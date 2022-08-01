@@ -5,7 +5,14 @@
 #include "ntfsattr.h"
 #include "ntfsattrDlg.h"
 
-#include "../../NTFSLib/NTFS.h"
+#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/mft-idx.h>
+#include <ntfs-browser/ntfs-common.h>
+#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/index-entry.h>
+
+using namespace NtfsBrowser;
 
 #ifdef _DEBUG
   #define new DEBUG_NEW
@@ -256,7 +263,7 @@ void appenddata(CString& lines, BYTE* data, DWORD datalen)
   lines += line;
 }
 
-void printattr(const CAttrBase* attr, void* context, BOOL* bStop)
+void printattr(const AttrBase* attr, void* context, BOOL* bStop)
 {
   CString* dump = (CString*)context;
 
@@ -294,7 +301,7 @@ void CNtfsattrDlg::OnOK()
 
     _TCHAR volname = m_filename.GetAt(0);
 
-    CNTFSVolume volume(volname);
+    NtfsVolume volume(volname);
     if (!volume.IsVolumeOK())
     {
       MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -303,12 +310,12 @@ void CNtfsattrDlg::OnOK()
 
     // parse root directory
 
-    CFileRecord fr(&volume);
+    FileRecord fr(&volume);
     // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
     // don't waste time and ram to parse unwanted attributes
     fr.SetAttrMask(MASK_INDEX_ROOT | MASK_INDEX_ALLOCATION);
 
-    if (!fr.ParseFileRecord(MFT_IDX_ROOT))
+    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)))
     {
       MessageBox(_T("Cannot read root directory of volume"));
       return;
@@ -322,7 +329,7 @@ void CNtfsattrDlg::OnOK()
 
     // find subdirectory
 
-    CIndexEntry ie;
+    IndexEntry ie;
 
     int dirs = m_filename.Find(_T('\\'), 0);
     int dire = m_filename.Find(_T('\\'), dirs + 1);

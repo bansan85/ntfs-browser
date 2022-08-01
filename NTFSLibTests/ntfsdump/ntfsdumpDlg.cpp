@@ -5,7 +5,14 @@
 #include "ntfsdump.h"
 #include "ntfsdumpDlg.h"
 
-#include "../../NTFSLib/NTFS.h"
+#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/mft-idx.h>
+#include <ntfs-browser/ntfs-common.h>
+#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/index-entry.h>
+
+using namespace NtfsBrowser;
 
 #ifdef _DEBUG
   #define new DEBUG_NEW
@@ -240,7 +247,7 @@ void CNtfsdumpDlg::OnOK()
 
     _TCHAR volname = m_filename.GetAt(0);
 
-    CNTFSVolume volume(volname);
+    NtfsVolume volume(volname);
     if (!volume.IsVolumeOK())
     {
       MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -249,12 +256,12 @@ void CNtfsdumpDlg::OnOK()
 
     // parse root directory
 
-    CFileRecord fr(&volume);
+    FileRecord fr(&volume);
     // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
     // don't waste time and ram to parse unwanted attributes
     fr.SetAttrMask(MASK_INDEX_ROOT | MASK_INDEX_ALLOCATION);
 
-    if (!fr.ParseFileRecord(MFT_IDX_ROOT))
+    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)))
     {
       MessageBox(_T("Cannot read root directory of volume"));
       return;
@@ -268,7 +275,7 @@ void CNtfsdumpDlg::OnOK()
 
     // find subdirectory
 
-    CIndexEntry ie;
+    IndexEntry ie;
 
     int dirs = m_filename.Find(_T('\\'), 0);
     int dire = m_filename.Find(_T('\\'), dirs + 1);
@@ -332,7 +339,7 @@ void CNtfsdumpDlg::OnOK()
       BYTE* filebuf = new BYTE[16 * 1024];
 
       // only pick the unnamed stream (file data)
-      const CAttrBase* data = fr.FindStream();
+      const AttrBase* data = fr.FindStream();
       if (data)
       {
         DWORD datalen = (DWORD)data->GetDataSize();

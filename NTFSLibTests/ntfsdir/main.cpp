@@ -3,7 +3,15 @@
 // eg. ntfsdir c:\windows
 // eg. ntfsdir "c:\program files\common files"
 
-#include "../../NTFSLib/NTFS.h"
+#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/mft-idx.h>
+#include <ntfs-browser/ntfs-common.h>
+#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/index-entry.h>
+
+using namespace NtfsBrowser;
+
 #include <stdio.h>
 
 void usage()
@@ -105,10 +113,10 @@ int getpathname(char** ppath, char* pathname)
 int totalfiles = 0;
 int totaldirs = 0;
 
-void printfile(const CIndexEntry* ie)
+void printfile(const IndexEntry* ie)
 {
   // Hide system metafiles
-  if (ie->GetFileReference() < MFT_IDX_USER) return;
+  if (ie->GetFileReference() < static_cast<ULONGLONG>(MftIdx::USER)) return;
 
   // Ignore DOS alias file names
   if (!ie->IsWin32Name()) return;
@@ -159,7 +167,7 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  CNTFSVolume volume(volname);
+  NtfsVolume volume(volname);
   if (!volume.IsVolumeOK())
   {
     printf("Cannot get NTFS BPB from boot sector of volume %c\n", volume);
@@ -168,13 +176,13 @@ int main(int argc, char* argv[])
 
   // get root directory info
 
-  CFileRecord fr(&volume);
+  FileRecord fr(&volume);
 
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
   fr.SetAttrMask(MASK_INDEX_ROOT | MASK_INDEX_ALLOCATION);
 
-  if (!fr.ParseFileRecord(MFT_IDX_ROOT))
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)))
   {
     printf("Cannot read root directory of volume %c\n", volname);
     return -1;
@@ -201,7 +209,7 @@ int main(int argc, char* argv[])
     }
     if (pathlen == 0) break;  // no subdirectories
 
-    CIndexEntry ie;
+    IndexEntry ie;
     if (fr.FindSubEntry(pathname, ie))
     {
       if (ie.IsDirectory())

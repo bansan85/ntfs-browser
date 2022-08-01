@@ -5,7 +5,13 @@
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
 
-#include "../../NTFSLib/NTFS.h"
+#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/mft-idx.h>
+#include <ntfs-browser/ntfs-common.h>
+#include <ntfs-browser/file-record.h>
+
+using namespace NtfsBrowser;
 
 #ifdef _DEBUG
   #define new DEBUG_NEW
@@ -67,7 +73,7 @@ BOOL CNtfsundelDlg::OnInitDialog()
   m_files.InsertColumn(2, _T("Name"), LVCFMT_LEFT, 260);
   m_files.InsertColumn(3, _T("Time"), LVCFMT_LEFT, 130);
 
-  _TCHAR drvname[3];  // "C:\"
+  _TCHAR drvname[4];  // "C:\"
   drvname[0] = _T('A');
   drvname[1] = _T(':');
   drvname[2] = _T('\\');
@@ -264,7 +270,7 @@ void CNtfsundelDlg::OnSearch()
 
   _TCHAR volname = vns.GetAt(0);
 
-  CNTFSVolume volume(volname);
+  NtfsVolume volume(volname);
   if (!volume.IsVolumeOK())
   {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -282,9 +288,10 @@ void CNtfsundelDlg::OnSearch()
   // Find deleted files (directory excluded)
   stop = FALSE;
   DWORD count = 0;
-  for (ULONGLONG i = MFT_IDX_USER; i < volume.GetRecordsCount(); i++)
+  for (ULONGLONG i = static_cast<ULONGLONG>(MftIdx::USER);
+       i < volume.GetRecordsCount(); i++)
   {
-    CFileRecord fr(&volume);
+    FileRecord fr(&volume);
 
     // Only parse Standard Information and File Name attributes
     fr.SetAttrMask(MASK_FILE_NAME);        // StdInfo will always be parsed
@@ -375,8 +382,8 @@ void CNtfsundelDlg::OnRecover()
 
   _TCHAR volname = vns.GetAt(0);
 
-  CNTFSVolume volume(volname);
-  CFileRecord fr(&volume);
+  NtfsVolume volume(volname);
+  FileRecord fr(&volume);
 
   if (!fr.ParseFileRecord(ref))
   {
@@ -419,7 +426,7 @@ void CNtfsundelDlg::OnRecover()
 
     // Save to disk
     // Unnamed Data attribute contains the file data
-    const CAttrBase* data = fr.FindStream();
+    const AttrBase* data = fr.FindStream();
     if (data)
     {
       ULONGLONG datalen = data->GetDataSize();

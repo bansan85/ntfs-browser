@@ -1,0 +1,15 @@
+{
+    "files.associations": {
+        "compare": "cpp",
+        "exception": "cpp",
+        "initializer_list": "cpp",
+        "limits": "cpp",
+        "type_traits": "cpp",
+        "iosfwd": "cpp",
+        "tuple": "cpp",
+        "vector": "cpp",
+        "xmemory": "cpp",
+        "xstring": "cpp",
+        "xutility": "cpp"
+    }
+}

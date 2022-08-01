@@ -533,7 +533,7 @@
 <p>Find the next attribute with type "<code>attrType</code>" contained in this file record. If no more attribute of "<code>attrType</code>" is found, <code>NULL</code> is returned. Once called, the internal index is moved to next.</p>
 <p>This routine should be called after <code>FindFirstAttr()</code>.</p>
 <div class=pre-lang id=premain16732><div>C++</div><div class=pre-action-link><span id=copycode16732 class=copy-code data-index=16732 style=visibility:visible>Copy Code</span></div></div>
-<pre id=pre16732 style=margin-top:0 class="lang-cplusplus notranslate" data-language=C++ data-allowshrink=True data-collapse=False data-codeblock-processed=true>CAttrBase *ab = FindFirstAttr(ATTR_TYPE_FILENAME)
+<pre id=pre16732 style=margin-top:0 class="lang-cplusplus notranslate" data-language=C++ data-allowshrink=True data-collapse=False data-codeblock-processed=true>AttrBase *ab = FindFirstAttr(ATTR_TYPE_FILENAME)
 <span class=code-keyword>while</span> (ab)
 {
     <span class=code-comment>// process ab here
@@ -564,7 +564,7 @@
  </li>	<li><code>void ClearAttrRawCB()</code></li>	<li><code>void SetAttrMask(DWORD mask)</code></li>	<li><code>void TraverseAttrs(ATTRS_CALLBACK attrCallBack, void *context)</code>
  <ul>
  <li><code>attrCallBack</code>: User defined callback function</li> <li><code>context</code>: context to pass to the callback function</li>	</ul>
- </li>	<li><code>const CAttrBase* FindFirstAttr(DWORD attrType) const</code></li>	<li><code>const CAttrBase* FindNextAttr(DWORD attrType) const</code></li>	<li><code>int GetFileName(_TCHAR *buf, DWORD bufLen) const</code>
+ </li>	<li><code>const AttrBase* FindFirstAttr(DWORD attrType) const</code></li>	<li><code>const AttrBase* FindNextAttr(DWORD attrType) const</code></li>	<li><code>int GetFileName(_TCHAR *buf, DWORD bufLen) const</code>
  <ul>
  <li><code>buf</code>: Name buffer to hold the returned file name.</li> <li><code>bufLen</code>: Name buffer size in characters (not bytes!)</li>	</ul>
  <ul>
@@ -572,7 +572,7 @@
  </li>	<li><code>ULONGLONG GetFileSize() const</code></li>	<li><code>void GetFileTime(FILETIME *writeTm, FILETIME *createTm = NULL, FILETIME *accessTm = NULL) const</code></li>	<li><code>void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const</code></li>	<li><code>const BOOL FindSubEntry(const _TCHAR *fileName, CIndexEntry &amp;ieFound) const</code>
  <ul>
  <li><code>fileName</code>: Sub file name to find</li> <li><code>ieFound</code>: <code>CIndexEntry</code> object found</li>	</ul>
- </li>	<li><code>const CAttrBase* FindStream(_TCHAR *name = NULL)</code></li>	<li><code>BOOL IsDeleted() const</code></li>	<li><code>BOOL IsDirectory() const</code></li>	<li><code>BOOL IsReadOnly() const</code></li>	<li><code>BOOL IsHidden() const</code></li>	<li><code>BOOL IsSystem() const</code></li>	<li><code>BOOL IsCompressed() const</code></li>	<li><code>BOOL IsEncrypted() const</code></li>	<li><code>BOOL IsSparse() const</code></ol>
+ </li>	<li><code>const AttrBase* FindStream(_TCHAR *name = NULL)</code></li>	<li><code>BOOL IsDeleted() const</code></li>	<li><code>BOOL IsDirectory() const</code></li>	<li><code>BOOL IsReadOnly() const</code></li>	<li><code>BOOL IsHidden() const</code></li>	<li><code>BOOL IsSystem() const</code></li>	<li><code>BOOL IsCompressed() const</code></li>	<li><code>BOOL IsEncrypted() const</code></li>	<li><code>BOOL IsSparse() const</code></ol>
 <h2>NTFS attributes classes</h2>
 <div class=pre-lang id=premain372832><div> </div><div class=pre-action-link><span id=copycode372832 class=copy-code data-index=372832 style=visibility:visible>Copy Code</span></div></div>
 <pre id=pre372832 style=margin-top:0 data-language=Text data-allowshrink=True data-collapse=False data-codeblock-processed=true class=notranslate>Attributes               Class
@@ -586,8 +586,8 @@ $DATA                    CAttr_Data&lt;TYPE_RESIDENT&gt;
 $INDEX_ROOT              CAttr_IndexRoot
 $INDEX_ALLOCATION        CAttr_IndexAlloc
 $BITMAP                  CAttr_Bitmap&lt;TYPE_RESIENT&gt;</pre>
-<p>NTFS attributes are classified into resident (<code>CAttrResident</code>) and nonresident (<code>CAttrNonResident</code>). Resident and nonresident attributes share a common header (<code>CAttrBase</code>). All attribute classes are derived from <code>CAttrResident</code> or <code>CAttrNonResident</code>, which are derived from <code>CAttrBase</code>. Some attributes, such as <code>$DATA</code> and <code>$ATTRIBUTE_LIST</code> can be resident or nonresident; these classes use a template parameter as their base class.</p>
-<h4>1. CAttrBase</h4>
+<p>NTFS attributes are classified into resident (<code>CAttrResident</code>) and nonresident (<code>CAttrNonResident</code>). Resident and nonresident attributes share a common header (<code>AttrBase</code>). All attribute classes are derived from <code>CAttrResident</code> or <code>CAttrNonResident</code>, which are derived from <code>AttrBase</code>. Some attributes, such as <code>$DATA</code> and <code>$ATTRIBUTE_LIST</code> can be resident or nonresident; these classes use a template parameter as their base class.</p>
+<h4>1. AttrBase</h4>
 <p>Base class of all the attribute classes.</p>
 <p><code>allocSize</code> is the allocated size of the data in bytes. Just leave this parameter blank if you don't want it.</p>
 <p>Return value: Actual size of the data in bytes.</p>
@@ -607,7 +607,7 @@ $BITMAP                  CAttr_Bitmap&lt;TYPE_RESIENT&gt;</pre>
 <pre id=pre191098 style=margin-top:0 data-allowshrink=True data-collapse=False data-codeblock-processed=true class=notranslate>__inline BOOL IsUnNamed() <span class=code-keyword>const</span></pre>
 <p>Check if this attribute is unnamed.</p>
 <ol>
- <li><code>CAttrBase(const ATTR_HEADER_COMMON *ahc, const CFileRecord *fr)</code>
+ <li><code>AttrBase(const ATTR_HEADER_COMMON *ahc, const CFileRecord *fr)</code>
  <ul>
  <li><code>ahc</code>: Points to the attribute header buffer.</li> <li><code>fr</code>: The file record which owns this attribute.</li>	</ul>
  </li>	<li><code>virtual __inline ULONGLONG GetDataSize(ULONGLONG *allocSize = NULL) const = 0</code></li>	<li><code>virtual BOOL ReadData(const ULONGLONG &amp;offset, void *bufv, DWORD bufLen, DWORD *actural) const = 0</code>
