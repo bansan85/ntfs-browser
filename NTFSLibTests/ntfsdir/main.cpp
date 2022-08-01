@@ -8,239 +8,233 @@
 
 void usage()
 {
-	printf("Invalid parameter\n");
-	printf("Usage: ntfsdir \"path\"\n");
-	printf("eg. ntfsdir c:\n");
-	printf("eg. ntfsdir c:\\windows\n");
-	printf("eg. ntfsdir \"c:\\program files\\common files\"\n");
+  printf("Invalid parameter\n");
+  printf("Usage: ntfsdir \"path\"\n");
+  printf("eg. ntfsdir c:\n");
+  printf("eg. ntfsdir c:\\windows\n");
+  printf("eg. ntfsdir \"c:\\program files\\common files\"\n");
 }
 
 // get volume name 'C', 'D', ...
 // *ppath -> "c:\program files\common files"
-char getvolume(char **ppath)
+char getvolume(char** ppath)
 {
-	char *p = *ppath;
-	char volname;
+  char* p = *ppath;
+  char volname;
 
-	// skip leading blank and "
-	while (*p)
-	{
-		if (*p == ' ' || *p == '"')
-			p++;
-		else
-			break;
-	}
-	if (*p == '\0')
-		return '\0';
-	else
-	{
-		volname = *p;
-		p++;
-	}
+  // skip leading blank and "
+  while (*p)
+  {
+    if (*p == ' ' || *p == '"')
+      p++;
+    else
+      break;
+  }
+  if (*p == '\0')
+    return '\0';
+  else
+  {
+    volname = *p;
+    p++;
+  }
 
-	// skip blank
-	while(*p)
-	{
-		if (*p == ' ')
-			p++;
-		else
-			break;
-	}
-	if (*p == '\0')
-		return '\0';
+  // skip blank
+  while (*p)
+  {
+    if (*p == ' ')
+      p++;
+    else
+      break;
+  }
+  if (*p == '\0') return '\0';
 
-	if (*p != ':')
-		return '\0';
+  if (*p != ':') return '\0';
 
-	// forward to '\' or string end
-	while (*p)
-	{
-		if (*p != '\\')
-			p++;
-		else
-			break;
-	}
-	// forward to not '\' and not ", or string end
-	while (*p)
-	{
-		if (*p == '\\' || *p == '"')
-			p++;
-		else
-			break;
-	}
+  // forward to '\' or string end
+  while (*p)
+  {
+    if (*p != '\\')
+      p++;
+    else
+      break;
+  }
+  // forward to not '\' and not ", or string end
+  while (*p)
+  {
+    if (*p == '\\' || *p == '"')
+      p++;
+    else
+      break;
+  }
 
-	*ppath = p;
-	return volname;
+  *ppath = p;
+  return volname;
 }
 
 // get sub directory name
 // *ppath -> "program files\common files"
-int getpathname(char **ppath, char *pathname)
+int getpathname(char** ppath, char* pathname)
 {
-	int len = 0;
-	char *p = *ppath;
+  int len = 0;
+  char* p = *ppath;
 
-	// copy until '\' or " or string ends or buffer full
-	while (*p && len < MAX_PATH)
-	{
-		pathname[len] = *p;
-		len++;
-		p++;
+  // copy until '\' or " or string ends or buffer full
+  while (*p && len < MAX_PATH)
+  {
+    pathname[len] = *p;
+    len++;
+    p++;
 
-		if (*p == '\\' || *p == '\"')
-			break;
-	}
-	pathname[len] = '\0';
+    if (*p == '\\' || *p == '\"') break;
+  }
+  pathname[len] = '\0';
 
-	// forward to not '\' and not ", or string end
-	while (*p)
-	{
-		if (*p == '\\' || *p == '\"')
-			p++;
-		else
-			break;
-	}
+  // forward to not '\' and not ", or string end
+  while (*p)
+  {
+    if (*p == '\\' || *p == '\"')
+      p++;
+    else
+      break;
+  }
 
-	*ppath = p;
-	return len;
+  *ppath = p;
+  return len;
 }
 
 int totalfiles = 0;
 int totaldirs = 0;
 
-void printfile(const CIndexEntry *ie)
+void printfile(const CIndexEntry* ie)
 {
-	// Hide system metafiles
-	if (ie->GetFileReference() < MFT_IDX_USER)
-		return;
+  // Hide system metafiles
+  if (ie->GetFileReference() < MFT_IDX_USER) return;
 
-	// Ignore DOS alias file names
-	if (!ie->IsWin32Name())
-		return;
+  // Ignore DOS alias file names
+  if (!ie->IsWin32Name()) return;
 
-	FILETIME ft;
-	char fn[MAX_PATH];
-	int fnlen = ie->GetFileName(fn, MAX_PATH);
-	if (fnlen > 0)
-	{
-		ie->GetFileTime(&ft);
-		SYSTEMTIME st;
-		if (FileTimeToSystemTime(&ft, &st))
-		{
-			printf("%d-%02d-%02d  %02d:%02d\t%s    ", st.wYear, st.wMonth, st.wDay,
-				st.wHour, st.wMinute, ie->IsDirectory()?"<DIR>":"     ");
+  FILETIME ft;
+  char fn[MAX_PATH];
+  int fnlen = ie->GetFileName(fn, MAX_PATH);
+  if (fnlen > 0)
+  {
+    ie->GetFileTime(&ft);
+    SYSTEMTIME st;
+    if (FileTimeToSystemTime(&ft, &st))
+    {
+      printf("%d-%02d-%02d  %02d:%02d\t%s    ", st.wYear, st.wMonth, st.wDay,
+             st.wHour, st.wMinute, ie->IsDirectory() ? "<DIR>" : "     ");
 
-			if (!ie->IsDirectory())
-				printf("%I64u\t", ie->GetFileSize());
-			else
-				printf("\t");
+      if (!ie->IsDirectory())
+        printf("%I64u\t", ie->GetFileSize());
+      else
+        printf("\t");
 
-			printf("<%c%c%c>\t%s\n", ie->IsReadOnly()?'R':' ',
-				ie->IsHidden()?'H':' ', ie->IsSystem()?'S':' ', fn);
-		}
+      printf("<%c%c%c>\t%s\n", ie->IsReadOnly() ? 'R' : ' ',
+             ie->IsHidden() ? 'H' : ' ', ie->IsSystem() ? 'S' : ' ', fn);
+    }
 
-		if (ie->IsDirectory())
-			totaldirs ++;
-		else
-			totalfiles ++;
-	}
+    if (ie->IsDirectory())
+      totaldirs++;
+    else
+      totalfiles++;
+  }
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-	if (argc != 2)
-	{
-		usage();
-		return -1;
-	}
+  if (argc != 2)
+  {
+    usage();
+    return -1;
+  }
 
-	char *path = argv[1];
+  char* path = argv[1];
 
-	char volname;
-	volname = getvolume(&path);
-	if (!volname)
-	{
-		usage();
-		return -1;
-	}
+  char volname;
+  volname = getvolume(&path);
+  if (!volname)
+  {
+    usage();
+    return -1;
+  }
 
-	CNTFSVolume volume(volname);
-	if (!volume.IsVolumeOK())
-	{
-		printf("Cannot get NTFS BPB from boot sector of volume %c\n", volume);
-		return -1;
-	}
+  CNTFSVolume volume(volname);
+  if (!volume.IsVolumeOK())
+  {
+    printf("Cannot get NTFS BPB from boot sector of volume %c\n", volume);
+    return -1;
+  }
 
-	// get root directory info
+  // get root directory info
 
-	CFileRecord fr(&volume);
+  CFileRecord fr(&volume);
 
-	// we only need INDEX_ROOT and INDEX_ALLOCATION
-	// don't waste time and ram to parse unwanted attributes
-	fr.SetAttrMask(MASK_INDEX_ROOT | MASK_INDEX_ALLOCATION);
+  // we only need INDEX_ROOT and INDEX_ALLOCATION
+  // don't waste time and ram to parse unwanted attributes
+  fr.SetAttrMask(MASK_INDEX_ROOT | MASK_INDEX_ALLOCATION);
 
-	if (!fr.ParseFileRecord(MFT_IDX_ROOT))
-	{
-		printf("Cannot read root directory of volume %c\n", volname);
-		return -1;
-	}
+  if (!fr.ParseFileRecord(MFT_IDX_ROOT))
+  {
+    printf("Cannot read root directory of volume %c\n", volname);
+    return -1;
+  }
 
-	if (!fr.ParseAttrs())
-	{
-		printf("Cannot parse attributes\n");
-		return -1;
-	}
+  if (!fr.ParseAttrs())
+  {
+    printf("Cannot parse attributes\n");
+    return -1;
+  }
 
-	// find subdirectory
+  // find subdirectory
 
-	char pathname[MAX_PATH];
-	int pathlen;
+  char pathname[MAX_PATH];
+  int pathlen;
 
-	while (1)
-	{
-		pathlen = getpathname(&path, pathname);
-		if (pathlen < 0)	// parameter syntax error
-		{
-			usage();
-			return -1;
-		}
-		if (pathlen == 0)
-			break;	// no subdirectories
+  while (1)
+  {
+    pathlen = getpathname(&path, pathname);
+    if (pathlen < 0)  // parameter syntax error
+    {
+      usage();
+      return -1;
+    }
+    if (pathlen == 0) break;  // no subdirectories
 
-		CIndexEntry ie;
-		if (fr.FindSubEntry(pathname, ie))
-		{
-			if (ie.IsDirectory())
-			{
-				if (!fr.ParseFileRecord(ie.GetFileReference()))
-				{
-					printf("Cannot read directory %s\n", pathname);
-					return -1;
-				}
-				if (!fr.ParseAttrs())
-				{
-					printf("Cannot parse attributes\n");
-					return -1;
-				}
-			}
-			else
-			{
-				printf("%s is not a directory\n", pathname);
-				return -1;
-			}
-		}
-		else
-		{
-			printf("Cannot find directory %s\n", pathname);
-			return -1;
-		}
-	}
+    CIndexEntry ie;
+    if (fr.FindSubEntry(pathname, ie))
+    {
+      if (ie.IsDirectory())
+      {
+        if (!fr.ParseFileRecord(ie.GetFileReference()))
+        {
+          printf("Cannot read directory %s\n", pathname);
+          return -1;
+        }
+        if (!fr.ParseAttrs())
+        {
+          printf("Cannot parse attributes\n");
+          return -1;
+        }
+      }
+      else
+      {
+        printf("%s is not a directory\n", pathname);
+        return -1;
+      }
+    }
+    else
+    {
+      printf("Cannot find directory %s\n", pathname);
+      return -1;
+    }
+  }
 
-	// list it !
+  // list it !
 
-	fr.TraverseSubEntries(printfile);
+  fr.TraverseSubEntries(printfile);
 
-	printf("Files: %d, Directories: %d\n", totalfiles, totaldirs);
+  printf("Files: %d, Directories: %d\n", totalfiles, totaldirs);
 
-	return 0;
+  return 0;
 }

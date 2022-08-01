@@ -5,7 +5,7 @@
  */
 
 #ifndef __NTFS_H_CYB70289
-#define	__NTFS_H_CYB70289
+#define __NTFS_H_CYB70289
 
 #pragma pack(8)
 
