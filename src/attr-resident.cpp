@@ -1,6 +1,7 @@
 #include <crtdbg.h>
 
-#include <ntfs-browser/attr-resident.h>
+#include "attr-resident.h"
+#include "attr/header-resident.h"
 
 namespace NtfsBrowser
 {
@@ -8,7 +9,7 @@ namespace NtfsBrowser
 AttrResident::AttrResident(const AttrHeaderCommon* ahc, const FileRecord* fr)
     : AttrBase(ahc, fr)
 {
-  AttrHeaderR = (AttrHeaderResident*)ahc;
+  AttrHeaderR = (Attr::HeaderResident*)ahc;
   AttrBody = (void*)((BYTE*)AttrHeaderR + AttrHeaderR->AttrOffset);
   AttrBodySize = AttrHeaderR->AttrSize;
 }

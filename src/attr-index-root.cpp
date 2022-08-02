@@ -1,6 +1,9 @@
-#include <ntfs-browser/attr-index-root.h>
-#include <ntfs-browser/data/index-entry-flag.h>
+#include "attr-index-root.h"
 #include <ntfs-browser/data/attr-type.h>
+#include "flag/index-entry.h"
+#include "data/index-entry.h"
+#include "ntfs-common.h"
+#include "attr/index-root.h"
 
 namespace NtfsBrowser
 {
@@ -10,7 +13,7 @@ AttrIndexRoot::AttrIndexRoot(const AttrHeaderCommon* ahc, const FileRecord* fr)
 {
   NTFS_TRACE("Attribute: Index Root\n");
 
-  IndexRoot = (Data::AttrIndexRoot*)AttrBody;
+  IndexRoot = (Attr::IndexRoot*)AttrBody;
 
   if (IsFileName())
   {
@@ -38,7 +41,7 @@ void AttrIndexRoot::ParseIndexEntries()
     IndexEntry* ieClass = new IndexEntry(ie);
     push_back(ieClass);
 
-    if (ie->Flags & static_cast<BYTE>(IndexEntryFlag::LAST))
+    if (static_cast<BOOL>(ie->Flags & Flag::IndexEntry::LAST))
     {
       NTFS_TRACE("Last Index Entry\n");
       break;
@@ -49,7 +52,7 @@ void AttrIndexRoot::ParseIndexEntries()
   }
 }
 
-// Check if this IndexRoot contains FileName or IndexView
+// Check if this IndexRoot contains Filename or IndexView
 BOOL AttrIndexRoot::IsFileName() const
 {
   return (IndexRoot->AttrType == static_cast<DWORD>(AttrType::FILE_NAME));

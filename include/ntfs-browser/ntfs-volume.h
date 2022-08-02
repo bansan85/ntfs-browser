@@ -9,9 +9,7 @@ namespace NtfsBrowser
 {
 class FileRecord;
 class AttrBase;
-///////////////////////////////////////
-// NTFS Volume forward declaration
-///////////////////////////////////////
+
 class NtfsVolume
 {
  public:

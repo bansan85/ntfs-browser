@@ -1,19 +1,22 @@
 #include <ntfs-browser/file-record.h>
+#include "index-block.h"
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/attr-std-info.h>
-#include <ntfs-browser/attr-list.h>
-#include <ntfs-browser/attr-non-resident.h>
-#include <ntfs-browser/attr-resident.h>
-#include <ntfs-browser/attr-file-name.h>
-#include <ntfs-browser/attr-vol-name.h>
-#include <ntfs-browser/attr-vol-info.h>
-#include <ntfs-browser/attr-data.h>
-#include <ntfs-browser/attr-bitmap.h>
-#include <ntfs-browser/attr-index-root.h>
-#include <ntfs-browser/attr-index-alloc.h>
-#include <ntfs-browser/data/file-record-header.h>
-#include <ntfs-browser/data/mft-idx.h>
+#include "attr-std-info.h"
+#include <ntfs-browser/mask.h>
+#include "attr-list.h"
+#include "attr-non-resident.h"
+#include "attr-resident.h"
+#include "attr-file-name.h"
+#include "attr-vol-name.h"
+#include "attr-vol-info.h"
+#include "attr-data.h"
+#include "attr-bitmap.h"
+#include "attr-index-root.h"
+#include "attr-index-alloc.h"
+#include <ntfs-browser/mft-idx.h>
+#include "data/file-record-header.h"
+#include "flag/file-record.h"
 
 namespace NtfsBrowser
 {
@@ -73,6 +76,9 @@ void FileRecord::UserCallBack(DWORD attType, AttrHeaderCommon* ahc,
   else if (Volume->AttrRawCallBack[attType])
     Volume->AttrRawCallBack[attType](ahc, bDiscard);
 }
+
+extern template class NtfsBrowser::AttrList<AttrNonResident>;
+extern template class NtfsBrowser::AttrList<AttrResident>;
 
 AttrBase* FileRecord::AllocAttr(AttrHeaderCommon* ahc, BOOL* bUnhandled)
 {
@@ -175,7 +181,8 @@ FileRecordHeader* FileRecord::ReadFileRecord(ULONGLONG& fileRef)
   FileRecordHeader* fr = NULL;
   DWORD len;
 
-  if (fileRef < static_cast<ULONGLONG>(MftIdx::USER) || Volume->MFTData == NULL)
+  if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
+      Volume->MFTData == NULL)
   {
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr;
@@ -270,7 +277,7 @@ BOOL FileRecord::ParseFileRecord(ULONGLONG fileRef)
   return FALSE;
 }
 
-// Visit IndexBlocks recursivly to find a specific FileName
+// Visit IndexBlocks recursivly to find a specific Filename
 BOOL FileRecord::VisitIndexBlock(const ULONGLONG& vcn, const _TCHAR* fileName,
                                  IndexEntry& ieFound) const
 {
@@ -360,7 +367,8 @@ BOOL FileRecord::ParseAttrs()
   while (ahc->Type != (DWORD)-1 &&
          (dataPtr + ahc->TotalSize) <= Volume->FileRecordSize)
   {
-    if (ATTR_MASK(ahc->Type) & AttrMask)  // Skip unwanted attributes
+    if (static_cast<BOOL>(ATTR_MASK(ahc->Type) &
+                          AttrMask))  // Skip unwanted attributes
     {
       if (!ParseAttr(ahc))  // Parse error
         return FALSE;
@@ -399,10 +407,10 @@ void FileRecord::ClearAttrRawCB()
 }
 
 // Choose attributes to handle, unwanted attributes will be discarded silently
-void FileRecord::SetAttrMask(DWORD mask)
+void FileRecord::SetAttrMask(Mask mask)
 {
   // Standard Information and Attribute List is needed always
-  AttrMask = mask | MASK_STANDARD_INFORMATION | MASK_ATTRIBUTE_LIST;
+  AttrMask = mask | Mask::STANDARD_INFORMATION | Mask::ATTRIBUTE_LIST;
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine
@@ -412,7 +420,8 @@ void FileRecord::TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context)
 
   for (int i = 0; i < kAttrNums; i++)
   {
-    if (AttrMask & (((DWORD)1) << i))  // skip masked attributes
+    // skip masked attributes
+    if (static_cast<BOOL>(AttrMask & (static_cast<Mask>(((DWORD)1) << i))))
     {
       for (const AttrBase* ab : attr_list_[i])
       {
@@ -461,7 +470,7 @@ int FileRecord::GetFileName(_TCHAR* buf, DWORD bufLen) const
     const AttrFileName* fn = static_cast<const AttrFileName*>(fn_);
     if (fn->IsWin32Name())
     {
-      int len = fn->GetFileName(buf, bufLen);
+      int len = fn->GetFilename(buf, bufLen);
       if (len != 0) return len;  // success or fail
     }
   }
@@ -528,7 +537,7 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const
   }
 }
 
-// Find a specific FileName from InexRoot described B+ tree
+// Find a specific Filename from InexRoot described B+ tree
 const BOOL FileRecord::FindSubEntry(const _TCHAR* fileName,
                                     IndexEntry& ieFound) const
 {
@@ -602,13 +611,13 @@ const AttrBase* FileRecord::FindStream(_TCHAR* name)
 // Check if it's deleted or in use
 BOOL FileRecord::IsDeleted() const
 {
-  return !(file_record_->Flags & static_cast<DWORD>(FileRecordFlag::INUSE));
+  return !static_cast<BOOL>(file_record_->Flags & Flag::FileRecord::INUSE);
 }
 
 // Check if it's a directory
 BOOL FileRecord::IsDirectory() const
 {
-  return file_record_->Flags & static_cast<DWORD>(FileRecordFlag::DIR);
+  return static_cast<BOOL>(file_record_->Flags & Flag::FileRecord::DIR);
 }
 
 BOOL FileRecord::IsReadOnly() const

@@ -1,13 +1,19 @@
 add_library(
   ${PROJECT_NAME}
   attr-base.cpp
+  attr-file-name.cpp
   attr-index-alloc.cpp
   attr-index-root.cpp
+  attr-list.cpp
   attr-non-resident.cpp
   attr-resident.cpp
   attr-std-info.cpp
-  file-name.cpp
+  attr-vol-info.cpp
+  attr-vol-name.cpp
   file-record.cpp
+  filename.cpp
+  index-block.cpp
+  index-entry.cpp
   ntfs-volume.cpp)
 
 target_include_directories(

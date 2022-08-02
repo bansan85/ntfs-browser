@@ -1,4 +1,9 @@
-#include <ntfs-browser/attr-index-alloc.h>
+#include "attr-index-alloc.h"
+#include "data/index-block.h"
+#include "ntfs-common.h"
+#include "index-block.h"
+#include "flag/index-entry.h"
+#include "data/index-entry.h"
 
 namespace NtfsBrowser
 {
@@ -97,7 +102,7 @@ BOOL AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
       IndexEntry* ieClass = new IndexEntry(ie);
       ibClass.push_back(ieClass);
 
-      if (ie->Flags & static_cast<BYTE>(IndexEntryFlag::LAST))
+      if (static_cast<BOOL>(ie->Flags & Flag::IndexEntry::LAST))
       {
         NTFS_TRACE("Last Index Entry\n");
         break;

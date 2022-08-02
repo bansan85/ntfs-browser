@@ -7,8 +7,7 @@
 
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/data/mft-idx.h>
-#include <ntfs-browser/ntfs-common.h>
+#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/file-record.h>
 
 using namespace NtfsBrowser;
@@ -288,13 +287,13 @@ void CNtfsundelDlg::OnSearch()
   // Find deleted files (directory excluded)
   stop = FALSE;
   DWORD count = 0;
-  for (ULONGLONG i = static_cast<ULONGLONG>(MftIdx::USER);
+  for (ULONGLONG i = static_cast<ULONGLONG>(Enum::MftIdx::USER);
        i < volume.GetRecordsCount(); i++)
   {
     FileRecord fr(&volume);
 
     // Only parse Standard Information and File Name attributes
-    fr.SetAttrMask(MASK_FILE_NAME);        // StdInfo will always be parsed
+    fr.SetAttrMask(Mask::FILE_NAME);       // StdInfo will always be parsed
     if (!fr.ParseFileRecord(i)) continue;  // skip to next
     if (!fr.ParseAttrs()) continue;        // skip to next
 
@@ -391,7 +390,7 @@ void CNtfsundelDlg::OnRecover()
     return;
   }
 
-  fr.SetAttrMask(MASK_DATA);
+  fr.SetAttrMask(Mask::DATA);
   if (!fr.ParseAttrs())
   {
     if (fr.IsCompressed())

@@ -6,6 +6,7 @@
 #include <tchar.h>
 
 #include <ntfs-browser/data/attr-defines.h>
+#include <ntfs-browser/mask.h>
 
 namespace NtfsBrowser
 {
@@ -27,9 +28,6 @@ using SUBENTRY_CALLBACK = void (*)(const IndexEntry* ie);
 using ATTRS_CALLBACK = void (*)(const AttrBase* attr, void* context,
                                 BOOL* bStop);
 
-////////////////////////////////
-// Process a single File Record
-////////////////////////////////
 class FileRecord
 {
  public:
@@ -44,7 +42,7 @@ class FileRecord
   FileRecordHeader* file_record_;
   ULONGLONG FileReference;
   AttrRawCallback AttrRawCallBack[kAttrNums];
-  DWORD AttrMask;
+  Mask AttrMask;
   std::vector<AttrBase*> attr_list_[kAttrNums];  // Attributes
 
   void ClearAttrs();
@@ -65,7 +63,7 @@ class FileRecord
   BOOL InstallAttrRawCB(DWORD attrType, AttrRawCallback cb);
   void ClearAttrRawCB();
 
-  void SetAttrMask(DWORD mask);
+  void SetAttrMask(Mask mask);
   void TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context);
   const std::vector<AttrBase*>* getAttr(DWORD attrType) const;
   std::vector<AttrBase*>* getAttr(DWORD attrType);

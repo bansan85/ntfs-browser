@@ -1,10 +1,11 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/ntfs-common.h>
-#include <ntfs-browser/attr-vol-info.h>
-#include <ntfs-browser/attr-vol-name.h>
-#include <ntfs-browser/data/mft-idx.h>
-#include <ntfs-browser/data/ntfs-bpb.h>
+#include <ntfs-browser/mask.h>
+#include "ntfs-common.h"
+#include "attr-vol-info.h"
+#include "attr-vol-name.h"
+#include <ntfs-browser/mft-idx.h>
+#include "data/ntfs-bpb.h"
 
 namespace NtfsBrowser
 {
@@ -26,8 +27,8 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   // Verify NTFS volume version (must >= 3.0)
 
   FileRecord vol(this);
-  vol.SetAttrMask(MASK_VOLUME_NAME | MASK_VOLUME_INFORMATION);
-  if (!vol.ParseFileRecord(static_cast<DWORD>(MftIdx::VOLUME))) return;
+  vol.SetAttrMask(Mask::VOLUME_NAME | Mask::VOLUME_INFORMATION);
+  if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME))) return;
 
   vol.ParseAttrs();
   const auto* vec =
@@ -54,8 +55,8 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   VolumeOK = TRUE;
 
   MFTRecord = new FileRecord(this);
-  MFTRecord->SetAttrMask(MASK_DATA);
-  if (MFTRecord->ParseFileRecord(static_cast<DWORD>(MftIdx::MFT)))
+  MFTRecord->SetAttrMask(Mask::DATA);
+  if (MFTRecord->ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)))
   {
     MFTRecord->ParseAttrs();
     const auto* vec3 = MFTRecord->getAttr(static_cast<DWORD>(AttrType::DATA));
@@ -95,7 +96,7 @@ BOOL NtfsVolume::OpenVolume(_TCHAR volume)
   if (hVolume != INVALID_HANDLE_VALUE)
   {
     DWORD num;
-    NtfsBpb bpb;
+    Data::NtfsBpb bpb;
 
     // Read the first sector (boot sector)
     if (ReadFile(hVolume, &bpb, 512, &num, NULL) && num == 512)

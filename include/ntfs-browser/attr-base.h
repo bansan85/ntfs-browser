@@ -7,9 +7,7 @@
 namespace NtfsBrowser
 {
 class FileRecord;
-////////////////////////////////
-// Attributes base class
-////////////////////////////////
+
 class AttrBase
 {
  public:

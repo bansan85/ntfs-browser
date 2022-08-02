@@ -1,5 +1,8 @@
-#include <ntfs-browser/attr-non-resident.h>
-#include <ntfs-browser/ntfs-common.h>
+#include "attr-non-resident.h"
+#include "ntfs-common.h"
+
+#include "data/run-entry.h"
+#include "attr/header-non-resident.h"
 
 namespace NtfsBrowser
 {
@@ -8,7 +11,7 @@ AttrNonResident::AttrNonResident(const AttrHeaderCommon* ahc,
                                  const FileRecord* fr)
     : AttrBase(ahc, fr)
 {
-  AttrHeaderNR = (AttrHeaderNonResident*)ahc;
+  AttrHeaderNR = (Attr::HeaderNonResident*)ahc;
 
   UnalignedBuf = new BYTE[_ClusterSize];
 
@@ -86,7 +89,7 @@ BOOL AttrNonResident::ParseDataRun()
       NTFS_TRACE(LCNOffset == 0 ? ", Sparse Data\n" : "\n");
 
       // Store LCN, Data size (clusters) into list
-      DataRunEntry* dr = new DataRunEntry;
+      Data::RunEntry* dr = new Data::RunEntry;
       dr->LCN = (LCNOffset == 0) ? -1 : LCN;
       dr->Clusters = length;
       dr->StartVCN = VCN;
@@ -186,7 +189,7 @@ BOOL AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, DWORD clusters,
   }
 
   // Traverse the DataRun List to find the according LCN
-  for (const DataRunEntry& dr : DataRunList)
+  for (const Data::RunEntry& dr : DataRunList)
   {
     if (vcn >= dr.StartVCN && vcn <= dr.LastVCN)
     {

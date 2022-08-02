@@ -1,6 +1,8 @@
-#include <ntfs-browser/attr-std-info.h>
-#include <ntfs-browser/data/attr-std-info-permission.h>
-#include <ntfs-browser/ntfs-common.h>
+#include "attr-std-info.h"
+#include "ntfs-common.h"
+
+#include "attr/standard-information.h"
+#include "flag/std-info-permission.h"
 
 namespace NtfsBrowser
 {
@@ -10,7 +12,7 @@ AttrStdInfo::AttrStdInfo(const AttrHeaderCommon* ahc, const FileRecord* fr)
 {
   NTFS_TRACE("Attribute: Standard Information\n");
 
-  StdInfo = (AttrStandardInformation*)AttrBody;
+  StdInfo = (Attr::StandardInformation*)AttrBody;
 }
 
 AttrStdInfo::~AttrStdInfo() { NTFS_TRACE("AttrStdInfo deleted\n"); }
@@ -26,42 +28,45 @@ void AttrStdInfo::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
   if (accessTm) UTC2Local(StdInfo->ReadTime, accessTm);
 }
 
-DWORD AttrStdInfo::GetFilePermission() const { return StdInfo->Permission; }
+Flag::StdInfoPermission AttrStdInfo::GetFilePermission() const
+{
+  return StdInfo->Permission;
+}
 
 BOOL AttrStdInfo::IsReadOnly() const
 {
-  return ((StdInfo->Permission) &
-          static_cast<DWORD>(AttrStdInfoPermission::READONLY));
+  return static_cast<BOOL>(StdInfo->Permission &
+                           Flag::StdInfoPermission::READONLY);
 }
 
 BOOL AttrStdInfo::IsHidden() const
 {
-  return ((StdInfo->Permission) &
-          static_cast<DWORD>(AttrStdInfoPermission::HIDDEN));
+  return static_cast<BOOL>(StdInfo->Permission &
+                           Flag::StdInfoPermission::HIDDEN);
 }
 
 BOOL AttrStdInfo::IsSystem() const
 {
-  return ((StdInfo->Permission) &
-          static_cast<DWORD>(AttrStdInfoPermission::SYSTEM));
+  return static_cast<BOOL>(StdInfo->Permission &
+                           Flag::StdInfoPermission::SYSTEM);
 }
 
 BOOL AttrStdInfo::IsCompressed() const
 {
-  return ((StdInfo->Permission) &
-          static_cast<DWORD>(AttrStdInfoPermission::COMPRESSED));
+  return static_cast<BOOL>(StdInfo->Permission &
+                           Flag::StdInfoPermission::COMPRESSED);
 }
 
 BOOL AttrStdInfo::IsEncrypted() const
 {
-  return ((StdInfo->Permission) &
-          static_cast<DWORD>(AttrStdInfoPermission::ENCRYPTED));
+  return static_cast<BOOL>(StdInfo->Permission &
+                           Flag::StdInfoPermission::ENCRYPTED);
 }
 
 BOOL AttrStdInfo::IsSparse() const
 {
-  return ((StdInfo->Permission) &
-          static_cast<DWORD>(AttrStdInfoPermission::SPARSE));
+  return static_cast<BOOL>(StdInfo->Permission &
+                           Flag::StdInfoPermission::SPARSE);
 }
 
 // UTC filetime to Local filetime

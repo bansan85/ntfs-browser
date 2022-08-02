@@ -5,8 +5,7 @@
 
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/data/mft-idx.h>
-#include <ntfs-browser/ntfs-common.h>
+#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
 
@@ -116,14 +115,15 @@ int totaldirs = 0;
 void printfile(const IndexEntry* ie)
 {
   // Hide system metafiles
-  if (ie->GetFileReference() < static_cast<ULONGLONG>(MftIdx::USER)) return;
+  if (ie->GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::USER))
+    return;
 
   // Ignore DOS alias file names
   if (!ie->IsWin32Name()) return;
 
   FILETIME ft;
   char fn[MAX_PATH];
-  int fnlen = ie->GetFileName(fn, MAX_PATH);
+  int fnlen = ie->GetFilename(fn, MAX_PATH);
   if (fnlen > 0)
   {
     ie->GetFileTime(&ft);
@@ -170,7 +170,7 @@ int main(int argc, char* argv[])
   NtfsVolume volume(volname);
   if (!volume.IsVolumeOK())
   {
-    printf("Cannot get NTFS BPB from boot sector of volume %c\n", volume);
+    printf("Cannot get NTFS BPB from boot sector of volume %c\n", volname);
     return -1;
   }
 
@@ -180,9 +180,9 @@ int main(int argc, char* argv[])
 
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(MASK_INDEX_ROOT | MASK_INDEX_ALLOCATION);
+  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
 
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)))
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
   {
     printf("Cannot read root directory of volume %c\n", volname);
     return -1;

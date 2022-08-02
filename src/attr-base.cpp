@@ -2,7 +2,7 @@
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/ntfs-common.h>
+#include "ntfs-common.h"
 
 namespace NtfsBrowser
 {

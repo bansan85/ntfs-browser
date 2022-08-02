@@ -7,8 +7,7 @@
 
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/data/mft-idx.h>
-#include <ntfs-browser/ntfs-common.h>
+#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
 
@@ -259,9 +258,9 @@ void CNtfsdumpDlg::OnOK()
     FileRecord fr(&volume);
     // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
     // don't waste time and ram to parse unwanted attributes
-    fr.SetAttrMask(MASK_INDEX_ROOT | MASK_INDEX_ALLOCATION);
+    fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
 
-    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)))
+    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
     {
       MessageBox(_T("Cannot read root directory of volume"));
       return;
@@ -324,7 +323,7 @@ void CNtfsdumpDlg::OnOK()
       }
 
       // We only need DATA attribute and StdInfo
-      fr.SetAttrMask(MASK_DATA);
+      fr.SetAttrMask(Mask::DATA);
       if (!fr.ParseAttrs())
       {
         if (fr.IsCompressed())
