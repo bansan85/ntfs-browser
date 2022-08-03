@@ -88,4 +88,10 @@ int AttrBase::GetAttrName(wchar_t* buf, DWORD bufLen) const
 // Verify if this attribute is unnamed
 // Useful in analyzing MultiStream files
 BOOL AttrBase::IsUnNamed() const { return (attr_header_.NameLength == 0); }
+
+WORD AttrBase::GetSectorSize() const { return sector_size_; }
+DWORD AttrBase::GetClusterSize() const { return cluster_size_; }
+DWORD AttrBase::GetIndexBlockSize() const { return index_block_size_; }
+HANDLE AttrBase::GetHandle() const { return hvolume_; }
+
 }  // namespace NtfsBrowser

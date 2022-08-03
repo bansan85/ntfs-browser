@@ -6,7 +6,7 @@ namespace NtfsBrowser
 {
 
 AttrVolInfo::AttrVolInfo(const AttrHeaderCommon& ahc, const FileRecord& fr)
-    : AttrResident(ahc, fr), VolInfo(*(Attr::VolumeInformation*)attr_body_)
+    : AttrResident(ahc, fr), VolInfo(*(Attr::VolumeInformation*)GetData())
 {
   NTFS_TRACE("Attribute: Volume Information\n");
 }

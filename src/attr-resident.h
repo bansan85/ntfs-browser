@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include <ntfs-browser/attr-base.h>
 
 namespace NtfsBrowser
@@ -17,18 +19,22 @@ class AttrResident : public AttrBase
 {
  public:
   AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrResident(AttrResident&& other) noexcept = delete;
+  AttrResident(AttrResident const& other) = delete;
+  AttrResident& operator=(AttrResident&& other) noexcept = delete;
+  AttrResident& operator=(AttrResident const& other) = delete;
   ~AttrResident() override = default;
 
- protected:
-  const Attr::HeaderResident& attr_header_r_;
-  const void* attr_body_;  // Points to Resident Data
-  DWORD attr_body_size_;   // Attribute Data Size
+ private:
+  const Attr::HeaderResident& header_r_;
+  std::vector<BYTE> body_;
 
+ protected:
   [[nodiscard]] BOOL IsDataRunOK() const override;
 
- public:
   [[nodiscard]] ULONGLONG GetDataSize() const override;
   [[nodiscard]] BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
                               DWORD* actural) const override;
+  [[nodiscard]] const BYTE* GetData();
 };  // AttrResident
 }  // namespace NtfsBrowser

@@ -13,7 +13,7 @@ AttrIndexRoot::AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr)
 {
   NTFS_TRACE("Attribute: Index Root\n");
 
-  IndexRoot = (Attr::IndexRoot*)attr_body_;
+  IndexRoot = (Attr::IndexRoot*)GetData();
 
   if (IsFileName())
   {

@@ -8,7 +8,7 @@ namespace NtfsBrowser
 {
 
 AttrStdInfo::AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord& fr)
-    : AttrResident(ahc, fr), StdInfo(*(Attr::StandardInformation*)attr_body_)
+    : AttrResident(ahc, fr), StdInfo(*(Attr::StandardInformation*)GetData())
 {
   NTFS_TRACE("Attribute: Standard Information\n");
 }

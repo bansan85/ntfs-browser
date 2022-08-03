@@ -12,9 +12,13 @@ class AttrBase
 {
  public:
   AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrBase(AttrBase&& other) noexcept = delete;
+  AttrBase(AttrBase const& other) = delete;
+  AttrBase& operator=(AttrBase&& other) noexcept = delete;
+  AttrBase& operator=(AttrBase const& other) = delete;
   virtual ~AttrBase();
 
- protected:
+ private:
   const AttrHeaderCommon& attr_header_;
   WORD sector_size_;
   DWORD cluster_size_;
@@ -34,6 +38,11 @@ class AttrBase
 
  protected:
   [[nodiscard]] virtual BOOL IsDataRunOK() const = 0;
+
+  [[nodiscard]] WORD GetSectorSize() const;
+  [[nodiscard]] DWORD GetClusterSize() const;
+  [[nodiscard]] DWORD GetIndexBlockSize() const;
+  [[nodiscard]] HANDLE GetHandle() const;
 
  public:
   [[nodiscard]] virtual ULONGLONG GetDataSize() const = 0;

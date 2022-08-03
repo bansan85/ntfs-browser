@@ -11,11 +11,11 @@ AttrVolName::AttrVolName(const AttrHeaderCommon& ahc, const FileRecord& fr)
 {
   NTFS_TRACE("Attribute: Volume Name\n");
 
-  name_.resize((attr_body_size_ / 2) + 1, '\0');
-  memcpy(name_.data(), attr_body_, attr_body_size_);
+  name_.resize((GetDataSize() / 2) + 1, '\0');
+  memcpy(name_.data(), GetData(), GetDataSize());
 }
 
 // Get NTFS Volume Unicode Name
-std::wstring_view AttrVolName::GetName() const { return name_; }
+std::wstring_view AttrVolName::GetName() const noexcept { return name_; }
 
 }  // namespace NtfsBrowser

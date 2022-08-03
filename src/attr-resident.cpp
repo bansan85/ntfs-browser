@@ -7,10 +7,10 @@ namespace NtfsBrowser
 {
 
 AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
-    : AttrBase(ahc, fr), attr_header_r_((const Attr::HeaderResident&)ahc)
+    : AttrBase(ahc, fr), header_r_((const Attr::HeaderResident&)ahc)
 {
-  attr_body_ = (void*)((BYTE*)&attr_header_r_ + attr_header_r_.AttrOffset);
-  attr_body_size_ = attr_header_r_.AttrSize;
+  body_.resize(header_r_.AttrSize);
+  memcpy(body_.data(), (BYTE*)&header_r_ + header_r_.AttrOffset, body_.size());
 }
 
 BOOL AttrResident::IsDataRunOK() const
@@ -20,10 +20,7 @@ BOOL AttrResident::IsDataRunOK() const
 
 // Return Actural Data Size
 // *allocSize = Allocated Size
-ULONGLONG AttrResident::GetDataSize() const
-{
-  return (ULONGLONG)attr_body_size_;
-}
+ULONGLONG AttrResident::GetDataSize() const { return (ULONGLONG)body_.size(); }
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
@@ -36,16 +33,18 @@ BOOL AttrResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
   if (bufLen == 0) return TRUE;
 
   DWORD offsetd = (DWORD)offset;
-  if (offsetd >= attr_body_size_) return FALSE;  // offset parameter error
+  if (offsetd >= body_.size()) return FALSE;  // offset parameter error
 
-  if ((offsetd + bufLen) > attr_body_size_)
-    *actural = attr_body_size_ - offsetd;  // Beyond scope
+  if ((offsetd + bufLen) > body_.size())
+    *actural = body_.size() - offsetd;  // Beyond scope
   else
     *actural = bufLen;
 
-  memcpy(bufv, (BYTE*)attr_body_ + offsetd, *actural);
+  memcpy(bufv, (BYTE*)body_.data() + offsetd, *actural);
 
   return TRUE;
 }
+
+const BYTE* AttrResident::GetData() { return body_.data(); }
 
 }  // namespace NtfsBrowser
