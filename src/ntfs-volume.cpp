@@ -17,8 +17,8 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
 {
   hVolume = INVALID_HANDLE_VALUE;
   VolumeOK = FALSE;
-  MFTRecord = NULL;
-  MFTData = NULL;
+  MFTRecord = nullptr;
+  MFTData = nullptr;
   Version = 0;
   ClearAttrRawCB();
 
@@ -44,11 +44,8 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   const auto* vec2 = vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_NAME));
   if (vec2 && !vec2->empty())
   {
-    char volname[MAX_PATH];
-    if (((AttrVolName*)vec2->front())->GetName(volname, MAX_PATH) > 0)
-    {
-      NTFS_TRACE1("NTFS volume name: %s\n", volname);
-    }
+    std::wstring_view volname{((AttrVolName*)vec2->front())->GetName()};
+    NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
   }
 #endif
 
@@ -63,9 +60,10 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
     if (!vec3 || vec3->empty())
     {
       delete MFTRecord;
-      MFTRecord = NULL;
+      MFTRecord = nullptr;
     }
-    MFTData = vec3->front();
+    else
+      MFTData = vec3->front();
   }
 }
 
@@ -92,14 +90,14 @@ BOOL NtfsVolume::OpenVolume(_TCHAR volume)
 
   hVolume =
       CreateFile(volumePath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                 NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+                 nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr);
   if (hVolume != INVALID_HANDLE_VALUE)
   {
     DWORD num;
     Data::NtfsBpb bpb;
 
     // Read the first sector (boot sector)
-    if (ReadFile(hVolume, &bpb, 512, &num, NULL) && num == 512)
+    if (ReadFile(hVolume, &bpb, 512, &num, nullptr) && num == 512)
     {
       if (strncmp((const char*)bpb.Signature, NTFS_SIGNATURE, 8) == 0)
       {
@@ -196,7 +194,7 @@ BOOL NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
 // Clear all Attribute CallBack routines
 void NtfsVolume::ClearAttrRawCB()
 {
-  for (int i = 0; i < kAttrNums; i++) AttrRawCallBack[i] = NULL;
+  for (int i = 0; i < kAttrNums; i++) AttrRawCallBack[i] = nullptr;
 }
 
 }  // namespace NtfsBrowser

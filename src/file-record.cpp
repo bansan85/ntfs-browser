@@ -23,7 +23,6 @@ namespace NtfsBrowser
 
 FileRecord::FileRecord(const NtfsVolume& volume) : Volume(volume)
 {
-  file_record_ = NULL;
   FileReference = (ULONGLONG)-1;
 
   ClearAttrRawCB();
@@ -161,7 +160,7 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
   buffer.reserve(Volume.FileRecordSize);
 
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
-      Volume.MFTData == NULL)
+      Volume.MFTData == nullptr)
   {
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr;
@@ -174,7 +173,7 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
     else
     {
       if (ReadFile(Volume.hVolume, buffer.data(), Volume.FileRecordSize, &len,
-                   NULL) &&
+                   nullptr) &&
           len == Volume.FileRecordSize)
       {
         std::unique_ptr<FileRecordHeader> fr =
@@ -252,7 +251,7 @@ const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
 {
   const std::vector<AttrBase*>* vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
-  if (vec == NULL || vec->empty()) return FALSE;
+  if (vec == nullptr || vec->empty()) return FALSE;
 
   IndexBlock ib;
   const IndexEntry* retval;
@@ -275,10 +274,10 @@ const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
           {
             // Search in SubNode (IndexBlock), recursive call
             retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
-            if (retval != NULL) return retval;
+            if (retval != nullptr) return retval;
           }
           else
-            return NULL;  // not found
+            return nullptr;  // not found
         }
         // Just step forward if fileName is bigger than IndexEntry
       }
@@ -286,12 +285,12 @@ const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
       {
         // Search in SubNode (IndexBlock), recursive call
         retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
-        if (retval != NULL) return retval;
+        if (retval != nullptr) return retval;
       }
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 // Traverse SubNode recursivly in ascending order
@@ -301,7 +300,7 @@ void FileRecord::TraverseSubNode(const ULONGLONG& vcn,
 {
   const std::vector<AttrBase*>* vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
-  if (vec == NULL || vec->empty()) return;
+  if (vec == nullptr || vec->empty()) return;
 
   IndexBlock ib;
   if (((AttrIndexAlloc*)vec->front())->ParseIndexBlock(vcn, ib))
@@ -372,7 +371,7 @@ BOOL FileRecord::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
 // Clear all Attribute CallBack routines
 void FileRecord::ClearAttrRawCB()
 {
-  for (int i = 0; i < kAttrNums; i++) AttrRawCallBack[i] = NULL;
+  for (int i = 0; i < kAttrNums; i++) AttrRawCallBack[i] = nullptr;
 }
 
 // Choose attributes to handle, unwanted attributes will be discarded silently
@@ -413,7 +412,7 @@ const std::vector<AttrBase*>* FileRecord::getAttr(DWORD attrType) const
     return &attr_list_[attrIdx];
   }
   else
-    return NULL;
+    return nullptr;
 }
 
 std::vector<AttrBase*>* FileRecord::getAttr(DWORD attrType)
@@ -425,7 +424,7 @@ std::vector<AttrBase*>* FileRecord::getAttr(DWORD attrType)
     return &attr_list_[attrIdx];
   }
   else
-    return NULL;
+    return nullptr;
 }
 
 // Get File Name (First Win32 name)
@@ -491,7 +490,7 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const
 
   const std::vector<AttrBase*>* vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ROOT));
-  if (vec == NULL || vec->empty()) return;
+  if (vec == nullptr || vec->empty()) return;
 
   AttrIndexRoot* ir = (AttrIndexRoot*)vec->front();
 
@@ -512,7 +511,7 @@ const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
   // Start searching from IndexRoot (B+ tree root node)
   const std::vector<AttrBase*>* vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ROOT));
-  if (vec == NULL || vec->empty()) return FALSE;
+  if (vec == nullptr || vec->empty()) return FALSE;
 
   AttrIndexRoot* ir = (AttrIndexRoot*)vec->front();
 
@@ -536,10 +535,10 @@ const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
         {
           // Search in SubNode (IndexBlock)
           retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
-          if (retval != NULL) return retval;
+          if (retval != nullptr) return retval;
         }
         else
-          return NULL;  // not found
+          return nullptr;  // not found
       }
       // Just step forward if fileName is bigger than IndexEntry
     }
@@ -547,11 +546,11 @@ const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
     {
       // Search in SubNode (IndexBlock)
       retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
-      if (retval != NULL) return retval;
+      if (retval != nullptr) return retval;
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 // Find Data attribute class of
@@ -559,10 +558,10 @@ const AttrBase* FileRecord::FindStream(_TCHAR* name)
 {
   const std::vector<AttrBase*>* vec =
       getAttr(static_cast<DWORD>(AttrType::DATA));
-  if (vec == NULL) return NULL;
+  if (vec == nullptr) return nullptr;
   for (const AttrBase* data : *vec)
   {
-    if (data->IsUnNamed() && name == NULL)  // Unnamed stream
+    if (data->IsUnNamed() && name == nullptr)  // Unnamed stream
       return data;
     if ((!data->IsUnNamed()) && name)  // Named stream
     {
@@ -574,7 +573,7 @@ const AttrBase* FileRecord::FindStream(_TCHAR* name)
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 // Check if it's deleted or in use

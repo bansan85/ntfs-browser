@@ -53,7 +53,7 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc,
 
         // Insert new found AttrList to fr.AttrList
         const std::vector<AttrBase*>* vec = frnew.getAttr(alRecord.AttrType);
-        if (vec != NULL)
+        if (vec != nullptr)
         {
           for (AttrBase* ab : *vec)
           {

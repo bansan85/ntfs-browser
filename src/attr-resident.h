@@ -17,18 +17,18 @@ class AttrResident : public AttrBase
 {
  public:
   AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr);
-  virtual ~AttrResident() = default;
+  ~AttrResident() override = default;
 
  protected:
-  const Attr::HeaderResident& AttrHeaderR;
-  const void* AttrBody;  // Points to Resident Data
-  DWORD AttrBodySize;    // Attribute Data Size
+  const Attr::HeaderResident& attr_header_r_;
+  const void* attr_body_;  // Points to Resident Data
+  DWORD attr_body_size_;   // Attribute Data Size
 
-  virtual BOOL IsDataRunOK() const;
+  [[nodiscard]] BOOL IsDataRunOK() const override;
 
  public:
-  virtual ULONGLONG GetDataSize() const;
-  virtual BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
-                        DWORD* actural) const;
+  [[nodiscard]] ULONGLONG GetDataSize() const override;
+  [[nodiscard]] BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
+                              DWORD* actural) const override;
 };  // AttrResident
 }  // namespace NtfsBrowser

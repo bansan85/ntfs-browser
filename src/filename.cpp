@@ -14,9 +14,9 @@ Filename::Filename()
 {
   IsCopy = FALSE;
 
-  filename_ = NULL;
+  filename_ = nullptr;
 
-  FilenameWUC = NULL;
+  FilenameWUC = nullptr;
   FilenameLength = 0;
 }
 
@@ -48,7 +48,7 @@ void Filename::CopyFilename(const Filename* fn, const Attr::Filename* afn)
   if (FilenameWUC)
   {
     delete FilenameWUC;
-    FilenameWUC = NULL;
+    FilenameWUC = nullptr;
   }
 
   FilenameLength = fn->FilenameLength;
@@ -61,7 +61,7 @@ void Filename::CopyFilename(const Filename* fn, const Attr::Filename* afn)
     FilenameWUC[FilenameLength] = wchar_t('\0');
   }
   else
-    FilenameWUC = NULL;
+    FilenameWUC = nullptr;
 }
 
 // Get uppercase unicode filename and store it in a buffer
@@ -75,7 +75,7 @@ void Filename::GetFilenameWUC()
   if (FilenameWUC)
   {
     delete FilenameWUC;
-    FilenameWUC = NULL;
+    FilenameWUC = nullptr;
     FilenameLength = 0;
   }
 
@@ -91,7 +91,7 @@ void Filename::GetFilenameWUC()
   else
   {
     FilenameLength = 0;
-    FilenameWUC = NULL;
+    FilenameWUC = nullptr;
   }
 }
 
@@ -100,7 +100,7 @@ int Filename::Compare(const wchar_t* fn) const
 {
   // Change fn to upper case
   size_t len = wcslen(fn);
-  if (len > MAX_PATH) return 1;  // Assume bigger
+  if (len >= MAX_PATH) return 1;  // Assume bigger
 
   wchar_t fns[MAX_PATH];
 
@@ -185,7 +185,7 @@ BOOL Filename::IsSparse() const
 // Return 0: Unnamed, <0: buffer too small, -buffersize, >0 Name length
 int Filename::GetFilename(char* buf, DWORD bufLen) const
 {
-  if (filename_ == NULL) return 0;
+  if (filename_ == nullptr) return 0;
 
   int len = 0;
 
@@ -195,7 +195,8 @@ int Filename::GetFilename(char* buf, DWORD bufLen) const
       return -1 * filename_->NameLength;  // buffer too small
 
     len = WideCharToMultiByte(CP_ACP, 0, (wchar_t*)filename_->Name,
-                              filename_->NameLength, buf, bufLen, NULL, NULL);
+                              filename_->NameLength, buf, bufLen, nullptr,
+                              nullptr);
     if (len)
     {
       buf[len] = '\0';
@@ -218,7 +219,7 @@ int Filename::GetFilename(char* buf, DWORD bufLen) const
 // Return 0: Unnamed, <0: buffer too small, -buffersize, >0 Name length
 int Filename::GetFilename(wchar_t* buf, DWORD bufLen) const
 {
-  if (filename_ == NULL) return 0;
+  if (filename_ == nullptr) return 0;
 
   if (filename_->NameLength)
   {
@@ -239,7 +240,7 @@ BOOL Filename::HasName() const { return FilenameLength > 0; }
 
 BOOL Filename::IsWin32Name() const
 {
-  if (filename_ == NULL || FilenameLength <= 0) return FALSE;
+  if (filename_ == nullptr || FilenameLength <= 0) return FALSE;
 
   // POSIX, WIN32, WIN32_DOS
   return filename_->NameSpace != Flag::FilenameNamespace::DOS;

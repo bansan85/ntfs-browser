@@ -11,7 +11,7 @@ IndexBlock::IndexBlock()
 {
   NTFS_TRACE("Index Block\n");
 
-  index_block_ = NULL;
+  index_block_ = nullptr;
 }
 
 IndexBlock::~IndexBlock()

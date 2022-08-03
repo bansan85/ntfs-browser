@@ -1,6 +1,10 @@
 #pragma once
 
 #include "attr-resident.h"
+#include <string>
+#include <string_view>
+
+// OK
 
 namespace NtfsBrowser
 {
@@ -15,18 +19,14 @@ class AttrVolName : public AttrResident
  public:
   AttrVolName(const AttrHeaderCommon& ahc, const FileRecord& fr);
 
-  virtual ~AttrVolName();
+  ~AttrVolName() override = default;
 
  private:
-  wchar_t* VolNameU;
-  char* VolNameA;
-  DWORD NameLength;
+  std::wstring name_;
 
  public:
   // Get NTFS Volume Unicode Name
-  int GetName(wchar_t* buf, DWORD len) const;
-  // ANSI Name
-  int GetName(char* buf, DWORD len) const;
+  [[nodiscard]] std::wstring_view GetName() const;
 };  // AttrVolInfo
 
 }  // namespace NtfsBrowser

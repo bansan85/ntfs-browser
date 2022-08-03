@@ -27,7 +27,7 @@ class AttrBitmap : public TYPE_RESIDENT
       BitmapSize = GetDataSize();
 
       if (IsNonResident())
-        BitmapBuf = new BYTE[_ClusterSize];
+        BitmapBuf = new BYTE[cluster_size_];
       else
       {
         BitmapBuf = new BYTE[BitmapSize];

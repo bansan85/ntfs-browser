@@ -10,7 +10,7 @@ AttrFileName::AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr)
 {
   NTFS_TRACE("Attribute: File Name\n");
 
-  SetFilename((Attr::Filename*)AttrBody);
+  SetFilename((Attr::Filename*)attr_body_);
 }
 
 AttrFileName::~AttrFileName() { NTFS_TRACE("AttrFileName deleted\n"); }

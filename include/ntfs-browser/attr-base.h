@@ -15,30 +15,30 @@ class AttrBase
   virtual ~AttrBase();
 
  protected:
-  const AttrHeaderCommon& AttrHeader;
-  WORD _SectorSize;
-  DWORD _ClusterSize;
-  DWORD _IndexBlockSize;
-  HANDLE _hVolume;
+  const AttrHeaderCommon& attr_header_;
+  WORD sector_size_;
+  DWORD cluster_size_;
+  DWORD index_block_size_;
+  HANDLE hvolume_;
   const FileRecord& file_record_;
 
  public:
-  const AttrHeaderCommon& GetAttrHeader() const;
-  DWORD GetAttrType() const;
-  DWORD GetAttrTotalSize() const;
-  BOOL IsNonResident() const;
-  WORD GetAttrFlags() const;
-  int GetAttrName(char* buf, DWORD bufLen) const;
-  int GetAttrName(wchar_t* buf, DWORD bufLen) const;
-  BOOL IsUnNamed() const;
+  [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const;
+  [[nodiscard]] DWORD GetAttrType() const;
+  [[nodiscard]] DWORD GetAttrTotalSize() const;
+  [[nodiscard]] BOOL IsNonResident() const;
+  [[nodiscard]] WORD GetAttrFlags() const;
+  [[nodiscard]] int GetAttrName(char* buf, DWORD bufLen) const;
+  [[nodiscard]] int GetAttrName(wchar_t* buf, DWORD bufLen) const;
+  [[nodiscard]] BOOL IsUnNamed() const;
 
  protected:
-  virtual BOOL IsDataRunOK() const = 0;
+  [[nodiscard]] virtual BOOL IsDataRunOK() const = 0;
 
  public:
-  virtual ULONGLONG GetDataSize() const = 0;
-  virtual BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
-                        DWORD* actural) const = 0;
+  [[nodiscard]] virtual ULONGLONG GetDataSize() const = 0;
+  [[nodiscard]] virtual BOOL ReadData(ULONGLONG offset, void* bufv,
+                                      DWORD bufLen, DWORD* actural) const = 0;
 };  // AttrBase
 
 }  // namespace NtfsBrowser

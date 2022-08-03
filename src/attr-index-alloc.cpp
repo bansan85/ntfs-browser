@@ -21,15 +21,15 @@ AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
     // Get total number of Index Blocks
     ULONGLONG ibTotalSize;
     ibTotalSize = GetDataSize();
-    if (ibTotalSize % _IndexBlockSize)
+    if (ibTotalSize % index_block_size_)
     {
       NTFS_TRACE2(
           "Cannot calulate number of IndexBlocks, total size = %I64u, unit = "
           "%u\n",
-          ibTotalSize, _IndexBlockSize);
+          ibTotalSize, index_block_size_);
       return;
     }
-    IndexBlockCount = ibTotalSize / _IndexBlockSize;
+    IndexBlockCount = ibTotalSize / index_block_size_;
   }
   else
   {
@@ -46,7 +46,7 @@ BOOL AttrIndexAlloc::PatchUS(WORD* sector, int sectors, WORD usn, WORD* usarray)
 
   for (i = 0; i < sectors; i++)
   {
-    sector += ((_SectorSize >> 1) - 1);
+    sector += ((sector_size_ >> 1) - 1);
     if (*sector != usn) return FALSE;  // USN error
     *sector = usarray[i];              // Write back correct data
     sector++;
@@ -65,15 +65,15 @@ BOOL AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
     return FALSE;
 
   // Allocate buffer for a single Index Block
-  Data::IndexBlock* ibBuf = ibClass.AllocIndexBlock(_IndexBlockSize);
+  Data::IndexBlock* ibBuf = ibClass.AllocIndexBlock(index_block_size_);
 
   // Sectors Per Index Block
-  DWORD sectors = _IndexBlockSize / _SectorSize;
+  DWORD sectors = index_block_size_ / sector_size_;
 
   // Read one Index Block
   DWORD len;
-  if (ReadData(vcn * _IndexBlockSize, ibBuf, _IndexBlockSize, &len) &&
-      len == _IndexBlockSize)
+  if (ReadData(vcn * index_block_size_, ibBuf, index_block_size_, &len) &&
+      len == index_block_size_)
   {
     if (ibBuf->Magic != INDEX_BLOCK_MAGIC)
     {

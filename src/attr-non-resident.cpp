@@ -11,7 +11,7 @@ AttrNonResident::AttrNonResident(const AttrHeaderCommon& ahc,
                                  const FileRecord& fr)
     : AttrBase(ahc, fr), AttrHeaderNR((Attr::HeaderNonResident&)ahc)
 {
-  UnalignedBuf = new BYTE[_ClusterSize];
+  UnalignedBuf = new BYTE[cluster_size_];
 
   bDataRunOK = ParseDataRun();
 }
@@ -125,7 +125,7 @@ BOOL AttrNonResident::ReadClusters(void* buf, DWORD clusters,
     NTFS_TRACE("Sparse Data, Fill the buffer with 0\n");
 
     // Fill the buffer with 0
-    memset(buf, 0, clusters * _ClusterSize);
+    memset(buf, 0, clusters * cluster_size_);
 
     return TRUE;
   }
@@ -133,8 +133,8 @@ BOOL AttrNonResident::ReadClusters(void* buf, DWORD clusters,
   LARGE_INTEGER addr;
   DWORD len;
 
-  addr.QuadPart = lcn * _ClusterSize;
-  len = SetFilePointer(_hVolume, addr.LowPart, &addr.HighPart, FILE_BEGIN);
+  addr.QuadPart = lcn * cluster_size_;
+  len = SetFilePointer(hvolume_, addr.LowPart, &addr.HighPart, FILE_BEGIN);
 
   if (len == (DWORD)-1 && GetLastError() != NO_ERROR)
   {
@@ -142,8 +142,8 @@ BOOL AttrNonResident::ReadClusters(void* buf, DWORD clusters,
   }
   else
   {
-    if (ReadFile(_hVolume, buf, clusters * _ClusterSize, &len, NULL) &&
-        len == clusters * _ClusterSize)
+    if (ReadFile(hvolume_, buf, clusters * cluster_size_, &len, nullptr) &&
+        len == clusters * cluster_size_)
     {
       NTFS_TRACE2("Successfully read %u clusters from LCN %I64d\n", clusters,
                   lcn);
@@ -181,7 +181,7 @@ BOOL AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, DWORD clusters,
   }
 
   // Verify buffer size
-  if (bufLen < clusters * _ClusterSize)
+  if (bufLen < clusters * cluster_size_)
   {
     NTFS_TRACE("Buffer size too small\n");
     return FALSE;
@@ -203,7 +203,7 @@ BOOL AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, DWORD clusters,
         clustersToRead = clusters;
       if (ReadClusters(buf, clustersToRead, dr.LCN + (vcn - dr.StartVCN)))
       {
-        buf += clustersToRead * _ClusterSize;
+        buf += clustersToRead * cluster_size_;
         clusters -= clustersToRead;
         *actural += clustersToRead;
         vcn += clustersToRead;
@@ -215,7 +215,7 @@ BOOL AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, DWORD clusters,
     }
   }
 
-  *actural *= _ClusterSize;
+  *actural *= cluster_size_;
   return TRUE;
 }
 
@@ -249,18 +249,18 @@ BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
   BYTE* buf = (BYTE*)bufv;
 
   // First cluster Number
-  ULONGLONG startVCN = offset / _ClusterSize;
+  ULONGLONG startVCN = offset / cluster_size_;
   // Bytes in first cluster
-  DWORD startBytes = _ClusterSize - (DWORD)(offset % _ClusterSize);
+  DWORD startBytes = cluster_size_ - (DWORD)(offset % cluster_size_);
   // Read first cluster
-  if (startBytes != _ClusterSize)
+  if (startBytes != cluster_size_)
   {
     // First cluster, Unaligned
-    if (ReadVirtualClusters(startVCN, 1, UnalignedBuf, _ClusterSize, &len) &&
-        len == _ClusterSize)
+    if (ReadVirtualClusters(startVCN, 1, UnalignedBuf, cluster_size_, &len) &&
+        len == cluster_size_)
     {
       len = (startBytes < bufLen) ? startBytes : bufLen;
-      memcpy(buf, UnalignedBuf + _ClusterSize - startBytes, len);
+      memcpy(buf, UnalignedBuf + cluster_size_ - startBytes, len);
       buf += len;
       bufLen -= len;
       *actural += len;
@@ -271,18 +271,18 @@ BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
   }
   if (bufLen == 0) return TRUE;
 
-  DWORD alignedClusters = bufLen / _ClusterSize;
+  DWORD alignedClusters = bufLen / cluster_size_;
   if (alignedClusters)
   {
     // Aligned clusters
-    DWORD alignedSize = alignedClusters * _ClusterSize;
+    DWORD alignedSize = alignedClusters * cluster_size_;
     if (ReadVirtualClusters(startVCN, alignedClusters, buf, alignedSize,
                             &len) &&
         len == alignedSize)
     {
       startVCN += alignedClusters;
       buf += alignedSize;
-      bufLen %= _ClusterSize;
+      bufLen %= cluster_size_;
       *actural += len;
 
       if (bufLen == 0) return TRUE;
@@ -292,8 +292,8 @@ BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
   }
 
   // Last cluster, Unaligned
-  if (ReadVirtualClusters(startVCN, 1, UnalignedBuf, _ClusterSize, &len) &&
-      len == _ClusterSize)
+  if (ReadVirtualClusters(startVCN, 1, UnalignedBuf, cluster_size_, &len) &&
+      len == cluster_size_)
   {
     memcpy(buf, UnalignedBuf, bufLen);
     *actural += bufLen;

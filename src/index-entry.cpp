@@ -53,7 +53,7 @@ IndexEntry& IndexEntry::operator=(const IndexEntry& ieClass)
   if (index_entry_)
   {
     delete (void*)index_entry_;
-    index_entry_ = NULL;
+    index_entry_ = nullptr;
   }
 
   const Data::IndexEntry* ie = ieClass.index_entry_;
