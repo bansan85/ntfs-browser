@@ -8,7 +8,7 @@
 namespace NtfsBrowser
 {
 
-AttrIndexRoot::AttrIndexRoot(const AttrHeaderCommon* ahc, const FileRecord* fr)
+AttrIndexRoot::AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr)
     : AttrResident(ahc, fr)
 {
   NTFS_TRACE("Attribute: Index Root\n");
@@ -38,8 +38,7 @@ void AttrIndexRoot::ParseIndexEntries()
 
   while (ieTotal <= IndexRoot->TotalEntrySize)
   {
-    IndexEntry* ieClass = new IndexEntry(ie);
-    push_back(ieClass);
+    emplace_back(ie);
 
     if (static_cast<BOOL>(ie->Flags & Flag::IndexEntry::LAST))
     {

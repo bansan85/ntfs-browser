@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 
 #include <windows.h>
 #include <tchar.h>
@@ -18,7 +19,7 @@ struct FileRecordHeader;
 
 // User defined Callback routine to handle Directory traversing
 // Will be called by FileRecord::TraverseSubEntries for each sub entry
-using SUBENTRY_CALLBACK = void (*)(const IndexEntry* ie);
+using SUBENTRY_CALLBACK = void (*)(const IndexEntry& ie);
 
 // User defined Callback routine to handle FileRecord parsed attributes
 // Will be called by FileRecord::TraverseAttrs() for each attribute
@@ -31,15 +32,18 @@ using ATTRS_CALLBACK = void (*)(const AttrBase* attr, void* context,
 class FileRecord
 {
  public:
-  FileRecord(const NtfsVolume* volume);
+  FileRecord(const NtfsVolume& volume);
+  FileRecord(FileRecord&& t) = default;
+  FileRecord(const FileRecord& t) = delete;
+
   virtual ~FileRecord();
   friend class AttrBase;
   template <class TYPE_RESIDENT>
   friend class AttrList;
 
  private:
-  const NtfsVolume* Volume;
-  FileRecordHeader* file_record_;
+  const NtfsVolume& Volume;
+  std::unique_ptr<FileRecordHeader> file_record_;
   ULONGLONG FileReference;
   AttrRawCallback AttrRawCallBack[kAttrNums];
   Mask AttrMask;
@@ -47,12 +51,12 @@ class FileRecord
 
   void ClearAttrs();
   BOOL PatchUS(WORD* sector, int sectors, WORD usn, WORD* usarray);
-  void UserCallBack(DWORD attType, AttrHeaderCommon* ahc, BOOL* bDiscard);
-  AttrBase* AllocAttr(AttrHeaderCommon* ahc, BOOL* bUnhandled);
-  BOOL ParseAttr(AttrHeaderCommon* ahc);
-  FileRecordHeader* ReadFileRecord(ULONGLONG& fileRef);
-  BOOL VisitIndexBlock(const ULONGLONG& vcn, const _TCHAR* fileName,
-                       IndexEntry& ieFound) const;
+  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, BOOL& bDiscard);
+  AttrBase* AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled);
+  BOOL ParseAttr(const AttrHeaderCommon& ahc);
+  std::unique_ptr<FileRecordHeader> ReadFileRecord(ULONGLONG& fileRef);
+  const IndexEntry* VisitIndexBlock(const ULONGLONG& vcn,
+                                    const _TCHAR* fileName) const;
   void TraverseSubNode(const ULONGLONG& vcn,
                        SUBENTRY_CALLBACK seCallBack) const;
 
@@ -74,7 +78,7 @@ class FileRecord
                    FILETIME* accessTm = NULL) const;
 
   void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const;
-  const BOOL FindSubEntry(const _TCHAR* fileName, IndexEntry& ieFound) const;
+  const IndexEntry* FindSubEntry(const _TCHAR* fileName) const;
   const AttrBase* FindStream(_TCHAR* name = NULL);
 
   BOOL IsDeleted() const;

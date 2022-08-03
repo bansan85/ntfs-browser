@@ -14,7 +14,7 @@ struct AttrHeaderCommon;
 class AttrFileName : public AttrResident, public Filename
 {
  public:
-  AttrFileName(const AttrHeaderCommon* ahc, const FileRecord* fr);
+  AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr);
 
   virtual ~AttrFileName();
 

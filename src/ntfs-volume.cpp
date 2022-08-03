@@ -26,7 +26,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
 
   // Verify NTFS volume version (must >= 3.0)
 
-  FileRecord vol(this);
+  FileRecord vol(*this);
   vol.SetAttrMask(Mask::VOLUME_NAME | Mask::VOLUME_INFORMATION);
   if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME))) return;
 
@@ -54,7 +54,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
 
   VolumeOK = TRUE;
 
-  MFTRecord = new FileRecord(this);
+  MFTRecord = new FileRecord(*this);
   MFTRecord->SetAttrMask(Mask::DATA);
   if (MFTRecord->ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)))
   {

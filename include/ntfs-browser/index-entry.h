@@ -12,7 +12,6 @@ struct IndexEntry;
 class IndexEntry : public Filename
 {
  public:
-  IndexEntry();
   IndexEntry(const Data::IndexEntry* ie);
   virtual ~IndexEntry();
 

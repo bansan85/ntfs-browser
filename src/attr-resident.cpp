@@ -6,15 +6,12 @@
 namespace NtfsBrowser
 {
 
-AttrResident::AttrResident(const AttrHeaderCommon* ahc, const FileRecord* fr)
-    : AttrBase(ahc, fr)
+AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
+    : AttrBase(ahc, fr), AttrHeaderR((const Attr::HeaderResident&)ahc)
 {
-  AttrHeaderR = (Attr::HeaderResident*)ahc;
-  AttrBody = (void*)((BYTE*)AttrHeaderR + AttrHeaderR->AttrOffset);
-  AttrBodySize = AttrHeaderR->AttrSize;
+  AttrBody = (void*)((BYTE*)&AttrHeaderR + AttrHeaderR.AttrOffset);
+  AttrBodySize = AttrHeaderR.AttrSize;
 }
-
-AttrResident::~AttrResident() {}
 
 BOOL AttrResident::IsDataRunOK() const
 {
@@ -23,16 +20,11 @@ BOOL AttrResident::IsDataRunOK() const
 
 // Return Actural Data Size
 // *allocSize = Allocated Size
-ULONGLONG AttrResident::GetDataSize(ULONGLONG* allocSize) const
-{
-  if (allocSize) *allocSize = AttrBodySize;
-
-  return (ULONGLONG)AttrBodySize;
-}
+ULONGLONG AttrResident::GetDataSize() const { return (ULONGLONG)AttrBodySize; }
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
-BOOL AttrResident::ReadData(const ULONGLONG& offset, void* bufv, DWORD bufLen,
+BOOL AttrResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
                             DWORD* actural) const
 {
   _ASSERT(bufv);

@@ -1,6 +1,8 @@
 // ntfsdumpDlg.cpp : implementation file
 //
 
+#include <algorithm>
+
 #include "stdafx.h"
 #include "ntfsdump.h"
 #include "ntfsdumpDlg.h"
@@ -255,7 +257,7 @@ void CNtfsdumpDlg::OnOK()
 
     // parse root directory
 
-    FileRecord fr(&volume);
+    FileRecord fr(volume);
     // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
     // don't waste time and ram to parse unwanted attributes
     fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
@@ -274,7 +276,7 @@ void CNtfsdumpDlg::OnOK()
 
     // find subdirectory
 
-    IndexEntry ie;
+    const IndexEntry* ie;
 
     int dirs = m_filename.Find(_T('\\'), 0);
     int dire = m_filename.Find(_T('\\'), dirs + 1);
@@ -282,9 +284,10 @@ void CNtfsdumpDlg::OnOK()
     {
       CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
 
-      if (fr.FindSubEntry((const _TCHAR*)pathname, ie))
+      ie = fr.FindSubEntry((const _TCHAR*)pathname);
+      if (ie != NULL)
       {
-        if (!fr.ParseFileRecord(ie.GetFileReference()))
+        if (!fr.ParseFileRecord(ie->GetFileReference()))
         {
           MessageBox(_T("Cannot read root directory of volume"));
           return;
@@ -314,9 +317,10 @@ void CNtfsdumpDlg::OnOK()
     // dump it !
 
     CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
-    if (fr.FindSubEntry((const _TCHAR*)filename, ie))
+    ie = fr.FindSubEntry((const _TCHAR*)filename);
+    if (ie != NULL)
     {
-      if (!fr.ParseFileRecord(ie.GetFileReference()))
+      if (!fr.ParseFileRecord(ie->GetFileReference()))
       {
         MessageBox(_T("Cannot read file"));
         return;
@@ -341,9 +345,8 @@ void CNtfsdumpDlg::OnOK()
       const AttrBase* data = fr.FindStream();
       if (data)
       {
-        DWORD datalen = (DWORD)data->GetDataSize();
-        if (datalen > 16 * 1024)
-          datalen = 16 * 1024;  // show only the first 16K
+        // show only the first 16K
+        DWORD datalen = (DWORD)min(data->GetDataSize(), 16 * 1024);
 
         DWORD len;
         if (data->ReadData(0, filebuf, datalen, &len) && len == datalen)

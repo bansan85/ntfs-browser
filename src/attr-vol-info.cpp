@@ -5,19 +5,17 @@
 namespace NtfsBrowser
 {
 
-AttrVolInfo::AttrVolInfo(const AttrHeaderCommon* ahc, const FileRecord* fr)
-    : AttrResident(ahc, fr)
+AttrVolInfo::AttrVolInfo(const AttrHeaderCommon& ahc, const FileRecord& fr)
+    : AttrResident(ahc, fr), VolInfo(*(Attr::VolumeInformation*)AttrBody)
 {
   NTFS_TRACE("Attribute: Volume Information\n");
-
-  VolInfo = (Attr::VolumeInformation*)AttrBody;
 }
 
 AttrVolInfo::~AttrVolInfo() { NTFS_TRACE("AttrVolInfo deleted\n"); }
 
 WORD AttrVolInfo::GetVersion()
 {
-  return MAKEWORD(VolInfo->MinorVersion, VolInfo->MajorVersion);
+  return MAKEWORD(VolInfo.MinorVersion, VolInfo.MajorVersion);
 }
 
 }  // namespace NtfsBrowser

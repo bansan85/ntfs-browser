@@ -17,12 +17,12 @@ struct VolumeInformation;
 class AttrVolInfo : public AttrResident
 {
  public:
-  AttrVolInfo(const AttrHeaderCommon* ahc, const FileRecord* fr);
+  AttrVolInfo(const AttrHeaderCommon& ahc, const FileRecord& fr);
 
   virtual ~AttrVolInfo();
 
  private:
-  const Attr::VolumeInformation* VolInfo;
+  const Attr::VolumeInformation& VolInfo;
 
  public:
   // Get NTFS Volume Version

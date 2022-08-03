@@ -4,7 +4,7 @@
 namespace NtfsBrowser
 {
 
-AttrVolName::AttrVolName(const AttrHeaderCommon* ahc, const FileRecord* fr)
+AttrVolName::AttrVolName(const AttrHeaderCommon& ahc, const FileRecord& fr)
     : AttrResident(ahc, fr)
 {
   NTFS_TRACE("Attribute: Volume Name\n");

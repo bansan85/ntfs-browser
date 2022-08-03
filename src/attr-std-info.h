@@ -23,11 +23,11 @@ enum class StdInfoPermission : DWORD;
 class AttrStdInfo : public AttrResident
 {
  public:
-  AttrStdInfo(const AttrHeaderCommon* ahc, const FileRecord* fr);
+  AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord& fr);
   virtual ~AttrStdInfo();
 
  private:
-  const Attr::StandardInformation* StdInfo;
+  const Attr::StandardInformation& StdInfo;
 
  public:
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm = NULL,

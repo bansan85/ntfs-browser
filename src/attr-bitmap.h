@@ -14,7 +14,7 @@ template <class TYPE_RESIDENT>
 class AttrBitmap : public TYPE_RESIDENT
 {
  public:
-  AttrBitmap(const AttrHeaderCommon* ahc, const FileRecord* fr)
+  AttrBitmap(const AttrHeaderCommon& ahc, const FileRecord& fr)
       : TYPE_RESIDENT(ahc, fr)
   {
     NTFS_TRACE1("Attribute: Bitmap (%sResident)\n",
@@ -30,7 +30,7 @@ class AttrBitmap : public TYPE_RESIDENT
         BitmapBuf = new BYTE[_ClusterSize];
       else
       {
-        BitmapBuf = new BYTE[(DWORD)BitmapSize];
+        BitmapBuf = new BYTE[BitmapSize];
 
         DWORD len;
         if (!(ReadData(0, BitmapBuf, (DWORD)BitmapSize, &len) &&
@@ -65,7 +65,7 @@ class AttrBitmap : public TYPE_RESIDENT
 
  public:
   // Verify if a single cluster is free
-  BOOL IsClusterFree(const ULONGLONG& cluster) const
+  BOOL IsClusterFree(ULONGLONG cluster) const
   {
     if (!IsDataRunOK() || !BitmapBuf) return FALSE;
 
@@ -96,7 +96,7 @@ class AttrBitmap : public TYPE_RESIDENT
 
     // All the Bitmap data is already in BitmapBuf
     DWORD idx = (DWORD)(cluster >> 3);
-    if (IsNonResident() == FALSE)
+    if (!IsNonResident())
     {
       if (idx >= BitmapSize) return TRUE;  // Resident data bounds check error
     }

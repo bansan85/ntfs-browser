@@ -21,10 +21,8 @@
 namespace NtfsBrowser
 {
 
-FileRecord::FileRecord(const NtfsVolume* volume)
+FileRecord::FileRecord(const NtfsVolume& volume) : Volume(volume)
 {
-  _ASSERT(volume);
-  Volume = volume;
   file_record_ = NULL;
   FileReference = (ULONGLONG)-1;
 
@@ -34,12 +32,7 @@ FileRecord::FileRecord(const NtfsVolume* volume)
   AttrMask = MASK_ALL;
 }
 
-FileRecord::~FileRecord()
-{
-  ClearAttrs();
-
-  if (file_record_) delete file_record_;
-}
+FileRecord::~FileRecord() { ClearAttrs(); }
 
 // Free all CAttr_xxx
 void FileRecord::ClearAttrs()
@@ -50,178 +43,165 @@ void FileRecord::ClearAttrs()
   }
 }
 
-// Verify US and update sectors
-BOOL FileRecord::PatchUS(WORD* sector, int sectors, WORD usn, WORD* usarray)
-{
-  int i;
-
-  for (i = 0; i < sectors; i++)
-  {
-    sector += ((Volume->SectorSize >> 1) - 1);
-    if (*sector != usn) return FALSE;  // USN error
-    *sector = usarray[i];              // Write back correct data
-    sector++;
-  }
-  return TRUE;
-}
-
 // Call user defined Callback routines for an attribute
-void FileRecord::UserCallBack(DWORD attType, AttrHeaderCommon* ahc,
-                              BOOL* bDiscard)
+void FileRecord::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
+                              BOOL& bDiscard)
 {
-  *bDiscard = FALSE;
+  bDiscard = FALSE;
 
   if (AttrRawCallBack[attType])
     AttrRawCallBack[attType](ahc, bDiscard);
-  else if (Volume->AttrRawCallBack[attType])
-    Volume->AttrRawCallBack[attType](ahc, bDiscard);
+  else if (Volume.AttrRawCallBack[attType])
+    Volume.AttrRawCallBack[attType](ahc, bDiscard);
 }
 
 extern template class NtfsBrowser::AttrList<AttrNonResident>;
 extern template class NtfsBrowser::AttrList<AttrResident>;
 
-AttrBase* FileRecord::AllocAttr(AttrHeaderCommon* ahc, BOOL* bUnhandled)
+AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled)
 {
-  switch (ahc->Type)
+  switch (ahc.Type)
   {
     case static_cast<DWORD>(AttrType::STANDARD_INFORMATION):
-      return new AttrStdInfo(ahc, this);
+      return new AttrStdInfo(ahc, *this);
 
     case static_cast<DWORD>(AttrType::ATTRIBUTE_LIST):
-      if (ahc->NonResident)
-        return new AttrList<AttrNonResident>(ahc, this);
+      if (ahc.NonResident)
+        return new AttrList<AttrNonResident>(ahc, *this);
       else
-        return new AttrList<AttrResident>(ahc, this);
+        return new AttrList<AttrResident>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::FILE_NAME):
-      return new AttrFileName(ahc, this);
+      return new AttrFileName(ahc, *this);
 
     case static_cast<DWORD>(AttrType::VOLUME_NAME):
-      return new AttrVolName(ahc, this);
+      return new AttrVolName(ahc, *this);
 
     case static_cast<DWORD>(AttrType::VOLUME_INFORMATION):
-      return new AttrVolInfo(ahc, this);
+      return new AttrVolInfo(ahc, *this);
 
     case static_cast<DWORD>(AttrType::DATA):
-      if (ahc->NonResident)
-        return new AttrData<AttrNonResident>(ahc, this);
+      if (ahc.NonResident)
+        return new AttrData<AttrNonResident>(ahc, *this);
       else
-        return new AttrData<AttrResident>(ahc, this);
+        return new AttrData<AttrResident>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::INDEX_ROOT):
-      return new AttrIndexRoot(ahc, this);
+      return new AttrIndexRoot(ahc, *this);
 
     case static_cast<DWORD>(AttrType::INDEX_ALLOCATION):
-      return new AttrIndexAlloc(ahc, this);
+      return new AttrIndexAlloc(ahc, *this);
 
     case static_cast<DWORD>(AttrType::BITMAP):
-      if (ahc->NonResident)
-        return new AttrBitmap<AttrNonResident>(ahc, this);
+      if (ahc.NonResident)
+        return new AttrBitmap<AttrNonResident>(ahc, *this);
       else
         // Resident Bitmap may exist in a directory's FileRecord
         // or in $MFT for a very small volume in theory
-        return new AttrBitmap<AttrResident>(ahc, this);
+        return new AttrBitmap<AttrResident>(ahc, *this);
 
     // Unhandled Attributes
     default:
-      *bUnhandled = TRUE;
-      if (ahc->NonResident)
-        return new AttrNonResident(ahc, this);
+      bUnhandled = TRUE;
+      if (ahc.NonResident)
+        return new AttrNonResident(ahc, *this);
       else
-        return new AttrResident(ahc, this);
+        return new AttrResident(ahc, *this);
   }
 }
 
 // Parse a single Attribute
 // Return False on error
-BOOL FileRecord::ParseAttr(AttrHeaderCommon* ahc)
+BOOL FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 {
-  DWORD attrIndex = ATTR_INDEX(ahc->Type);
+  DWORD attrIndex = ATTR_INDEX(ahc.Type);
   if (attrIndex < kAttrNums)
   {
     BOOL bDiscard = FALSE;
-    UserCallBack(attrIndex, ahc, &bDiscard);
+    UserCallBack(attrIndex, ahc, bDiscard);
 
     if (!bDiscard)
     {
       BOOL bUnhandled = FALSE;
-      AttrBase* attr = AllocAttr(ahc, &bUnhandled);
+      AttrBase* attr = AllocAttr(ahc, bUnhandled);
       if (attr)
       {
         if (bUnhandled)
         {
-          NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc->Type);
+          NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.Type);
         }
         attr_list_[attrIndex].push_back(attr);
         return TRUE;
       }
       else
       {
-        NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc->Type);
+        NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.Type);
         return FALSE;
       }
     }
     else
     {
       NTFS_TRACE1("User Callback has processed this Attribute: 0x%04X\n",
-                  ahc->Type);
+                  ahc.Type);
       return TRUE;
     }
   }
   else
   {
-    NTFS_TRACE1("Invalid Attribute Type: 0x%04X\n", ahc->Type);
+    NTFS_TRACE1("Invalid Attribute Type: 0x%04X\n", ahc.Type);
     return FALSE;
   }
 }
 
 // Read File Record
-FileRecordHeader* FileRecord::ReadFileRecord(ULONGLONG& fileRef)
+std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
 {
-  FileRecordHeader* fr = NULL;
   DWORD len;
+  std::vector<BYTE> buffer;
+  buffer.reserve(Volume.FileRecordSize);
 
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
-      Volume->MFTData == NULL)
+      Volume.MFTData == NULL)
   {
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr;
-    frAddr.QuadPart = Volume->MFTAddr + (Volume->FileRecordSize) * fileRef;
-    frAddr.LowPart = SetFilePointer(Volume->hVolume, frAddr.LowPart,
+    frAddr.QuadPart = Volume.MFTAddr + (Volume.FileRecordSize) * fileRef;
+    frAddr.LowPart = SetFilePointer(Volume.hVolume, frAddr.LowPart,
                                     &frAddr.HighPart, FILE_BEGIN);
 
     if (frAddr.LowPart == DWORD(-1) && GetLastError() != NO_ERROR)
       return FALSE;
     else
     {
-      fr = (FileRecordHeader*)new BYTE[Volume->FileRecordSize];
-
-      if (ReadFile(Volume->hVolume, fr, Volume->FileRecordSize, &len, NULL) &&
-          len == Volume->FileRecordSize)
-        return fr;
-      else
+      if (ReadFile(Volume.hVolume, buffer.data(), Volume.FileRecordSize, &len,
+                   NULL) &&
+          len == Volume.FileRecordSize)
       {
-        delete fr;
-        return NULL;
+        std::unique_ptr<FileRecordHeader> fr =
+            std::make_unique<FileRecordHeader>(
+                buffer.data(), Volume.FileRecordSize, Volume.SectorSize);
+        return fr;
       }
+      else
+        return {};
     }
   }
   else
   {
     // May be fragmented $MFT
     ULONGLONG frAddr;
-    frAddr = (Volume->FileRecordSize) * fileRef;
+    frAddr = (Volume.FileRecordSize) * fileRef;
 
-    fr = (FileRecordHeader*)new BYTE[Volume->FileRecordSize];
-
-    if (Volume->MFTData->ReadData(frAddr, fr, Volume->FileRecordSize, &len) &&
-        len == Volume->FileRecordSize)
-      return fr;
-    else
+    if (Volume.MFTData->ReadData(frAddr, buffer.data(), Volume.FileRecordSize,
+                                 &len) &&
+        len == Volume.FileRecordSize)
     {
-      delete fr;
-      return NULL;
+      std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
+          buffer.data(), Volume.FileRecordSize, Volume.SectorSize);
+      return fr;
     }
+    else
+      return {};
   }
 }
 
@@ -230,14 +210,10 @@ BOOL FileRecord::ParseFileRecord(ULONGLONG fileRef)
 {
   // Clear previous data
   ClearAttrs();
-  if (file_record_)
-  {
-    delete file_record_;
-    file_record_ = NULL;
-  }
+  if (file_record_) file_record_.reset();
 
-  FileRecordHeader* fr = ReadFileRecord(fileRef);
-  if (fr == NULL)
+  std::unique_ptr<FileRecordHeader> fr = ReadFileRecord(fileRef);
+  if (!fr)
   {
     NTFS_TRACE1("Cannot read file record %I64u\n", fileRef);
 
@@ -249,15 +225,10 @@ BOOL FileRecord::ParseFileRecord(ULONGLONG fileRef)
 
     if (fr->Magic == kFileRecordMagic)
     {
-      // Patch US
-      WORD* usnaddr = (WORD*)((BYTE*)fr + fr->OffsetOfUS);
-      WORD usn = *usnaddr;
-      WORD* usarray = usnaddr + 1;
-      if (PatchUS((WORD*)fr, Volume->FileRecordSize / Volume->SectorSize, usn,
-                  usarray))
+      if (fr->PatchUS())
       {
         NTFS_TRACE1("File Record %I64u Found\n", fileRef);
-        file_record_ = fr;
+        file_record_ = std::move(fr);
 
         return TRUE;
       }
@@ -270,59 +241,57 @@ BOOL FileRecord::ParseFileRecord(ULONGLONG fileRef)
     {
       NTFS_TRACE("Invalid file record\n");
     }
-
-    delete fr;
   }
 
   return FALSE;
 }
 
 // Visit IndexBlocks recursivly to find a specific Filename
-BOOL FileRecord::VisitIndexBlock(const ULONGLONG& vcn, const _TCHAR* fileName,
-                                 IndexEntry& ieFound) const
+const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
+                                              const _TCHAR* fileName) const
 {
   const std::vector<AttrBase*>* vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
   if (vec == NULL || vec->empty()) return FALSE;
 
   IndexBlock ib;
+  const IndexEntry* retval;
   if (((AttrIndexAlloc*)vec->front())->ParseIndexBlock(vcn, ib))
   {
-    for (IndexEntry* ie : ib)
+    for (const IndexEntry& ie : ib)
     {
-      if (ie->HasName())
+      if (ie.HasName())
       {
         // Compare name
-        int i = ie->Compare(fileName);
+        int i = ie.Compare(fileName);
         if (i == 0)
         {
-          ieFound = *ie;
-          return TRUE;
+          return &ie;
         }
         else if (i < 0)  // fileName is smaller than IndexEntry
         {
           // Visit SubNode
-          if (ie->IsSubNodePtr())
+          if (ie.IsSubNodePtr())
           {
             // Search in SubNode (IndexBlock), recursive call
-            if (VisitIndexBlock(ie->GetSubNodeVCN(), fileName, ieFound))
-              return TRUE;
+            retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+            if (retval != NULL) return retval;
           }
           else
-            return FALSE;  // not found
+            return NULL;  // not found
         }
         // Just step forward if fileName is bigger than IndexEntry
       }
-      else if (ie->IsSubNodePtr())
+      else if (ie.IsSubNodePtr())
       {
         // Search in SubNode (IndexBlock), recursive call
-        if (VisitIndexBlock(ie->GetSubNodeVCN(), fileName, ieFound))
-          return TRUE;
+        retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+        if (retval != NULL) return retval;
       }
     }
   }
 
-  return FALSE;
+  return NULL;
 }
 
 // Traverse SubNode recursivly in ascending order
@@ -338,12 +307,12 @@ void FileRecord::TraverseSubNode(const ULONGLONG& vcn,
   if (((AttrIndexAlloc*)vec->front())->ParseIndexBlock(vcn, ib))
 
   {
-    for (IndexEntry* ie : ib)
+    for (const IndexEntry& ie : ib)
     {
-      if (ie->IsSubNodePtr())
-        TraverseSubNode(ie->GetSubNodeVCN(), seCallBack);  // recursive call
+      if (ie.IsSubNodePtr())
+        TraverseSubNode(ie.GetSubNodeVCN(), seCallBack);  // recursive call
 
-      if (ie->HasName()) seCallBack(ie);
+      if (ie.HasName()) seCallBack(ie);
     }
   }
 }
@@ -360,17 +329,16 @@ BOOL FileRecord::ParseAttrs()
   // Visit all attributes
 
   DWORD dataPtr = 0;  // guard if data exceeds FileRecordSize bounds
-  AttrHeaderCommon* ahc =
-      (AttrHeaderCommon*)((BYTE*)file_record_ + file_record_->OffsetOfAttr);
+  const AttrHeaderCommon* ahc = file_record_->HeaderCommon();
   dataPtr += file_record_->OffsetOfAttr;
 
   while (ahc->Type != (DWORD)-1 &&
-         (dataPtr + ahc->TotalSize) <= Volume->FileRecordSize)
+         (dataPtr + ahc->TotalSize) <= Volume.FileRecordSize)
   {
     if (static_cast<BOOL>(ATTR_MASK(ahc->Type) &
                           AttrMask))  // Skip unwanted attributes
     {
-      if (!ParseAttr(ahc))  // Parse error
+      if (!ParseAttr(*ahc))  // Parse error
         return FALSE;
 
       if (IsEncrypted() || IsCompressed())
@@ -381,7 +349,8 @@ BOOL FileRecord::ParseAttrs()
     }
 
     dataPtr += ahc->TotalSize;
-    ahc = (AttrHeaderCommon*)((BYTE*)ahc + ahc->TotalSize);  // next attribute
+    ahc = (const AttrHeaderCommon*)((BYTE*)ahc +
+                                    ahc->TotalSize);  // next attribute
   }
 
   return TRUE;
@@ -528,18 +497,17 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const
 
   if (!ir->IsFileName()) return;
 
-  for (IndexEntry* ie : *ir)
+  for (const IndexEntry& ie : *ir)
   {
     // Visit subnode first
-    if (ie->IsSubNodePtr()) TraverseSubNode(ie->GetSubNodeVCN(), seCallBack);
+    if (ie.IsSubNodePtr()) TraverseSubNode(ie.GetSubNodeVCN(), seCallBack);
 
-    if (ie->HasName()) seCallBack(ie);
+    if (ie.HasName()) seCallBack(ie);
   }
 }
 
 // Find a specific Filename from InexRoot described B+ tree
-const BOOL FileRecord::FindSubEntry(const _TCHAR* fileName,
-                                    IndexEntry& ieFound) const
+const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
 {
   // Start searching from IndexRoot (B+ tree root node)
   const std::vector<AttrBase*>* vec =
@@ -550,39 +518,40 @@ const BOOL FileRecord::FindSubEntry(const _TCHAR* fileName,
 
   if (!ir->IsFileName()) return FALSE;
 
-  for (IndexEntry* ie : *ir)
+  const IndexEntry* retval;
+  for (const IndexEntry& ie : *ir)
   {
-    if (ie->HasName())
+    if (ie.HasName())
     {
       // Compare name
-      int i = ie->Compare(fileName);
+      int i = ie.Compare(fileName);
       if (i == 0)
       {
-        ieFound = *ie;
-        return TRUE;
+        return &ie;
       }
       else if (i < 0)  // fileName is smaller than IndexEntry
       {
         // Visit SubNode
-        if (ie->IsSubNodePtr())
+        if (ie.IsSubNodePtr())
         {
           // Search in SubNode (IndexBlock)
-          if (VisitIndexBlock(ie->GetSubNodeVCN(), fileName, ieFound))
-            return TRUE;
+          retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+          if (retval != NULL) return retval;
         }
         else
-          return FALSE;  // not found
+          return NULL;  // not found
       }
       // Just step forward if fileName is bigger than IndexEntry
     }
-    else if (ie->IsSubNodePtr())
+    else if (ie.IsSubNodePtr())
     {
       // Search in SubNode (IndexBlock)
-      if (VisitIndexBlock(ie->GetSubNodeVCN(), fileName, ieFound)) return TRUE;
+      retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+      if (retval != NULL) return retval;
     }
   }
 
-  return FALSE;
+  return NULL;
 }
 
 // Find Data attribute class of

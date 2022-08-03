@@ -8,8 +8,8 @@
 namespace NtfsBrowser
 {
 
-AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon* ahc,
-                               const FileRecord* fr)
+AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
+                               const FileRecord& fr)
     : AttrNonResident(ahc, fr)
 {
   NTFS_TRACE("Attribute: Index Allocation\n");
@@ -99,8 +99,7 @@ BOOL AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 
     while (ieTotal <= ibBuf->TotalEntrySize)
     {
-      IndexEntry* ieClass = new IndexEntry(ie);
-      ibClass.push_back(ieClass);
+      ibClass.emplace_back(ie);
 
       if (static_cast<BOOL>(ie->Flags & Flag::IndexEntry::LAST))
       {

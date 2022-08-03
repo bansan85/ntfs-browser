@@ -6,8 +6,7 @@
 
 #define ATTR_INDEX(at) \
   (((at) >> 4) - 1)  // Attribute Type to Index, eg. 0x10->0, 0x30->2
-#define ATTR_MASK_(at) \
-  static_cast<Mask>(((DWORD)1) << ATTR_INDEX(at))  // Attribute Bit Mask
+#define ATTR_MASK_(at) (((DWORD)1) << ATTR_INDEX(at))  // Attribute Bit Mask
 
 namespace NtfsBrowser
 {

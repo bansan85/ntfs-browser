@@ -14,7 +14,7 @@ struct IndexBlock;
 ///////////////////////////////
 // Index Block helper class
 ///////////////////////////////
-class IndexBlock : public std::vector<IndexEntry*>
+class IndexBlock : public std::vector<IndexEntry>
 {
  public:
   IndexBlock();

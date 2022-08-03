@@ -290,7 +290,7 @@ void CNtfsundelDlg::OnSearch()
   for (ULONGLONG i = static_cast<ULONGLONG>(Enum::MftIdx::USER);
        i < volume.GetRecordsCount(); i++)
   {
-    FileRecord fr(&volume);
+    FileRecord fr(volume);
 
     // Only parse Standard Information and File Name attributes
     fr.SetAttrMask(Mask::FILE_NAME);       // StdInfo will always be parsed
@@ -382,7 +382,7 @@ void CNtfsundelDlg::OnRecover()
   _TCHAR volname = vns.GetAt(0);
 
   NtfsVolume volume(volname);
-  FileRecord fr(&volume);
+  FileRecord fr(volume);
 
   if (!fr.ParseFileRecord(ref))
   {

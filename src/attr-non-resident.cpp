@@ -7,12 +7,10 @@
 namespace NtfsBrowser
 {
 
-AttrNonResident::AttrNonResident(const AttrHeaderCommon* ahc,
-                                 const FileRecord* fr)
-    : AttrBase(ahc, fr)
+AttrNonResident::AttrNonResident(const AttrHeaderCommon& ahc,
+                                 const FileRecord& fr)
+    : AttrBase(ahc, fr), AttrHeaderNR((Attr::HeaderNonResident&)ahc)
 {
-  AttrHeaderNR = (Attr::HeaderNonResident*)ahc;
-
   UnalignedBuf = new BYTE[_ClusterSize];
 
   bDataRunOK = ParseDataRun();
@@ -65,10 +63,10 @@ BOOL AttrNonResident::PickData(const BYTE** dataRun, LONGLONG* length,
 BOOL AttrNonResident::ParseDataRun()
 {
   NTFS_TRACE("Parsing Non Resident DataRun\n");
-  NTFS_TRACE2("Start VCN = %I64u, End VCN = %I64u\n", AttrHeaderNR->StartVCN,
-              AttrHeaderNR->LastVCN);
+  NTFS_TRACE2("Start VCN = %I64u, End VCN = %I64u\n", AttrHeaderNR.StartVCN,
+              AttrHeaderNR.LastVCN);
 
-  const BYTE* dataRun = (BYTE*)AttrHeaderNR + AttrHeaderNR->DataRunOffset;
+  const BYTE* dataRun = (BYTE*)&AttrHeaderNR + AttrHeaderNR.DataRunOffset;
   LONGLONG length;
   LONGLONG LCNOffset;
   LONGLONG LCN = 0;
@@ -96,7 +94,7 @@ BOOL AttrNonResident::ParseDataRun()
       VCN += length;
       dr->LastVCN = VCN - 1;
 
-      if (dr->LastVCN <= (AttrHeaderNR->LastVCN - AttrHeaderNR->StartVCN))
+      if (dr->LastVCN <= (AttrHeaderNR.LastVCN - AttrHeaderNR.StartVCN))
       {
         DataRunList.push_back(*dr);
       }
@@ -119,7 +117,8 @@ BOOL AttrNonResident::ParseDataRun()
 
 // Read clusters from disk, or sparse data
 // *actural = Clusters acturally read
-BOOL AttrNonResident::ReadClusters(void* buf, DWORD clusters, LONGLONG lcn)
+BOOL AttrNonResident::ReadClusters(void* buf, DWORD clusters,
+                                   LONGLONG lcn) const
 {
   if (lcn == -1)  // sparse data
   {
@@ -166,7 +165,7 @@ BOOL AttrNonResident::ReadClusters(void* buf, DWORD clusters, LONGLONG lcn)
 // *actural = Number of bytes acturally read
 BOOL AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, DWORD clusters,
                                           void* bufv, DWORD bufLen,
-                                          DWORD* actural)
+                                          DWORD* actural) const
 {
   _ASSERT(bufv);
   _ASSERT(clusters);
@@ -175,7 +174,7 @@ BOOL AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, DWORD clusters,
   BYTE* buf = (BYTE*)bufv;
 
   // Verify if clusters exceeds DataRun bounds
-  if (vcn + clusters > (AttrHeaderNR->LastVCN - AttrHeaderNR->StartVCN + 1))
+  if (vcn + clusters > (AttrHeaderNR.LastVCN - AttrHeaderNR.StartVCN + 1))
   {
     NTFS_TRACE("Cluster exceeds DataRun bounds\n");
     return FALSE;
@@ -225,17 +224,12 @@ BOOL AttrNonResident::IsDataRunOK() const { return bDataRunOK; }
 
 // Return Actural Data Size
 // *allocSize = Allocated Size
-ULONGLONG AttrNonResident::GetDataSize(ULONGLONG* allocSize) const
-{
-  if (allocSize) *allocSize = AttrHeaderNR->AllocSize;
-
-  return AttrHeaderNR->RealSize;
-}
+ULONGLONG AttrNonResident::GetDataSize() const { return AttrHeaderNR.RealSize; }
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
-BOOL AttrNonResident::ReadData(const ULONGLONG& offset, void* bufv,
-                               DWORD bufLen, DWORD* actural) const
+BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
+                               DWORD* actural) const
 {
   // Hard disks can only be accessed by sectors
   // To be simple and efficient, only implemented cluster based accessing
@@ -247,9 +241,9 @@ BOOL AttrNonResident::ReadData(const ULONGLONG& offset, void* bufv,
   if (bufLen == 0) return TRUE;
 
   // Bounds check
-  if (offset > AttrHeaderNR->RealSize) return FALSE;
-  if ((offset + bufLen) > AttrHeaderNR->RealSize)
-    bufLen = (DWORD)(AttrHeaderNR->RealSize - offset);
+  if (offset > AttrHeaderNR.RealSize) return FALSE;
+  if ((offset + bufLen) > AttrHeaderNR.RealSize)
+    bufLen = (DWORD)(AttrHeaderNR.RealSize - offset);
 
   DWORD len;
   BYTE* buf = (BYTE*)bufv;
@@ -262,9 +256,7 @@ BOOL AttrNonResident::ReadData(const ULONGLONG& offset, void* bufv,
   if (startBytes != _ClusterSize)
   {
     // First cluster, Unaligned
-    if (((AttrNonResident*)this)
-            ->ReadVirtualClusters(startVCN, 1, UnalignedBuf, _ClusterSize,
-                                  &len) &&
+    if (ReadVirtualClusters(startVCN, 1, UnalignedBuf, _ClusterSize, &len) &&
         len == _ClusterSize)
     {
       len = (startBytes < bufLen) ? startBytes : bufLen;
@@ -284,9 +276,8 @@ BOOL AttrNonResident::ReadData(const ULONGLONG& offset, void* bufv,
   {
     // Aligned clusters
     DWORD alignedSize = alignedClusters * _ClusterSize;
-    if (((AttrNonResident*)this)
-            ->ReadVirtualClusters(startVCN, alignedClusters, buf, alignedSize,
-                                  &len) &&
+    if (ReadVirtualClusters(startVCN, alignedClusters, buf, alignedSize,
+                            &len) &&
         len == alignedSize)
     {
       startVCN += alignedClusters;
@@ -301,9 +292,7 @@ BOOL AttrNonResident::ReadData(const ULONGLONG& offset, void* bufv,
   }
 
   // Last cluster, Unaligned
-  if (((AttrNonResident*)this)
-          ->ReadVirtualClusters(startVCN, 1, UnalignedBuf, _ClusterSize,
-                                &len) &&
+  if (ReadVirtualClusters(startVCN, 1, UnalignedBuf, _ClusterSize, &len) &&
       len == _ClusterSize)
   {
     memcpy(buf, UnalignedBuf, bufLen);

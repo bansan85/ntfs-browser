@@ -13,7 +13,7 @@ class FileRecord;
 class AttrVolName : public AttrResident
 {
  public:
-  AttrVolName(const AttrHeaderCommon* ahc, const FileRecord* fr);
+  AttrVolName(const AttrHeaderCommon& ahc, const FileRecord& fr);
 
   virtual ~AttrVolName();
 

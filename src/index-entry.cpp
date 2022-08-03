@@ -4,17 +4,6 @@
 
 namespace NtfsBrowser
 {
-
-IndexEntry::IndexEntry()
-{
-  NTFS_TRACE("Index Entry\n");
-
-  IsDefault = TRUE;
-
-  index_entry_ = NULL;
-  SetFilename(NULL);
-}
-
 IndexEntry::IndexEntry(const Data::IndexEntry* ie)
 {
   NTFS_TRACE("Index Entry\n");

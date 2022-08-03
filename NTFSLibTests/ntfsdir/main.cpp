@@ -112,37 +112,37 @@ int getpathname(char** ppath, char* pathname)
 int totalfiles = 0;
 int totaldirs = 0;
 
-void printfile(const IndexEntry* ie)
+void printfile(const IndexEntry& ie)
 {
   // Hide system metafiles
-  if (ie->GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::USER))
+  if (ie.GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::USER))
     return;
 
   // Ignore DOS alias file names
-  if (!ie->IsWin32Name()) return;
+  if (!ie.IsWin32Name()) return;
 
   FILETIME ft;
   char fn[MAX_PATH];
-  int fnlen = ie->GetFilename(fn, MAX_PATH);
+  int fnlen = ie.GetFilename(fn, MAX_PATH);
   if (fnlen > 0)
   {
-    ie->GetFileTime(&ft);
+    ie.GetFileTime(&ft);
     SYSTEMTIME st;
     if (FileTimeToSystemTime(&ft, &st))
     {
       printf("%d-%02d-%02d  %02d:%02d\t%s    ", st.wYear, st.wMonth, st.wDay,
-             st.wHour, st.wMinute, ie->IsDirectory() ? "<DIR>" : "     ");
+             st.wHour, st.wMinute, ie.IsDirectory() ? "<DIR>" : "     ");
 
-      if (!ie->IsDirectory())
-        printf("%I64u\t", ie->GetFileSize());
+      if (!ie.IsDirectory())
+        printf("%I64u\t", ie.GetFileSize());
       else
         printf("\t");
 
-      printf("<%c%c%c>\t%s\n", ie->IsReadOnly() ? 'R' : ' ',
-             ie->IsHidden() ? 'H' : ' ', ie->IsSystem() ? 'S' : ' ', fn);
+      printf("<%c%c%c>\t%s\n", ie.IsReadOnly() ? 'R' : ' ',
+             ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn);
     }
 
-    if (ie->IsDirectory())
+    if (ie.IsDirectory())
       totaldirs++;
     else
       totalfiles++;
@@ -176,7 +176,7 @@ int main(int argc, char* argv[])
 
   // get root directory info
 
-  FileRecord fr(&volume);
+  FileRecord fr(volume);
 
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
@@ -209,12 +209,12 @@ int main(int argc, char* argv[])
     }
     if (pathlen == 0) break;  // no subdirectories
 
-    IndexEntry ie;
-    if (fr.FindSubEntry(pathname, ie))
+    const IndexEntry* ie = fr.FindSubEntry(pathname);
+    if (ie != NULL)
     {
-      if (ie.IsDirectory())
+      if (ie->IsDirectory())
       {
-        if (!fr.ParseFileRecord(ie.GetFileReference()))
+        if (!fr.ParseFileRecord(ie->GetFileReference()))
         {
           printf("Cannot read directory %s\n", pathname);
           return -1;

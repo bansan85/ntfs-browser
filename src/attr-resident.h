@@ -16,19 +16,19 @@ struct HeaderResident;
 class AttrResident : public AttrBase
 {
  public:
-  AttrResident(const AttrHeaderCommon* ahc, const FileRecord* fr);
-  virtual ~AttrResident();
+  AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  virtual ~AttrResident() = default;
 
  protected:
-  const Attr::HeaderResident* AttrHeaderR;
+  const Attr::HeaderResident& AttrHeaderR;
   const void* AttrBody;  // Points to Resident Data
   DWORD AttrBodySize;    // Attribute Data Size
 
   virtual BOOL IsDataRunOK() const;
 
  public:
-  virtual ULONGLONG GetDataSize(ULONGLONG* allocSize = NULL) const;
-  virtual BOOL ReadData(const ULONGLONG& offset, void* bufv, DWORD bufLen,
+  virtual ULONGLONG GetDataSize() const;
+  virtual BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
                         DWORD* actural) const;
 };  // AttrResident
 }  // namespace NtfsBrowser

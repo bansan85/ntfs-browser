@@ -278,7 +278,7 @@ void printattr(const AttrBase* attr, void* context, BOOL* bStop)
   }
   line += _T("\r\n");
 
-  appenddata(line, (BYTE*)(attr->GetAttrHeader()), attr->GetAttrTotalSize());
+  appenddata(line, (BYTE*)&attr->GetAttrHeader(), attr->GetAttrTotalSize());
 
   *dump += line;
 }
@@ -309,7 +309,7 @@ void CNtfsattrDlg::OnOK()
 
     // parse root directory
 
-    FileRecord fr(&volume);
+    FileRecord fr(volume);
     // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
     // don't waste time and ram to parse unwanted attributes
     fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
@@ -328,7 +328,7 @@ void CNtfsattrDlg::OnOK()
 
     // find subdirectory
 
-    IndexEntry ie;
+    const IndexEntry* ie;
 
     int dirs = m_filename.Find(_T('\\'), 0);
     int dire = m_filename.Find(_T('\\'), dirs + 1);
@@ -336,9 +336,10 @@ void CNtfsattrDlg::OnOK()
     {
       CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
 
-      if (fr.FindSubEntry((const _TCHAR*)pathname, ie))
+      ie = fr.FindSubEntry((const _TCHAR*)pathname);
+      if (ie != NULL)
       {
-        if (!fr.ParseFileRecord(ie.GetFileReference()))
+        if (!fr.ParseFileRecord(ie->GetFileReference()))
         {
           MessageBox(_T("Cannot read root directory of volume"));
           return;
@@ -372,9 +373,10 @@ void CNtfsattrDlg::OnOK()
     if (filename.GetLength() == 2 && (filename.Find(_T(':')) != -1))
       filename = _T('.');  // root directory
 
-    if (fr.FindSubEntry((const _TCHAR*)filename, ie))
+    ie = fr.FindSubEntry((const _TCHAR*)filename);
+    if (ie != NULL)
     {
-      if (!fr.ParseFileRecord(ie.GetFileReference()))
+      if (!fr.ParseFileRecord(ie->GetFileReference()))
       {
         MessageBox(_T("Cannot read file"));
         return;

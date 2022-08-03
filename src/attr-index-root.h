@@ -16,10 +16,10 @@ struct IndexRoot;
 /////////////////////////////////////
 // Attribute: Index Root (Resident)
 /////////////////////////////////////
-class AttrIndexRoot : public AttrResident, public std::vector<IndexEntry*>
+class AttrIndexRoot : public AttrResident, public std::vector<IndexEntry>
 {
  public:
-  AttrIndexRoot(const AttrHeaderCommon* ahc, const FileRecord* fr);
+  AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr);
   virtual ~AttrIndexRoot();
 
  private:

@@ -21,11 +21,11 @@ struct HeaderNonResident;
 class AttrNonResident : public AttrBase
 {
  public:
-  AttrNonResident(const AttrHeaderCommon* ahc, const FileRecord* fr);
+  AttrNonResident(const AttrHeaderCommon& ahc, const FileRecord& fr);
   virtual ~AttrNonResident();
 
  protected:
-  const Attr::HeaderNonResident* AttrHeaderNR;
+  const Attr::HeaderNonResident& AttrHeaderNR;
   std::vector<Data::RunEntry> DataRunList;
 
  private:
@@ -33,16 +33,16 @@ class AttrNonResident : public AttrBase
   BYTE* UnalignedBuf;  // Buffer to hold not cluster aligned data
   BOOL PickData(const BYTE** dataRun, LONGLONG* length, LONGLONG* LCNOffset);
   BOOL ParseDataRun();
-  BOOL ReadClusters(void* buf, DWORD clusters, LONGLONG lcn);
+  BOOL ReadClusters(void* buf, DWORD clusters, LONGLONG lcn) const;
   BOOL ReadVirtualClusters(ULONGLONG vcn, DWORD clusters, void* bufv,
-                           DWORD bufLen, DWORD* actural);
+                           DWORD bufLen, DWORD* actural) const;
 
  protected:
   virtual BOOL IsDataRunOK() const;
 
  public:
-  virtual ULONGLONG GetDataSize(ULONGLONG* allocSize = NULL) const;
-  virtual BOOL ReadData(const ULONGLONG& offset, void* bufv, DWORD bufLen,
+  virtual ULONGLONG GetDataSize() const;
+  virtual BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
                         DWORD* actural) const;
 };  // AttrNonResident
 }  // namespace NtfsBrowser

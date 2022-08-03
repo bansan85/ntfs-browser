@@ -5,7 +5,7 @@
 namespace NtfsBrowser
 {
 
-AttrFileName::AttrFileName(const AttrHeaderCommon* ahc, const FileRecord* fr)
+AttrFileName::AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr)
     : AttrResident(ahc, fr)
 {
   NTFS_TRACE("Attribute: File Name\n");

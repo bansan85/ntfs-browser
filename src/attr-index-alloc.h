@@ -14,7 +14,7 @@ struct AttrHeaderCommon;
 class AttrIndexAlloc : public AttrNonResident
 {
  public:
-  AttrIndexAlloc(const AttrHeaderCommon* ahc, const FileRecord* fr);
+  AttrIndexAlloc(const AttrHeaderCommon& ahc, const FileRecord& fr);
   virtual ~AttrIndexAlloc();
 
  private:

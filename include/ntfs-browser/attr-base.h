@@ -11,19 +11,19 @@ class FileRecord;
 class AttrBase
 {
  public:
-  AttrBase(const AttrHeaderCommon* ahc, const FileRecord* fr);
+  AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr);
   virtual ~AttrBase();
 
  protected:
-  const AttrHeaderCommon* AttrHeader;
+  const AttrHeaderCommon& AttrHeader;
   WORD _SectorSize;
   DWORD _ClusterSize;
   DWORD _IndexBlockSize;
   HANDLE _hVolume;
-  const FileRecord* file_record_;
+  const FileRecord& file_record_;
 
  public:
-  const AttrHeaderCommon* GetAttrHeader() const;
+  const AttrHeaderCommon& GetAttrHeader() const;
   DWORD GetAttrType() const;
   DWORD GetAttrTotalSize() const;
   BOOL IsNonResident() const;
@@ -36,8 +36,8 @@ class AttrBase
   virtual BOOL IsDataRunOK() const = 0;
 
  public:
-  virtual ULONGLONG GetDataSize(ULONGLONG* allocSize = NULL) const = 0;
-  virtual BOOL ReadData(const ULONGLONG& offset, void* bufv, DWORD bufLen,
+  virtual ULONGLONG GetDataSize() const = 0;
+  virtual BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
                         DWORD* actural) const = 0;
 };  // AttrBase
 

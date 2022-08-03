@@ -7,43 +7,38 @@
 namespace NtfsBrowser
 {
 
-AttrBase::AttrBase(const AttrHeaderCommon* ahc, const FileRecord* fr)
+AttrBase::AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr)
+    : AttrHeader(ahc), file_record_(fr)
 {
-  _ASSERT(ahc);
-  _ASSERT(fr);
-
-  AttrHeader = ahc;
-  file_record_ = fr;
-
-  _SectorSize = fr->Volume->SectorSize;
-  _ClusterSize = fr->Volume->ClusterSize;
-  _IndexBlockSize = fr->Volume->IndexBlockSize;
-  _hVolume = fr->Volume->hVolume;
+  _SectorSize = fr.Volume.SectorSize;
+  _ClusterSize = fr.Volume.ClusterSize;
+  _IndexBlockSize = fr.Volume.IndexBlockSize;
+  _hVolume = fr.Volume.hVolume;
 }
 
 AttrBase::~AttrBase() {}
 
-const AttrHeaderCommon* AttrBase::GetAttrHeader() const { return AttrHeader; }
+const AttrHeaderCommon& AttrBase::GetAttrHeader() const { return AttrHeader; }
 
-DWORD AttrBase::GetAttrType() const { return AttrHeader->Type; }
+DWORD AttrBase::GetAttrType() const { return AttrHeader.Type; }
 
-DWORD AttrBase::GetAttrTotalSize() const { return AttrHeader->TotalSize; }
+DWORD AttrBase::GetAttrTotalSize() const { return AttrHeader.TotalSize; }
 
-BOOL AttrBase::IsNonResident() const { return AttrHeader->NonResident; }
+BOOL AttrBase::IsNonResident() const { return AttrHeader.NonResident; }
 
-WORD AttrBase::GetAttrFlags() const { return AttrHeader->Flags; }
+WORD AttrBase::GetAttrFlags() const { return AttrHeader.Flags; }
 
 // Get ANSI Attribute name
 // Return 0: Unnamed, <0: buffer too small, -buffersize, >0 Name length
 int AttrBase::GetAttrName(char* buf, DWORD bufLen) const
 {
-  if (AttrHeader->NameLength)
+  if (AttrHeader.NameLength)
   {
-    if (bufLen < AttrHeader->NameLength)
-      return -1 * AttrHeader->NameLength;  // buffer too small
+    if (bufLen < AttrHeader.NameLength)
+      return -1 * AttrHeader.NameLength;  // buffer too small
 
-    wchar_t* namePtr = (wchar_t*)((BYTE*)AttrHeader + AttrHeader->NameOffset);
-    int len = WideCharToMultiByte(CP_ACP, 0, namePtr, AttrHeader->NameLength,
+    wchar_t* namePtr = (wchar_t*)((BYTE*)&AttrHeader + AttrHeader.NameOffset);
+    int len = WideCharToMultiByte(CP_ACP, 0, namePtr, AttrHeader.NameLength,
                                   buf, bufLen, NULL, NULL);
     if (len)
     {
@@ -54,7 +49,7 @@ int AttrBase::GetAttrName(char* buf, DWORD bufLen) const
     else
     {
       NTFS_TRACE("Unrecognized attribute name or Name buffer too small\n");
-      return -1 * AttrHeader->NameLength;
+      return -1 * AttrHeader.NameLength;
     }
   }
   else
@@ -68,13 +63,13 @@ int AttrBase::GetAttrName(char* buf, DWORD bufLen) const
 // Return 0: Unnamed, <0: buffer too small, -buffersize, >0 Name length
 int AttrBase::GetAttrName(wchar_t* buf, DWORD bufLen) const
 {
-  if (AttrHeader->NameLength)
+  if (AttrHeader.NameLength)
   {
-    if (bufLen < AttrHeader->NameLength)
-      return -1 * AttrHeader->NameLength;  // buffer too small
+    if (bufLen < AttrHeader.NameLength)
+      return -1 * AttrHeader.NameLength;  // buffer too small
 
-    bufLen = AttrHeader->NameLength;
-    wchar_t* namePtr = (wchar_t*)((BYTE*)AttrHeader + AttrHeader->NameOffset);
+    bufLen = AttrHeader.NameLength;
+    wchar_t* namePtr = (wchar_t*)((BYTE*)&AttrHeader + AttrHeader.NameOffset);
     wcsncpy(buf, namePtr, bufLen);
     buf[bufLen] = '\0\0';
 
@@ -90,5 +85,5 @@ int AttrBase::GetAttrName(wchar_t* buf, DWORD bufLen) const
 
 // Verify if this attribute is unnamed
 // Useful in analyzing MultiStream files
-BOOL AttrBase::IsUnNamed() const { return (AttrHeader->NameLength == 0); }
+BOOL AttrBase::IsUnNamed() const { return (AttrHeader.NameLength == 0); }
 }  // namespace NtfsBrowser
