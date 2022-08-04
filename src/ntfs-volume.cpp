@@ -30,7 +30,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   vol.SetAttrMask(Mask::VOLUME_NAME | Mask::VOLUME_INFORMATION);
   if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME))) return;
 
-  vol.ParseAttrs();
+  if (!vol.ParseAttrs()) return;
   const auto* vec =
       vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_INFORMATION));
   if (!vec || vec->empty()) return;
@@ -56,7 +56,12 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   MFTRecord->SetAttrMask(Mask::DATA);
   if (MFTRecord->ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)))
   {
-    MFTRecord->ParseAttrs();
+    if (!MFTRecord->ParseAttrs())
+    {
+      delete MFTRecord;
+      MFTRecord = nullptr;
+      return;
+    }
     const auto* vec3 = MFTRecord->getAttr(static_cast<DWORD>(AttrType::DATA));
     if (!vec3 || vec3->empty())
     {
@@ -185,7 +190,7 @@ BOOL NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
   DWORD atIdx = ATTR_INDEX(attrType);
   if (atIdx < kAttrNums)
   {
-    AttrRawCallBack[atIdx] = cb;
+    attr_raw_call_back_[atIdx] = cb;
     return TRUE;
   }
   else
@@ -195,7 +200,7 @@ BOOL NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
 // Clear all Attribute CallBack routines
 void NtfsVolume::ClearAttrRawCB()
 {
-  for (int i = 0; i < kAttrNums; i++) AttrRawCallBack[i] = nullptr;
+  for (int i = 0; i < kAttrNums; i++) attr_raw_call_back_[i] = nullptr;
 }
 
 }  // namespace NtfsBrowser

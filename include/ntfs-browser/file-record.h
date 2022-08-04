@@ -10,6 +10,8 @@
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/mask.h>
 
+// OK
+
 namespace NtfsBrowser
 {
 class NtfsVolume;
@@ -45,11 +47,11 @@ class FileRecord
   friend class AttrList;
 
  private:
-  const NtfsVolume& Volume;
+  const NtfsVolume& volume_;
   std::unique_ptr<FileRecordHeader> file_record_;
-  ULONGLONG FileReference;
-  std::array<AttrRawCallback, kAttrNums> AttrRawCallBack;
-  Mask AttrMask;
+  ULONGLONG file_reference_;
+  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_;
+  Mask attr_mask_;
   std::array<std::vector<AttrBase*>, kAttrNums> attr_list_;  // Attributes
 
   void ClearAttrs();
@@ -61,8 +63,8 @@ class FileRecord
   [[nodiscard]] BOOL ParseAttr(const AttrHeaderCommon& ahc);
   [[nodiscard]] std::unique_ptr<FileRecordHeader>
       ReadFileRecord(ULONGLONG& fileRef);
-  const IndexEntry* VisitIndexBlock(const ULONGLONG& vcn,
-                                    const _TCHAR* fileName) const;
+  [[nodiscard]] const IndexEntry* VisitIndexBlock(const ULONGLONG& vcn,
+                                                  const _TCHAR* fileName) const;
   void TraverseSubNode(const ULONGLONG& vcn,
                        SUBENTRY_CALLBACK seCallBack) const;
 

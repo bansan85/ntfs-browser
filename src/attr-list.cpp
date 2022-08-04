@@ -17,13 +17,13 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc,
     : TYPE_RESIDENT(ahc, fr)
 {
   NTFS_TRACE("Attribute: Attribute List\n");
-  if (fr.FileReference == (ULONGLONG)-1) return;
+  if (fr.file_reference_ == (ULONGLONG)-1) return;
 
   ULONGLONG offset = 0;
   DWORD len;
   Attr::AttributeList alRecord;
 
-  while (ReadData(offset, &alRecord, sizeof(Attr::AttributeList), &len) &&
+  while (this->ReadData(offset, &alRecord, sizeof(Attr::AttributeList), &len) &&
          len == sizeof(Attr::AttributeList))
   {
     if (ATTR_INDEX(alRecord.AttrType) > kAttrNums)
@@ -35,15 +35,15 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc,
     NTFS_TRACE1("Attribute List: 0x%04x\n", alRecord.AttrType);
 
     ULONGLONG recordRef = alRecord.BaseRef & 0x0000FFFFFFFFFFFFUL;
-    if (recordRef != fr.FileReference)  // Skip contained attributes
+    if (recordRef != fr.file_reference_)  // Skip contained attributes
     {
       Mask am = ATTR_MASK(alRecord.AttrType);
-      if (static_cast<BOOL>(am & fr.AttrMask))  // Skip unwanted attributes
+      if (static_cast<BOOL>(am & fr.attr_mask_))  // Skip unwanted attributes
       {
-        FileRecordList.emplace_back(fr.Volume);
+        FileRecordList.emplace_back(fr.volume_);
         FileRecord& frnew = FileRecordList.back();
 
-        frnew.AttrMask = am;
+        frnew.attr_mask_ = am;
         if (!frnew.ParseFileRecord(recordRef))
         {
           NTFS_TRACE("Attribute List parse error2\n");

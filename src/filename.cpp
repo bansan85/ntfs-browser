@@ -250,13 +250,14 @@ BOOL Filename::IsWin32Name() const
 void Filename::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                            FILETIME* accessTm) const
 {
-  AttrStdInfo::UTC2Local(filename_ ? filename_->AlterTime : 0, writeTm);
+  if (writeTm)
+    AttrStdInfo::UTC2Local(filename_ ? filename_->AlterTime : 0, *writeTm);
 
   if (createTm)
-    AttrStdInfo::UTC2Local(filename_ ? filename_->CreateTime : 0, createTm);
+    AttrStdInfo::UTC2Local(filename_ ? filename_->CreateTime : 0, *createTm);
 
   if (accessTm)
-    AttrStdInfo::UTC2Local(filename_ ? filename_->ReadTime : 0, accessTm);
+    AttrStdInfo::UTC2Local(filename_ ? filename_->ReadTime : 0, *accessTm);
 }
 
 }  // namespace NtfsBrowser

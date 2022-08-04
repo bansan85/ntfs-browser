@@ -1,6 +1,9 @@
 // ntfsattrDlg.cpp : implementation file
 //
 
+#include <array>
+#include <string_view>
+
 #include "stdafx.h"
 #include "ntfsattr.h"
 #include "ntfsattrDlg.h"
@@ -183,22 +186,22 @@ void CNtfsattrDlg::OnPaint()
 //  the minimized window.
 HCURSOR CNtfsattrDlg::OnQueryDragIcon() { return (HCURSOR)m_hIcon; }
 
-_TCHAR* AttrNames[] = {_T("STANDARD_INFORMATION"),
-                       _T("ATTRIBUTE_LIST"),
-                       _T("FILE_NAME"),
-                       _T("OBJECT_ID"),
-                       _T("SECURITY_DESCRIPTOR"),
-                       _T("VOLUME_NAME"),
-                       _T("VOLUME_INFORMATION"),
-                       _T("DATA"),
-                       _T("INDEX_ROOT"),
-                       _T("INDEX_ALLOCATION"),
-                       _T("BITMAP"),
-                       _T("REPARSE_POINT"),
-                       _T("EA_INFORMATION"),
-                       _T("EA"),
-                       _T("NULL"),
-                       _T("LOGGED_UTILITY_STREAM")};
+std::array<const _TCHAR*, kAttrNums> AttrNames = {"STANDARD_INFORMATION",
+                                                  "ATTRIBUTE_LIST",
+                                                  "FILE_NAME",
+                                                  "OBJECT_ID",
+                                                  "SECURITY_DESCRIPTOR",
+                                                  "VOLUME_NAME",
+                                                  "VOLUME_INFORMATION",
+                                                  "DATA",
+                                                  "INDEX_ROOT",
+                                                  "INDEX_ALLOCATION",
+                                                  "BITMAP",
+                                                  "REPARSE_POINT",
+                                                  "EA_INFORMATION",
+                                                  "EA",
+                                                  "NULL",
+                                                  "LOGGED_UTILITY_STREAM"};
 
 // ugly but work !
 void appenddata(CString& lines, BYTE* data, DWORD datalen)

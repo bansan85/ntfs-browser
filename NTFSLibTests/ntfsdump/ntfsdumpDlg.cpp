@@ -342,7 +342,7 @@ void CNtfsdumpDlg::OnOK()
       BYTE* filebuf = new BYTE[16 * 1024];
 
       // only pick the unnamed stream (file data)
-      const AttrBase* data = fr.FindStream();
+      const AttrBase* data = fr.FindStream(nullptr);
       if (data)
       {
         // show only the first 16K

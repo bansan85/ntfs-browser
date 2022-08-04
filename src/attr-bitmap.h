@@ -18,22 +18,22 @@ class AttrBitmap : public TYPE_RESIDENT
       : TYPE_RESIDENT(ahc, fr)
   {
     NTFS_TRACE1("Attribute: Bitmap (%sResident)\n",
-                IsNonResident() ? "Non" : "");
+                this->IsNonResident() ? "Non" : "");
 
     CurrentCluster = -1;
 
-    if (IsDataRunOK())
+    if (this->IsDataRunOK())
     {
-      BitmapSize = GetDataSize();
+      BitmapSize = this->GetDataSize();
 
-      if (IsNonResident())
-        BitmapBuf = new BYTE[GetClusterSize()];
+      if (this->IsNonResident())
+        BitmapBuf = new BYTE[this->GetClusterSize()];
       else
       {
         BitmapBuf = new BYTE[BitmapSize];
 
         DWORD len;
-        if (!(ReadData(0, BitmapBuf, (DWORD)BitmapSize, &len) &&
+        if (!(this->ReadData(0, BitmapBuf, (DWORD)BitmapSize, &len) &&
               len == (DWORD)BitmapSize))
         {
           BitmapBuf = NULL;
@@ -67,12 +67,12 @@ class AttrBitmap : public TYPE_RESIDENT
   // Verify if a single cluster is free
   BOOL IsClusterFree(ULONGLONG cluster) const
   {
-    if (!IsDataRunOK() || !BitmapBuf) return FALSE;
+    if (!this->IsDataRunOK() || !BitmapBuf) return FALSE;
 
-    if (IsNonResident())
+    if (this->IsNonResident())
     {
       LONGLONG idx = (LONGLONG)cluster >> 3;
-      DWORD clusterSize = ((NtfsVolume*)Volume)->GetClusterSize();
+      DWORD clusterSize = ((NtfsVolume*)this->Volume)->GetClusterSize();
 
       LONGLONG clusterOffset = idx / clusterSize;
       cluster -= (clusterOffset * clusterSize * 8);
@@ -81,7 +81,7 @@ class AttrBitmap : public TYPE_RESIDENT
       if (CurrentCluster != clusterOffset)
       {
         DWORD len;
-        if (ReadData(clusterOffset, BitmapBuf, clusterSize, &len) &&
+        if (this->ReadData(clusterOffset, BitmapBuf, clusterSize, &len) &&
             len == clusterSize)
         {
           CurrentCluster = clusterOffset;
@@ -96,7 +96,7 @@ class AttrBitmap : public TYPE_RESIDENT
 
     // All the Bitmap data is already in BitmapBuf
     DWORD idx = (DWORD)(cluster >> 3);
-    if (!IsNonResident())
+    if (!this->IsNonResident())
     {
       if (idx >= BitmapSize) return TRUE;  // Resident data bounds check error
     }

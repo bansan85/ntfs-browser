@@ -28,8 +28,7 @@ class AttrVolInfo : public AttrResident
   ~AttrVolInfo() override;
 
  private:
-  BYTE major_version_;
-  BYTE minor_version_;
+  const Attr::VolumeInformation& vol_info_;
 
  public:
   // Get NTFS Volume Version

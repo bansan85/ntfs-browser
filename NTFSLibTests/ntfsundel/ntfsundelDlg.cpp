@@ -331,7 +331,7 @@ void CNtfsundelDlg::OnSearch()
       m_files.SetItemText(itm, 1, fn);
       // Time
       FILETIME ft;
-      fr.GetFileTime(&ft);
+      fr.GetFileTime(&ft, nullptr, nullptr);
       SYSTEMTIME st;
       if (!FileTimeToSystemTime(&ft, &st)) memset(&st, 0, sizeof(SYSTEMTIME));
       s.Format(_T("%04d-%02d-%02d  %02d:%02d"), st.wYear, st.wMonth, st.wDay,
@@ -425,7 +425,7 @@ void CNtfsundelDlg::OnRecover()
 
     // Save to disk
     // Unnamed Data attribute contains the file data
-    const AttrBase* data = fr.FindStream();
+    const AttrBase* data = fr.FindStream(nullptr);
     if (data)
     {
       ULONGLONG datalen = data->GetDataSize();

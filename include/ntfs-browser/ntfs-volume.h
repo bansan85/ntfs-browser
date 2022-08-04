@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include <ntfs-browser/data/attr-defines.h>
 
 #include <windows.h>
@@ -27,7 +29,7 @@ class NtfsVolume
   ULONGLONG MFTAddr;
   HANDLE hVolume;
   BOOL VolumeOK;
-  AttrRawCallback AttrRawCallBack[kAttrNums];
+  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_;
   WORD Version;
 
   // MFT file records ($MFT file itself) may be fragmented

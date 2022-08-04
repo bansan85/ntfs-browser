@@ -21,14 +21,14 @@
 namespace NtfsBrowser
 {
 
-FileRecord::FileRecord(const NtfsVolume& volume) : Volume(volume)
+FileRecord::FileRecord(const NtfsVolume& volume) : volume_(volume)
 {
-  FileReference = (ULONGLONG)-1;
+  file_reference_ = (ULONGLONG)-1;
 
   ClearAttrRawCB();
 
   // Default to parse all attributes
-  AttrMask = MASK_ALL;
+  attr_mask_ = MASK_ALL;
 }
 
 FileRecord::~FileRecord() { ClearAttrs(); }
@@ -48,10 +48,10 @@ void FileRecord::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
 {
   bDiscard = FALSE;
 
-  if (AttrRawCallBack[attType])
-    AttrRawCallBack[attType](ahc, bDiscard);
-  else if (Volume.AttrRawCallBack[attType])
-    Volume.AttrRawCallBack[attType](ahc, bDiscard);
+  if (attr_raw_call_back_[attType])
+    attr_raw_call_back_[attType](ahc, bDiscard);
+  else if (volume_.attr_raw_call_back_[attType])
+    volume_.attr_raw_call_back_[attType](ahc, bDiscard);
 }
 
 extern template class NtfsBrowser::AttrList<AttrNonResident>;
@@ -59,13 +59,13 @@ extern template class NtfsBrowser::AttrList<AttrResident>;
 
 AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled)
 {
-  switch (ahc.Type)
+  switch (ahc.type)
   {
     case static_cast<DWORD>(AttrType::STANDARD_INFORMATION):
       return new AttrStdInfo(ahc, *this);
 
     case static_cast<DWORD>(AttrType::ATTRIBUTE_LIST):
-      if (ahc.NonResident)
+      if (ahc.non_resident)
         return new AttrList<AttrNonResident>(ahc, *this);
       else
         return new AttrList<AttrResident>(ahc, *this);
@@ -80,7 +80,7 @@ AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled)
       return new AttrVolInfo(ahc, *this);
 
     case static_cast<DWORD>(AttrType::DATA):
-      if (ahc.NonResident)
+      if (ahc.non_resident)
         return new AttrData<AttrNonResident>(ahc, *this);
       else
         return new AttrData<AttrResident>(ahc, *this);
@@ -92,7 +92,7 @@ AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled)
       return new AttrIndexAlloc(ahc, *this);
 
     case static_cast<DWORD>(AttrType::BITMAP):
-      if (ahc.NonResident)
+      if (ahc.non_resident)
         return new AttrBitmap<AttrNonResident>(ahc, *this);
       else
         // Resident Bitmap may exist in a directory's FileRecord
@@ -102,7 +102,7 @@ AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled)
     // Unhandled Attributes
     default:
       bUnhandled = TRUE;
-      if (ahc.NonResident)
+      if (ahc.non_resident)
         return new AttrNonResident(ahc, *this);
       else
         return new AttrResident(ahc, *this);
@@ -113,7 +113,7 @@ AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled)
 // Return False on error
 BOOL FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 {
-  DWORD attrIndex = ATTR_INDEX(ahc.Type);
+  DWORD attrIndex = ATTR_INDEX(ahc.type);
   if (attrIndex < kAttrNums)
   {
     BOOL bDiscard = FALSE;
@@ -127,27 +127,27 @@ BOOL FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
       {
         if (bUnhandled)
         {
-          NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.Type);
+          NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.type);
         }
         attr_list_[attrIndex].push_back(attr);
         return TRUE;
       }
       else
       {
-        NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.Type);
+        NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
         return FALSE;
       }
     }
     else
     {
       NTFS_TRACE1("User Callback has processed this Attribute: 0x%04X\n",
-                  ahc.Type);
+                  ahc.type);
       return TRUE;
     }
   }
   else
   {
-    NTFS_TRACE1("Invalid Attribute Type: 0x%04X\n", ahc.Type);
+    NTFS_TRACE1("Invalid Attribute Type: 0x%04X\n", ahc.type);
     return FALSE;
   }
 }
@@ -157,28 +157,28 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
 {
   DWORD len;
   std::vector<BYTE> buffer;
-  buffer.reserve(Volume.FileRecordSize);
+  buffer.reserve(volume_.FileRecordSize);
 
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
-      Volume.MFTData == nullptr)
+      volume_.MFTData == nullptr)
   {
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr;
-    frAddr.QuadPart = Volume.MFTAddr + (Volume.FileRecordSize) * fileRef;
-    frAddr.LowPart = SetFilePointer(Volume.hVolume, frAddr.LowPart,
+    frAddr.QuadPart = volume_.MFTAddr + (volume_.FileRecordSize) * fileRef;
+    frAddr.LowPart = SetFilePointer(volume_.hVolume, frAddr.LowPart,
                                     &frAddr.HighPart, FILE_BEGIN);
 
     if (frAddr.LowPart == DWORD(-1) && GetLastError() != NO_ERROR)
       return FALSE;
     else
     {
-      if (ReadFile(Volume.hVolume, buffer.data(), Volume.FileRecordSize, &len,
+      if (ReadFile(volume_.hVolume, buffer.data(), volume_.FileRecordSize, &len,
                    nullptr) &&
-          len == Volume.FileRecordSize)
+          len == volume_.FileRecordSize)
       {
         std::unique_ptr<FileRecordHeader> fr =
             std::make_unique<FileRecordHeader>(
-                buffer.data(), Volume.FileRecordSize, Volume.SectorSize);
+                buffer.data(), volume_.FileRecordSize, volume_.SectorSize);
         return fr;
       }
       else
@@ -189,14 +189,14 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
   {
     // May be fragmented $MFT
     ULONGLONG frAddr;
-    frAddr = (Volume.FileRecordSize) * fileRef;
+    frAddr = (volume_.FileRecordSize) * fileRef;
 
-    if (Volume.MFTData->ReadData(frAddr, buffer.data(), Volume.FileRecordSize,
-                                 &len) &&
-        len == Volume.FileRecordSize)
+    if (volume_.MFTData->ReadData(frAddr, buffer.data(), volume_.FileRecordSize,
+                                  &len) &&
+        len == volume_.FileRecordSize)
     {
       std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-          buffer.data(), Volume.FileRecordSize, Volume.SectorSize);
+          buffer.data(), volume_.FileRecordSize, volume_.SectorSize);
       return fr;
     }
     else
@@ -216,11 +216,11 @@ BOOL FileRecord::ParseFileRecord(ULONGLONG fileRef)
   {
     NTFS_TRACE1("Cannot read file record %I64u\n", fileRef);
 
-    FileReference = (ULONGLONG)-1;
+    file_reference_ = (ULONGLONG)-1;
   }
   else
   {
-    FileReference = fileRef;
+    file_reference_ = fileRef;
 
     if (fr->Magic == kFileRecordMagic)
     {
@@ -331,11 +331,11 @@ BOOL FileRecord::ParseAttrs()
   const AttrHeaderCommon* ahc = file_record_->HeaderCommon();
   dataPtr += file_record_->OffsetOfAttr;
 
-  while (ahc->Type != (DWORD)-1 &&
-         (dataPtr + ahc->TotalSize) <= Volume.FileRecordSize)
+  while (ahc->type != (DWORD)-1 &&
+         (dataPtr + ahc->total_size) <= volume_.FileRecordSize)
   {
-    if (static_cast<BOOL>(ATTR_MASK(ahc->Type) &
-                          AttrMask))  // Skip unwanted attributes
+    if (static_cast<BOOL>(ATTR_MASK(ahc->type) &
+                          attr_mask_))  // Skip unwanted attributes
     {
       if (!ParseAttr(*ahc))  // Parse error
         return FALSE;
@@ -347,9 +347,9 @@ BOOL FileRecord::ParseAttrs()
       }
     }
 
-    dataPtr += ahc->TotalSize;
+    dataPtr += ahc->total_size;
     ahc = (const AttrHeaderCommon*)((BYTE*)ahc +
-                                    ahc->TotalSize);  // next attribute
+                                    ahc->total_size);  // next attribute
   }
 
   return TRUE;
@@ -361,7 +361,7 @@ BOOL FileRecord::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
   DWORD atIdx = ATTR_INDEX(attrType);
   if (atIdx < kAttrNums)
   {
-    AttrRawCallBack[atIdx] = cb;
+    attr_raw_call_back_[atIdx] = cb;
     return TRUE;
   }
   else
@@ -371,14 +371,14 @@ BOOL FileRecord::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
 // Clear all Attribute CallBack routines
 void FileRecord::ClearAttrRawCB()
 {
-  for (int i = 0; i < kAttrNums; i++) AttrRawCallBack[i] = nullptr;
+  for (int i = 0; i < kAttrNums; i++) attr_raw_call_back_[i] = nullptr;
 }
 
 // Choose attributes to handle, unwanted attributes will be discarded silently
 void FileRecord::SetAttrMask(Mask mask)
 {
   // Standard Information and Attribute List is needed always
-  AttrMask = mask | Mask::STANDARD_INFORMATION | Mask::ATTRIBUTE_LIST;
+  attr_mask_ = mask | Mask::STANDARD_INFORMATION | Mask::ATTRIBUTE_LIST;
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine
@@ -389,7 +389,7 @@ void FileRecord::TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context)
   for (int i = 0; i < kAttrNums; i++)
   {
     // skip masked attributes
-    if (static_cast<BOOL>(AttrMask & (static_cast<Mask>(((DWORD)1) << i))))
+    if (static_cast<BOOL>(attr_mask_ & (static_cast<Mask>(((DWORD)1) << i))))
     {
       for (const AttrBase* ab : attr_list_[i])
       {
