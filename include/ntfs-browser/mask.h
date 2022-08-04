@@ -5,13 +5,13 @@
 #include <ntfs-browser/data/attr-type.h>
 
 #define ATTR_INDEX(at) \
-  (((at) >> 4) - 1)  // Attribute Type to Index, eg. 0x10->0, 0x30->2
+  (((at) >> 4U) - 1)  // Attribute Type to Index, eg. 0x10->0, 0x30->2
 #define ATTR_MASK_(at) (((DWORD)1) << ATTR_INDEX(at))  // Attribute Bit Mask
 
 namespace NtfsBrowser
 {
 
-enum class Mask
+enum class Mask : DWORD
 {
   // Bit masks of Attributes
   STANDARD_INFORMATION =
@@ -35,6 +35,7 @@ enum class Mask
       ATTR_MASK_(static_cast<DWORD>(AttrType::LOGGED_UTILITY_STREAM))
 };
 
+//NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Mask)
 
 #define ATTR_MASK(at) \

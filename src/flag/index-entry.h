@@ -13,6 +13,7 @@ enum class IndexEntry : BYTE
 
 };
 
+//NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::IndexEntry)
 
 }  // namespace NtfsBrowser::Flag

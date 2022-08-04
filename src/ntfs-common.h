@@ -1,5 +1,7 @@
 #pragma once
 
+// OK
+
 #include <crtdbg.h>
 
 #define NTFS_TRACE(t1) _RPT0(_CRT_WARN, t1)

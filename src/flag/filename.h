@@ -25,6 +25,7 @@ enum class Filename : DWORD
   INDEXVIEW = 0x20000000
 };
 
+//NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::Filename)
 
 }  // namespace NtfsBrowser::Flag

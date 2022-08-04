@@ -49,7 +49,11 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc,
           NTFS_TRACE("Attribute List parse error2\n");
           break;
         }
-        frnew.ParseAttrs();
+        if (!frnew.ParseAttrs())
+        {
+          NTFS_TRACE("Attribute List parse error3\n");
+          break;
+        }
 
         // Insert new found AttrList to fr.AttrList
         const std::vector<AttrBase*>* vec = frnew.getAttr(alRecord.AttrType);

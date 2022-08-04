@@ -19,7 +19,7 @@ AttrStdInfo::~AttrStdInfo() { NTFS_TRACE("AttrStdInfo deleted\n"); }
 void AttrStdInfo::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                               FILETIME* accessTm) const
 {
-  UTC2Local(StdInfo.AlterTime, writeTm);
+  if (writeTm) UTC2Local(StdInfo.AlterTime, writeTm);
 
   if (createTm) UTC2Local(StdInfo.CreateTime, createTm);
 

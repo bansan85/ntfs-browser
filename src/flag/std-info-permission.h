@@ -22,6 +22,7 @@ enum class StdInfoPermission : DWORD
   ENCRYPTED = 0x00004000
 };
 
+//NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::StdInfoPermission)
 
 }  // namespace NtfsBrowser::Flag

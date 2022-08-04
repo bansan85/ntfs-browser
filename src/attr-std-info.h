@@ -30,8 +30,8 @@ class AttrStdInfo : public AttrResident
   const Attr::StandardInformation& StdInfo;
 
  public:
-  void GetFileTime(FILETIME* writeTm, FILETIME* createTm = NULL,
-                   FILETIME* accessTm = NULL) const;
+  void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
+                   FILETIME* accessTm) const;
   Flag::StdInfoPermission GetFilePermission() const;
   BOOL IsReadOnly() const;
   BOOL IsHidden() const;

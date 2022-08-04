@@ -465,8 +465,11 @@ void FileRecord::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
     ((AttrStdInfo*)vec.front())->GetFileTime(writeTm, createTm, accessTm);
   else
   {
-    writeTm->dwHighDateTime = 0;
-    writeTm->dwLowDateTime = 0;
+    if (writeTm)
+    {
+      writeTm->dwHighDateTime = 0;
+      writeTm->dwLowDateTime = 0;
+    }
     if (createTm)
     {
       createTm->dwHighDateTime = 0;

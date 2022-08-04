@@ -35,8 +35,9 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
       vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_INFORMATION));
   if (!vec || vec->empty()) return;
 
-  Version = ((AttrVolInfo*)vec->front())->GetVersion();
-  NTFS_TRACE2("NTFS volume version: %u.%u\n", HIBYTE(Version), LOBYTE(Version));
+  auto [VersionMajor, VersionMinor] =
+      ((AttrVolInfo*)vec->front())->GetVersion();
+  NTFS_TRACE2("NTFS volume version: %u.%u\n", VersionMajor, VersionMinor);
   if (Version < 0x0300)  // NT4 ?
     return;
 

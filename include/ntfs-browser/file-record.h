@@ -1,10 +1,11 @@
 #pragma once
 
-#include <vector>
+#include <array>
 #include <memory>
+#include <vector>
 
-#include <windows.h>
 #include <tchar.h>
+#include <windows.h>
 
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/mask.h>
@@ -32,9 +33,11 @@ using ATTRS_CALLBACK = void (*)(const AttrBase* attr, void* context,
 class FileRecord
 {
  public:
-  FileRecord(const NtfsVolume& volume);
-  FileRecord(FileRecord&& t) = default;
-  FileRecord(const FileRecord& t) = delete;
+  explicit FileRecord(const NtfsVolume& volume);
+  FileRecord(FileRecord&& other) noexcept = default;
+  FileRecord(FileRecord const& other) = delete;
+  FileRecord& operator=(FileRecord&& other) noexcept = delete;
+  FileRecord& operator=(FileRecord const& other) = delete;
 
   virtual ~FileRecord();
   friend class AttrBase;
@@ -45,49 +48,52 @@ class FileRecord
   const NtfsVolume& Volume;
   std::unique_ptr<FileRecordHeader> file_record_;
   ULONGLONG FileReference;
-  AttrRawCallback AttrRawCallBack[kAttrNums];
+  std::array<AttrRawCallback, kAttrNums> AttrRawCallBack;
   Mask AttrMask;
-  std::vector<AttrBase*> attr_list_[kAttrNums];  // Attributes
+  std::array<std::vector<AttrBase*>, kAttrNums> attr_list_;  // Attributes
 
   void ClearAttrs();
-  BOOL PatchUS(WORD* sector, int sectors, WORD usn, WORD* usarray);
+  [[nodiscard]] BOOL PatchUS(WORD* sector, int sectors, WORD usn,
+                             WORD* usarray);
   void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, BOOL& bDiscard);
-  AttrBase* AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled);
-  BOOL ParseAttr(const AttrHeaderCommon& ahc);
-  std::unique_ptr<FileRecordHeader> ReadFileRecord(ULONGLONG& fileRef);
+  [[nodiscard]] AttrBase* AllocAttr(const AttrHeaderCommon& ahc,
+                                    BOOL& bUnhandled);
+  [[nodiscard]] BOOL ParseAttr(const AttrHeaderCommon& ahc);
+  [[nodiscard]] std::unique_ptr<FileRecordHeader>
+      ReadFileRecord(ULONGLONG& fileRef);
   const IndexEntry* VisitIndexBlock(const ULONGLONG& vcn,
                                     const _TCHAR* fileName) const;
   void TraverseSubNode(const ULONGLONG& vcn,
                        SUBENTRY_CALLBACK seCallBack) const;
 
  public:
-  BOOL ParseFileRecord(ULONGLONG fileRef);
-  BOOL ParseAttrs();
+  [[nodiscard]] BOOL ParseFileRecord(ULONGLONG fileRef);
+  [[nodiscard]] BOOL ParseAttrs();
 
-  BOOL InstallAttrRawCB(DWORD attrType, AttrRawCallback cb);
+  [[nodiscard]] BOOL InstallAttrRawCB(DWORD attrType, AttrRawCallback cb);
   void ClearAttrRawCB();
 
   void SetAttrMask(Mask mask);
   void TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context);
-  const std::vector<AttrBase*>* getAttr(DWORD attrType) const;
-  std::vector<AttrBase*>* getAttr(DWORD attrType);
+  [[nodiscard]] const std::vector<AttrBase*>* getAttr(DWORD attrType) const;
+  [[nodiscard]] std::vector<AttrBase*>* getAttr(DWORD attrType);
 
-  int GetFileName(_TCHAR* buf, DWORD bufLen) const;
-  ULONGLONG GetFileSize() const;
-  void GetFileTime(FILETIME* writeTm, FILETIME* createTm = NULL,
-                   FILETIME* accessTm = NULL) const;
+  [[nodiscard]] int GetFileName(_TCHAR* buf, DWORD bufLen) const;
+  [[nodiscard]] ULONGLONG GetFileSize() const;
+  void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
+                   FILETIME* accessTm) const;
 
   void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const;
-  const IndexEntry* FindSubEntry(const _TCHAR* fileName) const;
-  const AttrBase* FindStream(_TCHAR* name = NULL);
+  [[nodiscard]] const IndexEntry* FindSubEntry(const _TCHAR* fileName) const;
+  [[nodiscard]] const AttrBase* FindStream(_TCHAR* name);
 
-  BOOL IsDeleted() const;
-  BOOL IsDirectory() const;
-  BOOL IsReadOnly() const;
-  BOOL IsHidden() const;
-  BOOL IsSystem() const;
-  BOOL IsCompressed() const;
-  BOOL IsEncrypted() const;
-  BOOL IsSparse() const;
+  [[nodiscard]] BOOL IsDeleted() const;
+  [[nodiscard]] BOOL IsDirectory() const;
+  [[nodiscard]] BOOL IsReadOnly() const;
+  [[nodiscard]] BOOL IsHidden() const;
+  [[nodiscard]] BOOL IsSystem() const;
+  [[nodiscard]] BOOL IsCompressed() const;
+  [[nodiscard]] BOOL IsEncrypted() const;
+  [[nodiscard]] BOOL IsSparse() const;
 };  // FileRecord
 }  // namespace NtfsBrowser

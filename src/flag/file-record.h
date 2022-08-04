@@ -11,6 +11,7 @@ enum class FileRecord : WORD
   DIR = 0x02
 };
 
+//NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::FileRecord)
 
 }  // namespace NtfsBrowser::Flag

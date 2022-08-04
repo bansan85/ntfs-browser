@@ -12,6 +12,7 @@ enum class FilenameNamespace : BYTE
   DOS = 0x02
 };
 
+//NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::FilenameNamespace)
 
 }  // namespace NtfsBrowser::Flag
