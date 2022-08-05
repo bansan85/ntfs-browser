@@ -23,7 +23,7 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc,
   DWORD len;
   Attr::AttributeList alRecord;
 
-  while (this->ReadData(offset, &alRecord, sizeof(Attr::AttributeList), &len) &&
+  while (this->ReadData(offset, &alRecord, sizeof(Attr::AttributeList), len) &&
          len == sizeof(Attr::AttributeList))
   {
     if (ATTR_INDEX(alRecord.AttrType) > kAttrNums)

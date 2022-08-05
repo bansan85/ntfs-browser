@@ -72,7 +72,7 @@ BOOL AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 
   // Read one Index Block
   DWORD len;
-  if (ReadData(vcn * GetIndexBlockSize(), ibBuf, GetIndexBlockSize(), &len) &&
+  if (ReadData(vcn * GetIndexBlockSize(), ibBuf, GetIndexBlockSize(), len) &&
       len == GetIndexBlockSize())
   {
     if (ibBuf->Magic != INDEX_BLOCK_MAGIC)

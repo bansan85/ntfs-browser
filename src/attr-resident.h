@@ -27,15 +27,14 @@ class AttrResident : public AttrBase
   ~AttrResident() override = default;
 
  private:
-  const Attr::HeaderResident& header_r_;
   std::vector<BYTE> body_;
 
  protected:
-  [[nodiscard]] BOOL IsDataRunOK() const override;
+  [[nodiscard]] BOOL IsDataRunOK() const noexcept override;
 
   [[nodiscard]] ULONGLONG GetDataSize() const override;
   [[nodiscard]] BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
-                              DWORD* actural) const override;
-  [[nodiscard]] const BYTE* GetData();
+                              DWORD& actural) const override;
+  [[nodiscard]] const BYTE* GetData() const noexcept;
 };  // AttrResident
 }  // namespace NtfsBrowser

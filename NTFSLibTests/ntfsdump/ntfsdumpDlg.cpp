@@ -349,7 +349,7 @@ void CNtfsdumpDlg::OnOK()
         DWORD datalen = (DWORD)min(data->GetDataSize(), 16 * 1024);
 
         DWORD len;
-        if (data->ReadData(0, filebuf, datalen, &len) && len == datalen)
+        if (data->ReadData(0, filebuf, datalen, len) && len == datalen)
         {
           ShowData(m_dump, filebuf, datalen);
           UpdateData(FALSE);

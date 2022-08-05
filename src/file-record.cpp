@@ -192,7 +192,7 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
     frAddr = (volume_.FileRecordSize) * fileRef;
 
     if (volume_.MFTData->ReadData(frAddr, buffer.data(), volume_.FileRecordSize,
-                                  &len) &&
+                                  len) &&
         len == volume_.FileRecordSize)
     {
       std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(

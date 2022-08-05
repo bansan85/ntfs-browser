@@ -33,7 +33,7 @@ class AttrBitmap : public TYPE_RESIDENT
         BitmapBuf = new BYTE[BitmapSize];
 
         DWORD len;
-        if (!(this->ReadData(0, BitmapBuf, (DWORD)BitmapSize, &len) &&
+        if (!(this->ReadData(0, BitmapBuf, (DWORD)BitmapSize, len) &&
               len == (DWORD)BitmapSize))
         {
           BitmapBuf = NULL;

@@ -38,11 +38,11 @@ class AttrNonResident : public AttrBase
                            DWORD bufLen, DWORD* actural) const;
 
  protected:
-  BOOL IsDataRunOK() const override;
+  BOOL IsDataRunOK() const noexcept override;
 
  public:
   [[nodiscard]] ULONGLONG GetDataSize() const override;
   [[nodiscard]] BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
-                              DWORD* actural) const override;
+                              DWORD& actural) const override;
 };  // AttrNonResident
 }  // namespace NtfsBrowser

@@ -1,5 +1,7 @@
 #include <crtdbg.h>
 
+#include <gsl/narrow>
+
 #include "attr-resident.h"
 #include "attr/header-resident.h"
 
@@ -7,44 +9,77 @@ namespace NtfsBrowser
 {
 
 AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
-    : AttrBase(ahc, fr), header_r_((const Attr::HeaderResident&)ahc)
+    : AttrBase(ahc, fr)
 {
-  body_.resize(header_r_.AttrSize);
-  memcpy(body_.data(), (BYTE*)&header_r_ + header_r_.AttrOffset, body_.size());
+  const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
+  body_.resize(header.AttrSize);
+
+#ifdef _MSC_VER
+  #pragma warning(push)
+  #pragma warning(disable : 26481)
+  #pragma warning(disable : 26490)
+#endif
+  memcpy(body_.data(),
+         // NOLINTNEXTLINE
+         &reinterpret_cast<const BYTE*>(&header)[header.AttrOffset],
+         body_.size());
+#ifdef _MSC_VER
+  #pragma warning(pop)
+#endif
 }
 
-BOOL AttrResident::IsDataRunOK() const
+BOOL AttrResident::IsDataRunOK() const noexcept
 {
   return TRUE;  // Always OK for a resident attribute
 }
 
 // Return Actural Data Size
 // *allocSize = Allocated Size
-ULONGLONG AttrResident::GetDataSize() const { return (ULONGLONG)body_.size(); }
+ULONGLONG AttrResident::GetDataSize() const
+{
+  return gsl::narrow<ULONGLONG>(body_.size());
+}
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
 BOOL AttrResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
-                            DWORD* actural) const
+                            DWORD& actural) const
 {
   _ASSERT(bufv);
 
-  *actural = 0;
-  if (bufLen == 0) return TRUE;
+  actural = 0;
+  if (bufLen == 0)
+  {
+    return TRUE;
+  }
 
-  DWORD offsetd = (DWORD)offset;
-  if (offsetd >= body_.size()) return FALSE;  // offset parameter error
+  // offset parameter error
+  if (offset >= body_.size())
+  {
+    return FALSE;
+  }
 
-  if ((offsetd + bufLen) > body_.size())
-    *actural = body_.size() - offsetd;  // Beyond scope
+  if ((offset + bufLen) > body_.size())
+  {
+    actural = gsl::narrow<DWORD>(body_.size() - offset);  // Beyond scope
+  }
   else
-    *actural = bufLen;
+  {
+    actural = bufLen;
+  }
 
-  memcpy(bufv, (BYTE*)body_.data() + offsetd, *actural);
+#ifdef _MSC_VER
+  #pragma warning(push)
+  #pragma warning(disable : 26446)
+#endif
+  memcpy(bufv, &body_[offset], actural);
+#ifdef _MSC_VER
+  #pragma warning(pop)
+#endif
 
   return TRUE;
 }
 
-const BYTE* AttrResident::GetData() { return body_.data(); }
+const BYTE* AttrResident::GetData() const noexcept { return body_.data(); }
 
 }  // namespace NtfsBrowser

@@ -446,7 +446,7 @@ void CNtfsundelDlg::OnRecover()
         BYTE buf[BUFSIZE];
 
         DWORD len;
-        if (data->ReadData(i, buf, BUFSIZE, &len) &&
+        if (data->ReadData(i, buf, BUFSIZE, len) &&
             (len == BUFSIZE || len == remain))
         {
           // Save data

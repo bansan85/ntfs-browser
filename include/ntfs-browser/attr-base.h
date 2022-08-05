@@ -38,7 +38,7 @@ class AttrBase
   [[nodiscard]] BOOL IsUnNamed() const;
 
  protected:
-  [[nodiscard]] virtual BOOL IsDataRunOK() const = 0;
+  [[nodiscard]] virtual BOOL IsDataRunOK() const noexcept = 0;
 
   [[nodiscard]] WORD GetSectorSize() const;
   [[nodiscard]] DWORD GetClusterSize() const;
@@ -48,7 +48,7 @@ class AttrBase
  public:
   [[nodiscard]] virtual ULONGLONG GetDataSize() const = 0;
   [[nodiscard]] virtual BOOL ReadData(ULONGLONG offset, void* bufv,
-                                      DWORD bufLen, DWORD* actural) const = 0;
+                                      DWORD bufLen, DWORD& actural) const = 0;
 };  // AttrBase
 
 }  // namespace NtfsBrowser

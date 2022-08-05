@@ -221,7 +221,7 @@ BOOL AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, DWORD clusters,
 }
 
 // Judge if the DataRun is successfully parsed
-BOOL AttrNonResident::IsDataRunOK() const { return bDataRunOK; }
+BOOL AttrNonResident::IsDataRunOK() const noexcept { return bDataRunOK; }
 
 // Return Actural Data Size
 // *allocSize = Allocated Size
@@ -230,7 +230,7 @@ ULONGLONG AttrNonResident::GetDataSize() const { return AttrHeaderNR.RealSize; }
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
 BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
-                               DWORD* actural) const
+                               DWORD& actural) const
 {
   // Hard disks can only be accessed by sectors
   // To be simple and efficient, only implemented cluster based accessing
@@ -238,7 +238,7 @@ BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
 
   _ASSERT(bufv);
 
-  *actural = 0;
+  actural = 0;
   if (bufLen == 0) return TRUE;
 
   // Bounds check
@@ -265,7 +265,7 @@ BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
       memcpy(buf, UnalignedBuf + GetClusterSize() - startBytes, len);
       buf += len;
       bufLen -= len;
-      *actural += len;
+      actural += len;
       startVCN++;
     }
     else
@@ -285,7 +285,7 @@ BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
       startVCN += alignedClusters;
       buf += alignedSize;
       bufLen %= GetClusterSize();
-      *actural += len;
+      actural += len;
 
       if (bufLen == 0) return TRUE;
     }
@@ -298,7 +298,7 @@ BOOL AttrNonResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
       len == GetClusterSize())
   {
     memcpy(buf, UnalignedBuf, bufLen);
-    *actural += bufLen;
+    actural += bufLen;
 
     return TRUE;
   }

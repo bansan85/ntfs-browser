@@ -51,7 +51,7 @@ set(${PROJECT_NAME}_CMAKE ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt)
 
 add_library(${PROJECT_NAME} ${${PROJECT_NAME}_SRC} ${${PROJECT_NAME}_H}
                             ${${PROJECT_NAME}_CMAKE})
-
+target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft.GSL::GSL)
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
