@@ -1,8 +1,9 @@
 #include "attr-list.h"
 #include "attr-non-resident.h"
 #include "attr-resident.h"
-#include "ntfs-common.h"
 #include "attr/attribute-list.h"
+#include "data/run-entry.h"
+#include "ntfs-common.h"
 #include <ntfs-browser/mask.h>
 
 namespace NtfsBrowser

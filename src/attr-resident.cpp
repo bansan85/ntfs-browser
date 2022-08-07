@@ -28,25 +28,20 @@ AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
 #endif
 }
 
-BOOL AttrResident::IsDataRunOK() const noexcept
+bool AttrResident::IsDataRunOK() const noexcept
 {
   return TRUE;  // Always OK for a resident attribute
 }
 
 // Return Actural Data Size
 // *allocSize = Allocated Size
-ULONGLONG AttrResident::GetDataSize() const
-{
-  return gsl::narrow<ULONGLONG>(body_.size());
-}
+ULONGLONG AttrResident::GetDataSize() const noexcept { return body_.size(); }
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
-BOOL AttrResident::ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
-                            DWORD& actural) const
+bool AttrResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
+                            DWORD bufLen, DWORD& actural) const
 {
-  _ASSERT(bufv);
-
   actural = 0;
   if (bufLen == 0)
   {

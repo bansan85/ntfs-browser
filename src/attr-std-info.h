@@ -39,12 +39,12 @@ class AttrStdInfo : public AttrResident
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                    FILETIME* accessTm) const noexcept;
   [[nodiscard]] Flag::StdInfoPermission GetFilePermission() const noexcept;
-  [[nodiscard]] BOOL IsReadOnly() const noexcept;
-  [[nodiscard]] BOOL IsHidden() const noexcept;
-  [[nodiscard]] BOOL IsSystem() const noexcept;
-  [[nodiscard]] BOOL IsCompressed() const noexcept;
-  [[nodiscard]] BOOL IsEncrypted() const noexcept;
-  [[nodiscard]] BOOL IsSparse() const noexcept;
+  [[nodiscard]] bool IsReadOnly() const noexcept;
+  [[nodiscard]] bool IsHidden() const noexcept;
+  [[nodiscard]] bool IsSystem() const noexcept;
+  [[nodiscard]] bool IsCompressed() const noexcept;
+  [[nodiscard]] bool IsEncrypted() const noexcept;
+  [[nodiscard]] bool IsSparse() const noexcept;
 
   static void UTC2Local(const ULONGLONG& ultm, FILETIME& lftm) noexcept;
 };  // AttrStdInfo

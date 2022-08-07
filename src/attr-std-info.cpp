@@ -43,39 +43,39 @@ Flag::StdInfoPermission AttrStdInfo::GetFilePermission() const noexcept
   return std_info_.Permission;
 }
 
-BOOL AttrStdInfo::IsReadOnly() const noexcept
+bool AttrStdInfo::IsReadOnly() const noexcept
 {
-  return static_cast<BOOL>(std_info_.Permission &
+  return static_cast<bool>(std_info_.Permission &
                            Flag::StdInfoPermission::READONLY);
 }
 
-BOOL AttrStdInfo::IsHidden() const noexcept
+bool AttrStdInfo::IsHidden() const noexcept
 {
-  return static_cast<BOOL>(std_info_.Permission &
+  return static_cast<bool>(std_info_.Permission &
                            Flag::StdInfoPermission::HIDDEN);
 }
 
-BOOL AttrStdInfo::IsSystem() const noexcept
+bool AttrStdInfo::IsSystem() const noexcept
 {
-  return static_cast<BOOL>(std_info_.Permission &
+  return static_cast<bool>(std_info_.Permission &
                            Flag::StdInfoPermission::SYSTEM);
 }
 
-BOOL AttrStdInfo::IsCompressed() const noexcept
+bool AttrStdInfo::IsCompressed() const noexcept
 {
-  return static_cast<BOOL>(std_info_.Permission &
+  return static_cast<bool>(std_info_.Permission &
                            Flag::StdInfoPermission::COMPRESSED);
 }
 
-BOOL AttrStdInfo::IsEncrypted() const noexcept
+bool AttrStdInfo::IsEncrypted() const noexcept
 {
-  return static_cast<BOOL>(std_info_.Permission &
+  return static_cast<bool>(std_info_.Permission &
                            Flag::StdInfoPermission::ENCRYPTED);
 }
 
-BOOL AttrStdInfo::IsSparse() const noexcept
+bool AttrStdInfo::IsSparse() const noexcept
 {
-  return static_cast<BOOL>(std_info_.Permission &
+  return static_cast<bool>(std_info_.Permission &
                            Flag::StdInfoPermission::SPARSE);
 }
 

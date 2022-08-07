@@ -30,11 +30,11 @@ class AttrResident : public AttrBase
   std::vector<BYTE> body_;
 
  protected:
-  [[nodiscard]] BOOL IsDataRunOK() const noexcept override;
+  [[nodiscard]] bool IsDataRunOK() const noexcept override;
 
-  [[nodiscard]] ULONGLONG GetDataSize() const override;
-  [[nodiscard]] BOOL ReadData(ULONGLONG offset, void* bufv, DWORD bufLen,
-                              DWORD& actural) const override;
+  [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
+  [[nodiscard]] bool ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
+                              DWORD bufLen, DWORD& actural) const override;
   [[nodiscard]] const BYTE* GetData() const noexcept;
 };  // AttrResident
 }  // namespace NtfsBrowser

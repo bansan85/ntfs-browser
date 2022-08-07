@@ -3,6 +3,8 @@
 // OK
 #include <windows.h>
 
+#include <gsl/pointers>
+
 #include <ntfs-browser/data/attr-header-common.h>
 
 namespace NtfsBrowser
@@ -31,14 +33,14 @@ class AttrBase
   [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const;
   [[nodiscard]] DWORD GetAttrType() const;
   [[nodiscard]] DWORD GetAttrTotalSize() const;
-  [[nodiscard]] BOOL IsNonResident() const;
+  [[nodiscard]] bool IsNonResident() const;
   [[nodiscard]] WORD GetAttrFlags() const;
   [[nodiscard]] int GetAttrName(char* buf, DWORD bufLen) const;
   [[nodiscard]] int GetAttrName(wchar_t* buf, DWORD bufLen) const;
-  [[nodiscard]] BOOL IsUnNamed() const;
+  [[nodiscard]] bool IsUnNamed() const;
 
  protected:
-  [[nodiscard]] virtual BOOL IsDataRunOK() const noexcept = 0;
+  [[nodiscard]] virtual bool IsDataRunOK() const noexcept = 0;
 
   [[nodiscard]] WORD GetSectorSize() const;
   [[nodiscard]] DWORD GetClusterSize() const;
@@ -46,9 +48,10 @@ class AttrBase
   [[nodiscard]] HANDLE GetHandle() const;
 
  public:
-  [[nodiscard]] virtual ULONGLONG GetDataSize() const = 0;
-  [[nodiscard]] virtual BOOL ReadData(ULONGLONG offset, void* bufv,
-                                      DWORD bufLen, DWORD& actural) const = 0;
+  [[nodiscard]] virtual ULONGLONG GetDataSize() const noexcept = 0;
+  [[nodiscard]] virtual bool ReadData(ULONGLONG offset,
+                                      gsl::not_null<void*> bufv, DWORD bufLen,
+                                      DWORD& actural) const = 0;
 };  // AttrBase
 
 }  // namespace NtfsBrowser

@@ -1,6 +1,10 @@
 #pragma once
 
+#include <optional>
+
 #include <windows.h>
+
+// OK
 
 namespace NtfsBrowser::Data
 {
@@ -9,10 +13,10 @@ namespace NtfsBrowser::Data
 ////////////////////////////////
 struct RunEntry
 {
-  LONGLONG LCN;  // -1 to indicate sparse data
-  ULONGLONG Clusters;
-  ULONGLONG StartVCN;
-  ULONGLONG LastVCN;
+  std::optional<ULONGLONG> lcn;  // empty to indicate sparse data
+  ULONGLONG clusters;
+  ULONGLONG start_vcn;
+  ULONGLONG last_vcn;
 };
 //typedef class CSList<DataRun_Entry> CDataRunList;
 

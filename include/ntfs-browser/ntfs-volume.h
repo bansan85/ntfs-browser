@@ -30,7 +30,8 @@ class NtfsVolume
   HANDLE hVolume;
   BOOL VolumeOK;
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_;
-  WORD Version;
+  BYTE VersionMajor;
+  BYTE VersionMinor;
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
@@ -41,7 +42,7 @@ class NtfsVolume
 
  public:
   BOOL IsVolumeOK() const;
-  WORD GetVersion() const;
+  std::pair<BYTE, BYTE> GetVersion() const;
   ULONGLONG GetRecordsCount() const;
 
   DWORD GetSectorSize() const;

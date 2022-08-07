@@ -4,18 +4,20 @@
 
 #include <ntfs-browser/data/attr-header-common.h>
 
+// OK
+
 namespace NtfsBrowser::Attr
 {
 struct HeaderNonResident
 {
-  AttrHeaderCommon Header;  // Common data structure
-  ULONGLONG StartVCN;       // Starting VCN
-  ULONGLONG LastVCN;        // Last VCN
-  WORD DataRunOffset;       // Offset to the Data Runs
-  WORD CompUnitSize;        // Compression unit size
-  DWORD Padding;            // Padding
-  ULONGLONG AllocSize;      // Allocated size of the attribute
-  ULONGLONG RealSize;       // Real size of the attribute
-  ULONGLONG IniSize;        // Initialized data size of the stream
+  AttrHeaderCommon header;  // Common data structure
+  ULONGLONG start_vcn;      // Starting VCN
+  ULONGLONG last_vcn;       // Last VCN
+  WORD data_run_offset;     // Offset to the Data Runs
+  WORD comp_unit_size;      // Compression unit size
+  DWORD padding;            // Padding
+  ULONGLONG alloc_size;     // Allocated size of the attribute
+  ULONGLONG real_size;      // Real size of the attribute
+  ULONGLONG ini_size;       // Initialized data size of the stream
 };
 }  // namespace NtfsBrowser::Attr

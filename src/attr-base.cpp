@@ -24,7 +24,7 @@ DWORD AttrBase::GetAttrType() const { return attr_header_.type; }
 
 DWORD AttrBase::GetAttrTotalSize() const { return attr_header_.total_size; }
 
-BOOL AttrBase::IsNonResident() const { return attr_header_.non_resident; }
+bool AttrBase::IsNonResident() const { return attr_header_.non_resident; }
 
 WORD AttrBase::GetAttrFlags() const { return attr_header_.flags; }
 
@@ -87,7 +87,7 @@ int AttrBase::GetAttrName(wchar_t* buf, DWORD bufLen) const
 
 // Verify if this attribute is unnamed
 // Useful in analyzing MultiStream files
-BOOL AttrBase::IsUnNamed() const { return (attr_header_.name_length == 0); }
+bool AttrBase::IsUnNamed() const { return (attr_header_.name_length == 0); }
 
 WORD AttrBase::GetSectorSize() const { return sector_size_; }
 DWORD AttrBase::GetClusterSize() const { return cluster_size_; }

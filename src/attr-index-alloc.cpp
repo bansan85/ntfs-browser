@@ -1,7 +1,8 @@
 #include "attr-index-alloc.h"
 #include "data/index-block.h"
-#include "ntfs-common.h"
+#include "data/run-entry.h"
 #include "index-block.h"
+#include "ntfs-common.h"
 #include "flag/index-entry.h"
 #include "data/index-entry.h"
 

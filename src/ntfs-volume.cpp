@@ -19,7 +19,6 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   VolumeOK = FALSE;
   MFTRecord = nullptr;
   MFTData = nullptr;
-  Version = 0;
   ClearAttrRawCB();
 
   if (!OpenVolume(volume)) return;
@@ -35,10 +34,10 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
       vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_INFORMATION));
   if (!vec || vec->empty()) return;
 
-  auto [VersionMajor, VersionMinor] =
+  std::tie(VersionMajor, this->VersionMinor) =
       ((AttrVolInfo*)vec->front())->GetVersion();
   NTFS_TRACE2("NTFS volume version: %u.%u\n", VersionMajor, VersionMinor);
-  if (Version < 0x0300)  // NT4 ?
+  if (VersionMajor < 3)  // NT4 ?
     return;
 
 #ifdef _DEBUG
@@ -163,7 +162,10 @@ BOOL NtfsVolume::OpenVolume(_TCHAR volume)
 BOOL NtfsVolume::IsVolumeOK() const { return VolumeOK; }
 
 // Get NTFS volume version
-WORD NtfsVolume::GetVersion() const { return Version; }
+std::pair<BYTE, BYTE> NtfsVolume::GetVersion() const
+{
+  return {VersionMajor, VersionMinor};
+}
 
 // Get File Record count
 ULONGLONG NtfsVolume::GetRecordsCount() const
