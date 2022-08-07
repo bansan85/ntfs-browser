@@ -24,6 +24,10 @@ class AttrNonResident : public AttrBase
 {
  public:
   AttrNonResident(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrNonResident(AttrNonResident&& other) noexcept = delete;
+  AttrNonResident(AttrNonResident const& other) = delete;
+  AttrNonResident& operator=(AttrNonResident&& other) noexcept = delete;
+  AttrNonResident& operator=(AttrNonResident const& other) = delete;
   virtual ~AttrNonResident() = default;
 
  private:

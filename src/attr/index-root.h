@@ -5,11 +5,10 @@
 namespace NtfsBrowser::Attr
 {
 
-#pragma pack(1)
 struct IndexRoot
 {
   // Index Root Header
-  DWORD AttrType;  // Attribute type
+  DWORD attr_type;  // Attribute type
   //(ATTR_TYPE_FILE_NAME: Directory, 0: Index View)
   DWORD CollRule;      // Collation rule
   DWORD IBSize;        // Size of index block
@@ -23,6 +22,5 @@ struct IndexRoot
   BYTE Flags;            // Flags
   BYTE Padding2[3];      // Padding
 };
-#pragma pack()
 
 }  // namespace NtfsBrowser::Attr

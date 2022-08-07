@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <tchar.h>
@@ -30,7 +31,7 @@ using SUBENTRY_CALLBACK = void (*)(const IndexEntry& ie);
 // Set bStop to TRUE if don't want to continue
 // Set bStop to FALSE to continue processing
 using ATTRS_CALLBACK = void (*)(const AttrBase* attr, void* context,
-                                BOOL* bStop);
+                                bool* bStop);
 
 class FileRecord
 {
@@ -49,36 +50,36 @@ class FileRecord
  private:
   const NtfsVolume& volume_;
   std::unique_ptr<FileRecordHeader> file_record_;
-  ULONGLONG file_reference_;
+  std::optional<ULONGLONG> file_reference_;
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_;
   Mask attr_mask_;
   std::array<std::vector<AttrBase*>, kAttrNums> attr_list_;  // Attributes
 
   void ClearAttrs();
-  [[nodiscard]] BOOL PatchUS(WORD* sector, int sectors, WORD usn,
+  [[nodiscard]] bool PatchUS(WORD* sector, int sectors, WORD usn,
                              WORD* usarray);
-  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, BOOL& bDiscard);
+  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, bool& bDiscard);
   [[nodiscard]] AttrBase* AllocAttr(const AttrHeaderCommon& ahc,
-                                    BOOL& bUnhandled);
-  [[nodiscard]] BOOL ParseAttr(const AttrHeaderCommon& ahc);
+                                    bool& bUnhandled);
+  [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc);
   [[nodiscard]] std::unique_ptr<FileRecordHeader>
-      ReadFileRecord(ULONGLONG& fileRef);
+      ReadFileRecord(ULONGLONG fileRef);
   [[nodiscard]] const IndexEntry* VisitIndexBlock(const ULONGLONG& vcn,
                                                   const _TCHAR* fileName) const;
   void TraverseSubNode(const ULONGLONG& vcn,
                        SUBENTRY_CALLBACK seCallBack) const;
 
  public:
-  [[nodiscard]] BOOL ParseFileRecord(ULONGLONG fileRef);
-  [[nodiscard]] BOOL ParseAttrs();
+  [[nodiscard]] bool ParseFileRecord(ULONGLONG fileRef);
+  [[nodiscard]] bool ParseAttrs();
 
-  [[nodiscard]] BOOL InstallAttrRawCB(DWORD attrType, AttrRawCallback cb);
+  [[nodiscard]] bool InstallAttrRawCB(DWORD attrType, AttrRawCallback cb);
   void ClearAttrRawCB();
 
   void SetAttrMask(Mask mask);
   void TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context);
-  [[nodiscard]] const std::vector<AttrBase*>* getAttr(DWORD attrType) const;
-  [[nodiscard]] std::vector<AttrBase*>* getAttr(DWORD attrType);
+  [[nodiscard]] const std::vector<AttrBase*>& getAttr(DWORD attrType) const;
+  [[nodiscard]] std::vector<AttrBase*>& getAttr(DWORD attrType);
 
   [[nodiscard]] int GetFileName(_TCHAR* buf, DWORD bufLen) const;
   [[nodiscard]] ULONGLONG GetFileSize() const;
@@ -89,13 +90,13 @@ class FileRecord
   [[nodiscard]] const IndexEntry* FindSubEntry(const _TCHAR* fileName) const;
   [[nodiscard]] const AttrBase* FindStream(_TCHAR* name);
 
-  [[nodiscard]] BOOL IsDeleted() const;
-  [[nodiscard]] BOOL IsDirectory() const;
-  [[nodiscard]] BOOL IsReadOnly() const;
-  [[nodiscard]] BOOL IsHidden() const;
-  [[nodiscard]] BOOL IsSystem() const;
-  [[nodiscard]] BOOL IsCompressed() const;
-  [[nodiscard]] BOOL IsEncrypted() const;
-  [[nodiscard]] BOOL IsSparse() const;
+  [[nodiscard]] bool IsDeleted() const;
+  [[nodiscard]] bool IsDirectory() const;
+  [[nodiscard]] bool IsReadOnly() const;
+  [[nodiscard]] bool IsHidden() const;
+  [[nodiscard]] bool IsSystem() const;
+  [[nodiscard]] bool IsCompressed() const;
+  [[nodiscard]] bool IsEncrypted() const;
+  [[nodiscard]] bool IsSparse() const;
 };  // FileRecord
 }  // namespace NtfsBrowser

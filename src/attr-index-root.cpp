@@ -54,7 +54,7 @@ void AttrIndexRoot::ParseIndexEntries()
 // Check if this IndexRoot contains Filename or IndexView
 BOOL AttrIndexRoot::IsFileName() const
 {
-  return (IndexRoot->AttrType == static_cast<DWORD>(AttrType::FILE_NAME));
+  return (IndexRoot->attr_type == static_cast<DWORD>(AttrType::FILE_NAME));
 }
 
 }  // namespace NtfsBrowser

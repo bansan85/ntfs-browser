@@ -265,7 +265,7 @@ void appenddata(CString& lines, BYTE* data, DWORD datalen)
   lines += line;
 }
 
-void printattr(const AttrBase* attr, void* context, BOOL* bStop)
+void printattr(const AttrBase* attr, void* context, bool* bStop)
 {
   CString* dump = (CString*)context;
 

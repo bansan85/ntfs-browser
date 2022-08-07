@@ -13,5 +13,5 @@ constexpr size_t kAttrNums = 16;  // Attribute Types count
 // Set bDiscard to TRUE if this Attribute is to be discarded
 // Set bDiscard to FALSE to let FileRecord process it
 using AttrRawCallback = void (*)(const AttrHeaderCommon& attrHead,
-                                 BOOL& bDiscard);
+                                 bool& bDiscard);
 }  // namespace NtfsBrowser

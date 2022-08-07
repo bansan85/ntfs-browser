@@ -25,8 +25,6 @@ namespace NtfsBrowser
 
 FileRecord::FileRecord(const NtfsVolume& volume) : volume_(volume)
 {
-  file_reference_ = (ULONGLONG)-1;
-
   ClearAttrRawCB();
 
   // Default to parse all attributes
@@ -46,7 +44,7 @@ void FileRecord::ClearAttrs()
 
 // Call user defined Callback routines for an attribute
 void FileRecord::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
-                              BOOL& bDiscard)
+                              bool& bDiscard)
 {
   bDiscard = FALSE;
 
@@ -59,7 +57,7 @@ void FileRecord::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
 extern template class NtfsBrowser::AttrList<AttrNonResident>;
 extern template class NtfsBrowser::AttrList<AttrResident>;
 
-AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled)
+AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled)
 {
   switch (ahc.type)
   {
@@ -113,17 +111,17 @@ AttrBase* FileRecord::AllocAttr(const AttrHeaderCommon& ahc, BOOL& bUnhandled)
 
 // Parse a single Attribute
 // Return False on error
-BOOL FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
+bool FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 {
   DWORD attrIndex = ATTR_INDEX(ahc.type);
   if (attrIndex < kAttrNums)
   {
-    BOOL bDiscard = FALSE;
+    bool bDiscard = FALSE;
     UserCallBack(attrIndex, ahc, bDiscard);
 
     if (!bDiscard)
     {
-      BOOL bUnhandled = FALSE;
+      bool bUnhandled = FALSE;
       AttrBase* attr = AllocAttr(ahc, bUnhandled);
       if (attr)
       {
@@ -155,7 +153,7 @@ BOOL FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 }
 
 // Read File Record
-std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
+std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
 {
   DWORD len;
   std::vector<BYTE> buffer;
@@ -190,8 +188,7 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
   else
   {
     // May be fragmented $MFT
-    ULONGLONG frAddr;
-    frAddr = (volume_.FileRecordSize) * fileRef;
+    const ULONGLONG frAddr = (volume_.FileRecordSize) * fileRef;
 
     if (volume_.MFTData->ReadData(frAddr, buffer.data(), volume_.FileRecordSize,
                                   len) &&
@@ -207,7 +204,7 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG& fileRef)
 }
 
 // Read File Record, verify and patch the US (update sequence)
-BOOL FileRecord::ParseFileRecord(ULONGLONG fileRef)
+bool FileRecord::ParseFileRecord(ULONGLONG fileRef)
 {
   // Clear previous data
   ClearAttrs();
@@ -218,7 +215,7 @@ BOOL FileRecord::ParseFileRecord(ULONGLONG fileRef)
   {
     NTFS_TRACE1("Cannot read file record %I64u\n", fileRef);
 
-    file_reference_ = (ULONGLONG)-1;
+    file_reference_ = {};
   }
   else
   {
@@ -251,13 +248,13 @@ BOOL FileRecord::ParseFileRecord(ULONGLONG fileRef)
 const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
                                               const _TCHAR* fileName) const
 {
-  const std::vector<AttrBase*>* vec =
+  const std::vector<AttrBase*>& vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
-  if (vec == nullptr || vec->empty()) return FALSE;
+  if (vec.empty()) return FALSE;
 
   IndexBlock ib;
   const IndexEntry* retval;
-  if (((AttrIndexAlloc*)vec->front())->ParseIndexBlock(vcn, ib))
+  if (((AttrIndexAlloc*)vec.front())->ParseIndexBlock(vcn, ib))
   {
     for (const IndexEntry& ie : ib)
     {
@@ -300,12 +297,12 @@ const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
 void FileRecord::TraverseSubNode(const ULONGLONG& vcn,
                                  SUBENTRY_CALLBACK seCallBack) const
 {
-  const std::vector<AttrBase*>* vec =
+  const std::vector<AttrBase*>& vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
-  if (vec == nullptr || vec->empty()) return;
+  if (vec.empty()) return;
 
   IndexBlock ib;
-  if (((AttrIndexAlloc*)vec->front())->ParseIndexBlock(vcn, ib))
+  if (((AttrIndexAlloc*)vec.front())->ParseIndexBlock(vcn, ib))
 
   {
     for (const IndexEntry& ie : ib)
@@ -320,7 +317,7 @@ void FileRecord::TraverseSubNode(const ULONGLONG& vcn,
 
 // Parse all the attributes in a File Record
 // And insert them into a link list
-BOOL FileRecord::ParseAttrs()
+bool FileRecord::ParseAttrs()
 {
   _ASSERT(file_record_);
 
@@ -336,7 +333,7 @@ BOOL FileRecord::ParseAttrs()
   while (ahc->type != (DWORD)-1 &&
          (dataPtr + ahc->total_size) <= volume_.FileRecordSize)
   {
-    if (static_cast<BOOL>(ATTR_MASK(ahc->type) &
+    if (static_cast<bool>(ATTR_MASK(ahc->type) &
                           attr_mask_))  // Skip unwanted attributes
     {
       if (!ParseAttr(*ahc))  // Parse error
@@ -358,7 +355,7 @@ BOOL FileRecord::ParseAttrs()
 }
 
 // Install Attribute raw data CallBack routines for a single File Record
-BOOL FileRecord::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
+bool FileRecord::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
 {
   DWORD atIdx = ATTR_INDEX(attrType);
   if (atIdx < kAttrNums)
@@ -391,11 +388,11 @@ void FileRecord::TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context)
   for (int i = 0; i < kAttrNums; i++)
   {
     // skip masked attributes
-    if (static_cast<BOOL>(attr_mask_ & (static_cast<Mask>(((DWORD)1) << i))))
+    if (static_cast<bool>(attr_mask_ & (static_cast<Mask>(((DWORD)1) << i))))
     {
       for (const AttrBase* ab : attr_list_[i])
       {
-        BOOL bStop;
+        bool bStop;
         bStop = FALSE;
         attrCallBack(ab, context, &bStop);
         if (bStop) return;
@@ -405,28 +402,34 @@ void FileRecord::TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context)
 }
 
 // Find Attributes
-const std::vector<AttrBase*>* FileRecord::getAttr(DWORD attrType) const
+const std::vector<AttrBase*>& FileRecord::getAttr(DWORD attrType) const
 {
+  static std::vector<AttrBase*> dummy{};
   DWORD attrIdx = ATTR_INDEX(attrType);
 
   if (attrIdx < kAttrNums)
   {
-    return &attr_list_[attrIdx];
+    return attr_list_[attrIdx];
   }
   else
-    return nullptr;
+  {
+    return dummy;
+  }
 }
 
-std::vector<AttrBase*>* FileRecord::getAttr(DWORD attrType)
+std::vector<AttrBase*>& FileRecord::getAttr(DWORD attrType)
 {
+  static std::vector<AttrBase*> dummy{};
   DWORD attrIdx = ATTR_INDEX(attrType);
 
   if (attrIdx < kAttrNums)
   {
-    return &attr_list_[attrIdx];
+    return attr_list_[attrIdx];
   }
   else
-    return nullptr;
+  {
+    return dummy;
+  }
 }
 
 // Get File Name (First Win32 name)
@@ -493,11 +496,11 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const
 
   // Start traversing from IndexRoot (B+ tree root node)
 
-  const std::vector<AttrBase*>* vec =
+  const std::vector<AttrBase*>& vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ROOT));
-  if (vec == nullptr || vec->empty()) return;
+  if (vec.empty()) return;
 
-  AttrIndexRoot* ir = (AttrIndexRoot*)vec->front();
+  AttrIndexRoot* ir = (AttrIndexRoot*)vec.front();
 
   if (!ir->IsFileName()) return;
 
@@ -514,11 +517,11 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const
 const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
 {
   // Start searching from IndexRoot (B+ tree root node)
-  const std::vector<AttrBase*>* vec =
+  const std::vector<AttrBase*>& vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ROOT));
-  if (vec == nullptr || vec->empty()) return FALSE;
+  if (vec.empty()) return FALSE;
 
-  AttrIndexRoot* ir = (AttrIndexRoot*)vec->front();
+  AttrIndexRoot* ir = (AttrIndexRoot*)vec.front();
 
   if (!ir->IsFileName()) return FALSE;
 
@@ -561,10 +564,9 @@ const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
 // Find Data attribute class of
 const AttrBase* FileRecord::FindStream(_TCHAR* name)
 {
-  const std::vector<AttrBase*>* vec =
+  const std::vector<AttrBase*> vec =
       getAttr(static_cast<DWORD>(AttrType::DATA));
-  if (vec == nullptr) return nullptr;
-  for (const AttrBase* data : *vec)
+  for (const AttrBase* data : vec)
   {
     if (data->IsUnNamed() && name == nullptr)  // Unnamed stream
       return data;
@@ -582,18 +584,18 @@ const AttrBase* FileRecord::FindStream(_TCHAR* name)
 }
 
 // Check if it's deleted or in use
-BOOL FileRecord::IsDeleted() const
+bool FileRecord::IsDeleted() const
 {
-  return !static_cast<BOOL>(file_record_->Flags & Flag::FileRecord::INUSE);
+  return !static_cast<bool>(file_record_->Flags & Flag::FileRecord::INUSE);
 }
 
 // Check if it's a directory
-BOOL FileRecord::IsDirectory() const
+bool FileRecord::IsDirectory() const
 {
-  return static_cast<BOOL>(file_record_->Flags & Flag::FileRecord::DIR);
+  return static_cast<bool>(file_record_->Flags & Flag::FileRecord::DIR);
 }
 
-BOOL FileRecord::IsReadOnly() const
+bool FileRecord::IsReadOnly() const
 {
   // Standard Information attribute holds the most updated file time
   const std::vector<AttrBase*>& vec = attr_list_[ATTR_INDEX(
@@ -601,35 +603,35 @@ BOOL FileRecord::IsReadOnly() const
   return vec.empty() ? FALSE : ((AttrStdInfo*)vec.front())->IsReadOnly();
 }
 
-BOOL FileRecord::IsHidden() const
+bool FileRecord::IsHidden() const
 {
   const std::vector<AttrBase*>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
   return vec.empty() ? FALSE : ((AttrStdInfo*)vec.front())->IsHidden();
 }
 
-BOOL FileRecord::IsSystem() const
+bool FileRecord::IsSystem() const
 {
   const std::vector<AttrBase*>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
   return vec.empty() ? FALSE : ((AttrStdInfo*)vec.front())->IsSystem();
 }
 
-BOOL FileRecord::IsCompressed() const
+bool FileRecord::IsCompressed() const
 {
   const std::vector<AttrBase*>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
   return vec.empty() ? FALSE : ((AttrStdInfo*)vec.front())->IsCompressed();
 }
 
-BOOL FileRecord::IsEncrypted() const
+bool FileRecord::IsEncrypted() const
 {
   const std::vector<AttrBase*>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
   return vec.empty() ? FALSE : ((AttrStdInfo*)vec.front())->IsEncrypted();
 }
 
-BOOL FileRecord::IsSparse() const
+bool FileRecord::IsSparse() const
 {
   const std::vector<AttrBase*>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];

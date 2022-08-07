@@ -20,7 +20,7 @@ struct Filename
   ULONGLONG RealSize;                 // Real size of the file
   Flag::Filename Flags;               // Flags
   DWORD ER;                           // Used by EAs and Reparse
-  BYTE NameLength;                    // Filename length in characters
+  BYTE name_length;                   // Filename length in characters
   Flag::FilenameNamespace NameSpace;  // Filename space
   WORD Name[1];                       // Filename
 };

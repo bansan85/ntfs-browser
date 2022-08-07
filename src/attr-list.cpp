@@ -6,6 +6,8 @@
 #include "ntfs-common.h"
 #include <ntfs-browser/mask.h>
 
+// OK
+
 namespace NtfsBrowser
 {
 
@@ -13,39 +15,41 @@ namespace NtfsBrowser
 // Attribute: Attribute List
 ////////////////////////////////////////////
 template <typename TYPE_RESIDENT>
-AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc,
-                                  const FileRecord& fr)
+AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
     : TYPE_RESIDENT(ahc, fr)
 {
   NTFS_TRACE("Attribute: Attribute List\n");
-  if (fr.file_reference_ == (ULONGLONG)-1) return;
+  if (!fr.file_reference_)
+  {
+    return;
+  }
 
   ULONGLONG offset = 0;
-  DWORD len;
-  Attr::AttributeList alRecord;
+  DWORD len = 0;
+  Attr::AttributeList al_record{};
 
-  while (this->ReadData(offset, &alRecord, sizeof(Attr::AttributeList), len) &&
+  while (this->ReadData(offset, &al_record, sizeof(Attr::AttributeList), len) &&
          len == sizeof(Attr::AttributeList))
   {
-    if (ATTR_INDEX(alRecord.AttrType) > kAttrNums)
+    if (ATTR_INDEX(al_record.attr_type) > kAttrNums)
     {
       NTFS_TRACE("Attribute List parse error1\n");
       break;
     }
 
-    NTFS_TRACE1("Attribute List: 0x%04x\n", alRecord.AttrType);
+    NTFS_TRACE1("Attribute List: 0x%04x\n", al_record.attr_type);
 
-    ULONGLONG recordRef = alRecord.BaseRef & 0x0000FFFFFFFFFFFFUL;
-    if (recordRef != fr.file_reference_)  // Skip contained attributes
+    const ULONGLONG record_ref = al_record.base_ref.segment_number;
+    if (record_ref != *fr.file_reference_)  // Skip contained attributes
     {
-      Mask am = ATTR_MASK(alRecord.AttrType);
-      if (static_cast<BOOL>(am & fr.attr_mask_))  // Skip unwanted attributes
+      const Mask am = ATTR_MASK(al_record.attr_type);
+      if (static_cast<bool>(am & fr.attr_mask_))  // Skip unwanted attributes
       {
-        FileRecordList.emplace_back(fr.volume_);
-        FileRecord& frnew = FileRecordList.back();
+        file_record_list_.emplace_back(fr.volume_);
+        FileRecord& frnew = file_record_list_.back();
 
         frnew.attr_mask_ = am;
-        if (!frnew.ParseFileRecord(recordRef))
+        if (!frnew.ParseFileRecord(record_ref))
         {
           NTFS_TRACE("Attribute List parse error2\n");
           break;
@@ -57,22 +61,16 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc,
         }
 
         // Insert new found AttrList to fr.AttrList
-        const std::vector<AttrBase*>* vec = frnew.getAttr(alRecord.AttrType);
-        if (vec != nullptr)
-        {
-          for (AttrBase* ab : *vec)
-          {
-            auto vec2 = fr.attr_list_[ATTR_INDEX(alRecord.AttrType)];
-            vec2.push_back(ab);
-          }
-        }
-
+        std::vector<AttrBase*>& vec = frnew.getAttr(al_record.attr_type);
+        fr.attr_list_[ATTR_INDEX(al_record.attr_type)].insert(
+            fr.attr_list_[ATTR_INDEX(al_record.attr_type)].end(), vec.begin(),
+            vec.end());
         // Throw away frnew.AttrList entries to prevent free twice (fr will delete them)
-        frnew.attr_list_[ATTR_INDEX(alRecord.AttrType)].clear();
+        vec.clear();
       }
     }
 
-    offset += alRecord.RecordSize;
+    offset += al_record.record_size;
   }
 }
 

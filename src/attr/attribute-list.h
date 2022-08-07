@@ -2,20 +2,26 @@
 
 #include <windows.h>
 
+// OK
+
 namespace NtfsBrowser::Attr
 {
 
-#pragma pack(1)
+struct MftSegmentReference
+{
+  ULONGLONG segment_number : 48;
+  WORD sequence_number;
+};
+
 struct AttributeList
 {
-  DWORD AttrType;      // Attribute type
-  WORD RecordSize;     // Record length
-  BYTE NameLength;     // Name length in characters
-  BYTE NameOffset;     // Name offset
-  ULONGLONG StartVCN;  // Start VCN
-  ULONGLONG BaseRef;   // Base file reference to the attribute
-  WORD AttrId;         // Attribute Id
+  DWORD attr_type;               // Attribute type
+  WORD record_size;              // Record length
+  BYTE name_length;              // Name length in characters
+  BYTE name_offset;              // Name offset
+  ULONGLONG start_vcn;           // Start VCN
+  MftSegmentReference base_ref;  // Base file reference to the attribute
+  WORD attr_id;                  // Attribute Id
 };
-#pragma pack()
 
 }  // namespace NtfsBrowser::Attr

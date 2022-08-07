@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 
+#include <gsl/pointers>
+
 #include <windows.h>
 
 #include "../flag/file-record.h"
@@ -48,12 +50,13 @@ struct FileRecordHeader
     if (Magic == kFileRecordMagic)
     {
       USArray.reserve(fileRecordSize / sectorSize);
-      WORD* usnaddr = (WORD*)((BYTE*)buffer + OffsetOfUS);
+      const gsl::not_null<WORD*> usnaddr =
+          reinterpret_cast<WORD*>(buffer + OffsetOfUS);
       USNumber = *usnaddr;
-      WORD* usarray = usnaddr + 1;
+      const gsl::not_null<WORD*> usarray = usnaddr.get() + 1;
 
       for (WORD i = 0; i < fileRecordSize / sectorSize; i++)
-        USArray.push_back(usarray[i]);
+        USArray.push_back(usarray.get()[i]);
     }
     else
     {
@@ -62,22 +65,27 @@ struct FileRecordHeader
   }
 
   // Verify US and update sectors
-  BOOL PatchUS()
+  BOOL PatchUS() noexcept
   {
-    WORD* sector = (WORD*)&Magic;
-    for (size_t i = 0; i < USArray.size(); i++)
+    gsl::not_null<WORD*> sector = reinterpret_cast<WORD*>(&Raw[0]);
+    for (WORD value : USArray)
     {
-      sector += ((sectorSize >> 1) - 1);
-      if (*sector != USNumber) return FALSE;  // USN error
-      *sector = USArray[i];                   // Write back correct data
-      sector++;
+      sector = sector.get() + ((sectorSize >> 1) - 1);
+      // USN error
+      if (*sector != USNumber)
+      {
+        return FALSE;
+      }
+      // Write back correct data
+      *sector = value;
+      sector = sector.get() + 1;
     }
     return TRUE;
   }
 
-  const AttrHeaderCommon* HeaderCommon()
+  const AttrHeaderCommon* HeaderCommon() noexcept
   {
-    return (AttrHeaderCommon*)(Raw + OffsetOfAttr);
+    return reinterpret_cast<const AttrHeaderCommon*>(Raw + OffsetOfAttr);
   }
 };
 }  // namespace NtfsBrowser

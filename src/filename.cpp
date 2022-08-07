@@ -189,13 +189,13 @@ int Filename::GetFilename(char* buf, DWORD bufLen) const
 
   int len = 0;
 
-  if (filename_->NameLength)
+  if (filename_->name_length)
   {
-    if (bufLen < filename_->NameLength)
-      return -1 * filename_->NameLength;  // buffer too small
+    if (bufLen < filename_->name_length)
+      return -1 * filename_->name_length;  // buffer too small
 
     len = WideCharToMultiByte(CP_ACP, 0, (wchar_t*)filename_->Name,
-                              filename_->NameLength, buf, bufLen, nullptr,
+                              filename_->name_length, buf, bufLen, nullptr,
                               nullptr);
     if (len)
     {
@@ -221,12 +221,12 @@ int Filename::GetFilename(wchar_t* buf, DWORD bufLen) const
 {
   if (filename_ == nullptr) return 0;
 
-  if (filename_->NameLength)
+  if (filename_->name_length)
   {
-    if (bufLen < filename_->NameLength)
-      return -1 * filename_->NameLength;  // buffer too small
+    if (bufLen < filename_->name_length)
+      return -1 * filename_->name_length;  // buffer too small
 
-    bufLen = filename_->NameLength;
+    bufLen = filename_->name_length;
     wcsncpy(buf, (wchar_t*)filename_->Name, bufLen);
     buf[bufLen] = wchar_t('\0');
 

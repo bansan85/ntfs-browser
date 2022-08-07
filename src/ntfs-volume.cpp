@@ -30,21 +30,21 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME))) return;
 
   if (!vol.ParseAttrs()) return;
-  const auto* vec =
+  const auto& vec =
       vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_INFORMATION));
-  if (!vec || vec->empty()) return;
+  if (vec.empty()) return;
 
   std::tie(VersionMajor, this->VersionMinor) =
-      ((AttrVolInfo*)vec->front())->GetVersion();
+      ((AttrVolInfo*)vec.front())->GetVersion();
   NTFS_TRACE2("NTFS volume version: %u.%u\n", VersionMajor, VersionMinor);
   if (VersionMajor < 3)  // NT4 ?
     return;
 
 #ifdef _DEBUG
-  const auto* vec2 = vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_NAME));
-  if (vec2 && !vec2->empty())
+  const auto& vec2 = vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_NAME));
+  if (!vec2.empty())
   {
-    std::wstring_view volname{((AttrVolName*)vec2->front())->GetName()};
+    std::wstring_view volname{((AttrVolName*)vec2.front())->GetName()};
     NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
   }
 #endif
@@ -61,14 +61,17 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
       MFTRecord = nullptr;
       return;
     }
-    const auto* vec3 = MFTRecord->getAttr(static_cast<DWORD>(AttrType::DATA));
-    if (!vec3 || vec3->empty())
+    const std::vector<AttrBase*>& vec3 =
+        MFTRecord->getAttr(static_cast<DWORD>(AttrType::DATA));
+    if (vec3.empty())
     {
       delete MFTRecord;
       MFTRecord = nullptr;
     }
     else
-      MFTData = vec3->front();
+    {
+      MFTData = vec3.front();
+    }
   }
 }
 
