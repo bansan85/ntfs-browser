@@ -4,6 +4,8 @@
 
 #include <ntfs-browser/index-entry.h>
 
+// OK
+
 namespace NtfsBrowser
 {
 namespace Data
@@ -18,7 +20,10 @@ class IndexBlock : public std::vector<IndexEntry>
 {
  public:
   IndexBlock();
-
+  IndexBlock(IndexBlock&& other) noexcept = delete;
+  IndexBlock(IndexBlock const& other) = delete;
+  IndexBlock& operator=(IndexBlock&& other) noexcept = delete;
+  IndexBlock& operator=(IndexBlock const& other) = delete;
   virtual ~IndexBlock();
 
  private:

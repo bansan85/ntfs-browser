@@ -2,6 +2,8 @@
 
 #include "attr-non-resident.h"
 
+// OK
+
 namespace NtfsBrowser
 {
 class IndexBlock;
@@ -15,16 +17,21 @@ class AttrIndexAlloc : public AttrNonResident
 {
  public:
   AttrIndexAlloc(const AttrHeaderCommon& ahc, const FileRecord& fr);
-  virtual ~AttrIndexAlloc();
+  AttrIndexAlloc(AttrIndexAlloc&& other) noexcept = delete;
+  AttrIndexAlloc(AttrIndexAlloc const& other) = delete;
+  AttrIndexAlloc& operator=(AttrIndexAlloc&& other) noexcept = delete;
+  AttrIndexAlloc& operator=(AttrIndexAlloc const& other) = delete;
+  ~AttrIndexAlloc() override;
 
  private:
-  ULONGLONG IndexBlockCount;
+  ULONGLONG index_block_count_;
 
-  BOOL PatchUS(WORD* sector, int sectors, WORD usn, WORD* usarray);
+  [[nodiscard]] bool PatchUS(WORD* sector, DWORD sectors, WORD usn,
+                             const WORD* usarray);
 
  public:
-  ULONGLONG GetIndexBlockCount();
-  BOOL ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass);
+  [[nodiscard]] ULONGLONG GetIndexBlockCount() const noexcept;
+  [[nodiscard]] bool ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass);
 };  // AttrIndexAlloc
 
 }  // namespace NtfsBrowser

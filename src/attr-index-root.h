@@ -27,7 +27,7 @@ class AttrIndexRoot : public AttrResident, public std::vector<IndexEntry>
   AttrIndexRoot(AttrIndexRoot const& other) = delete;
   AttrIndexRoot& operator=(AttrIndexRoot&& other) noexcept = delete;
   AttrIndexRoot& operator=(AttrIndexRoot const& other) = delete;
-  virtual ~AttrIndexRoot();
+  ~AttrIndexRoot() override;
 
  private:
   const Attr::IndexRoot* index_root_;
@@ -35,7 +35,7 @@ class AttrIndexRoot : public AttrResident, public std::vector<IndexEntry>
   void ParseIndexEntries();
 
  public:
-  bool IsFileName() const noexcept;
+  [[nodiscard]] bool IsFileName() const noexcept;
 };  // AttrIndexRoot
 
 }  // namespace NtfsBrowser

@@ -221,7 +221,7 @@ bool FileRecord::ParseFileRecord(ULONGLONG fileRef)
   {
     file_reference_ = fileRef;
 
-    if (fr->Magic == kFileRecordMagic)
+    if (fr->magic == kFileRecordMagic)
     {
       if (fr->PatchUS())
       {

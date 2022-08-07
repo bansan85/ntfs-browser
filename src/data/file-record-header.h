@@ -19,10 +19,10 @@ struct FileRecordHeader
   {
     struct
     {
-      DWORD Magic;        // "FILE"
-      WORD OffsetOfUS;    // Offset of Update Sequence
-      WORD SizeOfUS;      // Size in words of Update Sequence Number & Array
-      ULONGLONG LSN;      // $LogFile Sequence Number
+      DWORD magic;        // "FILE"
+      WORD offset_of_us;  // Offset of Update Sequence
+      WORD size_of_us;    // Size in words of Update Sequence Number & Array
+      ULONGLONG lsn;      // $LogFile Sequence Number
       WORD SeqNo;         // Sequence number
       WORD Hardlinks;     // Hard link count
       WORD OffsetOfAttr;  // Offset of the first Attribute
@@ -47,11 +47,11 @@ struct FileRecordHeader
     _ASSERT(1024 == fileRecordSize);
     memcpy(&Raw[0], buffer, fileRecordSize);
 
-    if (Magic == kFileRecordMagic)
+    if (magic == kFileRecordMagic)
     {
       USArray.reserve(fileRecordSize / sectorSize);
       const gsl::not_null<WORD*> usnaddr =
-          reinterpret_cast<WORD*>(buffer + OffsetOfUS);
+          reinterpret_cast<WORD*>(buffer + offset_of_us);
       USNumber = *usnaddr;
       const gsl::not_null<WORD*> usarray = usnaddr.get() + 1;
 

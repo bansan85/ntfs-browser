@@ -1,28 +1,25 @@
 #include "attr-index-alloc.h"
 #include "data/index-block.h"
+#include "data/index-entry.h"
 #include "data/run-entry.h"
+#include "flag/index-entry.h"
 #include "index-block.h"
 #include "ntfs-common.h"
-#include "flag/index-entry.h"
-#include "data/index-entry.h"
 
 namespace NtfsBrowser
 {
 
 AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
                                const FileRecord& fr)
-    : AttrNonResident(ahc, fr)
+    : AttrNonResident(ahc, fr), index_block_count_(0)
 {
   NTFS_TRACE("Attribute: Index Allocation\n");
-
-  IndexBlockCount = 0;
 
   if (IsDataRunOK())
   {
     // Get total number of Index Blocks
-    ULONGLONG ibTotalSize;
-    ibTotalSize = GetDataSize();
-    if (ibTotalSize % GetIndexBlockSize())
+    const ULONGLONG ibTotalSize = GetDataSize();
+    if (ibTotalSize % GetIndexBlockSize() != 0)
     {
       NTFS_TRACE2(
           "Cannot calulate number of IndexBlocks, total size = %I64u, unit = "
@@ -30,7 +27,7 @@ AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
           ibTotalSize, GetIndexBlockSize());
       return;
     }
-    IndexBlockCount = ibTotalSize / GetIndexBlockSize();
+    index_block_count_ = ibTotalSize / GetIndexBlockSize();
   }
   else
   {
@@ -41,60 +38,71 @@ AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
 AttrIndexAlloc::~AttrIndexAlloc() { NTFS_TRACE("AttrIndexAlloc deleted\n"); }
 
 // Verify US and update sectors
-BOOL AttrIndexAlloc::PatchUS(WORD* sector, int sectors, WORD usn, WORD* usarray)
+bool AttrIndexAlloc::PatchUS(WORD* sector, DWORD sectors, WORD usn,
+                             const WORD* usarray)
 {
-  int i;
-
-  for (i = 0; i < sectors; i++)
+  for (DWORD i = 0; i < sectors; i++)
   {
-    sector += ((GetSectorSize() >> 1) - 1);
-    if (*sector != usn) return FALSE;  // USN error
-    *sector = usarray[i];              // Write back correct data
+    sector += GetSectorSize() / 2;
+    sector--;
+    // USN error
+    if (*sector != usn)
+    {
+      return FALSE;
+    }
+    // Write back correct data
+    *sector = usarray[i];
     sector++;
   }
   return TRUE;
 }
 
-ULONGLONG AttrIndexAlloc::GetIndexBlockCount() { return IndexBlockCount; }
+ULONGLONG AttrIndexAlloc::GetIndexBlockCount() const noexcept
+{
+  return index_block_count_;
+}
 
 // Parse a single Index Block
 // vcn = Index Block VCN in Index Allocation Data Attributes
 // ibClass holds the parsed Index Entries
-BOOL AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
+bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 {
-  if (vcn >= IndexBlockCount)  // Bounds check
+  if (vcn >= index_block_count_)  // Bounds check
+  {
     return FALSE;
+  }
 
   // Allocate buffer for a single Index Block
   Data::IndexBlock* ibBuf = ibClass.AllocIndexBlock(GetIndexBlockSize());
 
   // Sectors Per Index Block
-  DWORD sectors = GetIndexBlockSize() / GetSectorSize();
+  const DWORD sectors = GetIndexBlockSize() / GetSectorSize();
 
   // Read one Index Block
-  DWORD len;
+  DWORD len = 0;
   if (ReadData(vcn * GetIndexBlockSize(), ibBuf, GetIndexBlockSize(), len) &&
       len == GetIndexBlockSize())
   {
-    if (ibBuf->Magic != INDEX_BLOCK_MAGIC)
+    if (ibBuf->magic != kIndexBlockMagic)
     {
       NTFS_TRACE("Index Block parse error: Magic mismatch\n");
       return FALSE;
     }
 
     // Patch US
-    WORD* usnaddr = (WORD*)((BYTE*)ibBuf + ibBuf->OffsetOfUS);
-    WORD usn = *usnaddr;
-    WORD* usarray = usnaddr + 1;
-    if (!PatchUS((WORD*)ibBuf, sectors, usn, usarray))
+    const auto* usnaddr = reinterpret_cast<const WORD*>(
+        reinterpret_cast<const BYTE*>(ibBuf) + ibBuf->offset_of_us);
+    const WORD usn = *usnaddr;
+    const WORD* usarray = usnaddr + 1;
+    if (!PatchUS(reinterpret_cast<WORD*>(ibBuf), sectors, usn, usarray))
     {
       NTFS_TRACE("Index Block parse error: Update Sequence Number\n");
       return FALSE;
     }
 
-    Data::IndexEntry* ie;
-    ie = (Data::IndexEntry*)((BYTE*)(&(ibBuf->entry_offset)) +
-                             ibBuf->entry_offset);
+    const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
+        reinterpret_cast<const BYTE*>(&(ibBuf->entry_offset)) +
+        ibBuf->entry_offset);
 
     DWORD ieTotal = ie->size;
 
@@ -102,20 +110,21 @@ BOOL AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
     {
       ibClass.emplace_back(ie);
 
-      if (static_cast<BOOL>(ie->flags & Flag::IndexEntry::LAST))
+      if (static_cast<bool>(ie->flags & Flag::IndexEntry::LAST))
       {
         NTFS_TRACE("Last Index Entry\n");
         break;
       }
 
-      ie = (Data::IndexEntry*)((BYTE*)ie + ie->size);  // Pick next
+      ie = reinterpret_cast<const Data::IndexEntry*>(
+          reinterpret_cast<const BYTE*>(ie) + ie->size);  // Pick next
       ieTotal += ie->size;
     }
 
     return TRUE;
   }
-  else
-    return FALSE;
+
+  return FALSE;
 }
 
 }  // namespace NtfsBrowser
