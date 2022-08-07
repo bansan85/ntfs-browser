@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+// OK
+
 namespace NtfsBrowser::Attr
 {
 
@@ -10,17 +12,17 @@ struct IndexRoot
   // Index Root Header
   DWORD attr_type;  // Attribute type
   //(ATTR_TYPE_FILE_NAME: Directory, 0: Index View)
-  DWORD CollRule;      // Collation rule
-  DWORD IBSize;        // Size of index block
-  BYTE ClustersPerIB;  // Clusters per index block (same as BPB?)
-  BYTE Padding1[3];    // Padding
+  DWORD coll_rule;       // Collation rule
+  DWORD ib_size;         // Size of index block
+  BYTE clusters_per_ib;  // Clusters per index block (same as BPB?)
+  BYTE padding1[3];      // Padding
   // Index Header
-  DWORD EntryOffset;  // Offset to the first index entry,
+  DWORD entry_offset;  // Offset to the first index entry,
   // relative to this address(0x10)
-  DWORD TotalEntrySize;  // Total size of the index entries
-  DWORD AllocEntrySize;  // Allocated size of the index entries
-  BYTE Flags;            // Flags
-  BYTE Padding2[3];      // Padding
+  DWORD total_entry_size;  // Total size of the index entries
+  DWORD alloc_entry_size;  // Allocated size of the index entries
+  BYTE flags;              // Flags
+  BYTE padding2[3];        // Padding
 };
 
 }  // namespace NtfsBrowser::Attr

@@ -18,7 +18,7 @@ struct Filename
   ULONGLONG ReadTime;                 // File read time
   ULONGLONG AllocSize;                // Allocated size of the file
   ULONGLONG RealSize;                 // Real size of the file
-  Flag::Filename Flags;               // Flags
+  Flag::Filename flags;               // Flags
   DWORD ER;                           // Used by EAs and Reparse
   BYTE name_length;                   // Filename length in characters
   Flag::FilenameNamespace NameSpace;  // Filename space

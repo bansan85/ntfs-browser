@@ -586,13 +586,13 @@ const AttrBase* FileRecord::FindStream(_TCHAR* name)
 // Check if it's deleted or in use
 bool FileRecord::IsDeleted() const
 {
-  return !static_cast<bool>(file_record_->Flags & Flag::FileRecord::INUSE);
+  return !static_cast<bool>(file_record_->flags & Flag::FileRecord::INUSE);
 }
 
 // Check if it's a directory
 bool FileRecord::IsDirectory() const
 {
-  return static_cast<bool>(file_record_->Flags & Flag::FileRecord::DIR);
+  return static_cast<bool>(file_record_->flags & Flag::FileRecord::DIR);
 }
 
 bool FileRecord::IsReadOnly() const

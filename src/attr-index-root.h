@@ -2,8 +2,11 @@
 
 #include <vector>
 
-#include "attr-resident.h"
 #include <ntfs-browser/index-entry.h>
+
+#include "attr-resident.h"
+
+// OK
 
 namespace NtfsBrowser
 {
@@ -20,15 +23,19 @@ class AttrIndexRoot : public AttrResident, public std::vector<IndexEntry>
 {
  public:
   AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrIndexRoot(AttrIndexRoot&& other) noexcept = delete;
+  AttrIndexRoot(AttrIndexRoot const& other) = delete;
+  AttrIndexRoot& operator=(AttrIndexRoot&& other) noexcept = delete;
+  AttrIndexRoot& operator=(AttrIndexRoot const& other) = delete;
   virtual ~AttrIndexRoot();
 
  private:
-  const Attr::IndexRoot* IndexRoot;
+  const Attr::IndexRoot* index_root_;
 
   void ParseIndexEntries();
 
  public:
-  BOOL IsFileName() const;
+  bool IsFileName() const noexcept;
 };  // AttrIndexRoot
 
 }  // namespace NtfsBrowser

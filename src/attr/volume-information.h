@@ -12,7 +12,7 @@ struct VolumeInformation
   ULONGLONG Reserved1;  // Always 0 ?
   BYTE MajorVersion;    // Major version
   BYTE MinorVersion;    // Minor version
-  WORD Flags;           // Flags
+  WORD flags;           // Flags
   DWORD Reserved2;      // Always 0 ?
 };
 

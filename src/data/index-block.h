@@ -16,12 +16,12 @@ struct IndexBlock
   ULONGLONG LSN;    // $LogFile Sequence Number
   ULONGLONG VCN;    // VCN of this index block in the index allocation
   // Index Header
-  DWORD EntryOffset;  // Offset of the index entries,
+  DWORD entry_offset;  // Offset of the index entries,
   // relative to this address(0x18)
-  DWORD TotalEntrySize;  // Total size of the index entries
-  DWORD AllocEntrySize;  // Allocated size of index entries
-  BYTE NotLeaf;          // 1 if not leaf node (has children)
-  BYTE Padding[3];       // Padding
+  DWORD total_entry_size;  // Total size of the index entries
+  DWORD alloc_entry_size;  // Allocated size of index entries
+  BYTE NotLeaf;            // 1 if not leaf node (has children)
+  BYTE padding[3];         // Padding
 };
 
 }  // namespace NtfsBrowser::Data

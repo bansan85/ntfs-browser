@@ -129,55 +129,55 @@ ULONGLONG Filename::GetFileSize() const
 
 Flag::Filename Filename::GetFilePermission() const
 {
-  return filename_ ? filename_->Flags : Flag::Filename::NONE;
+  return filename_ ? filename_->flags : Flag::Filename::NONE;
 }
 
 BOOL Filename::IsReadOnly() const
 {
   return filename_
-             ? static_cast<BOOL>(filename_->Flags & Flag::Filename::READONLY)
+             ? static_cast<BOOL>(filename_->flags & Flag::Filename::READONLY)
              : FALSE;
 }
 
 BOOL Filename::IsHidden() const
 {
   return filename_
-             ? static_cast<BOOL>(filename_->Flags & Flag::Filename::HIDDEN)
+             ? static_cast<BOOL>(filename_->flags & Flag::Filename::HIDDEN)
              : FALSE;
 }
 
 BOOL Filename::IsSystem() const
 {
   return filename_
-             ? static_cast<BOOL>(filename_->Flags & Flag::Filename::SYSTEM)
+             ? static_cast<BOOL>(filename_->flags & Flag::Filename::SYSTEM)
              : FALSE;
 }
 
 BOOL Filename::IsDirectory() const
 {
   return filename_
-             ? static_cast<BOOL>(filename_->Flags & Flag::Filename::DIRECTORY)
+             ? static_cast<BOOL>(filename_->flags & Flag::Filename::DIRECTORY)
              : FALSE;
 }
 
 BOOL Filename::IsCompressed() const
 {
   return filename_
-             ? static_cast<BOOL>(filename_->Flags & Flag::Filename::COMPRESSED)
+             ? static_cast<BOOL>(filename_->flags & Flag::Filename::COMPRESSED)
              : FALSE;
 }
 
 BOOL Filename::IsEncrypted() const
 {
   return filename_
-             ? static_cast<BOOL>(filename_->Flags & Flag::Filename::ENCRYPTED)
+             ? static_cast<BOOL>(filename_->flags & Flag::Filename::ENCRYPTED)
              : FALSE;
 }
 
 BOOL Filename::IsSparse() const
 {
   return filename_
-             ? static_cast<BOOL>(filename_->Flags & Flag::Filename::SPARSE)
+             ? static_cast<BOOL>(filename_->flags & Flag::Filename::SPARSE)
              : FALSE;
 }
 

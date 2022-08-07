@@ -93,23 +93,23 @@ BOOL AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
     }
 
     Data::IndexEntry* ie;
-    ie = (Data::IndexEntry*)((BYTE*)(&(ibBuf->EntryOffset)) +
-                             ibBuf->EntryOffset);
+    ie = (Data::IndexEntry*)((BYTE*)(&(ibBuf->entry_offset)) +
+                             ibBuf->entry_offset);
 
-    DWORD ieTotal = ie->Size;
+    DWORD ieTotal = ie->size;
 
-    while (ieTotal <= ibBuf->TotalEntrySize)
+    while (ieTotal <= ibBuf->total_entry_size)
     {
       ibClass.emplace_back(ie);
 
-      if (static_cast<BOOL>(ie->Flags & Flag::IndexEntry::LAST))
+      if (static_cast<BOOL>(ie->flags & Flag::IndexEntry::LAST))
       {
         NTFS_TRACE("Last Index Entry\n");
         break;
       }
 
-      ie = (Data::IndexEntry*)((BYTE*)ie + ie->Size);  // Pick next
-      ieTotal += ie->Size;
+      ie = (Data::IndexEntry*)((BYTE*)ie + ie->size);  // Pick next
+      ieTotal += ie->size;
     }
 
     return TRUE;

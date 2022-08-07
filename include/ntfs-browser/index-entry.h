@@ -16,7 +16,7 @@ class IndexEntry : public Filename
   virtual ~IndexEntry();
 
  private:
-  BOOL IsDefault;
+  bool is_default_;
 
  protected:
   const Data::IndexEntry* index_entry_;
@@ -25,7 +25,7 @@ class IndexEntry : public Filename
   // Use with caution !
   IndexEntry& operator=(const IndexEntry& ieClass);
   ULONGLONG GetFileReference() const;
-  BOOL IsSubNodePtr() const;
+  bool IsSubNodePtr() const;
   ULONGLONG GetSubNodeVCN() const;
 };  // IndexEntry
 

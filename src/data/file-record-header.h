@@ -26,7 +26,7 @@ struct FileRecordHeader
       WORD SeqNo;         // Sequence number
       WORD Hardlinks;     // Hard link count
       WORD OffsetOfAttr;  // Offset of the first Attribute
-      Flag::FileRecord Flags;  // Flags
+      Flag::FileRecord flags;  // Flags
       DWORD RealSize;          // Real size of the FILE record
       DWORD AllocSize;         // Allocated size of the FILE record
       ULONGLONG RefToBase;     // File reference to the base FILE record

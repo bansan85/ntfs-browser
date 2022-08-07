@@ -12,6 +12,6 @@ struct HeaderResident
   DWORD AttrSize;           // Length of the attribute body
   WORD AttrOffset;          // Offset to the Attribute
   BYTE IndexedFlag;         // Indexed flag
-  BYTE Padding;             // Padding
+  BYTE padding;             // Padding
 };
 }  // namespace NtfsBrowser::Attr

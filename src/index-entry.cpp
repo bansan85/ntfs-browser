@@ -8,7 +8,7 @@ IndexEntry::IndexEntry(const Data::IndexEntry* ie)
 {
   NTFS_TRACE("Index Entry\n");
 
-  IsDefault = FALSE;
+  is_default_ = FALSE;
 
   _ASSERT(ie);
   index_entry_ = ie;
@@ -18,9 +18,9 @@ IndexEntry::IndexEntry(const Data::IndexEntry* ie)
     NTFS_TRACE("Points to sub-node\n");
   }
 
-  if (ie->StreamSize)
+  if (ie->stream_size)
   {
-    SetFilename((Attr::Filename*)(ie->Stream));
+    SetFilename((Attr::Filename*)(&ie->stream));
   }
   else
   {
@@ -40,7 +40,7 @@ IndexEntry::~IndexEntry()
 
 IndexEntry& IndexEntry::operator=(const IndexEntry& ieClass)
 {
-  if (!IsDefault)
+  if (!is_default_)
   {
     NTFS_TRACE("Cannot call this routine\n");
     return *this;
@@ -57,11 +57,11 @@ IndexEntry& IndexEntry::operator=(const IndexEntry& ieClass)
   }
 
   const Data::IndexEntry* ie = ieClass.index_entry_;
-  _ASSERT(ie && (ie->Size > 0));
+  _ASSERT(ie && (ie->size > 0));
 
-  index_entry_ = (Data::IndexEntry*)new BYTE[ie->Size];
-  memcpy((void*)index_entry_, ie, ie->Size);
-  CopyFilename(&ieClass, (Attr::Filename*)(index_entry_->Stream));
+  index_entry_ = (Data::IndexEntry*)new BYTE[ie->size];
+  memcpy((void*)index_entry_, ie, ie->size);
+  CopyFilename(&ieClass, (Attr::Filename*)(&index_entry_->stream));
 
   return *this;
 }
@@ -69,15 +69,15 @@ IndexEntry& IndexEntry::operator=(const IndexEntry& ieClass)
 ULONGLONG IndexEntry::GetFileReference() const
 {
   if (index_entry_)
-    return index_entry_->FileReference & 0x0000FFFFFFFFFFFFUL;
+    return index_entry_->file_reference & 0x0000FFFFFFFFFFFFUL;
   else
     return (ULONGLONG)-1;
 }
 
-BOOL IndexEntry::IsSubNodePtr() const
+bool IndexEntry::IsSubNodePtr() const
 {
   if (index_entry_)
-    return static_cast<BOOL>(index_entry_->Flags & Flag::IndexEntry::SUBNODE);
+    return static_cast<bool>(index_entry_->flags & Flag::IndexEntry::SUBNODE);
   else
     return FALSE;
 }
@@ -85,7 +85,7 @@ BOOL IndexEntry::IsSubNodePtr() const
 ULONGLONG IndexEntry::GetSubNodeVCN() const
 {
   if (index_entry_)
-    return *(ULONGLONG*)((BYTE*)index_entry_ + index_entry_->Size - 8);
+    return *(ULONGLONG*)((BYTE*)index_entry_ + index_entry_->size - 8);
   else
     return (ULONGLONG)-1;
 }
