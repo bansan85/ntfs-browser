@@ -23,11 +23,11 @@ class Filename
  protected:
   const Attr::Filename* filename_;  // May be NULL for an IndexEntry
   // Uppercase Unicode File Name, used to compare file names
-  wchar_t* FilenameWUC;
-  int FilenameLength;
-  BOOL IsCopy;
+  wchar_t* filename_wuc_;
+  int filename_length_;
+  bool is_copy_;
 
-  void SetFilename(Attr::Filename* fn);
+  void SetFilename(const Attr::Filename* fn);
   void CopyFilename(const Filename* fn, const Attr::Filename* afn);
 
  private:
@@ -38,22 +38,22 @@ class Filename
   int Compare(const char* fn) const;
 
   ULONGLONG GetFileSize() const;
-  Flag::Filename GetFilePermission() const;
-  BOOL IsReadOnly() const;
-  BOOL IsHidden() const;
-  BOOL IsSystem() const;
-  BOOL IsDirectory() const;
-  BOOL IsCompressed() const;
-  BOOL IsEncrypted() const;
-  BOOL IsSparse() const;
+  virtual Flag::Filename GetFilePermission() const noexcept;
+  virtual bool IsReadOnly() const noexcept;
+  virtual bool IsHidden() const noexcept;
+  virtual bool IsSystem() const noexcept;
+  virtual bool IsDirectory() const noexcept;
+  virtual bool IsCompressed() const noexcept;
+  virtual bool IsEncrypted() const noexcept;
+  virtual bool IsSparse() const noexcept;
 
   int GetFilename(char* buf, DWORD bufLen) const;
   int GetFilename(wchar_t* buf, DWORD bufLen) const;
-  BOOL HasName() const;
-  BOOL IsWin32Name() const;
+  bool HasName() const;
+  bool IsWin32Name() const;
 
-  void GetFileTime(FILETIME* writeTm, FILETIME* createTm = NULL,
-                   FILETIME* accessTm = NULL) const;
+  virtual void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
+                           FILETIME* accessTm) const noexcept;
 };  // Filename
 
 }  // namespace NtfsBrowser

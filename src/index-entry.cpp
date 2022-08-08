@@ -30,10 +30,10 @@ IndexEntry::IndexEntry(const Data::IndexEntry* ie)
 
 IndexEntry::~IndexEntry()
 {
-  // Never touch *index_entry_ here if IsCopy == FALSE !
+  // Never touch *index_entry_ here if is_copy_ == FALSE !
   // As the memory have been deallocated by ~IndexBlock()
 
-  if (IsCopy && index_entry_) delete (void*)index_entry_;
+  if (is_copy_ && index_entry_) delete (void*)index_entry_;
 
   NTFS_TRACE("index_entry_ deleted\n");
 }
@@ -48,7 +48,7 @@ IndexEntry& IndexEntry::operator=(const IndexEntry& ieClass)
 
   NTFS_TRACE("Index Entry Copied\n");
 
-  IsCopy = TRUE;
+  is_copy_ = TRUE;
 
   if (index_entry_)
   {

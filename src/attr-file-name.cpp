@@ -1,6 +1,9 @@
 #include "attr-file-name.h"
+#include "flag/filename.h"
 #include "ntfs-common.h"
 #include <cassert>
+
+// OK
 
 namespace NtfsBrowser
 {
@@ -10,47 +13,47 @@ AttrFileName::AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr)
 {
   NTFS_TRACE("Attribute: File Name\n");
 
-  SetFilename((Attr::Filename*)GetData());
+  SetFilename(reinterpret_cast<const Attr::Filename*>(GetData()));
 }
 
 AttrFileName::~AttrFileName() { NTFS_TRACE("AttrFileName deleted\n"); }
 
-void AttrFileName::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                               FILETIME* accessTm) const
+void AttrFileName::GetFileTime(FILETIME* /*writeTm*/, FILETIME* /*createTm*/,
+                               FILETIME* /* accessTm*/) const noexcept
 {
   assert(false);
 }
-DWORD AttrFileName::GetFilePermission()
+Flag::Filename AttrFileName::GetFilePermission() const noexcept
 {
   assert(false);
-  return 0;
+  return Flag::Filename::NONE;
 }
-BOOL AttrFileName::IsReadOnly() const
-{
-  assert(false);
-  return false;
-}
-BOOL AttrFileName::IsHidden() const
+bool AttrFileName::IsReadOnly() const noexcept
 {
   assert(false);
   return false;
 }
-BOOL AttrFileName::IsSystem() const
+bool AttrFileName::IsHidden() const noexcept
 {
   assert(false);
   return false;
 }
-BOOL AttrFileName::IsCompressed() const
+bool AttrFileName::IsSystem() const noexcept
 {
   assert(false);
   return false;
 }
-BOOL AttrFileName::IsEncrypted() const
+bool AttrFileName::IsCompressed() const noexcept
 {
   assert(false);
   return false;
 }
-BOOL AttrFileName::IsSparse() const
+bool AttrFileName::IsEncrypted() const noexcept
+{
+  assert(false);
+  return false;
+}
+bool AttrFileName::IsSparse() const noexcept
 {
   assert(false);
   return false;

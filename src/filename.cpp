@@ -12,20 +12,20 @@ namespace NtfsBrowser
 
 Filename::Filename()
 {
-  IsCopy = FALSE;
+  is_copy_ = FALSE;
 
   filename_ = nullptr;
 
-  FilenameWUC = nullptr;
-  FilenameLength = 0;
+  filename_wuc_ = nullptr;
+  filename_length_ = 0;
 }
 
 Filename::~Filename()
 {
-  if (FilenameWUC) delete FilenameWUC;
+  if (filename_wuc_) delete filename_wuc_;
 }
 
-void Filename::SetFilename(Attr::Filename* fn)
+void Filename::SetFilename(const Attr::Filename* fn)
 {
   filename_ = fn;
 
@@ -35,7 +35,7 @@ void Filename::SetFilename(Attr::Filename* fn)
 // Copy pointer buffers
 void Filename::CopyFilename(const Filename* fn, const Attr::Filename* afn)
 {
-  if (!IsCopy)
+  if (!is_copy_)
   {
     NTFS_TRACE("Cannot call this routine\n");
     return;
@@ -45,23 +45,23 @@ void Filename::CopyFilename(const Filename* fn, const Attr::Filename* afn)
 
   NTFS_TRACE("Filename Copied\n");
 
-  if (FilenameWUC)
+  if (filename_wuc_)
   {
-    delete FilenameWUC;
-    FilenameWUC = nullptr;
+    delete filename_wuc_;
+    filename_wuc_ = nullptr;
   }
 
-  FilenameLength = fn->FilenameLength;
+  filename_length_ = fn->filename_length_;
   filename_ = afn;
 
-  if (fn->FilenameWUC)
+  if (fn->filename_wuc_)
   {
-    FilenameWUC = new wchar_t[FilenameLength + 1];
-    wcsncpy(FilenameWUC, fn->FilenameWUC, FilenameLength);
-    FilenameWUC[FilenameLength] = wchar_t('\0');
+    filename_wuc_ = new wchar_t[filename_length_ + 1];
+    wcsncpy(filename_wuc_, fn->filename_wuc_, filename_length_);
+    filename_wuc_[filename_length_] = wchar_t('\0');
   }
   else
-    FilenameWUC = nullptr;
+    filename_wuc_ = nullptr;
 }
 
 // Get uppercase unicode filename and store it in a buffer
@@ -72,26 +72,27 @@ void Filename::GetFilenameWUC()
   GetFilename(fna, MAX_PATH);  // Just show filename in debug window
 #endif
 
-  if (FilenameWUC)
+  if (filename_wuc_)
   {
-    delete FilenameWUC;
-    FilenameWUC = nullptr;
-    FilenameLength = 0;
+    delete filename_wuc_;
+    filename_wuc_ = nullptr;
+    filename_length_ = 0;
   }
 
   wchar_t fns[MAX_PATH];
-  FilenameLength = GetFilename(fns, MAX_PATH);
+  filename_length_ = GetFilename(fns, MAX_PATH);
 
-  if (FilenameLength > 0)
+  if (filename_length_ > 0)
   {
-    FilenameWUC = new wchar_t[FilenameLength + 1];
-    for (int i = 0; i < FilenameLength; i++) FilenameWUC[i] = towupper(fns[i]);
-    FilenameWUC[FilenameLength] = wchar_t('\0');
+    filename_wuc_ = new wchar_t[filename_length_ + 1];
+    for (int i = 0; i < filename_length_; i++)
+      filename_wuc_[i] = towupper(fns[i]);
+    filename_wuc_[filename_length_] = wchar_t('\0');
   }
   else
   {
-    FilenameLength = 0;
-    FilenameWUC = nullptr;
+    filename_length_ = 0;
+    filename_wuc_ = nullptr;
   }
 }
 
@@ -107,7 +108,7 @@ int Filename::Compare(const wchar_t* fn) const
   for (int i = 0; i < len; i++) fns[i] = towupper(fn[i]);
   fns[len] = wchar_t('\0');
 
-  return wcscmp(fns, FilenameWUC);
+  return wcscmp(fns, filename_wuc_);
 }
 
 // Compare ANSI file name
@@ -127,57 +128,57 @@ ULONGLONG Filename::GetFileSize() const
   return filename_ ? filename_->RealSize : 0;
 }
 
-Flag::Filename Filename::GetFilePermission() const
+Flag::Filename Filename::GetFilePermission() const noexcept
 {
   return filename_ ? filename_->flags : Flag::Filename::NONE;
 }
 
-BOOL Filename::IsReadOnly() const
+bool Filename::IsReadOnly() const noexcept
 {
   return filename_
-             ? static_cast<BOOL>(filename_->flags & Flag::Filename::READONLY)
+             ? static_cast<bool>(filename_->flags & Flag::Filename::READONLY)
              : FALSE;
 }
 
-BOOL Filename::IsHidden() const
+bool Filename::IsHidden() const noexcept
 {
   return filename_
-             ? static_cast<BOOL>(filename_->flags & Flag::Filename::HIDDEN)
+             ? static_cast<bool>(filename_->flags & Flag::Filename::HIDDEN)
              : FALSE;
 }
 
-BOOL Filename::IsSystem() const
+bool Filename::IsSystem() const noexcept
 {
   return filename_
-             ? static_cast<BOOL>(filename_->flags & Flag::Filename::SYSTEM)
+             ? static_cast<bool>(filename_->flags & Flag::Filename::SYSTEM)
              : FALSE;
 }
 
-BOOL Filename::IsDirectory() const
+bool Filename::IsDirectory() const noexcept
 {
   return filename_
-             ? static_cast<BOOL>(filename_->flags & Flag::Filename::DIRECTORY)
+             ? static_cast<bool>(filename_->flags & Flag::Filename::DIRECTORY)
              : FALSE;
 }
 
-BOOL Filename::IsCompressed() const
+bool Filename::IsCompressed() const noexcept
 {
   return filename_
-             ? static_cast<BOOL>(filename_->flags & Flag::Filename::COMPRESSED)
+             ? static_cast<bool>(filename_->flags & Flag::Filename::COMPRESSED)
              : FALSE;
 }
 
-BOOL Filename::IsEncrypted() const
+bool Filename::IsEncrypted() const noexcept
 {
   return filename_
-             ? static_cast<BOOL>(filename_->flags & Flag::Filename::ENCRYPTED)
+             ? static_cast<bool>(filename_->flags & Flag::Filename::ENCRYPTED)
              : FALSE;
 }
 
-BOOL Filename::IsSparse() const
+bool Filename::IsSparse() const noexcept
 {
   return filename_
-             ? static_cast<BOOL>(filename_->flags & Flag::Filename::SPARSE)
+             ? static_cast<bool>(filename_->flags & Flag::Filename::SPARSE)
              : FALSE;
 }
 
@@ -236,11 +237,11 @@ int Filename::GetFilename(wchar_t* buf, DWORD bufLen) const
   return 0;
 }
 
-BOOL Filename::HasName() const { return FilenameLength > 0; }
+bool Filename::HasName() const { return filename_length_ > 0; }
 
-BOOL Filename::IsWin32Name() const
+bool Filename::IsWin32Name() const
 {
-  if (filename_ == nullptr || FilenameLength <= 0) return FALSE;
+  if (filename_ == nullptr || filename_length_ <= 0) return FALSE;
 
   // POSIX, WIN32, WIN32_DOS
   return filename_->NameSpace != Flag::FilenameNamespace::DOS;
@@ -248,7 +249,7 @@ BOOL Filename::IsWin32Name() const
 
 // Change from UTC time to local time
 void Filename::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                           FILETIME* accessTm) const
+                           FILETIME* accessTm) const noexcept
 {
   if (writeTm)
     AttrStdInfo::UTC2Local(filename_ ? filename_->AlterTime : 0, *writeTm);

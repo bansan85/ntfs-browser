@@ -126,7 +126,7 @@ void printfile(const IndexEntry& ie)
   int fnlen = ie.GetFilename(fn, MAX_PATH);
   if (fnlen > 0)
   {
-    ie.GetFileTime(&ft);
+    ie.GetFileTime(&ft, nullptr, nullptr);
     SYSTEMTIME st;
     if (FileTimeToSystemTime(&ft, &st))
     {
