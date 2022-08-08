@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <string>
+
 namespace NtfsBrowser
 {
 namespace Attr
@@ -18,14 +20,12 @@ class Filename
 {
  public:
   Filename();
-  virtual ~Filename();
+  virtual ~Filename() = default;
 
  protected:
   const Attr::Filename* filename_;  // May be NULL for an IndexEntry
   // Uppercase Unicode File Name, used to compare file names
-  wchar_t* filename_wuc_;
-  int filename_length_;
-  bool is_copy_;
+  std::wstring filename_wuc_;
 
   void SetFilename(const Attr::Filename* fn);
   void CopyFilename(const Filename* fn, const Attr::Filename* afn);
@@ -34,8 +34,7 @@ class Filename
   void GetFilenameWUC();
 
  public:
-  int Compare(const wchar_t* fn) const;
-  int Compare(const char* fn) const;
+  int Compare(std::wstring_view fn) const;
 
   ULONGLONG GetFileSize() const;
   virtual Flag::Filename GetFilePermission() const noexcept;
@@ -47,8 +46,7 @@ class Filename
   virtual bool IsEncrypted() const noexcept;
   virtual bool IsSparse() const noexcept;
 
-  int GetFilename(char* buf, DWORD bufLen) const;
-  int GetFilename(wchar_t* buf, DWORD bufLen) const;
+  std::wstring GetFilename() const;
   bool HasName() const;
   bool IsWin32Name() const;
 

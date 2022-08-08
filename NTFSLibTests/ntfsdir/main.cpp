@@ -80,15 +80,16 @@ char getvolume(char** ppath)
 
 // get sub directory name
 // *ppath -> "program files\common files"
-int getpathname(char** ppath, char* pathname)
+std::wstring getpathname(std::wstring& ppath)
 {
+  std::wstring pathname;
   int len = 0;
-  char* p = *ppath;
+  const wchar_t* p = ppath.c_str();
 
   // copy until '\' or " or string ends or buffer full
-  while (*p && len < MAX_PATH)
+  while (*p && len < ppath.length())
   {
-    pathname[len] = *p;
+    pathname.append(1, *p);
     len++;
     p++;
 
@@ -105,8 +106,8 @@ int getpathname(char** ppath, char* pathname)
       break;
   }
 
-  *ppath = p;
-  return len;
+  ppath = ppath.substr(p - ppath.c_str());
+  return pathname;
 }
 
 int totalfiles = 0;
@@ -122,9 +123,8 @@ void printfile(const IndexEntry& ie)
   if (!ie.IsWin32Name()) return;
 
   FILETIME ft;
-  char fn[MAX_PATH];
-  int fnlen = ie.GetFilename(fn, MAX_PATH);
-  if (fnlen > 0)
+  std::wstring fn = ie.GetFilename();
+  if (!fn.empty())
   {
     ie.GetFileTime(&ft, nullptr, nullptr);
     SYSTEMTIME st;
@@ -138,8 +138,8 @@ void printfile(const IndexEntry& ie)
       else
         printf("\t");
 
-      printf("<%c%c%c>\t%s\n", ie.IsReadOnly() ? 'R' : ' ',
-             ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn);
+      printf("<%c%c%c>\t%ls\n", ie.IsReadOnly() ? 'R' : ' ',
+             ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.c_str());
     }
 
     if (ie.IsDirectory())
@@ -195,28 +195,23 @@ int main(int argc, char* argv[])
   }
 
   // find subdirectory
-
-  char pathname[MAX_PATH];
-  int pathlen;
+  std::wstring wpath(strlen(path) + 1, 0);
+  mbstowcs(wpath.data(), path, strlen(path) + 1);
+  std::wstring pathname;
 
   while (1)
   {
-    pathlen = getpathname(&path, pathname);
-    if (pathlen < 0)  // parameter syntax error
-    {
-      usage();
-      return -1;
-    }
-    if (pathlen == 0) break;  // no subdirectories
+    pathname = getpathname(wpath);
+    if (pathname.empty()) break;  // no subdirectories
 
-    const IndexEntry* ie = fr.FindSubEntry(pathname);
-    if (ie != NULL)
+    std::optional<IndexEntry> ie = fr.FindSubEntry(pathname.c_str());
+    if (ie)
     {
       if (ie->IsDirectory())
       {
         if (!fr.ParseFileRecord(ie->GetFileReference()))
         {
-          printf("Cannot read directory %s\n", pathname);
+          printf("Cannot read directory %ls\n", pathname.c_str());
           return -1;
         }
         if (!fr.ParseAttrs())
@@ -227,13 +222,13 @@ int main(int argc, char* argv[])
       }
       else
       {
-        printf("%s is not a directory\n", pathname);
+        printf("%ls is not a directory\n", pathname.c_str());
         return -1;
       }
     }
     else
     {
-      printf("Cannot find directory %s\n", pathname);
+      printf("Cannot find directory %ls\n", pathname.c_str());
       return -1;
     }
   }

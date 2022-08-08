@@ -186,22 +186,22 @@ void CNtfsattrDlg::OnPaint()
 //  the minimized window.
 HCURSOR CNtfsattrDlg::OnQueryDragIcon() { return (HCURSOR)m_hIcon; }
 
-std::array<const _TCHAR*, kAttrNums> AttrNames = {"STANDARD_INFORMATION",
-                                                  "ATTRIBUTE_LIST",
-                                                  "FILE_NAME",
-                                                  "OBJECT_ID",
-                                                  "SECURITY_DESCRIPTOR",
-                                                  "VOLUME_NAME",
-                                                  "VOLUME_INFORMATION",
-                                                  "DATA",
-                                                  "INDEX_ROOT",
-                                                  "INDEX_ALLOCATION",
-                                                  "BITMAP",
-                                                  "REPARSE_POINT",
-                                                  "EA_INFORMATION",
-                                                  "EA",
-                                                  "NULL",
-                                                  "LOGGED_UTILITY_STREAM"};
+std::array<const _TCHAR*, kAttrNums> AttrNames = {_T("STANDARD_INFORMATION"),
+                                                  _T("ATTRIBUTE_LIST"),
+                                                  _T("FILE_NAME"),
+                                                  _T("OBJECT_ID"),
+                                                  _T("SECURITY_DESCRIPTOR"),
+                                                  _T("VOLUME_NAME"),
+                                                  _T("VOLUME_INFORMATION"),
+                                                  _T("DATA"),
+                                                  _T("INDEX_ROOT"),
+                                                  _T("INDEX_ALLOCATION"),
+                                                  _T("BITMAP"),
+                                                  _T("REPARSE_POINT"),
+                                                  _T("EA_INFORMATION"),
+                                                  _T("EA"),
+                                                  _T("NULL"),
+                                                  _T("LOGGED_UTILITY_STREAM")};
 
 // ugly but work !
 void appenddata(CString& lines, BYTE* data, DWORD datalen)
@@ -272,11 +272,11 @@ void printattr(const AttrBase* attr, void* context, bool* bStop)
   CString line = _T("\r\n");
   line += AttrNames[ATTR_INDEX(attr->GetAttrType())];
 
-  _TCHAR attrname[100];
-  if (attr->GetAttrName(attrname, 100) > 0)
+  std::wstring attrname = attr->GetAttrName();
+  if (!attrname.empty())
   {
     line += '(';
-    line += attrname;
+    line += attrname.c_str();
     line += ')';
   }
   line += _T("\r\n");
@@ -331,7 +331,7 @@ void CNtfsattrDlg::OnOK()
 
     // find subdirectory
 
-    const IndexEntry* ie;
+    std::optional<IndexEntry> ie;
 
     int dirs = m_filename.Find(_T('\\'), 0);
     int dire = m_filename.Find(_T('\\'), dirs + 1);
@@ -340,7 +340,7 @@ void CNtfsattrDlg::OnOK()
       CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
 
       ie = fr.FindSubEntry((const _TCHAR*)pathname);
-      if (ie != NULL)
+      if (ie)
       {
         if (!fr.ParseFileRecord(ie->GetFileReference()))
         {
@@ -377,7 +377,7 @@ void CNtfsattrDlg::OnOK()
       filename = _T('.');  // root directory
 
     ie = fr.FindSubEntry((const _TCHAR*)filename);
-    if (ie != NULL)
+    if (ie)
     {
       if (!fr.ParseFileRecord(ie->GetFileReference()))
       {

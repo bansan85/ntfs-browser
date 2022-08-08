@@ -276,7 +276,7 @@ void CNtfsdumpDlg::OnOK()
 
     // find subdirectory
 
-    const IndexEntry* ie;
+    std::optional<IndexEntry> ie;
 
     int dirs = m_filename.Find(_T('\\'), 0);
     int dire = m_filename.Find(_T('\\'), dirs + 1);
@@ -285,7 +285,7 @@ void CNtfsdumpDlg::OnOK()
       CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
 
       ie = fr.FindSubEntry((const _TCHAR*)pathname);
-      if (ie != NULL)
+      if (ie)
       {
         if (!fr.ParseFileRecord(ie->GetFileReference()))
         {
@@ -318,7 +318,7 @@ void CNtfsdumpDlg::OnOK()
 
     CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
     ie = fr.FindSubEntry((const _TCHAR*)filename);
-    if (ie != NULL)
+    if (ie)
     {
       if (!fr.ParseFileRecord(ie->GetFileReference()))
       {

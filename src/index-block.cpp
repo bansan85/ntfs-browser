@@ -14,13 +14,6 @@ IndexBlock::IndexBlock()
   index_block_ = nullptr;
 }
 
-IndexBlock::~IndexBlock()
-{
-  NTFS_TRACE("index_block_ deleted\n");
-
-  if (index_block_) delete index_block_;
-}
-
 Data::IndexBlock* IndexBlock::AllocIndexBlock(DWORD size)
 {
   // Free previous data if any

@@ -14,38 +14,37 @@ class FileRecord;
 class AttrBase
 {
  public:
-  AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr) noexcept;
   AttrBase(AttrBase&& other) noexcept = delete;
   AttrBase(AttrBase const& other) = delete;
   AttrBase& operator=(AttrBase&& other) noexcept = delete;
   AttrBase& operator=(AttrBase const& other) = delete;
-  virtual ~AttrBase();
+  virtual ~AttrBase() = default;
 
  private:
   const AttrHeaderCommon& attr_header_;
+  const FileRecord& file_record_;
   WORD sector_size_;
   DWORD cluster_size_;
   DWORD index_block_size_;
   HANDLE hvolume_;
-  const FileRecord& file_record_;
 
  public:
-  [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const;
-  [[nodiscard]] DWORD GetAttrType() const;
-  [[nodiscard]] DWORD GetAttrTotalSize() const;
-  [[nodiscard]] bool IsNonResident() const;
-  [[nodiscard]] WORD GetAttrFlags() const;
-  [[nodiscard]] int GetAttrName(char* buf, DWORD bufLen) const;
-  [[nodiscard]] int GetAttrName(wchar_t* buf, DWORD bufLen) const;
-  [[nodiscard]] bool IsUnNamed() const;
+  [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const noexcept;
+  [[nodiscard]] DWORD GetAttrType() const noexcept;
+  [[nodiscard]] DWORD GetAttrTotalSize() const noexcept;
+  [[nodiscard]] bool IsNonResident() const noexcept;
+  [[nodiscard]] WORD GetAttrFlags() const noexcept;
+  [[nodiscard]] std::wstring GetAttrName() const;
+  [[nodiscard]] bool IsUnNamed() const noexcept;
 
  protected:
   [[nodiscard]] virtual bool IsDataRunOK() const noexcept = 0;
 
-  [[nodiscard]] WORD GetSectorSize() const;
-  [[nodiscard]] DWORD GetClusterSize() const;
-  [[nodiscard]] DWORD GetIndexBlockSize() const;
-  [[nodiscard]] HANDLE GetHandle() const;
+  [[nodiscard]] WORD GetSectorSize() const noexcept;
+  [[nodiscard]] DWORD GetClusterSize() const noexcept;
+  [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
+  [[nodiscard]] HANDLE GetHandle() const noexcept;
 
  public:
   [[nodiscard]] virtual ULONGLONG GetDataSize() const noexcept = 0;

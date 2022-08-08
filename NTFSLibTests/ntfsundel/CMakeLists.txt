@@ -9,3 +9,4 @@ add_executable(
 target_compile_definitions(NtfsUndel PRIVATE _AFXDLL)
 target_link_libraries(NtfsUndel PRIVATE ${PROJECT_NAME})
 set_target_properties(NtfsUndel PROPERTIES WIN32_EXECUTABLE 1)
+target_link_options(NtfsUndel PRIVATE "/entry:wWinMainCRTStartup")

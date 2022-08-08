@@ -22,21 +22,21 @@ class NtfsVolume
   friend class AttrBase;
 
  private:
-  WORD SectorSize;
-  DWORD ClusterSize;
-  DWORD FileRecordSize;
-  DWORD IndexBlockSize;
-  ULONGLONG MFTAddr;
-  HANDLE hVolume;
-  BOOL VolumeOK;
+  WORD sector_size_;
+  DWORD cluster_size_;
+  DWORD file_record_size_;
+  DWORD index_block_size_;
+  ULONGLONG mft_addr_;
+  HANDLE hvolume_;
+  BOOL volume_ok_;
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_;
-  BYTE VersionMajor;
-  BYTE VersionMinor;
+  BYTE version_major_;
+  BYTE version_minor_;
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
-  FileRecord* MFTRecord;    // $MFT File Record
-  const AttrBase* MFTData;  // $MFT Data Attribute
+  FileRecord* mft_record_;    // $MFT File Record
+  const AttrBase* mft_data_;  // $MFT Data Attribute
 
   BOOL OpenVolume(_TCHAR volume);
 

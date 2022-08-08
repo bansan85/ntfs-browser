@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <vector>
+#include <string_view>
 
 #include <tchar.h>
 #include <windows.h>
@@ -64,8 +65,8 @@ class FileRecord
   [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc);
   [[nodiscard]] std::unique_ptr<FileRecordHeader>
       ReadFileRecord(ULONGLONG fileRef);
-  [[nodiscard]] const IndexEntry* VisitIndexBlock(const ULONGLONG& vcn,
-                                                  const _TCHAR* fileName) const;
+  [[nodiscard]] std::optional<IndexEntry>
+      VisitIndexBlock(const ULONGLONG& vcn, std::wstring_view fileName) const;
   void TraverseSubNode(const ULONGLONG& vcn,
                        SUBENTRY_CALLBACK seCallBack) const;
 
@@ -81,14 +82,15 @@ class FileRecord
   [[nodiscard]] const std::vector<AttrBase*>& getAttr(DWORD attrType) const;
   [[nodiscard]] std::vector<AttrBase*>& getAttr(DWORD attrType);
 
-  [[nodiscard]] int GetFileName(_TCHAR* buf, DWORD bufLen) const;
+  [[nodiscard]] std::wstring GetFileName() const;
   [[nodiscard]] ULONGLONG GetFileSize() const;
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                    FILETIME* accessTm) const;
 
   void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const;
-  [[nodiscard]] const IndexEntry* FindSubEntry(const _TCHAR* fileName) const;
-  [[nodiscard]] const AttrBase* FindStream(_TCHAR* name);
+  [[nodiscard]] std::optional<IndexEntry>
+      FindSubEntry(std::wstring_view fileName) const;
+  [[nodiscard]] const AttrBase* FindStream(std::wstring_view name);
 
   [[nodiscard]] bool IsDeleted() const;
   [[nodiscard]] bool IsDirectory() const;

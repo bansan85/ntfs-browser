@@ -302,10 +302,10 @@ void CNtfsundelDlg::OnSearch()
     if (fr.IsDirectory()) continue;
 
     // Check file name
-    _TCHAR fn[MAX_PATH];
-    if (fr.GetFileName(fn, MAX_PATH) <= 0) continue;
+    std::wstring fn = fr.GetFileName();
+    if (fn.empty()) continue;
     // Make UpperCase
-    CString fns = fn;
+    CString fns{fn.c_str()};
     fns.MakeUpper();
     CString filters = m_filter;
     filters.MakeUpper();
@@ -328,7 +328,7 @@ void CNtfsundelDlg::OnSearch()
 
       int itm = m_files.InsertItem(count, s);
       // File name
-      m_files.SetItemText(itm, 1, fn);
+      m_files.SetItemText(itm, 1, fn.c_str());
       // Time
       FILETIME ft;
       fr.GetFileTime(&ft, nullptr, nullptr);

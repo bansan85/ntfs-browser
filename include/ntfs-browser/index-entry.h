@@ -13,7 +13,7 @@ class IndexEntry : public Filename
 {
  public:
   IndexEntry(const Data::IndexEntry* ie);
-  virtual ~IndexEntry();
+  virtual ~IndexEntry() = default;
 
  private:
   bool is_default_;

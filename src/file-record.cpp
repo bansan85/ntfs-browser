@@ -157,28 +157,28 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
 {
   DWORD len;
   std::vector<BYTE> buffer;
-  buffer.reserve(volume_.FileRecordSize);
+  buffer.reserve(volume_.file_record_size_);
 
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
-      volume_.MFTData == nullptr)
+      volume_.mft_data_ == nullptr)
   {
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr;
-    frAddr.QuadPart = volume_.MFTAddr + (volume_.FileRecordSize) * fileRef;
-    frAddr.LowPart = SetFilePointer(volume_.hVolume, frAddr.LowPart,
+    frAddr.QuadPart = volume_.mft_addr_ + (volume_.file_record_size_) * fileRef;
+    frAddr.LowPart = SetFilePointer(volume_.hvolume_, frAddr.LowPart,
                                     &frAddr.HighPart, FILE_BEGIN);
 
     if (frAddr.LowPart == DWORD(-1) && GetLastError() != NO_ERROR)
       return FALSE;
     else
     {
-      if (ReadFile(volume_.hVolume, buffer.data(), volume_.FileRecordSize, &len,
-                   nullptr) &&
-          len == volume_.FileRecordSize)
+      if (ReadFile(volume_.hvolume_, buffer.data(), volume_.file_record_size_,
+                   &len, nullptr) &&
+          len == volume_.file_record_size_)
       {
         std::unique_ptr<FileRecordHeader> fr =
             std::make_unique<FileRecordHeader>(
-                buffer.data(), volume_.FileRecordSize, volume_.SectorSize);
+                buffer.data(), volume_.file_record_size_, volume_.sector_size_);
         return fr;
       }
       else
@@ -188,14 +188,14 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
   else
   {
     // May be fragmented $MFT
-    const ULONGLONG frAddr = (volume_.FileRecordSize) * fileRef;
+    const ULONGLONG frAddr = (volume_.file_record_size_) * fileRef;
 
-    if (volume_.MFTData->ReadData(frAddr, buffer.data(), volume_.FileRecordSize,
-                                  len) &&
-        len == volume_.FileRecordSize)
+    if (volume_.mft_data_->ReadData(frAddr, buffer.data(),
+                                    volume_.file_record_size_, len) &&
+        len == volume_.file_record_size_)
     {
       std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-          buffer.data(), volume_.FileRecordSize, volume_.SectorSize);
+          buffer.data(), volume_.file_record_size_, volume_.sector_size_);
       return fr;
     }
     else
@@ -245,15 +245,16 @@ bool FileRecord::ParseFileRecord(ULONGLONG fileRef)
 }
 
 // Visit IndexBlocks recursivly to find a specific Filename
-const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
-                                              const _TCHAR* fileName) const
+std::optional<IndexEntry>
+    FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
+                                std::wstring_view fileName) const
 {
   const std::vector<AttrBase*>& vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
-  if (vec.empty()) return FALSE;
+  if (vec.empty()) return {};
 
   IndexBlock ib;
-  const IndexEntry* retval;
+  std::optional<IndexEntry> retval;
   if (((AttrIndexAlloc*)vec.front())->ParseIndexBlock(vcn, ib))
   {
     for (const IndexEntry& ie : ib)
@@ -264,7 +265,8 @@ const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
         int i = ie.Compare(fileName);
         if (i == 0)
         {
-          return &ie;
+          // Must be a copy. Either, will be invalid when ib is destroyed.
+          return ie;
         }
         else if (i < 0)  // fileName is smaller than IndexEntry
         {
@@ -273,7 +275,7 @@ const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
           {
             // Search in SubNode (IndexBlock), recursive call
             retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
-            if (retval != nullptr) return retval;
+            if (retval) return retval;
           }
           else
             return nullptr;  // not found
@@ -284,12 +286,12 @@ const IndexEntry* FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
       {
         // Search in SubNode (IndexBlock), recursive call
         retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
-        if (retval != nullptr) return retval;
+        if (retval) return retval;
       }
     }
   }
 
-  return nullptr;
+  return {};
 }
 
 // Traverse SubNode recursivly in ascending order
@@ -326,12 +328,12 @@ bool FileRecord::ParseAttrs()
 
   // Visit all attributes
 
-  DWORD dataPtr = 0;  // guard if data exceeds FileRecordSize bounds
+  DWORD dataPtr = 0;  // guard if data exceeds file_record_size_ bounds
   const AttrHeaderCommon* ahc = file_record_->HeaderCommon();
   dataPtr += file_record_->OffsetOfAttr;
 
   while (ahc->type != (DWORD)-1 &&
-         (dataPtr + ahc->total_size) <= volume_.FileRecordSize)
+         (dataPtr + ahc->total_size) <= volume_.file_record_size_)
   {
     if (static_cast<bool>(ATTR_MASK(ahc->type) &
                           attr_mask_))  // Skip unwanted attributes
@@ -433,7 +435,7 @@ std::vector<AttrBase*>& FileRecord::getAttr(DWORD attrType)
 }
 
 // Get File Name (First Win32 name)
-int FileRecord::GetFileName(_TCHAR* buf, DWORD bufLen) const
+std::wstring FileRecord::GetFileName() const
 {
   // A file may have several filenames
   // Return the first Win32 filename
@@ -441,14 +443,13 @@ int FileRecord::GetFileName(_TCHAR* buf, DWORD bufLen) const
        attr_list_[ATTR_INDEX(static_cast<DWORD>(AttrType::FILE_NAME))])
   {
     const AttrFileName* fn = static_cast<const AttrFileName*>(fn_);
-    if (fn->IsWin32Name())
+    if (fn->IsWin32Name() && !fn->GetFilename().empty())
     {
-      int len = fn->GetFilename(buf, bufLen);
-      if (len != 0) return len;  // success or fail
+      return fn->GetFilename();
     }
   }
 
-  return 0;
+  return {};
 }
 
 // Get File Size
@@ -514,18 +515,19 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const
 }
 
 // Find a specific Filename from InexRoot described B+ tree
-const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
+std::optional<IndexEntry>
+    FileRecord::FindSubEntry(std::wstring_view fileName) const
 {
   // Start searching from IndexRoot (B+ tree root node)
   const std::vector<AttrBase*>& vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ROOT));
-  if (vec.empty()) return FALSE;
+  if (vec.empty()) return {};
 
   AttrIndexRoot* ir = (AttrIndexRoot*)vec.front();
 
-  if (!ir->IsFileName()) return FALSE;
+  if (!ir->IsFileName()) return {};
 
-  const IndexEntry* retval;
+  std::optional<IndexEntry> retval;
   for (const IndexEntry& ie : *ir)
   {
     if (ie.HasName())
@@ -534,7 +536,8 @@ const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
       int i = ie.Compare(fileName);
       if (i == 0)
       {
-        return &ie;
+        // Must be a copy.
+        return ie;
       }
       else if (i < 0)  // fileName is smaller than IndexEntry
       {
@@ -543,7 +546,7 @@ const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
         {
           // Search in SubNode (IndexBlock)
           retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
-          if (retval != nullptr) return retval;
+          if (retval) return retval;
         }
         else
           return nullptr;  // not found
@@ -554,7 +557,7 @@ const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
     {
       // Search in SubNode (IndexBlock)
       retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
-      if (retval != nullptr) return retval;
+      if (retval) return retval;
     }
   }
 
@@ -562,21 +565,17 @@ const IndexEntry* FileRecord::FindSubEntry(const _TCHAR* fileName) const
 }
 
 // Find Data attribute class of
-const AttrBase* FileRecord::FindStream(_TCHAR* name)
+const AttrBase* FileRecord::FindStream(std::wstring_view name)
 {
   const std::vector<AttrBase*> vec =
       getAttr(static_cast<DWORD>(AttrType::DATA));
   for (const AttrBase* data : vec)
   {
-    if (data->IsUnNamed() && name == nullptr)  // Unnamed stream
+    if (data->IsUnNamed() && name == std::wstring_view{})  // Unnamed stream
       return data;
-    if ((!data->IsUnNamed()) && name)  // Named stream
+    if ((!data->IsUnNamed()) && data->GetAttrName() == name)  // Named stream
     {
-      _TCHAR an[MAX_PATH];
-      if (data->GetAttrName(an, MAX_PATH))
-      {
-        if (_tcscmp(an, name) == 0) break;
-      }
+      break;
     }
   }
 

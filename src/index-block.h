@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include <ntfs-browser/index-entry.h>
@@ -24,7 +25,7 @@ class IndexBlock : public std::vector<IndexEntry>
   IndexBlock(IndexBlock const& other) = delete;
   IndexBlock& operator=(IndexBlock&& other) noexcept = delete;
   IndexBlock& operator=(IndexBlock const& other) = delete;
-  virtual ~IndexBlock();
+  virtual ~IndexBlock() = default;
 
  private:
   Data::IndexBlock* index_block_;
