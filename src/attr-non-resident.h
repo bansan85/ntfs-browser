@@ -1,18 +1,16 @@
 #pragma once
 
-#include <vector>
 #include <optional>
+#include <vector>
 
 // OK
 
 #include <ntfs-browser/attr-base.h>
 
+#include "data/run-entry.h"
+
 namespace NtfsBrowser
 {
-namespace Data
-{
-struct RunEntry;
-}  // namespace Data
 namespace Attr
 {
 struct HeaderNonResident;

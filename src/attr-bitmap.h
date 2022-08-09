@@ -4,6 +4,8 @@
 #include <ntfs-browser/data/attr-header-common.h>
 #include "ntfs-common.h"
 
+// OK
+
 namespace NtfsBrowser
 {
 
@@ -20,23 +22,23 @@ class AttrBitmap : public TYPE_RESIDENT
     NTFS_TRACE1("Attribute: Bitmap (%sResident)\n",
                 this->IsNonResident() ? "Non" : "");
 
-    CurrentCluster = -1;
+    current_cluster_ = -1;
 
     if (this->IsDataRunOK())
     {
-      BitmapSize = this->GetDataSize();
+      bitmap_size_ = this->GetDataSize();
 
       if (this->IsNonResident())
-        BitmapBuf = new BYTE[this->GetClusterSize()];
+        bitmap_buf_.resize(this->GetClusterSize(), 0);
       else
       {
-        BitmapBuf = new BYTE[BitmapSize];
+        bitmap_buf_.resize(bitmap_size_, 0);
 
         DWORD len;
-        if (!(this->ReadData(0, BitmapBuf, (DWORD)BitmapSize, len) &&
-              len == (DWORD)BitmapSize))
+        if (!(this->ReadData(0, bitmap_buf_.data(), (DWORD)bitmap_size_, len) &&
+              len == (DWORD)bitmap_size_))
         {
-          BitmapBuf = NULL;
+          bitmap_buf_.clear();
           NTFS_TRACE("Read Resident Bitmap data failed\n");
         }
         else
@@ -47,27 +49,25 @@ class AttrBitmap : public TYPE_RESIDENT
     }
     else
     {
-      BitmapSize = 0;
-      BitmapBuf = 0;
+      bitmap_size_ = 0;
     }
   }
-  virtual ~AttrBitmap()
-  {
-    if (BitmapBuf) delete BitmapBuf;
-
-    NTFS_TRACE("AttrBitmap deleted\n");
-  }
+  AttrBitmap(AttrBitmap&& other) noexcept = delete;
+  AttrBitmap(AttrBitmap const& other) = delete;
+  AttrBitmap& operator=(AttrBitmap&& other) noexcept = delete;
+  AttrBitmap& operator=(AttrBitmap const& other) = delete;
+  virtual ~AttrBitmap() { NTFS_TRACE("AttrBitmap deleted\n"); }
 
  private:
-  ULONGLONG BitmapSize;  // Bitmap data size
-  BYTE* BitmapBuf;       // Bitmap data buffer
-  LONGLONG CurrentCluster;
+  ULONGLONG bitmap_size_;         // Bitmap data size
+  std::vector<BYTE> bitmap_buf_;  // Bitmap data buffer
+  LONGLONG current_cluster_;
 
  public:
   // Verify if a single cluster is free
-  BOOL IsClusterFree(ULONGLONG cluster) const
+  bool IsClusterFree(ULONGLONG cluster) const
   {
-    if (!this->IsDataRunOK() || !BitmapBuf) return FALSE;
+    if (!this->IsDataRunOK() || bitmap_buf_.empty()) return false;
 
     if (this->IsNonResident())
     {
@@ -78,18 +78,18 @@ class AttrBitmap : public TYPE_RESIDENT
       cluster -= (clusterOffset * clusterSize * 8);
 
       // Read one cluster of data if buffer mismatch
-      if (CurrentCluster != clusterOffset)
+      if (current_cluster_ != clusterOffset)
       {
         DWORD len;
-        if (this->ReadData(clusterOffset, BitmapBuf, clusterSize, &len) &&
+        if (this->ReadData(clusterOffset, bitmap_buf_, clusterSize, &len) &&
             len == clusterSize)
         {
-          CurrentCluster = clusterOffset;
+          current_cluster_ = clusterOffset;
         }
         else
         {
-          CurrentCluster = -1;
-          return FALSE;
+          current_cluster_ = -1;
+          return false;
         }
       }
     }
@@ -98,12 +98,12 @@ class AttrBitmap : public TYPE_RESIDENT
     DWORD idx = (DWORD)(cluster >> 3);
     if (!this->IsNonResident())
     {
-      if (idx >= BitmapSize) return TRUE;  // Resident data bounds check error
+      if (idx >= bitmap_size_) return TRUE;  // Resident data bounds check error
     }
 
     BYTE fac = (BYTE)(cluster % 8);
 
-    return ((BitmapBuf[idx] & (1 << fac)) == 0);
+    return (bitmap_buf_[idx] & (1 << fac)) == 0;
   }
 
 };  // AttrBitmap

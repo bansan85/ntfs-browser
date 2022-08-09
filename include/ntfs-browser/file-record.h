@@ -3,8 +3,8 @@
 #include <array>
 #include <memory>
 #include <optional>
-#include <vector>
 #include <string_view>
+#include <vector>
 
 #include <tchar.h>
 #include <windows.h>
@@ -54,14 +54,15 @@ class FileRecord
   std::optional<ULONGLONG> file_reference_;
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_;
   Mask attr_mask_;
-  std::array<std::vector<AttrBase*>, kAttrNums> attr_list_;  // Attributes
+  std::array<std::vector<std::unique_ptr<AttrBase>>, kAttrNums> attr_list_;
 
-  void ClearAttrs();
+  void ClearAttrs() noexcept;
   [[nodiscard]] bool PatchUS(WORD* sector, int sectors, WORD usn,
                              WORD* usarray);
-  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, bool& bDiscard);
-  [[nodiscard]] AttrBase* AllocAttr(const AttrHeaderCommon& ahc,
-                                    bool& bUnhandled);
+  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
+                    bool& bDiscard) noexcept;
+  [[nodiscard]] std::unique_ptr<AttrBase> AllocAttr(const AttrHeaderCommon& ahc,
+                                                    bool& bUnhandled);
   [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc);
   [[nodiscard]] std::unique_ptr<FileRecordHeader>
       ReadFileRecord(ULONGLONG fileRef);
@@ -74,31 +75,34 @@ class FileRecord
   [[nodiscard]] bool ParseFileRecord(ULONGLONG fileRef);
   [[nodiscard]] bool ParseAttrs();
 
-  [[nodiscard]] bool InstallAttrRawCB(DWORD attrType, AttrRawCallback cb);
-  void ClearAttrRawCB();
+  [[nodiscard]] bool InstallAttrRawCB(DWORD attrType,
+                                      AttrRawCallback cb) noexcept;
+  void ClearAttrRawCB() noexcept;
 
-  void SetAttrMask(Mask mask);
-  void TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context);
-  [[nodiscard]] const std::vector<AttrBase*>& getAttr(DWORD attrType) const;
-  [[nodiscard]] std::vector<AttrBase*>& getAttr(DWORD attrType);
+  void SetAttrMask(Mask mask) noexcept;
+  void TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context) noexcept;
+  [[nodiscard]] const std::vector<std::unique_ptr<AttrBase>>&
+      getAttr(DWORD attrType) const noexcept;
+  [[nodiscard]] std::vector<std::unique_ptr<AttrBase>>&
+      getAttr(DWORD attrType) noexcept;
 
   [[nodiscard]] std::wstring GetFileName() const;
-  [[nodiscard]] ULONGLONG GetFileSize() const;
+  [[nodiscard]] ULONGLONG GetFileSize() const noexcept;
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                   FILETIME* accessTm) const;
+                   FILETIME* accessTm) const noexcept;
 
   void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const;
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntry(std::wstring_view fileName) const;
   [[nodiscard]] const AttrBase* FindStream(std::wstring_view name);
 
-  [[nodiscard]] bool IsDeleted() const;
-  [[nodiscard]] bool IsDirectory() const;
-  [[nodiscard]] bool IsReadOnly() const;
-  [[nodiscard]] bool IsHidden() const;
-  [[nodiscard]] bool IsSystem() const;
-  [[nodiscard]] bool IsCompressed() const;
-  [[nodiscard]] bool IsEncrypted() const;
-  [[nodiscard]] bool IsSparse() const;
+  [[nodiscard]] bool IsDeleted() const noexcept;
+  [[nodiscard]] bool IsDirectory() const noexcept;
+  [[nodiscard]] bool IsReadOnly() const noexcept;
+  [[nodiscard]] bool IsHidden() const noexcept;
+  [[nodiscard]] bool IsSystem() const noexcept;
+  [[nodiscard]] bool IsCompressed() const noexcept;
+  [[nodiscard]] bool IsEncrypted() const noexcept;
+  [[nodiscard]] bool IsSparse() const noexcept;
 };  // FileRecord
 }  // namespace NtfsBrowser

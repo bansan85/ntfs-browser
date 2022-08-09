@@ -48,13 +48,13 @@ bool AttrIndexAlloc::PatchUS(WORD* sector, DWORD sectors, WORD usn,
     // USN error
     if (*sector != usn)
     {
-      return FALSE;
+      return false;
     }
     // Write back correct data
     *sector = usarray[i];
     sector++;
   }
-  return TRUE;
+  return true;
 }
 
 ULONGLONG AttrIndexAlloc::GetIndexBlockCount() const noexcept
@@ -69,7 +69,7 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 {
   if (vcn >= index_block_count_)  // Bounds check
   {
-    return FALSE;
+    return false;
   }
 
   // Allocate buffer for a single Index Block
@@ -86,7 +86,7 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
     if (ibBuf->magic != kIndexBlockMagic)
     {
       NTFS_TRACE("Index Block parse error: Magic mismatch\n");
-      return FALSE;
+      return false;
     }
 
     // Patch US
@@ -97,7 +97,7 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
     if (!PatchUS(reinterpret_cast<WORD*>(ibBuf), sectors, usn, usarray))
     {
       NTFS_TRACE("Index Block parse error: Update Sequence Number\n");
-      return FALSE;
+      return false;
     }
 
     const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
@@ -121,10 +121,10 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
       ieTotal += ie->size;
     }
 
-    return TRUE;
+    return true;
   }
 
-  return FALSE;
+  return false;
 }
 
 }  // namespace NtfsBrowser

@@ -27,6 +27,7 @@ class AttrFileName : public AttrResident, public Filename
   // File permission and time in $FILE_NAME only updates when the filename changes
   // So hide these functions to prevent user from getting the error information
   // Standard Information and IndexEntry keeps the most recent file time and permission infomation
+#if 0
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                    FILETIME* accessTm) const noexcept override;
   Flag::Filename GetFilePermission() const noexcept override;
@@ -36,6 +37,7 @@ class AttrFileName : public AttrResident, public Filename
   bool IsCompressed() const noexcept override;
   bool IsEncrypted() const noexcept override;
   bool IsSparse() const noexcept override;
+#endif
 };  // AttrFileName
 
 }  // namespace NtfsBrowser

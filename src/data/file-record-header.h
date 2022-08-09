@@ -9,6 +9,8 @@
 
 #include "../flag/file-record.h"
 
+// OK
+
 namespace NtfsBrowser
 {
 constexpr uint32_t kFileRecordMagic('ELIF');
@@ -19,73 +21,73 @@ struct FileRecordHeader
   {
     struct
     {
-      DWORD magic;        // "FILE"
-      WORD offset_of_us;  // Offset of Update Sequence
-      WORD size_of_us;    // Size in words of Update Sequence Number & Array
-      ULONGLONG lsn;      // $LogFile Sequence Number
-      WORD SeqNo;         // Sequence number
-      WORD Hardlinks;     // Hard link count
-      WORD OffsetOfAttr;  // Offset of the first Attribute
+      DWORD magic;          // "FILE"
+      WORD offset_of_us;    // Offset of Update Sequence
+      WORD size_of_us;      // Size in words of Update Sequence Number & Array
+      ULONGLONG lsn;        // $LogFile Sequence Number
+      WORD seq_no;          // Sequence number
+      WORD hardlinks;       // Hard link count
+      WORD offset_of_attr;  // Offset of the first Attribute
       Flag::FileRecord flags;  // Flags
       DWORD real_size;         // Real size of the FILE record
       DWORD alloc_size;        // Allocated size of the FILE record
-      ULONGLONG RefToBase;     // File reference to the base FILE record
-      WORD NextAttrId;         // Next Attribute Id
-      WORD Align;              // Align to 4 byte boundary
-      DWORD RecordNo;          // Number of this MFT Record
+      ULONGLONG ref_to_base;   // File reference to the base FILE record
+      WORD next_attr_id;       // Next Attribute Id
+      WORD align;              // Align to 4 byte boundary
+      DWORD record_no;         // Number of this MFT Record
     };
-    BYTE Raw[1024];
+    BYTE raw[1024];
   };
 
-  WORD USNumber;
-  std::vector<WORD> USArray;
-  size_t sectorSize;
+  WORD us_number;
+  std::vector<WORD> us_array;
+  size_t sector_size;
 
-  FileRecordHeader(BYTE* buffer, size_t fileRecordSize, size_t sectorSize)
+  FileRecordHeader(BYTE* buffer, size_t fileRecordSize, size_t sector_size)
   {
-    this->sectorSize = sectorSize;
+    this->sector_size = sector_size;
     _ASSERT(1024 == fileRecordSize);
-    memcpy(&Raw[0], buffer, fileRecordSize);
+    memcpy(&raw[0], buffer, fileRecordSize);
 
     if (magic == kFileRecordMagic)
     {
-      USArray.reserve(fileRecordSize / sectorSize);
+      us_array.reserve(fileRecordSize / sector_size);
       const gsl::not_null<WORD*> usnaddr =
           reinterpret_cast<WORD*>(buffer + offset_of_us);
-      USNumber = *usnaddr;
+      us_number = *usnaddr;
       const gsl::not_null<WORD*> usarray = usnaddr.get() + 1;
 
-      for (WORD i = 0; i < fileRecordSize / sectorSize; i++)
-        USArray.push_back(usarray.get()[i]);
+      for (WORD i = 0; i < fileRecordSize / sector_size; i++)
+        us_array.push_back(usarray.get()[i]);
     }
     else
     {
-      USNumber = 0;
+      us_number = 0;
     }
   }
 
   // Verify US and update sectors
-  BOOL PatchUS() noexcept
+  bool PatchUS() noexcept
   {
-    gsl::not_null<WORD*> sector = reinterpret_cast<WORD*>(&Raw[0]);
-    for (WORD value : USArray)
+    gsl::not_null<WORD*> sector = reinterpret_cast<WORD*>(&raw[0]);
+    for (WORD value : us_array)
     {
-      sector = sector.get() + ((sectorSize >> 1) - 1);
+      sector = sector.get() + ((sector_size >> 1) - 1);
       // USN error
-      if (*sector != USNumber)
+      if (*sector != us_number)
       {
-        return FALSE;
+        return false;
       }
       // Write back correct data
       *sector = value;
       sector = sector.get() + 1;
     }
-    return TRUE;
+    return true;
   }
 
-  const AttrHeaderCommon* HeaderCommon() noexcept
+  const AttrHeaderCommon& HeaderCommon() noexcept
   {
-    return reinterpret_cast<const AttrHeaderCommon*>(Raw + OffsetOfAttr);
+    return *reinterpret_cast<const AttrHeaderCommon*>(&raw[0] + offset_of_attr);
   }
 };
 }  // namespace NtfsBrowser

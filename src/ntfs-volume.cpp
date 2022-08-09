@@ -35,7 +35,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   if (vec.empty()) return;
 
   std::tie(version_major_, this->version_minor_) =
-      ((AttrVolInfo*)vec.front())->GetVersion();
+      ((AttrVolInfo*)vec.front().get())->GetVersion();
   NTFS_TRACE2("NTFS volume version: %u.%u\n", version_major_, version_minor_);
   if (version_major_ < 3)  // NT4 ?
     return;
@@ -44,7 +44,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   const auto& vec2 = vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_NAME));
   if (!vec2.empty())
   {
-    std::wstring_view volname{((AttrVolName*)vec2.front())->GetName()};
+    std::wstring_view volname{((AttrVolName*)vec2.front().get())->GetName()};
     NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
   }
 #endif
@@ -61,7 +61,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
       mft_record_ = nullptr;
       return;
     }
-    const std::vector<AttrBase*>& vec3 =
+    const std::vector<std::unique_ptr<AttrBase>>& vec3 =
         mft_record_->getAttr(static_cast<DWORD>(AttrType::DATA));
     if (vec3.empty())
     {
@@ -70,7 +70,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
     }
     else
     {
-      mft_data_ = vec3.front();
+      mft_data_ = vec3.front().get();
     }
   }
 }

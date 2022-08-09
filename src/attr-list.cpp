@@ -61,10 +61,13 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
         }
 
         // Insert new found AttrList to fr.AttrList
-        std::vector<AttrBase*>& vec = frnew.getAttr(al_record.attr_type);
-        fr.attr_list_[ATTR_INDEX(al_record.attr_type)].insert(
-            fr.attr_list_[ATTR_INDEX(al_record.attr_type)].end(), vec.begin(),
-            vec.end());
+        std::vector<std::unique_ptr<AttrBase>>& vec =
+            frnew.getAttr(al_record.attr_type);
+        for (std::unique_ptr<AttrBase>& veci : vec)
+        {
+          fr.attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
+              std::move(veci));
+        }
         // Throw away frnew.AttrList entries to prevent free twice (fr will delete them)
         vec.clear();
       }

@@ -22,6 +22,10 @@ class AttrData : public TYPE_RESIDENT
     NTFS_TRACE1("Attribute: Data (%sResident)\n",
                 this->IsNonResident() ? "Non" : "");
   }
+  AttrData(AttrData&& other) noexcept = delete;
+  AttrData(AttrData const& other) = delete;
+  AttrData& operator=(AttrData&& other) noexcept = delete;
+  AttrData& operator=(AttrData const& other) = delete;
 
   virtual ~AttrData() { NTFS_TRACE("AttrData deleted\n"); }
 };  // AttrData

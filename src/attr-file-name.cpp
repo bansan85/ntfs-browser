@@ -17,7 +17,7 @@ AttrFileName::AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr)
 }
 
 AttrFileName::~AttrFileName() { NTFS_TRACE("AttrFileName deleted\n"); }
-
+#if 0
 void AttrFileName::GetFileTime(FILETIME* /*writeTm*/, FILETIME* /*createTm*/,
                                FILETIME* /* accessTm*/) const noexcept
 {
@@ -58,5 +58,5 @@ bool AttrFileName::IsSparse() const noexcept
   assert(false);
   return false;
 }
-
+#endif
 }  // namespace NtfsBrowser
