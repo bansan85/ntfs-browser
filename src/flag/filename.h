@@ -2,6 +2,8 @@
 
 #include <winnt.h>
 
+// OK
+
 namespace NtfsBrowser::Flag
 {
 

@@ -27,8 +27,8 @@ struct FileRecordHeader
       WORD Hardlinks;     // Hard link count
       WORD OffsetOfAttr;  // Offset of the first Attribute
       Flag::FileRecord flags;  // Flags
-      DWORD RealSize;          // Real size of the FILE record
-      DWORD AllocSize;         // Allocated size of the FILE record
+      DWORD real_size;         // Real size of the FILE record
+      DWORD alloc_size;        // Allocated size of the FILE record
       ULONGLONG RefToBase;     // File reference to the base FILE record
       WORD NextAttrId;         // Next Attribute Id
       WORD Align;              // Align to 4 byte boundary

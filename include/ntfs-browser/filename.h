@@ -4,6 +4,8 @@
 
 #include <string>
 
+// OK
+
 namespace NtfsBrowser
 {
 namespace Attr
@@ -19,7 +21,7 @@ enum class Filename : DWORD;
 class Filename
 {
  public:
-  Filename();
+  Filename() noexcept;
   virtual ~Filename() = default;
 
  protected:
@@ -27,16 +29,16 @@ class Filename
   // Uppercase Unicode File Name, used to compare file names
   std::wstring filename_wuc_;
 
-  void SetFilename(const Attr::Filename* fn);
-  void CopyFilename(const Filename* fn, const Attr::Filename* afn);
+  void SetFilename(const Attr::Filename& fn);
+  void CopyFilename(const Filename& fn, const Attr::Filename& afn);
 
  private:
   void GetFilenameWUC();
 
  public:
-  int Compare(std::wstring_view fn) const;
+  int Compare(std::wstring_view fn) const noexcept;
 
-  ULONGLONG GetFileSize() const;
+  ULONGLONG GetFileSize() const noexcept;
   virtual Flag::Filename GetFilePermission() const noexcept;
   virtual bool IsReadOnly() const noexcept;
   virtual bool IsHidden() const noexcept;
@@ -47,8 +49,8 @@ class Filename
   virtual bool IsSparse() const noexcept;
 
   std::wstring GetFilename() const;
-  bool HasName() const;
-  bool IsWin32Name() const;
+  bool HasName() const noexcept;
+  bool IsWin32Name() const noexcept;
 
   virtual void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                            FILETIME* accessTm) const noexcept;

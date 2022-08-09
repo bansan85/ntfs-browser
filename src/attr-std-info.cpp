@@ -24,17 +24,17 @@ void AttrStdInfo::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
 {
   if (writeTm != nullptr)
   {
-    UTC2Local(std_info_.AlterTime, *writeTm);
+    UTC2Local(std_info_.alter_time, *writeTm);
   }
 
   if (createTm != nullptr)
   {
-    UTC2Local(std_info_.CreateTime, *createTm);
+    UTC2Local(std_info_.create_time, *createTm);
   }
 
   if (accessTm != nullptr)
   {
-    UTC2Local(std_info_.ReadTime, *accessTm);
+    UTC2Local(std_info_.read_time, *accessTm);
   }
 }
 

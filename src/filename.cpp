@@ -1,33 +1,32 @@
 #include <crtdbg.h>
 
-#include "ntfs-common.h"
 #include <ntfs-browser/filename.h>
-#include "attr/filename.h"
-#include "flag/filename.h"
-#include "flag/filename-namespace.h"
+
 #include "attr-std-info.h"
+#include "attr/filename.h"
+#include "flag/filename-namespace.h"
+#include "flag/filename.h"
+#include "ntfs-common.h"
 
 namespace NtfsBrowser
 {
 
-Filename::Filename() { filename_ = nullptr; }
+Filename::Filename() noexcept : filename_(nullptr) {}
 
-void Filename::SetFilename(const Attr::Filename* fn)
+void Filename::SetFilename(const Attr::Filename& fn)
 {
-  filename_ = fn;
+  filename_ = &fn;
 
   GetFilenameWUC();
 }
 
 // Copy pointer buffers
-void Filename::CopyFilename(const Filename* fn, const Attr::Filename* afn)
+void Filename::CopyFilename(const Filename& fn, const Attr::Filename& afn)
 {
-  _ASSERT(fn && afn);
-
   NTFS_TRACE("Filename Copied\n");
 
-  filename_ = afn;
-  filename_wuc_ = fn->filename_wuc_;
+  filename_ = &afn;
+  filename_wuc_ = fn.filename_wuc_;
 }
 
 // Get uppercase unicode filename and store it in a buffer
@@ -39,79 +38,83 @@ void Filename::GetFilenameWUC()
 }
 
 // Compare Unicode file name
-int Filename::Compare(std::wstring_view fn) const
+int Filename::Compare(std::wstring_view fn) const noexcept
 {
-  return wcsicmp(fn.data(), filename_wuc_.c_str());
+  return _wcsicmp(fn.data(), filename_wuc_.c_str());
 }
 
-ULONGLONG Filename::GetFileSize() const
+ULONGLONG Filename::GetFileSize() const noexcept
 {
-  return filename_ ? filename_->RealSize : 0;
+  return filename_ != nullptr ? filename_->real_size : 0;
 }
 
 Flag::Filename Filename::GetFilePermission() const noexcept
 {
-  return filename_ ? filename_->flags : Flag::Filename::NONE;
+  return filename_ != nullptr ? filename_->flags : Flag::Filename::NONE;
 }
 
 bool Filename::IsReadOnly() const noexcept
 {
-  return filename_
+  return filename_ != nullptr
              ? static_cast<bool>(filename_->flags & Flag::Filename::READONLY)
-             : FALSE;
+             : false;
 }
 
 bool Filename::IsHidden() const noexcept
 {
-  return filename_
+  return filename_ != nullptr
              ? static_cast<bool>(filename_->flags & Flag::Filename::HIDDEN)
-             : FALSE;
+             : false;
 }
 
 bool Filename::IsSystem() const noexcept
 {
-  return filename_
+  return filename_ != nullptr
              ? static_cast<bool>(filename_->flags & Flag::Filename::SYSTEM)
-             : FALSE;
+             : false;
 }
 
 bool Filename::IsDirectory() const noexcept
 {
-  return filename_
+  return filename_ != nullptr
              ? static_cast<bool>(filename_->flags & Flag::Filename::DIRECTORY)
-             : FALSE;
+             : false;
 }
 
 bool Filename::IsCompressed() const noexcept
 {
-  return filename_
+  return filename_ != nullptr
              ? static_cast<bool>(filename_->flags & Flag::Filename::COMPRESSED)
-             : FALSE;
+             : false;
 }
 
 bool Filename::IsEncrypted() const noexcept
 {
-  return filename_
+  return filename_ != nullptr
              ? static_cast<bool>(filename_->flags & Flag::Filename::ENCRYPTED)
-             : FALSE;
+             : false;
 }
 
 bool Filename::IsSparse() const noexcept
 {
-  return filename_
+  return filename_ != nullptr
              ? static_cast<bool>(filename_->flags & Flag::Filename::SPARSE)
-             : FALSE;
+             : false;
 }
 
 // Get Unicode File Name
 // Return 0: Unnamed, <0: buffer too small, -buffersize, >0 Name length
 std::wstring Filename::GetFilename() const
 {
-  if (filename_ == nullptr) return {};
+  if (filename_ == nullptr)
+  {
+    return {};
+  }
 
   std::wstring retval;
-  retval.resize(filename_->name_length);
-  retval.assign((const wchar_t*)filename_->Name, filename_->name_length);
+  retval.resize(filename_->name_length, '\0');
+  retval.assign(reinterpret_cast<const wchar_t*>(&filename_->name[0]),
+                filename_->name_length);
 
   if (!retval.empty())
   {
@@ -124,28 +127,40 @@ std::wstring Filename::GetFilename() const
   return retval;
 }
 
-bool Filename::HasName() const { return filename_wuc_.length(); }
+bool Filename::HasName() const noexcept { return !filename_wuc_.empty(); }
 
-bool Filename::IsWin32Name() const
+bool Filename::IsWin32Name() const noexcept
 {
-  if (filename_ == nullptr || filename_wuc_.empty()) return FALSE;
+  if (filename_ == nullptr || filename_wuc_.empty())
+  {
+    return false;
+  }
 
   // POSIX, WIN32, WIN32_DOS
-  return filename_->NameSpace != Flag::FilenameNamespace::DOS;
+  return filename_->name_space != Flag::FilenameNamespace::DOS;
 }
 
 // Change from UTC time to local time
 void Filename::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                            FILETIME* accessTm) const noexcept
 {
-  if (writeTm)
-    AttrStdInfo::UTC2Local(filename_ ? filename_->AlterTime : 0, *writeTm);
+  if (writeTm != nullptr)
+  {
+    AttrStdInfo::UTC2Local(filename_ != nullptr ? filename_->alter_time : 0,
+                           *writeTm);
+  }
 
-  if (createTm)
-    AttrStdInfo::UTC2Local(filename_ ? filename_->CreateTime : 0, *createTm);
+  if (createTm != nullptr)
+  {
+    AttrStdInfo::UTC2Local(filename_ != nullptr ? filename_->create_time : 0,
+                           *createTm);
+  }
 
-  if (accessTm)
-    AttrStdInfo::UTC2Local(filename_ ? filename_->ReadTime : 0, *accessTm);
+  if (accessTm != nullptr)
+  {
+    AttrStdInfo::UTC2Local(filename_ != nullptr ? filename_->read_time : 0,
+                           *accessTm);
+  }
 }
 
 }  // namespace NtfsBrowser

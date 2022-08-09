@@ -5,25 +5,25 @@
 #include "flag/filename.h"
 #include "flag/filename-namespace.h"
 
+// OK
+
 namespace NtfsBrowser::Attr
 {
 
-#pragma pack(1)
 struct Filename
 {
-  ULONGLONG ParentRef;                // File reference to the parent directory
-  ULONGLONG CreateTime;               // File creation time
-  ULONGLONG AlterTime;                // File altered time
-  ULONGLONG MFTTime;                  // MFT changed time
-  ULONGLONG ReadTime;                 // File read time
-  ULONGLONG AllocSize;                // Allocated size of the file
-  ULONGLONG RealSize;                 // Real size of the file
-  Flag::Filename flags;               // Flags
-  DWORD ER;                           // Used by EAs and Reparse
-  BYTE name_length;                   // Filename length in characters
-  Flag::FilenameNamespace NameSpace;  // Filename space
-  WORD Name[1];                       // Filename
+  ULONGLONG parent_ref;                // File reference to the parent directory
+  ULONGLONG create_time;               // File creation time
+  ULONGLONG alter_time;                // File altered time
+  ULONGLONG mft_time;                  // MFT changed time
+  ULONGLONG read_time;                 // File read time
+  ULONGLONG alloc_size;                // Allocated size of the file
+  ULONGLONG real_size;                 // Real size of the file
+  Flag::Filename flags;                // Flags
+  DWORD er;                            // Used by EAs and Reparse
+  BYTE name_length;                    // Filename length in characters
+  Flag::FilenameNamespace name_space;  // Filename space
+  WORD name[1];                        // Filename
 };
-#pragma pack()
 
 }  // namespace NtfsBrowser::Attr

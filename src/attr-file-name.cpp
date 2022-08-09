@@ -13,7 +13,7 @@ AttrFileName::AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr)
 {
   NTFS_TRACE("Attribute: File Name\n");
 
-  SetFilename(reinterpret_cast<const Attr::Filename*>(GetData()));
+  SetFilename(*reinterpret_cast<const Attr::Filename*>(GetData()));
 }
 
 AttrFileName::~AttrFileName() { NTFS_TRACE("AttrFileName deleted\n"); }

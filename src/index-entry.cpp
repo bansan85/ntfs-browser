@@ -20,7 +20,7 @@ IndexEntry::IndexEntry(const Data::IndexEntry* ie)
 
   if (ie->stream_size)
   {
-    SetFilename((Attr::Filename*)(&ie->stream));
+    SetFilename(*(const Attr::Filename*)(&ie->stream));
   }
   else
   {
@@ -49,7 +49,7 @@ IndexEntry& IndexEntry::operator=(const IndexEntry& ieClass)
 
   index_entry_ = (Data::IndexEntry*)new BYTE[ie->size];
   memcpy((void*)index_entry_, ie, ie->size);
-  CopyFilename(&ieClass, (Attr::Filename*)(&index_entry_->stream));
+  CopyFilename(ieClass, *(const Attr::Filename*)(&index_entry_->stream));
 
   return *this;
 }
