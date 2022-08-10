@@ -1,28 +1,26 @@
-#include "index-block.h"
-
-#include "data/index-entry.h"
 #include "data/index-block.h"
+#include "data/index-entry.h"
+#include "index-block.h"
 #include "ntfs-common.h"
+
+// OK
 
 namespace NtfsBrowser
 {
 
-IndexBlock::IndexBlock()
-{
-  NTFS_TRACE("Index Block\n");
-
-  index_block_ = nullptr;
-}
+IndexBlock::IndexBlock() noexcept { NTFS_TRACE("Index Block\n"); }
 
 Data::IndexBlock* IndexBlock::AllocIndexBlock(DWORD size)
 {
   // Free previous data if any
-  if (this->size() > 0) clear();
-  if (index_block_) delete index_block_;
+  if (!this->empty())
+  {
+    clear();
+  }
 
-  index_block_ = (Data::IndexBlock*)new BYTE[size];
+  index_block_.resize(size);
 
-  return index_block_;
+  return reinterpret_cast<Data::IndexBlock*>(index_block_.data());
 }
 
 }  // namespace NtfsBrowser

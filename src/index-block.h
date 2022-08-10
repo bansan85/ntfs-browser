@@ -20,7 +20,7 @@ struct IndexBlock;
 class IndexBlock : public std::vector<IndexEntry>
 {
  public:
-  IndexBlock();
+  IndexBlock() noexcept;
   IndexBlock(IndexBlock&& other) noexcept = delete;
   IndexBlock(IndexBlock const& other) = delete;
   IndexBlock& operator=(IndexBlock&& other) noexcept = delete;
@@ -28,7 +28,7 @@ class IndexBlock : public std::vector<IndexEntry>
   virtual ~IndexBlock() = default;
 
  private:
-  Data::IndexBlock* index_block_;
+  std::vector<BYTE> index_block_;
 
  public:
   Data::IndexBlock* AllocIndexBlock(DWORD size);
