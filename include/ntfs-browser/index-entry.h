@@ -2,6 +2,8 @@
 
 #include <ntfs-browser/filename.h>
 
+// OK
+
 namespace NtfsBrowser
 {
 namespace Data
@@ -12,21 +14,20 @@ struct IndexEntry;
 class IndexEntry : public Filename
 {
  public:
-  IndexEntry(const Data::IndexEntry* ie);
+  IndexEntry(const Data::IndexEntry& ie);
+  IndexEntry(IndexEntry&& other) noexcept = default;
+  IndexEntry(IndexEntry const& other) = default;
+  IndexEntry& operator=(IndexEntry&& other) noexcept = default;
+  IndexEntry& operator=(IndexEntry const& other) = default;
   virtual ~IndexEntry() = default;
 
- private:
-  bool is_default_;
-
  protected:
-  const Data::IndexEntry* index_entry_;
+  const Data::IndexEntry& index_entry_;
 
  public:
-  // Use with caution !
-  IndexEntry& operator=(const IndexEntry& ieClass);
-  ULONGLONG GetFileReference() const;
-  bool IsSubNodePtr() const;
-  ULONGLONG GetSubNodeVCN() const;
+  ULONGLONG GetFileReference() const noexcept;
+  bool IsSubNodePtr() const noexcept;
+  ULONGLONG GetSubNodeVCN() const noexcept;
 };  // IndexEntry
 
 }  // namespace NtfsBrowser

@@ -40,7 +40,7 @@ void AttrIndexRoot::ParseIndexEntries()
 
   while (ieTotal <= index_root_->total_entry_size)
   {
-    emplace_back(ie);
+    emplace_back(*ie);
 
     if (static_cast<bool>(ie->flags & Flag::IndexEntry::LAST))
     {

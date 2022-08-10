@@ -331,15 +331,13 @@ void CNtfsattrDlg::OnOK()
 
     // find subdirectory
 
-    std::optional<IndexEntry> ie;
-
     int dirs = m_filename.Find(_T('\\'), 0);
     int dire = m_filename.Find(_T('\\'), dirs + 1);
     while (dire != -1)
     {
       CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
 
-      ie = fr.FindSubEntry((const _TCHAR*)pathname);
+      std::optional<IndexEntry> ie = fr.FindSubEntry((const _TCHAR*)pathname);
       if (ie)
       {
         if (!fr.ParseFileRecord(ie->GetFileReference()))
@@ -376,7 +374,7 @@ void CNtfsattrDlg::OnOK()
     if (filename.GetLength() == 2 && (filename.Find(_T(':')) != -1))
       filename = _T('.');  // root directory
 
-    ie = fr.FindSubEntry((const _TCHAR*)filename);
+    std::optional<IndexEntry> ie = fr.FindSubEntry((const _TCHAR*)filename);
     if (ie)
     {
       if (!fr.ParseFileRecord(ie->GetFileReference()))

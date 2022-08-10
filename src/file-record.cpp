@@ -257,7 +257,6 @@ std::optional<IndexEntry>
   }
 
   IndexBlock ib;
-  std::optional<IndexEntry> retval;
   if (!static_cast<AttrIndexAlloc*>(vec.front().get())
            ->ParseIndexBlock(vcn, ib))
   {
@@ -279,10 +278,11 @@ std::optional<IndexEntry>
         // Visit SubNode
         if (!ie.IsSubNodePtr())
         {
-          return nullptr;  // not found
+          return {};  // not found
         }
         // Search in SubNode (IndexBlock), recursive call
-        retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+        std::optional<IndexEntry> retval =
+            VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
         if (retval)
         {
           return retval;
@@ -293,7 +293,8 @@ std::optional<IndexEntry>
     else if (ie.IsSubNodePtr())
     {
       // Search in SubNode (IndexBlock), recursive call
-      retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+      std::optional<IndexEntry> retval =
+          VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
       if (retval)
       {
         return retval;
@@ -573,7 +574,6 @@ std::optional<IndexEntry>
     return {};
   }
 
-  std::optional<IndexEntry> retval;
   for (const IndexEntry& ie : *ir)
   {
     if (ie.HasName())
@@ -591,7 +591,8 @@ std::optional<IndexEntry>
         if (ie.IsSubNodePtr())
         {
           // Search in SubNode (IndexBlock)
-          retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+          std::optional<IndexEntry> retval =
+              VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
           if (retval)
           {
             return retval;
@@ -600,7 +601,7 @@ std::optional<IndexEntry>
         // not found
         else
         {
-          return nullptr;
+          return {};
         }
       }
       // Just step forward if fileName is bigger than IndexEntry
@@ -608,7 +609,8 @@ std::optional<IndexEntry>
     else if (ie.IsSubNodePtr())
     {
       // Search in SubNode (IndexBlock)
-      retval = VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+      std::optional<IndexEntry> retval =
+          VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
       if (retval)
       {
         return retval;
@@ -616,7 +618,7 @@ std::optional<IndexEntry>
     }
   }
 
-  return nullptr;
+  return {};
 }
 
 // Find Data attribute class of

@@ -108,7 +108,7 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 
     while (ieTotal <= ibBuf->total_entry_size)
     {
-      ibClass.emplace_back(ie);
+      ibClass.emplace_back(*ie);
 
       if (static_cast<bool>(ie->flags & Flag::IndexEntry::LAST))
       {
