@@ -1,7 +1,5 @@
 #pragma once
 
-//OK
-
 namespace NtfsBrowser
 {
 

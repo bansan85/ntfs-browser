@@ -43,9 +43,8 @@ struct FileRecordHeader
   std::vector<WORD> us_array;
   size_t sector_size;
 
-  FileRecordHeader(BYTE* buffer, size_t fileRecordSize, size_t sector_size)
+  FileRecordHeader(BYTE* buffer, size_t fileRecordSize, size_t sector_size): sector_size( sector_size)
   {
-    this->sector_size = sector_size;
     _ASSERT(1024 == fileRecordSize);
     memcpy(&raw[0], buffer, fileRecordSize);
 
@@ -57,8 +56,10 @@ struct FileRecordHeader
       us_number = *usnaddr;
       const gsl::not_null<WORD*> usarray = usnaddr.get() + 1;
 
-      for (WORD i = 0; i < fileRecordSize / sector_size; i++)
+      for (size_t i = 0; i < fileRecordSize / sector_size; i++)
+      {
         us_array.push_back(usarray.get()[i]);
+      }
     }
     else
     {
@@ -72,7 +73,7 @@ struct FileRecordHeader
     gsl::not_null<WORD*> sector = reinterpret_cast<WORD*>(&raw[0]);
     for (WORD value : us_array)
     {
-      sector = sector.get() + ((sector_size >> 1) - 1);
+      sector = sector.get() + ((sector_size >> 1U) - 1);
       // USN error
       if (*sector != us_number)
       {

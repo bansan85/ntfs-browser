@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/file-record.h>
+
 #include "ntfs-common.h"
 
 // OK
@@ -27,7 +28,7 @@ class AttrData : public TYPE_RESIDENT
   AttrData& operator=(AttrData&& other) noexcept = delete;
   AttrData& operator=(AttrData const& other) = delete;
 
-  virtual ~AttrData() { NTFS_TRACE("AttrData deleted\n"); }
+  ~AttrData() override { NTFS_TRACE("AttrData deleted\n"); }
 };  // AttrData
 
 }  // namespace NtfsBrowser

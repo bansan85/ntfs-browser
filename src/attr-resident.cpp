@@ -12,7 +12,7 @@ AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
     : AttrBase(ahc, fr)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
-  body_.resize(header.AttrSize);
+  body_.resize(header.attr_size);
 
 #ifdef _MSC_VER
   #pragma warning(push)
@@ -21,7 +21,7 @@ AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
 #endif
   memcpy(body_.data(),
          // NOLINTNEXTLINE
-         &reinterpret_cast<const BYTE*>(&header)[header.AttrOffset],
+         &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
          body_.size());
 #ifdef _MSC_VER
   #pragma warning(pop)
@@ -40,7 +40,7 @@ ULONGLONG AttrResident::GetDataSize() const noexcept { return body_.size(); }
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
 bool AttrResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
-                            DWORD bufLen, DWORD& actural) const
+                            ULONGLONG bufLen, ULONGLONG& actural) const
 {
   actural = 0;
   if (bufLen == 0)

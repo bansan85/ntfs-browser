@@ -18,7 +18,7 @@ AttrVolInfo::~AttrVolInfo() { NTFS_TRACE("AttrVolInfo deleted\n"); }
 
 std::pair<BYTE, BYTE> AttrVolInfo::GetVersion() const noexcept
 {
-  return {vol_info_.MajorVersion, vol_info_.MinorVersion};
+  return {vol_info_.major_version, vol_info_.minor_version};
 }
 
 }  // namespace NtfsBrowser

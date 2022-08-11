@@ -4,8 +4,6 @@
 
 #include <ntfs-browser/data/attr-type.h>
 
-//OK
-
 #define ATTR_INDEX(at) \
   (((at) >> 4U) - 1)  // Attribute Type to Index, eg. 0x10->0, 0x30->2
 #define ATTR_MASK_(at) (((DWORD)1) << ATTR_INDEX(at))  // Attribute Bit Mask
@@ -43,6 +41,6 @@ DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Mask)
 #define ATTR_MASK(at) \
   static_cast<Mask>(((DWORD)1) << ATTR_INDEX(at))  // Attribute Bit Mask
 
-#define MASK_ALL static_cast<Mask>((DWORD)-1)
+#define MASK_ALL static_cast<Mask>(static_cast<DWORD>(-1))
 
 }  // namespace NtfsBrowser

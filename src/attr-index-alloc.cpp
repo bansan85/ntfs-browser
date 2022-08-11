@@ -11,7 +11,7 @@ namespace NtfsBrowser
 
 AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
                                const FileRecord& fr)
-    : AttrNonResident(ahc, fr), index_block_count_(0)
+    : AttrNonResident(ahc, fr)
 {
   NTFS_TRACE("Attribute: Index Allocation\n");
 
@@ -79,7 +79,7 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
   const DWORD sectors = GetIndexBlockSize() / GetSectorSize();
 
   // Read one Index Block
-  DWORD len = 0;
+  ULONGLONG len = 0;
   if (ReadData(vcn * GetIndexBlockSize(), ibBuf, GetIndexBlockSize(), len) &&
       len == GetIndexBlockSize())
   {

@@ -1,6 +1,5 @@
 #pragma once
 
-// OK
 #include <windows.h>
 
 namespace NtfsBrowser

@@ -24,7 +24,7 @@ class AttrIndexAlloc : public AttrNonResident
   ~AttrIndexAlloc() override;
 
  private:
-  ULONGLONG index_block_count_;
+  ULONGLONG index_block_count_{0};
 
   [[nodiscard]] bool PatchUS(WORD* sector, DWORD sectors, WORD usn,
                              const WORD* usarray);

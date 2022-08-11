@@ -17,17 +17,8 @@ namespace NtfsBrowser
 // NTFS Volume Implementation
 ///////////////////////////////////////
 NtfsVolume::NtfsVolume(_TCHAR volume)
-    : sector_size_(0),
-      cluster_size_(0),
-      file_record_size_(0),
-      index_block_size_(0),
-      mft_addr_(0),
-      hvolume_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)),
-      volume_ok_(false),
-      version_major_(0),
-      version_minor_(0),
-      mft_record_(*this),
-      mft_data_(nullptr)
+    : hvolume_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)),
+      mft_record_(*this)
 {
   ClearAttrRawCB();
 
@@ -102,12 +93,12 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
     return false;
   }
 
-  _TCHAR volumePath[7];
-  _sntprintf_s(&volumePath[0], 7, 6, _T("\\\\.\\%c:"), volume);
+  std::array<_TCHAR, 7> volumePath;
+  _sntprintf_s(volumePath.data(), 7, 6, _T("\\\\.\\%c:"), volume);
   volumePath[6] = _T('\0');
 
   hvolume_ =
-      HandlePtr(CreateFileW(&volumePath[0], GENERIC_READ,
+      HandlePtr(CreateFileW(volumePath.data(), GENERIC_READ,
                             FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                             OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
                 &CloseHandle);

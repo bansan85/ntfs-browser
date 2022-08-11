@@ -2,13 +2,11 @@
 
 #include <array>
 
+#include <tchar.h>
+#include <windows.h>
+
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/file-record.h>
-
-#include <windows.h>
-#include <tchar.h>
-
-// OK
 
 namespace NtfsBrowser
 {
@@ -17,7 +15,7 @@ class AttrBase;
 class NtfsVolume
 {
  public:
-  NtfsVolume(_TCHAR volume);
+  explicit NtfsVolume(_TCHAR volume);
   NtfsVolume(NtfsVolume&& other) noexcept = delete;
   NtfsVolume(NtfsVolume const& other) = delete;
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
@@ -28,39 +26,39 @@ class NtfsVolume
   friend class AttrBase;
 
  private:
-  typedef std::unique_ptr<std::remove_pointer<HANDLE>::type,
-                          decltype(&::CloseHandle)>
-      HandlePtr;
-  WORD sector_size_;
-  DWORD cluster_size_;
-  DWORD file_record_size_;
-  DWORD index_block_size_;
-  ULONGLONG mft_addr_;
+  using HandlePtr = std::unique_ptr<std::remove_pointer<HANDLE>::type,
+                                    decltype(&::CloseHandle)>;
+  WORD sector_size_{0};
+  DWORD cluster_size_{0};
+  DWORD file_record_size_{0};
+  DWORD index_block_size_{0};
+  ULONGLONG mft_addr_{0};
   HandlePtr hvolume_;
-  bool volume_ok_;
-  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_;
-  BYTE version_major_;
-  BYTE version_minor_;
+  bool volume_ok_{false};
+  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
+  BYTE version_major_{0};
+  BYTE version_minor_{0};
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
-  FileRecord mft_record_;     // $MFT File Record
-  const AttrBase* mft_data_;  // $MFT Data Attribute
+  FileRecord mft_record_;              // $MFT File Record
+  const AttrBase* mft_data_{nullptr};  // $MFT Data Attribute
 
   bool OpenVolume(_TCHAR volume) noexcept;
 
  public:
-  bool IsVolumeOK() const noexcept;
-  std::pair<BYTE, BYTE> GetVersion() const noexcept;
-  ULONGLONG GetRecordsCount() const noexcept;
+  [[nodiscard]] bool IsVolumeOK() const noexcept;
+  [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
+  [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
 
-  DWORD GetSectorSize() const noexcept;
-  DWORD GetClusterSize() const noexcept;
-  DWORD GetFileRecordSize() const noexcept;
-  DWORD GetIndexBlockSize() const noexcept;
-  ULONGLONG GetMFTAddr() const noexcept;
+  [[nodiscard]] DWORD GetSectorSize() const noexcept;
+  [[nodiscard]] DWORD GetClusterSize() const noexcept;
+  [[nodiscard]] DWORD GetFileRecordSize() const noexcept;
+  [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
+  [[nodiscard]] ULONGLONG GetMFTAddr() const noexcept;
 
-  bool InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept;
+  [[nodiscard]] bool InstallAttrRawCB(DWORD attrType,
+                                      AttrRawCallback cb) noexcept;
   void ClearAttrRawCB() noexcept;
 };  // NtfsVolume
 }  // namespace NtfsBrowser

@@ -40,42 +40,42 @@ void AttrStdInfo::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
 
 Flag::StdInfoPermission AttrStdInfo::GetFilePermission() const noexcept
 {
-  return std_info_.Permission;
+  return std_info_.permission;
 }
 
 bool AttrStdInfo::IsReadOnly() const noexcept
 {
-  return static_cast<bool>(std_info_.Permission &
+  return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::READONLY);
 }
 
 bool AttrStdInfo::IsHidden() const noexcept
 {
-  return static_cast<bool>(std_info_.Permission &
+  return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::HIDDEN);
 }
 
 bool AttrStdInfo::IsSystem() const noexcept
 {
-  return static_cast<bool>(std_info_.Permission &
+  return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::SYSTEM);
 }
 
 bool AttrStdInfo::IsCompressed() const noexcept
 {
-  return static_cast<bool>(std_info_.Permission &
+  return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::COMPRESSED);
 }
 
 bool AttrStdInfo::IsEncrypted() const noexcept
 {
-  return static_cast<bool>(std_info_.Permission &
+  return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::ENCRYPTED);
 }
 
 bool AttrStdInfo::IsSparse() const noexcept
 {
-  return static_cast<bool>(std_info_.Permission &
+  return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::SPARSE);
 }
 

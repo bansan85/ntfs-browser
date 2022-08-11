@@ -1,10 +1,9 @@
 #pragma once
 
-#include "attr-resident.h"
-#include <ntfs-browser/filename.h>
 #include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/filename.h>
 
-// OK
+#include "attr-resident.h"
 
 namespace NtfsBrowser
 {
@@ -21,7 +20,7 @@ class AttrFileName : public AttrResident, public Filename
   AttrFileName(AttrFileName const& other) = delete;
   AttrFileName& operator=(AttrFileName&& other) noexcept = delete;
   AttrFileName& operator=(AttrFileName const& other) = delete;
-  virtual ~AttrFileName();
+  ~AttrFileName() override;
 
  private:
   // File permission and time in $FILE_NAME only updates when the filename changes

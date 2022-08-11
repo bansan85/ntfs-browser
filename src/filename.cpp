@@ -11,8 +11,6 @@
 namespace NtfsBrowser
 {
 
-Filename::Filename() noexcept : filename_(nullptr) {}
-
 void Filename::SetFilename(const Attr::Filename& fn)
 {
   filename_ = &fn;

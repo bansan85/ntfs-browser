@@ -1,6 +1,5 @@
 #pragma once
 
-// OK
 #include <windows.h>
 
 #include <gsl/pointers>
@@ -23,7 +22,6 @@ class AttrBase
 
  private:
   const AttrHeaderCommon& attr_header_;
-  const FileRecord& file_record_;
   WORD sector_size_;
   DWORD cluster_size_;
   DWORD index_block_size_;
@@ -49,8 +47,9 @@ class AttrBase
  public:
   [[nodiscard]] virtual ULONGLONG GetDataSize() const noexcept = 0;
   [[nodiscard]] virtual bool ReadData(ULONGLONG offset,
-                                      gsl::not_null<void*> bufv, DWORD bufLen,
-                                      DWORD& actural) const = 0;
+                                      gsl::not_null<void*> bufv,
+                                      ULONGLONG bufLen,
+                                      ULONGLONG& actural) const = 0;
 };  // AttrBase
 
 }  // namespace NtfsBrowser

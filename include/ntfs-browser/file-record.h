@@ -12,8 +12,6 @@
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/mask.h>
 
-// OK
-
 namespace NtfsBrowser
 {
 class NtfsVolume;
@@ -50,11 +48,11 @@ class FileRecord
 
  private:
   const NtfsVolume& volume_;
-  std::unique_ptr<FileRecordHeader> file_record_;
-  std::optional<ULONGLONG> file_reference_;
-  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_;
-  Mask attr_mask_;
-  std::array<std::vector<std::unique_ptr<AttrBase>>, kAttrNums> attr_list_;
+  std::unique_ptr<FileRecordHeader> file_record_{};
+  std::optional<ULONGLONG> file_reference_{};
+  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
+  Mask attr_mask_{MASK_ALL};
+  std::array<std::vector<std::unique_ptr<AttrBase>>, kAttrNums> attr_list_{};
 
   void ClearAttrs() noexcept;
   [[nodiscard]] bool PatchUS(WORD* sector, int sectors, WORD usn,

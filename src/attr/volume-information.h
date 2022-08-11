@@ -2,18 +2,16 @@
 
 #include <windows.h>
 
-// OK
-
 namespace NtfsBrowser::Attr
 {
 
 struct VolumeInformation
 {
-  ULONGLONG Reserved1;  // Always 0 ?
-  BYTE MajorVersion;    // Major version
-  BYTE MinorVersion;    // Minor version
+  ULONGLONG reserved1;  // Always 0 ?
+  BYTE major_version;    // Major version
+  BYTE minor_version;    // Minor version
   WORD flags;           // Flags
-  DWORD Reserved2;      // Always 0 ?
+  DWORD reserved2;      // Always 0 ?
 };
 
 }  // namespace NtfsBrowser::Attr

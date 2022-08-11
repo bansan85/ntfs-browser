@@ -2,8 +2,8 @@
 
 #include <windows.h>
 
-#include "flag/filename.h"
 #include "flag/filename-namespace.h"
+#include "flag/filename.h"
 
 // OK
 

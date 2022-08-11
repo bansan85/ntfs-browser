@@ -8,10 +8,10 @@ namespace NtfsBrowser::Attr
 {
 struct HeaderResident
 {
-  AttrHeaderCommon Header;  // Common data structure
-  DWORD AttrSize;           // Length of the attribute body
-  WORD AttrOffset;          // Offset to the Attribute
-  BYTE IndexedFlag;         // Indexed flag
+  AttrHeaderCommon header;  // Common data structure
+  DWORD attr_size;           // Length of the attribute body
+  WORD attr_offset;          // Offset to the Attribute
+  BYTE indexed_flag;         // Indexed flag
   BYTE padding;             // Padding
 };
 }  // namespace NtfsBrowser::Attr

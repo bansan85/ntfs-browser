@@ -2,8 +2,6 @@
 
 #include <windows.h>
 
-// OK
-
 namespace NtfsBrowser
 {
 struct AttrHeaderCommon;

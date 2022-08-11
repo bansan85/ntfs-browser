@@ -445,13 +445,13 @@ void CNtfsundelDlg::OnRecover()
       {
         BYTE buf[BUFSIZE];
 
-        DWORD len;
+        ULONGLONG len = 0;
         if (data->ReadData(i, buf, BUFSIZE, len) &&
             (len == BUFSIZE || len == remain))
         {
           // Save data
           DWORD l;
-          WriteFile(hf, buf, len, &l, NULL);
+          WriteFile(hf, buf, static_cast<DWORD>(len), &l, NULL);
           remain -= len;
         }
         else

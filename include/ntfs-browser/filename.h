@@ -1,10 +1,8 @@
 #pragma once
 
-#include <windows.h>
-
 #include <string>
 
-// OK
+#include <windows.h>
 
 namespace NtfsBrowser
 {
@@ -21,36 +19,41 @@ enum class Filename : DWORD;
 class Filename
 {
  public:
-  Filename() noexcept;
+  Filename() = default;
+  Filename(Filename&& other) noexcept = delete;
+  Filename(Filename const& other) = default;
+  Filename& operator=(Filename&& other) noexcept = delete;
+  Filename& operator=(Filename const& other) = delete;
   virtual ~Filename() = default;
 
  protected:
-  const Attr::Filename* filename_;  // May be NULL for an IndexEntry
-  // Uppercase Unicode File Name, used to compare file names
-  std::wstring filename_wuc_;
-
   void SetFilename(const Attr::Filename& fn);
   void CopyFilename(const Filename& fn, const Attr::Filename& afn);
 
  private:
+  // May be NULL for an IndexEntry
+  const Attr::Filename* filename_{nullptr};
+  // Uppercase Unicode File Name, used to compare file names
+  std::wstring filename_wuc_;
+
   void GetFilenameWUC();
 
  public:
-  int Compare(std::wstring_view fn) const noexcept;
+  [[nodiscard]] int Compare(std::wstring_view fn) const noexcept;
 
-  ULONGLONG GetFileSize() const noexcept;
-  virtual Flag::Filename GetFilePermission() const noexcept;
-  virtual bool IsReadOnly() const noexcept;
-  virtual bool IsHidden() const noexcept;
-  virtual bool IsSystem() const noexcept;
-  virtual bool IsDirectory() const noexcept;
-  virtual bool IsCompressed() const noexcept;
-  virtual bool IsEncrypted() const noexcept;
-  virtual bool IsSparse() const noexcept;
+  [[nodiscard]] ULONGLONG GetFileSize() const noexcept;
+  [[nodiscard]] virtual Flag::Filename GetFilePermission() const noexcept;
+  [[nodiscard]] virtual bool IsReadOnly() const noexcept;
+  [[nodiscard]] virtual bool IsHidden() const noexcept;
+  [[nodiscard]] virtual bool IsSystem() const noexcept;
+  [[nodiscard]] virtual bool IsDirectory() const noexcept;
+  [[nodiscard]] virtual bool IsCompressed() const noexcept;
+  [[nodiscard]] virtual bool IsEncrypted() const noexcept;
+  [[nodiscard]] virtual bool IsSparse() const noexcept;
 
-  std::wstring GetFilename() const;
-  bool HasName() const noexcept;
-  bool IsWin32Name() const noexcept;
+  [[nodiscard]] std::wstring GetFilename() const;
+  [[nodiscard]] bool HasName() const noexcept;
+  [[nodiscard]] bool IsWin32Name() const noexcept;
 
   virtual void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                            FILETIME* accessTm) const noexcept;

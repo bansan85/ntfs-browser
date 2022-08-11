@@ -1,7 +1,8 @@
 #pragma once
 
-#include <ntfs-browser/file-record.h>
 #include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/file-record.h>
+
 #include "ntfs-common.h"
 
 // OK
@@ -22,21 +23,21 @@ class AttrBitmap : public TYPE_RESIDENT
     NTFS_TRACE1("Attribute: Bitmap (%sResident)\n",
                 this->IsNonResident() ? "Non" : "");
 
-    current_cluster_ = -1;
-
     if (this->IsDataRunOK())
     {
       bitmap_size_ = this->GetDataSize();
 
       if (this->IsNonResident())
+      {
         bitmap_buf_.resize(this->GetClusterSize(), 0);
+      }
       else
       {
         bitmap_buf_.resize(bitmap_size_, 0);
 
-        DWORD len;
-        if (!(this->ReadData(0, bitmap_buf_.data(), (DWORD)bitmap_size_, len) &&
-              len == (DWORD)bitmap_size_))
+        ULONGLONG len = 0;
+        if (!(this->ReadData(0, bitmap_buf_.data(), bitmap_size_, len) &&
+              len == bitmap_size_))
         {
           bitmap_buf_.clear();
           NTFS_TRACE("Read Resident Bitmap data failed\n");
@@ -56,16 +57,16 @@ class AttrBitmap : public TYPE_RESIDENT
   AttrBitmap(AttrBitmap const& other) = delete;
   AttrBitmap& operator=(AttrBitmap&& other) noexcept = delete;
   AttrBitmap& operator=(AttrBitmap const& other) = delete;
-  virtual ~AttrBitmap() { NTFS_TRACE("AttrBitmap deleted\n"); }
+  ~AttrBitmap() override { NTFS_TRACE("AttrBitmap deleted\n"); }
 
  private:
   ULONGLONG bitmap_size_;         // Bitmap data size
   std::vector<BYTE> bitmap_buf_;  // Bitmap data buffer
-  LONGLONG current_cluster_;
+  LONGLONG current_cluster_{-1};
 
  public:
   // Verify if a single cluster is free
-  bool IsClusterFree(ULONGLONG cluster) const
+  [[nodiscard]] bool IsClusterFree(ULONGLONG cluster) const
   {
     if (!this->IsDataRunOK() || bitmap_buf_.empty()) return false;
 

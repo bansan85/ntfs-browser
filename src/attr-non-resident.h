@@ -26,7 +26,7 @@ class AttrNonResident : public AttrBase
   AttrNonResident(AttrNonResident const& other) = delete;
   AttrNonResident& operator=(AttrNonResident&& other) noexcept = delete;
   AttrNonResident& operator=(AttrNonResident const& other) = delete;
-  virtual ~AttrNonResident() = default;
+  ~AttrNonResident() override = default;
 
  private:
   const Attr::HeaderNonResident& attr_header_nr_;
@@ -35,12 +35,12 @@ class AttrNonResident : public AttrBase
   [[nodiscard]] static bool PickData(const BYTE*& dataRun, ULONGLONG& length,
                                      LONGLONG& LCNOffset) noexcept;
   [[nodiscard]] bool ParseDataRun();
-  [[nodiscard]] bool ReadClusters(void* buf, DWORD clusters,
+  [[nodiscard]] bool ReadClusters(void* buf, ULONGLONG clusters,
                                   std::optional<ULONGLONG> start_lcn,
                                   ULONGLONG offset) const;
-  [[nodiscard]] bool ReadVirtualClusters(ULONGLONG vcn, DWORD clusters,
-                                         void* bufv, DWORD bufLen,
-                                         DWORD& actural) const;
+  [[nodiscard]] bool ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
+                                         void* bufv, ULONGLONG bufLen,
+                                         ULONGLONG& actural) const;
 
  protected:
   [[nodiscard]] bool IsDataRunOK() const noexcept override;
@@ -48,6 +48,7 @@ class AttrNonResident : public AttrBase
  public:
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
   [[nodiscard]] bool ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
-                              DWORD bufLen, DWORD& actural) const override;
+                              ULONGLONG bufLen,
+                              ULONGLONG& actural) const override;
 };  // AttrNonResident
 }  // namespace NtfsBrowser

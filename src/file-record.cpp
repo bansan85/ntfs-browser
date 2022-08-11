@@ -29,7 +29,7 @@ namespace NtfsBrowser
 {
 
 FileRecord::FileRecord(const NtfsVolume& volume)
-    : volume_(volume), attr_mask_(MASK_ALL)
+    : volume_(volume)
 {
   ClearAttrRawCB();
 
@@ -160,7 +160,6 @@ bool FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 // Read File Record
 std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
 {
-  DWORD len = 0;
   std::vector<BYTE> buffer;
   buffer.reserve(volume_.file_record_size_);
 
@@ -179,7 +178,8 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     {
       return {};
     }
-    if (ReadFile(volume_.hvolume_.get(), buffer.data(),
+    if (DWORD len = 0;
+        ReadFile(volume_.hvolume_.get(), buffer.data(),
                  volume_.file_record_size_, &len, nullptr) != 0 &&
         len == volume_.file_record_size_)
     {
@@ -192,7 +192,8 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
   // May be fragmented $MFT
   const ULONGLONG frAddr = (volume_.file_record_size_) * fileRef;
 
-  if (volume_.mft_data_->ReadData(frAddr, buffer.data(),
+  if (ULONGLONG len = 0;
+      volume_.mft_data_->ReadData(frAddr, buffer.data(),
                                   volume_.file_record_size_, len) &&
       len == volume_.file_record_size_)
   {
@@ -210,7 +211,7 @@ bool FileRecord::ParseFileRecord(ULONGLONG fileRef)
   ClearAttrs();
   if (file_record_)
   {
-    file_record_.reset();
+    file_record_.reset(nullptr);
   }
 
   std::unique_ptr<FileRecordHeader> fr = ReadFileRecord(fileRef);

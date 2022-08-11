@@ -346,7 +346,7 @@ void CNtfsdumpDlg::OnOK()
         // show only the first 16K
         DWORD datalen = (DWORD)min(data->GetDataSize(), 16 * 1024);
 
-        DWORD len;
+        ULONGLONG len = 0;
         if (data->ReadData(0, filebuf, datalen, len) && len == datalen)
         {
           ShowData(m_dump, filebuf, datalen);
