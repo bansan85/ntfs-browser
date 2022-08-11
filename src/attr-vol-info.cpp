@@ -16,7 +16,7 @@ AttrVolInfo::AttrVolInfo(const AttrHeaderCommon& ahc, const FileRecord& fr)
 
 AttrVolInfo::~AttrVolInfo() { NTFS_TRACE("AttrVolInfo deleted\n"); }
 
-std::pair<BYTE, BYTE> AttrVolInfo::GetVersion() noexcept
+std::pair<BYTE, BYTE> AttrVolInfo::GetVersion() const noexcept
 {
   return {vol_info_.MajorVersion, vol_info_.MinorVersion};
 }

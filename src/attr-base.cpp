@@ -16,7 +16,7 @@ AttrBase::AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr) noexcept
       sector_size_(fr.volume_.sector_size_),
       cluster_size_(fr.volume_.cluster_size_),
       index_block_size_(fr.volume_.index_block_size_),
-      hvolume_(fr.volume_.hvolume_)
+      hvolume_(fr.volume_.hvolume_.get())
 {
 }
 

@@ -1,5 +1,5 @@
 ---
-Checks: '*,-altera-struct-pack-align,-llvmlibc-callee-namespace,-modernize-use-trailing-return-type,-llvmlibc-implementation-in-namespace,-llvm-header-guard,-llvmlibc-restrict-system-libc-headers,-cppcoreguidelines-macro-usage,-cppcoreguidelines-pro-type-vararg,-hicpp-vararg,-cppcoreguidelines-pro-type-reinterpret-cast,-bugprone-easily-swappable-parameters,-cppcoreguidelines-pro-type-union-access,-altera-unroll-loops,-altera-id-dependent-backward-branch,-readability-suspicious-call-argument'
+Checks: '*,-altera-struct-pack-align,-llvmlibc-callee-namespace,-modernize-use-trailing-return-type,-llvmlibc-implementation-in-namespace,-llvm-header-guard,-llvmlibc-restrict-system-libc-headers,-cppcoreguidelines-macro-usage,-cppcoreguidelines-pro-type-vararg,-hicpp-vararg,-cppcoreguidelines-pro-type-reinterpret-cast,-bugprone-easily-swappable-parameters,-cppcoreguidelines-pro-type-union-access,-altera-unroll-loops,-altera-id-dependent-backward-branch,-readability-suspicious-call-argument,-readability-identifier-length'
 WarningsAsErrors: '*'
 HeaderFilterRegex: '^(?!.*(gsl))'
 AnalyzeTemporaryDtors: false

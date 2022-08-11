@@ -1,11 +1,14 @@
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/mask.h>
-#include "ntfs-common.h"
+#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/ntfs-volume.h>
+
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
-#include <ntfs-browser/mft-idx.h>
 #include "data/ntfs-bpb.h"
+#include "ntfs-common.h"
+
+// OK
 
 namespace NtfsBrowser
 {
@@ -14,198 +17,216 @@ namespace NtfsBrowser
 // NTFS Volume Implementation
 ///////////////////////////////////////
 NtfsVolume::NtfsVolume(_TCHAR volume)
+    : sector_size_(0),
+      cluster_size_(0),
+      file_record_size_(0),
+      index_block_size_(0),
+      mft_addr_(0),
+      hvolume_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)),
+      volume_ok_(false),
+      version_major_(0),
+      version_minor_(0),
+      mft_record_(*this),
+      mft_data_(nullptr)
 {
-  hvolume_ = INVALID_HANDLE_VALUE;
-  volume_ok_ = FALSE;
-  mft_record_ = nullptr;
-  mft_data_ = nullptr;
   ClearAttrRawCB();
 
-  if (!OpenVolume(volume)) return;
+  if (!OpenVolume(volume))
+  {
+    return;
+  }
 
   // Verify NTFS volume version (must >= 3.0)
 
   FileRecord vol(*this);
   vol.SetAttrMask(Mask::VOLUME_NAME | Mask::VOLUME_INFORMATION);
-  if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME))) return;
+  if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME)))
+  {
+    return;
+  }
 
-  if (!vol.ParseAttrs()) return;
+  if (!vol.ParseAttrs())
+  {
+    return;
+  }
   const auto& vec =
       vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_INFORMATION));
-  if (vec.empty()) return;
+  if (vec.empty())
+  {
+    return;
+  }
 
   std::tie(version_major_, this->version_minor_) =
-      ((AttrVolInfo*)vec.front().get())->GetVersion();
+      reinterpret_cast<const AttrVolInfo*>(vec.front().get())->GetVersion();
   NTFS_TRACE2("NTFS volume version: %u.%u\n", version_major_, version_minor_);
   if (version_major_ < 3)  // NT4 ?
+  {
     return;
+  }
 
 #ifdef _DEBUG
   const auto& vec2 = vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_NAME));
   if (!vec2.empty())
   {
-    std::wstring_view volname{((AttrVolName*)vec2.front().get())->GetName()};
+    const std::wstring_view volname =
+        reinterpret_cast<const AttrVolName*>(vec2.front().get())->GetName();
     NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
   }
 #endif
 
-  volume_ok_ = TRUE;
+  volume_ok_ = true;
 
-  mft_record_ = new FileRecord(*this);
-  mft_record_->SetAttrMask(Mask::DATA);
-  if (mft_record_->ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)))
+  mft_record_.SetAttrMask(Mask::DATA);
+  if (mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)))
   {
-    if (!mft_record_->ParseAttrs())
+    if (!mft_record_.ParseAttrs())
     {
-      delete mft_record_;
-      mft_record_ = nullptr;
       return;
     }
     const std::vector<std::unique_ptr<AttrBase>>& vec3 =
-        mft_record_->getAttr(static_cast<DWORD>(AttrType::DATA));
-    if (vec3.empty())
-    {
-      delete mft_record_;
-      mft_record_ = nullptr;
-    }
-    else
+        mft_record_.getAttr(static_cast<DWORD>(AttrType::DATA));
+    if (!vec3.empty())
     {
       mft_data_ = vec3.front().get();
     }
   }
 }
 
-NtfsVolume::~NtfsVolume()
-{
-  if (hvolume_ != INVALID_HANDLE_VALUE) CloseHandle(hvolume_);
-
-  if (mft_record_) delete mft_record_;
-}
-
 // Open a volume ('a' - 'z', 'A' - 'Z'), get volume handle and BPB
-BOOL NtfsVolume::OpenVolume(_TCHAR volume)
+bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
 {
   // Verify parameter
   if (!_istalpha(volume))
   {
     NTFS_TRACE("Volume name error, should be like 'C', 'D'\n");
-    return FALSE;
+    return false;
   }
 
   _TCHAR volumePath[7];
-  _sntprintf(volumePath, 6, _T("\\\\.\\%c:"), volume);
+  _sntprintf_s(&volumePath[0], 7, 6, _T("\\\\.\\%c:"), volume);
   volumePath[6] = _T('\0');
 
   hvolume_ =
-      CreateFileW(volumePath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                  nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr);
-  if (hvolume_ != INVALID_HANDLE_VALUE)
+      HandlePtr(CreateFileW(&volumePath[0], GENERIC_READ,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
+                &CloseHandle);
+  if (hvolume_.get() == INVALID_HANDLE_VALUE)
   {
-    DWORD num;
-    Data::NtfsBpb bpb;
+    NTFS_TRACE1("Cannnot open volume %c\n", (char)volume);
+    return false;
+  }
 
-    // Read the first sector (boot sector)
-    if (ReadFile(hvolume_, &bpb, 512, &num, nullptr) && num == 512)
-    {
-      if (strncmp((const char*)bpb.Signature, NTFS_SIGNATURE, 8) == 0)
-      {
-        // Log important volume parameters
+  DWORD num = 0;
+  Data::NtfsBpb bpb{};
 
-        sector_size_ = bpb.BytesPerSector;
-        NTFS_TRACE1("Sector Size = %u bytes\n", sector_size_);
+  // Read the first sector (boot sector)
+  constexpr DWORD default_sector_size = 512;
+  if (ReadFile(hvolume_.get(), &bpb, default_sector_size, &num, nullptr) == 0 ||
+      num != default_sector_size)
+  {
+    NTFS_TRACE("Read boot sector error\n");
+    hvolume_ = HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle);
+    return false;
+  }
 
-        cluster_size_ = sector_size_ * bpb.SectorsPerCluster;
-        NTFS_TRACE1("Cluster Size = %u bytes\n", cluster_size_);
+  if (strncmp(reinterpret_cast<const char*>(&bpb.Signature[0]), NTFS_SIGNATURE,
+              sizeof(bpb.Signature)) != 0)
+  {
+    NTFS_TRACE("Volume file system is not NTFS\n");
+    hvolume_ = HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle);
+    return false;
+  }
 
-        int sz = (char)bpb.ClustersPerFileRecord;
-        if (sz > 0)
-          file_record_size_ = cluster_size_ * sz;
-        else
-          file_record_size_ = 1 << (-sz);
-        NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
+  // Log important volume parameters
 
-        sz = (char)bpb.ClustersPerIndexBlock;
-        if (sz > 0)
-          index_block_size_ = cluster_size_ * sz;
-        else
-          index_block_size_ = 1 << (-sz);
-        NTFS_TRACE1("IndexBlock Size = %u bytes\n", index_block_size_);
+  sector_size_ = bpb.BytesPerSector;
+  NTFS_TRACE1("Sector Size = %u bytes\n", sector_size_);
 
-        mft_addr_ = bpb.LCN_MFT * cluster_size_;
-        NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
-      }
-      else
-      {
-        NTFS_TRACE("Volume file system is not NTFS\n");
-        goto IOError;
-      }
-    }
-    else
-    {
-      NTFS_TRACE("Read boot sector error\n");
-      goto IOError;
-    }
+  cluster_size_ = sector_size_ * bpb.SectorsPerCluster;
+  NTFS_TRACE1("Cluster Size = %u bytes\n", cluster_size_);
+
+  char sz = static_cast<char>(bpb.ClustersPerFileRecord);
+  if (sz > 0)
+  {
+    file_record_size_ = cluster_size_ * sz;
   }
   else
   {
-    NTFS_TRACE1("Cannnot open volume %c\n", (char)volume);
-  IOError:
-    if (hvolume_ != INVALID_HANDLE_VALUE)
-    {
-      CloseHandle(hvolume_);
-      hvolume_ = INVALID_HANDLE_VALUE;
-    }
-    return FALSE;
+    file_record_size_ = 1U << static_cast<unsigned char>(-sz);
   }
+  NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
 
-  return TRUE;
+  sz = static_cast<char>(bpb.ClustersPerIndexBlock);
+  if (sz > 0)
+  {
+    index_block_size_ = cluster_size_ * sz;
+  }
+  else
+  {
+    index_block_size_ = 1U << static_cast<unsigned char>(-sz);
+  }
+  NTFS_TRACE1("IndexBlock Size = %u bytes\n", index_block_size_);
+
+  mft_addr_ = bpb.LCN_MFT * cluster_size_;
+  NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
+
+  return true;
 }
 
 // Check if Volume is successfully opened
-BOOL NtfsVolume::IsVolumeOK() const { return volume_ok_; }
+bool NtfsVolume::IsVolumeOK() const noexcept { return volume_ok_; }
 
 // Get NTFS volume version
-std::pair<BYTE, BYTE> NtfsVolume::GetVersion() const
+std::pair<BYTE, BYTE> NtfsVolume::GetVersion() const noexcept
 {
   return {version_major_, version_minor_};
 }
 
 // Get File Record count
-ULONGLONG NtfsVolume::GetRecordsCount() const
+ULONGLONG NtfsVolume::GetRecordsCount() const noexcept
 {
   return (mft_data_->GetDataSize() / file_record_size_);
 }
 
 // Get BPB information
 
-DWORD NtfsVolume::GetSectorSize() const { return sector_size_; }
+DWORD NtfsVolume::GetSectorSize() const noexcept { return sector_size_; }
 
-DWORD NtfsVolume::GetClusterSize() const { return cluster_size_; }
+DWORD NtfsVolume::GetClusterSize() const noexcept { return cluster_size_; }
 
-DWORD NtfsVolume::GetFileRecordSize() const { return file_record_size_; }
+DWORD NtfsVolume::GetFileRecordSize() const noexcept
+{
+  return file_record_size_;
+}
 
-DWORD NtfsVolume::GetIndexBlockSize() const { return index_block_size_; }
+DWORD NtfsVolume::GetIndexBlockSize() const noexcept
+{
+  return index_block_size_;
+}
 
 // Get MFT starting address
-ULONGLONG NtfsVolume::GetMFTAddr() const { return mft_addr_; }
+ULONGLONG NtfsVolume::GetMFTAddr() const noexcept { return mft_addr_; }
 
 // Install Attribute CallBack routines for the whole Volume
-BOOL NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb)
+bool NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept
 {
-  DWORD atIdx = ATTR_INDEX(attrType);
+  const DWORD atIdx = ATTR_INDEX(attrType);
   if (atIdx < kAttrNums)
   {
     attr_raw_call_back_[atIdx] = cb;
-    return TRUE;
+    return true;
   }
-  else
-    return FALSE;
+  return false;
 }
 
 // Clear all Attribute CallBack routines
-void NtfsVolume::ClearAttrRawCB()
+void NtfsVolume::ClearAttrRawCB() noexcept
 {
-  for (int i = 0; i < kAttrNums; i++) attr_raw_call_back_[i] = nullptr;
+  for (size_t i = 0; i < kAttrNums; i++)
+  {
+    attr_raw_call_back_[i] = nullptr;
+  }
 }
 
 }  // namespace NtfsBrowser

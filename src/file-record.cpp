@@ -171,16 +171,16 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     LARGE_INTEGER frAddr;
     frAddr.QuadPart = gsl::narrow<LONGLONG>(
         volume_.mft_addr_ + (volume_.file_record_size_) * fileRef);
-    frAddr.LowPart =
-        SetFilePointer(volume_.hvolume_, static_cast<LONG>(frAddr.LowPart),
-                       &frAddr.HighPart, FILE_BEGIN);
+    frAddr.LowPart = SetFilePointer(volume_.hvolume_.get(),
+                                    static_cast<LONG>(frAddr.LowPart),
+                                    &frAddr.HighPart, FILE_BEGIN);
 
     if (frAddr.LowPart == static_cast<DWORD>(-1) && GetLastError() != NO_ERROR)
     {
       return {};
     }
-    if (ReadFile(volume_.hvolume_, buffer.data(), volume_.file_record_size_,
-                 &len, nullptr) != 0 &&
+    if (ReadFile(volume_.hvolume_.get(), buffer.data(),
+                 volume_.file_record_size_, &len, nullptr) != 0 &&
         len == volume_.file_record_size_)
     {
       std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(

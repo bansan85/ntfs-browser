@@ -32,7 +32,7 @@ class AttrVolInfo : public AttrResident
 
  public:
   // Get NTFS Volume Version
-  std::pair<BYTE, BYTE> GetVersion() noexcept;
+  std::pair<BYTE, BYTE> GetVersion() const noexcept;
 };  // AttrVolInfo
 
 }  // namespace NtfsBrowser
