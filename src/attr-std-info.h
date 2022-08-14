@@ -6,8 +6,6 @@
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/file-record.h>
 
-//OK
-
 namespace NtfsBrowser
 {
 namespace Attr
@@ -19,9 +17,6 @@ namespace Flag
 enum class StdInfoPermission : DWORD;
 }  // namespace Flag
 
-///////////////////////////////////
-// Attribute: Standard Information
-///////////////////////////////////
 class AttrStdInfo : public AttrResident
 {
  public:

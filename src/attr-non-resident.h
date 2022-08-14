@@ -3,8 +3,6 @@
 #include <optional>
 #include <vector>
 
-// OK
-
 #include <ntfs-browser/attr-base.h>
 
 #include "data/run-entry.h"

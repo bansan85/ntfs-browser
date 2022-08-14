@@ -4,8 +4,6 @@
 
 #include <windows.h>
 
-// OK
-
 namespace NtfsBrowser::Data
 {
 ////////////////////////////////

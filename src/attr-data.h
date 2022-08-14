@@ -5,14 +5,9 @@
 
 #include "ntfs-common.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 
-/////////////////////////////////////
-// Attribute: Data
-/////////////////////////////////////
 template <class TYPE_RESIDENT>
 class AttrData : public TYPE_RESIDENT
 {

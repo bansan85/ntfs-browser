@@ -21,6 +21,7 @@ enum class AttrType
   REPARSE_POINT = 0xC0,
   EA_INFORMATION = 0xD0,
   EA = 0xE0,
+  PROPERTY_SET = 0xF0,
   LOGGED_UTILITY_STREAM = 0x100
 };
 

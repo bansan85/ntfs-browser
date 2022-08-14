@@ -14,18 +14,9 @@ AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
   body_.resize(header.attr_size);
 
-#ifdef _MSC_VER
-  #pragma warning(push)
-  #pragma warning(disable : 26481)
-  #pragma warning(disable : 26490)
-#endif
   memcpy(body_.data(),
-         // NOLINTNEXTLINE
          &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
          body_.size());
-#ifdef _MSC_VER
-  #pragma warning(pop)
-#endif
 }
 
 bool AttrResident::IsDataRunOK() const noexcept

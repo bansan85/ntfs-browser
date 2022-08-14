@@ -8,14 +8,9 @@
 #include "data/ntfs-bpb.h"
 #include "ntfs-common.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 
-///////////////////////////////////////
-// NTFS Volume Implementation
-///////////////////////////////////////
 NtfsVolume::NtfsVolume(_TCHAR volume)
     : hvolume_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)),
       mft_record_(*this)
@@ -68,18 +63,16 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   volume_ok_ = true;
 
   mft_record_.SetAttrMask(Mask::DATA);
-  if (mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)))
+  if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
+      !mft_record_.ParseAttrs())
   {
-    if (!mft_record_.ParseAttrs())
-    {
-      return;
-    }
-    const std::vector<std::unique_ptr<AttrBase>>& vec3 =
-        mft_record_.getAttr(static_cast<DWORD>(AttrType::DATA));
-    if (!vec3.empty())
-    {
-      mft_data_ = vec3.front().get();
-    }
+    return;
+  }
+  const std::vector<std::unique_ptr<AttrBase>>& vec3 =
+      mft_record_.getAttr(static_cast<DWORD>(AttrType::DATA));
+  if (!vec3.empty())
+  {
+    mft_data_ = vec3.front().get();
   }
 }
 
@@ -121,8 +114,8 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
     return false;
   }
 
-  if (strncmp(reinterpret_cast<const char*>(&bpb.Signature[0]), NTFS_SIGNATURE,
-              sizeof(bpb.Signature)) != 0)
+  if (strncmp(reinterpret_cast<const char*>(&bpb.signature[0]), NTFS_SIGNATURE,
+              sizeof(bpb.signature)) != 0)
   {
     NTFS_TRACE("Volume file system is not NTFS\n");
     hvolume_ = HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle);
@@ -131,13 +124,13 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
 
   // Log important volume parameters
 
-  sector_size_ = bpb.BytesPerSector;
+  sector_size_ = bpb.bytes_per_sector;
   NTFS_TRACE1("Sector Size = %u bytes\n", sector_size_);
 
-  cluster_size_ = sector_size_ * bpb.SectorsPerCluster;
+  cluster_size_ = sector_size_ * bpb.sectors_per_cluster;
   NTFS_TRACE1("Cluster Size = %u bytes\n", cluster_size_);
 
-  char sz = static_cast<char>(bpb.ClustersPerFileRecord);
+  char sz = static_cast<char>(bpb.clusters_per_file_record);
   if (sz > 0)
   {
     file_record_size_ = cluster_size_ * sz;
@@ -148,7 +141,7 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
   }
   NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
 
-  sz = static_cast<char>(bpb.ClustersPerIndexBlock);
+  sz = static_cast<char>(bpb.clusters_per_index_block);
   if (sz > 0)
   {
     index_block_size_ = cluster_size_ * sz;
@@ -159,7 +152,7 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
   }
   NTFS_TRACE1("IndexBlock Size = %u bytes\n", index_block_size_);
 
-  mft_addr_ = bpb.LCN_MFT * cluster_size_;
+  mft_addr_ = bpb.lcn_mft * cluster_size_;
   NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
 
   return true;
@@ -214,9 +207,9 @@ bool NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept
 // Clear all Attribute CallBack routines
 void NtfsVolume::ClearAttrRawCB() noexcept
 {
-  for (size_t i = 0; i < kAttrNums; i++)
+  for (AttrRawCallback& call_back : attr_raw_call_back_)
   {
-    attr_raw_call_back_[i] = nullptr;
+    call_back = nullptr;
   }
 }
 

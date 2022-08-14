@@ -3,8 +3,6 @@
 #include "index-block.h"
 #include "ntfs-common.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 
@@ -12,11 +10,7 @@ IndexBlock::IndexBlock() noexcept { NTFS_TRACE("Index Block\n"); }
 
 Data::IndexBlock* IndexBlock::AllocIndexBlock(DWORD size)
 {
-  // Free previous data if any
-  if (!this->empty())
-  {
-    clear();
-  }
+  clear();
 
   index_block_.resize(size);
 

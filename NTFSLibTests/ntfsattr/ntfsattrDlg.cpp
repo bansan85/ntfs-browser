@@ -75,16 +75,14 @@ END_MESSAGE_MAP()
 /////////////////////////////////////////////////////////////////////////////
 // CNtfsattrDlg dialog
 
-CNtfsattrDlg::CNtfsattrDlg(CWnd* pParent /*=NULL*/)
-    : CDialog(CNtfsattrDlg::IDD, pParent)
+CNtfsattrDlg::CNtfsattrDlg(CWnd* pParent /*=nullptr*/)
+    : CDialog(CNtfsattrDlg::IDD, pParent),
+      m_filename(_T("")),
+      m_dump(_T("")),
+      m_dir(FALSE),
+      // Note that LoadIcon does not require a subsequent DestroyIcon in Win32
+      m_hIcon(AfxGetApp()->LoadIcon(IDR_MAINFRAME))
 {
-  //{{AFX_DATA_INIT(CNtfsattrDlg)
-  m_filename = _T("");
-  m_dump = _T("");
-  m_dir = FALSE;
-  //}}AFX_DATA_INIT
-  // Note that LoadIcon does not require a subsequent DestroyIcon in Win32
-  m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
 
 void CNtfsattrDlg::DoDataExchange(CDataExchange* pDX)
@@ -119,7 +117,7 @@ BOOL CNtfsattrDlg::OnInitDialog()
   ASSERT(IDM_ABOUTBOX < 0xF000);
 
   CMenu* pSysMenu = GetSystemMenu(FALSE);
-  if (pSysMenu != NULL)
+  if (pSysMenu != nullptr)
   {
     CString strAboutMenu;
     strAboutMenu.LoadString(IDS_ABOUTBOX);
@@ -142,7 +140,7 @@ BOOL CNtfsattrDlg::OnInitDialog()
 
 void CNtfsattrDlg::OnSysCommand(UINT nID, LPARAM lParam)
 {
-  if ((nID & 0xFFF0) == IDM_ABOUTBOX)
+  if ((nID & 0xFFF0U) == IDM_ABOUTBOX)
   {
     CAboutDlg dlgAbout;
     dlgAbout.DoModal();
@@ -159,19 +157,20 @@ void CNtfsattrDlg::OnSysCommand(UINT nID, LPARAM lParam)
 
 void CNtfsattrDlg::OnPaint()
 {
-  if (IsIconic())
+  if (IsIconic() != 0)
   {
     CPaintDC dc(this);  // device context for painting
 
-    SendMessage(WM_ICONERASEBKGND, (WPARAM)dc.GetSafeHdc(), 0);
+    SendMessage(WM_ICONERASEBKGND, reinterpret_cast<WPARAM>(dc.GetSafeHdc()),
+                0);
 
     // Center icon in client rectangle
-    int cxIcon = GetSystemMetrics(SM_CXICON);
-    int cyIcon = GetSystemMetrics(SM_CYICON);
+    const int cxIcon = GetSystemMetrics(SM_CXICON);
+    const int cyIcon = GetSystemMetrics(SM_CYICON);
     CRect rect;
     GetClientRect(&rect);
-    int x = (rect.Width() - cxIcon + 1) / 2;
-    int y = (rect.Height() - cyIcon + 1) / 2;
+    const int x = (rect.Width() - cxIcon + 1) / 2;
+    const int y = (rect.Height() - cyIcon + 1) / 2;
 
     // Draw the icon
     dc.DrawIcon(x, y, m_hIcon);
@@ -184,7 +183,7 @@ void CNtfsattrDlg::OnPaint()
 
 // The system calls this to obtain the cursor to display while the user drags
 //  the minimized window.
-HCURSOR CNtfsattrDlg::OnQueryDragIcon() { return (HCURSOR)m_hIcon; }
+HCURSOR CNtfsattrDlg::OnQueryDragIcon() noexcept { return (HCURSOR)m_hIcon; }
 
 std::array<const _TCHAR*, kAttrNums> AttrNames = {_T("STANDARD_INFORMATION"),
                                                   _T("ATTRIBUTE_LIST"),
@@ -204,17 +203,17 @@ std::array<const _TCHAR*, kAttrNums> AttrNames = {_T("STANDARD_INFORMATION"),
                                                   _T("LOGGED_UTILITY_STREAM")};
 
 // ugly but work !
-void appenddata(CString& lines, BYTE* data, DWORD datalen)
+void appenddata(CString& lines, const BYTE* data, DWORD datalen)
 {
   // "01 02 03 04 05 06 07 08 - 09 0A 0B 0C 0D 0E 0F   123456789ABCDEF";
 
   CString line;
-  BYTE* p;
   DWORD i;
 
-  for (i = 0; i < ((datalen - 1) >> 4); i++)
+  std::array<BYTE, 16> p;
+  for (i = 0; i < ((datalen - 1U) >> 4); i++)
   {
-    p = data + i * 16;
+    memcpy(p.data(), data + i * 16, 16);
 
     line.Format(
         _T("%02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X %02X ")
@@ -223,7 +222,10 @@ void appenddata(CString& lines, BYTE* data, DWORD datalen)
         p[11], p[12], p[13], p[14], p[15]);
     for (int j = 0; j < 16; j++)
     {
-      if (p[j] < 0x20) p[j] = '.';
+      if (p[j] < 0x20)
+      {
+        p[j] = '.';
+      }
     }
     line.Format(_T("%s%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), line, p[0], p[1],
                 p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11],
@@ -233,46 +235,57 @@ void appenddata(CString& lines, BYTE* data, DWORD datalen)
   }
 
   // last line
-  p = data + i * 16;
+  memcpy(p.data(), data + i * 16, 16);
   BYTE q[16];
-  memset(q, 0xFF, 16);
-  memcpy(q, p, 16);
+  memset(&q[0], 0xFF, 16);
+  memcpy(&q[0], p.data(), 16);
   if ((datalen % 16) == 0)
+  {
     line.Format(
         _T("%02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X %02X ")
         _T("%02X %02X %02X %02X   "),
         q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10],
         q[11], q[12], q[13], q[14], q[15]);
+  }
   else
+  {
     line.Format(
         _T("%02X %02X %02X %02X %02X %02X %02X %02X                           ")
         _T("  "),
         q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]);
+  }
 
   for (int j = 0; j < 16; j++)
   {
-    if (q[j] < 0x20) q[j] = '.';
+    if (q[j] < 0x20)
+    {
+      q[j] = '.';
+    }
   }
 
   if ((datalen % 16) == 0)
+  {
     line.Format(_T("%s%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), line, q[0], q[1],
                 q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11],
                 q[12], q[13], q[14], q[15]);
+  }
   else
+  {
     line.Format(_T("%s%c%c%c%c%c%c%c%c\r\n"), line, q[0], q[1], q[2], q[3],
                 q[4], q[5], q[6], q[7]);
+  }
 
   lines += line;
 }
 
-void printattr(const AttrBase* attr, void* context, bool* bStop)
+void printattr(const AttrBase& attr, void* context, bool* /* bStop*/)
 {
-  CString* dump = (CString*)context;
+  CString* dump = static_cast<CString*>(context);
 
   CString line = _T("\r\n");
-  line += AttrNames[ATTR_INDEX(attr->GetAttrType())];
+  line += AttrNames[ATTR_INDEX(attr.GetAttrType())];
 
-  std::wstring attrname = attr->GetAttrName();
+  std::wstring attrname = attr.GetAttrName();
   if (!attrname.empty())
   {
     line += '(';
@@ -281,7 +294,8 @@ void printattr(const AttrBase* attr, void* context, bool* bStop)
   }
   line += _T("\r\n");
 
-  appenddata(line, (BYTE*)&attr->GetAttrHeader(), attr->GetAttrTotalSize());
+  appenddata(line, reinterpret_cast<const BYTE*>(&attr.GetAttrHeader()),
+             attr.GetAttrTotalSize());
 
   *dump += line;
 }
@@ -294,14 +308,17 @@ void CNtfsattrDlg::OnOK()
   {
     UpdateData();
     m_filename = fd.GetPathName();
-    if (m_dir) m_filename = m_filename.Left(m_filename.ReverseFind(_T('\\')));
+    if (m_dir)
+    {
+      m_filename = m_filename.Left(m_filename.ReverseFind(_T('\\')));
+    }
     UpdateData(FALSE);
 
     m_dump.Empty();
 
     // parse volume
 
-    _TCHAR volname = m_filename.GetAt(0);
+    const _TCHAR volname = m_filename.GetAt(0);
 
     NtfsVolume volume(volname);
     if (!volume.IsVolumeOK())
@@ -337,7 +354,8 @@ void CNtfsattrDlg::OnOK()
     {
       CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
 
-      std::optional<IndexEntry> ie = fr.FindSubEntry((const _TCHAR*)pathname);
+      std::optional<IndexEntry> ie =
+          fr.FindSubEntry(static_cast<const _TCHAR*>(pathname));
       if (ie)
       {
         if (!fr.ParseFileRecord(ie->GetFileReference()))
@@ -349,11 +367,17 @@ void CNtfsattrDlg::OnOK()
         if (!fr.ParseAttrs())
         {
           if (fr.IsCompressed())
+          {
             MessageBox(_T("Compressed directory not supported yet"));
+          }
           else if (fr.IsEncrypted())
+          {
             MessageBox(_T("Encrypted directory not supported yet"));
+          }
           else
+          {
             MessageBox(_T("Cannot parse directory attributes"));
+          }
           return;
         }
       }
@@ -371,10 +395,14 @@ void CNtfsattrDlg::OnOK()
 
     CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
 
+    // root directory
     if (filename.GetLength() == 2 && (filename.Find(_T(':')) != -1))
-      filename = _T('.');  // root directory
+    {
+      filename = _T('.');
+    }
 
-    std::optional<IndexEntry> ie = fr.FindSubEntry((const _TCHAR*)filename);
+    std::optional<IndexEntry> ie =
+        fr.FindSubEntry(static_cast<const _TCHAR*>(filename));
     if (ie)
     {
       if (!fr.ParseFileRecord(ie->GetFileReference()))
@@ -388,11 +416,17 @@ void CNtfsattrDlg::OnOK()
       if (!fr.ParseAttrs())
       {
         if (fr.IsCompressed())
+        {
           MessageBox(_T("Compressed file not supported yet"));
+        }
         else if (fr.IsEncrypted())
+        {
           MessageBox(_T("Encrypted file not supported yet"));
+        }
         else
+        {
           MessageBox(_T("Cannot parse file attributes"));
+        }
         return;
       }
 

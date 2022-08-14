@@ -2,8 +2,6 @@
 #include "attr/volume-information.h"
 #include "ntfs-common.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 

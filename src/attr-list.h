@@ -5,8 +5,6 @@
 
 #include "data/file-record-header.h"  //for complete type FileRecord
 
-// OK
-
 namespace NtfsBrowser
 {
 template <typename TYPE_RESIDENT>

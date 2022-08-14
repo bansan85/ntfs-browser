@@ -5,8 +5,6 @@
 
 #include "ntfs-common.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 
@@ -39,7 +37,6 @@ bool AttrBase::IsNonResident() const noexcept
 WORD AttrBase::GetAttrFlags() const noexcept { return attr_header_.flags; }
 
 // Get UNICODE Attribute name
-// Return 0: Unnamed, <0: buffer too small, -buffersize, >0 Name length
 std::wstring AttrBase::GetAttrName() const
 {
   if (attr_header_.name_length == 0)

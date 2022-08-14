@@ -4,8 +4,6 @@
 
 #include "../flag/index-entry.h"
 
-// OK
-
 namespace NtfsBrowser::Data
 {
 

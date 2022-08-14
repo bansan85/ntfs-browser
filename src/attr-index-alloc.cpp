@@ -15,24 +15,23 @@ AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
 {
   NTFS_TRACE("Attribute: Index Allocation\n");
 
-  if (IsDataRunOK())
-  {
-    // Get total number of Index Blocks
-    const ULONGLONG ibTotalSize = GetDataSize();
-    if (ibTotalSize % GetIndexBlockSize() != 0)
-    {
-      NTFS_TRACE2(
-          "Cannot calulate number of IndexBlocks, total size = %I64u, unit = "
-          "%u\n",
-          ibTotalSize, GetIndexBlockSize());
-      return;
-    }
-    index_block_count_ = ibTotalSize / GetIndexBlockSize();
-  }
-  else
+  if (!IsDataRunOK())
   {
     NTFS_TRACE("Index Allocation DataRun parse error\n");
+    return;
   }
+
+  // Get total number of Index Blocks
+  const ULONGLONG ibTotalSize = GetDataSize();
+  if (ibTotalSize % GetIndexBlockSize() != 0)
+  {
+    NTFS_TRACE2(
+        "Cannot calulate number of IndexBlocks, total size = %I64u, unit = "
+        "%u\n",
+        ibTotalSize, GetIndexBlockSize());
+    return;
+  }
+  index_block_count_ = ibTotalSize / GetIndexBlockSize();
 }
 
 AttrIndexAlloc::~AttrIndexAlloc() { NTFS_TRACE("AttrIndexAlloc deleted\n"); }

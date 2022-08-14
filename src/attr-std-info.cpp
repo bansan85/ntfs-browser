@@ -4,8 +4,6 @@
 #include "attr/standard-information.h"
 #include "flag/std-info-permission.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 

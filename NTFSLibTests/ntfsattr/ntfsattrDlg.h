@@ -46,8 +46,8 @@ class CNtfsattrDlg : public CDialog
   virtual BOOL OnInitDialog();
   afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
   afx_msg void OnPaint();
-  afx_msg HCURSOR OnQueryDragIcon();
-  virtual void OnOK();
+  afx_msg HCURSOR OnQueryDragIcon() noexcept;
+  void OnOK() override;
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 };

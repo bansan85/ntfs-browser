@@ -16,7 +16,7 @@ class IndexEntry : public Filename
   IndexEntry(IndexEntry&& other) noexcept = default;
   IndexEntry(IndexEntry const& other) = default;
   IndexEntry& operator=(IndexEntry&& other) noexcept = default;
-  IndexEntry& operator=(IndexEntry const& other) = delete;
+  IndexEntry& operator=(IndexEntry const& other) = default;
   ~IndexEntry() override = default;
 
  private:

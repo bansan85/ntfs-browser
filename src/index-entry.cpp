@@ -3,8 +3,6 @@
 #include "data/index-entry.h"
 #include "ntfs-common.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 IndexEntry::IndexEntry(const Data::IndexEntry& ie) : index_entry_(ie)

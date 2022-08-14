@@ -2,17 +2,12 @@
 
 #include "attr-non-resident.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 class IndexBlock;
 class FileRecord;
 struct AttrHeaderCommon;
 
-/////////////////////////////////////////////
-// Attribute: Index Allocation (NonResident)
-/////////////////////////////////////////////
 class AttrIndexAlloc : public AttrNonResident
 {
  public:

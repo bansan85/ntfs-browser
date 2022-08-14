@@ -4,8 +4,6 @@
 
 static constexpr DWORD kIndexBlockMagic = 'XDNI';
 
-// OK
-
 namespace NtfsBrowser::Data
 {
 

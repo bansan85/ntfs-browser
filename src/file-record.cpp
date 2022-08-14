@@ -23,13 +23,10 @@
 #include "flag/file-record.h"
 #include "index-block.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 
-FileRecord::FileRecord(const NtfsVolume& volume)
-    : volume_(volume)
+FileRecord::FileRecord(const NtfsVolume& volume) : volume_(volume)
 {
   ClearAttrRawCB();
 
@@ -63,6 +60,8 @@ void FileRecord::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
   }
 }
 
+extern template class NtfsBrowser::AttrBitmap<AttrNonResident>;
+extern template class NtfsBrowser::AttrBitmap<AttrResident>;
 extern template class NtfsBrowser::AttrList<AttrNonResident>;
 extern template class NtfsBrowser::AttrList<AttrResident>;
 
@@ -422,7 +421,7 @@ void FileRecord::TraverseAttrs(ATTRS_CALLBACK attrCallBack,
       for (const std::unique_ptr<AttrBase>& ab : attr_list_[i])
       {
         bool bStop = false;
-        attrCallBack(ab.get(), context, &bStop);
+        attrCallBack(*ab.get(), context, &bStop);
         if (bStop)
         {
           return;

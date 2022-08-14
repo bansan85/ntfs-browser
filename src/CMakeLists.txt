@@ -1,5 +1,7 @@
 set(${PROJECT_NAME}_SRC
+    data/file-record-header.cpp
     attr-base.cpp
+    attr-bitmap.cpp
     attr-file-name.cpp
     attr-index-alloc.cpp
     attr-index-root.cpp

@@ -31,6 +31,7 @@ enum class Mask : DWORD
   REPARSE_POINT = ATTR_MASK_(static_cast<DWORD>(AttrType::REPARSE_POINT)),
   EA_INFORMATION = ATTR_MASK_(static_cast<DWORD>(AttrType::EA_INFORMATION)),
   EA = ATTR_MASK_(static_cast<DWORD>(AttrType::EA)),
+  PROPERTY_SET = ATTR_MASK_(static_cast<DWORD>(AttrType::PROPERTY_SET)),
   LOGGED_UTILITY_STREAM =
       ATTR_MASK_(static_cast<DWORD>(AttrType::LOGGED_UTILITY_STREAM))
 };

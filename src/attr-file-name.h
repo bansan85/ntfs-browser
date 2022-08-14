@@ -9,9 +9,6 @@ namespace NtfsBrowser
 {
 struct AttrHeaderCommon;
 
-////////////////////////////////
-// Attribute: File Name
-////////////////////////////////
 class AttrFileName : public AttrResident, public Filename
 {
  public:
@@ -29,13 +26,13 @@ class AttrFileName : public AttrResident, public Filename
 #if 0
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                    FILETIME* accessTm) const noexcept override;
-  Flag::Filename GetFilePermission() const noexcept override;
-  bool IsReadOnly() const noexcept override;
-  bool IsHidden() const noexcept override;
-  bool IsSystem() const noexcept override;
-  bool IsCompressed() const noexcept override;
-  bool IsEncrypted() const noexcept override;
-  bool IsSparse() const noexcept override;
+  [[nodiscard]] Flag::Filename GetFilePermission() const noexcept override;
+  [[nodiscard]] bool IsReadOnly() const noexcept override;
+  [[nodiscard]] bool IsHidden() const noexcept override;
+  [[nodiscard]] bool IsSystem() const noexcept override;
+  [[nodiscard]] bool IsCompressed() const noexcept override;
+  [[nodiscard]] bool IsEncrypted() const noexcept override;
+  [[nodiscard]] bool IsSparse() const noexcept override;
 #endif
 };  // AttrFileName
 

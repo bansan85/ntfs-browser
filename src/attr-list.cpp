@@ -6,14 +6,9 @@
 #include "ntfs-common.h"
 #include <ntfs-browser/mask.h>
 
-// OK
-
 namespace NtfsBrowser
 {
 
-////////////////////////////////////////////
-// Attribute: Attribute List
-////////////////////////////////////////////
 template <typename TYPE_RESIDENT>
 AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
     : TYPE_RESIDENT(ahc, fr)

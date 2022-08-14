@@ -5,8 +5,6 @@
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
 
-// OK
-
 namespace NtfsBrowser::Attr
 {
 

@@ -29,7 +29,7 @@ using SUBENTRY_CALLBACK = void (*)(const IndexEntry& ie);
 // attrClass is the according attribute's wrapping class, CAttr_xxx
 // Set bStop to TRUE if don't want to continue
 // Set bStop to FALSE to continue processing
-using ATTRS_CALLBACK = void (*)(const AttrBase* attr, void* context,
+using ATTRS_CALLBACK = void (*)(const AttrBase& attr, void* context,
                                 bool* bStop);
 
 class FileRecord

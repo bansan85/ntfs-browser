@@ -1,6 +1,5 @@
 #pragma once
 
-// OK
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
@@ -13,9 +12,7 @@ namespace Attr
 {
 struct HeaderResident;
 }  // namespace Attr
-////////////////////////////////
-// Resident Attributes
-////////////////////////////////
+
 class AttrResident : public AttrBase
 {
  public:

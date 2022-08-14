@@ -4,8 +4,6 @@
 
 #include <ntfs-browser/data/attr-header-common.h>
 
-// OK
-
 namespace NtfsBrowser::Attr
 {
 struct HeaderNonResident

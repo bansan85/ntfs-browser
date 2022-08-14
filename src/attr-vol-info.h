@@ -4,8 +4,6 @@
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/file-record.h>
 
-// OK
-
 namespace NtfsBrowser
 {
 namespace Attr
@@ -13,9 +11,6 @@ namespace Attr
 struct VolumeInformation;
 }  // namespace Attr
 
-//////////////////////////////////
-// Attribute: Volume Information
-//////////////////////////////////
 class AttrVolInfo : public AttrResident
 {
  public:

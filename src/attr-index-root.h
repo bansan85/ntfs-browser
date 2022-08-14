@@ -6,8 +6,6 @@
 
 #include "attr-resident.h"
 
-// OK
-
 namespace NtfsBrowser
 {
 
@@ -16,9 +14,6 @@ namespace Attr
 struct IndexRoot;
 }  // namespace Attr
 
-/////////////////////////////////////
-// Attribute: Index Root (Resident)
-/////////////////////////////////////
 class AttrIndexRoot : public AttrResident, public std::vector<IndexEntry>
 {
  public:

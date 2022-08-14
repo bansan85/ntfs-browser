@@ -44,7 +44,7 @@ class NtfsVolume
   FileRecord mft_record_;              // $MFT File Record
   const AttrBase* mft_data_{nullptr};  // $MFT Data Attribute
 
-  bool OpenVolume(_TCHAR volume) noexcept;
+  [[nodiscard]] bool OpenVolume(_TCHAR volume) noexcept;
 
  public:
   [[nodiscard]] bool IsVolumeOK() const noexcept;

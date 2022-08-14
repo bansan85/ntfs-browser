@@ -1,8 +1,6 @@
 #include <gsl/narrow>
 #include <gsl/pointers>
 
-// OK
-
 #include "attr-non-resident.h"
 #include "attr/header-non-resident.h"
 #include "data/run-entry.h"
@@ -157,7 +155,8 @@ bool AttrNonResident::ReadClusters(void* buf, ULONGLONG clusters,
   }
   else
   {
-    if (ReadFile(GetHandle(), buf, gsl::narrow<DWORD>(clusters * GetClusterSize()), &len,
+    if (ReadFile(GetHandle(), buf,
+                 gsl::narrow<DWORD>(clusters * GetClusterSize()), &len,
                  nullptr) != 0 &&
         len == clusters * GetClusterSize())
     {
@@ -209,8 +208,7 @@ bool AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
       // Clusters from read pointer to the end
       const ULONGLONG vcns = dr.last_vcn - vcn + 1;
       // Fragmented data, we must go on
-      const ULONGLONG clustersToRead =
-          clusters > vcns ? vcns : clusters;
+      const ULONGLONG clustersToRead = clusters > vcns ? vcns : clusters;
 
       if (ReadClusters(buf, clustersToRead, dr.lcn, vcn - dr.start_vcn))
       {
@@ -287,8 +285,8 @@ bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
     ULONGLONG len = 0;
     // First cluster, Unaligned
     if (ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(),
-                                           GetClusterSize(), len) &&
-                       len == GetClusterSize())
+                            GetClusterSize(), len) &&
+        len == GetClusterSize())
     {
       len = (start_bytes < bufLen) ? start_bytes : bufLen;
       memcpy(buf, &unaligned_buf[GetClusterSize() - start_bytes], len);
@@ -313,9 +311,9 @@ bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
     // Aligned clusters
     ULONGLONG alignedSize = alignedClusters * GetClusterSize();
     ULONGLONG len = 0;
-    if (ReadVirtualClusters(start_vcn, alignedClusters, buf,
-                                           alignedSize, len) &&
-                       len == alignedSize)
+    if (ReadVirtualClusters(start_vcn, alignedClusters, buf, alignedSize,
+                            len) &&
+        len == alignedSize)
     {
       start_vcn += alignedClusters;
       buf += alignedSize;
@@ -335,9 +333,9 @@ bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
 
   // Last cluster, Unaligned
   ULONGLONG len = 0;
-  if (ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(),
-                                         GetClusterSize(), len) &&
-                     len == GetClusterSize())
+  if (ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(), GetClusterSize(),
+                          len) &&
+      len == GetClusterSize())
   {
     memcpy(buf, unaligned_buf.data(), bufLen);
     actural += bufLen;

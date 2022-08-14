@@ -4,16 +4,11 @@
 #include <string>
 #include <string_view>
 
-// OK
-
 namespace NtfsBrowser
 {
 struct AttrHeaderCommon;
 class FileRecord;
 
-///////////////////////////
-// Attribute: Volume Name
-///////////////////////////
 class AttrVolName : public AttrResident
 {
  public:

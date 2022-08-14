@@ -3,8 +3,6 @@
 #include "ntfs-common.h"
 #include <cassert>
 
-// OK
-
 namespace NtfsBrowser
 {
 
