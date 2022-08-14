@@ -115,7 +115,7 @@ std::unique_ptr<AttrBase> FileRecord::AllocAttr(const AttrHeaderCommon& ahc,
 
     // Unhandled Attributes
     default:
-      bUnhandled = TRUE;
+      bUnhandled = true;
       if (ahc.non_resident != 0)
       {
         return std::make_unique<AttrNonResident>(ahc, *this);
@@ -145,14 +145,14 @@ bool FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
           NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.type);
         }
         attr_list_[attrIndex].push_back(std::move(attr));
-        return TRUE;
+        return true;
       }
       NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
       return false;
     }
     NTFS_TRACE1("User Callback has processed this Attribute: 0x%04X\n",
                 ahc.type);
-    return TRUE;
+    return true;
   }
   NTFS_TRACE1("Invalid Attribute Type: 0x%04X\n", ahc.type);
   return false;
@@ -233,7 +233,7 @@ bool FileRecord::ParseFileRecord(ULONGLONG fileRef)
         NTFS_TRACE1("File Record %I64u Found\n", fileRef);
         file_record_ = std::move(fr);
 
-        return TRUE;
+        return true;
       }
       NTFS_TRACE("Update Sequence Number error\n");
     }

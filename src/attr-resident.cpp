@@ -21,7 +21,7 @@ AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
 
 bool AttrResident::IsDataRunOK() const noexcept
 {
-  return TRUE;  // Always OK for a resident attribute
+  return true;  // Always OK for a resident attribute
 }
 
 // Return Actural Data Size
@@ -36,13 +36,13 @@ bool AttrResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
   actural = 0;
   if (bufLen == 0)
   {
-    return TRUE;
+    return true;
   }
 
   // offset parameter error
   if (offset >= body_.size())
   {
-    return FALSE;
+    return false;
   }
 
   if ((offset + bufLen) > body_.size())
@@ -63,7 +63,7 @@ bool AttrResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
   #pragma warning(pop)
 #endif
 
-  return TRUE;
+  return true;
 }
 
 const BYTE* AttrResident::GetData() const noexcept { return body_.data(); }

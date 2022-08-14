@@ -27,8 +27,8 @@ using SUBENTRY_CALLBACK = void (*)(const IndexEntry& ie);
 // User defined Callback routine to handle FileRecord parsed attributes
 // Will be called by FileRecord::TraverseAttrs() for each attribute
 // attrClass is the according attribute's wrapping class, CAttr_xxx
-// Set bStop to TRUE if don't want to continue
-// Set bStop to FALSE to continue processing
+// Set bStop to true if don't want to continue
+// Set bStop to false to continue processing
 using ATTRS_CALLBACK = void (*)(const AttrBase& attr, void* context,
                                 bool* bStop);
 

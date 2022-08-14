@@ -136,14 +136,14 @@ void CNtfsundelDlg::OnPaint()
 HCURSOR CNtfsundelDlg::OnQueryDragIcon() { return (HCURSOR)m_hIcon; }
 
 // Check if file name matchs wildchar pattern
-BOOL MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
+bool MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
 {
   // Compare until pattern is not '*' and not '?'
   while (*fileName && *pattern)
   {
     if (*pattern == _T('*') || *pattern == _T('?')) break;
 
-    if (*fileName != *pattern) return FALSE;
+    if (*fileName != *pattern) return false;
 
     fileName++;
     pattern++;
@@ -152,16 +152,16 @@ BOOL MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
   if (*pattern == _T('\0'))
   {
     if (*fileName == _T('\0'))
-      return TRUE;  // Exactly matched
+      return true;  // Exactly matched
     else
-      return FALSE;
+      return false;
   }
   else if (*pattern == _T('?'))
   {
     do
     {
       if (*fileName == _T('\0'))
-        return FALSE;
+        return false;
       else
       {
         fileName++;  // Skip to next
@@ -188,7 +188,7 @@ BOOL MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
 
     while (*fileName && *fileName != *pattern) fileName++;
     if (*fileName != *pattern)
-      return FALSE;
+      return false;
     else
     {
       if (*pattern)
@@ -201,22 +201,22 @@ BOOL MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
 
         if (*fileName == *pattern && *fileName == _T('\0') &&
             (fileName - ff) >= (pattern - pp))
-          return TRUE;
+          return true;
 
         if (MatchFileName(ff + 1, p))
-          return TRUE;
+          return true;
         else
           return MatchFileName(ff, pp);
       }
       else
-        return TRUE;
+        return true;
     }
   }
   else
-    return FALSE;
+    return false;
 }
 
-BOOL PeekAndPump()
+bool PeekAndPump()
 {
   MSG msg;
   while (PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE))
@@ -224,22 +224,22 @@ BOOL PeekAndPump()
     if (!AfxGetApp()->PumpMessage())
     {
       PostQuitMessage(0);
-      return FALSE;
+      return false;
     }
   }
 
-  return TRUE;
+  return true;
 }
 
 void CNtfsundelDlg::OnSearch()
 {
-  static BOOL stop = FALSE;  // Give user a chance to stop the searching loop
+  static bool stop = false;  // Give user a chance to stop the searching loop
 
   CString btntext;
   GetDlgItem(IDB_SEARCH)->GetWindowText(btntext);
   if (btntext == _T("Stop"))
   {
-    stop = TRUE;
+    stop = true;
     return;
   }
 
