@@ -35,6 +35,8 @@ FileRecord::FileRecord(const NtfsVolume& volume) : volume_(volume)
 
 FileRecord::~FileRecord() { ClearAttrs(); }
 
+const NtfsVolume& FileRecord::GetVolume() const noexcept { return volume_; }
+
 // Free all CAttr_xxx
 void FileRecord::ClearAttrs() noexcept
 {
@@ -54,9 +56,9 @@ void FileRecord::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
   {
     attr_raw_call_back_[attType](ahc, bDiscard);
   }
-  else if (volume_.attr_raw_call_back_[attType] != nullptr)
+  else
   {
-    volume_.attr_raw_call_back_[attType](ahc, bDiscard);
+    volume_.AttrRawCallBack(attType, ahc, bDiscard);
   }
 }
 
@@ -160,7 +162,7 @@ bool FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
 {
   std::vector<BYTE> buffer;
-  buffer.reserve(volume_.file_record_size_);
+  buffer.reserve(volume_.GetFileRecordSize());
 
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
       volume_.mft_data_ == nullptr)
@@ -168,7 +170,7 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr;
     frAddr.QuadPart = gsl::narrow<LONGLONG>(
-        volume_.mft_addr_ + (volume_.file_record_size_) * fileRef);
+        volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
     frAddr.LowPart = SetFilePointer(volume_.hvolume_.get(),
                                     static_cast<LONG>(frAddr.LowPart),
                                     &frAddr.HighPart, FILE_BEGIN);
@@ -179,25 +181,25 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     }
     if (DWORD len = 0;
         ReadFile(volume_.hvolume_.get(), buffer.data(),
-                 volume_.file_record_size_, &len, nullptr) != 0 &&
-        len == volume_.file_record_size_)
+                 volume_.GetFileRecordSize(), &len, nullptr) != 0 &&
+        len == volume_.GetFileRecordSize())
     {
       std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-          buffer.data(), volume_.file_record_size_, volume_.sector_size_);
+          buffer.data(), volume_.GetFileRecordSize(), volume_.GetSectorSize());
       return fr;
     }
     return {};
   }
   // May be fragmented $MFT
-  const ULONGLONG frAddr = (volume_.file_record_size_) * fileRef;
+  const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
 
   if (ULONGLONG len = 0;
       volume_.mft_data_->ReadData(frAddr, buffer.data(),
-                                  volume_.file_record_size_, len) &&
-      len == volume_.file_record_size_)
+                                  volume_.GetFileRecordSize(), len) &&
+      len == volume_.GetFileRecordSize())
   {
     std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-        buffer.data(), volume_.file_record_size_, volume_.sector_size_);
+        buffer.data(), volume_.GetFileRecordSize(), volume_.GetSectorSize());
     return fr;
   }
   return {};
@@ -353,7 +355,7 @@ bool FileRecord::ParseAttrs()
   dataPtr += file_record_->offset_of_attr;
 
   while (ahc->type != static_cast<DWORD>(-1) &&
-         (dataPtr + ahc->total_size) <= volume_.file_record_size_)
+         (dataPtr + ahc->total_size) <= volume_.GetFileRecordSize())
   {
     if (static_cast<bool>(ATTR_MASK(ahc->type) &
                           attr_mask_))  // Skip unwanted attributes

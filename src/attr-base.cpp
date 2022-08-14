@@ -10,10 +10,10 @@ namespace NtfsBrowser
 
 AttrBase::AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr) noexcept
     : attr_header_(ahc),
-      sector_size_(fr.volume_.sector_size_),
-      cluster_size_(fr.volume_.cluster_size_),
-      index_block_size_(fr.volume_.index_block_size_),
-      hvolume_(fr.volume_.hvolume_.get())
+      sector_size_(fr.GetVolume().GetSectorSize()),
+      cluster_size_(fr.GetVolume().GetClusterSize()),
+      index_block_size_(fr.GetVolume().GetIndexBlockSize()),
+      hvolume_(fr.GetVolume().hvolume_.get())
 {
 }
 

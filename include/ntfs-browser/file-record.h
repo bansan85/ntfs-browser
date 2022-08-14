@@ -70,6 +70,7 @@ class FileRecord
                        SUBENTRY_CALLBACK seCallBack) const;
 
  public:
+  [[nodiscard]] const NtfsVolume& GetVolume() const noexcept;
   [[nodiscard]] bool ParseFileRecord(ULONGLONG fileRef);
   [[nodiscard]] bool ParseAttrs();
 

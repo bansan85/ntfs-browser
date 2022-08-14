@@ -175,7 +175,7 @@ ULONGLONG NtfsVolume::GetRecordsCount() const noexcept
 
 // Get BPB information
 
-DWORD NtfsVolume::GetSectorSize() const noexcept { return sector_size_; }
+WORD NtfsVolume::GetSectorSize() const noexcept { return sector_size_; }
 
 DWORD NtfsVolume::GetClusterSize() const noexcept { return cluster_size_; }
 
@@ -202,6 +202,15 @@ bool NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept
     return true;
   }
   return false;
+}
+
+void NtfsVolume::AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,
+                                 bool& bDiscard) const
+{
+  if (attr_raw_call_back_[attType] != nullptr)
+  {
+    attr_raw_call_back_[attType](ahc, bDiscard);
+  }
 }
 
 // Clear all Attribute CallBack routines

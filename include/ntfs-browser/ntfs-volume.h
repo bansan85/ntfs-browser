@@ -51,7 +51,7 @@ class NtfsVolume
   [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
   [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
 
-  [[nodiscard]] DWORD GetSectorSize() const noexcept;
+  [[nodiscard]] WORD GetSectorSize() const noexcept;
   [[nodiscard]] DWORD GetClusterSize() const noexcept;
   [[nodiscard]] DWORD GetFileRecordSize() const noexcept;
   [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
@@ -59,6 +59,8 @@ class NtfsVolume
 
   [[nodiscard]] bool InstallAttrRawCB(DWORD attrType,
                                       AttrRawCallback cb) noexcept;
+  void AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,
+                       bool& bDiscard) const;
   void ClearAttrRawCB() noexcept;
 };  // NtfsVolume
 }  // namespace NtfsBrowser
