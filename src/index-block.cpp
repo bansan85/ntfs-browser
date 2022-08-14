@@ -8,13 +8,13 @@ namespace NtfsBrowser
 
 IndexBlock::IndexBlock() noexcept { NTFS_TRACE("Index Block\n"); }
 
-Data::IndexBlock* IndexBlock::AllocIndexBlock(DWORD size)
+std::shared_ptr<BYTE[]> IndexBlock::AllocIndexBlock(DWORD size)
 {
   clear();
 
-  index_block_.resize(size);
+  index_block_ = std::make_shared<BYTE[]>(size);
 
-  return reinterpret_cast<Data::IndexBlock*>(index_block_.data());
+  return index_block_;
 }
 
 }  // namespace NtfsBrowser

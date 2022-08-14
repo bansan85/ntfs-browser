@@ -1,5 +1,8 @@
 #pragma once
 
+#include <memory>
+#include <optional>
+
 #include <ntfs-browser/filename.h>
 
 namespace NtfsBrowser
@@ -12,7 +15,8 @@ struct IndexEntry;
 class IndexEntry : public Filename
 {
  public:
-  explicit IndexEntry(const Data::IndexEntry& ie);
+  explicit IndexEntry(std::optional<std::shared_ptr<BYTE[]>> sh_ptr,
+                      const Data::IndexEntry& ie);
   IndexEntry(IndexEntry&& other) noexcept = default;
   IndexEntry(IndexEntry const& other) = default;
   IndexEntry& operator=(IndexEntry&& other) noexcept = default;
@@ -20,6 +24,7 @@ class IndexEntry : public Filename
   ~IndexEntry() override = default;
 
  private:
+  std::optional<std::shared_ptr<BYTE[]>> sh_ptr_;
   const Data::IndexEntry& index_entry_;
 
  public:

@@ -23,10 +23,10 @@ class IndexBlock : public std::vector<IndexEntry>
   virtual ~IndexBlock() = default;
 
  private:
-  std::vector<BYTE> index_block_;
+  std::shared_ptr<BYTE[]> index_block_;
 
  public:
-  [[nodiscard]] Data::IndexBlock* AllocIndexBlock(DWORD size);
+  [[nodiscard]] std::shared_ptr<BYTE[]> AllocIndexBlock(DWORD size);
 };  // IndexBlock
 
 }  // namespace NtfsBrowser

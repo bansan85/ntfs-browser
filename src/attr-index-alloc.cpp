@@ -72,7 +72,10 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
   }
 
   // Allocate buffer for a single Index Block
-  Data::IndexBlock* ibBuf = ibClass.AllocIndexBlock(GetIndexBlockSize());
+  std::shared_ptr<BYTE[]> ib_sh_ptr =
+      ibClass.AllocIndexBlock(GetIndexBlockSize());
+  Data::IndexBlock* ibBuf =
+      reinterpret_cast<Data::IndexBlock*>(&ib_sh_ptr.get()[0]);
 
   // Sectors Per Index Block
   const DWORD sectors = GetIndexBlockSize() / GetSectorSize();
@@ -107,7 +110,7 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 
     while (ieTotal <= ibBuf->total_entry_size)
     {
-      ibClass.emplace_back(*ie);
+      ibClass.emplace_back(ib_sh_ptr, *ie);
 
       if (static_cast<bool>(ie->flags & Flag::IndexEntry::LAST))
       {
