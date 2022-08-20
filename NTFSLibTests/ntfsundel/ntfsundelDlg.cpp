@@ -1,14 +1,11 @@
-// ntfsundelDlg.cpp : implementation file
-//
-
 #include "stdafx.h"
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
 
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/file-record.h>
+#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 using namespace NtfsBrowser;
 
@@ -18,53 +15,36 @@ using namespace NtfsBrowser;
 static char THIS_FILE[] = __FILE__;
 #endif
 
-/////////////////////////////////////////////////////////////////////////////
-// CNtfsundelDlg dialog
-
-CNtfsundelDlg::CNtfsundelDlg(CWnd* pParent /*=NULL*/)
+CNtfsundelDlg::CNtfsundelDlg(CWnd* pParent)
     : CDialog(CNtfsundelDlg::IDD, pParent)
 {
-  //{{AFX_DATA_INIT(CNtfsundelDlg)
   m_filter = _T("*.*");
-  //}}AFX_DATA_INIT
-  // Note that LoadIcon does not require a subsequent DestroyIcon in Win32
   m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
 
 void CNtfsundelDlg::DoDataExchange(CDataExchange* pDX)
 {
   CDialog::DoDataExchange(pDX);
-  //{{AFX_DATA_MAP(CNtfsundelDlg)
   DDX_Control(pDX, IDL_FILES, m_files);
   DDX_Control(pDX, IDC_DRIVER, m_driver);
   DDX_Text(pDX, IDE_FILTER, m_filter);
   DDV_MaxChars(pDX, m_filter, 30);
-  //}}AFX_DATA_MAP
 }
 
 BEGIN_MESSAGE_MAP(CNtfsundelDlg, CDialog)
-//{{AFX_MSG_MAP(CNtfsundelDlg)
 ON_WM_PAINT()
 ON_WM_QUERYDRAGICON()
 ON_BN_CLICKED(IDB_SEARCH, OnSearch)
 ON_BN_CLICKED(IDB_RECOVER, OnRecover)
 ON_CBN_SELCHANGE(IDC_DRIVER, OnSelchangeDriver)
-//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
-
-/////////////////////////////////////////////////////////////////////////////
-// CNtfsundelDlg message handlers
 
 BOOL CNtfsundelDlg::OnInitDialog()
 {
   CDialog::OnInitDialog();
 
-  // Set the icon for this dialog.  The framework does this automatically
-  //  when the application's main window is not a dialog
   SetIcon(m_hIcon, TRUE);   // Set big icon
   SetIcon(m_hIcon, FALSE);  // Set small icon
-
-  // TODO: Add extra initialization here
 
   m_files.SetExtendedStyle(LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES |
                            LVS_EX_HEADERDRAGDROP);
@@ -72,7 +52,7 @@ BOOL CNtfsundelDlg::OnInitDialog()
   m_files.InsertColumn(2, _T("Name"), LVCFMT_LEFT, 260);
   m_files.InsertColumn(3, _T("Time"), LVCFMT_LEFT, 130);
 
-  _TCHAR drvname[4];  // "C:\"
+  std::array<_TCHAR, 4> drvname;  // "C:\"
   drvname[0] = _T('A');
   drvname[1] = _T(':');
   drvname[2] = _T('\\');
@@ -80,47 +60,47 @@ BOOL CNtfsundelDlg::OnInitDialog()
 
   DWORD bm = 1;                       // bit mask
   DWORD drives = GetLogicalDrives();  // available drives bitmap
-  for (int i = 0; i < 32; i++)
+  for (int i = 0; i < sizeof(drives) * 8; i++)
   {
-    if (drives & bm)
+    if ((drives & bm) != 0)
     {
-      DWORD dt = GetDriveType(drvname);
+      UINT dt = GetDriveType(&drvname[0]);
       if (dt == DRIVE_FIXED || dt == DRIVE_REMOVABLE)
       {
         drvname[2] = _T('\0');
-        m_driver.InsertString(-1, drvname);
+        m_driver.InsertString(-1, &drvname[0]);
         drvname[2] = _T('\\');
       }
     }
 
     drvname[0]++;
-    bm <<= 1;
+    bm <<= 1U;
   }
 
-  if (m_driver.GetCount() > 0) m_driver.SetCurSel(0);
+  if (m_driver.GetCount() > 0)
+  {
+    m_driver.SetCurSel(0);
+  }
 
   return TRUE;  // return TRUE  unless you set the focus to a control
 }
 
-// If you add a minimize button to your dialog, you will need the code below
-//  to draw the icon.  For MFC applications using the document/view model,
-//  this is automatically done for you by the framework.
-
 void CNtfsundelDlg::OnPaint()
 {
-  if (IsIconic())
+  if (IsIconic() == TRUE)
   {
     CPaintDC dc(this);  // device context for painting
 
-    SendMessage(WM_ICONERASEBKGND, (WPARAM)dc.GetSafeHdc(), 0);
+    SendMessage(WM_ICONERASEBKGND, reinterpret_cast<WPARAM>(dc.GetSafeHdc()),
+                0);
 
     // Center icon in client rectangle
-    int cxIcon = GetSystemMetrics(SM_CXICON);
-    int cyIcon = GetSystemMetrics(SM_CYICON);
+    const int cxIcon = GetSystemMetrics(SM_CXICON);
+    const int cyIcon = GetSystemMetrics(SM_CYICON);
     CRect rect;
     GetClientRect(&rect);
-    int x = (rect.Width() - cxIcon + 1) / 2;
-    int y = (rect.Height() - cyIcon + 1) / 2;
+    const int x = (rect.Width() - cxIcon + 1) / 2;
+    const int y = (rect.Height() - cyIcon + 1) / 2;
 
     // Draw the icon
     dc.DrawIcon(x, y, m_hIcon);
@@ -133,7 +113,10 @@ void CNtfsundelDlg::OnPaint()
 
 // The system calls this to obtain the cursor to display while the user drags
 //  the minimized window.
-HCURSOR CNtfsundelDlg::OnQueryDragIcon() { return (HCURSOR)m_hIcon; }
+HCURSOR CNtfsundelDlg::OnQueryDragIcon()
+{
+  return static_cast<HCURSOR>(m_hIcon);
+}
 
 // Check if file name matchs wildchar pattern
 bool MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
@@ -141,9 +124,15 @@ bool MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
   // Compare until pattern is not '*' and not '?'
   while (*fileName && *pattern)
   {
-    if (*pattern == _T('*') || *pattern == _T('?')) break;
+    if (*pattern == _T('*') || *pattern == _T('?'))
+    {
+      break;
+    }
 
-    if (*fileName != *pattern) return false;
+    if (*fileName != *pattern)
+    {
+      return false;
+    }
 
     fileName++;
     pattern++;
@@ -151,17 +140,17 @@ bool MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
 
   if (*pattern == _T('\0'))
   {
-    if (*fileName == _T('\0'))
-      return true;  // Exactly matched
-    else
-      return false;
+    // Exactly matched
+    return *fileName == _T('\0');
   }
-  else if (*pattern == _T('?'))
+  if (*pattern == _T('?'))
   {
     do
     {
       if (*fileName == _T('\0'))
+      {
         return false;
+      }
       else
       {
         fileName++;  // Skip to next
@@ -172,7 +161,7 @@ bool MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
 
     return MatchFileName(fileName, pattern);
   }
-  else if (*pattern == _T('*'))
+  if (*pattern == _T('*'))
   {
     const _TCHAR* p = pattern;
 
@@ -186,42 +175,52 @@ bool MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
         break;
     }
 
-    while (*fileName && *fileName != *pattern) fileName++;
-    if (*fileName != *pattern)
-      return false;
-    else
+    while (*fileName && *fileName != *pattern)
     {
-      if (*pattern)
-      {
-        const _TCHAR* ff = fileName;
-        const _TCHAR* pp = pattern;
-
-        while (*fileName == *pp) fileName++;
-        while (*pattern == *pp) pattern++;
-
-        if (*fileName == *pattern && *fileName == _T('\0') &&
-            (fileName - ff) >= (pattern - pp))
-          return true;
-
-        if (MatchFileName(ff + 1, p))
-          return true;
-        else
-          return MatchFileName(ff, pp);
-      }
-      else
-        return true;
+      fileName++;
     }
+    if (*fileName != *pattern)
+    {
+      return false;
+    }
+
+    if (*pattern)
+    {
+      const _TCHAR* ff = fileName;
+      const _TCHAR* pp = pattern;
+
+      while (*fileName == *pp)
+      {
+        fileName++;
+      }
+      while (*pattern == *pp)
+      {
+        pattern++;
+      }
+
+      if (*fileName == *pattern && *fileName == _T('\0') &&
+          (fileName - ff) >= (pattern - pp))
+      {
+        return true;
+      }
+
+      if (MatchFileName(ff + 1, p))
+      {
+        return true;
+      }
+      return MatchFileName(ff, pp);
+    }
+    return true;
   }
-  else
-    return false;
+  return false;
 }
 
 bool PeekAndPump()
 {
   MSG msg;
-  while (PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE))
+  while (PeekMessage(&msg, nullptr, 0, 0, PM_NOREMOVE))
   {
-    if (!AfxGetApp()->PumpMessage())
+    if (AfxGetApp()->PumpMessage() == FALSE)
     {
       PostQuitMessage(0);
       return false;
@@ -245,11 +244,14 @@ void CNtfsundelDlg::OnSearch()
 
   m_files.DeleteAllItems();
 
-  UpdateData();
+  UpdateData(TRUE);
 
   // Remove leading and trailing space
   if (m_filter.IsEmpty())
-    m_filter = _T("*.*");  // default to find all deleted files
+  // default to find all deleted files
+  {
+    m_filter = _T("*.*");
+  }
   else
   {
     m_filter.TrimLeft();
@@ -258,8 +260,11 @@ void CNtfsundelDlg::OnSearch()
 
   // Volume information
   CString vns;
-  int sel = m_driver.GetCurSel();
-  if (sel >= 0) m_driver.GetLBText(sel, vns);
+  const int sel = m_driver.GetCurSel();
+  if (sel >= 0)
+  {
+    m_driver.GetLBText(sel, vns);
+  }
   if (vns.IsEmpty())
   {
     MessageBox(_T("Select a disk drive"));
@@ -267,7 +272,7 @@ void CNtfsundelDlg::OnSearch()
     return;
   }
 
-  _TCHAR volname = vns.GetAt(0);
+  const _TCHAR volname = vns.GetAt(0);
 
   NtfsVolume volume(volname);
   if (!volume.IsVolumeOK())
@@ -286,31 +291,47 @@ void CNtfsundelDlg::OnSearch()
 
   // Find deleted files (directory excluded)
   stop = FALSE;
-  DWORD count = 0;
-  for (ULONGLONG i = static_cast<ULONGLONG>(Enum::MftIdx::USER);
+  int count = 0;
+  for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::USER);
        i < volume.GetRecordsCount(); i++)
   {
     FileRecord fr(volume);
 
     // Only parse Standard Information and File Name attributes
-    fr.SetAttrMask(Mask::FILE_NAME);       // StdInfo will always be parsed
-    if (!fr.ParseFileRecord(i)) continue;  // skip to next
-    if (!fr.ParseAttrs()) continue;        // skip to next
+    // StdInfo will always be parsed
+    fr.SetAttrMask(Mask::FILE_NAME);
+    if (!fr.ParseFileRecord(i))
+    {
+      continue;
+    }
+    if (!fr.ParseAttrs())
+    {
+      continue;
+    }
 
     // Check if it's deleted and not directory
-    if (!fr.IsDeleted()) continue;
-    if (fr.IsDirectory()) continue;
+    if (!fr.IsDeleted())
+    {
+      continue;
+    }
+    if (fr.IsDirectory())
+    {
+      continue;
+    }
 
     // Check file name
     std::wstring fn = fr.GetFileName();
-    if (fn.empty()) continue;
+    if (fn.empty())
+    {
+      continue;
+    }
     // Make UpperCase
     CString fns{fn.c_str()};
     fns.MakeUpper();
     CString filters = m_filter;
     filters.MakeUpper();
     // Change ".*" to "*" at filter string end
-    int fl = filters.GetLength();
+    const int fl = filters.GetLength();
     if (fl >= 2)
     {
       if (filters.GetAt(fl - 1) == _T('*') && filters.GetAt(fl - 2) == _T('.'))
@@ -320,7 +341,8 @@ void CNtfsundelDlg::OnSearch()
       }
     }
 
-    if (MatchFileName((const _TCHAR*)fns, (const _TCHAR*)filters))
+    if (MatchFileName(static_cast<const _TCHAR*>(fns),
+                      static_cast<const _TCHAR*>(filters)))
     {
       // Add to list
       CString s;
@@ -333,14 +355,18 @@ void CNtfsundelDlg::OnSearch()
       FILETIME ft;
       fr.GetFileTime(&ft, nullptr, nullptr);
       SYSTEMTIME st;
-      if (!FileTimeToSystemTime(&ft, &st)) memset(&st, 0, sizeof(SYSTEMTIME));
-      s.Format(_T("%04d-%02d-%02d  %02d:%02d"), st.wYear, st.wMonth, st.wDay,
+      if (FileTimeToSystemTime(&ft, &st) == FALSE)
+      {
+        memset(&st, 0, sizeof(SYSTEMTIME));
+      }
+      s.Format(_T("%04u-%02u-%02u  %02u:%02u"), st.wYear, st.wMonth, st.wDay,
                st.wHour, st.wMinute);
       m_files.SetItemText(itm, 2, s);
 
       // Prevent showing too many entries, 50,000 maxiam
       count++;
-      if (count > 50000)
+      constexpr DWORD MAX_NUMBER_FILES = 50000;
+      if (count > MAX_NUMBER_FILES)
       {
         MessageBox(
             _T("Too many files found, only the first 50,000 will be shown"));
@@ -348,9 +374,15 @@ void CNtfsundelDlg::OnSearch()
       }
     }
 
-    if (stop) break;
+    if (stop)
+    {
+      break;
+    }
 
-    if (!PeekAndPump()) break;
+    if (!PeekAndPump())
+    {
+      break;
+    }
   }
 
   CString totals;
@@ -367,19 +399,22 @@ void CNtfsundelDlg::OnSearch()
 void CNtfsundelDlg::OnRecover()
 {
   POSITION pos = m_files.GetFirstSelectedItemPosition();
-  if (pos == NULL) return;
+  if (pos == nullptr)
+  {
+    return;
+  }
 
-  int itm = m_files.GetNextSelectedItem(pos);
+  const int itm = m_files.GetNextSelectedItem(pos);
 
   CString refs = m_files.GetItemText(itm, 0);
-  ULONGLONG ref = _ttoi64((const _TCHAR*)refs);
+  ULONGLONG ref = _ttoi64(static_cast<const _TCHAR*>(refs));
 
   CString fn = m_files.GetItemText(itm, 1);
 
   CString vns;
   m_driver.GetLBText(m_driver.GetCurSel(), vns);
 
-  _TCHAR volname = vns.GetAt(0);
+  const _TCHAR volname = vns.GetAt(0);
 
   NtfsVolume volume(volname);
   FileRecord fr(volume);
@@ -394,29 +429,37 @@ void CNtfsundelDlg::OnRecover()
   if (!fr.ParseAttrs())
   {
     if (fr.IsCompressed())
+    {
       MessageBox(_T("Compressed directory not supported yet"));
+    }
     else if (fr.IsEncrypted())
+    {
       MessageBox(_T("Encrypted directory not supported yet"));
+    }
     else
+    {
       MessageBox(_T("File Record attribute parse error"));
+    }
     return;
   }
 
   // Save as
-  CFileDialog savedlg(FALSE, NULL, (const _TCHAR*)fn);
+  CFileDialog savedlg(FALSE, nullptr, static_cast<const _TCHAR*>(fn));
   if (savedlg.DoModal() == IDOK)
   {
     CString path = savedlg.GetPathName();
-    if (path.GetAt(0) == volname)
+
+    if ((path.GetAt(0) == volname) &&
+        (MessageBox(_T("You should choose a different drive, do you want to ")
+                    _T("continue anyway ?"),
+                    nullptr, MB_OKCANCEL) == IDCANCEL))
     {
-      if (MessageBox(_T("You should choose a different drive, do you want to ")
-                     _T("continue anyway ?"),
-                     NULL, MB_OKCANCEL) == IDCANCEL)
-        return;
+      return;
     }
 
-    HANDLE hf = CreateFile((const _TCHAR*)path, GENERIC_READ | GENERIC_WRITE, 0,
-                           NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE hf = CreateFile(static_cast<const _TCHAR*>(path),
+                           GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hf == INVALID_HANDLE_VALUE)
     {
       MessageBox(_T("File creation failed"));
@@ -425,48 +468,55 @@ void CNtfsundelDlg::OnRecover()
 
     // Save to disk
     // Unnamed Data attribute contains the file data
-    const AttrBase* data = fr.FindStream(nullptr);
-    if (data)
+    const AttrBase* data = fr.FindStream({});
+    if (data == nullptr)
     {
-      ULONGLONG datalen = data->GetDataSize();
-      ULONGLONG remain = datalen;
-
-      // Check files with huge size (maybe something is error)
-      if (datalen > 100 * 1024 * 1024)
-      {
-        if (MessageBox(
-                _T("File size exceeds 100M, do you want to continue anyway ?"),
-                NULL, MB_OKCANCEL) == IDCANCEL)
-          return;
-      }
-
-#define BUFSIZE 64 * 1024  // Read 64K once
-      for (ULONGLONG i = 0; i < datalen; i += BUFSIZE)
-      {
-        BYTE buf[BUFSIZE];
-
-        ULONGLONG len = 0;
-        if (data->ReadData(i, buf, BUFSIZE, len) &&
-            (len == BUFSIZE || len == remain))
-        {
-          // Save data
-          DWORD l;
-          WriteFile(hf, buf, static_cast<DWORD>(len), &l, NULL);
-          remain -= len;
-        }
-        else
-        {
-          MessageBox(_T("Read data error"));
-          return;
-        }
-      }
-
-      CloseHandle(hf);
-
-      CString s;
-      s.Format(_T("%I64u bytes recovered"), datalen);
-      MessageBox(s);
+      return;
     }
+
+    const ULONGLONG datalen = data->GetDataSize();
+    ULONGLONG remain = datalen;
+
+    // Check files with huge size (maybe something is error)
+    constexpr ULONGLONG SIZE_CHECK = 100 * 1024 * 1024U;
+    if (datalen > SIZE_CHECK)
+    {
+      if (MessageBox(
+              _T("File size exceeds 100M, do you want to continue anyway ?"),
+              nullptr, MB_OKCANCEL) == IDCANCEL)
+      {
+        return;
+      }
+    }
+
+    // Read 64K once
+    constexpr DWORD BUFSIZE = 64 * 1024U;
+    for (ULONGLONG i = 0; i < datalen; i += BUFSIZE)
+    {
+      std::vector<BYTE> vec;
+      vec.resize(BUFSIZE, '\0');
+
+      ULONGLONG len = 0;
+      if (data->ReadData(i, &vec[0], BUFSIZE, len) &&
+          (len == BUFSIZE || len == remain))
+      {
+        // Save data
+        DWORD l = 0;
+        WriteFile(hf, &vec[0], static_cast<DWORD>(len), &l, NULL);
+        remain -= len;
+      }
+      else
+      {
+        MessageBox(_T("Read data error"));
+        return;
+      }
+    }
+
+    CloseHandle(hf);
+
+    CString s;
+    s.Format(_T("%I64u bytes recovered"), datalen);
+    MessageBox(s);
   }
 }
 

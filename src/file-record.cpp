@@ -310,7 +310,8 @@ std::optional<IndexEntry>
 // Traverse SubNode recursivly in ascending order
 // Call user defined callback routine once found an subentry
 void FileRecord::TraverseSubNode(const ULONGLONG& vcn,
-                                 SUBENTRY_CALLBACK seCallBack) const
+                                 SUBENTRY_CALLBACK seCallBack,
+                                 void* context) const
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
@@ -328,12 +329,12 @@ void FileRecord::TraverseSubNode(const ULONGLONG& vcn,
       if (ie.IsSubNodePtr())
       {
         // recursive call
-        TraverseSubNode(ie.GetSubNodeVCN(), seCallBack);
+        TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context);
       }
 
       if (ie.HasName())
       {
-        seCallBack(ie);
+        seCallBack(ie, context);
       }
     }
   }
@@ -522,7 +523,8 @@ void FileRecord::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
 
 // Traverse all sub directories and files contained
 // Call user defined callback routine once found an entry
-void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const
+void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
+                                    void* context) const
 {
   _ASSERT(seCallBack);
 
@@ -547,12 +549,12 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const
     // Visit subnode first
     if (ie.IsSubNodePtr())
     {
-      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack);
+      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context);
     }
 
     if (ie.HasName())
     {
-      seCallBack(ie);
+      seCallBack(ie, context);
     }
   }
 }

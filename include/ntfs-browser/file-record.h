@@ -22,7 +22,7 @@ struct FileRecordHeader;
 
 // User defined Callback routine to handle Directory traversing
 // Will be called by FileRecord::TraverseSubEntries for each sub entry
-using SUBENTRY_CALLBACK = void (*)(const IndexEntry& ie);
+using SUBENTRY_CALLBACK = void (*)(const IndexEntry& ie, void* context);
 
 // User defined Callback routine to handle FileRecord parsed attributes
 // Will be called by FileRecord::TraverseAttrs() for each attribute
@@ -66,8 +66,8 @@ class FileRecord
       ReadFileRecord(ULONGLONG fileRef);
   [[nodiscard]] std::optional<IndexEntry>
       VisitIndexBlock(const ULONGLONG& vcn, std::wstring_view fileName) const;
-  void TraverseSubNode(const ULONGLONG& vcn,
-                       SUBENTRY_CALLBACK seCallBack) const;
+  void TraverseSubNode(const ULONGLONG& vcn, SUBENTRY_CALLBACK seCallBack,
+                       void* context) const;
 
  public:
   [[nodiscard]] const NtfsVolume& GetVolume() const noexcept;
@@ -90,7 +90,7 @@ class FileRecord
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                    FILETIME* accessTm) const noexcept;
 
-  void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack) const;
+  void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack, void* context) const;
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntry(std::wstring_view fileName) const;
   [[nodiscard]] const AttrBase* FindStream(std::wstring_view name);

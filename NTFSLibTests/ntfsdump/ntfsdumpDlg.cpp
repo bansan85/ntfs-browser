@@ -1,7 +1,6 @@
-// ntfsdumpDlg.cpp : implementation file
-//
-
 #include <algorithm>
+
+#include <gsl/narrow>
 
 #include "stdafx.h"
 #include "ntfsdump.h"
@@ -21,89 +20,53 @@ using namespace NtfsBrowser;
 static char THIS_FILE[] = __FILE__;
 #endif
 
-/////////////////////////////////////////////////////////////////////////////
-// CAboutDlg dialog used for App About
-
 class CAboutDlg : public CDialog
 {
  public:
   CAboutDlg();
 
-  // Dialog Data
-  //{{AFX_DATA(CAboutDlg)
   enum
   {
     IDD = IDD_ABOUTBOX
   };
-  //}}AFX_DATA
-
-  // ClassWizard generated virtual function overrides
-  //{{AFX_VIRTUAL(CAboutDlg)
 
  protected:
-  virtual void DoDataExchange(CDataExchange* pDX);  // DDX/DDV support
-                                                    //}}AFX_VIRTUAL
-
-  // Implementation
+  virtual void DoDataExchange(CDataExchange* pDX);
 
  protected:
-  //{{AFX_MSG(CAboutDlg)
-  //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 };
 
-CAboutDlg::CAboutDlg() : CDialog(CAboutDlg::IDD)
-{
-  //{{AFX_DATA_INIT(CAboutDlg)
-  //}}AFX_DATA_INIT
-}
+CAboutDlg::CAboutDlg() : CDialog(CAboutDlg::IDD) {}
 
 void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 {
   CDialog::DoDataExchange(pDX);
-  //{{AFX_DATA_MAP(CAboutDlg)
-  //}}AFX_DATA_MAP
 }
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialog)
-//{{AFX_MSG_MAP(CAboutDlg)
-// No message handlers
-//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
-/////////////////////////////////////////////////////////////////////////////
-// CNtfsdumpDlg dialog
-
-CNtfsdumpDlg::CNtfsdumpDlg(CWnd* pParent /*=NULL*/)
-    : CDialog(CNtfsdumpDlg::IDD, pParent)
+CNtfsdumpDlg::CNtfsdumpDlg(CWnd* pParent)
+    : CDialog(CNtfsdumpDlg::IDD, pParent),
+      m_filename(_T("")),
+      m_dump(_T("")),
+      m_hIcon(AfxGetApp()->LoadIcon(IDR_MAINFRAME))
 {
-  //{{AFX_DATA_INIT(CNtfsdumpDlg)
-  m_filename = _T("");
-  m_dump = _T("");
-  //}}AFX_DATA_INIT
-  // Note that LoadIcon does not require a subsequent DestroyIcon in Win32
-  m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
 
 void CNtfsdumpDlg::DoDataExchange(CDataExchange* pDX)
 {
   CDialog::DoDataExchange(pDX);
-  //{{AFX_DATA_MAP(CNtfsdumpDlg)
   DDX_Text(pDX, IDC_FILENAME, m_filename);
   DDX_Text(pDX, IDE_DUMP, m_dump);
-  //}}AFX_DATA_MAP
 }
 
 BEGIN_MESSAGE_MAP(CNtfsdumpDlg, CDialog)
-//{{AFX_MSG_MAP(CNtfsdumpDlg)
 ON_WM_SYSCOMMAND()
 ON_WM_PAINT()
 ON_WM_QUERYDRAGICON()
-//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
-
-/////////////////////////////////////////////////////////////////////////////
-// CNtfsdumpDlg message handlers
 
 BOOL CNtfsdumpDlg::OnInitDialog()
 {
@@ -112,11 +75,11 @@ BOOL CNtfsdumpDlg::OnInitDialog()
   // Add "About..." menu item to system menu.
 
   // IDM_ABOUTBOX must be in the system command range.
-  ASSERT((IDM_ABOUTBOX & 0xFFF0) == IDM_ABOUTBOX);
+  ASSERT((IDM_ABOUTBOX & 0xFFF0U) == IDM_ABOUTBOX);
   ASSERT(IDM_ABOUTBOX < 0xF000);
 
   CMenu* pSysMenu = GetSystemMenu(FALSE);
-  if (pSysMenu != NULL)
+  if (pSysMenu != nullptr)
   {
     CString strAboutMenu;
     strAboutMenu.LoadString(IDS_ABOUTBOX);
@@ -132,14 +95,12 @@ BOOL CNtfsdumpDlg::OnInitDialog()
   SetIcon(m_hIcon, TRUE);   // Set big icon
   SetIcon(m_hIcon, FALSE);  // Set small icon
 
-  // TODO: Add extra initialization here
-
   return TRUE;  // return TRUE  unless you set the focus to a control
 }
 
 void CNtfsdumpDlg::OnSysCommand(UINT nID, LPARAM lParam)
 {
-  if ((nID & 0xFFF0) == IDM_ABOUTBOX)
+  if ((nID & 0xFFF0U) == IDM_ABOUTBOX)
   {
     CAboutDlg dlgAbout;
     dlgAbout.DoModal();
@@ -150,25 +111,22 @@ void CNtfsdumpDlg::OnSysCommand(UINT nID, LPARAM lParam)
   }
 }
 
-// If you add a minimize button to your dialog, you will need the code below
-//  to draw the icon.  For MFC applications using the document/view model,
-//  this is automatically done for you by the framework.
-
 void CNtfsdumpDlg::OnPaint()
 {
-  if (IsIconic())
+  if (IsIconic() == TRUE)
   {
     CPaintDC dc(this);  // device context for painting
 
-    SendMessage(WM_ICONERASEBKGND, (WPARAM)dc.GetSafeHdc(), 0);
+    SendMessage(WM_ICONERASEBKGND, reinterpret_cast<WPARAM>(dc.GetSafeHdc()),
+                0);
 
     // Center icon in client rectangle
-    int cxIcon = GetSystemMetrics(SM_CXICON);
-    int cyIcon = GetSystemMetrics(SM_CYICON);
+    const int cxIcon = GetSystemMetrics(SM_CXICON);
+    const int cyIcon = GetSystemMetrics(SM_CYICON);
     CRect rect;
     GetClientRect(&rect);
-    int x = (rect.Width() - cxIcon + 1) / 2;
-    int y = (rect.Height() - cyIcon + 1) / 2;
+    const int x = (rect.Width() - cxIcon + 1) / 2;
+    const int y = (rect.Height() - cyIcon + 1) / 2;
 
     // Draw the icon
     dc.DrawIcon(x, y, m_hIcon);
@@ -188,13 +146,16 @@ void ShowData(CString& m_dump, BYTE* data, DWORD datalen)
 {
   // "0000    01 02 03 04 05 06 07 08 - 09 0A 0B 0C 0D 0E 0F   123456789ABCDEF";
 
-  if (datalen == 0) return;
+  if (datalen == 0)
+  {
+    return;
+  }
 
   CString line;
   BYTE* p;
   DWORD i;
 
-  for (i = 0; i < ((datalen - 1) >> 4); i++)
+  for (i = 0; i < ((datalen - 1) >> 4U); i++)
   {
     p = data + i * 16;
 
@@ -226,7 +187,10 @@ void ShowData(CString& m_dump, BYTE* data, DWORD datalen)
       q[11], q[12], q[13], q[14], q[15]);
   for (int j = 0; j < 16; j++)
   {
-    if (q[j] < 0x20) q[j] = '.';
+    if (q[j] < 0x20)
+    {
+      q[j] = '.';
+    }
   }
   line.Format(_T("%s%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c"), line, q[0], q[1], q[2],
               q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11], q[12],
@@ -238,31 +202,62 @@ void CNtfsdumpDlg::OnOK()
 {
   CFileDialog fd(TRUE);
 
-  if (fd.DoModal() == IDOK)
+  if (fd.DoModal() != IDOK)
   {
-    m_filename = fd.GetPathName();
-    m_dump.Empty();
-    UpdateData(FALSE);
+    return;
+  }
 
-    // parse volume
+  m_filename = fd.GetPathName();
+  m_dump.Empty();
+  UpdateData(FALSE);
 
-    _TCHAR volname = m_filename.GetAt(0);
+  // parse volume
 
-    NtfsVolume volume(volname);
-    if (!volume.IsVolumeOK())
+  const _TCHAR volname = m_filename.GetAt(0);
+
+  NtfsVolume volume(volname);
+  if (!volume.IsVolumeOK())
+  {
+    MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
+    return;
+  }
+
+  // parse root directory
+
+  FileRecord fr(volume);
+  // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
+  // don't waste time and ram to parse unwanted attributes
+  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+  {
+    MessageBox(_T("Cannot read root directory of volume"));
+    return;
+  }
+
+  if (!fr.ParseAttrs())
+  {
+    MessageBox(_T("Cannot parse attributes"));
+    return;
+  }
+
+  // find subdirectory
+
+  int dirs = m_filename.Find(_T('\\'), 0);
+  int dire = m_filename.Find(_T('\\'), dirs + 1);
+  while (dire != -1)
+  {
+    CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
+
+    std::optional<IndexEntry> ie =
+        fr.FindSubEntry(static_cast<const _TCHAR*>(pathname));
+    if (!ie)
     {
-      MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
+      MessageBox(_T("File not found\n"));
       return;
     }
 
-    // parse root directory
-
-    FileRecord fr(volume);
-    // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
-    // don't waste time and ram to parse unwanted attributes
-    fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-
-    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+    if (!fr.ParseFileRecord(ie->GetFileReference()))
     {
       MessageBox(_T("Cannot read root directory of volume"));
       return;
@@ -270,100 +265,81 @@ void CNtfsdumpDlg::OnOK()
 
     if (!fr.ParseAttrs())
     {
-      MessageBox(_T("Cannot parse attributes"));
-      return;
-    }
-
-    // find subdirectory
-
-    int dirs = m_filename.Find(_T('\\'), 0);
-    int dire = m_filename.Find(_T('\\'), dirs + 1);
-    while (dire != -1)
-    {
-      CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
-
-      std::optional<IndexEntry> ie = fr.FindSubEntry((const _TCHAR*)pathname);
-      if (ie)
+      if (fr.IsCompressed())
       {
-        if (!fr.ParseFileRecord(ie->GetFileReference()))
-        {
-          MessageBox(_T("Cannot read root directory of volume"));
-          return;
-        }
-
-        if (!fr.ParseAttrs())
-        {
-          if (fr.IsCompressed())
-            MessageBox(_T("Compressed directory not supported yet"));
-          else if (fr.IsEncrypted())
-            MessageBox(_T("Encrypted directory not supported yet"));
-          else
-            MessageBox(_T("Cannot parse directory attributes"));
-          return;
-        }
+        MessageBox(_T("Compressed directory not supported yet"));
+      }
+      else if (fr.IsEncrypted())
+      {
+        MessageBox(_T("Encrypted directory not supported yet"));
       }
       else
       {
-        MessageBox(_T("File not found\n"));
-        return;
+        MessageBox(_T("Cannot parse directory attributes"));
       }
-
-      dirs = dire;
-      dire = m_filename.Find(_T('\\'), dirs + 1);
+      return;
     }
 
-    // dump it !
+    dirs = dire;
+    dire = m_filename.Find(_T('\\'), dirs + 1);
+  }
 
-    CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
-    std::optional<IndexEntry> ie = fr.FindSubEntry((const _TCHAR*)filename);
-    if (ie)
+  // dump it !
+
+  CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
+  std::optional<IndexEntry> ie =
+      fr.FindSubEntry(static_cast<const _TCHAR*>(filename));
+  if (!ie)
+  {
+    MessageBox(_T("File not found\n"));
+    return;
+  }
+
+  if (!fr.ParseFileRecord(ie->GetFileReference()))
+  {
+    MessageBox(_T("Cannot read file"));
+    return;
+  }
+
+  // We only need DATA attribute and StdInfo
+  fr.SetAttrMask(Mask::DATA);
+  if (!fr.ParseAttrs())
+  {
+    if (fr.IsCompressed())
     {
-      if (!fr.ParseFileRecord(ie->GetFileReference()))
-      {
-        MessageBox(_T("Cannot read file"));
-        return;
-      }
-
-      // We only need DATA attribute and StdInfo
-      fr.SetAttrMask(Mask::DATA);
-      if (!fr.ParseAttrs())
-      {
-        if (fr.IsCompressed())
-          MessageBox(_T("Compressed file not supported yet"));
-        else if (fr.IsEncrypted())
-          MessageBox(_T("Encrypted file not supported yet"));
-        else
-          MessageBox(_T("Cannot parse file attributes"));
-        return;
-      }
-
-      BYTE* filebuf = new BYTE[16 * 1024];
-
-      // only pick the unnamed stream (file data)
-      const AttrBase* data = fr.FindStream(nullptr);
-      if (data)
-      {
-        // show only the first 16K
-        DWORD datalen = (DWORD)min(data->GetDataSize(), 16 * 1024);
-
-        ULONGLONG len = 0;
-        if (data->ReadData(0, filebuf, datalen, len) && len == datalen)
-        {
-          ShowData(m_dump, filebuf, datalen);
-          UpdateData(FALSE);
-        }
-        else
-        {
-          MessageBox(_T("Read data error"));
-          return;
-        }
-      }
-
-      delete filebuf;
+      MessageBox(_T("Compressed file not supported yet"));
+    }
+    else if (fr.IsEncrypted())
+    {
+      MessageBox(_T("Encrypted file not supported yet"));
     }
     else
     {
-      MessageBox(_T("File not found\n"));
+      MessageBox(_T("Cannot parse file attributes"));
+    }
+    return;
+  }
+
+  constexpr ULONGLONG BUFFER_SIZE = 16U * 1024U;
+  std::vector<BYTE> filebuf;
+  filebuf.resize(BUFFER_SIZE);
+
+  // only pick the unnamed stream (file data)
+  const AttrBase* data = fr.FindStream({});
+  if (data != nullptr)
+  {
+    // show only the first 16K
+    const ULONGLONG datalen = min(data->GetDataSize(), BUFFER_SIZE);
+
+    ULONGLONG len = 0;
+    if (data->ReadData(0, filebuf.data(), datalen, len) && len == datalen)
+    {
+      ShowData(m_dump, filebuf.data(), gsl::narrow<DWORD>(datalen));
+      UpdateData(FALSE);
+    }
+    else
+    {
+      MessageBox(_T("Read data error"));
       return;
     }
   }

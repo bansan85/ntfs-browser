@@ -1,17 +1,17 @@
-// list files and directories
+// list files and irectories
 // usage: ntfsdir "path"
 // eg. ntfsdir c:\windows
 // eg. ntfsdir "c:\program files\common files"
 
-#include <ntfs-browser/ntfs-volume.h>
+#include <cstdio>
+
 #include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 using namespace NtfsBrowser;
-
-#include <stdio.h>
 
 void usage()
 {
@@ -27,51 +27,72 @@ void usage()
 char getvolume(char** ppath)
 {
   char* p = *ppath;
-  char volname;
 
   // skip leading blank and "
   while (*p)
   {
     if (*p == ' ' || *p == '"')
+    {
       p++;
+    }
     else
+    {
       break;
+    }
   }
   if (*p == '\0')
-    return '\0';
-  else
   {
-    volname = *p;
-    p++;
+    return '\0';
   }
+
+  const char volname = *p;
+  p++;
 
   // skip blank
   while (*p)
   {
     if (*p == ' ')
+    {
       p++;
+    }
     else
+    {
       break;
+    }
   }
-  if (*p == '\0') return '\0';
+  if (*p == '\0')
+  {
+    return '\0';
+  }
 
-  if (*p != ':') return '\0';
+  if (*p != ':')
+  {
+    return '\0';
+  }
 
   // forward to '\' or string end
   while (*p)
   {
     if (*p != '\\')
+    {
       p++;
+    }
     else
+    {
       break;
+    }
   }
   // forward to not '\' and not ", or string end
   while (*p)
   {
     if (*p == '\\' || *p == '"')
+    {
       p++;
+    }
     else
+    {
       break;
+    }
   }
 
   *ppath = p;
@@ -93,34 +114,49 @@ std::wstring getpathname(std::wstring& ppath)
     len++;
     p++;
 
-    if (*p == '\\' || *p == '\"') break;
+    if (*p == '\\' || *p == '\"')
+    {
+      break;
+    }
   }
-  pathname[len] = '\0';
 
   // forward to not '\' and not ", or string end
   while (*p)
   {
     if (*p == '\\' || *p == '\"')
+    {
       p++;
+    }
     else
+    {
       break;
+    }
   }
 
   ppath = ppath.substr(p - ppath.c_str());
   return pathname;
 }
 
-int totalfiles = 0;
-int totaldirs = 0;
-
-void printfile(const IndexEntry& ie)
+struct Total
 {
+  int files = 0;
+  int dirs = 0;
+};
+
+void printfile(const IndexEntry& ie, void* context)
+{
+  Total& total = *static_cast<Total*>(context);
   // Hide system metafiles
   if (ie.GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::USER))
+  {
     return;
+  }
 
   // Ignore DOS alias file names
-  if (!ie.IsWin32Name()) return;
+  if (!ie.IsWin32Name())
+  {
+    return;
+  }
 
   FILETIME ft;
   std::wstring fn = ie.GetFilename();
@@ -128,24 +164,32 @@ void printfile(const IndexEntry& ie)
   {
     ie.GetFileTime(&ft, nullptr, nullptr);
     SYSTEMTIME st;
-    if (FileTimeToSystemTime(&ft, &st))
+    if (FileTimeToSystemTime(&ft, &st) == TRUE)
     {
-      printf("%d-%02d-%02d  %02d:%02d\t%s    ", st.wYear, st.wMonth, st.wDay,
+      printf("%u-%02u-%02u  %02u:%02u\t%s    ", st.wYear, st.wMonth, st.wDay,
              st.wHour, st.wMinute, ie.IsDirectory() ? "<DIR>" : "     ");
 
       if (!ie.IsDirectory())
+      {
         printf("%I64u\t", ie.GetFileSize());
+      }
       else
+      {
         printf("\t");
+      }
 
       printf("<%c%c%c>\t%ls\n", ie.IsReadOnly() ? 'R' : ' ',
              ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.c_str());
     }
 
     if (ie.IsDirectory())
-      totaldirs++;
+    {
+      total.dirs++;
+    }
     else
-      totalfiles++;
+    {
+      total.files++;
+    }
   }
 }
 
@@ -159,9 +203,8 @@ int main(int argc, char* argv[])
 
   char* path = argv[1];
 
-  char volname;
-  volname = getvolume(&path);
-  if (!volname)
+  const char volname = getvolume(&path);
+  if (volname == '\0')
   {
     usage();
     return -1;
@@ -175,7 +218,6 @@ int main(int argc, char* argv[])
   }
 
   // get root directory info
-
   FileRecord fr(volume);
 
   // we only need INDEX_ROOT and INDEX_ALLOCATION
@@ -196,13 +238,25 @@ int main(int argc, char* argv[])
 
   // find subdirectory
   std::wstring wpath(strlen(path) + 1, 0);
-  mbstowcs(wpath.data(), path, strlen(path) + 1);
+  size_t outSize = 0;
+  const errno_t err =
+      mbstowcs_s(&outSize, wpath.data(), strlen(path) + 1, path, strlen(path));
+
+  if (err != 0)
+  {
+    printf("Cannot parse requested path\n");
+    return -1;
+  }
   std::wstring pathname;
 
-  while (1)
+  while (true)
   {
     pathname = getpathname(wpath);
-    if (pathname.empty()) break;  // no subdirectories
+    // no subdirectories
+    if (pathname.empty())
+    {
+      break;
+    }
 
     std::optional<IndexEntry> ie = fr.FindSubEntry(pathname.c_str());
     if (ie)
@@ -235,9 +289,10 @@ int main(int argc, char* argv[])
 
   // list it !
 
-  fr.TraverseSubEntries(printfile);
+  Total total;
+  fr.TraverseSubEntries(printfile, &total);
 
-  printf("Files: %d, Directories: %d\n", totalfiles, totaldirs);
+  printf("Files: %d, Directories: %d\n", total.files, total.dirs);
 
   return 0;
 }
