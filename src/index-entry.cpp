@@ -16,14 +16,13 @@ IndexEntry::IndexEntry(std::optional<std::shared_ptr<BYTE[]>> sh_ptr,
     NTFS_TRACE("Points to sub-node\n");
   }
 
-  if (ie.stream_size != 0)
-  {
-    SetFilename(*reinterpret_cast<const Attr::Filename*>(&ie.stream));
-  }
-  else
+  if (ie.stream_size == 0)
   {
     NTFS_TRACE("No Filename stream found\n");
+    return;
   }
+
+  SetFilename(*reinterpret_cast<const Attr::Filename*>(&ie.stream));
 }
 
 ULONGLONG IndexEntry::GetFileReference() const noexcept
@@ -33,7 +32,8 @@ ULONGLONG IndexEntry::GetFileReference() const noexcept
 
 bool IndexEntry::IsSubNodePtr() const noexcept
 {
-  return static_cast<bool>(index_entry_.flags & Flag::IndexEntry::SUBNODE);
+  return (index_entry_.flags & Flag::IndexEntry::SUBNODE) ==
+         Flag::IndexEntry::SUBNODE;
 }
 
 ULONGLONG IndexEntry::GetSubNodeVCN() const noexcept

@@ -64,7 +64,6 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
         fr.attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
             std::move(veci));
       }
-      // Throw away frnew.AttrList entries to prevent free twice (fr will delete them)
       vec.clear();
     }
 

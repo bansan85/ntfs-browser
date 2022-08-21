@@ -68,6 +68,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
   {
     return;
   }
+
   const std::vector<std::unique_ptr<AttrBase>>& vec3 =
       mft_record_.getAttr(static_cast<DWORD>(AttrType::DATA));
   if (!vec3.empty())
@@ -196,12 +197,13 @@ ULONGLONG NtfsVolume::GetMFTAddr() const noexcept { return mft_addr_; }
 bool NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept
 {
   const DWORD atIdx = ATTR_INDEX(attrType);
-  if (atIdx < kAttrNums)
+  if (atIdx >= kAttrNums)
   {
-    attr_raw_call_back_[atIdx] = cb;
-    return true;
+    return false;
   }
-  return false;
+
+  attr_raw_call_back_[atIdx] = cb;
+  return true;
 }
 
 void NtfsVolume::AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,

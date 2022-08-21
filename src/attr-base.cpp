@@ -44,6 +44,7 @@ std::wstring AttrBase::GetAttrName() const
     NTFS_TRACE("Attribute is unnamed\n");
     return {};
   }
+
   std::wstring retval;
   retval.resize(attr_header_.name_length, '\0');
   const auto* namePtr = reinterpret_cast<const wchar_t*>(

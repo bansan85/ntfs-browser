@@ -274,37 +274,68 @@ void CNtfsattrDlg::OnOK()
 {
   CFileDialog fd(TRUE);
 
-  if (fd.DoModal() == IDOK)
+  if (fd.DoModal() != IDOK)
   {
-    UpdateData(TRUE);
-    m_filename = fd.GetPathName();
-    if (m_dir == TRUE)
+    return;
+  }
+
+  UpdateData(TRUE);
+  m_filename = fd.GetPathName();
+  if (m_dir == TRUE)
+  {
+    m_filename = m_filename.Left(m_filename.ReverseFind(_T('\\')));
+  }
+  UpdateData(FALSE);
+
+  m_dump.Empty();
+
+  // parse volume
+
+  const _TCHAR volname = m_filename.GetAt(0);
+
+  NtfsVolume volume(volname);
+  if (!volume.IsVolumeOK())
+  {
+    MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
+    return;
+  }
+
+  // parse root directory
+
+  FileRecord fr(volume);
+  // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
+  // don't waste time and ram to parse unwanted attributes
+  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+  {
+    MessageBox(_T("Cannot read root directory of volume"));
+    return;
+  }
+
+  if (!fr.ParseAttrs())
+  {
+    MessageBox(_T("Cannot parse attributes"));
+    return;
+  }
+
+  // find subdirectory
+
+  int dirs = m_filename.Find(_T('\\'), 0);
+  int dire = m_filename.Find(_T('\\'), dirs + 1);
+  while (dire != -1)
+  {
+    CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
+
+    std::optional<IndexEntry> ie =
+        fr.FindSubEntry(static_cast<const _TCHAR*>(pathname));
+    if (!ie)
     {
-      m_filename = m_filename.Left(m_filename.ReverseFind(_T('\\')));
-    }
-    UpdateData(FALSE);
-
-    m_dump.Empty();
-
-    // parse volume
-
-    const _TCHAR volname = m_filename.GetAt(0);
-
-    NtfsVolume volume(volname);
-    if (!volume.IsVolumeOK())
-    {
-      MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
+      MessageBox(_T("File not found\n"));
       return;
     }
 
-    // parse root directory
-
-    FileRecord fr(volume);
-    // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
-    // don't waste time and ram to parse unwanted attributes
-    fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-
-    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+    if (!fr.ParseFileRecord(ie->GetFileReference()))
     {
       MessageBox(_T("Cannot read root directory of volume"));
       return;
@@ -312,101 +343,68 @@ void CNtfsattrDlg::OnOK()
 
     if (!fr.ParseAttrs())
     {
-      MessageBox(_T("Cannot parse attributes"));
-      return;
-    }
-
-    // find subdirectory
-
-    int dirs = m_filename.Find(_T('\\'), 0);
-    int dire = m_filename.Find(_T('\\'), dirs + 1);
-    while (dire != -1)
-    {
-      CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
-
-      std::optional<IndexEntry> ie =
-          fr.FindSubEntry(static_cast<const _TCHAR*>(pathname));
-      if (ie)
+      if (fr.IsCompressed())
       {
-        if (!fr.ParseFileRecord(ie->GetFileReference()))
-        {
-          MessageBox(_T("Cannot read root directory of volume"));
-          return;
-        }
-
-        if (!fr.ParseAttrs())
-        {
-          if (fr.IsCompressed())
-          {
-            MessageBox(_T("Compressed directory not supported yet"));
-          }
-          else if (fr.IsEncrypted())
-          {
-            MessageBox(_T("Encrypted directory not supported yet"));
-          }
-          else
-          {
-            MessageBox(_T("Cannot parse directory attributes"));
-          }
-          return;
-        }
+        MessageBox(_T("Compressed directory not supported yet"));
+      }
+      else if (fr.IsEncrypted())
+      {
+        MessageBox(_T("Encrypted directory not supported yet"));
       }
       else
       {
-        MessageBox(_T("File not found\n"));
-        return;
+        MessageBox(_T("Cannot parse directory attributes"));
       }
-
-      dirs = dire;
-      dire = m_filename.Find(_T('\\'), dirs + 1);
+      return;
     }
 
-    // dump it !
+    dirs = dire;
+    dire = m_filename.Find(_T('\\'), dirs + 1);
+  }
 
-    CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
+  // dump it !
 
-    // root directory
-    if (filename.GetLength() == 2 && (filename.Find(_T(':'), 0) != -1))
+  CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
+
+  // root directory
+  if (filename.GetLength() == 2 && (filename.Find(_T(':'), 0) != -1))
+  {
+    filename = _T('.');
+  }
+
+  std::optional<IndexEntry> ie =
+      fr.FindSubEntry(static_cast<const _TCHAR*>(filename));
+  if (!ie)
+  {
+    MessageBox(_T("File not found\n"));
+    return;
+  }
+
+  if (!fr.ParseFileRecord(ie->GetFileReference()))
+  {
+    MessageBox(_T("Cannot read file"));
+    return;
+  }
+
+  // parse all attributes
+  fr.SetAttrMask(MASK_ALL);
+  if (!fr.ParseAttrs())
+  {
+    if (fr.IsCompressed())
     {
-      filename = _T('.');
+      MessageBox(_T("Compressed file not supported yet"));
     }
-
-    std::optional<IndexEntry> ie =
-        fr.FindSubEntry(static_cast<const _TCHAR*>(filename));
-    if (ie)
+    else if (fr.IsEncrypted())
     {
-      if (!fr.ParseFileRecord(ie->GetFileReference()))
-      {
-        MessageBox(_T("Cannot read file"));
-        return;
-      }
-
-      // parse all attributes
-      fr.SetAttrMask(MASK_ALL);
-      if (!fr.ParseAttrs())
-      {
-        if (fr.IsCompressed())
-        {
-          MessageBox(_T("Compressed file not supported yet"));
-        }
-        else if (fr.IsEncrypted())
-        {
-          MessageBox(_T("Encrypted file not supported yet"));
-        }
-        else
-        {
-          MessageBox(_T("Cannot parse file attributes"));
-        }
-        return;
-      }
-
-      fr.TraverseAttrs(printattr, &m_dump);
-      UpdateData(FALSE);
+      MessageBox(_T("Encrypted file not supported yet"));
     }
     else
     {
-      MessageBox(_T("File not found\n"));
-      return;
+      MessageBox(_T("Cannot parse file attributes"));
     }
+    return;
   }
+
+  fr.TraverseAttrs(printattr, &m_dump);
+  UpdateData(FALSE);
 }

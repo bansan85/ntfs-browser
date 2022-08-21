@@ -83,44 +83,40 @@ bool AttrNonResident::ParseDataRun()
 
   while (*data_run != 0)
   {
-    if (PickData(data_run, length, lcn_offset))
-    {
-      lcn += lcn_offset;
-      if (lcn < 0)
-      {
-        NTFS_TRACE("DataRun decode error 2\n");
-        return false;
-      }
-
-      NTFS_TRACE2("Data length = %I64d clusters, LCN = %I64d", length, lcn);
-      NTFS_TRACE(lcn_offset == 0 ? ", Sparse Data\n" : "\n");
-
-      // Store LCN, Data size (clusters) into list
-      Data::RunEntry dr;
-      dr.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : lcn;
-      dr.clusters = length;
-      dr.start_vcn = vcn;
-      vcn += length;
-      dr.last_vcn = vcn - 1;
-
-      if (dr.last_vcn <= (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn))
-      {
-        data_run_list_.push_back(dr);
-      }
-      else
-      {
-        NTFS_TRACE("DataRun decode error: VCN exceeds bound\n");
-
-        // Remove entries
-        data_run_list_.clear();
-
-        return false;
-      }
-    }
-    else
+    if (!PickData(data_run, length, lcn_offset))
     {
       break;
     }
+
+    lcn += lcn_offset;
+    if (lcn < 0)
+    {
+      NTFS_TRACE("DataRun decode error 2\n");
+      return false;
+    }
+
+    NTFS_TRACE2("Data length = %I64d clusters, LCN = %I64d", length, lcn);
+    NTFS_TRACE(lcn_offset == 0 ? ", Sparse Data\n" : "\n");
+
+    // Store LCN, Data size (clusters) into list
+    Data::RunEntry dr;
+    dr.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : lcn;
+    dr.clusters = length;
+    dr.start_vcn = vcn;
+    vcn += length;
+    dr.last_vcn = vcn - 1;
+
+    if (dr.last_vcn > (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn))
+    {
+      NTFS_TRACE("DataRun decode error: VCN exceeds bound\n");
+
+      // Remove entries
+      data_run_list_.clear();
+
+      return false;
+    }
+
+    data_run_list_.push_back(dr);
   }
 
   return true;
@@ -152,22 +148,20 @@ bool AttrNonResident::ReadClusters(void* buf, ULONGLONG clusters,
   if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
   {
     NTFS_TRACE1("Cannot locate cluster with LCN %I64d\n", lcn);
-  }
-  else
-  {
-    if (ReadFile(GetHandle(), buf,
-                 gsl::narrow<DWORD>(clusters * GetClusterSize()), &len,
-                 nullptr) != 0 &&
-        len == clusters * GetClusterSize())
-    {
-      NTFS_TRACE2("Successfully read %u clusters from LCN %I64d\n", clusters,
-                  lcn);
-      return true;
-    }
-    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
+    return false;
   }
 
-  return false;
+  if (ReadFile(GetHandle(), buf,
+               gsl::narrow<DWORD>(clusters * GetClusterSize()), &len,
+               nullptr) == FALSE ||
+      len != clusters * GetClusterSize())
+  {
+    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
+    return false;
+  }
+
+  NTFS_TRACE2("Successfully read %u clusters from LCN %I64d\n", clusters, lcn);
+  return true;
 }
 
 // Read Data, cluster based
@@ -186,8 +180,7 @@ bool AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
   BYTE* buf = static_cast<BYTE*>(bufv);
 
   // Verify if clusters exceeds DataRun bounds
-  if (vcn + clusters >
-      (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn + 1))
+  if (vcn + clusters > attr_header_nr_.last_vcn - attr_header_nr_.start_vcn + 1)
   {
     NTFS_TRACE("Cluster exceeds DataRun bounds\n");
     return false;
@@ -210,17 +203,15 @@ bool AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
       // Fragmented data, we must go on
       const ULONGLONG clustersToRead = clusters > vcns ? vcns : clusters;
 
-      if (ReadClusters(buf, clustersToRead, dr.lcn, vcn - dr.start_vcn))
-      {
-        buf += static_cast<ULONGLONG>(clustersToRead) * GetClusterSize();
-        clusters -= clustersToRead;
-        actural += clustersToRead;
-        vcn += clustersToRead;
-      }
-      else
+      if (!ReadClusters(buf, clustersToRead, dr.lcn, vcn - dr.start_vcn))
       {
         break;
       }
+
+      buf += static_cast<ULONGLONG>(clustersToRead) * GetClusterSize();
+      clusters -= clustersToRead;
+      actural += clustersToRead;
+      vcn += clustersToRead;
 
       if (clusters == 0)
       {
@@ -284,21 +275,19 @@ bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
   {
     ULONGLONG len = 0;
     // First cluster, Unaligned
-    if (ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(),
-                            GetClusterSize(), len) &&
-        len == GetClusterSize())
-    {
-      len = (start_bytes < bufLen) ? start_bytes : bufLen;
-      memcpy(buf, &unaligned_buf[GetClusterSize() - start_bytes], len);
-      buf += len;
-      bufLen -= len;
-      actural += len;
-      start_vcn++;
-    }
-    else
+    if (!ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(),
+                             GetClusterSize(), len) ||
+        len != GetClusterSize())
     {
       return false;
     }
+
+    len = (start_bytes < bufLen) ? start_bytes : bufLen;
+    memcpy(buf, &unaligned_buf[GetClusterSize() - start_bytes], len);
+    buf += len;
+    bufLen -= len;
+    actural += len;
+    start_vcn++;
   }
   if (bufLen == 0)
   {
@@ -311,38 +300,37 @@ bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
     // Aligned clusters
     ULONGLONG alignedSize = alignedClusters * GetClusterSize();
     ULONGLONG len = 0;
-    if (ReadVirtualClusters(start_vcn, alignedClusters, buf, alignedSize,
-                            len) &&
-        len == alignedSize)
-    {
-      start_vcn += alignedClusters;
-      buf += alignedSize;
-      bufLen %= GetClusterSize();
-      actural += len;
-
-      if (bufLen == 0)
-      {
-        return true;
-      }
-    }
-    else
+    if (!ReadVirtualClusters(start_vcn, alignedClusters, buf, alignedSize,
+                             len) ||
+        len != alignedSize)
     {
       return false;
+    }
+
+    start_vcn += alignedClusters;
+    buf += alignedSize;
+    bufLen %= GetClusterSize();
+    actural += len;
+
+    if (bufLen == 0)
+    {
+      return true;
     }
   }
 
   // Last cluster, Unaligned
   ULONGLONG len = 0;
-  if (ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(), GetClusterSize(),
-                          len) &&
-      len == GetClusterSize())
+  if (!ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(), GetClusterSize(),
+                           len) ||
+      len != GetClusterSize())
   {
-    memcpy(buf, unaligned_buf.data(), bufLen);
-    actural += bufLen;
-
-    return true;
+    return false;
   }
-  return false;
+
+  memcpy(buf, unaligned_buf.data(), bufLen);
+  actural += bufLen;
+
+  return true;
 }
 
 }  // namespace NtfsBrowser

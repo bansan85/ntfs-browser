@@ -31,6 +31,7 @@ AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
         ibTotalSize, GetIndexBlockSize());
     return;
   }
+
   index_block_count_ = ibTotalSize / GetIndexBlockSize();
 }
 
@@ -53,6 +54,7 @@ bool AttrIndexAlloc::PatchUS(WORD* sector, DWORD sectors, WORD usn,
     *sector = usarray[i];
     sector++;
   }
+
   return true;
 }
 
@@ -66,7 +68,8 @@ ULONGLONG AttrIndexAlloc::GetIndexBlockCount() const noexcept
 // ibClass holds the parsed Index Entries
 bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 {
-  if (vcn >= index_block_count_)  // Bounds check
+  // Bounds check
+  if (vcn >= index_block_count_)
   {
     return false;
   }
@@ -82,51 +85,51 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 
   // Read one Index Block
   ULONGLONG len = 0;
-  if (ReadData(vcn * GetIndexBlockSize(), ibBuf, GetIndexBlockSize(), len) &&
-      len == GetIndexBlockSize())
+  if (!ReadData(vcn * GetIndexBlockSize(), ibBuf, GetIndexBlockSize(), len) ||
+      len != GetIndexBlockSize())
   {
-    if (ibBuf->magic != kIndexBlockMagic)
-    {
-      NTFS_TRACE("Index Block parse error: Magic mismatch\n");
-      return false;
-    }
-
-    // Patch US
-    const auto* usnaddr = reinterpret_cast<const WORD*>(
-        reinterpret_cast<const BYTE*>(ibBuf) + ibBuf->offset_of_us);
-    const WORD usn = *usnaddr;
-    const WORD* usarray = usnaddr + 1;
-    if (!PatchUS(reinterpret_cast<WORD*>(ibBuf), sectors, usn, usarray))
-    {
-      NTFS_TRACE("Index Block parse error: Update Sequence Number\n");
-      return false;
-    }
-
-    const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
-        reinterpret_cast<const BYTE*>(&(ibBuf->entry_offset)) +
-        ibBuf->entry_offset);
-
-    DWORD ieTotal = ie->size;
-
-    while (ieTotal <= ibBuf->total_entry_size)
-    {
-      ibClass.emplace_back(ib_sh_ptr, *ie);
-
-      if (static_cast<bool>(ie->flags & Flag::IndexEntry::LAST))
-      {
-        NTFS_TRACE("Last Index Entry\n");
-        break;
-      }
-
-      ie = reinterpret_cast<const Data::IndexEntry*>(
-          reinterpret_cast<const BYTE*>(ie) + ie->size);  // Pick next
-      ieTotal += ie->size;
-    }
-
-    return true;
+    return false;
   }
 
-  return false;
+  if (ibBuf->magic != kIndexBlockMagic)
+  {
+    NTFS_TRACE("Index Block parse error: Magic mismatch\n");
+    return false;
+  }
+
+  // Patch US
+  const auto* usnaddr = reinterpret_cast<const WORD*>(
+      reinterpret_cast<const BYTE*>(ibBuf) + ibBuf->offset_of_us);
+  const WORD usn = *usnaddr;
+  const WORD* usarray = usnaddr + 1;
+  if (!PatchUS(reinterpret_cast<WORD*>(ibBuf), sectors, usn, usarray))
+  {
+    NTFS_TRACE("Index Block parse error: Update Sequence Number\n");
+    return false;
+  }
+
+  const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
+      reinterpret_cast<const BYTE*>(&(ibBuf->entry_offset)) +
+      ibBuf->entry_offset);
+
+  DWORD ieTotal = ie->size;
+
+  while (ieTotal <= ibBuf->total_entry_size)
+  {
+    ibClass.emplace_back(ib_sh_ptr, *ie);
+
+    if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
+    {
+      NTFS_TRACE("Last Index Entry\n");
+      break;
+    }
+
+    ie = reinterpret_cast<const Data::IndexEntry*>(
+        reinterpret_cast<const BYTE*>(ie) + ie->size);  // Pick next
+    ieTotal += ie->size;
+  }
+
+  return true;
 }
 
 }  // namespace NtfsBrowser

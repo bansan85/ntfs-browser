@@ -18,6 +18,7 @@ AttrBitmap<TYPE_RESIDENT>::AttrBitmap(const AttrHeaderCommon& ahc,
     bitmap_size_ = 0;
     return;
   }
+
   bitmap_size_ = this->GetDataSize();
 
   if (this->IsNonResident())
@@ -34,11 +35,10 @@ AttrBitmap<TYPE_RESIDENT>::AttrBitmap(const AttrHeaderCommon& ahc,
   {
     bitmap_buf_.clear();
     NTFS_TRACE("Read Resident Bitmap data failed\n");
+    return;
   }
-  else
-  {
-    NTFS_TRACE1("%u bytes of resident Bitmap data read\n", len);
-  }
+
+  NTFS_TRACE1("%u bytes of resident Bitmap data read\n", len);
 }
 
 template <class TYPE_RESIDENT>
@@ -61,16 +61,15 @@ bool AttrBitmap<TYPE_RESIDENT>::IsClusterFree(ULONGLONG cluster)
     if (!current_cluster_ || *current_cluster_ != clusterOffset)
     {
       ULONGLONG len = 0;
-      if (this->ReadData(clusterOffset, bitmap_buf_.data(), clusterSize, len) &&
-          len == clusterSize)
-      {
-        current_cluster_ = clusterOffset;
-      }
-      else
+      if (!this->ReadData(clusterOffset, bitmap_buf_.data(), clusterSize,
+                          len) ||
+          len != clusterSize)
       {
         current_cluster_ = {};
         return false;
       }
+
+      current_cluster_ = clusterOffset;
     }
   }
 

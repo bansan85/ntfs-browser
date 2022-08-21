@@ -332,15 +332,13 @@ void CNtfsdumpDlg::OnOK()
     const ULONGLONG datalen = min(data->GetDataSize(), BUFFER_SIZE);
 
     ULONGLONG len = 0;
-    if (data->ReadData(0, filebuf.data(), datalen, len) && len == datalen)
-    {
-      ShowData(m_dump, filebuf.data(), gsl::narrow<DWORD>(datalen));
-      UpdateData(FALSE);
-    }
-    else
+    if (!data->ReadData(0, filebuf.data(), datalen, len) || len != datalen)
     {
       MessageBox(_T("Read data error"));
       return;
     }
+
+    ShowData(m_dump, filebuf.data(), gsl::narrow<DWORD>(datalen));
+    UpdateData(FALSE);
   }
 }

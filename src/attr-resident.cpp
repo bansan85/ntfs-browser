@@ -54,14 +54,7 @@ bool AttrResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
     actural = bufLen;
   }
 
-#ifdef _MSC_VER
-  #pragma warning(push)
-  #pragma warning(disable : 26446)
-#endif
   memcpy(bufv, &body_[offset], actural);
-#ifdef _MSC_VER
-  #pragma warning(pop)
-#endif
 
   return true;
 }

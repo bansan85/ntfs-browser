@@ -160,36 +160,38 @@ void printfile(const IndexEntry& ie, void* context)
 
   FILETIME ft;
   std::wstring fn = ie.GetFilename();
-  if (!fn.empty())
+  if (fn.empty())
   {
-    ie.GetFileTime(&ft, nullptr, nullptr);
-    SYSTEMTIME st;
-    if (FileTimeToSystemTime(&ft, &st) == TRUE)
+    return;
+  }
+
+  ie.GetFileTime(&ft, nullptr, nullptr);
+  SYSTEMTIME st;
+  if (FileTimeToSystemTime(&ft, &st) == TRUE)
+  {
+    printf("%u-%02u-%02u  %02u:%02u\t%s    ", st.wYear, st.wMonth, st.wDay,
+           st.wHour, st.wMinute, ie.IsDirectory() ? "<DIR>" : "     ");
+
+    if (!ie.IsDirectory())
     {
-      printf("%u-%02u-%02u  %02u:%02u\t%s    ", st.wYear, st.wMonth, st.wDay,
-             st.wHour, st.wMinute, ie.IsDirectory() ? "<DIR>" : "     ");
-
-      if (!ie.IsDirectory())
-      {
-        printf("%I64u\t", ie.GetFileSize());
-      }
-      else
-      {
-        printf("\t");
-      }
-
-      printf("<%c%c%c>\t%ls\n", ie.IsReadOnly() ? 'R' : ' ',
-             ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.c_str());
-    }
-
-    if (ie.IsDirectory())
-    {
-      total.dirs++;
+      printf("%I64u\t", ie.GetFileSize());
     }
     else
     {
-      total.files++;
+      printf("\t");
     }
+
+    printf("<%c%c%c>\t%ls\n", ie.IsReadOnly() ? 'R' : ' ',
+           ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.c_str());
+  }
+
+  if (ie.IsDirectory())
+  {
+    total.dirs++;
+  }
+  else
+  {
+    total.files++;
   }
 }
 
@@ -259,30 +261,26 @@ int main(int argc, char* argv[])
     }
 
     std::optional<IndexEntry> ie = fr.FindSubEntry(pathname.c_str());
-    if (ie)
-    {
-      if (ie->IsDirectory())
-      {
-        if (!fr.ParseFileRecord(ie->GetFileReference()))
-        {
-          printf("Cannot read directory %ls\n", pathname.c_str());
-          return -1;
-        }
-        if (!fr.ParseAttrs())
-        {
-          printf("Cannot parse attributes\n");
-          return -1;
-        }
-      }
-      else
-      {
-        printf("%ls is not a directory\n", pathname.c_str());
-        return -1;
-      }
-    }
-    else
+    if (!ie)
     {
       printf("Cannot find directory %ls\n", pathname.c_str());
+      return -1;
+    }
+
+    if (!ie->IsDirectory())
+    {
+      printf("%ls is not a directory\n", pathname.c_str());
+      return -1;
+    }
+
+    if (!fr.ParseFileRecord(ie->GetFileReference()))
+    {
+      printf("Cannot read directory %ls\n", pathname.c_str());
+      return -1;
+    }
+    if (!fr.ParseAttrs())
+    {
+      printf("Cannot parse attributes\n");
       return -1;
     }
   }

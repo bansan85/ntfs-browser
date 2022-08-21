@@ -183,6 +183,7 @@ void CNtfsundelDlg::OnSearch()
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
     return;
   }
+
   TRACE1("%I64u File Records total\n", volume.GetRecordsCount());
 
   // Begin searching
@@ -333,79 +334,80 @@ void CNtfsundelDlg::OnRecover()
 
   // Save as
   CFileDialog savedlg(FALSE, nullptr, static_cast<const _TCHAR*>(fn));
-  if (savedlg.DoModal() == IDOK)
+  if (savedlg.DoModal() != IDOK)
   {
-    CString path = savedlg.GetPathName();
-
-    if ((path.GetAt(0) == volname) &&
-        (MessageBox(_T("You should choose a different drive, do you want to ")
-                    _T("continue anyway ?"),
-                    nullptr, MB_OKCANCEL) == IDCANCEL))
-    {
-      return;
-    }
-
-    HANDLE hf = CreateFile(static_cast<const _TCHAR*>(path),
-                           GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hf == INVALID_HANDLE_VALUE)
-    {
-      MessageBox(_T("File creation failed"));
-      return;
-    }
-
-    // Save to disk
-    // Unnamed Data attribute contains the file data
-    const AttrBase* data = fr.FindStream({});
-    if (data == nullptr)
-    {
-      return;
-    }
-
-    const ULONGLONG datalen = data->GetDataSize();
-    ULONGLONG remain = datalen;
-
-    // Check files with huge size (maybe something is error)
-    constexpr ULONGLONG SIZE_CHECK = 100 * 1024 * 1024U;
-    if (datalen > SIZE_CHECK)
-    {
-      if (MessageBox(
-              _T("File size exceeds 100M, do you want to continue anyway ?"),
-              nullptr, MB_OKCANCEL) == IDCANCEL)
-      {
-        return;
-      }
-    }
-
-    // Read 64K once
-    constexpr DWORD BUFSIZE = 64 * 1024U;
-    for (ULONGLONG i = 0; i < datalen; i += BUFSIZE)
-    {
-      std::vector<BYTE> vec;
-      vec.resize(BUFSIZE, '\0');
-
-      ULONGLONG len = 0;
-      if (data->ReadData(i, &vec[0], BUFSIZE, len) &&
-          (len == BUFSIZE || len == remain))
-      {
-        // Save data
-        DWORD l = 0;
-        WriteFile(hf, &vec[0], static_cast<DWORD>(len), &l, NULL);
-        remain -= len;
-      }
-      else
-      {
-        MessageBox(_T("Read data error"));
-        return;
-      }
-    }
-
-    CloseHandle(hf);
-
-    CString s;
-    s.Format(_T("%I64u bytes recovered"), datalen);
-    MessageBox(s);
+    return;
   }
+
+  CString path = savedlg.GetPathName();
+
+  if ((path.GetAt(0) == volname) &&
+      (MessageBox(_T("You should choose a different drive, do you want to ")
+                  _T("continue anyway ?"),
+                  nullptr, MB_OKCANCEL) == IDCANCEL))
+  {
+    return;
+  }
+
+  using HandlePtr = std::unique_ptr<std::remove_pointer<HANDLE>::type,
+                                    decltype(&::CloseHandle)>;
+  HandlePtr hf = HandlePtr(
+      CreateFile(static_cast<const _TCHAR*>(path), GENERIC_READ | GENERIC_WRITE,
+                 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
+      &CloseHandle);
+  if (hf.get() == INVALID_HANDLE_VALUE)
+  {
+    MessageBox(_T("File creation failed"));
+    return;
+  }
+
+  // Save to disk
+  // Unnamed Data attribute contains the file data
+  const AttrBase* data = fr.FindStream({});
+  if (data == nullptr)
+  {
+    return;
+  }
+
+  const ULONGLONG datalen = data->GetDataSize();
+  ULONGLONG remain = datalen;
+
+  // Check files with huge size (maybe something is error)
+  constexpr ULONGLONG SIZE_CHECK = 100 * 1024 * 1024U;
+  if (datalen > SIZE_CHECK)
+  {
+    if (MessageBox(
+            _T("File size exceeds 100M, do you want to continue anyway ?"),
+            nullptr, MB_OKCANCEL) == IDCANCEL)
+    {
+      return;
+    }
+  }
+
+  // Read 64K once
+  constexpr DWORD BUFSIZE = 64 * 1024U;
+  for (ULONGLONG i = 0; i < datalen; i += BUFSIZE)
+  {
+    std::vector<BYTE> vec;
+    vec.resize(BUFSIZE, '\0');
+
+    ULONGLONG len = 0;
+    if (!data->ReadData(i, &vec[0], BUFSIZE, len) ||
+        (len != BUFSIZE && len != remain))
+    {
+      MessageBox(_T("Read data error"));
+      return;
+    }
+
+    // Save data
+    DWORD l = 0;
+    WriteFile(hf.get(), &vec[0], static_cast<DWORD>(len), &l, nullptr);
+    remain -= len;
+  }
+
+  CString s;
+  s.Format(_T("%I64u bytes recovered"), datalen);
+  MessageBox(s);
 }
 
 void CNtfsundelDlg::OnSelchangeDriver() { m_files.DeleteAllItems(); }

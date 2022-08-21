@@ -21,36 +21,43 @@ void AttrFileName::GetFileTime(FILETIME* /*writeTm*/, FILETIME* /*createTm*/,
 {
   assert(false);
 }
+
 Flag::Filename AttrFileName::GetFilePermission() const noexcept
 {
   assert(false);
   return Flag::Filename::NONE;
 }
+
 bool AttrFileName::IsReadOnly() const noexcept
 {
   assert(false);
   return false;
 }
+
 bool AttrFileName::IsHidden() const noexcept
 {
   assert(false);
   return false;
 }
+
 bool AttrFileName::IsSystem() const noexcept
 {
   assert(false);
   return false;
 }
+
 bool AttrFileName::IsCompressed() const noexcept
 {
   assert(false);
   return false;
 }
+
 bool AttrFileName::IsEncrypted() const noexcept
 {
   assert(false);
   return false;
 }
+
 bool AttrFileName::IsSparse() const noexcept
 {
   assert(false);

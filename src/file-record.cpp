@@ -37,7 +37,6 @@ FileRecord::~FileRecord() { ClearAttrs(); }
 
 const NtfsVolume& FileRecord::GetVolume() const noexcept { return volume_; }
 
-// Free all CAttr_xxx
 void FileRecord::ClearAttrs() noexcept
 {
   for (std::vector<std::unique_ptr<AttrBase>>& arr : attr_list_)
@@ -129,32 +128,34 @@ std::unique_ptr<AttrBase> FileRecord::AllocAttr(const AttrHeaderCommon& ahc,
 bool FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 {
   const DWORD attrIndex = ATTR_INDEX(ahc.type);
-  if (attrIndex < kAttrNums)
+  if (attrIndex >= kAttrNums)
   {
-    bool bDiscard = false;
-    UserCallBack(attrIndex, ahc, bDiscard);
+    NTFS_TRACE1("Invalid Attribute Type: 0x%04X\n", ahc.type);
+    return false;
+  }
 
-    if (!bDiscard)
-    {
-      bool bUnhandled = false;
-      std::unique_ptr<AttrBase> attr = AllocAttr(ahc, bUnhandled);
-      if (attr)
-      {
-        if (bUnhandled)
-        {
-          NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.type);
-        }
-        attr_list_[attrIndex].push_back(std::move(attr));
-        return true;
-      }
-      NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
-      return false;
-    }
+  bool bDiscard = false;
+  UserCallBack(attrIndex, ahc, bDiscard);
+
+  if (bDiscard)
+  {
     NTFS_TRACE1("User Callback has processed this Attribute: 0x%04X\n",
                 ahc.type);
     return true;
   }
-  NTFS_TRACE1("Invalid Attribute Type: 0x%04X\n", ahc.type);
+
+  bool bUnhandled = false;
+  std::unique_ptr<AttrBase> attr = AllocAttr(ahc, bUnhandled);
+  if (attr)
+  {
+    if (bUnhandled)
+    {
+      NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.type);
+    }
+    attr_list_[attrIndex].push_back(std::move(attr));
+    return true;
+  }
+  NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
   return false;
 }
 
@@ -179,30 +180,34 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     {
       return {};
     }
+
     if (DWORD len = 0;
         ReadFile(volume_.hvolume_.get(), buffer.data(),
-                 volume_.GetFileRecordSize(), &len, nullptr) != 0 &&
-        len == volume_.GetFileRecordSize())
+                 volume_.GetFileRecordSize(), &len, nullptr) == FALSE ||
+        len != volume_.GetFileRecordSize())
     {
-      std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-          buffer.data(), volume_.GetFileRecordSize(), volume_.GetSectorSize());
-      return fr;
+      return {};
     }
-    return {};
-  }
-  // May be fragmented $MFT
-  const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
 
-  if (ULONGLONG len = 0;
-      volume_.mft_data_->ReadData(frAddr, buffer.data(),
-                                  volume_.GetFileRecordSize(), len) &&
-      len == volume_.GetFileRecordSize())
-  {
     std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
         buffer.data(), volume_.GetFileRecordSize(), volume_.GetSectorSize());
     return fr;
   }
-  return {};
+
+  // May be fragmented $MFT
+  const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
+
+  if (ULONGLONG len = 0;
+      !volume_.mft_data_->ReadData(frAddr, buffer.data(),
+                                   volume_.GetFileRecordSize(), len) ||
+      len != volume_.GetFileRecordSize())
+  {
+    return {};
+  }
+
+  std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
+      buffer.data(), volume_.GetFileRecordSize(), volume_.GetSectorSize());
+  return fr;
 }
 
 // Read File Record, verify and patch the US (update sequence)
@@ -221,29 +226,28 @@ bool FileRecord::ParseFileRecord(ULONGLONG fileRef)
     NTFS_TRACE1("Cannot read file record %I64u\n", fileRef);
 
     file_reference_ = {};
+
+    return false;
   }
-  else
+
+  file_reference_ = fileRef;
+
+  if (fr->magic != kFileRecordMagic)
   {
-    file_reference_ = fileRef;
-
-    if (fr->magic == kFileRecordMagic)
-    {
-      if (fr->PatchUS())
-      {
-        NTFS_TRACE1("File Record %I64u Found\n", fileRef);
-        file_record_ = std::move(fr);
-
-        return true;
-      }
-      NTFS_TRACE("Update Sequence Number error\n");
-    }
-    else
-    {
-      NTFS_TRACE("Invalid file record\n");
-    }
+    NTFS_TRACE("Invalid file record\n");
+    return false;
   }
 
-  return false;
+  if (!fr->PatchUS())
+  {
+    NTFS_TRACE("Update Sequence Number error\n");
+    return false;
+  }
+
+  NTFS_TRACE1("File Record %I64u Found\n", fileRef);
+  file_record_ = std::move(fr);
+
+  return true;
 }
 
 // Visit IndexBlocks recursivly to find a specific Filename
@@ -264,6 +268,7 @@ std::optional<IndexEntry>
   {
     return {};
   }
+
   for (const IndexEntry& ie : ib)
   {
     if (ie.HasName())
@@ -321,21 +326,23 @@ void FileRecord::TraverseSubNode(const ULONGLONG& vcn,
   }
 
   IndexBlock ib;
-  if (static_cast<AttrIndexAlloc*>(vec.front().get())->ParseIndexBlock(vcn, ib))
-
+  if (!static_cast<AttrIndexAlloc*>(vec.front().get())
+           ->ParseIndexBlock(vcn, ib))
   {
-    for (const IndexEntry& ie : ib)
-    {
-      if (ie.IsSubNodePtr())
-      {
-        // recursive call
-        TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context);
-      }
+    return;
+  }
 
-      if (ie.HasName())
-      {
-        seCallBack(ie, context);
-      }
+  for (const IndexEntry& ie : ib)
+  {
+    if (ie.IsSubNodePtr())
+    {
+      // recursive call
+      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context);
+    }
+
+    if (ie.HasName())
+    {
+      seCallBack(ie, context);
     }
   }
 }
@@ -386,20 +393,21 @@ bool FileRecord::ParseAttrs()
 bool FileRecord::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept
 {
   const DWORD atIdx = ATTR_INDEX(attrType);
-  if (atIdx < kAttrNums)
+  if (atIdx >= kAttrNums)
   {
-    attr_raw_call_back_[atIdx] = cb;
-    return true;
+    return false;
   }
-  return false;
+
+  attr_raw_call_back_[atIdx] = cb;
+  return true;
 }
 
 // Clear all Attribute CallBack routines
 void FileRecord::ClearAttrRawCB() noexcept
 {
-  for (int i = 0; i < kAttrNums; i++)
+  for (AttrRawCallback& cb : attr_raw_call_back_)
   {
-    attr_raw_call_back_[i] = nullptr;
+    cb = nullptr;
   }
 }
 
@@ -441,11 +449,12 @@ const std::vector<std::unique_ptr<AttrBase>>&
   static std::vector<std::unique_ptr<AttrBase>> dummy{};
   const DWORD attrIdx = ATTR_INDEX(attrType);
 
-  if (attrIdx < kAttrNums)
+  if (attrIdx >= kAttrNums)
   {
-    return attr_list_[attrIdx];
+    return dummy;
   }
-  return dummy;
+
+  return attr_list_[attrIdx];
 }
 
 std::vector<std::unique_ptr<AttrBase>>&
@@ -454,11 +463,12 @@ std::vector<std::unique_ptr<AttrBase>>&
   static std::vector<std::unique_ptr<AttrBase>> dummy{};
   const DWORD attrIdx = ATTR_INDEX(attrType);
 
-  if (attrIdx < kAttrNums)
+  if (attrIdx >= kAttrNums)
   {
-    return attr_list_[attrIdx];
+    return dummy;
   }
-  return dummy;
+
+  return attr_list_[attrIdx];
 }
 
 // Get File Name (First Win32 name)
@@ -500,24 +510,23 @@ void FileRecord::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
   {
     reinterpret_cast<const AttrStdInfo*>(vec.front().get())
         ->GetFileTime(writeTm, createTm, accessTm);
+    return;
   }
-  else
+
+  if (writeTm != nullptr)
   {
-    if (writeTm != nullptr)
-    {
-      writeTm->dwHighDateTime = 0;
-      writeTm->dwLowDateTime = 0;
-    }
-    if (createTm != nullptr)
-    {
-      createTm->dwHighDateTime = 0;
-      createTm->dwLowDateTime = 0;
-    }
-    if (accessTm != nullptr)
-    {
-      accessTm->dwHighDateTime = 0;
-      accessTm->dwLowDateTime = 0;
-    }
+    writeTm->dwHighDateTime = 0;
+    writeTm->dwLowDateTime = 0;
+  }
+  if (createTm != nullptr)
+  {
+    createTm->dwHighDateTime = 0;
+    createTm->dwLowDateTime = 0;
+  }
+  if (accessTm != nullptr)
+  {
+    accessTm->dwHighDateTime = 0;
+    accessTm->dwLowDateTime = 0;
   }
 }
 

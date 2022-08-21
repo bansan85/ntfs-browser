@@ -15,14 +15,13 @@ AttrIndexRoot::AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr)
 {
   NTFS_TRACE("Attribute: Index Root\n");
 
-  if (IsFileName())
-  {
-    ParseIndexEntries();
-  }
-  else
+  if (!IsFileName())
   {
     NTFS_TRACE("Index View not supported\n");
+    return;
   }
+
+  ParseIndexEntries();
 }
 
 AttrIndexRoot::~AttrIndexRoot() { NTFS_TRACE("AttrIndexRoot deleted\n"); }
@@ -40,7 +39,7 @@ void AttrIndexRoot::ParseIndexEntries()
   {
     emplace_back(std::nullopt, *ie);
 
-    if (static_cast<bool>(ie->flags & Flag::IndexEntry::LAST))
+    if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {
       NTFS_TRACE("Last Index Entry\n");
       break;

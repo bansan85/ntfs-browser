@@ -10,22 +10,21 @@ FileRecordHeader::FileRecordHeader(BYTE* buffer, size_t fileRecordSize,
   _ASSERT(1024 == fileRecordSize);
   memcpy(&raw[0], buffer, fileRecordSize);
 
-  if (magic == kFileRecordMagic)
-  {
-    us_array.reserve(fileRecordSize / sector_size);
-    const gsl::not_null<WORD*> usnaddr =
-        reinterpret_cast<WORD*>(buffer + offset_of_us);
-    us_number = *usnaddr;
-    const gsl::not_null<WORD*> usarray = usnaddr.get() + 1;
-
-    for (size_t i = 0; i < fileRecordSize / sector_size; i++)
-    {
-      us_array.push_back(usarray.get()[i]);
-    }
-  }
-  else
+  if (magic != kFileRecordMagic)
   {
     us_number = 0;
+    return;
+  }
+
+  us_array.reserve(fileRecordSize / sector_size);
+  const gsl::not_null<WORD*> usnaddr =
+      reinterpret_cast<WORD*>(buffer + offset_of_us);
+  us_number = *usnaddr;
+  const gsl::not_null<WORD*> usarray = usnaddr.get() + 1;
+
+  for (size_t i = 0; i < fileRecordSize / sector_size; i++)
+  {
+    us_array.push_back(usarray.get()[i]);
   }
 }
 
