@@ -1,4 +1,7 @@
 #include "stdafx.h"
+
+#include <regex>
+
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
 
@@ -52,14 +55,10 @@ BOOL CNtfsundelDlg::OnInitDialog()
   m_files.InsertColumn(2, _T("Name"), LVCFMT_LEFT, 260);
   m_files.InsertColumn(3, _T("Time"), LVCFMT_LEFT, 130);
 
-  std::array<_TCHAR, 4> drvname;  // "C:\"
-  drvname[0] = _T('A');
-  drvname[1] = _T(':');
-  drvname[2] = _T('\\');
-  drvname[3] = _T('\0');
+  std::array<_TCHAR, 4> drvname = {_T('A'), _T(':'), _T('\\'), _T('\0')};
 
-  DWORD bm = 1;                       // bit mask
-  DWORD drives = GetLogicalDrives();  // available drives bitmap
+  DWORD bm = 1;                             // bit mask
+  const DWORD drives = GetLogicalDrives();  // available drives bitmap
   for (int i = 0; i < sizeof(drives) * 8; i++)
   {
     if ((drives & bm) != 0)
@@ -118,103 +117,6 @@ HCURSOR CNtfsundelDlg::OnQueryDragIcon()
   return static_cast<HCURSOR>(m_hIcon);
 }
 
-// Check if file name matchs wildchar pattern
-bool MatchFileName(const _TCHAR* fileName, const _TCHAR* pattern)
-{
-  // Compare until pattern is not '*' and not '?'
-  while (*fileName && *pattern)
-  {
-    if (*pattern == _T('*') || *pattern == _T('?'))
-    {
-      break;
-    }
-
-    if (*fileName != *pattern)
-    {
-      return false;
-    }
-
-    fileName++;
-    pattern++;
-  }
-
-  if (*pattern == _T('\0'))
-  {
-    // Exactly matched
-    return *fileName == _T('\0');
-  }
-  if (*pattern == _T('?'))
-  {
-    do
-    {
-      if (*fileName == _T('\0'))
-      {
-        return false;
-      }
-      else
-      {
-        fileName++;  // Skip to next
-        pattern++;
-      }
-    }
-    while (*pattern == _T('?'));
-
-    return MatchFileName(fileName, pattern);
-  }
-  if (*pattern == _T('*'))
-  {
-    const _TCHAR* p = pattern;
-
-    // Skip to next character, not '?' and not '*"
-    pattern++;
-    while (*pattern)
-    {
-      if (*pattern == _T('*') || *pattern == _T('?'))
-        pattern++;
-      else
-        break;
-    }
-
-    while (*fileName && *fileName != *pattern)
-    {
-      fileName++;
-    }
-    if (*fileName != *pattern)
-    {
-      return false;
-    }
-
-    if (*pattern)
-    {
-      const _TCHAR* ff = fileName;
-      const _TCHAR* pp = pattern;
-
-      while (*fileName == *pp)
-      {
-        fileName++;
-      }
-      while (*pattern == *pp)
-      {
-        pattern++;
-      }
-
-      if (*fileName == *pattern && *fileName == _T('\0') &&
-          (fileName - ff) >= (pattern - pp))
-      {
-        return true;
-      }
-
-      if (MatchFileName(ff + 1, p))
-      {
-        return true;
-      }
-      return MatchFileName(ff, pp);
-    }
-    return true;
-  }
-  return false;
-}
-
 bool PeekAndPump()
 {
   MSG msg;
@@ -232,7 +134,8 @@ bool PeekAndPump()
 
 void CNtfsundelDlg::OnSearch()
 {
-  static bool stop = false;  // Give user a chance to stop the searching loop
+  // Give user a chance to stop the searching loop
+  static std::atomic<bool> stop = false;
 
   CString btntext;
   GetDlgItem(IDB_SEARCH)->GetWindowText(btntext);
@@ -250,7 +153,7 @@ void CNtfsundelDlg::OnSearch()
   if (m_filter.IsEmpty())
   // default to find all deleted files
   {
-    m_filter = _T("*.*");
+    m_filter = _T(".*");
   }
   else
   {
@@ -292,10 +195,16 @@ void CNtfsundelDlg::OnSearch()
   // Find deleted files (directory excluded)
   stop = FALSE;
   int count = 0;
+  FileRecord fr(volume);
+
+  const auto regx = std::wregex(static_cast<const _TCHAR*>(m_filter));
   for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::USER);
        i < volume.GetRecordsCount(); i++)
   {
-    FileRecord fr(volume);
+    if (stop)
+    {
+      break;
+    }
 
     // Only parse Standard Information and File Name attributes
     // StdInfo will always be parsed
@@ -325,30 +234,14 @@ void CNtfsundelDlg::OnSearch()
     {
       continue;
     }
-    // Make UpperCase
-    CString fns{fn.c_str()};
-    fns.MakeUpper();
-    CString filters = m_filter;
-    filters.MakeUpper();
-    // Change ".*" to "*" at filter string end
-    const int fl = filters.GetLength();
-    if (fl >= 2)
-    {
-      if (filters.GetAt(fl - 1) == _T('*') && filters.GetAt(fl - 2) == _T('.'))
-      {
-        filters.SetAt(fl - 2, _T('*'));
-        filters = filters.Left(fl - 1);
-      }
-    }
 
-    if (MatchFileName(static_cast<const _TCHAR*>(fns),
-                      static_cast<const _TCHAR*>(filters)))
+    if (std::regex_match(fn, regx))
     {
       // Add to list
       CString s;
       s.Format(_T("%I64u"), i);
 
-      int itm = m_files.InsertItem(count, s);
+      const int itm = m_files.InsertItem(count, s);
       // File name
       m_files.SetItemText(itm, 1, fn.c_str());
       // Time
@@ -366,17 +259,12 @@ void CNtfsundelDlg::OnSearch()
       // Prevent showing too many entries, 50,000 maxiam
       count++;
       constexpr DWORD MAX_NUMBER_FILES = 50000;
-      if (count > MAX_NUMBER_FILES)
+      if (count >= MAX_NUMBER_FILES)
       {
         MessageBox(
             _T("Too many files found, only the first 50,000 will be shown"));
         break;
       }
-    }
-
-    if (stop)
-    {
-      break;
     }
 
     if (!PeekAndPump())
