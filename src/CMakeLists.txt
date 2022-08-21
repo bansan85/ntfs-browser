@@ -18,6 +18,15 @@ set(${PROJECT_NAME}_SRC
     ntfs-volume.cpp)
 
 set(${PROJECT_NAME}_H
+    ../include/ntfs-browser/data/attr-defines.h
+    ../include/ntfs-browser/data/attr-header-common.h
+    ../include/ntfs-browser/data/attr-type.h
+    ../include/ntfs-browser/attr-base.h
+    ../include/ntfs-browser/file-record.h
+    ../include/ntfs-browser/index-entry.h
+    ../include/ntfs-browser/mask.h
+    ../include/ntfs-browser/mft-idx.h
+    ../include/ntfs-browser/ntfs-volume.h
     attr/attribute-list.h
     attr/filename.h
     attr/header-non-resident.h
