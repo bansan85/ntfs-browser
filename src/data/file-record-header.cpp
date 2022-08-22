@@ -3,7 +3,7 @@
 namespace NtfsBrowser
 {
 
-FileRecordHeader::FileRecordHeader(BYTE* buffer, size_t fileRecordSize,
+FileRecordHeader::FileRecordHeader(const BYTE* buffer, size_t fileRecordSize,
                                    size_t sector_size)
     : sector_size(sector_size)
 {
@@ -17,10 +17,10 @@ FileRecordHeader::FileRecordHeader(BYTE* buffer, size_t fileRecordSize,
   }
 
   us_array.reserve(fileRecordSize / sector_size);
-  const gsl::not_null<WORD*> usnaddr =
-      reinterpret_cast<WORD*>(buffer + offset_of_us);
+  const gsl::not_null<const WORD*> usnaddr =
+      reinterpret_cast<const WORD*>(buffer + offset_of_us);
   us_number = *usnaddr;
-  const gsl::not_null<WORD*> usarray = usnaddr.get() + 1;
+  const gsl::not_null<const WORD*> usarray = usnaddr.get() + 1;
 
   for (size_t i = 0; i < fileRecordSize / sector_size; i++)
   {

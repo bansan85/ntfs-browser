@@ -43,7 +43,8 @@ struct FileRecordHeader
   std::vector<WORD> us_array{};
   size_t sector_size;
 
-  FileRecordHeader(BYTE* buffer, size_t fileRecordSize, size_t sector_size);
+  FileRecordHeader(const BYTE* buffer, size_t fileRecordSize,
+                   size_t sector_size);
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
   const AttrHeaderCommon& HeaderCommon() noexcept;

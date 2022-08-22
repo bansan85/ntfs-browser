@@ -141,6 +141,7 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
     file_record_size_ = 1U << static_cast<unsigned char>(-sz);
   }
   NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
+  file_record_buffer_.reserve(file_record_size_);
 
   sz = static_cast<char>(bpb.clusters_per_index_block);
   if (sz > 0)
@@ -192,6 +193,11 @@ DWORD NtfsVolume::GetIndexBlockSize() const noexcept
 
 // Get MFT starting address
 ULONGLONG NtfsVolume::GetMFTAddr() const noexcept { return mft_addr_; }
+
+BYTE* NtfsVolume::GetFileRecordBuffer() const noexcept
+{
+  return file_record_buffer_.data();
+}
 
 // Install Attribute CallBack routines for the whole Volume
 bool NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept

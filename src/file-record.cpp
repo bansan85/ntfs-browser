@@ -162,9 +162,7 @@ bool FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 // Read File Record
 std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
 {
-  std::vector<BYTE> buffer;
-  buffer.reserve(volume_.GetFileRecordSize());
-
+  BYTE* buffer = volume_.GetFileRecordBuffer();
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
       volume_.mft_data_ == nullptr)
   {
@@ -182,15 +180,15 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     }
 
     if (DWORD len = 0;
-        ReadFile(volume_.hvolume_.get(), buffer.data(),
-                 volume_.GetFileRecordSize(), &len, nullptr) == FALSE ||
+        ReadFile(volume_.hvolume_.get(), buffer, volume_.GetFileRecordSize(),
+                 &len, nullptr) == FALSE ||
         len != volume_.GetFileRecordSize())
     {
       return {};
     }
 
     std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-        buffer.data(), volume_.GetFileRecordSize(), volume_.GetSectorSize());
+        buffer, volume_.GetFileRecordSize(), volume_.GetSectorSize());
     return fr;
   }
 
@@ -198,15 +196,15 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
   const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
 
   if (ULONGLONG len = 0;
-      !volume_.mft_data_->ReadData(frAddr, buffer.data(),
-                                   volume_.GetFileRecordSize(), len) ||
+      !volume_.mft_data_->ReadData(frAddr, buffer, volume_.GetFileRecordSize(),
+                                   len) ||
       len != volume_.GetFileRecordSize())
   {
     return {};
   }
 
   std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-      buffer.data(), volume_.GetFileRecordSize(), volume_.GetSectorSize());
+      buffer, volume_.GetFileRecordSize(), volume_.GetSectorSize());
   return fr;
 }
 
