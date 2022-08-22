@@ -207,6 +207,11 @@ void CNtfsundelDlg::OnSearch()
       break;
     }
 
+    if (!PeekAndPump())
+    {
+      break;
+    }
+
     // Only parse Standard Information and File Name attributes
     // StdInfo will always be parsed
     fr.SetAttrMask(Mask::FILE_NAME);
@@ -266,11 +271,6 @@ void CNtfsundelDlg::OnSearch()
             _T("Too many files found, only the first 50,000 will be shown"));
         break;
       }
-    }
-
-    if (!PeekAndPump())
-    {
-      break;
     }
   }
 
