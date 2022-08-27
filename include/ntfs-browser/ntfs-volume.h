@@ -6,6 +6,7 @@
 #include <windows.h>
 
 #include <ntfs-browser/data/attr-defines.h>
+#include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
 
 namespace NtfsBrowser
@@ -26,18 +27,16 @@ class NtfsVolume
   friend class AttrBase;
 
  private:
-  using HandlePtr = std::unique_ptr<std::remove_pointer<HANDLE>::type,
-                                    decltype(&::CloseHandle)>;
   WORD sector_size_{0};
   DWORD cluster_size_{0};
   DWORD file_record_size_{0};
   DWORD index_block_size_{0};
   ULONGLONG mft_addr_{0};
-  HandlePtr hvolume_;
   bool volume_ok_{false};
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
   BYTE version_major_{0};
   BYTE version_minor_{0};
+  FileReader volume_{};
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
@@ -47,7 +46,7 @@ class NtfsVolume
   // Buffer of size file_record_size_ to read FileRecord.
   mutable std::vector<BYTE> file_record_buffer_;
 
-  [[nodiscard]] bool OpenVolume(_TCHAR volume) noexcept;
+  [[nodiscard]] bool OpenVolume(_TCHAR volume);
 
  public:
   [[nodiscard]] bool IsVolumeOK() const noexcept;
@@ -60,6 +59,8 @@ class NtfsVolume
   [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
   [[nodiscard]] ULONGLONG GetMFTAddr() const noexcept;
   [[nodiscard]] BYTE* GetFileRecordBuffer() const noexcept;
+
+  [[nodiscard]] bool Read(LARGE_INTEGER& addr, DWORD length, void* buf) const;
 
   [[nodiscard]] bool InstallAttrRawCB(DWORD attrType,
                                       AttrRawCallback cb) noexcept;

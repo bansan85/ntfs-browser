@@ -170,19 +170,8 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     LARGE_INTEGER frAddr;
     frAddr.QuadPart = gsl::narrow<LONGLONG>(
         volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
-    frAddr.LowPart = SetFilePointer(volume_.hvolume_.get(),
-                                    static_cast<LONG>(frAddr.LowPart),
-                                    &frAddr.HighPart, FILE_BEGIN);
 
-    if (frAddr.LowPart == static_cast<DWORD>(-1) && GetLastError() != NO_ERROR)
-    {
-      return {};
-    }
-
-    if (DWORD len = 0;
-        ReadFile(volume_.hvolume_.get(), buffer, volume_.GetFileRecordSize(),
-                 &len, nullptr) == FALSE ||
-        len != volume_.GetFileRecordSize())
+    if (!volume_.Read(frAddr, volume_.GetFileRecordSize(), buffer))
     {
       return {};
     }

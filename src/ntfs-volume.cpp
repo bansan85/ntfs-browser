@@ -11,9 +11,7 @@
 namespace NtfsBrowser
 {
 
-NtfsVolume::NtfsVolume(_TCHAR volume)
-    : hvolume_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)),
-      mft_record_(*this)
+NtfsVolume::NtfsVolume(_TCHAR volume) : mft_record_(*this)
 {
   ClearAttrRawCB();
 
@@ -78,7 +76,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume)
 }
 
 // Open a volume ('a' - 'z', 'A' - 'Z'), get volume handle and BPB
-bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
+bool NtfsVolume::OpenVolume(_TCHAR volume)
 {
   // Verify parameter
   if (!_istalpha(volume))
@@ -91,12 +89,7 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
   _sntprintf_s(volumePath.data(), 7, 6, _T("\\\\.\\%c:"), volume);
   volumePath[6] = _T('\0');
 
-  hvolume_ =
-      HandlePtr(CreateFileW(volumePath.data(), GENERIC_READ,
-                            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                            OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
-                &CloseHandle);
-  if (hvolume_.get() == INVALID_HANDLE_VALUE)
+  if (!volume_.Open(volumePath.data()))
   {
     NTFS_TRACE1("Cannnot open volume %c\n", (char)volume);
     return false;
@@ -107,11 +100,10 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
 
   // Read the first sector (boot sector)
   constexpr DWORD default_sector_size = 512;
-  if (ReadFile(hvolume_.get(), &bpb, default_sector_size, &num, nullptr) == 0 ||
-      num != default_sector_size)
+  LARGE_INTEGER frAddr{.QuadPart = 0};
+  if (!volume_.Read(frAddr, default_sector_size, &bpb))
   {
     NTFS_TRACE("Read boot sector error\n");
-    hvolume_ = HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle);
     return false;
   }
 
@@ -119,7 +111,6 @@ bool NtfsVolume::OpenVolume(_TCHAR volume) noexcept
               sizeof(bpb.signature)) != 0)
   {
     NTFS_TRACE("Volume file system is not NTFS\n");
-    hvolume_ = HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle);
     return false;
   }
 
@@ -197,6 +188,11 @@ ULONGLONG NtfsVolume::GetMFTAddr() const noexcept { return mft_addr_; }
 BYTE* NtfsVolume::GetFileRecordBuffer() const noexcept
 {
   return file_record_buffer_.data();
+}
+
+bool NtfsVolume::Read(LARGE_INTEGER& addr, DWORD length, void* buf) const
+{
+  return volume_.Read(addr, length, buf);
 }
 
 // Install Attribute CallBack routines for the whole Volume

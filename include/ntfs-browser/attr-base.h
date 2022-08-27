@@ -9,6 +9,7 @@
 namespace NtfsBrowser
 {
 class FileRecord;
+class NtfsVolume;
 
 class AttrBase
 {
@@ -20,12 +21,9 @@ class AttrBase
   AttrBase& operator=(AttrBase const& other) = delete;
   virtual ~AttrBase() = default;
 
- private:
+ protected:
   const AttrHeaderCommon& attr_header_;
-  WORD sector_size_;
-  DWORD cluster_size_;
-  DWORD index_block_size_;
-  HANDLE hvolume_;
+  const NtfsVolume& volume_;
 
  public:
   [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const noexcept;
@@ -42,7 +40,6 @@ class AttrBase
   [[nodiscard]] WORD GetSectorSize() const noexcept;
   [[nodiscard]] DWORD GetClusterSize() const noexcept;
   [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
-  [[nodiscard]] HANDLE GetHandle() const noexcept;
 
  public:
   [[nodiscard]] virtual ULONGLONG GetDataSize() const noexcept = 0;

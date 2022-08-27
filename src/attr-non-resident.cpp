@@ -1,6 +1,8 @@
 #include <gsl/narrow>
 #include <gsl/pointers>
 
+#include <ntfs-browser/ntfs-volume.h>
+
 #include "attr-non-resident.h"
 #include "attr/header-non-resident.h"
 #include "data/run-entry.h"
@@ -142,19 +144,8 @@ bool AttrNonResident::ReadClusters(void* buf, ULONGLONG clusters,
   LARGE_INTEGER addr;
 
   addr.QuadPart = gsl::narrow<LONGLONG>(lcn * GetClusterSize());
-  DWORD len = SetFilePointer(GetHandle(), static_cast<LONG>(addr.LowPart),
-                             &addr.HighPart, FILE_BEGIN);
 
-  if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
-  {
-    NTFS_TRACE1("Cannot locate cluster with LCN %I64d\n", lcn);
-    return false;
-  }
-
-  if (ReadFile(GetHandle(), buf,
-               gsl::narrow<DWORD>(clusters * GetClusterSize()), &len,
-               nullptr) == FALSE ||
-      len != clusters * GetClusterSize())
+  if (!volume_.Read(addr, gsl::narrow<DWORD>(clusters * GetClusterSize()), buf))
   {
     NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
     return false;

@@ -9,11 +9,7 @@ namespace NtfsBrowser
 {
 
 AttrBase::AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr) noexcept
-    : attr_header_(ahc),
-      sector_size_(fr.GetVolume().GetSectorSize()),
-      cluster_size_(fr.GetVolume().GetClusterSize()),
-      index_block_size_(fr.GetVolume().GetIndexBlockSize()),
-      hvolume_(fr.GetVolume().hvolume_.get())
+    : attr_header_(ahc), volume_(fr.GetVolume())
 {
 }
 
@@ -62,9 +58,14 @@ bool AttrBase::IsUnNamed() const noexcept
   return attr_header_.name_length == 0;
 }
 
-WORD AttrBase::GetSectorSize() const noexcept { return sector_size_; }
-DWORD AttrBase::GetClusterSize() const noexcept { return cluster_size_; }
-DWORD AttrBase::GetIndexBlockSize() const noexcept { return index_block_size_; }
-HANDLE AttrBase::GetHandle() const noexcept { return hvolume_; }
+WORD AttrBase::GetSectorSize() const noexcept { return volume_.sector_size_; }
+DWORD AttrBase::GetClusterSize() const noexcept
+{
+  return volume_.cluster_size_;
+}
+DWORD AttrBase::GetIndexBlockSize() const noexcept
+{
+  return volume_.index_block_size_;
+}
 
 }  // namespace NtfsBrowser

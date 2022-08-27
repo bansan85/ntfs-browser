@@ -13,6 +13,7 @@ set(${PROJECT_NAME}_SRC
     attr-vol-name.cpp
     file-record.cpp
     filename.cpp
+    file-reader.cpp
     index-block.cpp
     index-entry.cpp
     ntfs-volume.cpp)
@@ -22,6 +23,7 @@ set(${PROJECT_NAME}_H
     ../include/ntfs-browser/data/attr-header-common.h
     ../include/ntfs-browser/data/attr-type.h
     ../include/ntfs-browser/attr-base.h
+    ../include/ntfs-browser/file-reader.h
     ../include/ntfs-browser/file-record.h
     ../include/ntfs-browser/index-entry.h
     ../include/ntfs-browser/mask.h
