@@ -55,8 +55,6 @@ class FileRecord
   std::array<std::vector<std::unique_ptr<AttrBase>>, kAttrNums> attr_list_{};
 
   void ClearAttrs() noexcept;
-  [[nodiscard]] bool PatchUS(WORD* sector, int sectors, WORD usn,
-                             WORD* usarray);
   void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
                     bool& bDiscard) noexcept;
   [[nodiscard]] std::unique_ptr<AttrBase> AllocAttr(const AttrHeaderCommon& ahc,
@@ -65,8 +63,8 @@ class FileRecord
   [[nodiscard]] std::unique_ptr<FileRecordHeader>
       ReadFileRecord(ULONGLONG fileRef);
   [[nodiscard]] std::optional<IndexEntry>
-      VisitIndexBlock(const ULONGLONG& vcn, std::wstring_view fileName) const;
-  void TraverseSubNode(const ULONGLONG& vcn, SUBENTRY_CALLBACK seCallBack,
+      VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName) const;
+  void TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
                        void* context) const;
 
  public:

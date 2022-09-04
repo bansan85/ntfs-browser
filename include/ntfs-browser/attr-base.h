@@ -1,5 +1,9 @@
 #pragma once
 
+#include <optional>
+#include <span>
+#include <vector>
+
 #include <windows.h>
 
 #include <gsl/pointers>
@@ -43,10 +47,8 @@ class AttrBase
 
  public:
   [[nodiscard]] virtual ULONGLONG GetDataSize() const noexcept = 0;
-  [[nodiscard]] virtual bool ReadData(ULONGLONG offset,
-                                      gsl::not_null<void*> bufv,
-                                      ULONGLONG bufLen,
-                                      ULONGLONG& actural) const = 0;
+  [[nodiscard]] virtual std::optional<ULONGLONG>
+      ReadData(ULONGLONG offset, std::span<BYTE> buffer) const = 0;
 };  // AttrBase
 
 }  // namespace NtfsBrowser

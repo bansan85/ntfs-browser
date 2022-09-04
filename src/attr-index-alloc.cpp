@@ -84,9 +84,10 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
   const DWORD sectors = GetIndexBlockSize() / GetSectorSize();
 
   // Read one Index Block
-  ULONGLONG len = 0;
-  if (!ReadData(vcn * GetIndexBlockSize(), ibBuf, GetIndexBlockSize(), len) ||
-      len != GetIndexBlockSize())
+  std::optional<ULONGLONG> len =
+      ReadData(vcn * GetIndexBlockSize(),
+               {reinterpret_cast<BYTE*>(ibBuf), GetIndexBlockSize()});
+  if (!len || *len != GetIndexBlockSize())
   {
     return false;
   }

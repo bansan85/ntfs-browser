@@ -30,19 +30,20 @@ ULONGLONG AttrResident::GetDataSize() const noexcept { return body_.size(); }
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
-bool AttrResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
-                            ULONGLONG bufLen, ULONGLONG& actural) const
+std::optional<ULONGLONG> AttrResident::ReadData(ULONGLONG offset,
+                                                std::span<BYTE> buffer) const
 {
-  actural = 0;
+  ULONGLONG bufLen = buffer.size();
+  ULONGLONG actural = 0;
   if (bufLen == 0)
   {
-    return true;
+    return bufLen;
   }
 
   // offset parameter error
   if (offset >= body_.size())
   {
-    return false;
+    return {};
   }
 
   if ((offset + bufLen) > body_.size())
@@ -54,9 +55,9 @@ bool AttrResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
     actural = bufLen;
   }
 
-  memcpy(bufv, &body_[offset], actural);
+  memcpy(buffer.data(), &body_[offset], actural);
 
-  return true;
+  return bufLen;
 }
 
 const BYTE* AttrResident::GetData() const noexcept { return body_.data(); }

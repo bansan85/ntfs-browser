@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
@@ -33,20 +34,19 @@ class AttrNonResident : public AttrBase
   [[nodiscard]] static bool PickData(const BYTE*& dataRun, ULONGLONG& length,
                                      LONGLONG& LCNOffset) noexcept;
   [[nodiscard]] bool ParseDataRun();
-  [[nodiscard]] bool ReadClusters(void* buf, ULONGLONG clusters,
-                                  std::optional<ULONGLONG> start_lcn,
-                                  ULONGLONG offset) const;
-  [[nodiscard]] bool ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
-                                         void* bufv, ULONGLONG bufLen,
-                                         ULONGLONG& actural) const;
+  [[nodiscard]] std::optional<std::span<const BYTE>>
+      ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
+                   ULONGLONG offset) const;
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
+                          std::span<BYTE> buffer) const;
 
  protected:
   [[nodiscard]] bool IsDataRunOK() const noexcept override;
 
  public:
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
-  [[nodiscard]] bool ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
-                              ULONGLONG bufLen,
-                              ULONGLONG& actural) const override;
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadData(ULONGLONG offset, std::span<BYTE> buffer) const override;
 };  // AttrNonResident
 }  // namespace NtfsBrowser

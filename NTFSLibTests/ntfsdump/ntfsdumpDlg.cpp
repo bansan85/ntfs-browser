@@ -215,7 +215,7 @@ void CNtfsdumpDlg::OnOK()
 
   const _TCHAR volname = m_filename.GetAt(0);
 
-  NtfsVolume volume(volname);
+  NtfsVolume volume(volname, FileReader::Strategy::NO_CACHE);
   if (!volume.IsVolumeOK())
   {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -331,8 +331,8 @@ void CNtfsdumpDlg::OnOK()
     // show only the first 16K
     const ULONGLONG datalen = min(data->GetDataSize(), BUFFER_SIZE);
 
-    ULONGLONG len = 0;
-    if (!data->ReadData(0, filebuf.data(), datalen, len) || len != datalen)
+    std::optional<ULONGLONG> len = data->ReadData(0, {filebuf.data(), datalen});
+    if (!len || *len != datalen)
     {
       MessageBox(_T("Read data error"));
       return;

@@ -1,7 +1,10 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string_view>
+#include <span>
+#include <vector>
 
 #include <windows.h>
 
@@ -11,16 +14,26 @@ namespace NtfsBrowser
 class FileReader
 {
  public:
-  FileReader();
+  enum class Strategy
+  {
+    NO_CACHE /*,
+    SEQUENTIAL*/
+  };
+
+  FileReader(Strategy strategy);
 
   bool Open(std::wstring_view volume);
-  bool Read(LARGE_INTEGER& addr, DWORD length, void* buf) const;
+  std::optional<std::span<const BYTE>> Read(LARGE_INTEGER& addr,
+                                            DWORD length) const;
 
  private:
-  using HandlePtr = std::unique_ptr<std::remove_pointer<HANDLE>::type,
-                                    decltype(&::CloseHandle)>;
+  using HandlePtr =
+      std::unique_ptr<std::remove_pointer_t<HANDLE>, decltype(&::CloseHandle)>;
 
   HandlePtr handle_;
+  Strategy strategy_;
+
+  mutable std::vector<BYTE> buffer_;
 };
 
 }  // namespace NtfsBrowser

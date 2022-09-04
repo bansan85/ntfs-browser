@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <span>
 
 #include <tchar.h>
 #include <windows.h>
@@ -16,7 +17,7 @@ class AttrBase;
 class NtfsVolume
 {
  public:
-  explicit NtfsVolume(_TCHAR volume);
+  explicit NtfsVolume(_TCHAR volume, FileReader::Strategy strategy);
   NtfsVolume(NtfsVolume&& other) noexcept = delete;
   NtfsVolume(NtfsVolume const& other) = delete;
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
@@ -36,7 +37,7 @@ class NtfsVolume
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
   BYTE version_major_{0};
   BYTE version_minor_{0};
-  FileReader volume_{};
+  FileReader volume_;
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
@@ -44,6 +45,7 @@ class NtfsVolume
   const AttrBase* mft_data_{nullptr};  // $MFT Data Attribute
 
   // Buffer of size file_record_size_ to read FileRecord.
+  mutable std::vector<BYTE> cluster_buffer_;
   mutable std::vector<BYTE> file_record_buffer_;
 
   [[nodiscard]] bool OpenVolume(_TCHAR volume);
@@ -58,9 +60,12 @@ class NtfsVolume
   [[nodiscard]] DWORD GetFileRecordSize() const noexcept;
   [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
   [[nodiscard]] ULONGLONG GetMFTAddr() const noexcept;
-  [[nodiscard]] BYTE* GetFileRecordBuffer() const noexcept;
 
-  [[nodiscard]] bool Read(LARGE_INTEGER& addr, DWORD length, void* buf) const;
+  [[nodiscard]] std::span<BYTE> GetClusterBuffer() const noexcept;
+  [[nodiscard]] std::span<BYTE> GetFileRecordBuffer() const noexcept;
+
+  [[nodiscard]] std::optional<std::span<const BYTE>> Read(LARGE_INTEGER& addr,
+                                                          DWORD length) const;
 
   [[nodiscard]] bool InstallAttrRawCB(DWORD attrType,
                                       AttrRawCallback cb) noexcept;

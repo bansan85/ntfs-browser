@@ -126,33 +126,26 @@ bool AttrNonResident::ParseDataRun()
 
 // Read clusters from disk, or sparse data
 // *actural = Clusters acturally read
-bool AttrNonResident::ReadClusters(void* buf, ULONGLONG clusters,
-                                   std::optional<ULONGLONG> start_lcn,
-                                   ULONGLONG offset) const
+std::optional<std::span<const BYTE>>
+    AttrNonResident::ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
+                                  ULONGLONG offset) const
 {
-  if (!start_lcn)  // sparse data
-  {
-    NTFS_TRACE("Sparse Data, Fill the buffer with 0\n");
-
-    // Fill the buffer with 0
-    memset(buf, 0, clusters * GetClusterSize());
-
-    return true;
-  }
-  const ULONGLONG lcn = *start_lcn + offset;
+  const ULONGLONG lcn = start_lcn + offset;
 
   LARGE_INTEGER addr;
 
   addr.QuadPart = gsl::narrow<LONGLONG>(lcn * GetClusterSize());
 
-  if (!volume_.Read(addr, gsl::narrow<DWORD>(clusters * GetClusterSize()), buf))
+  std::optional<std::span<const BYTE>> buffer =
+      volume_.Read(addr, gsl::narrow<DWORD>(clusters * GetClusterSize()));
+  if (!buffer)
   {
     NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
-    return false;
+    return {};
   }
 
   NTFS_TRACE2("Successfully read %u clusters from LCN %I64d\n", clusters, lcn);
-  return true;
+  return buffer;
 }
 
 // Read Data, cluster based
@@ -160,29 +153,29 @@ bool AttrNonResident::ReadClusters(void* buf, ULONGLONG clusters,
 // clusters: Clusters to read
 // bufv, bufLen: Returned data
 // *actural = Number of bytes acturally read
-bool AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
-                                          void* bufv, ULONGLONG bufLen,
-                                          ULONGLONG& actural) const
+std::optional<ULONGLONG>
+    AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
+                                         std::span<BYTE> buffer) const
 {
-  _ASSERT(bufv);
   _ASSERT(clusters);
 
-  actural = 0;
-  BYTE* buf = static_cast<BYTE*>(bufv);
+  ULONGLONG actural = 0;
 
   // Verify if clusters exceeds DataRun bounds
   if (vcn + clusters > attr_header_nr_.last_vcn - attr_header_nr_.start_vcn + 1)
   {
     NTFS_TRACE("Cluster exceeds DataRun bounds\n");
-    return false;
+    return {};
   }
 
-  // Verify buffer size
-  if (bufLen < clusters * GetClusterSize())
+  // Verify if clusters exceeds DataRun bounds
+  if (buffer.size() != clusters * GetClusterSize())
   {
-    NTFS_TRACE("Buffer size too small\n");
-    return false;
+    NTFS_TRACE("Invalid buffer size\n");
+    return {};
   }
+
+  BYTE* buf = buffer.data();
 
   // Traverse the DataRun List to find the according LCN
   for (const Data::RunEntry& dr : data_run_list_)
@@ -194,9 +187,19 @@ bool AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
       // Fragmented data, we must go on
       const ULONGLONG clustersToRead = clusters > vcns ? vcns : clusters;
 
-      if (!ReadClusters(buf, clustersToRead, dr.lcn, vcn - dr.start_vcn))
+      if (dr.lcn)
       {
-        break;
+        std::optional<std::span<const BYTE>> bufferi =
+            ReadClusters(clustersToRead, *dr.lcn, vcn - dr.start_vcn);
+        if (!bufferi)
+        {
+          break;
+        }
+        memcpy(buf, bufferi->data(), bufferi->size());
+      }
+      else
+      {
+        memset(buf, 0, clustersToRead * GetClusterSize());
       }
 
       buf += static_cast<ULONGLONG>(clustersToRead) * GetClusterSize();
@@ -212,7 +215,7 @@ bool AttrNonResident::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
   }
 
   actural *= GetClusterSize();
-  return true;
+  return actural;
 }
 
 // Judge if the DataRun is successfully parsed
@@ -228,28 +231,26 @@ ULONGLONG AttrNonResident::GetDataSize() const noexcept
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
-bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
-                               ULONGLONG bufLen, ULONGLONG& actural) const
+std::optional<ULONGLONG> AttrNonResident::ReadData(ULONGLONG offset,
+                                                   std::span<BYTE> buffer) const
 {
-  std::vector<BYTE> unaligned_buf;
-  unaligned_buf.resize(GetClusterSize());
-
   // Hard disks can only be accessed by sectors
   // To be simple and efficient, only implemented cluster based accessing
   // So cluster unaligned data address should be processed carefully here
 
-  BYTE* buf = static_cast<BYTE*>(bufv.get());
+  ULONGLONG bufLen = buffer.size();
+  BYTE* buf = buffer.data();
 
-  actural = 0;
+  ULONGLONG actural = 0;
   if (bufLen == 0)
   {
-    return true;
+    return actural;
   }
 
   // Bounds check
   if (offset > attr_header_nr_.real_size)
   {
-    return false;
+    return {};
   }
   if (offset + bufLen > attr_header_nr_.real_size)
   {
@@ -266,15 +267,16 @@ bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
   {
     ULONGLONG len = 0;
     // First cluster, Unaligned
-    if (!ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(),
-                             GetClusterSize(), len) ||
-        len != GetClusterSize())
+    std::span<BYTE> unaligned_buf_first = volume_.GetClusterBuffer();
+    std::optional<ULONGLONG> lenc =
+        ReadVirtualClusters(start_vcn, 1, unaligned_buf_first);
+    if (!lenc || *lenc != GetClusterSize())
     {
-      return false;
+      return {};
     }
 
     len = (start_bytes < bufLen) ? start_bytes : bufLen;
-    memcpy(buf, &unaligned_buf[GetClusterSize() - start_bytes], len);
+    memcpy(buf, &unaligned_buf_first[GetClusterSize() - start_bytes], len);
     buf += len;
     bufLen -= len;
     actural += len;
@@ -282,7 +284,7 @@ bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
   }
   if (bufLen == 0)
   {
-    return true;
+    return actural;
   }
 
   const ULONGLONG alignedClusters = bufLen / GetClusterSize();
@@ -290,38 +292,38 @@ bool AttrNonResident::ReadData(ULONGLONG offset, gsl::not_null<void*> bufv,
   {
     // Aligned clusters
     ULONGLONG alignedSize = alignedClusters * GetClusterSize();
-    ULONGLONG len = 0;
-    if (!ReadVirtualClusters(start_vcn, alignedClusters, buf, alignedSize,
-                             len) ||
-        len != alignedSize)
+
+    std::optional<ULONGLONG> lenc =
+        ReadVirtualClusters(start_vcn, alignedClusters, {buf, alignedSize});
+    if (!lenc || *lenc != alignedSize)
     {
-      return false;
+      return {};
     }
 
     start_vcn += alignedClusters;
     buf += alignedSize;
     bufLen %= GetClusterSize();
-    actural += len;
+    actural += *lenc;
 
     if (bufLen == 0)
     {
-      return true;
+      return actural;
     }
   }
 
   // Last cluster, Unaligned
-  ULONGLONG len = 0;
-  if (!ReadVirtualClusters(start_vcn, 1, unaligned_buf.data(), GetClusterSize(),
-                           len) ||
-      len != GetClusterSize())
+  std::span<BYTE> unaligned_buf_last = volume_.GetClusterBuffer();
+  std::optional<ULONGLONG> lenc =
+      ReadVirtualClusters(start_vcn, 1, unaligned_buf_last);
+  if (!lenc || *lenc != GetClusterSize())
   {
-    return false;
+    return {};
   }
 
-  memcpy(buf, unaligned_buf.data(), bufLen);
+  memcpy(buf, unaligned_buf_last.data(), bufLen);
   actural += bufLen;
 
-  return true;
+  return actural;
 }
 
 }  // namespace NtfsBrowser

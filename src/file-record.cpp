@@ -162,7 +162,6 @@ bool FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
 // Read File Record
 std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
 {
-  BYTE* buffer = volume_.GetFileRecordBuffer();
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
       volume_.mft_data_ == nullptr)
   {
@@ -171,29 +170,31 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     frAddr.QuadPart = gsl::narrow<LONGLONG>(
         volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
 
-    if (!volume_.Read(frAddr, volume_.GetFileRecordSize(), buffer))
+    std::optional<std::span<const BYTE>> buffer =
+        volume_.Read(frAddr, volume_.GetFileRecordSize());
+    if (!buffer || buffer->size() != volume_.GetFileRecordSize())
     {
       return {};
     }
 
-    std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-        buffer, volume_.GetFileRecordSize(), volume_.GetSectorSize());
+    std::unique_ptr<FileRecordHeader> fr =
+        std::make_unique<FileRecordHeader>(*buffer, volume_.GetSectorSize());
     return fr;
   }
 
   // May be fragmented $MFT
   const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
 
-  if (ULONGLONG len = 0;
-      !volume_.mft_data_->ReadData(frAddr, buffer, volume_.GetFileRecordSize(),
-                                   len) ||
-      len != volume_.GetFileRecordSize())
+  std::span<BYTE> buffer_file = volume_.GetFileRecordBuffer();
+  if (std::optional<ULONGLONG> len =
+          volume_.mft_data_->ReadData(frAddr, buffer_file);
+      !len || *len != volume_.GetFileRecordSize())
   {
     return {};
   }
 
-  std::unique_ptr<FileRecordHeader> fr = std::make_unique<FileRecordHeader>(
-      buffer, volume_.GetFileRecordSize(), volume_.GetSectorSize());
+  std::unique_ptr<FileRecordHeader> fr =
+      std::make_unique<FileRecordHeader>(buffer_file, volume_.GetSectorSize());
   return fr;
 }
 
@@ -239,8 +240,7 @@ bool FileRecord::ParseFileRecord(ULONGLONG fileRef)
 
 // Visit IndexBlocks recursivly to find a specific Filename
 std::optional<IndexEntry>
-    FileRecord::VisitIndexBlock(const ULONGLONG& vcn,
-                                std::wstring_view fileName) const
+    FileRecord::VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName) const
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec =
       getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
@@ -301,8 +301,7 @@ std::optional<IndexEntry>
 
 // Traverse SubNode recursivly in ascending order
 // Call user defined callback routine once found an subentry
-void FileRecord::TraverseSubNode(const ULONGLONG& vcn,
-                                 SUBENTRY_CALLBACK seCallBack,
+void FileRecord::TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
                                  void* context) const
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec =

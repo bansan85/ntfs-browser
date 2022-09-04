@@ -11,7 +11,8 @@
 namespace NtfsBrowser
 {
 
-NtfsVolume::NtfsVolume(_TCHAR volume) : mft_record_(*this)
+NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
+    : mft_record_(*this), volume_{strategy}
 {
   ClearAttrRawCB();
 
@@ -96,19 +97,21 @@ bool NtfsVolume::OpenVolume(_TCHAR volume)
   }
 
   DWORD num = 0;
-  Data::NtfsBpb bpb{};
 
   // Read the first sector (boot sector)
   constexpr DWORD default_sector_size = 512;
   LARGE_INTEGER frAddr{.QuadPart = 0};
-  if (!volume_.Read(frAddr, default_sector_size, &bpb))
+  std::optional<std::span<const BYTE>> bpb_buffer =
+      volume_.Read(frAddr, default_sector_size);
+  if (!bpb_buffer)
   {
     NTFS_TRACE("Read boot sector error\n");
     return false;
   }
+  auto bpb = reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
 
-  if (strncmp(reinterpret_cast<const char*>(&bpb.signature[0]), NTFS_SIGNATURE,
-              sizeof(bpb.signature)) != 0)
+  if (strncmp(reinterpret_cast<const char*>(&bpb->signature[0]), NTFS_SIGNATURE,
+              sizeof(bpb->signature)) != 0)
   {
     NTFS_TRACE("Volume file system is not NTFS\n");
     return false;
@@ -116,13 +119,14 @@ bool NtfsVolume::OpenVolume(_TCHAR volume)
 
   // Log important volume parameters
 
-  sector_size_ = bpb.bytes_per_sector;
+  sector_size_ = bpb->bytes_per_sector;
   NTFS_TRACE1("Sector Size = %u bytes\n", sector_size_);
 
-  cluster_size_ = sector_size_ * bpb.sectors_per_cluster;
+  cluster_size_ = sector_size_ * bpb->sectors_per_cluster;
   NTFS_TRACE1("Cluster Size = %u bytes\n", cluster_size_);
+  cluster_buffer_.resize(cluster_size_);
 
-  char sz = static_cast<char>(bpb.clusters_per_file_record);
+  char sz = static_cast<char>(bpb->clusters_per_file_record);
   if (sz > 0)
   {
     file_record_size_ = cluster_size_ * sz;
@@ -132,9 +136,9 @@ bool NtfsVolume::OpenVolume(_TCHAR volume)
     file_record_size_ = 1U << static_cast<unsigned char>(-sz);
   }
   NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
-  file_record_buffer_.reserve(file_record_size_);
+  file_record_buffer_.resize(file_record_size_);
 
-  sz = static_cast<char>(bpb.clusters_per_index_block);
+  sz = static_cast<char>(bpb->clusters_per_index_block);
   if (sz > 0)
   {
     index_block_size_ = cluster_size_ * sz;
@@ -145,7 +149,7 @@ bool NtfsVolume::OpenVolume(_TCHAR volume)
   }
   NTFS_TRACE1("IndexBlock Size = %u bytes\n", index_block_size_);
 
-  mft_addr_ = bpb.lcn_mft * cluster_size_;
+  mft_addr_ = bpb->lcn_mft * cluster_size_;
   NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
 
   return true;
@@ -185,14 +189,20 @@ DWORD NtfsVolume::GetIndexBlockSize() const noexcept
 // Get MFT starting address
 ULONGLONG NtfsVolume::GetMFTAddr() const noexcept { return mft_addr_; }
 
-BYTE* NtfsVolume::GetFileRecordBuffer() const noexcept
+std::span<BYTE> NtfsVolume::GetClusterBuffer() const noexcept
 {
-  return file_record_buffer_.data();
+  return {cluster_buffer_.data(), cluster_buffer_.size()};
 }
 
-bool NtfsVolume::Read(LARGE_INTEGER& addr, DWORD length, void* buf) const
+std::span<BYTE> NtfsVolume::GetFileRecordBuffer() const noexcept
 {
-  return volume_.Read(addr, length, buf);
+  return {file_record_buffer_.data(), file_record_buffer_.size()};
+}
+
+std::optional<std::span<const BYTE>> NtfsVolume::Read(LARGE_INTEGER& addr,
+                                                      DWORD length) const
+{
+  return volume_.Read(addr, length);
 }
 
 // Install Attribute CallBack routines for the whole Volume

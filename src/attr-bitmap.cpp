@@ -29,16 +29,16 @@ AttrBitmap<TYPE_RESIDENT>::AttrBitmap(const AttrHeaderCommon& ahc,
 
   bitmap_buf_.resize(bitmap_size_, 0);
 
-  ULONGLONG len = 0;
-  if (!(this->ReadData(0, bitmap_buf_.data(), bitmap_size_, len) &&
-        len == bitmap_size_))
+  std::optional<ULONGLONG> len =
+      this->ReadData(0, {bitmap_buf_.data(), bitmap_size_});
+  if (len && *len == bitmap_size_)
   {
     bitmap_buf_.clear();
     NTFS_TRACE("Read Resident Bitmap data failed\n");
     return;
   }
 
-  NTFS_TRACE1("%u bytes of resident Bitmap data read\n", len);
+  NTFS_TRACE1("%u bytes of resident Bitmap data read\n", bitmap_size_);
 }
 
 template <class TYPE_RESIDENT>
@@ -60,10 +60,9 @@ bool AttrBitmap<TYPE_RESIDENT>::IsClusterFree(ULONGLONG cluster)
     // Read one cluster of data if buffer mismatch
     if (!current_cluster_ || *current_cluster_ != clusterOffset)
     {
-      ULONGLONG len = 0;
-      if (!this->ReadData(clusterOffset, bitmap_buf_.data(), clusterSize,
-                          len) ||
-          len != clusterSize)
+      std::optional<ULONGLONG> len =
+          this->ReadData(clusterOffset, {bitmap_buf_.data(), clusterSize});
+      if (!len || *len != clusterSize)
       {
         current_cluster_ = {};
         return false;

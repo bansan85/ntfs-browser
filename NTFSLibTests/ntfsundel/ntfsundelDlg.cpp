@@ -177,7 +177,7 @@ void CNtfsundelDlg::OnSearch()
 
   const _TCHAR volname = vns.GetAt(0);
 
-  NtfsVolume volume(volname);
+  NtfsVolume volume(volname, FileReader::Strategy::NO_CACHE);
   if (!volume.IsVolumeOK())
   {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -305,7 +305,7 @@ void CNtfsundelDlg::OnRecover()
 
   const _TCHAR volname = vns.GetAt(0);
 
-  NtfsVolume volume(volname);
+  NtfsVolume volume(volname, FileReader::Strategy::NO_CACHE);
   FileRecord fr(volume);
 
   if (!fr.ParseFileRecord(ref))
@@ -391,9 +391,8 @@ void CNtfsundelDlg::OnRecover()
     std::vector<BYTE> vec;
     vec.resize(BUFSIZE, '\0');
 
-    ULONGLONG len = 0;
-    if (!data->ReadData(i, &vec[0], BUFSIZE, len) ||
-        (len != BUFSIZE && len != remain))
+    std::optional<ULONGLONG> len = data->ReadData(i, {&vec[0], BUFSIZE});
+    if (!len || (*len != BUFSIZE && *len != remain))
     {
       MessageBox(_T("Read data error"));
       return;
@@ -401,8 +400,8 @@ void CNtfsundelDlg::OnRecover()
 
     // Save data
     DWORD l = 0;
-    WriteFile(hf.get(), &vec[0], static_cast<DWORD>(len), &l, nullptr);
-    remain -= len;
+    WriteFile(hf.get(), &vec[0], static_cast<DWORD>(*len), &l, nullptr);
+    remain -= *len;
   }
 
   CString s;

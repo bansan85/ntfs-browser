@@ -20,11 +20,12 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
   }
 
   ULONGLONG offset = 0;
-  ULONGLONG len = 0;
+  std::optional<ULONGLONG> len = 0;
   Attr::AttributeList al_record{};
 
-  while (this->ReadData(offset, &al_record, sizeof(Attr::AttributeList), len) &&
-         len == sizeof(Attr::AttributeList))
+  while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
+                                        sizeof(Attr::AttributeList)})) &&
+         *len == sizeof(Attr::AttributeList))
   {
     if (ATTR_INDEX(al_record.attr_type) > kAttrNums)
     {
