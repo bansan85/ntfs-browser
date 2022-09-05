@@ -66,7 +66,9 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
   if (!vec2.empty())
   {
     const std::wstring_view volname =
-        reinterpret_cast<const AttrVolName*>(vec2.front().get())->GetName();
+        reinterpret_cast<const AttrVolName<AttrResidentLight>*>(
+            vec2.front().get())
+            ->GetName();
     NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
   }
 #endif

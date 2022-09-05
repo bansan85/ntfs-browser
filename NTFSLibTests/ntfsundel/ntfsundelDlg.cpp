@@ -1,5 +1,6 @@
 #include "stdafx.h"
 
+#include <chrono>
 #include <regex>
 
 #include "ntfsundel.h"
@@ -21,7 +22,7 @@ static char THIS_FILE[] = __FILE__;
 CNtfsundelDlg::CNtfsundelDlg(CWnd* pParent)
     : CDialog(CNtfsundelDlg::IDD, pParent)
 {
-  m_filter = _T("*.*");
+  m_filter = _T(".*\\..*");
   m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
 
@@ -199,18 +200,23 @@ void CNtfsundelDlg::OnSearch()
   FileRecord fr(volume);
 
   const auto regx = std::wregex(static_cast<const _TCHAR*>(m_filter));
+  std::chrono::steady_clock::time_point begin =
+      std::chrono::steady_clock::now();
   for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::USER);
        i < volume.GetRecordsCount(); i++)
   {
+    if (i == 40000) break;
     if (stop)
     {
       break;
     }
 
+    /*
     if (!PeekAndPump())
     {
       break;
     }
+    */
 
     // Only parse Standard Information and File Name attributes
     // StdInfo will always be parsed
@@ -225,7 +231,7 @@ void CNtfsundelDlg::OnSearch()
     }
 
     // Check if it's deleted and not directory
-    if (!fr.IsDeleted())
+    if (fr.IsDeleted())
     {
       continue;
     }
@@ -274,9 +280,13 @@ void CNtfsundelDlg::OnSearch()
       }
     }
   }
+  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+  long long duration =
+      std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
+          .count();
 
   CString totals;
-  totals.Format(_T("%d deleted files processed"), count);
+  totals.Format(_T("%lld deleted files processed"), duration);
   MessageBox(totals);
 
   GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Search"));
