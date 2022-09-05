@@ -28,17 +28,12 @@ void Filename::CopyFilename(const Filename& fn, const Attr::Filename& afn)
 }
 
 // Get uppercase unicode filename and store it in a buffer
-void Filename::GetFilenameWUC()
-{
-  filename_wuc_ = GetFilename();
-  std::transform(filename_wuc_.begin(), filename_wuc_.end(),
-                 filename_wuc_.begin(), ::towupper);
-}
+void Filename::GetFilenameWUC() { filename_wuc_ = GetFilename(); }
 
 // Compare Unicode file name
 int Filename::Compare(std::wstring_view fn) const noexcept
 {
-  return _wcsicmp(fn.data(), filename_wuc_.c_str());
+  return _wcsicmp(fn.data(), filename_wuc_.data());
 }
 
 ULONGLONG Filename::GetFileSize() const noexcept
@@ -102,17 +97,16 @@ bool Filename::IsSparse() const noexcept
 
 // Get Unicode File Name
 // Return 0: Unnamed, <0: buffer too small, -buffersize, >0 Name length
-std::wstring Filename::GetFilename() const
+std::wstring_view Filename::GetFilename() const
 {
   if (filename_ == nullptr)
   {
     return {};
   }
 
-  std::wstring retval;
-  retval.resize(filename_->name_length, '\0');
-  retval.assign(reinterpret_cast<const wchar_t*>(&filename_->name[0]),
-                filename_->name_length);
+  std::wstring_view retval(
+      reinterpret_cast<const wchar_t*>(&filename_->name[0]),
+      filename_->name_length);
 
   if (!retval.empty())
   {
@@ -144,20 +138,20 @@ void Filename::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
 {
   if (writeTm != nullptr)
   {
-    AttrStdInfo::UTC2Local(filename_ != nullptr ? filename_->alter_time : 0,
-                           *writeTm);
+    AttrStdInfo<AttrResidentHeavy>::UTC2Local(
+        filename_ != nullptr ? filename_->alter_time : 0, *writeTm);
   }
 
   if (createTm != nullptr)
   {
-    AttrStdInfo::UTC2Local(filename_ != nullptr ? filename_->create_time : 0,
-                           *createTm);
+    AttrStdInfo<AttrResidentHeavy>::UTC2Local(
+        filename_ != nullptr ? filename_->create_time : 0, *createTm);
   }
 
   if (accessTm != nullptr)
   {
-    AttrStdInfo::UTC2Local(filename_ != nullptr ? filename_->read_time : 0,
-                           *accessTm);
+    AttrStdInfo<AttrResidentHeavy>::UTC2Local(
+        filename_ != nullptr ? filename_->read_time : 0, *accessTm);
   }
 }
 

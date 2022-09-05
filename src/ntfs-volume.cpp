@@ -41,8 +41,20 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
     return;
   }
 
-  std::tie(version_major_, this->version_minor_) =
-      reinterpret_cast<const AttrVolInfo*>(vec.front().get())->GetVersion();
+  if (strategy == FileReader::Strategy::NO_CACHE)
+  {
+    std::tie(version_major_, version_minor_) =
+        reinterpret_cast<const AttrVolInfo<AttrResidentHeavy>*>(
+            vec.front().get())
+            ->GetVersion();
+  }
+  else
+  {
+    std::tie(version_major_, version_minor_) =
+        reinterpret_cast<const AttrVolInfo<AttrResidentLight>*>(
+            vec.front().get())
+            ->GetVersion();
+  }
   NTFS_TRACE2("NTFS volume version: %u.%u\n", version_major_, version_minor_);
   if (version_major_ < 3)  // NT4 ?
   {

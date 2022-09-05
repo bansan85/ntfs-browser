@@ -6,62 +6,80 @@
 namespace NtfsBrowser
 {
 
-AttrFileName::AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr)
-    : AttrResident(ahc, fr)
+template <typename RESIDENT>
+AttrFileName<RESIDENT>::AttrFileName(const AttrHeaderCommon& ahc,
+                                     const FileRecord& fr)
+    : RESIDENT(ahc, fr)
 {
   NTFS_TRACE("Attribute: File Name\n");
 
-  SetFilename(*reinterpret_cast<const Attr::Filename*>(GetData()));
+  SetFilename(*reinterpret_cast<const Attr::Filename*>(this->GetData()));
 }
 
-AttrFileName::~AttrFileName() { NTFS_TRACE("AttrFileName deleted\n"); }
+template <typename RESIDENT>
+AttrFileName<RESIDENT>::~AttrFileName()
+{
+  NTFS_TRACE("AttrFileName deleted\n");
+}
 #if 0
-void AttrFileName::GetFileTime(FILETIME* /*writeTm*/, FILETIME* /*createTm*/,
+template <typename RESIDENT>
+void AttrFileName<RESIDENT>::GetFileTime(FILETIME* /*writeTm*/, FILETIME* /*createTm*/,
                                FILETIME* /* accessTm*/) const noexcept
 {
   assert(false);
 }
 
-Flag::Filename AttrFileName::GetFilePermission() const noexcept
+template <typename RESIDENT>
+Flag::Filename AttrFileName<RESIDENT>::GetFilePermission() const noexcept
 {
   assert(false);
   return Flag::Filename::NONE;
 }
 
-bool AttrFileName::IsReadOnly() const noexcept
+template <typename RESIDENT>
+bool AttrFileName<RESIDENT>::IsReadOnly() const noexcept
 {
   assert(false);
   return false;
 }
 
-bool AttrFileName::IsHidden() const noexcept
+template <typename RESIDENT>
+bool AttrFileName<RESIDENT>::IsHidden() const noexcept
 {
   assert(false);
   return false;
 }
 
-bool AttrFileName::IsSystem() const noexcept
+template <typename RESIDENT>
+bool AttrFileName<RESIDENT>::IsSystem() const noexcept
 {
   assert(false);
   return false;
 }
 
-bool AttrFileName::IsCompressed() const noexcept
+template <typename RESIDENT>
+bool AttrFileName<RESIDENT>::IsCompressed() const noexcept
 {
   assert(false);
   return false;
 }
 
-bool AttrFileName::IsEncrypted() const noexcept
+template <typename RESIDENT>
+bool AttrFileName<RESIDENT>::IsEncrypted() const noexcept
 {
   assert(false);
   return false;
 }
 
-bool AttrFileName::IsSparse() const noexcept
+template <typename RESIDENT>
+bool AttrFileName<RESIDENT>::IsSparse() const noexcept
 {
   assert(false);
   return false;
 }
 #endif
+
+template class AttrFileName<AttrResidentHeavy>;
+template class AttrFileName<AttrResidentLight>;
+
 }  // namespace NtfsBrowser

@@ -27,6 +27,8 @@ class FileReader
   std::optional<std::span<const BYTE>> Read(LARGE_INTEGER& addr,
                                             DWORD length) const;
 
+  Strategy GetStrategy() const;
+
  private:
   using HandlePtr =
       std::unique_ptr<std::remove_pointer_t<HANDLE>, decltype(&::CloseHandle)>;

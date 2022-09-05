@@ -7,18 +7,26 @@
 namespace NtfsBrowser
 {
 
-AttrStdInfo::AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord& fr)
-    : AttrResident(ahc, fr),
-      std_info_(*reinterpret_cast<const Attr::StandardInformation*>(GetData()))
+template <typename RESIDENT>
+AttrStdInfo<RESIDENT>::AttrStdInfo(const AttrHeaderCommon& ahc,
+                                   const FileRecord& fr)
+    : RESIDENT(ahc, fr),
+      std_info_(
+          *reinterpret_cast<const Attr::StandardInformation*>(this->GetData()))
 {
   NTFS_TRACE("Attribute: Standard Information\n");
 }
 
-AttrStdInfo::~AttrStdInfo() { NTFS_TRACE("AttrStdInfo deleted\n"); }
+template <typename RESIDENT>
+AttrStdInfo<RESIDENT>::~AttrStdInfo()
+{
+  NTFS_TRACE("AttrStdInfo deleted\n");
+}
 
 // Change from UTC time to local time
-void AttrStdInfo::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                              FILETIME* accessTm) const noexcept
+template <typename RESIDENT>
+void AttrStdInfo<RESIDENT>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
+                                        FILETIME* accessTm) const noexcept
 {
   if (writeTm != nullptr)
   {
@@ -36,49 +44,59 @@ void AttrStdInfo::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
   }
 }
 
-Flag::StdInfoPermission AttrStdInfo::GetFilePermission() const noexcept
+template <typename RESIDENT>
+Flag::StdInfoPermission
+    AttrStdInfo<RESIDENT>::GetFilePermission() const noexcept
 {
   return std_info_.permission;
 }
 
-bool AttrStdInfo::IsReadOnly() const noexcept
+template <typename RESIDENT>
+bool AttrStdInfo<RESIDENT>::IsReadOnly() const noexcept
 {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::READONLY);
 }
 
-bool AttrStdInfo::IsHidden() const noexcept
+template <typename RESIDENT>
+bool AttrStdInfo<RESIDENT>::IsHidden() const noexcept
 {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::HIDDEN);
 }
 
-bool AttrStdInfo::IsSystem() const noexcept
+template <typename RESIDENT>
+bool AttrStdInfo<RESIDENT>::IsSystem() const noexcept
 {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::SYSTEM);
 }
 
-bool AttrStdInfo::IsCompressed() const noexcept
+template <typename RESIDENT>
+bool AttrStdInfo<RESIDENT>::IsCompressed() const noexcept
 {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::COMPRESSED);
 }
 
-bool AttrStdInfo::IsEncrypted() const noexcept
+template <typename RESIDENT>
+bool AttrStdInfo<RESIDENT>::IsEncrypted() const noexcept
 {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::ENCRYPTED);
 }
 
-bool AttrStdInfo::IsSparse() const noexcept
+template <typename RESIDENT>
+bool AttrStdInfo<RESIDENT>::IsSparse() const noexcept
 {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::SPARSE);
 }
 
 // UTC filetime to Local filetime
-void AttrStdInfo::UTC2Local(const ULONGLONG& ultm, FILETIME& lftm) noexcept
+template <typename RESIDENT>
+void AttrStdInfo<RESIDENT>::UTC2Local(const ULONGLONG& ultm,
+                                      FILETIME& lftm) noexcept
 {
   const _ULARGE_INTEGER fti{.QuadPart = ultm};
   FILETIME ftt{.dwLowDateTime = fti.LowPart, .dwHighDateTime = fti.HighPart};
@@ -88,5 +106,8 @@ void AttrStdInfo::UTC2Local(const ULONGLONG& ultm, FILETIME& lftm) noexcept
     lftm = ftt;
   }
 }
+
+template class AttrStdInfo<AttrResidentHeavy>;
+template class AttrStdInfo<AttrResidentLight>;
 
 }  // namespace NtfsBrowser

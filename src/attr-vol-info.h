@@ -11,7 +11,8 @@ namespace Attr
 struct VolumeInformation;
 }  // namespace Attr
 
-class AttrVolInfo : public AttrResident
+template <typename RESIDENT>
+class AttrVolInfo : public RESIDENT
 {
  public:
   AttrVolInfo(const AttrHeaderCommon& ahc, const FileRecord& fr);

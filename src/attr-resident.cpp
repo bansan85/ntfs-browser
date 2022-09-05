@@ -11,22 +11,12 @@ namespace NtfsBrowser
 AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
     : AttrBase(ahc, fr)
 {
-  const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
-  body_.resize(header.attr_size);
-
-  memcpy(body_.data(),
-         &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
-         body_.size());
 }
 
 bool AttrResident::IsDataRunOK() const noexcept
 {
   return true;  // Always OK for a resident attribute
 }
-
-// Return Actural Data Size
-// *allocSize = Allocated Size
-ULONGLONG AttrResident::GetDataSize() const noexcept { return body_.size(); }
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
@@ -41,25 +31,60 @@ std::optional<ULONGLONG> AttrResident::ReadData(ULONGLONG offset,
   }
 
   // offset parameter error
-  if (offset >= body_.size())
+  if (offset >= GetDataSize())
   {
     return {};
   }
 
-  if ((offset + bufLen) > body_.size())
+  if ((offset + bufLen) > GetDataSize())
   {
-    actural = gsl::narrow<DWORD>(body_.size() - offset);  // Beyond scope
+    actural = gsl::narrow<DWORD>(GetDataSize() - offset);  // Beyond scope
   }
   else
   {
     actural = bufLen;
   }
 
-  memcpy(buffer.data(), &body_[offset], actural);
+  memcpy(buffer.data(), &GetData()[offset], actural);
 
   return bufLen;
 }
 
-const BYTE* AttrResident::GetData() const noexcept { return body_.data(); }
+AttrResidentLight::AttrResidentLight(const AttrHeaderCommon& ahc,
+                                     const FileRecord& fr)
+    : AttrResident(ahc, fr)
+{
+  const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
+
+  body_ = std::span<const BYTE>{
+      &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
+      header.attr_size};
+}
+
+const BYTE* AttrResidentLight::GetData() const noexcept { return body_.data(); }
+
+ULONGLONG AttrResidentLight::GetDataSize() const noexcept
+{
+  return body_.size();
+}
+
+AttrResidentHeavy::AttrResidentHeavy(const AttrHeaderCommon& ahc,
+                                     const FileRecord& fr)
+    : AttrResident(ahc, fr)
+{
+  const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
+
+  body_.resize(header.attr_size);
+  memcpy(body_.data(),
+         &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
+         header.attr_size);
+}
+
+const BYTE* AttrResidentHeavy::GetData() const noexcept { return body_.data(); }
+
+ULONGLONG AttrResidentHeavy::GetDataSize() const noexcept
+{
+  return body_.size();
+}
 
 }  // namespace NtfsBrowser

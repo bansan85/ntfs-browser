@@ -79,6 +79,7 @@ AttrList<TYPE_RESIDENT>::~AttrList()
 }
 
 template class AttrList<AttrNonResident>;
-template class AttrList<AttrResident>;
+template class AttrList<AttrResidentHeavy>;
+template class AttrList<AttrResidentLight>;
 
 }  // namespace NtfsBrowser

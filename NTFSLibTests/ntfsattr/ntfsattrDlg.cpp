@@ -255,11 +255,11 @@ void printattr(const AttrBase& attr, void* context, bool* /* bStop*/)
   CString line = _T("\r\n");
   line += AttrNames[ATTR_INDEX(attr.GetAttrType())];
 
-  std::wstring attrname = attr.GetAttrName();
+  std::wstring_view attrname = attr.GetAttrName();
   if (!attrname.empty())
   {
     line += '(';
-    line += attrname.c_str();
+    line += attrname.data();
     line += ')';
   }
   line += _T("\r\n");

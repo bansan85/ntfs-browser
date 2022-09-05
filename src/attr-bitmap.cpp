@@ -86,6 +86,7 @@ bool AttrBitmap<TYPE_RESIDENT>::IsClusterFree(ULONGLONG cluster)
 }
 
 template class AttrBitmap<AttrNonResident>;
-template class AttrBitmap<AttrResident>;
+template class AttrBitmap<AttrResidentHeavy>;
+template class AttrBitmap<AttrResidentLight>;
 
 }  // namespace NtfsBrowser

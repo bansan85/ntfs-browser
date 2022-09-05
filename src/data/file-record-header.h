@@ -1,12 +1,15 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <vector>
 
 #include <gsl/pointers>
 
 #include <windows.h>
+
+#include <ntfs-browser/file-reader.h>
 
 #include "../flag/file-record.h"
 
@@ -18,7 +21,7 @@ struct AttrHeaderCommon;
 
 struct FileRecordHeader
 {
-  union
+  union Data
   {
     struct
     {
@@ -48,5 +51,28 @@ struct FileRecordHeader
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
   const AttrHeaderCommon& HeaderCommon() noexcept;
+  static std::unique_ptr<FileRecordHeader>
+      Factory(std::span<const BYTE> buffer, size_t sector_size,
+              FileReader::Strategy strategy);
+  virtual const FileRecordHeader::Data* GetData() const = 0;
 };
+
+struct FileRecordHeaderLight : public FileRecordHeader
+{
+  std::span<const BYTE> data_;
+
+  FileRecordHeaderLight(std::span<const BYTE> buffer, size_t sector_size);
+
+  const FileRecordHeader::Data* GetData() const override;
+};
+
+struct FileRecordHeaderHeavy : public FileRecordHeader
+{
+  FileRecordHeader::Data data_;
+
+  FileRecordHeaderHeavy(std::span<const BYTE> buffer, size_t sector_size);
+
+  const FileRecordHeader::Data* GetData() const override;
+};
+
 }  // namespace NtfsBrowser

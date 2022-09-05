@@ -17,7 +17,8 @@ namespace Flag
 enum class StdInfoPermission : DWORD;
 }  // namespace Flag
 
-class AttrStdInfo : public AttrResident
+template <typename RESIDENT>
+class AttrStdInfo : public RESIDENT
 {
  public:
   AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord& fr);

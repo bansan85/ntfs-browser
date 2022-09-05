@@ -221,6 +221,11 @@ std::optional<ULONGLONG>
 // Judge if the DataRun is successfully parsed
 bool AttrNonResident::IsDataRunOK() const noexcept { return data_run_ok_; }
 
+const BYTE* AttrNonResident::GetData() const noexcept
+{
+  return reinterpret_cast<const BYTE*>(&attr_header_nr_);
+}
+
 // Return Actural Data Size
 // *allocSize = Allocated Size
 // not no except

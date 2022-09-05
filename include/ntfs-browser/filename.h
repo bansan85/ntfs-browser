@@ -34,7 +34,7 @@ class Filename
   // May be NULL for an IndexEntry
   const Attr::Filename* filename_{nullptr};
   // Uppercase Unicode File Name, used to compare file names
-  std::wstring filename_wuc_;
+  std::wstring_view filename_wuc_;
 
   void GetFilenameWUC();
 
@@ -51,7 +51,7 @@ class Filename
   [[nodiscard]] virtual bool IsEncrypted() const noexcept;
   [[nodiscard]] virtual bool IsSparse() const noexcept;
 
-  [[nodiscard]] std::wstring GetFilename() const;
+  [[nodiscard]] std::wstring_view GetFilename() const;
   [[nodiscard]] bool HasName() const noexcept;
   [[nodiscard]] bool IsWin32Name() const noexcept;
 

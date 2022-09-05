@@ -9,7 +9,8 @@ namespace NtfsBrowser
 {
 struct AttrHeaderCommon;
 
-class AttrFileName : public AttrResident, public Filename
+template <typename RESIDENT>
+class AttrFileName : public RESIDENT, public Filename
 {
  public:
   AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr);

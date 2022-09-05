@@ -2,7 +2,7 @@
 
 #include "ntfs-common.h"
 
-static constexpr size_t BUFFER_SIZE = 1024 * 1024 * 10;
+static constexpr LONGLONG BUFFER_SIZE = 1024 * 1024;
 
 namespace NtfsBrowser
 {
@@ -26,10 +26,7 @@ bool FileReader::Open(std::wstring_view volume)
 std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
                                                       DWORD length) const
 {
-  if ((strategy_ == Strategy::NO_CACHE) ||
-      (strategy_ == Strategy::FULL_CACHE &&
-       (addr.QuadPart / BUFFER_SIZE !=
-        (addr.QuadPart + length - 1) / BUFFER_SIZE)))
+  if (strategy_ == Strategy::NO_CACHE)
   {
     DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr.LowPart),
                                &addr.HighPart, FILE_BEGIN);
@@ -55,12 +52,16 @@ std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
 
     return std::span<const BYTE>{buffer_.data(), length};
   }
-  if (strategy_ == Strategy::FULL_CACHE &&
-      (addr.QuadPart / BUFFER_SIZE ==
-       (addr.QuadPart + length - 1) / BUFFER_SIZE))
+  if (strategy_ == Strategy::FULL_CACHE)
   {
-    LARGE_INTEGER addr2;
-    addr2.QuadPart = addr.QuadPart - addr.QuadPart % BUFFER_SIZE;
+    // Not implemented. Really needed ?
+    if (addr.QuadPart / BUFFER_SIZE !=
+        (addr.QuadPart + length - 1) / BUFFER_SIZE)
+    {
+      return {};
+    }
+    LARGE_INTEGER addr2{.QuadPart =
+                            addr.QuadPart - addr.QuadPart % BUFFER_SIZE};
     DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr2.LowPart),
                                &addr2.HighPart, FILE_BEGIN);
 
@@ -93,5 +94,7 @@ std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
   }
   return {};
 }
+
+FileReader::Strategy FileReader::GetStrategy() const { return strategy_; }
 
 }  // namespace NtfsBrowser

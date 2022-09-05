@@ -35,7 +35,7 @@ class AttrBase
   [[nodiscard]] DWORD GetAttrTotalSize() const noexcept;
   [[nodiscard]] bool IsNonResident() const noexcept;
   [[nodiscard]] WORD GetAttrFlags() const noexcept;
-  [[nodiscard]] std::wstring GetAttrName() const;
+  [[nodiscard]] std::wstring_view GetAttrName() const;
   [[nodiscard]] bool IsUnNamed() const noexcept;
 
  protected:
@@ -46,6 +46,7 @@ class AttrBase
   [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
 
  public:
+  [[nodiscard]] virtual const BYTE* GetData() const noexcept = 0;
   [[nodiscard]] virtual ULONGLONG GetDataSize() const noexcept = 0;
   [[nodiscard]] virtual std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, std::span<BYTE> buffer) const = 0;

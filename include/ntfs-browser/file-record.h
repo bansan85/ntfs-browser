@@ -57,6 +57,7 @@ class FileRecord
   void ClearAttrs() noexcept;
   void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
                     bool& bDiscard) noexcept;
+  template <typename RESIDENT>
   [[nodiscard]] std::unique_ptr<AttrBase> AllocAttr(const AttrHeaderCommon& ahc,
                                                     bool& bUnhandled);
   [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc);
@@ -83,7 +84,7 @@ class FileRecord
   [[nodiscard]] std::vector<std::unique_ptr<AttrBase>>&
       getAttr(DWORD attrType) noexcept;
 
-  [[nodiscard]] std::wstring GetFileName() const;
+  [[nodiscard]] std::wstring_view GetFileName() const;
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                    FILETIME* accessTm) const noexcept;
@@ -102,4 +103,5 @@ class FileRecord
   [[nodiscard]] bool IsEncrypted() const noexcept;
   [[nodiscard]] bool IsSparse() const noexcept;
 };  // FileRecord
+
 }  // namespace NtfsBrowser

@@ -159,7 +159,7 @@ void printfile(const IndexEntry& ie, void* context)
   }
 
   FILETIME ft;
-  std::wstring fn = ie.GetFilename();
+  std::wstring_view fn = ie.GetFilename();
   if (fn.empty())
   {
     return;
@@ -182,7 +182,7 @@ void printfile(const IndexEntry& ie, void* context)
     }
 
     printf("<%c%c%c>\t%ls\n", ie.IsReadOnly() ? 'R' : ' ',
-           ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.c_str());
+           ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.data());
   }
 
   if (ie.IsDirectory())

@@ -62,43 +62,46 @@ void FileRecord::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
 }
 
 extern template class NtfsBrowser::AttrBitmap<AttrNonResident>;
-extern template class NtfsBrowser::AttrBitmap<AttrResident>;
+extern template class NtfsBrowser::AttrBitmap<AttrResidentLight>;
+extern template class NtfsBrowser::AttrBitmap<AttrResidentHeavy>;
 extern template class NtfsBrowser::AttrList<AttrNonResident>;
-extern template class NtfsBrowser::AttrList<AttrResident>;
+extern template class NtfsBrowser::AttrList<AttrResidentLight>;
+extern template class NtfsBrowser::AttrList<AttrResidentHeavy>;
 
+template <typename RESIDENT>
 std::unique_ptr<AttrBase> FileRecord::AllocAttr(const AttrHeaderCommon& ahc,
                                                 bool& bUnhandled)
 {
   switch (ahc.type)
   {
     case static_cast<DWORD>(AttrType::STANDARD_INFORMATION):
-      return std::make_unique<AttrStdInfo>(ahc, *this);
+      return std::make_unique<AttrStdInfo<RESIDENT>>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::ATTRIBUTE_LIST):
       if (ahc.non_resident != 0)
       {
         return std::make_unique<AttrList<AttrNonResident>>(ahc, *this);
       }
-      return std::make_unique<AttrList<AttrResident>>(ahc, *this);
+      return std::make_unique<AttrList<RESIDENT>>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::FILE_NAME):
-      return std::make_unique<AttrFileName>(ahc, *this);
+      return std::make_unique<AttrFileName<RESIDENT>>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::VOLUME_NAME):
-      return std::make_unique<AttrVolName>(ahc, *this);
+      return std::make_unique<AttrVolName<RESIDENT>>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::VOLUME_INFORMATION):
-      return std::make_unique<AttrVolInfo>(ahc, *this);
+      return std::make_unique<AttrVolInfo<RESIDENT>>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::DATA):
       if (ahc.non_resident != 0)
       {
         return std::make_unique<AttrData<AttrNonResident>>(ahc, *this);
       }
-      return std::make_unique<AttrData<AttrResident>>(ahc, *this);
+      return std::make_unique<AttrData<RESIDENT>>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::INDEX_ROOT):
-      return std::make_unique<AttrIndexRoot>(ahc, *this);
+      return std::make_unique<AttrIndexRoot<RESIDENT>>(ahc, *this);
 
     case static_cast<DWORD>(AttrType::INDEX_ALLOCATION):
       return std::make_unique<AttrIndexAlloc>(ahc, *this);
@@ -110,7 +113,7 @@ std::unique_ptr<AttrBase> FileRecord::AllocAttr(const AttrHeaderCommon& ahc,
       }
       // Resident Bitmap may exist in a directory's FileRecord
       // or in $MFT for a very small volume in theory
-      return std::make_unique<AttrBitmap<AttrResident>>(ahc, *this);
+      return std::make_unique<AttrBitmap<RESIDENT>>(ahc, *this);
 
     // Unhandled Attributes
     default:
@@ -119,7 +122,7 @@ std::unique_ptr<AttrBase> FileRecord::AllocAttr(const AttrHeaderCommon& ahc,
       {
         return std::make_unique<AttrNonResident>(ahc, *this);
       }
-      return std::make_unique<AttrResident>(ahc, *this);
+      return std::make_unique<RESIDENT>(ahc, *this);
   }
 }
 
@@ -145,7 +148,12 @@ bool FileRecord::ParseAttr(const AttrHeaderCommon& ahc)
   }
 
   bool bUnhandled = false;
-  std::unique_ptr<AttrBase> attr = AllocAttr(ahc, bUnhandled);
+
+  std::unique_ptr<AttrBase> attr;
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+    attr = AllocAttr<AttrResidentHeavy>(ahc, bUnhandled);
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+    attr = AllocAttr<AttrResidentLight>(ahc, bUnhandled);
   if (attr)
   {
     if (bUnhandled)
@@ -177,9 +185,8 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
       return {};
     }
 
-    std::unique_ptr<FileRecordHeader> fr =
-        std::make_unique<FileRecordHeader>(*buffer, volume_.GetSectorSize());
-    return fr;
+    return FileRecordHeader::Factory(*buffer, volume_.GetSectorSize(),
+                                     volume_.volume_.GetStrategy());
   }
 
   // May be fragmented $MFT
@@ -193,8 +200,9 @@ std::unique_ptr<FileRecordHeader> FileRecord::ReadFileRecord(ULONGLONG fileRef)
     return {};
   }
 
-  std::unique_ptr<FileRecordHeader> fr =
-      std::make_unique<FileRecordHeader>(buffer_file, volume_.GetSectorSize());
+  std::unique_ptr<FileRecordHeaderHeavy> fr =
+      std::make_unique<FileRecordHeaderHeavy>(buffer_file,
+                                              volume_.GetSectorSize());
   return fr;
 }
 
@@ -220,7 +228,7 @@ bool FileRecord::ParseFileRecord(ULONGLONG fileRef)
 
   file_reference_ = fileRef;
 
-  if (fr->magic != kFileRecordMagic)
+  if (fr->GetData()->magic != kFileRecordMagic)
   {
     NTFS_TRACE("Invalid file record\n");
     return false;
@@ -346,7 +354,7 @@ bool FileRecord::ParseAttrs()
 
   DWORD dataPtr = 0;  // guard if data exceeds file_record_size_ bounds
   const AttrHeaderCommon* ahc = &file_record_->HeaderCommon();
-  dataPtr += file_record_->offset_of_attr;
+  dataPtr += file_record_->GetData()->offset_of_attr;
 
   while (ahc->type != static_cast<DWORD>(-1) &&
          (dataPtr + ahc->total_size) <= volume_.GetFileRecordSize())
@@ -458,14 +466,23 @@ std::vector<std::unique_ptr<AttrBase>>&
 }
 
 // Get File Name (First Win32 name)
-std::wstring FileRecord::GetFileName() const
+std::wstring_view FileRecord::GetFileName() const
 {
   // A file may have several filenames
   // Return the first Win32 filename
   for (const std::unique_ptr<AttrBase>& fn_ :
        attr_list_[ATTR_INDEX(static_cast<DWORD>(AttrType::FILE_NAME))])
   {
-    const auto* fn = static_cast<const AttrFileName*>(fn_.get());
+    const Filename* fn;
+    if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+    {
+      fn = static_cast<const AttrFileName<AttrResidentHeavy>*>(fn_.get());
+    }
+    else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+    {
+      fn = static_cast<const AttrFileName<AttrResidentLight>*>(fn_.get());
+    }
+
     if (fn->IsWin32Name() && !fn->GetFilename().empty())
     {
       return fn->GetFilename();
@@ -480,9 +497,23 @@ ULONGLONG FileRecord::GetFileSize() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec =
       attr_list_[ATTR_INDEX(static_cast<DWORD>(AttrType::FILE_NAME))];
-  return vec.empty() ? 0
-                     : reinterpret_cast<const AttrFileName*>(vec.front().get())
-                           ->GetFileSize();
+  if (vec.empty())
+  {
+    return 0;
+  }
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<const AttrFileName<AttrResidentHeavy>*>(
+               vec.front().get())
+        ->GetFileSize();
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<const AttrFileName<AttrResidentLight>*>(
+               vec.front().get())
+        ->GetFileSize();
+  }
+  return 0;
 }
 
 // Get File Times
@@ -494,8 +525,18 @@ void FileRecord::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
   // Standard Information attribute hold the most updated file time
   if (!vec.empty())
   {
-    reinterpret_cast<const AttrStdInfo*>(vec.front().get())
-        ->GetFileTime(writeTm, createTm, accessTm);
+    if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+    {
+      return reinterpret_cast<const AttrStdInfo<AttrResidentHeavy>*>(
+                 vec.front().get())
+          ->GetFileTime(writeTm, createTm, accessTm);
+    }
+    else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+    {
+      return reinterpret_cast<const AttrStdInfo<AttrResidentLight>*>(
+                 vec.front().get())
+          ->GetFileTime(writeTm, createTm, accessTm);
+    }
     return;
   }
 
@@ -532,14 +573,32 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
     return;
   }
 
-  const auto* ir = reinterpret_cast<const AttrIndexRoot*>(vec.front().get());
+  const std::vector<IndexEntry>* all_ie;
 
-  if (!ir->IsFileName())
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
   {
-    return;
+    const auto* ir = reinterpret_cast<const AttrIndexRoot<AttrResidentHeavy>*>(
+        vec.front().get());
+
+    if (!ir->IsFileName())
+    {
+      return;
+    }
+    all_ie = ir;
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    const auto* ir = reinterpret_cast<const AttrIndexRoot<AttrResidentLight>*>(
+        vec.front().get());
+
+    if (!ir->IsFileName())
+    {
+      return;
+    }
+    all_ie = ir;
   }
 
-  for (const IndexEntry& ie : *ir)
+  for (const IndexEntry& ie : *all_ie)
   {
     // Visit subnode first
     if (ie.IsSubNodePtr())
@@ -566,14 +625,36 @@ std::optional<IndexEntry>
     return {};
   }
 
-  const auto* ir = reinterpret_cast<const AttrIndexRoot*>(vec.front().get());
+  const std::vector<IndexEntry>* all_ie = nullptr;
 
-  if (!ir->IsFileName())
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  {
+    const auto* ir = reinterpret_cast<const AttrIndexRoot<AttrResidentHeavy>*>(
+        vec.front().get());
+
+    if (!ir->IsFileName())
+    {
+      return {};
+    }
+    all_ie = ir;
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    const auto* ir = reinterpret_cast<const AttrIndexRoot<AttrResidentLight>*>(
+        vec.front().get());
+
+    if (!ir->IsFileName())
+    {
+      return {};
+    }
+    all_ie = ir;
+  }
+  else
   {
     return {};
   }
 
-  for (const IndexEntry& ie : *ir)
+  for (const IndexEntry& ie : *all_ie)
   {
     if (ie.HasName())
     {
@@ -645,13 +726,15 @@ const AttrBase* FileRecord::FindStream(std::wstring_view name)
 // Check if it's deleted or in use
 bool FileRecord::IsDeleted() const noexcept
 {
-  return !static_cast<bool>(file_record_->flags & Flag::FileRecord::INUSE);
+  return !static_cast<bool>(file_record_->GetData()->flags &
+                            Flag::FileRecord::INUSE);
 }
 
 // Check if it's a directory
 bool FileRecord::IsDirectory() const noexcept
 {
-  return static_cast<bool>(file_record_->flags & Flag::FileRecord::DIR);
+  return static_cast<bool>(file_record_->GetData()->flags &
+                           Flag::FileRecord::DIR);
 }
 
 bool FileRecord::IsReadOnly() const noexcept
@@ -659,54 +742,151 @@ bool FileRecord::IsReadOnly() const noexcept
   // Standard Information attribute holds the most updated file time
   const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
-  return vec.empty() ? false
-                     : reinterpret_cast<const AttrStdInfo*>(vec.front().get())
-                           ->IsReadOnly();
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentHeavy>*>(
+               vec.front().get())
+        ->IsReadOnly();
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentLight>*>(
+               vec.front().get())
+        ->IsReadOnly();
+  }
+  return false;
 }
 
 bool FileRecord::IsHidden() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
-  return vec.empty() ? false
-                     : reinterpret_cast<const AttrStdInfo*>(vec.front().get())
-                           ->IsHidden();
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentHeavy>*>(
+               vec.front().get())
+        ->IsHidden();
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentLight>*>(
+               vec.front().get())
+        ->IsHidden();
+  }
+  return false;
 }
 
 bool FileRecord::IsSystem() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
-  return vec.empty() ? false
-                     : reinterpret_cast<const AttrStdInfo*>(vec.front().get())
-                           ->IsSystem();
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentHeavy>*>(
+               vec.front().get())
+        ->IsSystem();
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentLight>*>(
+               vec.front().get())
+        ->IsSystem();
+  }
+  return false;
 }
 
 bool FileRecord::IsCompressed() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
-  return vec.empty() ? false
-                     : reinterpret_cast<const AttrStdInfo*>(vec.front().get())
-                           ->IsCompressed();
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentHeavy>*>(
+               vec.front().get())
+        ->IsCompressed();
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentLight>*>(
+               vec.front().get())
+        ->IsCompressed();
+  }
+  return false;
 }
 
 bool FileRecord::IsEncrypted() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
-  return vec.empty() ? false
-                     : reinterpret_cast<const AttrStdInfo*>(vec.front().get())
-                           ->IsEncrypted();
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentHeavy>*>(
+               vec.front().get())
+        ->IsEncrypted();
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentLight>*>(
+               vec.front().get())
+        ->IsEncrypted();
+  }
+  return false;
 }
 
 bool FileRecord::IsSparse() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
       static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
-  return vec.empty() ? false
-                     : reinterpret_cast<const AttrStdInfo*>(vec.front().get())
-                           ->IsSparse();
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentHeavy>*>(
+               vec.front().get())
+        ->IsSparse();
+  }
+  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<const AttrStdInfo<AttrResidentLight>*>(
+               vec.front().get())
+        ->IsSparse();
+  }
+  return false;
 }
+
+template std::unique_ptr<AttrBase>
+    FileRecord::AllocAttr<AttrResidentHeavy>(const AttrHeaderCommon& ahc,
+                                             bool& bUnhandled);
+template std::unique_ptr<AttrBase>
+    FileRecord::AllocAttr<AttrResidentLight>(const AttrHeaderCommon& ahc,
+                                             bool& bUnhandled);
 
 }  // namespace NtfsBrowser

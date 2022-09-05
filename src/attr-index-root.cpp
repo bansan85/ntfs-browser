@@ -9,9 +9,11 @@
 namespace NtfsBrowser
 {
 
-AttrIndexRoot::AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr)
-    : AttrResident(ahc, fr),
-      index_root_(reinterpret_cast<const Attr::IndexRoot*>(GetData()))
+template <typename RESIDENT>
+AttrIndexRoot<RESIDENT>::AttrIndexRoot(const AttrHeaderCommon& ahc,
+                                       const FileRecord& fr)
+    : RESIDENT(ahc, fr),
+      index_root_(reinterpret_cast<const Attr::IndexRoot*>(this->GetData()))
 {
   NTFS_TRACE("Attribute: Index Root\n");
 
@@ -24,10 +26,15 @@ AttrIndexRoot::AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr)
   ParseIndexEntries();
 }
 
-AttrIndexRoot::~AttrIndexRoot() { NTFS_TRACE("AttrIndexRoot deleted\n"); }
+template <typename RESIDENT>
+AttrIndexRoot<RESIDENT>::~AttrIndexRoot()
+{
+  NTFS_TRACE("AttrIndexRoot deleted\n");
+}
 
 // Get all the index entries
-void AttrIndexRoot::ParseIndexEntries()
+template <typename RESIDENT>
+void AttrIndexRoot<RESIDENT>::ParseIndexEntries()
 {
   const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
       reinterpret_cast<const BYTE*>(&(index_root_->entry_offset)) +
@@ -52,9 +59,13 @@ void AttrIndexRoot::ParseIndexEntries()
 }
 
 // Check if this IndexRoot contains Filename or IndexView
-bool AttrIndexRoot::IsFileName() const noexcept
+template <typename RESIDENT>
+bool AttrIndexRoot<RESIDENT>::IsFileName() const noexcept
 {
   return (index_root_->attr_type == static_cast<DWORD>(AttrType::FILE_NAME));
 }
+
+template class AttrIndexRoot<AttrResidentHeavy>;
+template class AttrIndexRoot<AttrResidentLight>;
 
 }  // namespace NtfsBrowser

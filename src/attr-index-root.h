@@ -14,7 +14,8 @@ namespace Attr
 struct IndexRoot;
 }  // namespace Attr
 
-class AttrIndexRoot : public AttrResident, public std::vector<IndexEntry>
+template <typename RESIDENT>
+class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntry>
 {
  public:
   AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr);

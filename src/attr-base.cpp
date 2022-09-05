@@ -33,7 +33,7 @@ bool AttrBase::IsNonResident() const noexcept
 WORD AttrBase::GetAttrFlags() const noexcept { return attr_header_.flags; }
 
 // Get UNICODE Attribute name
-std::wstring AttrBase::GetAttrName() const
+std::wstring_view AttrBase::GetAttrName() const
 {
   if (attr_header_.name_length == 0)
   {
@@ -41,11 +41,10 @@ std::wstring AttrBase::GetAttrName() const
     return {};
   }
 
-  std::wstring retval;
-  retval.resize(attr_header_.name_length, '\0');
-  const auto* namePtr = reinterpret_cast<const wchar_t*>(
-      reinterpret_cast<const BYTE*>(&attr_header_) + attr_header_.name_offset);
-  retval.assign(namePtr, attr_header_.name_length);
+  std::wstring_view retval{reinterpret_cast<const wchar_t*>(
+                               reinterpret_cast<const BYTE*>(&attr_header_) +
+                               attr_header_.name_offset),
+                           attr_header_.name_length};
 
   NTFS_TRACE("Unicode Attribute Name\n");
   return retval;

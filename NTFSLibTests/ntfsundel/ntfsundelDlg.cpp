@@ -235,13 +235,14 @@ void CNtfsundelDlg::OnSearch()
     }
 
     // Check file name
-    std::wstring fn = fr.GetFileName();
+    std::wstring_view fn = fr.GetFileName();
     if (fn.empty())
     {
       continue;
     }
 
-    if (std::regex_match(fn, regx))
+    std::wstring sw = {fn.begin(), fn.end()};
+    if (std::regex_match(sw, regx))
     {
       // Add to list
       CString s;
@@ -249,7 +250,7 @@ void CNtfsundelDlg::OnSearch()
 
       const int itm = m_files.InsertItem(count, s);
       // File name
-      m_files.SetItemText(itm, 1, fn.c_str());
+      m_files.SetItemText(itm, 1, sw.c_str());
       // Time
       FILETIME ft;
       fr.GetFileTime(&ft, nullptr, nullptr);
@@ -264,7 +265,7 @@ void CNtfsundelDlg::OnSearch()
 
       // Prevent showing too many entries, 50,000 maxiam
       count++;
-      constexpr DWORD MAX_NUMBER_FILES = 50000;
+      static constexpr DWORD MAX_NUMBER_FILES = 50000;
       if (count >= MAX_NUMBER_FILES)
       {
         MessageBox(

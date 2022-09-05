@@ -1,5 +1,6 @@
 #pragma once
 
+#include <span>
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
@@ -23,15 +24,33 @@ class AttrResident : public AttrBase
   AttrResident& operator=(AttrResident const& other) = delete;
   ~AttrResident() override = default;
 
- private:
-  std::vector<BYTE> body_;
-
  protected:
   [[nodiscard]] bool IsDataRunOK() const noexcept override;
 
-  [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, std::span<BYTE> buffer) const override;
-  [[nodiscard]] const BYTE* GetData() const noexcept;
 };  // AttrResident
+
+class AttrResidentLight : public AttrResident
+{
+ public:
+  AttrResidentLight(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  [[nodiscard]] const BYTE* GetData() const noexcept override;
+  [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
+
+ private:
+  std::span<const BYTE> body_;
+};
+
+class AttrResidentHeavy : public AttrResident
+{
+ public:
+  AttrResidentHeavy(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  [[nodiscard]] const BYTE* GetData() const noexcept override;
+  [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
+
+ private:
+  std::vector<BYTE> body_;
+};
+
 }  // namespace NtfsBrowser

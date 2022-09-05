@@ -8,9 +8,10 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
     : sector_size(sector_size)
 {
   _ASSERT(1024 == buffer.size());
-  memcpy(&raw[0], buffer.data(), buffer.size());
 
-  if (magic != kFileRecordMagic)
+  const Data* data = reinterpret_cast<const Data*>(buffer.data());
+
+  if (data->magic != kFileRecordMagic)
   {
     us_number = 0;
     return;
@@ -18,7 +19,7 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
 
   us_array.reserve(buffer.size() / sector_size);
   const gsl::not_null<const WORD*> usnaddr =
-      reinterpret_cast<const WORD*>(buffer.data() + offset_of_us);
+      reinterpret_cast<const WORD*>(buffer.data() + data->offset_of_us);
   us_number = *usnaddr;
   const gsl::not_null<const WORD*> usarray = usnaddr.get() + 1;
 
@@ -30,7 +31,8 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
 
 bool FileRecordHeader::PatchUS() noexcept
 {
-  gsl::not_null<WORD*> sector = reinterpret_cast<WORD*>(&raw[0]);
+  gsl::not_null<WORD*> sector =
+      const_cast<WORD*>(reinterpret_cast<const WORD*>(&GetData()->raw[0]));
   for (WORD value : us_array)
   {
     sector = sector.get() + ((sector_size >> 1U) - 1);
@@ -48,6 +50,52 @@ bool FileRecordHeader::PatchUS() noexcept
 
 const AttrHeaderCommon& FileRecordHeader::HeaderCommon() noexcept
 {
-  return *reinterpret_cast<const AttrHeaderCommon*>(&raw[0] + offset_of_attr);
+  return *reinterpret_cast<const AttrHeaderCommon*>(&GetData()->raw[0] +
+                                                    GetData()->offset_of_attr);
 }
+
+std::unique_ptr<FileRecordHeader>
+    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size,
+                              FileReader::Strategy strategy)
+{
+  switch (strategy)
+  {
+    case FileReader::Strategy::NO_CACHE:
+    {
+      return std::make_unique<FileRecordHeaderHeavy>(buffer, sector_size);
+    }
+    case FileReader::Strategy::FULL_CACHE:
+    {
+      return std::make_unique<FileRecordHeaderLight>(buffer, sector_size);
+    }
+    default:
+    {
+      return {};
+    }
+  }
+}
+
+FileRecordHeaderLight::FileRecordHeaderLight(std::span<const BYTE> buffer,
+                                             size_t sector_size)
+    : FileRecordHeader(buffer, sector_size), data_(buffer)
+{
+}
+
+const FileRecordHeader::Data* FileRecordHeaderLight::GetData() const
+{
+  return reinterpret_cast<const Data*>(data_.data());
+}
+
+FileRecordHeaderHeavy::FileRecordHeaderHeavy(std::span<const BYTE> buffer,
+                                             size_t sector_size)
+    : FileRecordHeader(buffer, sector_size)
+{
+  memcpy(&data_.raw[0], buffer.data(), buffer.size());
+}
+
+const FileRecordHeader::Data* FileRecordHeaderHeavy::GetData() const
+{
+  return &data_;
+}
+
 }  // namespace NtfsBrowser
