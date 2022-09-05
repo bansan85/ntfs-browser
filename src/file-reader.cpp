@@ -2,6 +2,8 @@
 
 #include "ntfs-common.h"
 
+static constexpr size_t BUFFER_SIZE = 1024 * 1024 * 10;
+
 namespace NtfsBrowser
 {
 
@@ -24,7 +26,10 @@ bool FileReader::Open(std::wstring_view volume)
 std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
                                                       DWORD length) const
 {
-  if (strategy_ == Strategy::NO_CACHE)
+  if ((strategy_ == Strategy::NO_CACHE) ||
+      (strategy_ == Strategy::FULL_CACHE &&
+       (addr.QuadPart / BUFFER_SIZE !=
+        (addr.QuadPart + length - 1) / BUFFER_SIZE)))
   {
     DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr.LowPart),
                                &addr.HighPart, FILE_BEGIN);
@@ -49,6 +54,42 @@ std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
     }
 
     return std::span<const BYTE>{buffer_.data(), length};
+  }
+  if (strategy_ == Strategy::FULL_CACHE &&
+      (addr.QuadPart / BUFFER_SIZE ==
+       (addr.QuadPart + length - 1) / BUFFER_SIZE))
+  {
+    LARGE_INTEGER addr2;
+    addr2.QuadPart = addr.QuadPart - addr.QuadPart % BUFFER_SIZE;
+    DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr2.LowPart),
+                               &addr2.HighPart, FILE_BEGIN);
+
+    if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
+    {
+      NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
+      return {};
+    }
+
+    size_t index = addr.QuadPart / BUFFER_SIZE;
+    if (map_buffer_.contains(index))
+    {
+      return std::span<const BYTE>{
+          &map_buffer_[index][addr.QuadPart % BUFFER_SIZE], length};
+    }
+
+    map_buffer_[index] = std::vector<BYTE>(BUFFER_SIZE);
+
+    std::vector<BYTE>& map_buf = map_buffer_[index];
+
+    if (ReadFile(handle_.get(), &map_buf[0], BUFFER_SIZE, &len, nullptr) ==
+            FALSE ||
+        len != BUFFER_SIZE)
+    {
+      NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+      return {};
+    }
+
+    return std::span<const BYTE>{&map_buf[addr.QuadPart % BUFFER_SIZE], length};
   }
   return {};
 }

@@ -33,7 +33,7 @@ FileRecord::FileRecord(const NtfsVolume& volume) : volume_(volume)
   // Default to parse all attributes
 }
 
-FileRecord::~FileRecord() { ClearAttrs(); }
+FileRecord::~FileRecord() {}
 
 const NtfsVolume& FileRecord::GetVolume() const noexcept { return volume_; }
 

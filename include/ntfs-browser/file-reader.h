@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -16,8 +17,8 @@ class FileReader
  public:
   enum class Strategy
   {
-    NO_CACHE /*,
-    SEQUENTIAL*/
+    NO_CACHE,
+    FULL_CACHE
   };
 
   FileReader(Strategy strategy);
@@ -34,6 +35,7 @@ class FileReader
   Strategy strategy_;
 
   mutable std::vector<BYTE> buffer_;
+  mutable std::map<size_t, std::vector<BYTE>> map_buffer_;
 };
 
 }  // namespace NtfsBrowser
