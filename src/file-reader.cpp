@@ -1,3 +1,5 @@
+#include <cassert>
+
 #include <ntfs-browser/file-reader.h>
 
 #include "ntfs-common.h"
@@ -55,11 +57,8 @@ std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
   if (strategy_ == Strategy::FULL_CACHE)
   {
     // Not implemented. Really needed ?
-    if (addr.QuadPart / BUFFER_SIZE !=
-        (addr.QuadPart + length - 1) / BUFFER_SIZE)
-    {
-      return {};
-    }
+    assert(addr.QuadPart / BUFFER_SIZE ==
+           (addr.QuadPart + length - 1) / BUFFER_SIZE);
     LARGE_INTEGER addr2{.QuadPart =
                             addr.QuadPart - addr.QuadPart % BUFFER_SIZE};
     DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr2.LowPart),
