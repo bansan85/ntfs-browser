@@ -1,0 +1,69 @@
+---
+name: Build
+on: [push]
+env:
+  VERBOSE: 1
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+#        name: [gcc, clang, windows, clang-cfi]
+        name: [windows]
+        build_shared_libs: [ON, OFF]
+        include:
+#          - name: gcc
+#            ar: /usr/bin/ar
+#            cxx: /usr/bin/g++-11
+#            ranlib: /usr/bin/ranlib
+#            os: ubuntu-22.04
+#            buildall: all
+#            cxx_flags: -fno-omit-frame-pointer -g -O0
+#            ld_flags: -Wl,-O0
+#          - name: clang
+#            ar: /usr/bin/llvm-ar-14
+#            cxx: /usr/bin/clang++-14
+#            ranlib: /usr/bin/llvm-ranlib-14
+#            os: ubuntu-22.04
+#            buildall: all
+#            cxx_flags: -fno-omit-frame-pointer -g -O0
+#            ld_flags: -Wl,-O0
+          - name: windows
+            cxx: cl
+            os: windows-latest
+            buildall: ALL_BUILD
+            cxx_flags: /MP
+#          - name: clang-cfi
+#            ar: /usr/bin/llvm-ar-14
+#            cxx: /usr/bin/clang++-14
+#            ranlib: /usr/bin/llvm-ranlib-14
+#            os: ubuntu-22.04
+#            buildall: all
+#            cxx_flags: -fno-omit-frame-pointer -g -O0 -fsanitize=cfi -flto=thin -fvisibility=hidden -fno-sanitize-trap=cfi
+#            ld_flags: -fuse-ld=gold -Wl,-O0
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+#      - name: Install gcc
+#        if: contains(matrix.cxx, '/g++')
+#        run: sudo apt-get install -yq g++-11 gcc-11
+#      - name: Install clang
+#        if: contains(matrix.cxx, 'clang++')
+#       run: sudo apt-get install -yq clang-14 llvm-14
+#      - name: Install NSIS (Linux)
+#        if: contains(matrix.os, 'ubuntu')
+#        run: sudo apt-get install -yq nsis
+#      - name: Install NSIS (Windows)
+#        if: contains(matrix.os, 'windows')
+#        run: |
+#          iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+#          scoop bucket add extras
+#          scoop install nsis
+      - name: cmake
+        run: |
+          mkdir build_lib
+          $env:CXXFLAGS = "${{ matrix.cxx_flags }}"
+          cmake -S . -B build_lib -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install_path" -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" -DBUILD_SHARED_LIBS:BOOL=${{ matrix.build_shared_libs }} -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.ld_flags }}" || exit 1
+          cmake --build build_lib/ --target ${{ matrix.buildall }} --config ${{ matrix.build_type }} || exit 1
