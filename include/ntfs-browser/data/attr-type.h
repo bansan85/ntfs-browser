@@ -1,9 +1,11 @@
 #pragma once
 
+#include <windows.h>
+
 namespace NtfsBrowser
 {
 
-enum class AttrType
+enum class AttrType : DWORD
 {
   // Attribute Header
 
@@ -22,7 +24,8 @@ enum class AttrType
   EA_INFORMATION = 0xD0,
   EA = 0xE0,
   PROPERTY_SET = 0xF0,
-  LOGGED_UTILITY_STREAM = 0x100
+  LOGGED_UTILITY_STREAM = 0x100,
+  ALL = static_cast<DWORD>(-1)
 };
 
 }  // namespace NtfsBrowser

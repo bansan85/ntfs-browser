@@ -387,7 +387,7 @@ void CNtfsattrDlg::OnOK()
   }
 
   // parse all attributes
-  fr.SetAttrMask(MASK_ALL);
+  fr.SetAttrMask(Mask::ALL);
   if (!fr.ParseAttrs())
   {
     if (fr.IsCompressed())

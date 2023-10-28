@@ -74,39 +74,39 @@ std::unique_ptr<AttrBase> FileRecord::AllocAttr(const AttrHeaderCommon& ahc,
 {
   switch (ahc.type)
   {
-    case static_cast<DWORD>(AttrType::STANDARD_INFORMATION):
+    case AttrType::STANDARD_INFORMATION:
       return std::make_unique<AttrStdInfo<RESIDENT>>(ahc, *this);
 
-    case static_cast<DWORD>(AttrType::ATTRIBUTE_LIST):
+    case AttrType::ATTRIBUTE_LIST:
       if (ahc.non_resident != 0)
       {
         return std::make_unique<AttrList<AttrNonResident>>(ahc, *this);
       }
       return std::make_unique<AttrList<RESIDENT>>(ahc, *this);
 
-    case static_cast<DWORD>(AttrType::FILE_NAME):
+    case AttrType::FILE_NAME:
       return std::make_unique<AttrFileName<RESIDENT>>(ahc, *this);
 
-    case static_cast<DWORD>(AttrType::VOLUME_NAME):
+    case AttrType::VOLUME_NAME:
       return std::make_unique<AttrVolName<RESIDENT>>(ahc, *this);
 
-    case static_cast<DWORD>(AttrType::VOLUME_INFORMATION):
+    case AttrType::VOLUME_INFORMATION:
       return std::make_unique<AttrVolInfo<RESIDENT>>(ahc, *this);
 
-    case static_cast<DWORD>(AttrType::DATA):
+    case AttrType::DATA:
       if (ahc.non_resident != 0)
       {
         return std::make_unique<AttrData<AttrNonResident>>(ahc, *this);
       }
       return std::make_unique<AttrData<RESIDENT>>(ahc, *this);
 
-    case static_cast<DWORD>(AttrType::INDEX_ROOT):
+    case AttrType::INDEX_ROOT:
       return std::make_unique<AttrIndexRoot<RESIDENT>>(ahc, *this);
 
-    case static_cast<DWORD>(AttrType::INDEX_ALLOCATION):
+    case AttrType::INDEX_ALLOCATION:
       return std::make_unique<AttrIndexAlloc>(ahc, *this);
 
-    case static_cast<DWORD>(AttrType::BITMAP):
+    case AttrType::BITMAP:
       if (ahc.non_resident != 0)
       {
         return std::make_unique<AttrBitmap<AttrNonResident>>(ahc, *this);
@@ -251,7 +251,7 @@ std::optional<IndexEntry>
     FileRecord::VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName) const
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec =
-      getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
+      getAttr(AttrType::INDEX_ALLOCATION);
   if (vec.empty())
   {
     return {};
@@ -313,7 +313,7 @@ void FileRecord::TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
                                  void* context) const
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec =
-      getAttr(static_cast<DWORD>(AttrType::INDEX_ALLOCATION));
+      getAttr(AttrType::INDEX_ALLOCATION);
   if (vec.empty())
   {
     return;
@@ -356,7 +356,7 @@ bool FileRecord::ParseAttrs()
   const AttrHeaderCommon* ahc = &file_record_->HeaderCommon();
   dataPtr += file_record_->GetData()->offset_of_attr;
 
-  while (ahc->type != static_cast<DWORD>(-1) &&
+  while (ahc->type != AttrType::ALL &&
          (dataPtr + ahc->total_size) <= volume_.GetFileRecordSize())
   {
     if (static_cast<bool>(ATTR_MASK(ahc->type) &
@@ -384,7 +384,8 @@ bool FileRecord::ParseAttrs()
 }
 
 // Install Attribute raw data CallBack routines for a single File Record
-bool FileRecord::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept
+bool FileRecord::InstallAttrRawCB(AttrType attrType,
+                                  AttrRawCallback cb) noexcept
 {
   const DWORD atIdx = ATTR_INDEX(attrType);
   if (atIdx >= kAttrNums)
@@ -438,7 +439,7 @@ void FileRecord::TraverseAttrs(ATTRS_CALLBACK attrCallBack,
 
 // Find Attributes
 const std::vector<std::unique_ptr<AttrBase>>&
-    FileRecord::getAttr(DWORD attrType) const noexcept
+    FileRecord::getAttr(AttrType attrType) const noexcept
 {
   static std::vector<std::unique_ptr<AttrBase>> dummy{};
   const DWORD attrIdx = ATTR_INDEX(attrType);
@@ -452,7 +453,7 @@ const std::vector<std::unique_ptr<AttrBase>>&
 }
 
 std::vector<std::unique_ptr<AttrBase>>&
-    FileRecord::getAttr(DWORD attrType) noexcept
+    FileRecord::getAttr(AttrType attrType) noexcept
 {
   static std::vector<std::unique_ptr<AttrBase>> dummy{};
   const DWORD attrIdx = ATTR_INDEX(attrType);
@@ -471,7 +472,7 @@ std::wstring_view FileRecord::GetFileName() const
   // A file may have several filenames
   // Return the first Win32 filename
   for (const std::unique_ptr<AttrBase>& fn_ :
-       attr_list_[ATTR_INDEX(static_cast<DWORD>(AttrType::FILE_NAME))])
+       attr_list_[ATTR_INDEX(AttrType::FILE_NAME)])
   {
     const Filename* fn;
     if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
@@ -496,7 +497,7 @@ std::wstring_view FileRecord::GetFileName() const
 ULONGLONG FileRecord::GetFileSize() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase>>& vec =
-      attr_list_[ATTR_INDEX(static_cast<DWORD>(AttrType::FILE_NAME))];
+      attr_list_[ATTR_INDEX(AttrType::FILE_NAME)];
   if (vec.empty())
   {
     return 0;
@@ -520,8 +521,8 @@ ULONGLONG FileRecord::GetFileSize() const noexcept
 void FileRecord::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                              FILETIME* accessTm) const noexcept
 {
-  const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
-      static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
+  const std::vector<std::unique_ptr<AttrBase>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
   // Standard Information attribute hold the most updated file time
   if (!vec.empty())
   {
@@ -567,7 +568,7 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
   // Start traversing from IndexRoot (B+ tree root node)
 
   const std::vector<std::unique_ptr<AttrBase>>& vec =
-      getAttr(static_cast<DWORD>(AttrType::INDEX_ROOT));
+      getAttr(AttrType::INDEX_ROOT);
   if (vec.empty())
   {
     return;
@@ -619,7 +620,7 @@ std::optional<IndexEntry>
 {
   // Start searching from IndexRoot (B+ tree root node)
   const std::vector<std::unique_ptr<AttrBase>>& vec =
-      getAttr(static_cast<DWORD>(AttrType::INDEX_ROOT));
+      getAttr(AttrType::INDEX_ROOT);
   if (vec.empty())
   {
     return {};
@@ -704,8 +705,7 @@ std::optional<IndexEntry>
 // Find Data attribute class of
 const AttrBase* FileRecord::FindStream(std::wstring_view name)
 {
-  const std::vector<std::unique_ptr<AttrBase>>& vec =
-      getAttr(static_cast<DWORD>(AttrType::DATA));
+  const std::vector<std::unique_ptr<AttrBase>>& vec = getAttr(AttrType::DATA);
   for (const std::unique_ptr<AttrBase>& data : vec)
   {
     // Unnamed stream
@@ -740,8 +740,8 @@ bool FileRecord::IsDirectory() const noexcept
 bool FileRecord::IsReadOnly() const noexcept
 {
   // Standard Information attribute holds the most updated file time
-  const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
-      static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
+  const std::vector<std::unique_ptr<AttrBase>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
   if (vec.empty())
   {
     return false;
@@ -764,8 +764,8 @@ bool FileRecord::IsReadOnly() const noexcept
 
 bool FileRecord::IsHidden() const noexcept
 {
-  const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
-      static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
+  const std::vector<std::unique_ptr<AttrBase>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
   if (vec.empty())
   {
     return false;
@@ -788,8 +788,8 @@ bool FileRecord::IsHidden() const noexcept
 
 bool FileRecord::IsSystem() const noexcept
 {
-  const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
-      static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
+  const std::vector<std::unique_ptr<AttrBase>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
   if (vec.empty())
   {
     return false;
@@ -812,8 +812,8 @@ bool FileRecord::IsSystem() const noexcept
 
 bool FileRecord::IsCompressed() const noexcept
 {
-  const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
-      static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
+  const std::vector<std::unique_ptr<AttrBase>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
   if (vec.empty())
   {
     return false;
@@ -836,8 +836,8 @@ bool FileRecord::IsCompressed() const noexcept
 
 bool FileRecord::IsEncrypted() const noexcept
 {
-  const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
-      static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
+  const std::vector<std::unique_ptr<AttrBase>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
   if (vec.empty())
   {
     return false;
@@ -860,8 +860,8 @@ bool FileRecord::IsEncrypted() const noexcept
 
 bool FileRecord::IsSparse() const noexcept
 {
-  const std::vector<std::unique_ptr<AttrBase>>& vec = attr_list_[ATTR_INDEX(
-      static_cast<DWORD>(AttrType::STANDARD_INFORMATION))];
+  const std::vector<std::unique_ptr<AttrBase>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
   if (vec.empty())
   {
     return false;

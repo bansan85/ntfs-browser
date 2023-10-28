@@ -34,8 +34,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
   {
     return;
   }
-  const auto& vec =
-      vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_INFORMATION));
+  const auto& vec = vol.getAttr(AttrType::VOLUME_INFORMATION);
   if (vec.empty())
   {
     return;
@@ -62,7 +61,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
   }
 
 #ifdef _DEBUG
-  const auto& vec2 = vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_NAME));
+  const auto& vec2 = vol.getAttr(AttrType::VOLUME_NAME);
   if (!vec2.empty())
   {
     if (strategy == FileReader::Strategy::NO_CACHE)
@@ -94,7 +93,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
   }
 
   const std::vector<std::unique_ptr<AttrBase>>& vec3 =
-      mft_record_.getAttr(static_cast<DWORD>(AttrType::DATA));
+      mft_record_.getAttr(AttrType::DATA);
   if (!vec3.empty())
   {
     mft_data_ = vec3.front().get();
@@ -231,7 +230,8 @@ std::optional<std::span<const BYTE>> NtfsVolume::Read(LARGE_INTEGER& addr,
 }
 
 // Install Attribute CallBack routines for the whole Volume
-bool NtfsVolume::InstallAttrRawCB(DWORD attrType, AttrRawCallback cb) noexcept
+bool NtfsVolume::InstallAttrRawCB(AttrType attrType,
+                                  AttrRawCallback cb) noexcept
 {
   const DWORD atIdx = ATTR_INDEX(attrType);
   if (atIdx >= kAttrNums)

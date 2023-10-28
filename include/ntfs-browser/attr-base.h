@@ -31,7 +31,7 @@ class AttrBase
 
  public:
   [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const noexcept;
-  [[nodiscard]] DWORD GetAttrType() const noexcept;
+  [[nodiscard]] AttrType GetAttrType() const noexcept;
   [[nodiscard]] DWORD GetAttrTotalSize() const noexcept;
   [[nodiscard]] bool IsNonResident() const noexcept;
   [[nodiscard]] WORD GetAttrFlags() const noexcept;

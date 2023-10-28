@@ -2,13 +2,15 @@
 
 #include <windows.h>
 
+#include <ntfs-browser/data/attr-type.h>
+
 namespace NtfsBrowser::Attr
 {
 
 struct IndexRoot
 {
   // Index Root Header
-  DWORD attr_type;  // Attribute type
+  AttrType attr_type;  // Attribute type
   //(ATTR_TYPE_FILE_NAME: Directory, 0: Index View)
   DWORD coll_rule;       // Collation rule
   DWORD ib_size;         // Size of index block

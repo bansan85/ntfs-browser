@@ -13,7 +13,7 @@ struct MftSegmentReference
 
 struct AttributeList
 {
-  DWORD attr_type;               // Attribute type
+  AttrType attr_type;            // Attribute type
   WORD record_size;              // Record length
   BYTE name_length;              // Name length in characters
   BYTE name_offset;              // Name offset

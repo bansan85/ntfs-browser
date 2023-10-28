@@ -18,7 +18,7 @@ const AttrHeaderCommon& AttrBase::GetAttrHeader() const noexcept
   return attr_header_;
 }
 
-DWORD AttrBase::GetAttrType() const noexcept { return attr_header_.type; }
+AttrType AttrBase::GetAttrType() const noexcept { return attr_header_.type; }
 
 DWORD AttrBase::GetAttrTotalSize() const noexcept
 {

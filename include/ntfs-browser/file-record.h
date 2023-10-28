@@ -10,6 +10,7 @@
 #include <windows.h>
 
 #include <ntfs-browser/data/attr-defines.h>
+#include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/mask.h>
 
 namespace NtfsBrowser
@@ -51,7 +52,7 @@ class FileRecord
   std::unique_ptr<FileRecordHeader> file_record_{};
   std::optional<ULONGLONG> file_reference_{};
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
-  Mask attr_mask_{MASK_ALL};
+  Mask attr_mask_{Mask::ALL};
   std::array<std::vector<std::unique_ptr<AttrBase>>, kAttrNums> attr_list_{};
 
   void ClearAttrs() noexcept;
@@ -73,16 +74,16 @@ class FileRecord
   [[nodiscard]] bool ParseFileRecord(ULONGLONG fileRef);
   [[nodiscard]] bool ParseAttrs();
 
-  [[nodiscard]] bool InstallAttrRawCB(DWORD attrType,
+  [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
                                       AttrRawCallback cb) noexcept;
   void ClearAttrRawCB() noexcept;
 
   void SetAttrMask(Mask mask) noexcept;
   void TraverseAttrs(ATTRS_CALLBACK attrCallBack, void* context) noexcept;
   [[nodiscard]] const std::vector<std::unique_ptr<AttrBase>>&
-      getAttr(DWORD attrType) const noexcept;
+      getAttr(AttrType attrType) const noexcept;
   [[nodiscard]] std::vector<std::unique_ptr<AttrBase>>&
-      getAttr(DWORD attrType) noexcept;
+      getAttr(AttrType attrType) noexcept;
 
   [[nodiscard]] std::wstring_view GetFileName() const;
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;

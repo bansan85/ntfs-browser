@@ -62,7 +62,7 @@ void AttrIndexRoot<RESIDENT>::ParseIndexEntries()
 template <typename RESIDENT>
 bool AttrIndexRoot<RESIDENT>::IsFileName() const noexcept
 {
-  return (index_root_->attr_type == static_cast<DWORD>(AttrType::FILE_NAME));
+  return index_root_->attr_type == AttrType::FILE_NAME;
 }
 
 template class AttrIndexRoot<AttrResidentHeavy>;
