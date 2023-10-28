@@ -65,11 +65,22 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
   const auto& vec2 = vol.getAttr(static_cast<DWORD>(AttrType::VOLUME_NAME));
   if (!vec2.empty())
   {
-    const std::wstring_view volname =
-        reinterpret_cast<const AttrVolName<AttrResidentLight>*>(
-            vec2.front().get())
-            ->GetName();
-    NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
+    if (strategy == FileReader::Strategy::NO_CACHE)
+    {
+      const std::wstring_view volname =
+          reinterpret_cast<const AttrVolName<AttrResidentHeavy>*>(
+              vec2.front().get())
+              ->GetName();
+      NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
+    }
+    else
+    {
+      const std::wstring_view volname =
+          reinterpret_cast<const AttrVolName<AttrResidentLight>*>(
+              vec2.front().get())
+              ->GetName();
+      NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
+    }
   }
 #endif
 

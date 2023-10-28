@@ -49,7 +49,7 @@ class AttrBase
   [[nodiscard]] virtual const BYTE* GetData() const noexcept = 0;
   [[nodiscard]] virtual ULONGLONG GetDataSize() const noexcept = 0;
   [[nodiscard]] virtual std::optional<ULONGLONG>
-      ReadData(ULONGLONG offset, std::span<BYTE> buffer) const = 0;
+      ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const = 0;
 };  // AttrBase
 
 }  // namespace NtfsBrowser

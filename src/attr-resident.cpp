@@ -20,8 +20,9 @@ bool AttrResident::IsDataRunOK() const noexcept
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
-std::optional<ULONGLONG> AttrResident::ReadData(ULONGLONG offset,
-                                                std::span<BYTE> buffer) const
+std::optional<ULONGLONG>
+    AttrResident::ReadData(ULONGLONG offset,
+                           const std::span<BYTE>& buffer) const
 {
   ULONGLONG bufLen = buffer.size();
   ULONGLONG actural = 0;

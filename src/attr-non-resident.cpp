@@ -236,8 +236,9 @@ ULONGLONG AttrNonResident::GetDataSize() const noexcept
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
-std::optional<ULONGLONG> AttrNonResident::ReadData(ULONGLONG offset,
-                                                   std::span<BYTE> buffer) const
+std::optional<ULONGLONG>
+    AttrNonResident::ReadData(ULONGLONG offset,
+                              const std::span<BYTE>& buffer) const
 {
   // Hard disks can only be accessed by sectors
   // To be simple and efficient, only implemented cluster based accessing

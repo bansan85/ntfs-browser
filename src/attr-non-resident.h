@@ -48,6 +48,6 @@ class AttrNonResident : public AttrBase
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
   [[nodiscard]] std::optional<ULONGLONG>
-      ReadData(ULONGLONG offset, std::span<BYTE> buffer) const override;
+      ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrNonResident
 }  // namespace NtfsBrowser

@@ -28,7 +28,7 @@ class AttrResident : public AttrBase
   [[nodiscard]] bool IsDataRunOK() const noexcept override;
 
   [[nodiscard]] std::optional<ULONGLONG>
-      ReadData(ULONGLONG offset, std::span<BYTE> buffer) const override;
+      ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrResident
 
 class AttrResidentLight : public AttrResident
