@@ -181,8 +181,9 @@ void printfile(const IndexEntry& ie, void* context)
       printf("\t");
     }
 
-    printf("<%c%c%c>\t%ls\n", ie.IsReadOnly() ? 'R' : ' ',
-           ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.data());
+    printf("<%c%c%c>\t%.*ls\n", ie.IsReadOnly() ? 'R' : ' ',
+           ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.size(),
+           fn.data());
   }
 
   if (ie.IsDirectory())

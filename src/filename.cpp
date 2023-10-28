@@ -33,7 +33,8 @@ void Filename::GetFilenameWUC() { filename_wuc_ = GetFilename(); }
 // Compare Unicode file name
 int Filename::Compare(std::wstring_view fn) const noexcept
 {
-  return _wcsicmp(fn.data(), filename_wuc_.data());
+  return _wcsnicmp(fn.data(), filename_wuc_.data(),
+                   max(fn.size(), filename_wuc_.size()));
 }
 
 ULONGLONG Filename::GetFileSize() const noexcept
