@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "StdAfx.h"
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
 
@@ -9,7 +9,7 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 BEGIN_MESSAGE_MAP(CNtfsundelApp, CWinApp)
-ON_COMMAND(ID_HELP, CWinApp::OnHelp)
+ON_COMMAND(ID_HELP, &CWinApp::OnHelp)
 END_MESSAGE_MAP()
 
 CNtfsundelApp::CNtfsundelApp() {}

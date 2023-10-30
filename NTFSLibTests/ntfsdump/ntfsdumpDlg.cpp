@@ -2,7 +2,7 @@
 
 #include <gsl/narrow>
 
-#include "stdafx.h"
+#include "StdAfx.h"
 #include "ntfsdump.h"
 #include "ntfsdumpDlg.h"
 
@@ -31,7 +31,7 @@ class CAboutDlg : public CDialog
   };
 
  protected:
-  virtual void DoDataExchange(CDataExchange* pDX);
+  void DoDataExchange(CDataExchange* pDX) override;
 
  protected:
   DECLARE_MESSAGE_MAP()
@@ -168,9 +168,9 @@ void ShowData(CString& m_dump, BYTE* data, DWORD datalen)
     {
       if (p[j] < 0x20) p[j] = '.';
     }
-    line.Format(_T("%s%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), line, p[0], p[1],
-                p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11],
-                p[12], p[13], p[14], p[15]);
+    line.Format(_T("%s%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), (LPCWSTR)line,
+                p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9],
+                p[10], p[11], p[12], p[13], p[14], p[15]);
 
     m_dump += line;
   }
@@ -192,9 +192,9 @@ void ShowData(CString& m_dump, BYTE* data, DWORD datalen)
       q[j] = '.';
     }
   }
-  line.Format(_T("%s%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c"), line, q[0], q[1], q[2],
-              q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11], q[12],
-              q[13], q[14], q[15]);
+  line.Format(_T("%s%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c"), (LPCWSTR)line, q[0],
+              q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10],
+              q[11], q[12], q[13], q[14], q[15]);
   m_dump += line;
 }
 

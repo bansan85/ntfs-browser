@@ -32,8 +32,8 @@ class CNtfsdumpDlg : public CDialog
   //{{AFX_VIRTUAL(CNtfsdumpDlg)
 
  protected:
-  virtual void DoDataExchange(CDataExchange* pDX);  // DDX/DDV support
-                                                    //}}AFX_VIRTUAL
+  void DoDataExchange(CDataExchange* pDX) override;  // DDX/DDV support
+                                                     //}}AFX_VIRTUAL
 
   // Implementation
 
@@ -42,11 +42,11 @@ class CNtfsdumpDlg : public CDialog
 
   // Generated message map functions
   //{{AFX_MSG(CNtfsdumpDlg)
-  virtual BOOL OnInitDialog();
+  BOOL OnInitDialog() override;
   afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
   afx_msg void OnPaint();
   afx_msg HCURSOR OnQueryDragIcon();
-  virtual void OnOK();
+  void OnOK() override;
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 };

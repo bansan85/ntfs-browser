@@ -1,7 +1,7 @@
 // ntfsattr.cpp : Defines the class behaviors for the application.
 //
 
-#include "stdafx.h"
+#include "StdAfx.h"
 #include "ntfsattr.h"
 #include "ntfsattrDlg.h"
 
@@ -12,7 +12,7 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 BEGIN_MESSAGE_MAP(CNtfsattrApp, CWinApp)
-ON_COMMAND(ID_HELP, CWinApp::OnHelp)
+ON_COMMAND(ID_HELP, &CWinApp::OnHelp)
 END_MESSAGE_MAP()
 
 CNtfsattrApp::CNtfsattrApp() {}

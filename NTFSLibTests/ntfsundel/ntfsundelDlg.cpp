@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "StdAfx.h"
 
 #include <chrono>
 #include <regex>
@@ -38,9 +38,9 @@ void CNtfsundelDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CNtfsundelDlg, CDialog)
 ON_WM_PAINT()
 ON_WM_QUERYDRAGICON()
-ON_BN_CLICKED(IDB_SEARCH, OnSearch)
-ON_BN_CLICKED(IDB_RECOVER, OnRecover)
-ON_CBN_SELCHANGE(IDC_DRIVER, OnSelchangeDriver)
+ON_BN_CLICKED(IDB_SEARCH, &CNtfsundelDlg::OnSearch)
+ON_BN_CLICKED(IDB_RECOVER, &CNtfsundelDlg::OnRecover)
+ON_CBN_SELCHANGE(IDC_DRIVER, &CNtfsundelDlg::OnSelchangeDriver)
 END_MESSAGE_MAP()
 
 BOOL CNtfsundelDlg::OnInitDialog()
@@ -286,7 +286,7 @@ void CNtfsundelDlg::OnSearch()
           .count();
 
   CString totals;
-  totals.Format(_T("%lld deleted files processed"), duration);
+  totals.Format(_T("%lldus"), duration);
   MessageBox(totals);
 
   GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Search"));

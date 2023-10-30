@@ -29,7 +29,7 @@ class CNtfsattrApp : public CWinApp
   //{{AFX_VIRTUAL(CNtfsattrApp)
 
  public:
-  virtual BOOL InitInstance();
+  BOOL InitInstance() override;
   //}}AFX_VIRTUAL
 
   // Implementation

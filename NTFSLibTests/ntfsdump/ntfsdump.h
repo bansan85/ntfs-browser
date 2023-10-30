@@ -29,7 +29,7 @@ class CNtfsdumpApp : public CWinApp
   //{{AFX_VIRTUAL(CNtfsdumpApp)
 
  public:
-  virtual BOOL InitInstance();
+  BOOL InitInstance() override;
   //}}AFX_VIRTUAL
 
   // Implementation

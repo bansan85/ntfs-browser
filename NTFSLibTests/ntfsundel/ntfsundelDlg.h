@@ -34,8 +34,8 @@ class CNtfsundelDlg : public CDialog
   //{{AFX_VIRTUAL(CNtfsundelDlg)
 
  protected:
-  virtual void DoDataExchange(CDataExchange* pDX);  // DDX/DDV support
-                                                    //}}AFX_VIRTUAL
+  void DoDataExchange(CDataExchange* pDX) override;  // DDX/DDV support
+                                                     //}}AFX_VIRTUAL
 
   // Implementation
 
@@ -44,7 +44,7 @@ class CNtfsundelDlg : public CDialog
 
   // Generated message map functions
   //{{AFX_MSG(CNtfsundelDlg)
-  virtual BOOL OnInitDialog();
+  BOOL OnInitDialog() override;
   afx_msg void OnPaint();
   afx_msg HCURSOR OnQueryDragIcon();
   afx_msg void OnSearch();
