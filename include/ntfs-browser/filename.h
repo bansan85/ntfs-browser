@@ -20,7 +20,7 @@ class Filename
 {
  public:
   Filename() = default;
-  Filename(Filename&& other) noexcept = delete;
+  Filename(Filename&& other) noexcept = default;
   Filename(Filename const& other) = default;
   Filename& operator=(Filename&& other) noexcept = delete;
   Filename& operator=(Filename const& other) = delete;

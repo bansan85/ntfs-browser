@@ -44,7 +44,7 @@ void AttrIndexRoot<RESIDENT>::ParseIndexEntries()
 
   while (ieTotal <= index_root_->total_entry_size)
   {
-    emplace_back(std::nullopt, *ie);
+    emplace_back(nullptr, *ie);
 
     if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {

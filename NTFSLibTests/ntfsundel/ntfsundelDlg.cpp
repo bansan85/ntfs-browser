@@ -60,7 +60,7 @@ BOOL CNtfsundelDlg::OnInitDialog()
 
   DWORD bm = 1;                             // bit mask
   const DWORD drives = GetLogicalDrives();  // available drives bitmap
-  for (int i = 0; i < sizeof(drives) * 8; i++)
+  for (size_t i = 0; i < sizeof(drives) * 8; i++)
   {
     if ((drives & bm) != 0)
     {

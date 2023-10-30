@@ -15,16 +15,16 @@ struct IndexEntry;
 class IndexEntry : public Filename
 {
  public:
-  explicit IndexEntry(std::optional<std::shared_ptr<BYTE[]>> sh_ptr,
+  explicit IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
                       const Data::IndexEntry& ie);
   IndexEntry(IndexEntry&& other) noexcept = default;
   IndexEntry(IndexEntry const& other) = default;
-  IndexEntry& operator=(IndexEntry&& other) noexcept = default;
-  IndexEntry& operator=(IndexEntry const& other) = default;
+  IndexEntry& operator=(IndexEntry&& other) noexcept = delete;
+  IndexEntry& operator=(IndexEntry const& other) = delete;
   ~IndexEntry() override = default;
 
  private:
-  std::optional<std::shared_ptr<BYTE[]>> sh_ptr_;
+  std::shared_ptr<BYTE[]> sh_ptr_;
   const Data::IndexEntry& index_entry_;
 
  public:

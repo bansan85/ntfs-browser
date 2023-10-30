@@ -48,6 +48,7 @@ struct FileRecordHeader
   size_t sector_size;
 
   FileRecordHeader(std::span<const BYTE> buffer, size_t sector_size);
+  virtual ~FileRecordHeader() = default;
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
   const AttrHeaderCommon& HeaderCommon() noexcept;
@@ -57,20 +58,22 @@ struct FileRecordHeader
   virtual const FileRecordHeader::Data* GetData() const = 0;
 };
 
-struct FileRecordHeaderLight : public FileRecordHeader
+struct FileRecordHeaderLight final : public FileRecordHeader
 {
   std::span<const BYTE> data_;
 
   FileRecordHeaderLight(std::span<const BYTE> buffer, size_t sector_size);
+  virtual ~FileRecordHeaderLight() = default;
 
   const FileRecordHeader::Data* GetData() const override;
 };
 
-struct FileRecordHeaderHeavy : public FileRecordHeader
+struct FileRecordHeaderHeavy final : public FileRecordHeader
 {
   FileRecordHeader::Data data_;
 
   FileRecordHeaderHeavy(std::span<const BYTE> buffer, size_t sector_size);
+  virtual ~FileRecordHeaderHeavy() = default;
 
   const FileRecordHeader::Data* GetData() const override;
 };

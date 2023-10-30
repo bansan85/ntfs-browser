@@ -157,7 +157,7 @@ void ShowData(CString& m_dump, BYTE* data, DWORD datalen)
 
   for (i = 0; i < ((datalen - 1) >> 4U); i++)
   {
-    p = data + i * 16;
+    p = data + static_cast<size_t>(i) * 16;
 
     line.Format(
         _T("%04X    %02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X ")
@@ -176,7 +176,7 @@ void ShowData(CString& m_dump, BYTE* data, DWORD datalen)
   }
 
   // last line
-  p = data + i * 16;
+  p = data + static_cast<size_t>(i) * 16;
   BYTE q[16];
   memset(q, 0xFF, 16);
   memcpy(q, p, datalen - i * 16);

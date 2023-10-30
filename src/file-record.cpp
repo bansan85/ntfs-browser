@@ -475,13 +475,21 @@ std::wstring_view FileRecord::GetFileName() const
        attr_list_[ATTR_INDEX(AttrType::FILE_NAME)])
   {
     const Filename* fn;
-    if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+    switch (volume_.volume_.GetStrategy())
     {
-      fn = static_cast<const AttrFileName<AttrResidentHeavy>*>(fn_.get());
-    }
-    else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
-    {
-      fn = static_cast<const AttrFileName<AttrResidentLight>*>(fn_.get());
+      case FileReader::Strategy::NO_CACHE:
+      {
+        fn = static_cast<const AttrFileName<AttrResidentHeavy>*>(fn_.get());
+        break;
+      }
+      case FileReader::Strategy::FULL_CACHE:
+      {
+        fn = static_cast<const AttrFileName<AttrResidentLight>*>(fn_.get());
+        break;
+      }
+      default:
+        _ASSERT(false);
+        return {};
     }
 
     if (fn->IsWin32Name() && !fn->GetFilename().empty())
@@ -576,27 +584,39 @@ void FileRecord::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
 
   const std::vector<IndexEntry>* all_ie;
 
-  if (volume_.volume_.GetStrategy() == FileReader::Strategy::NO_CACHE)
+  switch (volume_.volume_.GetStrategy())
   {
-    const auto* ir = reinterpret_cast<const AttrIndexRoot<AttrResidentHeavy>*>(
-        vec.front().get());
-
-    if (!ir->IsFileName())
+    case FileReader::Strategy::NO_CACHE:
     {
+      const auto* ir =
+          reinterpret_cast<const AttrIndexRoot<AttrResidentHeavy>*>(
+              vec.front().get());
+
+      if (!ir->IsFileName())
+      {
+        return;
+      }
+      all_ie = ir;
+      break;
+    }
+    case FileReader::Strategy::FULL_CACHE:
+    {
+      const auto* ir =
+          reinterpret_cast<const AttrIndexRoot<AttrResidentLight>*>(
+              vec.front().get());
+
+      if (!ir->IsFileName())
+      {
+        return;
+      }
+      all_ie = ir;
+      break;
+    }
+    default:
+    {
+      _ASSERT(false);
       return;
     }
-    all_ie = ir;
-  }
-  else if (volume_.volume_.GetStrategy() == FileReader::Strategy::FULL_CACHE)
-  {
-    const auto* ir = reinterpret_cast<const AttrIndexRoot<AttrResidentLight>*>(
-        vec.front().get());
-
-    if (!ir->IsFileName())
-    {
-      return;
-    }
-    all_ie = ir;
   }
 
   for (const IndexEntry& ie : *all_ie)

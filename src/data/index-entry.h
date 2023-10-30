@@ -9,13 +9,10 @@ namespace NtfsBrowser::Data
 
 struct IndexEntry
 {
-  struct
-  {
-    // Low 6B : MFT record index
-    ULONGLONG mft_index : 48;
-    // High 2B: MFT record sequence number
-    ULONGLONG mft_sn : 16;
-  };
+  // Low 6B : MFT record index
+  ULONGLONG mft_index : 48;
+  // High 2B: MFT record sequence number
+  ULONGLONG mft_sn : 16;
   WORD size;               // Length of the index entry
   WORD stream_size;        // Length of the stream
   Flag::IndexEntry flags;  // Flags

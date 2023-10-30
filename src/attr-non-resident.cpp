@@ -27,8 +27,8 @@ bool AttrNonResident::PickData(const BYTE*& dataRun, ULONGLONG& length,
   {
     struct
     {
-      unsigned char lengthBytes : 4;
-      unsigned char offsetBytes : 4;
+      BYTE lengthBytes : 4;
+      BYTE offsetBytes : 4;
     };
     BYTE size;
   };

@@ -4,6 +4,7 @@
 // eg. ntfsdir "c:\program files\common files"
 
 #include <cstdio>
+#include <gsl/narrow>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/file-record.h>
@@ -104,7 +105,7 @@ char getvolume(char** ppath)
 std::wstring getpathname(std::wstring& ppath)
 {
   std::wstring pathname;
-  int len = 0;
+  size_t len = 0;
   const wchar_t* p = ppath.c_str();
 
   // copy until '\' or " or string ends or buffer full
@@ -182,8 +183,8 @@ void printfile(const IndexEntry& ie, void* context)
     }
 
     printf("<%c%c%c>\t%.*ls\n", ie.IsReadOnly() ? 'R' : ' ',
-           ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ', fn.size(),
-           fn.data());
+           ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ',
+           gsl::narrow<int>(fn.size()), fn.data());
   }
 
   if (ie.IsDirectory())

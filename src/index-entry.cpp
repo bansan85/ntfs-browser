@@ -5,7 +5,7 @@
 
 namespace NtfsBrowser
 {
-IndexEntry::IndexEntry(std::optional<std::shared_ptr<BYTE[]>> sh_ptr,
+IndexEntry::IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
                        const Data::IndexEntry& ie)
     : sh_ptr_(sh_ptr), index_entry_(ie)
 {

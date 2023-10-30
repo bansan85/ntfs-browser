@@ -12,7 +12,7 @@ namespace NtfsBrowser
 {
 
 NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
-    : mft_record_(*this), volume_{strategy}
+    : volume_{strategy}, mft_record_(*this)
 {
   ClearAttrRawCB();
 
@@ -119,8 +119,6 @@ bool NtfsVolume::OpenVolume(_TCHAR volume)
     NTFS_TRACE1("Cannnot open volume %c\n", (char)volume);
     return false;
   }
-
-  DWORD num = 0;
 
   // Read the first sector (boot sector)
   constexpr DWORD default_sector_size = 512;

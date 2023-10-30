@@ -183,7 +183,7 @@ void appenddata(CString& lines, const BYTE* data, DWORD datalen)
   std::array<BYTE, 16> p;
   for (i = 0; i < ((datalen - 1U) >> 4); i++)
   {
-    memcpy(p.data(), data + i * 16, 16);
+    memcpy(p.data(), data + static_cast<size_t>(i) * 16, 16);
 
     line.Format(
         _T("%02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X %02X ")
@@ -205,7 +205,7 @@ void appenddata(CString& lines, const BYTE* data, DWORD datalen)
   }
 
   // last line
-  memcpy(p.data(), data + i * 16, 16);
+  memcpy(p.data(), data + static_cast<size_t>(i) * 16, 16);
   BYTE q[16];
   memset(&q[0], 0xFF, 16);
   memcpy(&q[0], p.data(), 16);
