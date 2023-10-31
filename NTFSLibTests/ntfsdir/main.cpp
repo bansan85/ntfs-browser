@@ -214,7 +214,7 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  NtfsVolume volume(volname, FileReader::Strategy::NO_CACHE);
+  NtfsVolume<Strategy::FULL_CACHE> volume(volname);
   if (!volume.IsVolumeOK())
   {
     printf("Cannot get NTFS BPB from boot sector of volume %c\n", volname);

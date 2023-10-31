@@ -1,5 +1,6 @@
 {
     "files.associations": {
+      "*.gradle": "groovy",
       "compare": "cpp",
       "exception": "cpp",
       "initializer_list": "cpp",
@@ -55,6 +56,25 @@
       "xlocmes": "cpp",
       "xlocmon": "cpp",
       "xlocnum": "cpp",
-      "xloctime": "cpp"
+      "xloctime": "cpp",
+      "charconv": "cpp",
+      "chrono": "cpp",
+      "complex": "cpp",
+      "forward_list": "cpp",
+      "map": "cpp",
+      "set": "cpp",
+      "format": "cpp",
+      "iomanip": "cpp",
+      "iostream": "cpp",
+      "istream": "cpp",
+      "mutex": "cpp",
+      "ostream": "cpp",
+      "regex": "cpp",
+      "span": "cpp",
+      "sstream": "cpp",
+      "stop_token": "cpp",
+      "thread": "cpp",
+      "xtree": "cpp",
+      "pointers": "cpp"
     }
 }

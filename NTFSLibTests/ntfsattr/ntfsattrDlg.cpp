@@ -248,7 +248,8 @@ void appenddata(CString& lines, const BYTE* data, DWORD datalen)
   lines += line;
 }
 
-void printattr(const AttrBase& attr, void* context, bool* /* bStop*/)
+template <Strategy S>
+void printattr(const AttrBase<S>& attr, void* context, bool* /* bStop*/)
 {
   CString* dump = static_cast<CString*>(context);
 
@@ -293,7 +294,7 @@ void CNtfsattrDlg::OnOK()
 
   const _TCHAR volname = m_filename.GetAt(0);
 
-  NtfsVolume volume(volname, FileReader::Strategy::NO_CACHE);
+  NtfsVolume<Strategy::FULL_CACHE> volume(volname);
   if (!volume.IsVolumeOK())
   {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -405,6 +406,6 @@ void CNtfsattrDlg::OnOK()
     return;
   }
 
-  fr.TraverseAttrs(printattr, &m_dump);
+  fr.TraverseAttrs(printattr<Strategy::FULL_CACHE>, &m_dump);
   UpdateData(FALSE);
 }

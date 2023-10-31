@@ -2,16 +2,20 @@
 
 #include "attr-non-resident.h"
 
+#include <ntfs-browser/strategy.h>
+
 namespace NtfsBrowser
 {
 class IndexBlock;
+template <Strategy S>
 class FileRecord;
 struct AttrHeaderCommon;
 
-class AttrIndexAlloc : public AttrNonResident
+template <Strategy S>
+class AttrIndexAlloc : public AttrNonResident<S>
 {
  public:
-  AttrIndexAlloc(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrIndexAlloc(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
   AttrIndexAlloc(AttrIndexAlloc&& other) noexcept = delete;
   AttrIndexAlloc(AttrIndexAlloc const& other) = delete;
   AttrIndexAlloc& operator=(AttrIndexAlloc&& other) noexcept = delete;

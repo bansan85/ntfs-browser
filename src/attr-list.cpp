@@ -9,8 +9,9 @@
 namespace NtfsBrowser
 {
 
-template <typename TYPE_RESIDENT>
-AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
+template <typename TYPE_RESIDENT, Strategy S>
+AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
+                                     FileRecord<S>& fr)
     : TYPE_RESIDENT(ahc, fr)
 {
   NTFS_TRACE("Attribute: Attribute List\n");
@@ -43,7 +44,7 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
         static_cast<bool>(am & fr.attr_mask_))
     {
       file_record_list_.emplace_back(fr.volume_);
-      FileRecord& frnew = file_record_list_.back();
+      FileRecord<S>& frnew = file_record_list_.back();
 
       frnew.attr_mask_ = am;
       if (!frnew.ParseFileRecord(record_ref))
@@ -58,9 +59,9 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
       }
 
       // Insert new found AttrList to fr.AttrList
-      std::vector<std::unique_ptr<AttrBase>>& vec =
+      std::vector<std::unique_ptr<AttrBase<S>>>& vec =
           frnew.getAttr(al_record.attr_type);
-      for (std::unique_ptr<AttrBase>& veci : vec)
+      for (std::unique_ptr<AttrBase<S>>& veci : vec)
       {
         fr.attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
             std::move(veci));
@@ -68,18 +69,25 @@ AttrList<TYPE_RESIDENT>::AttrList(const AttrHeaderCommon& ahc, FileRecord& fr)
       vec.clear();
     }
 
+    if (al_record.record_size == 0)
+    {
+      break;
+    }
     offset += al_record.record_size;
   }
 }
 
-template <typename TYPE_RESIDENT>
-AttrList<TYPE_RESIDENT>::~AttrList()
+template <typename TYPE_RESIDENT, Strategy S>
+AttrList<TYPE_RESIDENT, S>::~AttrList()
 {
   NTFS_TRACE("AttrList deleted\n");
 }
 
-template class AttrList<AttrNonResident>;
-template class AttrList<AttrResidentHeavy>;
-template class AttrList<AttrResidentLight>;
+template class AttrList<AttrNonResident<Strategy::FULL_CACHE>,
+                        Strategy::FULL_CACHE>;
+template class AttrList<AttrNonResident<Strategy::NO_CACHE>,
+                        Strategy::NO_CACHE>;
+template class AttrList<AttrResidentFullCache, Strategy::FULL_CACHE>;
+template class AttrList<AttrResidentNoCache, Strategy::NO_CACHE>;
 
 }  // namespace NtfsBrowser

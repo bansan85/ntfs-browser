@@ -6,9 +6,9 @@
 namespace NtfsBrowser
 {
 
-template <typename RESIDENT>
-AttrFileName<RESIDENT>::AttrFileName(const AttrHeaderCommon& ahc,
-                                     const FileRecord& fr)
+template <typename RESIDENT, Strategy S>
+AttrFileName<RESIDENT, S>::AttrFileName(const AttrHeaderCommon& ahc,
+                                        const FileRecord<S>& fr)
     : RESIDENT(ahc, fr)
 {
   NTFS_TRACE("Attribute: File Name\n");
@@ -16,8 +16,8 @@ AttrFileName<RESIDENT>::AttrFileName(const AttrHeaderCommon& ahc,
   SetFilename(*reinterpret_cast<const Attr::Filename*>(this->GetData()));
 }
 
-template <typename RESIDENT>
-AttrFileName<RESIDENT>::~AttrFileName()
+template <typename RESIDENT, Strategy S>
+AttrFileName<RESIDENT, S>::~AttrFileName()
 {
   NTFS_TRACE("AttrFileName deleted\n");
 }
@@ -79,7 +79,7 @@ bool AttrFileName<RESIDENT>::IsSparse() const noexcept
 }
 #endif
 
-template class AttrFileName<AttrResidentHeavy>;
-template class AttrFileName<AttrResidentLight>;
+template class AttrFileName<AttrResidentFullCache, Strategy::FULL_CACHE>;
+template class AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>;
 
 }  // namespace NtfsBrowser

@@ -9,23 +9,24 @@
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr-base.h>
 
 namespace NtfsBrowser
 {
-class AttrBase;
 
+template <Strategy S>
 class NtfsVolume
 {
  public:
-  explicit NtfsVolume(_TCHAR volume, FileReader::Strategy strategy);
+  explicit NtfsVolume(_TCHAR volume);
   NtfsVolume(NtfsVolume&& other) noexcept = delete;
   NtfsVolume(NtfsVolume const& other) = delete;
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
   NtfsVolume& operator=(NtfsVolume const& other) = delete;
   virtual ~NtfsVolume() = default;
 
-  friend class FileRecord;
-  friend class AttrBase;
+  friend class FileRecord<S>;
+  friend class AttrBase<S>;
 
  private:
   WORD sector_size_{0};
@@ -37,12 +38,12 @@ class NtfsVolume
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
   BYTE version_major_{0};
   BYTE version_minor_{0};
-  FileReader volume_;
+  FileReader<S> volume_;
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
-  FileRecord mft_record_;              // $MFT File Record
-  const AttrBase* mft_data_{nullptr};  // $MFT Data Attribute
+  FileRecord<S> mft_record_;              // $MFT File Record
+  const AttrBase<S>* mft_data_{nullptr};  // $MFT Data Attribute
 
   // Buffer of size file_record_size_ to read FileRecord.
   mutable std::vector<BYTE> cluster_buffer_;

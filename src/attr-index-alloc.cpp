@@ -9,41 +9,47 @@
 namespace NtfsBrowser
 {
 
-AttrIndexAlloc::AttrIndexAlloc(const AttrHeaderCommon& ahc,
-                               const FileRecord& fr)
-    : AttrNonResident(ahc, fr)
+template <Strategy S>
+AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
+                                  const FileRecord<S>& fr)
+    : AttrNonResident<S>(ahc, fr)
 {
   NTFS_TRACE("Attribute: Index Allocation\n");
 
-  if (!IsDataRunOK())
+  if (!this->IsDataRunOK())
   {
     NTFS_TRACE("Index Allocation DataRun parse error\n");
     return;
   }
 
   // Get total number of Index Blocks
-  const ULONGLONG ibTotalSize = GetDataSize();
-  if (ibTotalSize % GetIndexBlockSize() != 0)
+  const ULONGLONG ibTotalSize = this->GetDataSize();
+  if (ibTotalSize % this->GetIndexBlockSize() != 0)
   {
     NTFS_TRACE2(
         "Cannot calulate number of IndexBlocks, total size = %I64u, unit = "
         "%u\n",
-        ibTotalSize, GetIndexBlockSize());
+        ibTotalSize, this->GetIndexBlockSize());
     return;
   }
 
-  index_block_count_ = ibTotalSize / GetIndexBlockSize();
+  index_block_count_ = ibTotalSize / this->GetIndexBlockSize();
 }
 
-AttrIndexAlloc::~AttrIndexAlloc() { NTFS_TRACE("AttrIndexAlloc deleted\n"); }
+template <Strategy S>
+AttrIndexAlloc<S>::~AttrIndexAlloc()
+{
+  NTFS_TRACE("AttrIndexAlloc deleted\n");
+}
 
 // Verify US and update sectors
-bool AttrIndexAlloc::PatchUS(WORD* sector, DWORD sectors, WORD usn,
-                             const WORD* usarray)
+template <Strategy S>
+bool AttrIndexAlloc<S>::PatchUS(WORD* sector, DWORD sectors, WORD usn,
+                                const WORD* usarray)
 {
   for (DWORD i = 0; i < sectors; i++)
   {
-    sector += GetSectorSize() / 2;
+    sector += this->GetSectorSize() / 2;
     sector--;
     // USN error
     if (*sector != usn)
@@ -58,7 +64,8 @@ bool AttrIndexAlloc::PatchUS(WORD* sector, DWORD sectors, WORD usn,
   return true;
 }
 
-ULONGLONG AttrIndexAlloc::GetIndexBlockCount() const noexcept
+template <Strategy S>
+ULONGLONG AttrIndexAlloc<S>::GetIndexBlockCount() const noexcept
 {
   return index_block_count_;
 }
@@ -66,7 +73,9 @@ ULONGLONG AttrIndexAlloc::GetIndexBlockCount() const noexcept
 // Parse a single Index Block
 // vcn = Index Block VCN in Index Allocation Data Attributes
 // ibClass holds the parsed Index Entries
-bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
+template <Strategy S>
+bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
+                                        IndexBlock& ibClass)
 {
   // Bounds check
   if (vcn >= index_block_count_)
@@ -76,18 +85,18 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 
   // Allocate buffer for a single Index Block
   std::shared_ptr<BYTE[]> ib_sh_ptr =
-      ibClass.AllocIndexBlock(GetIndexBlockSize());
+      ibClass.AllocIndexBlock(this->GetIndexBlockSize());
   Data::IndexBlock* ibBuf =
       reinterpret_cast<Data::IndexBlock*>(&ib_sh_ptr.get()[0]);
 
   // Sectors Per Index Block
-  const DWORD sectors = GetIndexBlockSize() / GetSectorSize();
+  const DWORD sectors = this->GetIndexBlockSize() / this->GetSectorSize();
 
   // Read one Index Block
-  std::optional<ULONGLONG> len =
-      ReadData(vcn * GetIndexBlockSize(),
-               {reinterpret_cast<BYTE*>(ibBuf), GetIndexBlockSize()});
-  if (!len || *len != GetIndexBlockSize())
+  std::optional<ULONGLONG> len = this->ReadData(
+      vcn * this->GetIndexBlockSize(),
+      {reinterpret_cast<BYTE*>(ibBuf), this->GetIndexBlockSize()});
+  if (!len || *len != this->GetIndexBlockSize())
   {
     return false;
   }
@@ -132,5 +141,8 @@ bool AttrIndexAlloc::ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass)
 
   return true;
 }
+
+template class AttrIndexAlloc<Strategy::FULL_CACHE>;
+template class AttrIndexAlloc<Strategy::NO_CACHE>;
 
 }  // namespace NtfsBrowser

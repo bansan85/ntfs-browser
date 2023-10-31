@@ -9,13 +9,14 @@ static constexpr LONGLONG BUFFER_SIZE = 32 * 1024;
 namespace NtfsBrowser
 {
 
-FileReader::FileReader(Strategy strategy)
-    : handle_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)),
-      strategy_(strategy)
+template <Strategy S>
+FileReader<S>::FileReader()
+    : handle_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle))
 {
 }
 
-bool FileReader::Open(std::wstring_view volume)
+template <Strategy S>
+bool FileReader<S>::Open(std::wstring_view volume)
 {
   handle_ =
       HandlePtr(CreateFileW(volume.data(), GENERIC_READ,
@@ -25,78 +26,92 @@ bool FileReader::Open(std::wstring_view volume)
   return handle_.get() != INVALID_HANDLE_VALUE;
 }
 
-std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
-                                                      DWORD length) const
+template <Strategy T>
+template <Strategy Q>
+typename std::enable_if_t<
+    std::is_same_v<std::integral_constant<Strategy, Q>,
+                   std::integral_constant<Strategy, Strategy::NO_CACHE>>,
+    std::optional<std::span<const BYTE>>>
+    FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
 {
-  if (strategy_ == Strategy::NO_CACHE)
+  DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr.LowPart),
+                             &addr.HighPart, FILE_BEGIN);
+
+  if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
   {
-    DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr.LowPart),
-                               &addr.HighPart, FILE_BEGIN);
-
-    if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
-    {
-      NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
-      return {};
-    }
-
-    if (buffer_.capacity() < length)
-    {
-      buffer_.reserve(length);
-    }
-
-    if (ReadFile(handle_.get(), buffer_.data(), length, &len, nullptr) ==
-            FALSE ||
-        len != length)
-    {
-      NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
-      return {};
-    }
-
-    return std::span<const BYTE>{buffer_.data(), length};
+    NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
+    return {};
   }
-  if (strategy_ == Strategy::FULL_CACHE)
+
+  if (buffer_.capacity() < length)
   {
-    // Not implemented. Really needed ?
-    assert(addr.QuadPart / BUFFER_SIZE ==
-           (addr.QuadPart + length - 1) / BUFFER_SIZE);
-
-    size_t index = addr.QuadPart / BUFFER_SIZE;
-    if (map_buffer_.contains(index))
-    {
-      return std::span<const BYTE>{
-          &map_buffer_[index][addr.QuadPart % BUFFER_SIZE], length};
-    }
-
-    LARGE_INTEGER addr2{.QuadPart =
-                            addr.QuadPart - addr.QuadPart % BUFFER_SIZE};
-    DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr2.LowPart),
-                               &addr2.HighPart, FILE_BEGIN);
-
-    if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
-    {
-      NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
-      return {};
-    }
-
-    std::vector<BYTE> new_vector;
-    new_vector.reserve(BUFFER_SIZE);
-    map_buffer_[index] = std::move(new_vector);
-
-    std::vector<BYTE>& map_buf = map_buffer_[index];
-
-    if (ReadFile(handle_.get(), &map_buf[0], BUFFER_SIZE, &len, nullptr) ==
-            FALSE ||
-        len != BUFFER_SIZE)
-    {
-      NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
-      return {};
-    }
-
-    return std::span<const BYTE>{&map_buf[addr.QuadPart % BUFFER_SIZE], length};
+    buffer_.reserve(length);
   }
-  return {};
+
+  if (ReadFile(handle_.get(), buffer_.data(), length, &len, nullptr) == FALSE ||
+      len != length)
+  {
+    NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+    return {};
+  }
+
+  return std::span<const BYTE>{buffer_.data(), length};
 }
 
-FileReader::Strategy FileReader::GetStrategy() const { return strategy_; }
+template <Strategy T>
+template <Strategy Q>
+typename std::enable_if_t<
+    std::is_same_v<std::integral_constant<Strategy, Q>,
+                   std::integral_constant<Strategy, Strategy::FULL_CACHE>>,
+    std::optional<std::span<const BYTE>>>
+    FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
+{
+  // Not implemented. Really needed ?
+  assert(addr.QuadPart / BUFFER_SIZE ==
+         (addr.QuadPart + length - 1) / BUFFER_SIZE);
+
+  size_t index = addr.QuadPart / BUFFER_SIZE;
+  if (map_buffer_.contains(index))
+  {
+    return std::span<const BYTE>{
+        map_buffer_[index].data() + addr.QuadPart % BUFFER_SIZE, length};
+  }
+
+  LARGE_INTEGER addr2{.QuadPart = addr.QuadPart - addr.QuadPart % BUFFER_SIZE};
+  DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr2.LowPart),
+                             &addr2.HighPart, FILE_BEGIN);
+
+  if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
+  {
+    NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
+    return {};
+  }
+
+  std::vector<BYTE> new_vector;
+  new_vector.reserve(BUFFER_SIZE);
+
+  if (ReadFile(handle_.get(), new_vector.data(), BUFFER_SIZE, &len, nullptr) ==
+          FALSE ||
+      len != BUFFER_SIZE)
+  {
+    NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+    return {};
+  }
+
+  map_buffer_[index] = std::move(new_vector);
+
+  return std::span<const BYTE>{
+      map_buffer_[index].data() + addr.QuadPart % BUFFER_SIZE, length};
+}
+
+template class FileReader<Strategy::NO_CACHE>;
+template class FileReader<Strategy::FULL_CACHE>;
+
+template std::optional<std::span<const BYTE>>
+    FileReader<Strategy::NO_CACHE>::Read<Strategy::NO_CACHE>(
+        LARGE_INTEGER& addr, DWORD length) const;
+template std::optional<std::span<const BYTE>>
+    FileReader<Strategy::FULL_CACHE>::Read<Strategy::FULL_CACHE>(
+        LARGE_INTEGER& addr, DWORD length) const;
 
 }  // namespace NtfsBrowser

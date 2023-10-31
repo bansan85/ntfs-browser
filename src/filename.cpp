@@ -139,19 +139,19 @@ void Filename::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
 {
   if (writeTm != nullptr)
   {
-    AttrStdInfo<AttrResidentHeavy>::UTC2Local(
+    AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>::UTC2Local(
         filename_ != nullptr ? filename_->alter_time : 0, *writeTm);
   }
 
   if (createTm != nullptr)
   {
-    AttrStdInfo<AttrResidentHeavy>::UTC2Local(
+    AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>::UTC2Local(
         filename_ != nullptr ? filename_->create_time : 0, *createTm);
   }
 
   if (accessTm != nullptr)
   {
-    AttrStdInfo<AttrResidentHeavy>::UTC2Local(
+    AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>::UTC2Local(
         filename_ != nullptr ? filename_->read_time : 0, *accessTm);
   }
 }

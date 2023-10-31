@@ -1,4 +1,6 @@
-#include "file-record-header.h"
+#include <ntfs-browser/data/file-record-header.h>
+
+#include <ntfs-browser/strategy.h>
 
 namespace NtfsBrowser
 {
@@ -36,8 +38,8 @@ bool FileRecordHeader::PatchUS() noexcept
   for (WORD value : us_array)
   {
     sector = sector.get() + ((sector_size >> 1U) - 1);
-    // USN error
-    if (*sector != us_number)
+    // USN error. Ignore if already patched (FULL_CACHE)
+    if (*sector != us_number && *sector != value)
     {
       return false;
     }
@@ -54,48 +56,46 @@ const AttrHeaderCommon& FileRecordHeader::HeaderCommon() noexcept
                                                     GetData()->offset_of_attr);
 }
 
-std::unique_ptr<FileRecordHeader>
-    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size,
-                              FileReader::Strategy strategy)
+template <Strategy S>
+FileRecordHeaderImpl<S> FileRecordHeader::Factory(std::span<const BYTE> buffer,
+                                                  size_t sector_size)
 {
-  switch (strategy)
-  {
-    case FileReader::Strategy::NO_CACHE:
-    {
-      return std::make_unique<FileRecordHeaderHeavy>(buffer, sector_size);
-    }
-    case FileReader::Strategy::FULL_CACHE:
-    {
-      return std::make_unique<FileRecordHeaderLight>(buffer, sector_size);
-    }
-    default:
-    {
-      return {};
-    }
-  }
+  return {buffer, sector_size};
 }
 
-FileRecordHeaderLight::FileRecordHeaderLight(std::span<const BYTE> buffer,
-                                             size_t sector_size)
+FileRecordHeaderImpl<Strategy::NO_CACHE>::FileRecordHeaderImpl(
+    std::span<const BYTE> buffer, size_t sector_size)
     : FileRecordHeader(buffer, sector_size), data_(buffer)
 {
 }
 
-const FileRecordHeader::Data* FileRecordHeaderLight::GetData() const
+const FileRecordHeader::Data*
+    FileRecordHeaderImpl<Strategy::NO_CACHE>::GetData() const
 {
   return reinterpret_cast<const Data*>(data_.data());
 }
 
-FileRecordHeaderHeavy::FileRecordHeaderHeavy(std::span<const BYTE> buffer,
-                                             size_t sector_size)
+FileRecordHeaderImpl<Strategy::FULL_CACHE>::FileRecordHeaderImpl(
+    std::span<const BYTE> buffer, size_t sector_size)
     : FileRecordHeader(buffer, sector_size)
 {
   memcpy(&data_.raw[0], buffer.data(), buffer.size());
 }
 
-const FileRecordHeader::Data* FileRecordHeaderHeavy::GetData() const
+const FileRecordHeader::Data*
+    FileRecordHeaderImpl<Strategy::FULL_CACHE>::GetData() const
 {
   return &data_;
 }
+
+template struct FileRecordHeaderImpl<Strategy::NO_CACHE>;
+template struct FileRecordHeaderImpl<Strategy::FULL_CACHE>;
+
+template
+FileRecordHeaderImpl<Strategy::NO_CACHE>
+    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
+template
+FileRecordHeaderImpl<Strategy::FULL_CACHE>
+    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
 
 }  // namespace NtfsBrowser

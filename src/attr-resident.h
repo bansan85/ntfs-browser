@@ -4,9 +4,11 @@
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/strategy.h>
 
 namespace NtfsBrowser
 {
+template <Strategy S>
 class FileReader;
 struct AttrHeaderCommon;
 namespace Attr
@@ -14,10 +16,11 @@ namespace Attr
 struct HeaderResident;
 }  // namespace Attr
 
-class AttrResident : public AttrBase
+template <Strategy S>
+class AttrResident : public AttrBase<S>
 {
  public:
-  AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrResident(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
   AttrResident(AttrResident&& other) noexcept = delete;
   AttrResident(AttrResident const& other) = delete;
   AttrResident& operator=(AttrResident&& other) noexcept = delete;
@@ -31,10 +34,11 @@ class AttrResident : public AttrBase
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrResident
 
-class AttrResidentLight : public AttrResident
+class AttrResidentNoCache : public AttrResident<Strategy::NO_CACHE>
 {
  public:
-  AttrResidentLight(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrResidentNoCache(const AttrHeaderCommon& ahc,
+                      const FileRecord<Strategy::NO_CACHE>& fr);
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
 
@@ -42,10 +46,11 @@ class AttrResidentLight : public AttrResident
   std::span<const BYTE> body_;
 };
 
-class AttrResidentHeavy : public AttrResident
+class AttrResidentFullCache : public AttrResident<Strategy::FULL_CACHE>
 {
  public:
-  AttrResidentHeavy(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrResidentFullCache(const AttrHeaderCommon& ahc,
+                        const FileRecord<Strategy::FULL_CACHE>& fr);
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
 

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/strategy.h>
 
 #include "attr-resident.h"
 
@@ -14,11 +15,11 @@ namespace Attr
 struct IndexRoot;
 }  // namespace Attr
 
-template <typename RESIDENT>
+template <typename RESIDENT, Strategy S>
 class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntry>
 {
  public:
-  AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
   AttrIndexRoot(AttrIndexRoot&& other) noexcept = delete;
   AttrIndexRoot(AttrIndexRoot const& other) = delete;
   AttrIndexRoot& operator=(AttrIndexRoot&& other) noexcept = delete;

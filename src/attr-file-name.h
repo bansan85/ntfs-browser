@@ -9,11 +9,11 @@ namespace NtfsBrowser
 {
 struct AttrHeaderCommon;
 
-template <typename RESIDENT>
+template <typename RESIDENT, Strategy S>
 class AttrFileName : public RESIDENT, public Filename
 {
  public:
-  AttrFileName(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrFileName(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
   AttrFileName(AttrFileName&& other) noexcept = delete;
   AttrFileName(AttrFileName const& other) = delete;
   AttrFileName& operator=(AttrFileName&& other) noexcept = delete;

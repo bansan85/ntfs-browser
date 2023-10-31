@@ -8,11 +8,11 @@
 namespace NtfsBrowser
 {
 
-template <class TYPE_RESIDENT>
+template <class TYPE_RESIDENT, Strategy S>
 class AttrData : public TYPE_RESIDENT
 {
  public:
-  AttrData(const AttrHeaderCommon& ahc, const FileRecord& fr)
+  AttrData(const AttrHeaderCommon& ahc, const FileRecord<S>& fr)
       : TYPE_RESIDENT(ahc, fr)
   {
     NTFS_TRACE1("Attribute: Data (%sResident)\n",

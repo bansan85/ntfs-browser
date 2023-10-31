@@ -181,7 +181,7 @@ void CNtfsundelDlg::OnSearch()
 
   const _TCHAR volname = vns.GetAt(0);
 
-  NtfsVolume volume(volname, FileReader::Strategy::FULL_CACHE);
+  NtfsVolume<Strategy::FULL_CACHE> volume(volname);
   if (!volume.IsVolumeOK())
   {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -208,10 +208,10 @@ void CNtfsundelDlg::OnSearch()
   const auto regx = std::wregex(static_cast<const _TCHAR*>(m_filter));
   std::chrono::steady_clock::time_point begin =
       std::chrono::steady_clock::now();
-  for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::USER);
+  for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::MFT);
        i < volume.GetRecordsCount(); i++)
   {
-    //if (i == 40000) break;
+    //if (i == 100000) break;
     if (stop)
     {
       break;
@@ -253,9 +253,8 @@ void CNtfsundelDlg::OnSearch()
     if (fr.IsDirectory())
     {
       fr.TraverseSubEntries(
-          [&fr, &id_to_parent](const IndexEntry& ie, void* context)
-          {
-            if (id_to_parent.contains(ie.GetFileReference()))
+          [&fr, &id_to_parent](const IndexEntry& ie, void* context) {
+            if (ie.GetFileReference() == *fr.GetFileReference())
             {
               return;
             }
@@ -300,11 +299,11 @@ void CNtfsundelDlg::OnSearch()
         fr.SetAttrMask(Mask::FILE_NAME);
         if (!fr.ParseFileRecord(id->second))
         {
-          continue;
+          break;
         }
         if (!fr.ParseAttrs())
         {
-          continue;
+          break;
         }
         std::wstring fn2 = std::wstring{fr.GetFileName()};
         full_file_name = fn2 + L"\\" + full_file_name;
@@ -368,7 +367,7 @@ void CNtfsundelDlg::OnRecover()
 
   const _TCHAR volname = vns.GetAt(0);
 
-  NtfsVolume volume(volname, FileReader::Strategy::NO_CACHE);
+  NtfsVolume<Strategy::NO_CACHE> volume(volname);
   FileRecord fr(volume);
 
   if (!fr.ParseFileRecord(ref))
@@ -426,7 +425,7 @@ void CNtfsundelDlg::OnRecover()
 
   // Save to disk
   // Unnamed Data attribute contains the file data
-  const AttrBase* data = fr.FindStream({});
+  const AttrBase<Strategy::NO_CACHE>* data = fr.FindStream({});
   if (data == nullptr)
   {
     return;

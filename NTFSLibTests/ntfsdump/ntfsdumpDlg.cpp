@@ -215,7 +215,7 @@ void CNtfsdumpDlg::OnOK()
 
   const _TCHAR volname = m_filename.GetAt(0);
 
-  NtfsVolume volume(volname, FileReader::Strategy::NO_CACHE);
+  NtfsVolume<Strategy::FULL_CACHE> volume(volname);
   if (!volume.IsVolumeOK())
   {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -325,7 +325,7 @@ void CNtfsdumpDlg::OnOK()
   filebuf.resize(BUFFER_SIZE);
 
   // only pick the unnamed stream (file data)
-  const AttrBase* data = fr.FindStream({});
+  const AttrBase<Strategy::FULL_CACHE>* data = fr.FindStream({});
   if (data != nullptr)
   {
     // show only the first 16K

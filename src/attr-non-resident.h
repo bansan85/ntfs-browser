@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/strategy.h>
 
 #include "data/run-entry.h"
 
@@ -17,10 +18,11 @@ struct HeaderNonResident;
 ////////////////////////////////
 // NonResident Attributes
 ////////////////////////////////
-class AttrNonResident : public AttrBase
+template <Strategy S>
+class AttrNonResident : public AttrBase<S>
 {
  public:
-  AttrNonResident(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrNonResident(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
   AttrNonResident(AttrNonResident&& other) noexcept = delete;
   AttrNonResident(AttrNonResident const& other) = delete;
   AttrNonResident& operator=(AttrNonResident&& other) noexcept = delete;

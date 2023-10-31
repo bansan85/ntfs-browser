@@ -9,16 +9,20 @@
 #include <gsl/pointers>
 
 #include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/strategy.h>
 
 namespace NtfsBrowser
 {
+template <Strategy S>
 class FileRecord;
+template <Strategy S>
 class NtfsVolume;
 
+template <Strategy S>
 class AttrBase
 {
  public:
-  AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr) noexcept;
+  AttrBase(const AttrHeaderCommon& ahc, const FileRecord<S>& fr) noexcept;
   AttrBase(AttrBase&& other) noexcept = delete;
   AttrBase(AttrBase const& other) = delete;
   AttrBase& operator=(AttrBase&& other) noexcept = delete;
@@ -27,7 +31,7 @@ class AttrBase
 
  protected:
   const AttrHeaderCommon& attr_header_;
-  const NtfsVolume& volume_;
+  const NtfsVolume<S>& volume_;
 
  public:
   [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const noexcept;

@@ -8,21 +8,25 @@
 namespace NtfsBrowser
 {
 
-AttrResident::AttrResident(const AttrHeaderCommon& ahc, const FileRecord& fr)
-    : AttrBase(ahc, fr)
+template <Strategy S>
+AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
+                              const FileRecord<S>& fr)
+    : AttrBase<S>(ahc, fr)
 {
 }
 
-bool AttrResident::IsDataRunOK() const noexcept
+template <Strategy S>
+bool AttrResident<S>::IsDataRunOK() const noexcept
 {
   return true;  // Always OK for a resident attribute
 }
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
+template <Strategy S>
 std::optional<ULONGLONG>
-    AttrResident::ReadData(ULONGLONG offset,
-                           const std::span<BYTE>& buffer) const
+    AttrResident<S>::ReadData(ULONGLONG offset,
+                              const std::span<BYTE>& buffer) const
 {
   ULONGLONG bufLen = buffer.size();
   ULONGLONG actural = 0;
@@ -32,27 +36,27 @@ std::optional<ULONGLONG>
   }
 
   // offset parameter error
-  if (offset >= GetDataSize())
+  if (offset >= this->GetDataSize())
   {
     return {};
   }
 
-  if ((offset + bufLen) > GetDataSize())
+  if ((offset + bufLen) > this->GetDataSize())
   {
-    actural = gsl::narrow<DWORD>(GetDataSize() - offset);  // Beyond scope
+    actural = gsl::narrow<DWORD>(this->GetDataSize() - offset);  // Beyond scope
   }
   else
   {
     actural = bufLen;
   }
 
-  memcpy(buffer.data(), &GetData()[offset], actural);
+  memcpy(buffer.data(), &this->GetData()[offset], actural);
 
   return bufLen;
 }
 
-AttrResidentLight::AttrResidentLight(const AttrHeaderCommon& ahc,
-                                     const FileRecord& fr)
+AttrResidentNoCache::AttrResidentNoCache(
+    const AttrHeaderCommon& ahc, const FileRecord<Strategy::NO_CACHE>& fr)
     : AttrResident(ahc, fr)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
@@ -62,15 +66,18 @@ AttrResidentLight::AttrResidentLight(const AttrHeaderCommon& ahc,
       header.attr_size};
 }
 
-const BYTE* AttrResidentLight::GetData() const noexcept { return body_.data(); }
+const BYTE* AttrResidentNoCache::GetData() const noexcept
+{
+  return body_.data();
+}
 
-ULONGLONG AttrResidentLight::GetDataSize() const noexcept
+ULONGLONG AttrResidentNoCache::GetDataSize() const noexcept
 {
   return body_.size();
 }
 
-AttrResidentHeavy::AttrResidentHeavy(const AttrHeaderCommon& ahc,
-                                     const FileRecord& fr)
+AttrResidentFullCache::AttrResidentFullCache(
+    const AttrHeaderCommon& ahc, const FileRecord<Strategy::FULL_CACHE>& fr)
     : AttrResident(ahc, fr)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
@@ -81,9 +88,12 @@ AttrResidentHeavy::AttrResidentHeavy(const AttrHeaderCommon& ahc,
          header.attr_size);
 }
 
-const BYTE* AttrResidentHeavy::GetData() const noexcept { return body_.data(); }
+const BYTE* AttrResidentFullCache::GetData() const noexcept
+{
+  return body_.data();
+}
 
-ULONGLONG AttrResidentHeavy::GetDataSize() const noexcept
+ULONGLONG AttrResidentFullCache::GetDataSize() const noexcept
 {
   return body_.size();
 }

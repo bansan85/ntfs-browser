@@ -8,11 +8,11 @@
 namespace NtfsBrowser
 {
 
-template <class TYPE_RESIDENT>
+template <class TYPE_RESIDENT, Strategy S>
 class AttrBitmap : public TYPE_RESIDENT
 {
  public:
-  AttrBitmap(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrBitmap(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
   AttrBitmap(AttrBitmap&& other) noexcept = delete;
   AttrBitmap(AttrBitmap const& other) = delete;
   AttrBitmap& operator=(AttrBitmap&& other) noexcept = delete;

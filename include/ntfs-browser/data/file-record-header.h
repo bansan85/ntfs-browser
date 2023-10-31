@@ -10,6 +10,7 @@
 #include <windows.h>
 
 #include <ntfs-browser/file-reader.h>
+#include <ntfs-browser/strategy.h>
 
 #include "../flag/file-record.h"
 
@@ -18,6 +19,9 @@ namespace NtfsBrowser
 constexpr uint32_t kFileRecordMagic('ELIF');
 
 struct AttrHeaderCommon;
+
+template <Strategy S>
+struct FileRecordHeaderImpl;
 
 struct FileRecordHeader
 {
@@ -52,28 +56,37 @@ struct FileRecordHeader
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
   const AttrHeaderCommon& HeaderCommon() noexcept;
-  static std::unique_ptr<FileRecordHeader>
-      Factory(std::span<const BYTE> buffer, size_t sector_size,
-              FileReader::Strategy strategy);
+
+  template <Strategy S>
+  static FileRecordHeaderImpl<S> Factory(std::span<const BYTE> buffer,
+                                         size_t sector_size);
+
   virtual const FileRecordHeader::Data* GetData() const = 0;
 };
 
-struct FileRecordHeaderLight final : public FileRecordHeader
+template <Strategy S>
+struct FileRecordHeaderImpl
+{
+};
+
+template <>
+struct FileRecordHeaderImpl<Strategy::NO_CACHE> : public FileRecordHeader
 {
   std::span<const BYTE> data_;
 
-  FileRecordHeaderLight(std::span<const BYTE> buffer, size_t sector_size);
-  virtual ~FileRecordHeaderLight() = default;
+  FileRecordHeaderImpl(std::span<const BYTE> buffer, size_t sector_size);
+  virtual ~FileRecordHeaderImpl() = default;
 
   const FileRecordHeader::Data* GetData() const override;
 };
 
-struct FileRecordHeaderHeavy final : public FileRecordHeader
+template <>
+struct FileRecordHeaderImpl<Strategy::FULL_CACHE> : public FileRecordHeader
 {
   FileRecordHeader::Data data_;
 
-  FileRecordHeaderHeavy(std::span<const BYTE> buffer, size_t sector_size);
-  virtual ~FileRecordHeaderHeavy() = default;
+  FileRecordHeaderImpl(std::span<const BYTE> buffer, size_t sector_size);
+  virtual ~FileRecordHeaderImpl() = default;
 
   const FileRecordHeader::Data* GetData() const override;
 };

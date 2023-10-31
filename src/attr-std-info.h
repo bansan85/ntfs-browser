@@ -17,11 +17,11 @@ namespace Flag
 enum class StdInfoPermission : DWORD;
 }  // namespace Flag
 
-template <typename RESIDENT>
+template <typename RESIDENT, Strategy S>
 class AttrStdInfo : public RESIDENT
 {
  public:
-  AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord& fr);
+  AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
   AttrStdInfo(AttrStdInfo&& other) noexcept = delete;
   AttrStdInfo(AttrStdInfo const& other) = delete;
   AttrStdInfo& operator=(AttrStdInfo&& other) noexcept = delete;

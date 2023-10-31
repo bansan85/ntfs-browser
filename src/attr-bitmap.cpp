@@ -5,9 +5,9 @@
 namespace NtfsBrowser
 {
 
-template <class TYPE_RESIDENT>
-AttrBitmap<TYPE_RESIDENT>::AttrBitmap(const AttrHeaderCommon& ahc,
-                                      const FileRecord& fr)
+template <class TYPE_RESIDENT, Strategy S>
+AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
+                                         const FileRecord<S>& fr)
     : TYPE_RESIDENT(ahc, fr)
 {
   NTFS_TRACE1("Attribute: Bitmap (%sResident)\n",
@@ -41,8 +41,8 @@ AttrBitmap<TYPE_RESIDENT>::AttrBitmap(const AttrHeaderCommon& ahc,
   NTFS_TRACE1("%u bytes of resident Bitmap data read\n", bitmap_size_);
 }
 
-template <class TYPE_RESIDENT>
-bool AttrBitmap<TYPE_RESIDENT>::IsClusterFree(ULONGLONG cluster)
+template <class TYPE_RESIDENT, Strategy S>
+bool AttrBitmap<TYPE_RESIDENT, S>::IsClusterFree(ULONGLONG cluster)
 {
   if (!this->IsDataRunOK() || bitmap_buf_.empty())
   {
@@ -85,8 +85,11 @@ bool AttrBitmap<TYPE_RESIDENT>::IsClusterFree(ULONGLONG cluster)
   return (bitmap_buf_[idx] & static_cast<BYTE>(1U << fac)) == 0;
 }
 
-template class AttrBitmap<AttrNonResident>;
-template class AttrBitmap<AttrResidentHeavy>;
-template class AttrBitmap<AttrResidentLight>;
+template class AttrBitmap<AttrNonResident<Strategy::FULL_CACHE>,
+                          Strategy::FULL_CACHE>;
+template class AttrBitmap<AttrNonResident<Strategy::NO_CACHE>,
+                          Strategy::NO_CACHE>;
+template class AttrBitmap<AttrResidentFullCache, Strategy::FULL_CACHE>;
+template class AttrBitmap<AttrResidentNoCache, Strategy::NO_CACHE>;
 
 }  // namespace NtfsBrowser

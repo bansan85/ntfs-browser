@@ -8,32 +8,46 @@
 namespace NtfsBrowser
 {
 
-AttrBase::AttrBase(const AttrHeaderCommon& ahc, const FileRecord& fr) noexcept
+template <Strategy S>
+AttrBase<S>::AttrBase(const AttrHeaderCommon& ahc,
+                      const FileRecord<S>& fr) noexcept
     : attr_header_(ahc), volume_(fr.GetVolume())
 {
 }
 
-const AttrHeaderCommon& AttrBase::GetAttrHeader() const noexcept
+template <Strategy S>
+const AttrHeaderCommon& AttrBase<S>::GetAttrHeader() const noexcept
 {
   return attr_header_;
 }
 
-AttrType AttrBase::GetAttrType() const noexcept { return attr_header_.type; }
+template <Strategy S>
+AttrType AttrBase<S>::GetAttrType() const noexcept
+{
+  return attr_header_.type;
+}
 
-DWORD AttrBase::GetAttrTotalSize() const noexcept
+template <Strategy S>
+DWORD AttrBase<S>::GetAttrTotalSize() const noexcept
 {
   return attr_header_.total_size;
 }
 
-bool AttrBase::IsNonResident() const noexcept
+template <Strategy S>
+bool AttrBase<S>::IsNonResident() const noexcept
 {
   return attr_header_.non_resident != 0;
 }
 
-WORD AttrBase::GetAttrFlags() const noexcept { return attr_header_.flags; }
+template <Strategy S>
+WORD AttrBase<S>::GetAttrFlags() const noexcept
+{
+  return attr_header_.flags;
+}
 
 // Get UNICODE Attribute name
-std::wstring_view AttrBase::GetAttrName() const
+template <Strategy S>
+std::wstring_view AttrBase<S>::GetAttrName() const
 {
   if (attr_header_.name_length == 0)
   {
@@ -52,19 +66,31 @@ std::wstring_view AttrBase::GetAttrName() const
 
 // Verify if this attribute is unnamed
 // Useful in analyzing MultiStream files
-bool AttrBase::IsUnNamed() const noexcept
+template <Strategy S>
+bool AttrBase<S>::IsUnNamed() const noexcept
 {
   return attr_header_.name_length == 0;
 }
 
-WORD AttrBase::GetSectorSize() const noexcept { return volume_.sector_size_; }
-DWORD AttrBase::GetClusterSize() const noexcept
+template <Strategy S>
+WORD AttrBase<S>::GetSectorSize() const noexcept
+{
+  return volume_.sector_size_;
+}
+
+template <Strategy S>
+DWORD AttrBase<S>::GetClusterSize() const noexcept
 {
   return volume_.cluster_size_;
 }
-DWORD AttrBase::GetIndexBlockSize() const noexcept
+
+template <Strategy S>
+DWORD AttrBase<S>::GetIndexBlockSize() const noexcept
 {
   return volume_.index_block_size_;
 }
+
+template class AttrBase<Strategy::NO_CACHE>;
+template class AttrBase<Strategy::FULL_CACHE>;
 
 }  // namespace NtfsBrowser

@@ -11,8 +11,8 @@
 namespace NtfsBrowser
 {
 
-NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
-    : volume_{strategy}, mft_record_(*this)
+template <Strategy S>
+NtfsVolume<S>::NtfsVolume(_TCHAR volume) : mft_record_(*this)
 {
   ClearAttrRawCB();
 
@@ -40,17 +40,19 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
     return;
   }
 
-  if (strategy == FileReader::Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     std::tie(version_major_, version_minor_) =
-        reinterpret_cast<const AttrVolInfo<AttrResidentHeavy>*>(
+        reinterpret_cast<
+            const AttrVolInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
             vec.front().get())
             ->GetVersion();
   }
   else
   {
     std::tie(version_major_, version_minor_) =
-        reinterpret_cast<const AttrVolInfo<AttrResidentLight>*>(
+        reinterpret_cast<
+            const AttrVolInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
             vec.front().get())
             ->GetVersion();
   }
@@ -64,10 +66,11 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
   const auto& vec2 = vol.getAttr(AttrType::VOLUME_NAME);
   if (!vec2.empty())
   {
-    if (strategy == FileReader::Strategy::NO_CACHE)
+    if (S == Strategy::NO_CACHE)
     {
       const std::wstring_view volname =
-          reinterpret_cast<const AttrVolName<AttrResidentHeavy>*>(
+          reinterpret_cast<
+              const AttrVolName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
               vec2.front().get())
               ->GetName();
       NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
@@ -75,7 +78,8 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
     else
     {
       const std::wstring_view volname =
-          reinterpret_cast<const AttrVolName<AttrResidentLight>*>(
+          reinterpret_cast<
+              const AttrVolName<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
               vec2.front().get())
               ->GetName();
       NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
@@ -92,7 +96,7 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
     return;
   }
 
-  const std::vector<std::unique_ptr<AttrBase>>& vec3 =
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec3 =
       mft_record_.getAttr(AttrType::DATA);
   if (!vec3.empty())
   {
@@ -101,7 +105,8 @@ NtfsVolume::NtfsVolume(_TCHAR volume, FileReader::Strategy strategy)
 }
 
 // Open a volume ('a' - 'z', 'A' - 'Z'), get volume handle and BPB
-bool NtfsVolume::OpenVolume(_TCHAR volume)
+template <Strategy S>
+bool NtfsVolume<S>::OpenVolume(_TCHAR volume)
 {
   // Verify parameter
   if (!_istalpha(volume))
@@ -178,58 +183,81 @@ bool NtfsVolume::OpenVolume(_TCHAR volume)
 }
 
 // Check if Volume is successfully opened
-bool NtfsVolume::IsVolumeOK() const noexcept { return volume_ok_; }
+template <Strategy S>
+bool NtfsVolume<S>::IsVolumeOK() const noexcept
+{
+  return volume_ok_;
+}
 
 // Get NTFS volume version
-std::pair<BYTE, BYTE> NtfsVolume::GetVersion() const noexcept
+template <Strategy S>
+std::pair<BYTE, BYTE> NtfsVolume<S>::GetVersion() const noexcept
 {
   return {version_major_, version_minor_};
 }
 
 // Get File Record count
-ULONGLONG NtfsVolume::GetRecordsCount() const noexcept
+template <Strategy S>
+ULONGLONG NtfsVolume<S>::GetRecordsCount() const noexcept
 {
   return (mft_data_->GetDataSize() / file_record_size_);
 }
 
 // Get BPB information
+template <Strategy S>
+WORD NtfsVolume<S>::GetSectorSize() const noexcept
+{
+  return sector_size_;
+}
 
-WORD NtfsVolume::GetSectorSize() const noexcept { return sector_size_; }
+template <Strategy S>
+DWORD NtfsVolume<S>::GetClusterSize() const noexcept
+{
+  return cluster_size_;
+}
 
-DWORD NtfsVolume::GetClusterSize() const noexcept { return cluster_size_; }
-
-DWORD NtfsVolume::GetFileRecordSize() const noexcept
+template <Strategy S>
+DWORD NtfsVolume<S>::GetFileRecordSize() const noexcept
 {
   return file_record_size_;
 }
 
-DWORD NtfsVolume::GetIndexBlockSize() const noexcept
+template <Strategy S>
+DWORD NtfsVolume<S>::GetIndexBlockSize() const noexcept
 {
   return index_block_size_;
 }
 
 // Get MFT starting address
-ULONGLONG NtfsVolume::GetMFTAddr() const noexcept { return mft_addr_; }
+template <Strategy S>
+ULONGLONG NtfsVolume<S>::GetMFTAddr() const noexcept
+{
+  return mft_addr_;
+}
 
-std::span<BYTE> NtfsVolume::GetClusterBuffer() const noexcept
+template <Strategy S>
+std::span<BYTE> NtfsVolume<S>::GetClusterBuffer() const noexcept
 {
   return {cluster_buffer_.data(), cluster_buffer_.size()};
 }
 
-std::span<BYTE> NtfsVolume::GetFileRecordBuffer() const noexcept
+template <Strategy S>
+std::span<BYTE> NtfsVolume<S>::GetFileRecordBuffer() const noexcept
 {
   return {file_record_buffer_.data(), file_record_buffer_.size()};
 }
 
-std::optional<std::span<const BYTE>> NtfsVolume::Read(LARGE_INTEGER& addr,
-                                                      DWORD length) const
+template <Strategy S>
+std::optional<std::span<const BYTE>> NtfsVolume<S>::Read(LARGE_INTEGER& addr,
+                                                         DWORD length) const
 {
   return volume_.Read(addr, length);
 }
 
 // Install Attribute CallBack routines for the whole Volume
-bool NtfsVolume::InstallAttrRawCB(AttrType attrType,
-                                  AttrRawCallback cb) noexcept
+template <Strategy S>
+bool NtfsVolume<S>::InstallAttrRawCB(AttrType attrType,
+                                     AttrRawCallback cb) noexcept
 {
   const DWORD atIdx = ATTR_INDEX(attrType);
   if (atIdx >= kAttrNums)
@@ -241,8 +269,9 @@ bool NtfsVolume::InstallAttrRawCB(AttrType attrType,
   return true;
 }
 
-void NtfsVolume::AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,
-                                 bool& bDiscard) const
+template <Strategy S>
+void NtfsVolume<S>::AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,
+                                    bool& bDiscard) const
 {
   if (attr_raw_call_back_[attType] != nullptr)
   {
@@ -251,12 +280,16 @@ void NtfsVolume::AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,
 }
 
 // Clear all Attribute CallBack routines
-void NtfsVolume::ClearAttrRawCB() noexcept
+template <Strategy S>
+void NtfsVolume<S>::ClearAttrRawCB() noexcept
 {
   for (AttrRawCallback& call_back : attr_raw_call_back_)
   {
     call_back = nullptr;
   }
 }
+
+template class NtfsVolume<Strategy::NO_CACHE>;
+template class NtfsVolume<Strategy::FULL_CACHE>;
 
 }  // namespace NtfsBrowser
