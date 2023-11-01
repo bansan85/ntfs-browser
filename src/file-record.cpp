@@ -374,6 +374,11 @@ bool FileRecord::ParseAttrs()
       }
     }
 
+    if (ahc->total_size == 0)
+    {
+      return false;
+    }
+
     dataPtr += ahc->total_size;
     ahc = reinterpret_cast<const AttrHeaderCommon*>(
         reinterpret_cast<const BYTE*>(ahc) +
@@ -381,6 +386,11 @@ bool FileRecord::ParseAttrs()
   }
 
   return true;
+}
+
+std::optional<ULONGLONG> FileRecord::GetFileReference() const noexcept
+{
+  return file_reference_;
 }
 
 // Install Attribute raw data CallBack routines for a single File Record

@@ -4,7 +4,7 @@
 
 #include "ntfs-common.h"
 
-static constexpr LONGLONG BUFFER_SIZE = 1024 * 1024;
+static constexpr LONGLONG BUFFER_SIZE = 32 * 1024;
 
 namespace NtfsBrowser
 {
@@ -59,6 +59,14 @@ std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
     // Not implemented. Really needed ?
     assert(addr.QuadPart / BUFFER_SIZE ==
            (addr.QuadPart + length - 1) / BUFFER_SIZE);
+
+    size_t index = addr.QuadPart / BUFFER_SIZE;
+    if (map_buffer_.contains(index))
+    {
+      return std::span<const BYTE>{
+          &map_buffer_[index][addr.QuadPart % BUFFER_SIZE], length};
+    }
+
     LARGE_INTEGER addr2{.QuadPart =
                             addr.QuadPart - addr.QuadPart % BUFFER_SIZE};
     DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr2.LowPart),
@@ -70,14 +78,9 @@ std::optional<std::span<const BYTE>> FileReader::Read(LARGE_INTEGER& addr,
       return {};
     }
 
-    size_t index = addr.QuadPart / BUFFER_SIZE;
-    if (map_buffer_.contains(index))
-    {
-      return std::span<const BYTE>{
-          &map_buffer_[index][addr.QuadPart % BUFFER_SIZE], length};
-    }
-
-    map_buffer_[index] = std::vector<BYTE>(BUFFER_SIZE);
+    std::vector<BYTE> new_vector;
+    new_vector.reserve(BUFFER_SIZE);
+    map_buffer_[index] = std::move(new_vector);
 
     std::vector<BYTE>& map_buf = map_buffer_[index];
 

@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <functional>
 #include <vector>
 
 #include <tchar.h>
@@ -23,15 +24,16 @@ struct FileRecordHeader;
 
 // User defined Callback routine to handle Directory traversing
 // Will be called by FileRecord::TraverseSubEntries for each sub entry
-using SUBENTRY_CALLBACK = void (*)(const IndexEntry& ie, void* context);
+using SUBENTRY_CALLBACK =
+    std::function<void(const IndexEntry& ie, void* context)>;
 
 // User defined Callback routine to handle FileRecord parsed attributes
 // Will be called by FileRecord::TraverseAttrs() for each attribute
 // attrClass is the according attribute's wrapping class, CAttr_xxx
 // Set bStop to true if don't want to continue
 // Set bStop to false to continue processing
-using ATTRS_CALLBACK = void (*)(const AttrBase& attr, void* context,
-                                bool* bStop);
+using ATTRS_CALLBACK =
+    std::function<void(const AttrBase& attr, void* context, bool* bStop)>;
 
 class FileRecord
 {
@@ -73,7 +75,7 @@ class FileRecord
   [[nodiscard]] const NtfsVolume& GetVolume() const noexcept;
   [[nodiscard]] bool ParseFileRecord(ULONGLONG fileRef);
   [[nodiscard]] bool ParseAttrs();
-
+  [[nodiscard]] std::optional<ULONGLONG> GetFileReference() const noexcept;
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
                                       AttrRawCallback cb) noexcept;
   void ClearAttrRawCB() noexcept;

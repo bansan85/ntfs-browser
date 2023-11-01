@@ -2,6 +2,8 @@
 
 #include <chrono>
 #include <regex>
+#include <set>
+#include <map>
 
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
@@ -10,6 +12,7 @@
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/index-entry.h>
 
 using namespace NtfsBrowser;
 
@@ -22,7 +25,7 @@ static char THIS_FILE[] = __FILE__;
 CNtfsundelDlg::CNtfsundelDlg(CWnd* pParent)
     : CDialog(CNtfsundelDlg::IDD, pParent)
 {
-  m_filter = _T(".*\\..*");
+  m_filter = _T(".*");
   m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
 
@@ -199,13 +202,16 @@ void CNtfsundelDlg::OnSearch()
   int count = 0;
   FileRecord fr(volume);
 
+  std::map<ULONGLONG, ULONGLONG> id_to_parent;
+  std::set<ULONGLONG> files;
+
   const auto regx = std::wregex(static_cast<const _TCHAR*>(m_filter));
   std::chrono::steady_clock::time_point begin =
       std::chrono::steady_clock::now();
   for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::USER);
        i < volume.GetRecordsCount(); i++)
   {
-    if (i == 40000) break;
+    //if (i == 40000) break;
     if (stop)
     {
       break;
@@ -220,7 +226,7 @@ void CNtfsundelDlg::OnSearch()
 
     // Only parse Standard Information and File Name attributes
     // StdInfo will always be parsed
-    fr.SetAttrMask(Mask::FILE_NAME);
+    fr.SetAttrMask(Mask::FILE_NAME | Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
     if (!fr.ParseFileRecord(i))
     {
       continue;
@@ -235,31 +241,76 @@ void CNtfsundelDlg::OnSearch()
     {
       continue;
     }
-    if (fr.IsDirectory())
-    {
-      continue;
-    }
 
     // Check file name
     std::wstring_view fn = fr.GetFileName();
+
     if (fn.empty())
     {
       continue;
     }
+
+    if (fr.IsDirectory())
+    {
+      fr.TraverseSubEntries(
+          [&fr, &id_to_parent](const IndexEntry& ie, void* context)
+          {
+            if (id_to_parent.contains(ie.GetFileReference()))
+            {
+              return;
+            }
+            id_to_parent.insert(
+                {ie.GetFileReference(), *fr.GetFileReference()});
+          },
+          nullptr);
+    }
+    files.insert(*fr.GetFileReference());
+  }
+
+  for (auto fri : files)
+  {
+    fr.SetAttrMask(Mask::FILE_NAME);
+    if (!fr.ParseFileRecord(fri))
+    {
+      continue;
+    }
+    if (!fr.ParseAttrs())
+    {
+      continue;
+    }
+    std::wstring_view fn = fr.GetFileName();
 
     std::wstring sw = {fn.begin(), fn.end()};
     if (std::regex_match(sw, regx))
     {
       // Add to list
       CString s;
-      s.Format(_T("%I64u"), i);
+      s.Format(_T("%I64u"), fri);
 
-      const int itm = m_files.InsertItem(count, s);
-      // File name
-      m_files.SetItemText(itm, 1, sw.c_str());
       // Time
       FILETIME ft;
       fr.GetFileTime(&ft, nullptr, nullptr);
+
+      const int itm = m_files.InsertItem(count, s);
+      // Full File name
+      std::wstring full_file_name = sw;
+      auto id = id_to_parent.find(fri);
+      while (id != id_to_parent.end())
+      {
+        fr.SetAttrMask(Mask::FILE_NAME);
+        if (!fr.ParseFileRecord(id->second))
+        {
+          continue;
+        }
+        if (!fr.ParseAttrs())
+        {
+          continue;
+        }
+        std::wstring fn2 = std::wstring{fr.GetFileName()};
+        full_file_name = fn2 + L"\\" + full_file_name;
+        id = id_to_parent.find(id->second);
+      }
+      m_files.SetItemText(itm, 1, full_file_name.c_str());
       SYSTEMTIME st;
       if (FileTimeToSystemTime(&ft, &st) == FALSE)
       {
@@ -280,6 +331,7 @@ void CNtfsundelDlg::OnSearch()
       }
     }
   }
+
   std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
   long long duration =
       std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
