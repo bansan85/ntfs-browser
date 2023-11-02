@@ -51,7 +51,7 @@ class FileRecord
 
   virtual ~FileRecord();
   friend class AttrBase<S>;
-  template <class TYPE_RESIDENT, Strategy S>
+  template <class TYPE_RESIDENT, Strategy>
   friend class AttrList;
 
  private:

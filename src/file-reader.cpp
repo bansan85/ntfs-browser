@@ -4,7 +4,8 @@
 
 #include "ntfs-common.h"
 
-static constexpr LONGLONG BUFFER_SIZE = 32 * 1024;
+static constexpr LONGLONG READ_BUFFER_SIZE = 64 * 1024;
+static constexpr LONGLONG MEMORY_BUFFER_SIZE = 512 * READ_BUFFER_SIZE;
 
 namespace NtfsBrowser
 {
@@ -67,17 +68,18 @@ typename std::enable_if_t<
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
 {
   // Not implemented. Really needed ?
-  assert(addr.QuadPart / BUFFER_SIZE ==
-         (addr.QuadPart + length - 1) / BUFFER_SIZE);
+  assert(addr.QuadPart / READ_BUFFER_SIZE ==
+         (addr.QuadPart + length - 1) / READ_BUFFER_SIZE);
 
-  size_t index = addr.QuadPart / BUFFER_SIZE;
+  size_t index = addr.QuadPart / READ_BUFFER_SIZE;
   if (map_buffer_.contains(index))
   {
     return std::span<const BYTE>{
-        map_buffer_[index].data() + addr.QuadPart % BUFFER_SIZE, length};
+        &map_buffer_[index][0] + addr.QuadPart % READ_BUFFER_SIZE, length};
   }
 
-  LARGE_INTEGER addr2{.QuadPart = addr.QuadPart - addr.QuadPart % BUFFER_SIZE};
+  LARGE_INTEGER addr2{.QuadPart =
+                          addr.QuadPart - addr.QuadPart % READ_BUFFER_SIZE};
   DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr2.LowPart),
                              &addr2.HighPart, FILE_BEGIN);
 
@@ -87,21 +89,33 @@ typename std::enable_if_t<
     return {};
   }
 
-  std::vector<BYTE> new_vector;
-  new_vector.reserve(BUFFER_SIZE);
+  BYTE* new_data = NextMemory();
 
-  if (ReadFile(handle_.get(), new_vector.data(), BUFFER_SIZE, &len, nullptr) ==
+  if (ReadFile(handle_.get(), &new_data[0], READ_BUFFER_SIZE, &len, nullptr) ==
           FALSE ||
-      len != BUFFER_SIZE)
+      len != READ_BUFFER_SIZE)
   {
     NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
     return {};
   }
 
-  map_buffer_[index] = std::move(new_vector);
+  map_buffer_[index] = new_data;
 
-  return std::span<const BYTE>{
-      map_buffer_[index].data() + addr.QuadPart % BUFFER_SIZE, length};
+  return std::span<const BYTE>{new_data + addr.QuadPart % READ_BUFFER_SIZE,
+                               length};
+}
+
+template <Strategy S>
+BYTE* FileReader<S>::NextMemory() const
+{
+  if (mem_alloc.empty() || last_alloc * READ_BUFFER_SIZE == MEMORY_BUFFER_SIZE)
+  {
+    last_alloc = 0;
+    mem_alloc.emplace_back(std::make_unique<BYTE[]>(MEMORY_BUFFER_SIZE));
+  }
+  BYTE* retval = &mem_alloc.back()[0] + last_alloc * READ_BUFFER_SIZE;
+  last_alloc++;
+  return retval;
 }
 
 template class FileReader<Strategy::NO_CACHE>;

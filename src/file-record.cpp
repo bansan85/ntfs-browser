@@ -206,8 +206,7 @@ std::optional<FileRecordHeaderImpl<S>>
     return {};
   }
 
-  FileRecordHeaderImpl<S> fr{buffer_file, volume_.GetSectorSize()};
-  return fr;
+  return {{buffer_file, volume_.GetSectorSize()}};
 }
 
 // Read File Record, verify and patch the US (update sequence)
@@ -433,7 +432,7 @@ template <Strategy S>
 void FileRecord<S>::SetAttrMask(Mask mask) noexcept
 {
   // Standard Information and Attribute List is needed always
-  attr_mask_ = mask | Mask::STANDARD_INFORMATION | Mask::ATTRIBUTE_LIST;
+  attr_mask_ = mask;
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine

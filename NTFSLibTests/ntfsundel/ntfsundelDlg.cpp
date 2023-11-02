@@ -211,7 +211,7 @@ void CNtfsundelDlg::OnSearch()
   for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::MFT);
        i < volume.GetRecordsCount(); i++)
   {
-    //if (i == 100000) break;
+    if (i == 500000) break;
     if (stop)
     {
       break;
@@ -263,8 +263,14 @@ void CNtfsundelDlg::OnSearch()
           },
           nullptr);
     }
+
     files.insert(*fr.GetFileReference());
   }
+
+  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+  long long duration =
+      std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
+          .count();
 
   for (auto fri : files)
   {
@@ -321,7 +327,7 @@ void CNtfsundelDlg::OnSearch()
 
       // Prevent showing too many entries, 50,000 maxiam
       count++;
-      static constexpr DWORD MAX_NUMBER_FILES = 50000;
+      static constexpr DWORD MAX_NUMBER_FILES = 5000;
       if (count >= MAX_NUMBER_FILES)
       {
         MessageBox(
@@ -330,11 +336,6 @@ void CNtfsundelDlg::OnSearch()
       }
     }
   }
-
-  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-  long long duration =
-      std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
-          .count();
 
   CString totals;
   totals.Format(_T("%lldus"), duration);
