@@ -259,9 +259,15 @@ std::optional<ULONGLONG>
   ULONGLONG bufLen = buffer.size();
   BYTE* buf = buffer.data();
 
+  size_t nbpart = 0;
+
   ULONGLONG actural = 0;
   if (bufLen == 0)
   {
+    if (nbpart > 1)
+    {
+      return actural;
+    }
     return actural;
   }
 
@@ -288,6 +294,7 @@ std::optional<ULONGLONG>
     std::span<BYTE> unaligned_buf_first = this->volume_.GetClusterBuffer();
     std::optional<ULONGLONG> lenc =
         ReadVirtualClusters(start_vcn, 1, unaligned_buf_first);
+    nbpart++;
     if (!lenc || *lenc != this->GetClusterSize())
     {
       return {};
@@ -303,6 +310,10 @@ std::optional<ULONGLONG>
   }
   if (bufLen == 0)
   {
+    if (nbpart > 1)
+    {
+      return actural;
+    }
     return actural;
   }
 
@@ -314,6 +325,7 @@ std::optional<ULONGLONG>
 
     std::optional<ULONGLONG> lenc =
         ReadVirtualClusters(start_vcn, alignedClusters, {buf, alignedSize});
+    nbpart++;
     if (!lenc || *lenc != alignedSize)
     {
       return {};
@@ -326,6 +338,10 @@ std::optional<ULONGLONG>
 
     if (bufLen == 0)
     {
+      if (nbpart > 1)
+      {
+        return actural;
+      }
       return actural;
     }
   }
@@ -334,6 +350,7 @@ std::optional<ULONGLONG>
   std::span<BYTE> unaligned_buf_last = this->volume_.GetClusterBuffer();
   std::optional<ULONGLONG> lenc =
       ReadVirtualClusters(start_vcn, 1, unaligned_buf_last);
+  nbpart++;
   if (!lenc || *lenc != this->GetClusterSize())
   {
     return {};
@@ -342,6 +359,10 @@ std::optional<ULONGLONG>
   memcpy(buf, unaligned_buf_last.data(), bufLen);
   actural += bufLen;
 
+  if (nbpart > 1)
+  {
+    return actural;
+  }
   return actural;
 }
 
