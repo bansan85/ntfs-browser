@@ -2,3 +2,6 @@
 	path = 3rdparty/gsl
 	url = https://github.com/microsoft/GSL.git
 	branch = main
+[submodule "3rdparty/Catch2"]
+	path = 3rdparty/Catch2
+	url = https://github.com/catchorg/Catch2.git
