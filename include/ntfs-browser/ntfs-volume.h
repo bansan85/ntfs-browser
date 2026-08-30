@@ -2,6 +2,7 @@
 
 #include <array>
 #include <span>
+#include <string_view>
 
 #include <tchar.h>
 #include <windows.h>
@@ -19,6 +20,9 @@ class NtfsVolume
 {
  public:
   explicit NtfsVolume(_TCHAR volume);
+  // Opens an arbitrary device/image path instead of a drive letter
+  // (eg. "\\\\.\\PhysicalDrive0", or a plain file for a disk image).
+  explicit NtfsVolume(std::wstring_view path);
   NtfsVolume(NtfsVolume&& other) noexcept = delete;
   NtfsVolume(NtfsVolume const& other) = delete;
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
@@ -49,6 +53,8 @@ class NtfsVolume
   mutable std::vector<BYTE> cluster_buffer_;
 
   [[nodiscard]] bool OpenVolume(_TCHAR volume);
+  [[nodiscard]] bool OpenVolume(std::wstring_view path);
+  void Init();
 
  public:
   [[nodiscard]] bool IsVolumeOK() const noexcept;
