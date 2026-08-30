@@ -177,6 +177,11 @@ template <Strategy S>
 std::optional<FileRecordHeaderImpl<S>>
     FileRecord<S>::ReadFileRecord(ULONGLONG fileRef)
 {
+  if (record_buffer_.size() != volume_.GetFileRecordSize())
+  {
+    record_buffer_.resize(volume_.GetFileRecordSize());
+  }
+
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
       volume_.mft_data_ == nullptr)
   {
@@ -185,28 +190,26 @@ std::optional<FileRecordHeaderImpl<S>>
     frAddr.QuadPart = gsl::narrow<LONGLONG>(
         volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
 
-    std::optional<std::span<const BYTE>> buffer =
-        volume_.Read(frAddr, volume_.GetFileRecordSize());
-    if (!buffer || buffer->size() != volume_.GetFileRecordSize())
+    if (!volume_.ReadInto(frAddr, record_buffer_))
     {
       return {};
     }
 
-    return FileRecordHeader::Factory<S>(*buffer, volume_.GetSectorSize());
+    return FileRecordHeader::Factory<S>(record_buffer_,
+                                        volume_.GetSectorSize());
   }
 
   // May be fragmented $MFT
   const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
 
-  std::span<BYTE> buffer_file = volume_.GetFileRecordBuffer();
   if (std::optional<ULONGLONG> len =
-          volume_.mft_data_->ReadData(frAddr, buffer_file);
+          volume_.mft_data_->ReadData(frAddr, record_buffer_);
       !len || *len != volume_.GetFileRecordSize())
   {
     return {};
   }
 
-  return {{buffer_file, volume_.GetSectorSize()}};
+  return FileRecordHeader::Factory<S>(record_buffer_, volume_.GetSectorSize());
 }
 
 // Read File Record, verify and patch the US (update sequence)

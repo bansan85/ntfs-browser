@@ -163,7 +163,6 @@ bool NtfsVolume<S>::OpenVolume(_TCHAR volume)
     file_record_size_ = 1U << static_cast<unsigned char>(-sz);
   }
   NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
-  file_record_buffer_.resize(file_record_size_);
 
   sz = static_cast<char>(bpb->clusters_per_index_block);
   if (sz > 0)
@@ -242,16 +241,16 @@ std::span<BYTE> NtfsVolume<S>::GetClusterBuffer() const noexcept
 }
 
 template <Strategy S>
-std::span<BYTE> NtfsVolume<S>::GetFileRecordBuffer() const noexcept
-{
-  return {file_record_buffer_.data(), file_record_buffer_.size()};
-}
-
-template <Strategy S>
 std::optional<std::span<const BYTE>> NtfsVolume<S>::Read(LARGE_INTEGER& addr,
                                                          DWORD length) const
 {
   return volume_.Read(addr, length);
+}
+
+template <Strategy S>
+bool NtfsVolume<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
+{
+  return volume_.ReadInto(addr, dest);
 }
 
 // Install Attribute CallBack routines for the whole Volume

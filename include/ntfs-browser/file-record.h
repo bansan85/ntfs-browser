@@ -62,6 +62,11 @@ class FileRecord
   Mask attr_mask_{Mask::ALL};
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
+  // Owned per-instance so this FileRecord's raw bytes (viewed by NO_CACHE
+  // attributes as plain pointers/spans, no copy) are never aliased by
+  // another FileRecord's read (eg. NtfsVolume::mft_record_ vs. this one).
+  std::vector<BYTE> record_buffer_;
+
   void ClearAttrs() noexcept;
   void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
                     bool& bDiscard) noexcept;

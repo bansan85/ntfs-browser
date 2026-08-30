@@ -27,6 +27,29 @@ bool FileReader<S>::Open(std::wstring_view volume)
   return handle_.get() != INVALID_HANDLE_VALUE;
 }
 
+template <Strategy S>
+bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
+{
+  DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr.LowPart),
+                             &addr.HighPart, FILE_BEGIN);
+
+  if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
+  {
+    NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
+    return false;
+  }
+
+  if (ReadFile(handle_.get(), dest.data(), static_cast<DWORD>(dest.size()),
+               &len, nullptr) == FALSE ||
+      len != dest.size())
+  {
+    NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+    return false;
+  }
+
+  return true;
+}
+
 template <Strategy T>
 template <Strategy Q>
 typename std::enable_if_t<
