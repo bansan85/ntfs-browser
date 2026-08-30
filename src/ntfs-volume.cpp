@@ -33,6 +33,18 @@ NtfsVolume<S>::NtfsVolume(std::wstring_view path) : mft_record_(*this)
   }
 }
 
+template <Strategy S>
+NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader)
+    : mft_record_(*this)
+{
+  ClearAttrRawCB();
+
+  if (OpenVolume(std::move(reader)))
+  {
+    Init();
+  }
+}
+
 // Verify NTFS volume version (must >= 3.0) and locate $MFT's Data attribute
 template <Strategy S>
 void NtfsVolume<S>::Init()
@@ -146,7 +158,22 @@ bool NtfsVolume<S>::OpenVolume(std::wstring_view path)
     return false;
   }
 
-  // Read the first sector (boot sector)
+  return ParseBootSector();
+}
+
+// Use an already-open reader (eg. a test double), get BPB
+template <Strategy S>
+bool NtfsVolume<S>::OpenVolume(std::unique_ptr<IDiskReader> reader)
+{
+  volume_ = FileReader<S>(std::move(reader));
+
+  return ParseBootSector();
+}
+
+// Read the first sector (boot sector) and derive volume geometry from it
+template <Strategy S>
+bool NtfsVolume<S>::ParseBootSector()
+{
   constexpr DWORD default_sector_size = 512;
   LARGE_INTEGER frAddr{.QuadPart = 0};
   std::optional<std::span<const BYTE>> bpb_buffer =

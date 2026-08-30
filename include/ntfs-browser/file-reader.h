@@ -8,6 +8,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/strategy.h>
 
 #include <windows.h>
@@ -20,6 +21,10 @@ class FileReader
 {
  public:
   FileReader();
+
+  // Takes ownership of an already-open reader (eg. an in-memory test double)
+  // instead of opening a real disk/file via Open().
+  explicit FileReader(std::unique_ptr<IDiskReader> reader);
 
   bool Open(std::wstring_view volume);
 
@@ -42,12 +47,9 @@ class FileReader
       Read(LARGE_INTEGER& addr, DWORD length) const;
 
  private:
-  using HandlePtr =
-      std::unique_ptr<std::remove_pointer_t<HANDLE>, decltype(&::CloseHandle)>;
-
   BYTE* NextMemory() const;
 
-  HandlePtr handle_;
+  std::unique_ptr<IDiskReader> reader_;
 
   // Use only for Strategy::NO_CACHE.
   mutable std::vector<BYTE> buffer_;

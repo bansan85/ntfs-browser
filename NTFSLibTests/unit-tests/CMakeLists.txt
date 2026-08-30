@@ -1,6 +1,11 @@
 add_executable(NtfsBrowserTests
     "fake-ntfs-image.h"
     "fake-ntfs-image.cpp"
+    "memory-disk-reader.h"
+    "memory-disk-reader.cpp"
+    "sequential-disk-reader.h"
+    "sequential-disk-reader.cpp"
+    "disk-reader-tests.cpp"
     "file-reader-tests.cpp"
     "no-cache-lifetime-tests.cpp")
 

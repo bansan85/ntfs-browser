@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <memory>
 #include <span>
 #include <string_view>
 
@@ -8,6 +9,7 @@
 #include <windows.h>
 
 #include <ntfs-browser/data/attr-defines.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/attr-base.h>
@@ -23,6 +25,9 @@ class NtfsVolume
   // Opens an arbitrary device/image path instead of a drive letter
   // (eg. "\\\\.\\PhysicalDrive0", or a plain file for a disk image).
   explicit NtfsVolume(std::wstring_view path);
+  // Uses an already-open reader instead of opening a path (eg. an in-memory
+  // or sequential test double, which have no real path to open).
+  explicit NtfsVolume(std::unique_ptr<IDiskReader> reader);
   NtfsVolume(NtfsVolume&& other) noexcept = delete;
   NtfsVolume(NtfsVolume const& other) = delete;
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
@@ -54,6 +59,8 @@ class NtfsVolume
 
   [[nodiscard]] bool OpenVolume(_TCHAR volume);
   [[nodiscard]] bool OpenVolume(std::wstring_view path);
+  [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
+  [[nodiscard]] bool ParseBootSector();
   void Init();
 
  public:

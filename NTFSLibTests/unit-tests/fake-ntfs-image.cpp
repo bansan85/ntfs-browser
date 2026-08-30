@@ -139,7 +139,7 @@ FakeRecord MakeRootRecord()
 
 }  // namespace
 
-std::filesystem::path WriteFakeNtfsImage()
+std::vector<BYTE> BuildFakeNtfsImage()
 {
   NtfsBrowser::Data::NtfsBpb bpb{};
   std::memcpy(bpb.signature, NTFS_SIGNATURE, sizeof(bpb.signature));
@@ -173,6 +173,13 @@ std::filesystem::path WriteFakeNtfsImage()
   putRecord(MftIdx::MFT, MakeMftRecord());
   putRecord(MftIdx::VOLUME, MakeVolumeRecord());
   putRecord(MftIdx::ROOT, MakeRootRecord());
+
+  return image;
+}
+
+std::filesystem::path WriteFakeNtfsImage()
+{
+  const std::vector<BYTE> image = BuildFakeNtfsImage();
 
   std::random_device rd;
   const std::filesystem::path path =
