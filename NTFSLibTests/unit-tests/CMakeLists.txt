@@ -19,5 +19,16 @@ target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}
 # struct layouts (src/data, src/attr) instead of hand-picked offsets.
 target_include_directories(NtfsBrowserTests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
+if(WIN32 AND BUILD_SHARED_LIBS)
+  add_custom_command(
+    TARGET NtfsBrowserTests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:NtfsBrowserTests>
+      $<TARGET_FILE_DIR:NtfsBrowserTests>
+    COMMAND_EXPAND_LISTS)
+endif()
+
 include(Catch)
 catch_discover_tests(NtfsBrowserTests)
