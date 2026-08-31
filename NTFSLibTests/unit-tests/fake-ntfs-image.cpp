@@ -14,10 +14,17 @@
 #include <ntfs-browser/flag/file-record.h>
 #include <ntfs-browser/mft-idx.h>
 
+#include "attr/attribute-list.h"
+#include "attr/filename.h"
 #include "attr/header-non-resident.h"
 #include "attr/header-resident.h"
+#include "attr/index-root.h"
 #include "attr/volume-information.h"
+#include "data/index-entry.h"
 #include "data/ntfs-bpb.h"
+#include "flag/filename-namespace.h"
+#include "flag/filename.h"
+#include "flag/index-entry.h"
 
 namespace NtfsBrowserTests
 {
@@ -137,6 +144,112 @@ FakeRecord MakeRootRecord()
                                            NtfsBrowser::Flag::FileRecord::DIR);
 }
 
+// Directory (#kAttributeListDirIdx): its only attribute is a resident
+// $ATTRIBUTE_LIST with a single record relocating $INDEX_ROOT to
+// #kIndexExtensionIdx - reproduces a directory whose base MFT record no
+// longer holds $INDEX_ROOT/$INDEX_ALLOCATION directly, as real directories
+// like C:\Windows do once they outgrow the base record.
+FakeRecord MakeAttributeListOnlyDirRecord()
+{
+  FakeRecord record = MakeRecordHeader(
+      kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                       NtfsBrowser::Flag::FileRecord::DIR);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::ATTRIBUTE_LIST;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = sizeof(NtfsBrowser::Attr::AttributeList);
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  auto& alEntry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+      &record[kAttrOffset + attr.attr_offset]);
+  alEntry.attr_type = AttrType::INDEX_ROOT;
+  alEntry.record_size = static_cast<WORD>(sizeof(alEntry));
+  alEntry.name_length = 0;
+  alEntry.name_offset = 0;
+  alEntry.start_vcn = 0;
+  alEntry.base_ref.segment_number = kIndexExtensionIdx;
+  alEntry.base_ref.sequence_number = 0;
+  alEntry.attr_id = 0;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
+// Extension record (#kIndexExtensionIdx): holds the resident $INDEX_ROOT
+// that #kAttributeListDirIdx's $ATTRIBUTE_LIST points to - a single "Foo"
+// filename entry (file reference 20), plus the terminating nameless entry.
+FakeRecord MakeIndexRootExtensionRecord()
+{
+  FakeRecord record = MakeRecordHeader(
+      kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::INDEX_ROOT;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+
+  BYTE* body = &record[kAttrOffset + attr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kFakeFileRecordSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset = static_cast<DWORD>(
+      (body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  // Entry 1: "Foo", a regular (non-directory) file, reference 20.
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = 20;
+  e1.mft_sn = 1;
+
+  auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+  fn.parent_ref = kAttributeListDirIdx;
+  fn.flags = NtfsBrowser::Flag::Filename::NONE;
+  fn.name_length = 3;
+  fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  constexpr wchar_t kFooName[] = L"Foo";
+  for (BYTE i = 0; i < fn.name_length; i++)
+  {
+    fn.name[i] = static_cast<WORD>(kFooName[i]);
+  }
+
+  e1.stream_size = static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[3]) -
+                                     reinterpret_cast<BYTE*>(&fn));
+  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+
+  // Entry 2: the terminating entry - no name, no sub-node.
+  auto& e2 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot) + e1.size);
+  e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  e2.stream_size = 0;
+  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+                              reinterpret_cast<BYTE*>(&e2));
+
+  root.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
+  root.alloc_entry_size = root.total_entry_size;
+  root.flags = 0;
+
+  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+                   e1.size + e2.size;
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -173,6 +286,25 @@ std::vector<BYTE> BuildFakeNtfsImage()
   putRecord(MftIdx::MFT, MakeMftRecord());
   putRecord(MftIdx::VOLUME, MakeVolumeRecord());
   putRecord(MftIdx::ROOT, MakeRootRecord());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectory()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
+  {
+    const size_t offset =
+        mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                      static_cast<size_t>(idx);
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  putRecord(kAttributeListDirIdx, MakeAttributeListOnlyDirRecord());
+  putRecord(kIndexExtensionIdx, MakeIndexRootExtensionRecord());
 
   return image;
 }

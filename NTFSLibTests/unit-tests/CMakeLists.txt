@@ -7,7 +7,9 @@ add_executable(NtfsBrowserTests
     "sequential-disk-reader.cpp"
     "disk-reader-tests.cpp"
     "file-reader-tests.cpp"
-    "no-cache-lifetime-tests.cpp")
+    "no-cache-lifetime-tests.cpp"
+    "attribute-list-tests.cpp"
+    "filename-compare-tests.cpp")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}
                                                 Catch2::Catch2WithMain)
