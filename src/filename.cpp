@@ -33,8 +33,16 @@ void Filename::GetFilenameWUC() { filename_wuc_ = GetFilename(); }
 // Compare Unicode file name
 int Filename::Compare(std::wstring_view fn) const noexcept
 {
-  return _wcsnicmp(fn.data(), filename_wuc_.data(),
-                   max(fn.size(), filename_wuc_.size()));
+  // filename_wuc_ is a non-owning view into the raw, non-null-terminated
+  // on-disk name buffer, so only the overlapping length can be compared
+  // directly; ties are broken by length, as in normal lexicographic order.
+  const size_t n = min(fn.size(), filename_wuc_.size());
+  const int result = _wcsnicmp(fn.data(), filename_wuc_.data(), n);
+  if (result != 0 || fn.size() == filename_wuc_.size())
+  {
+    return result;
+  }
+  return fn.size() < filename_wuc_.size() ? -1 : 1;
 }
 
 ULONGLONG Filename::GetFileSize() const noexcept

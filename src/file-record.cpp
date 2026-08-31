@@ -435,7 +435,7 @@ template <Strategy S>
 void FileRecord<S>::SetAttrMask(Mask mask) noexcept
 {
   // Standard Information and Attribute List is needed always
-  attr_mask_ = mask;
+  attr_mask_ = mask | Mask::STANDARD_INFORMATION | Mask::ATTRIBUTE_LIST;
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine
