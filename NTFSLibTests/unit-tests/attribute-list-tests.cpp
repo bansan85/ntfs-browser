@@ -35,9 +35,8 @@ using NtfsBrowser::Strategy;
 // kAttributeListDirIdx's only attribute is a resident $ATTRIBUTE_LIST
 // pointing $INDEX_ROOT at kIndexExtensionIdx, which holds the actual
 // "Foo" entry.
-TEST_CASE(
-    "FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
-    "[file-record][regression]")
+TEST_CASE("FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
+          "[file-record][regression]")
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());

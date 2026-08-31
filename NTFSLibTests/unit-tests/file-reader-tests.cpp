@@ -34,7 +34,10 @@ struct TempFile
 {
   std::filesystem::path path;
 
-  explicit TempFile(std::span<const BYTE> content) : path(WriteTempFile(content)) {}
+  explicit TempFile(std::span<const BYTE> content)
+      : path(WriteTempFile(content))
+  {
+  }
   TempFile(const TempFile&) = delete;
   TempFile& operator=(const TempFile&) = delete;
   ~TempFile() { std::filesystem::remove(path); }

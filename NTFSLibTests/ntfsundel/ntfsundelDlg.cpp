@@ -253,7 +253,8 @@ void CNtfsundelDlg::OnSearch()
     if (fr.IsDirectory())
     {
       fr.TraverseSubEntries(
-          [&fr, &id_to_parent](const IndexEntry& ie, void* context) {
+          [&fr, &id_to_parent](const IndexEntry& ie, void* context)
+          {
             if (ie.GetFileReference() == *fr.GetFileReference())
             {
               return;

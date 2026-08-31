@@ -43,7 +43,7 @@ jobs:
 #            cxx_flags: -fno-omit-frame-pointer -g -O0 -fsanitize=cfi -flto=thin -fvisibility=hidden -fno-sanitize-trap=cfi
 #            ld_flags: -fuse-ld=gold -Wl,-O0
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 #      - name: Install gcc

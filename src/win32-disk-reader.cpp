@@ -12,11 +12,10 @@ Win32DiskReader::Win32DiskReader()
 
 bool Win32DiskReader::Open(std::wstring_view path)
 {
-  handle_ =
-      HandlePtr(CreateFileW(path.data(), GENERIC_READ,
-                            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                            OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
-                &CloseHandle);
+  handle_ = HandlePtr(
+      CreateFileW(path.data(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                  nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
+      &CloseHandle);
   return handle_.get() != INVALID_HANDLE_VALUE;
 }
 

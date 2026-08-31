@@ -78,8 +78,7 @@ class NtfsVolume
 
   [[nodiscard]] std::optional<std::span<const BYTE>> Read(LARGE_INTEGER& addr,
                                                           DWORD length) const;
-  [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
-                              std::span<BYTE> dest) const;
+  [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
                                       AttrRawCallback cb) noexcept;

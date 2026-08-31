@@ -66,10 +66,9 @@ TEST_CASE("MemoryDiskReader::Open loads a file's content into memory",
   const std::vector<BYTE> content = MakeContent(64);
 
   std::random_device rd;
-  const std::filesystem::path path =
-      std::filesystem::temp_directory_path() /
-      (L"ntfsbrowser-memory-disk-reader-test-" + std::to_wstring(rd()) +
-       L".bin");
+  const std::filesystem::path path = std::filesystem::temp_directory_path() /
+                                     (L"ntfsbrowser-memory-disk-reader-test-" +
+                                      std::to_wstring(rd()) + L".bin");
   {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(reinterpret_cast<const char*>(content.data()),

@@ -22,8 +22,7 @@ bool SequentialDiskReader::ReadInto(LARGE_INTEGER& /*addr*/,
 
 SequentialDiskReader::Producer MakeMemoryProducer(std::vector<BYTE> data)
 {
-  return [data = std::move(data), pos = size_t{0}](
-             std::span<BYTE> dest) mutable
+  return [data = std::move(data), pos = size_t{0}](std::span<BYTE> dest) mutable
   {
     if (pos + dest.size() > data.size())
     {
@@ -36,8 +35,8 @@ SequentialDiskReader::Producer MakeMemoryProducer(std::vector<BYTE> data)
   };
 }
 
-SequentialDiskReader::Producer MakeFileStreamProducer(
-    std::filesystem::path path)
+SequentialDiskReader::Producer
+    MakeFileStreamProducer(std::filesystem::path path)
 {
   auto in = std::make_shared<std::ifstream>(path, std::ios::binary);
 
@@ -45,12 +44,12 @@ SequentialDiskReader::Producer MakeFileStreamProducer(
   {
     return static_cast<bool>(
         in->read(reinterpret_cast<char*>(dest.data()),
-                  static_cast<std::streamsize>(dest.size())));
+                 static_cast<std::streamsize>(dest.size())));
   };
 }
 
-SequentialDiskReader::Producer MakeGeneratorProducer(
-    std::function<void(std::span<BYTE>)> generate)
+SequentialDiskReader::Producer
+    MakeGeneratorProducer(std::function<void(std::span<BYTE>)> generate)
 {
   return [generate = std::move(generate)](std::span<BYTE> dest)
   {
