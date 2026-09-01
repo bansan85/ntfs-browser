@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include <ntfs-browser/data/attr-type.h>
 
 #include "attr-index-root.h"
@@ -15,6 +17,11 @@ AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
     : RESIDENT(ahc, fr),
       index_root_(reinterpret_cast<const Attr::IndexRoot*>(this->GetData()))
 {
+  if (this->GetDataSize() < sizeof(Attr::IndexRoot))
+  {
+    throw std::runtime_error("Index Root attribute smaller than expected.\n");
+  }
+
   NTFS_TRACE("Attribute: Index Root\n");
 
   if (!IsFileName())
