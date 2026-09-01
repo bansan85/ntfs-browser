@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "attr-std-info.h"
 #include "ntfs-common.h"
 
@@ -14,6 +16,12 @@ AttrStdInfo<RESIDENT, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
       std_info_(
           *reinterpret_cast<const Attr::StandardInformation*>(this->GetData()))
 {
+  if (this->GetDataSize() < sizeof(Attr::StandardInformation))
+  {
+    throw std::runtime_error(
+        "Standard Information attribute smaller than expected.\n");
+  }
+
   NTFS_TRACE("Attribute: Standard Information\n");
 }
 
