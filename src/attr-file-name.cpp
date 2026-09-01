@@ -1,7 +1,10 @@
 #include "attr-file-name.h"
+#include "attr/filename.h"
 #include "flag/filename.h"
 #include "ntfs-common.h"
 #include <cassert>
+#include <cstddef>
+#include <stdexcept>
 
 namespace NtfsBrowser
 {
@@ -13,7 +16,21 @@ AttrFileName<RESIDENT, S>::AttrFileName(const AttrHeaderCommon& ahc,
 {
   NTFS_TRACE("Attribute: File Name\n");
 
-  SetFilename(*reinterpret_cast<const Attr::Filename*>(this->GetData()));
+  if (this->GetDataSize() < offsetof(Attr::Filename, name))
+  {
+    throw std::runtime_error("File Name attribute smaller than expected.\n");
+  }
+
+  const auto& fn = *reinterpret_cast<const Attr::Filename*>(this->GetData());
+  if (this->GetDataSize() <
+      offsetof(Attr::Filename, name) +
+          (static_cast<ULONGLONG>(fn.name_length) * sizeof(WORD)))
+  {
+    throw std::runtime_error(
+        "File Name attribute name exceeds attribute bounds.\n");
+  }
+
+  SetFilename(fn);
 }
 
 template <typename RESIDENT, Strategy S>
