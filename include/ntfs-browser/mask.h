@@ -38,4 +38,14 @@ DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Mask)
 // Attribute Bit Mask
 #define ATTR_MASK(at) static_cast<Mask>(1U << ATTR_INDEX(at))
 
+// True only if "at" is a real AttrType value, not on-disk data that could
+// alias another type's ATTR_INDEX/ATTR_MASK slot. Callers MUST check this
+// before passing a value read from disk to ATTR_INDEX or ATTR_MASK.
+[[nodiscard]] constexpr bool IsValidAttrType(AttrType at) noexcept
+{
+  const DWORD raw = static_cast<DWORD>(at);
+  return raw != 0 && (raw & 0xFU) == 0 &&
+         raw <= static_cast<DWORD>(AttrType::LOGGED_UTILITY_STREAM);
+}
+
 }  // namespace NtfsBrowser

@@ -401,10 +401,12 @@ bool FileRecord<S>::ParseAttrs()
          (static_cast<ULONGLONG>(dataPtr) + ahc->total_size <=
           volume_.GetFileRecordSize()))
   {
-    if (static_cast<bool>(ATTR_MASK(ahc->type) &
-                          attr_mask_))  // Skip unwanted attributes
+    // True only when the type is a real attribute slot and the caller's
+    // mask requests that slot.
+    if (IsValidAttrType(ahc->type) &&
+        static_cast<bool>(ATTR_MASK(ahc->type) & attr_mask_))
     {
-      if (!ParseAttr(*ahc))  // Parse error
+      if (!ParseAttr(*ahc))
       {
         return false;
       }
