@@ -395,8 +395,9 @@ bool FileRecord<S>::ParseAttrs()
          (static_cast<ULONGLONG>(dataPtr) + ahc->total_size <=
           volume_.GetFileRecordSize()))
   {
-    if (static_cast<bool>(ATTR_MASK(ahc->type) &
-                          attr_mask_))  // Skip unwanted attributes
+    if (IsValidAttrType(ahc->type) &&
+        static_cast<bool>(ATTR_MASK(ahc->type) &
+                          attr_mask_))  // Skip unwanted/unrecognized attributes
     {
       if (!ParseAttr(*ahc))  // Parse error
       {

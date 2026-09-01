@@ -38,4 +38,16 @@ DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Mask)
 // Attribute Bit Mask
 #define ATTR_MASK(at) static_cast<Mask>(1U << ATTR_INDEX(at))
 
+// True if "at" is one of the AttrType enumerators rather than arbitrary
+// on-disk data. ATTR_INDEX/ATTR_MASK divide the raw type value by 0x10;
+// an unaligned or out-of-range value would otherwise silently alias the
+// slot of an unrelated, differently-typed attribute instead of being
+// rejected by a kAttrNums bounds check.
+[[nodiscard]] constexpr bool IsValidAttrType(AttrType at) noexcept
+{
+  const DWORD raw = static_cast<DWORD>(at);
+  return raw != 0 && (raw & 0xFU) == 0 &&
+         raw <= static_cast<DWORD>(AttrType::LOGGED_UTILITY_STREAM);
+}
+
 }  // namespace NtfsBrowser

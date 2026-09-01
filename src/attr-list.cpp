@@ -30,7 +30,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
                                         sizeof(Attr::AttributeList)})) &&
          *len == sizeof(Attr::AttributeList))
   {
-    if (ATTR_INDEX(al_record.attr_type) > kAttrNums)
+    if (!IsValidAttrType(al_record.attr_type))
     {
       throw std::runtime_error(
           "Attribute List parse error (al_record.attr_type).\n");
