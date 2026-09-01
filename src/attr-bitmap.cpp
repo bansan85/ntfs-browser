@@ -13,12 +13,6 @@ AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
   NTFS_TRACE1("Attribute: Bitmap (%sResident)\n",
               this->IsNonResident() ? "Non" : "");
 
-  if (!this->IsDataRunOK())
-  {
-    bitmap_size_ = 0;
-    return;
-  }
-
   bitmap_size_ = this->GetDataSize();
 
   if (this->IsNonResident())
@@ -44,7 +38,7 @@ AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
 template <class TYPE_RESIDENT, Strategy S>
 bool AttrBitmap<TYPE_RESIDENT, S>::IsClusterFree(ULONGLONG cluster)
 {
-  if (!this->IsDataRunOK() || bitmap_buf_.empty())
+  if (bitmap_buf_.empty())
   {
     return false;
   }

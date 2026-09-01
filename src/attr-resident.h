@@ -28,8 +28,6 @@ class AttrResident : public AttrBase<S>
   ~AttrResident() override = default;
 
  protected:
-  [[nodiscard]] bool IsDataRunOK() const noexcept override;
-
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrResident

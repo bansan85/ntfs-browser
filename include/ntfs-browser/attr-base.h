@@ -43,8 +43,6 @@ class AttrBase
   [[nodiscard]] bool IsUnNamed() const noexcept;
 
  protected:
-  [[nodiscard]] virtual bool IsDataRunOK() const noexcept = 0;
-
   [[nodiscard]] WORD GetSectorSize() const noexcept;
   [[nodiscard]] DWORD GetClusterSize() const noexcept;
   [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
