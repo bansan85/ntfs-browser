@@ -18,16 +18,25 @@ template <Strategy S>
 AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
                                     const FileRecord<S>& fr)
     : AttrBase<S>(ahc, fr),
-      attr_header_nr_(reinterpret_cast<const Attr::HeaderNonResident&>(ahc)),
-      data_run_ok_(ParseDataRun())
+      attr_header_nr_(reinterpret_cast<const Attr::HeaderNonResident&>(ahc))
 {
+  ParseDataRun();
 }
 
-// Parse a single DataRun unit
+// Parse a single DataRun unit. "end" bounds dataRun to the containing
+// attribute (already validated by FileRecord::ParseAttrs against the record
+// buffer) -- data_run_offset/the run stream itself are attacker-controlled
+// and otherwise unbounded.
 template <Strategy S>
-bool AttrNonResident<S>::PickData(const BYTE*& dataRun, ULONGLONG& length,
+bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
+                                  ULONGLONG& length,
                                   LONGLONG& LCNOffset) noexcept
 {
+  if (dataRun >= end)
+  {
+    return false;
+  }
+
   union Length
   {
     struct
@@ -44,6 +53,13 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, ULONGLONG& length,
       size.offsetBytes > sizeof(LONGLONG))
   {
     NTFS_TRACE1("DataRun decode error 1: 0x%02X\n", size);
+    return false;
+  }
+
+  if (end - dataRun < static_cast<ptrdiff_t>(size.lengthBytes) +
+                           static_cast<ptrdiff_t>(size.offsetBytes))
+  {
+    NTFS_TRACE("DataRun decode error: run exceeds attribute bounds\n");
     return false;
   }
 
@@ -76,22 +92,23 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, ULONGLONG& length,
 
 // Travers DataRun and insert into a link list
 template <Strategy S>
-bool AttrNonResident<S>::ParseDataRun()
+void AttrNonResident<S>::ParseDataRun()
 {
   NTFS_TRACE("Parsing Non Resident DataRun\n");
   NTFS_TRACE2("Start VCN = %I64u, End VCN = %I64u\n", attr_header_nr_.start_vcn,
               attr_header_nr_.last_vcn);
 
-  const BYTE* data_run = reinterpret_cast<const BYTE*>(&attr_header_nr_) +
-                         attr_header_nr_.data_run_offset;
+  const BYTE* const attr_start = reinterpret_cast<const BYTE*>(&attr_header_nr_);
+  const BYTE* data_run = attr_start + attr_header_nr_.data_run_offset;
+  const BYTE* const end = attr_start + attr_header_nr_.header.total_size;
   ULONGLONG length = 0;
   LONGLONG lcn_offset = 0;
   LONGLONG lcn = 0;
   ULONGLONG vcn = 0;
 
-  while (*data_run != 0)
+  while (data_run < end && *data_run != 0)
   {
-    if (!PickData(data_run, length, lcn_offset))
+    if (!PickData(data_run, end, length, lcn_offset))
     {
       break;
     }
@@ -100,7 +117,7 @@ bool AttrNonResident<S>::ParseDataRun()
     if (lcn < 0)
     {
       NTFS_TRACE("DataRun decode error 2\n");
-      return false;
+      break;
     }
 
     NTFS_TRACE2("Data length = %I64d clusters, LCN = %I64d", length, lcn);
@@ -117,17 +134,11 @@ bool AttrNonResident<S>::ParseDataRun()
     if (dr.last_vcn > (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn))
     {
       NTFS_TRACE("DataRun decode error: VCN exceeds bound\n");
-
-      // Remove entries
-      data_run_list_.clear();
-
-      return false;
+      break;
     }
 
     data_run_list_.push_back(dr);
   }
-
-  return true;
 }
 
 // Read clusters from disk, or sparse data
@@ -224,13 +235,6 @@ std::optional<ULONGLONG>
 
   actural *= this->GetClusterSize();
   return actural;
-}
-
-// Judge if the DataRun is successfully parsed
-template <Strategy S>
-bool AttrNonResident<S>::IsDataRunOK() const noexcept
-{
-  return data_run_ok_;
 }
 
 template <Strategy S>

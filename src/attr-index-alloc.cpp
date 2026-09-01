@@ -16,12 +16,6 @@ AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
 {
   NTFS_TRACE("Attribute: Index Allocation\n");
 
-  if (!this->IsDataRunOK())
-  {
-    NTFS_TRACE("Index Allocation DataRun parse error\n");
-    return;
-  }
-
   // Get total number of Index Blocks
   const ULONGLONG ibTotalSize = this->GetDataSize();
   if (ibTotalSize % this->GetIndexBlockSize() != 0)

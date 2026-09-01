@@ -33,12 +33,6 @@ AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
 {
 }
 
-template <Strategy S>
-bool AttrResident<S>::IsDataRunOK() const noexcept
-{
-  return true;  // Always OK for a resident attribute
-}
-
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
 template <Strategy S>

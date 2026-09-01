@@ -32,19 +32,16 @@ class AttrNonResident : public AttrBase<S>
  private:
   const Attr::HeaderNonResident& attr_header_nr_;
   std::vector<Data::RunEntry> data_run_list_;
-  bool data_run_ok_;
-  [[nodiscard]] static bool PickData(const BYTE*& dataRun, ULONGLONG& length,
+  [[nodiscard]] static bool PickData(const BYTE*& dataRun, const BYTE* end,
+                                     ULONGLONG& length,
                                      LONGLONG& LCNOffset) noexcept;
-  [[nodiscard]] bool ParseDataRun();
+  void ParseDataRun();
   [[nodiscard]] std::optional<std::span<const BYTE>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
                           std::span<BYTE> buffer) const;
-
- protected:
-  [[nodiscard]] bool IsDataRunOK() const noexcept override;
 
  public:
   [[nodiscard]] const BYTE* GetData() const noexcept override;
