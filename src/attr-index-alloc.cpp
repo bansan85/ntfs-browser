@@ -1,3 +1,5 @@
+#include <cstddef>
+
 #include "attr-index-alloc.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
@@ -112,14 +114,46 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     return false;
   }
 
-  const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
-      reinterpret_cast<const BYTE*>(&(ibBuf->entry_offset)) +
-      ibBuf->entry_offset);
+  // entry_offset/total_entry_size and each entry's own "size" come straight
+  // off disk -- bound every step against the end of the allocated index
+  // block buffer instead of trusting them.
+  const BYTE* const block_end =
+      reinterpret_cast<const BYTE*>(ibBuf) + this->GetIndexBlockSize();
+  const auto* const entry_offset_addr =
+      reinterpret_cast<const BYTE*>(&(ibBuf->entry_offset));
 
-  DWORD ieTotal = ie->size;
-
-  while (ieTotal <= ibBuf->total_entry_size)
+  if (ibBuf->entry_offset >
+      static_cast<ULONGLONG>(block_end - entry_offset_addr))
   {
+    NTFS_TRACE("Index Block: entry_offset exceeds block bounds\n");
+    return false;
+  }
+
+  const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
+      entry_offset_addr + ibBuf->entry_offset);
+  DWORD ieTotal = 0;
+
+  while (true)
+  {
+    if (reinterpret_cast<const BYTE*>(ie) + offsetof(Data::IndexEntry, stream) >
+        block_end)
+    {
+      NTFS_TRACE("Index Block: index entry header exceeds block bounds\n");
+      break;
+    }
+    if (ie->size == 0 ||
+        reinterpret_cast<const BYTE*>(ie) + ie->size > block_end)
+    {
+      NTFS_TRACE("Index Block: index entry exceeds block bounds\n");
+      break;
+    }
+
+    ieTotal += ie->size;
+    if (ieTotal > ibBuf->total_entry_size)
+    {
+      break;
+    }
+
     ibClass.emplace_back(ib_sh_ptr, *ie);
 
     if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
@@ -130,7 +164,6 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
     ie = reinterpret_cast<const Data::IndexEntry*>(
         reinterpret_cast<const BYTE*>(ie) + ie->size);  // Pick next
-    ieTotal += ie->size;
   }
 
   return true;

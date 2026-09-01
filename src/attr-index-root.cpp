@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <stdexcept>
 
 #include <ntfs-browser/data/attr-type.h>
@@ -39,18 +40,49 @@ AttrIndexRoot<RESIDENT, S>::~AttrIndexRoot()
   NTFS_TRACE("AttrIndexRoot deleted\n");
 }
 
-// Get all the index entries
+// Get all the index entries. entry_offset/total_entry_size and each entry's
+// own "size" come straight off disk -- none of them are otherwise related to
+// GetDataSize(), so every step here is bounded against data_end to avoid
+// walking past the resident attribute buffer.
 template <typename RESIDENT, Strategy S>
 void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 {
-  const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
-      reinterpret_cast<const BYTE*>(&(index_root_->entry_offset)) +
-      index_root_->entry_offset);
+  const BYTE* const data_end = this->GetData() + this->GetDataSize();
+  const auto* const entry_offset_addr =
+      reinterpret_cast<const BYTE*>(&(index_root_->entry_offset));
 
-  DWORD ieTotal = ie->size;
-
-  while (ieTotal <= index_root_->total_entry_size)
+  if (index_root_->entry_offset >
+      static_cast<ULONGLONG>(data_end - entry_offset_addr))
   {
+    NTFS_TRACE("Index Root: entry_offset exceeds attribute bounds\n");
+    return;
+  }
+
+  const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
+      entry_offset_addr + index_root_->entry_offset);
+  DWORD ieTotal = 0;
+
+  while (true)
+  {
+    if (reinterpret_cast<const BYTE*>(ie) + offsetof(Data::IndexEntry, stream) >
+        data_end)
+    {
+      NTFS_TRACE("Index Root: index entry header exceeds attribute bounds\n");
+      break;
+    }
+    if (ie->size == 0 ||
+        reinterpret_cast<const BYTE*>(ie) + ie->size > data_end)
+    {
+      NTFS_TRACE("Index Root: index entry exceeds attribute bounds\n");
+      break;
+    }
+
+    ieTotal += ie->size;
+    if (ieTotal > index_root_->total_entry_size)
+    {
+      break;
+    }
+
     emplace_back(nullptr, *ie);
 
     if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
@@ -61,7 +93,6 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 
     ie = reinterpret_cast<const Data::IndexEntry*>(
         reinterpret_cast<const BYTE*>(ie) + ie->size);  // Pick next
-    ieTotal += ie->size;
   }
 }
 
