@@ -1,4 +1,5 @@
 #include <cassert>
+#include <stdexcept>
 
 #include <gsl/narrow>
 
@@ -157,21 +158,26 @@ bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc)
   bool bUnhandled = false;
 
   std::unique_ptr<AttrBase<S>> attr;
-  if constexpr (S == Strategy::NO_CACHE)
-    attr = AllocAttr<AttrResidentNoCache>(ahc, bUnhandled);
-  else
-    attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled);
-  if (attr)
+  try
   {
-    if (bUnhandled)
-    {
-      NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.type);
-    }
-    attr_list_[attrIndex].push_back(std::move(attr));
-    return true;
+    if constexpr (S == Strategy::NO_CACHE)
+      attr = AllocAttr<AttrResidentNoCache>(ahc, bUnhandled);
+    else
+      attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled);
   }
-  NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
-  return false;
+  catch ([[maybe_unused]] const std::runtime_error& e)
+  {
+    NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
+    NTFS_TRACE(e.what());
+    return false;
+  }
+
+  if (bUnhandled)
+  {
+    NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.type);
+  }
+  attr_list_[attrIndex].push_back(std::move(attr));
+  return true;
 }
 
 // Read File Record
@@ -197,8 +203,16 @@ std::optional<FileRecordHeaderImpl<S>>
       return {};
     }
 
-    return FileRecordHeader::Factory<S>(record_buffer_,
-                                        volume_.GetSectorSize());
+    try
+    {
+      return FileRecordHeader::Factory<S>(record_buffer_,
+                                          volume_.GetSectorSize());
+    }
+    catch ([[maybe_unused]] const std::runtime_error& e)
+    {
+      NTFS_TRACE(e.what());
+      return {};
+    }
   }
 
   // May be fragmented $MFT
@@ -366,11 +380,20 @@ bool FileRecord<S>::ParseAttrs()
   // Visit all attributes
 
   DWORD dataPtr = 0;  // guard if data exceeds file_record_size_ bounds
-  const AttrHeaderCommon* ahc = &file_record_->HeaderCommon();
+  const AttrHeaderCommon* ahc = file_record_->HeaderCommon();
+
+  if (ahc == nullptr)
+  {
+    return false;
+  }
+
   dataPtr += file_record_->GetData()->offset_of_attr;
 
-  while (ahc->type != AttrType::ALL &&
-         (dataPtr + ahc->total_size) <= volume_.GetFileRecordSize())
+  while ((static_cast<ULONGLONG>(dataPtr) + sizeof(AttrHeaderCommon) <=
+          volume_.GetFileRecordSize()) &&
+         ahc->type != AttrType::ALL &&
+         (static_cast<ULONGLONG>(dataPtr) + ahc->total_size <=
+          volume_.GetFileRecordSize()))
   {
     if (static_cast<bool>(ATTR_MASK(ahc->type) &
                           attr_mask_))  // Skip unwanted attributes

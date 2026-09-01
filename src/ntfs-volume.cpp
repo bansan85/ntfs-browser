@@ -205,6 +205,12 @@ bool NtfsVolume<S>::ParseBootSector()
 
   cluster_size_ = sector_size_ * bpb->sectors_per_cluster;
   NTFS_TRACE1("Cluster Size = %u bytes\n", cluster_size_);
+
+  if (cluster_size_ == 0)
+  {
+    NTFS_TRACE("Cluster Size can't be null\n");
+    return false;
+  }
   cluster_buffer_.resize(cluster_size_);
 
   char sz = static_cast<char>(bpb->clusters_per_file_record);

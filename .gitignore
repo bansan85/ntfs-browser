@@ -1,2 +1,9 @@
 /build
 /build-linux
+
+# Python virtualenv (e.g. for the format.sh cmake-format helper)
+/.venv/
+
+# Local AFL fuzzing artifacts (crash corpus, raw crash dumps)
+/crashes/
+/crash1.txt
