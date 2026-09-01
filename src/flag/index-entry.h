@@ -1,7 +1,6 @@
 #pragma once
 
-#include <windows.h>
-#include <winnt.h>
+#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser::Flag
 {

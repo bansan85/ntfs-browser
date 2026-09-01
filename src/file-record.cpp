@@ -1,3 +1,5 @@
+#include <cassert>
+
 #include <gsl/narrow>
 
 #include <ntfs-browser/attr-base.h>
@@ -356,7 +358,7 @@ void FileRecord<S>::TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
 template <Strategy S>
 bool FileRecord<S>::ParseAttrs()
 {
-  _ASSERT(file_record_);
+  assert(file_record_);
 
   // Clear previous data
   ClearAttrs();
@@ -443,7 +445,7 @@ template <Strategy S>
 void FileRecord<S>::TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack,
                                   void* context) noexcept
 {
-  _ASSERT(attrCallBack);
+  assert(attrCallBack);
 
   for (size_t i = 0; i < kAttrNums; i++)
   {
@@ -521,7 +523,7 @@ std::wstring_view FileRecord<S>::GetFileName() const
         break;
       }
       default:
-        _ASSERT(false);
+        assert(false);
         return {};
     }
 
@@ -611,7 +613,7 @@ template <Strategy S>
 void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
                                        void* context) const
 {
-  _ASSERT(seCallBack);
+  assert(seCallBack);
 
   // Start traversing from IndexRoot (B+ tree root node)
 
@@ -654,7 +656,7 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
     }
     default:
     {
-      _ASSERT(false);
+      assert(false);
       return;
     }
   }

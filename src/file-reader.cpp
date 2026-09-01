@@ -1,9 +1,12 @@
 #include <cassert>
 
 #include <ntfs-browser/file-reader.h>
-#include <ntfs-browser/win32-disk-reader.h>
 
 #include "ntfs-common.h"
+
+#ifdef _WIN32
+  #include <ntfs-browser/win32-disk-reader.h>
+#endif
 
 static constexpr LONGLONG READ_BUFFER_SIZE = 64 * 1024;
 static constexpr LONGLONG MEMORY_BUFFER_SIZE = 512 * READ_BUFFER_SIZE;
@@ -20,6 +23,7 @@ FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader)
 {
 }
 
+#ifdef _WIN32
 template <Strategy S>
 bool FileReader<S>::Open(std::wstring_view volume)
 {
@@ -32,6 +36,7 @@ bool FileReader<S>::Open(std::wstring_view volume)
   reader_ = std::move(reader);
   return true;
 }
+#endif
 
 template <Strategy S>
 bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const

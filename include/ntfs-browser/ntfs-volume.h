@@ -5,14 +5,16 @@
 #include <span>
 #include <string_view>
 
-#include <tchar.h>
-#include <windows.h>
-
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/win-types.h>
+
+#ifdef _WIN32
+  #include <tchar.h>
+#endif
 
 namespace NtfsBrowser
 {
@@ -21,10 +23,14 @@ template <Strategy S>
 class NtfsVolume
 {
  public:
+#ifdef _WIN32
+  // Opens a real disk/device by drive letter, or an arbitrary device/image
+  // path (eg. "\\\\.\\PhysicalDrive0", or a plain file for a disk image) via
+  // Win32DiskReader. Not available outside Windows -- construct NtfsVolume
+  // from an already-open IDiskReader there.
   explicit NtfsVolume(_TCHAR volume);
-  // Opens an arbitrary device/image path instead of a drive letter
-  // (eg. "\\\\.\\PhysicalDrive0", or a plain file for a disk image).
   explicit NtfsVolume(std::wstring_view path);
+#endif
   // Uses an already-open reader instead of opening a path (eg. an in-memory
   // or sequential test double, which have no real path to open).
   explicit NtfsVolume(std::unique_ptr<IDiskReader> reader);
@@ -57,8 +63,10 @@ class NtfsVolume
   // Buffer of size cluster_size_ for unaligned cluster access.
   mutable std::vector<BYTE> cluster_buffer_;
 
+#ifdef _WIN32
   [[nodiscard]] bool OpenVolume(_TCHAR volume);
   [[nodiscard]] bool OpenVolume(std::wstring_view path);
+#endif
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
   void Init();

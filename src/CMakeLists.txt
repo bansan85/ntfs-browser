@@ -16,8 +16,11 @@ set(${PROJECT_NAME}_SRC
     "file-reader.cpp"
     "index-block.cpp"
     "index-entry.cpp"
-    "ntfs-volume.cpp"
-    "win32-disk-reader.cpp")
+    "ntfs-volume.cpp")
+
+if(WIN32)
+  list(APPEND ${PROJECT_NAME}_SRC "win32-disk-reader.cpp")
+endif()
 
 set(${PROJECT_NAME}_H
     "../include/ntfs-browser/data/attr-defines.h"
@@ -72,7 +75,13 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
-         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+  # MSVC's quoted-include search also checks the directory of the file that
+  # (transitively) included the current one, so eg. src/attr/filename.h's
+  # #include "flag/filename-namespace.h" resolves via src/filename.cpp's own
+  # directory there. GCC only checks the including file's own directory, so it
+  # needs src/ on the search path explicitly to resolve the same include.
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(${PROJECT_NAME} PUBLIC "_UNICODE" "UNICODE")
 
 group_src(${${PROJECT_NAME}_SRC} ${${PROJECT_NAME}_H} ${${PROJECT_NAME}_CMAKE})

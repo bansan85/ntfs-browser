@@ -10,8 +10,7 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/strategy.h>
-
-#include <windows.h>
+#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {
@@ -26,7 +25,11 @@ class FileReader
   // instead of opening a real disk/file via Open().
   explicit FileReader(std::unique_ptr<IDiskReader> reader);
 
+#ifdef _WIN32
+  // Opens a real disk/file path via Win32DiskReader. Not available outside
+  // Windows -- construct FileReader from an already-open IDiskReader there.
   bool Open(std::wstring_view volume);
+#endif
 
   // Reads directly into a caller-owned destination, bypassing buffer_/
   // map_buffer_ entirely. Use when the result must outlive the next Read().

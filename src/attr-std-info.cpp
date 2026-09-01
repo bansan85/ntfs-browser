@@ -99,6 +99,7 @@ template <typename RESIDENT, Strategy S>
 void AttrStdInfo<RESIDENT, S>::UTC2Local(const ULONGLONG& ultm,
                                          FILETIME& lftm) noexcept
 {
+#ifdef _WIN32
   const _ULARGE_INTEGER fti{.QuadPart = ultm};
   FILETIME ftt{.dwLowDateTime = fti.LowPart, .dwHighDateTime = fti.HighPart};
 
@@ -106,6 +107,13 @@ void AttrStdInfo<RESIDENT, S>::UTC2Local(const ULONGLONG& ultm,
   {
     lftm = ftt;
   }
+#else
+  // No portable equivalent to FileTimeToLocalFileTime's timezone-aware
+  // conversion is available outside Windows; leave the time in UTC, same as
+  // the fallback above when the Win32 call itself fails.
+  lftm.dwLowDateTime = static_cast<DWORD>(ultm & 0xFFFFFFFFULL);
+  lftm.dwHighDateTime = static_cast<DWORD>(ultm >> 32);
+#endif
 }
 
 template class AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>;

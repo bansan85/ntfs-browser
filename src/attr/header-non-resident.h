@@ -1,8 +1,7 @@
 #pragma once
 
-#include <windows.h>
-
 #include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser::Attr
 {

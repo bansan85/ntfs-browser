@@ -5,12 +5,11 @@
 #include <string_view>
 #include <vector>
 
-#include <windows.h>
-
 #include <gsl/pointers>
 
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/strategy.h>
+#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {

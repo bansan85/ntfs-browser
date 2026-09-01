@@ -1,4 +1,4 @@
-#include <crtdbg.h>
+#include <algorithm>
 
 #include <ntfs-browser/filename.h>
 
@@ -36,7 +36,7 @@ int Filename::Compare(std::wstring_view fn) const noexcept
   // filename_wuc_ is a non-owning view into the raw, non-null-terminated
   // on-disk name buffer, so only the overlapping length can be compared
   // directly; ties are broken by length, as in normal lexicographic order.
-  const size_t n = min(fn.size(), filename_wuc_.size());
+  const size_t n = std::min(fn.size(), filename_wuc_.size());
   const int result = _wcsnicmp(fn.data(), filename_wuc_.data(), n);
   if (result != 0 || fn.size() == filename_wuc_.size())
   {

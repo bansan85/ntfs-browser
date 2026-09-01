@@ -1,6 +1,6 @@
 #pragma once
 
-#include <windows.h>
+#include <ntfs-browser/win-types.h>
 
 #include "attr-resident.h"
 #include <ntfs-browser/data/attr-header-common.h>
