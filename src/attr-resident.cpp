@@ -1,4 +1,5 @@
 #include <cstring>
+#include <stdexcept>
 
 #include <gsl/narrow>
 
@@ -7,6 +8,23 @@
 
 namespace NtfsBrowser
 {
+
+namespace
+{
+// attr_offset/attr_size come straight off disk and are independent of
+// total_size (which FileRecord::ParseAttrs already bounds-checked against the
+// record buffer) -- without this check a crafted attribute can point body_
+// past the record buffer entirely.
+void ValidateResidentBounds(const Attr::HeaderResident& header)
+{
+  if (static_cast<ULONGLONG>(header.attr_offset) + header.attr_size >
+      header.header.total_size)
+  {
+    throw std::runtime_error(
+        "Resident attribute body exceeds attribute bounds.\n");
+  }
+}
+}  // namespace
 
 template <Strategy S>
 AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
@@ -60,6 +78,7 @@ AttrResidentNoCache::AttrResidentNoCache(
     : AttrResident(ahc, fr)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
+  ValidateResidentBounds(header);
 
   body_ = std::span<const BYTE>{
       &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
@@ -81,6 +100,7 @@ AttrResidentFullCache::AttrResidentFullCache(
     : AttrResident(ahc, fr)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
+  ValidateResidentBounds(header);
 
   body_.resize(header.attr_size);
   memcpy(body_.data(),
