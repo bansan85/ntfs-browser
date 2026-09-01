@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "attr-vol-info.h"
 #include "attr/volume-information.h"
 #include "ntfs-common.h"
@@ -12,6 +14,12 @@ AttrVolInfo<RESIDENT, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
       vol_info_(
           *reinterpret_cast<const Attr::VolumeInformation*>(this->GetData()))
 {
+  if (this->GetDataSize() < sizeof(Attr::VolumeInformation))
+  {
+    throw std::runtime_error(
+        "Volume Information attribute smaller than expected.\n");
+  }
+
   NTFS_TRACE("Attribute: Volume Information\n");
 }
 
