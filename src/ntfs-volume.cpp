@@ -203,6 +203,13 @@ bool NtfsVolume<S>::ParseBootSector()
   sector_size_ = bpb->bytes_per_sector;
   NTFS_TRACE1("Sector Size = %u bytes\n", sector_size_);
 
+  // Sector size must be >= 2 to prevent integer underflow in fixup-patch pointer arithmetic.
+  if (sector_size_ < sizeof(WORD))
+  {
+    NTFS_TRACE("Sector Size must be at least 2 bytes\n");
+    return false;
+  }
+
   cluster_size_ = sector_size_ * bpb->sectors_per_cluster;
   NTFS_TRACE1("Cluster Size = %u bytes\n", cluster_size_);
 
