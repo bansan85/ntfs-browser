@@ -69,3 +69,11 @@ Almost every core class is templated on `Strategy` ([include/ntfs-browser/strate
 ### Callbacks
 
 Two callback mechanisms exist: `AttrRawCallback` (installed via `InstallAttrRawCB` on `NtfsVolume`/`FileRecord`) fires during raw attribute parsing and can veto/discard an attribute before it's wrapped; `ATTRS_CALLBACK`/`SUBENTRY_CALLBACK` are post-parse traversal callbacks (`TraverseAttrs`, `TraverseSubEntries`) for consumer code, matching the style used in the sample apps.
+
+### Fuzzing
+
+Both fuzzers drive the same path — open a `NO_CACHE` volume, parse the root `FileRecord`, `TraverseSubEntries` — and treat thrown C++ exceptions as "handled" (bad input rejected), leaving only genuine crashes (access violations, CRT aborts) to escape as real findings:
+
+- `NtfsFuzzer` ([NTFSLibTests/fuzz/main.cpp](NTFSLibTests/fuzz/main.cpp), Windows-only) feeds an endless RNG-backed byte stream through `SequentialDiskReader`; a SEH handler around each iteration catches crashes and prints the seed to repro with `NtfsFuzzer --seed <seed>`.
+- `NtfsFuzzerAfl` ([NTFSLibTests/fuzz/afl-main.cpp](NTFSLibTests/fuzz/afl-main.cpp)) is a classic afl-gcc/afl-g++ file-input harness (`NtfsFuzzerAfl <path>`, or `afl-fuzz -i in -o out -- ./NtfsFuzzerAfl @@`); it loops the input via `LoopingDiskReader` instead of generating fresh bytes, and builds on Linux too (portable C++, no SEH).
+- Crashing inputs found this way get saved into [NTFSLibTests/fuzz/data/](NTFSLibTests/fuzz/data/) as a regression corpus, replayed by the Catch2 test in [NTFSLibTests/unit-tests/fuzzer-regression-tests.cpp](NTFSLibTests/unit-tests/fuzzer-regression-tests.cpp), which runs the actual `NtfsFuzzerAfl` binary against each saved file and checks for a clean exit (plus, for entries in its `kExpectedErrorMessages` table, the specific `NTFS_TRACE` parse-error message the fix is supposed to produce).
