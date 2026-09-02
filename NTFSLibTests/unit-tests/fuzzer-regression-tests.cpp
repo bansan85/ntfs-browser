@@ -67,8 +67,13 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"Index Root attribute smaller than expected."}},
         {"resident_attr_body_out_of_bounds",
          {"Resident attribute body exceeds attribute bounds."}},
-        {"cluster_size_null", {"Cluster Size can't be null"}},
+        // Sector Size in this testcase is 0, which now fails the earlier
+        // sector-size sanity check before cluster_size_ is even computed
+        // (see NtfsVolume::ParseBootSector).
+        {"cluster_size_null", {"Sector Size must be at least 2 bytes"}},
         {"invalid_offset_of_us", {"Offset must be lower than 1024."}},
+        {"sector_size_too_small",
+         {"Sector Size must be at least 2 bytes"}},
     };
 
 struct RunResult

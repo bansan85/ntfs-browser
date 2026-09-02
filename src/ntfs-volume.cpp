@@ -203,6 +203,17 @@ bool NtfsVolume<S>::ParseBootSector()
   sector_size_ = bpb->bytes_per_sector;
   NTFS_TRACE1("Sector Size = %u bytes\n", sector_size_);
 
+  // Sector size must be large enough to hold one Update Sequence Number
+  // (WORD). Fixup patching (PatchUS) computes (sector_size / 2) - 1; a
+  // sector_size of 0 or 1 from a corrupted/malicious boot sector underflows
+  // that unsigned arithmetic and walks the patch pointer outside the file
+  // record/index block buffer, corrupting adjacent heap memory.
+  if (sector_size_ < sizeof(WORD))
+  {
+    NTFS_TRACE("Sector Size must be at least 2 bytes\n");
+    return false;
+  }
+
   cluster_size_ = sector_size_ * bpb->sectors_per_cluster;
   NTFS_TRACE1("Cluster Size = %u bytes\n", cluster_size_);
 
