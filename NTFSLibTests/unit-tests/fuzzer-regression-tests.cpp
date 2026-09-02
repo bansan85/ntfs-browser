@@ -72,8 +72,9 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // (see NtfsVolume::ParseBootSector).
         {"cluster_size_null", {"Sector Size must be at least 2 bytes"}},
         {"invalid_offset_of_us", {"Offset must be lower than 1024."}},
-        {"sector_size_too_small",
-         {"Sector Size must be at least 2 bytes"}},
+        {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
+        {"attribute_list_extension_record_cycle",
+         {"already resolved in this chain, skipping"}},
     };
 
 struct RunResult
