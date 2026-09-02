@@ -1,0 +1,28 @@
+---
+name: clang-tidy
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -yq clang-tidy jq
+      - name: Configure
+        run: |
+          cmake -S . -B build-linux -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: clang-tidy
+        shell: bash
+        run: |
+          jq -r '.[].file' build-linux/compile_commands.json |
+            grep -v '/3rdparty/' | sort -u >files.txt
+          xargs -a files.txt -P "$(nproc)" -I{} clang-tidy -p build-linux {}
