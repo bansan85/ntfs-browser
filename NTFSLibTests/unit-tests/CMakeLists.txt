@@ -25,9 +25,8 @@ target_include_directories(NtfsBrowserTests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 add_dependencies(NtfsBrowserTests NtfsFuzzerAfl)
 target_compile_definitions(
   NtfsBrowserTests
-  PRIVATE
-    NTFS_FUZZER_AFL_EXE="$<TARGET_FILE:NtfsFuzzerAfl>"
-    NTFS_FUZZ_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data")
+  PRIVATE NTFS_FUZZER_AFL_EXE="$<TARGET_FILE:NtfsFuzzerAfl>"
+          NTFS_FUZZ_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data")
 
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
