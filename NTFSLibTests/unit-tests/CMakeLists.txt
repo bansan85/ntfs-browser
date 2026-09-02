@@ -18,7 +18,7 @@ target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}
 
 # Needed to build a synthetic NTFS image directly from the library's own on-disk
 # struct layouts (src/data, src/attr) instead of hand-picked offsets.
-target_include_directories(NtfsBrowserTests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(NtfsBrowserTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 # Lets fuzzer-regression-tests.cpp replay the saved AFL testcases through the
 # actual NtfsFuzzerAfl binary without hardcoding build-output layout.
