@@ -32,7 +32,7 @@ AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
     return;
   }
 
-  NTFS_TRACE1("%u bytes of resident Bitmap data read\n", bitmap_size_);
+  NTFS_TRACE1("%I64u bytes of resident Bitmap data read\n", bitmap_size_);
 }
 
 template <class TYPE_RESIDENT, Strategy S>

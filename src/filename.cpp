@@ -119,7 +119,8 @@ std::wstring_view Filename::GetFilename() const
 
   if (!retval.empty())
   {
-    NTFS_TRACE2("File Name: %.*ls\n", retval.size(), retval.data());
+    NTFS_TRACE2("File Name: %.*ls\n", static_cast<int>(retval.size()),
+                retval.data());
     NTFS_TRACE4("File Permission: %s\t%c%c%c\n",
                 IsDirectory() ? "Directory" : "File", IsReadOnly() ? 'R' : ' ',
                 IsHidden() ? 'H' : ' ', IsSystem() ? 'S' : ' ');
