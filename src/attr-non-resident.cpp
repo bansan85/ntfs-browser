@@ -52,12 +52,12 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
   if (size.lengthBytes > sizeof(ULONGLONG) ||
       size.offsetBytes > sizeof(LONGLONG))
   {
-    NTFS_TRACE1("DataRun decode error 1: 0x%02X\n", size);
+    NTFS_TRACE1("DataRun decode error 1: 0x%02X\n", size.size);
     return false;
   }
 
   if (end - dataRun < static_cast<ptrdiff_t>(size.lengthBytes) +
-                           static_cast<ptrdiff_t>(size.offsetBytes))
+                          static_cast<ptrdiff_t>(size.offsetBytes))
   {
     NTFS_TRACE("DataRun decode error: run exceeds attribute bounds\n");
     return false;
@@ -164,7 +164,8 @@ std::optional<std::span<const BYTE>>
     return {};
   }
 
-  NTFS_TRACE2("Successfully read %u clusters from LCN %I64d\n", clusters, lcn);
+  NTFS_TRACE2("Successfully read %I64u clusters from LCN %I64d\n", clusters,
+              lcn);
   return buffer;
 }
 
