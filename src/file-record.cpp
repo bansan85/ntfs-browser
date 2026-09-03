@@ -23,6 +23,8 @@
 #include "attr-std-info.h"
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
+#include "attr/header-non-resident.h"
+#include "attr/header-resident.h"
 #include "data/run-entry.h"
 #include "index-block.h"
 
@@ -81,7 +83,22 @@ std::unique_ptr<AttrBase<S>>
 {
   switch (ahc.type)
   {
+    // STANDARD_INFORMATION, FILE_NAME, VOLUME_NAME, VOLUME_INFORMATION and
+    // INDEX_ROOT are always resident per the NTFS on-disk format; there is
+    // no meaningful "non-resident" shape for any of them to fall back to
+    // (GetData() on a non-resident attribute returns the raw
+    // Attr::HeaderNonResident bytes, not attribute content fetched through
+    // clusters). A record claiming otherwise is corrupt - reject it here,
+    // before the RESIDENT ctor reinterprets bytes that (once total_size is
+    // validated against ahc.non_resident's own minimum in ParseAttrs) are
+    // guaranteed in-bounds but would otherwise describe the wrong on-disk
+    // layout entirely.
     case AttrType::STANDARD_INFORMATION:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error(
+            "Standard Information attribute must be resident.\n");
+      }
       return std::make_unique<AttrStdInfo<RESIDENT, S>>(ahc, *this);
 
     case AttrType::ATTRIBUTE_LIST:
@@ -92,12 +109,25 @@ std::unique_ptr<AttrBase<S>>
       return std::make_unique<AttrList<RESIDENT, S>>(ahc, *this);
 
     case AttrType::FILE_NAME:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error("File Name attribute must be resident.\n");
+      }
       return std::make_unique<AttrFileName<RESIDENT, S>>(ahc, *this);
 
     case AttrType::VOLUME_NAME:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error("Volume Name attribute must be resident.\n");
+      }
       return std::make_unique<AttrVolName<RESIDENT, S>>(ahc, *this);
 
     case AttrType::VOLUME_INFORMATION:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error(
+            "Volume Information attribute must be resident.\n");
+      }
       return std::make_unique<AttrVolInfo<RESIDENT, S>>(ahc, *this);
 
     case AttrType::DATA:
@@ -108,9 +138,25 @@ std::unique_ptr<AttrBase<S>>
       return std::make_unique<AttrData<RESIDENT, S>>(ahc, *this);
 
     case AttrType::INDEX_ROOT:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error("Index Root attribute must be resident.\n");
+      }
       return std::make_unique<AttrIndexRoot<RESIDENT, S>>(ahc, *this);
 
+    // INDEX_ALLOCATION is always non-resident per the NTFS on-disk format;
+    // AttrIndexAlloc unconditionally derives from AttrNonResident<S> (no
+    // resident variant exists). A record claiming otherwise is corrupt -
+    // reject it, rather than reinterpreting its bytes as
+    // Attr::HeaderNonResident (64 bytes) when only a resident attribute's
+    // minimum (24 bytes, per ParseAttrs' ahc.non_resident-based check) was
+    // actually guaranteed.
     case AttrType::INDEX_ALLOCATION:
+      if (ahc.non_resident == 0)
+      {
+        throw std::runtime_error(
+            "Index Allocation attribute must be non-resident.\n");
+      }
       return std::make_unique<AttrIndexAlloc<S>>(ahc, *this);
 
     case AttrType::BITMAP:
@@ -410,6 +456,26 @@ bool FileRecord<S>::ParseAttrs()
          (static_cast<ULONGLONG>(dataPtr) + ahc->total_size <=
           volume_.GetFileRecordSize()))
   {
+    // Every NTFS attribute is physically at least a resident or
+    // non-resident header (Attr::HeaderResident / Attr::HeaderNonResident,
+    // per ahc->non_resident) - reject a total_size too small to hold one
+    // before AllocAttr()/ParseAttr() reinterpret_cast the raw bytes and
+    // read fields (attr_size/attr_offset, or
+    // start_vcn/last_vcn/data_run_offset/real_size) that would otherwise
+    // come from past this attribute's own declared extent, possibly past
+    // the record buffer itself. This subsumes the previous
+    // "total_size == 0" guard (0 is always smaller than either minimum),
+    // and - unlike that guard - runs before ParseAttr() rather than after.
+    const DWORD minTotalSize =
+        ahc->non_resident != 0
+            ? static_cast<DWORD>(sizeof(Attr::HeaderNonResident))
+            : static_cast<DWORD>(sizeof(Attr::HeaderResident));
+    if (ahc->total_size < minTotalSize)
+    {
+      NTFS_TRACE("Attribute total_size too small for its header.\n");
+      return false;
+    }
+
     if (IsValidAttrType(ahc->type) &&
         static_cast<bool>(ATTR_MASK(ahc->type) &
                           attr_mask_))  // Skip unwanted/unrecognized attributes
@@ -424,11 +490,6 @@ bool FileRecord<S>::ParseAttrs()
         NTFS_TRACE("Compressed and Encrypted file not supported yet !\n");
         return false;
       }
-    }
-
-    if (ahc->total_size == 0)
-    {
-      return false;
     }
 
     dataPtr += ahc->total_size;

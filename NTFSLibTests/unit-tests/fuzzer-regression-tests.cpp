@@ -65,8 +65,15 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"Volume Information attribute smaller than expected."}},
         {"f2a2482f50a933eeea4d1a506651884827c0952d",
          {"Index Root attribute smaller than expected."}},
+        // FileRecord::ParseAttrs() now rejects an attribute whose
+        // total_size is too small for its own header
+        // (Attr::HeaderResident/HeaderNonResident) before ever calling
+        // ParseAttr() - this testcase's attribute is undersized in exactly
+        // that way, so it's now caught earlier than
+        // ValidateResidentBounds() (see bug F1 in
+        // docs/bug-reports/2026-09-03-full-repo.md).
         {"resident_attr_body_out_of_bounds",
-         {"Resident attribute body exceeds attribute bounds."}},
+         {"Attribute total_size too small for its header."}},
         {"cluster_size_null", {"Cluster Size can't be null"}},
         {"invalid_offset_of_us", {"Offset must be lower than 1024."}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
