@@ -251,6 +251,51 @@ FakeRecord MakeIndexRootExtensionRecord()
   return record;
 }
 
+// Record (#kUndersizedAttrRecordIdx): a single REPARSE_POINT attribute whose
+// declared total_size (17) is smaller than sizeof(Attr::HeaderResident)
+// (24). REPARSE_POINT is deliberately not one of the types FileRecord's
+// AllocAttr special-cases: it falls through to the "default" branch, which
+// already checks ahc.non_resident, keeping this fixture focused on F1's
+// actual defect - FileRecord::ParseAttrs() never checks total_size against
+// the header size before AttrResident{No,Full}Cache's ctor reinterprets the
+// raw bytes as Attr::HeaderResident and reads attr_size (relative offset
+// 16-19) / attr_offset (20-21) - fields that partly or wholly lie past this
+// attribute's declared 17-byte extent.
+//
+// attr_size/attr_offset (absolute bytes 64-69) are left at FakeRecord's
+// zero-initialized default, past total_size's declared end (absolute
+// 48-64) - the point being that the current code reads them at all. Byte 72
+// (the high byte of the *next* AttrHeaderCommon::total_size, reinterpreted
+// starting right after this 17-byte attribute) is set to a large sentinel
+// so ParseAttrs' own "does this next attribute fit in 1024 bytes" check
+// fails and the loop exits cleanly, instead of misparsing further bytes -
+// keeping the fixture's outcome deterministic instead of depending on
+// whatever garbage a real disk would leave there.
+FakeRecord MakeUndersizedResidentAttrRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  constexpr DWORD kUndersizedTotalSize = 17;
+  static_assert(
+      kUndersizedTotalSize < sizeof(NtfsBrowser::Attr::HeaderResident),
+      "total_size must be smaller than a resident attribute header to "
+      "reproduce F1");
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::REPARSE_POINT;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.header.total_size = kUndersizedTotalSize;
+
+  record[kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderResident)] = 0xFF;
+
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -304,6 +349,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectory()
 
   putRecord(kAttributeListDirIdx, MakeAttributeListOnlyDirRecord());
   putRecord(kIndexExtensionIdx, MakeIndexRootExtensionRecord());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithUndersizedAttribute()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset =
+      mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                    static_cast<size_t>(kUndersizedAttrRecordIdx);
+  const FakeRecord record = MakeUndersizedResidentAttrRecord();
+  std::memcpy(image.data() + offset, record.data(), record.size());
 
   return image;
 }

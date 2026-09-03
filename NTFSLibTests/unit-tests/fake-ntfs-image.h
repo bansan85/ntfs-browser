@@ -48,4 +48,17 @@ inline constexpr ULONGLONG kIndexExtensionIdx = 7;
 // lives in the extension record it points to (kIndexExtensionIdx).
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectory();
 
+// MFT index of the record built by
+// BuildFakeNtfsImageWithUndersizedAttribute(): its only attribute declares
+// total_size = 17, smaller than sizeof(Attr::HeaderResident) (24).
+inline constexpr ULONGLONG kUndersizedAttrRecordIdx = 8;
+
+// Same volume as BuildFakeNtfsImage(), plus a record (kUndersizedAttrRecordIdx)
+// whose single attribute's total_size (17 bytes) is too small to hold even a
+// resident attribute's fixed header (24 bytes) - regression fixture for F1:
+// FileRecord::ParseAttrs() used to never check total_size against the header
+// size it is about to reinterpret_cast, so AttrResident{No,Full}Cache's ctor
+// read attr_size/attr_offset from bytes past the attribute's declared extent.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithUndersizedAttribute();
+
 }  // namespace NtfsBrowserTests
