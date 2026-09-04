@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list>
 #include <unordered_set>
 
 #include <ntfs-browser/data/attr-header-common.h>
@@ -27,7 +28,8 @@ class AttrList : public TYPE_RESIDENT
   ~AttrList() override;
 
  private:
-  std::vector<FileRecord<S>> file_record_list_;
+  // Unlike std::vector, appending never moves existing elements' addresses.
+  std::list<FileRecord<S>> file_record_list_;
 };  // AttrList
 
 }  // namespace NtfsBrowser
