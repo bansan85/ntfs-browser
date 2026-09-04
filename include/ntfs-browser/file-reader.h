@@ -52,6 +52,9 @@ class FileReader
  private:
   BYTE* NextMemory() const;
 
+  // Strategy::FULL_CACHE only. See file-reader.cpp for details.
+  BYTE* GetCachedBlock(LARGE_INTEGER blockAddr) const;
+
   std::unique_ptr<IDiskReader> reader_;
 
   // Use only for Strategy::NO_CACHE.
@@ -61,6 +64,15 @@ class FileReader
   mutable std::unordered_map<size_t, BYTE*> map_buffer_;
   mutable std::vector<std::unique_ptr<BYTE[]>> mem_alloc;
   mutable size_t last_alloc = 0;
+
+  // Strategy::FULL_CACHE only, and only ever appended to when a single
+  // Read() call spans more than one of NextMemory()'s 64KiB blocks (see
+  // Read<FULL_CACHE>() in file-reader.cpp for why that can't be served as a
+  // zero-copy view like the common, single-block case). Owns the resulting
+  // stitched-together copies for as long as this FileReader lives, so a
+  // span returned for a crossing read stays valid exactly as long as one
+  // returned for a non-crossing read would (FULL_CACHE's whole point).
+  mutable std::vector<std::unique_ptr<BYTE[]>> crossing_reads_;
 };
 
 }  // namespace NtfsBrowser
