@@ -74,6 +74,14 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // docs/bug-reports/2026-09-03-full-repo.md).
         {"resident_attr_body_out_of_bounds",
          {"Attribute total_size too small for its header."}},
+        // A resident $INDEX_ROOT whose total_size (32) is large enough to
+        // pass the F1 check above but whose attr_offset/attr_size (24 + 100)
+        // overrun that total_size - exercises ValidateResidentBounds() in
+        // AttrResidentNoCache's ctor (src/attr-resident.cpp), the bounds
+        // check F1's fix left in place for attributes that declare a
+        // consistent total_size but a body extending past it.
+        {"resident_attr_body_exceeds_bounds",
+         {"Resident attribute body exceeds attribute bounds."}},
         {"cluster_size_null", {"Cluster Size can't be null"}},
         {"invalid_offset_of_us", {"Offset must be lower than 1024."}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
