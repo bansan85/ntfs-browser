@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstring>
+#include <exception>
 
 #include <gsl/narrow>
 #include <gsl/pointers>
@@ -154,10 +155,32 @@ std::optional<std::span<const BYTE>>
 
   LARGE_INTEGER addr;
 
-  addr.QuadPart = gsl::narrow<LONGLONG>(lcn * this->GetClusterSize());
+  // lcn and clusters are both attacker-controlled and otherwise unbounded,
+  // so gsl::narrow() below can throw a gsl::narrowing_error.
+  try
+  {
+    addr.QuadPart = gsl::narrow<LONGLONG>(lcn * this->GetClusterSize());
+  }
+  catch ([[maybe_unused]] const std::exception& e)
+  {
+    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
+    NTFS_TRACE(e.what());
+    return {};
+  }
 
-  std::optional<std::span<const BYTE>> buffer = this->volume_.Read(
-      addr, gsl::narrow<DWORD>(clusters * this->GetClusterSize()));
+  std::optional<std::span<const BYTE>> buffer;
+  try
+  {
+    buffer = this->volume_.Read(
+        addr, gsl::narrow<DWORD>(clusters * this->GetClusterSize()));
+  }
+  catch ([[maybe_unused]] const std::exception& e)
+  {
+    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
+    NTFS_TRACE(e.what());
+    return {};
+  }
+
   if (!buffer)
   {
     NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);

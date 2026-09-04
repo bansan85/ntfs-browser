@@ -1,4 +1,5 @@
 #include <cstring>
+#include <limits>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/file-record-header.h>
@@ -262,8 +263,24 @@ bool NtfsVolume<S>::ParseBootSector()
     return false;
   }
 
-  mft_addr_ = bpb->lcn_mft * cluster_size_;
+  // Multiplying two attacker-controlled values can overflow mft_addr_'s type.
+  const bool mft_addr_overflows =
+      cluster_size_ != 0 &&
+      bpb->lcn_mft > (std::numeric_limits<ULONGLONG>::max)() / cluster_size_;
+  mft_addr_ = mft_addr_overflows ? (std::numeric_limits<ULONGLONG>::max)()
+                                 : bpb->lcn_mft * cluster_size_;
   NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
+
+  // Leaves headroom for the per-record byte offset added to mft_addr_
+  // later, before it is narrowed to a LONGLONG.
+  constexpr ULONGLONG kMaxPlausibleMftAddr =
+      (std::numeric_limits<LONGLONG>::max)() / 2;
+
+  if (mft_addr_overflows || mft_addr_ > kMaxPlausibleMftAddr)
+  {
+    NTFS_TRACE("MFT address is invalid\n");
+    return false;
+  }
 
   return true;
 }

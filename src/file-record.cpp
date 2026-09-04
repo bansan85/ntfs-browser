@@ -201,8 +201,10 @@ bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc,
     else
       attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled, attrListChain);
   }
-  catch ([[maybe_unused]] const std::runtime_error& e)
+  catch ([[maybe_unused]] const std::exception& e)
   {
+    // gsl::narrow(), reachable through AllocAttr(), can throw a
+    // gsl::narrowing_error, which is not a std::runtime_error.
     NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
     NTFS_TRACE(e.what());
     return false;
@@ -235,8 +237,18 @@ std::optional<FileRecordHeaderImpl<S>>
   {
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr;
-    frAddr.QuadPart = gsl::narrow<LONGLONG>(
-        volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
+    try
+    {
+      frAddr.QuadPart = gsl::narrow<LONGLONG>(
+          volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
+    }
+    catch ([[maybe_unused]] const std::exception& e)
+    {
+      // fileRef is attacker-controlled and unbounded, so this sum can
+      // still overflow a LONGLONG even with mft_addr_ validated.
+      NTFS_TRACE(e.what());
+      return {};
+    }
 
     if (!volume_.ReadInto(frAddr, record_buffer_))
     {
@@ -248,7 +260,7 @@ std::optional<FileRecordHeaderImpl<S>>
       return FileRecordHeader::Factory<S>(record_buffer_,
                                           volume_.GetSectorSize());
     }
-    catch ([[maybe_unused]] const std::runtime_error& e)
+    catch ([[maybe_unused]] const std::exception& e)
     {
       NTFS_TRACE(e.what());
       return {};
@@ -265,7 +277,18 @@ std::optional<FileRecordHeaderImpl<S>>
     return {};
   }
 
-  return FileRecordHeader::Factory<S>(record_buffer_, volume_.GetSectorSize());
+  try
+  {
+    return FileRecordHeader::Factory<S>(record_buffer_,
+                                        volume_.GetSectorSize());
+  }
+  catch ([[maybe_unused]] const std::exception& e)
+  {
+    // Reachable through the same FileRecordHeader::Factory<S>() call as
+    // the direct-allocation path above.
+    NTFS_TRACE(e.what());
+    return {};
+  }
 }
 
 // Read File Record, verify and patch the US (update sequence)
