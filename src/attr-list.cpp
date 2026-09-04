@@ -11,9 +11,23 @@
 namespace NtfsBrowser
 {
 
+namespace
+{
+
+// Packs (record_ref, attr_type) into one key. record_ref fits the high 48
+// bits (MftSegmentReference::segment_number is 48-bit); every AttrType
+// fits the low 16 bits.
+ULONGLONG MakeChainKey(ULONGLONG recordRef, AttrType attrType) noexcept
+{
+  return (recordRef << 16) | (static_cast<ULONGLONG>(attrType) & 0xFFFFU);
+}
+
+}  // namespace
+
 template <typename TYPE_RESIDENT, Strategy S>
-AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
-                                     FileRecord<S>& fr)
+AttrList<TYPE_RESIDENT, S>::AttrList(
+    const AttrHeaderCommon& ahc, FileRecord<S>& fr,
+    std::unordered_set<ULONGLONG>& attrListChain)
     : TYPE_RESIDENT(ahc, fr)
 {
   NTFS_TRACE("Attribute: Attribute List\n");
@@ -26,12 +40,9 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
   std::optional<ULONGLONG> len = 0;
   Attr::AttributeList al_record{};
 
-  // Start the chain here, unless fr already carries one from an outer AttrList.
-  if (!fr.attr_list_chain_)
-  {
-    fr.attr_list_chain_ = std::make_shared<std::unordered_set<ULONGLONG>>();
-    fr.attr_list_chain_->insert(*fr.file_reference_);
-  }
+  // Marks this record's own chain key first, so a cycle back to it is caught.
+  attrListChain.insert(
+      MakeChainKey(*fr.file_reference_, AttrType::ATTRIBUTE_LIST));
 
   while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
                                         sizeof(Attr::AttributeList)})) &&
@@ -52,12 +63,13 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
     if (record_ref != *fr.file_reference_ &&
         static_cast<bool>(am & fr.attr_mask_))
     {
-      if (!fr.attr_list_chain_->insert(record_ref).second)
+      if (!attrListChain.insert(MakeChainKey(record_ref, al_record.attr_type))
+               .second)
       {
-        NTFS_TRACE1(
-            "Attribute List: record %I64u already resolved in this chain, "
-            "skipping\n",
-            record_ref);
+        NTFS_TRACE2(
+            "Attribute List: record %I64u, type 0x%04x already resolved in "
+            "this chain, skipping\n",
+            record_ref, al_record.attr_type);
       }
       else
       {
@@ -65,13 +77,12 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
         FileRecord<S>& frnew = file_record_list_.back();
 
         frnew.attr_mask_ = am;
-        frnew.attr_list_chain_ = fr.attr_list_chain_;
         if (!frnew.ParseFileRecord(record_ref))
         {
           throw std::runtime_error(
               "Attribute List parse error (ParseFileRecord).\n");
         }
-        if (!frnew.ParseAttrs())
+        if (!frnew.ParseAttrs(attrListChain))
         {
           throw std::runtime_error(
               "Attribute List parse error (ParseAttrs).\n");

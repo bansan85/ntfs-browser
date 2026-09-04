@@ -61,9 +61,9 @@ class FileRecord
   Mask attr_mask_{Mask::ALL};
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
-  // Detects $ATTRIBUTE_LIST cycles; null until AttrList first needs it.
-  std::shared_ptr<std::unordered_set<ULONGLONG>> attr_list_chain_{};
-
+  // Owned per-instance so this FileRecord's raw bytes (viewed by NO_CACHE
+  // attributes as plain pointers/spans, no copy) are never aliased by
+  // another FileRecord's read (eg. NtfsVolume::mft_record_ vs. this one).
   std::vector<BYTE> record_buffer_;
 
   void ClearAttrs() noexcept;
@@ -71,8 +71,14 @@ class FileRecord
                     bool& bDiscard) noexcept;
   template <typename RESIDENT>
   [[nodiscard]] std::unique_ptr<AttrBase<S>>
-      AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled);
-  [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc);
+      AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled,
+                std::unordered_set<ULONGLONG>& attrListChain);
+  [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc,
+                               std::unordered_set<ULONGLONG>& attrListChain);
+  // attrListChain carries one $ATTRIBUTE_LIST resolution's already-visited
+  // (record, attribute type) pairs into this record's own attribute parse,
+  // instead of starting a fresh chain.
+  [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain);
   [[nodiscard]] std::optional<FileRecordHeaderImpl<S>>
       ReadFileRecord(ULONGLONG fileRef);
   // visitedVcns guards against a malformed/malicious B+ tree where a
