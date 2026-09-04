@@ -51,6 +51,8 @@ class FileReader
  private:
   BYTE* NextMemory() const;
 
+  BYTE* GetCachedBlock(LARGE_INTEGER blockAddr) const;
+
   std::unique_ptr<IDiskReader> reader_;
 
   // Use only for Strategy::NO_CACHE.
@@ -60,6 +62,10 @@ class FileReader
   mutable std::unordered_map<size_t, BYTE*> map_buffer_;
   mutable std::vector<std::unique_ptr<BYTE[]>> mem_alloc;
   mutable size_t last_alloc = 0;
+
+  // Owns stitched-together buffers for crossing reads, kept alive for
+  // this reader's lifetime.
+  mutable std::vector<std::unique_ptr<BYTE[]>> crossing_reads_;
 };
 
 }

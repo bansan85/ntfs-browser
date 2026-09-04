@@ -1,4 +1,5 @@
-#include <cassert>
+#include <algorithm>
+#include <cstring>
 
 #include <ntfs-browser/file-reader.h>
 
@@ -66,6 +67,32 @@ typename std::enable_if_t<
   return std::span<const BYTE>{buffer_.data(), length};
 }
 
+// Fetches (loading and caching on first access) the single 64KiB block
+// containing "blockAddr" - which must already be 64KiB-aligned - and
+// returns a pointer to its start, or nullptr on a read failure.
+template <Strategy S>
+BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER blockAddr) const
+{
+  const size_t index = blockAddr.QuadPart / READ_BUFFER_SIZE;
+  const auto it = map_buffer_.find(index);
+  if (it != map_buffer_.end())
+  {
+    return it->second;
+  }
+
+  BYTE* new_data = NextMemory();
+
+  if (!reader_->ReadInto(
+          blockAddr,
+          std::span<BYTE>{new_data, static_cast<size_t>(READ_BUFFER_SIZE)}))
+  {
+    return nullptr;
+  }
+
+  map_buffer_[index] = new_data;
+  return new_data;
+}
+
 template <Strategy T>
 template <Strategy Q>
 typename std::enable_if_t<
@@ -74,34 +101,62 @@ typename std::enable_if_t<
     std::optional<std::span<const BYTE>>>
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
 {
-  // Not implemented. Really needed ?
-  assert(addr.QuadPart / READ_BUFFER_SIZE ==
-         (addr.QuadPart + length - 1) / READ_BUFFER_SIZE);
-
-  size_t index = addr.QuadPart / READ_BUFFER_SIZE;
-  if (map_buffer_.contains(index))
+  if (length == 0)
   {
-    return std::span<const BYTE>{
-        &map_buffer_[index][0] + addr.QuadPart % READ_BUFFER_SIZE, length};
+    return std::span<const BYTE>{};
   }
 
-  LARGE_INTEGER addr2{.QuadPart =
-                          addr.QuadPart - addr.QuadPart % READ_BUFFER_SIZE};
+  const bool crossesBlock = addr.QuadPart / READ_BUFFER_SIZE !=
+                            (addr.QuadPart + length - 1) / READ_BUFFER_SIZE;
 
-  BYTE* new_data = NextMemory();
-
-  if (!reader_->ReadInto(
-          addr2,
-          std::span<BYTE>{new_data, static_cast<size_t>(READ_BUFFER_SIZE)}))
+  if (!crossesBlock)
   {
-    NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
-    return {};
+    // Fast path: the request fits in a single block; return a zero-copy view.
+    const LARGE_INTEGER blockAddr{.QuadPart = addr.QuadPart -
+                                              addr.QuadPart % READ_BUFFER_SIZE};
+    BYTE* block = GetCachedBlock(blockAddr);
+    if (block == nullptr)
+    {
+      NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+      return {};
+    }
+
+    return std::span<const BYTE>{block + addr.QuadPart % READ_BUFFER_SIZE,
+                                 length};
   }
 
-  map_buffer_[index] = new_data;
+  // Slow path: stitch the range together one block at a time.
+  auto assembled = std::make_unique<BYTE[]>(length);
+  BYTE* const result = assembled.get();
+  BYTE* out = result;
 
-  return std::span<const BYTE>{new_data + addr.QuadPart % READ_BUFFER_SIZE,
-                               length};
+  LARGE_INTEGER cur = addr;
+  DWORD remaining = length;
+  while (remaining != 0)
+  {
+    const LARGE_INTEGER blockAddr{.QuadPart = cur.QuadPart -
+                                              cur.QuadPart % READ_BUFFER_SIZE};
+    BYTE* block = GetCachedBlock(blockAddr);
+    if (block == nullptr)
+    {
+      NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+      return {};
+    }
+
+    const auto offsetInBlock =
+        static_cast<DWORD>(cur.QuadPart % READ_BUFFER_SIZE);
+    const DWORD chunk = static_cast<DWORD>(
+        std::min<LONGLONG>(READ_BUFFER_SIZE - offsetInBlock, remaining));
+
+    memcpy(out, block + offsetInBlock, chunk);
+
+    out += chunk;
+    cur.QuadPart += chunk;
+    remaining -= chunk;
+  }
+
+  crossing_reads_.push_back(std::move(assembled));
+  return std::span<const BYTE>{result, length};
 }
 
 template <Strategy S>
