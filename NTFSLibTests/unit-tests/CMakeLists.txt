@@ -13,6 +13,7 @@ add_executable(
   "filename-compare-tests.cpp"
   "parse-attrs-total-size-tests.cpp"
   "file-record-header-fixup-tests.cpp"
+  "index-block-fixup-tests.cpp"
   "fuzzer-regression-tests.cpp")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}

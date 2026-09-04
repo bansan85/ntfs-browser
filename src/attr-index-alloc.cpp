@@ -11,6 +11,16 @@
 namespace NtfsBrowser
 {
 
+bool IndexBlockUsOffsetInBounds(WORD offset_of_us, DWORD sectors,
+                                DWORD index_block_size) noexcept
+{
+  // True only if offset_of_us starts past the header and the whole USN
+  // array still fits within the buffer.
+  return offset_of_us >= sizeof(Data::IndexBlock) &&
+         static_cast<ULONGLONG>(offset_of_us) + 2ULL * (1ULL + sectors) <=
+             index_block_size;
+}
+
 template <Strategy S>
 AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
                                   const FileRecord<S>& fr)
@@ -100,6 +110,13 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   if (ibBuf->magic != kIndexBlockMagic)
   {
     NTFS_TRACE("Index Block parse error: Magic mismatch\n");
+    return false;
+  }
+
+  if (!IndexBlockUsOffsetInBounds(ibBuf->offset_of_us, sectors,
+                                  this->GetIndexBlockSize()))
+  {
+    NTFS_TRACE("Index Block parse error: offset_of_us out of bounds\n");
     return false;
   }
 

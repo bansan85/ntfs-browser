@@ -20,6 +20,7 @@
 #include "attr/header-resident.h"
 #include "attr/index-root.h"
 #include "attr/volume-information.h"
+#include "data/index-block.h"
 #include "data/index-entry.h"
 #include "data/ntfs-bpb.h"
 #include "flag/filename-namespace.h"
@@ -280,6 +281,101 @@ FakeRecord MakeUndersizedResidentAttrRecord()
   return record;
 }
 
+// LCN for the forged index block, placed past every record's cluster range.
+constexpr DWORD kForgedIndexBlockLcn = 20;
+
+// Builds a directory record whose $INDEX_ALLOCATION references a single
+// forged index block, reached through TraverseSubNode() without real
+// B+-tree comparisons.
+FakeRecord MakeIndexAllocDirRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  DWORD offset = kAttrOffset;
+
+  auto& rootAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  rootAttr.header.type = AttrType::INDEX_ROOT;
+  rootAttr.header.non_resident = 0;
+  rootAttr.header.name_length = 0;
+  rootAttr.header.flags = 0;
+  rootAttr.header.id = 0;
+  rootAttr.attr_offset = static_cast<WORD>(sizeof(rootAttr));
+
+  BYTE* body = &record[offset + rootAttr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kForgedIndexBlockSize;
+  root.clusters_per_ib =
+      static_cast<BYTE>(kForgedIndexBlockSize / kClusterSize);
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = 0;
+  e1.mft_sn = 0;
+  e1.stream_size = 0;
+  e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE |
+             NtfsBrowser::Flag::IndexEntry::LAST;
+  // Size covers the header up to stream, plus the 8-byte subnode VCN.
+  e1.size = static_cast<WORD>(offsetof(NtfsBrowser::Data::IndexEntry, stream) +
+                              sizeof(ULONGLONG));
+  auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
+      reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
+  subNodeVcn = 0;
+
+  root.total_entry_size = e1.size;
+  root.alloc_entry_size = e1.size;
+  root.flags = 0;
+
+  rootAttr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size;
+  rootAttr.header.total_size =
+      static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
+
+  offset += rootAttr.header.total_size;
+
+  auto& allocAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
+  allocAttr.header.type = AttrType::INDEX_ALLOCATION;
+  allocAttr.header.non_resident = 1;
+  allocAttr.header.name_length = 0;
+  allocAttr.header.flags = 0;
+  allocAttr.header.id = 0;
+  allocAttr.start_vcn = 0;
+  allocAttr.last_vcn =
+      static_cast<ULONGLONG>(kForgedIndexBlockSize / kClusterSize) - 1;
+  allocAttr.data_run_offset = static_cast<WORD>(sizeof(allocAttr));
+  allocAttr.comp_unit_size = 0;
+  allocAttr.real_size = kForgedIndexBlockSize;
+  allocAttr.alloc_size = kForgedIndexBlockSize;
+  allocAttr.ini_size = kForgedIndexBlockSize;
+
+  BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
+  DWORD runLen = 0;
+  // High nibble = 4-byte LCN offset field; low nibble = 1-byte run length.
+  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = static_cast<BYTE>(kForgedIndexBlockSize / kClusterSize);
+  {
+    const DWORD lcn = kForgedIndexBlockLcn;
+    std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
+    runLen += sizeof(lcn);
+  }
+  dataRun[runLen++] = 0x00;  // terminate the run list
+
+  allocAttr.header.total_size = static_cast<DWORD>(sizeof(allocAttr)) + runLen;
+
+  offset += allocAttr.header.total_size;
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -345,6 +441,46 @@ std::vector<BYTE> BuildFakeNtfsImageWithUndersizedAttribute()
                     static_cast<size_t>(kUndersizedAttrRecordIdx);
   const FakeRecord record = MakeUndersizedResidentAttrRecord();
   std::memcpy(image.data() + offset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithForgedIndexBlock()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Only this fixture's directory needs an index block bigger than 1
+  // cluster - patch the shared BPB in place (both fields are DWORD but
+  // ntfs-volume.cpp::ParseBootSector() only ever consults their low byte,
+  // truncated to a signed char) rather than duplicating
+  // BuildFakeNtfsImage()'s whole boot sector setup.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_index_block =
+      static_cast<DWORD>(kForgedIndexBlockSize / kClusterSize);
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t dirOffset =
+      mftAddr + static_cast<size_t>(kFakeFileRecordSize) * kIndexAllocDirIdx;
+  const FakeRecord dirRecord = MakeIndexAllocDirRecord();
+  std::memcpy(image.data() + dirOffset, dirRecord.data(), dirRecord.size());
+
+  const size_t blockOffset =
+      static_cast<size_t>(kForgedIndexBlockLcn) * kClusterSize;
+  if (image.size() < blockOffset + kForgedIndexBlockSize)
+  {
+    image.resize(blockOffset + kForgedIndexBlockSize, 0);
+  }
+
+  auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(image.data() +
+                                                                  blockOffset);
+  std::memset(&block, 0, sizeof(block));
+  block.magic = kIndexBlockMagic;
+  block.offset_of_us = kForgedIndexBlockOffsetOfUs;
+  // size_of_us is never checked; this value only keeps the fixture plausible.
+  block.size_of_us =
+      static_cast<WORD>(kForgedIndexBlockSize / kBytesPerSector + 1);
+  block.vcn = 0;
+  block.not_leaf = 0;
 
   return image;
 }

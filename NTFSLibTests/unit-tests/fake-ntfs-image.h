@@ -48,4 +48,21 @@ inline constexpr ULONGLONG kUndersizedAttrRecordIdx = 8;
 // read from bytes past its own declared extent.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithUndersizedAttribute();
 
+// MFT index of the directory record built by
+// BuildFakeNtfsImageWithForgedIndexBlock(); the next unused index.
+inline constexpr ULONGLONG kIndexAllocDirIdx = 9;
+
+// Size (bytes) of the forged index block: a whole number of clusters,
+// kept distinct from every other allocation size in this file.
+inline constexpr DWORD kForgedIndexBlockSize = 7 * kFakeFileRecordSize;
+
+// offset_of_us declared by the forged index block: far past
+// kForgedIndexBlockSize, overrunning the block's buffer.
+inline constexpr WORD kForgedIndexBlockOffsetOfUs = 0xFFFF;
+
+// Same volume as BuildFakeNtfsImage(), plus a directory whose
+// $INDEX_ALLOCATION points at an index block with an out-of-bounds
+// offset_of_us.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithForgedIndexBlock();
+
 }  // namespace NtfsBrowserTests
