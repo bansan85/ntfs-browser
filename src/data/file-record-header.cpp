@@ -32,13 +32,34 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
     throw std::runtime_error("Offset must be lower than 1024.");
   }
 
-  us_array.reserve(buffer.size() / sector_size);
+  // The Update Sequence Array holds one WORD per sector in the record, plus
+  // the leading USN itself (data->offset_of_us >= buffer.size() above only
+  // guards that first WORD - it says nothing about the array that follows).
+  // Without this check, a small sector_size (only guarded elsewhere to be
+  // >= sizeof(WORD)) combined with an offset_of_us near the end of buffer
+  // makes the loop below read far past buffer's declared end.
+  const size_t sectors = buffer.size() / sector_size;
+  if (data->offset_of_us + 2 * (1 + sectors) > buffer.size())
+  {
+    throw std::runtime_error(
+        "Update Sequence Array does not fit within the file record "
+        "buffer.");
+  }
+  // size_of_us is the on-disk field that is supposed to state the array's
+  // real size (USN + one WORD per sector), but it is never used to size
+  // anything below - sectors (derived straight from buffer.size() and
+  // sector_size, both already validated) is what actually bounds the loop,
+  // so the read stays safe regardless of what size_of_us claims. It is
+  // deliberately not cross-checked against sectors + 1 here: unlike
+  // offset_of_us, disagreeing with it can't cause an out-of-bounds read.
+
+  us_array.reserve(sectors);
   const gsl::not_null<const WORD*> usnaddr =
       reinterpret_cast<const WORD*>(buffer.data() + data->offset_of_us);
   us_number = *usnaddr;
   const gsl::not_null<const WORD*> usarray = usnaddr.get() + 1;
 
-  for (size_t i = 0; i < buffer.size() / sector_size; i++)
+  for (size_t i = 0; i < sectors; i++)
   {
     us_array.push_back(usarray.get()[i]);
   }
