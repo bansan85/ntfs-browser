@@ -111,6 +111,30 @@ inline constexpr DWORD kTinyIndexBlockSize = 2;
 // the volume regardless. See F6 in docs/bug-reports/2026-09-03-full-repo.md.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock();
 
+// lcn_mft value BuildFakeNtfsImageWithHugeMftLcn() patches into the BPB -
+// regression fixture for F8: NtfsVolume<S>::ParseBootSector() computes
+// mft_addr_ = bpb->lcn_mft * cluster_size_ (src/ntfs-volume.cpp) without ever
+// validating the result against the volume's own size. With cluster_size_ ==
+// kClusterSize (1024, this fixture's fixed cluster size), 2^53 yields
+// mft_addr_ == 2^63 exactly: it still fits in the ULONGLONG mft_addr_ is
+// stored as, but FileRecord<S>::ReadFileRecord() (src/file-record.cpp)
+// immediately narrows GetMFTAddr() (plus a per-record offset) down to a
+// LONGLONG for LARGE_INTEGER::QuadPart via gsl::narrow<LONGLONG>() - a value
+// that large makes that narrow() throw gsl::narrowing_error. That type
+// derives from std::exception, not std::runtime_error, so it escapes every
+// catch (const std::runtime_error&) in the parser and propagates out of
+// FileRecord::ParseFileRecord() -> NtfsVolume::Init() -> the NtfsVolume
+// constructor itself. See F8 in docs/bug-reports/2026-09-03-full-repo.md.
+inline constexpr ULONGLONG kHugeMftLcn = 1ULL << 53;
+
+// Same volume as BuildFakeNtfsImage(), with lcn_mft patched to kHugeMftLcn so
+// mft_addr_ ends up 2^63 - large enough that gsl::narrow<LONGLONG>() throws
+// when FileRecord<S>::ReadFileRecord() converts it (plus a per-record
+// offset) to a LARGE_INTEGER, yet NtfsVolume<S>::ParseBootSector() currently
+// accepts the volume regardless, since nothing validates mft_addr_ against
+// the volume's own bounds. See F8 in docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithHugeMftLcn();
+
 // MFT index of the directory record built by
 // BuildFakeNtfsImageWithMultiTypeAttributeListDirectory(): its resident
 // $ATTRIBUTE_LIST holds TWO records that both name the SAME extension
