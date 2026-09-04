@@ -771,6 +771,19 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedAttributeListDirectory()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithCorruptMftRecord()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Zeroing the magic makes ParseFileRecord() fail on this record alone.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                      static_cast<size_t>(MftIdx::MFT);
+  std::memset(image.data() + offset, 0, kFakeFileRecordSize);
+
+  return image;
+}
+
 std::filesystem::path WriteFakeNtfsImage()
 {
   const std::vector<BYTE> image = BuildFakeNtfsImage();

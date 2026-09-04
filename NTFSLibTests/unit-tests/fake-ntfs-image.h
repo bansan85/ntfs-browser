@@ -135,4 +135,9 @@ inline constexpr std::array<DWORD, 4> kUafRealSizeSentinels{1024, 2048, 3072,
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedAttributeListDirectory();
 
+// Same volume as BuildFakeNtfsImage(), but with the $MFT file record
+// zero-filled (magic == 0, not kFileRecordMagic), while $Volume and the
+// root directory are left untouched and valid.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptMftRecord();
+
 }  // namespace NtfsBrowserTests
