@@ -61,4 +61,34 @@ inline constexpr ULONGLONG kUndersizedAttrRecordIdx = 8;
 // read attr_size/attr_offset from bytes past the attribute's declared extent.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithUndersizedAttribute();
 
+// MFT index of the directory record built by
+// BuildFakeNtfsImageWithForgedIndexBlock(): its $INDEX_ROOT holds a single,
+// nameless SUBNODE-only entry pointing at VCN 0 of its $INDEX_ALLOCATION,
+// whose sole index block is the forged one described below.
+inline constexpr ULONGLONG kIndexAllocDirIdx = 9;
+
+// Size (bytes) of the single index block kIndexAllocDirIdx's
+// $INDEX_ALLOCATION describes - AttrIndexAlloc<S>::ParseIndexBlock()
+// allocates exactly this many bytes (IndexBlock::AllocIndexBlock,
+// src/index-block.cpp) to hold it. A whole number of the fixture's 1KB
+// clusters (7), chosen distinct from every other allocation size in this
+// fixture so a test-only allocator hook can recognize it unambiguously.
+inline constexpr DWORD kForgedIndexBlockSize = 7 * kFakeFileRecordSize;
+
+// offset_of_us the forged index block declares (Data::IndexBlock,
+// src/data/index-block.h) - regression fixture for F4:
+// AttrIndexAlloc<S>::ParseIndexBlock() (src/attr-index-alloc.cpp) never
+// checks offset_of_us against the index_block_size-byte buffer it just
+// allocated before reading the Update Sequence Number through it. 0xFFFF
+// (the maximum a WORD can hold) is far past kForgedIndexBlockSize, matching
+// the bug report's own scenario.
+inline constexpr WORD kForgedIndexBlockOffsetOfUs = 0xFFFF;
+
+// Same volume as BuildFakeNtfsImage(), plus a directory (kIndexAllocDirIdx)
+// whose $INDEX_ALLOCATION's single data run points at an "INDX"-signed
+// index block whose offset_of_us (kForgedIndexBlockOffsetOfUs) is never
+// validated against the block's real size (kForgedIndexBlockSize) - see F4
+// in docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithForgedIndexBlock();
+
 }  // namespace NtfsBrowserTests
