@@ -62,6 +62,8 @@ const std::unordered_map<std::string, std::vector<std::string>>
           "buffer."}},
         {"index_block_offset_of_us_out_of_bounds",
          {"Index Block parse error: offset_of_us out of bounds"}},
+        {"file_record_size_invalid", {"FileRecord Size is invalid"}},
+        {"index_block_size_invalid", {"IndexBlock Size is invalid"}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
