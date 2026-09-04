@@ -1,12 +1,14 @@
 #include <cstring>
 
 #include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
+#include "data/index-block.h"
 #include "data/ntfs-bpb.h"
 #include "ntfs-common.h"
 
@@ -235,6 +237,24 @@ bool NtfsVolume<S>::ParseBootSector()
   }
   NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
 
+  // clusters_per_file_record is an attacker-controlled signed-byte-style
+  // field: a negative encoding close to 0 (eg. 0xFF -> sz = -1) yields a
+  // file_record_size_ of just a few bytes. FileRecordHeader's ctor happens
+  // to reject anything other than exactly 1024 bytes today
+  // (src/data/file-record-header.cpp), which incidentally protects this
+  // path, but that is a coincidence of its current buffer layout
+  // (FileRecordHeader::Data::raw is a fixed BYTE[1024]), not a structural
+  // guarantee - nothing stops that accidental guard from disappearing later.
+  // Validate file_record_size_ here too, the same way as index_block_size_
+  // below: it must be able to hold FileRecordHeader::Data, and every sector
+  // in it must be addressable by PatchUS().
+  if (file_record_size_ < sizeof(FileRecordHeader::Data) ||
+      file_record_size_ % sector_size_ != 0)
+  {
+    NTFS_TRACE("FileRecord Size is invalid\n");
+    return false;
+  }
+
   sz = static_cast<char>(bpb->clusters_per_index_block);
   if (sz > 0)
   {
@@ -245,6 +265,24 @@ bool NtfsVolume<S>::ParseBootSector()
     index_block_size_ = 1U << static_cast<unsigned char>(-sz);
   }
   NTFS_TRACE1("IndexBlock Size = %u bytes\n", index_block_size_);
+
+  // Same reasoning as file_record_size_ just above, but here nothing
+  // downstream accidentally protects it: AttrIndexAlloc<S>::ParseIndexBlock()
+  // (src/attr-index-alloc.cpp) allocates exactly index_block_size_ bytes and
+  // immediately reinterprets the start of that buffer as Data::IndexBlock
+  // (magic, offset_of_us, ...) without ever checking the allocation is big
+  // enough to hold it. clusters_per_index_block = 0xFF ("sz = -1") yields
+  // index_block_size_ = 2, so even ibBuf->magic alone (a DWORD) already reads
+  // past a 2-byte allocation. Also require a whole number of sectors, like
+  // file_record_size_ above, so the Update Sequence Array fixup
+  // (AttrIndexAlloc<S>::PatchUS) walks a well-defined number of sectors
+  // instead of running off a partial one.
+  if (index_block_size_ < sizeof(Data::IndexBlock) ||
+      index_block_size_ % sector_size_ != 0)
+  {
+    NTFS_TRACE("IndexBlock Size is invalid\n");
+    return false;
+  }
 
   mft_addr_ = bpb->lcn_mft * cluster_size_;
   NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
