@@ -90,3 +90,33 @@ TEST_CASE(
   REQUIRE(dir.ParseAttrs());
   CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
 }
+
+TEST_CASE(
+    "AttrList's FileRecord vector growth does not invalidate "
+    "already-resolved extension records' attributes (FULL_CACHE)",
+    "[file-record][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithFragmentedAttributeListDirectory());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ALLOCATION);
+
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kUafAttrListDirIdx));
+  REQUIRE(dir.ParseAttrs());
+
+  const auto& allocAttrs = dir.getAttr(AttrType::INDEX_ALLOCATION);
+  REQUIRE(allocAttrs.size() == NtfsBrowserTests::kUafRealSizeSentinels.size());
+
+  // Each GetDataSize() reads through a reference bound at that extension
+  // record's construction time, so a moved FileRecord reads stale memory.
+  for (size_t i = 0; i < allocAttrs.size(); i++)
+  {
+    CHECK(allocAttrs[i]->GetDataSize() ==
+          NtfsBrowserTests::kUafRealSizeSentinels[i]);
+  }
+}

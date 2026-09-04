@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <vector>
@@ -100,5 +101,30 @@ inline constexpr ULONGLONG kAttributeListDirIdx2 = 12;
 // relocates $INDEX_ROOT to the same extension record the first one uses.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithAttributeListDirectoryChainReused();
+
+// MFT index of the directory record built by
+// BuildFakeNtfsImageWithFragmentedAttributeListDirectory().
+inline constexpr ULONGLONG kUafAttrListDirIdx = 13;
+
+// MFT indices of the four extension records that directory's
+// $ATTRIBUTE_LIST relocates $INDEX_ALLOCATION to. Must stay below
+// Enum::MftIdx::USER (16); kUafExtensionIdx2/3 reuse indices 1 and 2,
+// left unused by BuildFakeNtfsImage().
+inline constexpr ULONGLONG kUafExtensionIdx0 = 14;
+inline constexpr ULONGLONG kUafExtensionIdx1 = 15;
+inline constexpr ULONGLONG kUafExtensionIdx2 = 1;
+inline constexpr ULONGLONG kUafExtensionIdx3 = 2;
+
+// Distinct real_size sentinel written into each extension record's
+// $INDEX_ALLOCATION, so a test can tell which record's memory it is
+// still reading.
+inline constexpr std::array<DWORD, 4> kUafRealSizeSentinels{1024, 2048, 3072,
+                                                            4096};
+
+// Same volume as BuildFakeNtfsImage(), plus a directory whose
+// $ATTRIBUTE_LIST relocates $INDEX_ALLOCATION into four distinct
+// extension records.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithFragmentedAttributeListDirectory();
 
 }  // namespace NtfsBrowserTests
