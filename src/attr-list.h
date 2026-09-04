@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list>
 #include <unordered_set>
 
 #include <ntfs-browser/data/attr-header-common.h>
@@ -33,7 +34,21 @@ class AttrList : public TYPE_RESIDENT
   ~AttrList() override;
 
  private:
-  std::vector<FileRecord<S>> file_record_list_;
+  // std::list, not std::vector: every extension record's attributes are
+  // merged out into fr.attr_list_ as unique_ptr<AttrBase<S>>, but
+  // AttrBase::attr_header_/AttrNonResident::attr_header_nr_ inside them are
+  // references bound directly into the owning FileRecord's own inline
+  // record buffer (FileRecordHeaderImpl<Strategy::FULL_CACHE>::data_, a
+  // by-value 1024-byte union - see include/ntfs-browser/data/file-record-header.h).
+  // A std::vector would relocate every FileRecord already constructed - and
+  // therefore every attribute already merged out of one - each time a later
+  // emplace_back() reallocates, leaving those references dangling (N3,
+  // docs/bug-reports/2026-09-03-full-repo.md). std::list never moves
+  // existing elements on insertion, so their addresses - and everything
+  // pointing/referencing into them - stay valid for this object's whole
+  // lifetime. Only ever appended to (emplace_back) and read via back(), so
+  // std::list's lack of random access costs nothing here.
+  std::list<FileRecord<S>> file_record_list_;
 };  // AttrList
 
 }  // namespace NtfsBrowser
