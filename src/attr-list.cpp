@@ -11,9 +11,28 @@
 namespace NtfsBrowser
 {
 
+namespace
+{
+
+// Packs (record_ref, attr_type) into a single key for attrListChain.
+// record_ref comes from MftSegmentReference::segment_number, a 48-bit
+// bitfield, so it fits entirely in the high 48 bits of a ULONGLONG; every
+// defined AttrType (data/attr-type.h) is a small multiple of 0x10 no
+// larger than LOGGED_UTILITY_STREAM (0x100), comfortably within the low 16
+// bits, and IsValidAttrType() has already rejected AttrType::ALL by the
+// time this is called - so the two combine below with no realistic
+// collision.
+ULONGLONG MakeChainKey(ULONGLONG recordRef, AttrType attrType) noexcept
+{
+  return (recordRef << 16) | (static_cast<ULONGLONG>(attrType) & 0xFFFFU);
+}
+
+}  // namespace
+
 template <typename TYPE_RESIDENT, Strategy S>
-AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
-                                     FileRecord<S>& fr)
+AttrList<TYPE_RESIDENT, S>::AttrList(
+    const AttrHeaderCommon& ahc, FileRecord<S>& fr,
+    std::unordered_set<ULONGLONG>& attrListChain)
     : TYPE_RESIDENT(ahc, fr)
 {
   NTFS_TRACE("Attribute: Attribute List\n");
@@ -26,16 +45,20 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
   std::optional<ULONGLONG> len = 0;
   Attr::AttributeList al_record{};
 
-  // Lazily start (or inherit, if fr is itself an extension record opened by
-  // an outer AttrList) the set of file references resolved along this
-  // Attribute List chain, so a record that loops back to one already seen
-  // (self-reference or a cycle between extension records) is caught below
-  // instead of being parsed again forever.
-  if (!fr.attr_list_chain_)
-  {
-    fr.attr_list_chain_ = std::make_shared<std::unordered_set<ULONGLONG>>();
-    fr.attr_list_chain_->insert(*fr.file_reference_);
-  }
+  // Mark this record's own $ATTRIBUTE_LIST as resolved along this chain
+  // before following any of its entries. attrListChain::insert() is a
+  // no-op if the key is already present (eg. for an extension record: the
+  // entry that led here already inserted this very key just below, before
+  // recursing into this record) - the point is the *top-level* record's
+  // own key, which nothing else ever inserts, since it is the origin of
+  // the chain rather than a target reached through one of its entries.
+  // Without this, an entry - anywhere in this chain, however many
+  // extension records deep - naming this record again with attr_type
+  // ATTRIBUTE_LIST (the only attr_type an entry can carry that makes
+  // AllocAttr() recurse into another AttrList, see AllocAttr()'s
+  // ATTRIBUTE_LIST case) would go undetected as a cycle back to here.
+  attrListChain.insert(
+      MakeChainKey(*fr.file_reference_, AttrType::ATTRIBUTE_LIST));
 
   while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
                                         sizeof(Attr::AttributeList)})) &&
@@ -56,16 +79,22 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
     if (record_ref != *fr.file_reference_ &&
         static_cast<bool>(am & fr.attr_mask_))
     {
-      if (!fr.attr_list_chain_->insert(record_ref).second)
+      if (!attrListChain.insert(MakeChainKey(record_ref, al_record.attr_type))
+               .second)
       {
-        // record_ref was already resolved earlier in this Attribute List
-        // chain (extension records referencing each other in a cycle, or
-        // an entry naming the same record twice) - skip it instead of
-        // parsing it again, which would recurse without bound.
-        NTFS_TRACE1(
-            "Attribute List: record %I64u already resolved in this chain, "
-            "skipping\n",
-            record_ref);
+        // This (record, attribute type) pair was already resolved earlier
+        // in this Attribute List chain: extension records referencing each
+        // other in a cycle, a duplicate entry, or simply a second entry
+        // for a type already retrieved - skip it instead of parsing it
+        // again, which would recurse without bound. Note this deliberately
+        // does NOT skip a *different* attr_type for the very same
+        // record_ref: one extension record commonly hosts several
+        // relocated attributes of different types (eg. $INDEX_ROOT and
+        // $INDEX_ALLOCATION), and each needs its own resolution.
+        NTFS_TRACE2(
+            "Attribute List: record %I64u, type 0x%04x already resolved in "
+            "this chain, skipping\n",
+            record_ref, al_record.attr_type);
       }
       else
       {
@@ -73,13 +102,12 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
         FileRecord<S>& frnew = file_record_list_.back();
 
         frnew.attr_mask_ = am;
-        frnew.attr_list_chain_ = fr.attr_list_chain_;
         if (!frnew.ParseFileRecord(record_ref))
         {
           throw std::runtime_error(
               "Attribute List parse error (ParseFileRecord).\n");
         }
-        if (!frnew.ParseAttrs())
+        if (!frnew.ParseAttrs(attrListChain))
         {
           throw std::runtime_error(
               "Attribute List parse error (ParseAttrs).\n");

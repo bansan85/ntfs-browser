@@ -61,15 +61,6 @@ class FileRecord
   Mask attr_mask_{Mask::ALL};
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
-  // Shared across every FileRecord opened while resolving one $ATTRIBUTE_LIST
-  // chain (this record plus every extension record AttrList follows), so a
-  // record that refers back to one already seen (self-reference or a cycle
-  // among extension records) is recognized and skipped instead of being
-  // parsed again - which would recurse without bound. Lazily created by
-  // AttrList the first time it processes an $ATTRIBUTE_LIST attribute; null
-  // otherwise.
-  std::shared_ptr<std::unordered_set<ULONGLONG>> attr_list_chain_{};
-
   // Owned per-instance so this FileRecord's raw bytes (viewed by NO_CACHE
   // attributes as plain pointers/spans, no copy) are never aliased by
   // another FileRecord's read (eg. NtfsVolume::mft_record_ vs. this one).
@@ -78,10 +69,30 @@ class FileRecord
   void ClearAttrs() noexcept;
   void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
                     bool& bDiscard) noexcept;
+  // attrListChain is just forwarded here (and further, from AllocAttr's
+  // ATTRIBUTE_LIST case into AttrList's constructor) - see the private
+  // ParseAttrs(std::unordered_set<ULONGLONG>&) overload below for what it
+  // is and why it is a parameter.
   template <typename RESIDENT>
   [[nodiscard]] std::unique_ptr<AttrBase<S>>
-      AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled);
-  [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc);
+      AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled,
+                std::unordered_set<ULONGLONG>& attrListChain);
+  [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc,
+                               std::unordered_set<ULONGLONG>& attrListChain);
+  // Recursive counterpart of the public ParseAttrs() below: continues
+  // resolving this record's attributes using an already-in-progress
+  // $ATTRIBUTE_LIST resolution chain (attrListChain) instead of starting a
+  // fresh one. AttrList (a friend) calls this - not the public ParseAttrs()
+  // - on the FileRecord it opens for each extension record, passing along
+  // the very same set the outer resolution is using, so the whole chain
+  // (however many extension records deep) shares one view of which
+  // (record, attribute type) pairs are already resolved. Deliberately a
+  // function parameter, local to one top-level ParseAttrs() call, rather
+  // than a FileRecord member (as it used to be): a member survived across
+  // unrelated ParseFileRecord() calls on a reused FileRecord, silently
+  // carrying one file's resolved-record set into the next file's
+  // resolution and wrongly treating it as already resolved there too.
+  [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain);
   [[nodiscard]] std::optional<FileRecordHeaderImpl<S>>
       ReadFileRecord(ULONGLONG fileRef);
   // visitedVcns guards against a malformed/malicious B+ tree where a

@@ -79,7 +79,8 @@ void FileRecord<S>::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
 template <Strategy S>
 template <typename RESIDENT>
 std::unique_ptr<AttrBase<S>>
-    FileRecord<S>::AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled)
+    FileRecord<S>::AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled,
+                             std::unordered_set<ULONGLONG>& attrListChain)
 {
   switch (ahc.type)
   {
@@ -104,9 +105,10 @@ std::unique_ptr<AttrBase<S>>
     case AttrType::ATTRIBUTE_LIST:
       if (ahc.non_resident != 0)
       {
-        return std::make_unique<AttrList<AttrNonResident<S>, S>>(ahc, *this);
+        return std::make_unique<AttrList<AttrNonResident<S>, S>>(ahc, *this,
+                                                                 attrListChain);
       }
-      return std::make_unique<AttrList<RESIDENT, S>>(ahc, *this);
+      return std::make_unique<AttrList<RESIDENT, S>>(ahc, *this, attrListChain);
 
     case AttrType::FILE_NAME:
       if (ahc.non_resident != 0)
@@ -182,7 +184,8 @@ std::unique_ptr<AttrBase<S>>
 // Parse a single Attribute
 // Return False on error
 template <Strategy S>
-bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc)
+bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc,
+                              std::unordered_set<ULONGLONG>& attrListChain)
 {
   const DWORD attrIndex = ATTR_INDEX(ahc.type);
   if (attrIndex >= kAttrNums)
@@ -207,9 +210,9 @@ bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc)
   try
   {
     if constexpr (S == Strategy::NO_CACHE)
-      attr = AllocAttr<AttrResidentNoCache>(ahc, bUnhandled);
+      attr = AllocAttr<AttrResidentNoCache>(ahc, bUnhandled, attrListChain);
     else
-      attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled);
+      attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled, attrListChain);
   }
   catch ([[maybe_unused]] const std::runtime_error& e)
   {
@@ -433,6 +436,16 @@ void FileRecord<S>::TraverseSubNode(
 template <Strategy S>
 bool FileRecord<S>::ParseAttrs()
 {
+  // A fresh, empty chain: this is a new, top-level resolution unrelated to
+  // whatever $ATTRIBUTE_LIST chain (if any) a previous ParseFileRecord()
+  // call on this same FileRecord resolved. See the private overload below.
+  std::unordered_set<ULONGLONG> attrListChain;
+  return ParseAttrs(attrListChain);
+}
+
+template <Strategy S>
+bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
+{
   assert(file_record_);
 
   // Clear previous data
@@ -480,7 +493,7 @@ bool FileRecord<S>::ParseAttrs()
         static_cast<bool>(ATTR_MASK(ahc->type) &
                           attr_mask_))  // Skip unwanted/unrecognized attributes
     {
-      if (!ParseAttr(*ahc))  // Parse error
+      if (!ParseAttr(*ahc, attrListChain))  // Parse error
       {
         return false;
       }
