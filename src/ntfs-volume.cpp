@@ -1,12 +1,14 @@
 #include <cstring>
 
 #include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
+#include "data/index-block.h"
 #include "data/ntfs-bpb.h"
 #include "ntfs-common.h"
 
@@ -231,6 +233,15 @@ bool NtfsVolume<S>::ParseBootSector()
   }
   NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
 
+  // Rejects a size too small for the header, or not a whole number of
+  // sectors.
+  if (file_record_size_ < sizeof(FileRecordHeader::Data) ||
+      file_record_size_ % sector_size_ != 0)
+  {
+    NTFS_TRACE("FileRecord Size is invalid\n");
+    return false;
+  }
+
   sz = static_cast<char>(bpb->clusters_per_index_block);
   if (sz > 0)
   {
@@ -241,6 +252,15 @@ bool NtfsVolume<S>::ParseBootSector()
     index_block_size_ = 1U << static_cast<unsigned char>(-sz);
   }
   NTFS_TRACE1("IndexBlock Size = %u bytes\n", index_block_size_);
+
+  // Rejects a size too small for the header, or not a whole number of
+  // sectors.
+  if (index_block_size_ < sizeof(Data::IndexBlock) ||
+      index_block_size_ % sector_size_ != 0)
+  {
+    NTFS_TRACE("IndexBlock Size is invalid\n");
+    return false;
+  }
 
   mft_addr_ = bpb->lcn_mft * cluster_size_;
   NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
