@@ -16,6 +16,7 @@ add_executable(
   "file-record-header-fixup-tests.cpp"
   "index-block-fixup-tests.cpp"
   "boot-sector-index-block-size-tests.cpp"
+  "mft-addr-narrowing-tests.cpp"
   "fuzzer-regression-tests.cpp")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}

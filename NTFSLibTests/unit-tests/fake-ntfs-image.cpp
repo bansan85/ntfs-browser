@@ -703,6 +703,17 @@ std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithHugeMftLcn()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // lcn_mft is otherwise only ever set once, in BuildFakeNtfsImage() itself.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.lcn_mft = kHugeMftLcn;
+
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithMultiTypeAttributeListDirectory()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();

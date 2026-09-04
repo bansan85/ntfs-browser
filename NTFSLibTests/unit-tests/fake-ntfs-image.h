@@ -78,6 +78,14 @@ inline constexpr DWORD kTinyIndexBlockSize = 2;
 // so GetIndexBlockSize() is far smaller than Data::IndexBlock's own header.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock();
 
+// lcn_mft patched in by BuildFakeNtfsImageWithHugeMftLcn(); with this
+// fixture's fixed cluster size, mft_addr_ ends up exactly 2^63.
+inline constexpr ULONGLONG kHugeMftLcn = 1ULL << 53;
+
+// Same volume as BuildFakeNtfsImage(), with lcn_mft patched to kHugeMftLcn
+// so mft_addr_ ends up too large for a LONGLONG.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithHugeMftLcn();
+
 // MFT index of the directory record built by
 // BuildFakeNtfsImageWithMultiTypeAttributeListDirectory().
 inline constexpr ULONGLONG kAttrListMultiTypeDirIdx = 10;
