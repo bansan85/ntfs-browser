@@ -236,12 +236,6 @@ void CNtfsundelDlg::OnSearch()
       continue;
     }
 
-    // Check if it's deleted and not directory
-    if (fr.IsDeleted())
-    {
-      continue;
-    }
-
     // Check file name
     std::wstring_view fn = fr.GetFileName();
 
@@ -250,6 +244,7 @@ void CNtfsundelDlg::OnSearch()
       continue;
     }
 
+    // Walked for id_to_parent, though not itself a candidate below.
     if (fr.IsDirectory())
     {
       fr.TraverseSubEntries(
@@ -265,7 +260,11 @@ void CNtfsundelDlg::OnSearch()
           nullptr);
     }
 
-    files.insert(*fr.GetFileReference());
+    // Only deleted records are candidates for recovery
+    if (fr.IsDeleted())
+    {
+      files.insert(*fr.GetFileReference());
+    }
   }
 
   std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
