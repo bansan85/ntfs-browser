@@ -41,3 +41,52 @@ TEST_CASE("FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
   REQUIRE(found.has_value());
   CHECK(found->GetFileReference() == 20);
 }
+
+TEST_CASE(
+    "AttrList merges every attribute type relocated into the same "
+    "extension record",
+    "[file-record][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithMultiTypeAttributeListDirectory());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttrListMultiTypeDirIdx));
+  REQUIRE(dir.ParseAttrs());
+
+  CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
+
+  // Both entries name the same extension record, but different types.
+  CHECK_FALSE(dir.getAttr(AttrType::INDEX_ALLOCATION).empty());
+}
+
+TEST_CASE(
+    "AttrList chain state does not leak across FileRecord::ParseFileRecord "
+    "calls on a reused FileRecord",
+    "[file-record][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithAttributeListDirectoryChainReused());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  REQUIRE(dir.ParseAttrs());
+  CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
+
+  // Same FileRecord, unrelated directory relocating to the same record.
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx2));
+  REQUIRE(dir.ParseAttrs());
+  CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
+}

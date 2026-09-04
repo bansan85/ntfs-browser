@@ -77,4 +77,28 @@ inline constexpr DWORD kTinyIndexBlockSize = 2;
 // so GetIndexBlockSize() is far smaller than Data::IndexBlock's own header.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock();
 
+// MFT index of the directory record built by
+// BuildFakeNtfsImageWithMultiTypeAttributeListDirectory().
+inline constexpr ULONGLONG kAttrListMultiTypeDirIdx = 10;
+
+// MFT index of the extension record kAttrListMultiTypeDirIdx's
+// $ATTRIBUTE_LIST points at for both entries.
+inline constexpr ULONGLONG kMultiTypeExtensionIdx = 11;
+
+// Same volume as BuildFakeNtfsImage(), plus a directory whose
+// $ATTRIBUTE_LIST relocates two different attribute types ($INDEX_ROOT
+// and $INDEX_ALLOCATION) into the same extension record.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMultiTypeAttributeListDirectory();
+
+// MFT index of a second directory record built by
+// BuildFakeNtfsImageWithAttributeListDirectoryChainReused().
+inline constexpr ULONGLONG kAttributeListDirIdx2 = 12;
+
+// Same volume as BuildFakeNtfsImageWithAttributeListDirectory(), plus a
+// second, independent directory record whose $ATTRIBUTE_LIST also
+// relocates $INDEX_ROOT to the same extension record the first one uses.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttributeListDirectoryChainReused();
+
 }  // namespace NtfsBrowserTests
