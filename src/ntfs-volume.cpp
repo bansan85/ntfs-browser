@@ -1,4 +1,5 @@
 #include <cstring>
+#include <limits>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/file-record-header.h>
@@ -284,8 +285,41 @@ bool NtfsVolume<S>::ParseBootSector()
     return false;
   }
 
-  mft_addr_ = bpb->lcn_mft * cluster_size_;
+  // lcn_mft is attacker-controlled and otherwise unbounded, and both it and
+  // cluster_size_ are just as attacker-controlled as the sizes validated
+  // above - multiplying them can itself silently overflow/wrap the
+  // ULONGLONG mft_addr_ is stored in. Detect that first, rather than let a
+  // wrapped, spuriously "small" result slip past the bounds check below.
+  const bool mft_addr_overflows =
+      cluster_size_ != 0 &&
+      bpb->lcn_mft > (std::numeric_limits<ULONGLONG>::max)() / cluster_size_;
+  mft_addr_ = mft_addr_overflows ? (std::numeric_limits<ULONGLONG>::max)()
+                                 : bpb->lcn_mft * cluster_size_;
   NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
+
+  // mft_addr_ is later added to a per-record byte offset and narrowed down
+  // to a LONGLONG for LARGE_INTEGER::QuadPart (FileRecord::ReadFileRecord,
+  // src/file-record.cpp). gsl::narrow<LONGLONG>() throws
+  // gsl::narrowing_error when the value doesn't fit - and that type derives
+  // from std::exception, not std::runtime_error, so left unvalidated it
+  // slips past every catch in the parser and escapes
+  // NtfsVolume::Init() -> the NtfsVolume constructor itself, the first time
+  // $MFT is read (see F8 in docs/bug-reports/2026-09-03-full-repo.md).
+  // Reject the volume outright, the same way the sizes above are: mft_addr_
+  // must fit a LONGLONG with ample headroom left for that later per-record
+  // offset. (bpb->total_sectors would be an equally natural bound - $MFT
+  // cannot legitimately start beyond the volume it lives on - but it is not
+  // otherwise validated or even required to be populated by every caller
+  // constructing an NtfsVolume from an already-open IDiskReader, e.g. tests,
+  // so it is not relied on here.)
+  constexpr ULONGLONG kMaxPlausibleMftAddr =
+      (std::numeric_limits<LONGLONG>::max)() / 2;
+
+  if (mft_addr_overflows || mft_addr_ > kMaxPlausibleMftAddr)
+  {
+    NTFS_TRACE("MFT address is invalid\n");
+    return false;
+  }
 
   return true;
 }

@@ -214,8 +214,13 @@ bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc,
     else
       attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled, attrListChain);
   }
-  catch ([[maybe_unused]] const std::runtime_error& e)
+  catch ([[maybe_unused]] const std::exception& e)
   {
+    // Widened from std::runtime_error to std::exception (F8): AllocAttr()
+    // (eg. its non-resident attribute subclasses' data-run parsing) can
+    // reach gsl::narrow(), whose gsl::narrowing_error derives from
+    // std::exception, not std::runtime_error - narrower catches let it
+    // escape uncaught. See F8 in docs/bug-reports/2026-09-03-full-repo.md.
     NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
     NTFS_TRACE(e.what());
     return false;
@@ -244,8 +249,27 @@ std::optional<FileRecordHeaderImpl<S>>
   {
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr;
-    frAddr.QuadPart = gsl::narrow<LONGLONG>(
-        volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
+    try
+    {
+      frAddr.QuadPart = gsl::narrow<LONGLONG>(
+          volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
+    }
+    catch ([[maybe_unused]] const std::exception& e)
+    {
+      // F8 safety net: NtfsVolume::ParseBootSector() now rejects an
+      // implausible mft_addr_ upfront, but fileRef itself is
+      // attacker-controlled too (directory index entries,
+      // $ATTRIBUTE_LIST base_ref, ...) and unbounded here, so the sum can
+      // still overflow a LONGLONG. gsl::narrow<LONGLONG>() throws
+      // gsl::narrowing_error, which derives from std::exception rather than
+      // std::runtime_error - catch it right at the throw site and report it
+      // through this function's normal std::optional error channel instead
+      // of letting it escape FileRecord::ParseFileRecord() ->
+      // NtfsVolume::Init() -> the NtfsVolume constructor. See F8 in
+      // docs/bug-reports/2026-09-03-full-repo.md.
+      NTFS_TRACE(e.what());
+      return {};
+    }
 
     if (!volume_.ReadInto(frAddr, record_buffer_))
     {
@@ -257,8 +281,10 @@ std::optional<FileRecordHeaderImpl<S>>
       return FileRecordHeader::Factory<S>(record_buffer_,
                                           volume_.GetSectorSize());
     }
-    catch ([[maybe_unused]] const std::runtime_error& e)
+    catch ([[maybe_unused]] const std::exception& e)
     {
+      // Widened from std::runtime_error to std::exception (F8) - see the
+      // comment on ParseAttr()'s catch clause above.
       NTFS_TRACE(e.what());
       return {};
     }
@@ -274,7 +300,22 @@ std::optional<FileRecordHeaderImpl<S>>
     return {};
   }
 
-  return FileRecordHeader::Factory<S>(record_buffer_, volume_.GetSectorSize());
+  try
+  {
+    return FileRecordHeader::Factory<S>(record_buffer_,
+                                        volume_.GetSectorSize());
+  }
+  catch ([[maybe_unused]] const std::exception& e)
+  {
+    // This fragmented-$MFT path (fileRef >= Enum::MftIdx::USER) reaches the
+    // very same FileRecordHeader::Factory<S>() call as the direct-allocation
+    // path above, which does guard it - noticed while widening that catch
+    // for F8, and fixed here too for the same reason: nothing should let an
+    // exception escape FileRecord::ParseFileRecord() ->
+    // NtfsVolume::Init() -> the NtfsVolume constructor.
+    NTFS_TRACE(e.what());
+    return {};
+  }
 }
 
 // Read File Record, verify and patch the US (update sequence)

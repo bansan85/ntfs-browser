@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstring>
+#include <exception>
 
 #include <gsl/narrow>
 #include <gsl/pointers>
@@ -153,10 +154,39 @@ std::optional<std::span<const BYTE>>
 
   LARGE_INTEGER addr;
 
-  addr.QuadPart = gsl::narrow<LONGLONG>(lcn * this->GetClusterSize());
+  // lcn comes from a data run parsed straight off the disk
+  // (AttrNonResident<S>::ParseDataRun) and is only ever checked to be >= 0 -
+  // it is otherwise unbounded, and clusters is attacker-controlled too.
+  // gsl::narrow<LONGLONG>()/narrow<DWORD>() throw gsl::narrowing_error when
+  // either product doesn't fit, and that type derives from std::exception,
+  // not std::runtime_error - catch it right at the throw site and report it
+  // through this function's normal std::optional error channel instead of
+  // letting it escape every caller up to NtfsVolume's public API (F8, see
+  // docs/bug-reports/2026-09-03-full-repo.md).
+  try
+  {
+    addr.QuadPart = gsl::narrow<LONGLONG>(lcn * this->GetClusterSize());
+  }
+  catch ([[maybe_unused]] const std::exception& e)
+  {
+    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
+    NTFS_TRACE(e.what());
+    return {};
+  }
 
-  std::optional<std::span<const BYTE>> buffer = this->volume_.Read(
-      addr, gsl::narrow<DWORD>(clusters * this->GetClusterSize()));
+  std::optional<std::span<const BYTE>> buffer;
+  try
+  {
+    buffer = this->volume_.Read(
+        addr, gsl::narrow<DWORD>(clusters * this->GetClusterSize()));
+  }
+  catch ([[maybe_unused]] const std::exception& e)
+  {
+    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
+    NTFS_TRACE(e.what());
+    return {};
+  }
+
   if (!buffer)
   {
     NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
