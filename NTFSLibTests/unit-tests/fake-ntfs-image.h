@@ -248,4 +248,19 @@ inline constexpr std::array<DWORD, 4> kUafRealSizeSentinels{1024, 2048, 3072,
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedAttributeListDirectory();
 
+// Same volume as BuildFakeNtfsImage(), but with the $MFT (#0) file record
+// zero-filled (magic == 0, not kFileRecordMagic) so
+// FileRecord<S>::ParseFileRecord() fails on it, while $Volume (#3) and the
+// root directory (#5) records are left untouched and valid - regression
+// fixture for F14: NtfsVolume<S>::Init() (src/ntfs-volume.cpp) sets
+// volume_ok_ = true right after $Volume is successfully parsed, *before*
+// mft_record_.ParseFileRecord()/ParseAttrs() run and mft_data_ is assigned.
+// If either of those fails - as it does here - Init() returns early with
+// mft_data_ still nullptr but volume_ok_ already true, breaking the
+// documented "construct, then check IsVolumeOK()" contract:
+// GetRecordsCount() (src/ntfs-volume.cpp) dereferences mft_data_
+// unconditionally and is marked noexcept. See F14 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptMftRecord();
+
 }  // namespace NtfsBrowserTests
