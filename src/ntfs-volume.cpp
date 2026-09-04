@@ -120,8 +120,6 @@ void NtfsVolume<S>::Init()
   }
 #endif
 
-  volume_ok_ = true;
-
   mft_record_.SetAttrMask(Mask::DATA);
   if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
       !mft_record_.ParseAttrs())
@@ -131,10 +129,15 @@ void NtfsVolume<S>::Init()
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec3 =
       mft_record_.getAttr(AttrType::DATA);
-  if (!vec3.empty())
+  if (vec3.empty())
   {
-    mft_data_ = vec3.front().get();
+    return;
   }
+
+  mft_data_ = vec3.front().get();
+
+  // Reported OK only once mft_data_ is actually assigned.
+  volume_ok_ = true;
 }
 
 #ifdef _WIN32
@@ -303,6 +306,12 @@ std::pair<BYTE, BYTE> NtfsVolume<S>::GetVersion() const noexcept
 template <Strategy S>
 ULONGLONG NtfsVolume<S>::GetRecordsCount() const noexcept
 {
+  // noexcept: must not crash if called before/without checking IsVolumeOK().
+  if (mft_data_ == nullptr)
+  {
+    return 0;
+  }
+
   return (mft_data_->GetDataSize() / file_record_size_);
 }
 
