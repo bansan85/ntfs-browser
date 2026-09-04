@@ -150,3 +150,64 @@ TEST_CASE(
   REQUIRE(dir.ParseAttrs());
   CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
 }
+
+// Regression test for N3 (docs/bug-reports/2026-09-03-full-repo.md, lines
+// 87-96): AttrList<S>::AttrList() (src/attr-list.cpp) grows
+// file_record_list_ - a std::vector<FileRecord<S>> - by one emplace_back()
+// per resolved extension record. In Strategy::FULL_CACHE,
+// FileRecordHeaderImpl<FULL_CACHE>::data_ (the raw 1024-byte record buffer)
+// is a BY-VALUE member of FileRecord itself, and AttrBase::attr_header_ /
+// AttrNonResident::attr_header_nr_ are references bound directly into that
+// buffer at construction time. Once a later extension record's
+// emplace_back() reallocates the vector, every FileRecord already
+// constructed for an earlier entry - and every attribute already merged out
+// of it into fr.attr_list_ - is relocated in memory, leaving those
+// references dangling: a use-after-free. NO_CACHE is unaffected (its
+// backing buffer, record_buffer_, is heap-allocated and stable across a
+// move).
+//
+// BuildFakeNtfsImageWithFragmentedAttributeListDirectory() reproduces the
+// nominal, non-forged scenario the report describes - an $ATTRIBUTE_LIST
+// relocating attributes into several distinct extension records, as real
+// directories like C:\Windows commonly do: kUafAttrListDirIdx's
+// $ATTRIBUTE_LIST has FOUR entries, each naming a DIFFERENT extension
+// record (kUafExtensionIdx0..3), each holding a minimal non-resident
+// $INDEX_ALLOCATION whose real_size is a distinct, recognizable sentinel
+// (kUafRealSizeSentinels). Four distinct records guarantee at least one
+// std::vector reallocation regardless of the growth factor in use (eg.
+// MSVC's ~1.5x would already reallocate by the 2nd-4th emplace_back).
+TEST_CASE(
+    "AttrList's FileRecord vector growth does not invalidate "
+    "already-resolved extension records' attributes (N3, FULL_CACHE)",
+    "[file-record][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithFragmentedAttributeListDirectory());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ALLOCATION);
+
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kUafAttrListDirIdx));
+  REQUIRE(dir.ParseAttrs());
+
+  const auto& allocAttrs = dir.getAttr(AttrType::INDEX_ALLOCATION);
+  REQUIRE(allocAttrs.size() == NtfsBrowserTests::kUafRealSizeSentinels.size());
+
+  // Each resolved $INDEX_ALLOCATION's GetDataSize() reads
+  // attr_header_nr_.real_size fresh, through the reference bound at that
+  // extension record's construction time - exactly the dangling read N3
+  // describes once a later record's resolution has moved it. The FIRST
+  // extension record (kUafExtensionIdx0) is the one most certain to have
+  // been relocated by later emplace_back() calls, so its sentinel is the
+  // most telling, but every one is checked: before the fix, one or more no
+  // longer match their expected sentinel.
+  for (size_t i = 0; i < allocAttrs.size(); i++)
+  {
+    CHECK(allocAttrs[i]->GetDataSize() ==
+          NtfsBrowserTests::kUafRealSizeSentinels[i]);
+  }
+}

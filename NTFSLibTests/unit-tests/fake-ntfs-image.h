@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <vector>
@@ -161,5 +162,66 @@ inline constexpr ULONGLONG kAttributeListDirIdx2 = 12;
 // skipped. See F17 in docs/bug-reports/2026-09-03-full-repo.md.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithAttributeListDirectoryChainReused();
+
+// MFT index of the directory record built by
+// BuildFakeNtfsImageWithFragmentedAttributeListDirectory(): its resident
+// $ATTRIBUTE_LIST relocates $INDEX_ALLOCATION across FOUR DISTINCT
+// extension records (kUafExtensionIdx0..3) - as opposed to
+// kAttrListMultiTypeDirIdx above, which relocates two different types into
+// the SAME record. Regression fixture for N3
+// (docs/bug-reports/2026-09-03-full-repo.md): AttrList<S>::AttrList()
+// (src/attr-list.cpp) grows file_record_list_ - a
+// std::vector<FileRecord<S>> - by one emplace_back() per resolved
+// extension record; in Strategy::FULL_CACHE each FileRecord's raw record
+// buffer is a by-value member of the FileRecord itself, so once a later
+// emplace_back() reallocates the vector, every FileRecord already
+// constructed - and every attribute already merged out of it - is moved in
+// memory, leaving AttrBase::attr_header_/AttrNonResident::attr_header_nr_
+// (references bound at construction time) dangling. Four distinct records
+// guarantee at least one reallocation regardless of std::vector's growth
+// factor (eg. MSVC's ~1.5x would already reallocate by the 2nd-4th
+// emplace_back).
+inline constexpr ULONGLONG kUafAttrListDirIdx = 13;
+
+// MFT indices of the four extension records
+// BuildFakeNtfsImageWithFragmentedAttributeListDirectory()'s
+// $ATTRIBUTE_LIST relocates $INDEX_ALLOCATION to, one entry/record each.
+// Each holds a minimal non-resident $INDEX_ALLOCATION whose real_size is a
+// distinct, recognizable sentinel (kUafRealSizeSentinels) so a test can
+// tell whether it is still reading that specific record's own bytes, or a
+// dangling/relocated one, after the whole chain is resolved.
+//
+// All four (and kUafAttrListDirIdx above) must stay below
+// Enum::MftIdx::USER (16, include/ntfs-browser/mft-idx.h):
+// FileRecord::ReadFileRecord() (src/file-record.cpp) only takes the simple
+// "direct disk allocation" path this fixture relies on (mftAddr +
+// fileRecordSize * fileRef) for fileRef < 16; at or above that, it instead
+// reads through volume_.mft_data_ (the fake $MFT's own, deliberately empty,
+// DATA attribute), which this minimal fixture does not populate. Since only
+// 13, 14 and 15 remain free below that threshold after the other fixtures'
+// indices above, kUafExtensionIdx2/3 reuse 1 and 2 - reserved for
+// $MFTMirr/$LogFile in a real volume, but never written to by
+// BuildFakeNtfsImage() and so harmlessly zero-filled/unused here.
+inline constexpr ULONGLONG kUafExtensionIdx0 = 14;
+inline constexpr ULONGLONG kUafExtensionIdx1 = 15;
+inline constexpr ULONGLONG kUafExtensionIdx2 = 1;
+inline constexpr ULONGLONG kUafExtensionIdx3 = 2;
+
+// real_size sentinel values BuildFakeNtfsImageWithFragmentedAttributeListDirectory()
+// writes into kUafExtensionIdx0..3's $INDEX_ALLOCATION, in order - each a
+// distinct multiple of the fake image's 1024-byte cluster/index-block size,
+// read back via AttrBase::GetDataSize() (AttrNonResident<S>::GetDataSize(),
+// which reads attr_header_nr_.real_size fresh on every call - exactly the
+// dangling-reference read N3 describes).
+inline constexpr std::array<DWORD, 4> kUafRealSizeSentinels{1024, 2048, 3072,
+                                                            4096};
+
+// Same volume as BuildFakeNtfsImage(), plus a directory
+// (kUafAttrListDirIdx) whose $ATTRIBUTE_LIST relocates $INDEX_ALLOCATION
+// into four distinct extension records (kUafExtensionIdx0..3) - regression
+// fixture for N3. See kUafAttrListDirIdx above for the full defect
+// description.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithFragmentedAttributeListDirectory();
 
 }  // namespace NtfsBrowserTests

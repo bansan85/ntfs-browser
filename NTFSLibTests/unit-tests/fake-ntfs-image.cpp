@@ -555,6 +555,90 @@ FakeRecord MakeIndexAllocDirRecord()
   return record;
 }
 
+// Extension record (#kUafExtensionIdx0..3): a single minimal non-resident
+// $INDEX_ALLOCATION (empty data run - nothing in this fixture reads through
+// it) whose real_size is the given sentinel. Regression fixture for N3: only
+// GetDataSize() (which reads attr_header_nr_.real_size fresh on every call)
+// is exercised, so the sentinel written here doubles as a marker for
+// "am I still reading this specific record's own memory".
+FakeRecord MakeIndexAllocationOnlyExtensionRecord(DWORD realSize)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& allocAttr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+      &record[kAttrOffset]);
+  allocAttr.header.type = AttrType::INDEX_ALLOCATION;
+  allocAttr.header.non_resident = 1;
+  allocAttr.header.name_length = 0;
+  allocAttr.header.flags = 0;
+  allocAttr.header.id = 0;
+  allocAttr.start_vcn = 0;
+  allocAttr.last_vcn = 0;
+  allocAttr.data_run_offset = static_cast<WORD>(sizeof(allocAttr));
+  allocAttr.comp_unit_size = 0;
+  allocAttr.real_size = realSize;
+  allocAttr.alloc_size = realSize;
+  allocAttr.ini_size = realSize;
+  allocAttr.header.total_size = static_cast<DWORD>(sizeof(allocAttr)) + 8;
+
+  // Data run: a single 0x00 byte terminates the run list immediately.
+  record[kAttrOffset + sizeof(allocAttr)] = 0x00;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + allocAttr.header.total_size);
+  return record;
+}
+
+// Directory (#kUafAttrListDirIdx): a resident $ATTRIBUTE_LIST with FOUR
+// records, each naming a DIFFERENT extension record (kUafExtensionIdx0..3)
+// for the same attribute type ($INDEX_ALLOCATION) - a real, non-forged NTFS
+// shape (a heavily fragmented directory's $INDEX_ALLOCATION relocated
+// across several extension records, one $ATTRIBUTE_LIST entry per VCN
+// range/record). Regression fixture for N3: resolving entry N+1 grows
+// AttrList<S>::file_record_list_ (a std::vector<FileRecord<S>>), which in
+// Strategy::FULL_CACHE can relocate every FileRecord already constructed
+// for entries 0..N - and the attributes already merged out of them.
+FakeRecord MakeFragmentedAttributeListDirRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::ATTRIBUTE_LIST;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) * 4;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  const std::array<ULONGLONG, 4> extensionIdxs{
+      kUafExtensionIdx0, kUafExtensionIdx1, kUafExtensionIdx2,
+      kUafExtensionIdx3};
+
+  auto* alEntries = reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+      &record[kAttrOffset + attr.attr_offset]);
+  for (size_t i = 0; i < extensionIdxs.size(); i++)
+  {
+    alEntries[i].attr_type = AttrType::INDEX_ALLOCATION;
+    alEntries[i].record_size =
+        static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+    alEntries[i].name_length = 0;
+    alEntries[i].name_offset = 0;
+    alEntries[i].start_vcn = 0;
+    alEntries[i].base_ref.segment_number = extensionIdxs[i];
+    alEntries[i].base_ref.sequence_number = 0;
+    alEntries[i].attr_id = 0;
+  }
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -711,6 +795,31 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectoryChainReused()
                     static_cast<size_t>(kAttributeListDirIdx2);
   const FakeRecord record = MakeAttributeListOnlyDirRecord();
   std::memcpy(image.data() + offset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithFragmentedAttributeListDirectory()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
+  {
+    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                        static_cast<size_t>(idx);
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  putRecord(kUafAttrListDirIdx, MakeFragmentedAttributeListDirRecord());
+  putRecord(kUafExtensionIdx0,
+            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[0]));
+  putRecord(kUafExtensionIdx1,
+            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[1]));
+  putRecord(kUafExtensionIdx2,
+            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[2]));
+  putRecord(kUafExtensionIdx3,
+            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[3]));
 
   return image;
 }
