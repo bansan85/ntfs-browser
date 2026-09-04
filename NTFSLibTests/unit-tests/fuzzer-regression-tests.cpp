@@ -84,6 +84,15 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"Resident attribute body exceeds attribute bounds."}},
         {"cluster_size_null", {"Cluster Size can't be null"}},
         {"invalid_offset_of_us", {"Offset must be lower than 1024."}},
+        // Root record (#5) whose offset_of_us (1022) clears the check above
+        // but, with sector_size = 1024 (1 sector per 1024-byte record),
+        // leaves no room for the 1-word USN fixup array that follows it -
+        // exercises the bound FileRecordHeader's ctor now enforces on
+        // offset_of_us + 2 * (1 + sectors) (bug F3, see
+        // file-record-header-fixup-tests.cpp for the matching unit test).
+        {"usn_array_exceeds_record_buffer",
+         {"Update Sequence Array does not fit within the file record "
+          "buffer."}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
