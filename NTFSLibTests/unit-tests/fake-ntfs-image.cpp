@@ -252,6 +252,156 @@ FakeRecord MakeIndexRootExtensionRecord()
   return record;
 }
 
+// Directory (#kAttrListMultiTypeDirIdx): a resident $ATTRIBUTE_LIST with TWO
+// records, both naming the SAME extension record (#kMultiTypeExtensionIdx)
+// but for different attribute types ($INDEX_ROOT then $INDEX_ALLOCATION) -
+// regression fixture for F17's primary defect: AttrList<S>::AttrList()
+// deduplicates fr.attr_list_chain_ on record_ref alone, so the second entry
+// - naming the same record but a different, not-yet-retrieved attr_type -
+// is wrongly skipped.
+FakeRecord MakeAttributeListTwoTypesDirRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::ATTRIBUTE_LIST;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) * 2;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  auto* alEntries = reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+      &record[kAttrOffset + attr.attr_offset]);
+
+  alEntries[0].attr_type = AttrType::INDEX_ROOT;
+  alEntries[0].record_size =
+      static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+  alEntries[0].name_length = 0;
+  alEntries[0].name_offset = 0;
+  alEntries[0].start_vcn = 0;
+  alEntries[0].base_ref.segment_number = kMultiTypeExtensionIdx;
+  alEntries[0].base_ref.sequence_number = 0;
+  alEntries[0].attr_id = 0;
+
+  alEntries[1].attr_type = AttrType::INDEX_ALLOCATION;
+  alEntries[1].record_size =
+      static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+  alEntries[1].name_length = 0;
+  alEntries[1].name_offset = 0;
+  alEntries[1].start_vcn = 0;
+  alEntries[1].base_ref.segment_number = kMultiTypeExtensionIdx;
+  alEntries[1].base_ref.sequence_number = 0;
+  alEntries[1].attr_id = 0;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
+// Extension record (#kMultiTypeExtensionIdx): holds BOTH a resident
+// $INDEX_ROOT (the same single "Foo" entry, file reference 20, as
+// MakeIndexRootExtensionRecord()) and a minimal non-resident
+// $INDEX_ALLOCATION right after it (empty data run, real_size 0 - the same
+// "no real cluster data needed" shape MakeMftRecord() uses for $MFT's DATA
+// attribute). Enough for FileRecord::ParseAttr() to construct an
+// AttrIndexAlloc, which is all this fixture needs.
+FakeRecord MakeIndexRootAndAllocExtensionRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& rootAttr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  rootAttr.header.type = AttrType::INDEX_ROOT;
+  rootAttr.header.non_resident = 0;
+  rootAttr.header.name_length = 0;
+  rootAttr.header.flags = 0;
+  rootAttr.header.id = 0;
+  rootAttr.attr_offset = static_cast<WORD>(sizeof(rootAttr));
+
+  BYTE* body = &record[kAttrOffset + rootAttr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kFakeFileRecordSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  // Entry 1: "Foo", a regular (non-directory) file, reference 20.
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = 20;
+  e1.mft_sn = 1;
+
+  auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+  fn.parent_ref = kAttrListMultiTypeDirIdx;
+  fn.flags = NtfsBrowser::Flag::Filename::NONE;
+  fn.name_length = 3;
+  fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  constexpr wchar_t kFooName[] = L"Foo";
+  for (BYTE i = 0; i < fn.name_length; i++)
+  {
+    fn.name[i] = static_cast<WORD>(kFooName[i]);
+  }
+
+  e1.stream_size = static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[3]) -
+                                     reinterpret_cast<BYTE*>(&fn));
+  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+
+  // Entry 2: the terminating entry - no name, no sub-node.
+  auto& e2 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot) + e1.size);
+  e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  e2.stream_size = 0;
+  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+                              reinterpret_cast<BYTE*>(&e2));
+
+  root.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
+  root.alloc_entry_size = root.total_entry_size;
+  root.flags = 0;
+
+  rootAttr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size +
+      e2.size;
+  rootAttr.header.total_size =
+      static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
+
+  // Second attribute: a minimal non-resident $INDEX_ALLOCATION.
+  const DWORD allocAttrOffset = kAttrOffset + rootAttr.header.total_size;
+  auto& allocAttr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+      &record[allocAttrOffset]);
+  allocAttr.header.type = AttrType::INDEX_ALLOCATION;
+  allocAttr.header.non_resident = 1;
+  allocAttr.header.name_length = 0;
+  allocAttr.header.flags = 0;
+  allocAttr.header.id = 0;
+  allocAttr.start_vcn = 0;
+  allocAttr.last_vcn = 0;
+  allocAttr.data_run_offset = static_cast<WORD>(sizeof(allocAttr));
+  allocAttr.comp_unit_size = 0;
+  allocAttr.real_size = 0;
+  allocAttr.alloc_size = 0;
+  allocAttr.ini_size = 0;
+  allocAttr.header.total_size = static_cast<DWORD>(sizeof(allocAttr)) + 8;
+
+  // Data run: a single 0x00 byte terminates the run list immediately -
+  // nothing reads through it in this fixture.
+  record[allocAttrOffset + sizeof(allocAttr)] = 0x00;
+
+  WriteEndOfAttributesMarker(record,
+                             allocAttrOffset + allocAttr.header.total_size);
+  return record;
+}
+
 // Record (#kUndersizedAttrRecordIdx): a single REPARSE_POINT attribute whose
 // declared total_size (17) is smaller than sizeof(Attr::HeaderResident)
 // (24). REPARSE_POINT is deliberately not one of the types FileRecord's
@@ -529,6 +679,38 @@ std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock()
   // its low byte, truncated to a signed char.
   auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
   bpb.clusters_per_index_block = kTinyClustersPerIndexBlock;
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMultiTypeAttributeListDirectory()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
+  {
+    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                        static_cast<size_t>(idx);
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  putRecord(kAttrListMultiTypeDirIdx, MakeAttributeListTwoTypesDirRecord());
+  putRecord(kMultiTypeExtensionIdx, MakeIndexRootAndAllocExtensionRecord());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectoryChainReused()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImageWithAttributeListDirectory();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset =
+      mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                    static_cast<size_t>(kAttributeListDirIdx2);
+  const FakeRecord record = MakeAttributeListOnlyDirRecord();
+  std::memcpy(image.data() + offset, record.data(), record.size());
 
   return image;
 }

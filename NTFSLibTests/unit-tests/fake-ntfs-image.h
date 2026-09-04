@@ -110,4 +110,56 @@ inline constexpr DWORD kTinyIndexBlockSize = 2;
 // the volume regardless. See F6 in docs/bug-reports/2026-09-03-full-repo.md.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock();
 
+// MFT index of the directory record built by
+// BuildFakeNtfsImageWithMultiTypeAttributeListDirectory(): its resident
+// $ATTRIBUTE_LIST holds TWO records that both name the SAME extension
+// record (kMultiTypeExtensionIdx) but for different attribute types
+// ($INDEX_ROOT then $INDEX_ALLOCATION).
+inline constexpr ULONGLONG kAttrListMultiTypeDirIdx = 10;
+
+// MFT index of the extension record kAttrListMultiTypeDirIdx's
+// $ATTRIBUTE_LIST points at for both entries. Holds both a resident
+// $INDEX_ROOT (the same single "Foo" entry, file reference 20, as
+// MakeIndexRootExtensionRecord()) and a minimal non-resident
+// $INDEX_ALLOCATION (empty data run, real_size 0 - just enough for
+// FileRecord::ParseAttr() to construct an AttrIndexAlloc).
+inline constexpr ULONGLONG kMultiTypeExtensionIdx = 11;
+
+// Same volume as BuildFakeNtfsImage(), plus a directory
+// (kAttrListMultiTypeDirIdx) whose $ATTRIBUTE_LIST relocates two different
+// attribute types ($INDEX_ROOT and $INDEX_ALLOCATION) into the SAME
+// extension record (kMultiTypeExtensionIdx) - regression fixture for F17's
+// primary defect: AttrList<S>::AttrList() (src/attr-list.cpp) deduplicates
+// fr.attr_list_chain_ on record_ref alone, so once the first
+// $ATTRIBUTE_LIST entry resolves kMultiTypeExtensionIdx, the second entry
+// naming the very same record but a DIFFERENT attr_type is skipped even
+// though its attribute was never actually retrieved. Real directories (eg.
+// C:\Windows) commonly relocate $INDEX_ROOT and $INDEX_ALLOCATION into the
+// same extension record this way. See F17 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMultiTypeAttributeListDirectory();
+
+// MFT index of a second directory record built by
+// BuildFakeNtfsImageWithAttributeListDirectoryChainReused(): its
+// $ATTRIBUTE_LIST also relocates $INDEX_ROOT to kIndexExtensionIdx - the
+// very same extension record kAttributeListDirIdx's own $ATTRIBUTE_LIST
+// resolves.
+inline constexpr ULONGLONG kAttributeListDirIdx2 = 12;
+
+// Same volume as BuildFakeNtfsImageWithAttributeListDirectory(), plus a
+// second, independent directory record (kAttributeListDirIdx2) whose
+// $ATTRIBUTE_LIST also relocates $INDEX_ROOT to kIndexExtensionIdx -
+// regression fixture for F17's secondary defect: FileRecord::attr_list_chain_
+// (include/ntfs-browser/file-record.h) is never reset by
+// FileRecord::ParseFileRecord() (src/file-record.cpp), so a FileRecord
+// object reused across two ParseFileRecord()/ParseAttrs() calls (as
+// ntfsdir.exe and ntfsundel.exe do) carries the first parse's resolved
+// record set into the second: kIndexExtensionIdx, already marked resolved
+// by the first directory's chain, is then wrongly treated as
+// already-resolved for the second, unrelated directory's own chain and
+// skipped. See F17 in docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttributeListDirectoryChainReused();
+
 }  // namespace NtfsBrowserTests
