@@ -32,13 +32,22 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
     throw std::runtime_error("Offset must be lower than 1024.");
   }
 
-  us_array.reserve(buffer.size() / sector_size);
+  // A small sector_size can place the array past the buffer's end.
+  const size_t sectors = buffer.size() / sector_size;
+  if (data->offset_of_us + 2 * (1 + sectors) > buffer.size())
+  {
+    throw std::runtime_error(
+        "Update Sequence Array does not fit within the file record "
+        "buffer.");
+  }
+  // A wrong size_of_us cannot make the loop below read out of bounds.
+  us_array.reserve(sectors);
   const gsl::not_null<const WORD*> usnaddr =
       reinterpret_cast<const WORD*>(buffer.data() + data->offset_of_us);
   us_number = *usnaddr;
   const gsl::not_null<const WORD*> usarray = usnaddr.get() + 1;
 
-  for (size_t i = 0; i < buffer.size() / sector_size; i++)
+  for (size_t i = 0; i < sectors; i++)
   {
     us_array.push_back(usarray.get()[i]);
   }
