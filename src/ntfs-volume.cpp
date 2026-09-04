@@ -120,8 +120,6 @@ void NtfsVolume<S>::Init()
   }
 #endif
 
-  volume_ok_ = true;
-
   mft_record_.SetAttrMask(Mask::DATA);
   if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
       !mft_record_.ParseAttrs())
@@ -131,10 +129,23 @@ void NtfsVolume<S>::Init()
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec3 =
       mft_record_.getAttr(AttrType::DATA);
-  if (!vec3.empty())
+  if (vec3.empty())
   {
-    mft_data_ = vec3.front().get();
+    return;
   }
+
+  mft_data_ = vec3.front().get();
+
+  // Only report the volume as usable once mft_data_ is actually assigned.
+  // This used to be set true right after $Volume was parsed, before $MFT's
+  // own file record was even read - if ParseFileRecord()/ParseAttrs() failed
+  // above, or $MFT's DATA attribute vector came back empty, this function
+  // would already have returned with volume_ok_ true and mft_data_ still
+  // null. Every caller following the documented "construct, then check
+  // IsVolumeOK()" contract (eg. NTFSLibTests/ntfsundel/ntfsundelDlg.cpp)
+  // would then have GetRecordsCount() dereference that null mft_data_. See
+  // F14 in docs/bug-reports/2026-09-03-full-repo.md.
+  volume_ok_ = true;
 }
 
 #ifdef _WIN32
@@ -342,6 +353,18 @@ std::pair<BYTE, BYTE> NtfsVolume<S>::GetVersion() const noexcept
 template <Strategy S>
 ULONGLONG NtfsVolume<S>::GetRecordsCount() const noexcept
 {
+  // mft_data_ is only ever assigned once Init() successfully parses $MFT's
+  // own DATA attribute (see the F14 fix in Init() above), and IsVolumeOK()
+  // now stays false until that happens - but this function is noexcept and
+  // must not crash even if a caller reads it before/without checking
+  // IsVolumeOK(), so guard it directly rather than relying solely on that
+  // contract being honored. See F14 in
+  // docs/bug-reports/2026-09-03-full-repo.md.
+  if (mft_data_ == nullptr)
+  {
+    return 0;
+  }
+
   return (mft_data_->GetDataSize() / file_record_size_);
 }
 
