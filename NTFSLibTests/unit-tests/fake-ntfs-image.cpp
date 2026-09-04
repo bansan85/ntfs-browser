@@ -519,6 +519,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithForgedIndexBlock()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Patch the shared BPB in place, same technique as
+  // BuildFakeNtfsImageWithForgedIndexBlock(): clusters_per_index_block is a
+  // DWORD field, but ntfs-volume.cpp::ParseBootSector() only ever consults
+  // its low byte, truncated to a signed char.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_index_block = kTinyClustersPerIndexBlock;
+
+  return image;
+}
+
 std::filesystem::path WriteFakeNtfsImage()
 {
   const std::vector<BYTE> image = BuildFakeNtfsImage();

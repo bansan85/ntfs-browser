@@ -91,4 +91,23 @@ inline constexpr WORD kForgedIndexBlockOffsetOfUs = 0xFFFF;
 // in docs/bug-reports/2026-09-03-full-repo.md.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithForgedIndexBlock();
 
+// clusters_per_index_block value BuildFakeNtfsImageWithTinyIndexBlock()
+// patches into the BPB - regression fixture for F6:
+// NtfsVolume<S>::ParseBootSector() (src/ntfs-volume.cpp) reads
+// clusters_per_index_block as a signed char, so 0xFF -> -1 -> index_block_size_
+// = 1 << 1 = 2 bytes, without ever comparing the result against
+// sizeof(Data::IndexBlock) (40 bytes) - the structure every index block is
+// about to be allocated and parsed as (src/attr-index-alloc.cpp).
+inline constexpr BYTE kTinyClustersPerIndexBlock = 0xFF;
+
+// index_block_size_ that kTinyClustersPerIndexBlock is expected to produce.
+inline constexpr DWORD kTinyIndexBlockSize = 2;
+
+// Same volume as BuildFakeNtfsImage(), with clusters_per_index_block patched
+// to kTinyClustersPerIndexBlock so GetIndexBlockSize() ends up
+// kTinyIndexBlockSize bytes - far too small to even hold Data::IndexBlock's
+// own 40-byte header - yet NtfsVolume<S>::ParseBootSector() currently accepts
+// the volume regardless. See F6 in docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock();
+
 }  // namespace NtfsBrowserTests
