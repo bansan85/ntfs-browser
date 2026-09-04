@@ -72,6 +72,13 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // that way, so it's now caught earlier than
         // ValidateResidentBounds() (see bug F1 in
         // docs/bug-reports/2026-09-03-full-repo.md).
+        //
+        // Regenerated (root record #5, boot sector + $Volume + $MFT + root,
+        // concatenated in LoopingDiskReader's read order, same as the other
+        // from-scratch corpus files): the original 74-byte AFL find no
+        // longer reached this check at all, tripping "FileRecord Size is
+        // invalid\n" - the sector-alignment bound 3d77eb8 added to
+        // ParseBootSector() - before ParseAttrs() ever ran.
         {"resident_attr_body_out_of_bounds",
          {"Attribute total_size too small for its header."}},
         // A resident $INDEX_ROOT whose total_size (32) is large enough to
