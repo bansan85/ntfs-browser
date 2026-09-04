@@ -93,6 +93,14 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"usn_array_exceeds_record_buffer",
          {"Update Sequence Array does not fit within the file record "
           "buffer."}},
+        // Root directory (#5) whose $INDEX_ALLOCATION's sole index block
+        // declares offset_of_us = 0xFFFF - exercises the equivalent bound
+        // AttrIndexAlloc<S>::ParseIndexBlock() now enforces via
+        // IndexBlockUsOffsetInBounds() on the index block's own USN fixup
+        // array (bug F4, see index-block-fixup-tests.cpp for the matching
+        // unit test).
+        {"index_block_offset_of_us_out_of_bounds",
+         {"Index Block parse error: offset_of_us out of bounds"}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
