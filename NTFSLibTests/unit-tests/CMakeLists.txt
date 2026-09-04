@@ -8,6 +8,7 @@ add_executable(
   "sequential-disk-reader.cpp"
   "disk-reader-tests.cpp"
   "file-reader-tests.cpp"
+  "file-reader-full-cache-boundary-tests.cpp"
   "no-cache-lifetime-tests.cpp"
   "attribute-list-tests.cpp"
   "filename-compare-tests.cpp"
