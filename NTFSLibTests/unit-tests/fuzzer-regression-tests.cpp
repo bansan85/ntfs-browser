@@ -108,6 +108,18 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // unit test).
         {"index_block_offset_of_us_out_of_bounds",
          {"Index Block parse error: offset_of_us out of bounds"}},
+        // clusters_per_file_record = 0xFF ("sz = -1") yields
+        // file_record_size_ = 2, far too small to hold
+        // FileRecordHeader::Data - exercises the bound
+        // NtfsVolume<S>::ParseBootSector() now enforces on file_record_size_
+        // (bug F6, see boot-sector-index-block-size-tests.cpp for the
+        // matching unit test).
+        {"file_record_size_invalid", {"FileRecord Size is invalid"}},
+        // Same as above but clusters_per_index_block = 0xFF, yielding
+        // index_block_size_ = 2 - exercises the equivalent bound on
+        // index_block_size_ (bug F6, the check
+        // boot-sector-index-block-size-tests.cpp's unit test targets).
+        {"index_block_size_invalid", {"IndexBlock Size is invalid"}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
