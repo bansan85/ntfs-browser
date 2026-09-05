@@ -27,6 +27,7 @@ add_executable(
   "file-record-unparsed-flags-tests.cpp"
   "fragmented-mft-invalid-record-tests.cpp"
   "find-stream-named-tests.cpp"
+  "index-root-entry-lifetime-tests.cpp"
   "fuzzer-regression-tests.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h")
 

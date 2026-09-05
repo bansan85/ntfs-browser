@@ -651,4 +651,51 @@ inline constexpr std::array<BYTE, 4> kNamedDataStreamContent{0xCA, 0xFE, 0xBA,
 // BuildFakeNtfsImageWithSmallResidentData() (F10).
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithNamedDataStream();
 
+// MFT indices of the two directory records built by
+// BuildFakeNtfsImageWithIndexRootVariants(): each is a bare directory whose
+// only attribute is its own resident $INDEX_ROOT, with a single real
+// FILE_NAME entry that differs between the two (different name and mft
+// reference) - regression fixture for F21
+// (docs/bug-reports/2026-09-03-full-repo.md):
+// AttrIndexRoot<RESIDENT, S>::ParseIndexEntries() (src/attr-index-root.cpp)
+// used to emplace_back() every IndexEntry with a NULL shared_ptr<BYTE[]>
+// instead of an owned copy of its own resident attribute data, unlike
+// AttrIndexAlloc<S>::ParseIndexBlock() (src/attr-index-alloc.cpp), which
+// already allocates and shares one. FileRecord<S>::FindSubEntry()
+// (src/file-record.cpp) hands such an IndexEntry back "by value" under a
+// documented "Must be a copy" contract, but without independent backing
+// memory the copy still aliases the FileRecord/AttrIndexRoot object's own
+// storage - a real use-after-free once that object is destroyed/reparsed
+// (FULL_CACHE), or, deterministically under NO_CACHE, silent staleness once
+// FileRecord::record_buffer_ is overwritten in place by a same-size second
+// read (ReadFileRecord(), src/file-record.cpp, only resizes record_buffer_ if
+// the size differs - every record built by this fixture is exactly
+// kFakeFileRecordSize). Two distinct MFT indices below Enum::MftIdx::USER
+// (16) let a single FileRecord<S> object parse variant A, save a
+// FindSubEntry() result by value, then reparse variant B in place and check
+// the saved entry is unaffected.
+inline constexpr ULONGLONG kIndexRootVariantADirIdx = 6;
+inline constexpr ULONGLONG kIndexRootVariantBDirIdx = 7;
+
+// mft_index (file reference) each variant's single FILE_NAME entry declares
+// - deliberately distinct from each other and from either directory's own
+// MFT index, so a test can unambiguously tell which variant's bytes a saved
+// IndexEntry is (still, or no longer) reflecting.
+inline constexpr ULONGLONG kIndexRootVariantAMftRef = 30;
+inline constexpr ULONGLONG kIndexRootVariantBMftRef = 40;
+
+// File names each variant's single FILE_NAME entry declares.
+inline constexpr wchar_t kIndexRootVariantAName[] = L"AAA";
+inline constexpr wchar_t kIndexRootVariantBName[] = L"BBB";
+
+// Same volume as BuildFakeNtfsImage(), plus two directory records
+// (kIndexRootVariantADirIdx/kIndexRootVariantBDirIdx) at the same fixed
+// record size, each a bare directory whose only attribute is its own
+// resident $INDEX_ROOT holding one real FILE_NAME entry
+// (kIndexRootVariantAName/kIndexRootVariantBName, mft reference
+// kIndexRootVariantAMftRef/kIndexRootVariantBMftRef respectively) plus the
+// terminating entry. See F21 in docs/bug-reports/2026-09-03-full-repo.md and
+// kIndexRootVariantADirIdx above.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexRootVariants();
+
 }  // namespace NtfsBrowserTests
