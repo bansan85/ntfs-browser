@@ -376,6 +376,31 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // confirms the trace text and that nothing crashes on this input.
         {"find_stream_named_data",
          {"FindStream() found stream named \"F2-probe\""}},
+        // Root record (#5, built the same way as attr_name_exceeds_total_size
+        // above - boot sector + $Volume + $MFT + root, concatenated in
+        // LoopingDiskReader's read order) whose own resident $INDEX_ROOT
+        // holds a single real FILE_NAME entry ("Foo", file reference 20) via
+        // BuildFakeNtfsImageWithRootIndexRootEntry() (fake-ntfs-image.h/.cpp)
+        // - coverage fixture for F21 (docs/bug-reports/2026-09-03-full-repo.md):
+        // AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
+        // (src/attr-index-root.cpp) now allocates and copies its own
+        // independent shared_ptr<BYTE[]> up front, instead of aliasing the
+        // resident attribute's own FileRecord/AttrIndexRoot-lifetime-bound
+        // storage, before walking/emplace_back()-ing any entries - this
+        // trace confirms that allocation actually runs for a record with a
+        // real (non-terminator) entry. This fuzzer parses ROOT once per
+        // strategy and never holds an IndexEntry across a second
+        // ParseFileRecord() call, so it structurally cannot exercise the
+        // lifetime bug itself (a trace alone can't distinguish an owned copy
+        // from the old aliasing pointer) - the authoritative regression
+        // guard is index-root-entry-lifetime-tests.cpp's Catch2 test, which
+        // asserts a saved IndexEntry's actual content survives a same-size
+        // FileRecord reparse. Only reproduces under NO_CACHE - like several
+        // fixtures above, FULL_CACHE's very different read-size pattern
+        // diverges into an unrelated "Invalid file record" for this same
+        // input; only exit code 0 is asserted for that pass.
+        {"index_root_real_entry",
+         {"Index Root: allocated independent copy of resident data"}},
 };
 
 // No new corpus entry was added for bug F11 (docs/bug-reports/2026-09-03-

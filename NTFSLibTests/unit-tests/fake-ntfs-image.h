@@ -698,4 +698,15 @@ inline constexpr wchar_t kIndexRootVariantBName[] = L"BBB";
 // kIndexRootVariantADirIdx above.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexRootVariants();
 
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by MakeIndexRootExtensionRecord()'s own record (the same single
+// "Foo" entry, file reference 20) - same "overwrite the root record in its
+// own image copy" technique as BuildFakeNtfsImageWithSmallResidentData(). Lets
+// a caller reach a real, non-terminator $INDEX_ROOT entry straight off the
+// root record, without going through an $ATTRIBUTE_LIST extension record -
+// used to build the F21 fuzz corpus entry (see fuzzer-regression-tests.cpp),
+// since NTFSLibTests/fuzz/afl-main.cpp's FuzzOnce() only ever calls
+// ParseFileRecord() on MftIdx::ROOT itself.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithRootIndexRootEntry();
+
 }  // namespace NtfsBrowserTests
