@@ -62,7 +62,7 @@ std::optional<ULONGLONG>
 
   memcpy(buffer.data(), &this->GetData()[offset], actural);
 
-  return bufLen;
+  return actural;
 }
 
 AttrResidentNoCache::AttrResidentNoCache(
