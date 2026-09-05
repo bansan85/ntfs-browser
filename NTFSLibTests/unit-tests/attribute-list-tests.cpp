@@ -322,3 +322,56 @@ TEST_CASE(
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
   CHECK(record.ParseAttrs());
 }
+
+// Regression test for bug F11's primary trigger scenario
+// (docs/bug-reports/2026-09-03-full-repo.md): a resident $ATTRIBUTE_LIST
+// whose real data size is an exact, tight multiple of the REAL 26-byte
+// on-disk entry size but NOT a multiple of sizeof(Attr::AttributeList) (40
+// pre-fix, still 32 post-fix due to alignof(ULONGLONG) padding with no
+// on-disk counterpart). AttrList<S>::AttrList()'s read loop
+// (src/attr-list.cpp) used to request sizeof(Attr::AttributeList) bytes per
+// iteration; with only 26 real bytes per on-disk entry, its first (40-byte)
+// read already consumed all of entry 1's real bytes plus 14 bytes belonging
+// to entry 2, so the next iteration's request (offset 26, only 26 real
+// bytes left) came up short - entry 2 was silently dropped even though
+// nothing about the volume is malformed.
+//
+// BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory() reproduces
+// this: kAttrListTightPackDirIdx's $ATTRIBUTE_LIST has two entries, packed
+// back-to-back at the real 26-byte stride, relocating $INDEX_ROOT to
+// kAttrListTightPackExtIdxA and $INDEX_ALLOCATION to a DIFFERENT record,
+// kAttrListTightPackExtIdxB - entry 1 happens to still resolve pre-fix
+// (every field the loop reads for it sits before the struct's buggy
+// base_ref/attr_id region), which is what makes entry 2's silent drop easy
+// to miss.
+TEST_CASE(
+    "AttrList resolves every entry in a densely-packed (real 26-byte "
+    "stride) $ATTRIBUTE_LIST, not just those a multiple of "
+    "sizeof(Attr::AttributeList) apart (F11)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttrListTightPackDirIdx));
+  REQUIRE(dir.ParseAttrs());
+
+  // Entry 1 ($INDEX_ROOT) resolves even pre-fix.
+  const std::optional<IndexEntry> found = dir.FindSubEntry(L"Foo");
+  REQUIRE(found.has_value());
+  CHECK(found->GetFileReference() == 20);
+
+  // Entry 2 ($INDEX_ALLOCATION) is the one bug F11 silently drops: before
+  // the fix, this vector is empty.
+  const auto& allocAttrs = dir.getAttr(AttrType::INDEX_ALLOCATION);
+  REQUIRE(allocAttrs.size() == 1);
+  CHECK(allocAttrs[0]->GetDataSize() ==
+        NtfsBrowserTests::kAttrListTightPackRealSize);
+}

@@ -826,6 +826,63 @@ FakeRecord MakeAttributeListCycleRecord(ULONGLONG targetIdx)
   return record;
 }
 
+// Directory (#kAttrListTightPackDirIdx): a resident $ATTRIBUTE_LIST with TWO
+// entries, packed back-to-back at the REAL on-disk entry stride
+// (kAttributeListRealEntrySize, 26 bytes) instead of
+// sizeof(Attr::AttributeList) - regression fixture for bug F11
+// (docs/bug-reports/2026-09-03-full-repo.md). Every other $ATTRIBUTE_LIST
+// fixture above sizes its entries off sizeof(Attr::AttributeList) itself, so
+// it stays self-consistent with that struct's bug instead of exposing it;
+// this fixture instead reproduces what a real, densely-packed on-disk
+// $ATTRIBUTE_LIST actually looks like. Entries are written through raw byte
+// offsets (not C++ array indexing over Attr::AttributeList, whose sizeof()
+// includes trailing alignment padding the real on-disk format doesn't have)
+// so entry 2 lands exactly kAttributeListRealEntrySize bytes after entry 1,
+// not sizeof(Attr::AttributeList) bytes after it.
+FakeRecord MakeAttributeListTightlyPackedDirRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::ATTRIBUTE_LIST;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = static_cast<DWORD>(kAttributeListRealEntrySize) * 2;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  BYTE* body = &record[kAttrOffset + attr.attr_offset];
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(body);
+  e1.attr_type = AttrType::INDEX_ROOT;
+  e1.record_size = kAttributeListRealEntrySize;
+  e1.name_length = 0;
+  e1.name_offset = 0;
+  e1.start_vcn = 0;
+  e1.base_ref.segment_number = kAttrListTightPackExtIdxA;
+  e1.base_ref.sequence_number = 0;
+  e1.attr_id = 0;
+
+  auto& e2 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+      body + kAttributeListRealEntrySize);
+  e2.attr_type = AttrType::INDEX_ALLOCATION;
+  e2.record_size = kAttributeListRealEntrySize;
+  e2.name_length = 0;
+  e2.name_offset = 0;
+  e2.start_vcn = 0;
+  e2.base_ref.segment_number = kAttrListTightPackExtIdxB;
+  e2.base_ref.sequence_number = 0;
+  e2.attr_id = 1;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -871,7 +928,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation()
 
   const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
   const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                       static_cast<size_t>(MftIdx::VOLUME);
+                                      static_cast<size_t>(MftIdx::VOLUME);
   const FakeRecord record =
       MakeVolumeRecordSized(kMinimalVolumeInformationSize);
   std::memcpy(image.data() + offset, record.data(), record.size());
@@ -1174,6 +1231,27 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle()
             MakeAttributeListCycleRecord(kAttrListCycleExtIdx));
   putRecord(kAttrListCycleExtIdx,
             MakeAttributeListCycleRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
+  {
+    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                        static_cast<size_t>(idx);
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  putRecord(kAttrListTightPackDirIdx,
+            MakeAttributeListTightlyPackedDirRecord());
+  putRecord(kAttrListTightPackExtIdxA, MakeIndexRootExtensionRecord());
+  putRecord(kAttrListTightPackExtIdxB,
+            MakeIndexAllocationOnlyExtensionRecord(kAttrListTightPackRealSize));
 
   return image;
 }

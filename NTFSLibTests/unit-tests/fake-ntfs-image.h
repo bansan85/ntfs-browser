@@ -52,7 +52,8 @@ inline constexpr WORD kMinimalVolumeInformationSize = 12;
 // true on-disk size - instead of whatever sizeof(Attr::VolumeInformation)
 // currently computes to. Must still open successfully (IsVolumeOK() ==
 // true) and report version 3.1.
-[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation();
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMinimalVolumeInformation();
 
 // MFT index of the directory record built by
 // BuildFakeNtfsImageWithAttributeListDirectory(): its only attribute is a
@@ -492,5 +493,60 @@ inline constexpr ULONGLONG kAttrListCycleExtIdx = 6;
 // $ATTRIBUTE_LIST read, this fixture's single, exactly-40-byte entry on
 // each record sidesteps that entirely.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle();
+
+// Real, fixed on-disk size (bytes) of a nameless $ATTRIBUTE_LIST entry's
+// header: attr_type(4) + record_size(2) + name_length(1) + name_offset(1) +
+// start_vcn(8) + base file reference(8) + attr_id(2) = 26 bytes, with no
+// trailing padding on disk. Hardcoded here, independent of
+// sizeof(Attr::AttributeList) - regression fixture for bug F11
+// (docs/bug-reports/2026-09-03-full-repo.md): Attr::MftSegmentReference's
+// non-bitfield WORD member inflates that sizeof() to 40 (and still 32 even
+// once fixed, via alignof(ULONGLONG) padding with no on-disk counterpart) -
+// so a fixture sizing its entries off that sizeof() instead stays
+// self-consistent with the bug rather than exposing it, the same trap
+// kMinimalVolumeInformationSize above documents for $VOLUME_INFORMATION.
+inline constexpr WORD kAttributeListRealEntrySize = 26;
+
+// MFT index of the directory record built by
+// BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory(): its resident
+// $ATTRIBUTE_LIST holds TWO entries, packed back-to-back with NO padding
+// (each exactly kAttributeListRealEntrySize bytes) - relocating
+// $INDEX_ROOT to kAttrListTightPackExtIdxA and $INDEX_ALLOCATION to
+// kAttrListTightPackExtIdxB.
+inline constexpr ULONGLONG kAttrListTightPackDirIdx = 6;
+
+// MFT index of the extension record kAttrListTightPackDirIdx's
+// $ATTRIBUTE_LIST relocates $INDEX_ROOT to - the same single "Foo" entry
+// (file reference 20) as MakeIndexRootExtensionRecord() always builds.
+inline constexpr ULONGLONG kAttrListTightPackExtIdxA = 7;
+
+// MFT index of the extension record kAttrListTightPackDirIdx's
+// $ATTRIBUTE_LIST relocates $INDEX_ALLOCATION to - a minimal non-resident
+// $INDEX_ALLOCATION whose real_size is kAttrListTightPackRealSize.
+inline constexpr ULONGLONG kAttrListTightPackExtIdxB = 8;
+
+// real_size BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory()
+// writes into kAttrListTightPackExtIdxB's $INDEX_ALLOCATION attribute - read
+// back via AttrBase::GetDataSize() to confirm that attribute was genuinely
+// resolved (as opposed to merely not crashing).
+inline constexpr DWORD kAttrListTightPackRealSize = 4096;
+
+// Same volume as BuildFakeNtfsImage(), plus a directory
+// (kAttrListTightPackDirIdx) whose resident $ATTRIBUTE_LIST is exactly
+// 2 * kAttributeListRealEntrySize (52) bytes - a tight multiple of the REAL
+// 26-byte on-disk entry size, but NOT a multiple of
+// sizeof(Attr::AttributeList) (40 pre-F11-fix) - regression fixture for bug
+// F11 (docs/bug-reports/2026-09-03-full-repo.md): AttrList<S>::AttrList()'s
+// read loop (src/attr-list.cpp) requests sizeof(Attr::AttributeList) bytes
+// per iteration; with only 26 real bytes per on-disk entry, that first
+// (40-byte) read already reads past entry 1 into entry 2's own leading
+// bytes, and the second iteration's request (offset 26, only 26 real bytes
+// left) comes up short, so entry 2 ($INDEX_ALLOCATION) is silently dropped -
+// it never resolves, even though the volume is perfectly well-formed. Entry
+// 1 ($INDEX_ROOT) still happens to resolve, since every field the loop reads
+// before the buggy base_ref/attr_id region lands on real bytes regardless of
+// the struct bug.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory();
 
 }  // namespace NtfsBrowserTests
