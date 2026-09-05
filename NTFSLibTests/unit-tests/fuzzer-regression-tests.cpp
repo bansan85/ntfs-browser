@@ -241,7 +241,14 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // in-bounds location holding record #16's own raw bytes: valid
         // magic, but offset_of_us (1024) is out of bounds, so
         // FileRecordHeader's ctor throws "Offset must be lower than 1024."
-        // from inside this exact path.
+        // from inside this exact path. This same try/catch is also F16's fix
+        // (docs/bug-reports/2026-09-03-full-repo.md, an incidental side
+        // effect of this very commit); see
+        // fragmented-mft-invalid-record-tests.cpp for a dedicated Catch2
+        // fixture calling FileRecord<S>::ParseFileRecord() directly on this
+        // branch (this fuzzer reaches it one layer further out, via
+        // $ATTRIBUTE_LIST -> AttrList<S>::AttrList() ->
+        // FileRecord::ParseFileRecord()).
         {"fragmented_record_header_factory_throw",
          {"Offset must be lower than 1024.", "Attribute Parse error: 0x0020"}},
         // F8 catch #7 (src/ntfs-volume.cpp, NtfsVolume<S>::ParseBootSector()'s

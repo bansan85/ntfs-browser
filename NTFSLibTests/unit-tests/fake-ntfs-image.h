@@ -568,4 +568,52 @@ inline constexpr DWORD kAttrListTightPackRealSize = 4096;
 // empty-optional state).
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord();
 
+// MFT index of the forged file record placed inside $MFT's own extra
+// data-run cluster - the smallest index that can ONLY be reached through
+// FileRecord<S>::ReadFileRecord()'s "fragmented $MFT" path (fileRef >=
+// Enum::MftIdx::USER (16, include/ntfs-browser/mft-idx.h) and
+// volume_.mft_data_ != nullptr - src/file-record.cpp). Every fixture above
+// keeps every index it uses below 16 for exactly the reason documented on
+// kUafExtensionIdx0/1's comment: $MFT's own DATA attribute
+// (MakeMftRecord()) has always had an empty, immediately-terminated data
+// run, so a real ReadData() call through it would fail immediately rather
+// than ever reach FileRecordHeader::Factory<S>(). This fixture's $MFT (#0)
+// is the first and only one in this file to give that attribute a REAL,
+// non-empty data run instead (MakeMftRecordWithRealDataRun(), see
+// fake-ntfs-image.cpp) - regression fixture for F16
+// (docs/bug-reports/2026-09-03-full-repo.md): before this fixture existed, no
+// test in this repo (Catch2 unit test or fuzz corpus replay) had ever driven
+// a FileRecordHeader::Factory<S>() throw through this specific branch - only
+// its identical call on the direct-allocation path (guarded since before F8)
+// had coverage, via the existing invalid_offset_of_us fuzz corpus entry
+// (record 0/5). The fragmented path's own try/catch - added as an incidental
+// fix alongside F8, commit b7681a1 ("This fragmented-$MFT path ... reaches
+// the very same FileRecordHeader::Factory<S>() call as the direct-allocation
+// path above, which does guard it") - is what this fixture exercises.
+inline constexpr ULONGLONG kFragmentedMftInvalidRecordIdx = 16;
+
+// Physical LCN (in kFakeFileRecordSize-byte clusters - this fixture's
+// cluster size and file record size are equal, 1 sector per cluster, 1
+// sector per record) where BuildFakeNtfsImageWithFragmentedMftInvalidRecord()
+// places the real cluster data $MFT's DATA attribute's data run points at -
+// chosen past every direct-allocation record BuildFakeNtfsImage() itself
+// writes (the highest is MftIdx::ROOT, LCN 6), same spirit as
+// kForgedIndexBlockLcn above.
+inline constexpr DWORD kFragmentedMftDataRunLcn = 20;
+
+// Same volume as BuildFakeNtfsImage(), except $MFT's (#0) own DATA attribute
+// now has a genuine (non-empty) data run reaching
+// kFragmentedMftInvalidRecordIdx + 1 clusters (VCN 0..
+// kFragmentedMftInvalidRecordIdx), with the file record at that index
+// forged: valid magic (kFileRecordMagic) but offset_of_us ==
+// kFakeFileRecordSize (1024) - invalid per FileRecordHeader's ctor
+// ("Offset must be lower than 1024."). $MFT's own record (read directly,
+// fileRef 0) still parses successfully - IsVolumeOK() is true, mft_data_ is
+// assigned - only the forged record living inside its DATA stream is
+// invalid, and only reachable by asking for file record
+// kFragmentedMftInvalidRecordIdx specifically. See F16 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
+
 }  // namespace NtfsBrowserTests

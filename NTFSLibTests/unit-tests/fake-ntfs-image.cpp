@@ -110,6 +110,75 @@ FakeRecord MakeMftRecord()
   return record;
 }
 
+// $MFT (#0), F16 variant: a non-resident DATA attribute with a REAL,
+// non-empty data run of "clusters" clusters starting at physical LCN "lcn" -
+// unlike MakeMftRecord() above, whose data run is a single 0x00 terminator
+// byte. Encoded the same way MakeIndexAllocDirRecord() below encodes
+// $INDEX_ALLOCATION's own real data run (header byte 0x41: low nibble = 1
+// length byte, high nibble = 4 LCN-offset bytes), since nothing else in this
+// file builds a non-empty data run for $MFT's own record. real_size/
+// alloc_size/ini_size cover exactly "clusters" clusters, so a ReadData() call
+// through this attribute at any offset within that range reads real,
+// caller-placed bytes instead of coming up short. See
+// kFragmentedMftInvalidRecordIdx (fake-ntfs-image.h) for why this is needed
+// at all (F16).
+FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 1;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.start_vcn = 0;
+  attr.last_vcn = clusters - 1;
+  attr.data_run_offset = static_cast<WORD>(sizeof(attr));
+  attr.comp_unit_size = 0;
+  attr.real_size = clusters * kClusterSize;
+  attr.alloc_size = attr.real_size;
+  attr.ini_size = attr.real_size;
+
+  BYTE* dataRun = &record[kAttrOffset + attr.data_run_offset];
+  DWORD runLen = 0;
+  // Data run header byte: high nibble = LCN offset field size (4 bytes),
+  // low nibble = length field size (1 byte) - standard NTFS run encoding
+  // (AttrNonResident::PickData, src/attr-non-resident.cpp).
+  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = static_cast<BYTE>(clusters);
+  std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
+  runLen += sizeof(lcn);
+  dataRun[runLen++] = 0x00;  // terminate the run list
+
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + runLen;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
+// Forged file record (#kFragmentedMftInvalidRecordIdx): valid magic, so
+// FileRecordHeader's ctor gets past its first check, but offset_of_us ==
+// kFakeFileRecordSize (1024) - equal to (hence ">=") the 1024-byte buffer
+// FileRecordHeader::Factory<S>() is always called with here, which its ctor
+// rejects outright ("Offset must be lower than 1024.",
+// src/data/file-record-header.cpp) before ever reading a fixup array or
+// attribute. No other field needs to be set: the ctor throws right after
+// this check, before PatchUS()/HeaderCommon() would ever run.
+FakeRecord MakeInvalidOffsetOfUsRecord()
+{
+  FakeRecord record{};
+
+  auto& header = *reinterpret_cast<FileRecordHeader::Data*>(record.data());
+  header.magic = kFileRecordMagic;
+  header.offset_of_us = kFakeFileRecordSize;
+  header.size_of_us = 2;
+
+  return record;
+}
+
 // $Volume (#3): a resident VOLUME_INFORMATION attribute reporting NTFS 3.1,
 // the minimum NtfsVolume<S>::Init() requires to accept the volume. attrSize
 // is the resident attribute's declared byte size - hardcoded by callers
@@ -1299,6 +1368,42 @@ std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord()
   const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
                                           static_cast<size_t>(MftIdx::ROOT);
   std::memset(image.data() + rootOffset, 0, kFakeFileRecordSize);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithFragmentedMftInvalidRecord()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // VCN 0..kFragmentedMftInvalidRecordIdx, inclusive.
+  constexpr DWORD kClusters =
+      static_cast<DWORD>(kFragmentedMftInvalidRecordIdx) + 1;
+
+  // Replace $MFT's (#0) own file record in place: same technique as
+  // BuildFakeNtfsImageWithSmallResidentData() and friends, except this
+  // overwrites $MFT's record specifically, giving its DATA attribute a real
+  // data run instead of MakeMftRecord()'s empty one.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const FakeRecord mftRecord =
+      MakeMftRecordWithRealDataRun(kFragmentedMftDataRunLcn, kClusters);
+  std::memcpy(image.data() + mftAddr, mftRecord.data(), mftRecord.size());
+
+  // Forged file record (#kFragmentedMftInvalidRecordIdx): written at the
+  // physical cluster the data run maps VCN kFragmentedMftInvalidRecordIdx to
+  // (kFragmentedMftDataRunLcn + kFragmentedMftInvalidRecordIdx) - i.e. the
+  // exact byte offset FileRecord<S>::ReadFileRecord()'s fragmented-$MFT path
+  // reads from when asked for file record #kFragmentedMftInvalidRecordIdx.
+  const size_t forgedOffset = (static_cast<size_t>(kFragmentedMftDataRunLcn) +
+                               kFragmentedMftInvalidRecordIdx) *
+                              kClusterSize;
+  if (image.size() < forgedOffset + kFakeFileRecordSize)
+  {
+    image.resize(forgedOffset + kFakeFileRecordSize, 0);
+  }
+  const FakeRecord forgedRecord = MakeInvalidOffsetOfUsRecord();
+  std::memcpy(image.data() + forgedOffset, forgedRecord.data(),
+              forgedRecord.size());
 
   return image;
 }
