@@ -179,17 +179,31 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // attr_name_exceeds_total_size - boot sector + $Volume + $MFT +
         // root, concatenated in LoopingDiskReader's read order): a single
         // resident $ATTRIBUTE_LIST whose real data size (50 bytes) is not
-        // an exact multiple of sizeof(Attr::AttributeList) (40) -
-        // regression fixture for the AttrList<S>::AttrList() hardening
-        // added alongside F10 (docs/bug-reports/2026-09-03-full-repo.md):
-        // al_record is a single stack variable reused across loop
-        // iterations, never reset between them, so a short final read must
-        // stop the loop cleanly (now observably, via this NTFS_TRACE2 call)
-        // instead of parsing a "phantom" final entry built from a mix of
-        // freshly-read and stale bytes. See attribute-list-tests.cpp for
-        // the matching unit test (BuildFakeNtfsImageWithAttributeListShortRead()).
+        // an exact multiple of sizeof(Attr::AttributeList) (40, at the time
+        // this testcase was recorded - pre-F11) - regression fixture for
+        // the AttrList<S>::AttrList() hardening added alongside F10
+        // (docs/bug-reports/2026-09-03-full-repo.md): al_record is a single
+        // stack variable reused across loop iterations, never reset between
+        // them, so a short final read must stop the loop cleanly (now
+        // observably, via this NTFS_TRACE2 call) instead of parsing a
+        // "phantom" final entry built from a mix of freshly-read and stale
+        // bytes. See attribute-list-tests.cpp for the matching unit test
+        // (BuildFakeNtfsImageWithAttributeListShortRead()).
+        //
+        // Not regenerated for bug F11
+        // (docs/bug-reports/2026-09-03-full-repo.md): its raw bytes already
+        // encode a literal record_size of 40 for
+        // entry 1 (read as a plain WORD field, unaffected by
+        // MftSegmentReference's bitfield fix), so AttrList<S>::AttrList()'s
+        // read loop still advances the offset from 0 to 40 exactly as
+        // before, then requests Attr::kAttributeListEntryHeaderSize (26,
+        // not sizeof(Attr::AttributeList) post-fix) bytes with only 10 left
+        // (50 - 40) - the same short read as before, just now measured
+        // against the real on-disk entry size instead of the padded
+        // struct's sizeof(). Only the expected message text below changed,
+        // from "...expected 40..." to "...expected 26...".
         {"attribute_list_short_read",
-         {"Attribute List: ReadData returned 10 bytes, expected 40 - "
+         {"Attribute List: ReadData returned 10 bytes, expected 26 - "
           "stopping"}},
         // ROOT's own $ATTRIBUTE_LIST has 3 entries: (INDEX_ROOT, record 6),
         // (INDEX_ALLOCATION, record 6), (INDEX_ROOT, record 6 again) - the
@@ -311,6 +325,29 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // the matching unit test.
         {"volume_information_minimal_size", {"NTFS volume version: 3.1"}},
 };
+
+// No new corpus entry was added for bug F11 (docs/bug-reports/2026-09-03-
+// full-repo.md, Attr::MftSegmentReference's non-bitfield WORD member and
+// AttrList<S>::AttrList()'s sizeof(Attr::AttributeList)-sized read loop).
+// The fix doesn't add a new NTFS_TRACE call of its own - it changes
+// attribute_list_short_read's *existing* F10-hardening message above
+// instead (the read width the loop compares against is now
+// Attr::kAttributeListEntryHeaderSize (26), not sizeof(Attr::AttributeList)
+// (40 pre-fix), so that testcase's captured message now reads "...expected
+// 26..." rather than "...expected 40...") - already exactly the "natural,
+// real, testable message tied to this fix's own effects" this file's own
+// convention asks to check for first. F11's other, more interesting
+// consequence - a densely-packed $ATTRIBUTE_LIST's final entry being
+// silently dropped instead of resolved - is covered by
+// attribute-list-tests.cpp's own dedicated unit test
+// (BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory()), which
+// checks the resolved attribute's actual content (GetDataSize(),
+// FindSubEntry()) rather than merely a trace message's presence;
+// reproducing that same assertion strength as a NtfsFuzzerAfl corpus entry
+// would need this file to inspect resolved attribute data the way the
+// fuzzer harness does not, so it would add scaffolding without adding real
+// coverage beyond what that unit test (and the exit-code/message checks
+// already in place) provide.
 
 // The three fixtures below deliberately have no kExpectedErrorMessages
 // entry - only the exit-code check above applies to them.

@@ -161,7 +161,12 @@ FakeRecord MakeRootRecord()
 // $ATTRIBUTE_LIST with a single record relocating $INDEX_ROOT to
 // #kIndexExtensionIdx - reproduces a directory whose base MFT record no
 // longer holds $INDEX_ROOT/$INDEX_ALLOCATION directly, as real directories
-// like C:\Windows do once they outgrow the base record.
+// like C:\Windows do once they outgrow the base record. Sized off
+// Attr::kAttributeListEntryHeaderSize (26, the real on-disk size of a
+// nameless entry), not sizeof(Attr::AttributeList) (inflated by trailing
+// alignment padding with no on-disk counterpart - see bug F11,
+// docs/bug-reports/2026-09-03-full-repo.md), so this models a real,
+// densely-packed $ATTRIBUTE_LIST.
 FakeRecord MakeAttributeListOnlyDirRecord()
 {
   FakeRecord record =
@@ -175,14 +180,16 @@ FakeRecord MakeAttributeListOnlyDirRecord()
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size = sizeof(NtfsBrowser::Attr::AttributeList);
+  attr.attr_size =
+      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
   auto& alEntry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
       &record[kAttrOffset + attr.attr_offset]);
   alEntry.attr_type = AttrType::INDEX_ROOT;
-  alEntry.record_size = static_cast<WORD>(sizeof(alEntry));
+  alEntry.record_size =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   alEntry.name_length = 0;
   alEntry.name_offset = 0;
   alEntry.start_vcn = 0;
@@ -269,12 +276,20 @@ FakeRecord MakeIndexRootExtensionRecord()
 // regression fixture for F17's primary defect: AttrList<S>::AttrList()
 // deduplicates fr.attr_list_chain_ on record_ref alone, so the second entry
 // - naming the same record but a different, not-yet-retrieved attr_type -
-// is wrongly skipped.
+// is wrongly skipped. Entries are packed at the real on-disk stride
+// (Attr::kAttributeListEntryHeaderSize, 26 bytes) via raw byte offsets, not
+// C++ array indexing over Attr::AttributeList (whose sizeof() includes
+// trailing alignment padding with no on-disk counterpart - bug F11,
+// docs/bug-reports/2026-09-03-full-repo.md), so entry 2 lands exactly where
+// a real, densely-packed $ATTRIBUTE_LIST would put it.
 FakeRecord MakeAttributeListTwoTypesDirRecord()
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
                                         NtfsBrowser::Flag::FileRecord::DIR);
+
+  constexpr WORD kEntrySize =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
 
   auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
       &record[kAttrOffset]);
@@ -283,33 +298,32 @@ FakeRecord MakeAttributeListTwoTypesDirRecord()
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) * 2;
+  attr.attr_size = static_cast<DWORD>(kEntrySize) * 2;
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
-  auto* alEntries = reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
-      &record[kAttrOffset + attr.attr_offset]);
+  BYTE* body = &record[kAttrOffset + attr.attr_offset];
 
-  alEntries[0].attr_type = AttrType::INDEX_ROOT;
-  alEntries[0].record_size =
-      static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
-  alEntries[0].name_length = 0;
-  alEntries[0].name_offset = 0;
-  alEntries[0].start_vcn = 0;
-  alEntries[0].base_ref.segment_number = kMultiTypeExtensionIdx;
-  alEntries[0].base_ref.sequence_number = 0;
-  alEntries[0].attr_id = 0;
+  auto& e0 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(body);
+  e0.attr_type = AttrType::INDEX_ROOT;
+  e0.record_size = kEntrySize;
+  e0.name_length = 0;
+  e0.name_offset = 0;
+  e0.start_vcn = 0;
+  e0.base_ref.segment_number = kMultiTypeExtensionIdx;
+  e0.base_ref.sequence_number = 0;
+  e0.attr_id = 0;
 
-  alEntries[1].attr_type = AttrType::INDEX_ALLOCATION;
-  alEntries[1].record_size =
-      static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
-  alEntries[1].name_length = 0;
-  alEntries[1].name_offset = 0;
-  alEntries[1].start_vcn = 0;
-  alEntries[1].base_ref.segment_number = kMultiTypeExtensionIdx;
-  alEntries[1].base_ref.sequence_number = 0;
-  alEntries[1].attr_id = 0;
+  auto& e1 =
+      *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(body + kEntrySize);
+  e1.attr_type = AttrType::INDEX_ALLOCATION;
+  e1.record_size = kEntrySize;
+  e1.name_length = 0;
+  e1.name_offset = 0;
+  e1.start_vcn = 0;
+  e1.base_ref.segment_number = kMultiTypeExtensionIdx;
+  e1.base_ref.sequence_number = 0;
+  e1.attr_id = 0;
 
   WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
   return record;
@@ -608,12 +622,20 @@ FakeRecord MakeIndexAllocationOnlyExtensionRecord(DWORD realSize)
 // range/record). Regression fixture for N3: resolving entry N+1 grows
 // AttrList<S>::file_record_list_ (a std::vector<FileRecord<S>>), which in
 // Strategy::FULL_CACHE can relocate every FileRecord already constructed
-// for entries 0..N - and the attributes already merged out of them.
+// for entries 0..N - and the attributes already merged out of them. Entries
+// are packed at the real on-disk stride (Attr::kAttributeListEntryHeaderSize,
+// 26 bytes) via raw byte offsets, not C++ array indexing over
+// Attr::AttributeList (whose sizeof() includes trailing alignment padding
+// with no on-disk counterpart - bug F11,
+// docs/bug-reports/2026-09-03-full-repo.md).
 FakeRecord MakeFragmentedAttributeListDirRecord()
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
                                         NtfsBrowser::Flag::FileRecord::DIR);
+
+  constexpr WORD kEntrySize =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
 
   auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
       &record[kAttrOffset]);
@@ -622,8 +644,7 @@ FakeRecord MakeFragmentedAttributeListDirRecord()
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) * 4;
+  attr.attr_size = static_cast<DWORD>(kEntrySize) * 4;
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
@@ -631,19 +652,19 @@ FakeRecord MakeFragmentedAttributeListDirRecord()
       kUafExtensionIdx0, kUafExtensionIdx1, kUafExtensionIdx2,
       kUafExtensionIdx3};
 
-  auto* alEntries = reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
-      &record[kAttrOffset + attr.attr_offset]);
+  BYTE* body = &record[kAttrOffset + attr.attr_offset];
   for (size_t i = 0; i < extensionIdxs.size(); i++)
   {
-    alEntries[i].attr_type = AttrType::INDEX_ALLOCATION;
-    alEntries[i].record_size =
-        static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
-    alEntries[i].name_length = 0;
-    alEntries[i].name_offset = 0;
-    alEntries[i].start_vcn = 0;
-    alEntries[i].base_ref.segment_number = extensionIdxs[i];
-    alEntries[i].base_ref.sequence_number = 0;
-    alEntries[i].attr_id = 0;
+    auto& entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+        body + i * kEntrySize);
+    entry.attr_type = AttrType::INDEX_ALLOCATION;
+    entry.record_size = kEntrySize;
+    entry.name_length = 0;
+    entry.name_offset = 0;
+    entry.start_vcn = 0;
+    entry.base_ref.segment_number = extensionIdxs[i];
+    entry.base_ref.sequence_number = 0;
+    entry.attr_id = 0;
   }
 
   WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
@@ -738,17 +759,19 @@ FakeRecord MakeSmallResidentDataRecord()
 }
 
 // Root directory replacement (#5, patched in place): a single resident
-// $ATTRIBUTE_LIST attribute whose real data size (50 bytes) is NOT an exact
-// multiple of sizeof(Attr::AttributeList) (40) - regression fixture for the
-// AttrList<S>::AttrList() hardening added alongside F10. Entry 1 (the first
-// 40 bytes) is a full, well-formed record naming this very file record
-// (self-reference), so AttrList's ctor takes the "skip contained
-// attributes" branch and never needs to resolve an extension record. The
-// remaining 10 bytes (a truncated, partial second entry) are left at
-// FakeRecord's zero-initialized default - deliberately: this fixture's whole
-// point is that the loop must stop as soon as ReadData() reports fewer than
-// sizeof(Attr::AttributeList) bytes, before ever inspecting any of those
-// bytes as though they were a full entry.
+// $ATTRIBUTE_LIST attribute whose real data size (36 bytes) is NOT an exact
+// multiple of Attr::kAttributeListEntryHeaderSize (26, the real on-disk size
+// of a nameless entry - see bug F11, docs/bug-reports/2026-09-03-full-repo.md)
+// - regression fixture for the AttrList<S>::AttrList() hardening added
+// alongside F10. Entry 1 (the first 26 bytes) is a full, well-formed record
+// naming this very file record (self-reference), so AttrList's ctor takes
+// the "skip contained attributes" branch and never needs to resolve an
+// extension record. The remaining 10 bytes (a truncated, partial second
+// entry) are left at FakeRecord's zero-initialized default - deliberately:
+// this fixture's whole point is that the loop must stop as soon as
+// ReadData() reports fewer than Attr::kAttributeListEntryHeaderSize bytes,
+// before ever inspecting any of those bytes as though they were a full
+// entry.
 FakeRecord MakeAttributeListShortReadRecord()
 {
   FakeRecord record =
@@ -756,8 +779,9 @@ FakeRecord MakeAttributeListShortReadRecord()
                                         NtfsBrowser::Flag::FileRecord::DIR);
 
   constexpr DWORD kBodySize =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) + 10;
-  static_assert(kBodySize % sizeof(NtfsBrowser::Attr::AttributeList) != 0,
+      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize) + 10;
+  static_assert(kBodySize % NtfsBrowser::Attr::kAttributeListEntryHeaderSize !=
+                    0,
                 "body size must not be an exact multiple of the entry size, "
                 "to reproduce a short final ReadData()");
 
@@ -775,7 +799,8 @@ FakeRecord MakeAttributeListShortReadRecord()
   auto& e1 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
       &record[kAttrOffset + attr.attr_offset]);
   e1.attr_type = AttrType::DATA;
-  e1.record_size = static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+  e1.record_size =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   e1.name_length = 0;
   e1.name_offset = 0;
   e1.start_vcn = 0;
@@ -788,8 +813,8 @@ FakeRecord MakeAttributeListShortReadRecord()
 }
 
 // A file record whose sole attribute is a resident $ATTRIBUTE_LIST with
-// exactly one entry - a full sizeof(Attr::AttributeList) (40 bytes), so
-// AttrList<S>::AttrList()'s loop always reads it in one go, regardless of
+// exactly one entry - a full Attr::kAttributeListEntryHeaderSize (26 bytes),
+// so AttrList<S>::AttrList()'s loop always reads it in one go, regardless of
 // the F10 fix - naming attrType on the record targetIdx. Used by
 // BuildFakeNtfsImageWithAttributeListCycle() to build two records that each
 // point the other's way, forming a genuine two-record $ATTRIBUTE_LIST
@@ -807,14 +832,16 @@ FakeRecord MakeAttributeListCycleRecord(ULONGLONG targetIdx)
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size = sizeof(NtfsBrowser::Attr::AttributeList);
+  attr.attr_size =
+      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
   auto& e1 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
       &record[kAttrOffset + attr.attr_offset]);
   e1.attr_type = AttrType::ATTRIBUTE_LIST;
-  e1.record_size = static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+  e1.record_size =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   e1.name_length = 0;
   e1.name_offset = 0;
   e1.start_vcn = 0;

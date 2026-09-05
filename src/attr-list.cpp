@@ -61,22 +61,31 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
       MakeChainKey(*fr.file_reference_, AttrType::ATTRIBUTE_LIST));
 
   while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
-                                        sizeof(Attr::AttributeList)})))
+                                        Attr::kAttributeListEntryHeaderSize})))
   {
-    // A short (but non-empty) read means fewer than sizeof(Attr::AttributeList)
-    // bytes remained at this offset - the attribute's real data size is not
-    // an exact multiple of the entry size (a malformed/corrupt
-    // $ATTRIBUTE_LIST no valid NTFS volume would produce). al_record is
-    // reused across iterations rather than reset each time, so treating a
-    // short read as a full entry here would parse it with some fields fresh
-    // off disk and the rest stale from the previous iteration (see bug F10,
+    // A short (but non-empty) read means fewer than
+    // Attr::kAttributeListEntryHeaderSize bytes remained at this offset -
+    // the attribute's real data size is not an exact multiple of the real
+    // on-disk entry size (a malformed/corrupt $ATTRIBUTE_LIST no valid NTFS
+    // volume would produce). al_record is reused across iterations rather
+    // than reset each time, so treating a short read as a full entry here
+    // would parse it with some fields fresh off disk and the rest stale
+    // from the previous iteration (see bug F10,
     // docs/bug-reports/2026-09-03-full-repo.md) - stop cleanly instead.
-    if (*len != sizeof(Attr::AttributeList))
+    //
+    // This reads/compares against the real on-disk header size rather than
+    // sizeof(Attr::AttributeList): that sizeof() includes trailing
+    // alignment padding (alignof(ULONGLONG)) with no on-disk counterpart,
+    // so reading that many bytes per iteration would read past a densely
+    // packed entry's real end into the next entry's own bytes, desyncing
+    // every subsequent read (bug F11,
+    // docs/bug-reports/2026-09-03-full-repo.md).
+    if (*len != Attr::kAttributeListEntryHeaderSize)
     {
       NTFS_TRACE2(
           "Attribute List: ReadData returned %I64u bytes, expected %I64u - "
           "stopping\n",
-          *len, static_cast<ULONGLONG>(sizeof(Attr::AttributeList)));
+          *len, static_cast<ULONGLONG>(Attr::kAttributeListEntryHeaderSize));
       break;
     }
 
