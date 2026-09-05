@@ -123,6 +123,25 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // index_block_size_ (bug F6, the check
         // boot-sector-index-block-size-tests.cpp's unit test targets).
         {"index_block_size_invalid", {"IndexBlock Size is invalid"}},
+        // clusters_per_file_record = 0xE1 ("sz = -31") yields 1U << 31 ==
+        // 0x80000000 (2 GiB): a well-defined shift (unlike sz = -128, which
+        // really would be UB), but far too large a size for F6's checks
+        // above to catch (0x80000000 is >= sizeof(FileRecordHeader::Data)
+        // and a whole number of sectors). Exercises the bound
+        // NtfsVolume<S>::ParseBootSector() now enforces on sz itself, before
+        // the shift ever runs (bug F5, see
+        // boot-sector-oversized-record-size-tests.cpp for the matching unit
+        // test). Only the boot sector's own 512 bytes are needed - just like
+        // file_record_size_invalid/index_block_size_invalid above, this
+        // check trips in ParseBootSector() itself, before any FileRecord read
+        // happens.
+        {"file_record_size_shift_overflow",
+         {"clusters_per_file_record magnitude out of range"}},
+        // Same as above but clusters_per_index_block = 0xE1, yielding
+        // index_block_size_ = 0x80000000 - exercises the equivalent bound on
+        // clusters_per_index_block (bug F5).
+        {"index_block_size_shift_overflow",
+         {"clusters_per_index_block magnitude out of range"}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
