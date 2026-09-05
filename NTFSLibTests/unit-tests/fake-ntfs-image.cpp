@@ -846,6 +846,18 @@ std::vector<BYTE> BuildFakeNtfsImageWithOversizedFileRecord()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithFileRecordSizeTooBig()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Patch the shared BPB in place, same technique as
+  // BuildFakeNtfsImageWithOversizedFileRecord() just above.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_file_record = kFileRecordSizeTooBigClustersPerFileRecord;
+
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithHugeMftLcn()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();

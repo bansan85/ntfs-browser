@@ -159,6 +159,37 @@ inline constexpr DWORD kOversizedFileRecordSize = 0x80000000;
 // See F5 in docs/bug-reports/2026-09-03-full-repo.md.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOversizedFileRecord();
 
+// clusters_per_file_record value
+// BuildFakeNtfsImageWithFileRecordSizeTooBig() patches into the BPB -
+// regression fixture for F9: NtfsVolume<S>::ParseBootSector()
+// (src/ntfs-volume.cpp) reads clusters_per_file_record as a signed char
+// (sz); for sz > 0 it computes file_record_size_ = cluster_size_ * sz. sz ==
+// 8 is the largest magnitude F5's own bound on sz still allows ([-12, 8]),
+// and with this fixture's 1024-byte cluster_size_ yields file_record_size_
+// == kFileRecordSizeTooBig (8192) - a whole number of sectors, comfortably
+// >= kMinFileRecordHeaderSize, so every check that predates F9 accepts it,
+// yet it is twice FileRecordHeader::kMaxFileRecordSize (4096), the largest
+// size FileRecordHeader::Data::raw can actually hold. See F9 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+inline constexpr BYTE kFileRecordSizeTooBigClustersPerFileRecord = 8;
+
+// file_record_size_ that kFileRecordSizeTooBigClustersPerFileRecord is
+// expected to produce (cluster_size_ * sz == 1024 * 8).
+inline constexpr DWORD kFileRecordSizeTooBig = 8192;
+
+// Same volume as BuildFakeNtfsImage(), with clusters_per_file_record patched
+// to kFileRecordSizeTooBigClustersPerFileRecord so GetFileRecordSize() would
+// end up kFileRecordSizeTooBig (8192) - legal under every check that
+// predates F9 (a whole number of sectors, an sz magnitude within F5's own
+// bound) but exceeding FileRecordHeader::kMaxFileRecordSize. Unlike
+// BuildFakeNtfsImageWithOversizedFileRecord() above, this fixture's whole
+// point is that NtfsVolume<S>::ParseBootSector() must now reject it outright
+// - it is used only as boot-sector-only bytes (see
+// NTFSLibTests/fuzz/data/file_record_size_too_big), never driven through a
+// full NtfsVolume construction. See F9 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFileRecordSizeTooBig();
+
 // lcn_mft value BuildFakeNtfsImageWithHugeMftLcn() patches into the BPB -
 // regression fixture for F8: NtfsVolume<S>::ParseBootSector() computes
 // mft_addr_ = bpb->lcn_mft * cluster_size_ (src/ntfs-volume.cpp) without ever

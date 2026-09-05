@@ -142,6 +142,21 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // clusters_per_index_block (bug F5).
         {"index_block_size_shift_overflow",
          {"clusters_per_index_block magnitude out of range"}},
+        // clusters_per_file_record = 8 ("sz = 8", the largest magnitude F5's
+        // own bound still allows) yields file_record_size_ = cluster_size_ *
+        // 8 = 8192 - legal under every check that predates F9 (a whole
+        // number of sectors, comfortably >= kMinFileRecordHeaderSize) but
+        // twice FileRecordHeader::kMaxFileRecordSize (4096), the largest
+        // size FileRecordHeader::Data::raw can actually hold. Exercises the
+        // new upper-bound check NtfsVolume<S>::ParseBootSector() now
+        // enforces on file_record_size_ (bug F9, see
+        // file-record-header-size-tests.cpp for the matching unit tests on
+        // FileRecordHeader itself). Only the boot sector's own 512 bytes are
+        // needed - same recipe as file_record_size_shift_overflow above,
+        // this check trips in ParseBootSector() itself, before any
+        // FileRecord read happens.
+        {"file_record_size_too_big",
+         {"FileRecord Size exceeds the maximum supported file record size"}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
@@ -226,7 +241,7 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // used to be entirely unreached by this fuzzer.
         {"attr_name_exceeds_total_size",
          {"Attribute name exceeds attribute bounds."}},
-    };
+};
 
 // The three fixtures below deliberately have no kExpectedErrorMessages
 // entry - only the exit-code check above applies to them.
