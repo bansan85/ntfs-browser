@@ -26,7 +26,7 @@ endif()
 # C++, so also built on Windows as a plain (uninstrumented) executable for local
 # smoke-testing.
 add_executable(NtfsFuzzerAfl "afl-main.cpp" "looping-disk-reader.h"
-                             "looping-disk-reader.cpp")
+                             "looping-disk-reader.cpp" "named-stream-probe.h")
 
 target_link_libraries(NtfsFuzzerAfl PRIVATE ${PROJECT_NAME})
 

@@ -28,8 +28,10 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "looping-disk-reader.h"
+#include "named-stream-probe.h"
 
 using namespace NtfsBrowser;
+using NtfsFuzz::kNamedDataStreamName;
 using NtfsFuzz::LoopingDiskReader;
 
 namespace
@@ -107,10 +109,18 @@ void FuzzOnce(const std::vector<BYTE>& data)
   // two real callers (both pass {}): FindStream() calls GetAttrName() on
   // every named $DATA attribute it walks regardless of what name it was
   // asked to find, so this alone is enough to reach the F2 fix's bound
-  // check. The result is intentionally discarded - only reaching
-  // GetAttrName() matters here, not whether a stream by this name exists.
-  const AttrBase<S>* stream = fr.FindStream(L"F2-probe");
-  (void)stream;
+  // check. It also exercises F18 (docs/bug-reports/2026-09-03-full-repo.md):
+  // on NTFSLibTests/fuzz/data/find_stream_named_data's root record, whose
+  // $DATA attribute is genuinely named kNamedDataStreamName (see
+  // named-stream-probe.h), this call reaches FindStream()'s named-stream
+  // "found" branch. FindStream() itself NTFS_TRACEs which branch it took
+  // (src/file-record.cpp), so the result doesn't need inspecting here -
+  // unlike a plain reach-this-branch trace, fuzzer-regression-tests.cpp's
+  // find-stream-named-tests.cpp Catch2 test is what actually asserts on the
+  // returned pointer/content, since a trace alone can't distinguish "found
+  // and returned" from "found, then fell through anyway" (the shape of the
+  // original F18 bug).
+  (void)fr.FindStream(kNamedDataStreamName);
 }
 
 }  // namespace

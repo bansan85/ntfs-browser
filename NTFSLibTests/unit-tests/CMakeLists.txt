@@ -27,14 +27,19 @@ add_executable(
   "file-record-unparsed-flags-tests.cpp"
   "fragmented-mft-invalid-record-tests.cpp"
   "find-stream-named-tests.cpp"
-  "fuzzer-regression-tests.cpp")
+  "fuzzer-regression-tests.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}
                                                Catch2::Catch2WithMain)
 
 # Needed to build a synthetic NTFS image directly from the library's own on-disk
-# struct layouts (src/data, src/attr) instead of hand-picked offsets.
-target_include_directories(NtfsBrowserTests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+# struct layouts (src/data, src/attr) instead of hand-picked offsets. The fuzz/
+# include lets fake-ntfs-image.h reuse named-stream-probe.h's
+# kNamedDataStreamName instead of duplicating it (see F18).
+target_include_directories(
+  NtfsBrowserTests PRIVATE "${CMAKE_SOURCE_DIR}/src"
+                           "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz")
 
 # Lets fuzzer-regression-tests.cpp replay the saved AFL testcases through the
 # actual NtfsFuzzerAfl binary without hardcoding build-output layout.

@@ -7,6 +7,8 @@
 
 #include <windows.h>
 
+#include "named-stream-probe.h"
+
 namespace NtfsBrowserTests
 {
 
@@ -616,17 +618,18 @@ inline constexpr DWORD kFragmentedMftDataRunLcn = 20;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
 
-// UTF-16 name BuildFakeNtfsImageWithNamedDataStream() gives its resident
-// $DATA attribute - a named data stream, i.e. an NTFS Alternate Data Stream
-// (ADS). Exactly kNamedDataStreamNameLength wide characters (excluding the
-// terminating NUL).
-inline constexpr wchar_t kNamedDataStreamName[] = L"ads";
-
-// kNamedDataStreamName's length in UTF-16 code units (what
-// AttrHeaderCommon::name_length actually counts), independent of
-// sizeof(kNamedDataStreamName) so it stays correct if the name above ever
-// changes.
-inline constexpr BYTE kNamedDataStreamNameLength = 3;
+// kNamedDataStreamName/kNamedDataStreamNameLength (the UTF-16 name
+// BuildFakeNtfsImageWithNamedDataStream() gives its resident $DATA
+// attribute - a named data stream, i.e. an NTFS Alternate Data Stream/ADS)
+// are defined in NTFSLibTests/fuzz/named-stream-probe.h and re-exported
+// here under NtfsBrowserTests, rather than duplicated: it's the same
+// literal string NTFSLibTests/fuzz/afl-main.cpp's FuzzOnce() passes to
+// FindStream() (added for F2, to reach GetAttrName()'s bound check), so a
+// fuzz corpus file built from this fixture's root record drives that
+// existing call straight into FindStream()'s named-stream "found" branch
+// (F18) without needing any harness change.
+using NtfsFuzz::kNamedDataStreamName;
+using NtfsFuzz::kNamedDataStreamNameLength;
 
 // Known, recognizable byte pattern BuildFakeNtfsImageWithNamedDataStream()
 // writes as the entire body of its named $DATA (ADS) attribute - lets a test

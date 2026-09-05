@@ -936,15 +936,20 @@ const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name)
     // Unnamed stream
     if (data->IsUnNamed() && name.empty())
     {
+      NTFS_TRACE("FindStream() found the unnamed stream\n");
       return data.get();
     }
     // Named stream
     if ((!data->IsUnNamed()) && data->GetAttrName() == name)
     {
+      NTFS_TRACE2("FindStream() found stream named \"%.*ls\"\n",
+                  static_cast<int>(name.size()), name.data());
       return data.get();
     }
   }
 
+  NTFS_TRACE2("FindStream() found no stream named \"%.*ls\"\n",
+              static_cast<int>(name.size()), name.data());
   return nullptr;
 }
 

@@ -353,6 +353,29 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"root_record_parse_failure",
          {"IsDeleted() called on a FileRecord with no parsed record",
           "IsDirectory() called on a FileRecord with no parsed record"}},
+        // Root record (#5, built from scratch the same way as
+        // attr_name_exceeds_total_size - boot sector + $Volume + $MFT + root,
+        // concatenated in LoopingDiskReader's read order) whose single
+        // resident $DATA attribute is named exactly kNamedDataStreamName
+        // (NTFSLibTests/fuzz/named-stream-probe.h) - the same name
+        // afl-main.cpp's FuzzOnce() already passes to FindStream() (added
+        // for F2). Regression fixture for F18
+        // (docs/bug-reports/2026-09-03-full-repo.md): FileRecord<S>::
+        // FindStream()'s named-stream branch (src/file-record.cpp) used to
+        // `break;` instead of `return data.get();`, so it fell through to
+        // the same `return nullptr;` used for "not found" and could never
+        // return a named stream even when one existed with a matching name.
+        // FindStream() itself now NTFS_TRACEs whichever branch it takes,
+        // including this one - but note that alone can't discriminate the
+        // original bug: a trace placed *inside* the matching branch fires
+        // whether the code `break`s or `return`s, since both execute the
+        // branch body first. The authoritative regression guard for F18 is
+        // find-stream-named-tests.cpp's Catch2 test
+        // (BuildFakeNtfsImageWithNamedDataStream()), which asserts on the
+        // actual returned pointer/content; this entry only additionally
+        // confirms the trace text and that nothing crashes on this input.
+        {"find_stream_named_data",
+         {"FindStream() found stream named \"F2-probe\""}},
 };
 
 // No new corpus entry was added for bug F11 (docs/bug-reports/2026-09-03-
