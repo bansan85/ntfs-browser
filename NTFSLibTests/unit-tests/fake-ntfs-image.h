@@ -549,4 +549,23 @@ inline constexpr DWORD kAttrListTightPackRealSize = 4096;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory();
 
+// Same volume as BuildFakeNtfsImage(), but with the root directory's (#5)
+// file record zero-filled (magic == 0, not kFileRecordMagic) so
+// FileRecord<S>::ParseFileRecord(ROOT) fails - same technique as
+// BuildFakeNtfsImageWithCorruptMftRecord() above, but targeting ROOT
+// instead of $MFT, so $Volume/$MFT stay valid, IsVolumeOK() stays true, and
+// a caller (the fuzz harnesses' FuzzOnce()) actually reaches its
+// ParseFileRecord(ROOT) call and its failure branch. Regression/coverage
+// fixture for bug F15 (docs/bug-reports/2026-09-03-full-repo.md): a
+// FileRecord whose ParseFileRecord() call failed never assigns
+// file_record_ (see FileRecord<S>::ParseFileRecord(), src/file-record.cpp),
+// so calling IsDeleted()/IsDirectory() on it right after is exactly the
+// "empty file_record_ optional" state the fix guards against - now traced
+// via the NTFS_TRACE call each method's defensive branch gained. See
+// file-record-unparsed-flags-tests.cpp for the original F15 regression test
+// (a FileRecord that never had ParseFileRecord() called on it at all,
+// rather than one whose call failed - a different way to reach the same
+// empty-optional state).
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord();
+
 }  // namespace NtfsBrowserTests

@@ -130,6 +130,12 @@ void FuzzOnce(unsigned seed)
   fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
   {
+    // Exercises the F15 defensive check, matching afl-main.cpp's FuzzOnce():
+    // file_record_ is guaranteed empty here (a failed ParseFileRecord()
+    // never assigns it), so IsDeleted()/IsDirectory() must return false and
+    // trace, not crash. See F15 in docs/bug-reports/2026-09-03-full-repo.md.
+    (void)fr.IsDeleted();
+    (void)fr.IsDirectory();
     return;
   }
   if (!fr.ParseAttrs())

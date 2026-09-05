@@ -324,6 +324,28 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // (possibly inflated) sizeof(). See attr-vol-info-size-tests.cpp for
         // the matching unit test.
         {"volume_information_minimal_size", {"NTFS volume version: 3.1"}},
+        // Boot sector + $Volume + $MFT + root, concatenated in
+        // LoopingDiskReader's read order (same recipe as the other
+        // from-scratch corpus files) - root record (#5) is zero-filled
+        // (magic == 0, not kFileRecordMagic) via
+        // BuildFakeNtfsImageWithCorruptRootRecord() (fake-ntfs-image.h/.cpp),
+        // so FileRecord<S>::ParseFileRecord(ROOT) fails while $Volume/$MFT
+        // stay valid (IsVolumeOK() stays true). Regression/coverage fixture
+        // for bug F15's follow-up (docs/bug-reports/2026-09-03-full-repo.md):
+        // afl-main.cpp's FuzzOnce() now calls IsDeleted()/IsDirectory() right
+        // in this ParseFileRecord() failure branch, where file_record_ is
+        // guaranteed empty (a failed ParseFileRecord() never assigns it) -
+        // exactly the state both methods' defensive "if (!file_record_)"
+        // branch guards, each now carrying its own NTFS_TRACE call
+        // (src/file-record.cpp) confirming it fired instead of dereferencing
+        // the empty optional. FULL_CACHE's very different read-size pattern
+        // diverges into an unrelated "Invalid file record" for this same
+        // input before ever reaching FuzzOnce()'s own ParseFileRecord() call,
+        // same as attr_offset_exceeds_record_size above; only exit code 0 is
+        // asserted for that pass.
+        {"root_record_parse_failure",
+         {"IsDeleted() called on a FileRecord with no parsed record",
+          "IsDirectory() called on a FileRecord with no parsed record"}},
 };
 
 // No new corpus entry was added for bug F11 (docs/bug-reports/2026-09-03-
@@ -418,22 +440,27 @@ const std::unordered_map<std::string, std::vector<std::string>>
 // check ever gates.
 //
 // Bug F15 (FileRecord<S>::IsDeleted()/IsDirectory() dereferencing an empty
-// file_record_ optional, docs/bug-reports/2026-09-03-full-repo.md) has no
-// corpus entry either, and for a similar "unreachable from here" reason,
-// though the mechanism is different from the two above: it isn't gated out
-// by an earlier bounds check that always fires first - it's simply never
-// exercised at all, from either fuzzer, because neither main.cpp's
-// FuzzOnce() nor afl-main.cpp's FuzzOnce() ever calls IsDeleted() or
-// IsDirectory() in the first place (both stop at TraverseSubEntries()/
-// FindStream()), and both bail out via an early "return;" the moment
-// ParseFileRecord()/ParseAttrs() fails, before reaching any call that
-// could. This bug is purely a caller-discipline API contract issue - a
-// public accessor called before/without a successful parse - not something
-// any sequence of on-disk bytes fed through the fuzz harnesses' fixed call
-// sequence could ever trigger. Real coverage lives in
-// file-record-unparsed-flags-tests.cpp instead, which constructs a
-// FileRecord<S> and calls IsDeleted()/IsDirectory() directly without ever
-// calling ParseFileRecord() on it.
+// file_record_ optional, docs/bug-reports/2026-09-03-full-repo.md) DOES now
+// have a corpus entry - root_record_parse_failure above - added as a
+// follow-up once both methods gained their own NTFS_TRACE call inside the
+// "if (!file_record_)" defensive branch itself (not on the normal-path
+// return, which says nothing about the fix). An earlier version of this
+// follow-up called IsDeleted()/IsDirectory() right after a *successful*
+// ParseAttrs() - reachable, but wrong: file_record_ is populated by then, so
+// that call only ever exercised the normal path, never the empty-optional
+// branch the fix actually added. FuzzOnce() (afl-main.cpp) now calls both
+// methods instead in the ParseFileRecord() *failure* branch, where
+// file_record_ is guaranteed empty (ParseFileRecord() only ever assigns it
+// on its very last, success-only line - see src/file-record.cpp) - the same
+// state file-record-unparsed-flags-tests.cpp's direct unit test targets, now
+// also reachable through a real (if synthetic) on-disk byte stream:
+// BuildFakeNtfsImageWithCorruptRootRecord() (fake-ntfs-image.h/.cpp) makes
+// ROOT's own ParseFileRecord() fail while leaving $Volume/$MFT valid, so
+// FuzzOnce() reaches that failure branch instead of returning earlier via
+// !volume.IsVolumeOK(). Real, direct coverage of the original defect still
+// lives in file-record-unparsed-flags-tests.cpp (a FileRecord that never had
+// ParseFileRecord() called on it at all, rather than one whose call failed -
+// a different route to the same empty-optional state).
 
 struct RunResult
 {

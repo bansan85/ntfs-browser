@@ -1283,6 +1283,26 @@ std::vector<BYTE> BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Zero out the root directory's (#5) own record - same technique as
+  // BuildFakeNtfsImageWithCorruptMftRecord() above, but targeting ROOT
+  // instead of $MFT: magic no longer matches kFileRecordMagic, so
+  // FileRecord<S>::ParseFileRecord(ROOT) fails, while $Volume (#3) and $MFT
+  // (#0) (written at different offsets) are untouched and stay valid, so
+  // IsVolumeOK() stays true and a caller reaches the ParseFileRecord(ROOT)
+  // call - and its failure branch - at all. See F15 in
+  // docs/bug-reports/2026-09-03-full-repo.md.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  std::memset(image.data() + rootOffset, 0, kFakeFileRecordSize);
+
+  return image;
+}
+
 std::filesystem::path WriteFakeNtfsImage()
 {
   const std::vector<BYTE> image = BuildFakeNtfsImage();

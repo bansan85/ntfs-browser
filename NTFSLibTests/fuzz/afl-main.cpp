@@ -84,6 +84,16 @@ void FuzzOnce(const std::vector<BYTE>& data)
   fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION | Mask::DATA);
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
   {
+    // Exercises the F15 defensive check (src/file-record.cpp): file_record_
+    // is guaranteed empty here (the constructor default-initializes it, and
+    // a failed ParseFileRecord() never assigns it), so IsDeleted()/
+    // IsDirectory() must return false - and trace, not crash, which was UB
+    // pre-fix on an empty file_record_ optional - rather than reaching the
+    // normal path below, which requires a successful parse. See F15 in
+    // docs/bug-reports/2026-09-03-full-repo.md. Results discarded, only
+    // reaching the trace calls matters here.
+    (void)fr.IsDeleted();
+    (void)fr.IsDirectory();
     return;
   }
   if (!fr.ParseAttrs())
