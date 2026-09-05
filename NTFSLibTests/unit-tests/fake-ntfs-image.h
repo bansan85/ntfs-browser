@@ -32,6 +32,28 @@ inline constexpr uint32_t kFakeFileRecordSize = 1024;
 // Returns the path NtfsVolume<S> should be opened with.
 [[nodiscard]] std::filesystem::path WriteFakeNtfsImage();
 
+// Real on-disk size (bytes) of the $VOLUME_INFORMATION attribute: an 8-byte
+// reserved field, 1-byte major version, 1-byte minor version and a 2-byte
+// flags field - 12 bytes total, with no trailing padding on disk. Hardcoded
+// here, independent of sizeof(Attr::VolumeInformation), so this fixture keeps
+// exercising the true on-disk size even if that struct's own layout changes
+// again - regression fixture for the bug fixed alongside F44
+// (docs/bug-reports/2026-09-03-full-repo.md): AttrVolInfo's ctor rejects any
+// attribute smaller than sizeof(Attr::VolumeInformation), but without
+// #pragma pack(1) that sizeof() is inflated to 16 by alignof(ULONGLONG)
+// padding, so it rejected every real volume's (12-byte) attribute. The
+// default BuildFakeNtfsImage() fixture couldn't catch this on its own: it
+// sizes its $Volume record off the very same (possibly wrong) sizeof(), so it
+// stays self-consistent with the bug instead of exposing it.
+inline constexpr WORD kMinimalVolumeInformationSize = 12;
+
+// Same volume as BuildFakeNtfsImage(), with $Volume's (#3) VOLUME_INFORMATION
+// attribute shrunk to exactly kMinimalVolumeInformationSize (12) bytes - the
+// true on-disk size - instead of whatever sizeof(Attr::VolumeInformation)
+// currently computes to. Must still open successfully (IsVolumeOK() ==
+// true) and report version 3.1.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation();
+
 // MFT index of the directory record built by
 // BuildFakeNtfsImageWithAttributeListDirectory(): its only attribute is a
 // resident $ATTRIBUTE_LIST relocating $INDEX_ROOT to kIndexExtensionIdx.

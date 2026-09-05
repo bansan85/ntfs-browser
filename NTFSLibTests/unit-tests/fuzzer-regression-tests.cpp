@@ -290,6 +290,26 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // code 0 is asserted for that pass.
         {"attr_offset_exceeds_record_size",
          {"Offset of attr must be within the file record buffer"}},
+        // Boot sector + $Volume + $MFT + root, concatenated in
+        // LoopingDiskReader's read order (same recipe as the other
+        // from-scratch corpus files) - $Volume's (#3) VOLUME_INFORMATION
+        // attribute is shrunk to exactly 12 bytes, the true on-disk size,
+        // via BuildFakeNtfsImageWithMinimalVolumeInformation()
+        // (fake-ntfs-image.h/.cpp). This is NOT a malformed/fuzzed input:
+        // it is a well-formed volume, and the whole point is that it must
+        // parse *successfully* ("NTFS volume version: 3.1" - the message
+        // NtfsVolume<S>::Init(), src/ntfs-volume.cpp, prints unconditionally
+        // on both strategies once $Volume's attribute is accepted). Without
+        // #pragma pack(1) on Attr::VolumeInformation (src/attr/
+        // volume-information.h), alignof(ULONGLONG) pads sizeof() up to 16,
+        // so AttrVolInfo's ctor (src/attr-vol-info.cpp) rejected this
+        // real-size (12-byte) attribute with "Volume Information attribute
+        // smaller than expected." instead - silently breaking every real
+        // volume open, while every existing corpus/fixture kept passing
+        // because they all size their own $Volume attribute off that same
+        // (possibly inflated) sizeof(). See attr-vol-info-size-tests.cpp for
+        // the matching unit test.
+        {"volume_information_minimal_size", {"NTFS volume version: 3.1"}},
 };
 
 // The three fixtures below deliberately have no kExpectedErrorMessages
