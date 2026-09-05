@@ -12,7 +12,10 @@
 // supposed to produce -- not just "didn't crash", but "failed for the right
 // reason". Testcases without an entry only get the exit-code check, because
 // they don't reach a distinct NTFS_TRACE'd error (eg. attr_type_slot_aliasing,
-// invalid_header_common).
+// invalid_header_common, corrupt_mft_record_volume_ok,
+// full_cache_index_block_crosses_64kib_block,
+// full_cache_attribute_list_record_growth - see the comments near the bottom
+// of kExpectedErrorMessages for why those three have none).
 
 #include <algorithm>
 #include <array>
@@ -123,7 +126,124 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
+        // ROOT's own $ATTRIBUTE_LIST has 3 entries: (INDEX_ROOT, record 6),
+        // (INDEX_ALLOCATION, record 6), (INDEX_ROOT, record 6 again) - the
+        // 3rd is a genuine duplicate of the 1st's (record, type) pair and
+        // must be skipped with this message, while the 2nd (a DIFFERENT
+        // type on the SAME record) must still resolve normally - exactly
+        // the distinction F17's fix (dedupe by (record, attribute type),
+        // not record alone) makes. Before that fix, entry 2 would also
+        // have been wrongly skipped as "already resolved". See F17 in
+        // docs/bug-reports/2026-09-03-full-repo.md.
+        {"attribute_list_multi_type_same_record",
+         {"Attribute List: record 6, type 0x0090 already resolved in this "
+          "chain, skipping"}},
+        // F8 catch #1/#7 (src/attr-non-resident.cpp,
+        // AttrNonResident<S>::ReadClusters()): ROOT's $ATTRIBUTE_LIST
+        // relocates $INDEX_ALLOCATION to record #16 (>= Enum::MftIdx::USER),
+        // reachable only through volume_.mft_data_ ($MFT's own DATA
+        // attribute) - patched to a single data run whose LCN makes
+        // lcn * cluster_size overflow a LONGLONG. gsl::narrowing_error is
+        // caught right at the throw site (not just runtime_error, since F8
+        // widened this exact catch) and reported through ReadClusters()'s
+        // normal std::optional channel; the resulting ParseFileRecord()
+        // failure makes AttrList's ctor throw, which FileRecord::ParseAttr()
+        // catches in turn (also widened by F8) - one fixture, two of F8's
+        // seven touched catches. See F8 in
+        // docs/bug-reports/2026-09-03-full-repo.md.
+        {"mft_data_run_cluster_lcn_narrowing_error",
+         {"Cannot read cluster with LCN", "narrowing_error",
+          "Attribute Parse error: 0x0020"}},
+        // F8 catch #6 (src/file-record.cpp, FileRecord<S>::ReadFileRecord()'s
+        // fragmented-$MFT-path FileRecordHeader::Factory<S>() call) - this
+        // try/catch did not exist at all before F8; any exception here used
+        // to escape unguarded. Same $ATTRIBUTE_LIST -> record #16
+        // mechanism as above, but $MFT's DATA run now points at a real,
+        // in-bounds location holding record #16's own raw bytes: valid
+        // magic, but offset_of_us (1024) is out of bounds, so
+        // FileRecordHeader's ctor throws "Offset must be lower than 1024."
+        // from inside this exact path.
+        {"fragmented_record_header_factory_throw",
+         {"Offset must be lower than 1024.", "Attribute Parse error: 0x0020"}},
+        // F8 catch #7 (src/ntfs-volume.cpp, NtfsVolume<S>::ParseBootSector()'s
+        // upfront mft_addr_ bound): lcn_mft = 2^53 makes mft_addr_ = 2^63 -
+        // representable in the ULONGLONG it's stored in, but rejected
+        // outright before $MFT/$Volume/root are ever read, since it would
+        // later make FileRecord::ReadFileRecord()'s
+        // gsl::narrow<LONGLONG>(mft_addr_ + ...) throw. Same fixture as
+        // mft-addr-narrowing-tests.cpp's unit test.
+        //
+        // F8's other 5 touched catches: the 2 in ReadClusters() and the 1 in
+        // ParseAttr() above are covered by this file and
+        // mft_data_run_cluster_lcn_narrowing_error; the direct-allocation-path
+        // FileRecordHeader::Factory<S>() call (widened runtime_error ->
+        // exception, same as the fragmented-path one above) is already
+        // exercised - on root record #5 itself - by invalid_offset_of_us and
+        // usn_array_exceeds_record_buffer above. The remaining 2
+        // (ReadClusters()'s `clusters` DWORD-narrow, and
+        // ReadFileRecord()'s direct-allocation-path frAddr LONGLONG-narrow)
+        // are dead code given other bounds already enforced elsewhere:
+        // `clusters * cluster_size` can never reach 2^32 because it is
+        // always <= index_block_size_, itself capped around 2.1e9 by how
+        // clusters_per_index_block is decoded (a truncated signed byte);
+        // and mft_addr_ + file_record_size_ * fileRef can never reach 2^63
+        // because fileRef is bounded to 48 bits (MftSegmentReference /
+        // Data::IndexEntry::mft_index) and mft_addr_ is itself already
+        // capped at LLONG_MAX/2 by this very check - deliberately, to leave
+        // headroom for that addition (see the comment in ParseBootSector()
+        // right above the check). Both bounds are Strategy-independent, so
+        // FULL_CACHE does not change this.
+        {"mft_addr_narrowing_error", {"MFT address is invalid"}},
     };
+
+// The three fixtures below deliberately have no kExpectedErrorMessages
+// entry - only the exit-code check above applies to them.
+//
+// corrupt_mft_record_volume_ok - regression fixture for F14
+// (docs/bug-reports/2026-09-03-full-repo.md): NtfsVolume<S>::Init() used to
+// set volume_ok_ = true right after $Volume parsed, before $MFT's own
+// record was even read - if that failed (as it does here: $MFT is
+// zero-filled), IsVolumeOK() would wrongly report true with mft_data_
+// still null. The fix doesn't add a distinct NTFS_TRACE message of its
+// own - GetRecordsCount(), the function that used to dereference that null
+// pointer, is never called by this fuzzer at all - so this fixture only
+// proves the fixed code path (Init() returning early without ever setting
+// volume_ok_) runs cleanly for this input, same as
+// mft-parse-failure-volume-ok-tests.cpp's unit test (which does check
+// IsVolumeOK()/GetRecordsCount() directly).
+//
+// full_cache_index_block_crosses_64kib_block and
+// full_cache_attribute_list_record_growth - F19 and N3
+// (docs/bug-reports/2026-09-03-full-repo.md) only manifest under
+// Strategy::FULL_CACHE - NtfsFuzzerAfl used to hardcode Strategy::NO_CACHE
+// and could never reach either, so afl-main.cpp now runs every testcase
+// through both strategies. Neither fixture was recorded to make sense
+// under NO_CACHE too (it replays the same bytes under both strategies from
+// the same starting position, so NO_CACHE's very different read-size
+// pattern diverges quickly into an unrelated, harmless parse failure -
+// "Invalid file record" in these two cases; only exit code 0 is asserted).
+//
+// full_cache_index_block_crosses_64kib_block: ROOT's $INDEX_ROOT/
+// $INDEX_ALLOCATION describe one 128KiB index block via a single data run
+// starting at a non-block-aligned LCN, so reading it crosses more than one
+// of FileReader<FULL_CACHE>::Read()'s 64KiB cache blocks in one call - the
+// exact case that used to only be guarded by an assert() (compiled out in
+// Release) and, if it slipped through anyway, returned a span reaching
+// past the single 64KiB slice actually read. "Successfully read 128
+// clusters from LCN 24" in the captured output confirms the crossing read
+// completed instead of asserting/crashing.
+//
+// full_cache_attribute_list_record_growth: ROOT's $ATTRIBUTE_LIST
+// relocates $INDEX_ALLOCATION into 4 distinct extension records under
+// FULL_CACHE, growing AttrList's file_record_list_ repeatedly - the exact
+// non-forged shape N3 describes (a heavily fragmented directory's
+// $INDEX_ALLOCATION relocated across several extension records).
+// file_record_list_ is a std::list (the N3 fix), so this no longer
+// relocates already-constructed FileRecords/dangling attribute references
+// on growth; this fuzzer doesn't inspect GetDataSize() values the way
+// attribute-list-tests.cpp's unit test does, so a clean exit here is the
+// only signal available - a real regression back to std::vector would
+// need that unit test to catch it, not this file.
 
 struct RunResult
 {

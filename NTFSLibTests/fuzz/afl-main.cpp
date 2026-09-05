@@ -57,12 +57,20 @@ void PatchBpbSignature(std::vector<BYTE>& data)
 // is exactly what AFL's forkserver/instrumentation detects via this
 // process's exit status. No SEH: __try/__except doesn't exist under GCC, and
 // AFL doesn't need it.
-void FuzzOnce(std::vector<BYTE> data)
+//
+// Templated on Strategy so the exact same input drives both NO_CACHE and
+// FULL_CACHE (see the two calls in main()) - some bugs (eg. F19, N3, see
+// docs/bug-reports/2026-09-03-full-repo.md) only manifest in FULL_CACHE's
+// object graph (by-value record buffers, cached 64KiB blocks) and are
+// otherwise entirely invisible to this fuzzer, which used to hardcode
+// NO_CACHE only.
+template <Strategy S>
+void FuzzOnce(const std::vector<BYTE>& data)
 {
-  PatchBpbSignature(data);
-
-  NtfsVolume<Strategy::NO_CACHE> volume(
-      std::make_unique<LoopingDiskReader>(std::move(data)));
+  // Each strategy gets its own LoopingDiskReader over its own copy of data,
+  // so both runs replay the exact same bytes from the same starting
+  // position, independently of each other.
+  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data));
   if (!volume.IsVolumeOK())
   {
     return;
@@ -100,9 +108,25 @@ int main(int argc, char* argv[])
     return 0;
   }
 
+  PatchBpbSignature(*data);
+
+  // Run both strategies against the same input, each independently
+  // try/catch-guarded so a "handled" exception (or crash) in one doesn't
+  // prevent the other from running.
   try
   {
-    FuzzOnce(std::move(*data));
+    FuzzOnce<Strategy::NO_CACHE>(*data);
+  }
+  catch (const std::exception&)
+  {
+  }
+  catch (...)
+  {
+  }
+
+  try
+  {
+    FuzzOnce<Strategy::FULL_CACHE>(*data);
   }
   catch (const std::exception&)
   {
