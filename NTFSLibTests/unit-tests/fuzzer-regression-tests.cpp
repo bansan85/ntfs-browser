@@ -67,6 +67,15 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
+        {"attribute_list_multi_type_same_record",
+         {"Attribute List: record 6, type 0x0090 already resolved in this "
+          "chain, skipping"}},
+        {"mft_data_run_cluster_lcn_narrowing_error",
+         {"Cannot read cluster with LCN", "narrowing_error",
+          "Attribute Parse error: 0x0020"}},
+        {"fragmented_record_header_factory_throw",
+         {"Offset must be lower than 1024.", "Attribute Parse error: 0x0020"}},
+        {"mft_addr_narrowing_error", {"MFT address is invalid"}},
     };
 
 struct RunResult

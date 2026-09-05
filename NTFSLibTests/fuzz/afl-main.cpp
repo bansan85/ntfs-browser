@@ -40,12 +40,15 @@ void PatchBpbSignature(std::vector<BYTE>& data)
 // Opens the volume, parses the root file record, then walks its sub
 // entries. A thrown exception counts as handled input rejection; only a
 // real crash escapes, which AFL detects via this process's exit status.
-void FuzzOnce(std::vector<BYTE> data)
+//
+// Templated on Strategy so the same input drives both NO_CACHE and
+// FULL_CACHE (see main()): some bugs only manifest in FULL_CACHE's object
+// graph and are otherwise invisible to this fuzzer.
+template <Strategy S>
+void FuzzOnce(const std::vector<BYTE>& data)
 {
-  PatchBpbSignature(data);
-
-  NtfsVolume<Strategy::NO_CACHE> volume(
-      std::make_unique<LoopingDiskReader>(std::move(data)));
+  // Copied so both strategies replay the exact same bytes independently.
+  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data));
   if (!volume.IsVolumeOK())
   {
     return;
@@ -84,9 +87,23 @@ int main(int argc, char* argv[])
     return 0;
   }
 
+  PatchBpbSignature(*data);
+
+  // Guarded independently, so one strategy's exception can't skip the other.
   try
   {
-    FuzzOnce(std::move(*data));
+    FuzzOnce<Strategy::NO_CACHE>(*data);
+  }
+  catch (const std::exception&)
+  {
+  }
+  catch (...)
+  {
+  }
+
+  try
+  {
+    FuzzOnce<Strategy::FULL_CACHE>(*data);
   }
   catch (const std::exception&)
   {
