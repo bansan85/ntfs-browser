@@ -820,6 +820,32 @@ std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithOversizedIndexBlock()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Patch the shared BPB in place, same technique as
+  // BuildFakeNtfsImageWithTinyIndexBlock(): clusters_per_index_block is a
+  // DWORD field, but ntfs-volume.cpp::ParseBootSector() only ever consults
+  // its low byte, truncated to a signed char.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_index_block = kOversizedClustersPerIndexBlock;
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithOversizedFileRecord()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Patch the shared BPB in place, same technique as
+  // BuildFakeNtfsImageWithOversizedIndexBlock() just above.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_file_record = kOversizedClustersPerFileRecord;
+
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithHugeMftLcn()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();

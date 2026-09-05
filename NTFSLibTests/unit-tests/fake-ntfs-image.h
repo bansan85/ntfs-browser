@@ -111,6 +111,54 @@ inline constexpr DWORD kTinyIndexBlockSize = 2;
 // the volume regardless. See F6 in docs/bug-reports/2026-09-03-full-repo.md.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock();
 
+// clusters_per_index_block value BuildFakeNtfsImageWithOversizedIndexBlock()
+// patches into the BPB - regression fixture for F5:
+// NtfsVolume<S>::ParseBootSector() (src/ntfs-volume.cpp) reads
+// clusters_per_index_block as a signed char (sz); for sz <= 0 it computes
+// index_block_size_ = 1U << static_cast<unsigned char>(-sz). 0xE1 -> sz =
+// -31, a shift amount that is still < 32 (so, unlike sz = -128, this does
+// NOT itself invoke undefined behaviour on the 32-bit 1U), but the result -
+// 1U << 31 == 0x80000000 (2 GiB) - is nowhere near a plausible index block
+// size, yet F6's own bound check (index_block_size_ >= sizeof(Data::
+// IndexBlock) && index_block_size_ % sector_size_ == 0) does not catch it:
+// 0x80000000 is far bigger than 40 and evenly divisible by every common
+// sector size. See F5 in docs/bug-reports/2026-09-03-full-repo.md.
+inline constexpr BYTE kOversizedClustersPerIndexBlock = 0xE1;
+
+// index_block_size_ that kOversizedClustersPerIndexBlock is expected to
+// produce.
+inline constexpr DWORD kOversizedIndexBlockSize = 0x80000000;
+
+// Same volume as BuildFakeNtfsImage(), with clusters_per_index_block patched
+// to kOversizedClustersPerIndexBlock so GetIndexBlockSize() ends up
+// kOversizedIndexBlockSize (2 GiB) - a well-defined (no UB in the shift
+// itself) but absurd size that F6's existing checks do not reject. See F5 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOversizedIndexBlock();
+
+// clusters_per_file_record value BuildFakeNtfsImageWithOversizedFileRecord()
+// patches into the BPB - same reasoning and same 0xE1 -> sz = -31 -> 1U << 31
+// == 0x80000000 shift as kOversizedClustersPerIndexBlock above, but for
+// file_record_size_ instead of index_block_size_. See F5 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+inline constexpr BYTE kOversizedClustersPerFileRecord = 0xE1;
+
+// file_record_size_ that kOversizedClustersPerFileRecord is expected to
+// produce.
+inline constexpr DWORD kOversizedFileRecordSize = 0x80000000;
+
+// Same volume as BuildFakeNtfsImage(), with clusters_per_file_record patched
+// to kOversizedClustersPerFileRecord so GetFileRecordSize() ends up
+// kOversizedFileRecordSize (2 GiB). Unlike the index-block variant above,
+// this field is actually consumed by FileRecord<S>::ReadFileRecord() the
+// moment any file record is read (record_buffer_.resize(GetFileRecordSize())),
+// which NtfsVolume<S>::Init() does unconditionally for the $Volume record
+// before ever reporting IsVolumeOK() - so this fixture is deliberately not
+// driven through a full NtfsVolume construction in tests (that would itself
+// perform the very unbounded 2 GiB allocation F5 is about preventing).
+// See F5 in docs/bug-reports/2026-09-03-full-repo.md.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOversizedFileRecord();
+
 // lcn_mft value BuildFakeNtfsImageWithHugeMftLcn() patches into the BPB -
 // regression fixture for F8: NtfsVolume<S>::ParseBootSector() computes
 // mft_addr_ = bpb->lcn_mft * cluster_size_ (src/ntfs-volume.cpp) without ever
