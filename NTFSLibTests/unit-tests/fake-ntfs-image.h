@@ -384,4 +384,22 @@ inline constexpr wchar_t kAttrNameBoundsSentinel[] = L"PWNED!";
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithAttrNameExceedsTotalSize();
 
+// offset_of_attr value BuildFakeNtfsImageWithAttrOffsetOutOfBounds() patches
+// into the root directory record (#5) - regression fixture for the
+// HeaderCommon() half of bug F9: FileRecordHeader::HeaderCommon()
+// (src/data/file-record-header.cpp) bounds offset_of_attr against this
+// instance's own buffer_size_ (kFakeFileRecordSize, 1024, for every record in
+// this fixture), so a value this far past it - well within a WORD's range -
+// must be rejected instead of read past the record. See F9 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+inline constexpr WORD kAttrOffsetOutOfBounds = 2000;
+
+// Same volume as BuildFakeNtfsImage(), with the root directory's (#5)
+// offset_of_attr patched to kAttrOffsetOutOfBounds - regression fixture for
+// FileRecordHeader::HeaderCommon()'s buffer_size_ bound (bug F9):
+// FileRecord<S>::ParseAttrs() calls HeaderCommon() to locate the first
+// attribute, so this must make ParseAttrs() reject the whole record instead
+// of reading past its real, exactly-1024-byte extent.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds();
+
 }  // namespace NtfsBrowserTests

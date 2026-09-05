@@ -4,6 +4,7 @@
 
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/file-record.h>
+#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
@@ -14,6 +15,7 @@ using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Enum::MftIdx;
 
 // Regression test for bug F1: FileRecord::ParseAttrs() only ever checked
 // that an attribute's total_size fits within the 1024-byte record buffer
@@ -74,4 +76,30 @@ TEST_CASE(
 
   CHECK_FALSE(record.ParseAttrs());
   CHECK(record.getAttr(AttrType::REPARSE_POINT).empty());
+}
+
+// Regression test for the HeaderCommon() half of bug F9:
+// FileRecordHeader::HeaderCommon() (src/data/file-record-header.cpp) locates
+// a record's first attribute via offset_of_attr, bounded against this
+// instance's own buffer_size_ - not just the union's static capacity (see
+// file-record-header-size-tests.cpp for a test targeting HeaderCommon()
+// directly). FileRecord::ParseAttrs() calls HeaderCommon() to find that first
+// attribute, so a forged offset_of_attr pointing well past the root
+// directory's real, exactly-1024-byte extent must make ParseAttrs() reject
+// the whole record instead of reading past it.
+TEST_CASE(
+    "ParseAttrs rejects a record whose offset_of_attr exceeds its own file "
+    "record size (F9)",
+    "[file-record][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttrOffsetOutOfBounds());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+
+  CHECK_FALSE(record.ParseAttrs());
 }

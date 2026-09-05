@@ -96,3 +96,32 @@ TEST_CASE(
   CHECK(volume.GetFileRecordSize() !=
         NtfsBrowserTests::kOversizedFileRecordSize);
 }
+
+// Same F9 upper-bound rejection (file_record_size_ > kMaxFileRecordSize) as
+// the test above, but reached via the OTHER arithmetic branch:
+// clusters_per_file_record = kFileRecordSizeTooBigClustersPerFileRecord (8,
+// sz > 0) gives file_record_size_ = cluster_size_ * 8 = 8192 - legal under
+// every check that predates F9 (a whole number of sectors, an sz magnitude
+// within F5's own [-12, 8] bound) but still twice
+// FileRecordHeader::kMaxFileRecordSize (4096). Unlike the shift-based case
+// above, the multiply itself is never UB, so F5's own fix has no reason to
+// bound sz before computing it here - file_record_size_ is actually assigned
+// before F9's check rejects it, so GetFileRecordSize() legitimately still
+// holds kFileRecordSizeTooBig afterwards. IsVolumeOK() is the meaningful
+// assertion instead: ParseBootSector() returns false before Init() (and any
+// downstream file-record read) ever runs. See F9 in
+// docs/bug-reports/2026-09-03-full-repo.md.
+TEST_CASE(
+    "NtfsVolume must not accept a volume whose BPB describes a file record "
+    "size that exceeds kMaxFileRecordSize via the positive "
+    "clusters_per_file_record branch (F9)",
+    "[ntfs-volume][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithFileRecordSizeTooBig());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+
+  CHECK(volume.GetFileRecordSize() == NtfsBrowserTests::kFileRecordSizeTooBig);
+  CHECK_FALSE(volume.IsVolumeOK());
+}

@@ -241,6 +241,24 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // used to be entirely unreached by this fuzzer.
         {"attr_name_exceeds_total_size",
          {"Attribute name exceeds attribute bounds."}},
+        // Root record (#5, built the same way as attr_name_exceeds_total_size
+        // just above - boot sector + $Volume + $MFT + root, concatenated in
+        // LoopingDiskReader's read order) whose offset_of_attr (2000) is
+        // patched well past its own 1024-byte extent - exercises the
+        // HeaderCommon() half of bug F9: FileRecordHeader::HeaderCommon()
+        // (src/data/file-record-header.cpp) bounds offset_of_attr against
+        // this instance's own buffer_size_, and FileRecord::ParseAttrs()
+        // (which calls HeaderCommon() to locate the first attribute, no
+        // FindStream()/harness widening needed here, unlike F2) must reject
+        // the whole record instead of reading past it. See
+        // parse-attrs-total-size-tests.cpp for the matching unit test. Only
+        // reproduces under NO_CACHE - like full_cache_index_block_crosses_
+        // 64kib_block/full_cache_attribute_list_record_growth below,
+        // FULL_CACHE's very different read-size pattern diverges into an
+        // unrelated "Invalid file record" for this same input; only exit
+        // code 0 is asserted for that pass.
+        {"attr_offset_exceeds_record_size",
+         {"Offset of attr must be within the file record buffer"}},
 };
 
 // The three fixtures below deliberately have no kExpectedErrorMessages
@@ -291,6 +309,25 @@ const std::unordered_map<std::string, std::vector<std::string>>
 // attribute-list-tests.cpp's unit test does, so a clean exit here is the
 // only signal available - a real regression back to std::vector would
 // need that unit test to catch it, not this file.
+//
+// Two of bug F9's own messages have no corpus file at all, not even one
+// without a kExpectedErrorMessages entry: FileRecordHeader's ctor
+// (src/data/file-record-header.cpp) rejects buffer.size() outside
+// [kMinFileRecordHeaderSize, kMaxFileRecordSize] with "Buffer size of
+// FileRecordHeader is smaller than the minimum file record header size."/
+// "...exceeds the maximum supported file record size.", but both
+// FileRecord<S>::ReadFileRecord() call sites (src/file-record.cpp) only ever
+// construct a FileRecordHeader from record_buffer_, which is always resized
+// to exactly volume_.GetFileRecordSize() - a value NtfsVolume<S>::
+// ParseBootSector() already validated against that very same range before
+// Init() (and so ReadFileRecord()) can ever run. So through the real
+// NtfsVolume/FileRecord pipeline both fuzzers drive, file_record_size_ can
+// never disagree with FileRecordHeader's own ctor bound by the time it gets
+// there - this ctor-level check is dead code from a fuzzing perspective,
+// exactly like the two F8 catches documented above it. Real coverage lives
+// in file-record-header-size-tests.cpp instead, which calls
+// FileRecordHeader::Factory<S>() directly with buffer sizes no volume-level
+// check ever gates.
 
 struct RunResult
 {
