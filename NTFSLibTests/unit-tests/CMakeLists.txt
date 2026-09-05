@@ -14,6 +14,7 @@ add_executable(
   "filename-compare-tests.cpp"
   "parse-attrs-total-size-tests.cpp"
   "file-record-header-fixup-tests.cpp"
+  "file-record-header-size-tests.cpp"
   "index-block-fixup-tests.cpp"
   "boot-sector-index-block-size-tests.cpp"
   "boot-sector-oversized-record-size-tests.cpp"
