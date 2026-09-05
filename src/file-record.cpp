@@ -394,7 +394,10 @@ std::optional<IndexEntry> FileRecord<S>::VisitIndexBlock(
       const int i = ie.Compare(fileName);
       if (i == 0)
       {
-        // Must be a copy. Either, will be invalid when ib is destroyed.
+        // Must be a copy: ib is destroyed on return, but ie's shared_ptr<BYTE[]>
+        // (its own copy of ib's Index Block buffer, AttrIndexAlloc<S>::
+        // ParseIndexBlock()) keeps its backing bytes alive regardless (F21,
+        // docs/bug-reports/2026-09-03-full-repo.md).
         return ie;
       }
       if (i < 0)  // fileName is smaller than IndexEntry
@@ -886,7 +889,11 @@ std::optional<IndexEntry>
       const int i = ie.Compare(fileName);
       if (i == 0)
       {
-        // Must be a copy.
+        // Must be a copy: ie's shared_ptr<BYTE[]> (its own copy of $INDEX_ROOT's
+        // resident data, AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()) keeps
+        // its backing bytes alive independently of this FileRecord, exactly
+        // like the $INDEX_ALLOCATION case above (F21,
+        // docs/bug-reports/2026-09-03-full-repo.md).
         return ie;
       }
       if (i < 0)  // fileName is smaller than IndexEntry
