@@ -941,7 +941,7 @@ const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name)
     // Named stream
     if ((!data->IsUnNamed()) && data->GetAttrName() == name)
     {
-      break;
+      return data.get();
     }
   }
 
