@@ -952,6 +952,11 @@ const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name)
 template <Strategy S>
 bool FileRecord<S>::IsDeleted() const noexcept
 {
+  if (!file_record_)
+  {
+    return false;
+  }
+
   return !static_cast<bool>(file_record_->GetData()->flags &
                             Flag::FileRecord::INUSE);
 }
@@ -960,6 +965,11 @@ bool FileRecord<S>::IsDeleted() const noexcept
 template <Strategy S>
 bool FileRecord<S>::IsDirectory() const noexcept
 {
+  if (!file_record_)
+  {
+    return false;
+  }
+
   return static_cast<bool>(file_record_->GetData()->flags &
                            Flag::FileRecord::DIR);
 }

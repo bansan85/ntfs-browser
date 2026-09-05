@@ -416,6 +416,24 @@ const std::unordered_map<std::string, std::vector<std::string>>
 // in file-record-header-size-tests.cpp instead, which calls
 // FileRecordHeader::Factory<S>() directly with buffer sizes no volume-level
 // check ever gates.
+//
+// Bug F15 (FileRecord<S>::IsDeleted()/IsDirectory() dereferencing an empty
+// file_record_ optional, docs/bug-reports/2026-09-03-full-repo.md) has no
+// corpus entry either, and for a similar "unreachable from here" reason,
+// though the mechanism is different from the two above: it isn't gated out
+// by an earlier bounds check that always fires first - it's simply never
+// exercised at all, from either fuzzer, because neither main.cpp's
+// FuzzOnce() nor afl-main.cpp's FuzzOnce() ever calls IsDeleted() or
+// IsDirectory() in the first place (both stop at TraverseSubEntries()/
+// FindStream()), and both bail out via an early "return;" the moment
+// ParseFileRecord()/ParseAttrs() fails, before reaching any call that
+// could. This bug is purely a caller-discipline API contract issue - a
+// public accessor called before/without a successful parse - not something
+// any sequence of on-disk bytes fed through the fuzz harnesses' fixed call
+// sequence could ever trigger. Real coverage lives in
+// file-record-unparsed-flags-tests.cpp instead, which constructs a
+// FileRecord<S> and calls IsDeleted()/IsDirectory() directly without ever
+// calling ParseFileRecord() on it.
 
 struct RunResult
 {
