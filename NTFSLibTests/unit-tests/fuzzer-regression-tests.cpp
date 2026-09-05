@@ -194,6 +194,19 @@ const std::unordered_map<std::string, std::vector<std::string>>
         // right above the check). Both bounds are Strategy-independent, so
         // FULL_CACHE does not change this.
         {"mft_addr_narrowing_error", {"MFT address is invalid"}},
+        // Root record (#5, built from scratch the same way as
+        // resident_attr_body_out_of_bounds - boot sector + $Volume + $MFT +
+        // root, concatenated in LoopingDiskReader's read order): a single
+        // resident $DATA attribute whose name_offset/name_length reach 112
+        // bytes in, past its own 28-byte total_size - exercises the bound
+        // AttrBase<S>::GetAttrName() (src/attr-base.cpp) now enforces on
+        // name_offset + 2*name_length against total_size (bug F2, see
+        // attr-name-bounds-tests.cpp for the matching unit test). Reached
+        // via FuzzOnce()'s FindStream() call (afl-main.cpp), added
+        // specifically because GetAttrName() - like FindStream() itself -
+        // used to be entirely unreached by this fuzzer.
+        {"attr_name_exceeds_total_size",
+         {"Attribute name exceeds attribute bounds."}},
     };
 
 // The three fixtures below deliberately have no kExpectedErrorMessages

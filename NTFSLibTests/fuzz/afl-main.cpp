@@ -77,7 +77,11 @@ void FuzzOnce(const std::vector<BYTE>& data)
   }
 
   FileRecord fr(volume);
-  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  // DATA is included alongside INDEX_ROOT/INDEX_ALLOCATION so the
+  // FindStream() call below actually has named $DATA attributes (if any
+  // are present on ROOT) to look through - see F2 in
+  // docs/bug-reports/2026-09-03-full-repo.md.
+  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION | Mask::DATA);
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
   {
     return;
@@ -88,6 +92,15 @@ void FuzzOnce(const std::vector<BYTE>& data)
   }
 
   fr.TraverseSubEntries([](const IndexEntry&, void*) {}, nullptr);
+
+  // Exercises FindStream() with a non-empty name, unlike this repo's only
+  // two real callers (both pass {}): FindStream() calls GetAttrName() on
+  // every named $DATA attribute it walks regardless of what name it was
+  // asked to find, so this alone is enough to reach the F2 fix's bound
+  // check. The result is intentionally discarded - only reaching
+  // GetAttrName() matters here, not whether a stream by this name exists.
+  const AttrBase<S>* stream = fr.FindStream(L"F2-probe");
+  (void)stream;
 }
 
 }  // namespace
