@@ -55,6 +55,20 @@ std::wstring_view AttrBase<S>::GetAttrName() const
     return {};
   }
 
+  // name_offset (a WORD, 0..65535) and name_length (a BYTE counted in
+  // UTF-16 code units, up to 510 bytes) come straight off disk and are
+  // otherwise unbounded: without this check, a forged attribute can make
+  // the std::wstring_view below reach up to ~64KiB + 510 bytes past this
+  // attribute's own declared extent - and, in general, past the record
+  // buffer entirely.
+  if (static_cast<DWORD>(attr_header_.name_offset) +
+          2 * static_cast<DWORD>(attr_header_.name_length) >
+      attr_header_.total_size)
+  {
+    NTFS_TRACE("Attribute name exceeds attribute bounds.\n");
+    return {};
+  }
+
   std::wstring_view retval{reinterpret_cast<const wchar_t*>(
                                reinterpret_cast<const BYTE*>(&attr_header_) +
                                attr_header_.name_offset),
