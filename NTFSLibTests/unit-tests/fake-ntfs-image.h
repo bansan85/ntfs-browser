@@ -402,4 +402,29 @@ inline constexpr WORD kAttrOffsetOutOfBounds = 2000;
 // of reading past its real, exactly-1024-byte extent.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds();
 
+// Known, recognizable byte pattern BuildFakeNtfsImageWithSmallResidentData()
+// writes as the entire body of its single resident $DATA attribute -
+// regression fixture for F10: AttrResident<S>::ReadData() computed the real,
+// possibly-truncated byte count actually memcpy'd ("actural") but returned
+// the full requested buffer length ("bufLen") instead. A caller whose buffer
+// is larger than this attribute's real data size (4 bytes) can then tell the
+// two apart: the returned length either matches this array's size (fixed) or
+// the buffer's own, larger size (buggy).
+inline constexpr std::array<BYTE, 4> kSmallResidentDataContent{0xDE, 0xAD, 0xBE,
+                                                               0xEF};
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by a bare file record whose only attribute is a resident $DATA
+// attribute holding exactly kSmallResidentDataContent - regression fixture
+// for F10 (docs/bug-reports/2026-09-03-full-repo.md): a caller reading with a
+// buffer bigger than this attribute's real size (as
+// NTFSLibTests/ntfsundel/ntfsundelDlg.cpp does, always requesting 64KiB) must
+// see ReadData() report the true, possibly-truncated byte count, not the
+// buffer's requested length. Following the precedent set by
+// BuildFakeNtfsImageWithAttrOffsetOutOfBounds() above, this overwrites the
+// root record (#5) directly in its own independent image copy rather than
+// claiming a new MFT index - every index below Enum::MftIdx::USER (16) is
+// already claimed by another fixture in this file.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSmallResidentData();
+
 }  // namespace NtfsBrowserTests

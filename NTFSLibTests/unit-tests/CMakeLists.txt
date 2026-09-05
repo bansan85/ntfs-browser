@@ -21,6 +21,7 @@ add_executable(
   "mft-addr-narrowing-tests.cpp"
   "mft-parse-failure-volume-ok-tests.cpp"
   "attr-name-bounds-tests.cpp"
+  "attr-resident-read-data-tests.cpp"
   "fuzzer-regression-tests.cpp")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}

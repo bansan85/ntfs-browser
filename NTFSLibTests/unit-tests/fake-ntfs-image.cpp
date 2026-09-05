@@ -692,6 +692,40 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord()
   return record;
 }
 
+// Root directory replacement (#5, patched in place): a single
+// well-formed resident $DATA attribute whose body is exactly
+// kSmallResidentDataContent (4 bytes) - regression fixture for F10:
+// AttrResident<S>::ReadData() returned the caller's requested buffer length
+// instead of the real, possibly-truncated byte count actually copied.
+// attr_offset (sizeof(Attr::HeaderResident), 24) + attr_size (4) == total_size
+// (28), so ValidateResidentBounds() (src/attr-resident.cpp) accepts this
+// attribute - the fixture is deliberately well-formed in every respect other
+// than the one F10 concerns (the mismatch between requested and actual
+// ReadData() length), unlike the F1/F2 fixtures above.
+FakeRecord MakeSmallResidentDataRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = static_cast<DWORD>(kSmallResidentDataContent.size());
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  std::memcpy(&record[kAttrOffset + attr.attr_offset],
+              kSmallResidentDataContent.data(),
+              kSmallResidentDataContent.size());
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -972,6 +1006,24 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds()
   auto& header = *reinterpret_cast<NtfsBrowser::FileRecordHeader::Data*>(
       &image[rootOffset]);
   header.offset_of_attr = kAttrOffsetOutOfBounds;
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithSmallResidentData()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Replace the root directory's (#5) whole record in place - same
+  // technique as BuildFakeNtfsImageWithAttrOffsetOutOfBounds() just above,
+  // except this overwrites the entire record rather than patching a single
+  // field, since this fixture's attribute has nothing in common with
+  // MakeRootRecord()'s (bare, attribute-less) one.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeSmallResidentDataRecord();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
 
   return image;
 }
