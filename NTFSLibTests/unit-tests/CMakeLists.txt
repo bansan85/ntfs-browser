@@ -24,6 +24,7 @@ add_executable(
   "attr-resident-read-data-tests.cpp"
   "attr-vol-info-size-tests.cpp"
   "on-disk-struct-layout-tests.cpp"
+  "file-record-unparsed-flags-tests.cpp"
   "fuzzer-regression-tests.cpp")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}
