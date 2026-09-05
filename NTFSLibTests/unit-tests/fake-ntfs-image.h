@@ -140,4 +140,26 @@ inline constexpr std::array<DWORD, 4> kUafRealSizeSentinels{1024, 2048, 3072,
 // root directory are left untouched and valid.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptMftRecord();
 
+// MFT index of the record built by
+// BuildFakeNtfsImageWithAttrNameExceedsTotalSize(). Free below
+// Enum::MftIdx::USER (16).
+inline constexpr ULONGLONG kAttrNameExceedsTotalSizeRecordIdx = 4;
+
+// name_offset/name_length BuildFakeNtfsImageWithAttrNameExceedsTotalSize()
+// forges for its single $DATA attribute: together they reach past the
+// attribute's declared total_size (28), while still landing well inside
+// the 1024-byte record buffer.
+inline constexpr WORD kAttrNameBoundsNameOffset = 100;
+inline constexpr BYTE kAttrNameBoundsNameLength = 6;
+
+// Deterministic bytes written at kAttrNameBoundsNameOffset, exactly
+// kAttrNameBoundsNameLength wide characters (excluding the terminator).
+inline constexpr wchar_t kAttrNameBoundsSentinel[] = L"PWNED!";
+
+// Same volume as BuildFakeNtfsImage(), plus a record whose single resident
+// $DATA attribute declares a name reaching past its own total_size, while
+// still landing on known, deterministic bytes.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttrNameExceedsTotalSize();
+
 }  // namespace NtfsBrowserTests
