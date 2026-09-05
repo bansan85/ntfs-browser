@@ -12,11 +12,29 @@ namespace NtfsBrowser
 
 FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
                                    size_t sector_size)
-    : sector_size(sector_size)
+    : sector_size(sector_size), buffer_size_(buffer.size())
 {
-  if (1024 != buffer.size())
+  // Range check (bug F9): a file record can never be smaller than
+  // kMinFileRecordHeaderSize (too small to even hold Data's named header
+  // fields), and FileRecordHeaderImpl<FULL_CACHE>'s ctor memcpy()s the whole
+  // buffer into a by-value Data data_, so it can never be larger than
+  // Data::raw's own capacity (kMaxFileRecordSize) either - that would
+  // overflow data_. This used to be a hard `buffer.size() == 1024` check,
+  // which incidentally rejected every 4Kn (4096-byte-sector) NTFS volume:
+  // such a volume necessarily has 4096-byte file records (a record can never
+  // be smaller than a sector), a perfectly legal size this range now
+  // accepts. See F9 in docs/bug-reports/2026-09-03-full-repo.md.
+  if (buffer.size() < kMinFileRecordHeaderSize)
   {
-    throw std::runtime_error("Buffer size of FileRecordHeader must be 1024.");
+    throw std::runtime_error(
+        "Buffer size of FileRecordHeader is smaller than the minimum file "
+        "record header size.");
+  }
+  if (buffer.size() > kMaxFileRecordSize)
+  {
+    throw std::runtime_error(
+        "Buffer size of FileRecordHeader exceeds the maximum supported file "
+        "record size.");
   }
 
   const Data* data = reinterpret_cast<const Data*>(buffer.data());
@@ -87,10 +105,19 @@ bool FileRecordHeader::PatchUS() noexcept
 const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
 {
   WORD offset_of_attr = GetData()->offset_of_attr;
-  if (offset_of_attr + sizeof(AttrHeaderCommon) >=
-      sizeof(FileRecordHeader::Data::raw))
+  // Bound against this instance's own buffer_size_ (bug F9), not against
+  // sizeof(Data::raw) - Data::raw's capacity now has to cover the largest
+  // supported record size (kMaxFileRecordSize, 4096), but a given instance's
+  // real record can be smaller (eg. the common 1024-byte case). Bounding
+  // against the union's static capacity instead of the actual buffer would
+  // let offset_of_attr point past this instance's real, exactly-buffer_size_
+  // -long backing storage - a heap over-read under Strategy::NO_CACHE (whose
+  // data_ is a std::span over the real allocation), or a read of
+  // uninitialized bytes under Strategy::FULL_CACHE (whose data_ only has
+  // buffer_size_ bytes memcpy'd in).
+  if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size_)
   {
-    NTFS_TRACE("Offset of attr must be lower than 1024\n");
+    NTFS_TRACE("Offset of attr must be within the file record buffer\n");
     return nullptr;
   }
   return reinterpret_cast<const AttrHeaderCommon*>(&GetData()->raw[0] +

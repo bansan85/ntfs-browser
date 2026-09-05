@@ -275,19 +275,38 @@ bool NtfsVolume<S>::ParseBootSector()
 
   // clusters_per_file_record is an attacker-controlled signed-byte-style
   // field: a negative encoding close to 0 (eg. 0xFF -> sz = -1) yields a
-  // file_record_size_ of just a few bytes. FileRecordHeader's ctor happens
-  // to reject anything other than exactly 1024 bytes today
-  // (src/data/file-record-header.cpp), which incidentally protects this
-  // path, but that is a coincidence of its current buffer layout
-  // (FileRecordHeader::Data::raw is a fixed BYTE[1024]), not a structural
-  // guarantee - nothing stops that accidental guard from disappearing later.
-  // Validate file_record_size_ here too, the same way as index_block_size_
-  // below: it must be able to hold FileRecordHeader::Data, and every sector
-  // in it must be addressable by PatchUS().
-  if (file_record_size_ < sizeof(FileRecordHeader::Data) ||
+  // file_record_size_ of just a few bytes. Validate file_record_size_ here,
+  // the same way as index_block_size_ below: it must be able to hold
+  // FileRecordHeader::Data's named header fields, and every sector in it
+  // must be addressable by PatchUS(). Deliberately checked against
+  // kMinFileRecordHeaderSize (48, Data's named-fields size), not
+  // sizeof(FileRecordHeader::Data) (dominated by Data::raw's capacity,
+  // kMaxFileRecordSize) - the two used to be the same number by coincidence
+  // (both 1024), but raw[] was widened to kMaxFileRecordSize so 4Kn volumes'
+  // 4096-byte records can be read (bug F9), and this lower bound must not
+  // move with it. See F9 in docs/bug-reports/2026-09-03-full-repo.md.
+  if (file_record_size_ < kMinFileRecordHeaderSize ||
       file_record_size_ % sector_size_ != 0)
   {
     NTFS_TRACE("FileRecord Size is invalid\n");
+    return false;
+  }
+
+  // The check above only guards against file_record_size_ being implausibly
+  // small; nothing yet rejects it being implausibly large. sz > 0 computes
+  // file_record_size_ = cluster_size_ * sz (sz up to 8, F5's own bound on
+  // sz's magnitude), which can easily exceed kMaxFileRecordSize for a large
+  // enough cluster size - and FileRecordHeader::Data::raw (bug F9) can hold
+  // at most kMaxFileRecordSize bytes; FileRecordHeaderImpl<FULL_CACHE>'s ctor
+  // memcpy()s the whole record buffer into a by-value Data data_, so a
+  // bigger file_record_size_ would overflow it. Without this check, such a
+  // file_record_size_ sails through ParseBootSector() and only fails three
+  // call frames later, inside FileRecordHeader's own ctor, with a far less
+  // specific error. See F9 in docs/bug-reports/2026-09-03-full-repo.md.
+  if (file_record_size_ > kMaxFileRecordSize)
+  {
+    NTFS_TRACE(
+        "FileRecord Size exceeds the maximum supported file record size\n");
     return false;
   }
 
