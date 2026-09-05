@@ -427,4 +427,48 @@ inline constexpr std::array<BYTE, 4> kSmallResidentDataContent{0xDE, 0xAD, 0xBE,
 // already claimed by another fixture in this file.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSmallResidentData();
 
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by a bare file record whose only attribute is a resident
+// $ATTRIBUTE_LIST 50 bytes long - not an exact multiple of
+// sizeof(Attr::AttributeList) (40) - regression fixture for the
+// AttrList<S>::AttrList() hardening added alongside F10
+// (docs/bug-reports/2026-09-03-full-repo.md, src/attr-list.cpp): al_record
+// is a single stack variable reused across loop iterations, never reset
+// between them, so a short final read must stop the loop cleanly (now
+// observably, via an NTFS_TRACE2 call) instead of parsing a "phantom" final
+// entry built from a mix of freshly-read and stale bytes. The one full entry
+// this fixture does declare names itself (base_ref.segment_number == this
+// record's own file reference, 5) so AttrList's ctor never needs to resolve
+// an extension record at all, keeping the fixture self-contained. Same
+// "overwrite the root record in its own image copy" technique as
+// BuildFakeNtfsImageWithSmallResidentData() above.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListShortRead();
+
+// MFT index of the second record BuildFakeNtfsImageWithAttributeListCycle()
+// builds - the root directory's (#5) own resident $ATTRIBUTE_LIST points
+// here, and this record's own resident $ATTRIBUTE_LIST points right back at
+// #5, forming a two-record resolution cycle.
+inline constexpr ULONGLONG kAttrListCycleExtIdx = 6;
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// and a second record (kAttrListCycleExtIdx) each replaced by a bare file
+// record whose sole attribute is a resident $ATTRIBUTE_LIST with a single
+// entry of attr_type ATTRIBUTE_LIST naming the OTHER of the two records -
+// regression fixture for AttrList<S>::AttrList()'s cycle guard
+// (src/attr-list.cpp): resolving #5's $ATTRIBUTE_LIST entry recurses into
+// kAttrListCycleExtIdx's own ParseAttrs(), whose $ATTRIBUTE_LIST entry
+// names #5 again for the very same attribute type - a key already inserted
+// into attrListChain before #5's own AttrList ctor ever started resolving
+// entries, so this must be recognized and skipped ("...already resolved in
+// this chain, skipping") instead of recursing without bound. Also
+// regenerates the fuzz corpus entry
+// NTFSLibTests/fuzz/data/attribute_list_extension_record_cycle in a
+// deterministic, from-scratch form (see fuzzer-regression-tests.cpp): the
+// original raw AFL find no longer reaches this message unmodified once the
+// F10 fix (docs/bug-reports/2026-09-03-full-repo.md) changed
+// AttrResident<S>::ReadData()'s return value for every resident
+// $ATTRIBUTE_LIST read, this fixture's single, exactly-40-byte entry on
+// each record sidesteps that entirely.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle();
+
 }  // namespace NtfsBrowserTests

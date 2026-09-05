@@ -158,8 +158,39 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"file_record_size_too_big",
          {"FileRecord Size exceeds the maximum supported file record size"}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
+        // Regenerated (root record #5, its own resident $ATTRIBUTE_LIST
+        // naming record #6, whose own resident $ATTRIBUTE_LIST names #5
+        // right back - boot sector + $Volume + $MFT + root + record #6,
+        // concatenated in LoopingDiskReader's read order): the original raw
+        // AFL find no longer reaches this message unmodified once the F10
+        // fix (docs/bug-reports/2026-09-03-full-repo.md) changed
+        // AttrResident<S>::ReadData()'s return value for every resident
+        // $ATTRIBUTE_LIST read (this testcase's own $ATTRIBUTE_LIST body
+        // size was not an exact multiple of sizeof(Attr::AttributeList),
+        // so it now hits the new short-read stop below before ever reaching
+        // the cycle). BuildFakeNtfsImageWithAttributeListCycle()
+        // (fake-ntfs-image.h/.cpp) reproduces the intended two-record cycle
+        // from scratch with a single, exactly-sized entry per record,
+        // sidestepping that entirely - see attribute-list-tests.cpp for the
+        // matching unit test.
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
+        // Root record (#5, built from scratch the same way as
+        // attr_name_exceeds_total_size - boot sector + $Volume + $MFT +
+        // root, concatenated in LoopingDiskReader's read order): a single
+        // resident $ATTRIBUTE_LIST whose real data size (50 bytes) is not
+        // an exact multiple of sizeof(Attr::AttributeList) (40) -
+        // regression fixture for the AttrList<S>::AttrList() hardening
+        // added alongside F10 (docs/bug-reports/2026-09-03-full-repo.md):
+        // al_record is a single stack variable reused across loop
+        // iterations, never reset between them, so a short final read must
+        // stop the loop cleanly (now observably, via this NTFS_TRACE2 call)
+        // instead of parsing a "phantom" final entry built from a mix of
+        // freshly-read and stale bytes. See attribute-list-tests.cpp for
+        // the matching unit test (BuildFakeNtfsImageWithAttributeListShortRead()).
+        {"attribute_list_short_read",
+         {"Attribute List: ReadData returned 10 bytes, expected 40 - "
+          "stopping"}},
         // ROOT's own $ATTRIBUTE_LIST has 3 entries: (INDEX_ROOT, record 6),
         // (INDEX_ALLOCATION, record 6), (INDEX_ROOT, record 6 again) - the
         // 3rd is a genuine duplicate of the 1st's (record, type) pair and

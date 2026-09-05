@@ -7,6 +7,7 @@
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mask.h>
+#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
@@ -19,6 +20,7 @@ using NtfsBrowser::IndexEntry;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Enum::MftIdx;
 
 // Regression test for a bug in FileRecord::SetAttrMask(): it let a caller's
 // mask silently exclude $ATTRIBUTE_LIST, even though the comment right
@@ -210,4 +212,113 @@ TEST_CASE(
     CHECK(allocAttrs[i]->GetDataSize() ==
           NtfsBrowserTests::kUafRealSizeSentinels[i]);
   }
+}
+
+// Regression test for the AttrList<S>::AttrList() hardening added alongside
+// bug F10 (docs/bug-reports/2026-09-03-full-repo.md, src/attr-list.cpp):
+// al_record is a single stack variable reused across the ctor's loop
+// iterations, never reset between them. Before F10 was fixed,
+// AttrResident<S>::ReadData() always reported the full requested length
+// regardless of truncation, so the loop's own
+// "*len == sizeof(Attr::AttributeList)" check could never actually detect a
+// short final read - a genuine hazard while unfixed, since a truncated read
+// leaves most of al_record holding STALE bytes from the previous iteration,
+// yet the loop would still treat it as a fresh, valid entry. Fixing F10
+// alone already makes that check correctly false for a short read (this
+// fixture's whole point), and the added NTFS_TRACE2 call (verified via the
+// fuzz corpus entry "attribute_list_short_read", see
+// fuzzer-regression-tests.cpp) turns that already-correct stop into an
+// observable one instead of a silent exit.
+//
+// BuildFakeNtfsImageWithAttributeListShortRead() reproduces the shape: the
+// root directory's resident $ATTRIBUTE_LIST is 50 bytes - one full,
+// self-referencing entry (40 bytes, so resolving it never needs an
+// extension record) plus 10 leftover bytes, not an exact multiple of
+// sizeof(Attr::AttributeList) (40). Either way (fixed or not), this
+// particular fixture can never misbehave dangerously even if a short read
+// were wrongly treated as a full entry: the stale bytes filling most of
+// that phantom entry are themselves leftover from entry 1, whose own
+// base_ref is this very record's self-reference, so a phantom entry built
+// from them would also just be skipped harmlessly. What actually matters
+// here is that ParseAttrs() completes cleanly either way.
+TEST_CASE(
+    "AttrList stops cleanly on a resident $ATTRIBUTE_LIST whose size isn't "
+    "a multiple of the entry size (F10 hardening)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
+}
+
+// Same fixture under FULL_CACHE - AttrList<S>::AttrList()'s loop runs
+// identically regardless of strategy (it only ever calls this->ReadData(),
+// which both AttrResidentNoCache and AttrResidentFullCache implement via the
+// same shared AttrResident<S>::ReadData()) - confirms the defect (and its
+// fix) isn't an artifact of one strategy.
+TEST_CASE(
+    "AttrList stops cleanly on a resident $ATTRIBUTE_LIST whose size isn't "
+    "a multiple of the entry size (F10 hardening, FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
+}
+
+// Regression test for AttrList<S>::AttrList()'s cycle guard
+// (src/attr-list.cpp): two records whose resident $ATTRIBUTE_LIST each
+// names the OTHER for attr_type ATTRIBUTE_LIST. Resolving the root
+// directory's (#5) entry recurses into kAttrListCycleExtIdx's own
+// ParseAttrs(), whose own $ATTRIBUTE_LIST entry names #5 again for the same
+// attribute type - a key already inserted into attrListChain before #5's
+// own AttrList ctor started resolving entries - so this must be recognized
+// and skipped instead of recursing without bound (a real cycle, as opposed
+// to the F17 tests above, which cover a shared but acyclic target).
+// BuildFakeNtfsImageWithAttributeListCycle() also regenerates the fuzz
+// corpus entry NTFSLibTests/fuzz/data/attribute_list_extension_record_cycle
+// (see fuzzer-regression-tests.cpp) in a deterministic, from-scratch form.
+TEST_CASE(
+    "AttrList's cycle guard stops a two-record $ATTRIBUTE_LIST resolution "
+    "cycle instead of recursing without bound",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListCycle());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
+}
+
+// Same fixture under FULL_CACHE.
+TEST_CASE(
+    "AttrList's cycle guard stops a two-record $ATTRIBUTE_LIST resolution "
+    "cycle instead of recursing without bound (FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListCycle());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
 }

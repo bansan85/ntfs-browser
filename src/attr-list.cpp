@@ -61,9 +61,25 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
       MakeChainKey(*fr.file_reference_, AttrType::ATTRIBUTE_LIST));
 
   while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
-                                        sizeof(Attr::AttributeList)})) &&
-         *len == sizeof(Attr::AttributeList))
+                                        sizeof(Attr::AttributeList)})))
   {
+    // A short (but non-empty) read means fewer than sizeof(Attr::AttributeList)
+    // bytes remained at this offset - the attribute's real data size is not
+    // an exact multiple of the entry size (a malformed/corrupt
+    // $ATTRIBUTE_LIST no valid NTFS volume would produce). al_record is
+    // reused across iterations rather than reset each time, so treating a
+    // short read as a full entry here would parse it with some fields fresh
+    // off disk and the rest stale from the previous iteration (see bug F10,
+    // docs/bug-reports/2026-09-03-full-repo.md) - stop cleanly instead.
+    if (*len != sizeof(Attr::AttributeList))
+    {
+      NTFS_TRACE2(
+          "Attribute List: ReadData returned %I64u bytes, expected %I64u - "
+          "stopping\n",
+          *len, static_cast<ULONGLONG>(sizeof(Attr::AttributeList)));
+      break;
+    }
+
     if (!IsValidAttrType(al_record.attr_type))
     {
       throw std::runtime_error(
