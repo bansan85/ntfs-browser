@@ -227,6 +227,15 @@ bool NtfsVolume<S>::ParseBootSector()
   cluster_buffer_.resize(cluster_size_);
 
   char sz = static_cast<char>(bpb->clusters_per_file_record);
+
+  // Rejects an sz magnitude that would shift 1U by 32 or more (undefined
+  // behaviour), or yield a file_record_size_ no real volume could have.
+  if (sz < -12 || sz > 8)
+  {
+    NTFS_TRACE("clusters_per_file_record magnitude out of range\n");
+    return false;
+  }
+
   if (sz > 0)
   {
     file_record_size_ = cluster_size_ * sz;
@@ -247,6 +256,15 @@ bool NtfsVolume<S>::ParseBootSector()
   }
 
   sz = static_cast<char>(bpb->clusters_per_index_block);
+
+  // Rejects an sz magnitude that would shift 1U by 32 or more (undefined
+  // behaviour), or yield an index_block_size_ no real volume could have.
+  if (sz < -12 || sz > 8)
+  {
+    NTFS_TRACE("clusters_per_index_block magnitude out of range\n");
+    return false;
+  }
+
   if (sz > 0)
   {
     index_block_size_ = cluster_size_ * sz;
