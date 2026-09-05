@@ -55,7 +55,9 @@ void FuzzOnce(const std::vector<BYTE>& data)
   }
 
   FileRecord fr(volume);
-  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  // Without DATA here, FindStream() below never sees a named $DATA
+  // attribute on ROOT to walk.
+  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION | Mask::DATA);
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
   {
     return;
@@ -66,6 +68,11 @@ void FuzzOnce(const std::vector<BYTE>& data)
   }
 
   fr.TraverseSubEntries([](const IndexEntry&, void*) {}, nullptr);
+
+  // FindStream() calls GetAttrName() on every named $DATA attribute it
+  // walks, regardless of the name passed in.
+  const AttrBase<S>* stream = fr.FindStream(L"probe");
+  (void)stream;
 }
 
 }

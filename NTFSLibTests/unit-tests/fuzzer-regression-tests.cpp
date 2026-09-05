@@ -76,6 +76,8 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"fragmented_record_header_factory_throw",
          {"Offset must be lower than 1024.", "Attribute Parse error: 0x0020"}},
         {"mft_addr_narrowing_error", {"MFT address is invalid"}},
+        {"attr_name_exceeds_total_size",
+         {"Attribute name exceeds attribute bounds."}},
     };
 
 struct RunResult
