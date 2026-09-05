@@ -263,4 +263,46 @@ inline constexpr std::array<DWORD, 4> kUafRealSizeSentinels{1024, 2048, 3072,
 // docs/bug-reports/2026-09-03-full-repo.md.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptMftRecord();
 
+// MFT index of the record built by
+// BuildFakeNtfsImageWithAttrNameExceedsTotalSize(): its only attribute (a
+// resident, named $DATA) declares name_offset/name_length that read past its
+// own total_size. Free below Enum::MftIdx::USER (16) - see
+// kUafExtensionIdx0/1's comment above for why only this and a couple of
+// other small indices remain unclaimed.
+inline constexpr ULONGLONG kAttrNameExceedsTotalSizeRecordIdx = 4;
+
+// name_offset/name_length (relative to the attribute's own start, per
+// AttrHeaderCommon) BuildFakeNtfsImageWithAttrNameExceedsTotalSize() forges
+// for its single $DATA attribute - regression fixture for F2:
+// AttrBase<S>::GetAttrName() (src/attr-base.cpp) builds a std::wstring_view
+// straight from name_offset/name_length without ever checking
+// name_offset + 2*name_length against total_size (or the record's own
+// end). kAttrNameBoundsNameOffset (100) + 2*kAttrNameBoundsNameLength (6) =
+// 112 comfortably exceeds the attribute's declared total_size (28: a bare
+// 24-byte Attr::HeaderResident header plus a 4-byte body), while still
+// landing well inside the same 1024-byte record buffer - see
+// kAttrNameBoundsSentinel below for the deterministic bytes it reads
+// instead of a real name. See F2 in docs/bug-reports/2026-09-03-full-repo.md.
+inline constexpr WORD kAttrNameBoundsNameOffset = 100;
+inline constexpr BYTE kAttrNameBoundsNameLength = 6;
+
+// Deterministic UTF-16 bytes BuildFakeNtfsImageWithAttrNameExceedsTotalSize()
+// writes at kAttrOffset + kAttrNameBoundsNameOffset - i.e. past the
+// attribute's declared total_size, but still well inside the 1024-byte
+// record buffer, so the pre-fix wrong result (GetAttrName() returning this
+// exact string) is deterministic rather than depending on adjacent heap
+// contents. Exactly kAttrNameBoundsNameLength wide characters (excluding the
+// terminating NUL).
+inline constexpr wchar_t kAttrNameBoundsSentinel[] = L"PWNED!";
+
+// Same volume as BuildFakeNtfsImage(), plus a record
+// (kAttrNameExceedsTotalSizeRecordIdx) whose single resident $DATA attribute
+// declares name_offset/name_length (kAttrNameBoundsNameOffset/
+// kAttrNameBoundsNameLength) reaching past its own total_size while still
+// landing on known, deterministic bytes (kAttrNameBoundsSentinel) inside the
+// same 1024-byte record buffer - regression fixture for F2. See
+// kAttrNameExceedsTotalSizeRecordIdx above for the full defect description.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttrNameExceedsTotalSize();
+
 }  // namespace NtfsBrowserTests

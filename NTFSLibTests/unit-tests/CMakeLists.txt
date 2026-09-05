@@ -18,6 +18,7 @@ add_executable(
   "boot-sector-index-block-size-tests.cpp"
   "mft-addr-narrowing-tests.cpp"
   "mft-parse-failure-volume-ok-tests.cpp"
+  "attr-name-bounds-tests.cpp"
   "fuzzer-regression-tests.cpp")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}

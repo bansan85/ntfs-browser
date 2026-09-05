@@ -639,6 +639,59 @@ FakeRecord MakeFragmentedAttributeListDirRecord()
   return record;
 }
 
+// Record (#kAttrNameExceedsTotalSizeRecordIdx): a single resident $DATA
+// attribute whose name_offset/name_length (kAttrNameBoundsNameOffset/
+// kAttrNameBoundsNameLength) point past its own declared total_size, while
+// still landing on known, deterministic bytes inside this same 1024-byte
+// record buffer (kAttrNameBoundsSentinel, written at that exact offset by
+// this function) - regression fixture for F2: AttrBase<S>::GetAttrName()
+// (src/attr-base.cpp) builds a std::wstring_view straight from
+// name_offset/name_length without ever checking name_offset +
+// 2*name_length against total_size (or the record's own end). A forged
+// name_length/name_offset pair can in general read up to ~64KiB + 510 bytes
+// past a 1024-byte record; here the sentinel sits well inside the buffer so
+// the wrong (pre-fix) result is deterministic rather than depending on
+// adjacent heap contents. See F2 in docs/bug-reports/2026-09-03-full-repo.md.
+FakeRecord MakeAttrNameExceedsTotalSizeRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  constexpr DWORD kBodySize = 4;
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = kBodySize;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + kBodySize;
+
+  static_assert(static_cast<DWORD>(kAttrNameBoundsNameOffset) +
+                        2 * static_cast<DWORD>(kAttrNameBoundsNameLength) >
+                    sizeof(NtfsBrowser::Attr::HeaderResident) + kBodySize,
+                "name must exceed total_size to reproduce F2");
+  static_assert(sizeof(kAttrNameBoundsSentinel) - sizeof(wchar_t) ==
+                    static_cast<size_t>(kAttrNameBoundsNameLength) *
+                        sizeof(wchar_t),
+                "sentinel length must match name_length exactly");
+
+  attr.header.name_length = kAttrNameBoundsNameLength;
+  attr.header.name_offset = kAttrNameBoundsNameOffset;
+
+  // Deterministic bytes GetAttrName() must never actually be read from
+  // post-fix: written past total_size (28), but well inside the 1024-byte
+  // record buffer.
+  std::memcpy(&record[kAttrOffset + kAttrNameBoundsNameOffset],
+              kAttrNameBoundsSentinel,
+              static_cast<size_t>(kAttrNameBoundsNameLength) * sizeof(wchar_t));
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -848,6 +901,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithCorruptMftRecord()
   const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
                                       static_cast<size_t>(MftIdx::MFT);
   std::memset(image.data() + offset, 0, kFakeFileRecordSize);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithAttrNameExceedsTotalSize()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset =
+      mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                    static_cast<size_t>(kAttrNameExceedsTotalSizeRecordIdx);
+  const FakeRecord record = MakeAttrNameExceedsTotalSizeRecord();
+  std::memcpy(image.data() + offset, record.data(), record.size());
 
   return image;
 }
