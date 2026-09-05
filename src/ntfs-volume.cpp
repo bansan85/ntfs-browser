@@ -239,6 +239,30 @@ bool NtfsVolume<S>::ParseBootSector()
   cluster_buffer_.resize(cluster_size_);
 
   char sz = static_cast<char>(bpb->clusters_per_file_record);
+
+  // clusters_per_file_record is fully attacker-controlled: for sz <= 0,
+  // file_record_size_ is about to be computed as
+  // 1U << static_cast<unsigned char>(-sz). -sz can be as large as 128 (sz ==
+  // -128, from a byte of 0x80), and shifting a 32-bit 1U by >= 32 is
+  // undefined behaviour - this must be rejected before that shift ever runs,
+  // not after (unlike the size checks below, inherited from F6, which look
+  // at the *result* and only catch it being implausibly small). Bounding sz
+  // also closes a second gap those checks miss entirely: sz == -31 (byte
+  // 0xE1) shifts a well-defined amount (31 < 32) to a well-defined but
+  // absurd 0x80000000 (2 GiB) that is still >= sizeof(FileRecordHeader::Data)
+  // and a multiple of every common sector size, so it sails through both
+  // checks below unrejected and only blows up as a ~2 GiB allocation once
+  // FileRecord<S>::ReadFileRecord() resizes its buffer to it. Cap the
+  // magnitude at the same bound on both sides: sz > 8 would already make
+  // file_record_size_ bigger than any real NTFS file record, and sz < -12
+  // would shift past 4096 bytes, just as implausible. See F5 in
+  // docs/bug-reports/2026-09-03-full-repo.md.
+  if (sz < -12 || sz > 8)
+  {
+    NTFS_TRACE("clusters_per_file_record magnitude out of range\n");
+    return false;
+  }
+
   if (sz > 0)
   {
     file_record_size_ = cluster_size_ * sz;
@@ -268,6 +292,19 @@ bool NtfsVolume<S>::ParseBootSector()
   }
 
   sz = static_cast<char>(bpb->clusters_per_index_block);
+
+  // Same reasoning and same bound as clusters_per_file_record just above -
+  // reject an sz magnitude that would either shift 1U by >= 32 (undefined
+  // behaviour) or produce a well-defined but absurd index_block_size_ (eg.
+  // sz == -31, 1U << 31 == 0x80000000) that the size checks below cannot
+  // catch, since they only look at the result. See F5 in
+  // docs/bug-reports/2026-09-03-full-repo.md.
+  if (sz < -12 || sz > 8)
+  {
+    NTFS_TRACE("clusters_per_index_block magnitude out of range\n");
+    return false;
+  }
+
   if (sz > 0)
   {
     index_block_size_ = cluster_size_ * sz;
