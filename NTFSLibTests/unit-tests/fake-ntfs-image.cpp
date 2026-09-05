@@ -979,6 +979,52 @@ FakeRecord MakeAttributeListTightlyPackedDirRecord()
   return record;
 }
 
+// Root directory replacement (#5, patched in place): a single resident,
+// NAMED $DATA attribute - an Alternate Data Stream (ADS) - named
+// kNamedDataStreamName, whose body is exactly kNamedDataStreamContent (4
+// bytes) - regression fixture for F18
+// (docs/bug-reports/2026-09-03-full-repo.md): FileRecord<S>::FindStream()'s
+// named-stream branch (src/file-record.cpp) does `break;` instead of
+// `return data.get();`, so it can never return a named stream even when one
+// exists. The name is written right after the fixed 24-byte
+// Attr::HeaderResident header (name_offset == sizeof(attr)) and the body
+// right after the name (attr_offset == sizeof(attr) +
+// kNamedDataStreamNameLength * 2) - both well within total_size, so
+// AttrBase::GetAttrName()'s own bounds check (bug F2) and
+// ValidateResidentBounds() (src/attr-resident.cpp) both accept this
+// attribute; the fixture is deliberately well-formed in every respect other
+// than the one F18 concerns. Same "overwrite the root record in its own
+// image copy" technique as MakeSmallResidentDataRecord() (F10).
+FakeRecord MakeNamedDataStreamRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.header.name_length = kNamedDataStreamNameLength;
+  attr.header.name_offset = static_cast<WORD>(sizeof(attr));
+  attr.attr_size = static_cast<DWORD>(kNamedDataStreamContent.size());
+  attr.attr_offset = static_cast<WORD>(
+      sizeof(attr) +
+      static_cast<size_t>(kNamedDataStreamNameLength) * sizeof(wchar_t));
+  attr.header.total_size =
+      static_cast<DWORD>(attr.attr_offset) + attr.attr_size;
+
+  std::memcpy(
+      &record[kAttrOffset + attr.header.name_offset], kNamedDataStreamName,
+      static_cast<size_t>(kNamedDataStreamNameLength) * sizeof(wchar_t));
+  std::memcpy(&record[kAttrOffset + attr.attr_offset],
+              kNamedDataStreamContent.data(), kNamedDataStreamContent.size());
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -1404,6 +1450,21 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedMftInvalidRecord()
   const FakeRecord forgedRecord = MakeInvalidOffsetOfUsRecord();
   std::memcpy(image.data() + forgedOffset, forgedRecord.data(),
               forgedRecord.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithNamedDataStream()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Replace the root directory's (#5) whole record in place - same
+  // technique as BuildFakeNtfsImageWithSmallResidentData() above.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeNamedDataStreamRecord();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
 
   return image;
 }

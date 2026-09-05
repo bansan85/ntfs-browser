@@ -26,6 +26,7 @@ add_executable(
   "on-disk-struct-layout-tests.cpp"
   "file-record-unparsed-flags-tests.cpp"
   "fragmented-mft-invalid-record-tests.cpp"
+  "find-stream-named-tests.cpp"
   "fuzzer-regression-tests.cpp")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}

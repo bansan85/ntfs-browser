@@ -616,4 +616,36 @@ inline constexpr DWORD kFragmentedMftDataRunLcn = 20;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
 
+// UTF-16 name BuildFakeNtfsImageWithNamedDataStream() gives its resident
+// $DATA attribute - a named data stream, i.e. an NTFS Alternate Data Stream
+// (ADS). Exactly kNamedDataStreamNameLength wide characters (excluding the
+// terminating NUL).
+inline constexpr wchar_t kNamedDataStreamName[] = L"ads";
+
+// kNamedDataStreamName's length in UTF-16 code units (what
+// AttrHeaderCommon::name_length actually counts), independent of
+// sizeof(kNamedDataStreamName) so it stays correct if the name above ever
+// changes.
+inline constexpr BYTE kNamedDataStreamNameLength = 3;
+
+// Known, recognizable byte pattern BuildFakeNtfsImageWithNamedDataStream()
+// writes as the entire body of its named $DATA (ADS) attribute - lets a test
+// confirm FindStream() returned THIS specific attribute, not merely some
+// non-null pointer.
+inline constexpr std::array<BYTE, 4> kNamedDataStreamContent{0xCA, 0xFE, 0xBA,
+                                                             0xBE};
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by a bare file record whose only attribute is a resident, NAMED
+// $DATA attribute (kNamedDataStreamName) holding exactly
+// kNamedDataStreamContent - regression fixture for F18
+// (docs/bug-reports/2026-09-03-full-repo.md): FileRecord<S>::FindStream()
+// (src/file-record.cpp)'s named-stream branch does `break;` instead of
+// `return data.get();`, so it falls out of the loop into the same
+// `return nullptr;` used for "not found" - FindStream() can never return a
+// named stream (Alternate Data Stream) even when one exists with a matching
+// name. Same "overwrite the root record in its own image copy" technique as
+// BuildFakeNtfsImageWithSmallResidentData() (F10).
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithNamedDataStream();
+
 }  // namespace NtfsBrowserTests
