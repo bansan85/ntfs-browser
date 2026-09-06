@@ -205,7 +205,21 @@ void CNtfsundelDlg::OnSearch()
   std::map<ULONGLONG, ULONGLONG> id_to_parent;
   std::set<ULONGLONG> files;
 
-  const auto regx = std::wregex(static_cast<const _TCHAR*>(m_filter));
+  std::wregex regx;
+  try
+  {
+    regx = std::wregex(static_cast<const _TCHAR*>(m_filter));
+  }
+  catch (const std::regex_error&)
+  {
+    MessageBox(_T("Invalid filter expression"));
+    GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Search"));
+    GetDlgItem(IDB_RECOVER)->EnableWindow(TRUE);
+    GetDlgItem(IDC_DRIVER)->EnableWindow(TRUE);
+    GetDlgItem(IDE_FILTER)->EnableWindow(TRUE);
+    SetWindowText(_T("ntfsundel"));
+    return;
+  }
   std::chrono::steady_clock::time_point begin =
       std::chrono::steady_clock::now();
   for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::MFT);
