@@ -222,6 +222,7 @@ void CNtfsundelDlg::OnSearch()
   }
   std::chrono::steady_clock::time_point begin =
       std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point last_pump = begin;
   for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::MFT);
        i < volume.GetRecordsCount(); i++)
   {
@@ -231,12 +232,22 @@ void CNtfsundelDlg::OnSearch()
       break;
     }
 
-    /*
-    if (!PeekAndPump())
+    // Limits clock-read overhead over hundreds of thousands of iterations.
+    static constexpr ULONGLONG kPeekAndPumpCountInterval = 5000;
+    // Bounds worst-case Stop-button latency.
+    static constexpr std::chrono::milliseconds kPeekAndPumpTimeInterval(100);
+    if (i % kPeekAndPumpCountInterval == 0)
     {
-      break;
+      const auto now = std::chrono::steady_clock::now();
+      if (now - last_pump >= kPeekAndPumpTimeInterval)
+      {
+        last_pump = now;
+        if (!PeekAndPump())
+        {
+          break;
+        }
+      }
     }
-    */
 
     // Only parse Standard Information and File Name attributes
     // StdInfo will always be parsed
