@@ -90,8 +90,15 @@ class NtfsVolume
 
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
                                       AttrRawCallback cb) noexcept;
+  void ClearAttrRawCB() noexcept;
+
+ private:
+  // attType is an already-bounds-checked index into attr_raw_call_back_
+  // (kAttrNums), not a raw AttrType/DWORD value - keeping this private (only
+  // FileRecord<S>, a friend, calls it, from an index it already validated)
+  // avoids exposing an unbounded array index through the public API. See
+  // N11 in docs/bug-reports/2026-09-03-full-repo.md.
   void AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,
                        bool& bDiscard) const;
-  void ClearAttrRawCB() noexcept;
 };  // NtfsVolume
 }  // namespace NtfsBrowser
