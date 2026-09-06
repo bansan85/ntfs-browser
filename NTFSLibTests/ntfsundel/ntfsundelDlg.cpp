@@ -488,7 +488,14 @@ void CNtfsundelDlg::OnRecover()
 
     // Save data
     DWORD l = 0;
-    WriteFile(hf.get(), &vec[0], static_cast<DWORD>(*len), &l, nullptr);
+    // A failed or partial write must not be reported as success.
+    if (WriteFile(hf.get(), &vec[0], static_cast<DWORD>(*len), &l, nullptr) ==
+            FALSE ||
+        l != *len)
+    {
+      MessageBox(_T("Write data error"));
+      return;
+    }
     remain -= *len;
   }
 
