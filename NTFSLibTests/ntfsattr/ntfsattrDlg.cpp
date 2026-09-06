@@ -260,7 +260,7 @@ void printattr(const AttrBase<S>& attr, void* context, bool* /* bStop*/)
   if (!attrname.empty())
   {
     line += '(';
-    line += attrname.data();
+    line += CString(attrname.data(), static_cast<int>(attrname.size()));
     line += ')';
   }
   line += _T("\r\n");
