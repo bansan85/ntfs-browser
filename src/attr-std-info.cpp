@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <stdexcept>
 
 #include "attr-std-info.h"
@@ -16,7 +17,7 @@ AttrStdInfo<RESIDENT, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
       std_info_(
           *reinterpret_cast<const Attr::StandardInformation*>(this->GetData()))
 {
-  if (this->GetDataSize() < sizeof(Attr::StandardInformation))
+  if (this->GetDataSize() < offsetof(Attr::StandardInformation, owner_id))
   {
     throw std::runtime_error(
         "Standard Information attribute smaller than expected.\n");
