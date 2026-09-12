@@ -23,6 +23,9 @@ class FileReader
 
   bool Open(std::wstring_view volume);
 
+  // Reads from addr into dest.
+  bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
+
   template <Strategy S2 = S>
   typename std::enable_if_t<
       std::is_same_v<std::integral_constant<Strategy, S2>,

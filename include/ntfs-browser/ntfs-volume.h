@@ -45,9 +45,7 @@ class NtfsVolume
   FileRecord<S> mft_record_;              // $MFT File Record
   const AttrBase<S>* mft_data_{nullptr};  // $MFT Data Attribute
 
-  // Buffer of size file_record_size_ to read FileRecord.
   mutable std::vector<BYTE> cluster_buffer_;
-  mutable std::vector<BYTE> file_record_buffer_;
 
   [[nodiscard]] bool OpenVolume(_TCHAR volume);
 
@@ -63,10 +61,12 @@ class NtfsVolume
   [[nodiscard]] ULONGLONG GetMFTAddr() const noexcept;
 
   [[nodiscard]] std::span<BYTE> GetClusterBuffer() const noexcept;
-  [[nodiscard]] std::span<BYTE> GetFileRecordBuffer() const noexcept;
 
   [[nodiscard]] std::optional<std::span<const BYTE>> Read(LARGE_INTEGER& addr,
                                                           DWORD length) const;
+  // Reads from addr into dest.
+  [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
+                              std::span<BYTE> dest) const;
 
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
                                       AttrRawCallback cb) noexcept;

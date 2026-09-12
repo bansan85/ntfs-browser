@@ -62,6 +62,8 @@ class FileRecord
   Mask attr_mask_{Mask::ALL};
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
+  std::vector<BYTE> record_buffer_;
+
   void ClearAttrs() noexcept;
   void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
                     bool& bDiscard) noexcept;
