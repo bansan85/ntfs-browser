@@ -16,13 +16,27 @@ NtfsVolume<S>::NtfsVolume(_TCHAR volume) : mft_record_(*this)
 {
   ClearAttrRawCB();
 
-  if (!OpenVolume(volume))
+  if (OpenVolume(volume))
   {
-    return;
+    Init();
   }
+}
 
-  // Verify NTFS volume version (must >= 3.0)
+template <Strategy S>
+NtfsVolume<S>::NtfsVolume(std::wstring_view path) : mft_record_(*this)
+{
+  ClearAttrRawCB();
 
+  if (OpenVolume(path))
+  {
+    Init();
+  }
+}
+
+// Verify NTFS volume version (must >= 3.0) and locate $MFT's Data attribute
+template <Strategy S>
+void NtfsVolume<S>::Init()
+{
   FileRecord vol(*this);
   vol.SetAttrMask(Mask::VOLUME_NAME | Mask::VOLUME_INFORMATION);
   if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME)))
@@ -119,9 +133,16 @@ bool NtfsVolume<S>::OpenVolume(_TCHAR volume)
   _sntprintf_s(volumePath.data(), 7, 6, _T("\\\\.\\%c:"), volume);
   volumePath[6] = _T('\0');
 
-  if (!volume_.Open(volumePath.data()))
+  return OpenVolume(std::wstring_view(volumePath.data()));
+}
+
+// Open an arbitrary device/image path, get volume handle and BPB
+template <Strategy S>
+bool NtfsVolume<S>::OpenVolume(std::wstring_view path)
+{
+  if (!volume_.Open(path))
   {
-    NTFS_TRACE1("Cannnot open volume %c\n", (char)volume);
+    NTFS_TRACE("Cannnot open volume\n");
     return false;
   }
 
