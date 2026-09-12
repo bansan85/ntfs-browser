@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <memory>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -8,6 +9,7 @@
 #include <ntfs-browser/strategy.h>
 
 #include "fake-ntfs-image.h"
+#include "memory-disk-reader.h"
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
@@ -56,6 +58,24 @@ TEST_CASE(
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
 
   FileRecord<Strategy::FULL_CACHE> root(volume);
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+
+  CHECK(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
+}
+
+TEST_CASE(
+    "A second FileRecord's read does not corrupt $MFT's attribute "
+    "(NO_CACHE, in-memory volume)",
+    "[ntfs-volume][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImage());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+  REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
+
+  FileRecord<Strategy::NO_CACHE> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
 
   CHECK(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);

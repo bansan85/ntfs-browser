@@ -1,6 +1,7 @@
 #include <cassert>
 
 #include <ntfs-browser/file-reader.h>
+#include <ntfs-browser/win32-disk-reader.h>
 
 #include "ntfs-common.h"
 
@@ -11,43 +12,31 @@ namespace NtfsBrowser
 {
 
 template <Strategy S>
-FileReader<S>::FileReader()
-    : handle_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle))
+FileReader<S>::FileReader() = default;
+
+template <Strategy S>
+FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader)
+    : reader_(std::move(reader))
 {
 }
 
 template <Strategy S>
 bool FileReader<S>::Open(std::wstring_view volume)
 {
-  handle_ =
-      HandlePtr(CreateFileW(volume.data(), GENERIC_READ,
-                            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                            OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
-                &CloseHandle);
-  return handle_.get() != INVALID_HANDLE_VALUE;
+  auto reader = std::make_unique<Win32DiskReader>();
+  if (!reader->Open(volume))
+  {
+    return false;
+  }
+
+  reader_ = std::move(reader);
+  return true;
 }
 
 template <Strategy S>
 bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
 {
-  DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr.LowPart),
-                             &addr.HighPart, FILE_BEGIN);
-
-  if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
-  {
-    NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
-    return false;
-  }
-
-  if (ReadFile(handle_.get(), dest.data(), static_cast<DWORD>(dest.size()),
-               &len, nullptr) == FALSE ||
-      len != dest.size())
-  {
-    NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
-    return false;
-  }
-
-  return true;
+  return reader_->ReadInto(addr, dest);
 }
 
 template <Strategy T>
@@ -58,22 +47,12 @@ typename std::enable_if_t<
     std::optional<std::span<const BYTE>>>
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
 {
-  DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr.LowPart),
-                             &addr.HighPart, FILE_BEGIN);
-
-  if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
-  {
-    NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
-    return {};
-  }
-
   if (buffer_.capacity() < length)
   {
     buffer_.reserve(length);
   }
 
-  if (ReadFile(handle_.get(), buffer_.data(), length, &len, nullptr) == FALSE ||
-      len != length)
+  if (!reader_->ReadInto(addr, std::span<BYTE>{buffer_.data(), length}))
   {
     NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
     return {};
@@ -103,20 +82,12 @@ typename std::enable_if_t<
 
   LARGE_INTEGER addr2{.QuadPart =
                           addr.QuadPart - addr.QuadPart % READ_BUFFER_SIZE};
-  DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr2.LowPart),
-                             &addr2.HighPart, FILE_BEGIN);
-
-  if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
-  {
-    NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
-    return {};
-  }
 
   BYTE* new_data = NextMemory();
 
-  if (ReadFile(handle_.get(), &new_data[0], READ_BUFFER_SIZE, &len, nullptr) ==
-          FALSE ||
-      len != READ_BUFFER_SIZE)
+  if (!reader_->ReadInto(addr2,
+                         std::span<BYTE>{new_data, static_cast<size_t>(
+                                                        READ_BUFFER_SIZE)}))
   {
     NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
     return {};

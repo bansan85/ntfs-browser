@@ -16,13 +16,15 @@ set(${PROJECT_NAME}_SRC
     "file-reader.cpp"
     "index-block.cpp"
     "index-entry.cpp"
-    "ntfs-volume.cpp")
+    "ntfs-volume.cpp"
+    "win32-disk-reader.cpp")
 
 set(${PROJECT_NAME}_H
     "../include/ntfs-browser/data/attr-defines.h"
     "../include/ntfs-browser/data/attr-header-common.h"
     "../include/ntfs-browser/data/attr-type.h"
     "../include/ntfs-browser/attr-base.h"
+    "../include/ntfs-browser/disk-reader.h"
     "../include/ntfs-browser/file-reader.h"
     "../include/ntfs-browser/file-record.h"
     "../include/ntfs-browser/index-entry.h"
@@ -30,6 +32,7 @@ set(${PROJECT_NAME}_H
     "../include/ntfs-browser/mft-idx.h"
     "../include/ntfs-browser/ntfs-volume.h"
     "../include/ntfs-browser/strategy.h"
+    "../include/ntfs-browser/win32-disk-reader.h"
     "../include/ntfs-browser/file-record.h"
     "../include/ntfs-browser/data/file-record-header.h"
     "attr/attribute-list.h"
