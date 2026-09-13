@@ -33,8 +33,14 @@ void Filename::GetFilenameWUC() { filename_wuc_ = GetFilename(); }
 // Compare Unicode file name
 int Filename::Compare(std::wstring_view fn) const noexcept
 {
-  return _wcsnicmp(fn.data(), filename_wuc_.data(),
-                   max(fn.size(), filename_wuc_.size()));
+  // Only the overlap is safe: the on-disk name isn't null-terminated.
+  const size_t n = min(fn.size(), filename_wuc_.size());
+  const int result = _wcsnicmp(fn.data(), filename_wuc_.data(), n);
+  if (result != 0 || fn.size() == filename_wuc_.size())
+  {
+    return result;
+  }
+  return fn.size() < filename_wuc_.size() ? -1 : 1;
 }
 
 ULONGLONG Filename::GetFileSize() const noexcept
