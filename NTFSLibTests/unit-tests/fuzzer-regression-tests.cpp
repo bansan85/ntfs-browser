@@ -51,7 +51,7 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"f2a2482f50a933eeea4d1a506651884827c0952d",
          {"Index Root attribute smaller than expected."}},
         {"resident_attr_body_out_of_bounds",
-         {"Resident attribute body exceeds attribute bounds."}},
+         {"Attribute total_size too small for its header."}},
         {"cluster_size_null", {"Cluster Size can't be null"}},
         {"invalid_offset_of_us", {"Offset must be lower than 1024."}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},

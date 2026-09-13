@@ -23,6 +23,8 @@
 #include "attr-std-info.h"
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
+#include "attr/header-non-resident.h"
+#include "attr/header-resident.h"
 #include "data/run-entry.h"
 #include "index-block.h"
 
@@ -81,7 +83,14 @@ std::unique_ptr<AttrBase<S>>
 {
   switch (ahc.type)
   {
+    // These attribute types are always resident on disk; reject any
+    // record claiming otherwise before its bytes get reinterpreted as one.
     case AttrType::STANDARD_INFORMATION:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error(
+            "Standard Information attribute must be resident.\n");
+      }
       return std::make_unique<AttrStdInfo<RESIDENT, S>>(ahc, *this);
 
     case AttrType::ATTRIBUTE_LIST:
@@ -92,12 +101,25 @@ std::unique_ptr<AttrBase<S>>
       return std::make_unique<AttrList<RESIDENT, S>>(ahc, *this);
 
     case AttrType::FILE_NAME:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error("File Name attribute must be resident.\n");
+      }
       return std::make_unique<AttrFileName<RESIDENT, S>>(ahc, *this);
 
     case AttrType::VOLUME_NAME:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error("Volume Name attribute must be resident.\n");
+      }
       return std::make_unique<AttrVolName<RESIDENT, S>>(ahc, *this);
 
     case AttrType::VOLUME_INFORMATION:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error(
+            "Volume Information attribute must be resident.\n");
+      }
       return std::make_unique<AttrVolInfo<RESIDENT, S>>(ahc, *this);
 
     case AttrType::DATA:
@@ -108,9 +130,20 @@ std::unique_ptr<AttrBase<S>>
       return std::make_unique<AttrData<RESIDENT, S>>(ahc, *this);
 
     case AttrType::INDEX_ROOT:
+      if (ahc.non_resident != 0)
+      {
+        throw std::runtime_error("Index Root attribute must be resident.\n");
+      }
       return std::make_unique<AttrIndexRoot<RESIDENT, S>>(ahc, *this);
 
+    // INDEX_ALLOCATION is always non-resident on disk; reject a record
+    // claiming otherwise before its bytes get reinterpreted as one.
     case AttrType::INDEX_ALLOCATION:
+      if (ahc.non_resident == 0)
+      {
+        throw std::runtime_error(
+            "Index Allocation attribute must be non-resident.\n");
+      }
       return std::make_unique<AttrIndexAlloc<S>>(ahc, *this);
 
     case AttrType::BITMAP:
@@ -414,6 +447,16 @@ bool FileRecord<S>::ParseAttrs()
          (static_cast<ULONGLONG>(dataPtr) + ahc->total_size <=
           volume_.GetFileRecordSize()))
   {
+    const DWORD minTotalSize =
+        ahc->non_resident != 0
+            ? static_cast<DWORD>(sizeof(Attr::HeaderNonResident))
+            : static_cast<DWORD>(sizeof(Attr::HeaderResident));
+    if (ahc->total_size < minTotalSize)
+    {
+      NTFS_TRACE("Attribute total_size too small for its header.\n");
+      return false;
+    }
+
     // True only when the type is a real attribute slot and the caller's
     // mask requests that slot.
     if (IsValidAttrType(ahc->type) &&
@@ -429,11 +472,6 @@ bool FileRecord<S>::ParseAttrs()
         NTFS_TRACE("Compressed and Encrypted file not supported yet !\n");
         return false;
       }
-    }
-
-    if (ahc->total_size == 0)
-    {
-      return false;
     }
 
     dataPtr += ahc->total_size;
