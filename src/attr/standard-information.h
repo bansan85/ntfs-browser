@@ -1,6 +1,6 @@
 #pragma once
 
-#include <windows.h>
+#include <ntfs-browser/win-types.h>
 
 #include "../flag/std-info-permission.h"
 

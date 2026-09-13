@@ -1,4 +1,4 @@
-#include <crtdbg.h>
+#include <cstring>
 
 #include <gsl/narrow>
 

@@ -1,3 +1,6 @@
+#include <cassert>
+#include <cstring>
+
 #include <gsl/narrow>
 #include <gsl/pointers>
 
@@ -162,7 +165,7 @@ std::optional<ULONGLONG>
     AttrNonResident<S>::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
                                             std::span<BYTE> buffer) const
 {
-  _ASSERT(clusters);
+  assert(clusters);
 
   ULONGLONG actural = 0;
 

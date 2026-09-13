@@ -2,6 +2,9 @@
 
 #include <ntfs-browser/strategy.h>
 
+#include <cstring>
+#include <stdexcept>
+
 namespace NtfsBrowser
 {
 
@@ -9,7 +12,10 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
                                    size_t sector_size)
     : sector_size(sector_size)
 {
-  _ASSERT(1024 == buffer.size());
+  if (1024 != buffer.size())
+  {
+    throw std::runtime_error("Buffer size of FileRecordHeader must be 1024.");
+  }
 
   const Data* data = reinterpret_cast<const Data*>(buffer.data());
 

@@ -8,7 +8,7 @@ This file guides Claude Code when working with code in this repository.
 
 ## Build
 
-The build requires Windows and MSVC only. It uses `<windows.h>` and `<tchar.h>`; MFT/BPB parsing assumes Win32. It requires submodules (`3rdparty/gsl`, `3rdparty/Catch2`). Clone with `--recurse-submodules`, or run `git submodule update --init --recursive`.
+Windows and MSVC are the primary target. MFT/BPB parsing assumes Win32. The MFC demo apps, the unit tests, and `NtfsFuzzer` are Windows-only. The build requires submodules (`3rdparty/gsl`, `3rdparty/Catch2`). Clone with `--recurse-submodules`, or run `git submodule update --init --recursive`.
 
 ```
 cmake -S . -B build
@@ -18,6 +18,8 @@ cmake --build build --config Debug
 An existing configured `build/` directory (Visual Studio generator) is already present in this repo. You can also open `build/NtfsBrowser.slnx` in Visual Studio.
 
 `BUILD_SHARED_LIBS` (default OFF) selects a static or shared `NtfsBrowser` lib. CI (`.github/workflows/cmake.yml`) builds both Debug and Release, and both static and shared, on `windows-latest`.
+
+The `NtfsBrowser` library itself, and the `NtfsFuzzerAfl` target ([NTFSLibTests/fuzz/](NTFSLibTests/fuzz/)), also configure and build on Linux with plain GCC: `cmake -S . -B build-linux && cmake --build build-linux` (verified via WSL). `include/ntfs-browser/win-types.h` shims the handful of Windows typedefs (`BYTE`, `DWORD`, `LARGE_INTEGER`, ...) that the on-disk struct layouts and the public API are expressed in. Real Win32 API usage — `Win32DiskReader`, and drive-letter/path-based `NtfsVolume`/`FileReader` construction — is `#ifdef _WIN32`-guarded out. Everything else — the MFC demo apps, the unit tests, and the clang-oriented `NtfsFuzzer` — stays Windows/MSVC-only. CMake skips them (`if(WIN32)`) on other platforms.
 
 ## Tests
 

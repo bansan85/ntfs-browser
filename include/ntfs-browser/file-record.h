@@ -7,14 +7,12 @@
 #include <functional>
 #include <vector>
 
-#include <tchar.h>
-#include <windows.h>
-
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/data/file-record-header.h>
+#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {

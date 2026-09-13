@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include <windows.h>
+#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {

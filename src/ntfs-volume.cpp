@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
@@ -11,6 +13,7 @@
 namespace NtfsBrowser
 {
 
+#ifdef _WIN32
 template <Strategy S>
 NtfsVolume<S>::NtfsVolume(_TCHAR volume) : mft_record_(*this)
 {
@@ -32,6 +35,7 @@ NtfsVolume<S>::NtfsVolume(std::wstring_view path) : mft_record_(*this)
     Init();
   }
 }
+#endif
 
 template <Strategy S>
 NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader)
@@ -130,6 +134,7 @@ void NtfsVolume<S>::Init()
   }
 }
 
+#ifdef _WIN32
 // Open a volume ('a' - 'z', 'A' - 'Z'), get volume handle and BPB
 template <Strategy S>
 bool NtfsVolume<S>::OpenVolume(_TCHAR volume)
@@ -160,6 +165,7 @@ bool NtfsVolume<S>::OpenVolume(std::wstring_view path)
 
   return ParseBootSector();
 }
+#endif
 
 // Use an already-open reader (eg. a test double), get BPB
 template <Strategy S>

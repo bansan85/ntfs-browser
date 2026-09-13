@@ -3,7 +3,7 @@
 #include <span>
 #include <string_view>
 
-#include <windows.h>
+#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {

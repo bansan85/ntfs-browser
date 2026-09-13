@@ -1,8 +1,7 @@
 #pragma once
 
-#include <windows.h>
-
 #include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/win-types.h>
 
 // Attribute Type to Index, eg. 0x10->0, 0x30->2
 #define ATTR_INDEX(at) ((static_cast<DWORD>(at) >> 4U) - 1)

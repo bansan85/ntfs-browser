@@ -7,7 +7,7 @@
 
 #include <gsl/pointers>
 
-#include <windows.h>
+#include <ntfs-browser/win-types.h>
 
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/strategy.h>

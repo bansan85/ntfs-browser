@@ -1,4 +1,4 @@
-#include <crtdbg.h>
+#include <algorithm>
 
 #include <ntfs-browser/filename.h>
 
@@ -34,7 +34,7 @@ void Filename::GetFilenameWUC() { filename_wuc_ = GetFilename(); }
 int Filename::Compare(std::wstring_view fn) const noexcept
 {
   // Only the overlap is safe: the on-disk name isn't null-terminated.
-  const size_t n = min(fn.size(), filename_wuc_.size());
+  const size_t n = std::min(fn.size(), filename_wuc_.size());
   const int result = _wcsnicmp(fn.data(), filename_wuc_.data(), n);
   if (result != 0 || fn.size() == filename_wuc_.size())
   {

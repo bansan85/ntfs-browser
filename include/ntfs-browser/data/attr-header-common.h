@@ -1,6 +1,6 @@
 #pragma once
 
-#include <windows.h>
+#include <ntfs-browser/win-types.h>
 
 #include <ntfs-browser/data/attr-type.h>
 

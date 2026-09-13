@@ -16,8 +16,11 @@ set(${PROJECT_NAME}_SRC
     "file-reader.cpp"
     "index-block.cpp"
     "index-entry.cpp"
-    "ntfs-volume.cpp"
-    "win32-disk-reader.cpp")
+    "ntfs-volume.cpp")
+
+if(WIN32)
+  list(APPEND ${PROJECT_NAME}_SRC "win32-disk-reader.cpp")
+endif()
 
 set(${PROJECT_NAME}_H
     "../include/ntfs-browser/data/attr-defines.h"
@@ -72,7 +75,9 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
-         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+  # Unlike MSVC, GCC doesn't search transitively-including files' directories.
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(${PROJECT_NAME} PUBLIC "_UNICODE" "UNICODE")
 
 group_src(${${PROJECT_NAME}_SRC} ${${PROJECT_NAME}_H} ${${PROJECT_NAME}_CMAKE})
