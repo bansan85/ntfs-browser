@@ -275,10 +275,15 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
 
 // Visit IndexBlocks recursivly to find a specific Filename
 template <Strategy S>
-std::optional<IndexEntry>
-    FileRecord<S>::VisitIndexBlock(ULONGLONG vcn,
-                                   std::wstring_view fileName) const
+std::optional<IndexEntry> FileRecord<S>::VisitIndexBlock(
+    ULONGLONG vcn, std::wstring_view fileName,
+    std::unordered_set<ULONGLONG>& visitedVcns) const
 {
+  if (!visitedVcns.insert(vcn).second)
+  {
+    return {};
+  }
+
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
       getAttr(AttrType::INDEX_ALLOCATION);
   if (vec.empty())
@@ -313,7 +318,7 @@ std::optional<IndexEntry>
         }
         // Search in SubNode (IndexBlock), recursive call
         std::optional<IndexEntry> retval =
-            VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+            VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns);
         if (retval)
         {
           return retval;
@@ -325,7 +330,7 @@ std::optional<IndexEntry>
     {
       // Search in SubNode (IndexBlock), recursive call
       std::optional<IndexEntry> retval =
-          VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+          VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns);
       if (retval)
       {
         return retval;
@@ -338,10 +343,18 @@ std::optional<IndexEntry>
 
 // Traverse SubNode recursivly in ascending order
 // Call user defined callback routine once found an subentry
+// visitedVcns guards against a malformed/malicious B+ tree where a
+// subnode VCN is revisited, which would otherwise recurse without bound.
 template <Strategy S>
-void FileRecord<S>::TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
-                                    void* context) const
+void FileRecord<S>::TraverseSubNode(
+    ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack, void* context,
+    std::unordered_set<ULONGLONG>& visitedVcns) const
 {
+  if (!visitedVcns.insert(vcn).second)
+  {
+    return;
+  }
+
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
       getAttr(AttrType::INDEX_ALLOCATION);
   if (vec.empty())
@@ -361,7 +374,7 @@ void FileRecord<S>::TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
     if (ie.IsSubNodePtr())
     {
       // recursive call
-      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context);
+      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context, visitedVcns);
     }
 
     if (ie.HasName())
@@ -692,12 +705,14 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
     }
   }
 
+  std::unordered_set<ULONGLONG> visitedVcns;
+
   for (const IndexEntry& ie : *all_ie)
   {
     // Visit subnode first
     if (ie.IsSubNodePtr())
     {
-      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context);
+      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context, visitedVcns);
     }
 
     if (ie.HasName())
@@ -751,6 +766,8 @@ std::optional<IndexEntry>
     return {};
   }
 
+  std::unordered_set<ULONGLONG> visitedVcns;
+
   for (const IndexEntry& ie : *all_ie)
   {
     if (ie.HasName())
@@ -769,7 +786,7 @@ std::optional<IndexEntry>
         {
           // Search in SubNode (IndexBlock)
           std::optional<IndexEntry> retval =
-              VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+              VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns);
           if (retval)
           {
             return retval;
@@ -787,7 +804,7 @@ std::optional<IndexEntry>
     {
       // Search in SubNode (IndexBlock)
       std::optional<IndexEntry> retval =
-          VisitIndexBlock(ie.GetSubNodeVCN(), fileName);
+          VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns);
       if (retval)
       {
         return retval;

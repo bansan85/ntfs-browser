@@ -26,6 +26,13 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
   std::optional<ULONGLONG> len = 0;
   Attr::AttributeList al_record{};
 
+  // Start the chain here, unless fr already carries one from an outer AttrList.
+  if (!fr.attr_list_chain_)
+  {
+    fr.attr_list_chain_ = std::make_shared<std::unordered_set<ULONGLONG>>();
+    fr.attr_list_chain_->insert(*fr.file_reference_);
+  }
+
   while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
                                         sizeof(Attr::AttributeList)})) &&
          *len == sizeof(Attr::AttributeList))
@@ -45,29 +52,41 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
     if (record_ref != *fr.file_reference_ &&
         static_cast<bool>(am & fr.attr_mask_))
     {
-      file_record_list_.emplace_back(fr.volume_);
-      FileRecord<S>& frnew = file_record_list_.back();
+      if (!fr.attr_list_chain_->insert(record_ref).second)
+      {
+        NTFS_TRACE1(
+            "Attribute List: record %I64u already resolved in this chain, "
+            "skipping\n",
+            record_ref);
+      }
+      else
+      {
+        file_record_list_.emplace_back(fr.volume_);
+        FileRecord<S>& frnew = file_record_list_.back();
 
-      frnew.attr_mask_ = am;
-      if (!frnew.ParseFileRecord(record_ref))
-      {
-        throw std::runtime_error(
-            "Attribute List parse error (ParseFileRecord).\n");
-      }
-      if (!frnew.ParseAttrs())
-      {
-        throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
-      }
+        frnew.attr_mask_ = am;
+        frnew.attr_list_chain_ = fr.attr_list_chain_;
+        if (!frnew.ParseFileRecord(record_ref))
+        {
+          throw std::runtime_error(
+              "Attribute List parse error (ParseFileRecord).\n");
+        }
+        if (!frnew.ParseAttrs())
+        {
+          throw std::runtime_error(
+              "Attribute List parse error (ParseAttrs).\n");
+        }
 
-      // Insert new found AttrList to fr.AttrList
-      std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-          frnew.getAttr(al_record.attr_type);
-      for (std::unique_ptr<AttrBase<S>>& veci : vec)
-      {
-        fr.attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
-            std::move(veci));
+        // Insert new found AttrList to fr.AttrList
+        std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+            frnew.getAttr(al_record.attr_type);
+        for (std::unique_ptr<AttrBase<S>>& veci : vec)
+        {
+          fr.attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
+              std::move(veci));
+        }
+        vec.clear();
       }
-      vec.clear();
     }
 
     if (al_record.record_size == 0)

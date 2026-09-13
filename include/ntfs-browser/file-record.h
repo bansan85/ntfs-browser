@@ -5,6 +5,7 @@
 #include <optional>
 #include <string_view>
 #include <functional>
+#include <unordered_set>
 #include <vector>
 
 #include <ntfs-browser/data/attr-defines.h>
@@ -60,6 +61,9 @@ class FileRecord
   Mask attr_mask_{Mask::ALL};
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
+  // Detects $ATTRIBUTE_LIST cycles; null until AttrList first needs it.
+  std::shared_ptr<std::unordered_set<ULONGLONG>> attr_list_chain_{};
+
   std::vector<BYTE> record_buffer_;
 
   void ClearAttrs() noexcept;
@@ -71,10 +75,15 @@ class FileRecord
   [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc);
   [[nodiscard]] std::optional<FileRecordHeaderImpl<S>>
       ReadFileRecord(ULONGLONG fileRef);
+  // visitedVcns guards against a malformed/malicious B+ tree where a
+  // subnode VCN is revisited (self-loop or cycle among index blocks),
+  // which would otherwise recurse without bound and overflow the stack.
   [[nodiscard]] std::optional<IndexEntry>
-      VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName) const;
+      VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName,
+                      std::unordered_set<ULONGLONG>& visitedVcns) const;
   void TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
-                       void* context) const;
+                       void* context,
+                       std::unordered_set<ULONGLONG>& visitedVcns) const;
 
  public:
   [[nodiscard]] const NtfsVolume<S>& GetVolume() const noexcept;
