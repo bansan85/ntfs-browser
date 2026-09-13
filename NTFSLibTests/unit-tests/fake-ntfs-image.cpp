@@ -250,6 +250,36 @@ FakeRecord MakeIndexRootExtensionRecord()
   return record;
 }
 
+// A resident REPARSE_POINT attribute whose total_size (17) is smaller
+// than a resident header (24), so code that reinterprets its bytes as one
+// reads attr_size/attr_offset from past its declared extent. The byte
+// right after it is set to a large sentinel, so the next-attribute bounds
+// check stops the parse loop there instead of misreading further bytes.
+FakeRecord MakeUndersizedResidentAttrRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  constexpr DWORD kUndersizedTotalSize = 17;
+  static_assert(
+      kUndersizedTotalSize < sizeof(NtfsBrowser::Attr::HeaderResident),
+      "total_size must be smaller than a resident attribute header to "
+      "reproduce F1");
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::REPARSE_POINT;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.header.total_size = kUndersizedTotalSize;
+
+  record[kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderResident)] = 0xFF;
+
+  return record;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -301,6 +331,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectory()
 
   putRecord(kAttributeListDirIdx, MakeAttributeListOnlyDirRecord());
   putRecord(kIndexExtensionIdx, MakeIndexRootExtensionRecord());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithUndersizedAttribute()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset =
+      mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                    static_cast<size_t>(kUndersizedAttrRecordIdx);
+  const FakeRecord record = MakeUndersizedResidentAttrRecord();
+  std::memcpy(image.data() + offset, record.data(), record.size());
 
   return image;
 }
