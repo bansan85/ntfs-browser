@@ -85,9 +85,9 @@ typename std::enable_if_t<
 
   BYTE* new_data = NextMemory();
 
-  if (!reader_->ReadInto(addr2,
-                         std::span<BYTE>{new_data, static_cast<size_t>(
-                                                        READ_BUFFER_SIZE)}))
+  if (!reader_->ReadInto(
+          addr2,
+          std::span<BYTE>{new_data, static_cast<size_t>(READ_BUFFER_SIZE)}))
   {
     NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
     return {};

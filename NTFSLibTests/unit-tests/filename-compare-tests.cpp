@@ -40,8 +40,9 @@ IndexEntry MakeSystemEntry()
   // Filler: must never be read by Compare().
   fn.name[kNameLen] = 0xFFFF;
 
-  ie.stream_size = static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[kNameLen]) -
-                                     reinterpret_cast<BYTE*>(&fn));
+  ie.stream_size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[kNameLen]) -
+                        reinterpret_cast<BYTE*>(&fn));
   ie.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&ie.stream) -
                               reinterpret_cast<BYTE*>(&ie) + ie.stream_size);
 

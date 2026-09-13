@@ -20,9 +20,8 @@ using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-TEST_CASE(
-    "FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
-    "[file-record][regression]")
+TEST_CASE("FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
+          "[file-record][regression]")
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());

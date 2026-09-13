@@ -32,15 +32,15 @@ class SequentialDiskReader : public NtfsBrowser::IDiskReader
 };
 
 // Serves data out of a buffer already held in memory.
-[[nodiscard]] SequentialDiskReader::Producer MakeMemoryProducer(
-    std::vector<BYTE> data);
+[[nodiscard]] SequentialDiskReader::Producer
+    MakeMemoryProducer(std::vector<BYTE> data);
 
 // Serves data read incrementally from a file, instead of preloading it.
-[[nodiscard]] SequentialDiskReader::Producer MakeFileStreamProducer(
-    std::filesystem::path path);
+[[nodiscard]] SequentialDiskReader::Producer
+    MakeFileStreamProducer(std::filesystem::path path);
 
 // Serves data generated on the fly, with no backing store.
-[[nodiscard]] SequentialDiskReader::Producer MakeGeneratorProducer(
-    std::function<void(std::span<BYTE>)> generate);
+[[nodiscard]] SequentialDiskReader::Producer
+    MakeGeneratorProducer(std::function<void(std::span<BYTE>)> generate);
 
 }

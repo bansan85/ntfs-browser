@@ -91,11 +91,9 @@ const FileRecordHeader::Data*
 template struct FileRecordHeaderImpl<Strategy::NO_CACHE>;
 template struct FileRecordHeaderImpl<Strategy::FULL_CACHE>;
 
-template
-FileRecordHeaderImpl<Strategy::NO_CACHE>
+template FileRecordHeaderImpl<Strategy::NO_CACHE>
     FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
-template
-FileRecordHeaderImpl<Strategy::FULL_CACHE>
+template FileRecordHeaderImpl<Strategy::FULL_CACHE>
     FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
 
 }  // namespace NtfsBrowser
