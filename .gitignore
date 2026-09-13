@@ -1,2 +1,7 @@
 /build
 /build-linux
+
+/.venv/
+
+/crashes/
+/crash1.txt

@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "attr-list.h"
 #include "attr-non-resident.h"
 #include "attr-resident.h"
@@ -17,7 +19,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
   NTFS_TRACE("Attribute: Attribute List\n");
   if (!fr.file_reference_)
   {
-    return;
+    throw std::runtime_error("Missing file reference\n");
   }
 
   ULONGLONG offset = 0;
@@ -30,8 +32,8 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
   {
     if (ATTR_INDEX(al_record.attr_type) > kAttrNums)
     {
-      NTFS_TRACE("Attribute List parse error1\n");
-      break;
+      throw std::runtime_error(
+          "Attribute List parse error (al_record.attr_type).\n");
     }
 
     NTFS_TRACE1("Attribute List: 0x%04x\n", al_record.attr_type);
@@ -49,13 +51,12 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
       frnew.attr_mask_ = am;
       if (!frnew.ParseFileRecord(record_ref))
       {
-        NTFS_TRACE("Attribute List parse error2\n");
-        break;
+        throw std::runtime_error(
+            "Attribute List parse error (ParseFileRecord).\n");
       }
       if (!frnew.ParseAttrs())
       {
-        NTFS_TRACE("Attribute List parse error3\n");
-        break;
+        throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
       }
 
       // Insert new found AttrList to fr.AttrList
@@ -71,7 +72,8 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
 
     if (al_record.record_size == 0)
     {
-      break;
+      throw std::runtime_error(
+          "Attribute List with zero record size has endless loop.\n");
     }
     offset += al_record.record_size;
   }

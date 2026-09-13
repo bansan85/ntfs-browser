@@ -1,6 +1,8 @@
 #include <ntfs-browser/data/file-record-header.h>
 
 #include <ntfs-browser/strategy.h>
+#include "../ntfs-common.h"
+#include <ntfs-browser/data/attr-header-common.h>
 
 #include <cstring>
 #include <stdexcept>
@@ -23,6 +25,11 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
   {
     us_number = 0;
     return;
+  }
+
+  if (data->offset_of_us >= buffer.size())
+  {
+    throw std::runtime_error("Offset must be lower than 1024.");
   }
 
   us_array.reserve(buffer.size() / sector_size);
@@ -56,10 +63,17 @@ bool FileRecordHeader::PatchUS() noexcept
   return true;
 }
 
-const AttrHeaderCommon& FileRecordHeader::HeaderCommon() noexcept
+const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
 {
-  return *reinterpret_cast<const AttrHeaderCommon*>(&GetData()->raw[0] +
-                                                    GetData()->offset_of_attr);
+  WORD offset_of_attr = GetData()->offset_of_attr;
+  if (offset_of_attr + sizeof(AttrHeaderCommon) >=
+      sizeof(FileRecordHeader::Data::raw))
+  {
+    NTFS_TRACE("Offset of attr must be lower than 1024\n");
+    return nullptr;
+  }
+  return reinterpret_cast<const AttrHeaderCommon*>(&GetData()->raw[0] +
+                                                   offset_of_attr);
 }
 
 template <Strategy S>

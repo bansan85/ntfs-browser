@@ -55,7 +55,8 @@ struct FileRecordHeader
   virtual ~FileRecordHeader() = default;
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
-  const AttrHeaderCommon& HeaderCommon() noexcept;
+  // Returns nullptr if offset_of_attr doesn't fit in the record buffer.
+  const AttrHeaderCommon* HeaderCommon() noexcept;
 
   template <Strategy S>
   static FileRecordHeaderImpl<S> Factory(std::span<const BYTE> buffer,
