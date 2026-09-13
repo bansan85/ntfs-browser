@@ -23,4 +23,18 @@ inline constexpr uint32_t kFakeFileRecordSize = 1024;
 // Writes BuildFakeNtfsImage()'s image to a temp file and returns its path.
 [[nodiscard]] std::filesystem::path WriteFakeNtfsImage();
 
+// Directory record index: only attribute is a resident $ATTRIBUTE_LIST
+// relocating $INDEX_ROOT to kIndexExtensionIdx.
+inline constexpr ULONGLONG kAttributeListDirIdx = 6;
+
+// Extension record index: holds the $INDEX_ROOT kAttributeListDirIdx's
+// $ATTRIBUTE_LIST points to, with a single named entry "Foo" (ref 20).
+inline constexpr ULONGLONG kIndexExtensionIdx = 7;
+
+// Same volume as BuildFakeNtfsImage(), plus a directory split across two
+// records the way real NTFS directories (eg. C:\Windows) can be: the base
+// record holds only $ATTRIBUTE_LIST, and $INDEX_ROOT lives in the
+// extension record it points to.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectory();
+
 }
