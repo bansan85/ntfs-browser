@@ -52,8 +52,7 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"Index Root attribute smaller than expected."}},
         {"resident_attr_body_out_of_bounds",
          {"Resident attribute body exceeds attribute bounds."}},
-        // Testcase sector size is 0; now caught by earlier sector-size validation.
-        {"cluster_size_null", {"Sector Size must be at least 2 bytes"}},
+        {"cluster_size_null", {"Cluster Size can't be null"}},
         {"invalid_offset_of_us", {"Offset must be lower than 1024."}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
