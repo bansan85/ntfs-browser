@@ -65,4 +65,16 @@ inline constexpr WORD kForgedIndexBlockOffsetOfUs = 0xFFFF;
 // offset_of_us.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithForgedIndexBlock();
 
+// clusters_per_index_block patched in by
+// BuildFakeNtfsImageWithTinyIndexBlock(); read as a signed char, 0xFF
+// becomes -1, producing a far too small index_block_size_.
+inline constexpr BYTE kTinyClustersPerIndexBlock = 0xFF;
+
+// index_block_size_ that kTinyClustersPerIndexBlock is expected to produce.
+inline constexpr DWORD kTinyIndexBlockSize = 2;
+
+// Same volume as BuildFakeNtfsImage(), with clusters_per_index_block patched
+// so GetIndexBlockSize() is far smaller than Data::IndexBlock's own header.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock();
+
 }  // namespace NtfsBrowserTests

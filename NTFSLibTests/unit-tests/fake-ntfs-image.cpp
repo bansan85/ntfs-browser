@@ -485,6 +485,17 @@ std::vector<BYTE> BuildFakeNtfsImageWithForgedIndexBlock()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // ParseBootSector() reads this DWORD field's low byte as a signed char.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_index_block = kTinyClustersPerIndexBlock;
+
+  return image;
+}
+
 std::filesystem::path WriteFakeNtfsImage()
 {
   const std::vector<BYTE> image = BuildFakeNtfsImage();
