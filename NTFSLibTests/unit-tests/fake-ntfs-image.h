@@ -78,6 +78,37 @@ inline constexpr DWORD kTinyIndexBlockSize = 2;
 // so GetIndexBlockSize() is far smaller than Data::IndexBlock's own header.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock();
 
+// clusters_per_index_block patched in by
+// BuildFakeNtfsImageWithOversizedIndexBlock(); read as a signed char, 0xE1
+// becomes -31, producing an index_block_size_ far larger than any real
+// volume's, yet still divisible by every common sector size.
+inline constexpr BYTE kOversizedClustersPerIndexBlock = 0xE1;
+
+// index_block_size_ that kOversizedClustersPerIndexBlock is expected to
+// produce.
+inline constexpr DWORD kOversizedIndexBlockSize = 0x80000000;
+
+// Same volume as BuildFakeNtfsImage(), with clusters_per_index_block patched
+// so GetIndexBlockSize() is far larger than any real volume's, while still
+// passing every existing bound check.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOversizedIndexBlock();
+
+// clusters_per_file_record patched in by
+// BuildFakeNtfsImageWithOversizedFileRecord(); same 0xE1 shift as
+// kOversizedClustersPerIndexBlock, but for file_record_size_.
+inline constexpr BYTE kOversizedClustersPerFileRecord = 0xE1;
+
+// file_record_size_ that kOversizedClustersPerFileRecord is expected to
+// produce.
+inline constexpr DWORD kOversizedFileRecordSize = 0x80000000;
+
+// Same volume as BuildFakeNtfsImage(), with clusters_per_file_record patched
+// so GetFileRecordSize() is far larger than any real volume's. Unlike the
+// index-block variant above, this size is read the moment any file record
+// is parsed, so this fixture is not driven through a full NtfsVolume
+// construction in tests.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOversizedFileRecord();
+
 // lcn_mft patched in by BuildFakeNtfsImageWithHugeMftLcn(); with this
 // fixture's fixed cluster size, mft_addr_ ends up exactly 2^63.
 inline constexpr ULONGLONG kHugeMftLcn = 1ULL << 53;

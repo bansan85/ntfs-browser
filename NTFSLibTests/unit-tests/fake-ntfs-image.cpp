@@ -744,6 +744,28 @@ std::vector<BYTE> BuildFakeNtfsImageWithTinyIndexBlock()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithOversizedIndexBlock()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // ParseBootSector() reads this DWORD field's low byte as a signed char.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_index_block = kOversizedClustersPerIndexBlock;
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithOversizedFileRecord()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // ParseBootSector() reads this DWORD field's low byte as a signed char.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_file_record = kOversizedClustersPerFileRecord;
+
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithHugeMftLcn()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();
