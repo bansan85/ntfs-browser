@@ -12,10 +12,12 @@
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "gap-collation-probe.h"
 #include "looping-disk-reader.h"
 #include "named-stream-probe.h"
 
 using namespace NtfsBrowser;
+using NtfsFuzz::kGapCollationSearchName;
 using NtfsFuzz::kNamedDataStreamName;
 using NtfsFuzz::LoopingDiskReader;
 
@@ -78,6 +80,10 @@ void FuzzOnce(const std::vector<BYTE>& data)
   // FindStream() calls GetAttrName() on every named $DATA attribute it
   // walks, regardless of the name passed in.
   (void)fr.FindStream(kNamedDataStreamName);
+
+  // Unlike TraverseSubEntries() above, FindSubEntry() actually compares
+  // names, exercising a real B+-tree sub-node descent.
+  (void)fr.FindSubEntry(kGapCollationSearchName);
 }
 
 }

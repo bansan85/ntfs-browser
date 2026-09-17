@@ -7,6 +7,7 @@
 
 #include <windows.h>
 
+#include "gap-collation-probe.h"
 #include "named-stream-probe.h"
 
 namespace NtfsBrowserTests
@@ -314,5 +315,22 @@ inline constexpr wchar_t kIndexRootVariantBName[] = L"BBB";
 // replaced by one holding its own real $INDEX_ROOT entry directly, not via
 // an $ATTRIBUTE_LIST extension record.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithRootIndexRootEntry();
+
+// Shared with NTFSLibTests/fuzz/gap-collation-probe.h, so a fuzz corpus
+// file built from this fixture reaches the same sub-node entry by name.
+using NtfsFuzz::kGapCollationSearchName;
+using NtfsFuzz::kGapCollationSearchNameLength;
+
+// MFT reference the root-level, non-terminal $INDEX_ROOT entry declares.
+inline constexpr ULONGLONG kGapCollationNonTerminalMftRef = 25;
+
+// MFT reference the sub-node's real leaf entry declares.
+inline constexpr ULONGLONG kGapCollationLeafMftRef = 30;
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by one whose own $INDEX_ROOT holds a real, non-terminal entry
+// that is also a sub-node pointer into a real $INDEX_ALLOCATION index
+// block holding kGapCollationSearchName as its leaf entry.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode();
 
 }  // namespace NtfsBrowserTests

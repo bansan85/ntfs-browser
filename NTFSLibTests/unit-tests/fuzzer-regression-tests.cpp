@@ -97,6 +97,8 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"FindStream() found stream named \"ads-name\""}},
         {"index_root_real_entry",
          {"Index Root: allocated independent copy of resident data"}},
+        {"gap_collation_subnode",
+         {"VisitIndexBlock() found entry in sub-node"}},
     };
 
 struct RunResult

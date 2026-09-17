@@ -480,6 +480,10 @@ FakeRecord MakeUndersizedResidentAttrRecord()
 // LCN for the forged index block, placed past every record's cluster range.
 constexpr DWORD kForgedIndexBlockLcn = 20;
 
+// LCN where BuildFakeNtfsImageWithGapCollationSubNode() writes its own
+// index block, past every record's cluster range.
+constexpr DWORD kGapCollationIndexBlockLcn = 20;
+
 // Builds a directory record whose $INDEX_ALLOCATION references a single
 // forged index block, reached through TraverseSubNode() without real
 // B+-tree comparisons.
@@ -942,6 +946,122 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mftIndex,
   return record;
 }
 
+// Builds a root-directory replacement whose own $INDEX_ROOT holds one
+// real, non-terminal FILE_NAME entry that is also a sub-node pointer into
+// a real $INDEX_ALLOCATION index block.
+FakeRecord MakeRootRecordWithGapCollationSubNode()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  DWORD offset = kAttrOffset;
+
+  // $INDEX_ROOT
+  auto& rootAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  rootAttr.header.type = AttrType::INDEX_ROOT;
+  rootAttr.header.non_resident = 0;
+  rootAttr.header.name_length = 0;
+  rootAttr.header.flags = 0;
+  rootAttr.header.id = 0;
+  rootAttr.attr_offset = static_cast<WORD>(sizeof(rootAttr));
+
+  BYTE* body = &record[offset + rootAttr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kFakeFileRecordSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  // Entry 1 ("A_"): non-terminal, so it carries both a name and a sub-node
+  // VCN right after it.
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = kGapCollationNonTerminalMftRef;
+  e1.mft_sn = 1;
+
+  auto& fn1 = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+  fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::ROOT);
+  fn1.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
+  constexpr wchar_t kNonTerminalName[] = L"A_";
+  fn1.name_length = 2;
+  fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  for (BYTE i = 0; i < fn1.name_length; i++)
+  {
+    fn1.name[i] = static_cast<WORD>(kNonTerminalName[i]);
+  }
+
+  e1.stream_size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
+                        reinterpret_cast<BYTE*>(&fn1));
+  e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE;
+  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size +
+                              sizeof(ULONGLONG));
+  auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
+      reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
+  subNodeVcn = 0;
+
+  // Entry 2: the terminating entry - no name, no sub-node.
+  auto& e2 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot) + e1.size);
+  e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  e2.stream_size = 0;
+  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+                              reinterpret_cast<BYTE*>(&e2));
+
+  root.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
+  root.alloc_entry_size = root.total_entry_size;
+  root.flags = 0;
+
+  rootAttr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size +
+      e2.size;
+  rootAttr.header.total_size =
+      static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
+
+  offset += rootAttr.header.total_size;
+
+  // $INDEX_ALLOCATION
+  auto& allocAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
+  allocAttr.header.type = AttrType::INDEX_ALLOCATION;
+  allocAttr.header.non_resident = 1;
+  allocAttr.header.name_length = 0;
+  allocAttr.header.flags = 0;
+  allocAttr.header.id = 0;
+  allocAttr.start_vcn = 0;
+  allocAttr.last_vcn = 0;  // single cluster -> VCN 0 only
+  allocAttr.data_run_offset = static_cast<WORD>(sizeof(allocAttr));
+  allocAttr.comp_unit_size = 0;
+  allocAttr.real_size = kClusterSize;
+  allocAttr.alloc_size = kClusterSize;
+  allocAttr.ini_size = kClusterSize;
+
+  BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
+  DWORD runLen = 0;
+  // High nibble = LCN offset field size, low nibble = length field size.
+  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = 1;  // 1 cluster
+  {
+    const DWORD lcn = kGapCollationIndexBlockLcn;
+    std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
+    runLen += sizeof(lcn);
+  }
+  dataRun[runLen++] = 0x00;  // terminate the run list
+
+  allocAttr.header.total_size = static_cast<DWORD>(sizeof(allocAttr)) + runLen;
+
+  offset += allocAttr.header.total_size;
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -1380,6 +1500,76 @@ std::vector<BYTE> BuildFakeNtfsImageWithRootIndexRootEntry()
                                           static_cast<size_t>(MftIdx::ROOT);
   const FakeRecord record = MakeIndexRootExtensionRecord();
   std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Overwrites the whole root record (#5), not just a single field.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeRootRecordWithGapCollationSubNode();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  // The sub-node itself: one real index block holding
+  // kGapCollationSearchName as its only leaf entry.
+  const size_t blockOffset =
+      static_cast<size_t>(kGapCollationIndexBlockLcn) * kClusterSize;
+  if (image.size() < blockOffset + kClusterSize)
+  {
+    image.resize(blockOffset + kClusterSize, 0);
+  }
+
+  BYTE* const blockStart = image.data() + blockOffset;
+  auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
+  std::memset(&block, 0, sizeof(block));
+  block.magic = kIndexBlockMagic;
+  // Points at the block's own last 2 bytes, so PatchUS() succeeds
+  // trivially without a real fixup array.
+  block.offset_of_us = static_cast<WORD>(kClusterSize - 4);
+  block.size_of_us = 2;
+  block.vcn = 0;
+  block.entry_offset =
+      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+                         reinterpret_cast<BYTE*>(&block.entry_offset));
+  block.not_leaf = 0;
+
+  BYTE* body = blockStart + sizeof(NtfsBrowser::Data::IndexBlock);
+
+  // Entry 1: the real leaf entry, a plain leaf with no sub-node.
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body);
+  e1.mft_index = kGapCollationLeafMftRef;
+  e1.mft_sn = 1;
+
+  auto& fn1 = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+  fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::ROOT);
+  fn1.flags = NtfsBrowser::Flag::Filename::NONE;
+  fn1.name_length = kGapCollationSearchNameLength;
+  fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  for (BYTE i = 0; i < fn1.name_length; i++)
+  {
+    fn1.name[i] = static_cast<WORD>(kGapCollationSearchName[i]);
+  }
+
+  e1.stream_size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
+                        reinterpret_cast<BYTE*>(&fn1));
+  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+
+  // Entry 2: the terminating entry - no name, no sub-node.
+  auto& e2 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body + e1.size);
+  e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  e2.stream_size = 0;
+  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+                              reinterpret_cast<BYTE*>(&e2));
+
+  block.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
+  block.alloc_entry_size = block.total_entry_size;
 
   return image;
 }

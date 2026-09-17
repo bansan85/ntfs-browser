@@ -28,8 +28,10 @@ add_executable(
   "fragmented-mft-invalid-record-tests.cpp"
   "find-stream-named-tests.cpp"
   "index-root-entry-lifetime-tests.cpp"
+  "find-subentry-gap-collation-tests.cpp"
   "fuzzer-regression-tests.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h")
+  "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/gap-collation-probe.h")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}
                                                Catch2::Catch2WithMain)

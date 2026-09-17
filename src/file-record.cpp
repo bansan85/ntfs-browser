@@ -367,6 +367,7 @@ std::optional<IndexEntry> FileRecord<S>::VisitIndexBlock(
       {
         // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
         // alive after ib is destroyed.
+        NTFS_TRACE("VisitIndexBlock() found entry in sub-node\n");
         return ie;
       }
       if (i < 0)  // fileName is smaller than IndexEntry
@@ -854,6 +855,7 @@ std::optional<IndexEntry>
       {
         // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
         // alive independently of this FileRecord.
+        NTFS_TRACE("FindSubEntry() found entry in Index Root\n");
         return ie;
       }
       if (i < 0)  // fileName is smaller than IndexEntry
