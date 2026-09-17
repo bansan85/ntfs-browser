@@ -205,25 +205,15 @@ void appenddata(CString& lines, const BYTE* data, DWORD datalen)
   }
 
   // last line
-  memcpy(p.data(), data + static_cast<size_t>(i) * 16, 16);
+  memcpy(p.data(), data + static_cast<size_t>(i) * 16, datalen - i * 16);
   BYTE q[16];
   memset(&q[0], 0xFF, 16);
-  memcpy(&q[0], p.data(), 16);
-  if ((datalen % 16) == 0)
-  {
-    line.Format(
-        _T("%02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X %02X ")
-        _T("%02X %02X %02X %02X   "),
-        q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10],
-        q[11], q[12], q[13], q[14], q[15]);
-  }
-  else
-  {
-    line.Format(
-        _T("%02X %02X %02X %02X %02X %02X %02X %02X                           ")
-        _T("  "),
-        q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]);
-  }
+  memcpy(&q[0], p.data(), datalen - i * 16);
+  line.Format(
+      _T("%02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X %02X ")
+      _T("%02X %02X %02X %02X   "),
+      q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11],
+      q[12], q[13], q[14], q[15]);
 
   for (int j = 0; j < 16; j++)
   {
@@ -233,17 +223,9 @@ void appenddata(CString& lines, const BYTE* data, DWORD datalen)
     }
   }
 
-  if ((datalen % 16) == 0)
-  {
-    line.AppendFormat(_T("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), q[0], q[1],
-                      q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10],
-                      q[11], q[12], q[13], q[14], q[15]);
-  }
-  else
-  {
-    line.AppendFormat(_T("%c%c%c%c%c%c%c%c\r\n"), q[0], q[1], q[2], q[3], q[4],
-                      q[5], q[6], q[7]);
-  }
+  line.AppendFormat(_T("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), q[0], q[1],
+                    q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10],
+                    q[11], q[12], q[13], q[14], q[15]);
 
   lines += line;
 }
