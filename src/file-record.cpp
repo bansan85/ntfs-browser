@@ -916,6 +916,7 @@ bool FileRecord<S>::IsDeleted() const noexcept
 {
   if (!file_record_)
   {
+    NTFS_TRACE("IsDeleted() called on a FileRecord with no parsed record\n");
     return false;
   }
 
@@ -929,6 +930,7 @@ bool FileRecord<S>::IsDirectory() const noexcept
 {
   if (!file_record_)
   {
+    NTFS_TRACE("IsDirectory() called on a FileRecord with no parsed record\n");
     return false;
   }
 

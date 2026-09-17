@@ -261,4 +261,8 @@ inline constexpr DWORD kAttrListTightPackRealSize = 4096;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory();
 
+// Same volume as BuildFakeNtfsImage(), with the root directory's (#5) file
+// record zero-filled so ParseFileRecord(ROOT) fails.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord();
+
 }  // namespace NtfsBrowserTests

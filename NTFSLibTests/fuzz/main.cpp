@@ -118,6 +118,10 @@ void FuzzOnce(unsigned seed)
   fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
   {
+    // file_record_ is guaranteed empty here, exercising IsDeleted()/
+    // IsDirectory()'s guard against it.
+    (void)fr.IsDeleted();
+    (void)fr.IsDirectory();
     return;
   }
   if (!fr.ParseAttrs())

@@ -1133,6 +1133,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Zeroes the root directory's (#5) own record, so ParseFileRecord(ROOT)
+  // fails while $Volume and $MFT stay valid.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  std::memset(image.data() + rootOffset, 0, kFakeFileRecordSize);
+
+  return image;
+}
+
 std::filesystem::path WriteFakeNtfsImage()
 {
   const std::vector<BYTE> image = BuildFakeNtfsImage();

@@ -90,6 +90,9 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"attr_offset_exceeds_record_size",
          {"Offset of attr must be within the file record buffer"}},
         {"volume_information_minimal_size", {"NTFS volume version: 3.1"}},
+        {"root_record_parse_failure",
+         {"IsDeleted() called on a FileRecord with no parsed record",
+          "IsDirectory() called on a FileRecord with no parsed record"}},
     };
 
 struct RunResult
