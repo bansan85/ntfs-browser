@@ -265,4 +265,17 @@ inline constexpr DWORD kAttrListTightPackRealSize = 4096;
 // record zero-filled so ParseFileRecord(ROOT) fails.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord();
 
+// Smallest MFT index only reachable through ReadFileRecord()'s
+// fragmented-$MFT path.
+inline constexpr ULONGLONG kFragmentedMftInvalidRecordIdx = 16;
+
+// Physical LCN where the forged fragmented-$MFT record is placed.
+inline constexpr DWORD kFragmentedMftDataRunLcn = 20;
+
+// Same volume as BuildFakeNtfsImage(), except $MFT's DATA attribute has a
+// real data run reaching kFragmentedMftInvalidRecordIdx, whose file record
+// is forged with an invalid offset_of_us.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
+
 }  // namespace NtfsBrowserTests
