@@ -293,4 +293,21 @@ inline constexpr std::array<BYTE, 4> kNamedDataStreamContent{0xCA, 0xFE, 0xBA,
 // replaced by one whose sole attribute is a named $DATA stream.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithNamedDataStream();
 
+// MFT indices of the two directory records built by
+// BuildFakeNtfsImageWithIndexRootVariants().
+inline constexpr ULONGLONG kIndexRootVariantADirIdx = 6;
+inline constexpr ULONGLONG kIndexRootVariantBDirIdx = 7;
+
+// mft_index each variant's single FILE_NAME entry declares.
+inline constexpr ULONGLONG kIndexRootVariantAMftRef = 30;
+inline constexpr ULONGLONG kIndexRootVariantBMftRef = 40;
+
+// File names each variant's single FILE_NAME entry declares.
+inline constexpr wchar_t kIndexRootVariantAName[] = L"AAA";
+inline constexpr wchar_t kIndexRootVariantBName[] = L"BBB";
+
+// Same volume as BuildFakeNtfsImage(), plus two same-size directory records,
+// each holding its own resident $INDEX_ROOT with a distinct FILE_NAME entry.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexRootVariants();
+
 }  // namespace NtfsBrowserTests

@@ -872,6 +872,76 @@ FakeRecord MakeNamedDataStreamRecord()
   return record;
 }
 
+// Builds a directory record whose resident $INDEX_ROOT holds one real
+// FILE_NAME entry (name, mftIndex, parentRef) plus the terminating entry.
+FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mftIndex,
+                                  ULONGLONG parentRef)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::INDEX_ROOT;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+
+  BYTE* body = &record[kAttrOffset + attr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kFakeFileRecordSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  // Entry 1: the single real FILE_NAME entry this variant declares.
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = mftIndex;
+  e1.mft_sn = 1;
+
+  auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+  fn.parent_ref = parentRef;
+  fn.flags = NtfsBrowser::Flag::Filename::NONE;
+  fn.name_length = static_cast<BYTE>(name.size());
+  fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  for (BYTE i = 0; i < fn.name_length; i++)
+  {
+    fn.name[i] = static_cast<WORD>(name[i]);
+  }
+
+  e1.stream_size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[fn.name_length]) -
+                        reinterpret_cast<BYTE*>(&fn));
+  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+
+  // Entry 2: the terminating entry - no name, no sub-node.
+  auto& e2 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot) + e1.size);
+  e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  e2.stream_size = 0;
+  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+                              reinterpret_cast<BYTE*>(&e2));
+
+  root.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
+  root.alloc_entry_size = root.total_entry_size;
+  root.flags = 0;
+
+  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+                   e1.size + e2.size;
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -1272,6 +1342,30 @@ std::vector<BYTE> BuildFakeNtfsImageWithNamedDataStream()
                                           static_cast<size_t>(MftIdx::ROOT);
   const FakeRecord record = MakeNamedDataStreamRecord();
   std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithIndexRootVariants()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
+  {
+    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                        static_cast<size_t>(idx);
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  putRecord(kIndexRootVariantADirIdx,
+            MakeIndexRootDirRecord(kIndexRootVariantAName,
+                                   kIndexRootVariantAMftRef,
+                                   kIndexRootVariantADirIdx));
+  putRecord(kIndexRootVariantBDirIdx,
+            MakeIndexRootDirRecord(kIndexRootVariantBName,
+                                   kIndexRootVariantBMftRef,
+                                   kIndexRootVariantBDirIdx));
 
   return image;
 }
