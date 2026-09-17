@@ -84,6 +84,8 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"mft_addr_narrowing_error", {"MFT address is invalid"}},
         {"attr_name_exceeds_total_size",
          {"Attribute name exceeds attribute bounds."}},
+        {"attr_offset_exceeds_record_size",
+         {"Offset of attr must be within the file record buffer"}},
     };
 
 struct RunResult

@@ -872,6 +872,21 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttrNameExceedsTotalSize()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // offset_of_attr is per-record, unlike the BPB fields patched above.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  auto& header = *reinterpret_cast<NtfsBrowser::FileRecordHeader::Data*>(
+      &image[rootOffset]);
+  header.offset_of_attr = kAttrOffsetOutOfBounds;
+
+  return image;
+}
+
 std::filesystem::path WriteFakeNtfsImage()
 {
   const std::vector<BYTE> image = BuildFakeNtfsImage();

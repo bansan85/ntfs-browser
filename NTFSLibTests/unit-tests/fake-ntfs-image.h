@@ -203,4 +203,11 @@ inline constexpr wchar_t kAttrNameBoundsSentinel[] = L"PWNED!";
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithAttrNameExceedsTotalSize();
 
+// Well past this fixture's 1024-byte record, but within a WORD's range.
+inline constexpr WORD kAttrOffsetOutOfBounds = 2000;
+
+// Same volume as BuildFakeNtfsImage(), with the root directory's (#5)
+// offset_of_attr patched to kAttrOffsetOutOfBounds.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds();
+
 }  // namespace NtfsBrowserTests
