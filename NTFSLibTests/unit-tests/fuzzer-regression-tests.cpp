@@ -89,6 +89,7 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"Attribute name exceeds attribute bounds."}},
         {"attr_offset_exceeds_record_size",
          {"Offset of attr must be within the file record buffer"}},
+        {"volume_information_minimal_size", {"NTFS volume version: 3.1"}},
     };
 
 struct RunResult

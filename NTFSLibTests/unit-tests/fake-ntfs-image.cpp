@@ -112,9 +112,9 @@ FakeRecord MakeMftRecord()
   return record;
 }
 
-// Builds a fake $Volume record: a resident VOLUME_INFORMATION attribute
-// reporting NTFS 3.1, the minimum NtfsVolume<S>::Init() accepts.
-FakeRecord MakeVolumeRecord()
+// Builds a fake $Volume record whose VOLUME_INFORMATION attribute declares
+// attrSize bytes, reporting NTFS 3.1.
+FakeRecord MakeVolumeRecordSized(WORD attrSize)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
@@ -126,7 +126,7 @@ FakeRecord MakeVolumeRecord()
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size = sizeof(NtfsBrowser::Attr::VolumeInformation);
+  attr.attr_size = attrSize;
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
@@ -137,6 +137,12 @@ FakeRecord MakeVolumeRecord()
 
   WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
   return record;
+}
+
+FakeRecord MakeVolumeRecord()
+{
+  return MakeVolumeRecordSized(
+      static_cast<WORD>(sizeof(NtfsBrowser::Attr::VolumeInformation)));
 }
 
 // Builds a bare root-directory record; ParseFileRecord() never looks at
@@ -757,6 +763,20 @@ std::vector<BYTE> BuildFakeNtfsImage()
   putRecord(MftIdx::MFT, MakeMftRecord());
   putRecord(MftIdx::VOLUME, MakeVolumeRecord());
   putRecord(MftIdx::ROOT, MakeRootRecord());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                      static_cast<size_t>(MftIdx::VOLUME);
+  const FakeRecord record =
+      MakeVolumeRecordSized(kMinimalVolumeInformationSize);
+  std::memcpy(image.data() + offset, record.data(), record.size());
 
   return image;
 }

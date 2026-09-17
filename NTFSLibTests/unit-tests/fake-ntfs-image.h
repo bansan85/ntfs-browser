@@ -24,6 +24,14 @@ inline constexpr uint32_t kFakeFileRecordSize = 1024;
 // Writes BuildFakeNtfsImage()'s image to a temp file and returns its path.
 [[nodiscard]] std::filesystem::path WriteFakeNtfsImage();
 
+// True on-disk size of $VOLUME_INFORMATION: 12 bytes, with no padding.
+inline constexpr WORD kMinimalVolumeInformationSize = 12;
+
+// Same volume as BuildFakeNtfsImage(), with $Volume's (#3) VOLUME_INFORMATION
+// attribute shrunk to kMinimalVolumeInformationSize bytes.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMinimalVolumeInformation();
+
 // Directory record index: only attribute is a resident $ATTRIBUTE_LIST
 // relocating $INDEX_ROOT to kIndexExtensionIdx.
 inline constexpr ULONGLONG kAttributeListDirIdx = 6;
