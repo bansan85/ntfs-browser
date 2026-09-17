@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cwctype>
 
 #include <ntfs-browser/filename.h>
 
@@ -33,12 +34,26 @@ void Filename::GetFilenameWUC() { filename_wuc_ = GetFilename(); }
 // Compare Unicode file name
 int Filename::Compare(std::wstring_view fn) const noexcept
 {
-  // Only the overlap is safe: the on-disk name isn't null-terminated.
+  // Only the overlap is safe: the on-disk name isn't null-terminated. Folds
+  // to uppercase, matching NTFS' real $I30 collation order, not the
+  // platform CRT's lowercase-folding comparison.
   const size_t n = std::min(fn.size(), filename_wuc_.size());
-  const int result = _wcsnicmp(fn.data(), filename_wuc_.data(), n);
-  if (result != 0 || fn.size() == filename_wuc_.size())
+  for (size_t i = 0; i < n; ++i)
   {
-    return result;
+    const wint_t ca = std::towupper(static_cast<wint_t>(fn[i]));
+    const wint_t cb = std::towupper(static_cast<wint_t>(filename_wuc_[i]));
+    if (ca != cb)
+    {
+      return ca < cb ? -1 : 1;
+    }
+    if (fn[i] == L'\0')
+    {
+      break;
+    }
+  }
+  if (fn.size() == filename_wuc_.size())
+  {
+    return 0;
   }
   return fn.size() < filename_wuc_.size() ? -1 : 1;
 }

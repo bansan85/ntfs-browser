@@ -13,7 +13,6 @@
   // Minimal shim for the Windows typedefs this library's API uses.
   #include <cstddef>
   #include <cstdint>
-  #include <cwctype>
   #include <type_traits>
 
 using BYTE = std::uint8_t;
@@ -34,26 +33,6 @@ struct FILETIME
   DWORD dwLowDateTime;
   DWORD dwHighDateTime;
 };
-
-// MSVC CRT function with no GCC/glibc equivalent; Filename::Compare is the
-// only caller.
-inline int _wcsnicmp(const wchar_t* a, const wchar_t* b, size_t n) noexcept
-{
-  for (size_t i = 0; i < n; ++i)
-  {
-    const wint_t ca = std::towupper(static_cast<wint_t>(a[i]));
-    const wint_t cb = std::towupper(static_cast<wint_t>(b[i]));
-    if (ca != cb)
-    {
-      return ca < cb ? -1 : 1;
-    }
-    if (a[i] == L'\0')
-    {
-      break;
-    }
-  }
-  return 0;
-}
 
 // Reproduces <winnt.h>'s bitwise operators for a scoped enum, since
 // Mask/Flag::* enums are used as OR/AND-able bitmasks throughout the library.
