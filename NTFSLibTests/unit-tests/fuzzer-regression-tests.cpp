@@ -73,6 +73,9 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
+        {"attribute_list_short_read",
+         {"Attribute List: ReadData returned 10 bytes, expected 40 - "
+          "stopping"}},
         {"attribute_list_multi_type_same_record",
          {"Attribute List: record 6, type 0x0090 already resolved in this "
           "chain, skipping"}},

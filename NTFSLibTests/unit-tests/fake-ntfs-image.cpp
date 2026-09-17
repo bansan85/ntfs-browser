@@ -650,6 +650,80 @@ FakeRecord MakeSmallResidentDataRecord()
   return record;
 }
 
+// Builds a root-directory replacement whose resident $ATTRIBUTE_LIST holds
+// one full, self-referencing entry, followed by a truncated partial one.
+FakeRecord MakeAttributeListShortReadRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  constexpr DWORD kBodySize =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) + 10;
+  static_assert(kBodySize % sizeof(NtfsBrowser::Attr::AttributeList) != 0,
+                "body size must not be an exact multiple of the entry size, "
+                "to reproduce a short final ReadData()");
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::ATTRIBUTE_LIST;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = kBodySize;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+      &record[kAttrOffset + attr.attr_offset]);
+  e1.attr_type = AttrType::DATA;
+  e1.record_size = static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+  e1.name_length = 0;
+  e1.name_offset = 0;
+  e1.start_vcn = 0;
+  e1.base_ref.segment_number = static_cast<ULONGLONG>(MftIdx::ROOT);
+  e1.base_ref.sequence_number = 0;
+  e1.attr_id = 0;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
+// Builds a directory record whose resident $ATTRIBUTE_LIST, via a single
+// full entry, relocates to targetIdx.
+FakeRecord MakeAttributeListCycleRecord(ULONGLONG targetIdx)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::ATTRIBUTE_LIST;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = sizeof(NtfsBrowser::Attr::AttributeList);
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+      &record[kAttrOffset + attr.attr_offset]);
+  e1.attr_type = AttrType::ATTRIBUTE_LIST;
+  e1.record_size = static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+  e1.name_length = 0;
+  e1.name_offset = 0;
+  e1.start_vcn = 0;
+  e1.base_ref.segment_number = targetIdx;
+  e1.base_ref.sequence_number = 0;
+  e1.attr_id = 0;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -923,6 +997,40 @@ std::vector<BYTE> BuildFakeNtfsImageWithSmallResidentData()
                                           static_cast<size_t>(MftIdx::ROOT);
   const FakeRecord record = MakeSmallResidentDataRecord();
   std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithAttributeListShortRead()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Overwrites the whole root record (#5), not just a single field.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeAttributeListShortReadRecord();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
+  {
+    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                        static_cast<size_t>(idx);
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  putRecord(static_cast<ULONGLONG>(MftIdx::ROOT),
+            MakeAttributeListCycleRecord(kAttrListCycleExtIdx));
+  putRecord(kAttrListCycleExtIdx,
+            MakeAttributeListCycleRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
 
   return image;
 }

@@ -45,9 +45,17 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
       MakeChainKey(*fr.file_reference_, AttrType::ATTRIBUTE_LIST));
 
   while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
-                                        sizeof(Attr::AttributeList)})) &&
-         *len == sizeof(Attr::AttributeList))
+                                        sizeof(Attr::AttributeList)})))
   {
+    if (*len != sizeof(Attr::AttributeList))
+    {
+      NTFS_TRACE2(
+          "Attribute List: ReadData returned %I64u bytes, expected %I64u - "
+          "stopping\n",
+          *len, static_cast<ULONGLONG>(sizeof(Attr::AttributeList)));
+      break;
+    }
+
     if (!IsValidAttrType(al_record.attr_type))
     {
       throw std::runtime_error(

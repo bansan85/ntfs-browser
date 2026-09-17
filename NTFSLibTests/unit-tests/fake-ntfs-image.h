@@ -219,4 +219,16 @@ inline constexpr std::array<BYTE, 4> kSmallResidentDataContent{0xDE, 0xAD, 0xBE,
 // kSmallResidentDataContent.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSmallResidentData();
 
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by one whose resident $ATTRIBUTE_LIST ends in a short read.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListShortRead();
+
+// MFT index of the second record in a two-way $ATTRIBUTE_LIST cycle with #5.
+inline constexpr ULONGLONG kAttrListCycleExtIdx = 6;
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// and kAttrListCycleExtIdx each replaced by one whose resident
+// $ATTRIBUTE_LIST names the other, forming a resolution cycle.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle();
+
 }  // namespace NtfsBrowserTests

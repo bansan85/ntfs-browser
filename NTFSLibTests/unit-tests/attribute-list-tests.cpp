@@ -7,6 +7,7 @@
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mask.h>
+#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
@@ -19,6 +20,7 @@ using NtfsBrowser::IndexEntry;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Enum::MftIdx;
 
 TEST_CASE("FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
           "[file-record][regression]")
@@ -119,4 +121,68 @@ TEST_CASE(
     CHECK(allocAttrs[i]->GetDataSize() ==
           NtfsBrowserTests::kUafRealSizeSentinels[i]);
   }
+}
+
+TEST_CASE(
+    "AttrList stops cleanly on a resident $ATTRIBUTE_LIST whose size isn't "
+    "a multiple of the entry size",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
+}
+
+TEST_CASE(
+    "AttrList stops cleanly on a resident $ATTRIBUTE_LIST whose size isn't "
+    "a multiple of the entry size (FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
+}
+
+TEST_CASE(
+    "AttrList's cycle guard stops a two-record $ATTRIBUTE_LIST resolution "
+    "cycle instead of recursing without bound",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListCycle());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
+}
+
+TEST_CASE(
+    "AttrList's cycle guard stops a two-record $ATTRIBUTE_LIST resolution "
+    "cycle instead of recursing without bound (FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListCycle());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
 }
