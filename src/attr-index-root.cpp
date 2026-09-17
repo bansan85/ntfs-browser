@@ -1,4 +1,6 @@
 #include <cstddef>
+#include <cstring>
+#include <memory>
 #include <stdexcept>
 
 #include <ntfs-browser/data/attr-type.h>
@@ -40,18 +42,24 @@ AttrIndexRoot<RESIDENT, S>::~AttrIndexRoot()
   NTFS_TRACE("AttrIndexRoot deleted\n");
 }
 
-// Get all the index entries. entry_offset, total_entry_size, and each
-// entry's own size come straight off disk with no guaranteed relation to
-// the attribute's actual size, so every step is bounded against it before
-// dereferencing.
+// Parses every index entry, bounding each step against the resident
+// attribute's own size. Every returned IndexEntry keeps its own copy of
+// the backing bytes alive, independent of this object's lifetime.
 template <typename RESIDENT, Strategy S>
 void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 {
-  const BYTE* const data_end = this->GetData() + this->GetDataSize();
-  const auto* const entry_offset_addr =
-      reinterpret_cast<const BYTE*>(&(index_root_->entry_offset));
+  const ULONGLONG data_size = this->GetDataSize();
+  const auto data_copy = std::make_shared<BYTE[]>(data_size);
+  std::memcpy(data_copy.get(), this->GetData(), data_size);
+  NTFS_TRACE("Index Root: allocated independent copy of resident data\n");
 
-  if (index_root_->entry_offset >
+  const BYTE* const data_end = data_copy.get() + data_size;
+  const auto* const index_root_copy =
+      reinterpret_cast<const Attr::IndexRoot*>(data_copy.get());
+  const auto* const entry_offset_addr =
+      reinterpret_cast<const BYTE*>(&(index_root_copy->entry_offset));
+
+  if (index_root_copy->entry_offset >
       static_cast<ULONGLONG>(data_end - entry_offset_addr))
   {
     NTFS_TRACE("Index Root: entry_offset exceeds attribute bounds\n");
@@ -59,7 +67,7 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
   }
 
   const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
-      entry_offset_addr + index_root_->entry_offset);
+      entry_offset_addr + index_root_copy->entry_offset);
   DWORD ieTotal = 0;
 
   while (true)
@@ -78,12 +86,12 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
     }
 
     ieTotal += ie->size;
-    if (ieTotal > index_root_->total_entry_size)
+    if (ieTotal > index_root_copy->total_entry_size)
     {
       break;
     }
 
-    emplace_back(nullptr, *ie);
+    emplace_back(data_copy, *ie);
 
     if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {

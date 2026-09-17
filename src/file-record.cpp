@@ -365,7 +365,8 @@ std::optional<IndexEntry> FileRecord<S>::VisitIndexBlock(
       const int i = ie.Compare(fileName);
       if (i == 0)
       {
-        // Must be a copy. Either, will be invalid when ib is destroyed.
+        // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
+        // alive after ib is destroyed.
         return ie;
       }
       if (i < 0)  // fileName is smaller than IndexEntry
@@ -848,7 +849,8 @@ std::optional<IndexEntry>
       const int i = ie.Compare(fileName);
       if (i == 0)
       {
-        // Must be a copy.
+        // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
+        // alive independently of this FileRecord.
         return ie;
       }
       if (i < 0)  // fileName is smaller than IndexEntry
