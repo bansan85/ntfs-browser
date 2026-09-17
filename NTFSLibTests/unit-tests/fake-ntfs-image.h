@@ -239,4 +239,26 @@ inline constexpr ULONGLONG kAttrListCycleExtIdx = 6;
 // $ATTRIBUTE_LIST names the other, forming a resolution cycle.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle();
 
+// Real, fixed on-disk size of a nameless $ATTRIBUTE_LIST entry's header.
+inline constexpr WORD kAttributeListRealEntrySize = 26;
+
+// MFT index of the directory record with a densely-packed $ATTRIBUTE_LIST.
+inline constexpr ULONGLONG kAttrListTightPackDirIdx = 6;
+
+// MFT index kAttrListTightPackDirIdx's $ATTRIBUTE_LIST relocates
+// $INDEX_ROOT to.
+inline constexpr ULONGLONG kAttrListTightPackExtIdxA = 7;
+
+// MFT index kAttrListTightPackDirIdx's $ATTRIBUTE_LIST relocates
+// $INDEX_ALLOCATION to.
+inline constexpr ULONGLONG kAttrListTightPackExtIdxB = 8;
+
+// real_size written into kAttrListTightPackExtIdxB's $INDEX_ALLOCATION.
+inline constexpr DWORD kAttrListTightPackRealSize = 4096;
+
+// Same volume as BuildFakeNtfsImage(), plus a directory whose resident
+// $ATTRIBUTE_LIST packs two entries at the real on-disk entry stride.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory();
+
 }  // namespace NtfsBrowserTests

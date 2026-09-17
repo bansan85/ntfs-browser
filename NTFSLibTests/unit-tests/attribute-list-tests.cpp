@@ -186,3 +186,32 @@ TEST_CASE(
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
   CHECK(record.ParseAttrs());
 }
+
+TEST_CASE(
+    "AttrList resolves every entry in a densely-packed (real 26-byte "
+    "stride) $ATTRIBUTE_LIST, not just those a multiple of "
+    "sizeof(Attr::AttributeList) apart",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttrListTightPackDirIdx));
+  REQUIRE(dir.ParseAttrs());
+
+  const std::optional<IndexEntry> found = dir.FindSubEntry(L"Foo");
+  REQUIRE(found.has_value());
+  CHECK(found->GetFileReference() == 20);
+
+  const auto& allocAttrs = dir.getAttr(AttrType::INDEX_ALLOCATION);
+  REQUIRE(allocAttrs.size() == 1);
+  CHECK(allocAttrs[0]->GetDataSize() ==
+        NtfsBrowserTests::kAttrListTightPackRealSize);
+}
