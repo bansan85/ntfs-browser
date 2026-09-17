@@ -67,8 +67,7 @@ class FileRecord
   std::vector<BYTE> record_buffer_;
 
   void ClearAttrs() noexcept;
-  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
-                    bool& bDiscard) noexcept;
+  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, bool& bDiscard);
   template <typename RESIDENT>
   [[nodiscard]] std::unique_ptr<AttrBase<S>>
       AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled,
@@ -101,7 +100,7 @@ class FileRecord
   void ClearAttrRawCB() noexcept;
 
   void SetAttrMask(Mask mask) noexcept;
-  void TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context) noexcept;
+  void TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context);
   [[nodiscard]] const std::vector<std::unique_ptr<AttrBase<S>>>&
       getAttr(AttrType attrType) const noexcept;
   [[nodiscard]] std::vector<std::unique_ptr<AttrBase<S>>>&

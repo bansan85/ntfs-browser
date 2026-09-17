@@ -62,7 +62,7 @@ void FileRecord<S>::ClearAttrs() noexcept
 // Call user defined Callback routines for an attribute
 template <Strategy S>
 void FileRecord<S>::UserCallBack(DWORD attType, const AttrHeaderCommon& ahc,
-                                 bool& bDiscard) noexcept
+                                 bool& bDiscard)
 {
   bDiscard = false;
 
@@ -559,10 +559,13 @@ void FileRecord<S>::SetAttrMask(Mask mask) noexcept
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine
 template <Strategy S>
-void FileRecord<S>::TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack,
-                                  void* context) noexcept
+void FileRecord<S>::TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context)
 {
-  assert(attrCallBack);
+  if (!attrCallBack)
+  {
+    NTFS_TRACE("TraverseAttrs() called with an empty callback\n");
+    return;
+  }
 
   for (size_t i = 0; i < kAttrNums; i++)
   {
