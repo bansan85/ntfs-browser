@@ -310,4 +310,9 @@ inline constexpr wchar_t kIndexRootVariantBName[] = L"BBB";
 // each holding its own resident $INDEX_ROOT with a distinct FILE_NAME entry.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexRootVariants();
 
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by one holding its own real $INDEX_ROOT entry directly, not via
+// an $ATTRIBUTE_LIST extension record.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithRootIndexRootEntry();
+
 }  // namespace NtfsBrowserTests

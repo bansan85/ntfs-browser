@@ -1370,6 +1370,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithIndexRootVariants()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithRootIndexRootEntry()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Overwrites the whole root record (#5), not just a single field.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeIndexRootExtensionRecord();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  return image;
+}
+
 std::filesystem::path WriteFakeNtfsImage()
 {
   const std::vector<BYTE> image = BuildFakeNtfsImage();

@@ -95,6 +95,8 @@ const std::unordered_map<std::string, std::vector<std::string>>
           "IsDirectory() called on a FileRecord with no parsed record"}},
         {"find_stream_named_data",
          {"FindStream() found stream named \"ads-name\""}},
+        {"index_root_real_entry",
+         {"Index Root: allocated independent copy of resident data"}},
     };
 
 struct RunResult
