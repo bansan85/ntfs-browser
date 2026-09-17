@@ -23,7 +23,7 @@ endif()
 
 # Portable C++, no Win32 API, so it builds on Linux and Windows alike.
 add_executable(NtfsFuzzerAfl "afl-main.cpp" "looping-disk-reader.h"
-                             "looping-disk-reader.cpp")
+                             "looping-disk-reader.cpp" "named-stream-probe.h")
 
 target_link_libraries(NtfsFuzzerAfl PRIVATE ${PROJECT_NAME})
 

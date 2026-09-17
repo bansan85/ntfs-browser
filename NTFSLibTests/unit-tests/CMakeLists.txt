@@ -27,12 +27,17 @@ add_executable(
   "file-record-unparsed-flags-tests.cpp"
   "fragmented-mft-invalid-record-tests.cpp"
   "find-stream-named-tests.cpp"
-  "fuzzer-regression-tests.cpp")
+  "fuzzer-regression-tests.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h")
 
 target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}
                                                Catch2::Catch2WithMain)
 
-target_include_directories(NtfsBrowserTests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+# The fuzz/ include lets fake-ntfs-image.h reuse named-stream-probe.h's name
+# instead of duplicating it.
+target_include_directories(
+  NtfsBrowserTests PRIVATE "${CMAKE_SOURCE_DIR}/src"
+                           "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz")
 
 # Avoids hardcoding NtfsFuzzerAfl's build-output path in the test.
 add_dependencies(NtfsBrowserTests NtfsFuzzerAfl)

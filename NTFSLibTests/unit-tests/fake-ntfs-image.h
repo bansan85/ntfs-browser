@@ -7,6 +7,8 @@
 
 #include <windows.h>
 
+#include "named-stream-probe.h"
+
 namespace NtfsBrowserTests
 {
 
@@ -278,11 +280,10 @@ inline constexpr DWORD kFragmentedMftDataRunLcn = 20;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
 
-// Named-stream name this fixture's resident $DATA attribute declares.
-inline constexpr wchar_t kNamedDataStreamName[] = L"ads";
-
-// kNamedDataStreamName's length in UTF-16 code units.
-inline constexpr BYTE kNamedDataStreamNameLength = 3;
+// Shared with NTFSLibTests/fuzz/named-stream-probe.h, so a fuzz corpus file
+// built from this fixture reaches the same named stream by name.
+using NtfsFuzz::kNamedDataStreamName;
+using NtfsFuzz::kNamedDataStreamNameLength;
 
 // Recognizable byte pattern written as this fixture's entire $DATA body.
 inline constexpr std::array<BYTE, 4> kNamedDataStreamContent{0xCA, 0xFE, 0xBA,

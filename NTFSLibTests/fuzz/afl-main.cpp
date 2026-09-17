@@ -13,8 +13,10 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "looping-disk-reader.h"
+#include "named-stream-probe.h"
 
 using namespace NtfsBrowser;
+using NtfsFuzz::kNamedDataStreamName;
 using NtfsFuzz::LoopingDiskReader;
 
 namespace
@@ -75,8 +77,7 @@ void FuzzOnce(const std::vector<BYTE>& data)
 
   // FindStream() calls GetAttrName() on every named $DATA attribute it
   // walks, regardless of the name passed in.
-  const AttrBase<S>* stream = fr.FindStream(L"probe");
-  (void)stream;
+  (void)fr.FindStream(kNamedDataStreamName);
 }
 
 }

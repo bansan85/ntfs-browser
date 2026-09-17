@@ -93,6 +93,8 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"root_record_parse_failure",
          {"IsDeleted() called on a FileRecord with no parsed record",
           "IsDirectory() called on a FileRecord with no parsed record"}},
+        {"find_stream_named_data",
+         {"FindStream() found stream named \"ads-name\""}},
     };
 
 struct RunResult
