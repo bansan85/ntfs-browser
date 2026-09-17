@@ -109,6 +109,16 @@ inline constexpr DWORD kOversizedFileRecordSize = 0x80000000;
 // construction in tests.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOversizedFileRecord();
 
+// Yields a file_record_size_ twice FileRecordHeader::kMaxFileRecordSize.
+inline constexpr BYTE kFileRecordSizeTooBigClustersPerFileRecord = 8;
+
+// file_record_size_ that kFileRecordSizeTooBigClustersPerFileRecord produces.
+inline constexpr DWORD kFileRecordSizeTooBig = 8192;
+
+// Same volume as BuildFakeNtfsImage(), with clusters_per_file_record patched
+// so GetFileRecordSize() would exceed FileRecordHeader::kMaxFileRecordSize.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFileRecordSizeTooBig();
+
 // lcn_mft patched in by BuildFakeNtfsImageWithHugeMftLcn(); with this
 // fixture's fixed cluster size, mft_addr_ ends up exactly 2^63.
 inline constexpr ULONGLONG kHugeMftLcn = 1ULL << 53;

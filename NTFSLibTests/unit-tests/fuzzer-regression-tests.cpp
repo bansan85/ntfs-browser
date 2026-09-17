@@ -68,6 +68,8 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"clusters_per_file_record magnitude out of range"}},
         {"index_block_size_shift_overflow",
          {"clusters_per_index_block magnitude out of range"}},
+        {"file_record_size_too_big",
+         {"FileRecord Size exceeds the maximum supported file record size"}},
         {"sector_size_too_small", {"Sector Size must be at least 2 bytes"}},
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
