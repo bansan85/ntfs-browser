@@ -839,6 +839,39 @@ FakeRecord MakeAttributeListTightlyPackedDirRecord()
   return record;
 }
 
+// Builds a root-directory replacement whose sole attribute is a resident,
+// named $DATA stream (an ADS) holding kNamedDataStreamContent under
+// kNamedDataStreamName.
+FakeRecord MakeNamedDataStreamRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.header.name_length = kNamedDataStreamNameLength;
+  attr.header.name_offset = static_cast<WORD>(sizeof(attr));
+  attr.attr_size = static_cast<DWORD>(kNamedDataStreamContent.size());
+  attr.attr_offset = static_cast<WORD>(
+      sizeof(attr) +
+      static_cast<size_t>(kNamedDataStreamNameLength) * sizeof(wchar_t));
+  attr.header.total_size =
+      static_cast<DWORD>(attr.attr_offset) + attr.attr_size;
+
+  std::memcpy(
+      &record[kAttrOffset + attr.header.name_offset], kNamedDataStreamName,
+      static_cast<size_t>(kNamedDataStreamNameLength) * sizeof(wchar_t));
+  std::memcpy(&record[kAttrOffset + attr.attr_offset],
+              kNamedDataStreamContent.data(), kNamedDataStreamContent.size());
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -1225,6 +1258,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedMftInvalidRecord()
   const FakeRecord forgedRecord = MakeInvalidOffsetOfUsRecord();
   std::memcpy(image.data() + forgedOffset, forgedRecord.data(),
               forgedRecord.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithNamedDataStream()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Overwrites the whole root record (#5), not just a single field.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeNamedDataStreamRecord();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
 
   return image;
 }

@@ -278,4 +278,18 @@ inline constexpr DWORD kFragmentedMftDataRunLcn = 20;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
 
+// Named-stream name this fixture's resident $DATA attribute declares.
+inline constexpr wchar_t kNamedDataStreamName[] = L"ads";
+
+// kNamedDataStreamName's length in UTF-16 code units.
+inline constexpr BYTE kNamedDataStreamNameLength = 3;
+
+// Recognizable byte pattern written as this fixture's entire $DATA body.
+inline constexpr std::array<BYTE, 4> kNamedDataStreamContent{0xCA, 0xFE, 0xBA,
+                                                             0xBE};
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by one whose sole attribute is a named $DATA stream.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithNamedDataStream();
+
 }  // namespace NtfsBrowserTests
