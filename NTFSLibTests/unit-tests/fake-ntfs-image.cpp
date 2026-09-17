@@ -624,6 +624,32 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord()
   return record;
 }
 
+// Builds a root-directory replacement holding a single, well-formed
+// resident $DATA attribute whose body is exactly kSmallResidentDataContent.
+FakeRecord MakeSmallResidentDataRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = static_cast<DWORD>(kSmallResidentDataContent.size());
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  std::memcpy(&record[kAttrOffset + attr.attr_offset],
+              kSmallResidentDataContent.data(),
+              kSmallResidentDataContent.size());
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -883,6 +909,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds()
   auto& header = *reinterpret_cast<NtfsBrowser::FileRecordHeader::Data*>(
       &image[rootOffset]);
   header.offset_of_attr = kAttrOffsetOutOfBounds;
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithSmallResidentData()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Overwrites the whole root record (#5), not just a single field.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeSmallResidentDataRecord();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
 
   return image;
 }

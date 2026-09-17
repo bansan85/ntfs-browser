@@ -210,4 +210,13 @@ inline constexpr WORD kAttrOffsetOutOfBounds = 2000;
 // offset_of_attr patched to kAttrOffsetOutOfBounds.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds();
 
+// Recognizable byte pattern written as this fixture's entire $DATA body.
+inline constexpr std::array<BYTE, 4> kSmallResidentDataContent{0xDE, 0xAD, 0xBE,
+                                                               0xEF};
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by one whose sole attribute is a resident $DATA holding exactly
+// kSmallResidentDataContent.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSmallResidentData();
+
 }  // namespace NtfsBrowserTests
