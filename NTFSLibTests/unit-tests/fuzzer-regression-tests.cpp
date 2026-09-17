@@ -74,7 +74,7 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"attribute_list_extension_record_cycle",
          {"already resolved in this chain, skipping"}},
         {"attribute_list_short_read",
-         {"Attribute List: ReadData returned 10 bytes, expected 40 - "
+         {"Attribute List: ReadData returned 10 bytes, expected 26 - "
           "stopping"}},
         {"attribute_list_multi_type_same_record",
          {"Attribute List: record 6, type 0x0090 already resolved in this "

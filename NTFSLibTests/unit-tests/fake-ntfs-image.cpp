@@ -169,14 +169,16 @@ FakeRecord MakeAttributeListOnlyDirRecord()
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size = sizeof(NtfsBrowser::Attr::AttributeList);
+  attr.attr_size =
+      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
   auto& alEntry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
       &record[kAttrOffset + attr.attr_offset]);
   alEntry.attr_type = AttrType::INDEX_ROOT;
-  alEntry.record_size = static_cast<WORD>(sizeof(alEntry));
+  alEntry.record_size =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   alEntry.name_length = 0;
   alEntry.name_offset = 0;
   alEntry.start_vcn = 0;
@@ -265,6 +267,9 @@ FakeRecord MakeAttributeListTwoTypesDirRecord()
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
                                         NtfsBrowser::Flag::FileRecord::DIR);
 
+  constexpr WORD kEntrySize =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
+
   auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
       &record[kAttrOffset]);
   attr.header.type = AttrType::ATTRIBUTE_LIST;
@@ -272,33 +277,32 @@ FakeRecord MakeAttributeListTwoTypesDirRecord()
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) * 2;
+  attr.attr_size = static_cast<DWORD>(kEntrySize) * 2;
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
-  auto* alEntries = reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
-      &record[kAttrOffset + attr.attr_offset]);
+  BYTE* body = &record[kAttrOffset + attr.attr_offset];
 
-  alEntries[0].attr_type = AttrType::INDEX_ROOT;
-  alEntries[0].record_size =
-      static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
-  alEntries[0].name_length = 0;
-  alEntries[0].name_offset = 0;
-  alEntries[0].start_vcn = 0;
-  alEntries[0].base_ref.segment_number = kMultiTypeExtensionIdx;
-  alEntries[0].base_ref.sequence_number = 0;
-  alEntries[0].attr_id = 0;
+  auto& e0 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(body);
+  e0.attr_type = AttrType::INDEX_ROOT;
+  e0.record_size = kEntrySize;
+  e0.name_length = 0;
+  e0.name_offset = 0;
+  e0.start_vcn = 0;
+  e0.base_ref.segment_number = kMultiTypeExtensionIdx;
+  e0.base_ref.sequence_number = 0;
+  e0.attr_id = 0;
 
-  alEntries[1].attr_type = AttrType::INDEX_ALLOCATION;
-  alEntries[1].record_size =
-      static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
-  alEntries[1].name_length = 0;
-  alEntries[1].name_offset = 0;
-  alEntries[1].start_vcn = 0;
-  alEntries[1].base_ref.segment_number = kMultiTypeExtensionIdx;
-  alEntries[1].base_ref.sequence_number = 0;
-  alEntries[1].attr_id = 0;
+  auto& e1 =
+      *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(body + kEntrySize);
+  e1.attr_type = AttrType::INDEX_ALLOCATION;
+  e1.record_size = kEntrySize;
+  e1.name_length = 0;
+  e1.name_offset = 0;
+  e1.start_vcn = 0;
+  e1.base_ref.segment_number = kMultiTypeExtensionIdx;
+  e1.base_ref.sequence_number = 0;
+  e1.attr_id = 0;
 
   WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
   return record;
@@ -554,6 +558,9 @@ FakeRecord MakeFragmentedAttributeListDirRecord()
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
                                         NtfsBrowser::Flag::FileRecord::DIR);
 
+  constexpr WORD kEntrySize =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
+
   auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
       &record[kAttrOffset]);
   attr.header.type = AttrType::ATTRIBUTE_LIST;
@@ -561,8 +568,7 @@ FakeRecord MakeFragmentedAttributeListDirRecord()
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) * 4;
+  attr.attr_size = static_cast<DWORD>(kEntrySize) * 4;
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
@@ -570,19 +576,19 @@ FakeRecord MakeFragmentedAttributeListDirRecord()
       kUafExtensionIdx0, kUafExtensionIdx1, kUafExtensionIdx2,
       kUafExtensionIdx3};
 
-  auto* alEntries = reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
-      &record[kAttrOffset + attr.attr_offset]);
+  BYTE* body = &record[kAttrOffset + attr.attr_offset];
   for (size_t i = 0; i < extensionIdxs.size(); i++)
   {
-    alEntries[i].attr_type = AttrType::INDEX_ALLOCATION;
-    alEntries[i].record_size =
-        static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
-    alEntries[i].name_length = 0;
-    alEntries[i].name_offset = 0;
-    alEntries[i].start_vcn = 0;
-    alEntries[i].base_ref.segment_number = extensionIdxs[i];
-    alEntries[i].base_ref.sequence_number = 0;
-    alEntries[i].attr_id = 0;
+    auto& entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+        body + i * kEntrySize);
+    entry.attr_type = AttrType::INDEX_ALLOCATION;
+    entry.record_size = kEntrySize;
+    entry.name_length = 0;
+    entry.name_offset = 0;
+    entry.start_vcn = 0;
+    entry.base_ref.segment_number = extensionIdxs[i];
+    entry.base_ref.sequence_number = 0;
+    entry.attr_id = 0;
   }
 
   WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
@@ -665,8 +671,9 @@ FakeRecord MakeAttributeListShortReadRecord()
                                         NtfsBrowser::Flag::FileRecord::DIR);
 
   constexpr DWORD kBodySize =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::AttributeList)) + 10;
-  static_assert(kBodySize % sizeof(NtfsBrowser::Attr::AttributeList) != 0,
+      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize) + 10;
+  static_assert(kBodySize % NtfsBrowser::Attr::kAttributeListEntryHeaderSize !=
+                    0,
                 "body size must not be an exact multiple of the entry size, "
                 "to reproduce a short final ReadData()");
 
@@ -684,7 +691,8 @@ FakeRecord MakeAttributeListShortReadRecord()
   auto& e1 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
       &record[kAttrOffset + attr.attr_offset]);
   e1.attr_type = AttrType::DATA;
-  e1.record_size = static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+  e1.record_size =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   e1.name_length = 0;
   e1.name_offset = 0;
   e1.start_vcn = 0;
@@ -711,14 +719,16 @@ FakeRecord MakeAttributeListCycleRecord(ULONGLONG targetIdx)
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size = sizeof(NtfsBrowser::Attr::AttributeList);
+  attr.attr_size =
+      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
   auto& e1 = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
       &record[kAttrOffset + attr.attr_offset]);
   e1.attr_type = AttrType::ATTRIBUTE_LIST;
-  e1.record_size = static_cast<WORD>(sizeof(NtfsBrowser::Attr::AttributeList));
+  e1.record_size =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
   e1.name_length = 0;
   e1.name_offset = 0;
   e1.start_vcn = 0;
