@@ -18,6 +18,12 @@ namespace NtfsBrowser
 {
 constexpr uint32_t kFileRecordMagic('ELIF');
 
+// Size of Data's named header fields, before the first attribute begins.
+constexpr size_t kMinFileRecordHeaderSize = 48;
+
+// Largest file record size a real NTFS volume can have (a 4Kn volume's).
+constexpr size_t kMaxFileRecordSize = 4096;
+
 struct AttrHeaderCommon;
 
 template <Strategy S>
@@ -44,12 +50,14 @@ struct FileRecordHeader
       WORD align;              // Align to 4 byte boundary
       DWORD record_no;         // Number of this MFT Record
     };
-    BYTE raw[1024];
+    BYTE raw[kMaxFileRecordSize];
   };
 
   WORD us_number{0};
   std::vector<WORD> us_array{};
   size_t sector_size;
+  // Actual buffer size this instance was constructed with.
+  size_t buffer_size_;
 
   FileRecordHeader(std::span<const BYTE> buffer, size_t sector_size);
   virtual ~FileRecordHeader() = default;

@@ -12,11 +12,19 @@ namespace NtfsBrowser
 
 FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
                                    size_t sector_size)
-    : sector_size(sector_size)
+    : sector_size(sector_size), buffer_size_(buffer.size())
 {
-  if (1024 != buffer.size())
+  if (buffer.size() < kMinFileRecordHeaderSize)
   {
-    throw std::runtime_error("Buffer size of FileRecordHeader must be 1024.");
+    throw std::runtime_error(
+        "Buffer size of FileRecordHeader is smaller than the minimum file "
+        "record header size.");
+  }
+  if (buffer.size() > kMaxFileRecordSize)
+  {
+    throw std::runtime_error(
+        "Buffer size of FileRecordHeader exceeds the maximum supported file "
+        "record size.");
   }
 
   const Data* data = reinterpret_cast<const Data*>(buffer.data());
@@ -75,10 +83,9 @@ bool FileRecordHeader::PatchUS() noexcept
 const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
 {
   WORD offset_of_attr = GetData()->offset_of_attr;
-  if (offset_of_attr + sizeof(AttrHeaderCommon) >=
-      sizeof(FileRecordHeader::Data::raw))
+  if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size_)
   {
-    NTFS_TRACE("Offset of attr must be lower than 1024\n");
+    NTFS_TRACE("Offset of attr must be within the file record buffer\n");
     return nullptr;
   }
   return reinterpret_cast<const AttrHeaderCommon*>(&GetData()->raw[0] +

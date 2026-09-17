@@ -248,10 +248,17 @@ bool NtfsVolume<S>::ParseBootSector()
 
   // Rejects a size too small for the header, or not a whole number of
   // sectors.
-  if (file_record_size_ < sizeof(FileRecordHeader::Data) ||
+  if (file_record_size_ < kMinFileRecordHeaderSize ||
       file_record_size_ % sector_size_ != 0)
   {
     NTFS_TRACE("FileRecord Size is invalid\n");
+    return false;
+  }
+
+  if (file_record_size_ > kMaxFileRecordSize)
+  {
+    NTFS_TRACE(
+        "FileRecord Size exceeds the maximum supported file record size\n");
     return false;
   }
 
