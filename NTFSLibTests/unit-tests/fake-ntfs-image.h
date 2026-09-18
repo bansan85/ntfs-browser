@@ -348,4 +348,11 @@ inline constexpr ULONGLONG kLegacyStandardInformationRecordIdx = 6;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithLegacyStandardInformation();
 
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by a bare record whose only attribute is a resident
+// $STANDARD_INFORMATION shrunk to kLegacyStandardInformationSize bytes, so
+// FuzzOnce() (which only ever parses MftIdx::ROOT) can reach it directly.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLegacyStandardInformationOnRoot();
+
 }  // namespace NtfsBrowserTests

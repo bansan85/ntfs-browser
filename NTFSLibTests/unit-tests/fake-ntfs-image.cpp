@@ -1163,6 +1163,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithLegacyStandardInformation()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithLegacyStandardInformationOnRoot()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                      static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record =
+      MakeStandardInformationRecordSized(kLegacyStandardInformationSize);
+  std::memcpy(image.data() + offset, record.data(), record.size());
+
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectory()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();

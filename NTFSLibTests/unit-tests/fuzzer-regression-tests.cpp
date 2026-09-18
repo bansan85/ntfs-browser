@@ -99,6 +99,8 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"Index Root: allocated independent copy of resident data"}},
         {"gap_collation_subnode",
          {"VisitIndexBlock() found entry in sub-node"}},
+        {"standard_information_minimal_size",
+         {"Attribute: Standard Information"}},
     };
 
 struct RunResult
@@ -174,7 +176,7 @@ RunResult RunFuzzerOnFile(const fs::path& exe, const fs::path& testcase)
   return {exitCode, output};
 }
 
-}
+}  // namespace
 
 TEST_CASE("NtfsFuzzerAfl does not crash on saved regression testcases",
           "[fuzz][regression]")
