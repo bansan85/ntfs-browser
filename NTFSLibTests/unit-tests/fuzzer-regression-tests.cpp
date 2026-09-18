@@ -101,6 +101,9 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"VisitIndexBlock() found entry in sub-node"}},
         {"standard_information_minimal_size",
          {"Attribute: Standard Information"}},
+        {"index_block_chain_depth_limit",
+         {"VisitIndexBlock() aborting: recursion depth limit exceeded",
+          "TraverseSubNode() aborting: recursion depth limit exceeded"}},
     };
 
 struct RunResult
