@@ -13,6 +13,7 @@
 #include <windows.h>
 
 #include <crtdbg.h>
+#include <malloc.h>  // _resetstkoflw
 
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
@@ -30,6 +31,10 @@ namespace
 
 volatile bool g_stop = false;
 
+// Set by OnInvalidParameter()/OnPureCall(), since neither raises a
+// structured exception RunIteration()'s SEH handler could catch.
+volatile bool g_crt_failure = false;
+
 // Requests a graceful stop instead of an immediate process kill.
 BOOL WINAPI OnConsoleEvent(DWORD /*eventType*/)
 {
@@ -46,6 +51,7 @@ void OnInvalidParameter(const wchar_t* expr, const wchar_t* function,
            expr ? expr : L"?", function ? function : L"?", file ? file : L"?",
            line);
   fflush(stderr);
+  g_crt_failure = true;
 }
 
 // Debug-CRT pure-call handler; same rationale as OnInvalidParameter.
@@ -53,6 +59,7 @@ void OnPureCall()
 {
   fprintf(stderr, "\nPure virtual function called\n");
   fflush(stderr);
+  g_crt_failure = true;
 }
 
 // Logs before letting std::terminate()'s default abort() proceed.
@@ -154,6 +161,7 @@ void FuzzOnceCaught(unsigned seed)
 bool RunIteration(unsigned seed, DWORD& crashCode)
 {
   crashCode = 0;
+  g_crt_failure = false;
 
   __try
   {
@@ -162,10 +170,15 @@ bool RunIteration(unsigned seed, DWORD& crashCode)
   __except (EXCEPTION_EXECUTE_HANDLER)
   {
     crashCode = GetExceptionCode();
+    if (crashCode == EXCEPTION_STACK_OVERFLOW)
+    {
+      // Otherwise the consumed guard page never detects a later overflow.
+      _resetstkoflw();
+    }
     return false;
   }
 
-  return true;
+  return !g_crt_failure;
 }
 
 }
