@@ -19,6 +19,7 @@
 #include "attr/header-non-resident.h"
 #include "attr/header-resident.h"
 #include "attr/index-root.h"
+#include "attr/standard-information.h"
 #include "attr/volume-information.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
@@ -26,6 +27,7 @@
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
 #include "flag/index-entry.h"
+#include "flag/std-info-permission.h"
 
 namespace NtfsBrowserTests
 {
@@ -195,6 +197,39 @@ FakeRecord MakeVolumeRecord()
 {
   return MakeVolumeRecordSized(
       static_cast<WORD>(sizeof(NtfsBrowser::Attr::VolumeInformation)));
+}
+
+// Builds a resident $STANDARD_INFORMATION attribute exactly attrSize bytes
+// long, so a fixture can pin it to NTFS 1.2's real minimum size.
+FakeRecord MakeStandardInformationRecordSized(WORD attrSize)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::STANDARD_INFORMATION;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = attrSize;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  auto& stdInfo = *reinterpret_cast<NtfsBrowser::Attr::StandardInformation*>(
+      &record[kAttrOffset + attr.attr_offset]);
+  stdInfo.create_time = 0x0102030405060708ULL;
+  stdInfo.alter_time = 0x1112131415161718ULL;
+  stdInfo.mft_time = 0x2122232425262728ULL;
+  stdInfo.read_time = 0x3132333435363738ULL;
+  stdInfo.permission = NtfsBrowser::Flag::StdInfoPermission::READONLY;
+  stdInfo.max_version_no = 0;
+  stdInfo.version_no = 0;
+  stdInfo.class_id = 0;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
 }
 
 // Builds a bare root-directory record; ParseFileRecord() never looks at
@@ -1108,6 +1143,21 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation()
                                       static_cast<size_t>(MftIdx::VOLUME);
   const FakeRecord record =
       MakeVolumeRecordSized(kMinimalVolumeInformationSize);
+  std::memcpy(image.data() + offset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithLegacyStandardInformation()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset =
+      mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                    static_cast<size_t>(kLegacyStandardInformationRecordIdx);
+  const FakeRecord record =
+      MakeStandardInformationRecordSized(kLegacyStandardInformationSize);
   std::memcpy(image.data() + offset, record.data(), record.size());
 
   return image;

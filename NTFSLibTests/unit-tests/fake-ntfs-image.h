@@ -333,4 +333,19 @@ inline constexpr ULONGLONG kGapCollationLeafMftRef = 30;
 // block holding kGapCollationSearchName as its leaf entry.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode();
 
+// Real on-disk minimum size of a legacy NTFS 1.2 $STANDARD_INFORMATION
+// attribute, before the Windows-2000-era owner_id/security_id/quota/usn
+// extension appended four more fields.
+inline constexpr WORD kLegacyStandardInformationSize = 48;
+
+// MFT index of the record built by
+// BuildFakeNtfsImageWithLegacyStandardInformation().
+inline constexpr ULONGLONG kLegacyStandardInformationRecordIdx = 6;
+
+// Same volume as BuildFakeNtfsImage(), plus a record
+// (kLegacyStandardInformationRecordIdx) whose only attribute is a resident
+// $STANDARD_INFORMATION shrunk to kLegacyStandardInformationSize bytes.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLegacyStandardInformation();
+
 }  // namespace NtfsBrowserTests

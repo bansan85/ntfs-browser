@@ -23,6 +23,7 @@ add_executable(
   "attr-name-bounds-tests.cpp"
   "attr-resident-read-data-tests.cpp"
   "attr-vol-info-size-tests.cpp"
+  "attr-std-info-legacy-size-tests.cpp"
   "on-disk-struct-layout-tests.cpp"
   "file-record-unparsed-flags-tests.cpp"
   "fragmented-mft-invalid-record-tests.cpp"
