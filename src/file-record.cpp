@@ -334,10 +334,19 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
 
 // Visit IndexBlocks recursivly to find a specific Filename
 template <Strategy S>
-std::optional<IndexEntry> FileRecord<S>::VisitIndexBlock(
-    ULONGLONG vcn, std::wstring_view fileName,
-    std::unordered_set<ULONGLONG>& visitedVcns) const
+std::optional<IndexEntry>
+    FileRecord<S>::VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName,
+                                   std::unordered_set<ULONGLONG>& visitedVcns,
+                                   size_t depth) const
 {
+  if (depth >= kMaxIndexBlockDepth)
+  {
+    NTFS_TRACE("VisitIndexBlock() aborting: recursion depth limit exceeded\n");
+    return {};
+  }
+
+  // A subnode VCN already on this walk means the on-disk B+ tree is
+  // malformed (self-loop or cycle) - stop instead of recursing forever.
   if (!visitedVcns.insert(vcn).second)
   {
     return {};
@@ -378,8 +387,8 @@ std::optional<IndexEntry> FileRecord<S>::VisitIndexBlock(
           return {};  // not found
         }
         // Search in SubNode (IndexBlock), recursive call
-        std::optional<IndexEntry> retval =
-            VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns);
+        std::optional<IndexEntry> retval = VisitIndexBlock(
+            ie.GetSubNodeVCN(), fileName, visitedVcns, depth + 1);
         if (retval)
         {
           return retval;
@@ -391,7 +400,7 @@ std::optional<IndexEntry> FileRecord<S>::VisitIndexBlock(
     {
       // Search in SubNode (IndexBlock), recursive call
       std::optional<IndexEntry> retval =
-          VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns);
+          VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns, depth + 1);
       if (retval)
       {
         return retval;
@@ -407,10 +416,19 @@ std::optional<IndexEntry> FileRecord<S>::VisitIndexBlock(
 // visitedVcns guards against a malformed/malicious B+ tree where a
 // subnode VCN is revisited, which would otherwise recurse without bound.
 template <Strategy S>
-void FileRecord<S>::TraverseSubNode(
-    ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack, void* context,
-    std::unordered_set<ULONGLONG>& visitedVcns) const
+void FileRecord<S>::TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
+                                    void* context,
+                                    std::unordered_set<ULONGLONG>& visitedVcns,
+                                    size_t depth) const
 {
+  if (depth >= kMaxIndexBlockDepth)
+  {
+    NTFS_TRACE("TraverseSubNode() aborting: recursion depth limit exceeded\n");
+    return;
+  }
+
+  // A subnode VCN already on this walk means the on-disk B+ tree is
+  // malformed (self-loop or cycle) - stop instead of recursing forever.
   if (!visitedVcns.insert(vcn).second)
   {
     return;
@@ -435,7 +453,8 @@ void FileRecord<S>::TraverseSubNode(
     if (ie.IsSubNodePtr())
     {
       // recursive call
-      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context, visitedVcns);
+      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context, visitedVcns,
+                      depth + 1);
     }
 
     if (ie.HasName())
@@ -789,7 +808,7 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
     // Visit subnode first
     if (ie.IsSubNodePtr())
     {
-      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context, visitedVcns);
+      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context, visitedVcns, 0);
     }
 
     if (ie.HasName())
@@ -865,7 +884,7 @@ std::optional<IndexEntry>
         {
           // Search in SubNode (IndexBlock)
           std::optional<IndexEntry> retval =
-              VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns);
+              VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns, 0);
           if (retval)
           {
             return retval;
@@ -883,7 +902,7 @@ std::optional<IndexEntry>
     {
       // Search in SubNode (IndexBlock)
       std::optional<IndexEntry> retval =
-          VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns);
+          VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns, 0);
       if (retval)
       {
         return retval;

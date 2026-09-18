@@ -80,15 +80,17 @@ class FileRecord
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain);
   [[nodiscard]] std::optional<FileRecordHeaderImpl<S>>
       ReadFileRecord(ULONGLONG fileRef);
-  // visitedVcns guards against a malformed/malicious B+ tree where a
-  // subnode VCN is revisited (self-loop or cycle among index blocks),
-  // which would otherwise recurse without bound and overflow the stack.
+  // Chosen well above any real NTFS directory's B+ tree depth, but low
+  // enough to unwind long before a forged chain overflows the stack.
+  static constexpr size_t kMaxIndexBlockDepth = 64;
   [[nodiscard]] std::optional<IndexEntry>
       VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName,
-                      std::unordered_set<ULONGLONG>& visitedVcns) const;
+                      std::unordered_set<ULONGLONG>& visitedVcns,
+                      size_t depth) const;
   void TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
                        void* context,
-                       std::unordered_set<ULONGLONG>& visitedVcns) const;
+                       std::unordered_set<ULONGLONG>& visitedVcns,
+                       size_t depth) const;
 
  public:
   [[nodiscard]] const NtfsVolume<S>& GetVolume() const noexcept;
