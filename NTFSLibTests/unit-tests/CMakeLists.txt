@@ -30,6 +30,7 @@ add_executable(
   "find-stream-named-tests.cpp"
   "index-root-entry-lifetime-tests.cpp"
   "find-subentry-gap-collation-tests.cpp"
+  "index-block-recursion-depth-tests.cpp"
   "fuzzer-regression-tests.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/gap-collation-probe.h")

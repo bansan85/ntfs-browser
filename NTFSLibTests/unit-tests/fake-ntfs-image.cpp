@@ -1097,6 +1097,104 @@ FakeRecord MakeRootRecordWithGapCollationSubNode()
   return record;
 }
 
+// LCN where BuildFakeNtfsImageWithDeepIndexBlockChain() writes its chained
+// index blocks, kept clear of every other fixture's placement in this file.
+constexpr DWORD kIndexBlockChainLcn = 100;
+
+// Builds a root-directory replacement whose $INDEX_ROOT sub-node pointer
+// leads into a kIndexBlockChainLength-block chained $INDEX_ALLOCATION.
+FakeRecord MakeIndexBlockChainRootRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  DWORD offset = kAttrOffset;
+
+  // $INDEX_ROOT
+  auto& rootAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  rootAttr.header.type = AttrType::INDEX_ROOT;
+  rootAttr.header.non_resident = 0;
+  rootAttr.header.name_length = 0;
+  rootAttr.header.flags = 0;
+  rootAttr.header.id = 0;
+  rootAttr.attr_offset = static_cast<WORD>(sizeof(rootAttr));
+
+  BYTE* body = &record[offset + rootAttr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kClusterSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = 0;
+  e1.mft_sn = 0;
+  e1.stream_size = 0;
+  e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE |
+             NtfsBrowser::Flag::IndexEntry::LAST;
+  // Header plus the 8-byte subnode VCN that replaces "stream" when empty.
+  e1.size = static_cast<WORD>(offsetof(NtfsBrowser::Data::IndexEntry, stream) +
+                              sizeof(ULONGLONG));
+  auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
+      reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
+  subNodeVcn = 0;
+
+  root.total_entry_size = e1.size;
+  root.alloc_entry_size = e1.size;
+  root.flags = 0;
+
+  rootAttr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size;
+  rootAttr.header.total_size =
+      static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
+
+  offset += rootAttr.header.total_size;
+
+  // $INDEX_ALLOCATION: one data run, kIndexBlockChainLength clusters starting
+  // at kIndexBlockChainLcn.
+  auto& allocAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
+  allocAttr.header.type = AttrType::INDEX_ALLOCATION;
+  allocAttr.header.non_resident = 1;
+  allocAttr.header.name_length = 0;
+  allocAttr.header.flags = 0;
+  allocAttr.header.id = 0;
+  allocAttr.start_vcn = 0;
+  allocAttr.last_vcn = kIndexBlockChainLength - 1;
+  allocAttr.data_run_offset = static_cast<WORD>(sizeof(allocAttr));
+  allocAttr.comp_unit_size = 0;
+  allocAttr.real_size = kIndexBlockChainLength * kClusterSize;
+  allocAttr.alloc_size = allocAttr.real_size;
+  allocAttr.ini_size = allocAttr.real_size;
+
+  BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
+  DWORD runLen = 0;
+  // Data run header byte: high nibble = LCN offset field size (4 bytes),
+  // low nibble = length field size (1 byte) - standard NTFS run encoding
+  // (AttrNonResident::PickData, src/attr-non-resident.cpp).
+  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = static_cast<BYTE>(kIndexBlockChainLength);
+  {
+    const DWORD lcn = kIndexBlockChainLcn;
+    std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
+    runLen += sizeof(lcn);
+  }
+  dataRun[runLen++] = 0x00;  // terminate the run list
+
+  allocAttr.header.total_size = static_cast<DWORD>(sizeof(allocAttr)) + runLen;
+
+  offset += allocAttr.header.total_size;
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -1634,6 +1732,102 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode()
 
   block.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
   block.alloc_entry_size = block.total_entry_size;
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Replace the root directory's (#5) whole record in place.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeIndexBlockChainRootRecord();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  // The chain itself: kIndexBlockChainLength contiguous blocks starting at
+  // kIndexBlockChainLcn, one cluster each.
+  const size_t chainOffset =
+      static_cast<size_t>(kIndexBlockChainLcn) * kClusterSize;
+  const size_t chainBytes =
+      static_cast<size_t>(kIndexBlockChainLength) * kClusterSize;
+  // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
+  // extend past the chain's real end or its last read fails outright.
+  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  const size_t chainEnd = chainOffset + chainBytes;
+  const size_t alignedChainEnd =
+      ((chainEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
+      kFullCacheReadBlockSize;
+  if (image.size() < alignedChainEnd)
+  {
+    image.resize(alignedChainEnd, 0);
+  }
+
+  for (DWORD vcn = 0; vcn < kIndexBlockChainLength; vcn++)
+  {
+    BYTE* const blockStart =
+        image.data() + chainOffset + static_cast<size_t>(vcn) * kClusterSize;
+    auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
+    std::memset(&block, 0, sizeof(block));
+    block.magic = kIndexBlockMagic;
+    // Points offset_of_us at the fixup slot itself, valid for every block.
+    block.offset_of_us = static_cast<WORD>(kClusterSize - 4);
+    block.size_of_us = 2;
+    block.vcn = vcn;
+    block.entry_offset = static_cast<DWORD>(
+        (blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+        reinterpret_cast<BYTE*>(&block.entry_offset));
+
+    BYTE* body = blockStart + sizeof(NtfsBrowser::Data::IndexBlock);
+    auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body);
+
+    const bool isLeaf = (vcn == kIndexBlockChainLength - 1);
+    if (!isLeaf)
+    {
+      // Intermediate block: a lone, nameless entry pointing at the next VCN.
+      block.not_leaf = 1;
+      e1.mft_index = 0;
+      e1.mft_sn = 0;
+      e1.stream_size = 0;
+      e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE |
+                 NtfsBrowser::Flag::IndexEntry::LAST;
+      e1.size = static_cast<WORD>(
+          offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG));
+      auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
+          reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
+      subNodeVcn = vcn + 1;
+    }
+    else
+    {
+      // Deepest block: the real, named leaf entry, reached by depth alone.
+      block.not_leaf = 0;
+      e1.mft_index = kIndexBlockChainLeafMftRef;
+      e1.mft_sn = 1;
+
+      auto& fn1 = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+      fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::ROOT);
+      fn1.flags = NtfsBrowser::Flag::Filename::NONE;
+      fn1.name_length = kIndexBlockChainLeafNameLength;
+      fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+      for (BYTE i = 0; i < fn1.name_length; i++)
+      {
+        fn1.name[i] = static_cast<WORD>(kIndexBlockChainLeafName[i]);
+      }
+
+      e1.stream_size = static_cast<WORD>(
+          reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
+          reinterpret_cast<BYTE*>(&fn1));
+      e1.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+      e1.size =
+          static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                            reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+    }
+
+    block.total_entry_size = e1.size;
+    block.alloc_entry_size = e1.size;
+  }
 
   return image;
 }

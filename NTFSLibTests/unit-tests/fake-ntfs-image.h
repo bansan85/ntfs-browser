@@ -333,6 +333,24 @@ inline constexpr ULONGLONG kGapCollationLeafMftRef = 30;
 // block holding kGapCollationSearchName as its leaf entry.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode();
 
+// Chain length for BuildFakeNtfsImageWithDeepIndexBlockChain(), well past
+// the depth limit; every VCN is distinct, so no cycle guard can stop it.
+inline constexpr DWORD kIndexBlockChainLength = 70;
+
+// File reference the chain's leaf entry declares.
+inline constexpr ULONGLONG kIndexBlockChainLeafMftRef = 99;
+
+// Name (and UTF-16 length) of the chain's leaf entry, reachable only by
+// descending past every other block first.
+inline constexpr wchar_t kIndexBlockChainLeafName[] = L"Deep";
+inline constexpr BYTE kIndexBlockChainLeafNameLength = 4;
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by a bare directory whose $INDEX_ALLOCATION chains
+// kIndexBlockChainLength index blocks, each pointing to the next, the last
+// holding kIndexBlockChainLeafName as a real entry.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain();
+
 // Real on-disk minimum size of a legacy NTFS 1.2 $STANDARD_INFORMATION
 // attribute, before the Windows-2000-era owner_id/security_id/quota/usn
 // extension appended four more fields.
