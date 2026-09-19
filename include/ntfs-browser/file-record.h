@@ -104,6 +104,8 @@ class FileRecord
   void ClearAttrRawCB() noexcept;
 
   void SetAttrMask(Mask mask) noexcept;
+  void SetAttrMaskNoAttrList(Mask mask) noexcept;
+  void ResetAttrListChain() noexcept;
   void TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context) noexcept;
   [[nodiscard]] const std::vector<std::unique_ptr<AttrBase<S>>>&
       getAttr(AttrType attrType) const noexcept;

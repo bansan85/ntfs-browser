@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 
 #include <ntfs-browser/attr-base.h>
@@ -6,6 +7,7 @@
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "attr-non-resident.h"
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
 #include "data/index-block.h"
@@ -121,19 +123,205 @@ void NtfsVolume<S>::Init()
 
   volume_ok_ = true;
 
-  mft_record_.SetAttrMask(Mask::DATA);
+  // Step 1: Parse $MFT with DATA only to get the base record's non-resident DATA attr
+  mft_record_.SetAttrMaskNoAttrList(Mask::DATA);
   if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
       !mft_record_.ParseAttrs())
   {
     return;
   }
 
-  const std::vector<std::unique_ptr<AttrBase<S>>>& vec3 =
-      mft_record_.getAttr(AttrType::DATA);
-  if (!vec3.empty())
+  // Save base DATA attr and its runs (will be destroyed by re-parse below)
+  const auto& base_data_attrs = mft_record_.getAttr(AttrType::DATA);
+  ULONGLONG base_real_size = 0;
+  ULONGLONG base_attr_start_vcn = 0;
+  if (!base_data_attrs.empty() && base_data_attrs.front()->IsNonResident())
   {
-    mft_data_ = vec3.front().get();
+    const auto* base_non_res =
+        static_cast<const AttrNonResident<S>*>(base_data_attrs.front().get());
+    base_attr_start_vcn = base_non_res->GetStartVcn();
+    base_real_size = base_non_res->GetDataSize();
+    mft_data_ = base_data_attrs.front().get();
+
+    // Save base runs into mft_runs_
+    const auto& base_runs = base_non_res->GetRuns();
+    for (const auto& run : base_runs)
+    {
+      MftRun mft_run;
+      mft_run.start_vcn = base_attr_start_vcn + run.start_vcn;
+      mft_run.clusters = run.clusters;
+      mft_run.lcn = run.lcn;
+      mft_runs_.push_back(mft_run);
+    }
   }
+
+  // Step 2: Iteratively re-parse with ATTRIBUTE_LIST to get extension records' DATA attrs
+  // Each iteration, the expanded run list allows reading more extension records,
+  // which in turn provide more runs. Repeat until no new runs are found.
+  for (int iteration = 0; iteration < 20; iteration++)
+  {
+    // Reset attr_list_chain_ so AttrList can retry previously-failed extension records
+    mft_record_.ResetAttrListChain();
+
+    mft_record_.SetAttrMaskNoAttrList(Mask::DATA | Mask::ATTRIBUTE_LIST);
+    if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
+        !mft_record_.ParseAttrs())
+    {
+      // ATTRIBUTE_LIST parsing failed, but we have base runs so continue
+    }
+
+    // Add extension records' DATA attrs to mft_runs_
+    const ULONGLONG prev_run_count = mft_runs_.size();
+    const auto& all_data_attrs2 = mft_record_.getAttr(AttrType::DATA);
+    for (const auto& attr : all_data_attrs2)
+    {
+      if (!attr->IsNonResident())
+      {
+        continue;
+      }
+
+      const auto* non_res =
+          static_cast<const AttrNonResident<S>*>(attr.get());
+      const ULONGLONG attr_start_vcn = non_res->GetStartVcn();
+      const ULONGLONG attr_size = non_res->GetDataSize();
+
+      // Skip if this is the base record's DATA attr (same start_vcn and size)
+      if (attr_start_vcn == base_attr_start_vcn && attr_size == base_real_size)
+      {
+        continue;
+      }
+
+      const auto& runs = non_res->GetRuns();
+      for (const auto& run : runs)
+      {
+        MftRun mft_run;
+        mft_run.start_vcn = attr_start_vcn + run.start_vcn;
+        mft_run.clusters = run.clusters;
+        mft_run.lcn = run.lcn;
+        mft_runs_.push_back(mft_run);
+      }
+    }
+
+    // Sort by start_vcn
+    std::sort(mft_runs_.begin(), mft_runs_.end(),
+              [](const MftRun& a, const MftRun& b)
+              { return a.start_vcn < b.start_vcn; });
+
+    // Deduplicate runs (same start_vcn = same logical run, keep one)
+    auto last = std::unique(mft_runs_.begin(), mft_runs_.end(),
+                            [](const MftRun& a, const MftRun& b)
+                            { return a.start_vcn == b.start_vcn; });
+    mft_runs_.erase(last, mft_runs_.end());
+
+    ValidateMftRuns();
+
+    if (mft_runs_.size() == prev_run_count)
+    {
+      NTFS_TRACE1("MFT run list stable after %d iterations\n", iteration + 1);
+      break;
+    }
+  }
+}
+
+// Validate the combined MFT run list (check for overlaps and gaps)
+template <Strategy S>
+void NtfsVolume<S>::ValidateMftRuns()
+{
+  // Trim overlapping runs: if prev extends past curr's start, shorten prev
+  for (size_t i = 1; i < mft_runs_.size(); i++)
+  {
+    auto& prev = mft_runs_[i - 1];
+    const auto& curr = mft_runs_[i];
+    const ULONGLONG prev_end = prev.start_vcn + prev.clusters;
+    if (prev_end > curr.start_vcn)
+    {
+      prev.clusters = curr.start_vcn - prev.start_vcn;
+    }
+  }
+}
+
+// Read clusters from the unified MFT run list
+// vcn: Starting VCN to read from
+// clusters: Number of clusters to read
+// buffer: Destination buffer (must be large enough for clusters * cluster_size)
+// Returns: Number of bytes read, or empty on failure
+template <Strategy S>
+std::optional<ULONGLONG>
+    NtfsVolume<S>::ReadMftData(ULONGLONG vcn, ULONGLONG clusters,
+                               std::span<BYTE> buffer) const
+{
+  if (mft_runs_.empty())
+  {
+    return {};
+  }
+
+  ULONGLONG remaining = clusters;
+  ULONGLONG vcn_current = vcn;
+  BYTE* buf = buffer.data();
+  ULONGLONG total_read = 0;
+
+  // Find the run containing the starting VCN
+  for (const auto& run : mft_runs_)
+  {
+    // Skip runs that end before our target VCN
+    if (vcn_current >= run.start_vcn + run.clusters)
+    {
+      continue;
+    }
+
+    // Check if VCN is within this run
+    if (vcn_current >= run.start_vcn)
+    {
+      ULONGLONG offset_in_run = vcn_current - run.start_vcn;
+      ULONGLONG available = run.clusters - offset_in_run;
+      ULONGLONG to_read = (remaining < available) ? remaining : available;
+
+      if (run.lcn)
+      {
+        // Non-sparse: read from disk
+        LARGE_INTEGER addr;
+        addr.QuadPart = static_cast<LONGLONG>(
+            (*run.lcn + offset_in_run) * GetClusterSize());
+
+        DWORD bytesToRead = static_cast<DWORD>(to_read * GetClusterSize());
+        auto data = volume_.Read(addr, bytesToRead);
+        if (!data)
+        {
+          NTFS_TRACE1("ReadMftData: Failed to read from LCN %I64d\n",
+                      *run.lcn + offset_in_run);
+          return {};
+        }
+        memcpy(buf, data->data(), data->size());
+        total_read += data->size();
+      }
+      else
+      {
+        // Sparse: zero-fill
+        ULONGLONG bytes = to_read * GetClusterSize();
+        memset(buf, 0, bytes);
+        total_read += bytes;
+      }
+
+      buf += to_read * GetClusterSize();
+      remaining -= to_read;
+      vcn_current += to_read;
+
+      if (remaining == 0)
+      {
+        return total_read;
+      }
+    }
+  }
+
+  // If we get here, we ran out of runs before reading all requested clusters
+  if (remaining == clusters)
+  {
+    // VCN not found in any run
+    return {};
+  }
+
+  // Partial read: return what we managed to read
+  return total_read;
 }
 
 #ifdef _WIN32

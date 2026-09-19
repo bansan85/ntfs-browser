@@ -76,13 +76,19 @@ AttrList<TYPE_RESIDENT, S>::AttrList(const AttrHeaderCommon& ahc,
         frnew.attr_list_chain_ = fr.attr_list_chain_;
         if (!frnew.ParseFileRecord(record_ref))
         {
-          throw std::runtime_error(
-              "Attribute List parse error (ParseFileRecord).\n");
+          NTFS_TRACE1(
+              "Attribute List: skipping record %I64u (ParseFileRecord failed)\n",
+              record_ref);
+          file_record_list_.pop_back();
+          continue;
         }
         if (!frnew.ParseAttrs())
         {
-          throw std::runtime_error(
-              "Attribute List parse error (ParseAttrs).\n");
+          NTFS_TRACE1(
+              "Attribute List: skipping record %I64u (ParseAttrs failed)\n",
+              record_ref);
+          file_record_list_.pop_back();
+          continue;
         }
 
         // Insert new found AttrList to fr.AttrList

@@ -58,7 +58,15 @@ class NtfsVolume
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
   FileRecord<S> mft_record_;              // $MFT File Record
-  const AttrBase<S>* mft_data_{nullptr};  // $MFT Data Attribute
+  const AttrBase<S>* mft_data_{nullptr};  // $MFT Data Attribute (base record)
+
+  // Combined, sorted MFT run list built from all extension records
+  struct MftRun {
+    ULONGLONG start_vcn;   // Starting VCN of this run
+    ULONGLONG clusters;    // Length in clusters
+    std::optional<ULONGLONG> lcn;  // empty = sparse
+  };
+  std::vector<MftRun> mft_runs_;
 
   // Buffer of size cluster_size_ for unaligned cluster access.
   mutable std::vector<BYTE> cluster_buffer_;
@@ -70,6 +78,7 @@ class NtfsVolume
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
   void Init();
+  void ValidateMftRuns();
 
  public:
   [[nodiscard]] bool IsVolumeOK() const noexcept;
@@ -89,9 +98,13 @@ class NtfsVolume
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
-                                      AttrRawCallback cb) noexcept;
+                                       AttrRawCallback cb) noexcept;
   void AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,
                        bool& bDiscard) const;
   void ClearAttrRawCB() noexcept;
+
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadMftData(ULONGLONG vcn, ULONGLONG clusters,
+                  std::span<BYTE> buffer) const;
 };  // NtfsVolume
 }  // namespace NtfsBrowser

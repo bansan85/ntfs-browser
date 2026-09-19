@@ -254,6 +254,24 @@ ULONGLONG AttrNonResident<S>::GetDataSize() const noexcept
   return attr_header_nr_.real_size;
 }
 
+template <Strategy S>
+const std::vector<Data::RunEntry>& AttrNonResident<S>::GetRuns() const noexcept
+{
+  return data_run_list_;
+}
+
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::GetStartVcn() const noexcept
+{
+  return attr_header_nr_.start_vcn;
+}
+
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::GetLastVcn() const noexcept
+{
+  return attr_header_nr_.last_vcn;
+}
+
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
 template <Strategy S>

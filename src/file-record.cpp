@@ -261,17 +261,63 @@ std::optional<FileRecordHeaderImpl<S>>
     }
   }
 
-  // May be fragmented $MFT
+  // May be fragmented $MFT - use unified run list
   const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
 
-  if (std::optional<ULONGLONG> len =
-          volume_.mft_data_->ReadData(frAddr, record_buffer_);
-      !len || *len != volume_.GetFileRecordSize())
+  // Calculate VCN and cluster offset for this file record
+  const DWORD clusterSize = volume_.GetClusterSize();
+  const DWORD recordSize = volume_.GetFileRecordSize();
+  const ULONGLONG vcn = frAddr / clusterSize;
+
+  // File record may span clusters, read the required clusters
+  const ULONGLONG clustersNeeded = (recordSize + clusterSize - 1) / clusterSize;
+
+  // Read into a cluster-sized temporary buffer (record_buffer_ may be smaller)
+  const ULONGLONG readBufSize = clustersNeeded * clusterSize;
+  std::vector<BYTE> readBuf(static_cast<size_t>(readBufSize));
+
+  // Use the unified MFT run list to read the record
+  std::optional<ULONGLONG> len = volume_.ReadMftData(vcn, clustersNeeded, readBuf);
+
+  if (len && *len >= recordSize)
+  {
+    // Copy the file record portion into record_buffer_
+    const ULONGLONG offset = frAddr % clusterSize;
+    memcpy(record_buffer_.data(), readBuf.data() + static_cast<size_t>(offset),
+           static_cast<size_t>(recordSize));
+
+    try
+    {
+      return FileRecordHeader::Factory<S>(record_buffer_,
+                                          volume_.GetSectorSize());
+    }
+    catch ([[maybe_unused]] const std::runtime_error& e)
+    {
+      NTFS_TRACE(e.what());
+      return {};
+    }
+  }
+
+  // Fallback: direct disk read (for $MFT extension records not covered by any data runs)
+  LARGE_INTEGER directAddr;
+  directAddr.QuadPart = gsl::narrow<LONGLONG>(
+      volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
+
+  if (!volume_.ReadInto(directAddr, record_buffer_))
   {
     return {};
   }
 
-  return FileRecordHeader::Factory<S>(record_buffer_, volume_.GetSectorSize());
+  try
+  {
+    return FileRecordHeader::Factory<S>(record_buffer_,
+                                        volume_.GetSectorSize());
+  }
+  catch ([[maybe_unused]] const std::runtime_error& e)
+  {
+    NTFS_TRACE(e.what());
+    return {};
+  }
 }
 
 // Read File Record, verify and patch the US (update sequence)
@@ -538,6 +584,20 @@ void FileRecord<S>::SetAttrMask(Mask mask) noexcept
 {
   // Standard Information and Attribute List is needed always
   attr_mask_ = mask | Mask::STANDARD_INFORMATION | Mask::ATTRIBUTE_LIST;
+}
+
+// Choose attributes to handle, without automatically adding ATTRIBUTE_LIST
+// Used for $MFT record parsing to avoid chicken-and-egg with ATTRIBUTE_LIST
+template <Strategy S>
+void FileRecord<S>::SetAttrMaskNoAttrList(Mask mask) noexcept
+{
+  attr_mask_ = mask | Mask::STANDARD_INFORMATION;
+}
+
+template <Strategy S>
+void FileRecord<S>::ResetAttrListChain() noexcept
+{
+  attr_list_chain_.reset();
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine
