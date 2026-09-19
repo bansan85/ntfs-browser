@@ -16,6 +16,7 @@ set(${PROJECT_NAME}_SRC
     "file-reader.cpp"
     "index-block.cpp"
     "index-entry.cpp"
+    "lznt1/decompress.cpp"
     "ntfs-volume.cpp")
 
 if(WIN32)
@@ -65,6 +66,7 @@ set(${PROJECT_NAME}_H
     "flag/index-entry.h"
     "flag/std-info-permission.h"
     "index-block.h"
+    "lznt1/decompress.h"
     "ntfs-common.h")
 
 set(${PROJECT_NAME}_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")

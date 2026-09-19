@@ -504,12 +504,26 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
   {
     const DWORD minTotalSize =
         ahc->non_resident != 0
-            ? static_cast<DWORD>(sizeof(Attr::HeaderNonResident))
+            ? Attr::kHeaderNonResidentBaseSize
             : static_cast<DWORD>(sizeof(Attr::HeaderResident));
     if (ahc->total_size < minTotalSize)
     {
       NTFS_TRACE("Attribute total_size too small for its header.\n");
       return false;
+    }
+
+    if (ahc->non_resident != 0)
+    {
+      const auto& nonResident =
+          reinterpret_cast<const Attr::HeaderNonResident&>(*ahc);
+      if (Attr::HasCompressedSizeField(nonResident) &&
+          ahc->total_size < minTotalSize + Attr::kCompressedSizeFieldSize)
+      {
+        NTFS_TRACE(
+            "Compressed attribute total_size too small for its compressed "
+            "size field.\n");
+        return false;
+      }
     }
 
     // True only when the type is a real attribute slot and the caller's
@@ -522,9 +536,9 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
         return false;
       }
 
-      if (IsEncrypted() || IsCompressed())
+      if (IsEncrypted())
       {
-        NTFS_TRACE("Compressed and Encrypted file not supported yet !\n");
+        NTFS_TRACE("Encrypted file not supported yet !\n");
         return false;
       }
     }

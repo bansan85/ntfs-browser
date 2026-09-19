@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
@@ -32,6 +33,14 @@ class AttrNonResident : public AttrBase<S>
  private:
   const Attr::HeaderNonResident& attr_header_nr_;
   std::vector<Data::RunEntry> data_run_list_;
+
+  // Clusters per compression unit (2^comp_unit_size); 0 means uncompressed.
+  ULONGLONG comp_unit_clusters_{0};
+
+  // Decompressed compression units, keyed by unit index; lifetime follows
+  // Strategy (FULL_CACHE keeps them, NO_CACHE clears per ReadData()).
+  mutable std::unordered_map<ULONGLONG, std::vector<BYTE>> comp_unit_cache_;
+
   [[nodiscard]] static bool PickData(const BYTE*& dataRun, const BYTE* end,
                                      ULONGLONG& length,
                                      LONGLONG& LCNOffset) noexcept;
@@ -42,6 +51,22 @@ class AttrNonResident : public AttrBase<S>
   [[nodiscard]] std::optional<ULONGLONG>
       ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
                           std::span<BYTE> buffer) const;
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadVirtualClustersRaw(ULONGLONG vcn, ULONGLONG clusters,
+                             std::span<BYTE> buffer) const;
+
+  // Compression support. See attr-non-resident.cpp for the compression-unit
+  // layout these implement.
+  [[nodiscard]] ULONGLONG TotalClusters() const noexcept;
+  [[nodiscard]] ULONGLONG UnitClusters(ULONGLONG unitFirstVcn) const noexcept;
+  [[nodiscard]] std::optional<ULONGLONG>
+      LeadingRealClusters(ULONGLONG unitFirstVcn,
+                          ULONGLONG unitClusters) const noexcept;
+  [[nodiscard]] const std::vector<BYTE>*
+      GetCompressionUnit(ULONGLONG unitIndex) const;
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadVirtualClustersCompressed(ULONGLONG vcn, ULONGLONG clusters,
+                                    std::span<BYTE> buffer) const;
 
  public:
   [[nodiscard]] const BYTE* GetData() const noexcept override;

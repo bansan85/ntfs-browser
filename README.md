@@ -13,4 +13,8 @@ This project improves the historical software by:
 
   - fixing minor bugs,
   - rewriting it with C++20 coding style,
-  - caching `ReadFile` in `CAttrNonResident::ReadClusters`.
+  - caching `ReadFile` in `CAttrNonResident::ReadClusters`,
+  - reading LZNT1-compressed files and directories
+    (`FILE_ATTRIBUTE_COMPRESSED`), which the original skipped entirely:
+    compression units are decompressed transparently, so `ReadData()` keeps
+    returning plain bytes.

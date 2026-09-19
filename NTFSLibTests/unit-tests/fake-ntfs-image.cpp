@@ -1,9 +1,11 @@
 #include "fake-ntfs-image.h"
 
 #include <array>
+#include <cassert>
 #include <cstring>
 #include <fstream>
 #include <random>
+#include <span>
 #include <vector>
 
 #include <windows.h>
@@ -28,6 +30,7 @@
 #include "flag/filename.h"
 #include "flag/index-entry.h"
 #include "flag/std-info-permission.h"
+#include "lznt1/decompress.h"
 
 namespace NtfsBrowserTests
 {
@@ -40,11 +43,11 @@ using NtfsBrowser::Enum::MftIdx;
 namespace
 {
 
-// One sector per record, so the USN fixup needs only one slot.
-constexpr WORD kBytesPerSector = kFakeFileRecordSize;
-// One sector per cluster keeps addressing simple for the fake image.
-constexpr BYTE kSectorsPerCluster = 1;
-constexpr DWORD kClusterSize = kBytesPerSector * kSectorsPerCluster;
+// Reuses fake-ntfs-image.h's geometry, so fixture constants declared there
+// (eg. kCompressionUnitSize) can be sized in real clusters.
+constexpr WORD kBytesPerSector = kFakeBytesPerSector;
+constexpr BYTE kSectorsPerCluster = kFakeSectorsPerCluster;
+constexpr DWORD kClusterSize = kFakeClusterSize;
 // $MFT sits in the first cluster after the boot sector.
 constexpr ULONGLONG kMftLcn = 1;
 // Right after FileRecordHeader::Data's fixed header fields.
@@ -1195,6 +1198,349 @@ FakeRecord MakeIndexBlockChainRootRecord()
   return record;
 }
 
+////////////////////////////////////////////////////////////////////////////
+// NTFS compression fixtures (see fake-ntfs-image.h for what each builds)
+////////////////////////////////////////////////////////////////////////////
+
+// AttrHeaderCommon::flags bit 0 ("compressed"); unread by the library itself
+// but set here since a real compressed attribute always sets it too.
+constexpr WORD kAttrFlagCompressed = 0x0001;
+
+// Encodes "runs" into NTFS' real, delta-LCN run-list format at "dataRun"
+// (terminated by 0x00), and returns the byte count written.
+DWORD EncodeDataRuns(BYTE* dataRun, const std::vector<FakeDataRun>& runs)
+{
+  DWORD runLen = 0;
+  DWORD previousLcn = 0;
+
+  for (const FakeDataRun& run : runs)
+  {
+    if (run.lcn)
+    {
+      dataRun[runLen++] = 0x41;
+      dataRun[runLen++] = static_cast<BYTE>(run.clusters);
+      const LONG delta =
+          static_cast<LONG>(*run.lcn) - static_cast<LONG>(previousLcn);
+      std::memcpy(&dataRun[runLen], &delta, sizeof(delta));
+      runLen += sizeof(delta);
+      previousLcn = *run.lcn;
+    }
+    else
+    {
+      dataRun[runLen++] = 0x01;
+      dataRun[runLen++] = static_cast<BYTE>(run.clusters);
+    }
+  }
+
+  dataRun[runLen++] = 0x00;  // terminate the run list
+  return runLen;
+}
+
+// Writes one resident $STANDARD_INFORMATION attribute at record[offset]
+// with the given DOS permission bits, and returns its total_size.
+DWORD WriteStandardInformationAttr(
+    FakeRecord& record, DWORD offset,
+    NtfsBrowser::Flag::StdInfoPermission permission)
+{
+  auto& attr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  attr.header.type = AttrType::STANDARD_INFORMATION;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::StandardInformation));
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  auto& stdInfo = *reinterpret_cast<NtfsBrowser::Attr::StandardInformation*>(
+      &record[offset + attr.attr_offset]);
+  stdInfo.create_time = 0x0102030405060708ULL;
+  stdInfo.alter_time = 0x1112131415161718ULL;
+  stdInfo.mft_time = 0x2122232425262728ULL;
+  stdInfo.read_time = 0x3132333435363738ULL;
+  stdInfo.permission = permission;
+
+  return attr.header.total_size;
+}
+
+// Header fields the deliberately malformed compression fixtures forge -
+// values a well-formed builder never derives from its own run list.
+struct FakeNonResidentOverrides
+{
+  // Non-zero models one $ATTRIBUTE_LIST fragment of a split attribute.
+  ULONGLONG start_vcn = 0;
+  // Declares a VCN range wider than the runs map - ParseDataRun()'s state
+  // after stopping early on a decode error.
+  std::optional<ULONGLONG> last_vcn;
+  // Overrides "header + run list bytes" as the attribute's total_size.
+  std::optional<DWORD> total_size;
+};
+
+// Writes one non-resident attribute at record[offset] and returns its
+// declared total_size. compUnitSize == 0 is ordinary; non-zero adds the
+// trailing 8-byte CompressedSize field.
+DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
+                           WORD compUnitSize, ULONGLONG realSize,
+                           const std::vector<FakeDataRun>& runs,
+                           const FakeNonResidentOverrides& overrides = {})
+{
+  auto& attr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
+  attr.header.type = type;
+  attr.header.non_resident = 1;
+  attr.header.name_length = 0;
+  attr.header.flags =
+      (compUnitSize != 0) ? kAttrFlagCompressed : static_cast<WORD>(0);
+  attr.header.id = 0;
+
+  ULONGLONG totalClusters = 0;
+  ULONGLONG realClusters = 0;
+  for (const FakeDataRun& run : runs)
+  {
+    totalClusters += run.clusters;
+    if (run.lcn)
+    {
+      realClusters += run.clusters;
+    }
+  }
+
+  attr.start_vcn = overrides.start_vcn;
+  attr.last_vcn = overrides.last_vcn.value_or(
+      overrides.start_vcn + ((totalClusters == 0) ? 0 : totalClusters - 1));
+  attr.comp_unit_size = compUnitSize;
+  attr.alloc_size = totalClusters * kClusterSize;
+  attr.real_size = realSize;
+  attr.ini_size = realSize;
+
+  const auto headerSize = static_cast<WORD>(
+      sizeof(attr) +
+      ((compUnitSize != 0) ? NtfsBrowser::Attr::kCompressedSizeFieldSize : 0));
+  attr.data_run_offset = headerSize;
+
+  if (compUnitSize != 0)
+  {
+    // CompressedSize: total allocated size of the attribute's compressed
+    // clusters, i.e. everything actually on disk (the sparse padding of each
+    // compressed unit excluded).
+    const ULONGLONG compressedSize = realClusters * kClusterSize;
+    std::memcpy(&record[offset + sizeof(attr)], &compressedSize,
+                sizeof(compressedSize));
+  }
+
+  const DWORD runLen = EncodeDataRuns(&record[offset + headerSize], runs);
+  attr.header.total_size =
+      overrides.total_size.value_or(static_cast<DWORD>(headerSize) + runLen);
+  return attr.header.total_size;
+}
+
+// File record (root, #5): resident $STANDARD_INFORMATION("permission") plus
+// one non-resident $DATA attribute described by compUnitSize/realSize/runs.
+FakeRecord
+    MakeNonResidentDataRecord(NtfsBrowser::Flag::StdInfoPermission permission,
+                              WORD compUnitSize, ULONGLONG realSize,
+                              const std::vector<FakeDataRun>& runs,
+                              const FakeNonResidentOverrides& overrides = {})
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  DWORD offset = kAttrOffset;
+  offset += WriteStandardInformationAttr(record, offset, permission);
+  offset += WriteNonResidentAttr(record, offset, AttrType::DATA, compUnitSize,
+                                 realSize, runs, overrides);
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// Directory record (root, #5): resident $STANDARD_INFORMATION("permission"),
+// a resident $INDEX_ROOT with a lone nameless SUBNODE-only entry, and a
+// non-resident $INDEX_ALLOCATION - lets fixtures target an attribute
+// FuzzOnce() actually ReadData()s, unlike plain $DATA.
+FakeRecord MakeIndexAllocationDirRecord(
+    NtfsBrowser::Flag::StdInfoPermission permission, WORD compUnitSize,
+    ULONGLONG realSize, const std::vector<FakeDataRun>& runs,
+    const FakeNonResidentOverrides& overrides = {})
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  DWORD offset = kAttrOffset;
+  offset += WriteStandardInformationAttr(record, offset, permission);
+
+  // $INDEX_ROOT
+  auto& rootAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  rootAttr.header.type = AttrType::INDEX_ROOT;
+  rootAttr.header.non_resident = 0;
+  rootAttr.header.name_length = 0;
+  rootAttr.header.flags = 0;
+  rootAttr.header.id = 0;
+  rootAttr.attr_offset = static_cast<WORD>(sizeof(rootAttr));
+
+  BYTE* body = &record[offset + rootAttr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kFakeFileRecordSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = 0;
+  e1.mft_sn = 0;
+  e1.stream_size = 0;
+  e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE |
+             NtfsBrowser::Flag::IndexEntry::LAST;
+  e1.size = static_cast<WORD>(offsetof(NtfsBrowser::Data::IndexEntry, stream) +
+                              sizeof(ULONGLONG));
+  auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
+      reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
+  subNodeVcn = 0;
+
+  root.total_entry_size = e1.size;
+  root.alloc_entry_size = e1.size;
+  root.flags = 0;
+
+  rootAttr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size;
+  rootAttr.header.total_size =
+      static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
+
+  offset += rootAttr.header.total_size;
+  offset += WriteNonResidentAttr(record, offset, AttrType::INDEX_ALLOCATION,
+                                 compUnitSize, realSize, runs, overrides);
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// "record" and "clusterBytes" laid down over its real runs, in run order;
+// sparse runs consume no bytes and stay zero-filled.
+std::vector<BYTE> BuildCompressionImage(const FakeRecord& record,
+                                        const std::vector<FakeDataRun>& runs,
+                                        const std::vector<BYTE>& clusterBytes)
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  // Grow the image so every real run fits, rounded up to FULL_CACHE's whole
+  // 64KiB read block - same reasoning as
+  // BuildFakeNtfsImageWithDeepIndexBlockChain().
+  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  size_t highestEnd = image.size();
+  for (const FakeDataRun& run : runs)
+  {
+    if (run.lcn)
+    {
+      const size_t end = (static_cast<size_t>(*run.lcn) + run.clusters) *
+                         static_cast<size_t>(kClusterSize);
+      highestEnd = (end > highestEnd) ? end : highestEnd;
+    }
+  }
+  const size_t alignedEnd =
+      ((highestEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
+      kFullCacheReadBlockSize;
+  if (image.size() < alignedEnd)
+  {
+    image.resize(alignedEnd, 0);
+  }
+
+  size_t written = 0;
+  for (const FakeDataRun& run : runs)
+  {
+    if (!run.lcn || written >= clusterBytes.size())
+    {
+      continue;
+    }
+
+    const size_t capacity =
+        static_cast<size_t>(run.clusters) * static_cast<size_t>(kClusterSize);
+    const size_t left = clusterBytes.size() - written;
+    const size_t chunk = (left < capacity) ? left : capacity;
+    std::memcpy(image.data() + static_cast<size_t>(*run.lcn) *
+                                   static_cast<size_t>(kClusterSize),
+                clusterBytes.data() + written, chunk);
+    written += chunk;
+  }
+
+  return image;
+}
+
+// The malformed LZNT1 bytes both corrupt-compression fixtures use: a
+// well-formed compressed chunk header, then a compressed word whose
+// displacement (1) reaches before anything has been decompressed yet.
+std::vector<BYTE> MakeCorruptLznt1Chunk()
+{
+  return {0x02, 0xb0, 0x01, 0x00, 0x00};
+}
+
+// The 1024-byte "INDX"-signed index block the compressed $INDEX_ALLOCATION
+// decompresses to: one real leaf FILE_NAME entry plus the terminating entry.
+// Built standalone since it is the *decompressed* content, wrapped into an
+// LZNT1 chunk by the caller.
+std::vector<BYTE> MakeCompressedIndexBlockContent()
+{
+  std::vector<BYTE> content(kFakeFileRecordSize, 0);
+
+  BYTE* const blockStart = content.data();
+  auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
+  block.magic = kIndexBlockMagic;
+  // Points offset_of_us at the fixup slot itself, so PatchUS() trivially
+  // succeeds - same technique as BuildFakeNtfsImageWithGapCollationSubNode().
+  block.offset_of_us = static_cast<WORD>(kFakeFileRecordSize - 4);
+  block.size_of_us = 2;
+  block.vcn = 0;
+  block.entry_offset =
+      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+                         reinterpret_cast<BYTE*>(&block.entry_offset));
+  block.not_leaf = 0;
+
+  BYTE* body = blockStart + sizeof(NtfsBrowser::Data::IndexBlock);
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body);
+  e1.mft_index = kCompressedIndexEntryMftRef;
+  e1.mft_sn = 1;
+
+  auto& fn1 = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+  fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::ROOT);
+  fn1.flags = NtfsBrowser::Flag::Filename::NONE;
+  fn1.name_length = kCompressedIndexEntryNameLength;
+  fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  for (BYTE i = 0; i < fn1.name_length; i++)
+  {
+    fn1.name[i] = static_cast<WORD>(kCompressedIndexEntryName[i]);
+  }
+
+  e1.stream_size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
+                        reinterpret_cast<BYTE*>(&fn1));
+  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+
+  auto& e2 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body + e1.size);
+  e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  e2.stream_size = 0;
+  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+                              reinterpret_cast<BYTE*>(&e2));
+
+  block.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
+  block.alloc_entry_size = block.total_entry_size;
+
+  return content;
+}
+
 }
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -1830,6 +2176,784 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
   }
 
   return image;
+}
+
+std::vector<BYTE> MakeUncompressedLznt1Chunk(std::span<const BYTE> payload)
+{
+  // [MS-XCA] section 2.5.3: input streams are compressed in units of 4096
+  // bytes, so a single chunk never carries more than that (and a chunk with
+  // no payload at all is not representable - the declared size is
+  // payload.size() - 1).
+  assert(!payload.empty() && payload.size() <= NtfsBrowser::Lznt1::kChunkSize);
+
+  // Header: bit 15 clear (uncompressed), bits 14-12 == 3 (signature), bits
+  // 11-0 == payload size - 1 (the whole chunk's size, header included, minus
+  // three) - [MS-XCA] section 2.5.1.2.
+  const auto header =
+      static_cast<WORD>(0x3000U | static_cast<unsigned>(payload.size() - 1));
+
+  std::vector<BYTE> chunk;
+  chunk.reserve(payload.size() + 2);
+  chunk.push_back(static_cast<BYTE>(header & 0xFFU));
+  chunk.push_back(static_cast<BYTE>(header >> 8U));
+  chunk.insert(chunk.end(), payload.begin(), payload.end());
+  return chunk;
+}
+
+std::vector<BYTE> CompressionFixturePattern(size_t size)
+{
+  std::vector<BYTE> pattern(size, 0);
+  for (size_t i = 0; i < size; i++)
+  {
+    // Deliberately not a byte-aligned cycle, so a fixture whose content got
+    // shifted by a whole number of bytes/clusters still compares unequal.
+    pattern[i] = static_cast<BYTE>((i * 31U + 7U) % 251U);
+  }
+  return pattern;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCompressedFile()
+{
+  // One real cluster (the [MS-XCA] section 3.3 worked example's 59
+  // compressed bytes) plus a sparse pad up to a whole compression unit -
+  // 1 < kCompressionUnitClusters real clusters is exactly what marks a unit
+  // as compressed rather than stored.
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kXcaLznt1ExampleDecompressedSize, runs);
+
+  const std::vector<BYTE> clusterBytes(kXcaLznt1ExampleCompressed.begin(),
+                                       kXcaLznt1ExampleCompressed.end());
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnit()
+{
+  // Real runs covering the whole unit, no sparse pad: a stored
+  // (incompressible) unit, whose bytes must come back untouched.
+  const std::vector<FakeDataRun> runs{
+      {kCompressedDataLcn, kCompressionUnitClusters}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kCompressionUnitSize, runs);
+
+  return BuildCompressionImage(record, runs,
+                               CompressionFixturePattern(kCompressionUnitSize));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnit()
+{
+  const std::vector<FakeDataRun> runs{{{}, kCompressionUnitClusters}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED |
+          NtfsBrowser::Flag::StdInfoPermission::SPARSE,
+      kCompressionUnitSizeShift, kCompressionUnitSize, runs);
+
+  return BuildCompressionImage(record, runs, {});
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithFragmentedCompressedFile()
+{
+  // Two non-contiguous single-cluster real runs (so the compressed bytes
+  // genuinely span two Data::RunEntrys) plus a 2-cluster sparse pad.
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {kFragmentedCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFragmentedCompressedPayloadSize, runs);
+
+  const std::vector<BYTE> payload =
+      CompressionFixturePattern(kFragmentedCompressedPayloadSize);
+  return BuildCompressionImage(record, runs,
+                               MakeUncompressedLznt1Chunk(payload));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithTrailingPartialCompressionUnit()
+{
+  // Five real clusters then one sparse: unit 0 (VCN 0..3) is entirely real
+  // (stored), and unit 1 (VCN 4..5 only - the attribute stops there) sees
+  // the tail of that same run plus one hole, so it is a compressed unit
+  // whose real extent comes from a PARTIAL run rather than a run of its own.
+  const std::vector<FakeDataRun> runs{
+      {kCompressedDataLcn, kCompressionUnitClusters + 1}, {{}, 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift,
+      kTrailingPartialUnitStoredSize + kTrailingPartialUnitTailSize, runs);
+
+  // Clusters 0..3 hold unit 0's stored bytes verbatim; cluster 4 holds unit
+  // 1's LZNT1 stream (a single hand-encoded uncompressed chunk).
+  std::vector<BYTE> clusterBytes =
+      CompressionFixturePattern(kTrailingPartialUnitStoredSize);
+  const std::vector<BYTE> tail = MakeUncompressedLznt1Chunk(
+      CompressionFixturePattern(kTrailingPartialUnitTailSize));
+  clusterBytes.insert(clusterBytes.end(), tail.begin(), tail.end());
+
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCorruptCompressedUnit()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kXcaLznt1ExampleDecompressedSize, runs);
+
+  return BuildCompressionImage(record, runs, MakeCorruptLznt1Chunk());
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithUnmappedCompressionUnit()
+{
+  // Only unit 0's clusters are actually mapped; last_vcn claims two units'
+  // worth.
+  const std::vector<FakeDataRun> runs{
+      {kCompressedDataLcn, kCompressionUnitClusters}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, 2ULL * kCompressionUnitSize, runs,
+      {.last_vcn = 2ULL * kCompressionUnitClusters - 1});
+
+  return BuildCompressionImage(record, runs,
+                               CompressionFixturePattern(kCompressionUnitSize));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithRealClustersAfterHole()
+{
+  const std::vector<FakeDataRun> runs{
+      {kCompressedDataLcn, 1}, {{}, 1}, {kFragmentedCompressedDataLcn, 2}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kCompressionUnitSize, runs);
+
+  // Content is irrelevant - the layout is rejected before anything is
+  // decompressed - but a real LZNT1 stream keeps the fixture honest about
+  // being otherwise plausible.
+  const std::vector<BYTE> clusterBytes(kXcaLznt1ExampleCompressed.begin(),
+                                       kXcaLznt1ExampleCompressed.end());
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnit()
+{
+  // One real cluster then seven sparse: unit 0 (VCN 0..3) is compressed,
+  // unit 1 (VCN 4..7) a hole. real_size covers both, so unit 0 is interior
+  // and must yield a whole kCompressionUnitSize bytes.
+  const std::vector<FakeDataRun> runs{
+      {kCompressedDataLcn, 1}, {{}, 2ULL * kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, 2ULL * kCompressionUnitSize, runs);
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(
+          CompressionFixturePattern(kShortDecompressedUnitSize)));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kXcaLznt1ExampleDecompressedSize, runs,
+      {.total_size = kCompressedAttrTruncatedTotalSize});
+
+  const std::vector<BYTE> clusterBytes(kXcaLznt1ExampleCompressed.begin(),
+                                       kXcaLznt1ExampleCompressed.end());
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCompUnitSizeOutOfRange()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompUnitSizeOutOfRangeShift, kXcaLznt1ExampleDecompressedSize, runs);
+
+  const std::vector<BYTE> clusterBytes(kXcaLznt1ExampleCompressed.begin(),
+                                       kXcaLznt1ExampleCompressed.end());
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithOversizedCompressionUnit()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kOversizedCompUnitSizeShift, kXcaLznt1ExampleDecompressedSize, runs);
+
+  const std::vector<BYTE> clusterBytes(kXcaLznt1ExampleCompressed.begin(),
+                                       kXcaLznt1ExampleCompressed.end());
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMisalignedCompressedStartVcn()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kXcaLznt1ExampleDecompressedSize, runs,
+      {.start_vcn = kMisalignedCompressedStartVcn});
+
+  const std::vector<BYTE> clusterBytes(kXcaLznt1ExampleCompressed.begin(),
+                                       kXcaLznt1ExampleCompressed.end());
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithEncryptedFile()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  DWORD offset = kAttrOffset;
+  offset += WriteStandardInformationAttr(
+      record, offset,
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::ENCRYPTED);
+
+  // An ordinary resident $DATA attribute: nothing about this record is
+  // unusual other than the ENCRYPTED bit, which must still get the whole
+  // record rejected.
+  auto& dataAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  dataAttr.header.type = AttrType::DATA;
+  dataAttr.header.non_resident = 0;
+  dataAttr.header.name_length = 0;
+  dataAttr.header.flags = 0;
+  dataAttr.header.id = 0;
+  dataAttr.attr_size = static_cast<DWORD>(kSmallResidentDataContent.size());
+  dataAttr.attr_offset = static_cast<WORD>(sizeof(dataAttr));
+  dataAttr.header.total_size =
+      static_cast<DWORD>(sizeof(dataAttr)) + dataAttr.attr_size;
+  std::memcpy(&record[offset + dataAttr.attr_offset],
+              kSmallResidentDataContent.data(),
+              kSmallResidentDataContent.size());
+
+  offset += dataAttr.header.total_size;
+  WriteEndOfAttributesMarker(record, offset);
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 1;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.start_vcn = 0;
+  attr.last_vcn = 0;
+  attr.comp_unit_size = 0;
+  attr.real_size = 0;
+  attr.alloc_size = 0;
+  attr.ini_size = 0;
+  // data_run_offset == total_size: the attribute is exactly its own 64-byte
+  // base header, with no run-list bytes at all. Legal, and the smallest
+  // total_size FileRecord<S>::ParseAttrs() may accept for a non-resident
+  // attribute - the whole point of this fixture.
+  attr.data_run_offset =
+      static_cast<WORD>(NtfsBrowser::Attr::kHeaderNonResidentBaseSize);
+  attr.header.total_size = NtfsBrowser::Attr::kHeaderNonResidentBaseSize;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCompressedIndexAllocation()
+{
+  // Two real clusters (a 1026-byte uncompressed LZNT1 chunk wrapping one
+  // whole index block) plus a 2-cluster sparse pad: fewer real clusters than
+  // the unit holds, so the unit is compressed.
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(MakeCompressedIndexBlockContent()));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCorruptCompressedIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
+
+  return BuildCompressionImage(record, runs, MakeCorruptLznt1Chunk());
+}
+
+////////////////////////////////////////////////////////////////////////////
+// Fuzz-corpus-only compressed $INDEX_ALLOCATION fixtures - stay on
+// $INDEX_ALLOCATION, never $DATA, since that is all FuzzOnce() ReadData()s.
+////////////////////////////////////////////////////////////////////////////
+
+std::vector<BYTE> BuildFakeNtfsImageWithCompUnitSizeOutOfRangeIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompUnitSizeOutOfRangeShift, kFakeFileRecordSize, runs);
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(MakeCompressedIndexBlockContent()));
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithOversizedCompressionUnitIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kOversizedCompUnitSizeShift, kFakeFileRecordSize, runs);
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(MakeCompressedIndexBlockContent()));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMisalignedStartVcnIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs,
+      {.start_vcn = kMisalignedCompressedStartVcn});
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(MakeCompressedIndexBlockContent()));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMissingCompressedSizeIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs,
+      {.total_size = kCompressedAttrTruncatedTotalSize});
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(MakeCompressedIndexBlockContent()));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithUnmappedCompressionUnitIndexAllocation()
+{
+  // Only 2 of unit 0's 4 clusters are actually mapped by the run list, but
+  // last_vcn (forced to 2 via the override) claims a 3-cluster attribute -
+  // LeadingRealClusters() walks the one real run, reaches vcn 2, then runs
+  // out of runs with vcn(2) != unitEnd(3).
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs, {.last_vcn = 2});
+
+  return BuildCompressionImage(record, runs,
+                               CompressionFixturePattern(kCompressionUnitSize));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithRealClustersAfterHoleIndexAllocation()
+{
+  // real, hole, real - within a single compression unit, no encoding this
+  // library understands produces real clusters after a hole, so
+  // LeadingRealClusters() must reject it before ParseIndexBlock() ever tries
+  // to decompress anything.
+  const std::vector<FakeDataRun> runs{
+      {kCompressedDataLcn, 1}, {{}, 1}, {kFragmentedCompressedDataLcn, 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kCompressionUnitSize, runs);
+
+  // Content is irrelevant - the layout is rejected before anything is
+  // decompressed - but real LZNT1-looking bytes keep the fixture honest
+  // about being otherwise plausible.
+  const std::vector<BYTE> clusterBytes(kXcaLznt1ExampleCompressed.begin(),
+                                       kXcaLznt1ExampleCompressed.end());
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnitIndexAllocation()
+{
+  // A pure hole: LeadingRealClusters() returns 0, so GetCompressionUnit()
+  // takes its "sparse" branch - the fixture's own point, independent of
+  // ParseIndexBlock()'s later, separate magic-check failure on the result.
+  const std::vector<FakeDataRun> runs{{{}, kCompressionUnitClusters}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED |
+          NtfsBrowser::Flag::StdInfoPermission::SPARSE,
+      kCompressionUnitSizeShift, kCompressionUnitSize, runs);
+
+  return BuildCompressionImage(record, runs, {});
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnitIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kCompressionUnitSize, runs);
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(
+          CompressionFixturePattern(kShortDecompressedUnitSize)));
+}
+
+// LCN whose product with this fixture's cluster size overflows a signed
+// LONGLONG inside ReadClusters()'s gsl::narrow<LONGLONG>() call - same
+// magnitude as kHugeMftLcn, applied to a data run's LCN instead.
+constexpr ULONGLONG kOverflowingLcn = 1ULL << 53;
+
+// Directory record shaped like MakeIndexAllocationDirRecord(), but with a
+// single hand-encoded run (8-byte LCN offset) at kOverflowingLcn, so it
+// reaches ReadClusters()'s narrowing failure from GetCompressionUnit().
+FakeRecord MakeIndexAllocationDirRecordWithOverflowingLcn(DWORD realRunClusters)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  DWORD offset = kAttrOffset;
+  offset += WriteStandardInformationAttr(
+      record, offset,
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED);
+
+  // $INDEX_ROOT - identical nameless SUBNODE-only entry as
+  // MakeIndexAllocationDirRecord().
+  auto& rootAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  rootAttr.header.type = AttrType::INDEX_ROOT;
+  rootAttr.header.non_resident = 0;
+  rootAttr.header.name_length = 0;
+  rootAttr.header.flags = 0;
+  rootAttr.header.id = 0;
+  rootAttr.attr_offset = static_cast<WORD>(sizeof(rootAttr));
+
+  BYTE* body = &record[offset + rootAttr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kFakeFileRecordSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = 0;
+  e1.mft_sn = 0;
+  e1.stream_size = 0;
+  e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE |
+             NtfsBrowser::Flag::IndexEntry::LAST;
+  e1.size = static_cast<WORD>(offsetof(NtfsBrowser::Data::IndexEntry, stream) +
+                              sizeof(ULONGLONG));
+  auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
+      reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
+  subNodeVcn = 0;
+
+  root.total_entry_size = e1.size;
+  root.alloc_entry_size = e1.size;
+  root.flags = 0;
+
+  rootAttr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size;
+  rootAttr.header.total_size =
+      static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
+
+  offset += rootAttr.header.total_size;
+
+  // $INDEX_ALLOCATION: compressed, comp_unit_size == kCompressionUnitSizeShift.
+  auto& allocAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
+  allocAttr.header.type = AttrType::INDEX_ALLOCATION;
+  allocAttr.header.non_resident = 1;
+  allocAttr.header.name_length = 0;
+  allocAttr.header.flags = kAttrFlagCompressed;
+  allocAttr.header.id = 0;
+  allocAttr.start_vcn = 0;
+  allocAttr.last_vcn = kCompressionUnitClusters - 1;
+  allocAttr.comp_unit_size = kCompressionUnitSizeShift;
+  allocAttr.alloc_size = kCompressionUnitClusters * kClusterSize;
+  allocAttr.real_size = kFakeFileRecordSize;
+  allocAttr.ini_size = allocAttr.real_size;
+
+  const auto headerSize = static_cast<WORD>(
+      sizeof(allocAttr) + NtfsBrowser::Attr::kCompressedSizeFieldSize);
+  allocAttr.data_run_offset = headerSize;
+
+  const ULONGLONG compressedSize =
+      static_cast<ULONGLONG>(realRunClusters) * kClusterSize;
+  std::memcpy(&record[offset + sizeof(allocAttr)], &compressedSize,
+              sizeof(compressedSize));
+
+  BYTE* dataRun = &record[offset + headerSize];
+  DWORD runLen = 0;
+  // Real run: header 0x81 (8-byte LCN-offset field), an 8-byte LE delta of
+  // kOverflowingLcn, covering realRunClusters clusters.
+  dataRun[runLen++] = 0x81;
+  dataRun[runLen++] = static_cast<BYTE>(realRunClusters);
+  {
+    const auto delta = static_cast<LONGLONG>(kOverflowingLcn);
+    std::memcpy(&dataRun[runLen], &delta, sizeof(delta));
+    runLen += sizeof(delta);
+  }
+  if (realRunClusters < kCompressionUnitClusters)
+  {
+    // Sparse run padding the unit out to a whole compression unit (header
+    // byte 0x01: 1-byte length field, 0-byte offset field).
+    dataRun[runLen++] = 0x01;
+    dataRun[runLen++] =
+        static_cast<BYTE>(kCompressionUnitClusters - realRunClusters);
+  }
+  dataRun[runLen++] = 0x00;  // terminate the run list
+
+  allocAttr.header.total_size = static_cast<DWORD>(headerSize) + runLen;
+
+  offset += allocAttr.header.total_size;
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnitBadLcn()
+{
+  // All 4 clusters real (no sparse) - the "stored" branch.
+  const FakeRecord record =
+      MakeIndexAllocationDirRecordWithOverflowingLcn(kCompressionUnitClusters);
+
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn()
+{
+  // 1 real cluster (at the overflowing LCN) + 3 sparse - the "compressed"
+  // branch (realClusters < unitClusters).
+  const FakeRecord record = MakeIndexAllocationDirRecordWithOverflowingLcn(1);
+
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+  return image;
+}
+
+////////////////////////////////////////////////////////////////////////////
+// LZNT1 decompressor rejection-path fixtures (src/lznt1/decompress.cpp):
+// each a single compression unit whose real cluster(s) hold a hand-crafted,
+// malformed LZNT1 byte stream.
+////////////////////////////////////////////////////////////////////////////
+
+std::vector<BYTE> BuildFakeNtfsImageWithLznt1InvalidSignatureIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
+
+  // Chunk header 0x1002: bit 15 clear (not the end-of-buffer 0x0000 marker),
+  // bits 14-12 == 1 != the mandatory signature 3.
+  const std::vector<BYTE> clusterBytes{0x02, 0x10};
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1ChunkExceedsSrcBoundsIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
+
+  // Chunk header 0xBFFF: valid, declares a 4096-byte payload - far more than
+  // the ~1022 bytes actually available in the one real cluster.
+  const std::vector<BYTE> clusterBytes{0xFF, 0xBF};
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1UncompressedChunkExceedsDestIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
+
+  // Chunk 1 decompresses to just short of the 4096-byte unit; chunk 2
+  // (uncompressed, declared payload 10) has too little dest buffer left.
+  const std::vector<BYTE> clusterBytes{0x03, 0xB0, 0x02, 0xAA,
+                                       0xF4, 0x0F, 0x09, 0x30};
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithLznt1ChunkOver4096IndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
+
+  // Output reaches exactly 4096 bytes, then one more trailing byte forces a
+  // 3rd data element whose own bounds check must reject it.
+  const std::vector<BYTE> clusterBytes{0x04, 0xB0, 0x02, 0xAA,
+                                       0xFC, 0x0F, 0x00};
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithLznt1LiteralExceedsDestIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
+
+  // Chunk 1 fills the dest buffer to exactly 4096 bytes; chunk 2's first
+  // element is a literal, rejected for writing past a buffer already full.
+  const std::vector<BYTE> clusterBytes{0x03, 0xB0, 0x02, 0xAA, 0xFC,
+                                       0x0F, 0x01, 0xB0, 0x00, 0x00};
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithLznt1TruncatedWordIndexAllocation()
+{
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1},
+                                      {{}, kCompressionUnitClusters - 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
+
+  // Chunk header 0xB001 (payload 2): a flag byte (0x01 - a compressed word)
+  // followed by only ONE more byte, not the two a compressed word needs.
+  const std::vector<BYTE> clusterBytes{0x01, 0xB0, 0x01, 0x00};
+  return BuildCompressionImage(record, runs, clusterBytes);
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1BackreferenceExceedsDestIndexAllocation()
+{
+  // comp_unit_size == 1 (2048-byte unit), deliberately smaller than
+  // kChunkSize, so a legal-looking back-reference can still be rejected
+  // purely for exceeding this smaller unit's own dest buffer.
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1}, {{}, 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      1, kFakeFileRecordSize, runs);
+
+  // Back-reference (length 2048) fits the per-chunk cap but exceeds this
+  // unit's own 2048-byte dest buffer.
+  const std::vector<BYTE> clusterBytes{0x03, 0xB0, 0x02, 0xAA, 0xFD, 0x07};
+  return BuildCompressionImage(record, runs, clusterBytes);
 }
 
 std::filesystem::path WriteFakeNtfsImage()

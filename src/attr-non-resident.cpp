@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstring>
 #include <exception>
+#include <stdexcept>
 
 #include <gsl/narrow>
 #include <gsl/pointers>
@@ -10,10 +11,22 @@
 #include "attr-non-resident.h"
 #include "attr/header-non-resident.h"
 #include "data/run-entry.h"
+#include "lznt1/decompress.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
 {
+
+namespace
+{
+// Max comp_unit_size exponent; keeps 2^comp_unit_size from overflowing
+// before use.
+constexpr WORD kMaxCompUnitSizeShift = 16;
+
+// Real units are <=64KiB (16 clusters * 4KB); 1MiB caps a forged
+// comp_unit_size from over-allocating.
+constexpr ULONGLONG kMaxCompressionUnitSize = 1024ULL * 1024ULL;
+}  // namespace
 
 template <Strategy S>
 AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
@@ -21,6 +34,37 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
     : AttrBase<S>(ahc, fr),
       attr_header_nr_(reinterpret_cast<const Attr::HeaderNonResident&>(ahc))
 {
+  // total_size already covers this field (ParseAttrs()); start_vcn must be
+  // unit-aligned or units decode against the wrong window.
+  if (Attr::HasCompressedSizeField(attr_header_nr_))
+  {
+    if (attr_header_nr_.comp_unit_size > kMaxCompUnitSizeShift)
+    {
+      throw std::runtime_error("Compression unit size is out of range.\n");
+    }
+
+    comp_unit_clusters_ = 1ULL << attr_header_nr_.comp_unit_size;
+    const ULONGLONG unitSize = comp_unit_clusters_ * this->GetClusterSize();
+    if (unitSize == 0 || unitSize > kMaxCompressionUnitSize)
+    {
+      throw std::runtime_error("Compression unit size is implausibly large.\n");
+    }
+
+    if (attr_header_nr_.start_vcn % comp_unit_clusters_ != 0)
+    {
+      throw std::runtime_error(
+          "Compressed attribute start VCN is not compression unit "
+          "aligned.\n");
+    }
+
+    NTFS_TRACE2(
+        "Compressed attribute: %I64u clusters (%I64u bytes) per compression "
+        "unit\n",
+        comp_unit_clusters_, unitSize);
+    NTFS_TRACE1("Compressed size = %I64u bytes\n",
+                Attr::CompressedSize(attr_header_nr_));
+  }
+
   ParseDataRun();
 }
 
@@ -192,11 +236,292 @@ std::optional<std::span<const BYTE>>
   return buffer;
 }
 
-// Read Data, cluster based
-// clusterNo: Begnning cluster Number
-// clusters: Clusters to read
-// bufv, bufLen: Returned data
-// *actural = Number of bytes acturally read
+// Number of virtual clusters this attribute (or, for an attribute split
+// across an $ATTRIBUTE_LIST, this fragment of it) describes.
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::TotalClusters() const noexcept
+{
+  return attr_header_nr_.last_vcn - attr_header_nr_.start_vcn + 1;
+}
+
+// Clusters belonging to the compression unit starting at "unitFirstVcn":
+// a whole unit, except for a trailing partial unit at the attribute's end.
+template <Strategy S>
+ULONGLONG
+    AttrNonResident<S>::UnitClusters(ULONGLONG unitFirstVcn) const noexcept
+{
+  const ULONGLONG remaining = TotalClusters() - unitFirstVcn;
+  return (remaining < comp_unit_clusters_) ? remaining : comp_unit_clusters_;
+}
+
+// Counts the real (non-sparse) clusters at the start of a compression unit.
+// Returns an empty optional if the unit is not fully mapped, or if a real
+// run follows a hole within the unit - layouts a compression unit cannot
+// legally have.
+template <Strategy S>
+std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
+    ULONGLONG unitFirstVcn, ULONGLONG unitClusters) const noexcept
+{
+  const ULONGLONG unitEnd = unitFirstVcn + unitClusters;
+  ULONGLONG vcn = unitFirstVcn;
+  ULONGLONG realClusters = 0;
+  bool sawHole = false;
+
+  for (const Data::RunEntry& dr : data_run_list_)
+  {
+    if (vcn >= unitEnd)
+    {
+      break;
+    }
+    if (dr.last_vcn < vcn)
+    {
+      // Entirely before the unit (or before what has been counted so far).
+      continue;
+    }
+    if (dr.start_vcn > vcn)
+    {
+      NTFS_TRACE1("Compression unit at VCN %I64u is not fully mapped\n",
+                  unitFirstVcn);
+      return {};
+    }
+
+    const ULONGLONG inRun = dr.last_vcn - vcn + 1;
+    const ULONGLONG left = unitEnd - vcn;
+    const ULONGLONG take = (inRun < left) ? inRun : left;
+
+    if (dr.lcn)
+    {
+      if (sawHole)
+      {
+        NTFS_TRACE1(
+            "Compression unit at VCN %I64u has real clusters after a hole\n",
+            unitFirstVcn);
+        return {};
+      }
+      realClusters += take;
+    }
+    else
+    {
+      sawHole = true;
+    }
+
+    vcn += take;
+  }
+
+  if (vcn != unitEnd)
+  {
+    // The run list ran out before the unit did.
+    NTFS_TRACE1("Compression unit at VCN %I64u is not fully mapped\n",
+                unitFirstVcn);
+    return {};
+  }
+
+  return realClusters;
+}
+
+// Materializes one whole compression unit - decompressing it if needed - and
+// returns it, or nullptr on a read/decompression failure. The returned unit
+// is retained in comp_unit_cache_, so it is never decompressed twice within
+// one ReadData() call, nor - under FULL_CACHE - across calls.
+template <Strategy S>
+const std::vector<BYTE>*
+    AttrNonResident<S>::GetCompressionUnit(ULONGLONG unitIndex) const
+{
+  const auto cached = comp_unit_cache_.find(unitIndex);
+  if (cached != comp_unit_cache_.end())
+  {
+    NTFS_TRACE1("Compression unit %I64u served from cache\n", unitIndex);
+    return &cached->second;
+  }
+
+  const ULONGLONG unitFirstVcn = unitIndex * comp_unit_clusters_;
+  if (unitFirstVcn >= TotalClusters())
+  {
+    NTFS_TRACE1("Compression unit %I64u exceeds DataRun bounds\n", unitIndex);
+    return nullptr;
+  }
+
+  const ULONGLONG unitClusters = UnitClusters(unitFirstVcn);
+  const ULONGLONG unitSize = unitClusters * this->GetClusterSize();
+
+  // Bounded by kMaxCompressionUnitSize (constructor-validated), so this
+  // can't be driven arbitrarily large.
+  std::vector<BYTE> unit;
+  try
+  {
+    unit.assign(static_cast<size_t>(unitSize), 0);
+  }
+  catch ([[maybe_unused]] const std::exception& e)
+  {
+    NTFS_TRACE1("Cannot allocate compression unit %I64u\n", unitIndex);
+    NTFS_TRACE(e.what());
+    return nullptr;
+  }
+
+  const std::optional<ULONGLONG> realClustersOpt =
+      LeadingRealClusters(unitFirstVcn, unitClusters);
+  if (!realClustersOpt)
+  {
+    // LeadingRealClusters() already traced which layout it rejected.
+    return nullptr;
+  }
+  const ULONGLONG realClusters = *realClustersOpt;
+
+  if (realClusters == 0)
+  {
+    NTFS_TRACE1("Compression unit %I64u is sparse\n", unitIndex);
+  }
+  else if (realClusters == unitClusters)
+  {
+    // Stored unit: raw, uncompressed bytes.
+    const std::optional<ULONGLONG> len =
+        ReadVirtualClustersRaw(unitFirstVcn, unitClusters, unit);
+    if (!len || *len != unitSize)
+    {
+      NTFS_TRACE1("Cannot read stored compression unit %I64u\n", unitIndex);
+      return nullptr;
+    }
+  }
+  else
+  {
+    // Compressed unit.
+    std::vector<BYTE> compressed;
+    try
+    {
+      compressed.assign(
+          static_cast<size_t>(realClusters * this->GetClusterSize()), 0);
+    }
+    catch ([[maybe_unused]] const std::exception& e)
+    {
+      NTFS_TRACE1("Cannot allocate compressed data of unit %I64u\n", unitIndex);
+      NTFS_TRACE(e.what());
+      return nullptr;
+    }
+
+    const std::optional<ULONGLONG> len =
+        ReadVirtualClustersRaw(unitFirstVcn, realClusters, compressed);
+    if (!len || *len != compressed.size())
+    {
+      NTFS_TRACE1("Cannot read compressed compression unit %I64u\n", unitIndex);
+      return nullptr;
+    }
+
+    // requiredSize: expected output length - the trailing unit may compress
+    // short of unitSize, else short output is zero-padded as if valid.
+    const ULONGLONG unitFirstByte = unitFirstVcn * this->GetClusterSize();
+    ULONGLONG requiredSize = 0;
+    if (attr_header_nr_.real_size > unitFirstByte)
+    {
+      const ULONGLONG left = attr_header_nr_.real_size - unitFirstByte;
+      requiredSize = (left < unitSize) ? left : unitSize;
+    }
+
+    try
+    {
+      const size_t produced = Lznt1::Decompress(compressed, unit);
+      NTFS_TRACE2("Decompressed compression unit %I64u into %I64u bytes\n",
+                  unitIndex, static_cast<ULONGLONG>(produced));
+      if (produced < requiredSize)
+      {
+        NTFS_TRACE3(
+            "Compression unit %I64u decompressed to %I64u bytes, expected at "
+            "least %I64u\n",
+            unitIndex, static_cast<ULONGLONG>(produced), requiredSize);
+        return nullptr;
+      }
+    }
+    catch ([[maybe_unused]] const std::exception& e)
+    {
+      NTFS_TRACE1("Cannot decompress compression unit %I64u\n", unitIndex);
+      NTFS_TRACE(e.what());
+      return nullptr;
+    }
+  }
+
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    // Evicting here still holds "decompressed at most once per call": unit
+    // indices only increase within a call.
+    comp_unit_cache_.clear();
+  }
+
+  // Guarded like other allocations here: a bad_alloc must not escape
+  // ReadData() into consumer code.
+  try
+  {
+    return &comp_unit_cache_.emplace(unitIndex, std::move(unit)).first->second;
+  }
+  catch ([[maybe_unused]] const std::exception& e)
+  {
+    NTFS_TRACE1("Cannot cache compression unit %I64u\n", unitIndex);
+    NTFS_TRACE(e.what());
+    return nullptr;
+  }
+}
+
+// Compressed counterpart of ReadVirtualClustersRaw() below: serves the
+// requested virtual clusters out of whole compression units instead of
+// straight off the data runs.
+template <Strategy S>
+std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
+    ULONGLONG vcn, ULONGLONG clusters, std::span<BYTE> buffer) const
+{
+  assert(comp_unit_clusters_);
+
+  // Same two bounds checks as the raw path.
+  if (vcn + clusters > TotalClusters())
+  {
+    NTFS_TRACE("Cluster exceeds DataRun bounds\n");
+    return {};
+  }
+  if (buffer.size() != clusters * this->GetClusterSize())
+  {
+    NTFS_TRACE("Invalid buffer size\n");
+    return {};
+  }
+
+  BYTE* buf = buffer.data();
+  ULONGLONG actural = 0;
+
+  while (clusters != 0)
+  {
+    const ULONGLONG unitIndex = vcn / comp_unit_clusters_;
+    const ULONGLONG unitFirstVcn = unitIndex * comp_unit_clusters_;
+
+    const std::vector<BYTE>* unit = GetCompressionUnit(unitIndex);
+    if (unit == nullptr)
+    {
+      break;
+    }
+
+    const ULONGLONG offsetInUnit = vcn - unitFirstVcn;
+    const ULONGLONG unitClusters = unit->size() / this->GetClusterSize();
+    if (offsetInUnit >= unitClusters)
+    {
+      NTFS_TRACE1("Compression unit %I64u is shorter than expected\n",
+                  unitIndex);
+      break;
+    }
+
+    const ULONGLONG available = unitClusters - offsetInUnit;
+    const ULONGLONG toCopy = (clusters < available) ? clusters : available;
+    const ULONGLONG bytes = toCopy * this->GetClusterSize();
+
+    memcpy(buf, unit->data() + offsetInUnit * this->GetClusterSize(),
+           static_cast<size_t>(bytes));
+
+    buf += bytes;
+    clusters -= toCopy;
+    actural += toCopy;
+    vcn += toCopy;
+  }
+
+  actural *= this->GetClusterSize();
+  return actural;
+}
+
+// Dispatches to the compressed read path for a compressed attribute
+// (comp_unit_size != 0), else the raw data-run walk.
 template <Strategy S>
 std::optional<ULONGLONG>
     AttrNonResident<S>::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
@@ -204,10 +529,27 @@ std::optional<ULONGLONG>
 {
   assert(clusters);
 
+  if (comp_unit_clusters_ != 0)
+  {
+    return ReadVirtualClustersCompressed(vcn, clusters, buffer);
+  }
+
+  return ReadVirtualClustersRaw(vcn, clusters, buffer);
+}
+
+// Uncompressed read path: walk the data runs, reading real clusters off disk
+// and zero-filling sparse ones. Also the primitive the compressed path reads
+// a unit's real (LZNT1 or stored) clusters through.
+template <Strategy S>
+std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
+    ULONGLONG vcn, ULONGLONG clusters, std::span<BYTE> buffer) const
+{
+  assert(clusters);
+
   ULONGLONG actural = 0;
 
   // Verify if clusters exceeds DataRun bounds
-  if (vcn + clusters > attr_header_nr_.last_vcn - attr_header_nr_.start_vcn + 1)
+  if (vcn + clusters > TotalClusters())
   {
     NTFS_TRACE("Cluster exceeds DataRun bounds\n");
     return {};
@@ -288,6 +630,17 @@ std::optional<ULONGLONG>
   // Hard disks can only be accessed by sectors
   // To be simple and efficient, only implemented cluster based accessing
   // So cluster unaligned data address should be processed carefully here
+
+  // NO_CACHE keeps no state across calls (its raw cluster reads are redone
+  // every time too), so any decompressed unit left over from a previous
+  // ReadData() is dropped here. Within this call the cache still stands, so
+  // the up-to-3 partial/aligned ReadVirtualClusters() calls below share one
+  // decompression per unit they overlap. FULL_CACHE keeps its units for the
+  // attribute's whole lifetime instead - see comp_unit_cache_'s declaration.
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    comp_unit_cache_.clear();
+  }
 
   ULONGLONG bufLen = buffer.size();
   BYTE* buf = buffer.data();

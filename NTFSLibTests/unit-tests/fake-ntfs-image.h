@@ -3,6 +3,8 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
+#include <span>
 #include <vector>
 
 #include <windows.h>
@@ -18,6 +20,14 @@ inline constexpr uint64_t kSentinelRecordCount = 5;
 
 // Every fake record's size; FileRecordHeader asserts on this size internally.
 inline constexpr uint32_t kFakeFileRecordSize = 1024;
+
+// Volume geometry every image built here declares in its BPB: one sector
+// per file record and one sector per cluster.
+inline constexpr WORD kFakeBytesPerSector = kFakeFileRecordSize;
+inline constexpr BYTE kFakeSectorsPerCluster = 1;
+// Use this, not kFakeFileRecordSize, for anything sized in clusters.
+inline constexpr DWORD kFakeClusterSize =
+    static_cast<DWORD>(kFakeBytesPerSector) * kFakeSectorsPerCluster;
 
 // Builds a minimal fake NTFS volume image in memory: boot sector, $MFT,
 // $Volume, and root directory records, just enough for NtfsVolume<S> to
@@ -372,5 +382,294 @@ inline constexpr ULONGLONG kLegacyStandardInformationRecordIdx = 6;
 // FuzzOnce() (which only ever parses MftIdx::ROOT) can reach it directly.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithLegacyStandardInformationOnRoot();
+
+////////////////////////////////////////////////////////////////////////////
+// NTFS compression (FILE_ATTRIBUTE_COMPRESSED + comp_unit_size + LZNT1)
+////////////////////////////////////////////////////////////////////////////
+
+// One data run: "clusters" clusters at LCN "lcn", or a sparse hole when
+// "lcn" is empty. Encodes into NTFS' real run-list format, so fixtures can
+// describe fragmented/sparse layouts. "clusters" must fit one length byte.
+struct FakeDataRun
+{
+  std::optional<DWORD> lcn;
+  DWORD clusters;
+};
+
+// Compression unit exponent every fixture uses: 4 clusters, one chunk.
+inline constexpr WORD kCompressionUnitSizeShift = 2;
+
+// Clusters and bytes per compression unit implied by
+// kCompressionUnitSizeShift.
+inline constexpr DWORD kCompressionUnitClusters = 1U
+                                                  << kCompressionUnitSizeShift;
+inline constexpr DWORD kCompressionUnitSize =
+    kCompressionUnitClusters * kFakeClusterSize;
+
+// LCN where compression fixtures place real cluster data, clear of the
+// older fixtures' index-block LCNs (20, 100).
+inline constexpr DWORD kCompressedDataLcn = 30;
+
+// Second, non-contiguous LCN so a fragmented unit's compressed bytes span
+// two Data::RunEntrys instead of one.
+inline constexpr DWORD kFragmentedCompressedDataLcn = 35;
+
+// [MS-XCA] section 3.3's worked example: 59 bytes of real LZNT1-compressed
+// data, decompressing to kXcaLznt1ExampleDecompressed. Used verbatim so no
+// compressor need be written in this read-only-library repo.
+inline constexpr std::array<BYTE, 59> kXcaLznt1ExampleCompressed{
+    0x38, 0xb0, 0x88, 0x46, 0x23, 0x20, 0x00, 0x20, 0x47, 0x20, 0x41, 0x00,
+    0x10, 0xa2, 0x47, 0x01, 0xa0, 0x45, 0x20, 0x44, 0x00, 0x08, 0x45, 0x01,
+    0x50, 0x79, 0x00, 0xc0, 0x45, 0x20, 0x05, 0x24, 0x13, 0x88, 0x05, 0xb4,
+    0x02, 0x4a, 0x44, 0xef, 0x03, 0x58, 0x02, 0x8c, 0x09, 0x16, 0x01, 0x48,
+    0x45, 0x00, 0xbe, 0x00, 0x9e, 0x00, 0x04, 0x01, 0x18, 0x90, 0x00};
+
+// The ANSI string kXcaLznt1ExampleCompressed decompresses to ([MS-XCA]
+// section 3.3); sizeof(), not strlen(), is the byte count since the
+// terminal NUL is part of the data.
+inline constexpr char kXcaLznt1ExampleDecompressed[] =
+    "F# F# G A A G F# E D D E F# F# E E F# F# G A A G F# E D D E F# E D D E E "
+    "F# D E F# G F# D E F# G F# E D E A F# F# G A A G F# E D D E F# E D D";
+
+inline constexpr size_t kXcaLznt1ExampleDecompressedSize =
+    sizeof(kXcaLznt1ExampleDecompressed);
+static_assert(kXcaLznt1ExampleDecompressedSize == 142,
+              "[MS-XCA] section 3.3's worked example decompresses to exactly "
+              "142 bytes, terminal NUL included");
+
+// Hand-encodes an LZNT1 "uncompressed chunk" ([MS-XCA] 2.5.1.2): header plus
+// payload verbatim, so fixtures never need an actual compressor.
+[[nodiscard]] std::vector<BYTE>
+    MakeUncompressedLznt1Chunk(std::span<const BYTE> payload);
+
+// Deterministic byte pattern fixtures fill payloads with; callers recompute
+// it to check ReadData() results instead of exporting multi-KB arrays.
+[[nodiscard]] std::vector<BYTE> CompressionFixturePattern(size_t size);
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a FILE_ATTRIBUTE_COMPRESSED file; ReadData() must return decompressed bytes.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCompressedFile();
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but the unit is *stored*:
+// real runs cover it fully (no sparse pad), so its plain bytes
+// (CompressionFixturePattern(kCompressionUnitSize)) must pass through as-is.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnit();
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but the unit is a pure
+// hole (no real cluster); must read back as kCompressionUnitSize zeroes.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnit();
+
+// Payload size needing two compressed clusters, still under one unit.
+inline constexpr size_t kFragmentedCompressedPayloadSize = 2000;
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but the unit's compressed
+// bytes live in two non-contiguous real runs plus a sparse pad, so reading
+// it must stitch fragments together before decompressing.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithFragmentedCompressedFile();
+
+// Sizes of the fixture's two units: a full stored one, then a short one.
+inline constexpr size_t kTrailingPartialUnitStoredSize = kCompressionUnitSize;
+inline constexpr size_t kTrailingPartialUnitTailSize = 500;
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but 6 clusters long: a
+// full stored unit plus a shorter trailing one at EOF; must read back
+// exactly real_size bytes, no over-read.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithTrailingPartialCompressionUnit();
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but the unit's real
+// cluster holds a malformed LZNT1 chunk; decompression must reject it.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptCompressedUnit();
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but last_vcn claims two
+// units while the run list only maps the first - the state a decode error
+// leaves ParseDataRun() in; unit 1 must fail, not read back as zeroes.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithUnmappedCompressionUnit();
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but the unit's runs are
+// [real][sparse][real] - real clusters after a hole, a layout no per-unit
+// encoding can produce; ReadData() must reject it, not silently drop them.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithRealClustersAfterHole();
+
+// Decompressed byte count, short of what an interior unit demands.
+inline constexpr size_t kShortDecompressedUnitSize = 100;
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but two units long and the
+// first (interior) unit's LZNT1 stream stops early; ReadData() must reject
+// it instead of zero-padding, unlike a legitimately short trailing unit.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnit();
+
+// One byte short of the base header plus the CompressedSize field.
+inline constexpr DWORD kCompressedAttrTruncatedTotalSize = 71;
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), with total_size forced to
+// kCompressedAttrTruncatedTotalSize: passes the base non-resident size gate
+// but not the CompressedSize field comp_unit_size implies must be present.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize();
+
+// comp_unit_size BuildFakeNtfsImageWithCompUnitSizeOutOfRange() declares: a
+// shift so large that 1ULL << comp_unit_size would be undefined behaviour.
+inline constexpr WORD kCompUnitSizeOutOfRangeShift = 64;
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), with comp_unit_size set to
+// kCompUnitSizeOutOfRangeShift; AttrNonResident<S>'s constructor must reject
+// the shift before ever using it.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCompUnitSizeOutOfRange();
+
+// A well-defined shift (2048 clusters) past the largest buffered unit size.
+inline constexpr WORD kOversizedCompUnitSizeShift = 11;
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), with comp_unit_size set to
+// kOversizedCompUnitSizeShift, exceeding the constructor's size cap.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithOversizedCompressionUnit();
+
+// Not a multiple of kCompressionUnitClusters.
+inline constexpr ULONGLONG kMisalignedCompressedStartVcn = 2;
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), with start_vcn set to
+// kMisalignedCompressedStartVcn; units are indexed relative to start_vcn, so
+// a misaligned one must be rejected, not decoded against a shifted window.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMisalignedCompressedStartVcn();
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a FILE_ATTRIBUTE_ENCRYPTED (not compressed) file with one ordinary
+// resident $DATA attribute - confirms encrypted-record rejection still
+// works once compressed records are no longer rejected outright.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithEncryptedFile();
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// the smallest legal non-resident $DATA (base header only, comp_unit_size ==
+// 0); confirms the compressed-only CompressedSize field doesn't leak in.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData();
+
+// Name (and UTF-16 length) of the leaf entry the decompressed unit holds.
+inline constexpr wchar_t kCompressedIndexEntryName[] = L"Comp";
+inline constexpr BYTE kCompressedIndexEntryNameLength = 4;
+
+// mft reference that same entry declares.
+inline constexpr ULONGLONG kCompressedIndexEntryMftRef = 55;
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a compressed DIRECTORY whose $INDEX_ALLOCATION decompresses to a valid
+// index block - reachable through FuzzOnce(), unlike a plain $DATA attribute.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithCompressedIndexAllocation();
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), with the LZNT1
+// bytes replaced by BuildFakeNtfsImageWithCorruptCompressedUnit()'s
+// malformed chunk, reachable by the fuzz harness on a real byte stream.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithCorruptCompressedIndexAllocation();
+
+////////////////////////////////////////////////////////////////////////////
+// Fuzz-corpus-only compressed $INDEX_ALLOCATION fixtures: same recipe as
+// BuildFakeNtfsImageWithCompressedIndexAllocation(), since FuzzOnce() only
+// ever ReadData()s through $INDEX_ROOT/$INDEX_ALLOCATION, never plain $DATA.
+////////////////////////////////////////////////////////////////////////////
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), with
+// comp_unit_size set to kCompUnitSizeOutOfRangeShift instead - rejected
+// before the data run is ever parsed.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithCompUnitSizeOutOfRangeIndexAllocation();
+
+// Same as above, with comp_unit_size set to kOversizedCompUnitSizeShift: a
+// well-defined shift past the largest unit size buffered for.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithOversizedCompressionUnitIndexAllocation();
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), with start_vcn
+// forced to kMisalignedCompressedStartVcn via FakeNonResidentOverrides.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMisalignedStartVcnIndexAllocation();
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), with total_size
+// forced to kCompressedAttrTruncatedTotalSize - a ParseAttrs()-level
+// rejection independent of attribute type.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMissingCompressedSizeIndexAllocation();
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), but unit 0 is
+// only partially mapped (last_vcn claims more clusters than the run list
+// covers); LeadingRealClusters() must reject it, not treat it as smaller.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithUnmappedCompressionUnitIndexAllocation();
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), but unit 0's
+// runs are [real][hole][real] - a layout no per-unit encoding produces,
+// which must be rejected before decompression.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithRealClustersAfterHoleIndexAllocation();
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), but unit 0 is a
+// pure hole (record also marked SPARSE); reads back as zeroes, exercising
+// GetCompressionUnit()'s "0 real clusters" branch.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithSparseCompressionUnitIndexAllocation();
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), but unit 0's
+// real cluster decompresses to only kShortDecompressedUnitSize bytes, far
+// short of what real_size demands; must be rejected, not zero-padded.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithShortDecompressedUnitIndexAllocation();
+
+// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), but unit 0's
+// one real run is at an LCN whose product with cluster_size overflows a
+// LONGLONG; the "stored" branch must report a read failure, not throw.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithStoredCompressionUnitBadLcn();
+
+// Same as the "stored" variant above, but only 1 of 4 clusters is real (same
+// overflowing LCN); exercises the "compressed" branch's read failure instead.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn();
+
+////////////////////////////////////////////////////////////////////////////
+// LZNT1 decompressor rejection-path corpus fixtures (src/lznt1/decompress.cpp):
+// each shaped like BuildFakeNtfsImageWithCorruptCompressedIndexAllocation(),
+// with different bytes targeting a different bound inside Decompress().
+////////////////////////////////////////////////////////////////////////////
+
+// Chunk header 0x1002: bits 14-12 != the mandatory signature 3; Decompress()
+// must reject this before looking at anything else in the chunk.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1InvalidSignatureIndexAllocation();
+
+// Chunk header 0xBFFF declares a 4096-byte payload, far more than the bytes
+// actually available in this fixture's one real cluster.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1ChunkExceedsSrcBoundsIndexAllocation();
+
+// Two chunks: one decompressing to 4088 bytes, then an uncompressed chunk
+// declaring 10 more - more than the 4096-byte unit buffer has left.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1UncompressedChunkExceedsDestIndexAllocation();
+
+// One chunk decompressing to exactly kChunkSize (4096) bytes, with one more
+// data element left undecoded; the "already produced a full chunk" bound
+// must fire before that next element is even looked at.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1ChunkOver4096IndexAllocation();
+
+// Chunk 1 fills the dest buffer to exactly 4096 bytes and ends cleanly;
+// chunk 2's first element is a literal byte, which must be rejected the
+// moment out == dest.size(), without reading the literal's own value.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1LiteralExceedsDestIndexAllocation();
+
+// One chunk whose only element is a compressed word, but only 1 byte of
+// payload remains after the flag byte, not the 2 bytes a word needs.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1TruncatedWordIndexAllocation();
+
+// Uses comp_unit_size == 1 (2048-byte unit, smaller than every other
+// fixture's), so a back-reference within the 4096-byte per-chunk cap can
+// still be rejected purely for exceeding this smaller unit's own buffer.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithLznt1BackreferenceExceedsDestIndexAllocation();
 
 }  // namespace NtfsBrowserTests
