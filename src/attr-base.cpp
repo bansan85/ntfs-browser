@@ -55,6 +55,14 @@ std::wstring_view AttrBase<S>::GetAttrName() const
     return {};
   }
 
+  if (static_cast<ULONGLONG>(attr_header_.name_offset) +
+          (static_cast<ULONGLONG>(attr_header_.name_length) * sizeof(WCHAR)) >
+      attr_header_.total_size)
+  {
+    NTFS_TRACE("Attribute name exceeds attribute bounds.\n");
+    return {};
+  }
+
   std::wstring_view retval{reinterpret_cast<const wchar_t*>(
                                reinterpret_cast<const BYTE*>(&attr_header_) +
                                attr_header_.name_offset),
