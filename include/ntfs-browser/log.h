@@ -54,8 +54,9 @@ struct Config
 // wholesale. Returns false if the file sink could not be opened; the
 // console target is installed either way. Never throws: the library logs
 // from destructors and from noexcept functions.
-// Emitting is thread safe, but this call MUST NOT run concurrently with
-// it: it swaps the logger the emitting side reads.
+// The library is not thread safe, and neither is logging: this call and
+// every emitted message MUST come from one thread. The sinks are spdlog's
+// single-threaded ones, so a message costs no lock.
 bool Configure(const Config& config) noexcept;
 
 // Parses one "--log=<target>:<level>[:<path>]" argument into config. Only

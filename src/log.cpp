@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <exception>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -141,15 +140,17 @@ spdlog::level::level_enum
 
 // Builds the console target: a stdout sink capped below warn, plus a
 // stderr sink floored at warn, so each message lands on one stream only.
+// The _st sinks take no lock, which the library's single-threaded
+// contract allows and its per-cluster message volume wants.
 void AddConsoleSinks(Log::Level level, std::vector<spdlog::sink_ptr>& sinks)
 {
   auto out = std::make_shared<CeilingSink>(
-      std::make_shared<spdlog::sinks::stdout_sink_mt>(), spdlog::level::warn);
+      std::make_shared<spdlog::sinks::stdout_sink_st>(), spdlog::level::warn);
   out->set_level(ToSpdlog(level));
   out->set_pattern(std::string(kConsolePattern));
   sinks.push_back(out);
 
-  auto err = std::make_shared<spdlog::sinks::stderr_sink_mt>();
+  auto err = std::make_shared<spdlog::sinks::stderr_sink_st>();
   err->set_level((std::max)(spdlog::level::warn, ToSpdlog(level)));
   err->set_pattern(std::string(kConsolePattern));
   sinks.push_back(err);
@@ -177,7 +178,7 @@ bool Apply(const Log::Config& config) noexcept
       {
         // Appends: a second Configure() with the same path must not wipe
         // what the first one already wrote.
-        auto file = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
+        auto file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
             config.file_path, false);
         file->set_level(ToSpdlog(config.file_level));
         file->set_pattern(std::string(kFilePattern));
@@ -213,17 +214,10 @@ bool Apply(const Log::Config& config) noexcept
 spdlog::logger* EnsureLogger()
 {
   LoggerHolder& holder = Holder();
-  // Once: emitting is thread safe, so two threads can reach their first
-  // message together, and holder.logger is a plain shared_ptr.
-  static std::once_flag defaultOnce;
-  std::call_once(defaultOnce,
-                 [&holder]
-                 {
-                   if (!holder.logger)
-                   {
-                     Apply(Log::Config{});
-                   }
-                 });
+  if (!holder.logger)
+  {
+    Apply(Log::Config{});
+  }
   return holder.logger.get();
 }
 

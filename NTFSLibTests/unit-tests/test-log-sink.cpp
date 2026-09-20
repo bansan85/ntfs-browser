@@ -1,12 +1,12 @@
 #include "test-log-sink.h"
 
 #include <memory>
-#include <mutex>
 #include <string>
 
 #include <spdlog/common.h>
 #include <spdlog/details/log_msg.h>
 #include <spdlog/logger.h>
+#include <spdlog/details/null_mutex.h>
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/spdlog.h>
 
@@ -22,12 +22,14 @@ namespace
 // cannot do this: on Windows spdlog's console sinks cache the HANDLE that
 // GetStdHandle() returned when they were built, so _dup2() on fd 1 leaves
 // them writing to the real console and the capture comes back empty.
-class CaptureSink final : public spdlog::sinks::base_sink<std::mutex>
+// Null mutex: the library and its tests log from one thread, matching
+// the single-threaded sinks Configure() installs.
+class CaptureSink final
+    : public spdlog::sinks::base_sink<spdlog::details::null_mutex>
 {
  public:
   std::string Take()
   {
-    const std::lock_guard<std::mutex> lock(mutex_);
     std::string out;
     out.swap(buffer_);
     return out;
