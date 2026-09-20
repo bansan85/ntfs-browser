@@ -186,6 +186,11 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"file_record_read_failure", {"Cannot read file record 5"}},
         {"file_record_invalid_magic", {"Invalid file record"}},
         {"file_record_usn_mismatch", {"Update Sequence Number error"}},
+        {"boot_sector_read_failure", {"Read boot sector error"}},
+        {"file_reader_read_failure", {"Cannot read file at adress"}},
+        {"traverse_attrs_empty_callback",
+         {"TraverseAttrs() called with an empty callback"}},
+        {"file_record_unhandled_attribute", {"Unhandled attribute: 0x0040"}},
 };
 
 struct RunResult

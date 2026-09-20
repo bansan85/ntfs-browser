@@ -23,7 +23,9 @@ class LoopingDiskReader : public NtfsBrowser::IDiskReader
   [[nodiscard]] static std::optional<std::vector<BYTE>>
       LoadFile(const std::filesystem::path& path);
 
-  explicit LoopingDiskReader(std::vector<BYTE> data);
+  // failingRead is the 0-based index of the one ReadInto() call that fails.
+  explicit LoopingDiskReader(std::vector<BYTE> data,
+                             std::optional<size_t> failingRead = {});
 
   bool Open(std::wstring_view path) override;
 
@@ -32,7 +34,9 @@ class LoopingDiskReader : public NtfsBrowser::IDiskReader
 
  private:
   std::vector<BYTE> data_;
+  std::optional<size_t> failing_read_;
+  mutable size_t reads_{0};
   mutable size_t pos_{0};
 };
 
-}
+}  // namespace NtfsFuzz

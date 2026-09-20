@@ -26,8 +26,9 @@ std::optional<std::vector<BYTE>>
   return data;
 }
 
-LoopingDiskReader::LoopingDiskReader(std::vector<BYTE> data)
-    : data_(std::move(data))
+LoopingDiskReader::LoopingDiskReader(std::vector<BYTE> data,
+                                     std::optional<size_t> failingRead)
+    : data_(std::move(data)), failing_read_(failingRead)
 {
 }
 
@@ -36,6 +37,12 @@ bool LoopingDiskReader::Open(std::wstring_view /*path*/) { return true; }
 bool LoopingDiskReader::ReadInto(LARGE_INTEGER& /*addr*/,
                                  std::span<BYTE> dest) const
 {
+  // The stream position is left untouched, as after a real failed read.
+  if (failing_read_ && reads_++ == *failing_read_)
+  {
+    return false;
+  }
+
   size_t filled = 0;
   while (filled < dest.size())
   {
@@ -52,4 +59,4 @@ bool LoopingDiskReader::ReadInto(LARGE_INTEGER& /*addr*/,
   return true;
 }
 
-}
+}  // namespace NtfsFuzz
