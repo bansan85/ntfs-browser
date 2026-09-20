@@ -26,7 +26,7 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
 
   if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
   {
-    NTFS_TRACE1("Cannot set file pointer to %I64d\n", addr.QuadPart);
+    LogError("Cannot set file pointer to {}", addr.QuadPart);
     return false;
   }
 
@@ -34,11 +34,11 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
                &len, nullptr) == FALSE ||
       len != dest.size())
   {
-    NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+    LogError("Cannot read file at adress {}", addr.QuadPart);
     return false;
   }
 
   return true;
 }
 
-}
+}  // namespace NtfsBrowser

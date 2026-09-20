@@ -6,7 +6,7 @@
 namespace NtfsBrowser
 {
 
-IndexBlock::IndexBlock() noexcept { NTFS_TRACE("Index Block\n"); }
+IndexBlock::IndexBlock() noexcept { LogTrace("Index Block"); }
 
 std::shared_ptr<BYTE[]> IndexBlock::AllocIndexBlock(DWORD size)
 {

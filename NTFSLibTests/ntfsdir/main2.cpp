@@ -1,9 +1,13 @@
 #include <cstdio>
+#include <string>
+#include <string_view>
+
 #include <gsl/narrow>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/log.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
@@ -13,7 +17,8 @@ using namespace NtfsBrowser;
 void usage()
 {
   printf("Invalid parameter\n");
-  printf("Usage: ntfsdir \"path\"\n");
+  printf("Usage: ntfsdir [--log=...] \"path\"\n");
+  printf("  %s\n", std::string(Log::kOptionUsage).c_str());
   printf("eg. ntfsdir c:\n");
   printf("eg. ntfsdir c:\\windows\n");
   printf("eg. ntfsdir \"c:\\program files\\common files\"\n");
@@ -189,13 +194,39 @@ void printfile(const IndexEntry& ie, void* context)
 
 int main(int argc, char* argv[])
 {
-  if (argc != 2)
+  Log::Config logConfig;
+  char* path = nullptr;
+
+  for (int i = 1; i < argc; i++)
+  {
+    if (std::string_view(argv[i]).starts_with(Log::kOptionPrefix))
+    {
+      if (!Log::ParseOption(argv[i], logConfig))
+      {
+        usage();
+        return -1;
+      }
+      continue;
+    }
+    // Exactly one path argument, and it may come before or after --log=.
+    if (path != nullptr)
+    {
+      usage();
+      return -1;
+    }
+    path = argv[i];
+  }
+
+  if (path == nullptr)
   {
     usage();
     return -1;
   }
 
-  char* path = argv[1];
+  if (!Log::Configure(logConfig))
+  {
+    fprintf(stderr, "Cannot open log file %s\n", logConfig.file_path.c_str());
+  }
 
   const char volname = getvolume(&path);
   if (volname == '\0')

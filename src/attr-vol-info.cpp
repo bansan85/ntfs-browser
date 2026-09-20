@@ -20,13 +20,13 @@ AttrVolInfo<RESIDENT, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
         "Volume Information attribute smaller than expected.\n");
   }
 
-  NTFS_TRACE("Attribute: Volume Information\n");
+  LogTrace("Attribute: Volume Information");
 }
 
 template <typename RESIDENT, Strategy S>
 AttrVolInfo<RESIDENT, S>::~AttrVolInfo()
 {
-  NTFS_TRACE("AttrVolInfo deleted\n");
+  LogTrace("AttrVolInfo deleted");
 }
 
 template <typename RESIDENT, Strategy S>

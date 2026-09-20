@@ -60,7 +60,7 @@ typename std::enable_if_t<
 
   if (!reader_->ReadInto(addr, std::span<BYTE>{buffer_.data(), length}))
   {
-    NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+    LogError("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
 
@@ -117,7 +117,7 @@ typename std::enable_if_t<
     BYTE* block = GetCachedBlock(blockAddr);
     if (block == nullptr)
     {
-      NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+      LogError("Cannot read file at adress {}", addr.QuadPart);
       return {};
     }
 
@@ -139,7 +139,7 @@ typename std::enable_if_t<
     BYTE* block = GetCachedBlock(blockAddr);
     if (block == nullptr)
     {
-      NTFS_TRACE1("Cannot read file at adress %I64d\n", addr.QuadPart);
+      LogError("Cannot read file at adress {}", addr.QuadPart);
       return {};
     }
 

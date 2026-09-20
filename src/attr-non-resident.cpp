@@ -57,12 +57,11 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
           "aligned.\n");
     }
 
-    NTFS_TRACE2(
-        "Compressed attribute: %I64u clusters (%I64u bytes) per compression "
-        "unit\n",
+    LogDebug(
+        "Compressed attribute: {} clusters ({} bytes) per compression unit",
         comp_unit_clusters_, unitSize);
-    NTFS_TRACE1("Compressed size = %I64u bytes\n",
-                Attr::CompressedSize(attr_header_nr_));
+    LogDebug("Compressed size = {} bytes",
+             Attr::CompressedSize(attr_header_nr_));
   }
 
   ParseDataRun();
@@ -97,14 +96,14 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
   if (size.lengthBytes > sizeof(ULONGLONG) ||
       size.offsetBytes > sizeof(LONGLONG))
   {
-    NTFS_TRACE1("DataRun decode error 1: 0x%02X\n", size.size);
+    LogWarn("DataRun decode error 1: 0x{:02X}", size.size);
     return false;
   }
 
   if (end - dataRun < static_cast<ptrdiff_t>(size.lengthBytes) +
                           static_cast<ptrdiff_t>(size.offsetBytes))
   {
-    NTFS_TRACE("DataRun decode error: run exceeds attribute bounds\n");
+    LogWarn("DataRun decode error: run exceeds attribute bounds");
     return false;
   }
 
@@ -140,9 +139,9 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
 template <Strategy S>
 void AttrNonResident<S>::ParseDataRun()
 {
-  NTFS_TRACE("Parsing Non Resident DataRun\n");
-  NTFS_TRACE2("Start VCN = %I64u, End VCN = %I64u\n", attr_header_nr_.start_vcn,
-              attr_header_nr_.last_vcn);
+  LogTrace("Parsing Non Resident DataRun");
+  LogDebug("Start VCN = {}, End VCN = {}", attr_header_nr_.start_vcn,
+           attr_header_nr_.last_vcn);
 
   const BYTE* const attr_start =
       reinterpret_cast<const BYTE*>(&attr_header_nr_);
@@ -163,12 +162,12 @@ void AttrNonResident<S>::ParseDataRun()
     lcn += lcn_offset;
     if (lcn < 0)
     {
-      NTFS_TRACE("DataRun decode error 2\n");
+      LogWarn("DataRun decode error 2");
       break;
     }
 
-    NTFS_TRACE2("Data length = %I64d clusters, LCN = %I64d", length, lcn);
-    NTFS_TRACE(lcn_offset == 0 ? ", Sparse Data\n" : "\n");
+    LogDebug("Data length = {} clusters, LCN = {}{}", length, lcn,
+             lcn_offset == 0 ? ", Sparse Data" : "");
 
     // Store LCN, Data size (clusters) into list
     Data::RunEntry dr;
@@ -180,7 +179,7 @@ void AttrNonResident<S>::ParseDataRun()
 
     if (dr.last_vcn > (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn))
     {
-      NTFS_TRACE("DataRun decode error: VCN exceeds bound\n");
+      LogWarn("DataRun decode error: VCN exceeds bound");
       break;
     }
 
@@ -205,10 +204,10 @@ std::optional<std::span<const BYTE>>
   {
     addr.QuadPart = gsl::narrow<LONGLONG>(lcn * this->GetClusterSize());
   }
-  catch ([[maybe_unused]] const std::exception& e)
+  catch (const std::exception& e)
   {
-    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
-    NTFS_TRACE(e.what());
+    LogError("Cannot read cluster with LCN {}", lcn);
+    LogException(e);
     return {};
   }
 
@@ -218,21 +217,20 @@ std::optional<std::span<const BYTE>>
     buffer = this->volume_.Read(
         addr, gsl::narrow<DWORD>(clusters * this->GetClusterSize()));
   }
-  catch ([[maybe_unused]] const std::exception& e)
+  catch (const std::exception& e)
   {
-    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
-    NTFS_TRACE(e.what());
+    LogError("Cannot read cluster with LCN {}", lcn);
+    LogException(e);
     return {};
   }
 
   if (!buffer)
   {
-    NTFS_TRACE1("Cannot read cluster with LCN %I64d\n", lcn);
+    LogError("Cannot read cluster with LCN {}", lcn);
     return {};
   }
 
-  NTFS_TRACE2("Successfully read %I64u clusters from LCN %I64d\n", clusters,
-              lcn);
+  LogTrace("Successfully read {} clusters from LCN {}", clusters, lcn);
   return buffer;
 }
 
@@ -280,8 +278,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
     }
     if (dr.start_vcn > vcn)
     {
-      NTFS_TRACE1("Compression unit at VCN %I64u is not fully mapped\n",
-                  unitFirstVcn);
+      LogWarn("Compression unit at VCN {} is not fully mapped", unitFirstVcn);
       return {};
     }
 
@@ -293,9 +290,8 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
     {
       if (sawHole)
       {
-        NTFS_TRACE1(
-            "Compression unit at VCN %I64u has real clusters after a hole\n",
-            unitFirstVcn);
+        LogWarn("Compression unit at VCN {} has real clusters after a hole",
+                unitFirstVcn);
         return {};
       }
       realClusters += take;
@@ -311,8 +307,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
   if (vcn != unitEnd)
   {
     // The run list ran out before the unit did.
-    NTFS_TRACE1("Compression unit at VCN %I64u is not fully mapped\n",
-                unitFirstVcn);
+    LogWarn("Compression unit at VCN {} is not fully mapped", unitFirstVcn);
     return {};
   }
 
@@ -330,14 +325,14 @@ const std::vector<BYTE>*
   const auto cached = comp_unit_cache_.find(unitIndex);
   if (cached != comp_unit_cache_.end())
   {
-    NTFS_TRACE1("Compression unit %I64u served from cache\n", unitIndex);
+    LogDebug("Compression unit {} served from cache", unitIndex);
     return &cached->second;
   }
 
   const ULONGLONG unitFirstVcn = unitIndex * comp_unit_clusters_;
   if (unitFirstVcn >= TotalClusters())
   {
-    NTFS_TRACE1("Compression unit %I64u exceeds DataRun bounds\n", unitIndex);
+    LogWarn("Compression unit {} exceeds DataRun bounds", unitIndex);
     return nullptr;
   }
 
@@ -351,10 +346,10 @@ const std::vector<BYTE>*
   {
     unit.assign(static_cast<size_t>(unitSize), 0);
   }
-  catch ([[maybe_unused]] const std::exception& e)
+  catch (const std::exception& e)
   {
-    NTFS_TRACE1("Cannot allocate compression unit %I64u\n", unitIndex);
-    NTFS_TRACE(e.what());
+    LogError("Cannot allocate compression unit {}", unitIndex);
+    LogException(e);
     return nullptr;
   }
 
@@ -369,7 +364,7 @@ const std::vector<BYTE>*
 
   if (realClusters == 0)
   {
-    NTFS_TRACE1("Compression unit %I64u is sparse\n", unitIndex);
+    LogDebug("Compression unit {} is sparse", unitIndex);
   }
   else if (realClusters == unitClusters)
   {
@@ -378,7 +373,7 @@ const std::vector<BYTE>*
         ReadVirtualClustersRaw(unitFirstVcn, unitClusters, unit);
     if (!len || *len != unitSize)
     {
-      NTFS_TRACE1("Cannot read stored compression unit %I64u\n", unitIndex);
+      LogError("Cannot read stored compression unit {}", unitIndex);
       return nullptr;
     }
   }
@@ -391,10 +386,10 @@ const std::vector<BYTE>*
       compressed.assign(
           static_cast<size_t>(realClusters * this->GetClusterSize()), 0);
     }
-    catch ([[maybe_unused]] const std::exception& e)
+    catch (const std::exception& e)
     {
-      NTFS_TRACE1("Cannot allocate compressed data of unit %I64u\n", unitIndex);
-      NTFS_TRACE(e.what());
+      LogError("Cannot allocate compressed data of unit {}", unitIndex);
+      LogException(e);
       return nullptr;
     }
 
@@ -402,7 +397,7 @@ const std::vector<BYTE>*
         ReadVirtualClustersRaw(unitFirstVcn, realClusters, compressed);
     if (!len || *len != compressed.size())
     {
-      NTFS_TRACE1("Cannot read compressed compression unit %I64u\n", unitIndex);
+      LogError("Cannot read compressed compression unit {}", unitIndex);
       return nullptr;
     }
 
@@ -419,21 +414,21 @@ const std::vector<BYTE>*
     try
     {
       const size_t produced = Lznt1::Decompress(compressed, unit);
-      NTFS_TRACE2("Decompressed compression unit %I64u into %I64u bytes\n",
-                  unitIndex, static_cast<ULONGLONG>(produced));
+      LogDebug("Decompressed compression unit {} into {} bytes", unitIndex,
+               static_cast<ULONGLONG>(produced));
       if (produced < requiredSize)
       {
-        NTFS_TRACE3(
-            "Compression unit %I64u decompressed to %I64u bytes, expected at "
-            "least %I64u\n",
+        LogWarn(
+            "Compression unit {} decompressed to {} bytes, expected at "
+            "least {}",
             unitIndex, static_cast<ULONGLONG>(produced), requiredSize);
         return nullptr;
       }
     }
-    catch ([[maybe_unused]] const std::exception& e)
+    catch (const std::exception& e)
     {
-      NTFS_TRACE1("Cannot decompress compression unit %I64u\n", unitIndex);
-      NTFS_TRACE(e.what());
+      LogError("Cannot decompress compression unit {}", unitIndex);
+      LogException(e);
       return nullptr;
     }
   }
@@ -451,10 +446,10 @@ const std::vector<BYTE>*
   {
     return &comp_unit_cache_.emplace(unitIndex, std::move(unit)).first->second;
   }
-  catch ([[maybe_unused]] const std::exception& e)
+  catch (const std::exception& e)
   {
-    NTFS_TRACE1("Cannot cache compression unit %I64u\n", unitIndex);
-    NTFS_TRACE(e.what());
+    LogError("Cannot cache compression unit {}", unitIndex);
+    LogException(e);
     return nullptr;
   }
 }
@@ -471,12 +466,12 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
   // Same two bounds checks as the raw path.
   if (vcn + clusters > TotalClusters())
   {
-    NTFS_TRACE("Cluster exceeds DataRun bounds\n");
+    LogWarn("Cluster exceeds DataRun bounds");
     return {};
   }
   if (buffer.size() != clusters * this->GetClusterSize())
   {
-    NTFS_TRACE("Invalid buffer size\n");
+    LogWarn("Invalid buffer size");
     return {};
   }
 
@@ -498,8 +493,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
     const ULONGLONG unitClusters = unit->size() / this->GetClusterSize();
     if (offsetInUnit >= unitClusters)
     {
-      NTFS_TRACE1("Compression unit %I64u is shorter than expected\n",
-                  unitIndex);
+      LogWarn("Compression unit {} is shorter than expected", unitIndex);
       break;
     }
 
@@ -551,14 +545,14 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
   // Verify if clusters exceeds DataRun bounds
   if (vcn + clusters > TotalClusters())
   {
-    NTFS_TRACE("Cluster exceeds DataRun bounds\n");
+    LogWarn("Cluster exceeds DataRun bounds");
     return {};
   }
 
   // Verify if clusters exceeds DataRun bounds
   if (buffer.size() != clusters * this->GetClusterSize())
   {
-    NTFS_TRACE("Invalid buffer size\n");
+    LogWarn("Invalid buffer size");
     return {};
   }
 

@@ -10,8 +10,8 @@ AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
                                          const FileRecord<S>& fr)
     : TYPE_RESIDENT(ahc, fr)
 {
-  NTFS_TRACE1("Attribute: Bitmap (%sResident)\n",
-              this->IsNonResident() ? "Non" : "");
+  LogTrace("Attribute: Bitmap ({}Resident)",
+           this->IsNonResident() ? "Non" : "");
 
   bitmap_size_ = this->GetDataSize();
 
@@ -28,11 +28,11 @@ AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
   if (!len || *len != bitmap_size_)
   {
     bitmap_buf_.clear();
-    NTFS_TRACE("Read Resident Bitmap data failed\n");
+    LogWarn("Read Resident Bitmap data failed");
     return;
   }
 
-  NTFS_TRACE1("%I64u bytes of resident Bitmap data read\n", bitmap_size_);
+  LogDebug("{} bytes of resident Bitmap data read", bitmap_size_);
 }
 
 template <class TYPE_RESIDENT, Strategy S>

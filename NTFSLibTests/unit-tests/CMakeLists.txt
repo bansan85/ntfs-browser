@@ -6,6 +6,8 @@ add_executable(
   "memory-disk-reader.cpp"
   "sequential-disk-reader.h"
   "sequential-disk-reader.cpp"
+  "test-log-sink.h"
+  "test-log-sink.cpp"
   "disk-reader-tests.cpp"
   "file-reader-tests.cpp"
   "file-reader-full-cache-boundary-tests.cpp"
@@ -33,11 +35,16 @@ add_executable(
   "find-subentry-gap-collation-tests.cpp"
   "index-block-recursion-depth-tests.cpp"
   "fuzzer-regression-tests.cpp"
+  "logging-tests.cpp"
+  "utf-tests.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/gap-collation-probe.h")
 
-target_link_libraries(NtfsBrowserTests PRIVATE ${PROJECT_NAME}
-                                               Catch2::Catch2WithMain)
+# spdlog: the capturing sink the tests install on the library's logger is an
+# spdlog sink. The library keeps spdlog private, so the tests link it too.
+target_link_libraries(
+  NtfsBrowserTests PRIVATE ${PROJECT_NAME} Catch2::Catch2WithMain
+                           spdlog::spdlog)
 
 # The fuzz/ include lets fake-ntfs-image.h reuse named-stream-probe.h's name
 # instead of duplicating it.

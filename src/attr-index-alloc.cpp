@@ -26,16 +26,14 @@ AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
                                   const FileRecord<S>& fr)
     : AttrNonResident<S>(ahc, fr)
 {
-  NTFS_TRACE("Attribute: Index Allocation\n");
+  LogTrace("Attribute: Index Allocation");
 
   // Get total number of Index Blocks
   const ULONGLONG ibTotalSize = this->GetDataSize();
   if (ibTotalSize % this->GetIndexBlockSize() != 0)
   {
-    NTFS_TRACE2(
-        "Cannot calulate number of IndexBlocks, total size = %I64u, unit = "
-        "%u\n",
-        ibTotalSize, this->GetIndexBlockSize());
+    LogWarn("Cannot calulate number of IndexBlocks, total size = {}, unit = {}",
+            ibTotalSize, this->GetIndexBlockSize());
     return;
   }
 
@@ -45,7 +43,7 @@ AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
 template <Strategy S>
 AttrIndexAlloc<S>::~AttrIndexAlloc()
 {
-  NTFS_TRACE("AttrIndexAlloc deleted\n");
+  LogTrace("AttrIndexAlloc deleted");
 }
 
 // Verify US and update sectors
@@ -109,14 +107,14 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
   if (ibBuf->magic != kIndexBlockMagic)
   {
-    NTFS_TRACE("Index Block parse error: Magic mismatch\n");
+    LogWarn("Index Block parse error: Magic mismatch");
     return false;
   }
 
   if (!IndexBlockUsOffsetInBounds(ibBuf->offset_of_us, sectors,
                                   this->GetIndexBlockSize()))
   {
-    NTFS_TRACE("Index Block parse error: offset_of_us out of bounds\n");
+    LogWarn("Index Block parse error: offset_of_us out of bounds");
     return false;
   }
 
@@ -127,7 +125,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   const WORD* usarray = usnaddr + 1;
   if (!PatchUS(reinterpret_cast<WORD*>(ibBuf), sectors, usn, usarray))
   {
-    NTFS_TRACE("Index Block parse error: Update Sequence Number\n");
+    LogWarn("Index Block parse error: Update Sequence Number");
     return false;
   }
 
@@ -139,7 +137,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   if (ibBuf->entry_offset >
       static_cast<ULONGLONG>(block_end - entry_offset_addr))
   {
-    NTFS_TRACE("Index Block: entry_offset exceeds block bounds\n");
+    LogWarn("Index Block: entry_offset exceeds block bounds");
     return false;
   }
 
@@ -152,13 +150,13 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     if (reinterpret_cast<const BYTE*>(ie) + offsetof(Data::IndexEntry, stream) >
         block_end)
     {
-      NTFS_TRACE("Index Block: index entry header exceeds block bounds\n");
+      LogWarn("Index Block: index entry header exceeds block bounds");
       break;
     }
     if (ie->size == 0 ||
         reinterpret_cast<const BYTE*>(ie) + ie->size > block_end)
     {
-      NTFS_TRACE("Index Block: index entry exceeds block bounds\n");
+      LogWarn("Index Block: index entry exceeds block bounds");
       break;
     }
 
@@ -172,7 +170,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
     if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {
-      NTFS_TRACE("Last Index Entry\n");
+      LogTrace("Last Index Entry");
       break;
     }
 

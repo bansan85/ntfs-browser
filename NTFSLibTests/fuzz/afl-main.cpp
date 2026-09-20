@@ -5,10 +5,13 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/log.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
@@ -118,19 +121,57 @@ void RunGuarded(const std::vector<BYTE>& data,
   }
 }
 
+// Prints command-line usage help.
+void Usage(const char* program)
+{
+  std::fprintf(stderr, "usage: %s [--log=...] <input-file>\n", program);
+  std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str());
+}
+
 }  // namespace
 
-// Runs one AFL testcase file (argv[1]) through the library once.
+// Runs one AFL testcase file (the non-option argument) through the library
+// once.
 int main(int argc, char* argv[])
 {
-  if (argc != 2)
+  // Trace on the console by default, so an afl-fuzz run and the saved
+  // regression corpus both keep producing every message without a flag.
+  Log::Config logConfig{.console_level = Log::Level::kTrace};
+  const char* input = nullptr;
+
+  for (int i = 1; i < argc; i++)
   {
-    std::fprintf(stderr, "usage: %s <input-file>\n", argv[0]);
+    if (std::string_view(argv[i]).starts_with(Log::kOptionPrefix))
+    {
+      if (!Log::ParseOption(argv[i], logConfig))
+      {
+        Usage(argv[0]);
+        return 1;
+      }
+      continue;
+    }
+    if (input != nullptr)
+    {
+      Usage(argv[0]);
+      return 1;
+    }
+    input = argv[i];
+  }
+
+  if (input == nullptr)
+  {
+    Usage(argv[0]);
     return 1;
   }
 
+  if (!Log::Configure(logConfig))
+  {
+    std::fprintf(stderr, "Cannot open log file %s\n",
+                 logConfig.file_path.c_str());
+  }
+
   std::optional<std::vector<BYTE>> data =
-      LoopingDiskReader::LoadFile(std::filesystem::path(argv[1]));
+      LoopingDiskReader::LoadFile(std::filesystem::path(input));
   if (!data)
   {
     // Empty/unreadable testcase: nothing a looping reader could serve.

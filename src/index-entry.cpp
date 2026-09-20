@@ -12,16 +12,16 @@ IndexEntry::IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
                        const Data::IndexEntry& ie)
     : sh_ptr_(sh_ptr), index_entry_(ie)
 {
-  NTFS_TRACE("Index Entry\n");
+  LogTrace("Index Entry");
 
   if (IsSubNodePtr())
   {
-    NTFS_TRACE("Points to sub-node\n");
+    LogTrace("Points to sub-node");
   }
 
   if (ie.stream_size == 0)
   {
-    NTFS_TRACE("No Filename stream found\n");
+    LogWarn("No Filename stream found");
     return;
   }
 
@@ -30,13 +30,13 @@ IndexEntry::IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
   const size_t stream_offset = offsetof(Data::IndexEntry, stream);
   if (ie.size <= stream_offset)
   {
-    NTFS_TRACE("Index Entry stream exceeds entry bounds\n");
+    LogWarn("Index Entry stream exceeds entry bounds");
     return;
   }
   const size_t available = ie.size - stream_offset;
   if (available < offsetof(Attr::Filename, name))
   {
-    NTFS_TRACE("Index Entry stream smaller than expected\n");
+    LogWarn("Index Entry stream smaller than expected");
     return;
   }
 
@@ -44,7 +44,7 @@ IndexEntry::IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
   if (available < offsetof(Attr::Filename, name) +
                       (static_cast<size_t>(fn.name_length) * sizeof(WORD)))
   {
-    NTFS_TRACE("Index Entry Filename name exceeds entry bounds\n");
+    LogWarn("Index Entry Filename name exceeds entry bounds");
     return;
   }
 

@@ -30,7 +30,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
     std::unordered_set<ULONGLONG>& attrListChain)
     : TYPE_RESIDENT(ahc, fr)
 {
-  NTFS_TRACE("Attribute: Attribute List\n");
+  LogTrace("Attribute: Attribute List");
   if (!fr.file_reference_)
   {
     throw std::runtime_error("Missing file reference\n");
@@ -49,9 +49,9 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
   {
     if (*len != Attr::kAttributeListEntryHeaderSize)
     {
-      NTFS_TRACE2(
-          "Attribute List: ReadData returned %I64u bytes, expected %I64u - "
-          "stopping\n",
+      LogWarn(
+          "Attribute List: ReadData returned {} bytes, expected {} - "
+          "stopping",
           *len, static_cast<ULONGLONG>(Attr::kAttributeListEntryHeaderSize));
       break;
     }
@@ -62,7 +62,8 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
           "Attribute List parse error (al_record.attr_type).\n");
     }
 
-    NTFS_TRACE1("Attribute List: 0x%04x\n", al_record.attr_type);
+    LogDebug("Attribute List: 0x{:04x}",
+             static_cast<DWORD>(al_record.attr_type));
 
     const ULONGLONG record_ref = al_record.base_ref.segment_number;
     const Mask am = ATTR_MASK(al_record.attr_type);
@@ -74,10 +75,10 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
       if (!attrListChain.insert(MakeChainKey(record_ref, al_record.attr_type))
                .second)
       {
-        NTFS_TRACE2(
-            "Attribute List: record %I64u, type 0x%04x already resolved in "
-            "this chain, skipping\n",
-            record_ref, al_record.attr_type);
+        LogWarn(
+            "Attribute List: record {}, type 0x{:04x} already resolved in "
+            "this chain, skipping",
+            record_ref, static_cast<DWORD>(al_record.attr_type));
       }
       else
       {
@@ -120,7 +121,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
 template <typename TYPE_RESIDENT, Strategy S>
 AttrList<TYPE_RESIDENT, S>::~AttrList()
 {
-  NTFS_TRACE("AttrList deleted\n");
+  LogTrace("AttrList deleted");
 }
 
 template class AttrList<AttrNonResident<Strategy::FULL_CACHE>,

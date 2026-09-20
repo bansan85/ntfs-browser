@@ -8,7 +8,7 @@ This file guides Claude Code when working with code in this repository.
 
 ## Build
 
-Windows and MSVC are the primary target. MFT/BPB parsing assumes Win32. The MFC demo apps, the unit tests, and `NtfsFuzzer` are Windows-only. The build requires submodules (`3rdparty/gsl`, `3rdparty/Catch2`). Clone with `--recurse-submodules`, or run `git submodule update --init --recursive`.
+Windows and MSVC are the primary target. MFT/BPB parsing assumes Win32. The MFC demo apps, the unit tests, and `NtfsFuzzer` are Windows-only. The build requires submodules (`3rdparty/gsl`, `3rdparty/Catch2`, `3rdparty/spdlog`). Clone with `--recurse-submodules`, or run `git submodule update --init --recursive`.
 
 ```
 cmake -S . -B build
@@ -17,7 +17,7 @@ cmake --build build --config Debug
 
 An existing configured `build/` directory (Visual Studio generator) is already present in this repo. You can also open `build/NtfsBrowser.slnx` in Visual Studio.
 
-`BUILD_SHARED_LIBS` (default OFF) selects a static or shared `NtfsBrowser` lib. CI (`.github/workflows/cmake.yml`) builds both Debug and Release, and both static and shared, on `windows-latest`.
+`BUILD_SHARED_LIBS` (default OFF) selects a static or shared `NtfsBrowser` lib. spdlog follows it, and is linked PRIVATE: it never appears in a public header. CI (`.github/workflows/cmake.yml`) builds both Debug and Release, and both static and shared, on `windows-latest`.
 
 The `NtfsBrowser` library itself, and the `NtfsFuzzerAfl` target ([NTFSLibTests/fuzz/](NTFSLibTests/fuzz/)), also configure and build on Linux with plain GCC: `cmake -S . -B build-linux && cmake --build build-linux` (verified via WSL). `include/ntfs-browser/win-types.h` shims the handful of Windows typedefs (`BYTE`, `DWORD`, `LARGE_INTEGER`, ...) that the on-disk struct layouts and the public API are expressed in. Real Win32 API usage — `Win32DiskReader`, and drive-letter/path-based `NtfsVolume`/`FileReader` construction — is `#ifdef _WIN32`-guarded out. Everything else — the MFC demo apps, the unit tests, and the clang-oriented `NtfsFuzzer` — stays Windows/MSVC-only. CMake skips them (`if(WIN32)`) on other platforms.
 
@@ -38,6 +38,26 @@ build/NTFSLibTests/unit-tests/Debug/NtfsBrowserTests.exe "<test name or tag>"
 Test sources live in [NTFSLibTests/unit-tests/](NTFSLibTests/unit-tests/). Tests must not touch a real disk. They build synthetic NTFS images in memory ([fake-ntfs-image.h](NTFSLibTests/unit-tests/fake-ntfs-image.h)), using the library's own on-disk struct layouts from `src/data` and `src/attr`. They serve those images through fake `IDiskReader` implementations: [memory-disk-reader.h](NTFSLibTests/unit-tests/memory-disk-reader.h) (random-access, whole buffer in memory) or [sequential-disk-reader.h](NTFSLibTests/unit-tests/sequential-disk-reader.h) (offset-ignoring, chunk-at-a-time). Prefer extending these fakes over adding new test scaffolding.
 
 `NTFSLibTests/ntfsattr`, `ntfsdir`, `ntfsdump`, `ntfsundel` are older sample/demo apps. `ntfsdir` is the simplest: it opens a volume, parses the root `FileRecord`, walks down to a path, and traverses entries.
+
+## Logging
+
+All library diagnostics go through spdlog (`3rdparty/spdlog`, pinned to v1.17.0), behind the levelled `LogTrace`/`LogDebug`/`LogInfo`/`LogWarn`/`LogError`/`LogException` entry points in [src/ntfs-common.h](src/ntfs-common.h). Every level is always compiled in; filtering is runtime-only. spdlog MUST NOT appear in `include/ntfs-browser/*.h`, nor in any `src/*.h` the unit tests include.
+
+[include/ntfs-browser/log.h](include/ntfs-browser/log.h) is the public surface: a `Log::Level` enum, a `Log::Config`, a `noexcept Log::Configure()`, and `Log::ParseOption()` for one `--log` argument.
+
+The console-app executables (`NtfsDir`, `NtfsDir2`, `NtfsFuzzer`, `NtfsFuzzerAfl`) accept the option; the MFC dialog apps have no command line and do not.
+
+```
+--log=<console|file>:<off|error|warn|info|debug|trace>[:<path>]
+```
+
+The option MAY be repeated, once per target. It splits on the first two colons only, so `C:\dir\ntfs.log` survives. The path field belongs to the `file` target; without it the file sink writes `ntfs-browser.log` in the current directory.
+
+The console target is split by severity: `error` and `warn` go to stderr, `info`, `debug` and `trace` go to stdout. A message reaches exactly one stream. With no `Configure()` call the console target sits at `warn` and there is no file sink, so a consumer sees warnings and errors on stderr and nothing on stdout.
+
+`NtfsFuzzerAfl` defaults to `--log=console:trace`, which is what the regression corpus in [NTFSLibTests/unit-tests/fuzzer-regression-tests.cpp](NTFSLibTests/unit-tests/fuzzer-regression-tests.cpp) asserts against.
+
+The unit tests pin the library logger to a trace-level capturing spdlog sink before `main()` ([NTFSLibTests/unit-tests/test-log-sink.h](NTFSLibTests/unit-tests/test-log-sink.h)). A test that calls `Configure()` itself MUST call `InstallCaptureSink()` again afterwards, since `Configure()` replaces the logger's sinks wholesale.
 
 ## Formatting and linting
 

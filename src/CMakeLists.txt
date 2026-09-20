@@ -16,8 +16,10 @@ set(${PROJECT_NAME}_SRC
     "file-reader.cpp"
     "index-block.cpp"
     "index-entry.cpp"
+    "log.cpp"
     "lznt1/decompress.cpp"
-    "ntfs-volume.cpp")
+    "ntfs-volume.cpp"
+    "utf.cpp")
 
 if(WIN32)
   list(APPEND ${PROJECT_NAME}_SRC "win32-disk-reader.cpp")
@@ -32,6 +34,7 @@ set(${PROJECT_NAME}_H
     "../include/ntfs-browser/file-reader.h"
     "../include/ntfs-browser/file-record.h"
     "../include/ntfs-browser/index-entry.h"
+    "../include/ntfs-browser/log.h"
     "../include/ntfs-browser/mask.h"
     "../include/ntfs-browser/mft-idx.h"
     "../include/ntfs-browser/ntfs-volume.h"
@@ -67,13 +70,16 @@ set(${PROJECT_NAME}_H
     "flag/std-info-permission.h"
     "index-block.h"
     "lznt1/decompress.h"
-    "ntfs-common.h")
+    "ntfs-common.h"
+    "utf.h")
 
 set(${PROJECT_NAME}_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")
 
 add_library(${PROJECT_NAME} ${${PROJECT_NAME}_SRC} ${${PROJECT_NAME}_H}
                             ${${PROJECT_NAME}_CMAKE})
 target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)
+# Private: spdlog is an implementation detail, absent from the public API.
+target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>

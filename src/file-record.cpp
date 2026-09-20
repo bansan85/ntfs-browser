@@ -27,6 +27,8 @@
 #include "attr/header-resident.h"
 #include "data/run-entry.h"
 #include "index-block.h"
+#include "ntfs-common.h"
+#include "utf.h"
 
 namespace NtfsBrowser
 {
@@ -177,7 +179,7 @@ bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc,
   const DWORD attrIndex = ATTR_INDEX(ahc.type);
   if (attrIndex >= kAttrNums)
   {
-    NTFS_TRACE1("Invalid Attribute Type: 0x%04X\n", ahc.type);
+    LogWarn("Invalid Attribute Type: 0x{:04X}", static_cast<DWORD>(ahc.type));
     return false;
   }
 
@@ -186,8 +188,8 @@ bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc,
 
   if (bDiscard)
   {
-    NTFS_TRACE1("User Callback has processed this Attribute: 0x%04X\n",
-                ahc.type);
+    LogDebug("User Callback has processed this Attribute: 0x{:04X}",
+             static_cast<DWORD>(ahc.type));
     return true;
   }
 
@@ -201,18 +203,18 @@ bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc,
     else
       attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled, attrListChain);
   }
-  catch ([[maybe_unused]] const std::exception& e)
+  catch (const std::exception& e)
   {
     // gsl::narrow(), reachable through AllocAttr(), can throw a
     // gsl::narrowing_error, which is not a std::runtime_error.
-    NTFS_TRACE1("Attribute Parse error: 0x%04X\n", ahc.type);
-    NTFS_TRACE(e.what());
+    LogError("Attribute Parse error: 0x{:04X}", static_cast<DWORD>(ahc.type));
+    LogException(e);
     return false;
   }
 
   if (bUnhandled)
   {
-    NTFS_TRACE1("Unhandled attribute: 0x%04X\n", ahc.type);
+    LogWarn("Unhandled attribute: 0x{:04X}", static_cast<DWORD>(ahc.type));
   }
   attr_list_[attrIndex].push_back(std::move(attr));
   return true;
@@ -242,11 +244,11 @@ std::optional<FileRecordHeaderImpl<S>>
       frAddr.QuadPart = gsl::narrow<LONGLONG>(
           volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
     }
-    catch ([[maybe_unused]] const std::exception& e)
+    catch (const std::exception& e)
     {
       // fileRef is attacker-controlled and unbounded, so this sum can
       // still overflow a LONGLONG even with mft_addr_ validated.
-      NTFS_TRACE(e.what());
+      LogException(e);
       return {};
     }
 
@@ -260,9 +262,9 @@ std::optional<FileRecordHeaderImpl<S>>
       return FileRecordHeader::Factory<S>(record_buffer_,
                                           volume_.GetSectorSize());
     }
-    catch ([[maybe_unused]] const std::exception& e)
+    catch (const std::exception& e)
     {
-      NTFS_TRACE(e.what());
+      LogException(e);
       return {};
     }
   }
@@ -282,11 +284,11 @@ std::optional<FileRecordHeaderImpl<S>>
     return FileRecordHeader::Factory<S>(record_buffer_,
                                         volume_.GetSectorSize());
   }
-  catch ([[maybe_unused]] const std::exception& e)
+  catch (const std::exception& e)
   {
     // Reachable through the same FileRecordHeader::Factory<S>() call as
     // the direct-allocation path above.
-    NTFS_TRACE(e.what());
+    LogException(e);
     return {};
   }
 }
@@ -305,7 +307,7 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
   std::optional<FileRecordHeaderImpl<S>> fr = ReadFileRecord(fileRef);
   if (!fr)
   {
-    NTFS_TRACE1("Cannot read file record %I64u\n", fileRef);
+    LogError("Cannot read file record {}", fileRef);
 
     file_reference_ = {};
 
@@ -316,17 +318,17 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
 
   if (fr->GetData()->magic != kFileRecordMagic)
   {
-    NTFS_TRACE("Invalid file record\n");
+    LogWarn("Invalid file record");
     return false;
   }
 
   if (!fr->PatchUS())
   {
-    NTFS_TRACE("Update Sequence Number error\n");
+    LogWarn("Update Sequence Number error");
     return false;
   }
 
-  NTFS_TRACE1("File Record %I64u Found\n", fileRef);
+  LogDebug("File Record {} Found", fileRef);
   file_record_ = std::move(fr);
 
   return true;
@@ -341,7 +343,7 @@ std::optional<IndexEntry>
 {
   if (depth >= kMaxIndexBlockDepth)
   {
-    NTFS_TRACE("VisitIndexBlock() aborting: recursion depth limit exceeded\n");
+    LogWarn("VisitIndexBlock() aborting: recursion depth limit exceeded");
     return {};
   }
 
@@ -376,7 +378,7 @@ std::optional<IndexEntry>
       {
         // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
         // alive after ib is destroyed.
-        NTFS_TRACE("VisitIndexBlock() found entry in sub-node\n");
+        LogDebug("VisitIndexBlock() found entry in sub-node");
         return ie;
       }
       if (i < 0)  // fileName is smaller than IndexEntry
@@ -423,7 +425,7 @@ void FileRecord<S>::TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
 {
   if (depth >= kMaxIndexBlockDepth)
   {
-    NTFS_TRACE("TraverseSubNode() aborting: recursion depth limit exceeded\n");
+    LogWarn("TraverseSubNode() aborting: recursion depth limit exceeded");
     return;
   }
 
@@ -508,7 +510,7 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
             : static_cast<DWORD>(sizeof(Attr::HeaderResident));
     if (ahc->total_size < minTotalSize)
     {
-      NTFS_TRACE("Attribute total_size too small for its header.\n");
+      LogWarn("Attribute total_size too small for its header.");
       return false;
     }
 
@@ -519,9 +521,9 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
       if (Attr::HasCompressedSizeField(nonResident) &&
           ahc->total_size < minTotalSize + Attr::kCompressedSizeFieldSize)
       {
-        NTFS_TRACE(
+        LogWarn(
             "Compressed attribute total_size too small for its compressed "
-            "size field.\n");
+            "size field.");
         return false;
       }
     }
@@ -538,7 +540,7 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
 
       if (IsEncrypted())
       {
-        NTFS_TRACE("Encrypted file not supported yet !\n");
+        LogWarn("Encrypted file not supported yet !");
         return false;
       }
     }
@@ -597,7 +599,7 @@ void FileRecord<S>::TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context)
 {
   if (!attrCallBack)
   {
-    NTFS_TRACE("TraverseAttrs() called with an empty callback\n");
+    LogWarn("TraverseAttrs() called with an empty callback");
     return;
   }
 
@@ -888,7 +890,7 @@ std::optional<IndexEntry>
       {
         // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
         // alive independently of this FileRecord.
-        NTFS_TRACE("FindSubEntry() found entry in Index Root\n");
+        LogDebug("FindSubEntry() found entry in Index Root");
         return ie;
       }
       if (i < 0)  // fileName is smaller than IndexEntry
@@ -938,20 +940,18 @@ const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name)
     // Unnamed stream
     if (data->IsUnNamed() && name.empty())
     {
-      NTFS_TRACE("FindStream() found the unnamed stream\n");
+      LogDebug("FindStream() found the unnamed stream");
       return data.get();
     }
     // Named stream
     if ((!data->IsUnNamed()) && data->GetAttrName() == name)
     {
-      NTFS_TRACE2("FindStream() found stream named \"%.*ls\"\n",
-                  static_cast<int>(name.size()), name.data());
+      LogDebug("FindStream() found stream named \"{}\"", WideToUtf8(name));
       return data.get();
     }
   }
 
-  NTFS_TRACE2("FindStream() found no stream named \"%.*ls\"\n",
-              static_cast<int>(name.size()), name.data());
+  LogDebug("FindStream() found no stream named \"{}\"", WideToUtf8(name));
   return nullptr;
 }
 
@@ -961,7 +961,7 @@ bool FileRecord<S>::IsDeleted() const noexcept
 {
   if (!file_record_)
   {
-    NTFS_TRACE("IsDeleted() called on a FileRecord with no parsed record\n");
+    LogWarn("IsDeleted() called on a FileRecord with no parsed record");
     return false;
   }
 
@@ -975,7 +975,7 @@ bool FileRecord<S>::IsDirectory() const noexcept
 {
   if (!file_record_)
   {
-    NTFS_TRACE("IsDirectory() called on a FileRecord with no parsed record\n");
+    LogWarn("IsDirectory() called on a FileRecord with no parsed record");
     return false;
   }
 

@@ -85,7 +85,7 @@ const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
   WORD offset_of_attr = GetData()->offset_of_attr;
   if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size_)
   {
-    NTFS_TRACE("Offset of attr must be within the file record buffer\n");
+    LogWarn("Offset of attr must be within the file record buffer");
     return nullptr;
   }
   return reinterpret_cast<const AttrHeaderCommon*>(&GetData()->raw[0] +

@@ -25,11 +25,11 @@ AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
     throw std::runtime_error("Index Root attribute smaller than expected.\n");
   }
 
-  NTFS_TRACE("Attribute: Index Root\n");
+  LogTrace("Attribute: Index Root");
 
   if (!IsFileName())
   {
-    NTFS_TRACE("Index View not supported\n");
+    LogWarn("Index View not supported");
     return;
   }
 
@@ -39,7 +39,7 @@ AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
 template <typename RESIDENT, Strategy S>
 AttrIndexRoot<RESIDENT, S>::~AttrIndexRoot()
 {
-  NTFS_TRACE("AttrIndexRoot deleted\n");
+  LogTrace("AttrIndexRoot deleted");
 }
 
 // Parses every index entry, bounding each step against the resident
@@ -51,7 +51,7 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
   const ULONGLONG data_size = this->GetDataSize();
   const auto data_copy = std::make_shared<BYTE[]>(data_size);
   std::memcpy(data_copy.get(), this->GetData(), data_size);
-  NTFS_TRACE("Index Root: allocated independent copy of resident data\n");
+  LogDebug("Index Root: allocated independent copy of resident data");
 
   const BYTE* const data_end = data_copy.get() + data_size;
   const auto* const index_root_copy =
@@ -62,7 +62,7 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
   if (index_root_copy->entry_offset >
       static_cast<ULONGLONG>(data_end - entry_offset_addr))
   {
-    NTFS_TRACE("Index Root: entry_offset exceeds attribute bounds\n");
+    LogWarn("Index Root: entry_offset exceeds attribute bounds");
     return;
   }
 
@@ -75,13 +75,13 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
     if (reinterpret_cast<const BYTE*>(ie) + offsetof(Data::IndexEntry, stream) >
         data_end)
     {
-      NTFS_TRACE("Index Root: index entry header exceeds attribute bounds\n");
+      LogWarn("Index Root: index entry header exceeds attribute bounds");
       break;
     }
     if (ie->size == 0 ||
         reinterpret_cast<const BYTE*>(ie) + ie->size > data_end)
     {
-      NTFS_TRACE("Index Root: index entry exceeds attribute bounds\n");
+      LogWarn("Index Root: index entry exceeds attribute bounds");
       break;
     }
 
@@ -95,7 +95,7 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 
     if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {
-      NTFS_TRACE("Last Index Entry\n");
+      LogTrace("Last Index Entry");
       break;
     }
 

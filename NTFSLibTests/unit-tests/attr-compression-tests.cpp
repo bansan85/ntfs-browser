@@ -13,23 +13,13 @@
 // AttrNonResident never read comp_unit_size, so compressed clusters came
 // back as raw, undecoded bytes.
 
-#include <cstdio>
 #include <cstring>
-#include <filesystem>
-#include <fstream>
 #include <functional>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-#include <fcntl.h>
-#include <io.h>
-#include <process.h>
-#include <share.h>
-#include <sys/stat.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -44,6 +34,7 @@
 #include "fake-ntfs-image.h"
 #include "lznt1/decompress.h"
 #include "memory-disk-reader.h"
+#include "test-log-sink.h"
 
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
@@ -101,86 +92,15 @@ std::optional<std::vector<BYTE>> ReadRootData(const FileRecord<S>& record,
   return buffer;
 }
 
-// Restores stdout from its destructor, so an assertion failure or exception
-// inside the captured body cannot unwind with stdout still redirected -
-// which would leak the saved descriptor and silence every later test in the
-// binary, including the ones reporting the original failure.
-class StdoutRedirect
-{
- public:
-  explicit StdoutRedirect(const std::filesystem::path& path)
-  {
-    std::fflush(stdout);
-    saved_fd_ = ::_dup(::_fileno(stdout));
-    if (saved_fd_ == -1)
-    {
-      return;
-    }
-
-    int fileFd = -1;
-    if (::_wsopen_s(&fileFd, path.c_str(),
-                    _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY, _SH_DENYNO,
-                    _S_IREAD | _S_IWRITE) != 0)
-    {
-      return;
-    }
-
-    redirected_ = ::_dup2(fileFd, ::_fileno(stdout)) == 0;
-    ::_close(fileFd);
-  }
-
-  StdoutRedirect(StdoutRedirect&&) = delete;
-  StdoutRedirect(const StdoutRedirect&) = delete;
-  StdoutRedirect& operator=(StdoutRedirect&&) = delete;
-  StdoutRedirect& operator=(const StdoutRedirect&) = delete;
-
-  ~StdoutRedirect()
-  {
-    if (saved_fd_ == -1)
-    {
-      return;
-    }
-    std::fflush(stdout);
-    if (redirected_)
-    {
-      ::_dup2(saved_fd_, ::_fileno(stdout));
-    }
-    ::_close(saved_fd_);
-  }
-
-  [[nodiscard]] bool IsRedirected() const noexcept { return redirected_; }
-
- private:
-  int saved_fd_ = -1;
-  bool redirected_ = false;
-};
-
-// Captures stdout (NTFS_TRACE* output) while body runs - the only externally
-// visible signal that a cached decompression was reused.
+// Captures everything the library logs while body runs - the only
+// externally visible signal that a cached decompression was reused. The
+// library logger is already pinned to a trace-level capturing sink; see
+// test-log-sink.h.
 std::string CaptureTrace(const std::function<void()>& body)
 {
-  const std::filesystem::path path =
-      std::filesystem::temp_directory_path() /
-      ("ntfsbrowser-trace-" + std::to_string(::_getpid()) + ".txt");
-
-  bool redirected = false;
-  {
-    const StdoutRedirect redirect(path);
-    redirected = redirect.IsRedirected();
-    if (redirected)
-    {
-      body();
-    }
-  }
-  // Asserted only once stdout is back, so the failure is actually visible.
-  REQUIRE(redirected);
-
-  std::ifstream in(path, std::ios::binary);
-  std::string output((std::istreambuf_iterator<char>(in)),
-                     std::istreambuf_iterator<char>());
-  in.close();
-  std::filesystem::remove(path);
-  return output;
+  (void)NtfsBrowserTests::TakeCapturedLog();
+  body();
+  return NtfsBrowserTests::TakeCapturedLog();
 }
 
 }  // namespace

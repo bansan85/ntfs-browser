@@ -202,6 +202,34 @@ FakeRecord MakeVolumeRecord()
       static_cast<WORD>(sizeof(NtfsBrowser::Attr::VolumeInformation)));
 }
 
+// Builds a fake $Volume record carrying both VOLUME_INFORMATION (so the
+// volume reports NTFS 3.1) and a VOLUME_NAME holding name.
+FakeRecord MakeVolumeRecordWithName(std::wstring_view name)
+{
+  FakeRecord record = MakeVolumeRecord();
+
+  auto& volInfo = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  const DWORD nameOffset = kAttrOffset + volInfo.header.total_size;
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[nameOffset]);
+  attr.header.type = AttrType::VOLUME_NAME;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 1;
+  attr.attr_size = static_cast<DWORD>(name.size() * sizeof(wchar_t));
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  std::memcpy(&record[nameOffset + attr.attr_offset], name.data(),
+              attr.attr_size);
+
+  WriteEndOfAttributesMarker(record, nameOffset + attr.header.total_size);
+  return record;
+}
+
 // Builds a resident $STANDARD_INFORMATION attribute exactly attrSize bytes
 // long, so a fixture can pin it to NTFS 1.2's real minimum size.
 FakeRecord MakeStandardInformationRecordSized(WORD attrSize)
@@ -1541,7 +1569,7 @@ std::vector<BYTE> MakeCompressedIndexBlockContent()
   return content;
 }
 
-}
+}  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
 {
@@ -1587,6 +1615,19 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation()
                                       static_cast<size_t>(MftIdx::VOLUME);
   const FakeRecord record =
       MakeVolumeRecordSized(kMinimalVolumeInformationSize);
+  std::memcpy(image.data() + offset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithVolumeName()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                      static_cast<size_t>(MftIdx::VOLUME);
+  const FakeRecord record = MakeVolumeRecordWithName(kFakeVolumeName);
   std::memcpy(image.data() + offset, record.data(), record.size());
 
   return image;
@@ -2972,4 +3013,4 @@ std::filesystem::path WriteFakeNtfsImage()
   return path;
 }
 
-}
+}  // namespace NtfsBrowserTests

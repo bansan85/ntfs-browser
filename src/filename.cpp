@@ -8,6 +8,7 @@
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
 #include "ntfs-common.h"
+#include "utf.h"
 
 namespace NtfsBrowser
 {
@@ -22,7 +23,7 @@ void Filename::SetFilename(const Attr::Filename& fn)
 // Copy pointer buffers
 void Filename::CopyFilename(const Filename& fn, const Attr::Filename& afn)
 {
-  NTFS_TRACE("Filename Copied\n");
+  LogTrace("Filename Copied");
 
   filename_ = &afn;
   filename_wuc_ = fn.filename_wuc_;
@@ -130,13 +131,14 @@ std::wstring_view Filename::GetFilename() const
       reinterpret_cast<const wchar_t*>(&filename_->name[0]),
       filename_->name_length);
 
-  if (!retval.empty())
+  // Guarded: this runs once per directory entry, and the UTF-8 conversion
+  // below allocates whether or not anything would print it.
+  if (!retval.empty() && IsLogged(Log::Level::kDebug))
   {
-    NTFS_TRACE2("File Name: %.*ls\n", static_cast<int>(retval.size()),
-                retval.data());
-    NTFS_TRACE4("File Permission: %s\t%c%c%c\n",
-                IsDirectory() ? "Directory" : "File", IsReadOnly() ? 'R' : ' ',
-                IsHidden() ? 'H' : ' ', IsSystem() ? 'S' : ' ');
+    LogDebug("File Name: {}", WideToUtf8(retval));
+    LogDebug("File Permission: {}\t{}{}{}",
+             IsDirectory() ? "Directory" : "File", IsReadOnly() ? 'R' : ' ',
+             IsHidden() ? 'H' : ' ', IsSystem() ? 'S' : ' ');
   }
 
   return retval;

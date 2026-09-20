@@ -14,7 +14,7 @@ AttrFileName<RESIDENT, S>::AttrFileName(const AttrHeaderCommon& ahc,
                                         const FileRecord<S>& fr)
     : RESIDENT(ahc, fr)
 {
-  NTFS_TRACE("Attribute: File Name\n");
+  LogTrace("Attribute: File Name");
 
   if (this->GetDataSize() < offsetof(Attr::Filename, name))
   {
@@ -37,7 +37,7 @@ AttrFileName<RESIDENT, S>::AttrFileName(const AttrHeaderCommon& ahc,
 template <typename RESIDENT, Strategy S>
 AttrFileName<RESIDENT, S>::~AttrFileName()
 {
-  NTFS_TRACE("AttrFileName deleted\n");
+  LogTrace("AttrFileName deleted");
 }
 #if 0
 template <typename RESIDENT>

@@ -11,7 +11,7 @@ AttrVolName<RESIDENT, S>::AttrVolName(const AttrHeaderCommon& ahc,
                                       const FileRecord<S>& fr)
     : RESIDENT(ahc, fr)
 {
-  NTFS_TRACE("Attribute: Volume Name\n");
+  LogTrace("Attribute: Volume Name");
 
   name_.resize((this->GetDataSize() / 2) + 1, '\0');
   memcpy(name_.data(), this->GetData(), this->GetDataSize());

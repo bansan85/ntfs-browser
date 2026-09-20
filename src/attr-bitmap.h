@@ -17,7 +17,7 @@ class AttrBitmap : public TYPE_RESIDENT
   AttrBitmap(AttrBitmap const& other) = delete;
   AttrBitmap& operator=(AttrBitmap&& other) noexcept = delete;
   AttrBitmap& operator=(AttrBitmap const& other) = delete;
-  ~AttrBitmap() override { NTFS_TRACE("AttrBitmap deleted\n"); }
+  ~AttrBitmap() override { LogTrace("AttrBitmap deleted"); }
 
  private:
   ULONGLONG bitmap_size_;         // Bitmap data size

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include <windows.h>
@@ -44,6 +45,14 @@ inline constexpr WORD kMinimalVolumeInformationSize = 12;
 // attribute shrunk to kMinimalVolumeInformationSize bytes.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMinimalVolumeInformation();
+
+// Volume name BuildFakeNtfsImageWithVolumeName() stores in $Volume's
+// VOLUME_NAME attribute. ASCII, so its UTF-8 form is the same bytes.
+inline constexpr std::wstring_view kFakeVolumeName = L"TESTVOL";
+
+// Same volume as BuildFakeNtfsImage(), plus a VOLUME_NAME attribute
+// holding kFakeVolumeName on $Volume (#3).
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithVolumeName();
 
 // Directory record index: only attribute is a resident $ATTRIBUTE_LIST
 // relocating $INDEX_ROOT to kIndexExtensionIdx.

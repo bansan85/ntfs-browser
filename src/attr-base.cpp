@@ -51,7 +51,7 @@ std::wstring_view AttrBase<S>::GetAttrName() const
 {
   if (attr_header_.name_length == 0)
   {
-    NTFS_TRACE("Attribute is unnamed\n");
+    LogTrace("Attribute is unnamed");
     return {};
   }
 
@@ -59,7 +59,7 @@ std::wstring_view AttrBase<S>::GetAttrName() const
           (static_cast<ULONGLONG>(attr_header_.name_length) * sizeof(WCHAR)) >
       attr_header_.total_size)
   {
-    NTFS_TRACE("Attribute name exceeds attribute bounds.\n");
+    LogWarn("Attribute name exceeds attribute bounds.");
     return {};
   }
 
@@ -68,7 +68,7 @@ std::wstring_view AttrBase<S>::GetAttrName() const
                                attr_header_.name_offset),
                            attr_header_.name_length};
 
-  NTFS_TRACE("Unicode Attribute Name\n");
+  LogTrace("Unicode Attribute Name");
   return retval;
 }
 

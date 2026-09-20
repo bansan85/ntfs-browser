@@ -23,13 +23,13 @@ AttrStdInfo<RESIDENT, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
         "Standard Information attribute smaller than expected.\n");
   }
 
-  NTFS_TRACE("Attribute: Standard Information\n");
+  LogTrace("Attribute: Standard Information");
 }
 
 template <typename RESIDENT, Strategy S>
 AttrStdInfo<RESIDENT, S>::~AttrStdInfo()
 {
-  NTFS_TRACE("AttrStdInfo deleted\n");
+  LogTrace("AttrStdInfo deleted");
 }
 
 // Change from UTC time to local time

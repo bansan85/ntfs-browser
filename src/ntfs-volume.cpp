@@ -12,9 +12,26 @@
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
 #include "ntfs-common.h"
+#include "utf.h"
 
 namespace NtfsBrowser
 {
+namespace
+{
+
+// AttrVolName pads its buffer with a terminator that its view still
+// covers. UTF-8 has no terminator convention, so the padding must go
+// before converting, or it becomes a NUL byte inside the log line.
+std::wstring_view TrimTrailingNuls(std::wstring_view name) noexcept
+{
+  while (!name.empty() && name.back() == L'\0')
+  {
+    name.remove_suffix(1);
+  }
+  return name;
+}
+
+}  // namespace
 
 #ifdef _WIN32
 template <Strategy S>
@@ -89,13 +106,12 @@ void NtfsVolume<S>::Init()
             vec.front().get())
             ->GetVersion();
   }
-  NTFS_TRACE2("NTFS volume version: %u.%u\n", version_major_, version_minor_);
+  LogInfo("NTFS volume version: {}.{}", version_major_, version_minor_);
   if (version_major_ < 3)  // NT4 ?
   {
     return;
   }
 
-#ifdef _DEBUG
   const auto& vec2 = vol.getAttr(AttrType::VOLUME_NAME);
   if (!vec2.empty())
   {
@@ -106,7 +122,7 @@ void NtfsVolume<S>::Init()
               const AttrVolName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
               vec2.front().get())
               ->GetName();
-      NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
+      LogInfo("NTFS volume name: {}", WideToUtf8(TrimTrailingNuls(volname)));
     }
     else
     {
@@ -115,10 +131,9 @@ void NtfsVolume<S>::Init()
               const AttrVolName<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
               vec2.front().get())
               ->GetName();
-      NTFS_TRACE1("NTFS volume name: %ls\n", volname.data());
+      LogInfo("NTFS volume name: {}", WideToUtf8(TrimTrailingNuls(volname)));
     }
   }
-#endif
 
   mft_record_.SetAttrMask(Mask::DATA);
   if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
@@ -148,7 +163,7 @@ bool NtfsVolume<S>::OpenVolume(_TCHAR volume)
   // Verify parameter
   if (!_istalpha(volume))
   {
-    NTFS_TRACE("Volume name error, should be like 'C', 'D'\n");
+    LogError("Volume name error, should be like 'C', 'D'");
     return false;
   }
 
@@ -165,7 +180,7 @@ bool NtfsVolume<S>::OpenVolume(std::wstring_view path)
 {
   if (!volume_.Open(path))
   {
-    NTFS_TRACE("Cannnot open volume\n");
+    LogError("Cannnot open volume");
     return false;
   }
 
@@ -192,7 +207,7 @@ bool NtfsVolume<S>::ParseBootSector()
       volume_.Read(frAddr, default_sector_size);
   if (!bpb_buffer)
   {
-    NTFS_TRACE("Read boot sector error\n");
+    LogError("Read boot sector error");
     return false;
   }
   auto bpb = reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
@@ -200,28 +215,28 @@ bool NtfsVolume<S>::ParseBootSector()
   if (strncmp(reinterpret_cast<const char*>(&bpb->signature[0]), NTFS_SIGNATURE,
               sizeof(bpb->signature)) != 0)
   {
-    NTFS_TRACE("Volume file system is not NTFS\n");
+    LogWarn("Volume file system is not NTFS");
     return false;
   }
 
   // Log important volume parameters
 
   sector_size_ = bpb->bytes_per_sector;
-  NTFS_TRACE1("Sector Size = %u bytes\n", sector_size_);
+  LogInfo("Sector Size = {} bytes", sector_size_);
 
   // Sector size must be >= 2 to prevent integer underflow in fixup-patch pointer arithmetic.
   if (sector_size_ < sizeof(WORD))
   {
-    NTFS_TRACE("Sector Size must be at least 2 bytes\n");
+    LogError("Sector Size must be at least 2 bytes");
     return false;
   }
 
   cluster_size_ = sector_size_ * bpb->sectors_per_cluster;
-  NTFS_TRACE1("Cluster Size = %u bytes\n", cluster_size_);
+  LogInfo("Cluster Size = {} bytes", cluster_size_);
 
   if (cluster_size_ == 0)
   {
-    NTFS_TRACE("Cluster Size can't be null\n");
+    LogError("Cluster Size can't be null");
     return false;
   }
   cluster_buffer_.resize(cluster_size_);
@@ -232,7 +247,7 @@ bool NtfsVolume<S>::ParseBootSector()
   // behaviour), or yield a file_record_size_ no real volume could have.
   if (sz < -12 || sz > 8)
   {
-    NTFS_TRACE("clusters_per_file_record magnitude out of range\n");
+    LogError("clusters_per_file_record magnitude out of range");
     return false;
   }
 
@@ -244,21 +259,20 @@ bool NtfsVolume<S>::ParseBootSector()
   {
     file_record_size_ = 1U << static_cast<unsigned char>(-sz);
   }
-  NTFS_TRACE1("FileRecord Size = %u bytes\n", file_record_size_);
+  LogInfo("FileRecord Size = {} bytes", file_record_size_);
 
   // Rejects a size too small for the header, or not a whole number of
   // sectors.
   if (file_record_size_ < kMinFileRecordHeaderSize ||
       file_record_size_ % sector_size_ != 0)
   {
-    NTFS_TRACE("FileRecord Size is invalid\n");
+    LogError("FileRecord Size is invalid");
     return false;
   }
 
   if (file_record_size_ > kMaxFileRecordSize)
   {
-    NTFS_TRACE(
-        "FileRecord Size exceeds the maximum supported file record size\n");
+    LogError("FileRecord Size exceeds the maximum supported file record size");
     return false;
   }
 
@@ -268,7 +282,7 @@ bool NtfsVolume<S>::ParseBootSector()
   // behaviour), or yield an index_block_size_ no real volume could have.
   if (sz < -12 || sz > 8)
   {
-    NTFS_TRACE("clusters_per_index_block magnitude out of range\n");
+    LogError("clusters_per_index_block magnitude out of range");
     return false;
   }
 
@@ -280,14 +294,14 @@ bool NtfsVolume<S>::ParseBootSector()
   {
     index_block_size_ = 1U << static_cast<unsigned char>(-sz);
   }
-  NTFS_TRACE1("IndexBlock Size = %u bytes\n", index_block_size_);
+  LogInfo("IndexBlock Size = {} bytes", index_block_size_);
 
   // Rejects a size too small for the header, or not a whole number of
   // sectors.
   if (index_block_size_ < sizeof(Data::IndexBlock) ||
       index_block_size_ % sector_size_ != 0)
   {
-    NTFS_TRACE("IndexBlock Size is invalid\n");
+    LogError("IndexBlock Size is invalid");
     return false;
   }
 
@@ -297,7 +311,7 @@ bool NtfsVolume<S>::ParseBootSector()
       bpb->lcn_mft > (std::numeric_limits<ULONGLONG>::max)() / cluster_size_;
   mft_addr_ = mft_addr_overflows ? (std::numeric_limits<ULONGLONG>::max)()
                                  : bpb->lcn_mft * cluster_size_;
-  NTFS_TRACE1("MFT address = 0x%016I64X\n", mft_addr_);
+  LogInfo("MFT address = 0x{:016X}", mft_addr_);
 
   // Leaves headroom for the per-record byte offset added to mft_addr_
   // later, before it is narrowed to a LONGLONG.
@@ -306,7 +320,7 @@ bool NtfsVolume<S>::ParseBootSector()
 
   if (mft_addr_overflows || mft_addr_ > kMaxPlausibleMftAddr)
   {
-    NTFS_TRACE("MFT address is invalid\n");
+    LogError("MFT address is invalid");
     return false;
   }
 

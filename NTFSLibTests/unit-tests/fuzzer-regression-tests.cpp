@@ -31,10 +31,13 @@ std::vector<fs::path> ListRegressionTestcases()
 }
 
 // Keyed by testcase file name (NTFSLibTests/fuzz/data/<key>). Value is every
-// substring expected somewhere in the process' stdout, coming from the
-// NTFS_TRACE*() call(s) (direct literal, or an e.what() relayed by
-// FileRecord::ParseAttrs()) that the corresponding fix added -- a single
-// testcase can exercise more than one of a fix's bounds checks in one run.
+// substring expected somewhere in the child's output, coming from the
+// Log*() call(s) (direct literal, or an e.what() relayed by
+// LogException()) that the corresponding fix added -- a single testcase
+// can exercise more than one of a fix's bounds checks in one run.
+// The console target splits by level: warn and error reach stderr, the
+// rest stdout. These substrings are matched against both, because
+// RunFuzzerOnFile() gives the child one pipe for the two streams.
 const std::unordered_map<std::string, std::vector<std::string>>
     kExpectedErrorMessages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
@@ -288,7 +291,7 @@ TEST_CASE("NtfsFuzzerAfl does not crash on saved regression testcases",
       const auto it = kExpectedErrorMessages.find(file.filename().string());
       if (it != kExpectedErrorMessages.end())
       {
-        INFO("captured stdout:\n" << result.output);
+        INFO("captured output:\n" << result.output);
         for (const std::string& message : it->second)
         {
           CHECK_THAT(result.output,

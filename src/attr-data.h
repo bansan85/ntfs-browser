@@ -15,15 +15,15 @@ class AttrData : public TYPE_RESIDENT
   AttrData(const AttrHeaderCommon& ahc, const FileRecord<S>& fr)
       : TYPE_RESIDENT(ahc, fr)
   {
-    NTFS_TRACE1("Attribute: Data (%sResident)\n",
-                this->IsNonResident() ? "Non" : "");
+    LogTrace("Attribute: Data ({}Resident)",
+             this->IsNonResident() ? "Non" : "");
   }
   AttrData(AttrData&& other) noexcept = delete;
   AttrData(AttrData const& other) = delete;
   AttrData& operator=(AttrData&& other) noexcept = delete;
   AttrData& operator=(AttrData const& other) = delete;
 
-  ~AttrData() override { NTFS_TRACE("AttrData deleted\n"); }
+  ~AttrData() override { LogTrace("AttrData deleted"); }
 };  // AttrData
 
 }  // namespace NtfsBrowser
