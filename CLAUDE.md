@@ -69,8 +69,6 @@ A boolean condition needs a comment above it once it combines at least four dist
 
 Skip the comment entirely if a trace/logging call inside the same branch already states, in its own message, what the condition rejects.
 
-Commit messages follow the `git-commit` skill.
-
 ## Architecture
 
 ### Strategy-templated core
