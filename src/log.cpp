@@ -2,9 +2,11 @@
 #include <array>
 #include <cstddef>
 #include <exception>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -18,6 +20,14 @@
 #include <ntfs-browser/log.h>
 
 #include "ntfs-common.h"
+
+// Config::file_path is handed to the file sink as-is. The build defines
+// SPDLOG_WCHAR_FILENAMES on Windows for that: without it spdlog takes a
+// narrow name and opens it through the active ANSI code page.
+static_assert(
+    std::is_same_v<spdlog::filename_t, std::filesystem::path::string_type>,
+    "spdlog's filename type must match the platform's native path "
+    "type; check SPDLOG_WCHAR_FILENAMES");
 
 namespace NtfsBrowser
 {
@@ -179,7 +189,7 @@ bool Apply(const Log::Config& config) noexcept
         // Appends: a second Configure() with the same path must not wipe
         // what the first one already wrote.
         auto file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
-            config.file_path, false);
+            config.file_path.native(), false);
         file->set_level(ToSpdlog(config.file_level));
         file->set_pattern(std::string(kFilePattern));
         sinks.push_back(file);
@@ -221,12 +231,24 @@ spdlog::logger* EnsureLogger()
   return holder.logger.get();
 }
 
+// True if text spells out the ASCII string ascii. Every keyword --log
+// accepts is ASCII, so one parser can serve both a narrow and a wide argv.
+template <typename CharT>
+bool EqualsAscii(std::basic_string_view<CharT> text,
+                 std::string_view ascii) noexcept
+{
+  return std::equal(text.begin(), text.end(), ascii.begin(), ascii.end(),
+                    [](CharT lhs, char rhs)
+                    { return lhs == static_cast<CharT>(rhs); });
+}
+
 // Maps a --log level name onto its level. False if the name is unknown.
-bool ParseLevel(std::string_view text, Log::Level& level) noexcept
+template <typename CharT>
+bool ParseLevel(std::basic_string_view<CharT> text, Log::Level& level) noexcept
 {
   for (const auto& [name, value] : kLevelNames)
   {
-    if (name == text)
+    if (EqualsAscii(text, name))
     {
       level = value;
       return true;
@@ -257,29 +279,37 @@ namespace NtfsBrowser::Log
 
 bool Configure(const Config& config) noexcept { return Apply(config); }
 
-bool ParseOption(std::string_view arg, Config& config) noexcept
+namespace
 {
-  if (!arg.starts_with(kOptionPrefix))
+
+// ParseOption(), over whichever character type the executable's argv has.
+template <typename CharT>
+bool ParseOptionImpl(std::basic_string_view<CharT> arg, Config& config) noexcept
+{
+  if (arg.size() < kOptionPrefix.size() ||
+      !EqualsAscii(arg.substr(0, kOptionPrefix.size()), kOptionPrefix))
   {
     return false;
   }
 
-  const std::string_view value = arg.substr(kOptionPrefix.size());
-  const size_t targetEnd = value.find(':');
-  if (targetEnd == std::string_view::npos)
+  constexpr CharT kSeparator = static_cast<CharT>(':');
+
+  const std::basic_string_view<CharT> value = arg.substr(kOptionPrefix.size());
+  const size_t targetEnd = value.find(kSeparator);
+  if (targetEnd == std::basic_string_view<CharT>::npos)
   {
     return false;
   }
 
-  const std::string_view target = value.substr(0, targetEnd);
-  const std::string_view rest = value.substr(targetEnd + 1);
+  const std::basic_string_view<CharT> target = value.substr(0, targetEnd);
+  const std::basic_string_view<CharT> rest = value.substr(targetEnd + 1);
   // Only the first two colons split the option, so "C:\dir\ntfs.log"
   // survives as one path field.
-  const size_t levelEnd = rest.find(':');
-  const std::string_view levelText = rest.substr(0, levelEnd);
-  const bool hasPath = levelEnd != std::string_view::npos;
-  const std::string_view path =
-      hasPath ? rest.substr(levelEnd + 1) : std::string_view{};
+  const size_t levelEnd = rest.find(kSeparator);
+  const std::basic_string_view<CharT> levelText = rest.substr(0, levelEnd);
+  const bool hasPath = levelEnd != std::basic_string_view<CharT>::npos;
+  const std::basic_string_view<CharT> path =
+      hasPath ? rest.substr(levelEnd + 1) : std::basic_string_view<CharT>{};
 
   Level level = Level::kOff;
   if (!ParseLevel(levelText, level))
@@ -289,25 +319,25 @@ bool ParseOption(std::string_view arg, Config& config) noexcept
 
   // A path field belongs to the file target only, and an empty one names
   // no file at all.
-  if (hasPath && (target != kFileTarget || path.empty()))
+  if (hasPath && (!EqualsAscii(target, kFileTarget) || path.empty()))
   {
     return false;
   }
 
-  if (target == kConsoleTarget)
+  if (EqualsAscii(target, kConsoleTarget))
   {
     config.console_level = level;
     return true;
   }
 
-  if (target != kFileTarget)
+  if (!EqualsAscii(target, kFileTarget))
   {
     return false;
   }
 
-  // Built before anything is committed: assign() allocates, and config
-  // must come back untouched whenever this returns false.
-  std::string filePath;
+  // Built before anything is committed: the conversion allocates, and
+  // config must come back untouched whenever this returns false.
+  std::filesystem::path filePath;
   if (hasPath)
   {
     try
@@ -327,6 +357,20 @@ bool ParseOption(std::string_view arg, Config& config) noexcept
   }
   return true;
 }
+
+}  // namespace
+
+bool ParseOption(std::string_view arg, Config& config) noexcept
+{
+  return ParseOptionImpl(arg, config);
+}
+
+#ifdef _WIN32
+bool ParseOption(std::wstring_view arg, Config& config) noexcept
+{
+  return ParseOptionImpl(arg, config);
+}
+#endif
 
 }  // namespace NtfsBrowser::Log
 

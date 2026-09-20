@@ -69,10 +69,10 @@ class RestoreCaptureSink
 class TempFile
 {
  public:
-  explicit TempFile(const std::string& tag)
+  explicit TempFile(std::wstring_view tag)
       : path_(fs::temp_directory_path() /
-              ("ntfsbrowser-log-" + tag + "-" +
-               std::to_string(GetCurrentProcessId()) + ".txt"))
+              (L"ntfsbrowser-log-" + std::wstring(tag) + L"-" +
+               std::to_wstring(GetCurrentProcessId()) + L".txt"))
   {
     std::error_code ec;
     fs::remove(path_, ec);
@@ -90,7 +90,6 @@ class TempFile
   }
 
   [[nodiscard]] const fs::path& Path() const noexcept { return path_; }
-  [[nodiscard]] std::string Utf8Path() const { return path_.string(); }
 
   [[nodiscard]] std::string Read() const
   {
@@ -132,8 +131,8 @@ ChildOutput RunFuzzer(const std::wstring& extraArgs)
   REQUIRE(fs::exists(exe));
   REQUIRE(fs::exists(testcase));
 
-  const TempFile outFile("stdout");
-  const TempFile errFile("stderr");
+  const TempFile outFile(L"stdout");
+  const TempFile errFile(L"stderr");
 
   HANDLE outHandle = CreateInheritableOutput(outFile.Path());
   HANDLE errHandle = CreateInheritableOutput(errFile.Path());
@@ -198,6 +197,14 @@ TEST_CASE("the --log option parses a target and a level", "[logging]")
     CHECK(config.file_path == "C:\\tmp\\ntfs.log");
   }
 
+  SECTION("wide option, path kept as wide characters")
+  {
+    REQUIRE(NtfsBrowser::Log::ParseOption(
+        L"--log=file:trace:C:\\tmp\\\u30ed.log", config));
+    CHECK(config.file_level == Level::kTrace);
+    CHECK(config.file_path == fs::path(L"C:\\tmp\\\u30ed.log"));
+  }
+
   SECTION("repeated, once per target")
   {
     REQUIRE(NtfsBrowser::Log::ParseOption("--log=console:error", config));
@@ -257,12 +264,12 @@ TEST_CASE("the volume name is logged without its terminator", "[logging]")
 TEST_CASE("each sink keeps its own level", "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile logFile("levels");
+  const TempFile logFile(L"levels");
 
   Config config;
   config.console_level = Level::kOff;
   config.file_level = Level::kWarn;
-  config.file_path = logFile.Utf8Path();
+  config.file_path = logFile.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   NtfsBrowser::LogTrace("trace-only-line");
@@ -283,12 +290,12 @@ TEST_CASE("each sink keeps its own level", "[logging]")
 TEST_CASE("a file sink at trace records every level", "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile logFile("trace");
+  const TempFile logFile(L"trace");
 
   Config config;
   config.console_level = Level::kOff;
   config.file_level = Level::kTrace;
-  config.file_path = logFile.Utf8Path();
+  config.file_path = logFile.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   NtfsBrowser::LogTrace("recorded-trace");
@@ -304,12 +311,12 @@ TEST_CASE("a file sink at trace records every level", "[logging]")
 TEST_CASE("both targets off writes nothing at all", "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile logFile("silent");
+  const TempFile logFile(L"silent");
 
   Config config;
   config.console_level = Level::kOff;
   config.file_level = Level::kOff;
-  config.file_path = logFile.Utf8Path();
+  config.file_path = logFile.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   NtfsBrowser::LogError("never-written");
@@ -322,12 +329,12 @@ TEST_CASE("a message carrying braces is not treated as a format string",
           "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile logFile("braces");
+  const TempFile logFile(L"braces");
 
   Config config;
   config.console_level = Level::kOff;
   config.file_level = Level::kTrace;
-  config.file_path = logFile.Utf8Path();
+  config.file_path = logFile.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   // What LogException() relays: runtime text, never a format string.
@@ -363,20 +370,44 @@ TEST_CASE("Configure() on an unwritable path fails without throwing",
   NtfsBrowser::LogError("still-logging");
 }
 
+TEST_CASE("a log path outside the ANSI code page still opens", "[logging]")
+{
+  const RestoreCaptureSink restore;
+  // Japanese kana, which no Western Windows ANSI code page can express.
+  // The file only opens if the path stays wide from --log through to the
+  // sink's fopen().
+  const TempFile logFile(L"\u30ed\u30b0");
+
+  Config config;
+  REQUIRE(NtfsBrowser::Log::ParseOption(
+      std::wstring(L"--log=file:trace:") + logFile.Path().wstring(), config));
+  CHECK(config.file_path == logFile.Path());
+
+  config.console_level = Level::kOff;
+  REQUIRE(NtfsBrowser::Log::Configure(config));
+
+  NtfsBrowser::LogError("wide-path-line");
+
+  NtfsBrowserTests::InstallCaptureSink();
+
+  CHECK(fs::exists(logFile.Path()));
+  CHECK_THAT(logFile.Read(), ContainsSubstring("wide-path-line"));
+}
+
 TEST_CASE("Configure() replaces the previous sinks wholesale", "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile first("first");
-  const TempFile second("second");
+  const TempFile first(L"first");
+  const TempFile second(L"second");
 
   Config config;
   config.console_level = Level::kOff;
   config.file_level = Level::kTrace;
-  config.file_path = first.Utf8Path();
+  config.file_path = first.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
   NtfsBrowser::LogError("into-first");
 
-  config.file_path = second.Utf8Path();
+  config.file_path = second.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
   NtfsBrowser::LogError("into-second");
 
@@ -441,7 +472,7 @@ TEST_CASE("the console target splits by level across the two streams",
 TEST_CASE("the file target records what the console target is denied",
           "[logging]")
 {
-  const TempFile logFile("child");
+  const TempFile logFile(L"child");
 
   const ChildOutput result =
       RunFuzzer(L"--log=console:off \"--log=file:trace:" +

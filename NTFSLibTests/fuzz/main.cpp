@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <exception>
 #include <optional>
 #include <random>
@@ -189,7 +190,7 @@ bool RunIteration(unsigned seed, DWORD& crashCode)
 
 // With no args, fuzzes forever until Ctrl+C. With one numeric arg, fuzzes
 // for that many iterations. With "--seed <seed>", replays one iteration.
-int main(int argc, char* argv[])
+int wmain(int argc, wchar_t* argv[])
 {
   // Unbuffered, so an escaping CRT abort() can't strand output.
   setvbuf(stdout, nullptr, _IONBF, 0);
@@ -207,14 +208,14 @@ int main(int argc, char* argv[])
   // --log= options are consumed here; args holds everything else, so the
   // positional argument checks below stay as they were.
   Log::Config logConfig;
-  std::vector<char*> args{argv[0]};
+  std::vector<wchar_t*> args{argv[0]};
   for (int i = 1; i < argc; i++)
   {
-    if (std::string_view(argv[i]).starts_with(Log::kOptionPrefix))
+    if (std::wstring_view(argv[i]).starts_with(Log::kOptionPrefixW))
     {
       if (!Log::ParseOption(argv[i], logConfig))
       {
-        fprintf(stderr, "usage: %s [--log=...] [iterations | --seed <seed>]\n",
+        fprintf(stderr, "usage: %ls [--log=...] [iterations | --seed <seed>]\n",
                 argv[0]);
         fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str());
         return 1;
@@ -225,15 +226,15 @@ int main(int argc, char* argv[])
   }
   if (!Log::Configure(logConfig))
   {
-    fprintf(stderr, "Cannot open log file %s\n", logConfig.file_path.c_str());
+    fprintf(stderr, "Cannot open log file %ls\n", logConfig.file_path.c_str());
   }
 
   const size_t argCount = args.size();
 
-  if (argCount == 3 && std::strcmp(args[1], "--seed") == 0)
+  if (argCount == 3 && std::wcscmp(args[1], L"--seed") == 0)
   {
     const unsigned seed =
-        static_cast<unsigned>(std::strtoul(args[2], nullptr, 0));
+        static_cast<unsigned>(std::wcstoul(args[2], nullptr, 0));
     DWORD crashCode = 0;
     printf("Replaying seed=%u\n", seed);
     if (!RunIteration(seed, crashCode))
@@ -248,7 +249,7 @@ int main(int argc, char* argv[])
   std::optional<unsigned long long> maxIterations;
   if (argCount == 2)
   {
-    maxIterations = std::strtoull(args[1], nullptr, 0);
+    maxIterations = std::wcstoull(args[1], nullptr, 0);
   }
 
   SetConsoleCtrlHandler(OnConsoleEvent, TRUE);

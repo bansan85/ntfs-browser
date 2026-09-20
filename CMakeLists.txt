@@ -29,6 +29,14 @@ set(SPDLOG_BUILD_BENCH
 set(SPDLOG_SYSTEM_INCLUDES
     ON
     CACHE BOOL "" FORCE)
+# Log::Config::file_path is a std::filesystem::path, whose native form is wide
+# on Windows. Without this spdlog takes a narrow file name and opens it through
+# the active ANSI code page, which cannot express every path. spdlog forces this
+# option back off on the platforms where it does not apply, so it needs no
+# if(WIN32) here.
+set(SPDLOG_WCHAR_FILENAMES
+    ON
+    CACHE BOOL "" FORCE)
 add_subdirectory("3rdparty/spdlog")
 # spdlog already exports its own symbols with __declspec. Letting CMake generate
 # a .def for it on top makes the linker warn about every one.

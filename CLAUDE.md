@@ -55,6 +55,8 @@ The console-app executables (`NtfsDir`, `NtfsDir2`, `NtfsFuzzer`, `NtfsFuzzerAfl
 
 The option MAY be repeated, once per target. It splits on the first two colons only, so `C:\dir\ntfs.log` survives. The path field belongs to the `file` target; without it the file sink writes `ntfs-browser.log` in the current directory.
 
+`Log::Config::file_path` is a `std::filesystem::path`, and the build defines `SPDLOG_WCHAR_FILENAMES`, so on Windows a log path stays wide all the way to `_wfsopen` and is not limited to the active ANSI code page. The four console executables therefore have a `wmain`; `NtfsFuzzerAfl`, which also builds on Linux, picks `wmain`/`main` and the matching `argv` character type through `NTFS_FUZZ_MAIN`/`ArgChar`. `ParseOption()` has a `std::wstring_view` overload on Windows for that wide `argv`, alongside the portable `std::string_view` one.
+
 The console target is split by severity: `error` and `warn` go to stderr, `info`, `debug` and `trace` go to stdout. A message reaches exactly one stream. With no `Configure()` call the console target sits at `warn` and there is no file sink, so a consumer sees warnings and errors on stderr and nothing on stdout.
 
 `NtfsFuzzerAfl` defaults to `--log=console:trace`, which is what the regression corpus in [NTFSLibTests/unit-tests/fuzzer-regression-tests.cpp](NTFSLibTests/unit-tests/fuzzer-regression-tests.cpp) asserts against.

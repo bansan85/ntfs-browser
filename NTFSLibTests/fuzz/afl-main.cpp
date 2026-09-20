@@ -24,8 +24,30 @@ using NtfsFuzz::kGapCollationSearchName;
 using NtfsFuzz::kNamedDataStreamName;
 using NtfsFuzz::LoopingDiskReader;
 
+// Windows gives a wmain() the command line as wide characters. A narrow
+// main() only ever sees it through the active ANSI code page, which cannot
+// express every path. Every other platform has narrow argv and nothing else.
+#ifdef _WIN32
+  #define NTFS_FUZZ_MAIN wmain
+  // printf conversion for a native argv or path string.
+  #define NTFS_FUZZ_NATIVE "%ls"
+using ArgChar = wchar_t;
+#else
+  #define NTFS_FUZZ_MAIN main
+  // printf conversion for a native argv or path string.
+  #define NTFS_FUZZ_NATIVE "%s"
+using ArgChar = char;
+#endif
+
 namespace
 {
+
+// Log::kOptionPrefix in the character type this platform's argv has.
+#ifdef _WIN32
+constexpr std::wstring_view kLogPrefix = Log::kOptionPrefixW;
+#else
+constexpr std::string_view kLogPrefix = Log::kOptionPrefix;
+#endif
 
 // NtfsBpb::signature sits 3 bytes in, after the boot sector's jump instruction.
 constexpr size_t kBpbSignatureOffset = 3;
@@ -122,9 +144,10 @@ void RunGuarded(const std::vector<BYTE>& data,
 }
 
 // Prints command-line usage help.
-void Usage(const char* program)
+void Usage(const ArgChar* program)
 {
-  std::fprintf(stderr, "usage: %s [--log=...] <input-file>\n", program);
+  std::fprintf(stderr, "usage: " NTFS_FUZZ_NATIVE " [--log=...] <input-file>\n",
+               program);
   std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str());
 }
 
@@ -132,16 +155,16 @@ void Usage(const char* program)
 
 // Runs one AFL testcase file (the non-option argument) through the library
 // once.
-int main(int argc, char* argv[])
+int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
 {
   // Trace on the console by default, so an afl-fuzz run and the saved
   // regression corpus both keep producing every message without a flag.
   Log::Config logConfig{.console_level = Log::Level::kTrace};
-  const char* input = nullptr;
+  const ArgChar* input = nullptr;
 
   for (int i = 1; i < argc; i++)
   {
-    if (std::string_view(argv[i]).starts_with(Log::kOptionPrefix))
+    if (std::basic_string_view<ArgChar>(argv[i]).starts_with(kLogPrefix))
     {
       if (!Log::ParseOption(argv[i], logConfig))
       {
@@ -166,7 +189,7 @@ int main(int argc, char* argv[])
 
   if (!Log::Configure(logConfig))
   {
-    std::fprintf(stderr, "Cannot open log file %s\n",
+    std::fprintf(stderr, "Cannot open log file " NTFS_FUZZ_NATIVE "\n",
                  logConfig.file_path.c_str());
   }
 

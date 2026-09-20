@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
+#include <filesystem>
 #include <string_view>
 
 namespace NtfsBrowser::Log
@@ -26,11 +26,19 @@ enum class Level : std::uint8_t
 // Prefix of the command-line argument ParseOption() accepts.
 inline constexpr std::string_view kOptionPrefix = "--log=";
 
+#ifdef _WIN32
+// kOptionPrefix for an executable whose entry point is wmain(), whose
+// argv is wide.
+inline constexpr std::wstring_view kOptionPrefixW = L"--log=";
+#endif
+
 // One line of help for --log, for an executable's usage text.
 inline constexpr std::string_view kOptionUsage =
     "--log=<console|file>:<off|error|warn|info|debug|trace>[:<path>]";
 
 // Where the file sink writes when --log=file:<level> names no path.
+// Relative, so it lands in the current directory. ASCII, so it means the
+// same file whichever encoding a platform's paths use.
 inline constexpr std::string_view kDefaultFilePath = "ntfs-browser.log";
 
 // Name of the logger the library emits through. It is deliberately not the
@@ -44,10 +52,11 @@ struct Config
 {
   Level console_level = Level::kWarn;
   Level file_level = Level::kOff;
-  // Narrow bytes, as the logging backend takes them: on Windows a path
-  // outside the active ANSI code page cannot be opened, and the only
-  // report of that is Configure() returning false.
-  std::string file_path{kDefaultFilePath};
+  // A path, not a byte string: on Windows it holds the wide characters
+  // the filesystem itself uses, so a file outside the active ANSI code
+  // page opens. Assigning a narrow string still reads it through that
+  // code page, so such a name MUST be assigned as a std::wstring.
+  std::filesystem::path file_path{kDefaultFilePath};
 };
 
 // Applies config, replacing the library logger's sinks and their levels
@@ -65,5 +74,13 @@ bool Configure(const Config& config) noexcept;
 // drive letter. Returns false - leaving config untouched - if arg lacks
 // kOptionPrefix, or names an unknown target or level.
 bool ParseOption(std::string_view arg, Config& config) noexcept;
+
+#ifdef _WIN32
+// ParseOption() for an executable whose entry point is wmain(). The path
+// field reaches file_path unconverted, which the narrow overload cannot
+// do: it takes what the active ANSI code page can express, and Windows
+// hands a narrow main() nothing else.
+bool ParseOption(std::wstring_view arg, Config& config) noexcept;
+#endif
 
 }  // namespace NtfsBrowser::Log

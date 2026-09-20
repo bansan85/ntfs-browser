@@ -26,13 +26,13 @@ void usage()
 
 // Strips a leading drive-letter prefix (eg. "c:") off *ppath and returns
 // the letter. Advances *ppath past the prefix; returns '\0' on no match.
-char getvolume(char** ppath)
+wchar_t getvolume(wchar_t** ppath)
 {
-  char* p = *ppath;
+  wchar_t* p = *ppath;
 
   while (*p)
   {
-    if (*p == ' ' || *p == '"')
+    if (*p == L' ' || *p == L'"')
     {
       p++;
     }
@@ -41,17 +41,17 @@ char getvolume(char** ppath)
       break;
     }
   }
-  if (*p == '\0')
+  if (*p == L'\0')
   {
-    return '\0';
+    return L'\0';
   }
 
-  const char volname = *p;
+  const wchar_t volname = *p;
   p++;
 
   while (*p)
   {
-    if (*p == ' ')
+    if (*p == L' ')
     {
       p++;
     }
@@ -60,19 +60,19 @@ char getvolume(char** ppath)
       break;
     }
   }
-  if (*p == '\0')
+  if (*p == L'\0')
   {
-    return '\0';
+    return L'\0';
   }
 
-  if (*p != ':')
+  if (*p != L':')
   {
-    return '\0';
+    return L'\0';
   }
 
   while (*p)
   {
-    if (*p != '\\')
+    if (*p != L'\\')
     {
       p++;
     }
@@ -83,7 +83,7 @@ char getvolume(char** ppath)
   }
   while (*p)
   {
-    if (*p == '\\' || *p == '"')
+    if (*p == L'\\' || *p == L'"')
     {
       p++;
     }
@@ -192,14 +192,14 @@ void printfile(const IndexEntry& ie, void* context)
   }
 }
 
-int main(int argc, char* argv[])
+int wmain(int argc, wchar_t* argv[])
 {
   Log::Config logConfig;
-  char* path = nullptr;
+  wchar_t* path = nullptr;
 
   for (int i = 1; i < argc; i++)
   {
-    if (std::string_view(argv[i]).starts_with(Log::kOptionPrefix))
+    if (std::wstring_view(argv[i]).starts_with(Log::kOptionPrefixW))
     {
       if (!Log::ParseOption(argv[i], logConfig))
       {
@@ -225,11 +225,11 @@ int main(int argc, char* argv[])
 
   if (!Log::Configure(logConfig))
   {
-    fprintf(stderr, "Cannot open log file %s\n", logConfig.file_path.c_str());
+    fprintf(stderr, "Cannot open log file %ls\n", logConfig.file_path.c_str());
   }
 
-  const char volname = getvolume(&path);
-  if (volname == '\0')
+  const wchar_t volname = getvolume(&path);
+  if (volname == L'\0')
   {
     usage();
     return -1;
@@ -238,7 +238,7 @@ int main(int argc, char* argv[])
   NtfsVolume<Strategy::NO_CACHE> volume(volname);
   if (!volume.IsVolumeOK())
   {
-    printf("Cannot get NTFS BPB from boot sector of volume %c\n", volname);
+    printf("Cannot get NTFS BPB from boot sector of volume %lc\n", volname);
     return -1;
   }
 
@@ -248,7 +248,7 @@ int main(int argc, char* argv[])
 
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
   {
-    printf("Cannot read root directory of volume %c\n", volname);
+    printf("Cannot read root directory of volume %lc\n", volname);
     return -1;
   }
 
@@ -258,16 +258,7 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  std::wstring wpath(strlen(path) + 1, 0);
-  size_t outSize = 0;
-  const errno_t err =
-      mbstowcs_s(&outSize, wpath.data(), strlen(path) + 1, path, strlen(path));
-
-  if (err != 0)
-  {
-    printf("Cannot parse requested path\n");
-    return -1;
-  }
+  std::wstring wpath(path);
   std::wstring pathname;
 
   while (true)
