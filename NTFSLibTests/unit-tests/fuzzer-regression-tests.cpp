@@ -191,6 +191,7 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"traverse_attrs_empty_callback",
          {"TraverseAttrs() called with an empty callback"}},
         {"file_record_unhandled_attribute", {"Unhandled attribute: 0x0040"}},
+        {"bitmap_resident_data_read", {"8 bytes of resident Bitmap data read"}},
 };
 
 struct RunResult

@@ -25,7 +25,7 @@ AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
 
   std::optional<ULONGLONG> len =
       this->ReadData(0, {bitmap_buf_.data(), bitmap_size_});
-  if (len && *len == bitmap_size_)
+  if (!len || *len != bitmap_size_)
   {
     bitmap_buf_.clear();
     NTFS_TRACE("Read Resident Bitmap data failed\n");
