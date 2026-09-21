@@ -110,6 +110,15 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"compressed_index_allocation",
          {"Decompressed compression unit 0 into 1024 bytes",
           "per compression unit", "Compressed size = "}},
+        // UTF-8 of kSurrogateNames: hieroglyph, ant, ZWJ family, CJK ideograph.
+        {"surrogate_pair_names",
+         {"File Name: \xF0\x93\x82\x80", "File Name: \xF0\x9F\x90\x9C",
+          "File Name: "
+          "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D"
+          "\xF0\x9F\x91\xA7\xE2\x80\x8D\xF0\x9F\x91\xA6",
+          "File Name: \xF0\xA0\xAE\xB7", "File Permission: Directory",
+          "File Permission: File",
+          "Decompressed compression unit 0 into 1024 bytes"}},
         {"corrupt_compressed_index_allocation",
          {"Cannot decompress compression unit 0",
           "LZNT1: back-reference before start of chunk.",

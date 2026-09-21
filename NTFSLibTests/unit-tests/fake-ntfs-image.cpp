@@ -1383,14 +1383,58 @@ FakeRecord
   return record;
 }
 
+// One leaf $FILE_NAME index entry a fixture writes: a name, the MFT record
+// it points at, and whether that record is a directory.
+struct FakeIndexName
+{
+  std::wstring_view name;
+  ULONGLONG mft_ref;
+  bool directory;
+};
+
+// A UTF-16 code unit is one on-disk name character; wchar_t must match it
+// for a name to be copied over unit by unit.
+static_assert(sizeof(wchar_t) == sizeof(WORD),
+              "fixtures copy wchar_t names into 16-bit on-disk units");
+
+// Writes "name" as a leaf index entry at "dest" and returns its size in
+// bytes. Entries are packed with no padding, like every other fixture here.
+WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name)
+{
+  auto& entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(dest);
+  entry.mft_index = name.mft_ref;
+  entry.mft_sn = 1;
+
+  auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&entry.stream);
+  fn.parent_ref = static_cast<ULONGLONG>(MftIdx::ROOT);
+  fn.flags = name.directory ? NtfsBrowser::Flag::Filename::DIRECTORY
+                            : NtfsBrowser::Flag::Filename::NONE;
+  fn.name_length = static_cast<BYTE>(name.name.size());
+  fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  for (size_t i = 0; i < name.name.size(); i++)
+  {
+    fn.name[i] = static_cast<WORD>(name.name[i]);
+  }
+
+  entry.stream_size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[fn.name_length]) -
+                        reinterpret_cast<BYTE*>(&fn));
+  entry.size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&entry.stream) -
+                        reinterpret_cast<BYTE*>(&entry) + entry.stream_size);
+  return entry.size;
+}
+
 // Directory record (root, #5): resident $STANDARD_INFORMATION("permission"),
-// a resident $INDEX_ROOT with a lone nameless SUBNODE-only entry, and a
-// non-resident $INDEX_ALLOCATION - lets fixtures target an attribute
-// FuzzOnce() actually ReadData()s, unlike plain $DATA.
+// a resident $INDEX_ROOT holding "rootNames" as leaf entries followed by a
+// nameless SUBNODE-only entry, and a non-resident $INDEX_ALLOCATION - lets
+// fixtures target an attribute FuzzOnce() actually ReadData()s, unlike plain
+// $DATA.
 FakeRecord MakeIndexAllocationDirRecord(
     NtfsBrowser::Flag::StdInfoPermission permission, WORD compUnitSize,
     ULONGLONG realSize, const std::vector<FakeDataRun>& runs,
-    const FakeNonResidentOverrides& overrides = {})
+    const FakeNonResidentOverrides& overrides = {},
+    std::span<const FakeIndexName> rootNames = {})
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
@@ -1419,8 +1463,15 @@ FakeRecord MakeIndexAllocationDirRecord(
       static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
-  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  BYTE* const entries = body + sizeof(NtfsBrowser::Attr::IndexRoot);
+  DWORD leafBytes = 0;
+  for (const FakeIndexName& name : rootNames)
+  {
+    leafBytes += WriteFilenameEntry(entries + leafBytes, name);
+  }
+
+  auto& e1 =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entries + leafBytes);
   e1.mft_index = 0;
   e1.mft_sn = 0;
   e1.stream_size = 0;
@@ -1432,12 +1483,13 @@ FakeRecord MakeIndexAllocationDirRecord(
       reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
   subNodeVcn = 0;
 
-  root.total_entry_size = e1.size;
-  root.alloc_entry_size = e1.size;
+  root.total_entry_size = leafBytes + e1.size;
+  root.alloc_entry_size = leafBytes + e1.size;
   root.flags = 0;
 
   rootAttr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size;
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + leafBytes +
+      e1.size;
   rootAttr.header.total_size =
       static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
 
@@ -1514,11 +1566,11 @@ std::vector<BYTE> MakeCorruptLznt1Chunk()
   return {0x02, 0xb0, 0x01, 0x00, 0x00};
 }
 
-// The 1024-byte "INDX"-signed index block the compressed $INDEX_ALLOCATION
-// decompresses to: one real leaf FILE_NAME entry plus the terminating entry.
-// Built standalone since it is the *decompressed* content, wrapped into an
-// LZNT1 chunk by the caller.
-std::vector<BYTE> MakeCompressedIndexBlockContent()
+// The 1024-byte "INDX"-signed index block a compressed $INDEX_ALLOCATION
+// decompresses to: "names" as leaf FILE_NAME entries plus the terminating
+// entry. Built standalone since it is the *decompressed* content, wrapped
+// into an LZNT1 chunk by the caller.
+std::vector<BYTE> MakeIndexBlockContent(std::span<const FakeIndexName> names)
 {
   std::vector<BYTE> content(kFakeFileRecordSize, 0);
 
@@ -1535,38 +1587,37 @@ std::vector<BYTE> MakeCompressedIndexBlockContent()
                          reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
-  BYTE* body = blockStart + sizeof(NtfsBrowser::Data::IndexBlock);
+  BYTE* const body = blockStart + sizeof(NtfsBrowser::Data::IndexBlock);
 
-  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body);
-  e1.mft_index = kCompressedIndexEntryMftRef;
-  e1.mft_sn = 1;
-
-  auto& fn1 = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
-  fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::ROOT);
-  fn1.flags = NtfsBrowser::Flag::Filename::NONE;
-  fn1.name_length = kCompressedIndexEntryNameLength;
-  fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
-  for (BYTE i = 0; i < fn1.name_length; i++)
+  DWORD leafBytes = 0;
+  for (const FakeIndexName& name : names)
   {
-    fn1.name[i] = static_cast<WORD>(kCompressedIndexEntryName[i]);
+    leafBytes += WriteFilenameEntry(body + leafBytes, name);
   }
 
-  e1.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
-                        reinterpret_cast<BYTE*>(&fn1));
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
-                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+  auto& last =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body + leafBytes);
+  last.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  last.stream_size = 0;
+  last.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&last.stream) -
+                                reinterpret_cast<BYTE*>(&last));
 
-  auto& e2 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body + e1.size);
-  e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
-  e2.stream_size = 0;
-  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
-                              reinterpret_cast<BYTE*>(&e2));
-
-  block.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
+  block.total_entry_size = leafBytes + last.size;
   block.alloc_entry_size = block.total_entry_size;
 
   return content;
+}
+
+// The single "Comp" entry every compressed $INDEX_ALLOCATION fixture but
+// the surrogate-pair one decompresses to.
+std::vector<BYTE> MakeCompressedIndexBlockContent()
+{
+  const FakeIndexName comp{
+      .name = std::wstring_view(kCompressedIndexEntryName,
+                                kCompressedIndexEntryNameLength),
+      .mft_ref = kCompressedIndexEntryMftRef,
+      .directory = false};
+  return MakeIndexBlockContent(std::span(&comp, 1));
 }
 
 }  // namespace
@@ -2584,6 +2635,32 @@ std::vector<BYTE> BuildFakeNtfsImageWithCorruptCompressedIndexAllocation()
       kCompressionUnitSizeShift, kFakeFileRecordSize, runs);
 
   return BuildCompressionImage(record, runs, MakeCorruptLznt1Chunk());
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithSurrogatePairNames()
+{
+  const std::array<FakeIndexName, 2> rootNames{
+      {{kSurrogateNames[0], kSurrogateNameMftRefs[0],
+        kSurrogateNameIsDirectory[0]},
+       {kSurrogateNames[1], kSurrogateNameMftRefs[1],
+        kSurrogateNameIsDirectory[1]}}};
+  const std::array<FakeIndexName, 2> blockNames{
+      {{kSurrogateNames[2], kSurrogateNameMftRefs[2],
+        kSurrogateNameIsDirectory[2]},
+       {kSurrogateNames[3], kSurrogateNameMftRefs[3],
+        kSurrogateNameIsDirectory[3]}}};
+
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs, {}, rootNames);
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(MakeIndexBlockContent(blockNames)));
 }
 
 ////////////////////////////////////////////////////////////////////////////

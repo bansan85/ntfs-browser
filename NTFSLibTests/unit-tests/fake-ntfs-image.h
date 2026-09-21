@@ -574,6 +574,37 @@ inline constexpr ULONGLONG kCompressedIndexEntryMftRef = 55;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithCorruptCompressedIndexAllocation();
 
+// Names of the four entries BuildFakeNtfsImageWithSurrogatePairNames()
+// writes: the first two are leaves of the resident (uncompressed)
+// $INDEX_ROOT, the last two leaves of the compressed $INDEX_ALLOCATION
+// block. Every one holds code points outside the BMP, so each is stored as
+// UTF-16 surrogate pairs. They sit in the order the index collates them,
+// by UTF-16 code unit, so a lookup can walk from the root into the block.
+// Each is a different kind of name:
+//   [0] U+13080 EGYPTIAN HIEROGLYPH D010, from a rare SMP script;
+//   [1] U+1F41C ANT, an emoji;
+//   [2] a ZWJ family sequence: four emoji joined by three U+200D;
+//   [3] U+20BB7 CJK IDEOGRAPH, from the SIP (plane 2), so its high surrogate
+//       differs from the other names'.
+inline constexpr std::array<std::wstring_view, 4> kSurrogateNames{
+    L"\U00013080", L"\U0001F41C",
+    L"\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466",
+    L"\U00020BB7"};
+
+// Whether each entry above is a directory: each node holds one directory
+// and one file.
+inline constexpr std::array<bool, 4> kSurrogateNameIsDirectory{false, true,
+                                                               true, false};
+
+// MFT references the four entries above point at, in the same order.
+inline constexpr std::array<ULONGLONG, 4> kSurrogateNameMftRefs{56, 57, 58, 59};
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a compressed directory whose entries are kSurrogateNames: the first two
+// resident in $INDEX_ROOT, the last two inside the LZNT1-wrapped index block
+// $INDEX_ALLOCATION decompresses to. Reachable through FuzzOnce().
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSurrogatePairNames();
+
 ////////////////////////////////////////////////////////////////////////////
 // Fuzz-corpus-only compressed $INDEX_ALLOCATION fixtures: same recipe as
 // BuildFakeNtfsImageWithCompressedIndexAllocation(), since FuzzOnce() only

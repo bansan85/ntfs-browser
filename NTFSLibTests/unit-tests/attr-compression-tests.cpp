@@ -915,3 +915,66 @@ TEST_CASE(
 {
   CheckCorruptCompressedIndexAllocationIsRejected<Strategy::FULL_CACHE>();
 }
+
+namespace
+{
+
+// One entry as a traversal reports it.
+struct SeenEntry
+{
+  std::wstring name;
+  ULONGLONG mft_ref;
+  bool directory;
+};
+
+// Same fixture as NTFSLibTests/fuzz/data/surrogate_pair_names: the two
+// resident entries come out first, then the two from the compressed block.
+// Every name must survive as its own UTF-16 units and be found again by a
+// lookup, which walks from the root into the compressed block.
+template <Strategy S>
+void CheckSurrogatePairNamesTraverse()
+{
+  ParsedRoot<S> root = ParseRoot<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithSurrogatePairNames());
+  REQUIRE(root.record->ParseAttrs());
+  CHECK(root.record->IsCompressed());
+
+  std::vector<SeenEntry> seen;
+  root.record->TraverseSubEntries(
+      [](const IndexEntry& ie, void* context)
+      {
+        static_cast<std::vector<SeenEntry>*>(context)->push_back(
+            {std::wstring(ie.GetFilename()), ie.GetFileReference(),
+             ie.IsDirectory()});
+      },
+      &seen);
+
+  REQUIRE(seen.size() == NtfsBrowserTests::kSurrogateNames.size());
+  for (size_t i = 0; i < seen.size(); i++)
+  {
+    INFO("entry " << i);
+    CHECK(seen[i].name == NtfsBrowserTests::kSurrogateNames[i]);
+    CHECK(seen[i].mft_ref == NtfsBrowserTests::kSurrogateNameMftRefs[i]);
+    CHECK(seen[i].directory == NtfsBrowserTests::kSurrogateNameIsDirectory[i]);
+
+    const std::optional<IndexEntry> found =
+        root.record->FindSubEntry(NtfsBrowserTests::kSurrogateNames[i]);
+    REQUIRE(found.has_value());
+    CHECK(found->GetFileReference() ==
+          NtfsBrowserTests::kSurrogateNameMftRefs[i]);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("Names made of surrogate pairs are traversed and found",
+          "[attr-index-alloc][compression]")
+{
+  CheckSurrogatePairNamesTraverse<Strategy::NO_CACHE>();
+}
+
+TEST_CASE("Names made of surrogate pairs are traversed and found (FULL_CACHE)",
+          "[attr-index-alloc][compression]")
+{
+  CheckSurrogatePairNamesTraverse<Strategy::FULL_CACHE>();
+}
