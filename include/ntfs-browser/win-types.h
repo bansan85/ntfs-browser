@@ -22,6 +22,8 @@ using LONG = std::int32_t;
 using LONGLONG = std::int64_t;
 using ULONGLONG = std::uint64_t;
 using CHAR = char;
+// char16_t, not wchar_t: NTFS names are UTF-16, and wchar_t is 4 bytes here.
+using WCHAR = char16_t;
 
 struct LARGE_INTEGER
 {

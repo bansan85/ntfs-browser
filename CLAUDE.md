@@ -21,8 +21,6 @@ An existing configured `build/` directory (Visual Studio generator) is already p
 
 The `NtfsBrowser` library itself, and the `NtfsFuzzerAfl` target ([NTFSLibTests/fuzz/](NTFSLibTests/fuzz/)), also configure and build on Linux with plain GCC: `cmake -S . -B build-linux && cmake --build build-linux`, checked with GCC 15 under WSL. `include/ntfs-browser/win-types.h` shims the handful of Windows typedefs (`BYTE`, `DWORD`, `LARGE_INTEGER`, ...) that the on-disk struct layouts and the public API are expressed in. Real Win32 API usage — `Win32DiskReader`, and drive-letter/path-based `NtfsVolume`/`FileReader` construction — is `#ifdef _WIN32`-guarded out. Everything else — the MFC demo apps, the unit tests, and the clang-oriented `NtfsFuzzer` — stays Windows/MSVC-only. CMake skips them (`if(WIN32)`) on other platforms.
 
-The Linux build is broken right now: `src/attr-base.cpp` uses `WCHAR`, which `win-types.h` does not shim. Adding `using WCHAR = wchar_t;` to the shim fixes it. Tracked in [_bmad-output/implementation-artifacts/deferred-work.md](_bmad-output/implementation-artifacts/deferred-work.md).
-
 ## Tests
 
 Tests use Catch2 (vendored under `3rdparty/Catch2`). CTest registers them via `catch_discover_tests`.
