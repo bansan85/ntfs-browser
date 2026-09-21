@@ -26,9 +26,9 @@ std::optional<std::vector<BYTE>>
   return data;
 }
 
-LoopingDiskReader::LoopingDiskReader(std::vector<BYTE> data,
+LoopingDiskReader::LoopingDiskReader(std::span<const BYTE> data,
                                      std::optional<size_t> failingRead)
-    : data_(std::move(data)), failing_read_(failingRead)
+    : data_(data), failing_read_(failingRead)
 {
 }
 

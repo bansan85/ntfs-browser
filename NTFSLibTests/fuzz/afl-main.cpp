@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -89,10 +90,9 @@ constexpr size_t kInjectedFailureRuns = 16;
 // failingRead makes that one ReadInto() call fail, exercising the
 // disk-read error paths a looping reader never reaches on its own.
 template <Strategy S>
-void FuzzOnce(const std::vector<BYTE>& data,
+void FuzzOnce(std::span<const BYTE> data,
               std::optional<size_t> failingRead = {})
 {
-  // Copied so both strategies replay the exact same bytes independently.
   NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failingRead));
   if (!volume.IsVolumeOK())
   {
@@ -135,7 +135,7 @@ void FuzzOnce(const std::vector<BYTE>& data,
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash
 // may escape.
 template <Strategy S>
-void RunGuarded(const std::vector<BYTE>& data,
+void RunGuarded(std::span<const BYTE> data,
                 std::optional<size_t> failingRead = {})
 {
   try
