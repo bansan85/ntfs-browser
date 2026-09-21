@@ -249,7 +249,8 @@ RunResult RunFuzzerOnFile(const fs::path& exe, const fs::path& testcase)
   REQUIRE(SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0));
 
   std::wstring cmdLine =
-      L"\"" + exe.wstring() + L"\" \"" + testcase.wstring() + L"\"";
+      L"\"" + exe.wstring() + L"\" --inject-read-failures \"" +
+      testcase.wstring() + L"\"";
 
   STARTUPINFOW si{};
   si.cb = sizeof(si);

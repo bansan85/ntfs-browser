@@ -49,6 +49,13 @@ constexpr std::wstring_view kLogPrefix = Log::kOptionPrefixW;
 constexpr std::string_view kLogPrefix = Log::kOptionPrefix;
 #endif
 
+// Argument that turns on the read failure sweep, in argv's character type.
+#ifdef _WIN32
+constexpr std::wstring_view kInjectOption = L"--inject-read-failures";
+#else
+constexpr std::string_view kInjectOption = "--inject-read-failures";
+#endif
+
 // NtfsBpb::signature sits 3 bytes in, after the boot sector's jump instruction.
 constexpr size_t kBpbSignatureOffset = 3;
 // The exact bytes NtfsBpb::signature must hold to pass validation.
@@ -146,7 +153,9 @@ void RunGuarded(const std::vector<BYTE>& data,
 // Prints command-line usage help.
 void Usage(const ArgChar* program)
 {
-  std::fprintf(stderr, "usage: " NTFS_FUZZ_NATIVE " [--log=...] <input-file>\n",
+  std::fprintf(stderr,
+               "usage: " NTFS_FUZZ_NATIVE
+               " [--log=...] [--inject-read-failures] <input-file>\n",
                program);
   std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str());
 }
@@ -161,9 +170,15 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
   // regression corpus both keep producing every message without a flag.
   Log::Config logConfig{.console_level = Log::Level::kTrace};
   const ArgChar* input = nullptr;
+  bool injectFailures = false;
 
   for (int i = 1; i < argc; i++)
   {
+    if (std::basic_string_view<ArgChar>(argv[i]) == kInjectOption)
+    {
+      injectFailures = true;
+      continue;
+    }
     if (std::basic_string_view<ArgChar>(argv[i]).starts_with(kLogPrefix))
     {
       if (!Log::ParseOption(argv[i], logConfig))
@@ -206,6 +221,11 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
   // Guarded independently, so one run's exception can't skip the others.
   RunGuarded<Strategy::NO_CACHE>(*data);
   RunGuarded<Strategy::FULL_CACHE>(*data);
+
+  if (!injectFailures)
+  {
+    return 0;
+  }
 
   for (size_t failingRead = 0; failingRead < kInjectedFailureRuns;
        ++failingRead)
