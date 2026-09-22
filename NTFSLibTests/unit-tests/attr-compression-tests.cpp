@@ -667,23 +667,6 @@ TEST_CASE(
 namespace
 {
 
-// Acceptance criterion: an encrypted record stays rejected. Only the
-// compressed half of ParseAttrs()' old rejection was lifted.
-template <Strategy S>
-void CheckEncryptedRecordIsStillRejected()
-{
-  ParsedRoot<S> root =
-      ParseRoot<S>(NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile());
-
-  std::string trace;
-  bool parsed = true;
-  trace = CaptureTrace([&] { parsed = root.record->ParseAttrs(); });
-
-  CHECK_FALSE(parsed);
-  CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
-                        "Encrypted file not supported yet !"));
-}
-
 // Acceptance criterion: the existing 64-byte minimum total_size must still
 // be accepted; the conditional CompressedSize field must not have grown it.
 template <Strategy S>
@@ -723,18 +706,6 @@ void CheckCompressedHeaderRejected(std::vector<BYTE> image,
 }
 
 }  // namespace
-
-TEST_CASE("An encrypted file record is still rejected",
-          "[file-record][compression]")
-{
-  CheckEncryptedRecordIsStillRejected<Strategy::NO_CACHE>();
-}
-
-TEST_CASE("An encrypted file record is still rejected (FULL_CACHE)",
-          "[file-record][compression]")
-{
-  CheckEncryptedRecordIsStillRejected<Strategy::FULL_CACHE>();
-}
 
 TEST_CASE(
     "A minimum-size uncompressed non-resident attribute is still accepted",

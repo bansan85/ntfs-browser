@@ -26,6 +26,8 @@
 #include "attr/header-non-resident.h"
 #include "attr/header-resident.h"
 #include "data/run-entry.h"
+#include "efs/efs-context.h"
+#include "efs/efs-stream.h"
 #include "index-block.h"
 #include "ntfs-common.h"
 #include "utf.h"
@@ -158,6 +160,16 @@ std::unique_ptr<AttrBase<S>>
       // Resident Bitmap may exist in a directory's FileRecord
       // or in $MFT for a very small volume in theory
       return std::make_unique<AttrBitmap<RESIDENT, S>>(ahc, *this);
+
+    // $EFS, the only one this library reads, is read through the generic
+    // wrappers. Any other logged utility stream is not needed, but not
+    // worth a warning either.
+    case AttrType::LOGGED_UTILITY_STREAM:
+      if (ahc.non_resident != 0)
+      {
+        return std::make_unique<AttrNonResident<S>>(ahc, *this);
+      }
+      return std::make_unique<RESIDENT>(ahc, *this);
 
     // Unhandled Attributes
     default:
@@ -537,12 +549,6 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
       {
         return false;
       }
-
-      if (IsEncrypted())
-      {
-        LogWarn("Encrypted file not supported yet !");
-        return false;
-      }
     }
 
     dataPtr += ahc->total_size;
@@ -551,7 +557,105 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
         ahc->total_size);  // next attribute
   }
 
+  AttachEfsContext();
   return true;
+}
+
+// The largest $EFS stream read. It holds a few key entries, a few KiB at
+// most. A forged size must not decide how much memory a parse allocates.
+constexpr ULONGLONG kMaxEfsStreamSize = 64ULL * 1024;
+
+// Name of the $LOGGED_UTILITY_STREAM that holds the EFS keys.
+constexpr std::wstring_view kEfsStreamName = L"$EFS";
+
+// Copies the key entries out of this record's $EFS stream. Returns none if the
+// stream is absent or malformed: the parse goes on, and the read that needs
+// the key fails, with the cause logged.
+template <Strategy S>
+std::vector<Efs::WrappedFek> FileRecord<S>::ReadEfsEntries() const
+{
+  for (const std::unique_ptr<AttrBase<S>>& attr :
+       attr_list_[ATTR_INDEX(AttrType::LOGGED_UTILITY_STREAM)])
+  {
+    if (attr->GetAttrName() != kEfsStreamName)
+    {
+      continue;
+    }
+
+    const ULONGLONG size = attr->GetDataSize();
+    if (size > kMaxEfsStreamSize)
+    {
+      LogWarn("$EFS stream is too large: {} bytes.", size);
+      return {};
+    }
+
+    // Owned copy: under NO_CACHE the attribute's bytes are short-lived.
+    std::vector<BYTE> bytes(static_cast<size_t>(size));
+    const std::optional<ULONGLONG> read = attr->ReadData(0, bytes);
+    if (!read || *read != size)
+    {
+      LogWarn("Cannot read the $EFS stream.");
+      return {};
+    }
+
+    return Efs::ParseEfsStream(bytes).value_or(std::vector<Efs::WrappedFek>{});
+  }
+
+  return {};
+}
+
+// Gives every encrypted $DATA stream of this record the context that
+// decrypts it. Only a non-resident stream is encrypted: EFS never leaves file
+// data inside the record.
+template <Strategy S>
+void FileRecord<S>::AttachEfsContext()
+{
+  // AttrHeaderCommon::flags bit 0: the on-disk "compressed" flag. Real NTFS
+  // never sets it alongside 0x4000 (compression and encryption are mutually
+  // exclusive), but a forged record could. Decrypting a compressed stream's
+  // bytes before LZNT1 decoding sees them would corrupt them for no gain, so
+  // that combination is left undecrypted rather than misprocessed.
+  constexpr WORD kAttrFlagCompressed = 0x0001;
+
+  std::vector<AttrNonResident<S>*> encrypted;
+  for (const std::unique_ptr<AttrBase<S>>& attr :
+       attr_list_[ATTR_INDEX(AttrType::DATA)])
+  {
+    const WORD flags = attr->GetAttrFlags();
+    if ((flags & Efs::kAttrFlagEncrypted) == 0)
+    {
+      continue;
+    }
+    if ((flags & kAttrFlagCompressed) != 0)
+    {
+      LogWarn(
+          "A $DATA stream is flagged both compressed and encrypted; NTFS "
+          "never combines them. Reading it undecrypted.");
+      continue;
+    }
+
+    auto* nonResident = dynamic_cast<AttrNonResident<S>*>(attr.get());
+    if (nonResident == nullptr)
+    {
+      LogWarn("A resident $DATA is flagged encrypted. Read as is.");
+      continue;
+    }
+    encrypted.push_back(nonResident);
+  }
+
+  if (encrypted.empty())
+  {
+    return;
+  }
+
+  // One context for the record: its streams share one FEK, resolved once.
+  auto context = std::make_shared<const Efs::Context>(
+      ReadEfsEntries(),
+      [&volume = volume_] { return volume.GetEfsKeyProvider(); });
+  for (AttrNonResident<S>* stream : encrypted)
+  {
+    stream->SetEfsContext(context);
+  }
 }
 
 template <Strategy S>
@@ -591,6 +695,12 @@ void FileRecord<S>::SetAttrMask(Mask mask) noexcept
 {
   // Standard Information and Attribute List is needed always
   attr_mask_ = mask | Mask::STANDARD_INFORMATION | Mask::ATTRIBUTE_LIST;
+
+  // The $EFS stream holds the key of every encrypted $DATA.
+  if ((mask & Mask::DATA) == Mask::DATA)
+  {
+    attr_mask_ |= Mask::LOGGED_UTILITY_STREAM;
+  }
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine

@@ -7,6 +7,7 @@
 
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/efs.h>
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/attr-base.h>
@@ -62,6 +63,12 @@ class NtfsVolume
 
   mutable std::vector<BYTE> cluster_buffer_;
 
+  // EFS key source. efs_provider_set_ tells "never chosen", which lets the
+  // default provider be created on the first decryption, from "chosen to be
+  // none" (SetEfsKeyProvider(nullptr)), which disables decryption.
+  mutable std::shared_ptr<Efs::IEfsKeyProvider> efs_provider_;
+  mutable bool efs_provider_set_{false};
+
 #ifdef _WIN32
   [[nodiscard]] bool OpenVolume(_TCHAR volume);
   [[nodiscard]] bool OpenVolume(std::wstring_view path);
@@ -91,6 +98,16 @@ class NtfsVolume
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
                                       AttrRawCallback cb) noexcept;
   void ClearAttrRawCB() noexcept;
+
+  // Sets the source of the keys that decrypt EFS files. A null provider
+  // disables decryption altogether, and the default provider with it.
+  void SetEfsKeyProvider(
+      std::shared_ptr<Efs::IEfsKeyProvider> provider) noexcept;
+
+  // The installed provider. When none was ever installed, the first call
+  // creates the default one: the current user's certificate store, on Windows.
+  // Null where there is none, or after SetEfsKeyProvider(nullptr).
+  [[nodiscard]] std::shared_ptr<Efs::IEfsKeyProvider> GetEfsKeyProvider() const;
 
  private:
   // attType is an already-bounds-checked index into attr_raw_call_back_

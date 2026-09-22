@@ -25,6 +25,10 @@ add_executable(
   "attr-name-bounds-tests.cpp"
   "attr-resident-read-data-tests.cpp"
   "attr-compression-tests.cpp"
+  "efs-test-support.h"
+  "efs-test-support.cpp"
+  "efs-pfx-tests.cpp"
+  "efs-tests.cpp"
   "attr-vol-info-size-tests.cpp"
   "attr-std-info-legacy-size-tests.cpp"
   "on-disk-struct-layout-tests.cpp"
@@ -42,9 +46,11 @@ add_executable(
 
 # spdlog: the capturing sink the tests install on the library's logger is an
 # spdlog sink. The library keeps spdlog private, so the tests link it too.
+# Crypto++ likewise: the EFS tests encrypt their fixtures with it, as a
+# reference the library's own decryption shares no code with.
 target_link_libraries(
   NtfsBrowserTests PRIVATE ${PROJECT_NAME} Catch2::Catch2WithMain
-                           spdlog::spdlog)
+                           spdlog::spdlog cryptopp::cryptopp)
 
 # The fuzz/ include lets fake-ntfs-image.h reuse named-stream-probe.h's name
 # instead of duplicating it.
@@ -57,7 +63,8 @@ add_dependencies(NtfsBrowserTests NtfsFuzzerAfl)
 target_compile_definitions(
   NtfsBrowserTests
   PRIVATE NTFS_FUZZER_AFL_EXE="$<TARGET_FILE:NtfsFuzzerAfl>"
-          NTFS_FUZZ_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data")
+          NTFS_FUZZ_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data"
+          NTFS_EFS_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(

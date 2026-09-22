@@ -11,6 +11,11 @@ set(${PROJECT_NAME}_SRC
     "attr-std-info.cpp"
     "attr-vol-info.cpp"
     "attr-vol-name.cpp"
+    "efs/efs-context.cpp"
+    "efs/efs-stream.cpp"
+    "efs/efs.cpp"
+    "efs/cipher-cryptopp.cpp"
+    "efs/fek.cpp"
     "file-record.cpp"
     "filename.cpp"
     "file-reader.cpp"
@@ -22,7 +27,8 @@ set(${PROJECT_NAME}_SRC
     "utf.cpp")
 
 if(WIN32)
-  list(APPEND ${PROJECT_NAME}_SRC "win32-disk-reader.cpp")
+  list(APPEND ${PROJECT_NAME}_SRC "win32-disk-reader.cpp"
+       "efs/cipher-bcrypt.cpp" "efs/key-provider-win.cpp")
 endif()
 
 set(${PROJECT_NAME}_H
@@ -31,6 +37,7 @@ set(${PROJECT_NAME}_H
     "../include/ntfs-browser/data/attr-type.h"
     "../include/ntfs-browser/attr-base.h"
     "../include/ntfs-browser/disk-reader.h"
+    "../include/ntfs-browser/efs.h"
     "../include/ntfs-browser/file-reader.h"
     "../include/ntfs-browser/file-record.h"
     "../include/ntfs-browser/index-entry.h"
@@ -64,6 +71,10 @@ set(${PROJECT_NAME}_H
     "data/index-entry.h"
     "data/ntfs-bpb.h"
     "data/run-entry.h"
+    "efs/efs-context.h"
+    "efs/efs-stream.h"
+    "efs/fek.h"
+    "efs/sector-cipher.h"
     "flag/filename-namespace.h"
     "flag/filename.h"
     "flag/index-entry.h"
@@ -80,6 +91,11 @@ add_library(${PROJECT_NAME} ${${PROJECT_NAME}_SRC} ${${PROJECT_NAME}_H}
 target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)
 # Private: spdlog is an implementation detail, absent from the public API.
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)
+# Private too: Crypto++ and the Windows crypto libraries stay out of the API.
+target_link_libraries(${PROJECT_NAME} PRIVATE cryptopp::cryptopp)
+if(WIN32)
+  target_link_libraries(${PROJECT_NAME} PRIVATE bcrypt crypt32 ncrypt)
+endif()
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>

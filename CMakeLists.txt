@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.10)
+# 3.25: the Crypto++ integration below uses block(SCOPE_FOR VARIABLES).
+cmake_minimum_required(VERSION 3.25)
 
 project(NtfsBrowser)
 
@@ -43,6 +44,57 @@ add_subdirectory("3rdparty/spdlog")
 if(TARGET spdlog)
   set_target_properties(spdlog PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 endif()
+
+# Crypto++ is the default EFS cipher backend. Turn this ON to link an installed
+# copy (eg. from vcpkg) instead of the submodule.
+option(NTFS_BROWSER_USE_INSTALLED_CRYPTOPP
+       "Link an installed Crypto++ instead of the 3rdparty submodule" OFF)
+
+if(NTFS_BROWSER_USE_INSTALLED_CRYPTOPP)
+  find_package(cryptopp CONFIG REQUIRED)
+else()
+  # Crypto++ only supports static libraries, whatever BUILD_SHARED_LIBS says.
+  # The block keeps that override out of the rest of the project.
+  block(SCOPE_FOR VARIABLES)
+  set(BUILD_SHARED_LIBS OFF)
+  # A static Crypto++ ends up inside a shared NtfsBrowser on Linux.
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  set(CRYPTOPP_SOURCES
+      "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/cryptopp"
+      CACHE PATH "" FORCE)
+  # Its tests, docs and install rules are not this project's.
+  set(CRYPTOPP_BUILD_TESTING
+      OFF
+      CACHE BOOL "" FORCE)
+  set(CRYPTOPP_BUILD_DOCUMENTATION
+      OFF
+      CACHE BOOL "" FORCE)
+  set(CRYPTOPP_INSTALL
+      OFF
+      CACHE BOOL "" FORCE)
+  add_subdirectory("3rdparty/cryptopp-cmake")
+  if(MSVC)
+    # Crypto++ 8.9 does not build with the newest MSVC STL as it is.
+    target_compile_options(
+      cryptopp
+      PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:/FI${CMAKE_CURRENT_SOURCE_DIR}/cmake/cryptopp-stdext-compat.h>"
+    )
+  endif()
+  # The Visual Studio generators do not create the object directory of a MASM
+  # source that sits outside the build tree, which Crypto++'s does. Its path is
+  # the source's own one, with each ".." spelled "__".
+  if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    foreach(config IN LISTS CMAKE_CONFIGURATION_TYPES)
+      file(
+        MAKE_DIRECTORY
+        "${cryptopp-cmake_BINARY_DIR}/cryptopp/cryptopp.dir/${config}/__/__/cryptopp"
+      )
+    endforeach()
+  endif()
+  endblock()
+endif()
+
 add_subdirectory("src")
 
 enable_testing()

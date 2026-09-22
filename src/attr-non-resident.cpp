@@ -11,6 +11,7 @@
 #include "attr-non-resident.h"
 #include "attr/header-non-resident.h"
 #include "data/run-entry.h"
+#include "efs/efs-context.h"
 #include "lznt1/decompress.h"
 #include "ntfs-common.h"
 
@@ -577,6 +578,13 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
           break;
         }
         memcpy(buf, bufferi->data(), bufferi->size());
+
+        // Decrypts the copy in buf, never the span, which may be the cache.
+        if (efs_context_ && !efs_context_->Decrypt(vcn * this->GetClusterSize(),
+                                                   {buf, bufferi->size()}))
+        {
+          return {};
+        }
       }
       else
       {
@@ -597,6 +605,13 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
 
   actural *= this->GetClusterSize();
   return actural;
+}
+
+template <Strategy S>
+void AttrNonResident<S>::SetEfsContext(
+    std::shared_ptr<const Efs::Context> context) noexcept
+{
+  efs_context_ = std::move(context);
 }
 
 template <Strategy S>

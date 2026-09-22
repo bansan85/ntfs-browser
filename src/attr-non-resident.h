@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <span>
 #include <unordered_map>
@@ -16,6 +17,10 @@ namespace Attr
 {
 struct HeaderNonResident;
 }  // namespace Attr
+namespace Efs
+{
+class Context;
+}  // namespace Efs
 ////////////////////////////////
 // NonResident Attributes
 ////////////////////////////////
@@ -40,6 +45,10 @@ class AttrNonResident : public AttrBase<S>
   // Decompressed compression units, keyed by unit index; lifetime follows
   // Strategy (FULL_CACHE keeps them, NO_CACHE clears per ReadData()).
   mutable std::unordered_map<ULONGLONG, std::vector<BYTE>> comp_unit_cache_;
+
+  // Set only on an encrypted stream. Shared with the record's other encrypted
+  // streams, which hold the same key.
+  std::shared_ptr<const Efs::Context> efs_context_;
 
   [[nodiscard]] static bool PickData(const BYTE*& dataRun, const BYTE* end,
                                      ULONGLONG& length,
@@ -69,6 +78,9 @@ class AttrNonResident : public AttrBase<S>
                                     std::span<BYTE> buffer) const;
 
  public:
+  // Makes ReadData() decrypt this stream with the given context.
+  void SetEfsContext(std::shared_ptr<const Efs::Context> context) noexcept;
+
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
   [[nodiscard]] std::optional<ULONGLONG>

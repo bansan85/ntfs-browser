@@ -149,8 +149,6 @@ const std::unordered_map<std::string, std::vector<std::string>>
          {"Cannot read stored compression unit 0"}},
         {"compressed_index_allocation_compressed_unit_bad_lcn",
          {"Cannot read compressed compression unit 0"}},
-        {"compressed_index_allocation_encrypted",
-         {"Encrypted file not supported yet !"}},
         {"compressed_index_allocation_lznt1_invalid_signature",
          {"LZNT1: invalid chunk header signature.",
           "Cannot decompress compression unit 0"}},
@@ -248,9 +246,9 @@ RunResult RunFuzzerOnFile(const fs::path& exe, const fs::path& testcase)
   // deadlock ReadAllAndClose() above by keeping the write end open.
   REQUIRE(SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0));
 
-  std::wstring cmdLine =
-      L"\"" + exe.wstring() + L"\" --inject-read-failures \"" +
-      testcase.wstring() + L"\"";
+  std::wstring cmdLine = L"\"" + exe.wstring() +
+                         L"\" --inject-read-failures \"" + testcase.wstring() +
+                         L"\"";
 
   STARTUPINFOW si{};
   si.cb = sizeof(si);

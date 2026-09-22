@@ -1,5 +1,6 @@
 /build
 /build-linux
+/build-shared
 
 /.venv/
 

@@ -440,6 +440,27 @@ void NtfsVolume<S>::ClearAttrRawCB() noexcept
   }
 }
 
+template <Strategy S>
+void NtfsVolume<S>::SetEfsKeyProvider(
+    std::shared_ptr<Efs::IEfsKeyProvider> provider) noexcept
+{
+  efs_provider_ = std::move(provider);
+  efs_provider_set_ = true;
+}
+
+template <Strategy S>
+std::shared_ptr<Efs::IEfsKeyProvider> NtfsVolume<S>::GetEfsKeyProvider() const
+{
+  if (!efs_provider_set_)
+  {
+    efs_provider_set_ = true;
+#ifdef _WIN32
+    efs_provider_ = Efs::MakeCertStoreKeyProvider();
+#endif
+  }
+  return efs_provider_;
+}
+
 template class NtfsVolume<Strategy::NO_CACHE>;
 template class NtfsVolume<Strategy::FULL_CACHE>;
 

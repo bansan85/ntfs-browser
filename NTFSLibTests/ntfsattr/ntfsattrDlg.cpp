@@ -326,17 +326,7 @@ void CNtfsattrDlg::OnOK()
 
     if (!fr.ParseAttrs())
     {
-      // Compressed records are no longer a reason to fail here: NTFS
-      // attribute-level compression (LZNT1) is now read transparently, so a
-      // parse failure on a compressed record has some other cause.
-      if (fr.IsEncrypted())
-      {
-        MessageBox(_T("Encrypted directory not supported yet"));
-      }
-      else
-      {
-        MessageBox(_T("Cannot parse directory attributes"));
-      }
+      MessageBox(_T("Cannot parse directory attributes"));
       return;
     }
 
@@ -372,17 +362,7 @@ void CNtfsattrDlg::OnOK()
   fr.SetAttrMask(Mask::ALL);
   if (!fr.ParseAttrs())
   {
-    // Compressed records are no longer a reason to fail here: NTFS
-    // attribute-level compression (LZNT1) is now read transparently, so a
-    // parse failure on a compressed record has some other cause.
-    if (fr.IsEncrypted())
-    {
-      MessageBox(_T("Encrypted file not supported yet"));
-    }
-    else
-    {
-      MessageBox(_T("Cannot parse file attributes"));
-    }
+    MessageBox(_T("Cannot parse file attributes"));
     return;
   }
 

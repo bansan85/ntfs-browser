@@ -25,6 +25,7 @@
 #include "attr/volume-information.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
+#include "efs/efs-context.h"
 #include "data/ntfs-bpb.h"
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
@@ -1304,6 +1305,10 @@ struct FakeNonResidentOverrides
   std::optional<ULONGLONG> last_vcn;
   // Overrides "header + run list bytes" as the attribute's total_size.
   std::optional<DWORD> total_size;
+  // A stream name, written between the header and the run list.
+  std::wstring_view name;
+  // Overrides the flags a compressed/plain attribute would get.
+  std::optional<WORD> flags;
 };
 
 // Writes one non-resident attribute at record[offset] and returns its
@@ -1318,9 +1323,10 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
       *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
   attr.header.type = type;
   attr.header.non_resident = 1;
-  attr.header.name_length = 0;
-  attr.header.flags =
-      (compUnitSize != 0) ? kAttrFlagCompressed : static_cast<WORD>(0);
+  assert(overrides.name.size() <= 255 && "on-disk name_length is one byte");
+  attr.header.name_length = static_cast<BYTE>(overrides.name.size());
+  attr.header.flags = overrides.flags.value_or(
+      (compUnitSize != 0) ? kAttrFlagCompressed : static_cast<WORD>(0));
   attr.header.id = 0;
 
   ULONGLONG totalClusters = 0;
@@ -1345,7 +1351,14 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
   const auto headerSize = static_cast<WORD>(
       sizeof(attr) +
       ((compUnitSize != 0) ? NtfsBrowser::Attr::kCompressedSizeFieldSize : 0));
-  attr.data_run_offset = headerSize;
+  const size_t nameBytes = overrides.name.size() * sizeof(wchar_t);
+  if (nameBytes != 0)
+  {
+    attr.header.name_offset = headerSize;
+    std::memcpy(&record[offset + headerSize], overrides.name.data(), nameBytes);
+  }
+  const auto runOffset = static_cast<WORD>(headerSize + nameBytes);
+  attr.data_run_offset = runOffset;
 
   if (compUnitSize != 0)
   {
@@ -1357,9 +1370,9 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
                 sizeof(compressedSize));
   }
 
-  const DWORD runLen = EncodeDataRuns(&record[offset + headerSize], runs);
+  const DWORD runLen = EncodeDataRuns(&record[offset + runOffset], runs);
   attr.header.total_size =
-      overrides.total_size.value_or(static_cast<DWORD>(headerSize) + runLen);
+      overrides.total_size.value_or(static_cast<DWORD>(runOffset) + runLen);
   return attr.header.total_size;
 }
 
@@ -1501,20 +1514,11 @@ FakeRecord MakeIndexAllocationDirRecord(
   return record;
 }
 
-// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
-// "record" and "clusterBytes" laid down over its real runs, in run order;
-// sparse runs consume no bytes and stay zero-filled.
-std::vector<BYTE> BuildCompressionImage(const FakeRecord& record,
-                                        const std::vector<FakeDataRun>& runs,
-                                        const std::vector<BYTE>& clusterBytes)
+// Lays "clusterBytes" down over the real runs of "runs", in run order, growing
+// "image" to hold them; sparse runs consume no bytes and stay zero-filled.
+void LayRunBytes(std::vector<BYTE>& image, const std::vector<FakeDataRun>& runs,
+                 const std::vector<BYTE>& clusterBytes)
 {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
-  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                          static_cast<size_t>(MftIdx::ROOT);
-  std::memcpy(image.data() + rootOffset, record.data(), record.size());
-
   // Grow the image so every real run fits, rounded up to FULL_CACHE's whole
   // 64KiB read block - same reasoning as
   // BuildFakeNtfsImageWithDeepIndexBlockChain().
@@ -1554,7 +1558,23 @@ std::vector<BYTE> BuildCompressionImage(const FakeRecord& record,
                 clusterBytes.data() + written, chunk);
     written += chunk;
   }
+}
 
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// "record" and "clusterBytes" laid down over its real runs, in run order;
+// sparse runs consume no bytes and stay zero-filled.
+std::vector<BYTE> BuildCompressionImage(const FakeRecord& record,
+                                        const std::vector<FakeDataRun>& runs,
+                                        const std::vector<BYTE>& clusterBytes)
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  LayRunBytes(image, runs, clusterBytes);
   return image;
 }
 
@@ -2526,10 +2546,34 @@ std::vector<BYTE> BuildFakeNtfsImageWithMisalignedCompressedStartVcn()
   return BuildCompressionImage(record, runs, clusterBytes);
 }
 
-std::vector<BYTE> BuildFakeNtfsImageWithEncryptedFile()
+// Writes a resident $EFS attribute holding "body" and returns its total_size.
+DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
+                           std::span<const BYTE> body)
 {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
+  constexpr std::wstring_view kName = L"$EFS";
+  auto& attr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  attr.header.type = AttrType::LOGGED_UTILITY_STREAM;
+  attr.header.non_resident = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.header.name_length = static_cast<BYTE>(kName.size());
+  attr.header.name_offset = static_cast<WORD>(sizeof(attr));
+  attr.attr_size = static_cast<DWORD>(body.size());
+  attr.attr_offset =
+      static_cast<WORD>(sizeof(attr) + (kName.size() * sizeof(wchar_t)));
+  attr.header.total_size =
+      static_cast<DWORD>(attr.attr_offset) + attr.attr_size;
 
+  std::memcpy(&record[offset + attr.header.name_offset], kName.data(),
+              kName.size() * sizeof(wchar_t));
+  std::memcpy(&record[offset + attr.attr_offset], body.data(), body.size());
+  return attr.header.total_size;
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithEncryptedFile(const FakeEncryptedFile& file)
+{
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
 
@@ -2539,33 +2583,90 @@ std::vector<BYTE> BuildFakeNtfsImageWithEncryptedFile()
       NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
           NtfsBrowser::Flag::StdInfoPermission::ENCRYPTED);
 
-  // An ordinary resident $DATA attribute: nothing about this record is
-  // unusual other than the ENCRYPTED bit, which must still get the whole
-  // record rejected.
-  auto& dataAttr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
-  dataAttr.header.type = AttrType::DATA;
-  dataAttr.header.non_resident = 0;
-  dataAttr.header.name_length = 0;
-  dataAttr.header.flags = 0;
-  dataAttr.header.id = 0;
-  dataAttr.attr_size = static_cast<DWORD>(kSmallResidentDataContent.size());
-  dataAttr.attr_offset = static_cast<WORD>(sizeof(dataAttr));
-  dataAttr.header.total_size =
-      static_cast<DWORD>(sizeof(dataAttr)) + dataAttr.attr_size;
-  std::memcpy(&record[offset + dataAttr.attr_offset],
-              kSmallResidentDataContent.data(),
-              kSmallResidentDataContent.size());
+  for (const FakeEncryptedStream& stream : file.streams)
+  {
+    WORD flags = stream.flagged_encrypted ? NtfsBrowser::Efs::kAttrFlagEncrypted
+                                          : static_cast<WORD>(0);
+    if (stream.flagged_compressed)
+    {
+      flags |= kAttrFlagCompressed;
+    }
+    offset += WriteNonResidentAttr(record, offset, AttrType::DATA, 0,
+                                   stream.real_size, stream.runs,
+                                   {.name = stream.name, .flags = flags});
+  }
 
-  offset += dataAttr.header.total_size;
+  std::vector<FakeDataRun> efsRuns;
+  if (!file.efs_stream.empty())
+  {
+    if (file.efs_resident)
+    {
+      offset += WriteResidentEfsAttr(record, offset, file.efs_stream);
+    }
+    else
+    {
+      efsRuns.push_back(
+          {kFakeEfsStreamLcn,
+           static_cast<DWORD>((file.efs_stream.size() + kClusterSize - 1) /
+                              kClusterSize)});
+      offset += WriteNonResidentAttr(
+          record, offset, AttrType::LOGGED_UTILITY_STREAM, 0,
+          file.efs_stream.size(), efsRuns, {.name = L"$EFS"});
+    }
+  }
   WriteEndOfAttributesMarker(record, offset);
 
+  std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
   const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
                                           static_cast<size_t>(MftIdx::ROOT);
   std::memcpy(image.data() + rootOffset, record.data(), record.size());
 
+  for (const FakeEncryptedStream& stream : file.streams)
+  {
+    LayRunBytes(image, stream.runs, stream.cluster_bytes);
+  }
+  LayRunBytes(image, efsRuns, file.efs_stream);
+
   return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithEncryptedDirectory()
+{
+  const std::array<FakeIndexName, 1> rootNames{
+      {{kEncryptedDirectoryNames[0], kEncryptedDirectoryMftRefs[0], false}}};
+  const std::array<FakeIndexName, 1> blockNames{
+      {{kEncryptedDirectoryNames[1], kEncryptedDirectoryMftRefs[1], true}}};
+
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 1}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::ENCRYPTED,
+      0, kFakeFileRecordSize, runs, {}, rootNames);
+
+  return BuildCompressionImage(record, runs, MakeIndexBlockContent(blockNames));
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCompressedEncryptedDirectory()
+{
+  const std::array<FakeIndexName, 1> rootNames{
+      {{kEncryptedDirectoryNames[0], kEncryptedDirectoryMftRefs[0], false}}};
+  const std::array<FakeIndexName, 1> blockNames{
+      {{kEncryptedDirectoryNames[1], kEncryptedDirectoryMftRefs[1], true}}};
+
+  const std::vector<FakeDataRun> runs{{kCompressedDataLcn, 2},
+                                      {{}, kCompressionUnitClusters - 2}};
+
+  const FakeRecord record = MakeIndexAllocationDirRecord(
+      NtfsBrowser::Flag::StdInfoPermission::ARCHIVE |
+          NtfsBrowser::Flag::StdInfoPermission::COMPRESSED |
+          NtfsBrowser::Flag::StdInfoPermission::ENCRYPTED,
+      kCompressionUnitSizeShift, kFakeFileRecordSize, runs, {}, rootNames);
+
+  return BuildCompressionImage(
+      record, runs,
+      MakeUncompressedLznt1Chunk(MakeIndexBlockContent(blockNames)));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData()

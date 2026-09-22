@@ -17,6 +17,10 @@
 
 namespace NtfsBrowser
 {
+namespace Efs
+{
+struct WrappedFek;
+}  // namespace Efs
 template <Strategy S>
 class NtfsVolume;
 class IndexEntry;
@@ -67,6 +71,8 @@ class FileRecord
   std::vector<BYTE> record_buffer_;
 
   void ClearAttrs() noexcept;
+  void AttachEfsContext();
+  [[nodiscard]] std::vector<Efs::WrappedFek> ReadEfsEntries() const;
   void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, bool& bDiscard);
   template <typename RESIDENT>
   [[nodiscard]] std::unique_ptr<AttrBase<S>>

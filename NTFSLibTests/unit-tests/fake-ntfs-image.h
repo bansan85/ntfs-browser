@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -544,11 +545,57 @@ inline constexpr ULONGLONG kMisalignedCompressedStartVcn = 2;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMisalignedCompressedStartVcn();
 
+// LCN where a non-resident $EFS stream lives, clear of the data streams.
+inline constexpr DWORD kFakeEfsStreamLcn = 60;
+
+// One non-resident $DATA stream of an encrypted fake file. The bytes are
+// stored as given: encrypting them is the test's job.
+struct FakeEncryptedStream
+{
+  std::wstring name;                // empty: the unnamed stream
+  std::vector<FakeDataRun> runs;    // its layout, sparse holes included
+  std::vector<BYTE> cluster_bytes;  // laid over the real runs, in order
+  ULONGLONG real_size{0};
+  bool flagged_encrypted{true};  // the 0x4000 bit of the attribute header
+  // The compressed attribute flag (bit 0), alongside flagged_encrypted: a
+  // combination real NTFS never produces, but a forged record could.
+  bool flagged_compressed{false};
+};
+
+// An encrypted file: a root record with the ENCRYPTED std-info flag, these
+// $DATA streams, and an $EFS stream.
+struct FakeEncryptedFile
+{
+  std::vector<FakeEncryptedStream> streams;
+  // Bytes of the $EFS stream. Empty: the record has none.
+  std::vector<BYTE> efs_stream;
+  // Real EFS keeps $EFS non-resident, as here by default.
+  bool efs_resident{false};
+};
+
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
-// a FILE_ATTRIBUTE_ENCRYPTED (not compressed) file with one ordinary
-// resident $DATA attribute - confirms encrypted-record rejection still
-// works once compressed records are no longer rejected outright.
-[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithEncryptedFile();
+// the file described.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithEncryptedFile(const FakeEncryptedFile& file);
+
+// Names, MFT references of the two entries of the encrypted directory below:
+// the first sits in its $INDEX_ROOT, the second (a directory) in its index
+// block.
+inline constexpr std::array<std::wstring_view, 2> kEncryptedDirectoryNames{
+    L"secret.txt", L"vault"};
+inline constexpr std::array<ULONGLONG, 2> kEncryptedDirectoryMftRefs{40, 41};
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a directory that has the ENCRYPTED std-info flag: EFS marks a directory so
+// that files created in it are encrypted. Its index is not encrypted.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithEncryptedDirectory();
+
+// Same as BuildFakeNtfsImageWithEncryptedDirectory(), but the directory's
+// $INDEX_ALLOCATION is also LZNT1-compressed: compression and the record's
+// own encryption flag are independent, since $INDEX_ALLOCATION is never
+// itself an EFS-decrypted stream.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithCompressedEncryptedDirectory();
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
 // the smallest legal non-resident $DATA (base header only, comp_unit_size ==
