@@ -21,7 +21,7 @@ IndexEntry::IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
 
   if (ie.stream_size == 0)
   {
-    LogWarn("No Filename stream found");
+    LogInfo("No Filename stream found");
     return;
   }
 
