@@ -1,0 +1,32 @@
+{
+  "name": "ntfs-browser",
+  "version": "0.1.0",
+  "homepage": "https://github.com/bansan85/ntfs-browser",
+  "description": "A modernized, read-only C++20 library for parsing NTFS volumes directly from raw disk and MFT structures.",
+  "supports": "windows | linux",
+  "dependencies": [
+    "ms-gsl",
+    "spdlog"
+  ],
+  "default-features": [
+    "tests",
+    "efs-cryptopp"
+  ],
+  "features": {
+    "tests": {
+      "description": "Pull in Catch2 for NtfsBrowserTests (NTFS_BROWSER_USE_INSTALLED_CATCH2; Windows only, the tests do not build elsewhere)",
+      "dependencies": [
+        {
+          "name": "catch2",
+          "platform": "windows"
+        }
+      ]
+    },
+    "efs-cryptopp": {
+      "description": "Pull in Crypto++ for the EFS Crypto++ cipher backend (NTFS_BROWSER_USE_INSTALLED_CRYPTOPP, NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)",
+      "dependencies": [
+        "cryptopp"
+      ]
+    }
+  }
+}

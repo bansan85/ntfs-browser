@@ -12,43 +12,64 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
-add_subdirectory("3rdparty/gsl")
-add_subdirectory("3rdparty/Catch2")
-
-# spdlog's own examples, tests and benchmarks are not this project's, and its
-# tests would otherwise join ctest.
-set(SPDLOG_BUILD_EXAMPLE
-    OFF
-    CACHE BOOL "" FORCE)
-set(SPDLOG_BUILD_TESTS
-    OFF
-    CACHE BOOL "" FORCE)
-set(SPDLOG_BUILD_BENCH
-    OFF
-    CACHE BOOL "" FORCE)
-# Vendored headers are not this project's code to lint.
-set(SPDLOG_SYSTEM_INCLUDES
-    ON
-    CACHE BOOL "" FORCE)
-# Log::Config::file_path is a std::filesystem::path, whose native form is wide
-# on Windows. Without this spdlog takes a narrow file name and opens it through
-# the active ANSI code page, which cannot express every path. spdlog forces this
-# option back off on the platforms where it does not apply, so it needs no
-# if(WIN32) here.
-set(SPDLOG_WCHAR_FILENAMES
-    ON
-    CACHE BOOL "" FORCE)
-add_subdirectory("3rdparty/spdlog")
-# spdlog already exports its own symbols with __declspec. Letting CMake generate
-# a .def for it on top makes the linker warn about every one.
-if(TARGET spdlog)
-  set_target_properties(spdlog PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+if(VCPKG_TOOLCHAIN)
+  set(NTFS_BROWSER_USE_INSTALLED_DEFAULT ON)
+else()
+  set(NTFS_BROWSER_USE_INSTALLED_DEFAULT OFF)
 endif()
 
-# Crypto++ is the default EFS cipher backend. Turn this ON to link an installed
-# copy (eg. from vcpkg) instead of the submodule.
+option(NTFS_BROWSER_USE_INSTALLED_GSL
+       "Link an installed Microsoft GSL instead of the 3rdparty submodule"
+       ${NTFS_BROWSER_USE_INSTALLED_DEFAULT})
+if(NTFS_BROWSER_USE_INSTALLED_GSL)
+  find_package(Microsoft.GSL CONFIG REQUIRED)
+else()
+  add_subdirectory("3rdparty/gsl")
+endif()
+
+option(NTFS_BROWSER_USE_INSTALLED_CATCH2
+       "Link an installed Catch2 instead of the 3rdparty submodule"
+       ${NTFS_BROWSER_USE_INSTALLED_DEFAULT})
+if(NTFS_BROWSER_USE_INSTALLED_CATCH2)
+  find_package(Catch2 3 CONFIG REQUIRED)
+else()
+  add_subdirectory("3rdparty/Catch2")
+endif()
+
+option(NTFS_BROWSER_USE_INSTALLED_SPDLOG
+       "Link an installed spdlog instead of the 3rdparty submodule"
+       ${NTFS_BROWSER_USE_INSTALLED_DEFAULT})
+if(NTFS_BROWSER_USE_INSTALLED_SPDLOG)
+  find_package(spdlog CONFIG REQUIRED)
+else()
+  set(SPDLOG_BUILD_EXAMPLE
+      OFF
+      CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_TESTS
+      OFF
+      CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_BENCH
+      OFF
+      CACHE BOOL "" FORCE)
+  # Vendored headers are not this project's code to lint.
+  set(SPDLOG_SYSTEM_INCLUDES
+      ON
+      CACHE BOOL "" FORCE)
+  set(SPDLOG_WCHAR_FILENAMES
+      ON
+      CACHE BOOL "" FORCE)
+  add_subdirectory("3rdparty/spdlog")
+  if(TARGET spdlog)
+    set_target_properties(spdlog PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+  endif()
+endif()
+
+# Crypto++ is the default EFS cipher backend. Defaults the same way as the other
+# NTFS_BROWSER_USE_INSTALLED_* options above: ON under vcpkg, OFF otherwise
+# (build the 3rdparty submodule).
 option(NTFS_BROWSER_USE_INSTALLED_CRYPTOPP
-       "Link an installed Crypto++ instead of the 3rdparty submodule" OFF)
+       "Link an installed Crypto++ instead of the 3rdparty submodule"
+       ${NTFS_BROWSER_USE_INSTALLED_DEFAULT})
 
 # LZNT1 decompression and the two EFS decryption cipher backends are each
 # optional: turning one off drops its source files, dependency links and call
