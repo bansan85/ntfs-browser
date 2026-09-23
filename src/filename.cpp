@@ -1,10 +1,11 @@
+#include "attr/filename.h"
+
 #include <algorithm>
 #include <cwctype>
 
 #include <ntfs-browser/filename.h>
 
 #include "attr-std-info.h"
-#include "attr/filename.h"
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
 #include "ntfs-common.h"

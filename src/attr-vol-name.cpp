@@ -1,6 +1,7 @@
+#include "attr-vol-name.h"
+
 #include <cstring>
 
-#include "attr-vol-name.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser

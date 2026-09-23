@@ -1,3 +1,5 @@
+#include "attr-non-resident.h"
+
 #include <cassert>
 #include <cstring>
 #include <exception>
@@ -8,7 +10,6 @@
 
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "attr-non-resident.h"
 #include "attr/header-non-resident.h"
 #include "data/run-entry.h"
 #include "ntfs-common.h"

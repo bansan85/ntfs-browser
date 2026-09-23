@@ -1,8 +1,8 @@
 #pragma once
 
-#include <optional>
-
 #include <ntfs-browser/win-types.h>
+
+#include <optional>
 
 namespace NtfsBrowser::Data
 {

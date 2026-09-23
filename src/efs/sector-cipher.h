@@ -1,14 +1,14 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <array>
 #include <cstddef>
 #include <memory>
 #include <span>
 
-#include <ntfs-browser/win-types.h>
-
-#include "efs/fek.h"
 #include "../internal-export.h"
+#include "efs/fek.h"
 
 namespace NtfsBrowser::Efs
 {

@@ -5,9 +5,9 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
-
 #include <windows.h>
+
+#include <ntfs-browser/disk-reader.h>
 
 namespace NtfsBrowserTests
 {
@@ -29,4 +29,4 @@ class MemoryDiskReader : public NtfsBrowser::IDiskReader
   std::vector<BYTE> data_;
 };
 
-}
+}  // namespace NtfsBrowserTests

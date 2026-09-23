@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <optional>
 #include <span>
 #include <string_view>
@@ -10,7 +12,6 @@
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/strategy.h>
-#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {

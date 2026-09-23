@@ -1,6 +1,7 @@
+#include "attr-index-alloc.h"
+
 #include <cstddef>
 
-#include "attr-index-alloc.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
 #include "data/run-entry.h"

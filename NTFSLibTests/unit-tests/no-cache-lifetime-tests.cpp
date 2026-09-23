@@ -28,7 +28,7 @@ struct TempImage
   TempImage& operator=(const TempImage&) = delete;
 };
 
-}
+}  // namespace
 
 TEST_CASE(
     "A second FileRecord's read does not corrupt $MFT's attribute (NO_CACHE)",

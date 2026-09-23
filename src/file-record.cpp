@@ -5,12 +5,12 @@
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/file-record.h>
+#include <ntfs-browser/flag/file-record.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/data/file-record-header.h>
-#include <ntfs-browser/flag/file-record.h>
 
 #include "attr-bitmap.h"
 #include "attr-data.h"

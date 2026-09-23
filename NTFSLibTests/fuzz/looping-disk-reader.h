@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstddef>
 #include <filesystem>
 #include <optional>
@@ -8,7 +10,6 @@
 #include <vector>
 
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/win-types.h>
 
 namespace NtfsFuzz
 {

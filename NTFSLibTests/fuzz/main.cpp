@@ -14,10 +14,9 @@
   // Keeps windows.h from clobbering std::min/std::max.
   #define NOMINMAX
 #endif
-#include <windows.h>
-
 #include <crtdbg.h>
 #include <malloc.h>  // _resetstkoflw
+#include <windows.h>
 
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "attr-resident.h"
+#include <string>
+#include <string_view>
 
 #include <ntfs-browser/strategy.h>
 
-#include <string>
-#include <string_view>
+#include "attr-resident.h"
 
 namespace NtfsBrowser
 {

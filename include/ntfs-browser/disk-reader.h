@@ -1,9 +1,9 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <span>
 #include <string_view>
-
-#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {
@@ -24,4 +24,4 @@ class IDiskReader
                                       std::span<BYTE> dest) const = 0;
 };
 
-}
+}  // namespace NtfsBrowser

@@ -58,4 +58,4 @@ SequentialDiskReader::Producer
   };
 }
 
-}
+}  // namespace NtfsBrowserTests

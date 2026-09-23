@@ -2,6 +2,7 @@
 //
 
 #include "StdAfx.h"
+
 #include "ntfsattr.h"
 #include "ntfsattrDlg.h"
 

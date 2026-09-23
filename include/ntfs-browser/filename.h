@@ -1,9 +1,10 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <string>
 
 #include <ntfs-browser/export.h>
-#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {

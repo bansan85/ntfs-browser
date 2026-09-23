@@ -24,10 +24,10 @@
 // Portable C++ only (no Win32/POSIX APIs), so it builds in both supported
 // configurations: MSVC/Windows and GCC/Linux.
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstddef>
 #include <span>
-
-#include <ntfs-browser/win-types.h>
 
 #include "../internal-export.h"
 

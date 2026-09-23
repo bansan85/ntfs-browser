@@ -1,7 +1,7 @@
+#include "utf.h"
+
 #include <cstddef>
 #include <type_traits>
-
-#include "utf.h"
 
 namespace NtfsBrowser
 {

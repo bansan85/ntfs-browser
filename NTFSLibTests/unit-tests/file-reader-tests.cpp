@@ -6,9 +6,8 @@
 #include <span>
 #include <vector>
 
-#include <windows.h>
-
 #include <catch2/catch_test_macros.hpp>
+#include <windows.h>
 
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/strategy.h>
@@ -44,7 +43,7 @@ struct TempFile
   ~TempFile() { std::filesystem::remove(path); }
 };
 
-}
+}  // namespace
 
 TEST_CASE("FileReader::ReadInto reads into the caller-provided buffer",
           "[file-reader]")

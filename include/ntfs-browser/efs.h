@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -9,7 +11,6 @@
 #include <vector>
 
 #include <ntfs-browser/export.h>
-#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser::Efs
 {

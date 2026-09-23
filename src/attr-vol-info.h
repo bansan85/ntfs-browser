@@ -1,8 +1,9 @@
 #pragma once
 
-#include "attr-resident.h"
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/file-record.h>
+
+#include "attr-resident.h"
 
 namespace NtfsBrowser
 {

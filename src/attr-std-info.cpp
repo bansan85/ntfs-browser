@@ -1,11 +1,11 @@
+#include "attr-std-info.h"
+
 #include <cstddef>
 #include <stdexcept>
 
-#include "attr-std-info.h"
-#include "ntfs-common.h"
-
 #include "attr/standard-information.h"
 #include "flag/std-info-permission.h"
+#include "ntfs-common.h"
 
 namespace NtfsBrowser
 {

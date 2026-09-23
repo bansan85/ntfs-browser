@@ -1,11 +1,11 @@
-#include <ntfs-browser/data/file-record-header.h>
-
-#include <ntfs-browser/strategy.h>
-#include "../ntfs-common.h"
-#include <ntfs-browser/data/attr-header-common.h>
-
 #include <cstring>
 #include <stdexcept>
+
+#include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/data/file-record-header.h>
+#include <ntfs-browser/strategy.h>
+
+#include "../ntfs-common.h"
 
 namespace NtfsBrowser
 {

@@ -20,10 +20,9 @@
 #include <system_error>
 #include <vector>
 
-#include <windows.h>
-
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <windows.h>
 
 #include <ntfs-browser/log.h>
 #include <ntfs-browser/ntfs-volume.h>

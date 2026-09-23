@@ -1,10 +1,12 @@
 #include "attr-file-name.h"
-#include "attr/filename.h"
-#include "flag/filename.h"
-#include "ntfs-common.h"
+
 #include <cassert>
 #include <cstddef>
 #include <stdexcept>
+
+#include "attr/filename.h"
+#include "flag/filename.h"
+#include "ntfs-common.h"
 
 namespace NtfsBrowser
 {

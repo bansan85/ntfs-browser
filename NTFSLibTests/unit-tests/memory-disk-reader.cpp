@@ -38,4 +38,4 @@ bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
   return true;
 }
 
-}
+}  // namespace NtfsBrowserTests

@@ -5,10 +5,10 @@
 #include <string_view>
 #include <type_traits>
 
+#include <windows.h>
+
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/export.h>
-
-#include <windows.h>
 
 namespace NtfsBrowser
 {

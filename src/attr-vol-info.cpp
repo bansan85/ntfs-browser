@@ -1,6 +1,7 @@
+#include "attr-vol-info.h"
+
 #include <stdexcept>
 
-#include "attr-vol-info.h"
 #include "attr/volume-information.h"
 #include "ntfs-common.h"
 

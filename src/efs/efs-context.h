@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <functional>
 #include <memory>
 #include <optional>
@@ -8,7 +10,6 @@
 #include <vector>
 
 #include <ntfs-browser/efs.h>
-#include <ntfs-browser/win-types.h>
 
 #include "efs/efs-stream.h"
 #include "efs/sector-cipher.h"

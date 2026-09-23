@@ -1,18 +1,19 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <array>
 #include <memory>
 #include <span>
 #include <string_view>
 
+#include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/win-types.h>
 
 #ifdef _WIN32
   #include <tchar.h>

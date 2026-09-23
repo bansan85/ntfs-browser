@@ -1,18 +1,18 @@
 #include "StdAfx.h"
 
 #include <chrono>
+#include <map>
 #include <regex>
 #include <set>
-#include <map>
-
-#include "ntfsundel.h"
-#include "ntfsundelDlg.h"
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/file-record.h>
+#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/index-entry.h>
+
+#include "ntfsundel.h"
+#include "ntfsundelDlg.h"
 
 using namespace NtfsBrowser;
 

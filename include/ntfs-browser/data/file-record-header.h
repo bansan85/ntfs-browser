@@ -1,13 +1,13 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstdint>
 #include <memory>
 #include <span>
 #include <vector>
 
 #include <gsl/pointers>
-
-#include <ntfs-browser/win-types.h>
 
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/file-reader.h>
@@ -80,8 +80,8 @@ struct FileRecordHeaderImpl
 };
 
 template <>
-struct NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::NO_CACHE>
-    : public FileRecordHeader
+struct NTFS_BROWSER_EXPORT
+    FileRecordHeaderImpl<Strategy::NO_CACHE> : public FileRecordHeader
 {
   std::span<const BYTE> data_;
 
@@ -92,8 +92,8 @@ struct NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::NO_CACHE>
 };
 
 template <>
-struct NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::FULL_CACHE>
-    : public FileRecordHeader
+struct NTFS_BROWSER_EXPORT
+    FileRecordHeaderImpl<Strategy::FULL_CACHE> : public FileRecordHeader
 {
   FileRecordHeader::Data data_;
 

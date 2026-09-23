@@ -1,13 +1,15 @@
 #ifdef _WIN32
 
+  #include <ntfs-browser/win-types.h>
+
   #include <fstream>
   #include <iterator>
   #include <string>
 
-  #include <ntfs-browser/efs.h>
-
   #include <ncrypt.h>
   #include <wincrypt.h>
+
+  #include <ntfs-browser/efs.h>
 
   #include "efs/fek.h"
   #include "ntfs-common.h"

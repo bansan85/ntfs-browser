@@ -1,9 +1,10 @@
+#include "attr-resident.h"
+
 #include <cstring>
 #include <stdexcept>
 
 #include <gsl/narrow>
 
-#include "attr-resident.h"
 #include "attr/header-resident.h"
 
 namespace NtfsBrowser
@@ -22,7 +23,7 @@ void ValidateResidentBounds(const Attr::HeaderResident& header)
         "Resident attribute body exceeds attribute bounds.\n");
   }
 }
-}
+}  // namespace
 
 template <Strategy S>
 AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,

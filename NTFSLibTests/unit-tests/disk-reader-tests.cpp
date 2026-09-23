@@ -6,9 +6,8 @@
 #include <span>
 #include <vector>
 
-#include <windows.h>
-
 #include <catch2/catch_test_macros.hpp>
+#include <windows.h>
 
 #include "memory-disk-reader.h"
 #include "sequential-disk-reader.h"
@@ -33,7 +32,7 @@ std::vector<BYTE> MakeContent(size_t size)
   return content;
 }
 
-}
+}  // namespace
 
 TEST_CASE("MemoryDiskReader reads from a buffer given at construction",
           "[disk-reader][memory]")

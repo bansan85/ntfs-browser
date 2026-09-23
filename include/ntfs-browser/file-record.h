@@ -1,20 +1,21 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <array>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
-#include <functional>
 #include <unordered_set>
 #include <vector>
 
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/strategy.h>
-#include <ntfs-browser/data/file-record-header.h>
-#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {

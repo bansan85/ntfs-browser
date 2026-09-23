@@ -1,14 +1,14 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <list>
 #include <unordered_set>
 
 #include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/strategy.h>
-#include <ntfs-browser/win-types.h>
-
-#include <ntfs-browser/data/file-record-header.h>
 
 namespace NtfsBrowser
 {

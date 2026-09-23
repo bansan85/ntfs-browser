@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cstddef>
-
 #include <ntfs-browser/win-types.h>
+
+#include <cstddef>
 
 namespace NtfsBrowser::Attr
 {

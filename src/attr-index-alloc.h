@@ -1,9 +1,9 @@
 #pragma once
 
+#include <ntfs-browser/strategy.h>
+
 #include "attr-non-resident.h"
 #include "internal-export.h"
-
-#include <ntfs-browser/strategy.h>
 
 namespace NtfsBrowser
 {

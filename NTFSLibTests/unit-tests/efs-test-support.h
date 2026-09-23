@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <array>
 #include <optional>
 #include <span>
@@ -7,7 +9,6 @@
 #include <vector>
 
 #include <ntfs-browser/efs.h>
-#include <ntfs-browser/win-types.h>
 
 #include "efs/fek.h"
 

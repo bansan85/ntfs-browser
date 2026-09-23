@@ -1,3 +1,5 @@
+#include "attr-index-root.h"
+
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -5,7 +7,6 @@
 
 #include <ntfs-browser/data/attr-type.h>
 
-#include "attr-index-root.h"
 #include "attr/index-root.h"
 #include "data/index-entry.h"
 #include "flag/index-entry.h"

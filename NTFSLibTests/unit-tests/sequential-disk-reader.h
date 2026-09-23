@@ -6,9 +6,9 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
-
 #include <windows.h>
+
+#include <ntfs-browser/disk-reader.h>
 
 namespace NtfsBrowserTests
 {
@@ -43,4 +43,4 @@ class SequentialDiskReader : public NtfsBrowser::IDiskReader
 [[nodiscard]] SequentialDiskReader::Producer
     MakeGeneratorProducer(std::function<void(std::span<BYTE>)> generate);
 
-}
+}  // namespace NtfsBrowserTests

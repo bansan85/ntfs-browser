@@ -1,17 +1,18 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <map>
 #include <memory>
 #include <optional>
-#include <string_view>
 #include <span>
-#include <vector>
+#include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/strategy.h>
-#include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
 {

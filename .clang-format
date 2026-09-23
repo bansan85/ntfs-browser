@@ -80,28 +80,36 @@ IfMacros:
   - KJ_IF_MAYBE
 IncludeBlocks: Regroup
 IncludeCategories:
-  - Regex: '^<jessica/.*\.h>'
+  - Regex: '\"StdAfx.h\"'
+    Priority: 0
+    SortPriority: 0
+    CaseSensitive: true
+  - Regex: '^<ntfs-browser/win-types.h>'
+    Priority: 1
+    SortPriority: 0
+    CaseSensitive: true
+  - Regex: '^<ntfs-browser/.*\.h>'
     Priority: 4
     SortPriority: 0
     CaseSensitive: true
   - Regex: '^<.*\.h>'
-    Priority: 2
+    Priority: 3
     SortPriority: 0
     CaseSensitive: true
   - Regex: '^<.*\.hpp>'
-    Priority: 2
+    Priority: 3
     SortPriority: 0
     CaseSensitive: true
-  - Regex: '<restbed>'
-    Priority: 2
+  - Regex: '^<gsl/.*>'
+    Priority: 3
     SortPriority: 0
     CaseSensitive: true
   - Regex: '^<.*'
-    Priority: 1
+    Priority: 2
     SortPriority: 0
     CaseSensitive: true
   - Regex: '.*'
-    Priority: 3
+    Priority: 5
     SortPriority: 0
     CaseSensitive: true
 IncludeIsMainRegex: '([-_](test|unittest))?$'
@@ -175,7 +183,7 @@ ReflowComments: false
 RemoveBracesLLVM: false
 SeparateDefinitionBlocks: Leave
 ShortNamespaceLines: 0
-SortIncludes: Never
+SortIncludes: true
 SortJavaStaticImport: Before
 SortUsingDeclarations: true
 SpaceAfterCStyleCast: false

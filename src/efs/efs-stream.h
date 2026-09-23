@@ -1,10 +1,10 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <optional>
 #include <span>
 #include <vector>
-
-#include <ntfs-browser/win-types.h>
 
 #include "../internal-export.h"
 
