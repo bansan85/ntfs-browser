@@ -15,17 +15,25 @@ Context::Context(std::vector<WrappedFek> entries,
 // BCrypt is not the selected one, or cannot take this cipher (DESX).
 std::unique_ptr<SectorDecryptor> Context::MakeDecryptor(const Fek& fek) const
 {
-#ifdef _WIN32
+#if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
   if (GetCipherBackend() == CipherBackend::kBCrypt)
   {
     if (std::unique_ptr<SectorDecryptor> decryptor = MakeBCryptDecryptor(fek))
     {
       return decryptor;
     }
+  #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
     LogDebug("BCrypt declined the FEK. Using Crypto++.");
+  #else
+    LogDebug("BCrypt declined the FEK. No Crypto++ fallback compiled in.");
+  #endif
   }
 #endif
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
   return MakeCryptoPpDecryptor(fek);
+#else
+  return nullptr;
+#endif
 }
 
 // Tries each $EFS entry with the provider, until one yields a usable key.

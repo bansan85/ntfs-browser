@@ -574,6 +574,11 @@ constexpr std::wstring_view kEfsStreamName = L"$EFS";
 template <Strategy S>
 std::vector<Efs::WrappedFek> FileRecord<S>::ReadEfsEntries() const
 {
+#if !(defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
+      (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)))
+  // Neither backend is compiled in: there is no decryptor to feed keys to.
+  return {};
+#else
   for (const std::unique_ptr<AttrBase<S>>& attr :
        attr_list_[ATTR_INDEX(AttrType::LOGGED_UTILITY_STREAM)])
   {
@@ -602,6 +607,7 @@ std::vector<Efs::WrappedFek> FileRecord<S>::ReadEfsEntries() const
   }
 
   return {};
+#endif
 }
 
 // Gives every encrypted $DATA stream of this record the context that
@@ -610,6 +616,12 @@ std::vector<Efs::WrappedFek> FileRecord<S>::ReadEfsEntries() const
 template <Strategy S>
 void FileRecord<S>::AttachEfsContext()
 {
+#if !(defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
+      (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)))
+  // Neither backend is compiled in: no stream ever gets a decryption context,
+  // so ReadData() returns raw ciphertext for an encrypted $DATA stream.
+  return;
+#else
   // AttrHeaderCommon::flags bit 0: the on-disk "compressed" flag. Real NTFS
   // never sets it alongside 0x4000 (compression and encryption are mutually
   // exclusive), but a forged record could. Decrypting a compressed stream's
@@ -656,6 +668,7 @@ void FileRecord<S>::AttachEfsContext()
   {
     stream->SetEfsContext(context);
   }
+#endif
 }
 
 template <Strategy S>

@@ -194,6 +194,16 @@ TEMPLATE_TEST_CASE_SIG(
       {
         continue;
       }
+#ifndef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
+      if (algorithm == Algorithm::kDesx && backend == CipherBackend::kBCrypt)
+      {
+        // BCrypt has no DESX. With Crypto++ compiled in, MakeDecryptor()
+        // falls back to it and this combination still round-trips; without
+        // it there is no decryptor to fall back to at all, so this
+        // combination cannot be exercised here.
+        continue;
+      }
+#endif
       INFO("algorithm 0x" << std::hex << static_cast<DWORD>(algorithm)
                           << ", backend " << static_cast<int>(backend));
 
@@ -527,6 +537,12 @@ TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
   CHECK(names[1] == NtfsBrowserTests::kEncryptedDirectoryNames[1]);
 }
 
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
+// This test's whole premise is a compressed $INDEX_ALLOCATION: with
+// decompression not compiled in, that attribute is rejected on sight
+// (see attr-non-resident.cpp), so the record never parses at all. There is
+// no meaningful compressed-and-encrypted-directory case left to check then,
+// the same way attr-compression-tests.cpp is excluded outright.
 TEMPLATE_TEST_CASE_SIG(
     "A compressed $INDEX_ALLOCATION still lists under an encrypted directory",
     "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
@@ -551,6 +567,7 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(names[0] == NtfsBrowserTests::kEncryptedDirectoryNames[0]);
   CHECK(names[1] == NtfsBrowserTests::kEncryptedDirectoryNames[1]);
 }
+#endif
 
 TEMPLATE_TEST_CASE_SIG(
     "A hostile $EFS stream never crashes the parse and never yields a key",
@@ -711,10 +728,17 @@ TEST_CASE("The cipher backend is selectable, and Crypto++ is the default",
 {
   const NtfsBrowserTests::BackendGuard guard;
 
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
   CHECK(NtfsBrowser::Efs::SetCipherBackend(CipherBackend::kCryptoPp));
   CHECK(NtfsBrowser::Efs::GetCipherBackend() == CipherBackend::kCryptoPp);
+#else
+  // Crypto++ is not compiled in: the file only builds at all because BCrypt
+  // is, so that is the default instead (mirrors efs.cpp's g_backend default).
+  CHECK_FALSE(NtfsBrowser::Efs::SetCipherBackend(CipherBackend::kCryptoPp));
+  CHECK(NtfsBrowser::Efs::GetCipherBackend() == CipherBackend::kBCrypt);
+#endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
   CHECK(NtfsBrowser::Efs::SetCipherBackend(CipherBackend::kBCrypt));
   CHECK(NtfsBrowser::Efs::GetCipherBackend() == CipherBackend::kBCrypt);
 #else
@@ -807,8 +831,12 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
       const std::optional<Fek> fek = Fek::Parse(blob);
       REQUIRE(fek.has_value());
 
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
       auto decryptor = NtfsBrowser::Efs::MakeCryptoPpDecryptor(*fek);
-#ifdef _WIN32
+#else
+      std::unique_ptr<NtfsBrowser::Efs::SectorDecryptor> decryptor;
+#endif
+#if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
       if (backend == CipherBackend::kBCrypt)
       {
         decryptor = NtfsBrowser::Efs::MakeBCryptDecryptor(*fek);

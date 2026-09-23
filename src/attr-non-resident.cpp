@@ -11,9 +11,15 @@
 #include "attr-non-resident.h"
 #include "attr/header-non-resident.h"
 #include "data/run-entry.h"
-#include "efs/efs-context.h"
-#include "lznt1/decompress.h"
 #include "ntfs-common.h"
+
+#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
+    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
+  #include "efs/efs-context.h"
+#endif
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
+  #include "lznt1/decompress.h"
+#endif
 
 namespace NtfsBrowser
 {
@@ -39,6 +45,13 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
   // unit-aligned or units decode against the wrong window.
   if (Attr::HasCompressedSizeField(attr_header_nr_))
   {
+#ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
+    // Decompression is not compiled in: reject a compressed attribute
+    // outright, exactly as before compression support existed.
+    throw std::runtime_error(
+        "Compressed attribute rejected: decompression is not compiled "
+        "in.\n");
+#else
     if (attr_header_nr_.comp_unit_size > kMaxCompUnitSizeShift)
     {
       throw std::runtime_error("Compression unit size is out of range.\n");
@@ -63,6 +76,7 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
         comp_unit_clusters_, unitSize);
     LogDebug("Compressed size = {} bytes",
              Attr::CompressedSize(attr_header_nr_));
+#endif
   }
 
   ParseDataRun();
@@ -381,6 +395,12 @@ const std::vector<BYTE>*
   else
   {
     // Compressed unit.
+#ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
+    // Unreachable: the constructor already rejects a compressed attribute
+    // when decompression is not compiled in. Kept so this still compiles.
+    LogError("Decompression is not compiled in.");
+    return nullptr;
+#else
     std::vector<BYTE> compressed;
     try
     {
@@ -432,6 +452,7 @@ const std::vector<BYTE>*
       LogException(e);
       return nullptr;
     }
+#endif
   }
 
   if constexpr (S == Strategy::NO_CACHE)
@@ -579,12 +600,15 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
         }
         memcpy(buf, bufferi->data(), bufferi->size());
 
+#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
+    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
         // Decrypts the copy in buf, never the span, which may be the cache.
         if (efs_context_ && !efs_context_->Decrypt(vcn * this->GetClusterSize(),
                                                    {buf, bufferi->size()}))
         {
           return {};
         }
+#endif
       }
       else
       {

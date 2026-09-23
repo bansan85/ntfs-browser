@@ -11,10 +11,6 @@ set(${PROJECT_NAME}_SRC
     "attr-std-info.cpp"
     "attr-vol-info.cpp"
     "attr-vol-name.cpp"
-    "efs/efs-context.cpp"
-    "efs/efs-stream.cpp"
-    "efs/efs.cpp"
-    "efs/cipher-cryptopp.cpp"
     "efs/fek.cpp"
     "file-record.cpp"
     "filename.cpp"
@@ -22,13 +18,32 @@ set(${PROJECT_NAME}_SRC
     "index-block.cpp"
     "index-entry.cpp"
     "log.cpp"
-    "lznt1/decompress.cpp"
     "ntfs-volume.cpp"
     "utf.cpp")
 
+if(NTFS_BROWSER_ENABLE_DECOMPRESSION)
+  list(APPEND ${PROJECT_NAME}_SRC "lznt1/decompress.cpp")
+endif()
+
+if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
+  list(APPEND ${PROJECT_NAME}_SRC "efs/cipher-cryptopp.cpp")
+endif()
+
+# The backend-agnostic EFS machinery beyond fek.cpp - which key-provider-win.cpp
+# needs unconditionally on Windows, so it stays in the base list above - is only
+# needed, and only compiles, when at least one backend is compiled in.
+# NTFS_BROWSER_EFS_MASTER (set in the root CMakeLists.txt) is that condition.
+if(NTFS_BROWSER_EFS_MASTER)
+  list(APPEND ${PROJECT_NAME}_SRC "efs/efs-context.cpp" "efs/efs-stream.cpp"
+       "efs/efs.cpp")
+endif()
+
 if(WIN32)
   list(APPEND ${PROJECT_NAME}_SRC "win32-disk-reader.cpp"
-       "efs/cipher-bcrypt.cpp" "efs/key-provider-win.cpp")
+       "efs/key-provider-win.cpp")
+  if(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
+    list(APPEND ${PROJECT_NAME}_SRC "efs/cipher-bcrypt.cpp")
+  endif()
 endif()
 
 set(${PROJECT_NAME}_H
@@ -92,7 +107,13 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)
 # Private: spdlog is an implementation detail, absent from the public API.
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)
 # Private too: Crypto++ and the Windows crypto libraries stay out of the API.
-target_link_libraries(${PROJECT_NAME} PRIVATE cryptopp::cryptopp)
+# Narrower than the root CMakeLists.txt "EFS master" gate that decides whether
+# Crypto++ is configured at all: the shipped library stays Crypto++-free
+# whenever it does not itself use that backend, even though the local build tree
+# still builds Crypto++ as the unit tests' own reference cipher.
+if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
+  target_link_libraries(${PROJECT_NAME} PRIVATE cryptopp::cryptopp)
+endif()
 if(WIN32)
   target_link_libraries(${PROJECT_NAME} PRIVATE bcrypt crypt32 ncrypt)
 endif()
@@ -103,5 +124,13 @@ target_include_directories(
   # Unlike MSVC, GCC doesn't search transitively-including files' directories.
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(${PROJECT_NAME} PUBLIC "_UNICODE" "UNICODE")
+# Feed the three options through as macros to the private .cpp files that test
+# them with #ifdef/#if defined(...).
+target_compile_definitions(
+  ${PROJECT_NAME}
+  PRIVATE
+    $<$<BOOL:${NTFS_BROWSER_ENABLE_DECOMPRESSION}>:NTFS_BROWSER_ENABLE_DECOMPRESSION>
+    $<$<BOOL:${NTFS_BROWSER_ENABLE_EFS_CRYPTOPP}>:NTFS_BROWSER_ENABLE_EFS_CRYPTOPP>
+    $<$<BOOL:${NTFS_BROWSER_ENABLE_EFS_BCRYPT}>:NTFS_BROWSER_ENABLE_EFS_BCRYPT>)
 
 group_src(${${PROJECT_NAME}_SRC} ${${PROJECT_NAME}_H} ${${PROJECT_NAME}_CMAKE})

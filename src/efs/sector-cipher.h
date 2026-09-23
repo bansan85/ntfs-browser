@@ -60,11 +60,13 @@ class SectorDecryptor
                                            std::span<BYTE> sector) const = 0;
 };
 
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
 // The Crypto++ backend. Null if the key is unusable.
 [[nodiscard]] std::unique_ptr<SectorDecryptor>
     MakeCryptoPpDecryptor(const Fek& fek);
+#endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
 // The BCrypt backend. Null if the key is unusable, or for DESX, which BCrypt
 // does not have.
 [[nodiscard]] std::unique_ptr<SectorDecryptor>

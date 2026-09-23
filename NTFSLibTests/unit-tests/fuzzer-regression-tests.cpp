@@ -107,10 +107,12 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"index_block_chain_depth_limit",
          {"VisitIndexBlock() aborting: recursion depth limit exceeded",
           "TraverseSubNode() aborting: recursion depth limit exceeded"}},
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
         {"compressed_index_allocation",
          {"Decompressed compression unit 0 into 1024 bytes",
           "per compression unit", "Compressed size = "}},
-        // UTF-8 of kSurrogateNames: hieroglyph, ant, ZWJ family, CJK ideograph.
+#endif
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
         {"surrogate_pair_names",
          {"File Name: \xF0\x93\x82\x80", "File Name: \xF0\x9F\x90\x9C",
           "File Name: "
@@ -119,6 +121,14 @@ const std::unordered_map<std::string, std::vector<std::string>>
           "File Name: \xF0\xA0\xAE\xB7", "File Permission: Directory",
           "File Permission: File",
           "Decompressed compression unit 0 into 1024 bytes"}},
+#else
+        {"surrogate_pair_names",
+         {"File Name: \xF0\x93\x82\x80", "File Name: \xF0\x9F\x90\x9C",
+          "File Permission: Directory", "File Permission: File",
+          "Compressed attribute rejected: decompression is not compiled "
+          "in."}},
+#endif
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
         {"corrupt_compressed_index_allocation",
          {"Cannot decompress compression unit 0",
           "LZNT1: back-reference before start of chunk.",
@@ -132,9 +142,24 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"compressed_index_allocation_misaligned_start_vcn",
          {"Compressed attribute start VCN is not compression unit aligned.",
           "Attribute Parse error: 0x00A0"}},
+#else
+        {"compressed_index_allocation_comp_unit_size_out_of_range",
+         {"Attribute Parse error: 0x00A0",
+          "Compressed attribute rejected: decompression is not compiled "
+          "in."}},
+        {"compressed_index_allocation_oversized_compression_unit",
+         {"Attribute Parse error: 0x00A0",
+          "Compressed attribute rejected: decompression is not compiled "
+          "in."}},
+        {"compressed_index_allocation_misaligned_start_vcn",
+         {"Attribute Parse error: 0x00A0",
+          "Compressed attribute rejected: decompression is not compiled "
+          "in."}},
+#endif
         {"compressed_index_allocation_missing_compressed_size",
          {"Compressed attribute total_size too small for its compressed "
           "size field."}},
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
         {"compressed_index_allocation_unmapped_unit",
          {"Compression unit at VCN 0 is not fully mapped"}},
         {"compressed_index_allocation_real_after_hole",
@@ -170,6 +195,7 @@ const std::unordered_map<std::string, std::vector<std::string>>
         {"compressed_index_allocation_lznt1_backreference_exceeds_dest",
          {"LZNT1: back-reference exceeds decompressed bounds.",
           "Cannot decompress compression unit 0"}},
+#endif
         {"index_block_magic_mismatch",
          {"Index Block parse error: Magic mismatch"}},
         {"index_alloc_block_count_incalculable",
