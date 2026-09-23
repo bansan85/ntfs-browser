@@ -29,6 +29,8 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include "../internal-export.h"
+
 namespace NtfsBrowser::Lznt1
 {
 
@@ -38,7 +40,7 @@ inline constexpr size_t kChunkSize = 4096;
 // Decompresses one LZNT1 buffer, "src", into "dest" and returns the byte
 // count written. "src" MUST hold exactly the compressed data; "dest" MUST
 // fit the output. Throws std::runtime_error on malformed input.
-[[nodiscard]] size_t Decompress(std::span<const BYTE> src,
-                                std::span<BYTE> dest);
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t
+    Decompress(std::span<const BYTE> src, std::span<BYTE> dest);
 
 }  // namespace NtfsBrowser::Lznt1

@@ -8,6 +8,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include "efs/fek.h"
+#include "../internal-export.h"
 
 namespace NtfsBrowser::Efs
 {
@@ -62,14 +63,14 @@ class SectorDecryptor
 
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
 // The Crypto++ backend. Null if the key is unusable.
-[[nodiscard]] std::unique_ptr<SectorDecryptor>
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::unique_ptr<SectorDecryptor>
     MakeCryptoPpDecryptor(const Fek& fek);
 #endif
 
 #if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
 // The BCrypt backend. Null if the key is unusable, or for DESX, which BCrypt
 // does not have.
-[[nodiscard]] std::unique_ptr<SectorDecryptor>
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::unique_ptr<SectorDecryptor>
     MakeBCryptDecryptor(const Fek& fek);
 #endif
 

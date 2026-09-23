@@ -6,6 +6,8 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include "../internal-export.h"
+
 namespace NtfsBrowser::Efs
 {
 
@@ -20,7 +22,8 @@ struct WrappedFek
 // recovery field (DRF) entries. Copies what it keeps, so the result outlives
 // the stream. Returns nullopt if the stream is malformed: a bounds error, a
 // count or length out of range, or a thumbprint that is not a SHA-1 hash.
-[[nodiscard]] std::optional<std::vector<WrappedFek>>
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY
+    std::optional<std::vector<WrappedFek>>
     ParseEfsStream(std::span<const BYTE> stream);
 
 }  // namespace NtfsBrowser::Efs

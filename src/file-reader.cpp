@@ -175,10 +175,13 @@ BYTE* FileReader<S>::NextMemory() const
 template class FileReader<Strategy::NO_CACHE>;
 template class FileReader<Strategy::FULL_CACHE>;
 
-template std::optional<std::span<const BYTE>>
+// Class-level NTFS_BROWSER_EXPORT (on FileReader) does not reach a member
+// function template's own explicit instantiations: each needs the macro
+// again here, or a shared-build consumer cannot link against it.
+template NTFS_BROWSER_EXPORT std::optional<std::span<const BYTE>>
     FileReader<Strategy::NO_CACHE>::Read<Strategy::NO_CACHE>(
         LARGE_INTEGER& addr, DWORD length) const;
-template std::optional<std::span<const BYTE>>
+template NTFS_BROWSER_EXPORT std::optional<std::span<const BYTE>>
     FileReader<Strategy::FULL_CACHE>::Read<Strategy::FULL_CACHE>(
         LARGE_INTEGER& addr, DWORD length) const;
 

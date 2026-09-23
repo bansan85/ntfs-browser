@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include <ntfs-browser/export.h>
 #include <ntfs-browser/win-types.h>
 
 namespace NtfsBrowser
@@ -16,7 +17,7 @@ namespace Flag
 enum class Filename : DWORD;
 }  // namespace Flag
 
-class Filename
+class NTFS_BROWSER_EXPORT Filename
 {
  public:
   Filename() = default;

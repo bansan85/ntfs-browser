@@ -1,6 +1,7 @@
 #pragma once
 
 #include "attr-non-resident.h"
+#include "internal-export.h"
 
 #include <ntfs-browser/strategy.h>
 
@@ -15,8 +16,9 @@ struct AttrHeaderCommon;
 // index_block_size-byte buffer without overlapping the block header.
 // Callers MUST reject the block instead of reading through it when this
 // returns false.
-[[nodiscard]] bool IndexBlockUsOffsetInBounds(WORD offset_of_us, DWORD sectors,
-                                              DWORD index_block_size) noexcept;
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY bool
+    IndexBlockUsOffsetInBounds(WORD offset_of_us, DWORD sectors,
+                               DWORD index_block_size) noexcept;
 
 template <Strategy S>
 class AttrIndexAlloc : public AttrNonResident<S>

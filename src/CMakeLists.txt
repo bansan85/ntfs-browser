@@ -95,6 +95,7 @@ set(${PROJECT_NAME}_H
     "flag/index-entry.h"
     "flag/std-info-permission.h"
     "index-block.h"
+    "internal-export.h"
     "lznt1/decompress.h"
     "ntfs-common.h"
     "utf.h")
@@ -103,6 +104,16 @@ set(${PROJECT_NAME}_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")
 
 add_library(${PROJECT_NAME} ${${PROJECT_NAME}_SRC} ${${PROJECT_NAME}_H}
                             ${${PROJECT_NAME}_CMAKE})
+
+include(GenerateExportHeader)
+# Per-symbol export/import, replacing a blanket
+# CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS: only include/ntfs-browser/*.h types that
+# cross the DLL boundary carry NTFS_BROWSER_EXPORT. A static build (the default)
+# gets an empty macro, so this header is safe to include either way.
+generate_export_header(
+  ${PROJECT_NAME} BASE_NAME NTFS_BROWSER EXPORT_FILE_NAME
+  "${CMAKE_CURRENT_BINARY_DIR}/include/ntfs-browser/export.h")
+
 target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)
 # Private: spdlog is an implementation detail, absent from the public API.
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)
@@ -120,6 +131,7 @@ endif()
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   # Unlike MSVC, GCC doesn't search transitively-including files' directories.
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

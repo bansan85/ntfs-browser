@@ -8,6 +8,7 @@
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs.h>
+#include <ntfs-browser/export.h>
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/attr-base.h>
@@ -21,7 +22,7 @@ namespace NtfsBrowser
 {
 
 template <Strategy S>
-class NtfsVolume
+class NTFS_BROWSER_EXPORT NtfsVolume
 {
  public:
 #ifdef _WIN32

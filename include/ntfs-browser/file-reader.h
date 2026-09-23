@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/export.h>
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/win-types.h>
 
@@ -16,7 +17,7 @@ namespace NtfsBrowser
 {
 
 template <Strategy S>
-class FileReader
+class NTFS_BROWSER_EXPORT FileReader
 {
  public:
   FileReader();
@@ -68,4 +69,4 @@ class FileReader
   mutable std::vector<std::unique_ptr<BYTE[]>> crossing_reads_;
 };
 
-}
+}  // namespace NtfsBrowser

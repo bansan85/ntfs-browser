@@ -6,6 +6,7 @@
 #include <type_traits>
 
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/export.h>
 
 #include <windows.h>
 
@@ -14,7 +15,7 @@ namespace NtfsBrowser
 
 // Production IDiskReader: a real disk/device, or an ordinary file treated
 // the same way (CreateFileW handles both identically).
-class Win32DiskReader : public IDiskReader
+class NTFS_BROWSER_EXPORT Win32DiskReader : public IDiskReader
 {
  public:
   Win32DiskReader();
@@ -31,4 +32,4 @@ class Win32DiskReader : public IDiskReader
   HandlePtr handle_;
 };
 
-}
+}  // namespace NtfsBrowser

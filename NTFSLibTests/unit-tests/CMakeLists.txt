@@ -62,6 +62,18 @@ target_link_libraries(
   NtfsBrowserTests PRIVATE ${PROJECT_NAME} Catch2::Catch2WithMain
                            spdlog::spdlog)
 
+# These tests reach several internal (non-public) NtfsBrowser symbols directly,
+# by including their src/ headers (see the target_include_directories below): on
+# a shared build, that only links if the library itself was built exporting
+# them. NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS (src/internal-export.h) is what
+# makes that conditional, so it must be defined identically on both the library
+# and this target - a normal build of NtfsBrowser never defines it, keeping
+# those symbols out of its export table.
+target_compile_definitions(${PROJECT_NAME}
+                           PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS)
+target_compile_definitions(NtfsBrowserTests
+                           PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS)
+
 # Crypto++: efs-test-support.cpp's own reference cipher for building EFS test
 # fixtures, independent of NTFS_BROWSER_ENABLE_EFS_CRYPTOPP (the library's own
 # use of Crypto++) - not narrowed to it, unlike the library's link above, since

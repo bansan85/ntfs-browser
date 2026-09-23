@@ -9,6 +9,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <ntfs-browser/export.h>
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/strategy.h>
 
@@ -29,7 +30,7 @@ struct AttrHeaderCommon;
 template <Strategy S>
 struct FileRecordHeaderImpl;
 
-struct FileRecordHeader
+struct NTFS_BROWSER_EXPORT FileRecordHeader
 {
   union Data
   {
@@ -79,7 +80,8 @@ struct FileRecordHeaderImpl
 };
 
 template <>
-struct FileRecordHeaderImpl<Strategy::NO_CACHE> : public FileRecordHeader
+struct NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::NO_CACHE>
+    : public FileRecordHeader
 {
   std::span<const BYTE> data_;
 
@@ -90,7 +92,8 @@ struct FileRecordHeaderImpl<Strategy::NO_CACHE> : public FileRecordHeader
 };
 
 template <>
-struct FileRecordHeaderImpl<Strategy::FULL_CACHE> : public FileRecordHeader
+struct NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::FULL_CACHE>
+    : public FileRecordHeader
 {
   FileRecordHeader::Data data_;
 

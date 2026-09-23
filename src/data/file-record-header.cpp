@@ -127,9 +127,12 @@ const FileRecordHeader::Data*
 template struct FileRecordHeaderImpl<Strategy::NO_CACHE>;
 template struct FileRecordHeaderImpl<Strategy::FULL_CACHE>;
 
-template FileRecordHeaderImpl<Strategy::NO_CACHE>
+// Class-level NTFS_BROWSER_EXPORT (on FileRecordHeader) does not reach a
+// member function template's own explicit instantiations: each needs the
+// macro again here, or a shared-build consumer cannot link against it.
+template NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::NO_CACHE>
     FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
-template FileRecordHeaderImpl<Strategy::FULL_CACHE>
+template NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::FULL_CACHE>
     FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
 
 }  // namespace NtfsBrowser

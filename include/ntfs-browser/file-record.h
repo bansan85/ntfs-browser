@@ -10,6 +10,7 @@
 
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/export.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/data/file-record-header.h>
@@ -43,7 +44,7 @@ using ATTRS_CALLBACK =
     std::function<void(const AttrBase<S>& attr, void* context, bool* bStop)>;
 
 template <Strategy S>
-class FileRecord
+class NTFS_BROWSER_EXPORT FileRecord
 {
  public:
   explicit FileRecord(const NtfsVolume<S>& volume);

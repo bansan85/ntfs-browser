@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 
+#include <ntfs-browser/export.h>
 #include <ntfs-browser/filename.h>
 
 namespace NtfsBrowser
@@ -12,7 +13,7 @@ namespace Data
 struct IndexEntry;
 }  // namespace Data
 
-class IndexEntry : public Filename
+class NTFS_BROWSER_EXPORT IndexEntry : public Filename
 {
  public:
   explicit IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,

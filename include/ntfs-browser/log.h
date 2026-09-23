@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <string_view>
 
+#include <ntfs-browser/export.h>
+
 namespace NtfsBrowser::Log
 {
 
@@ -66,21 +68,23 @@ struct Config
 // The library is not thread safe, and neither is logging: this call and
 // every emitted message MUST come from one thread. The sinks are spdlog's
 // single-threaded ones, so a message costs no lock.
-bool Configure(const Config& config) noexcept;
+NTFS_BROWSER_EXPORT bool Configure(const Config& config) noexcept;
 
 // Parses one "--log=<target>:<level>[:<path>]" argument into config. Only
 // the named target is touched, so the option may be repeated once per
 // target. Splits on the first two colons only, so a Windows path keeps its
 // drive letter. Returns false - leaving config untouched - if arg lacks
 // kOptionPrefix, or names an unknown target or level.
-bool ParseOption(std::string_view arg, Config& config) noexcept;
+NTFS_BROWSER_EXPORT bool ParseOption(std::string_view arg,
+                                     Config& config) noexcept;
 
 #ifdef _WIN32
 // ParseOption() for an executable whose entry point is wmain(). The path
 // field reaches file_path unconverted, which the narrow overload cannot
 // do: it takes what the active ANSI code page can express, and Windows
 // hands a narrow main() nothing else.
-bool ParseOption(std::wstring_view arg, Config& config) noexcept;
+NTFS_BROWSER_EXPORT bool ParseOption(std::wstring_view arg,
+                                     Config& config) noexcept;
 #endif
 
 }  // namespace NtfsBrowser::Log

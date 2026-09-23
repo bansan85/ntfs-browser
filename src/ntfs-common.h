@@ -7,6 +7,8 @@
 
 #include <ntfs-browser/log.h>
 
+#include "internal-export.h"
+
 namespace NtfsBrowser::Log::Detail
 {
 
@@ -14,10 +16,11 @@ namespace NtfsBrowser::Log::Detail
 // test it before formatting, so a disabled level costs one out-of-line
 // call - across the DLL boundary under BUILD_SHARED_LIBS=ON - rather than
 // a std::format() call and the string it allocates.
-bool IsEnabled(Level level) noexcept;
+NTFS_BROWSER_EXPORT_TESTS_ONLY bool IsEnabled(Level level) noexcept;
 
 // Hands one finished line to the library logger.
-void Emit(Level level, std::string_view message) noexcept;
+NTFS_BROWSER_EXPORT_TESTS_ONLY void Emit(Level level,
+                                         std::string_view message) noexcept;
 
 // Formats and emits. A formatting or allocation failure yields a stand-in
 // line instead of a throw: callers include destructors and noexcept
@@ -93,6 +96,7 @@ inline bool IsLogged(Log::Level level) noexcept
 // Relays a caught exception at error level. what() is caller data, so it
 // is never a format string; the trailing newline some throw sites write
 // is dropped, so one exception still yields one line.
-void LogException(const std::exception& e) noexcept;
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    LogException(const std::exception& e) noexcept;
 
 }  // namespace NtfsBrowser

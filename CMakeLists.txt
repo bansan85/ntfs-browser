@@ -10,8 +10,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-
 if(VCPKG_TOOLCHAIN)
   set(NTFS_BROWSER_USE_INSTALLED_DEFAULT ON)
 else()
@@ -59,9 +57,6 @@ else()
       ON
       CACHE BOOL "" FORCE)
   add_subdirectory("3rdparty/spdlog")
-  if(TARGET spdlog)
-    set_target_properties(spdlog PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
-  endif()
 endif()
 
 # Crypto++ is the default EFS cipher backend. Defaults the same way as the other

@@ -8,6 +8,7 @@
 #include <gsl/pointers>
 
 #include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/export.h>
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/win-types.h>
 
@@ -19,7 +20,7 @@ template <Strategy S>
 class NtfsVolume;
 
 template <Strategy S>
-class AttrBase
+class NTFS_BROWSER_EXPORT AttrBase
 {
  public:
   AttrBase(const AttrHeaderCommon& ahc, const FileRecord<S>& fr) noexcept;
