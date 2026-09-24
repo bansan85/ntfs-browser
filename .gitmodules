@@ -14,3 +14,6 @@
 [submodule "3rdparty/cryptopp-cmake"]
 	path = 3rdparty/cryptopp-cmake
 	url = https://github.com/abdes/cryptopp-cmake.git
+[submodule "3rdparty/frozen"]
+	path = 3rdparty/frozen
+	url = https://github.com/serge-sans-paille/frozen.git

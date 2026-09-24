@@ -5,6 +5,7 @@
   "description": "A modernized, read-only C++20 library for parsing NTFS volumes directly from raw disk and MFT structures.",
   "supports": "windows | linux",
   "dependencies": [
+    "frozen",
     "ms-gsl",
     "spdlog"
   ],

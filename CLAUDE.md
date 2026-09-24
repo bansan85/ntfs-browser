@@ -8,7 +8,7 @@ This file guides Claude Code when working with code in this repository.
 
 ## Build
 
-Windows and MSVC are the primary target. MFT/BPB parsing assumes Win32. The MFC demo apps, the unit tests, and `NtfsFuzzer` are Windows-only. The build requires submodules (`3rdparty/gsl`, `3rdparty/Catch2`, `3rdparty/spdlog`, `3rdparty/cryptopp`, `3rdparty/cryptopp-cmake`). Clone with `--recurse-submodules`, or run `git submodule update --init --recursive`.
+Windows and MSVC are the primary target. MFT/BPB parsing assumes Win32. The MFC demo apps, the unit tests, and `NtfsFuzzer` are Windows-only. The build requires submodules (`3rdparty/gsl`, `3rdparty/Catch2`, `3rdparty/spdlog`, `3rdparty/cryptopp`, `3rdparty/cryptopp-cmake`, `3rdparty/frozen`). Clone with `--recurse-submodules`, or run `git submodule update --init --recursive`.
 
 ```
 cmake -S . -B build

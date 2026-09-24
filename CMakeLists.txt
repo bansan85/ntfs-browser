@@ -25,6 +25,15 @@ else()
   add_subdirectory("3rdparty/gsl")
 endif()
 
+option(NTFS_BROWSER_USE_INSTALLED_FROZEN
+       "Link an installed serge-sans-paille/frozen instead of the 3rdparty submodule"
+       ${NTFS_BROWSER_USE_INSTALLED_DEFAULT})
+if(NTFS_BROWSER_USE_INSTALLED_FROZEN)
+  find_package(frozen CONFIG REQUIRED)
+else()
+  add_subdirectory("3rdparty/frozen")
+endif()
+
 option(NTFS_BROWSER_USE_INSTALLED_CATCH2
        "Link an installed Catch2 instead of the 3rdparty submodule"
        ${NTFS_BROWSER_USE_INSTALLED_DEFAULT})
