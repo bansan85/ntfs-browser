@@ -1,6 +1,7 @@
 #include "attr-index-alloc.h"
 
 #include <cstddef>
+#include <limits>
 
 #include "data/index-block.h"
 #include "data/index-entry.h"
@@ -76,15 +77,35 @@ ULONGLONG AttrIndexAlloc<S>::GetIndexBlockCount() const noexcept
 }
 
 // Parse a single Index Block
-// vcn = Index Block VCN in Index Allocation Data Attributes
+// vcn = sub-node pointer read from an Index Entry, on-disk units (see below)
 // ibClass holds the parsed Index Entries
 template <Strategy S>
 bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
                                         IndexBlock& ibClass)
 {
-  // Bounds check
-  if (vcn >= index_block_count_)
+  // On disk, a sub-node VCN is in clusters when an index block spans a whole
+  // cluster or more, but in index_block_size units when a cluster is too
+  // big to hold one (index_block_size then < cluster_size). Converting it
+  // to a byte offset needs whichever unit is actually in effect.
+  const DWORD vcn_unit = this->GetIndexBlockSize() >= this->GetClusterSize()
+                             ? this->GetClusterSize()
+                             : this->GetIndexBlockSize();
+
+  // Reject a vcn whose multiply would overflow before it can be compared.
+  if (vcn > std::numeric_limits<ULONGLONG>::max() / vcn_unit)
   {
+    LogWarn("Index Block: sub-node vcn overflows byte offset");
+    return false;
+  }
+
+  const ULONGLONG byte_offset = vcn * vcn_unit;
+
+  // Bounds check: the offset must land exactly on one of the stream's
+  // index_block_size-sized blocks.
+  if (byte_offset % this->GetIndexBlockSize() != 0 ||
+      byte_offset / this->GetIndexBlockSize() >= index_block_count_)
+  {
+    LogWarn("Index Block: sub-node vcn out of bounds");
     return false;
   }
 
@@ -99,7 +120,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
   // Read one Index Block
   std::optional<ULONGLONG> len = this->ReadData(
-      vcn * this->GetIndexBlockSize(),
+      byte_offset,
       {reinterpret_cast<BYTE*>(ibBuf), this->GetIndexBlockSize()});
   if (!len || *len != this->GetIndexBlockSize())
   {
