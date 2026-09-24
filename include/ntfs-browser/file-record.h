@@ -101,8 +101,9 @@ class NTFS_BROWSER_EXPORT FileRecord
                        size_t depth) const;
   // TraverseSubEntries()'s recoverOrphanedBlocks pass: visitedVcns is the set
   // the normal B+ tree walk already reached, and is extended here in place.
-  void ScanOrphanedIndexBlocks(SUBENTRY_CALLBACK seCallBack, void* context,
-                               std::unordered_set<ULONGLONG>& visitedVcns) const;
+  void
+      ScanOrphanedIndexBlocks(SUBENTRY_CALLBACK seCallBack, void* context,
+                              std::unordered_set<ULONGLONG>& visitedVcns) const;
 
  public:
   [[nodiscard]] const NtfsVolume<S>& GetVolume() const noexcept;

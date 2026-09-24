@@ -86,9 +86,8 @@ void RunOrphanedBlocksFoundWithRecoveryFlag()
 
 }  // namespace
 
-TEST_CASE(
-    "TraverseSubEntries ignores an orphaned index block by default",
-    "[file-record][index-block][regression]")
+TEST_CASE("TraverseSubEntries ignores an orphaned index block by default",
+          "[file-record][index-block][regression]")
 {
   RunOrphanedBlocksNeedRecoveryFlag<Strategy::NO_CACHE>();
 }

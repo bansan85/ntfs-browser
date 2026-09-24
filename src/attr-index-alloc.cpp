@@ -120,8 +120,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
   // Read one Index Block
   std::optional<ULONGLONG> len = this->ReadData(
-      byte_offset,
-      {reinterpret_cast<BYTE*>(ibBuf), this->GetIndexBlockSize()});
+      byte_offset, {reinterpret_cast<BYTE*>(ibBuf), this->GetIndexBlockSize()});
   if (!len || *len != this->GetIndexBlockSize())
   {
     return false;
