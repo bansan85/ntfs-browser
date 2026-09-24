@@ -112,3 +112,18 @@ jobs:
       - name: ctest
         if: matrix.extra_cmake_args != ''
         run: ctest --test-dir build_lib -C ${{ matrix.build_type }} || exit 1
+  # Builds fetchcontent-consumer/ as its own, separate CMake project, the way
+  # an external project depending on NtfsBrowser through FetchContent would,
+  # with every NTFS_BROWSER_* option and BUILD_SHARED_LIBS on.
+  fetchcontent-consumer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: cmake
+        run: |
+          cmake -S fetchcontent-consumer -B build_fetchcontent_consumer -DNTFS_BROWSER_FETCHCONTENT_SOURCE_DIR="${{ github.workspace }}" || exit 1
+          cmake --build build_fetchcontent_consumer --target fetchcontent-smoke-test --config Debug --parallel || exit 1
+      - name: run
+        run: .\build_fetchcontent_consumer\Debug\fetchcontent-smoke-test.exe

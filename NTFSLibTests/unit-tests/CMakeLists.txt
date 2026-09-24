@@ -89,7 +89,7 @@ endif()
 # The fuzz/ include lets fake-ntfs-image.h reuse named-stream-probe.h's name
 # instead of duplicating it.
 target_include_directories(
-  NtfsBrowserTests PRIVATE "${CMAKE_SOURCE_DIR}/src"
+  NtfsBrowserTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../src"
                            "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz")
 
 # Avoids hardcoding NtfsFuzzerAfl's build-output path in the test.
