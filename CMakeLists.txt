@@ -152,5 +152,9 @@ endif()
 
 add_subdirectory("src")
 
+option(NTFS_BROWSER_ENABLE_TESTING "Enable testing" ${PROJECT_IS_TOP_LEVEL})
+
+if(NTFS_BROWSER_ENABLE_TESTING)
   enable_testing()
   add_subdirectory("NTFSLibTests")
+endif()
