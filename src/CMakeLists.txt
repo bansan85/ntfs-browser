@@ -117,6 +117,8 @@ generate_export_header(
 target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)
 # Private: spdlog is an implementation detail, absent from the public API.
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)
+# Private too: frozen's maps back internal static lookups only, never a public header.
+target_link_libraries(${PROJECT_NAME} PRIVATE frozen::frozen)
 # Private too: Crypto++ and the Windows crypto libraries stay out of the API.
 # Narrower than the root CMakeLists.txt "EFS master" gate that decides whether
 # Crypto++ is configured at all: the shipped library stays Crypto++-free
