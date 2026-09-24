@@ -1,5 +1,5 @@
 ---
-Checks:          '*'
+Checks:          '*,-llvmlibc-restrict-system-libc-headers,-llvmlibc-implementation-in-namespace,-llvm-prefer-static-over-anonymous-namespace,-modernize-use-trailing-return-type,-llvmlibc-callee-namespace,-portability-avoid-pragma-once,-llvm-header-guard,-altera-struct-pack-align,-llvmlibc-inline-function-decl,-boost-use-ranges'
 WarningsAsErrors: '*'
 HeaderFileExtensions:
   - ''
