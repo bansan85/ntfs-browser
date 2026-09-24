@@ -111,7 +111,7 @@ jobs:
       # not run ctest at all, in this workflow or any other.
       - name: ctest
         if: matrix.extra_cmake_args != ''
-        run: ctest --test-dir build_lib -C ${{ matrix.build_type }} || exit 1
+        run: ctest --output-on-failure --test-dir build_lib -C ${{ matrix.build_type }} || exit 1
   # Builds fetchcontent-consumer/ as its own, separate CMake project, the way
   # an external project depending on NtfsBrowser through FetchContent would,
   # with every NTFS_BROWSER_* option and BUILD_SHARED_LIBS on.
