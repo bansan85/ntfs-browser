@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <exception>
 #include <filesystem>
@@ -10,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_map.h>
 #include <spdlog/common.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -42,13 +43,13 @@ constexpr std::string_view kConsolePattern = "%v";
 constexpr std::string_view kFilePattern = "[%Y-%m-%d %H:%M:%S.%e] [%l] %v";
 
 // Level names --log accepts, paired with the level each one selects.
-constexpr std::array<std::pair<std::string_view, Log::Level>, 6> kLevelNames{
-    {{"off", Log::Level::kOff},
-     {"error", Log::Level::kError},
-     {"warn", Log::Level::kWarn},
-     {"info", Log::Level::kInfo},
-     {"debug", Log::Level::kDebug},
-     {"trace", Log::Level::kTrace}}};
+constexpr frozen::unordered_map<std::string_view, Log::Level, 6> kLevelNames{
+    {"off", Log::Level::kOff},
+    {"error", Log::Level::kError},
+    {"warn", Log::Level::kWarn},
+    {"info", Log::Level::kInfo},
+    {"debug", Log::Level::kDebug},
+    {"trace", Log::Level::kTrace}};
 
 // Target names --log accepts.
 constexpr std::string_view kConsoleTarget = "console";
