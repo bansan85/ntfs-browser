@@ -890,7 +890,8 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
 // Call user defined callback routine once found an entry
 template <Strategy S>
 void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
-                                       void* context) const
+                                       void* context,
+                                       bool recoverOrphanedBlocks) const
 {
   assert(seCallBack);
 
@@ -952,6 +953,66 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
 
     if (ie.HasName())
     {
+      seCallBack(ie, context);
+    }
+  }
+
+  if (recoverOrphanedBlocks)
+  {
+    ScanOrphanedIndexBlocks(seCallBack, context, visitedVcns);
+  }
+}
+
+// Recovery pass for TraverseSubEntries(): a corrupt $INDEX_ROOT or internal
+// node can leave real $INDEX_ALLOCATION blocks with no surviving pointer to
+// them. Since every name appears exactly once in the B+ tree, scanning every
+// block the normal walk missed finds them without relying on any pointer at
+// all - unlike the normal walk, in VCN order rather than collation order.
+template <Strategy S>
+void FileRecord<S>::ScanOrphanedIndexBlocks(
+    SUBENTRY_CALLBACK seCallBack, void* context,
+    std::unordered_set<ULONGLONG>& visitedVcns) const
+{
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      getAttr(AttrType::INDEX_ALLOCATION);
+  if (vec.empty())
+  {
+    return;
+  }
+
+  auto* alloc = static_cast<AttrIndexAlloc<S>*>(vec.front().get());
+  const ULONGLONG blockCount = alloc->GetIndexBlockCount();
+  const std::optional<ULONGLONG> selfRef = GetFileReference();
+
+  for (ULONGLONG vcn = 0; vcn < blockCount; vcn++)
+  {
+    if (!visitedVcns.insert(vcn).second)
+    {
+      continue;
+    }
+
+    IndexBlock ib;
+    if (!alloc->ParseIndexBlock(vcn, ib))
+    {
+      continue;
+    }
+
+    LogWarn("TraverseSubEntries() recovery: reporting orphaned index block {}",
+            vcn);
+
+    for (const IndexEntry& ie : ib)
+    {
+      if (!ie.HasName())
+      {
+        continue;
+      }
+      // An orphaned block may hold a stale entry left over from a file
+      // already deleted from this directory - only report one still filed
+      // under it.
+      if (selfRef && ie.GetParentReference() != *selfRef)
+      {
+        continue;
+      }
       seCallBack(ie, context);
     }
   }

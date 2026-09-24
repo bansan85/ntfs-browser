@@ -371,6 +371,38 @@ inline constexpr BYTE kIndexBlockChainLeafNameLength = 4;
 // holding kIndexBlockChainLeafName as a real entry.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain();
 
+// MFT reference BuildFakeNtfsImageWithOrphanedIndexBlocks() gives each of its
+// three leaf entries' mft_index field.
+inline constexpr ULONGLONG kOrphanedBlockReachableMftRef = 101;
+inline constexpr ULONGLONG kOrphanedBlockOrphanMftRef = 102;
+inline constexpr ULONGLONG kOrphanedBlockStaleMftRef = 103;
+
+// parent_ref BuildFakeNtfsImageWithOrphanedIndexBlocks()'s "Stale" entry
+// declares: some directory other than the root, so a parent_ref filter
+// must reject it even though its block is otherwise well-formed.
+inline constexpr ULONGLONG kOrphanedBlockStaleParentRef = 999;
+
+// Names (and UTF-16 lengths) of BuildFakeNtfsImageWithOrphanedIndexBlocks()'s
+// three leaf entries: reachable through the normal B+ tree walk, reachable
+// only by scanning every $INDEX_ALLOCATION block, and reachable that way but
+// filed under a different parent.
+inline constexpr wchar_t kOrphanedBlockReachableName[] = L"Reachable";
+inline constexpr BYTE kOrphanedBlockReachableNameLength = 9;
+inline constexpr wchar_t kOrphanedBlockOrphanName[] = L"Orphan";
+inline constexpr BYTE kOrphanedBlockOrphanNameLength = 6;
+inline constexpr wchar_t kOrphanedBlockStaleName[] = L"Stale";
+inline constexpr BYTE kOrphanedBlockStaleNameLength = 5;
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a directory whose $INDEX_ROOT points at a single real $INDEX_ALLOCATION
+// block (VCN 0, holding kOrphanedBlockReachableName), while the stream holds
+// two further blocks (VCN 1, 2) no pointer in the tree reaches: one holding
+// a normal entry (kOrphanedBlockOrphanName), the other an entry filed under
+// a different parent (kOrphanedBlockStaleName) - as a deleted file's
+// leftover entry would be. Models a directory index whose B+ tree pointers
+// were partly lost while the underlying blocks survived.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks();
+
 // Real on-disk minimum size of a legacy NTFS 1.2 $STANDARD_INFORMATION
 // attribute, before the Windows-2000-era owner_id/security_id/quota/usn
 // extension appended four more fields.

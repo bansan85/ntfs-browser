@@ -65,6 +65,11 @@ ULONGLONG Filename::GetFileSize() const noexcept
   return filename_ != nullptr ? filename_->real_size : 0;
 }
 
+ULONGLONG Filename::GetParentReference() const noexcept
+{
+  return filename_ != nullptr ? filename_->parent_ref : 0;
+}
+
 Flag::Filename Filename::GetFilePermission() const noexcept
 {
   return filename_ != nullptr ? filename_->flags : Flag::Filename::NONE;

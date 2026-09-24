@@ -99,6 +99,10 @@ class NTFS_BROWSER_EXPORT FileRecord
                        void* context,
                        std::unordered_set<ULONGLONG>& visitedVcns,
                        size_t depth) const;
+  // TraverseSubEntries()'s recoverOrphanedBlocks pass: visitedVcns is the set
+  // the normal B+ tree walk already reached, and is extended here in place.
+  void ScanOrphanedIndexBlocks(SUBENTRY_CALLBACK seCallBack, void* context,
+                               std::unordered_set<ULONGLONG>& visitedVcns) const;
 
  public:
   [[nodiscard]] const NtfsVolume<S>& GetVolume() const noexcept;
@@ -121,7 +125,14 @@ class NTFS_BROWSER_EXPORT FileRecord
   void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                    FILETIME* accessTm) const noexcept;
 
-  void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack, void* context) const;
+  // recoverOrphanedBlocks: when true, additionally scans every $INDEX_ALLOCATION
+  // block the B+ tree walk itself doesn't reach - recovery for a directory whose
+  // $INDEX_ROOT or an internal node is corrupt and no longer points at every
+  // child block. An entry found this way is only reported if its parent
+  // reference still matches this directory, since a block recovered this way
+  // may hold stale entries left over from a file already deleted from it.
+  void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack, void* context,
+                          bool recoverOrphanedBlocks = false) const;
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntry(std::wstring_view fileName) const;
   [[nodiscard]] const AttrBase<S>* FindStream(std::wstring_view name);

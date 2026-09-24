@@ -44,6 +44,8 @@ class NTFS_BROWSER_EXPORT Filename
   [[nodiscard]] int Compare(std::wstring_view fn) const noexcept;
 
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;
+  // File reference of the parent directory this name was filed under.
+  [[nodiscard]] ULONGLONG GetParentReference() const noexcept;
   [[nodiscard]] virtual Flag::Filename GetFilePermission() const noexcept;
   [[nodiscard]] virtual bool IsReadOnly() const noexcept;
   [[nodiscard]] virtual bool IsHidden() const noexcept;

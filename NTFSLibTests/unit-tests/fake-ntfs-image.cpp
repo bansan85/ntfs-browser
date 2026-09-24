@@ -1227,6 +1227,157 @@ FakeRecord MakeIndexBlockChainRootRecord()
   return record;
 }
 
+// LCN where BuildFakeNtfsImageWithOrphanedIndexBlocks() writes its three
+// index blocks, kept clear of every other fixture's placement in this file.
+constexpr DWORD kOrphanedBlocksLcn = 200;
+
+// Number of index blocks (VCN 0-2) the fixture's $INDEX_ALLOCATION covers.
+constexpr DWORD kOrphanedBlocksCount = 3;
+
+// Builds a root-directory replacement whose $INDEX_ROOT points only at
+// VCN 0, while its $INDEX_ALLOCATION stream is sized for
+// kOrphanedBlocksCount blocks - VCN 1 and 2 exist on "disk" but no pointer
+// in the tree reaches them.
+FakeRecord MakeOrphanedIndexBlocksRootRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  DWORD offset = kAttrOffset;
+
+  // $INDEX_ROOT
+  auto& rootAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  rootAttr.header.type = AttrType::INDEX_ROOT;
+  rootAttr.header.non_resident = 0;
+  rootAttr.header.name_length = 0;
+  rootAttr.header.flags = 0;
+  rootAttr.header.id = 0;
+  rootAttr.attr_offset = static_cast<WORD>(sizeof(rootAttr));
+
+  BYTE* body = &record[offset + rootAttr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kClusterSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  // Sole entry: nameless, terminal, pointing at VCN 0 - the only block a
+  // normal B+ tree walk reaches in this fixture.
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = 0;
+  e1.mft_sn = 0;
+  e1.stream_size = 0;
+  e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE |
+             NtfsBrowser::Flag::IndexEntry::LAST;
+  e1.size = static_cast<WORD>(offsetof(NtfsBrowser::Data::IndexEntry, stream) +
+                              sizeof(ULONGLONG));
+  auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
+      reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
+  subNodeVcn = 0;
+
+  root.total_entry_size = e1.size;
+  root.alloc_entry_size = e1.size;
+  root.flags = 0;
+
+  rootAttr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size;
+  rootAttr.header.total_size =
+      static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
+
+  offset += rootAttr.header.total_size;
+
+  // $INDEX_ALLOCATION: kOrphanedBlocksCount contiguous blocks at
+  // kOrphanedBlocksLcn, only the first ever pointed at from $INDEX_ROOT.
+  auto& allocAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
+  allocAttr.header.type = AttrType::INDEX_ALLOCATION;
+  allocAttr.header.non_resident = 1;
+  allocAttr.header.name_length = 0;
+  allocAttr.header.flags = 0;
+  allocAttr.header.id = 0;
+  allocAttr.start_vcn = 0;
+  allocAttr.last_vcn = kOrphanedBlocksCount - 1;
+  allocAttr.data_run_offset = static_cast<WORD>(sizeof(allocAttr));
+  allocAttr.comp_unit_size = 0;
+  allocAttr.real_size = kOrphanedBlocksCount * kClusterSize;
+  allocAttr.alloc_size = allocAttr.real_size;
+  allocAttr.ini_size = allocAttr.real_size;
+
+  BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
+  DWORD runLen = 0;
+  // High nibble = LCN offset field size, low nibble = length field size.
+  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = static_cast<BYTE>(kOrphanedBlocksCount);
+  {
+    const DWORD lcn = kOrphanedBlocksLcn;
+    std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
+    runLen += sizeof(lcn);
+  }
+  dataRun[runLen++] = 0x00;  // terminate the run list
+
+  allocAttr.header.total_size = static_cast<DWORD>(sizeof(allocAttr)) + runLen;
+
+  offset += allocAttr.header.total_size;
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// Writes a single-cluster index block at "vcn" (relative to kOrphanedBlocksLcn)
+// holding one real leaf entry, into "image".
+void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
+                                 ULONGLONG mftRef, ULONGLONG parentRef,
+                                 const wchar_t* name, BYTE nameLength)
+{
+  const size_t blocksOffset =
+      static_cast<size_t>(kOrphanedBlocksLcn) * kClusterSize;
+  BYTE* const blockStart =
+      image.data() + blocksOffset + static_cast<size_t>(vcn) * kClusterSize;
+  auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
+  std::memset(&block, 0, sizeof(block));
+  block.magic = kIndexBlockMagic;
+  // Points at the block's own last 4 bytes, so PatchUS() succeeds trivially
+  // without a real fixup array.
+  block.offset_of_us = static_cast<WORD>(kClusterSize - 4);
+  block.size_of_us = 2;
+  block.vcn = vcn;
+  block.entry_offset =
+      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+                         reinterpret_cast<BYTE*>(&block.entry_offset));
+  block.not_leaf = 0;
+
+  BYTE* body = blockStart + sizeof(NtfsBrowser::Data::IndexBlock);
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body);
+  e1.mft_index = mftRef;
+  e1.mft_sn = 1;
+
+  auto& fn1 = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+  fn1.parent_ref = parentRef;
+  fn1.flags = NtfsBrowser::Flag::Filename::NONE;
+  fn1.name_length = nameLength;
+  fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  for (BYTE i = 0; i < nameLength; i++)
+  {
+    fn1.name[i] = static_cast<WORD>(name[i]);
+  }
+
+  e1.stream_size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[nameLength]) -
+                        reinterpret_cast<BYTE*>(&fn1));
+  e1.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+
+  block.total_entry_size = e1.size;
+  block.alloc_entry_size = e1.size;
+}
+
 ////////////////////////////////////////////////////////////////////////////
 // NTFS compression fixtures (see fake-ntfs-image.h for what each builds)
 ////////////////////////////////////////////////////////////////////////////
@@ -2286,6 +2437,53 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
     block.total_entry_size = e1.size;
     block.alloc_entry_size = e1.size;
   }
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Replace the root directory's (#5) whole record in place.
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t rootOffset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                          static_cast<size_t>(MftIdx::ROOT);
+  const FakeRecord record = MakeOrphanedIndexBlocksRootRecord();
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  const size_t blocksOffset =
+      static_cast<size_t>(kOrphanedBlocksLcn) * kClusterSize;
+  const size_t blocksBytes =
+      static_cast<size_t>(kOrphanedBlocksCount) * kClusterSize;
+  // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
+  // extend past the blocks' real end or its last read fails outright.
+  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  const size_t blocksEnd = blocksOffset + blocksBytes;
+  const size_t alignedBlocksEnd =
+      ((blocksEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
+      kFullCacheReadBlockSize;
+  if (image.size() < alignedBlocksEnd)
+  {
+    image.resize(alignedBlocksEnd, 0);
+  }
+
+  // VCN 0: reachable through $INDEX_ROOT's own sub-node pointer.
+  WriteOrphanedIndexLeafBlock(image, 0, kOrphanedBlockReachableMftRef,
+                             static_cast<ULONGLONG>(MftIdx::ROOT),
+                             kOrphanedBlockReachableName,
+                             kOrphanedBlockReachableNameLength);
+  // VCN 1: orphaned, but still filed under this directory.
+  WriteOrphanedIndexLeafBlock(image, 1, kOrphanedBlockOrphanMftRef,
+                             static_cast<ULONGLONG>(MftIdx::ROOT),
+                             kOrphanedBlockOrphanName,
+                             kOrphanedBlockOrphanNameLength);
+  // VCN 2: orphaned, and filed under a different parent - a recovery scan
+  // must find the block but reject the entry.
+  WriteOrphanedIndexLeafBlock(image, 2, kOrphanedBlockStaleMftRef,
+                             kOrphanedBlockStaleParentRef,
+                             kOrphanedBlockStaleName,
+                             kOrphanedBlockStaleNameLength);
 
   return image;
 }
