@@ -4,6 +4,7 @@
 #include <cwctype>
 
 #include <ntfs-browser/filename.h>
+#include <ntfs-browser/mft-idx.h>
 
 #include "attr-std-info.h"
 #include "flag/filename-namespace.h"
@@ -67,7 +68,15 @@ ULONGLONG Filename::GetFileSize() const noexcept
 
 ULONGLONG Filename::GetParentReference() const noexcept
 {
-  return filename_ != nullptr ? filename_->parent_ref : 0;
+  return filename_ != nullptr ? filename_->parent_ref & kMftRecordNumberMask
+                              : 0;
+}
+
+WORD Filename::GetParentSequenceNumber() const noexcept
+{
+  return filename_ != nullptr
+             ? static_cast<WORD>(filename_->parent_ref >> kMftSequenceShift)
+             : 0;
 }
 
 Flag::Filename Filename::GetFilePermission() const noexcept

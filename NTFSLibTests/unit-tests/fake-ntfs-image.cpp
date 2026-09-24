@@ -64,6 +64,17 @@ static_assert(kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderNonResident) + 8 <
 
 using FakeRecord = std::array<BYTE, kFakeFileRecordSize>;
 
+// Packs an on-disk file reference: record number low, sequence number high.
+constexpr ULONGLONG MakeFileReference(ULONGLONG record, WORD sequence)
+{
+  return (static_cast<ULONGLONG>(sequence) << NtfsBrowser::kMftSequenceShift) |
+         record;
+}
+
+// Sequence number a real volume's root directory record carries; non-zero,
+// so a reader that forgets to mask it off a parent_ref sees a wrong number.
+constexpr WORD kRootSequenceNumber = 5;
+
 // Builds a bare file-record header with the given attribute offset and
 // flags.
 FakeRecord MakeRecordHeader(WORD offsetOfAttr,
@@ -2468,22 +2479,23 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks()
     image.resize(alignedBlocksEnd, 0);
   }
 
+  const ULONGLONG rootRef = MakeFileReference(
+      static_cast<ULONGLONG>(MftIdx::ROOT), kRootSequenceNumber);
+
   // VCN 0: reachable through $INDEX_ROOT's own sub-node pointer.
-  WriteOrphanedIndexLeafBlock(image, 0, kOrphanedBlockReachableMftRef,
-                             static_cast<ULONGLONG>(MftIdx::ROOT),
-                             kOrphanedBlockReachableName,
-                             kOrphanedBlockReachableNameLength);
+  WriteOrphanedIndexLeafBlock(image, 0, kOrphanedBlockReachableMftRef, rootRef,
+                              kOrphanedBlockReachableName,
+                              kOrphanedBlockReachableNameLength);
   // VCN 1: orphaned, but still filed under this directory.
-  WriteOrphanedIndexLeafBlock(image, 1, kOrphanedBlockOrphanMftRef,
-                             static_cast<ULONGLONG>(MftIdx::ROOT),
-                             kOrphanedBlockOrphanName,
-                             kOrphanedBlockOrphanNameLength);
+  WriteOrphanedIndexLeafBlock(image, 1, kOrphanedBlockOrphanMftRef, rootRef,
+                              kOrphanedBlockOrphanName,
+                              kOrphanedBlockOrphanNameLength);
   // VCN 2: orphaned, and filed under a different parent - a recovery scan
   // must find the block but reject the entry.
-  WriteOrphanedIndexLeafBlock(image, 2, kOrphanedBlockStaleMftRef,
-                             kOrphanedBlockStaleParentRef,
-                             kOrphanedBlockStaleName,
-                             kOrphanedBlockStaleNameLength);
+  WriteOrphanedIndexLeafBlock(
+      image, 2, kOrphanedBlockStaleMftRef,
+      MakeFileReference(kOrphanedBlockStaleParentRef, kRootSequenceNumber),
+      kOrphanedBlockStaleName, kOrphanedBlockStaleNameLength);
 
   return image;
 }

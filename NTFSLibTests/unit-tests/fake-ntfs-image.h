@@ -377,8 +377,8 @@ inline constexpr ULONGLONG kOrphanedBlockReachableMftRef = 101;
 inline constexpr ULONGLONG kOrphanedBlockOrphanMftRef = 102;
 inline constexpr ULONGLONG kOrphanedBlockStaleMftRef = 103;
 
-// parent_ref BuildFakeNtfsImageWithOrphanedIndexBlocks()'s "Stale" entry
-// declares: some directory other than the root, so a parent_ref filter
+// Parent record number BuildFakeNtfsImageWithOrphanedIndexBlocks()'s "Stale"
+// entry declares: some directory other than the root, so a parent filter
 // must reject it even though its block is otherwise well-formed.
 inline constexpr ULONGLONG kOrphanedBlockStaleParentRef = 999;
 
