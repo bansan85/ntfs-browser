@@ -18,6 +18,7 @@ set(${PROJECT_NAME}_SRC
     "index-block.cpp"
     "index-entry.cpp"
     "log.cpp"
+    "mft-tree.cpp"
     "ntfs-volume.cpp"
     "utf.cpp")
 
@@ -59,6 +60,7 @@ set(${PROJECT_NAME}_H
     "../include/ntfs-browser/log.h"
     "../include/ntfs-browser/mask.h"
     "../include/ntfs-browser/mft-idx.h"
+    "../include/ntfs-browser/mft-tree.h"
     "../include/ntfs-browser/ntfs-volume.h"
     "../include/ntfs-browser/strategy.h"
     "../include/ntfs-browser/win32-disk-reader.h"

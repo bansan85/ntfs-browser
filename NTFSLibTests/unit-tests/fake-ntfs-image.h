@@ -403,6 +403,47 @@ inline constexpr BYTE kOrphanedBlockStaleNameLength = 5;
 // were partly lost while the underlying blocks survived.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks();
 
+// Record slots BuildFakeNtfsImageWithMftTree()'s $MFT has room for.
+inline constexpr ULONGLONG kMftTreeRecordCount = 26;
+
+// Records of BuildFakeNtfsImageWithMftTree(), all past the system files. See
+// that function for what each one tests.
+inline constexpr ULONGLONG kMftTreeDocsIdx = 16;
+inline constexpr ULONGLONG kMftTreeReportIdx = 17;
+inline constexpr ULONGLONG kMftTreeHardLinkIdx = 18;
+inline constexpr ULONGLONG kMftTreeDeletedFileIdx = 19;
+inline constexpr ULONGLONG kMftTreeDeletedDirIdx = 20;
+inline constexpr ULONGLONG kMftTreeDeletedChildIdx = 21;
+inline constexpr ULONGLONG kMftTreeStaleChildIdx = 22;
+inline constexpr ULONGLONG kMftTreeReusedDirIdx = 23;
+inline constexpr ULONGLONG kMftTreeExtensionIdx = 24;
+inline constexpr ULONGLONG kMftTreeZeroedIdx = 25;
+
+// Size of kMftTreeReportIdx's resident $DATA. Its $FILE_NAME claims
+// kMftTreeReportStaleSize instead, the way a file grown since its last
+// rename does.
+inline constexpr DWORD kMftTreeReportDataSize = 37;
+inline constexpr ULONGLONG kMftTreeReportStaleSize = 999;
+
+// Same volume as BuildFakeNtfsImage(), with kMftTreeRecordCount record slots
+// and a $MFT data run over them, holding:
+//   5  the root directory, sequence 5;
+//   16 "Docs", a directory in the root;
+//   17 "report.txt" in Docs, read-only, with a DOS alias "REPORT~1.TXT";
+//   18 a file with two hard links: "link-a" in the root, "link-b" in Docs;
+//   19 "old.tmp", deleted, in Docs;
+//   20 "OldDir", a deleted directory in Docs, its sequence bumped on
+//      deletion;
+//   21 "draft.doc", deleted, in OldDir under OldDir's pre-deletion sequence;
+//   22 "stale.txt", deleted, in record 23 under a sequence 23 no longer has;
+//   23 "NewDir", a directory in the root, in use, whose sequence is one past
+//      the one 22 names - the "freed" rule MUST NOT apply to a live record;
+//   24 an extension record of 17, with a name of its own;
+//   25 a zero-filled slot.
+// Records 1, 2, 4 and 6-15 are zero-filled as in BuildFakeNtfsImage(), and
+// $MFT (0) is named "$MFT" in the root.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftTree();
+
 // Real on-disk minimum size of a legacy NTFS 1.2 $STANDARD_INFORMATION
 // attribute, before the Windows-2000-era owner_id/security_id/quota/usn
 // extension appended four more fields.

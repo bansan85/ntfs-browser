@@ -110,6 +110,11 @@ class NTFS_BROWSER_EXPORT FileRecord
   [[nodiscard]] bool ParseFileRecord(ULONGLONG fileRef);
   [[nodiscard]] bool ParseAttrs();
   [[nodiscard]] std::optional<ULONGLONG> GetFileReference() const noexcept;
+  // Times this record was reused; 0 when no record is parsed.
+  [[nodiscard]] WORD GetSequenceNumber() const noexcept;
+  // Record number of the base record this extension record belongs to. 0 for
+  // a base record, or when no record is parsed.
+  [[nodiscard]] ULONGLONG GetBaseRecordReference() const noexcept;
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
                                       AttrRawCallback cb) noexcept;
   void ClearAttrRawCB() noexcept;

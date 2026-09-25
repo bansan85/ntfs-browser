@@ -328,9 +328,11 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
 
   file_reference_ = fileRef;
 
+  // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
+  // meets this on every such slot. A caller gets false either way.
   if (fr->GetData()->magic != kFileRecordMagic)
   {
-    LogWarn("Invalid file record");
+    LogDebug("Invalid file record");
     return false;
   }
 
@@ -675,6 +677,20 @@ template <Strategy S>
 std::optional<ULONGLONG> FileRecord<S>::GetFileReference() const noexcept
 {
   return file_reference_;
+}
+
+template <Strategy S>
+WORD FileRecord<S>::GetSequenceNumber() const noexcept
+{
+  return file_record_ ? file_record_->GetData()->seq_no : 0;
+}
+
+template <Strategy S>
+ULONGLONG FileRecord<S>::GetBaseRecordReference() const noexcept
+{
+  return file_record_
+             ? file_record_->GetData()->ref_to_base & kMftRecordNumberMask
+             : 0;
 }
 
 // Install Attribute raw data CallBack routines for a single File Record

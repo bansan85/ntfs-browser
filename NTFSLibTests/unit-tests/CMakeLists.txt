@@ -33,6 +33,7 @@ set(NtfsBrowserTests_SRC
     "find-subentry-gap-collation-tests.cpp"
     "index-block-recursion-depth-tests.cpp"
     "traverse-sub-entries-recovery-tests.cpp"
+    "mft-tree-tests.cpp"
     "fuzzer-regression-tests.cpp"
     "logging-tests.cpp"
     "utf-tests.cpp"

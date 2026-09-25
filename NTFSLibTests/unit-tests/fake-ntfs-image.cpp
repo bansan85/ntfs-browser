@@ -1802,6 +1802,112 @@ std::vector<BYTE> MakeCompressedIndexBlockContent()
   return MakeIndexBlockContent(std::span(&comp, 1));
 }
 
+// NTFS starts every attribute of a record on an 8-byte boundary.
+constexpr DWORD kAttrAlignment = 8;
+
+// Rounds an attribute's size up to kAttrAlignment.
+constexpr DWORD AlignAttrSize(size_t size)
+{
+  return static_cast<DWORD>((size + kAttrAlignment - 1) &
+                            ~(kAttrAlignment - 1));
+}
+
+// One $FILE_NAME of a BuildFakeNtfsImageWithMftTree() record.
+struct FakeFileName
+{
+  std::wstring_view name;
+  ULONGLONG parent_ref;
+  NtfsBrowser::Flag::FilenameNamespace name_space =
+      NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  // The size NTFS only refreshes in $FILE_NAME on a rename.
+  ULONGLONG real_size = 0;
+};
+
+// Writes one resident $FILE_NAME at record[offset] and returns its
+// total_size.
+DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
+                        const FakeFileName& name, bool directory)
+{
+  auto& attr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  attr.header.type = AttrType::FILE_NAME;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.attr_size =
+      static_cast<DWORD>(offsetof(NtfsBrowser::Attr::Filename, name) +
+                         name.name.size() * sizeof(WORD));
+  attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
+
+  auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(
+      &record[offset + attr.attr_offset]);
+  fn.parent_ref = name.parent_ref;
+  fn.real_size = name.real_size;
+  fn.alloc_size = name.real_size;
+  fn.flags = directory ? NtfsBrowser::Flag::Filename::DIRECTORY
+                       : NtfsBrowser::Flag::Filename::NONE;
+  fn.name_length = static_cast<BYTE>(name.name.size());
+  fn.name_space = name.name_space;
+  for (size_t i = 0; i < name.name.size(); i++)
+  {
+    fn.name[i] = static_cast<WORD>(name.name[i]);
+  }
+
+  return attr.header.total_size;
+}
+
+// Writes one resident, unnamed $DATA of size zero bytes at record[offset]
+// and returns its total_size.
+DWORD WriteResidentDataAttr(FakeRecord& record, DWORD offset, DWORD size)
+{
+  auto& attr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.attr_size = size;
+  attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
+  return attr.header.total_size;
+}
+
+// Builds one record of BuildFakeNtfsImageWithMftTree(): a header carrying
+// sequence and baseRef, a $STANDARD_INFORMATION, names, and, when dataSize is
+// set, a resident $DATA of that size.
+FakeRecord MakeMftTreeRecord(NtfsBrowser::Flag::FileRecord flags, WORD sequence,
+                             std::initializer_list<FakeFileName> names,
+                             std::optional<DWORD> dataSize = {},
+                             NtfsBrowser::Flag::StdInfoPermission permission =
+                                 NtfsBrowser::Flag::StdInfoPermission::NORMAL,
+                             ULONGLONG baseRef = 0)
+{
+  FakeRecord record = MakeRecordHeader(kAttrOffset, flags);
+  auto& header = *reinterpret_cast<FileRecordHeader::Data*>(record.data());
+  header.seq_no = sequence;
+  header.ref_to_base = baseRef;
+
+  const bool directory = (flags & NtfsBrowser::Flag::FileRecord::DIR) ==
+                         NtfsBrowser::Flag::FileRecord::DIR;
+
+  DWORD offset = kAttrOffset;
+  offset += WriteStandardInformationAttr(record, offset, permission);
+  for (const FakeFileName& name : names)
+  {
+    offset += WriteFileNameAttr(record, offset, name, directory);
+  }
+  if (dataSize)
+  {
+    offset += WriteResidentDataAttr(record, offset, *dataSize);
+  }
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage()
@@ -2496,6 +2602,102 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks()
       image, 2, kOrphanedBlockStaleMftRef,
       MakeFileReference(kOrphanedBlockStaleParentRef, kRootSequenceNumber),
       kOrphanedBlockStaleName, kOrphanedBlockStaleNameLength);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftTree()
+{
+  using NtfsBrowser::Flag::FilenameNamespace;
+  using NtfsBrowser::Flag::StdInfoPermission;
+  using RecordFlag = NtfsBrowser::Flag::FileRecord;
+
+  // Sequence numbers the records below carry, where another record's
+  // parent reference names them.
+  constexpr WORD kDocsSequence = 1;
+  constexpr WORD kOldDirSequence = 3;
+  constexpr WORD kReportSequence = 3;
+  constexpr WORD kNewDirSequence = 7;
+
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
+  {
+    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                        static_cast<size_t>(idx);
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  const ULONGLONG root = MakeFileReference(static_cast<ULONGLONG>(MftIdx::ROOT),
+                                           kRootSequenceNumber);
+  const ULONGLONG docs = MakeFileReference(kMftTreeDocsIdx, kDocsSequence);
+
+  // $MFT: a data run over every slot, written in place, so the records past
+  // the first 16 read through it; plus the name real volumes give it.
+  FakeRecord mft = MakeMftRecordWithRealDataRun(
+      static_cast<DWORD>(kMftLcn), static_cast<DWORD>(kMftTreeRecordCount));
+  reinterpret_cast<FileRecordHeader::Data*>(mft.data())->seq_no = 1;
+  DWORD offset =
+      kAttrOffset +
+      reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&mft[kAttrOffset])
+          ->header.total_size;
+  offset += WriteFileNameAttr(mft, offset,
+                              {.name = L"$MFT", .parent_ref = root}, false);
+  WriteEndOfAttributesMarker(mft, offset);
+  putRecord(static_cast<ULONGLONG>(MftIdx::MFT), mft);
+
+  const RecordFlag file = RecordFlag::INUSE;
+  const RecordFlag dir = RecordFlag::INUSE | RecordFlag::DIR;
+  const RecordFlag deletedFile{};
+  const RecordFlag deletedDir = RecordFlag::DIR;
+
+  putRecord(static_cast<ULONGLONG>(MftIdx::ROOT),
+            MakeMftTreeRecord(dir, kRootSequenceNumber,
+                              {{.name = L".", .parent_ref = root}}));
+  putRecord(kMftTreeDocsIdx,
+            MakeMftTreeRecord(dir, kDocsSequence,
+                              {{.name = L"Docs", .parent_ref = root}}));
+  putRecord(kMftTreeReportIdx,
+            MakeMftTreeRecord(file, kReportSequence,
+                              {{.name = L"report.txt",
+                                .parent_ref = docs,
+                                .real_size = kMftTreeReportStaleSize},
+                               {.name = L"REPORT~1.TXT",
+                                .parent_ref = docs,
+                                .name_space = FilenameNamespace::DOS}},
+                              kMftTreeReportDataSize,
+                              StdInfoPermission::READONLY));
+  putRecord(kMftTreeHardLinkIdx,
+            MakeMftTreeRecord(file, 1,
+                              {{.name = L"link-a", .parent_ref = root},
+                               {.name = L"link-b", .parent_ref = docs}}));
+  // NTFS bumps a record's sequence number when it frees the record.
+  putRecord(kMftTreeDeletedFileIdx,
+            MakeMftTreeRecord(deletedFile, 2,
+                              {{.name = L"old.tmp", .parent_ref = docs}}));
+  putRecord(kMftTreeDeletedDirIdx,
+            MakeMftTreeRecord(deletedDir, kOldDirSequence + 1,
+                              {{.name = L"OldDir", .parent_ref = docs}}));
+  putRecord(kMftTreeDeletedChildIdx,
+            MakeMftTreeRecord(deletedFile, 2,
+                              {{.name = L"draft.doc",
+                                .parent_ref = MakeFileReference(
+                                    kMftTreeDeletedDirIdx, kOldDirSequence)}}));
+  putRecord(
+      kMftTreeStaleChildIdx,
+      MakeMftTreeRecord(deletedFile, 2,
+                        {{.name = L"stale.txt",
+                          .parent_ref = MakeFileReference(
+                              kMftTreeReusedDirIdx, kNewDirSequence - 1)}}));
+  putRecord(kMftTreeReusedDirIdx,
+            MakeMftTreeRecord(dir, kNewDirSequence,
+                              {{.name = L"NewDir", .parent_ref = root}}));
+  putRecord(
+      kMftTreeExtensionIdx,
+      MakeMftTreeRecord(file, 1, {{.name = L"ext", .parent_ref = docs}}, {},
+                        StdInfoPermission::NORMAL,
+                        MakeFileReference(kMftTreeReportIdx, kReportSequence)));
 
   return image;
 }
