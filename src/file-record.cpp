@@ -99,6 +99,14 @@ std::unique_ptr<AttrBase<S>>
       return std::make_unique<AttrStdInfo<RESIDENT, S>>(ahc, *this);
 
     case AttrType::ATTRIBUTE_LIST:
+      if (!resolve_attr_list_)
+      {
+        if (ahc.non_resident != 0)
+        {
+          return std::make_unique<AttrNonResident<S>>(ahc, *this);
+        }
+        return std::make_unique<RESIDENT>(ahc, *this);
+      }
       if (ahc.non_resident != 0)
       {
         return std::make_unique<AttrList<AttrNonResident<S>, S>>(ahc, *this,

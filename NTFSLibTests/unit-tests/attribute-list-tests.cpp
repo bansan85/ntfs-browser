@@ -227,6 +227,8 @@ TEST_CASE(
 
   NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
+  // mft_data_ must be the base extent, not whichever instance parsed first.
+  CHECK(volume.GetRecordsCount() == 1);
 
   FileRecord<Strategy::FULL_CACHE> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftDataSplitTargetIdx));
@@ -243,7 +245,74 @@ TEST_CASE(
 
   NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
+  CHECK(volume.GetRecordsCount() == 1);
 
   FileRecord<Strategy::NO_CACHE> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftDataSplitTargetIdx));
+}
+
+TEST_CASE(
+    "ReadFileRecord() resolves a two-hop $MFT DATA continuation chain, "
+    "where an earlier $ATTRIBUTE_LIST entry depends on a later one "
+    "(FULL_CACHE)",
+    "[ntfs-volume][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataExtentChain());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> record(volume);
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftChainExtA));
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftChainExtAStartVcn));
+}
+
+TEST_CASE(
+    "ReadFileRecord() resolves a two-hop $MFT DATA continuation chain, "
+    "where an earlier $ATTRIBUTE_LIST entry depends on a later one "
+    "(NO_CACHE)",
+    "[ntfs-volume][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataExtentChain());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftChainExtA));
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftChainExtAStartVcn));
+}
+
+TEST_CASE(
+    "A permanently unresolvable $MFT DATA continuation does not take down "
+    "an earlier, resolvable one in the same $ATTRIBUTE_LIST (FULL_CACHE)",
+    "[ntfs-volume][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> record(volume);
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftUnresolvableGoodRecord));
+  CHECK_FALSE(record.ParseFileRecord(NtfsBrowserTests::kMftUnresolvableExtIdx));
+}
+
+TEST_CASE(
+    "A permanently unresolvable $MFT DATA continuation does not take down "
+    "an earlier, resolvable one in the same $ATTRIBUTE_LIST (NO_CACHE)",
+    "[ntfs-volume][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftUnresolvableGoodRecord));
+  CHECK_FALSE(record.ParseFileRecord(NtfsBrowserTests::kMftUnresolvableExtIdx));
 }

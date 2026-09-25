@@ -301,27 +301,71 @@ inline constexpr DWORD kFragmentedMftDataRunLcn = 20;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
 
-// MFT index of the extension record BuildFakeNtfsImageWithMftDataSplit
-// AcrossAttributeList()'s $MFT's own $ATTRIBUTE_LIST relocates its DATA
-// continuation to.
-inline constexpr ULONGLONG kMftDataSplitExtIdx = 20;
+// MFT index of the extension record relocated via $ATTRIBUTE_LIST. Below
+// Enum::MftIdx::USER (16), so naively reachable.
+inline constexpr ULONGLONG kMftDataSplitExtIdx = 6;
 
-// MFT index of the file record only reachable through that continuation
-// instance. Past Enum::MftIdx::USER (16), so ReadFileRecord() must go
-// through $MFT's DATA attribute instead of a plain contiguous read.
+// MFT index only reachable through that continuation instance.
 inline constexpr ULONGLONG kMftDataSplitTargetIdx = 16;
 
-// Physical LCN the continuation instance's one data run maps
-// kMftDataSplitTargetIdx's VCN to.
+// Physical LCN the continuation maps kMftDataSplitTargetIdx's VCN to.
 inline constexpr DWORD kMftDataSplitLcn = 40;
 
 // Same volume as BuildFakeNtfsImage(), except $MFT's own DATA attribute is
-// split across an $ATTRIBUTE_LIST: the base record keeps a trivial, empty
-// instance, and an extension record holds the real continuation covering
-// kMftDataSplitTargetIdx - the case a $MFT so fragmented its own run list
-// doesn't fit in one attribute instance produces.
+// split via $ATTRIBUTE_LIST, its continuation covering kMftDataSplitTargetIdx.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+
+// MFT index of the chain's middle extent, naively reachable.
+inline constexpr ULONGLONG kMftChainExtB = 7;
+
+// Start VCN of kMftChainExtB's continuation.
+inline constexpr ULONGLONG kMftChainExtBStartVcn = 100;
+
+// Physical LCN kMftChainExtBStartVcn maps to.
+inline constexpr DWORD kMftChainExtBLcn = 200;
+
+// Clusters kMftChainExtB's extent covers - must reach kMftChainExtA.
+inline constexpr DWORD kMftChainExtBClusters = 50;
+
+// MFT index of the final extent, reachable only via kMftChainExtB's own extent.
+inline constexpr ULONGLONG kMftChainExtA = 120;
+
+// Start VCN of kMftChainExtA's continuation; also its target record's index.
+inline constexpr ULONGLONG kMftChainExtAStartVcn = 500;
+
+// Physical LCN kMftChainExtAStartVcn maps to.
+inline constexpr DWORD kMftChainTargetLcn = 300;
+
+// Same volume as BuildFakeNtfsImage(), with a two-entry $ATTRIBUTE_LIST
+// where resolving entry 1 needs entry 2's extent known first.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftDataExtentChain();
+
+// MFT index of a permanently unresolvable $ATTRIBUTE_LIST entry.
+inline constexpr ULONGLONG kMftUnresolvableExtIdx = 300;
+
+// Start VCN $ATTRIBUTE_LIST declares for kMftUnresolvableExtIdx.
+inline constexpr ULONGLONG kMftUnresolvableStartVcn = 9000;
+
+// MFT index of the second, resolvable entry.
+inline constexpr ULONGLONG kMftUnresolvableGoodExtIdx = 9;
+
+// Start VCN of kMftUnresolvableGoodExtIdx's continuation.
+inline constexpr ULONGLONG kMftUnresolvableGoodStartVcn = 200;
+
+// Physical LCN kMftUnresolvableGoodStartVcn maps to.
+inline constexpr DWORD kMftUnresolvableGoodLcn = 400;
+
+// Clusters kMftUnresolvableGoodExtIdx's extent covers.
+inline constexpr DWORD kMftUnresolvableGoodClusters = 10;
+
+// MFT index of the record reachable through kMftUnresolvableGoodExtIdx.
+inline constexpr ULONGLONG kMftUnresolvableGoodRecord = 205;
+
+// Same volume as BuildFakeNtfsImage(), with one unresolvable entry ahead of
+// one resolvable entry - the shape that caused 75a12d9's use-after-free.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithUnresolvableMftDataExtent();
 
 // Shared with NTFSLibTests/fuzz/named-stream-probe.h, so a fuzz corpus file
 // built from this fixture reaches the same named stream by name.

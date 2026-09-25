@@ -6,6 +6,7 @@
 #include <fstream>
 #include <random>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <windows.h>
@@ -99,6 +100,32 @@ void WriteEndOfAttributesMarker(FakeRecord& record, DWORD offset)
   std::memcpy(&record[offset], &marker, sizeof(marker));
 }
 
+// Writes record at byteOffset, growing image to the next 64 KiB boundary -
+// FULL_CACHE always reads a whole 64 KiB block, so a short image short-reads.
+void PutRecordAt(std::vector<BYTE>& image, size_t byteOffset,
+                 const FakeRecord& record)
+{
+  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  const size_t neededEnd = byteOffset + record.size();
+  const size_t alignedEnd =
+      ((neededEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
+      kFullCacheReadBlockSize;
+  if (image.size() < alignedEnd)
+  {
+    image.resize(alignedEnd, 0);
+  }
+  std::memcpy(image.data() + byteOffset, record.data(), record.size());
+}
+
+// Writes record at $MFT index idx - a plain contiguous slot, mftAddr plus
+// idx file records - growing image first if needed.
+void PutMftRecord(std::vector<BYTE>& image, DWORD mftAddr, ULONGLONG idx,
+                  const FakeRecord& record)
+{
+  PutRecordAt(image, mftAddr + static_cast<size_t>(kFakeFileRecordSize) * idx,
+              record);
+}
+
 // Builds a fake $MFT record: one non-resident DATA attribute whose
 // real_size reports kSentinelRecordCount fake records, with an empty
 // data run (GetRecordsCount() only reads real_size).
@@ -167,19 +194,18 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters)
   return record;
 }
 
-// Builds $MFT's base record (#0) with two attributes, in the same ascending
-// type order real NTFS writes them: a resident $ATTRIBUTE_LIST with one
-// entry relocating $MFT's own DATA continuation to extIdx (starting at VCN
-// continuationStartVcn), then $MFT's own native DATA attribute - the same
-// trivial, empty-run instance MakeMftRecord() builds, since nothing reads
-// through it in these fixtures.
-FakeRecord MakeMftRecordWithDataContinuation(ULONGLONG extIdx,
-                                             ULONGLONG continuationStartVcn)
+// Builds $MFT's base record: a resident $ATTRIBUTE_LIST with one entry per
+// (extension record index, start VCN) pair, then $MFT's own DATA attribute.
+FakeRecord MakeMftRecordWithDataContinuations(
+    std::span<const std::pair<ULONGLONG, ULONGLONG>> continuations)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
 
   DWORD offset = kAttrOffset;
+
+  const auto entrySize =
+      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
 
   auto& listAttr =
       *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
@@ -188,23 +214,24 @@ FakeRecord MakeMftRecordWithDataContinuation(ULONGLONG extIdx,
   listAttr.header.name_length = 0;
   listAttr.header.flags = 0;
   listAttr.header.id = 0;
-  listAttr.attr_size =
-      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
+  listAttr.attr_size = entrySize * static_cast<DWORD>(continuations.size());
   listAttr.attr_offset = static_cast<WORD>(sizeof(listAttr));
   listAttr.header.total_size =
       static_cast<DWORD>(sizeof(listAttr)) + listAttr.attr_size;
 
-  auto& alEntry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
-      &record[offset + listAttr.attr_offset]);
-  alEntry.attr_type = AttrType::DATA;
-  alEntry.record_size =
-      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
-  alEntry.name_length = 0;
-  alEntry.name_offset = 0;
-  alEntry.start_vcn = continuationStartVcn;
-  alEntry.base_ref.segment_number = extIdx;
-  alEntry.base_ref.sequence_number = 0;
-  alEntry.attr_id = 0;
+  for (size_t i = 0; i < continuations.size(); i++)
+  {
+    auto& alEntry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+        &record[offset + listAttr.attr_offset + i * entrySize]);
+    alEntry.attr_type = AttrType::DATA;
+    alEntry.record_size = static_cast<WORD>(entrySize);
+    alEntry.name_length = 0;
+    alEntry.name_offset = 0;
+    alEntry.start_vcn = continuations[i].second;
+    alEntry.base_ref.segment_number = continuations[i].first;
+    alEntry.base_ref.sequence_number = 0;
+    alEntry.attr_id = 0;
+  }
 
   offset += listAttr.header.total_size;
 
@@ -2446,46 +2473,98 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedMftInvalidRecord()
 std::vector<BYTE> BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();
-
   const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
-  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
-  {
-    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
-    if (image.size() < offset + record.size())
-    {
-      image.resize(offset + record.size(), 0);
-    }
-    std::memcpy(image.data() + offset, record.data(), record.size());
-  };
 
   // Overwrites $MFT's own record: a $ATTRIBUTE_LIST relocating its DATA
   // continuation (starting at kMftDataSplitTargetIdx) to the extension
   // record below.
-  putRecord(static_cast<ULONGLONG>(MftIdx::MFT),
-            MakeMftRecordWithDataContinuation(kMftDataSplitExtIdx,
-                                              kMftDataSplitTargetIdx));
+  const std::array<std::pair<ULONGLONG, ULONGLONG>, 1> continuations{
+      {{kMftDataSplitExtIdx, kMftDataSplitTargetIdx}}};
+  PutMftRecord(image, mftAddr, static_cast<ULONGLONG>(MftIdx::MFT),
+               MakeMftRecordWithDataContinuations(continuations));
 
   // Extension record: the continuation instance itself, one cluster
   // starting at VCN kMftDataSplitTargetIdx, mapped to kMftDataSplitLcn.
-  putRecord(kMftDataSplitExtIdx,
-            MakeMftDataContinuationExtensionRecord(kMftDataSplitTargetIdx,
-                                                   kMftDataSplitLcn, 1));
+  PutMftRecord(image, mftAddr, kMftDataSplitExtIdx,
+               MakeMftDataContinuationExtensionRecord(kMftDataSplitTargetIdx,
+                                                      kMftDataSplitLcn, 1));
 
   // The target file record itself, at the physical LCN the continuation
   // instance's data run maps its VCN to - only reachable by consulting that
   // instance, since kMftDataSplitTargetIdx is past Enum::MftIdx::USER.
-  const size_t targetOffset =
-      static_cast<size_t>(kMftDataSplitLcn) * kClusterSize;
-  if (image.size() < targetOffset + kFakeFileRecordSize)
-  {
-    image.resize(targetOffset + kFakeFileRecordSize, 0);
-  }
   FakeRecord targetRecord =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
   WriteEndOfAttributesMarker(targetRecord, kAttrOffset);
-  std::memcpy(image.data() + targetOffset, targetRecord.data(),
-              targetRecord.size());
+  PutRecordAt(image, static_cast<size_t>(kMftDataSplitLcn) * kClusterSize,
+              targetRecord);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftDataExtentChain()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  // Entry 1 names kMftChainExtA, reachable only through entry 2's extent.
+  const std::array<std::pair<ULONGLONG, ULONGLONG>, 2> continuations{
+      {{kMftChainExtA, kMftChainExtAStartVcn},
+       {kMftChainExtB, kMftChainExtBStartVcn}}};
+  PutMftRecord(image, mftAddr, static_cast<ULONGLONG>(MftIdx::MFT),
+               MakeMftRecordWithDataContinuations(continuations));
+
+  // Ext B: naively reachable (below Enum::MftIdx::USER). Its own extent
+  // covers kMftChainExtA's real location.
+  PutMftRecord(image, mftAddr, kMftChainExtB,
+               MakeMftDataContinuationExtensionRecord(kMftChainExtBStartVcn,
+                                                      kMftChainExtBLcn,
+                                                      kMftChainExtBClusters));
+
+  // Ext A's real bytes, mapped through ext B's extent; naive slot stays zero.
+  const size_t extAOffset = (static_cast<size_t>(kMftChainExtBLcn) +
+                             (kMftChainExtA - kMftChainExtBStartVcn)) *
+                            kClusterSize;
+  PutRecordAt(image, extAOffset,
+              MakeMftDataContinuationExtensionRecord(kMftChainExtAStartVcn,
+                                                     kMftChainTargetLcn, 1));
+
+  // The target file record, only reachable once both hops resolve.
+  FakeRecord targetRecord =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  WriteEndOfAttributesMarker(targetRecord, kAttrOffset);
+  PutRecordAt(image, static_cast<size_t>(kMftChainTargetLcn) * kClusterSize,
+              targetRecord);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithUnresolvableMftDataExtent()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  // Entry 1 is permanently unresolvable; entry 2 resolves fine.
+  const std::array<std::pair<ULONGLONG, ULONGLONG>, 2> continuations{
+      {{kMftUnresolvableExtIdx, kMftUnresolvableStartVcn},
+       {kMftUnresolvableGoodExtIdx, kMftUnresolvableGoodStartVcn}}};
+  PutMftRecord(image, mftAddr, static_cast<ULONGLONG>(MftIdx::MFT),
+               MakeMftRecordWithDataContinuations(continuations));
+
+  // The good entry: naively reachable, its extent covers the good record.
+  PutMftRecord(image, mftAddr, kMftUnresolvableGoodExtIdx,
+               MakeMftDataContinuationExtensionRecord(
+                   kMftUnresolvableGoodStartVcn, kMftUnresolvableGoodLcn,
+                   kMftUnresolvableGoodClusters));
+  FakeRecord goodRecord =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  WriteEndOfAttributesMarker(goodRecord, kAttrOffset);
+  PutRecordAt(image,
+              (static_cast<size_t>(kMftUnresolvableGoodLcn) +
+               (kMftUnresolvableGoodRecord - kMftUnresolvableGoodStartVcn)) *
+                  kClusterSize,
+              goodRecord);
+
+  // kMftUnresolvableExtIdx's slot stays zero-filled and unmapped.
 
   return image;
 }

@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <unordered_set>
+#include <utility>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/file-record-header.h>
@@ -11,6 +13,7 @@
 #include "attr-non-resident.h"
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
+#include "attr/attribute-list.h"
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
 #include "ntfs-common.h"
@@ -32,6 +35,9 @@ std::wstring_view TrimTrailingNuls(std::wstring_view name) noexcept
   }
   return name;
 }
+
+// Caps tracked $MFT DATA-continuation refs against a forged $ATTRIBUTE_LIST.
+constexpr size_t kMaxMftAttrListEntries = 65536;
 
 }  // namespace
 
@@ -137,76 +143,250 @@ void NtfsVolume<S>::Init()
     }
   }
 
-  mft_record_.SetAttrMask(Mask::DATA);
-  if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)))
+  // Skips SetAttrMask()'s automatic ATTRIBUTE_LIST bit (resolved below).
+  mft_record_.attr_mask_ = Mask::DATA;
+  if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
+      !mft_record_.ParseAttrs())
   {
     return;
   }
 
-  // A false return here can mean $MFT's own $ATTRIBUTE_LIST named an
-  // extension record ReadFileRecord() could not resolve yet: mft_data_ (and
-  // mft_data_instances_) aren't set until this call returns, so resolving
-  // that record falls back to a plain contiguous read from mft_addr_, which
-  // only reaches records within $MFT's first run. Whatever DATA instances
-  // were already gathered before that point are kept; the volume is still
-  // usable as long as the base instance survived.
-  if (!mft_record_.ParseAttrs())
+  const AttrBase<S>* baseExtent = nullptr;
+  for (const std::unique_ptr<AttrBase<S>>& attr :
+       mft_record_.getAttr(AttrType::DATA))
   {
-    LogWarn(
-        "$MFT's own attribute list did not fully resolve; continuing with "
-        "whatever DATA instances were found");
-  }
-
-  const std::vector<std::unique_ptr<AttrBase<S>>>& vec3 =
-      mft_record_.getAttr(AttrType::DATA);
-  if (vec3.empty())
-  {
-    return;
-  }
-
-  mft_data_ = vec3.front().get();
-
-  // $MFT's DATA attribute may be split across extension records, reached
-  // through $MFT's own $ATTRIBUTE_LIST, when its data runs don't fit in one
-  // attribute instance. ParseAttrs() already gathered every instance it
-  // could resolve into vec3; keep them all, sorted by starting VCN, so
-  // ReadMftData() can pick whichever one covers a given file record.
-  for (const std::unique_ptr<AttrBase<S>>& attr : vec3)
-  {
-    if (attr->IsNonResident())
+    // The base extent is the unnamed, non-resident DATA instance at VCN 0.
+    if (attr->IsNonResident() && attr->IsUnNamed() &&
+        static_cast<const AttrNonResident<S>*>(attr.get())->GetStartVcn() == 0)
     {
-      mft_data_instances_.push_back(attr.get());
+      baseExtent = attr.get();
+      break;
     }
   }
-  std::sort(
-      mft_data_instances_.begin(), mft_data_instances_.end(),
-      [](const AttrBase<S>* a, const AttrBase<S>* b)
-      {
-        return static_cast<const AttrNonResident<S>*>(a)->GetStartByteOffset() <
-               static_cast<const AttrNonResident<S>*>(b)->GetStartByteOffset();
-      });
+  if (baseExtent == nullptr)
+  {
+    return;
+  }
+
+  mft_data_ = baseExtent;
+
+  // Sentinel: base extent has no $ATTRIBUTE_LIST entry to check against.
+  TryAddMftExtent(*baseExtent, (std::numeric_limits<ULONGLONG>::max)());
+
+  // Must run after mft_data_/mft_extents_ are set, so it can use them.
+  ResolveMftDataExtents();
 
   // Reported OK only once mft_data_ is actually assigned.
   volume_ok_ = true;
 }
 
-// Finds whichever $MFT DATA instance covers vcn, or nullptr if none does -
-// eg. because $MFT's own $ATTRIBUTE_LIST named an extension record that
-// couldn't be resolved while bootstrapping $MFT itself (see Init()).
+// Resolves $MFT's own DATA continuations named by its $ATTRIBUTE_LIST, as a
+// fixed point since one entry can depend on an extent only another reveals.
 template <Strategy S>
-const AttrBase<S>* NtfsVolume<S>::FindMftDataInstance(ULONGLONG vcn) const
+void NtfsVolume<S>::ResolveMftDataExtents()
 {
-  for (const AttrBase<S>* instance : mft_data_instances_)
+  // Isolated from mft_record_; resolve_attr_list_ = false skips AttrList.
+  FileRecord<S> listRecord(*this);
+  listRecord.attr_mask_ = Mask::ATTRIBUTE_LIST;
+  listRecord.resolve_attr_list_ = false;
+
+  if (!listRecord.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
+      !listRecord.ParseAttrs())
   {
-    if (static_cast<const AttrNonResident<S>*>(instance)->CoversVcn(vcn))
+    LogDebug("$MFT's own $ATTRIBUTE_LIST did not parse; assuming none");
+    return;
+  }
+
+  const std::vector<std::unique_ptr<AttrBase<S>>>& listAttrs =
+      listRecord.getAttr(AttrType::ATTRIBUTE_LIST);
+  if (listAttrs.empty())
+  {
+    return;  // $MFT's DATA attribute fits in the base record alone.
+  }
+  const AttrBase<S>& rawList = *listAttrs.front();
+  const ULONGLONG selfRef = *listRecord.GetFileReference();
+
+  // Collects (record_ref, start_vcn) for each DATA entry, deduped and capped.
+  std::vector<std::pair<ULONGLONG, ULONGLONG>> pending;
+  {
+    std::unordered_set<ULONGLONG> seen;
+    ULONGLONG offset = 0;
+    Attr::AttributeList entry{};
+    std::optional<ULONGLONG> len;
+    while (
+        pending.size() < kMaxMftAttrListEntries &&
+        (len = rawList.ReadData(offset, {reinterpret_cast<BYTE*>(&entry),
+                                         Attr::kAttributeListEntryHeaderSize})))
     {
-      return instance;
+      if (*len != Attr::kAttributeListEntryHeaderSize ||
+          !IsValidAttrType(entry.attr_type))
+      {
+        break;
+      }
+
+      const ULONGLONG recordRef = entry.base_ref.segment_number;
+      if (entry.attr_type == AttrType::DATA && entry.name_length == 0 &&
+          recordRef != selfRef && seen.insert(recordRef).second)
+      {
+        pending.emplace_back(recordRef, entry.start_vcn);
+      }
+
+      if (entry.record_size == 0)
+      {
+        break;
+      }
+      offset += entry.record_size;
     }
   }
-  return nullptr;
+
+  // Attempts each ref once reachable, dropping it either way to bound reads.
+  while (!pending.empty())
+  {
+    std::vector<std::pair<ULONGLONG, ULONGLONG>> stillPending;
+    bool attemptedAny = false;
+
+    for (const auto& [recordRef, startVcn] : pending)
+    {
+      const bool reachable =
+          recordRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
+          IsMftRangeMapped(recordRef * file_record_size_, file_record_size_);
+      if (!reachable)
+      {
+        stillPending.emplace_back(recordRef, startVcn);
+        continue;
+      }
+      attemptedAny = true;
+
+      mft_extension_records_.emplace_back(*this);
+      FileRecord<S>& ext = mft_extension_records_.back();
+      ext.attr_mask_ = Mask::DATA;
+
+      if (ext.ParseFileRecord(recordRef) && ext.ParseAttrs())
+      {
+        for (const std::unique_ptr<AttrBase<S>>& attr :
+             ext.getAttr(AttrType::DATA))
+        {
+          if (attr->IsNonResident())
+          {
+            TryAddMftExtent(*attr, startVcn);
+          }
+        }
+      }
+      else
+      {
+        mft_extension_records_.pop_back();
+        LogWarn("$MFT DATA continuation in record {} could not be resolved",
+                recordRef);
+      }
+    }
+
+    if (!attemptedAny)
+    {
+      break;
+    }
+    pending = std::move(stillPending);
+  }
+
+  if (!pending.empty())
+  {
+    LogWarn(
+        "{} of $MFT's own DATA continuation(s) could not be resolved "
+        "(unreachable)",
+        pending.size());
+  }
 }
 
-// Reads $MFT's DATA attribute at a byte offset, following instance
+// Rejects attr if named, VCN-inverted, mismatched with expectedStartVcn, or
+// overlapping; otherwise inserts it into mft_extents_ in sorted order.
+template <Strategy S>
+void NtfsVolume<S>::TryAddMftExtent(const AttrBase<S>& attr,
+                                    ULONGLONG expectedStartVcn)
+{
+  if (!attr.IsUnNamed())
+  {
+    LogWarn("$MFT DATA continuation is named; rejecting");
+    return;
+  }
+
+  const auto& nonResident = static_cast<const AttrNonResident<S>&>(attr);
+  const ULONGLONG startVcn = nonResident.GetStartVcn();
+  const ULONGLONG lastVcn = nonResident.GetLastVcn();
+
+  if (startVcn > lastVcn)
+  {
+    LogWarn("$MFT DATA continuation has an empty/inverted VCN range");
+    return;
+  }
+
+  if (expectedStartVcn != (std::numeric_limits<ULONGLONG>::max)() &&
+      startVcn != expectedStartVcn)
+  {
+    LogWarn(
+        "$MFT DATA continuation's start VCN ({}) doesn't match its "
+        "$ATTRIBUTE_LIST entry ({})",
+        startVcn, expectedStartVcn);
+    return;
+  }
+
+  const auto insertPos =
+      std::upper_bound(mft_extents_.begin(), mft_extents_.end(), startVcn,
+                       [](ULONGLONG vcn, const MftExtent& extent)
+                       { return vcn < extent.start_vcn; });
+
+  const bool overlapsPrevious = insertPos != mft_extents_.begin() &&
+                                std::prev(insertPos)->last_vcn >= startVcn;
+  const bool overlapsNext =
+      insertPos != mft_extents_.end() && insertPos->start_vcn <= lastVcn;
+  if (overlapsPrevious || overlapsNext)
+  {
+    LogWarn("$MFT DATA continuation overlaps an already-accepted extent");
+    return;
+  }
+
+  mft_extents_.insert(insertPos, MftExtent{startVcn, lastVcn, &attr});
+}
+
+// True if [byteOffset, byteOffset + length) is fully mapped; no I/O.
+template <Strategy S>
+bool NtfsVolume<S>::IsMftRangeMapped(ULONGLONG byteOffset,
+                                     ULONGLONG length) const noexcept
+{
+  if (cluster_size_ == 0 || length == 0)
+  {
+    return false;
+  }
+
+  ULONGLONG offset = byteOffset;
+  const ULONGLONG end = byteOffset + length;
+  while (offset < end)
+  {
+    const MftExtent* extent = FindMftExtent(offset / cluster_size_);
+    if (extent == nullptr)
+    {
+      return false;
+    }
+    offset = (extent->last_vcn + 1) * cluster_size_;
+  }
+  return true;
+}
+
+// Finds the accepted extent covering vcn, or nullptr if unresolved.
+template <Strategy S>
+const typename NtfsVolume<S>::MftExtent*
+    NtfsVolume<S>::FindMftExtent(ULONGLONG vcn) const noexcept
+{
+  const auto it = std::upper_bound(mft_extents_.begin(), mft_extents_.end(),
+                                   vcn, [](ULONGLONG v, const MftExtent& extent)
+                                   { return v < extent.start_vcn; });
+  if (it == mft_extents_.begin())
+  {
+    return nullptr;
+  }
+  const MftExtent& candidate = *std::prev(it);
+  return (candidate.last_vcn >= vcn) ? &candidate : nullptr;
+}
+
+// Reads $MFT's DATA attribute at a byte offset, following extent
 // boundaries transparently when it is split across extension records.
 template <Strategy S>
 std::optional<ULONGLONG>
@@ -219,22 +399,22 @@ std::optional<ULONGLONG>
 
   while (remaining != 0)
   {
-    const AttrBase<S>* instance =
-        FindMftDataInstance(currentOffset / cluster_size_);
-    if (instance == nullptr)
+    const MftExtent* extent = FindMftExtent(currentOffset / cluster_size_);
+    if (extent == nullptr)
     {
       return {};
     }
 
-    const auto* nonResident = static_cast<const AttrNonResident<S>*>(instance);
-    const ULONGLONG instanceStartByte = nonResident->GetStartByteOffset();
-    const ULONGLONG availableInInstance =
-        nonResident->GetEndByteOffset() - currentOffset;
+    const auto* nonResident =
+        static_cast<const AttrNonResident<S>*>(extent->attr);
+    const ULONGLONG extentStartByte = extent->start_vcn * cluster_size_;
+    const ULONGLONG extentEndByte = (extent->last_vcn + 1) * cluster_size_;
+    const ULONGLONG availableInExtent = extentEndByte - currentOffset;
     const ULONGLONG toRead =
-        (remaining < availableInInstance) ? remaining : availableInInstance;
+        (remaining < availableInExtent) ? remaining : availableInExtent;
 
-    const std::optional<ULONGLONG> len = nonResident->ReadData(
-        currentOffset - instanceStartByte, {buf, static_cast<size_t>(toRead)});
+    const std::optional<ULONGLONG> len = nonResident->ReadExtentData(
+        currentOffset - extentStartByte, {buf, static_cast<size_t>(toRead)});
     if (!len || *len != toRead)
     {
       return {};

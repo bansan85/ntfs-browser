@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstring>
 #include <exception>
+#include <limits>
 #include <stdexcept>
 
 #include <gsl/narrow>
@@ -654,37 +655,11 @@ ULONGLONG AttrNonResident<S>::GetDataSize() const noexcept
   return attr_header_nr_.real_size;
 }
 
-// True if vcn falls within the VCN range this attribute instance covers -
-// relevant only for an attribute split into several instances across
-// $ATTRIBUTE_LIST, each covering its own slice of the whole VCN range.
+// Read "bufLen" bytes from "offset" into "bufv", bounded by "limit" total
+// bytes. Number of bytes acturally read is returned in "*actural"
 template <Strategy S>
-bool AttrNonResident<S>::CoversVcn(ULONGLONG vcn) const noexcept
-{
-  return vcn >= attr_header_nr_.start_vcn && vcn <= attr_header_nr_.last_vcn;
-}
-
-// Byte offset, within the whole (possibly multi-instance) attribute, where
-// this instance's VCN range starts.
-template <Strategy S>
-ULONGLONG AttrNonResident<S>::GetStartByteOffset() const noexcept
-{
-  return attr_header_nr_.start_vcn * this->GetClusterSize();
-}
-
-// Byte offset, within the whole attribute, one past where this instance's
-// VCN range ends.
-template <Strategy S>
-ULONGLONG AttrNonResident<S>::GetEndByteOffset() const noexcept
-{
-  return (attr_header_nr_.last_vcn + 1) * this->GetClusterSize();
-}
-
-// Read "bufLen" bytes from "offset" into "bufv"
-// Number of bytes acturally read is returned in "*actural"
-template <Strategy S>
-std::optional<ULONGLONG>
-    AttrNonResident<S>::ReadData(ULONGLONG offset,
-                                 const std::span<BYTE>& buffer) const
+std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
+    ULONGLONG offset, const std::span<BYTE>& buffer, ULONGLONG limit) const
 {
   // Hard disks can only be accessed by sectors
   // To be simple and efficient, only implemented cluster based accessing
@@ -711,13 +686,13 @@ std::optional<ULONGLONG>
   }
 
   // Bounds check
-  if (offset > attr_header_nr_.real_size)
+  if (offset > limit)
   {
     return {};
   }
-  if (offset + bufLen > attr_header_nr_.real_size)
+  if (offset + bufLen > limit)
   {
-    bufLen = gsl::narrow<DWORD>(attr_header_nr_.real_size - offset);
+    bufLen = gsl::narrow<DWORD>(limit - offset);
   }
 
   // First cluster Number
@@ -788,6 +763,47 @@ std::optional<ULONGLONG>
   actural += bufLen;
 
   return actural;
+}
+
+// real_size is 0 on continuation instances; only start_vcn == 0 sets it.
+template <Strategy S>
+std::optional<ULONGLONG>
+    AttrNonResident<S>::ReadData(ULONGLONG offset,
+                                 const std::span<BYTE>& buffer) const
+{
+  return ReadDataBounded(offset, buffer, attr_header_nr_.real_size);
+}
+
+template <Strategy S>
+std::optional<ULONGLONG>
+    AttrNonResident<S>::ReadExtentData(ULONGLONG offset,
+                                       const std::span<BYTE>& buffer) const
+{
+  const ULONGLONG clusters = TotalClusters();
+  const DWORD clusterSize = this->GetClusterSize();
+
+  // clusters/clusterSize are untrusted; guard the multiply against overflow.
+  if (clusterSize != 0 &&
+      clusters > (std::numeric_limits<ULONGLONG>::max)() / clusterSize)
+  {
+    LogError("Extent size overflows: {} clusters of {} bytes", clusters,
+             clusterSize);
+    return {};
+  }
+
+  return ReadDataBounded(offset, buffer, clusters * clusterSize);
+}
+
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::GetStartVcn() const noexcept
+{
+  return attr_header_nr_.start_vcn;
+}
+
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::GetLastVcn() const noexcept
+{
+  return attr_header_nr_.last_vcn;
 }
 
 template class AttrNonResident<Strategy::NO_CACHE>;

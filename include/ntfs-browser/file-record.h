@@ -56,6 +56,7 @@ class NTFS_BROWSER_EXPORT FileRecord
 
   virtual ~FileRecord();
   friend class AttrBase<S>;
+  friend class NtfsVolume<S>;
   template <class TYPE_RESIDENT, Strategy>
   friend class AttrList;
 
@@ -66,6 +67,9 @@ class NTFS_BROWSER_EXPORT FileRecord
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
   Mask attr_mask_{Mask::ALL};
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
+
+  // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.
+  bool resolve_attr_list_{true};
 
   // Owned per-instance so this FileRecord's raw bytes (viewed by NO_CACHE
   // attributes as plain pointers/spans, no copy) are never aliased by

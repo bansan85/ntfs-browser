@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
+#include <list>
 #include <memory>
 #include <optional>
 #include <span>
@@ -63,13 +64,21 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
   FileRecord<S> mft_record_;              // $MFT File Record
-  const AttrBase<S>* mft_data_{nullptr};  // $MFT Data Attribute
+  const AttrBase<S>* mft_data_{nullptr};  // $MFT Data Attribute (base extent)
 
-  // Every $MFT DATA attribute instance: the base one, plus any continuation
-  // reached through $MFT's own $ATTRIBUTE_LIST when its data runs don't fit
-  // in one instance. ReadMftData() picks whichever instance covers the VCN
-  // it needs.
-  std::vector<const AttrBase<S>*> mft_data_instances_;
+  // One VCN range $MFT's own DATA attribute maps: base extent or continuation.
+  struct MftExtent
+  {
+    ULONGLONG start_vcn;
+    ULONGLONG last_vcn;
+    const AttrBase<S>* attr;
+  };
+
+  // Sorted by start_vcn; binary-searched per file-record read.
+  std::vector<MftExtent> mft_extents_;
+
+  // Owns extension FileRecords; std::list keeps FULL_CACHE pointers stable.
+  std::list<FileRecord<S>> mft_extension_records_;
 
   mutable std::vector<BYTE> cluster_buffer_;
 
@@ -86,7 +95,11 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
   void Init();
-  [[nodiscard]] const AttrBase<S>* FindMftDataInstance(ULONGLONG vcn) const;
+  void ResolveMftDataExtents();
+  void TryAddMftExtent(const AttrBase<S>& attr, ULONGLONG expectedStartVcn);
+  [[nodiscard]] bool IsMftRangeMapped(ULONGLONG byteOffset,
+                                      ULONGLONG length) const noexcept;
+  [[nodiscard]] const MftExtent* FindMftExtent(ULONGLONG vcn) const noexcept;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadMftData(ULONGLONG offset, std::span<BYTE> buffer) const;
 

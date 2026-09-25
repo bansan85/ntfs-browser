@@ -58,6 +58,9 @@ class AttrNonResident : public AttrBase<S>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;
   [[nodiscard]] std::optional<ULONGLONG>
+      ReadDataBounded(ULONGLONG offset, const std::span<BYTE>& buffer,
+                      ULONGLONG limit) const;
+  [[nodiscard]] std::optional<ULONGLONG>
       ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
                           std::span<BYTE> buffer) const;
   [[nodiscard]] std::optional<ULONGLONG>
@@ -86,8 +89,12 @@ class AttrNonResident : public AttrBase<S>
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 
-  [[nodiscard]] bool CoversVcn(ULONGLONG vcn) const noexcept;
-  [[nodiscard]] ULONGLONG GetStartByteOffset() const noexcept;
-  [[nodiscard]] ULONGLONG GetEndByteOffset() const noexcept;
+  // Like ReadData(), but bounded by this instance's own VCN range instead
+  // of real_size, which continuation instances leave at 0.
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadExtentData(ULONGLONG offset, const std::span<BYTE>& buffer) const;
+
+  [[nodiscard]] ULONGLONG GetStartVcn() const noexcept;
+  [[nodiscard]] ULONGLONG GetLastVcn() const noexcept;
 };  // AttrNonResident
 }  // namespace NtfsBrowser
