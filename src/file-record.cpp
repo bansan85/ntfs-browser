@@ -917,6 +917,13 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
       getAttr(AttrType::INDEX_ROOT);
   if (vec.empty())
   {
+    // No IndexRoot at all to start the normal walk from, but $INDEX_ALLOCATION
+    // blocks may still exist and hold every entry.
+    if (recoverOrphanedBlocks)
+    {
+      std::unordered_set<ULONGLONG> visitedVcns;
+      ScanOrphanedIndexBlocks(seCallBack, context, visitedVcns);
+    }
     return;
   }
 

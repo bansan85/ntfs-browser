@@ -134,9 +134,10 @@ class NTFS_BROWSER_EXPORT FileRecord
   // recoverOrphanedBlocks: when true, additionally scans every $INDEX_ALLOCATION
   // block the B+ tree walk itself doesn't reach - recovery for a directory whose
   // $INDEX_ROOT or an internal node is corrupt and no longer points at every
-  // child block. An entry found this way is only reported if its parent
-  // reference still matches this directory, since a block recovered this way
-  // may hold stale entries left over from a file already deleted from it.
+  // child block, or whose $INDEX_ROOT attribute is missing entirely. An entry
+  // found this way is only reported if its parent reference still matches this
+  // directory, since a block recovered this way may hold stale entries left
+  // over from a file already deleted from it.
   void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack, void* context,
                           bool recoverOrphanedBlocks = false) const;
   [[nodiscard]] std::optional<IndexEntry>

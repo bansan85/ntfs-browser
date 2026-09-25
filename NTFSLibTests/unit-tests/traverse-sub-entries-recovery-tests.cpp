@@ -84,6 +84,49 @@ void RunOrphanedBlocksFoundWithRecoveryFlag()
   CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
 }
 
+// With no $INDEX_ROOT parsed at all, the normal walk has nowhere to start,
+// so without the recovery flag TraverseSubEntries() reports nothing.
+template <Strategy S>
+void RunMissingIndexRootNeedsRecoveryFlag()
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> root(volume);
+  root.SetAttrMask(Mask::INDEX_ALLOCATION);
+
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseAttrs());
+
+  CHECK(CollectNames(root, false).empty());
+}
+
+// With the recovery flag, a record with no parsed $INDEX_ROOT still yields
+// every entry reachable through $INDEX_ALLOCATION alone.
+template <Strategy S>
+void RunMissingIndexRootRecoveredWithFlag()
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> root(volume);
+  root.SetAttrMask(Mask::INDEX_ALLOCATION);
+
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseAttrs());
+
+  const std::vector<std::wstring> recovered = CollectNames(root, true);
+  REQUIRE(recovered.size() == 2);
+  CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
+}
+
 }  // namespace
 
 TEST_CASE("TraverseSubEntries ignores an orphaned index block by default",
@@ -114,4 +157,35 @@ TEST_CASE(
     "[file-record][index-block][regression]")
 {
   RunOrphanedBlocksFoundWithRecoveryFlag<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries with no parsed IndexRoot reports nothing by default",
+    "[file-record][index-block][regression]")
+{
+  RunMissingIndexRootNeedsRecoveryFlag<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries with no parsed IndexRoot reports nothing by default "
+    "(FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunMissingIndexRootNeedsRecoveryFlag<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan finds entries with no parsed IndexRoot "
+    "at all",
+    "[file-record][index-block][regression]")
+{
+  RunMissingIndexRootRecoveredWithFlag<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan finds entries with no parsed IndexRoot "
+    "at all (FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunMissingIndexRootRecoveredWithFlag<Strategy::FULL_CACHE>();
 }
