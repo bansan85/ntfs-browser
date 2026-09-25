@@ -167,6 +167,109 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters)
   return record;
 }
 
+// Builds $MFT's base record (#0) with two attributes, in the same ascending
+// type order real NTFS writes them: a resident $ATTRIBUTE_LIST with one
+// entry relocating $MFT's own DATA continuation to extIdx (starting at VCN
+// continuationStartVcn), then $MFT's own native DATA attribute - the same
+// trivial, empty-run instance MakeMftRecord() builds, since nothing reads
+// through it in these fixtures.
+FakeRecord MakeMftRecordWithDataContinuation(ULONGLONG extIdx,
+                                             ULONGLONG continuationStartVcn)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  DWORD offset = kAttrOffset;
+
+  auto& listAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  listAttr.header.type = AttrType::ATTRIBUTE_LIST;
+  listAttr.header.non_resident = 0;
+  listAttr.header.name_length = 0;
+  listAttr.header.flags = 0;
+  listAttr.header.id = 0;
+  listAttr.attr_size =
+      static_cast<DWORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
+  listAttr.attr_offset = static_cast<WORD>(sizeof(listAttr));
+  listAttr.header.total_size =
+      static_cast<DWORD>(sizeof(listAttr)) + listAttr.attr_size;
+
+  auto& alEntry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+      &record[offset + listAttr.attr_offset]);
+  alEntry.attr_type = AttrType::DATA;
+  alEntry.record_size =
+      static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
+  alEntry.name_length = 0;
+  alEntry.name_offset = 0;
+  alEntry.start_vcn = continuationStartVcn;
+  alEntry.base_ref.segment_number = extIdx;
+  alEntry.base_ref.sequence_number = 0;
+  alEntry.attr_id = 0;
+
+  offset += listAttr.header.total_size;
+
+  auto& dataAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
+  dataAttr.header.type = AttrType::DATA;
+  dataAttr.header.non_resident = 1;
+  dataAttr.header.name_length = 0;
+  dataAttr.header.flags = 0;
+  dataAttr.header.id = 0;
+  dataAttr.start_vcn = 0;
+  dataAttr.last_vcn = 0;
+  dataAttr.data_run_offset = static_cast<WORD>(sizeof(dataAttr));
+  dataAttr.comp_unit_size = 0;
+  dataAttr.real_size = kFakeFileRecordSize;
+  dataAttr.alloc_size = dataAttr.real_size;
+  dataAttr.ini_size = dataAttr.real_size;
+  dataAttr.header.total_size = static_cast<DWORD>(sizeof(dataAttr)) + 8;
+
+  record[offset + sizeof(dataAttr)] = 0x00;
+
+  WriteEndOfAttributesMarker(record, offset + dataAttr.header.total_size);
+  return record;
+}
+
+// Extension record holding the continuation instance of $MFT's own DATA
+// attribute: a single non-resident run of clusters clusters at LCN lcn,
+// starting at VCN startVcn - unlike MakeMftRecordWithRealDataRun()'s, which
+// always starts at VCN 0.
+FakeRecord MakeMftDataContinuationExtensionRecord(ULONGLONG startVcn, DWORD lcn,
+                                                  DWORD clusters)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::DATA;
+  attr.header.non_resident = 1;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.start_vcn = startVcn;
+  attr.last_vcn = startVcn + clusters - 1;
+  attr.data_run_offset = static_cast<WORD>(sizeof(attr));
+  attr.comp_unit_size = 0;
+  attr.real_size = (startVcn + clusters) * kClusterSize;
+  attr.alloc_size = attr.real_size;
+  attr.ini_size = attr.real_size;
+
+  BYTE* dataRun = &record[kAttrOffset + attr.data_run_offset];
+  DWORD runLen = 0;
+  // High nibble = LCN offset field size, low nibble = length field size.
+  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = static_cast<BYTE>(clusters);
+  std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
+  runLen += sizeof(lcn);
+  dataRun[runLen++] = 0x00;  // terminate the run list
+
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + runLen;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 // Builds a record with valid magic but offset_of_us == kFakeFileRecordSize,
 // which FileRecordHeader's ctor rejects outright.
 FakeRecord MakeInvalidOffsetOfUsRecord()
@@ -2336,6 +2439,53 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedMftInvalidRecord()
   const FakeRecord forgedRecord = MakeInvalidOffsetOfUsRecord();
   std::memcpy(image.data() + forgedOffset, forgedRecord.data(),
               forgedRecord.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
+  {
+    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                        static_cast<size_t>(idx);
+    if (image.size() < offset + record.size())
+    {
+      image.resize(offset + record.size(), 0);
+    }
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  // Overwrites $MFT's own record: a $ATTRIBUTE_LIST relocating its DATA
+  // continuation (starting at kMftDataSplitTargetIdx) to the extension
+  // record below.
+  putRecord(static_cast<ULONGLONG>(MftIdx::MFT),
+            MakeMftRecordWithDataContinuation(kMftDataSplitExtIdx,
+                                              kMftDataSplitTargetIdx));
+
+  // Extension record: the continuation instance itself, one cluster
+  // starting at VCN kMftDataSplitTargetIdx, mapped to kMftDataSplitLcn.
+  putRecord(kMftDataSplitExtIdx,
+            MakeMftDataContinuationExtensionRecord(kMftDataSplitTargetIdx,
+                                                   kMftDataSplitLcn, 1));
+
+  // The target file record itself, at the physical LCN the continuation
+  // instance's data run maps its VCN to - only reachable by consulting that
+  // instance, since kMftDataSplitTargetIdx is past Enum::MftIdx::USER.
+  const size_t targetOffset =
+      static_cast<size_t>(kMftDataSplitLcn) * kClusterSize;
+  if (image.size() < targetOffset + kFakeFileRecordSize)
+  {
+    image.resize(targetOffset + kFakeFileRecordSize, 0);
+  }
+  FakeRecord targetRecord =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  WriteEndOfAttributesMarker(targetRecord, kAttrOffset);
+  std::memcpy(image.data() + targetOffset, targetRecord.data(),
+              targetRecord.size());
 
   return image;
 }

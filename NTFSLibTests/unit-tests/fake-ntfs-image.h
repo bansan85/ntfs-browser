@@ -301,6 +301,28 @@ inline constexpr DWORD kFragmentedMftDataRunLcn = 20;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
 
+// MFT index of the extension record BuildFakeNtfsImageWithMftDataSplit
+// AcrossAttributeList()'s $MFT's own $ATTRIBUTE_LIST relocates its DATA
+// continuation to.
+inline constexpr ULONGLONG kMftDataSplitExtIdx = 20;
+
+// MFT index of the file record only reachable through that continuation
+// instance. Past Enum::MftIdx::USER (16), so ReadFileRecord() must go
+// through $MFT's DATA attribute instead of a plain contiguous read.
+inline constexpr ULONGLONG kMftDataSplitTargetIdx = 16;
+
+// Physical LCN the continuation instance's one data run maps
+// kMftDataSplitTargetIdx's VCN to.
+inline constexpr DWORD kMftDataSplitLcn = 40;
+
+// Same volume as BuildFakeNtfsImage(), except $MFT's own DATA attribute is
+// split across an $ATTRIBUTE_LIST: the base record keeps a trivial, empty
+// instance, and an extension record holds the real continuation covering
+// kMftDataSplitTargetIdx - the case a $MFT so fragmented its own run list
+// doesn't fit in one attribute instance produces.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+
 // Shared with NTFSLibTests/fuzz/named-stream-probe.h, so a fuzz corpus file
 // built from this fixture reaches the same named stream by name.
 using NtfsFuzz::kNamedDataStreamName;

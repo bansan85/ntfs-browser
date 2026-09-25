@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 #include <limits>
 
@@ -7,6 +8,7 @@
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "attr-non-resident.h"
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
 #include "data/index-block.h"
@@ -136,10 +138,23 @@ void NtfsVolume<S>::Init()
   }
 
   mft_record_.SetAttrMask(Mask::DATA);
-  if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
-      !mft_record_.ParseAttrs())
+  if (!mft_record_.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)))
   {
     return;
+  }
+
+  // A false return here can mean $MFT's own $ATTRIBUTE_LIST named an
+  // extension record ReadFileRecord() could not resolve yet: mft_data_ (and
+  // mft_data_instances_) aren't set until this call returns, so resolving
+  // that record falls back to a plain contiguous read from mft_addr_, which
+  // only reaches records within $MFT's first run. Whatever DATA instances
+  // were already gathered before that point are kept; the volume is still
+  // usable as long as the base instance survived.
+  if (!mft_record_.ParseAttrs())
+  {
+    LogWarn(
+        "$MFT's own attribute list did not fully resolve; continuing with "
+        "whatever DATA instances were found");
   }
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec3 =
@@ -151,8 +166,87 @@ void NtfsVolume<S>::Init()
 
   mft_data_ = vec3.front().get();
 
+  // $MFT's DATA attribute may be split across extension records, reached
+  // through $MFT's own $ATTRIBUTE_LIST, when its data runs don't fit in one
+  // attribute instance. ParseAttrs() already gathered every instance it
+  // could resolve into vec3; keep them all, sorted by starting VCN, so
+  // ReadMftData() can pick whichever one covers a given file record.
+  for (const std::unique_ptr<AttrBase<S>>& attr : vec3)
+  {
+    if (attr->IsNonResident())
+    {
+      mft_data_instances_.push_back(attr.get());
+    }
+  }
+  std::sort(
+      mft_data_instances_.begin(), mft_data_instances_.end(),
+      [](const AttrBase<S>* a, const AttrBase<S>* b)
+      {
+        return static_cast<const AttrNonResident<S>*>(a)->GetStartByteOffset() <
+               static_cast<const AttrNonResident<S>*>(b)->GetStartByteOffset();
+      });
+
   // Reported OK only once mft_data_ is actually assigned.
   volume_ok_ = true;
+}
+
+// Finds whichever $MFT DATA instance covers vcn, or nullptr if none does -
+// eg. because $MFT's own $ATTRIBUTE_LIST named an extension record that
+// couldn't be resolved while bootstrapping $MFT itself (see Init()).
+template <Strategy S>
+const AttrBase<S>* NtfsVolume<S>::FindMftDataInstance(ULONGLONG vcn) const
+{
+  for (const AttrBase<S>* instance : mft_data_instances_)
+  {
+    if (static_cast<const AttrNonResident<S>*>(instance)->CoversVcn(vcn))
+    {
+      return instance;
+    }
+  }
+  return nullptr;
+}
+
+// Reads $MFT's DATA attribute at a byte offset, following instance
+// boundaries transparently when it is split across extension records.
+template <Strategy S>
+std::optional<ULONGLONG>
+    NtfsVolume<S>::ReadMftData(ULONGLONG offset, std::span<BYTE> buffer) const
+{
+  ULONGLONG totalRead = 0;
+  BYTE* buf = buffer.data();
+  ULONGLONG remaining = buffer.size();
+  ULONGLONG currentOffset = offset;
+
+  while (remaining != 0)
+  {
+    const AttrBase<S>* instance =
+        FindMftDataInstance(currentOffset / cluster_size_);
+    if (instance == nullptr)
+    {
+      return {};
+    }
+
+    const auto* nonResident = static_cast<const AttrNonResident<S>*>(instance);
+    const ULONGLONG instanceStartByte = nonResident->GetStartByteOffset();
+    const ULONGLONG availableInInstance =
+        nonResident->GetEndByteOffset() - currentOffset;
+    const ULONGLONG toRead =
+        (remaining < availableInInstance) ? remaining : availableInInstance;
+
+    const std::optional<ULONGLONG> len = nonResident->ReadData(
+        currentOffset - instanceStartByte, {buf, static_cast<size_t>(toRead)});
+    if (!len || *len != toRead)
+    {
+      return {};
+    }
+
+    buf += toRead;
+    currentOffset += toRead;
+    remaining -= toRead;
+    totalRead += toRead;
+  }
+
+  return totalRead;
 }
 
 #ifdef _WIN32

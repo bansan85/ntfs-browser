@@ -215,3 +215,35 @@ TEST_CASE(
   CHECK(allocAttrs[0]->GetDataSize() ==
         NtfsBrowserTests::kAttrListTightPackRealSize);
 }
+
+TEST_CASE(
+    "ReadFileRecord() resolves a record through $MFT's own DATA "
+    "continuation, reached via $MFT's own $ATTRIBUTE_LIST (FULL_CACHE)",
+    "[ntfs-volume][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> record(volume);
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftDataSplitTargetIdx));
+}
+
+TEST_CASE(
+    "ReadFileRecord() resolves a record through $MFT's own DATA "
+    "continuation, reached via $MFT's own $ATTRIBUTE_LIST (NO_CACHE)",
+    "[ntfs-volume][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftDataSplitTargetIdx));
+}

@@ -281,11 +281,13 @@ std::optional<FileRecordHeaderImpl<S>>
     }
   }
 
-  // May be fragmented $MFT
+  // May be fragmented $MFT, and its DATA attribute itself may be split
+  // across extension records - ReadMftData() picks whichever instance
+  // covers this offset.
   const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
 
   if (std::optional<ULONGLONG> len =
-          volume_.mft_data_->ReadData(frAddr, record_buffer_);
+          volume_.ReadMftData(frAddr, record_buffer_);
       !len || *len != volume_.GetFileRecordSize())
   {
     return {};

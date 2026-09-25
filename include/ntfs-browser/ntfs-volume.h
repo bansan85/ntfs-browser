@@ -4,8 +4,10 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
+#include <vector>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-defines.h>
@@ -63,6 +65,12 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   FileRecord<S> mft_record_;              // $MFT File Record
   const AttrBase<S>* mft_data_{nullptr};  // $MFT Data Attribute
 
+  // Every $MFT DATA attribute instance: the base one, plus any continuation
+  // reached through $MFT's own $ATTRIBUTE_LIST when its data runs don't fit
+  // in one instance. ReadMftData() picks whichever instance covers the VCN
+  // it needs.
+  std::vector<const AttrBase<S>*> mft_data_instances_;
+
   mutable std::vector<BYTE> cluster_buffer_;
 
   // EFS key source. efs_provider_set_ tells "never chosen", which lets the
@@ -78,6 +86,9 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
   void Init();
+  [[nodiscard]] const AttrBase<S>* FindMftDataInstance(ULONGLONG vcn) const;
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadMftData(ULONGLONG offset, std::span<BYTE> buffer) const;
 
  public:
   [[nodiscard]] bool IsVolumeOK() const noexcept;

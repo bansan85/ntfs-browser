@@ -654,6 +654,31 @@ ULONGLONG AttrNonResident<S>::GetDataSize() const noexcept
   return attr_header_nr_.real_size;
 }
 
+// True if vcn falls within the VCN range this attribute instance covers -
+// relevant only for an attribute split into several instances across
+// $ATTRIBUTE_LIST, each covering its own slice of the whole VCN range.
+template <Strategy S>
+bool AttrNonResident<S>::CoversVcn(ULONGLONG vcn) const noexcept
+{
+  return vcn >= attr_header_nr_.start_vcn && vcn <= attr_header_nr_.last_vcn;
+}
+
+// Byte offset, within the whole (possibly multi-instance) attribute, where
+// this instance's VCN range starts.
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::GetStartByteOffset() const noexcept
+{
+  return attr_header_nr_.start_vcn * this->GetClusterSize();
+}
+
+// Byte offset, within the whole attribute, one past where this instance's
+// VCN range ends.
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::GetEndByteOffset() const noexcept
+{
+  return (attr_header_nr_.last_vcn + 1) * this->GetClusterSize();
+}
+
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
 template <Strategy S>
