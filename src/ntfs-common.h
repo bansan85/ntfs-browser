@@ -79,6 +79,17 @@ void LogWarn(std::format_string<Args...> fmt, Args&&... args) noexcept
   Log::Detail::Write(Log::Level::kWarn, fmt, std::forward<Args>(args)...);
 }
 
+// A salvageable condition: Info when recover is true (recover_errors is on,
+// so the caller salvages), Warn when strict (the caller rejects the item
+// whole). The text is identical either way.
+template <class... Args>
+void LogRecoverable(bool recover, std::format_string<Args...> fmt,
+                    Args&&... args) noexcept
+{
+  Log::Detail::Write(recover ? Log::Level::kInfo : Log::Level::kWarn, fmt,
+                     std::forward<Args>(args)...);
+}
+
 template <class... Args>
 void LogError(std::format_string<Args...> fmt, Args&&... args) noexcept
 {

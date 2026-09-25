@@ -51,8 +51,8 @@ class AttrNonResident : public AttrBase<S>
   std::shared_ptr<const Efs::Context> efs_context_;
 
   [[nodiscard]] static bool PickData(const BYTE*& dataRun, const BYTE* end,
-                                     ULONGLONG& length,
-                                     LONGLONG& LCNOffset) noexcept;
+                                     ULONGLONG& length, LONGLONG& LCNOffset,
+                                     bool recover) noexcept;
   void ParseDataRun();
   [[nodiscard]] std::optional<std::span<const BYTE>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,

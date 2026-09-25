@@ -30,6 +30,10 @@ class NTFS_BROWSER_EXPORT IndexEntry : public Filename
 
  public:
   [[nodiscard]] ULONGLONG GetFileReference() const noexcept;
+  // Times the record this entry names has been reused, read from the
+  // entry's own mft_sn field - not the live record's current sequence,
+  // which may already differ.
+  [[nodiscard]] WORD GetSequenceNumber() const noexcept;
   [[nodiscard]] bool IsSubNodePtr() const noexcept;
   [[nodiscard]] ULONGLONG GetSubNodeVCN() const noexcept;
 };  // IndexEntry

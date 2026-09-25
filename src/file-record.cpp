@@ -508,6 +508,19 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
   // Clear previous data
   ClearAttrs();
 
+  const bool recover = volume_.GetOptions().recover_errors;
+
+  // A freed record still parsed its header (IsDeleted() works), but not its
+  // attributes: this record exposes no content unless include_deleted opted
+  // in, or this is one of the volume's own metadata reads.
+  if (!bypass_deleted_gate_ && IsDeleted() &&
+      !volume_.GetOptions().include_deleted)
+  {
+    LogDebug("ParseAttrs() skipped: file record {} is deleted",
+             file_reference_ ? *file_reference_ : 0);
+    return false;
+  }
+
   // Visit all attributes
 
   DWORD dataPtr = 0;  // guard if data exceeds file_record_size_ bounds
@@ -519,15 +532,33 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
   }
 
   dataPtr += file_record_->GetData()->offset_of_attr;
+  bool foundEndMarker = false;
 
-  // True only while the header fits, it isn't the terminator, and the
-  // whole attribute fits within the record.
-  while ((static_cast<ULONGLONG>(dataPtr) + sizeof(AttrHeaderCommon) <=
-          volume_.GetFileRecordSize()) &&
-         ahc->type != AttrType::ALL &&
-         (static_cast<ULONGLONG>(dataPtr) + ahc->total_size <=
-          volume_.GetFileRecordSize()))
+  while (true)
   {
+    // The on-disk end-of-attributes marker is a single AttrType::ALL value
+    // (4 bytes): check for it as soon as that much room remains, rather
+    // than requiring a full attribute header to fit first.
+    if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrType) >
+        volume_.GetFileRecordSize())
+    {
+      break;
+    }
+    if (ahc->type == AttrType::ALL)
+    {
+      foundEndMarker = true;
+      break;
+    }
+    // From here on, the walk needs the whole header, and the whole
+    // attribute, to fit.
+    if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrHeaderCommon) >
+            volume_.GetFileRecordSize() ||
+        static_cast<ULONGLONG>(dataPtr) + ahc->total_size >
+            volume_.GetFileRecordSize())
+    {
+      break;
+    }
+
     const DWORD minTotalSize =
         ahc->non_resident != 0
             ? Attr::kHeaderNonResidentBaseSize
@@ -535,6 +566,10 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
     if (ahc->total_size < minTotalSize)
     {
       LogWarn("Attribute total_size too small for its header.");
+      if (!recover)
+      {
+        ClearAttrs();
+      }
       return false;
     }
 
@@ -548,6 +583,10 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
         LogWarn(
             "Compressed attribute total_size too small for its compressed "
             "size field.");
+        if (!recover)
+        {
+          ClearAttrs();
+        }
         return false;
       }
     }
@@ -557,8 +596,31 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
     if (IsValidAttrType(ahc->type) &&
         static_cast<bool>(ATTR_MASK(ahc->type) & attr_mask_))
     {
+      // Mirrors AttrBase::GetAttrName()'s own bounds check, ahead of
+      // constructing the attribute: strict rejects it outright instead of
+      // parsing it and letting a later GetAttrName() call find the same
+      // defect.
+      const bool nameExceedsBounds =
+          ahc->name_length != 0 &&
+          static_cast<ULONGLONG>(ahc->name_offset) +
+                  (static_cast<ULONGLONG>(ahc->name_length) * sizeof(WCHAR)) >
+              ahc->total_size;
+      if (nameExceedsBounds)
+      {
+        LogRecoverable(recover, "Attribute name exceeds attribute bounds.");
+        if (!recover)
+        {
+          ClearAttrs();
+          return false;
+        }
+      }
+
       if (!ParseAttr(*ahc, attrListChain))
       {
+        if (!recover)
+        {
+          ClearAttrs();
+        }
         return false;
       }
     }
@@ -569,7 +631,22 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
         ahc->total_size);  // next attribute
   }
 
-  AttachEfsContext();
+  if (!foundEndMarker)
+  {
+    LogRecoverable(recover,
+                   "Attribute walk ended without a terminating end marker.");
+    if (!recover)
+    {
+      ClearAttrs();
+      return false;
+    }
+  }
+
+  if (!AttachEfsContext())
+  {
+    ClearAttrs();
+    return false;
+  }
   return true;
 }
 
@@ -624,24 +701,27 @@ std::vector<Efs::WrappedFek> FileRecord<S>::ReadEfsEntries() const
 
 // Gives every encrypted $DATA stream of this record the context that
 // decrypts it. Only a non-resident stream is encrypted: EFS never leaves file
-// data inside the record.
+// data inside the record. Returns false only when strict and one of the two
+// anomalies below is found: the caller then rejects the whole record instead
+// of reading the stream undecrypted.
 template <Strategy S>
-void FileRecord<S>::AttachEfsContext()
+bool FileRecord<S>::AttachEfsContext()
 {
-#if !(defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
-      (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)))
-  // Neither backend is compiled in: no stream ever gets a decryption context,
-  // so ReadData() returns raw ciphertext for an encrypted $DATA stream.
-  return;
-#else
   // AttrHeaderCommon::flags bit 0: the on-disk "compressed" flag. Real NTFS
   // never sets it alongside 0x4000 (compression and encryption are mutually
   // exclusive), but a forged record could. Decrypting a compressed stream's
   // bytes before LZNT1 decoding sees them would corrupt them for no gain, so
-  // that combination is left undecrypted rather than misprocessed.
+  // that combination is left undecrypted rather than misprocessed, when
+  // recovering. Checked with or without a decryption backend compiled in:
+  // the anomaly is in the flags, not in what can decrypt them.
   constexpr WORD kAttrFlagCompressed = 0x0001;
+  const bool recover = volume_.GetOptions().recover_errors;
 
+#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
+    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
   std::vector<AttrNonResident<S>*> encrypted;
+#endif
+
   for (const std::unique_ptr<AttrBase<S>>& attr :
        attr_list_[ATTR_INDEX(AttrType::DATA)])
   {
@@ -652,24 +732,40 @@ void FileRecord<S>::AttachEfsContext()
     }
     if ((flags & kAttrFlagCompressed) != 0)
     {
-      LogWarn(
-          "A $DATA stream is flagged both compressed and encrypted; NTFS "
-          "never combines them. Reading it undecrypted.");
+      LogRecoverable(recover,
+                     "A $DATA stream is flagged both compressed and "
+                     "encrypted; NTFS never combines them. Reading it "
+                     "undecrypted.");
+      if (!recover)
+      {
+        return false;
+      }
       continue;
     }
 
     auto* nonResident = dynamic_cast<AttrNonResident<S>*>(attr.get());
     if (nonResident == nullptr)
     {
-      LogWarn("A resident $DATA is flagged encrypted. Read as is.");
+      LogRecoverable(recover,
+                     "A resident $DATA is flagged encrypted. Read as is.");
+      if (!recover)
+      {
+        return false;
+      }
       continue;
     }
+
+#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
+    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
     encrypted.push_back(nonResident);
+#endif
   }
 
+#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
+    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
   if (encrypted.empty())
   {
-    return;
+    return true;
   }
 
   // One context for the record: its streams share one FEK, resolved once.
@@ -681,6 +777,7 @@ void FileRecord<S>::AttachEfsContext()
     stream->SetEfsContext(context);
   }
 #endif
+  return true;
 }
 
 template <Strategy S>
@@ -916,10 +1013,11 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
 // Call user defined callback routine once found an entry
 template <Strategy S>
 void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
-                                       void* context,
-                                       bool recoverOrphanedBlocks) const
+                                       void* context) const
 {
   assert(seCallBack);
+
+  const bool recover = volume_.GetOptions().recover_errors;
 
   // Start traversing from IndexRoot (B+ tree root node)
 
@@ -929,7 +1027,7 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
   {
     // No IndexRoot at all to start the normal walk from, but $INDEX_ALLOCATION
     // blocks may still exist and hold every entry.
-    if (recoverOrphanedBlocks)
+    if (recover)
     {
       std::unordered_set<ULONGLONG> visitedVcns;
       ScanOrphanedIndexBlocks(seCallBack, context, visitedVcns);
@@ -990,7 +1088,7 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
     }
   }
 
-  if (recoverOrphanedBlocks)
+  if (recover)
   {
     ScanOrphanedIndexBlocks(seCallBack, context, visitedVcns);
   }
@@ -1014,11 +1112,50 @@ void FileRecord<S>::ScanOrphanedIndexBlocks(
   }
 
   auto* alloc = static_cast<AttrIndexAlloc<S>*>(vec.front().get());
-  const ULONGLONG blockCount = alloc->GetIndexBlockCount();
-  const std::optional<ULONGLONG> selfRef = GetFileReference();
 
-  for (ULONGLONG vcn = 0; vcn < blockCount; vcn++)
+  // A sub-node VCN (what visitedVcns holds, and what ParseIndexBlock()
+  // expects) is in clusters when a block spans a whole cluster or more, but
+  // in index_block_size units when a cluster is too big to hold one - the
+  // same conversion ParseIndexBlock() itself applies.
+  const DWORD indexBlockSize = volume_.GetIndexBlockSize();
+  const DWORD clusterSize = volume_.GetClusterSize();
+  const ULONGLONG clustersPerBlock =
+      (clusterSize != 0 && indexBlockSize >= clusterSize)
+          ? indexBlockSize / clusterSize
+          : 1;
+
+  // GetDataSize() (declared real_size) can be forged far past what the
+  // attribute's own data runs actually map; GetLastVcn() bounds the scan to
+  // what the run list claims to cover instead, so a forged size alone can't
+  // drive tens of thousands of doomed ParseIndexBlock() calls.
+  const ULONGLONG mappedClusters =
+      (alloc->GetLastVcn() >= alloc->GetStartVcn())
+          ? alloc->GetLastVcn() - alloc->GetStartVcn() + 1
+          : 0;
+  const ULONGLONG mappedBlockCount =
+      (mappedClusters + clustersPerBlock - 1) / clustersPerBlock;
+
+  const ULONGLONG declaredBlockCount = alloc->GetIndexBlockCount();
+  const ULONGLONG blockCount = (declaredBlockCount < mappedBlockCount)
+                                   ? declaredBlockCount
+                                   : mappedBlockCount;
+  const ULONGLONG scanLimit =
+      (blockCount < kMaxOrphanScanBlocks) ? blockCount : kMaxOrphanScanBlocks;
+  if (declaredBlockCount > kMaxOrphanScanBlocks ||
+      declaredBlockCount > mappedBlockCount)
   {
+    LogInfo(
+        "TraverseSubEntries() recovery: orphan scan capped at {} of {} "
+        "index blocks",
+        scanLimit, declaredBlockCount);
+  }
+
+  const std::optional<ULONGLONG> selfRef = GetFileReference();
+  const bool includeDeleted = volume_.GetOptions().include_deleted;
+
+  for (ULONGLONG blockIndex = 0; blockIndex < scanLimit; blockIndex++)
+  {
+    const ULONGLONG vcn = blockIndex * clustersPerBlock;
     if (!visitedVcns.insert(vcn).second)
     {
       continue;
@@ -1030,7 +1167,7 @@ void FileRecord<S>::ScanOrphanedIndexBlocks(
       continue;
     }
 
-    LogWarn("TraverseSubEntries() recovery: reporting orphaned index block {}",
+    LogInfo("TraverseSubEntries() recovery: reporting orphaned index block {}",
             vcn);
 
     for (const IndexEntry& ie : ib)
@@ -1045,6 +1182,18 @@ void FileRecord<S>::ScanOrphanedIndexBlocks(
       if (selfRef && ie.GetParentReference() != *selfRef)
       {
         continue;
+      }
+      // With include_deleted off, also drop an entry whose named record is
+      // itself freed, or was reused under a different sequence number.
+      if (!includeDeleted)
+      {
+        FileRecord<S> named(volume_);
+        if (!named.ParseFileRecord(ie.GetFileReference()) ||
+            named.IsDeleted() ||
+            named.GetSequenceNumber() != ie.GetSequenceNumber())
+        {
+          continue;
+        }
       }
       seCallBack(ie, context);
     }

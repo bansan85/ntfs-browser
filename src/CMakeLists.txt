@@ -63,6 +63,7 @@ set(${PROJECT_NAME}_H
     "../include/ntfs-browser/mft-tree.h"
     "../include/ntfs-browser/ntfs-volume.h"
     "../include/ntfs-browser/strategy.h"
+    "../include/ntfs-browser/volume-options.h"
     "../include/ntfs-browser/win32-disk-reader.h"
     "../include/ntfs-browser/file-record.h"
     "../include/ntfs-browser/data/file-record-header.h"

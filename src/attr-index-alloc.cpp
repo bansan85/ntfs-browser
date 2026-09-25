@@ -2,6 +2,10 @@
 
 #include <cstddef>
 #include <limits>
+#include <optional>
+#include <string_view>
+
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "data/index-block.h"
 #include "data/index-entry.h"
@@ -162,6 +166,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     return false;
   }
 
+  const bool recover = this->volume_.GetOptions().recover_errors;
   const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
       entry_offset_addr + ibBuf->entry_offset);
   DWORD ieTotal = 0;
@@ -171,20 +176,49 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     if (reinterpret_cast<const BYTE*>(ie) + offsetof(Data::IndexEntry, stream) >
         block_end)
     {
-      LogWarn("Index Block: index entry header exceeds block bounds");
+      LogRecoverable(recover,
+                     "Index Block: index entry header exceeds block bounds");
+      if (!recover)
+      {
+        ibClass.clear();
+        return false;
+      }
       break;
     }
     if (ie->size == 0 ||
         reinterpret_cast<const BYTE*>(ie) + ie->size > block_end)
     {
-      LogWarn("Index Block: index entry exceeds block bounds");
+      LogRecoverable(recover, "Index Block: index entry exceeds block bounds");
+      if (!recover)
+      {
+        ibClass.clear();
+        return false;
+      }
       break;
     }
 
     ieTotal += ie->size;
     if (ieTotal > ibBuf->total_entry_size)
     {
+      LogRecoverable(recover,
+                     "Index Block: index entry total exceeds the block's "
+                     "declared entry size");
+      if (!recover)
+      {
+        ibClass.clear();
+        return false;
+      }
       break;
+    }
+
+    if (const std::optional<std::string_view> defect = ValidateIndexEntry(*ie))
+    {
+      LogRecoverable(recover, "{}", *defect);
+      if (!recover)
+      {
+        ibClass.clear();
+        return false;
+      }
     }
 
     ibClass.emplace_back(ib_sh_ptr, *ie);

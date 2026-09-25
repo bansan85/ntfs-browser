@@ -90,8 +90,8 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
 // otherwise unbounded.
 template <Strategy S>
 bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
-                                  ULONGLONG& length,
-                                  LONGLONG& LCNOffset) noexcept
+                                  ULONGLONG& length, LONGLONG& LCNOffset,
+                                  bool recover) noexcept
 {
   if (dataRun >= end)
   {
@@ -113,14 +113,15 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
   if (size.lengthBytes > sizeof(ULONGLONG) ||
       size.offsetBytes > sizeof(LONGLONG))
   {
-    LogWarn("DataRun decode error 1: 0x{:02X}", size.size);
+    LogRecoverable(recover, "DataRun decode error 1: 0x{:02X}", size.size);
     return false;
   }
 
   if (end - dataRun < static_cast<ptrdiff_t>(size.lengthBytes) +
                           static_cast<ptrdiff_t>(size.offsetBytes))
   {
-    LogWarn("DataRun decode error: run exceeds attribute bounds");
+    LogRecoverable(recover,
+                   "DataRun decode error: run exceeds attribute bounds");
     return false;
   }
 
@@ -151,8 +152,10 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
   return true;
 }
 
-// Traverse DataRun and append entries to the run list. Stops at the first
-// decode or bounds error; entries parsed before that error are kept.
+// Traverse DataRun and append entries to the run list. When recovering,
+// stops at the first decode or bounds error, keeping entries parsed before
+// it; when strict, the same error instead throws, rejecting the attribute
+// outright.
 template <Strategy S>
 void AttrNonResident<S>::ParseDataRun()
 {
@@ -160,6 +163,7 @@ void AttrNonResident<S>::ParseDataRun()
   LogDebug("Start VCN = {}, End VCN = {}", attr_header_nr_.start_vcn,
            attr_header_nr_.last_vcn);
 
+  const bool recover = this->volume_.GetOptions().recover_errors;
   const BYTE* const attr_start =
       reinterpret_cast<const BYTE*>(&attr_header_nr_);
   const BYTE* data_run = attr_start + attr_header_nr_.data_run_offset;
@@ -171,15 +175,24 @@ void AttrNonResident<S>::ParseDataRun()
 
   while (data_run < end && *data_run != 0)
   {
-    if (!PickData(data_run, end, length, lcn_offset))
+    if (!PickData(data_run, end, length, lcn_offset, recover))
     {
+      // PickData() already logged which check failed.
+      if (!recover)
+      {
+        throw std::runtime_error("Data run is malformed.\n");
+      }
       break;
     }
 
     lcn += lcn_offset;
     if (lcn < 0)
     {
-      LogWarn("DataRun decode error 2");
+      LogRecoverable(recover, "DataRun decode error 2");
+      if (!recover)
+      {
+        throw std::runtime_error("Data run LCN underflows.\n");
+      }
       break;
     }
 
@@ -196,7 +209,12 @@ void AttrNonResident<S>::ParseDataRun()
 
     if (dr.last_vcn > (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn))
     {
-      LogWarn("DataRun decode error: VCN exceeds bound");
+      LogRecoverable(recover, "DataRun decode error: VCN exceeds bound");
+      if (!recover)
+      {
+        throw std::runtime_error(
+            "Data run VCN exceeds the attribute's declared bound.\n");
+      }
       break;
     }
 

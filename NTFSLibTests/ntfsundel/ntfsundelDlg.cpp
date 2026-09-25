@@ -181,7 +181,9 @@ void CNtfsundelDlg::OnSearch()
 
   const _TCHAR volname = vns.GetAt(0);
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(volname);
+  // A deleted-file finder needs to see freed records: without this, every
+  // one of them would be invisible from the moment it's parsed.
+  NtfsVolume<Strategy::FULL_CACHE> volume(volname, {.include_deleted = true});
   if (!volume.IsVolumeOK())
   {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -393,7 +395,9 @@ void CNtfsundelDlg::OnRecover()
 
   const _TCHAR volname = vns.GetAt(0);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(volname);
+  // The selected file came from OnSearch()'s deleted-inclusive listing: it
+  // must still be visible here, or recovery could never find its record.
+  NtfsVolume<Strategy::NO_CACHE> volume(volname, {.include_deleted = true});
   FileRecord fr(volume);
 
   if (!fr.ParseFileRecord(ref))

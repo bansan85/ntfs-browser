@@ -56,8 +56,6 @@ struct MftEntry
 
 struct MftScanOptions
 {
-  // Also keep the records NTFS freed, whose content survived until reuse.
-  bool include_deleted{true};
   // Called every few thousand records, and once at the end. Returning false
   // stops the scan: the tree then holds the records scanned so far.
   std::function<bool(ULONGLONG done, ULONGLONG total)> progress;
@@ -69,14 +67,16 @@ struct MftScanStats
   ULONGLONG slots{0};
   // Base records in use.
   ULONGLONG in_use{0};
-  // Base records NTFS freed, kept or not depending on include_deleted.
+  // Base records NTFS freed, kept or not depending on the volume's
+  // include_deleted.
   ULONGLONG deleted{0};
   // Extension records. Their attributes are read through their base record.
   ULONGLONG extensions{0};
   // Slots with no FILE magic (never used), a bad fixup, or a read error.
   ULONGLONG unreadable{0};
-  // Kept records with an attribute that failed to parse. What parsed before
-  // the failure is kept.
+  // Records with an attribute that failed to parse, counted either way.
+  // Dropped unless the volume's recover_errors is on, which keeps what
+  // parsed before the failure.
   ULONGLONG damaged{0};
   // Kept records that no chain of valid parent references links to the root.
   ULONGLONG unreachable{0};

@@ -18,6 +18,7 @@
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "efs-test-support.h"
 #include "efs/efs-stream.h"
@@ -34,6 +35,7 @@ using NtfsBrowser::IndexEntry;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Efs::CipherBackend;
 using NtfsBrowser::Efs::Fek;
 using NtfsBrowser::Efs::IEfsKeyProvider;
@@ -104,15 +106,18 @@ struct Opened
 // Opens the image and parses the root record. The provider is always set,
 // null included, so that no test ever reaches the real certificate store.
 // "mask" is nullopt for the default Mask::ALL; passing one exercises the
-// same SetAttrMask() a caller narrowing to Mask::DATA would use.
+// same SetAttrMask() a caller narrowing to Mask::DATA would use. "options"
+// defaults to strict; a test of a salvageable condition passes recover_errors.
 template <Strategy S>
 Opened<S> Open(std::vector<BYTE> image,
                std::shared_ptr<IEfsKeyProvider> provider,
-               std::optional<Mask> mask = std::nullopt)
+               std::optional<Mask> mask = std::nullopt,
+               const VolumeOptions& options = {})
 {
   Opened<S> opened;
   opened.volume = std::make_unique<NtfsVolume<S>>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      options);
   REQUIRE(opened.volume->IsVolumeOK());
   opened.volume->SetEfsKeyProvider(std::move(provider));
 
@@ -482,7 +487,8 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "A $DATA stream flagged both compressed and encrypted is left undecrypted",
+    "A $DATA stream flagged both compressed and encrypted is left "
+    "undecrypted when recovering",
     "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
   const TestEfsEntry user = TestUser();
@@ -503,8 +509,9 @@ TEMPLATE_TEST_CASE_SIG(
                           .flagged_compressed = true});
 
   (void)TakeLog();
-  Opened<S> opened = Open<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
+  Opened<S> opened =
+      Open<S>(NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file),
+              provider, std::nullopt, VolumeOptions{.recover_errors = true});
 
   // Never decrypted: the bytes come back exactly as they sit on disk.
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, onDisk.size());
@@ -512,6 +519,40 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(*read == onDisk);
   CHECK_THAT(TakeLog(), Catch::Matchers::ContainsSubstring(
                             "flagged both compressed and encrypted"));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A $DATA stream flagged both compressed and encrypted rejects the "
+    "record by default",
+    "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
+{
+  const TestEfsEntry user = TestUser();
+  auto provider = std::make_shared<TestKeyProvider>();
+  provider->Add(
+      user.thumbprint, user.wrapped_fek,
+      NtfsBrowserTests::MakeFekBlob(
+          Algorithm::kAes256, NtfsBrowserTests::TestKey(Algorithm::kAes256)));
+
+  const std::vector<BYTE> onDisk(NtfsBrowserTests::kFakeClusterSize, 0x42);
+
+  NtfsBrowserTests::FakeEncryptedFile file;
+  file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
+  file.streams.push_back({.runs = {{kFirstStreamLcn, 1}},
+                          .cluster_bytes = onDisk,
+                          .real_size = onDisk.size(),
+                          .flagged_encrypted = true,
+                          .flagged_compressed = true});
+
+  auto volume = std::make_unique<NtfsVolume<S>>(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file)));
+  REQUIRE(volume->IsVolumeOK());
+  volume->SetEfsKeyProvider(provider);
+
+  FileRecord<S> record(*volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK_FALSE(record.ParseAttrs());
+  CHECK(record.getAttr(AttrType::DATA).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",

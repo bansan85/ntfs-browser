@@ -10,6 +10,7 @@
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
@@ -20,6 +21,7 @@ using NtfsBrowser::IndexEntry;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
 
 TEST_CASE("FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
@@ -125,7 +127,41 @@ TEST_CASE(
 
 TEST_CASE(
     "AttrList stops cleanly on a resident $ATTRIBUTE_LIST whose size isn't "
-    "a multiple of the entry size",
+    "a multiple of the entry size, when recovering",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader),
+                                        VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
+}
+
+TEST_CASE(
+    "AttrList stops cleanly on a resident $ATTRIBUTE_LIST whose size isn't "
+    "a multiple of the entry size, when recovering (FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(
+      std::move(reader), VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK(record.ParseAttrs());
+}
+
+TEST_CASE(
+    "A resident $ATTRIBUTE_LIST whose size isn't a multiple of the entry "
+    "size rejects the record by default",
     "[attr-list][regression]")
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
@@ -136,12 +172,12 @@ TEST_CASE(
 
   FileRecord<Strategy::NO_CACHE> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
-  CHECK(record.ParseAttrs());
+  CHECK_FALSE(record.ParseAttrs());
 }
 
 TEST_CASE(
-    "AttrList stops cleanly on a resident $ATTRIBUTE_LIST whose size isn't "
-    "a multiple of the entry size (FULL_CACHE)",
+    "A resident $ATTRIBUTE_LIST whose size isn't a multiple of the entry "
+    "size rejects the record by default (FULL_CACHE)",
     "[attr-list][regression]")
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
@@ -152,7 +188,155 @@ TEST_CASE(
 
   FileRecord<Strategy::FULL_CACHE> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
-  CHECK(record.ParseAttrs());
+  CHECK_FALSE(record.ParseAttrs());
+}
+
+TEST_CASE(
+    "AttrList stops cleanly on an entry whose record_size is smaller than "
+    "the entry header, when recovering",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader),
+                                        VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT);
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  CHECK(dir.ParseAttrs());
+  CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
+}
+
+TEST_CASE(
+    "AttrList stops cleanly on an entry whose record_size is smaller than "
+    "the entry header, when recovering (FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(
+      std::move(reader), VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT);
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  CHECK(dir.ParseAttrs());
+  CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
+}
+
+TEST_CASE(
+    "An $ATTRIBUTE_LIST entry whose record_size is smaller than the entry "
+    "header rejects the record by default",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT);
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  CHECK_FALSE(dir.ParseAttrs());
+}
+
+TEST_CASE(
+    "An $ATTRIBUTE_LIST entry whose record_size is smaller than the entry "
+    "header rejects the record by default (FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT);
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  CHECK_FALSE(dir.ParseAttrs());
+}
+
+TEST_CASE(
+    "AttrList stops cleanly when an entry's record_size overshoots the "
+    "attribute's declared size, when recovering",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader),
+                                        VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT);
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  CHECK(dir.ParseAttrs());
+  CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
+}
+
+TEST_CASE(
+    "AttrList stops cleanly when an entry's record_size overshoots the "
+    "attribute's declared size, when recovering (FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(
+      std::move(reader), VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT);
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  CHECK(dir.ParseAttrs());
+  CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
+}
+
+TEST_CASE(
+    "An $ATTRIBUTE_LIST entry whose record_size overshoots the attribute's "
+    "declared size rejects the record by default",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch());
+
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT);
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  CHECK_FALSE(dir.ParseAttrs());
+}
+
+TEST_CASE(
+    "An $ATTRIBUTE_LIST entry whose record_size overshoots the attribute's "
+    "declared size rejects the record by default (FULL_CACHE)",
+    "[attr-list][regression]")
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch());
+
+  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  dir.SetAttrMask(Mask::INDEX_ROOT);
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
+  CHECK_FALSE(dir.ParseAttrs());
 }
 
 TEST_CASE(

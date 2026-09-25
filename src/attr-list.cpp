@@ -3,6 +3,7 @@
 #include <stdexcept>
 
 #include <ntfs-browser/mask.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr-non-resident.h"
 #include "attr-resident.h"
@@ -38,9 +39,11 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
     throw std::runtime_error("Missing file reference\n");
   }
 
+  const bool recover = fr.volume_.GetOptions().recover_errors;
   ULONGLONG offset = 0;
   std::optional<ULONGLONG> len = 0;
   Attr::AttributeList al_record{};
+  bool truncated = false;
 
   // Marks this record's own chain key first, so a cycle back to it is caught.
   attrListChain.insert(
@@ -51,10 +54,19 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
   {
     if (*len != Attr::kAttributeListEntryHeaderSize)
     {
-      LogWarn(
-          "Attribute List: ReadData returned {} bytes, expected {} - "
-          "stopping",
-          *len, static_cast<ULONGLONG>(Attr::kAttributeListEntryHeaderSize));
+      // A resident list's normal end already exited the loop above (ReadData
+      // returns nullopt at offset >= size); a non-resident list's normal end
+      // is this exact zero-byte read, landing precisely on the declared
+      // size. Anything else here is a truncated entry.
+      if (*len != 0 || offset != this->GetDataSize())
+      {
+        truncated = true;
+        LogRecoverable(
+            recover,
+            "Attribute List: ReadData returned {} bytes, "
+            "expected {} - stopping",
+            *len, static_cast<ULONGLONG>(Attr::kAttributeListEntryHeaderSize));
+      }
       break;
     }
 
@@ -111,12 +123,40 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
       }
     }
 
+    if (al_record.record_size != 0 &&
+        al_record.record_size < Attr::kAttributeListEntryHeaderSize)
+    {
+      truncated = true;
+      LogRecoverable(recover,
+                     "Attribute List: record_size {} is smaller than the "
+                     "entry header {} - stopping",
+                     al_record.record_size,
+                     static_cast<WORD>(Attr::kAttributeListEntryHeaderSize));
+      break;
+    }
     if (al_record.record_size == 0)
     {
       throw std::runtime_error(
           "Attribute List with zero record size has endless loop.\n");
     }
     offset += al_record.record_size;
+  }
+
+  // A resident list's normal end (ReadData returning nullopt) can still land
+  // past its own declared size, when the last entry's record_size
+  // overshoots it - not caught by either check above.
+  if (!truncated && offset != this->GetDataSize())
+  {
+    truncated = true;
+    LogRecoverable(recover,
+                   "Attribute List ended at offset {} instead of its "
+                   "declared size {}.",
+                   offset, this->GetDataSize());
+  }
+
+  if (truncated && !recover)
+  {
+    throw std::runtime_error("Attribute List is truncated.\n");
   }
 }
 

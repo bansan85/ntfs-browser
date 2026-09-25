@@ -17,6 +17,7 @@
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
+#include <ntfs-browser/volume-options.h>
 
 #ifdef _WIN32
   #include <tchar.h>
@@ -33,13 +34,15 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   // Opens a real disk/device by drive letter, or an arbitrary device/image
   // path (eg. "\\\\.\\PhysicalDrive0", or a plain file for a disk image) via
   // Win32DiskReader. Not available outside Windows -- construct NtfsVolume
-  // from an already-open IDiskReader there.
-  explicit NtfsVolume(_TCHAR volume);
-  explicit NtfsVolume(std::wstring_view path);
+  // from an already-open IDiskReader there. options is fixed for the
+  // volume's lifetime; read it back through GetOptions().
+  explicit NtfsVolume(_TCHAR volume, const VolumeOptions& options = {});
+  explicit NtfsVolume(std::wstring_view path, const VolumeOptions& options = {});
 #endif
   // Uses an already-open reader instead of opening a path (eg. an in-memory
   // or sequential test double, which have no real path to open).
-  explicit NtfsVolume(std::unique_ptr<IDiskReader> reader);
+  explicit NtfsVolume(std::unique_ptr<IDiskReader> reader,
+                      const VolumeOptions& options = {});
   NtfsVolume(NtfsVolume&& other) noexcept = delete;
   NtfsVolume(NtfsVolume const& other) = delete;
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
@@ -60,6 +63,11 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   BYTE version_major_{0};
   BYTE version_minor_{0};
   FileReader<S> volume_;
+
+  // Fixed for the volume's lifetime; set by the constructor, read back
+  // through GetOptions(). No setter: every component that reads it goes
+  // through this one volume-wide copy.
+  VolumeOptions options_;
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
@@ -105,6 +113,8 @@ class NTFS_BROWSER_EXPORT NtfsVolume
 
  public:
   [[nodiscard]] bool IsVolumeOK() const noexcept;
+  // The options this volume was constructed with.
+  [[nodiscard]] const VolumeOptions& GetOptions() const noexcept;
   [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
   [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
 

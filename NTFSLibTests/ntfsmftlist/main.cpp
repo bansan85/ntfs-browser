@@ -14,14 +14,17 @@
 #include <ntfs-browser/log.h>
 #include <ntfs-browser/mft-tree.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 using namespace NtfsBrowser;
 
 namespace
 {
 
-// Command-line switch that drops the records NTFS freed from the listing.
-constexpr std::wstring_view kNoDeletedOption = L"--no-deleted";
+// Command-line switch that adds the records NTFS freed to the listing.
+constexpr std::wstring_view kDeletedOption = L"--deleted";
+// Command-line switch that salvages a damaged item instead of rejecting it.
+constexpr std::wstring_view kRecoverOption = L"--recover";
 
 // Width of every column before the path, separators included, so an extra
 // hard link's "=" line lines up under the path it follows.
@@ -30,9 +33,10 @@ constexpr int kPathColumn = 63;
 // Prints command-line usage help.
 void usage()
 {
-  printf("Usage: ntfsmftlist [--log=...] [--no-deleted] <volume>\n");
+  printf("Usage: ntfsmftlist [--log=...] [--deleted] [--recover] <volume>\n");
   printf("  %s\n", std::string(Log::kOptionUsage).c_str());
-  printf("  --no-deleted  skip the records NTFS freed\n");
+  printf("  --deleted     also list the records NTFS freed\n");
+  printf("  --recover     salvage a damaged item instead of rejecting it\n");
   printf("  <volume>      a drive letter (c:), or a device or image path\n");
   printf(
       "Columns: record, sequence, DEL if freed, <DIR> or size, last write,\n");
@@ -41,7 +45,8 @@ void usage()
   printf("  hard links, path. A path whose parent chain breaks reads\n");
   printf("  <lost #N>\\..., N being the record where it breaks.\n");
   printf("eg. ntfsmftlist c:\n");
-  printf("eg. ntfsmftlist --no-deleted d:\\images\\disk.img\n");
+  printf("eg. ntfsmftlist --deleted d:\\images\\disk.img\n");
+  printf("eg. ntfsmftlist --deleted --recover d:\\images\\disk.img\n");
 }
 
 // Converts to UTF-8, which the console is switched to, so every name prints
@@ -127,7 +132,7 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry)
 // Opens target as a drive letter ("c" or "c:"), or else as a device or
 // image path.
 std::unique_ptr<NtfsVolume<Strategy::NO_CACHE>>
-    OpenVolume(std::wstring_view target)
+    OpenVolume(std::wstring_view target, const VolumeOptions& options)
 {
   // A lone letter, optionally followed by a colon, names a drive.
   const bool driveLetter =
@@ -135,9 +140,9 @@ std::unique_ptr<NtfsVolume<Strategy::NO_CACHE>>
       iswalpha(target[0]) != 0;
   if (driveLetter)
   {
-    return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target[0]);
+    return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target[0], options);
   }
-  return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target);
+  return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target, options);
 }
 
 }  // namespace
@@ -145,7 +150,8 @@ std::unique_ptr<NtfsVolume<Strategy::NO_CACHE>>
 int wmain(int argc, wchar_t* argv[])
 {
   Log::Config logConfig;
-  MftScanOptions options;
+  VolumeOptions volumeOptions;
+  MftScanOptions scanOptions;
   const wchar_t* target = nullptr;
 
   for (int i = 1; i < argc; i++)
@@ -160,9 +166,14 @@ int wmain(int argc, wchar_t* argv[])
       }
       continue;
     }
-    if (arg == kNoDeletedOption)
+    if (arg == kDeletedOption)
     {
-      options.include_deleted = false;
+      volumeOptions.include_deleted = true;
+      continue;
+    }
+    if (arg == kRecoverOption)
+    {
+      volumeOptions.recover_errors = true;
       continue;
     }
     if (target != nullptr)
@@ -187,14 +198,14 @@ int wmain(int argc, wchar_t* argv[])
   SetConsoleOutputCP(CP_UTF8);
 
   const std::unique_ptr<NtfsVolume<Strategy::NO_CACHE>> volume =
-      OpenVolume(target);
+      OpenVolume(target, volumeOptions);
   if (!volume->IsVolumeOK())
   {
     fprintf(stderr, "Cannot open %ls as an NTFS volume\n", target);
     return -1;
   }
 
-  options.progress = [](ULONGLONG done, ULONGLONG total)
+  scanOptions.progress = [](ULONGLONG done, ULONGLONG total)
   {
     fprintf(stderr, "\rScanning $MFT: %llu / %llu", done, total);
     if (done == total)
@@ -204,7 +215,7 @@ int wmain(int argc, wchar_t* argv[])
     return true;
   };
 
-  const MftTree tree(*volume, options);
+  const MftTree tree(*volume, scanOptions);
 
   printf("%10s %5s %-3s %14s %-16s %-6s %2s %s\n", "Record", "Seq", "", "Size",
          "Last write", "Attrib", "Ln", "Path");

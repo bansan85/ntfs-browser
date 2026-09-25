@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -23,6 +24,7 @@
 #include <ntfs-browser/log.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "sequential-disk-reader.h"
 
@@ -113,34 +115,46 @@ SequentialDiskReader::Producer
       });
 }
 
+// The two VolumeOptions combinations every seed is run under: strict (both
+// flags off, the default) and fully recovering (both on).
+constexpr std::array<VolumeOptions, 2> kVolumeOptionModes{
+    VolumeOptions{},
+    VolumeOptions{.include_deleted = true, .recover_errors = true}};
+
 // Opens the volume, parses the root file record, then walks its sub
 // entries. A thrown exception counts as handled input rejection; only a
-// real crash escapes, to the caller's SEH handler.
+// real crash escapes, to the caller's SEH handler. Runs the same
+// deterministic byte stream (from seed) once per VolumeOptions mode, so
+// both the strict and recovering code paths are exercised.
 void FuzzOnce(unsigned seed)
 {
-  NtfsVolume<Strategy::NO_CACHE> volume(
-      std::make_unique<SequentialDiskReader>(MakeRandomProducer(seed)));
-  if (!volume.IsVolumeOK())
+  for (const VolumeOptions& options : kVolumeOptionModes)
   {
-    return;
-  }
+    NtfsVolume<Strategy::NO_CACHE> volume(
+        std::make_unique<SequentialDiskReader>(MakeRandomProducer(seed)),
+        options);
+    if (!volume.IsVolumeOK())
+    {
+      continue;
+    }
 
-  FileRecord fr(volume);
-  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
-  {
-    // file_record_ is guaranteed empty here, exercising IsDeleted()/
-    // IsDirectory()'s guard against it.
-    (void)fr.IsDeleted();
-    (void)fr.IsDirectory();
-    return;
-  }
-  if (!fr.ParseAttrs())
-  {
-    return;
-  }
+    FileRecord fr(volume);
+    fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+    {
+      // file_record_ is guaranteed empty here, exercising IsDeleted()/
+      // IsDirectory()'s guard against it.
+      (void)fr.IsDeleted();
+      (void)fr.IsDirectory();
+      continue;
+    }
+    if (!fr.ParseAttrs())
+    {
+      continue;
+    }
 
-  fr.TraverseSubEntries([](const IndexEntry&, void*) {}, nullptr);
+    fr.TraverseSubEntries([](const IndexEntry&, void*) {}, nullptr);
+  }
 }
 
 // Swallows expected C++ exceptions; MSVC forbids mixing __try/__except

@@ -43,7 +43,8 @@ constexpr size_t kMaxMftAttrListEntries = 65536;
 
 #ifdef _WIN32
 template <Strategy S>
-NtfsVolume<S>::NtfsVolume(_TCHAR volume) : mft_record_(*this)
+NtfsVolume<S>::NtfsVolume(_TCHAR volume, const VolumeOptions& options)
+    : mft_record_(*this), options_(options)
 {
   ClearAttrRawCB();
 
@@ -54,7 +55,8 @@ NtfsVolume<S>::NtfsVolume(_TCHAR volume) : mft_record_(*this)
 }
 
 template <Strategy S>
-NtfsVolume<S>::NtfsVolume(std::wstring_view path) : mft_record_(*this)
+NtfsVolume<S>::NtfsVolume(std::wstring_view path, const VolumeOptions& options)
+    : mft_record_(*this), options_(options)
 {
   ClearAttrRawCB();
 
@@ -66,8 +68,9 @@ NtfsVolume<S>::NtfsVolume(std::wstring_view path) : mft_record_(*this)
 #endif
 
 template <Strategy S>
-NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader)
-    : mft_record_(*this)
+NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader,
+                          const VolumeOptions& options)
+    : mft_record_(*this), options_(options)
 {
   ClearAttrRawCB();
 
@@ -81,7 +84,14 @@ NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader)
 template <Strategy S>
 void NtfsVolume<S>::Init()
 {
+  // The volume's own metadata reads always see their own content, whatever
+  // include_deleted says: they are not the caller's traversal of the
+  // filesystem, and a freed $Volume/$MFT would otherwise make the whole
+  // volume unreadable.
+  mft_record_.bypass_deleted_gate_ = true;
+
   FileRecord vol(*this);
+  vol.bypass_deleted_gate_ = true;
   vol.SetAttrMask(Mask::VOLUME_NAME | Mask::VOLUME_INFORMATION);
   if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME)))
   {
@@ -189,6 +199,7 @@ void NtfsVolume<S>::ResolveMftDataExtents()
   FileRecord<S> listRecord(*this);
   listRecord.attr_mask_ = Mask::ATTRIBUTE_LIST;
   listRecord.resolve_attr_list_ = false;
+  listRecord.bypass_deleted_gate_ = true;
 
   if (!listRecord.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::MFT)) ||
       !listRecord.ParseAttrs())
@@ -260,6 +271,7 @@ void NtfsVolume<S>::ResolveMftDataExtents()
       mft_extension_records_.emplace_back(*this);
       FileRecord<S>& ext = mft_extension_records_.back();
       ext.attr_mask_ = Mask::DATA;
+      ext.bypass_deleted_gate_ = true;
 
       if (ext.ParseFileRecord(recordRef) && ext.ParseAttrs())
       {
@@ -606,6 +618,12 @@ template <Strategy S>
 bool NtfsVolume<S>::IsVolumeOK() const noexcept
 {
   return volume_ok_;
+}
+
+template <Strategy S>
+const VolumeOptions& NtfsVolume<S>::GetOptions() const noexcept
+{
+  return options_;
 }
 
 // Get NTFS volume version

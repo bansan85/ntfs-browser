@@ -1,3 +1,4 @@
+#include <array>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -15,6 +16,7 @@
 #include <ntfs-browser/log.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "gap-collation-probe.h"
 #include "looping-disk-reader.h"
@@ -79,6 +81,13 @@ void PatchBpbSignature(std::vector<BYTE>& data)
 // first index block reads. Later reads mostly repeat those code paths.
 constexpr size_t kInjectedFailureRuns = 16;
 
+// The two VolumeOptions combinations every input is run under: strict
+// (both flags off, the default) and fully recovering (both on). Exercises
+// both the "reject the damaged item whole" and "salvage it" code paths.
+constexpr std::array<VolumeOptions, 2> kVolumeOptionModes{
+    VolumeOptions{},
+    VolumeOptions{.include_deleted = true, .recover_errors = true}};
+
 // Opens the volume, parses the root file record, then walks its sub
 // entries. A thrown exception counts as handled input rejection; only a
 // real crash escapes, which AFL detects via this process's exit status.
@@ -90,10 +99,11 @@ constexpr size_t kInjectedFailureRuns = 16;
 // failingRead makes that one ReadInto() call fail, exercising the
 // disk-read error paths a looping reader never reaches on its own.
 template <Strategy S>
-void FuzzOnce(std::span<const BYTE> data,
+void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
               std::optional<size_t> failingRead = {})
 {
-  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failingRead));
+  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failingRead),
+                       options);
   if (!volume.IsVolumeOK())
   {
     return;
@@ -135,12 +145,12 @@ void FuzzOnce(std::span<const BYTE> data,
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash
 // may escape.
 template <Strategy S>
-void RunGuarded(std::span<const BYTE> data,
+void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
                 std::optional<size_t> failingRead = {})
 {
   try
   {
-    FuzzOnce<S>(data, failingRead);
+    FuzzOnce<S>(data, options, failingRead);
   }
   catch (const std::exception&)
   {
@@ -219,8 +229,13 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
   PatchBpbSignature(*data);
 
   // Guarded independently, so one run's exception can't skip the others.
-  RunGuarded<Strategy::NO_CACHE>(*data);
-  RunGuarded<Strategy::FULL_CACHE>(*data);
+  // Each strategy runs once per VolumeOptions mode, so both the strict
+  // (reject-whole) and recovering (salvage) code paths are exercised.
+  for (const VolumeOptions& options : kVolumeOptionModes)
+  {
+    RunGuarded<Strategy::NO_CACHE>(*data, options);
+    RunGuarded<Strategy::FULL_CACHE>(*data, options);
+  }
 
   if (!injectFailures)
   {
@@ -230,8 +245,11 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
   for (size_t failingRead = 0; failingRead < kInjectedFailureRuns;
        ++failingRead)
   {
-    RunGuarded<Strategy::NO_CACHE>(*data, failingRead);
-    RunGuarded<Strategy::FULL_CACHE>(*data, failingRead);
+    for (const VolumeOptions& options : kVolumeOptionModes)
+    {
+      RunGuarded<Strategy::NO_CACHE>(*data, options, failingRead);
+      RunGuarded<Strategy::FULL_CACHE>(*data, options, failingRead);
+    }
   }
 
   return 0;

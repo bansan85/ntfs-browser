@@ -3,9 +3,12 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <stdexcept>
+#include <string_view>
 
 #include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/index-root.h"
 #include "data/index-entry.h"
@@ -34,7 +37,11 @@ AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
     return;
   }
 
-  ParseIndexEntries();
+  if (!ParseIndexEntries())
+  {
+    throw std::runtime_error(
+        "Index Root attribute has a malformed index entry.\n");
+  }
 }
 
 template <typename RESIDENT, Strategy S>
@@ -47,8 +54,9 @@ AttrIndexRoot<RESIDENT, S>::~AttrIndexRoot()
 // attribute's own size. Every returned IndexEntry keeps its own copy of
 // the backing bytes alive, independent of this object's lifetime.
 template <typename RESIDENT, Strategy S>
-void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
+bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 {
+  const bool recover = this->volume_.GetOptions().recover_errors;
   const ULONGLONG data_size = this->GetDataSize();
   const auto data_copy = std::make_shared<BYTE[]>(data_size);
   std::memcpy(data_copy.get(), this->GetData(), data_size);
@@ -63,8 +71,9 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
   if (index_root_copy->entry_offset >
       static_cast<ULONGLONG>(data_end - entry_offset_addr))
   {
-    LogWarn("Index Root: entry_offset exceeds attribute bounds");
-    return;
+    LogRecoverable(recover,
+                   "Index Root: entry_offset exceeds attribute bounds");
+    return recover;
   }
 
   const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
@@ -76,20 +85,50 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
     if (reinterpret_cast<const BYTE*>(ie) + offsetof(Data::IndexEntry, stream) >
         data_end)
     {
-      LogWarn("Index Root: index entry header exceeds attribute bounds");
+      LogRecoverable(recover,
+                     "Index Root: index entry header exceeds attribute bounds");
+      if (!recover)
+      {
+        clear();
+        return false;
+      }
       break;
     }
     if (ie->size == 0 ||
         reinterpret_cast<const BYTE*>(ie) + ie->size > data_end)
     {
-      LogWarn("Index Root: index entry exceeds attribute bounds");
+      LogRecoverable(recover,
+                     "Index Root: index entry exceeds attribute bounds");
+      if (!recover)
+      {
+        clear();
+        return false;
+      }
       break;
     }
 
     ieTotal += ie->size;
     if (ieTotal > index_root_copy->total_entry_size)
     {
+      LogRecoverable(recover,
+                     "Index Root: index entry total exceeds the attribute's "
+                     "declared entry size");
+      if (!recover)
+      {
+        clear();
+        return false;
+      }
       break;
+    }
+
+    if (const std::optional<std::string_view> defect = ValidateIndexEntry(*ie))
+    {
+      LogRecoverable(recover, "{}", *defect);
+      if (!recover)
+      {
+        clear();
+        return false;
+      }
     }
 
     emplace_back(data_copy, *ie);
@@ -103,6 +142,8 @@ void AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
     ie = reinterpret_cast<const Data::IndexEntry*>(
         reinterpret_cast<const BYTE*>(ie) + ie->size);  // Pick next
   }
+
+  return true;
 }
 
 // Check if this IndexRoot contains Filename or IndexView

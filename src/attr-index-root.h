@@ -29,7 +29,7 @@ class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntry>
  private:
   const Attr::IndexRoot* index_root_;
 
-  void ParseIndexEntries();
+  [[nodiscard]] bool ParseIndexEntries();
 
  public:
   [[nodiscard]] bool IsFileName() const noexcept;

@@ -254,6 +254,22 @@ inline constexpr std::array<BYTE, 4> kSmallResidentDataContent{0xDE, 0xAD, 0xBE,
 // replaced by one whose resident $ATTRIBUTE_LIST ends in a short read.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAttributeListShortRead();
 
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by one whose resident $ATTRIBUTE_LIST holds a real entry
+// (relocating $INDEX_ROOT to kIndexExtensionIdx), followed by one whose own
+// record_size is nonzero but smaller than the entry header itself - the
+// mid-loop record_size bounds check, distinct from a short ReadData().
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall();
+
+// Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
+// replaced by one whose resident $ATTRIBUTE_LIST holds a single real entry
+// (relocating $INDEX_ROOT to kIndexExtensionIdx) whose own record_size
+// overshoots the attribute's declared size - the post-loop offset-vs-size
+// check, reached through AttrList's normal (nullopt) end.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttributeListOffsetMismatch();
+
 // MFT index of the second record in a two-way $ATTRIBUTE_LIST cycle with #5.
 inline constexpr ULONGLONG kAttrListCycleExtIdx = 6;
 
@@ -468,6 +484,74 @@ inline constexpr BYTE kOrphanedBlockStaleNameLength = 5;
 // leftover entry would be. Models a directory index whose B+ tree pointers
 // were partly lost while the underlying blocks survived.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks();
+
+// Declared block count BuildFakeNtfsImageWithHugeOrphanScanBlockCount()
+// forges into its $INDEX_ALLOCATION real_size: past
+// FileRecord::kMaxOrphanScanBlocks (65536), while only the same 3 real
+// blocks as BuildFakeNtfsImageWithOrphanedIndexBlocks() are ever backed.
+inline constexpr ULONGLONG kHugeOrphanScanDeclaredBlockCount = 70000;
+
+// Same as BuildFakeNtfsImageWithOrphanedIndexBlocks(), except the root's
+// $INDEX_ALLOCATION declares kHugeOrphanScanDeclaredBlockCount blocks: the
+// orphan scan must cap its work at kMaxOrphanScanBlocks instead of iterating
+// the whole declared (attacker-controlled) count.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithHugeOrphanScanBlockCount();
+
+// MFT index BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch() gives
+// its one extra, real record: free (zero-filled) in BuildFakeNtfsImage(),
+// and below Enum::MftIdx::USER (16), so it is reachable however $MFT's own
+// DATA attribute is mapped.
+inline constexpr ULONGLONG kOrphanedBlockSequenceMismatchTargetIdx = 2;
+
+// Sequence number BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch()
+// gives that extra record on disk - deliberately different from the
+// hardcoded mft_sn (1) WriteOrphanedIndexLeafBlock() gives every leaf entry
+// it writes, including the "Orphan" one redirected to name this record.
+inline constexpr WORD kOrphanedBlockSequenceMismatchRecordSeq = 7;
+
+// Same volume as BuildFakeNtfsImageWithOrphanedIndexBlocks(), except the
+// "Orphan" leaf entry (VCN 1) is redirected to name
+// kOrphanedBlockSequenceMismatchTargetIdx instead of
+// kOrphanedBlockOrphanMftRef: a record that actually exists and is in use,
+// but under a sequence number that does not match the entry's own mft_sn.
+// Decision 4's other drop condition, alongside "the record doesn't exist"
+// (which BuildFakeNtfsImageWithOrphanedIndexBlocks() itself already models).
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch();
+
+// clusters_per_ib BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock()
+// declares (via the shared BPB's clusters_per_index_block): more than 1, so
+// ScanOrphanedIndexBlocks()'s blockIndex-to-VCN scaling (blockIndex times
+// clusters_per_ib) actually multiplies - every other orphan-scan fixture
+// hardcodes 1, leaving that multiplication untested.
+inline constexpr BYTE kMultiClusterOrphanClustersPerBlock = 2;
+
+// MFT reference the fixture's block-0 (reachable) leaf entry declares.
+inline constexpr ULONGLONG kMultiClusterReachableMftRef = 105;
+
+// MFT reference the fixture's block-1 (orphaned) leaf entry declares.
+inline constexpr ULONGLONG kMultiClusterOrphanMftRef = 106;
+
+// Name (and UTF-16 length) of the block-0 leaf entry, reachable through the
+// normal B+ tree walk.
+inline constexpr wchar_t kMultiClusterReachableName[] = L"MultiReachable";
+inline constexpr BYTE kMultiClusterReachableNameLength = 14;
+
+// Name (and UTF-16 length) of the block-1 leaf entry: found only if the
+// recovery scan converts its block index (1) to VCN
+// kMultiClusterOrphanClustersPerBlock (2), not VCN 1.
+inline constexpr wchar_t kMultiClusterOrphanName[] = L"MultiOrphan";
+inline constexpr BYTE kMultiClusterOrphanNameLength = 11;
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a directory whose index blocks are kMultiClusterOrphanClustersPerBlock
+// clusters wide: $INDEX_ROOT points only at block 0 (VCN 0,
+// kMultiClusterReachableName), while $INDEX_ALLOCATION also covers block 1
+// (VCN kMultiClusterOrphanClustersPerBlock, kMultiClusterOrphanName), which
+// no B+ tree pointer reaches.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock();
 
 // Record slots BuildFakeNtfsImageWithMftTree()'s $MFT has room for.
 inline constexpr ULONGLONG kMftTreeRecordCount = 26;
@@ -717,6 +801,18 @@ struct FakeEncryptedFile
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithEncryptedFile(const FakeEncryptedFile& file);
 
+// Byte pattern BuildFakeNtfsImageWithResidentEncryptedData() writes as its
+// resident $DATA body; arbitrary, since decryption is never attempted on it.
+inline constexpr std::array<BYTE, 4> kResidentEncryptedDataContent{0x11, 0x22,
+                                                                   0x33, 0x44};
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// one whose sole attribute is a RESIDENT $DATA carrying the EFS "encrypted"
+// attribute-header flag (Efs::kAttrFlagEncrypted) - real NTFS never
+// encrypts a resident stream, but AttachEfsContext() must still handle a
+// forged one.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithResidentEncryptedData();
+
 // Names, MFT references of the two entries of the encrypted directory below:
 // the first sits in its $INDEX_ROOT, the second (a directory) in its index
 // block.
@@ -897,5 +993,70 @@ inline constexpr std::array<ULONGLONG, 4> kSurrogateNameMftRefs{56, 57, 58, 59};
 // still be rejected purely for exceeding this smaller unit's own buffer.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithLznt1BackreferenceExceedsDestIndexAllocation();
+
+////////////////////////////////////////////////////////////////////////////
+// VolumeOptions matrix-row fixtures: a defect strict mode rejects whole and
+// recover_errors salvages, each built directly (not through the fuzz
+// corpus), so a unit test can assert on the parsed result.
+////////////////////////////////////////////////////////////////////////////
+
+// LCNs BuildFakeNtfsImageWithBadDataRun() gives its two data runs. Never
+// actually read: the run list is rejected while still being decoded.
+inline constexpr DWORD kBadDataRunFirstLcn = 70;
+inline constexpr DWORD kBadDataRunSecondLcn = 71;
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// one whose non-resident $DATA attribute's data run decodes a first, real
+// run (VCN 0) cleanly, then hits a decode error on the second run: the
+// attribute's own last_vcn is forged to VCN 0, one short of what the second
+// run's VCN range would need - AttrNonResident<S>::ParseDataRun()'s "VCN
+// exceeds bound" check, with one real run already parsed when it fires.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithBadDataRun();
+
+// Names and MFT references BuildFakeNtfsImageWithBadIndexBlockEntry() gives
+// its two index blocks' single real entry each: "First" in the damaged
+// block (VCN 0), reported only when recovering; "Good" in the sibling,
+// well-formed block (VCN 1), reported either way.
+inline constexpr ULONGLONG kBadIndexBlockFirstMftRef = 111;
+inline constexpr wchar_t kBadIndexBlockFirstName[] = L"First";
+inline constexpr BYTE kBadIndexBlockFirstNameLength = 5;
+inline constexpr ULONGLONG kBadIndexBlockGoodMftRef = 112;
+inline constexpr wchar_t kBadIndexBlockGoodName[] = L"Good";
+inline constexpr BYTE kBadIndexBlockGoodNameLength = 4;
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a directory whose $INDEX_ROOT points directly at two $INDEX_ALLOCATION
+// blocks (VCN 0 and VCN 1: both real B+ tree children, reached by the
+// normal walk without any recovery). VCN 0 holds one real entry ("First")
+// followed by an entry whose declared size overruns the block; VCN 1 is an
+// ordinary, well-formed block holding "Good". Models one damaged block next
+// to a healthy sibling.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithBadIndexBlockEntry();
+
+// MFT reference BuildFakeNtfsImageWithMalformedIndexEntryFilename()'s single
+// entry declares.
+inline constexpr ULONGLONG kMalformedIndexEntryMftRef = 113;
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// a directory whose $INDEX_ROOT holds a single, terminal entry: a real,
+// 3-character name is written on disk, but the entry's own name_length
+// field claims 200 characters, reaching past the entry's declared size -
+// ValidateIndexEntry()'s "Filename name exceeds entry bounds" check.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMalformedIndexEntryFilename();
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// one whose sole resident $DATA attribute's total_size reaches exactly to
+// the end of the file record, leaving no room for a trailing AttrType::ALL
+// end-of-attributes marker - the attribute walk runs out of record before
+// ever finding one.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithNoEndMarker();
+
+// Same volume as BuildFakeNtfsImage(), with $Volume's (#3) record header
+// flags cleared (no INUSE bit): a freed $Volume record. NtfsVolume::Init()
+// marks its own internal FileRecord read of this record
+// (bypass_deleted_gate_) so the volume still opens under default
+// VolumeOptions (include_deleted off).
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithDeletedVolumeRecord();
 
 }  // namespace NtfsBrowserTests

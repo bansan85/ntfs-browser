@@ -14,6 +14,7 @@
 #include <ntfs-browser/mft-tree.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
@@ -25,6 +26,7 @@ using NtfsBrowser::MftScanStats;
 using NtfsBrowser::MftTree;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
 using namespace NtfsBrowserTests;
 
@@ -35,10 +37,12 @@ constexpr ULONGLONG kRoot = static_cast<ULONGLONG>(MftIdx::ROOT);
 
 // Opens BuildFakeNtfsImageWithMftTree() as a volume.
 template <Strategy S>
-std::unique_ptr<NtfsVolume<S>> OpenMftTreeVolume()
+std::unique_ptr<NtfsVolume<S>>
+    OpenMftTreeVolume(const VolumeOptions& options = {})
 {
   auto volume = std::make_unique<NtfsVolume<S>>(
-      std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithMftTree()));
+      std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithMftTree()),
+      options);
   REQUIRE(volume->IsVolumeOK());
   REQUIRE(volume->GetRecordsCount() == kMftTreeRecordCount);
   return volume;
@@ -54,7 +58,11 @@ std::vector<ULONGLONG> ChildrenOf(const MftTree& tree, ULONGLONG dir)
 template <Strategy S>
 void RunMftTreeRebuildsPaths()
 {
-  const auto volume = OpenMftTreeVolume<S>();
+  // The fixture's deleted records (old.tmp, OldDir, draft.doc, stale.txt)
+  // must stay visible for the sections below to exercise them: include_deleted
+  // is off by default now, so this test opts in explicitly.
+  const auto volume =
+      OpenMftTreeVolume<S>(VolumeOptions{.include_deleted = true});
   const MftTree tree(*volume);
 
   CHECK(tree.GetPath(kRoot) == L"\\");
@@ -140,8 +148,10 @@ void RunMftTreeRebuildsPaths()
 template <Strategy S>
 void RunMftTreeWithoutDeleted()
 {
+  // include_deleted defaults off, so the plain default volume already
+  // excludes the fixture's freed records.
   const auto volume = OpenMftTreeVolume<S>();
-  const MftTree tree(*volume, MftScanOptions{.include_deleted = false});
+  const MftTree tree(*volume);
 
   CHECK(tree.Find(kMftTreeDeletedFileIdx) == nullptr);
   CHECK(tree.Find(kMftTreeDeletedDirIdx) == nullptr);
@@ -151,6 +161,38 @@ void RunMftTreeWithoutDeleted()
   CHECK(tree.Entries().size() == 7);
   CHECK(tree.Stats().deleted == 4);
   CHECK(tree.Stats().unreachable == 1);
+}
+
+// MftTree drops a record whose attributes fail to parse when strict, and
+// keeps it (per FileRecord's own recover_errors behaviour) when recovering.
+// Uses a record with a masked-in attribute name exceeding its own
+// total_size: a strict rejection FileRecord::ParseAttrs() itself already
+// covers (see attr-name-bounds-tests.cpp); this checks MftTree's own
+// drop-vs-keep response to that outcome.
+template <Strategy S>
+void RunMftTreeDropsUnrecoveredRecord()
+{
+  {
+    const auto volume =
+        std::make_unique<NtfsVolume<S>>(std::make_unique<MemoryDiskReader>(
+            BuildFakeNtfsImageWithAttrNameExceedsTotalSize()));
+    REQUIRE(volume->IsVolumeOK());
+
+    const MftTree tree(*volume);
+    CHECK(tree.Stats().damaged == 1);
+    CHECK(tree.Find(kAttrNameExceedsTotalSizeRecordIdx) == nullptr);
+  }
+  {
+    const auto volume = std::make_unique<NtfsVolume<S>>(
+        std::make_unique<MemoryDiskReader>(
+            BuildFakeNtfsImageWithAttrNameExceedsTotalSize()),
+        VolumeOptions{.recover_errors = true});
+    REQUIRE(volume->IsVolumeOK());
+
+    const MftTree tree(*volume);
+    CHECK(tree.Stats().damaged == 0);
+    CHECK(tree.Find(kAttrNameExceedsTotalSizeRecordIdx) != nullptr);
+  }
 }
 
 template <Strategy S>
@@ -193,6 +235,20 @@ TEST_CASE("MftTree drops freed records when asked", "[mft-tree]")
 TEST_CASE("MftTree drops freed records when asked (FULL_CACHE)", "[mft-tree]")
 {
   RunMftTreeWithoutDeleted<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE("MftTree drops a record its FileRecord could not parse by default",
+          "[mft-tree][regression]")
+{
+  RunMftTreeDropsUnrecoveredRecord<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "MftTree drops a record its FileRecord could not parse by default "
+    "(FULL_CACHE)",
+    "[mft-tree][regression]")
+{
+  RunMftTreeDropsUnrecoveredRecord<Strategy::FULL_CACHE>();
 }
 
 TEST_CASE("MftTree stops when progress returns false", "[mft-tree]")

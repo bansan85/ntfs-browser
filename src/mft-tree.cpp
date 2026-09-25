@@ -177,7 +177,7 @@ void MftTree::Scan(const NtfsVolume<S>& volume, const MftScanOptions& options)
     if (fr.IsDeleted())
     {
       stats_.deleted++;
-      if (!options.include_deleted)
+      if (!volume.GetOptions().include_deleted)
       {
         continue;
       }
@@ -191,6 +191,10 @@ void MftTree::Scan(const NtfsVolume<S>& volume, const MftScanOptions& options)
     if (!ReadEntry(fr, record, entry))
     {
       stats_.damaged++;
+      if (!volume.GetOptions().recover_errors)
+      {
+        continue;  // Strict: a damaged record is dropped, not kept partial.
+      }
     }
     by_record_.emplace(record, entries_.size());
     entries_.push_back(std::move(entry));

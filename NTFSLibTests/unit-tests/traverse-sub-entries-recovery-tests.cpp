@@ -9,6 +9,7 @@
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
@@ -18,15 +19,21 @@ using NtfsBrowser::IndexEntry;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
 
 namespace
 {
 
+// Both flags on: the recovery scan runs, and Decision 4's include_deleted
+// filter is bypassed, so only the pre-existing parent-reference check
+// applies.
+constexpr VolumeOptions kRecoverKeepDeleted{.include_deleted = true,
+                                            .recover_errors = true};
+
 // Collects every name TraverseSubEntries() reports, in callback order.
 template <Strategy S>
-std::vector<std::wstring> CollectNames(const FileRecord<S>& root,
-                                       bool recoverOrphanedBlocks)
+std::vector<std::wstring> CollectNames(const FileRecord<S>& root)
 {
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
@@ -35,7 +42,7 @@ std::vector<std::wstring> CollectNames(const FileRecord<S>& root,
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             ie.GetFilename());
       },
-      &names, recoverOrphanedBlocks);
+      &names);
   return names;
 }
 
@@ -56,20 +63,24 @@ void RunOrphanedBlocksNeedRecoveryFlag()
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
   REQUIRE(root.ParseAttrs());
 
-  const std::vector<std::wstring> normal = CollectNames(root, false);
+  const std::vector<std::wstring> normal = CollectNames(root);
   REQUIRE(normal.size() == 1);
   CHECK(normal[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
 }
 
-// With the recovery flag, every $INDEX_ALLOCATION block the tree walk missed
-// is scanned too, but an entry filed under a different parent is rejected.
+// With recover_errors on and include_deleted on, every $INDEX_ALLOCATION
+// block the tree walk missed is scanned too, but an entry filed under a
+// different parent is rejected. include_deleted is on here because none of
+// this fixture's leaf entries name a record that actually exists: with it
+// off, Decision 4's filter drops every one of them instead (see
+// RunOrphanedBlocksDroppedWithoutIncludeDeleted below).
 template <Strategy S>
 void RunOrphanedBlocksFoundWithRecoveryFlag()
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader), kRecoverKeepDeleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -78,14 +89,92 @@ void RunOrphanedBlocksFoundWithRecoveryFlag()
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
   REQUIRE(root.ParseAttrs());
 
-  const std::vector<std::wstring> recovered = CollectNames(root, true);
+  const std::vector<std::wstring> recovered = CollectNames(root);
   REQUIRE(recovered.size() == 2);
   CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
   CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
 }
 
-// With no $INDEX_ROOT parsed at all, the normal walk has nowhere to start,
-// so without the recovery flag TraverseSubEntries() reports nothing.
+// With include_deleted off (the default), Decision 4 additionally requires
+// an orphan-scan entry's named record to actually exist, be in use, and
+// carry a matching sequence number. Neither orphaned leaf entry (Orphan,
+// Stale) names a record that exists in this fixture's tiny $MFT, so the
+// orphan scan itself contributes nothing - unlike with include_deleted on
+// above. Decision 4 only governs the orphan scan though: Reachable comes
+// from the normal B+ tree walk and is unaffected, so it still appears.
+template <Strategy S>
+void RunOrphanedBlocksDroppedWithoutIncludeDeleted()
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
+
+  NtfsVolume<S> volume(std::move(reader),
+                       VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> root(volume);
+  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseAttrs());
+
+  const std::vector<std::wstring> recovered = CollectNames(root);
+  REQUIRE(recovered.size() == 1);
+  CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+}
+
+// Decision 4's other drop condition: with include_deleted off, an
+// orphan-scan entry naming a record that DOES exist and IS in use, but
+// under a sequence number that does not match the entry's own, is dropped
+// exactly like one naming a record that doesn't exist at all (see
+// RunOrphanedBlocksDroppedWithoutIncludeDeleted above). With include_deleted
+// on, Decision 4 is bypassed entirely and the entry is kept, confirming the
+// drop above is specifically about the sequence mismatch.
+template <Strategy S>
+void RunOrphanedBlocksDroppedOnSequenceMismatch()
+{
+  {
+    auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+        NtfsBrowserTests::
+            BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
+
+    NtfsVolume<S> volume(std::move(reader),
+                         VolumeOptions{.recover_errors = true});
+    REQUIRE(volume.IsVolumeOK());
+
+    FileRecord<S> root(volume);
+    root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(root.ParseAttrs());
+
+    const std::vector<std::wstring> recovered = CollectNames(root);
+    REQUIRE(recovered.size() == 1);
+    CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  }
+  {
+    auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+        NtfsBrowserTests::
+            BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
+
+    NtfsVolume<S> volume(std::move(reader), kRecoverKeepDeleted);
+    REQUIRE(volume.IsVolumeOK());
+
+    FileRecord<S> root(volume);
+    root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(root.ParseAttrs());
+
+    const std::vector<std::wstring> recovered = CollectNames(root);
+    REQUIRE(recovered.size() == 2);
+    CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+    CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
+  }
+}
+
+// With no $INDEX_ROOT at all, the normal walk has nowhere to start, so
+// without the recovery flag TraverseSubEntries() reports nothing.
 template <Strategy S>
 void RunMissingIndexRootNeedsRecoveryFlag()
 {
@@ -101,7 +190,7 @@ void RunMissingIndexRootNeedsRecoveryFlag()
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
   REQUIRE(root.ParseAttrs());
 
-  CHECK(CollectNames(root, false).empty());
+  CHECK(CollectNames(root).empty());
 }
 
 // With the recovery flag, a record with no parsed $INDEX_ROOT still yields
@@ -112,7 +201,7 @@ void RunMissingIndexRootRecoveredWithFlag()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader), kRecoverKeepDeleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -121,7 +210,7 @@ void RunMissingIndexRootRecoveredWithFlag()
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
   REQUIRE(root.ParseAttrs());
 
-  const std::vector<std::wstring> recovered = CollectNames(root, true);
+  const std::vector<std::wstring> recovered = CollectNames(root);
   REQUIRE(recovered.size() == 2);
   CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
   CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
@@ -157,6 +246,40 @@ TEST_CASE(
     "[file-record][index-block][regression]")
 {
   RunOrphanedBlocksFoundWithRecoveryFlag<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan finds nothing when include_deleted is "
+    "off and no named record exists",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanedBlocksDroppedWithoutIncludeDeleted<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan finds nothing when include_deleted is "
+    "off and no named record exists (FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanedBlocksDroppedWithoutIncludeDeleted<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan drops an entry whose named record "
+    "exists but has a mismatched sequence number, when include_deleted is "
+    "off",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanedBlocksDroppedOnSequenceMismatch<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan drops an entry whose named record "
+    "exists but has a mismatched sequence number, when include_deleted is "
+    "off (FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanedBlocksDroppedOnSequenceMismatch<Strategy::FULL_CACHE>();
 }
 
 TEST_CASE(
