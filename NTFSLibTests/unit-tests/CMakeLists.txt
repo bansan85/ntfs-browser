@@ -35,6 +35,9 @@ set(NtfsBrowserTests_SRC
     "traverse-sub-entries-recovery-tests.cpp"
     "mft-tree-tests.cpp"
     "volume-options-tests.cpp"
+    "dftt-ntfs-autodetect-tests.cpp"
+    "dftt-ntfs-undel-tests.cpp"
+    "dftt-ntfs-kwsrch-tests.cpp"
     "fuzzer-regression-tests.cpp"
     "logging-tests.cpp"
     "utf-tests.cpp"
@@ -89,6 +92,16 @@ target_compile_definitions(NtfsBrowserTests
 # the source list above in that case too, so nothing here needs it then.
 if(NTFS_BROWSER_EFS_MASTER)
   target_link_libraries(NtfsBrowserTests PRIVATE cryptopp::cryptopp)
+endif()
+
+# BCrypt: dftt-ntfs-undel-tests.cpp's fallback MD5 backend, used to check
+# recovered file content when NTFS_BROWSER_ENABLE_EFS_CRYPTOPP is off. Mirrors
+# that file's own "#elif defined(_WIN32) &&
+# defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)" - linked whenever that branch could
+# be taken, whether or not Crypto++ is also available, since an unused import
+# library is harmless.
+if(WIN32 AND NTFS_BROWSER_ENABLE_EFS_BCRYPT)
+  target_link_libraries(NtfsBrowserTests PRIVATE bcrypt)
 endif()
 
 # The fuzz/ include lets fake-ntfs-image.h reuse named-stream-probe.h's name
