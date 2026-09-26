@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/strategy.h>
 
 namespace NtfsBrowser
 {
@@ -11,6 +12,8 @@ namespace Data
 {
 struct IndexBlock;
 }  // namespace Data
+template <Strategy S>
+class AttrIndexAlloc;
 
 class IndexBlock : public std::vector<IndexEntry>
 {
@@ -22,10 +25,12 @@ class IndexBlock : public std::vector<IndexEntry>
   IndexBlock& operator=(IndexBlock const& other) = delete;
   virtual ~IndexBlock() = default;
 
+  template <Strategy S>
+  friend class AttrIndexAlloc;
+
  private:
   std::shared_ptr<BYTE[]> index_block_;
 
- public:
   [[nodiscard]] std::shared_ptr<BYTE[]> AllocIndexBlock(DWORD size);
 };  // IndexBlock
 

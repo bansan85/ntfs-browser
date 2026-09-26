@@ -12,6 +12,8 @@ namespace NtfsBrowser
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
+template <Strategy S>
+class NtfsVolume;
 
 template <typename RESIDENT, Strategy S>
 class AttrVolName : public RESIDENT
@@ -24,10 +26,15 @@ class AttrVolName : public RESIDENT
   AttrVolName& operator=(AttrVolName const& other) = delete;
   ~AttrVolName() override = default;
 
+  // NtfsVolume::Init() picks between both Strategy instantiations of this
+  // class via a runtime if/else on S, not `if constexpr`, so every
+  // NtfsVolume<S> must be a friend regardless of this instantiation's own S.
+  template <Strategy>
+  friend class NtfsVolume;
+
  private:
   std::wstring name_;
 
- public:
   // Get NTFS Volume Unicode Name
   [[nodiscard]] std::wstring_view GetName() const noexcept;
 };  // AttrVolInfo

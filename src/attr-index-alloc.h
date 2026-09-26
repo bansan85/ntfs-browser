@@ -31,13 +31,14 @@ class AttrIndexAlloc : public AttrNonResident<S>
   AttrIndexAlloc& operator=(AttrIndexAlloc const& other) = delete;
   ~AttrIndexAlloc() override;
 
+  friend class FileRecord<S>;
+
  private:
   ULONGLONG index_block_count_{0};
 
   [[nodiscard]] bool PatchUS(WORD* sector, DWORD sectors, WORD usn,
                              const WORD* usarray);
 
- public:
   [[nodiscard]] ULONGLONG GetIndexBlockCount() const noexcept;
   [[nodiscard]] bool ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass);
 };  // AttrIndexAlloc

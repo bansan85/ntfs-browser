@@ -35,6 +35,9 @@ class AttrNonResident : public AttrBase<S>
   AttrNonResident& operator=(AttrNonResident const& other) = delete;
   ~AttrNonResident() override = default;
 
+  friend class FileRecord<S>;
+  friend class NtfsVolume<S>;
+
  private:
   const Attr::HeaderNonResident& attr_header_nr_;
   std::vector<Data::RunEntry> data_run_list_;
@@ -80,14 +83,8 @@ class AttrNonResident : public AttrBase<S>
       ReadVirtualClustersCompressed(ULONGLONG vcn, ULONGLONG clusters,
                                     std::span<BYTE> buffer) const;
 
- public:
   // Makes ReadData() decrypt this stream with the given context.
   void SetEfsContext(std::shared_ptr<const Efs::Context> context) noexcept;
-
-  [[nodiscard]] const BYTE* GetData() const noexcept override;
-  [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
-  [[nodiscard]] std::optional<ULONGLONG>
-      ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 
   // Like ReadData(), but bounded by this instance's own VCN range instead
   // of real_size, which continuation instances leave at 0.
@@ -96,5 +93,11 @@ class AttrNonResident : public AttrBase<S>
 
   [[nodiscard]] ULONGLONG GetStartVcn() const noexcept;
   [[nodiscard]] ULONGLONG GetLastVcn() const noexcept;
+
+ public:
+  [[nodiscard]] const BYTE* GetData() const noexcept override;
+  [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrNonResident
 }  // namespace NtfsBrowser

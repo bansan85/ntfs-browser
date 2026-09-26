@@ -10,9 +10,16 @@
 #include <vector>
 
 #include <ntfs-browser/efs.h>
+#include <ntfs-browser/strategy.h>
 
 #include "efs/efs-stream.h"
 #include "efs/sector-cipher.h"
+
+namespace NtfsBrowser
+{
+template <Strategy S>
+class AttrNonResident;
+}  // namespace NtfsBrowser
 
 namespace NtfsBrowser::Efs
 {
@@ -39,11 +46,8 @@ class Context
   Context& operator=(Context const& other) = delete;
   ~Context() = default;
 
-  // Decrypts data in place. "streamOffset" is the byte offset of data[0] in
-  // its stream, and both it and the size MUST be sector aligned. Returns
-  // false, with a warning naming the cause, if the data cannot be decrypted.
-  [[nodiscard]] bool Decrypt(ULONGLONG streamOffset,
-                             std::span<BYTE> data) const;
+  template <Strategy S>
+  friend class NtfsBrowser::AttrNonResident;
 
  private:
   std::vector<WrappedFek> entries_;
@@ -53,6 +57,12 @@ class Context
   mutable bool resolved_{false};
   mutable std::unique_ptr<SectorDecryptor> decryptor_;
   mutable std::string failure_;
+
+  // Decrypts data in place. "streamOffset" is the byte offset of data[0] in
+  // its stream, and both it and the size MUST be sector aligned. Returns
+  // false, with a warning naming the cause, if the data cannot be decrypted.
+  [[nodiscard]] bool Decrypt(ULONGLONG streamOffset,
+                             std::span<BYTE> data) const;
 
   void Resolve() const;
   [[nodiscard]] std::unique_ptr<SectorDecryptor>

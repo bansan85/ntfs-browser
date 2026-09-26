@@ -24,10 +24,11 @@ class AttrVolInfo : public RESIDENT
 
   ~AttrVolInfo() override;
 
+  friend class NtfsVolume<S>;
+
  private:
   const Attr::VolumeInformation& vol_info_;
 
- public:
   // Get NTFS Volume Version
   [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
 };  // AttrVolInfo
