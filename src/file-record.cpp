@@ -1,5 +1,10 @@
+#include "flag/file-record.h"
+
+#include <algorithm>
 #include <cassert>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
 
 #include <gsl/narrow>
 
@@ -27,7 +32,6 @@
 #include "data/run-entry.h"
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
-#include "flag/file-record.h"
 #include "index-block.h"
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
@@ -661,12 +665,102 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
     }
   }
 
+  MergeAttributeContinuations();
+
   if (!AttachEfsContext())
   {
     ClearAttrs();
     return false;
   }
   return true;
+}
+
+// Splices a non-resident attribute's own VCN-split instances (already all in
+// attr_list_ by now) back into one, so getAttr()/FindStream() see exactly
+// one complete attribute per stream instead of several partial ones.
+template <Strategy S>
+void FileRecord<S>::MergeAttributeContinuations()
+{
+  for (std::vector<std::unique_ptr<AttrBase<S>>>& attrs : attr_list_)
+  {
+    if (attrs.size() < 2)
+    {
+      continue;
+    }
+
+    // Every non-resident instance's index into attrs, grouped by stream
+    // name: two differently named streams of the same type (eg. two ADS)
+    // must never merge into each other.
+    std::unordered_map<std::wstring, std::vector<size_t>> byName;
+    for (size_t i = 0; i < attrs.size(); ++i)
+    {
+      if (attrs[i]->IsNonResident())
+      {
+        std::wstring key;
+        if (!attrs[i]->IsUnNamed())
+        {
+          key = attrs[i]->GetAttrName();
+        }
+        byName[key].push_back(i);
+      }
+    }
+
+    std::vector<size_t> toErase;
+    for (auto& [name, indices] : byName)
+    {
+      if (indices.size() < 2)
+      {
+        continue;
+      }
+
+      std::ranges::sort(indices, {},
+                        [&](size_t idx)
+                        {
+                          return static_cast<const AttrNonResident<S>&>(
+                                     *attrs[idx])
+                              .GetStartVcn();
+                        });
+
+      // A gap, an overlap, or a chain that doesn't start at VCN 0 means a
+      // damaged or unsupported layout: leave every instance exactly as
+      // parsed instead of splicing a wrong or partial result together.
+      ULONGLONG expectedStartVcn = 0;
+      bool contiguous = true;
+      for (size_t idx : indices)
+      {
+        const auto& instance =
+            static_cast<const AttrNonResident<S>&>(*attrs[idx]);
+        if (instance.GetStartVcn() != expectedStartVcn)
+        {
+          contiguous = false;
+          break;
+        }
+        expectedStartVcn = instance.GetLastVcn() + 1;
+      }
+      if (!contiguous)
+      {
+        LogWarn(
+            "Attribute continuation VCNs are not contiguous from 0; leaving "
+            "{} instance(s) unmerged",
+            indices.size());
+        continue;
+      }
+
+      auto& keeper = static_cast<AttrNonResident<S>&>(*attrs[indices.front()]);
+      for (size_t k = 1; k < indices.size(); ++k)
+      {
+        keeper.AppendRuns(
+            static_cast<const AttrNonResident<S>&>(*attrs[indices[k]]));
+        toErase.push_back(indices[k]);
+      }
+    }
+
+    std::ranges::sort(toErase);
+    for (auto it = toErase.rbegin(); it != toErase.rend(); ++it)
+    {
+      attrs.erase(attrs.begin() + static_cast<ptrdiff_t>(*it));
+    }
+  }
 }
 
 // The largest $EFS stream read. It holds a few key entries, a few KiB at

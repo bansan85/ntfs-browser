@@ -90,6 +90,10 @@ class NTFS_BROWSER_EXPORT FileRecord
   std::vector<BYTE> record_buffer_;
 
   void ClearAttrs() noexcept;
+  // Splices a non-resident attribute's own VCN-split instances (reached
+  // through $ATTRIBUTE_LIST) back into one, so getAttr()/FindStream() see a
+  // single, complete attribute per stream.
+  void MergeAttributeContinuations();
   // Attaches an EFS decryption context to every encrypted $DATA stream.
   // False only when strict and an anomalous stream was found: the caller
   // then rejects the whole record instead of reading it undecrypted.

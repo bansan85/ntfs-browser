@@ -41,7 +41,8 @@ template <Strategy S>
 AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
                                     const FileRecord<S>& fr)
     : AttrBase<S>(ahc, fr),
-      attr_header_nr_(reinterpret_cast<const Attr::HeaderNonResident&>(ahc))
+      attr_header_nr_(reinterpret_cast<const Attr::HeaderNonResident&>(ahc)),
+      merged_clusters_(attr_header_nr_.last_vcn - attr_header_nr_.start_vcn + 1)
 {
   // total_size already covers this field (ParseAttrs()); start_vcn must be
   // unit-aligned or units decode against the wrong window.
@@ -269,12 +270,12 @@ std::optional<std::span<const BYTE>>
   return buffer;
 }
 
-// Number of virtual clusters this attribute (or, for an attribute split
-// across an $ATTRIBUTE_LIST, this fragment of it) describes.
+// Number of virtual clusters this attribute describes, merged instances
+// included.
 template <Strategy S>
 ULONGLONG AttrNonResident<S>::TotalClusters() const noexcept
 {
-  return attr_header_nr_.last_vcn - attr_header_nr_.start_vcn + 1;
+  return merged_clusters_;
 }
 
 // Clusters belonging to the compression unit starting at "unitFirstVcn":
@@ -822,6 +823,20 @@ template <Strategy S>
 ULONGLONG AttrNonResident<S>::GetLastVcn() const noexcept
 {
   return attr_header_nr_.last_vcn;
+}
+
+// Rebases other's own runs onto merged_clusters_ (this instance's own VCN
+// count so far) and appends them, so the two read as one contiguous stream.
+template <Strategy S>
+void AttrNonResident<S>::AppendRuns(const AttrNonResident& other)
+{
+  for (Data::RunEntry dr : other.data_run_list_)
+  {
+    dr.start_vcn += merged_clusters_;
+    dr.last_vcn += merged_clusters_;
+    data_run_list_.push_back(dr);
+  }
+  merged_clusters_ += other.merged_clusters_;
 }
 
 template class AttrNonResident<Strategy::NO_CACHE>;

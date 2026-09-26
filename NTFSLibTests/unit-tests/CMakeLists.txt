@@ -7,6 +7,11 @@ set(NtfsBrowserTests_SRC
     "sequential-disk-reader.cpp"
     "test-log-sink.h"
     "test-log-sink.cpp"
+    "md5-test-support.h"
+    "md5-test-support.cpp"
+    "nps-ntfs1-test-support.h"
+    "nps-ntfs1-test-support.cpp"
+    "nps-ntfs1-tests.cpp"
     "disk-reader-tests.cpp"
     "file-reader-tests.cpp"
     "file-reader-full-cache-boundary-tests.cpp"
@@ -57,7 +62,7 @@ endif()
 # al. in.
 if(NTFS_BROWSER_EFS_MASTER)
   list(APPEND NtfsBrowserTests_SRC "efs-test-support.h" "efs-test-support.cpp"
-       "efs-pfx-tests.cpp" "efs-tests.cpp")
+       "efs-pfx-tests.cpp" "efs-tests.cpp" "nps-ntfs1-efs-tests.cpp")
 endif()
 
 add_executable(NtfsBrowserTests ${NtfsBrowserTests_SRC})
@@ -94,12 +99,12 @@ if(NTFS_BROWSER_EFS_MASTER)
   target_link_libraries(NtfsBrowserTests PRIVATE cryptopp::cryptopp)
 endif()
 
-# BCrypt: dftt-ntfs-undel-tests.cpp's fallback MD5 backend, used to check
-# recovered file content when NTFS_BROWSER_ENABLE_EFS_CRYPTOPP is off. Mirrors
-# that file's own "#elif defined(_WIN32) &&
-# defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)" - linked whenever that branch could
-# be taken, whether or not Crypto++ is also available, since an unused import
-# library is harmless.
+# BCrypt: md5-test-support.cpp's fallback MD5 backend (used by
+# dftt-ntfs-undel-tests.cpp and nps-ntfs1-tests.cpp to check recovered file
+# content) when NTFS_BROWSER_ENABLE_EFS_CRYPTOPP is off. Mirrors that file's
+# own "#elif defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)" -
+# linked whenever that branch could be taken, whether or not Crypto++ is also
+# available, since an unused import library is harmless.
 if(WIN32 AND NTFS_BROWSER_ENABLE_EFS_BCRYPT)
   target_link_libraries(NtfsBrowserTests PRIVATE bcrypt)
 endif()

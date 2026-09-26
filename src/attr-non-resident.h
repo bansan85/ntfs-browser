@@ -42,6 +42,9 @@ class AttrNonResident : public AttrBase<S>
   const Attr::HeaderNonResident& attr_header_nr_;
   std::vector<Data::RunEntry> data_run_list_;
 
+  // This instance's own VCN count; AppendRuns() extends it per merged instance.
+  ULONGLONG merged_clusters_{0};
+
   // Clusters per compression unit (2^comp_unit_size); 0 means uncompressed.
   ULONGLONG comp_unit_clusters_{0};
 
@@ -93,6 +96,9 @@ class AttrNonResident : public AttrBase<S>
 
   [[nodiscard]] ULONGLONG GetStartVcn() const noexcept;
   [[nodiscard]] ULONGLONG GetLastVcn() const noexcept;
+
+  // Splices other's own runs onto this instance's, as the next VCN range.
+  void AppendRuns(const AttrNonResident& other);
 
  public:
   [[nodiscard]] const BYTE* GetData() const noexcept override;
