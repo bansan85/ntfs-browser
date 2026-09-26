@@ -5,8 +5,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/strategy.h>
+
+#include "data/file-record-header.h"
 
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::kFileRecordMagic;

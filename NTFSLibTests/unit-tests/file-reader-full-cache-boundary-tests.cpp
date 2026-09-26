@@ -6,9 +6,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/strategy.h>
 
+#include "file-reader.h"
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::FileReader;

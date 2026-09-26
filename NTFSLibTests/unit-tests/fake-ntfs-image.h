@@ -486,9 +486,9 @@ inline constexpr BYTE kOrphanedBlockStaleNameLength = 5;
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks();
 
 // Declared block count BuildFakeNtfsImageWithHugeOrphanScanBlockCount()
-// forges into its $INDEX_ALLOCATION real_size: past
-// FileRecord::kMaxOrphanScanBlocks (65536), while only the same 3 real
-// blocks as BuildFakeNtfsImageWithOrphanedIndexBlocks() are ever backed.
+// forges into its $INDEX_ALLOCATION real_size: past FileRecord's internal
+// kMaxOrphanScanBlocks (65536), while only the same 3 real blocks as
+// BuildFakeNtfsImageWithOrphanedIndexBlocks() are ever backed.
 inline constexpr ULONGLONG kHugeOrphanScanDeclaredBlockCount = 70000;
 
 // Same as BuildFakeNtfsImageWithOrphanedIndexBlocks(), except the root's

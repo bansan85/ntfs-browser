@@ -1,4 +1,4 @@
-#include <ntfs-browser/win32-disk-reader.h>
+#include "win32-disk-reader.h"
 
 #include "ntfs-common.h"
 

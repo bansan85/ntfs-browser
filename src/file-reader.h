@@ -11,14 +11,15 @@
 #include <vector>
 
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/export.h>
 #include <ntfs-browser/strategy.h>
+
+#include "internal-export.h"
 
 namespace NtfsBrowser
 {
 
 template <Strategy S>
-class NTFS_BROWSER_EXPORT FileReader
+class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader
 {
  public:
   FileReader();

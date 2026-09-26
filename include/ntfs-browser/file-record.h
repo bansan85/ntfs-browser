@@ -12,7 +12,6 @@
 
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/strategy.h>
@@ -26,6 +25,11 @@ struct WrappedFek;
 template <Strategy S>
 class NtfsVolume;
 class IndexEntry;
+
+// On-disk file record header layout - an implementation detail FileRecord
+// keeps behind a pointer so this public header doesn't need its definition.
+template <Strategy S>
+struct FileRecordHeaderImpl;
 
 template <Strategy S>
 class AttrBase;
@@ -62,7 +66,7 @@ class NTFS_BROWSER_EXPORT FileRecord
 
  private:
   const NtfsVolume<S>& volume_;
-  std::optional<FileRecordHeaderImpl<S>> file_record_{};
+  std::unique_ptr<FileRecordHeaderImpl<S>> file_record_;
   std::optional<ULONGLONG> file_reference_{};
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
   Mask attr_mask_{Mask::ALL};
@@ -99,11 +103,8 @@ class NTFS_BROWSER_EXPORT FileRecord
   // (record, attribute type) pairs into this record's own attribute parse,
   // instead of starting a fresh chain.
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain);
-  [[nodiscard]] std::optional<FileRecordHeaderImpl<S>>
+  [[nodiscard]] std::unique_ptr<FileRecordHeaderImpl<S>>
       ReadFileRecord(ULONGLONG fileRef);
-  // Chosen well above any real NTFS directory's B+ tree depth, but low
-  // enough to unwind long before a forged chain overflows the stack.
-  static constexpr size_t kMaxIndexBlockDepth = 64;
   [[nodiscard]] std::optional<IndexEntry>
       VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName,
                       std::unordered_set<ULONGLONG>& visitedVcns,
@@ -153,11 +154,6 @@ class NTFS_BROWSER_EXPORT FileRecord
   // record it names is still in use under a matching sequence number.
   void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack, void* context) const;
 
-  // Caps the orphan-block recovery scan: an attacker-controlled declared
-  // block count must not drive an unbounded number of ParseIndexBlock()
-  // calls. 65536 blocks is already far past any real directory's index, so
-  // this only ever binds on a forged/damaged $INDEX_ALLOCATION.
-  static constexpr size_t kMaxOrphanScanBlocks = 65536;
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntry(std::wstring_view fileName) const;
   [[nodiscard]] const AttrBase<S>* FindStream(std::wstring_view name);

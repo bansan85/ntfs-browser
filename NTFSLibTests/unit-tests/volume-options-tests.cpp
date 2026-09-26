@@ -141,9 +141,10 @@ void RunSalvageableConditionLogLevel()
                                 "bounds."));
 }
 
-// The orphan scan caps its work at FileRecord::kMaxOrphanScanBlocks instead
-// of the attribute's own (attacker-controlled) declared block count, and
-// logs once when the cap binds. The 3 real blocks stay reachable either way.
+// The orphan scan caps its work at FileRecord's internal kMaxOrphanScanBlocks
+// instead of the attribute's own (attacker-controlled) declared block count,
+// and logs once when the cap binds. The 3 real blocks stay reachable either
+// way.
 template <Strategy S>
 void RunOrphanScanCapsDeclaredBlockCount()
 {

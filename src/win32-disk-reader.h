@@ -8,14 +8,14 @@
 #include <windows.h>
 
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/export.h>
 
 namespace NtfsBrowser
 {
 
 // Production IDiskReader: a real disk/device, or an ordinary file treated
-// the same way (CreateFileW handles both identically).
-class NTFS_BROWSER_EXPORT Win32DiskReader : public IDiskReader
+// the same way (CreateFileW handles both identically). Never used directly
+// outside FileReader<S>::Open(), so it carries no export macro.
+class Win32DiskReader : public IDiskReader
 {
  public:
   Win32DiskReader();

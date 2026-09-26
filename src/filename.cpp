@@ -4,11 +4,11 @@
 #include <cwctype>
 
 #include <ntfs-browser/filename.h>
-#include <ntfs-browser/mft-idx.h>
 
 #include "attr-std-info.h"
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
+#include "mft-file-reference.h"
 #include "ntfs-common.h"
 #include "utf.h"
 

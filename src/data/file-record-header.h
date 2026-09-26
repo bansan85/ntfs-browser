@@ -9,11 +9,10 @@
 
 #include <gsl/pointers>
 
-#include <ntfs-browser/export.h>
-#include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/strategy.h>
 
 #include "../flag/file-record.h"
+#include "../internal-export.h"
 
 namespace NtfsBrowser
 {
@@ -30,7 +29,7 @@ struct AttrHeaderCommon;
 template <Strategy S>
 struct FileRecordHeaderImpl;
 
-struct NTFS_BROWSER_EXPORT FileRecordHeader
+struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
 {
   union Data
   {
@@ -80,7 +79,7 @@ struct FileRecordHeaderImpl
 };
 
 template <>
-struct NTFS_BROWSER_EXPORT
+struct NTFS_BROWSER_EXPORT_TESTS_ONLY
     FileRecordHeaderImpl<Strategy::NO_CACHE> : public FileRecordHeader
 {
   std::span<const BYTE> data_;
@@ -92,7 +91,7 @@ struct NTFS_BROWSER_EXPORT
 };
 
 template <>
-struct NTFS_BROWSER_EXPORT
+struct NTFS_BROWSER_EXPORT_TESTS_ONLY
     FileRecordHeaderImpl<Strategy::FULL_CACHE> : public FileRecordHeader
 {
   FileRecordHeader::Data data_;

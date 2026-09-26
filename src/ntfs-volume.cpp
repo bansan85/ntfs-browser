@@ -5,7 +5,6 @@
 #include <utility>
 
 #include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -14,8 +13,10 @@
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
 #include "attr/attribute-list.h"
+#include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
+#include "file-reader.h"
 #include "ntfs-common.h"
 #include "utf.h"
 
@@ -44,7 +45,9 @@ constexpr size_t kMaxMftAttrListEntries = 65536;
 #ifdef _WIN32
 template <Strategy S>
 NtfsVolume<S>::NtfsVolume(_TCHAR volume, const VolumeOptions& options)
-    : mft_record_(*this), options_(options)
+    : volume_(std::make_unique<FileReader<S>>()),
+      options_(options),
+      mft_record_(*this)
 {
   ClearAttrRawCB();
 
@@ -56,7 +59,9 @@ NtfsVolume<S>::NtfsVolume(_TCHAR volume, const VolumeOptions& options)
 
 template <Strategy S>
 NtfsVolume<S>::NtfsVolume(std::wstring_view path, const VolumeOptions& options)
-    : mft_record_(*this), options_(options)
+    : volume_(std::make_unique<FileReader<S>>()),
+      options_(options),
+      mft_record_(*this)
 {
   ClearAttrRawCB();
 
@@ -70,7 +75,9 @@ NtfsVolume<S>::NtfsVolume(std::wstring_view path, const VolumeOptions& options)
 template <Strategy S>
 NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader,
                           const VolumeOptions& options)
-    : mft_record_(*this), options_(options)
+    : volume_(std::make_unique<FileReader<S>>()),
+      options_(options),
+      mft_record_(*this)
 {
   ClearAttrRawCB();
 
@@ -79,6 +86,9 @@ NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader,
     Init();
   }
 }
+
+template <Strategy S>
+NtfsVolume<S>::~NtfsVolume() = default;
 
 // Verify NTFS volume version (must >= 3.0) and locate $MFT's Data attribute
 template <Strategy S>
@@ -464,7 +474,7 @@ bool NtfsVolume<S>::OpenVolume(_TCHAR volume)
 template <Strategy S>
 bool NtfsVolume<S>::OpenVolume(std::wstring_view path)
 {
-  if (!volume_.Open(path))
+  if (!volume_->Open(path))
   {
     LogError("Cannnot open volume");
     return false;
@@ -478,7 +488,7 @@ bool NtfsVolume<S>::OpenVolume(std::wstring_view path)
 template <Strategy S>
 bool NtfsVolume<S>::OpenVolume(std::unique_ptr<IDiskReader> reader)
 {
-  volume_ = FileReader<S>(std::move(reader));
+  volume_ = std::make_unique<FileReader<S>>(std::move(reader));
 
   return ParseBootSector();
 }
@@ -490,7 +500,7 @@ bool NtfsVolume<S>::ParseBootSector()
   constexpr DWORD default_sector_size = 512;
   LARGE_INTEGER frAddr{.QuadPart = 0};
   std::optional<std::span<const BYTE>> bpb_buffer =
-      volume_.Read(frAddr, default_sector_size);
+      volume_->Read(frAddr, default_sector_size);
   if (!bpb_buffer)
   {
     LogError("Read boot sector error");
@@ -688,13 +698,13 @@ template <Strategy S>
 std::optional<std::span<const BYTE>> NtfsVolume<S>::Read(LARGE_INTEGER& addr,
                                                          DWORD length) const
 {
-  return volume_.Read(addr, length);
+  return volume_->Read(addr, length);
 }
 
 template <Strategy S>
 bool NtfsVolume<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
 {
-  return volume_.ReadInto(addr, dest);
+  return volume_->ReadInto(addr, dest);
 }
 
 // Install Attribute CallBack routines for the whole Volume

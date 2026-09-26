@@ -9,8 +9,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <windows.h>
 
-#include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/strategy.h>
+
+#include "file-reader.h"
 
 namespace
 {

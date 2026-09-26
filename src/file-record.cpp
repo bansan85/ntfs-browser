@@ -5,9 +5,7 @@
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/file-record.h>
-#include <ntfs-browser/flag/file-record.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -25,15 +23,31 @@
 #include "attr-vol-name.h"
 #include "attr/header-non-resident.h"
 #include "attr/header-resident.h"
+#include "data/file-record-header.h"
 #include "data/run-entry.h"
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
+#include "flag/file-record.h"
 #include "index-block.h"
+#include "mft-file-reference.h"
 #include "ntfs-common.h"
 #include "utf.h"
 
 namespace NtfsBrowser
 {
+
+namespace
+{
+// Chosen well above any real NTFS directory's B+ tree depth, but low enough
+// to unwind long before a forged chain overflows the stack.
+constexpr size_t kMaxIndexBlockDepth = 64;
+
+// Caps the orphan-block recovery scan: an attacker-controlled declared block
+// count must not drive an unbounded number of ParseIndexBlock() calls. 65536
+// blocks is already far past any real directory's index, so this only ever
+// binds on a forged/damaged $INDEX_ALLOCATION.
+constexpr size_t kMaxOrphanScanBlocks = 65536;
+}  // namespace
 
 template <Strategy S>
 FileRecord<S>::FileRecord(const NtfsVolume<S>& volume) : volume_(volume)
@@ -246,7 +260,7 @@ bool FileRecord<S>::ParseAttr(const AttrHeaderCommon& ahc,
 // records go through $MFT's DATA attribute, since $MFT itself may be
 // fragmented across the disk.
 template <Strategy S>
-std::optional<FileRecordHeaderImpl<S>>
+std::unique_ptr<FileRecordHeaderImpl<S>>
     FileRecord<S>::ReadFileRecord(ULONGLONG fileRef)
 {
   if (record_buffer_.size() != volume_.GetFileRecordSize())
@@ -279,8 +293,9 @@ std::optional<FileRecordHeaderImpl<S>>
 
     try
     {
-      return FileRecordHeader::Factory<S>(record_buffer_,
-                                          volume_.GetSectorSize());
+      auto header =
+          FileRecordHeader::Factory<S>(record_buffer_, volume_.GetSectorSize());
+      return std::make_unique<FileRecordHeaderImpl<S>>(std::move(header));
     }
     catch (const std::exception& e)
     {
@@ -303,8 +318,9 @@ std::optional<FileRecordHeaderImpl<S>>
 
   try
   {
-    return FileRecordHeader::Factory<S>(record_buffer_,
-                                        volume_.GetSectorSize());
+    auto header =
+        FileRecordHeader::Factory<S>(record_buffer_, volume_.GetSectorSize());
+    return std::make_unique<FileRecordHeaderImpl<S>>(std::move(header));
   }
   catch (const std::exception& e)
   {
@@ -326,7 +342,7 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
     file_record_.reset();
   }
 
-  std::optional<FileRecordHeaderImpl<S>> fr = ReadFileRecord(fileRef);
+  std::unique_ptr<FileRecordHeaderImpl<S>> fr = ReadFileRecord(fileRef);
   if (!fr)
   {
     LogError("Cannot read file record {}", fileRef);

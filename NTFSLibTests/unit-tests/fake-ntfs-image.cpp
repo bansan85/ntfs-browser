@@ -13,8 +13,6 @@
 
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/data/file-record-header.h>
-#include <ntfs-browser/flag/file-record.h>
 #include <ntfs-browser/mft-idx.h>
 
 #include "attr/attribute-list.h"
@@ -24,15 +22,18 @@
 #include "attr/index-root.h"
 #include "attr/standard-information.h"
 #include "attr/volume-information.h"
+#include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
 #include "data/ntfs-bpb.h"
 #include "efs/efs-context.h"
+#include "flag/file-record.h"
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
 #include "flag/index-entry.h"
 #include "flag/std-info-permission.h"
 #include "lznt1/decompress.h"
+#include "mft-file-reference.h"
 
 namespace NtfsBrowserTests
 {

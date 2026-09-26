@@ -15,7 +15,6 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs.h>
 #include <ntfs-browser/export.h>
-#include <ntfs-browser/file-reader.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -25,6 +24,12 @@
 
 namespace NtfsBrowser
 {
+
+// Caches reads from the volume's backing IDiskReader - an implementation
+// detail NtfsVolume keeps behind a pointer so this public header doesn't
+// need its definition.
+template <Strategy S>
+class FileReader;
 
 template <Strategy S>
 class NTFS_BROWSER_EXPORT NtfsVolume
@@ -47,7 +52,7 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   NtfsVolume(NtfsVolume const& other) = delete;
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
   NtfsVolume& operator=(NtfsVolume const& other) = delete;
-  virtual ~NtfsVolume() = default;
+  virtual ~NtfsVolume();
 
   friend class FileRecord<S>;
   friend class AttrBase<S>;
@@ -62,7 +67,7 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
   BYTE version_major_{0};
   BYTE version_minor_{0};
-  FileReader<S> volume_;
+  std::unique_ptr<FileReader<S>> volume_;
 
   // Fixed for the volume's lifetime; set by the constructor, read back
   // through GetOptions(). No setter: every component that reads it goes

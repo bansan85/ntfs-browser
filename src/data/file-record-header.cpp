@@ -2,10 +2,11 @@
 #include <stdexcept>
 
 #include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/strategy.h>
 
+#include "../internal-export.h"
 #include "../ntfs-common.h"
+#include "file-record-header.h"
 
 namespace NtfsBrowser
 {
@@ -127,12 +128,15 @@ const FileRecordHeader::Data*
 template struct FileRecordHeaderImpl<Strategy::NO_CACHE>;
 template struct FileRecordHeaderImpl<Strategy::FULL_CACHE>;
 
-// Class-level NTFS_BROWSER_EXPORT (on FileRecordHeader) does not reach a
-// member function template's own explicit instantiations: each needs the
-// macro again here, or a shared-build consumer cannot link against it.
-template NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::NO_CACHE>
-    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
-template NTFS_BROWSER_EXPORT FileRecordHeaderImpl<Strategy::FULL_CACHE>
-    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
+// Class-level NTFS_BROWSER_EXPORT_TESTS_ONLY (on FileRecordHeader) does not
+// reach a member function template's own explicit instantiations: each needs
+// the macro again here, or the unit tests cannot link against it on a shared
+// build.
+template NTFS_BROWSER_EXPORT_TESTS_ONLY
+    FileRecordHeaderImpl<Strategy::NO_CACHE> FileRecordHeader::Factory(
+        std::span<const BYTE> buffer, size_t sector_size);
+template NTFS_BROWSER_EXPORT_TESTS_ONLY
+    FileRecordHeaderImpl<Strategy::FULL_CACHE> FileRecordHeader::Factory(
+        std::span<const BYTE> buffer, size_t sector_size);
 
 }  // namespace NtfsBrowser

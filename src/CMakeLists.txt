@@ -54,7 +54,6 @@ set(${PROJECT_NAME}_H
     "../include/ntfs-browser/attr-base.h"
     "../include/ntfs-browser/disk-reader.h"
     "../include/ntfs-browser/efs.h"
-    "../include/ntfs-browser/file-reader.h"
     "../include/ntfs-browser/file-record.h"
     "../include/ntfs-browser/index-entry.h"
     "../include/ntfs-browser/log.h"
@@ -64,9 +63,6 @@ set(${PROJECT_NAME}_H
     "../include/ntfs-browser/ntfs-volume.h"
     "../include/ntfs-browser/strategy.h"
     "../include/ntfs-browser/volume-options.h"
-    "../include/ntfs-browser/win32-disk-reader.h"
-    "../include/ntfs-browser/file-record.h"
-    "../include/ntfs-browser/data/file-record-header.h"
     "attr/attribute-list.h"
     "attr/filename.h"
     "attr/header-non-resident.h"
@@ -85,6 +81,7 @@ set(${PROJECT_NAME}_H
     "attr-std-info.h"
     "attr-vol-info.h"
     "attr-vol-name.h"
+    "data/file-record-header.h"
     "data/index-block.h"
     "data/index-entry.h"
     "data/ntfs-bpb.h"
@@ -93,6 +90,8 @@ set(${PROJECT_NAME}_H
     "efs/efs-stream.h"
     "efs/fek.h"
     "efs/sector-cipher.h"
+    "file-reader.h"
+    "flag/file-record.h"
     "flag/filename-namespace.h"
     "flag/filename.h"
     "flag/index-entry.h"
@@ -100,8 +99,10 @@ set(${PROJECT_NAME}_H
     "index-block.h"
     "internal-export.h"
     "lznt1/decompress.h"
+    "mft-file-reference.h"
     "ntfs-common.h"
-    "utf.h")
+    "utf.h"
+    "win32-disk-reader.h")
 
 set(${PROJECT_NAME}_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")
 

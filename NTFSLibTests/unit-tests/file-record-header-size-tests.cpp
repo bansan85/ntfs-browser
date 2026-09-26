@@ -8,8 +8,9 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/data/file-record-header.h>
 #include <ntfs-browser/strategy.h>
+
+#include "data/file-record-header.h"
 
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::kFileRecordMagic;
