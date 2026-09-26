@@ -29,11 +29,7 @@ class AttrStdInfo : public RESIDENT
   AttrStdInfo& operator=(AttrStdInfo const& other) = delete;
   ~AttrStdInfo() override;
 
-  // FileRecord dispatches through both Strategy instantiations of this
-  // class via a runtime if/else on S, not `if constexpr`, so every
-  // FileRecord<S> must be a friend regardless of this instantiation's own S.
-  template <Strategy>
-  friend class FileRecord;
+  friend class FileRecord<S>;
 
  private:
   const Attr::StandardInformation& std_info_;

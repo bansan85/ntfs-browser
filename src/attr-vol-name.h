@@ -26,11 +26,7 @@ class AttrVolName : public RESIDENT
   AttrVolName& operator=(AttrVolName const& other) = delete;
   ~AttrVolName() override = default;
 
-  // NtfsVolume::Init() picks between both Strategy instantiations of this
-  // class via a runtime if/else on S, not `if constexpr`, so every
-  // NtfsVolume<S> must be a friend regardless of this instantiation's own S.
-  template <Strategy>
-  friend class NtfsVolume;
+  friend class NtfsVolume<S>;
 
  private:
   std::wstring name_;

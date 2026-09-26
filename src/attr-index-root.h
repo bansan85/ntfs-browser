@@ -26,11 +26,7 @@ class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntry>
   AttrIndexRoot& operator=(AttrIndexRoot const& other) = delete;
   ~AttrIndexRoot() override;
 
-  // FileRecord dispatches through both Strategy instantiations of this
-  // class via a runtime switch(S), not `if constexpr`, so every FileRecord<S>
-  // must be a friend regardless of this instantiation's own S.
-  template <Strategy>
-  friend class FileRecord;
+  friend class FileRecord<S>;
 
  private:
   const Attr::IndexRoot* index_root_;

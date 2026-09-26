@@ -143,7 +143,7 @@ void NtfsVolume<S>::Init()
   const auto& vec2 = vol.getAttr(AttrType::VOLUME_NAME);
   if (!vec2.empty())
   {
-    if (S == Strategy::NO_CACHE)
+    if constexpr (S == Strategy::NO_CACHE)
     {
       const std::wstring_view volname =
           reinterpret_cast<

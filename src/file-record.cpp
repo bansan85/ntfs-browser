@@ -924,25 +924,22 @@ std::wstring_view FileRecord<S>::GetFileName() const
        attr_list_[ATTR_INDEX(AttrType::FILE_NAME)])
   {
     const Filename* fn;
-    switch (S)
+    if constexpr (S == Strategy::NO_CACHE)
     {
-      case Strategy::NO_CACHE:
-      {
-        fn = reinterpret_cast<
-            const AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
-            fn_.get());
-        break;
-      }
-      case Strategy::FULL_CACHE:
-      {
-        fn = reinterpret_cast<
-            const AttrFileName<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
-            fn_.get());
-        break;
-      }
-      default:
-        assert(false);
-        return {};
+      fn = reinterpret_cast<
+          const AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+          fn_.get());
+    }
+    else if constexpr (S == Strategy::FULL_CACHE)
+    {
+      fn = reinterpret_cast<
+          const AttrFileName<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+          fn_.get());
+    }
+    else
+    {
+      assert(false);
+      return {};
     }
 
     if (fn->IsWin32Name() && !fn->GetFilename().empty())
@@ -964,14 +961,14 @@ ULONGLONG FileRecord<S>::GetFileSize() const noexcept
   {
     return 0;
   }
-  if (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     return reinterpret_cast<
                const AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                vec.front().get())
         ->GetFileSize();
   }
-  else if (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FULL_CACHE)
   {
     return reinterpret_cast<const AttrFileName<AttrResidentFullCache,
                                                Strategy::FULL_CACHE>*>(
@@ -991,14 +988,14 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
   // Standard Information attribute hold the most updated file time
   if (!vec.empty())
   {
-    if (S == Strategy::NO_CACHE)
+    if constexpr (S == Strategy::NO_CACHE)
     {
       return reinterpret_cast<
                  const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                  vec.front().get())
           ->GetFileTime(writeTm, createTm, accessTm);
     }
-    else if (S == Strategy::FULL_CACHE)
+    else if constexpr (S == Strategy::FULL_CACHE)
     {
       return reinterpret_cast<const AttrStdInfo<AttrResidentFullCache,
                                                 Strategy::FULL_CACHE>*>(
@@ -1053,39 +1050,34 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
 
   const std::vector<IndexEntry>* all_ie;
 
-  switch (S)
+  if constexpr (S == Strategy::NO_CACHE)
   {
-    case Strategy::NO_CACHE:
-    {
-      const auto* ir = reinterpret_cast<
-          const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(
-          vec.front().get());
+    const auto* ir = reinterpret_cast<
+        const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+        vec.front().get());
 
-      if (!ir->IsFileName())
-      {
-        return;
-      }
-      all_ie = ir;
-      break;
-    }
-    case Strategy::FULL_CACHE:
+    if (!ir->IsFileName())
     {
-      const auto* ir = reinterpret_cast<
-          const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
-          vec.front().get());
-
-      if (!ir->IsFileName())
-      {
-        return;
-      }
-      all_ie = ir;
-      break;
-    }
-    default:
-    {
-      assert(false);
       return;
     }
+    all_ie = ir;
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    const auto* ir = reinterpret_cast<
+        const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+        vec.front().get());
+
+    if (!ir->IsFileName())
+    {
+      return;
+    }
+    all_ie = ir;
+  }
+  else
+  {
+    assert(false);
+    return;
   }
 
   std::unordered_set<ULONGLONG> visitedVcns;
@@ -1231,7 +1223,7 @@ std::optional<IndexEntry>
 
   const std::vector<IndexEntry>* all_ie = nullptr;
 
-  if (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     const auto* ir = reinterpret_cast<
         const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(
@@ -1243,7 +1235,7 @@ std::optional<IndexEntry>
     }
     all_ie = ir;
   }
-  else if (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FULL_CACHE)
   {
     const auto* ir = reinterpret_cast<
         const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
@@ -1376,14 +1368,14 @@ bool FileRecord<S>::IsReadOnly() const noexcept
     return false;
   }
 
-  if (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                vec.front().get())
         ->IsReadOnly();
   }
-  else if (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FULL_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
@@ -1403,14 +1395,14 @@ bool FileRecord<S>::IsHidden() const noexcept
     return false;
   }
 
-  if (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                vec.front().get())
         ->IsHidden();
   }
-  else if (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FULL_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
@@ -1430,14 +1422,14 @@ bool FileRecord<S>::IsSystem() const noexcept
     return false;
   }
 
-  if (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                vec.front().get())
         ->IsSystem();
   }
-  else if (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FULL_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
@@ -1457,14 +1449,14 @@ bool FileRecord<S>::IsCompressed() const noexcept
     return false;
   }
 
-  if (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                vec.front().get())
         ->IsCompressed();
   }
-  else if (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FULL_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
@@ -1484,14 +1476,14 @@ bool FileRecord<S>::IsEncrypted() const noexcept
     return false;
   }
 
-  if (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                vec.front().get())
         ->IsEncrypted();
   }
-  else if (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FULL_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
@@ -1511,14 +1503,14 @@ bool FileRecord<S>::IsSparse() const noexcept
     return false;
   }
 
-  if (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NO_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                vec.front().get())
         ->IsSparse();
   }
-  else if (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FULL_CACHE)
   {
     return reinterpret_cast<
                const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
