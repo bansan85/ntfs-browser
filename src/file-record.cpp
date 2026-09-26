@@ -58,6 +58,9 @@ FileRecord<S>::FileRecord(const NtfsVolume<S>& volume) : volume_(volume)
 }
 
 template <Strategy S>
+FileRecord<S>::FileRecord(FileRecord&& other) noexcept = default;
+
+template <Strategy S>
 FileRecord<S>::~FileRecord()
 {
 }

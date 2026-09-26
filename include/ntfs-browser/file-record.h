@@ -53,7 +53,10 @@ class NTFS_BROWSER_EXPORT FileRecord
 {
  public:
   explicit FileRecord(const NtfsVolume<S>& volume);
-  FileRecord(FileRecord&& other) noexcept = default;
+  // Defined out of line (= default), so the move needs FileRecordHeaderImpl<S>
+  // complete only in file-record.cpp, not in every other TU that includes
+  // this header.
+  FileRecord(FileRecord&& other) noexcept;
   FileRecord(FileRecord const& other) = delete;
   FileRecord& operator=(FileRecord&& other) noexcept = delete;
   FileRecord& operator=(FileRecord const& other) = delete;
