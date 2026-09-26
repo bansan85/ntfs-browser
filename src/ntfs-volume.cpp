@@ -527,7 +527,24 @@ bool NtfsVolume<S>::ParseBootSector()
     return false;
   }
 
-  cluster_size_ = sector_size_ * bpb->sectors_per_cluster;
+  const char spc = static_cast<char>(bpb->sectors_per_cluster);
+  if (spc >= 0)
+  {
+    cluster_size_ = sector_size_ * static_cast<unsigned char>(spc);
+  }
+  else
+  {
+    // Windows 10 1903+ (build 18362) large-cluster encoding: a negative byte
+    // is -log2(sectors per cluster), not a literal sector count, letting a
+    // single BYTE field reach cluster sizes above 255 sectors (up to 2 MiB
+    // at the common 512-byte sector size).
+    if (spc < -12)
+    {
+      LogError("sectors_per_cluster magnitude out of range");
+      return false;
+    }
+    cluster_size_ = sector_size_ * (1U << static_cast<unsigned char>(-spc));
+  }
   LogInfo("Cluster Size = {} bytes", cluster_size_);
 
   if (cluster_size_ == 0)
