@@ -1,0 +1,91 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "shared",
+      "displayName": "Shared",
+      "inherits": "base",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": "ON"
+      }
+    },
+    {
+      "name": "static",
+      "displayName": "Static",
+      "inherits": "base",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": "OFF"
+      }
+    },
+    {
+      "name": "vcpkg-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "H:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/vcpkg-triplets"
+      }
+    },
+    {
+      "name": "shared-vcpkg",
+      "displayName": "Shared (vcpkg, x64-windows)",
+      "inherits": "vcpkg-base",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "VCPKG_HOST_TRIPLET": "x64-windows"
+      }
+    },
+    {
+      "name": "static-vcpkg",
+      "displayName": "Static /MD (vcpkg, x64-windows-static-md)",
+      "inherits": "vcpkg-base",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": "OFF",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+        "VCPKG_HOST_TRIPLET": "x64-windows-static-md"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "build-base",
+      "hidden": true,
+      "jobs": 16
+    },
+    {
+      "name": "shared",
+      "configurePreset": "shared",
+      "inherits": "build-base"
+    },
+    {
+      "name": "static",
+      "configurePreset": "static",
+      "inherits": "build-base"
+    },
+    {
+      "name": "shared-vcpkg",
+      "configurePreset": "shared-vcpkg",
+      "inherits": "build-base"
+    },
+    {
+      "name": "static-vcpkg",
+      "configurePreset": "static-vcpkg",
+      "inherits": "build-base"
+    }
+  ]
+}
