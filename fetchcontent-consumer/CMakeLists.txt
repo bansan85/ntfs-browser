@@ -28,6 +28,8 @@ set(NTFS_BROWSER_ENABLE_EFS_BCRYPT
 # network. Left unset, it falls back to a real GIT_REPOSITORY fetch, which is
 # the FetchContent path an external consumer actually takes.
 if(NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR)
+  file(TO_CMAKE_PATH "${NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR}"
+       NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR)
   FetchContent_Declare(ntfs-browser SOURCE_DIR
                                     "${NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR}")
 else()
