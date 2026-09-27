@@ -137,6 +137,10 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
   // walks, regardless of the name passed in.
   (void)fr.FindStream(kNamedDataStreamName);
 
+  // An empty name exercises FindStream()'s unnamed-stream branch, which the
+  // call above (a fixed non-empty name) never reaches.
+  (void)fr.FindStream(L"");
+
   // Unlike TraverseSubEntries() above, FindSubEntry() actually compares
   // names, exercising a real B+-tree sub-node descent.
   (void)fr.FindSubEntry(kGapCollationSearchName);
