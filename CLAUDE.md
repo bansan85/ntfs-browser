@@ -12,7 +12,7 @@ Windows and MSVC are the primary target. The MFC demo apps, the unit tests, and 
 
 ```
 cmake -S . -B build
-cmake --build build --config Debug
+cmake --build build --config Debug --parallel
 ```
 
 An existing configured `build/` directory (Visual Studio generator) is already present in this repo. You can also open `build/NtfsBrowser.slnx` in Visual Studio.
@@ -21,7 +21,7 @@ An existing configured `build/` directory (Visual Studio generator) is already p
 
 ```
 cmake --preset static
-cmake --build --preset static
+cmake --build --preset static --parallel
 ```
 
 `BUILD_SHARED_LIBS` (default OFF) selects a static or shared `NtfsBrowser` lib. spdlog follows it, and is linked PRIVATE: it never appears in a public header. Crypto++ (`cryptopp-cmake` over `3rdparty/cryptopp`) does not follow it: it is always static, and linked PRIVATE too. On MSVC the root [CMakeLists.txt](CMakeLists.txt) works around two Crypto++ 8.9 problems: MASM object directories the Visual Studio generator does not create, and `stdext` iterators the newest MSVC STL dropped ([cmake/cryptopp-stdext-compat.h](cmake/cryptopp-stdext-compat.h)).
@@ -34,14 +34,14 @@ Source lists are explicit, not globbed. A new file MUST be added to [src/CMakeLi
 
 CI ([.github/workflows/cmake.yml](.github/workflows/cmake.yml)) builds Debug and Release, static and shared, on `windows-latest`. It also builds each reduced configuration once: one feature option off, or both EFS backends off. Only those reduced legs run `ctest`. The full-featured legs never run the tests, so they SHOULD run locally before a push. A second job builds [fetchcontent-consumer/](fetchcontent-consumer/): a separate project that pulls this repo in through FetchContent, shared, with every feature ON.
 
-The `NtfsBrowser` library itself, and the `NtfsFuzzerAfl` target ([NTFSLibTests/fuzz/](NTFSLibTests/fuzz/)), also configure and build on Linux with plain GCC: `cmake -S . -B build-linux && cmake --build build-linux`, checked with GCC 15 under WSL. `include/ntfs-browser/win-types.h` shims the handful of Windows typedefs (`BYTE`, `DWORD`, `LARGE_INTEGER`, ...) that the on-disk struct layouts and the public API are expressed in. Real Win32 API usage — `Win32DiskReader`, and drive-letter/path-based `NtfsVolume`/`FileReader` construction — is `#ifdef _WIN32`-guarded out. Everything else — the MFC demo apps, the unit tests, and the clang-oriented `NtfsFuzzer` — stays Windows/MSVC-only. CMake skips them (`if(WIN32)`) on other platforms.
+The `NtfsBrowser` library itself, and the `NtfsFuzzerAfl` target ([NTFSLibTests/fuzz/](NTFSLibTests/fuzz/)), also configure and build on Linux with plain GCC: `cmake -S . -B build-linux && cmake --build build-linux --parallel`, checked with GCC 15 under WSL. `include/ntfs-browser/win-types.h` shims the handful of Windows typedefs (`BYTE`, `DWORD`, `LARGE_INTEGER`, ...) that the on-disk struct layouts and the public API are expressed in. Real Win32 API usage — `Win32DiskReader`, and drive-letter/path-based `NtfsVolume`/`FileReader` construction — is `#ifdef _WIN32`-guarded out. Everything else — the MFC demo apps, the unit tests, and the clang-oriented `NtfsFuzzer` — stays Windows/MSVC-only. CMake skips them (`if(WIN32)`) on other platforms.
 
 ## Tests
 
 Tests use Catch2 (vendored under `3rdparty/Catch2`). CTest registers them via `catch_discover_tests`.
 
 ```
-cmake --build build --config Debug --target NtfsBrowserTests
+cmake --build build --config Debug --target NtfsBrowserTests --parallel
 ctest --test-dir build -C Debug
 ```
 
