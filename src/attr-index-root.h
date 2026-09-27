@@ -26,7 +26,8 @@ class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntry>
   AttrIndexRoot& operator=(AttrIndexRoot const& other) = delete;
   ~AttrIndexRoot() override;
 
-  friend class FileRecord<S>;
+  template <Strategy>
+  friend class FileRecord;
 
  private:
   const Attr::IndexRoot* index_root_;

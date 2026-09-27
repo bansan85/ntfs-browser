@@ -26,7 +26,8 @@ class AttrVolName : public RESIDENT
   AttrVolName& operator=(AttrVolName const& other) = delete;
   ~AttrVolName() override = default;
 
-  friend class NtfsVolume<S>;
+  template <Strategy>
+  friend class NtfsVolume;
 
  private:
   std::wstring name_;

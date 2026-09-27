@@ -24,7 +24,8 @@ class AttrVolInfo : public RESIDENT
 
   ~AttrVolInfo() override;
 
-  friend class NtfsVolume<S>;
+  template <Strategy>
+  friend class NtfsVolume;
 
  private:
   const Attr::VolumeInformation& vol_info_;

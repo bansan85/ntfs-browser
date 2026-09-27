@@ -29,7 +29,8 @@ class AttrStdInfo : public RESIDENT
   AttrStdInfo& operator=(AttrStdInfo const& other) = delete;
   ~AttrStdInfo() override;
 
-  friend class FileRecord<S>;
+  template <Strategy>
+  friend class FileRecord;
 
  private:
   const Attr::StandardInformation& std_info_;
