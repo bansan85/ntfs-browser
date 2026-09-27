@@ -31,7 +31,6 @@ std::vector<fs::path> ListRegressionTestcases()
   return files;
 }
 
-
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
 inline constexpr bool kDecompressionEnabled = true;
 #else
@@ -141,55 +140,54 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
         {"surrogate_pair_names",
          {true,
           kDecompressionEnabled
-              ? MessageList{
-                    "File Name: \xF0\x93\x82\x80",
-                    "File Name: \xF0\x9F\x90\x9C",
-                    "File Name: "
-                    "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D"
-                    "\xF0\x9F\x91\xA7\xE2\x80\x8D\xF0\x9F\x91\xA6",
-                    "File Name: \xF0\xA0\xAE\xB7",
-                    "File Permission: Directory", "File Permission: File",
-                    "Decompressed compression unit 0 into 1024 bytes"}
-              : MessageList{
-                    "File Name: \xF0\x93\x82\x80",
-                    "File Name: \xF0\x9F\x90\x9C",
-                    "File Permission: Directory", "File Permission: File",
-                    "Compressed attribute rejected: decompression is not "
-                    "compiled in."}}},
+              ? MessageList{"File Name: \xF0\x93\x82\x80",
+                            "File Name: \xF0\x9F\x90\x9C",
+                            "File Name: "
+                            "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2"
+                            "\x80\x8D"
+                            "\xF0\x9F\x91\xA7\xE2\x80\x8D\xF0\x9F\x91\xA6",
+                            "File Name: \xF0\xA0\xAE\xB7",
+                            "File Permission: Directory",
+                            "File Permission: File",
+                            "Decompressed compression unit 0 into 1024 bytes"}
+              : MessageList{"File Name: \xF0\x93\x82\x80",
+                            "File Name: \xF0\x9F\x90\x9C",
+                            "File Permission: Directory",
+                            "File Permission: File",
+                            "Compressed attribute rejected: decompression is "
+                            "not "
+                            "compiled in."}}},
         {"corrupt_compressed_index_allocation",
          {kDecompressionEnabled,
           {"Cannot decompress compression unit 0",
            "LZNT1: back-reference before start of chunk.",
            "per compression unit", "Compressed size = "}}},
         {"compressed_index_allocation_comp_unit_size_out_of_range",
-         {true,
-          kDecompressionEnabled
-              ? MessageList{"Compression unit size is out of range.",
-                            "Attribute Parse error: 0x00A0"}
-              : MessageList{
-                    "Attribute Parse error: 0x00A0",
-                    "Compressed attribute rejected: decompression is not "
-                    "compiled in."}}},
+         {true, kDecompressionEnabled
+                    ? MessageList{"Compression unit size is out of range.",
+                                  "Attribute Parse error: 0x00A0"}
+                    : MessageList{"Attribute Parse error: 0x00A0",
+                                  "Compressed attribute rejected: "
+                                  "decompression is not "
+                                  "compiled in."}}},
         {"compressed_index_allocation_oversized_compression_unit",
-         {true,
-          kDecompressionEnabled
-              ? MessageList{"Compression unit size is implausibly large.",
-                            "Attribute Parse error: 0x00A0"}
-              : MessageList{
-                    "Attribute Parse error: 0x00A0",
-                    "Compressed attribute rejected: decompression is not "
-                    "compiled in."}}},
+         {true, kDecompressionEnabled
+                    ? MessageList{"Compression unit size is implausibly large.",
+                                  "Attribute Parse error: 0x00A0"}
+                    : MessageList{"Attribute Parse error: 0x00A0",
+                                  "Compressed attribute rejected: "
+                                  "decompression is not "
+                                  "compiled in."}}},
         {"compressed_index_allocation_misaligned_start_vcn",
          {true,
           kDecompressionEnabled
-              ? MessageList{
-                    "Compressed attribute start VCN is not compression "
-                    "unit aligned.",
-                    "Attribute Parse error: 0x00A0"}
-              : MessageList{
-                    "Attribute Parse error: 0x00A0",
-                    "Compressed attribute rejected: decompression is not "
-                    "compiled in."}}},
+              ? MessageList{"Compressed attribute start VCN is not compression "
+                            "unit aligned.",
+                            "Attribute Parse error: 0x00A0"}
+              : MessageList{"Attribute Parse error: 0x00A0",
+                            "Compressed attribute rejected: decompression is "
+                            "not "
+                            "compiled in."}}},
         {"compressed_index_allocation_missing_compressed_size",
          {true,
           {"Compressed attribute total_size too small for its compressed "
@@ -246,8 +244,7 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
          {true,
           {"Cannot calulate number of IndexBlocks",
            "Index Block: sub-node vcn out of bounds"}}},
-        {"index_root_view_not_supported",
-         {true, {"Index View not supported"}}},
+        {"index_root_view_not_supported", {true, {"Index View not supported"}}},
         {"index_block_usn_mismatch",
          {true, {"Index Block parse error: Update Sequence Number"}}},
         {"index_block_entry_header_exceeds_bounds",
@@ -282,14 +279,11 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
          {true,
           {"Index Entry stream exceeds entry bounds",
            "Index Root attribute has a malformed index entry."}}},
-        {"file_record_read_failure",
-         {true, {"Cannot read file record 5"}}},
+        {"file_record_read_failure", {true, {"Cannot read file record 5"}}},
         {"file_record_invalid_magic", {true, {"Invalid file record"}}},
-        {"file_record_usn_mismatch",
-         {true, {"Update Sequence Number error"}}},
+        {"file_record_usn_mismatch", {true, {"Update Sequence Number error"}}},
         {"boot_sector_read_failure", {true, {"Read boot sector error"}}},
-        {"file_reader_read_failure",
-         {true, {"Cannot read file at adress"}}},
+        {"file_reader_read_failure", {true, {"Cannot read file at adress"}}},
         {"traverse_attrs_empty_callback",
          {true, {"TraverseAttrs() called with an empty callback"}}},
         {"file_record_unhandled_attribute",
@@ -309,8 +303,7 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
         {"corrupt_mft_record_volume_ok", {true, {"Invalid file record"}}},
         {"efs_stream_too_large",
          {true, {"$EFS stream is too large: 131072 bytes."}}},
-        {"efs_stream_read_failure",
-         {true, {"Cannot read the $EFS stream."}}},
+        {"efs_stream_read_failure", {true, {"Cannot read the $EFS stream."}}},
         {"data_flagged_compressed_and_encrypted",
          {true,
           {"A $DATA stream is flagged both compressed and encrypted; NTFS "
@@ -331,19 +324,16 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
         {"root_record_deleted_skips_parse_attrs",
          {true, {"ParseAttrs() skipped: file record 5 is deleted"}}},
         {"attribute_walk_no_end_marker",
-         {true,
-          {"Attribute walk ended without a terminating end marker."}}},
+         {true, {"Attribute walk ended without a terminating end marker."}}},
         {"index_root_entry_ab_match",
          {true, {"FindSubEntry() found entry in Index Root"}}},
-        {"volume_name_resident_present",
-         {true, {"NTFS volume name: TESTVOL"}}},
+        {"volume_name_resident_present", {true, {"NTFS volume name: TESTVOL"}}},
         {"attribute_list_invalid_attr_type",
          {true, {"Attribute List parse error (al_record.attr_type)."}}},
         {"attribute_list_extension_parse_attrs_fail",
          {true, {"Attribute List parse error (ParseAttrs)."}}},
         {"attribute_list_zero_record_size",
-         {true,
-          {"Attribute List with zero record size has endless loop."}}},
+         {true, {"Attribute List with zero record size has endless loop."}}},
         {"attribute_list_record_size_too_small_on_root",
          {true,
           {"Attribute List: record_size 5 is smaller than the entry "
@@ -457,7 +447,8 @@ TEST_CASE("NtfsFuzzerAfl does not crash on saved regression testcases",
       CHECK(result.exit_code == 0);
 
       const auto it = kExpectedErrorMessages.find(file.filename().string());
-      if (it != kExpectedErrorMessages.end() && it->second.check_expected_messages)
+      if (it != kExpectedErrorMessages.end() &&
+          it->second.check_expected_messages)
       {
         INFO("captured output:\n" << result.output);
         for (const std::string_view message : it->second.messages)
@@ -468,8 +459,8 @@ TEST_CASE("NtfsFuzzerAfl does not crash on saved regression testcases",
           {
             break;
           }
-          CHECK_THAT(result.output, Catch::Matchers::ContainsSubstring(
-                                         std::string(message)));
+          CHECK_THAT(result.output,
+                     Catch::Matchers::ContainsSubstring(std::string(message)));
         }
       }
     }

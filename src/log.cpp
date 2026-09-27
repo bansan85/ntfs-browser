@@ -44,12 +44,9 @@ constexpr std::string_view kFilePattern = "[%Y-%m-%d %H:%M:%S.%e] [%l] %v";
 
 // Level names --log accepts, paired with the level each one selects.
 constexpr frozen::unordered_map<std::string_view, Log::Level, 6> kLevelNames{
-    {"off", Log::Level::kOff},
-    {"error", Log::Level::kError},
-    {"warn", Log::Level::kWarn},
-    {"info", Log::Level::kInfo},
-    {"debug", Log::Level::kDebug},
-    {"trace", Log::Level::kTrace}};
+    {"off", Log::Level::kOff},     {"error", Log::Level::kError},
+    {"warn", Log::Level::kWarn},   {"info", Log::Level::kInfo},
+    {"debug", Log::Level::kDebug}, {"trace", Log::Level::kTrace}};
 
 // Target names --log accepts.
 constexpr std::string_view kConsoleTarget = "console";

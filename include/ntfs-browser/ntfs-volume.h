@@ -42,7 +42,8 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   // from an already-open IDiskReader there. options is fixed for the
   // volume's lifetime; read it back through GetOptions().
   explicit NtfsVolume(_TCHAR volume, const VolumeOptions& options = {});
-  explicit NtfsVolume(std::wstring_view path, const VolumeOptions& options = {});
+  explicit NtfsVolume(std::wstring_view path,
+                      const VolumeOptions& options = {});
 #endif
   // Uses an already-open reader instead of opening a path (eg. an in-memory
   // or sequential test double, which have no real path to open).

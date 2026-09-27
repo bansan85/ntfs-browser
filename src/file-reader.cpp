@@ -1,7 +1,8 @@
+#include "file-reader.h"
+
 #include <algorithm>
 #include <cstring>
 
-#include "file-reader.h"
 #include "internal-export.h"
 #include "ntfs-common.h"
 

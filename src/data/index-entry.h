@@ -1,9 +1,9 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <optional>
 #include <string_view>
-
-#include <ntfs-browser/win-types.h>
 
 #include "../flag/index-entry.h"
 

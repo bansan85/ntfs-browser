@@ -1,3 +1,5 @@
+#include "file-record-header.h"
+
 #include <cstring>
 #include <stdexcept>
 
@@ -6,7 +8,6 @@
 
 #include "../internal-export.h"
 #include "../ntfs-common.h"
-#include "file-record-header.h"
 
 namespace NtfsBrowser
 {
@@ -132,11 +133,10 @@ template struct FileRecordHeaderImpl<Strategy::FULL_CACHE>;
 // reach a member function template's own explicit instantiations: each needs
 // the macro again here, or the unit tests cannot link against it on a shared
 // build.
+template NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeaderImpl<Strategy::NO_CACHE>
+    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
 template NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::NO_CACHE> FileRecordHeader::Factory(
-        std::span<const BYTE> buffer, size_t sector_size);
-template NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::FULL_CACHE> FileRecordHeader::Factory(
-        std::span<const BYTE> buffer, size_t sector_size);
+    FileRecordHeaderImpl<Strategy::FULL_CACHE>
+    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
 
 }  // namespace NtfsBrowser

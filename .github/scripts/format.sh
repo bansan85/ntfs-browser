@@ -11,10 +11,6 @@ for i in **/CMakeLists.txt; do
   cmake-format -i "$i" || exit 1
 done
 
-for i in {**/*.cpp,**/*.h}; do
-  case "$i" in 3rdparty/*) continue ;; esac
-  echo "clang-format $i... "
-  clang-format -style=file "$i" -i || exit 1
-done
+find . \( -path ./3rdparty -o -path ./.claude -o -path ./build \) -prune -o \( -name '*.cpp' -o -name '*.h' \) -exec clang-format -style=file -i {} +
 
 exit 0
