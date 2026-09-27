@@ -37,6 +37,13 @@ inline constexpr bool kDecompressionEnabled = true;
 inline constexpr bool kDecompressionEnabled = false;
 #endif
 
+#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
+    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
+inline constexpr bool kEfsEnabled = true;
+#else
+inline constexpr bool kEfsEnabled = false;
+#endif
+
 inline constexpr std::size_t kMaxExpectedMessages = 7;
 using MessageList = std::array<std::string_view, kMaxExpectedMessages>;
 
@@ -302,15 +309,16 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
          {true, {"FindStream() found the unnamed stream"}}},
         {"corrupt_mft_record_volume_ok", {true, {"Invalid file record"}}},
         {"efs_stream_too_large",
-         {true, {"$EFS stream is too large: 131072 bytes."}}},
-        {"efs_stream_read_failure", {true, {"Cannot read the $EFS stream."}}},
+         {kEfsEnabled, {"$EFS stream is too large: 131072 bytes."}}},
+        {"efs_stream_read_failure",
+         {kEfsEnabled, {"Cannot read the $EFS stream."}}},
         {"data_flagged_compressed_and_encrypted",
          {true,
           {"A $DATA stream is flagged both compressed and encrypted; NTFS "
            "never combines them. Reading it undecrypted."}}},
         {"resident_data_flagged_encrypted",
          {true, {"A resident $DATA is flagged encrypted. Read as is."}}},
-        {"efs_stream_malformed", {true, {"Malformed $EFS stream."}}},
+        {"efs_stream_malformed", {kEfsEnabled, {"Malformed $EFS stream."}}},
         {"standard_information_must_be_resident",
          {true, {"Standard Information attribute must be resident."}}},
         {"volume_name_must_be_resident",

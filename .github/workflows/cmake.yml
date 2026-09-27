@@ -29,7 +29,6 @@ jobs:
             build_type: Debug
             build_shared_libs: OFF
             preset: no-decompression
-            run_tests: true
           - name: windows-no-efs-cryptopp
             cxx: cl
             os: windows-latest
@@ -37,7 +36,6 @@ jobs:
             build_type: Debug
             build_shared_libs: OFF
             preset: efs-bcrypt-only
-            run_tests: true
           - name: windows-no-efs-bcrypt
             cxx: cl
             os: windows-latest
@@ -45,7 +43,6 @@ jobs:
             build_type: Debug
             build_shared_libs: OFF
             preset: efs-cryptopp-only
-            run_tests: true
           - name: windows-no-efs
             cxx: cl
             os: windows-latest
@@ -53,7 +50,6 @@ jobs:
             build_type: Debug
             build_shared_libs: OFF
             preset: no-efs
-            run_tests: true
           - name: linux-gcc
             cxx: g++
             os: ubuntu-latest
@@ -89,7 +85,6 @@ jobs:
           cmake --preset ${{ matrix.preset }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} || exit 1
           cmake --build --preset ${{ matrix.preset }} || exit 1
       - name: ctest
-        if: matrix.run_tests
         run: ctest --output-on-failure --test-dir build/${{ matrix.preset }} --parallel 16 || exit 1
   fetchcontent-consumer:
     runs-on: windows-latest
