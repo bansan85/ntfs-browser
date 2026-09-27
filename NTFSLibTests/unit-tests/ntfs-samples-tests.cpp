@@ -23,6 +23,7 @@
 
 #include "attr-file-name.h"
 #include "attr-resident.h"
+#include "corpus-test-support.h"
 #include "partition-disk-reader.h"
 
 using NtfsBrowser::AttrBase;
@@ -39,22 +40,18 @@ using NtfsBrowser::Enum::MftIdx;
 namespace
 {
 
-// The "ntfs-samples" forensic test image corpus, documented in
-// H:\repos\ntfs-database\ntfs-samples\ReadMe.md. Each image is checked into
-// that repo as a gzip/rar archive - too large to check into this one too -
-// decompressed ahead of time into these two drives. Not part of this repo:
-// hardcoded here for now.
-const std::filesystem::path kFDrive = LR"(F:\ntfs-samples)";
-const std::filesystem::path kEDrive = LR"(E:\ntfs-samples)";
-
-const std::filesystem::path kPtrnImage = kFDrive / "ntfs-ptrn.raw";
-const std::filesystem::path kRamslackImage = kFDrive / "ntfs-ramslack.raw";
-const std::filesystem::path kLastaccessImage = kFDrive / "ntfs-lastaccess.raw";
-const std::filesystem::path k2mImage = kFDrive / "ntfs-2m.raw";
-const std::filesystem::path kSiVsFnImage = kFDrive / "ntfs-si-vs-fn.raw";
-const std::filesystem::path kNtfsImage = kFDrive / "ntfs.raw";
-const std::filesystem::path kFragmentedMftImage =
-    kEDrive / "ntfs_extremely_fragmented_mft.raw";
+// The "ntfs-samples" forensic test image corpus, documented in that repo's
+// ReadMe.md. Each image is checked in there as a gzip/rar archive, too large
+// to check into this one too.
+const std::filesystem::path& kSamplesDir = NtfsBrowserTests::kNtfsSamplesDir;
+const std::filesystem::path kPtrnImage = kSamplesDir / "ntfs-ptrn.raw";
+const std::filesystem::path kRamslackImage = kSamplesDir / "ntfs-ramslack.raw";
+const std::filesystem::path kLastaccessImage =
+    kSamplesDir / "ntfs-lastaccess.raw";
+const std::filesystem::path k2mImage = kSamplesDir / "ntfs-2m.raw";
+const std::filesystem::path kSiVsFnImage = kSamplesDir / "ntfs-si-vs-fn.raw";
+// 64 GiB once decompressed: CI leaves ntfs.tgz compressed, and its test skips.
+const std::filesystem::path kNtfsImage = kSamplesDir / "ntfs.raw";
 
 // Ticks (100 ns units) in one second: FILETIME's own unit.
 constexpr ULONGLONG kTicksPerSecond = 10'000'000;
@@ -241,10 +238,7 @@ std::tuple<WORD, WORD, WORD> ToDate(const FILETIME& ft)
 TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
           "[ntfs-samples][integration]")
 {
-  if (!std::filesystem::exists(k2mImage))
-  {
-    SKIP("ntfs-2m.raw not present: " << k2mImage.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(k2mImage);
 
   NtfsVolume<Strategy::NO_CACHE> volume(
       OpenWholeDiskImage(k2mImage, kSmallImagePartitionOffset));
@@ -268,10 +262,7 @@ TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
 TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
           "[ntfs-samples][integration][slack]")
 {
-  if (!std::filesystem::exists(kPtrnImage))
-  {
-    SKIP("ntfs-ptrn.raw not present: " << kPtrnImage.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(kPtrnImage);
 
   NtfsVolume<Strategy::NO_CACHE> volume(
       OpenWholeDiskImage(kPtrnImage, kSmallImagePartitionOffset));
@@ -294,10 +285,7 @@ TEST_CASE(
     "Finds the RAM slack and cluster slack PTRN pattern (ntfs-ramslack.raw)",
     "[ntfs-samples][integration][slack]")
 {
-  if (!std::filesystem::exists(kRamslackImage))
-  {
-    SKIP("ntfs-ramslack.raw not present: " << kRamslackImage.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(kRamslackImage);
 
   NtfsVolume<Strategy::NO_CACHE> volume(
       OpenWholeDiskImage(kRamslackImage, kSmallImagePartitionOffset));
@@ -331,10 +319,7 @@ TEST_CASE(
     "access time (ntfs-lastaccess.raw)",
     "[ntfs-samples][integration][timestamps]")
 {
-  if (!std::filesystem::exists(kLastaccessImage))
-  {
-    SKIP("ntfs-lastaccess.raw not present: " << kLastaccessImage.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(kLastaccessImage);
 
   NtfsVolume<Strategy::NO_CACHE> volume(
       OpenWholeDiskImage(kLastaccessImage, kSmallImagePartitionOffset));
@@ -368,10 +353,7 @@ TEST_CASE(
     "different creation date for /test/test.txt (ntfs-si-vs-fn.raw)",
     "[ntfs-samples][integration][timestamps]")
 {
-  if (!std::filesystem::exists(kSiVsFnImage))
-  {
-    SKIP("ntfs-si-vs-fn.raw not present: " << kSiVsFnImage.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(kSiVsFnImage);
 
   NtfsVolume<Strategy::NO_CACHE> volume(
       OpenWholeDiskImage(kSiVsFnImage, kSmallImagePartitionOffset));
@@ -469,14 +451,14 @@ TEST_CASE(
     "(ntfs_extremely_fragmented_mft.raw)",
     "[ntfs-samples][integration][fragmented-mft]")
 {
-  if (!std::filesystem::exists(kFragmentedMftImage))
+  const std::filesystem::path& image = NtfsBrowserTests::kFragmentedMftImage;
+  if (!std::filesystem::exists(image))
   {
-    SKIP("ntfs_extremely_fragmented_mft.raw not present: "
-         << kFragmentedMftImage.string());
+    SKIP("ntfs_extremely_fragmented_mft.raw not present: " << image.string());
   }
 
   NtfsVolume<Strategy::NO_CACHE> volume(
-      OpenWholeDiskImage(kFragmentedMftImage, kLargeImagePartitionOffset));
+      OpenWholeDiskImage(image, kLargeImagePartitionOffset));
   REQUIRE(volume.IsVolumeOK());
 
   // ReadMe.md: these are the file records ($MFT's own base record, plus its

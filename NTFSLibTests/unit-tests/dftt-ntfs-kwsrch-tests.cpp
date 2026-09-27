@@ -12,6 +12,8 @@
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "corpus-test-support.h"
+
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::Mask;
@@ -25,10 +27,9 @@ namespace
 // DFTT test #3 ("NTFS Keyword Search #1", http://dftt.sf.net): an 8 MB NTFS
 // file system holding ten ASCII search terms, each placed to exercise one
 // combination of resident/non-resident, allocated/deleted, and plain/
-// alternate-data-stream content. Not part of this repo: hardcoded here for
-// now.
+// alternate-data-stream content.
 const std::filesystem::path kDfttImage =
-    LR"(H:\repos\ntfs-database\dftt\3-kwsrch-ntfs\ntfs-img-kw-1.dd)";
+    NtfsBrowserTests::kDfttDir / "3-kwsrch-ntfs" / "ntfs-img-kw-1.dd";
 
 // One DFTT test #3 search-term case, addressed by its own MFT record number
 // instead of by path (index.html gives the search term and the file it
@@ -73,10 +74,7 @@ void CheckReadsKeywordFile(const NtfsVolume<Strategy::NO_CACHE>& volume,
 TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
           "[dftt][integration]")
 {
-  if (!std::filesystem::exists(kDfttImage))
-  {
-    SKIP("DFTT test image not present: " << kDfttImage.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(kDfttImage);
 
   NtfsVolume<Strategy::NO_CACHE> volume(kDfttImage.wstring());
   REQUIRE(volume.IsVolumeOK());

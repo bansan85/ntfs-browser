@@ -12,6 +12,8 @@ set(
   "test-log-sink.cpp"
   "md5-test-support.h"
   "md5-test-support.cpp"
+  "corpus-test-support.h"
+  "corpus-test-support.cpp"
   "nps-ntfs1-test-support.h"
   "nps-ntfs1-test-support.cpp"
   "nps-ntfs1-tests.cpp"
@@ -143,6 +145,82 @@ target_compile_definitions(
     NTFS_FUZZ_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data"
     NTFS_EFS_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
 )
+
+# Forensic image corpora (corpus-test-support.h), outside this repo.
+# .github/scripts/fetch-test-data.py fills NTFS_BROWSER_TEST_DATA_DIR. Each
+# per-corpus variable, when set, overrides its default under that root; so does
+# an environment variable of the same name.
+set(
+  NTFS_BROWSER_TEST_DATA_DIR
+  "${PROJECT_SOURCE_DIR}/test-data"
+  CACHE PATH
+  "Root of the forensic image corpora"
+)
+set(
+  NTFS_BROWSER_TEST_DFTT_DIR
+  ""
+  CACHE PATH
+  "DFTT images (empty: <NTFS_BROWSER_TEST_DATA_DIR>/dftt)"
+)
+set(
+  NTFS_BROWSER_TEST_NPS_NTFS1_DIR
+  ""
+  CACHE PATH
+  "nps-2009-ntfs1 raw image (empty: <NTFS_BROWSER_TEST_DATA_DIR>/nps-2009-ntfs1)"
+)
+set(
+  NTFS_BROWSER_TEST_NTFS_SAMPLES_DIR
+  ""
+  CACHE PATH
+  "ntfs-samples raw images (empty: <NTFS_BROWSER_TEST_DATA_DIR>/ntfs-samples)"
+)
+set(
+  NTFS_BROWSER_TEST_FRAGMENTED_MFT_IMAGE
+  ""
+  CACHE FILEPATH
+  "ntfs_extremely_fragmented_mft.raw (empty: in the ntfs-samples directory)"
+)
+option(
+  NTFS_BROWSER_REQUIRE_TEST_DATA
+  "Fail, instead of skip, a corpus test whose image fetch-test-data.py provides"
+  OFF
+)
+
+set(test_DFTT_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/dftt")
+set(test_NPS_NTFS1_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/nps-2009-ntfs1")
+set(test_NTFS_SAMPLES_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/ntfs-samples")
+# The cache variable wins, then the same-named environment variable, then the
+# default. The environment lets one machine's paths reach every preset.
+foreach(
+  name
+  IN
+  ITEMS DFTT_DIR NPS_NTFS1_DIR NTFS_SAMPLES_DIR FRAGMENTED_MFT_IMAGE
+)
+  # Its default depends on NTFS_SAMPLES_DIR, resolved by the previous pass.
+  if(name STREQUAL "FRAGMENTED_MFT_IMAGE")
+    set(
+      test_${name}
+      "${test_NTFS_SAMPLES_DIR}/ntfs_extremely_fragmented_mft.raw"
+    )
+  endif()
+  if(NTFS_BROWSER_TEST_${name})
+    set(test_${name} "${NTFS_BROWSER_TEST_${name}}")
+  elseif(NOT "$ENV{NTFS_BROWSER_TEST_${name}}" STREQUAL "")
+    set(test_${name} "$ENV{NTFS_BROWSER_TEST_${name}}")
+  endif()
+  # A backslash would become a C escape sequence.
+  file(TO_CMAKE_PATH "${test_${name}}" test_${name})
+endforeach()
+target_compile_definitions(
+  NtfsBrowserTests
+  PRIVATE
+    NTFS_TEST_DFTT_DIR="${test_DFTT_DIR}"
+    NTFS_TEST_NPS_NTFS1_DIR="${test_NPS_NTFS1_DIR}"
+    NTFS_TEST_NTFS_SAMPLES_DIR="${test_NTFS_SAMPLES_DIR}"
+    NTFS_TEST_FRAGMENTED_MFT_IMAGE="${test_FRAGMENTED_MFT_IMAGE}"
+    $<$<BOOL:${NTFS_BROWSER_REQUIRE_TEST_DATA}>:NTFS_TEST_REQUIRE_DATA>
+)
+
 # Mirrors the library's own compile definitions: efs-tests.cpp's #ifdefs live in
 # this target, not the library's, so it needs the same three macros.
 target_compile_definitions(

@@ -13,6 +13,8 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
+#include "corpus-test-support.h"
+
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
@@ -27,20 +29,17 @@ namespace
 // DFTT test #10 ("NTFS Autodetect", http://dftt.sourceforge.net): each
 // partition image holds a valid NTFS filesystem, plus a second, unrelated
 // one (Ext2, UFS2 or UFS1) formatted over it afterwards. Both remain
-// mountable. Not part of this repo: hardcoded here for now.
-const std::filesystem::path kDfttDir =
-    LR"(H:\repos\ntfs-database\dftt\10b-ntfs-autodetect\10-ntfs-autodetect)";
+// mountable.
+const std::filesystem::path kAutodetectDir =
+    NtfsBrowserTests::kDfttDir / "10-ntfs-autodetect";
 
 // Opens a DFTT autodetect partition image and confirms the library reads its
 // NTFS side correctly: the root directory's own ntfs.txt is found, and its
 // $DATA attribute reads back the size the index entry advertises.
 void CheckReadsPartitionImage(std::wstring_view imageName)
 {
-  const std::filesystem::path imagePath = kDfttDir / imageName;
-  if (!std::filesystem::exists(imagePath))
-  {
-    SKIP("DFTT test image not present: " << imagePath.string());
-  }
+  const std::filesystem::path imagePath = kAutodetectDir / imageName;
+  NtfsBrowserTests::RequireCorpusImage(imagePath);
 
   NtfsVolume<Strategy::NO_CACHE> volume(imagePath.wstring());
   REQUIRE(volume.IsVolumeOK());

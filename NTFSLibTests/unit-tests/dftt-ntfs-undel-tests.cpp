@@ -14,6 +14,7 @@
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "corpus-test-support.h"
 #include "md5-test-support.h"
 
 using NtfsBrowser::AttrBase;
@@ -31,10 +32,9 @@ namespace
 
 // DFTT test #7 ("NTFS Undelete", http://dftt.sf.net): a 6 MB NTFS file
 // system with eight deleted files, two deleted directories, and a deleted
-// alternate data stream, none of which were touched afterwards. Not part of
-// this repo: hardcoded here for now.
+// alternate data stream, none of which were touched afterwards.
 const std::filesystem::path kDfttImage =
-    LR"(H:\repos\ntfs-database\dftt\7-undel-ntfs\7-ntfs-undel.dd)";
+    NtfsBrowserTests::kDfttDir / "7-undel-ntfs" / "7-ntfs-undel.dd";
 
 // One DFTT test #7 file, addressed directly by its own MFT record number
 // instead of by path: index.html documents that dir3, the parent of
@@ -85,10 +85,7 @@ void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NO_CACHE>& volume,
 TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
           "[dftt][integration]")
 {
-  if (!std::filesystem::exists(kDfttImage))
-  {
-    SKIP("DFTT test image not present: " << kDfttImage.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(kDfttImage);
 
   VolumeOptions options;
   options.include_deleted = true;

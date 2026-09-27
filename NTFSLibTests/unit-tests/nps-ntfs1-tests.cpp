@@ -50,11 +50,7 @@ void CheckDirMatchesGroundTruth(const NtfsVolume<Strategy::NO_CACHE>& volume,
 TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
           "[nps][integration]")
 {
-  if (!std::filesystem::exists(NtfsBrowserTests::kNtfs1Image))
-  {
-    SKIP("nps-2009-ntfs1 image not present: "
-         << NtfsBrowserTests::kNtfs1Image.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
 
   const NtfsVolume<Strategy::NO_CACHE> volume(
       NtfsBrowserTests::kNtfs1Image.wstring(), VolumeOptions{});
@@ -74,11 +70,7 @@ TEST_CASE(
       "meaningful ground-truth comparison left to make");
 #endif
 
-  if (!std::filesystem::exists(NtfsBrowserTests::kNtfs1Image))
-  {
-    SKIP("nps-2009-ntfs1 image not present: "
-         << NtfsBrowserTests::kNtfs1Image.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
 
   const NtfsVolume<Strategy::NO_CACHE> volume(
       NtfsBrowserTests::kNtfs1Image.wstring(), VolumeOptions{});

@@ -75,11 +75,7 @@ TEST_CASE(
     "dictates (NPS ntfs1, gen2)",
     "[nps][integration][efs]")
 {
-  if (!std::filesystem::exists(NtfsBrowserTests::kNtfs1Image))
-  {
-    SKIP("nps-2009-ntfs1 image not present: "
-         << NtfsBrowserTests::kNtfs1Image.string());
-  }
+  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
 
   NtfsVolume<Strategy::NO_CACHE> volume(NtfsBrowserTests::kNtfs1Image.wstring(),
                                         VolumeOptions{});

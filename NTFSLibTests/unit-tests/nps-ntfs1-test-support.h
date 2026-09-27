@@ -11,17 +11,18 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
+#include "corpus-test-support.h"
+
 namespace NtfsBrowserTests
 {
 
 // The NPS Test Disk Image "nps-2009-ntfs1" (Digital Corpora), generation 2: a
 // real NTFS volume with RAW, Compressed, and Encrypted directories, each
-// holding the same five files, plus the EFS recovery keys at the root. Not
-// part of this repo: hardcoded here for now, converted from the corpus's
-// published .E01 to raw with ewfmount (see narrative.txt and ntfs1-gen2.xml
-// alongside the source images).
+// holding the same five files, plus the EFS recovery keys at the root.
+// Converted from the corpus's published .E01 to raw with ewfexport (see
+// narrative.txt and ntfs1-gen2.xml alongside the source images).
 inline const std::filesystem::path kNtfs1Image =
-    LR"(H:\repos\ntfs-database\Disk Images\E01\ntfs1-gen2.raw)";
+    kNpsNtfs1Dir / "ntfs1-gen2.raw";
 
 // One of the five files RAW/, Compressed/, and Encrypted/ all hold. size and
 // md5 are the plaintext's, from ntfs1-gen2.xml (the fiwalk ground-truth
