@@ -4,11 +4,11 @@ This file guides Claude Code when working with code in this repository.
 
 ## Project overview
 
-`ntfs-browser` is a C++20, Windows-only library. It parses NTFS volumes directly: raw disk and MFT structures, not filesystem APIs. It is a modernized, read-only rewrite of the old CodeProject "An NTFS Parser Lib" (BSD-3c).
+`ntfs-browser` is a C++20 library, Windows-first. It parses NTFS volumes directly: raw disk and MFT structures, not filesystem APIs. It is a modernized, read-only rewrite of the old CodeProject "An NTFS Parser Lib" (BSD-3c).
 
 ## Build
 
-Windows and MSVC are the primary target. MFT/BPB parsing assumes Win32. The MFC demo apps, the unit tests, and `NtfsFuzzer` are Windows-only. The build requires submodules (`3rdparty/gsl`, `3rdparty/Catch2`, `3rdparty/spdlog`, `3rdparty/cryptopp`, `3rdparty/cryptopp-cmake`, `3rdparty/frozen`). Clone with `--recurse-submodules`, or run `git submodule update --init --recursive`.
+Windows and MSVC are the primary target. The MFC demo apps, the unit tests, and `NtfsFuzzer` are Windows-only. The build requires submodules (`3rdparty/gsl`, `3rdparty/Catch2`, `3rdparty/spdlog`, `3rdparty/cryptopp`, `3rdparty/cryptopp-cmake`, `3rdparty/frozen`). Clone with `--recurse-submodules`, or run `git submodule update --init --recursive`.
 
 ```
 cmake -S . -B build
@@ -17,7 +17,22 @@ cmake --build build --config Debug
 
 An existing configured `build/` directory (Visual Studio generator) is already present in this repo. You can also open `build/NtfsBrowser.slnx` in Visual Studio.
 
-`BUILD_SHARED_LIBS` (default OFF) selects a static or shared `NtfsBrowser` lib. spdlog follows it, and is linked PRIVATE: it never appears in a public header. CI (`.github/workflows/cmake.yml`) builds both Debug and Release, and both static and shared, on `windows-latest`. Crypto++ (`cryptopp-cmake` over `3rdparty/cryptopp`) does not follow it: it is always static, and linked PRIVATE too. `-DNTFS_BROWSER_USE_INSTALLED_CRYPTOPP=ON` links an installed copy (eg. vcpkg) instead. On MSVC the root [CMakeLists.txt](CMakeLists.txt) works around two Crypto++ 8.9 problems: MASM object directories the Visual Studio generator does not create, and `stdext` iterators the newest MSVC STL dropped ([cmake/cryptopp-stdext-compat.h](cmake/cryptopp-stdext-compat.h)).
+[CMakePresets.json](CMakePresets.json) defines Ninja presets: `static`, `shared`, `static-vcpkg`, `shared-vcpkg`. Each builds into `build/<preset>/`, single-config, with a `compile_commands.json`. VS Code uses them (`cmake.useCMakePresets`). Ninja needs an MSVC developer environment (`cl` on `PATH`). The `*-vcpkg` presets hardcode `CMAKE_TOOLCHAIN_FILE` to `H:/repos/vcpkg`.
+
+```
+cmake --preset static
+cmake --build --preset static
+```
+
+`BUILD_SHARED_LIBS` (default OFF) selects a static or shared `NtfsBrowser` lib. spdlog follows it, and is linked PRIVATE: it never appears in a public header. Crypto++ (`cryptopp-cmake` over `3rdparty/cryptopp`) does not follow it: it is always static, and linked PRIVATE too. On MSVC the root [CMakeLists.txt](CMakeLists.txt) works around two Crypto++ 8.9 problems: MASM object directories the Visual Studio generator does not create, and `stdext` iterators the newest MSVC STL dropped ([cmake/cryptopp-stdext-compat.h](cmake/cryptopp-stdext-compat.h)).
+
+`NTFS_BROWSER_USE_INSTALLED_{GSL,FROZEN,CATCH2,SPDLOG,CRYPTOPP}` each link an installed copy instead of the submodule. All five default ON under the vcpkg toolchain ([vcpkg.json](vcpkg.json)), OFF otherwise. `NTFS_BROWSER_ENABLE_TESTING` defaults ON only in a top-level build, not under FetchContent.
+
+Three feature options, all ON by default, compile code in or out: `NTFS_BROWSER_ENABLE_DECOMPRESSION` (LZNT1), `NTFS_BROWSER_ENABLE_EFS_CRYPTOPP` and `NTFS_BROWSER_ENABLE_EFS_BCRYPT` (the two EFS cipher backends). Turning one off drops its sources, its link dependency and its call sites. Each reaches C++ as a same-named macro, PRIVATE to the library and mirrored on `NtfsBrowserTests`. A `.cpp` or a `src/*.h` tests it with `#if`. A public header MUST NOT: consumers never see these macros. The BCrypt macro is defined on Linux too, so code MUST pair it with `_WIN32`. `NTFS_BROWSER_EFS_MASTER` (CMake) means at least one EFS backend is compiled in. It gates the backend-agnostic EFS sources and the EFS tests. C++ spells the same condition `defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))`.
+
+Source lists are explicit, not globbed. A new file MUST be added to [src/CMakeLists.txt](src/CMakeLists.txt) or [NTFSLibTests/unit-tests/CMakeLists.txt](NTFSLibTests/unit-tests/CMakeLists.txt), inside the matching feature gate if it has one.
+
+CI ([.github/workflows/cmake.yml](.github/workflows/cmake.yml)) builds Debug and Release, static and shared, on `windows-latest`. It also builds each reduced configuration once: one feature option off, or both EFS backends off. Only those reduced legs run `ctest`. The full-featured legs never run the tests, so they SHOULD run locally before a push. A second job builds [fetchcontent-consumer/](fetchcontent-consumer/): a separate project that pulls this repo in through FetchContent, shared, with every feature ON.
 
 The `NtfsBrowser` library itself, and the `NtfsFuzzerAfl` target ([NTFSLibTests/fuzz/](NTFSLibTests/fuzz/)), also configure and build on Linux with plain GCC: `cmake -S . -B build-linux && cmake --build build-linux`, checked with GCC 15 under WSL. `include/ntfs-browser/win-types.h` shims the handful of Windows typedefs (`BYTE`, `DWORD`, `LARGE_INTEGER`, ...) that the on-disk struct layouts and the public API are expressed in. Real Win32 API usage — `Win32DiskReader`, and drive-letter/path-based `NtfsVolume`/`FileReader` construction — is `#ifdef _WIN32`-guarded out. Everything else — the MFC demo apps, the unit tests, and the clang-oriented `NtfsFuzzer` — stays Windows/MSVC-only. CMake skips them (`if(WIN32)`) on other platforms.
 
@@ -30,12 +45,16 @@ cmake --build build --config Debug --target NtfsBrowserTests
 ctest --test-dir build -C Debug
 ```
 
-Run a single test case by name. Catch2's tag/name filter passes through ctest with `-R`. Or invoke the test binary directly:
+`ctest -R <regex>` runs the tests whose name matches. A Catch2 tag or wildcard needs the binary itself (`build/<preset>/NTFSLibTests/unit-tests/NtfsBrowserTests.exe` in a preset tree). There, a `[` inside a test name starts a tag: escape it as `\[`.
 ```
-build/NTFSLibTests/unit-tests/Debug/NtfsBrowserTests.exe "<test name or tag>"
+build/NTFSLibTests/unit-tests/Debug/NtfsBrowserTests.exe "<test name>"
+build/NTFSLibTests/unit-tests/Debug/NtfsBrowserTests.exe "[efs]"
+build/NTFSLibTests/unit-tests/Debug/NtfsBrowserTests.exe "LZNT1*"
 ```
 
 Test sources live in [NTFSLibTests/unit-tests/](NTFSLibTests/unit-tests/). Tests must not touch a real disk. They build synthetic NTFS images in memory ([fake-ntfs-image.h](NTFSLibTests/unit-tests/fake-ntfs-image.h)), using the library's own on-disk struct layouts from `src/data` and `src/attr`. They serve those images through fake `IDiskReader` implementations: [memory-disk-reader.h](NTFSLibTests/unit-tests/memory-disk-reader.h) (random-access, whole buffer in memory) or [sequential-disk-reader.h](NTFSLibTests/unit-tests/sequential-disk-reader.h) (offset-ignoring, chunk-at-a-time). Prefer extending these fakes over adding new test scaffolding.
+
+The corpus tests are the exception to synthetic images: `dftt-ntfs-*-tests.cpp`, `nps-ntfs1-*tests.cpp` and `ntfs-samples-tests.cpp`. They open forensic image files at hardcoded paths outside the repo (`H:\repos\ntfs-database\...`, `E:\ntfs-samples\`, `F:\ntfs-samples\`), never a device. Each one `SKIP`s when its image is absent. [partition-disk-reader.h](NTFSLibTests/unit-tests/partition-disk-reader.h) serves a whole-disk image, offsetting every read into its NTFS partition.
 
 `NTFSLibTests/ntfsattr`, `ntfsdir`, `ntfsdump`, `ntfsundel` are older sample/demo apps. `ntfsdir` is the simplest: it opens a volume, parses the root `FileRecord`, walks down to a path, and traverses entries. `NTFSLibTests/ntfsmftlist` lists every `$MFT` record through `MftTree`.
 
@@ -65,11 +84,11 @@ The unit tests pin the library logger to a trace-level capturing spdlog sink bef
 
 ## Formatting and linting
 
-CI enforces `clang-format` (config in [.clang-format](.clang-format)) and `gersemi` for `CMakeLists.txt`. See [.github/workflows/format.yml](.github/workflows/format.yml): non-main-branch PRs fail the build if formatting changes. Run before committing:
+CI enforces `clang-format` (config in [.clang-format](.clang-format)) and `gersemi` (config in [.gersemirc](.gersemirc)) for `CMakeLists.txt`. See [.github/workflows/format.yml](.github/workflows/format.yml): a push to `main`, or a PR into it, fails if formatting changes anything. [requirements-linter.txt](requirements-linter.txt) pins `clang-format==23.1.0`; another version can format differently. The gitignored `.venv/` holds both tools at those versions. Run before committing:
 ```
 bash ./.github/scripts/format.sh
 ```
-`.clang-tidy` enables nearly all checks (`Checks: '*'`, minus a short exclusion list), with `WarningsAsErrors: '*'`.
+`.clang-tidy` enables nearly all checks (`Checks: '*'`, minus a short exclusion list), with `WarningsAsErrors: '*'`. CI ([.github/workflows/clang-tidy.yml](.github/workflows/clang-tidy.yml)) runs it on Ubuntu, over the Linux configuration's `compile_commands.json`. `#ifdef _WIN32` code and the Windows-only targets are therefore never linted in CI. A preset tree's `compile_commands.json` serves a local run: `clang-tidy -p build/static <file>`.
 
 ## Writing style
 
@@ -99,6 +118,12 @@ Skip the comment entirely if a trace/logging call inside the same branch already
 
 Almost every core class is templated on `Strategy` ([include/ntfs-browser/strategy.h](include/ntfs-browser/strategy.h)): `Strategy::NO_CACHE` or `Strategy::FULL_CACHE`. This propagates through `NtfsVolume<S>` → `FileReader<S>` → `FileRecord<S>` → `AttrBase<S>` and all `Attr*<S>` subclasses. `FULL_CACHE` retains every read cluster in a map for reuse. `NO_CACHE` re-reads and returns views into a short-lived buffer instead. Attributes under `NO_CACHE` hold raw pointers or spans into that buffer. Callers MUST NOT assume attribute data outlives the next read. Pick the strategy that matches lifetime needs when writing code that touches these templates.
 
+### Templates and symbol export
+
+Class templates are declared in headers and defined in `src/*.cpp`. Each `.cpp` ends with explicit instantiations for both strategies (`template class FileRecord<Strategy::NO_CACHE>;`, then `FULL_CACHE`). A new class template, or a new member function template, MUST be instantiated there too, or it will not link. Most concrete attribute wrappers also take their base class as a parameter: `AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>`. `AttrList` and `AttrBitmap` exist over both a resident and a non-resident base.
+
+A shared build exports symbol by symbol. `generate_export_header` writes `NTFS_BROWSER_EXPORT` into `src/include/ntfs-browser/export.h` in the build tree. A public class or function that crosses the DLL boundary carries it. An internal symbol the unit tests reach through a `src/` header carries `NTFS_BROWSER_EXPORT_TESTS_ONLY` ([src/internal-export.h](src/internal-export.h)) instead. It exports only under `NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS`, which the unit tests' CMakeLists defines on the library. The class-level macro does not reach a member function template: each explicit instantiation of one repeats it. A test that calls a new internal symbol links in a static build, but fails in a shared one until that symbol is marked.
+
 ### Read path / object graph
 
 - `IDiskReader` ([include/ntfs-browser/disk-reader.h](include/ntfs-browser/disk-reader.h)) abstracts "get raw bytes from a backing store" behind `Open()`/`ReadInto()`. `Win32DiskReader` is the production implementation: a real disk/device handle, or a plain file treated the same way via `CreateFileW`. Tests substitute `MemoryDiskReader` or `SequentialDiskReader`.
@@ -114,6 +139,7 @@ Almost every core class is templated on `Strategy` ([include/ntfs-browser/strate
 - `include/ntfs-browser/` — public API headers. These are what consumers of the library include.
 - `src/` — implementation, plus internal-only headers not exposed publicly: `src/data/` (on-disk struct layouts: boot sector BPB, file record header, index block/entry, run entry), `src/attr/` (attribute header/type layouts), `src/flag/` (bitflag enums for filename/index-entry/std-info attributes), `src/efs/` (EFS: `$EFS` parser, FEK, sector ciphers for both backends, Windows key providers). Tests include from `src/` directly (see `NTFSLibTests/unit-tests/CMakeLists.txt`), to reuse these on-disk struct layouts when building fake images, rather than duplicating byte offsets.
 - `NTFSLibTests/` — Catch2 unit tests, plus the older MFC-based sample/demo apps.
+- `docs/[MS-XCA].pdf` — Microsoft's compression spec, LZNT1 included. The LZNT1 tests cite its sections.
 
 ### Callbacks
 
