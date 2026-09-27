@@ -1,0 +1,6 @@
+# Windows runners default to core.autocrlf=true, so this file checks out
+# with CRLF there and LF on Linux. It is fed into hashFiles() to build a
+# cache key shared between the Linux test-data job and the Windows build
+# jobs in .github/workflows/cmake.yml; a CRLF/LF mismatch makes hashFiles
+# produce different keys per OS, so pin it to LF everywhere.
+.github/scripts/fetch-test-data.py text eol=lf
