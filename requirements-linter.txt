@@ -1,2 +1,2 @@
-cmakelang
+gersemi
 clang-format==23.1.0

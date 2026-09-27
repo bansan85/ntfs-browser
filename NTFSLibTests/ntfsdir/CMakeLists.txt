@@ -5,9 +5,11 @@ if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
     TARGET NtfsDir
     POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsDir>
-            $<TARGET_FILE_DIR:NtfsDir>
-    COMMAND_EXPAND_LISTS)
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsDir>
+      $<TARGET_FILE_DIR:NtfsDir>
+    COMMAND_EXPAND_LISTS
+  )
 endif()
 
 add_executable(NtfsDir2 WIN32 "main2.cpp")
@@ -17,7 +19,9 @@ if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
     TARGET NtfsDir2
     POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_RUNTIME_DLLS:NtfsDir2> $<TARGET_FILE_DIR:NtfsDir2>
-    COMMAND_EXPAND_LISTS)
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsDir2>
+      $<TARGET_FILE_DIR:NtfsDir2>
+    COMMAND_EXPAND_LISTS
+  )
 endif()

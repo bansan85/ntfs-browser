@@ -1,0 +1,4 @@
+indent: 2
+definitions:
+  - cmake/vs.cmake
+  - 3rdparty/Catch2/extras/Catch.cmake

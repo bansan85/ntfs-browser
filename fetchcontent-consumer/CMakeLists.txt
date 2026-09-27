@@ -10,34 +10,32 @@ include(FetchContent)
 # Every NTFS_BROWSER_* toggle ON, plus a shared build: this smoke test exists to
 # catch a combination that only builds under the library's own defaults, not
 # under a consumer's explicit choices.
-set(BUILD_SHARED_LIBS
-    ON
-    CACHE BOOL "" FORCE)
-set(NTFS_BROWSER_ENABLE_DECOMPRESSION
-    ON
-    CACHE BOOL "" FORCE)
-set(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-    ON
-    CACHE BOOL "" FORCE)
-set(NTFS_BROWSER_ENABLE_EFS_BCRYPT
-    ON
-    CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
+set(NTFS_BROWSER_ENABLE_DECOMPRESSION ON CACHE BOOL "" FORCE)
+set(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP ON CACHE BOOL "" FORCE)
+set(NTFS_BROWSER_ENABLE_EFS_BCRYPT ON CACHE BOOL "" FORCE)
 
 # Points FetchContent at an already-checked-out working tree (eg. this
 # repository's own CI, which already has one) instead of cloning over the
 # network. Left unset, it falls back to a real GIT_REPOSITORY fetch, which is
 # the FetchContent path an external consumer actually takes.
 if(NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR)
-  file(TO_CMAKE_PATH "${NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR}"
-       NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR)
-  FetchContent_Declare(ntfs-browser SOURCE_DIR
-                                    "${NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR}")
+  file(
+    TO_CMAKE_PATH
+    "${NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR}"
+    NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR
+  )
+  FetchContent_Declare(
+    ntfs-browser
+    SOURCE_DIR "${NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR}"
+  )
 else()
   FetchContent_Declare(
     ntfs-browser
     GIT_REPOSITORY https://github.com/bansai85/ntfs-browser.git
     GIT_TAG main
-    GIT_SUBMODULES_RECURSE ON)
+    GIT_SUBMODULES_RECURSE ON
+  )
 endif()
 FetchContent_MakeAvailable(ntfs-browser)
 
@@ -59,5 +57,6 @@ if(WIN32 AND BUILD_SHARED_LIBS)
       ${CMAKE_COMMAND} -E copy_if_different
       $<TARGET_RUNTIME_DLLS:fetchcontent-smoke-test>
       $<TARGET_FILE_DIR:fetchcontent-smoke-test>
-    COMMAND_EXPAND_LISTS)
+    COMMAND_EXPAND_LISTS
+  )
 endif()

@@ -65,7 +65,7 @@ The unit tests pin the library logger to a trace-level capturing spdlog sink bef
 
 ## Formatting and linting
 
-CI enforces `clang-format` (config in [.clang-format](.clang-format)) and `cmake-format` (via the `cmakelang` pip package). See [.github/workflows/format.yml](.github/workflows/format.yml): non-main-branch PRs fail the build if formatting changes. Run before committing:
+CI enforces `clang-format` (config in [.clang-format](.clang-format)) and `gersemi` for `CMakeLists.txt`. See [.github/workflows/format.yml](.github/workflows/format.yml): non-main-branch PRs fail the build if formatting changes. Run before committing:
 ```
 bash ./.github/scripts/format.sh
 ```

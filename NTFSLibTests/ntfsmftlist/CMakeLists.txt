@@ -5,7 +5,9 @@ if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
     TARGET NtfsMftList
     POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_RUNTIME_DLLS:NtfsMftList> $<TARGET_FILE_DIR:NtfsMftList>
-    COMMAND_EXPAND_LISTS)
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsMftList>
+      $<TARGET_FILE_DIR:NtfsMftList>
+    COMMAND_EXPAND_LISTS
+  )
 endif()
