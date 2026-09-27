@@ -59,6 +59,39 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
         "VCPKG_HOST_TRIPLET": "x64-windows-static-md"
       }
+    },
+    {
+      "name": "no-decompression",
+      "displayName": "Static, LZNT1 decompression disabled",
+      "inherits": "static",
+      "cacheVariables": {
+        "NTFS_BROWSER_ENABLE_DECOMPRESSION": "OFF"
+      }
+    },
+    {
+      "name": "efs-cryptopp-only",
+      "displayName": "Static, EFS decryption via Crypto++ only",
+      "inherits": "static",
+      "cacheVariables": {
+        "NTFS_BROWSER_ENABLE_EFS_BCRYPT": "OFF"
+      }
+    },
+    {
+      "name": "efs-bcrypt-only",
+      "displayName": "Static, EFS decryption via BCrypt only",
+      "inherits": "static",
+      "cacheVariables": {
+        "NTFS_BROWSER_ENABLE_EFS_CRYPTOPP": "OFF"
+      }
+    },
+    {
+      "name": "no-efs",
+      "displayName": "Static, EFS decryption disabled (both backends off)",
+      "inherits": "static",
+      "cacheVariables": {
+        "NTFS_BROWSER_ENABLE_EFS_CRYPTOPP": "OFF",
+        "NTFS_BROWSER_ENABLE_EFS_BCRYPT": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -85,6 +118,26 @@
     {
       "name": "static-vcpkg",
       "configurePreset": "static-vcpkg",
+      "inherits": "build-base"
+    },
+    {
+      "name": "no-decompression",
+      "configurePreset": "no-decompression",
+      "inherits": "build-base"
+    },
+    {
+      "name": "efs-cryptopp-only",
+      "configurePreset": "efs-cryptopp-only",
+      "inherits": "build-base"
+    },
+    {
+      "name": "efs-bcrypt-only",
+      "configurePreset": "efs-bcrypt-only",
+      "inherits": "build-base"
+    },
+    {
+      "name": "no-efs",
+      "configurePreset": "no-efs",
       "inherits": "build-base"
     }
   ]
