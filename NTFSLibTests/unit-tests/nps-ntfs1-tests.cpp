@@ -67,6 +67,13 @@ TEST_CASE(
     "Compressed files decompress to the RAW ground truth (NPS ntfs1, gen2)",
     "[nps][integration]")
 {
+#ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
+  SKIP(
+      "decompression is not compiled in: a compressed attribute is "
+      "rejected on sight (see attr-non-resident.cpp), so there is no "
+      "meaningful ground-truth comparison left to make");
+#endif
+
   if (!std::filesystem::exists(NtfsBrowserTests::kNtfs1Image))
   {
     SKIP("nps-2009-ntfs1 image not present: "
