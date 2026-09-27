@@ -90,7 +90,7 @@ jobs:
           cmake --build --preset ${{ matrix.preset }} || exit 1
       - name: ctest
         if: matrix.run_tests
-        run: ctest --output-on-failure --test-dir build/${{ matrix.preset }} || exit 1
+        run: ctest --output-on-failure --test-dir build/${{ matrix.preset }} --parallel 16 || exit 1
   fetchcontent-consumer:
     runs-on: windows-latest
     steps:
@@ -100,6 +100,6 @@ jobs:
       - name: cmake
         run: |
           cmake -S fetchcontent-consumer -B build_fetchcontent_consumer -DNTFS_BROWSER_FETCHCONTENT_SOURCE_DIR="${{ github.workspace }}" || exit 1
-          cmake --build build_fetchcontent_consumer --target fetchcontent-smoke-test --config Debug --parallel || exit 1
+          cmake --build build_fetchcontent_consumer --target fetchcontent-smoke-test --config Debug --parallel 16 || exit 1
       - name: run
         run: .\build_fetchcontent_consumer\Debug\fetchcontent-smoke-test.exe
