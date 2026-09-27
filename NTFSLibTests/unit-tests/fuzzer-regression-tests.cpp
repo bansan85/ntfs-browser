@@ -428,41 +428,167 @@ RunResult RunFuzzerOnFile(const fs::path& exe, const fs::path& testcase)
   return {exitCode, output};
 }
 
-}  // namespace
-
-TEST_CASE("NtfsFuzzerAfl does not crash on saved regression testcases",
-          "[fuzz][regression]")
+// Runs one saved regression testcase and, if kExpectedErrorMessages has an
+// entry for it, checks its output against that entry's expected messages.
+void RunRegressionTestcase(std::string_view name)
 {
   const fs::path exe(NTFS_FUZZER_AFL_EXE);
   REQUIRE(fs::exists(exe));
 
+  const fs::path file = fs::path(NTFS_FUZZ_DATA_DIR) / name;
+  REQUIRE(fs::exists(file));
+
+  const RunResult result = RunFuzzerOnFile(exe, file);
+  CHECK(result.exit_code == 0);
+
+  const auto it = kExpectedErrorMessages.find(name);
+  if (it != kExpectedErrorMessages.end() && it->second.check_expected_messages)
+  {
+    INFO("captured output:\n" << result.output);
+    for (const std::string_view message : it->second.messages)
+    {
+      // Trailing array slots past this testcase's own messages are
+      // empty padding; stop there instead of matching real content.
+      if (message.empty())
+      {
+        break;
+      }
+      CHECK_THAT(result.output,
+                 Catch::Matchers::ContainsSubstring(std::string(message)));
+    }
+  }
+}
+
+}  // namespace
+
+TEST_CASE("saved regression corpus is fully covered by kExpectedErrorMessages",
+          "[fuzz][regression]")
+{
   const std::vector<fs::path> files = ListRegressionTestcases();
   REQUIRE_FALSE(files.empty());
 
   for (const fs::path& file : files)
   {
-    DYNAMIC_SECTION("testcase: " << file.filename().string())
-    {
-      const RunResult result = RunFuzzerOnFile(exe, file);
-      CHECK(result.exit_code == 0);
-
-      const auto it = kExpectedErrorMessages.find(file.filename().string());
-      if (it != kExpectedErrorMessages.end() &&
-          it->second.check_expected_messages)
-      {
-        INFO("captured output:\n" << result.output);
-        for (const std::string_view message : it->second.messages)
-        {
-          // Trailing array slots past this testcase's own messages are
-          // empty padding; stop there instead of matching real content.
-          if (message.empty())
-          {
-            break;
-          }
-          CHECK_THAT(result.output,
-                     Catch::Matchers::ContainsSubstring(std::string(message)));
-        }
-      }
-    }
+    CHECK(kExpectedErrorMessages.contains(file.filename().string()));
   }
+  CHECK(files.size() == kExpectedErrorMessages.size());
 }
+
+// Registers one ctest-visible TEST_CASE per saved regression testcase, so
+// ctest can rerun a single failing input instead of the whole corpus.
+#define NTFS_REGRESSION_TESTCASE(name)                               \
+  TEST_CASE("NtfsFuzzerAfl regression: " name, "[fuzz][regression]") \
+  {                                                                  \
+    RunRegressionTestcase(name);                                     \
+  }
+
+NTFS_REGRESSION_TESTCASE("0724c913e1b2f0607bb5cd3ebfacb596db4458e9")
+NTFS_REGRESSION_TESTCASE("65b60629c20b4730c35650dd68b6f87fe57c07a3")
+NTFS_REGRESSION_TESTCASE("8fc085f7649f977b0ab5f67b5b9da055eebc56dd")
+NTFS_REGRESSION_TESTCASE("9d6b29a12783a8d0595bf861671e5401493570b5")
+NTFS_REGRESSION_TESTCASE("attr_name_exceeds_total_size")
+NTFS_REGRESSION_TESTCASE("attr_offset_exceeds_record_size")
+NTFS_REGRESSION_TESTCASE("attr_type_slot_aliasing")
+NTFS_REGRESSION_TESTCASE("attribute_list_extension_parse_attrs_fail")
+NTFS_REGRESSION_TESTCASE("attribute_list_extension_record_cycle")
+NTFS_REGRESSION_TESTCASE("attribute_list_invalid_attr_type")
+NTFS_REGRESSION_TESTCASE("attribute_list_multi_type_same_record")
+NTFS_REGRESSION_TESTCASE("attribute_list_offset_mismatch_on_root")
+NTFS_REGRESSION_TESTCASE("attribute_list_record_size_too_small_on_root")
+NTFS_REGRESSION_TESTCASE("attribute_list_short_read")
+NTFS_REGRESSION_TESTCASE("attribute_list_zero_record_size")
+NTFS_REGRESSION_TESTCASE("attribute_walk_no_end_marker")
+NTFS_REGRESSION_TESTCASE("bitmap_resident_data_read")
+NTFS_REGRESSION_TESTCASE("boot_sector_read_failure")
+NTFS_REGRESSION_TESTCASE("cluster_size_null")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation")
+NTFS_REGRESSION_TESTCASE(
+    "compressed_index_allocation_comp_unit_size_out_of_range")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_compressed_unit_bad_lcn")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_encrypted")
+NTFS_REGRESSION_TESTCASE(
+    "compressed_index_allocation_lznt1_backreference_exceeds_dest")
+NTFS_REGRESSION_TESTCASE(
+    "compressed_index_allocation_lznt1_chunk_exceeds_src_bounds")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_lznt1_chunk_over_4096")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_lznt1_invalid_signature")
+NTFS_REGRESSION_TESTCASE(
+    "compressed_index_allocation_lznt1_literal_exceeds_dest")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_lznt1_truncated_word")
+NTFS_REGRESSION_TESTCASE(
+    "compressed_index_allocation_lznt1_uncompressed_chunk_exceeds_dest")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_misaligned_start_vcn")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_missing_compressed_size")
+NTFS_REGRESSION_TESTCASE(
+    "compressed_index_allocation_oversized_compression_unit")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_real_after_hole")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_short_decompressed_unit")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_sparse_unit")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_stored_unit_bad_lcn")
+NTFS_REGRESSION_TESTCASE("compressed_index_allocation_unmapped_unit")
+NTFS_REGRESSION_TESTCASE("corrupt_compressed_index_allocation")
+NTFS_REGRESSION_TESTCASE("corrupt_mft_record_volume_ok")
+NTFS_REGRESSION_TESTCASE("data_flagged_compressed_and_encrypted")
+NTFS_REGRESSION_TESTCASE("data_run_cluster_exceeds_bounds")
+NTFS_REGRESSION_TESTCASE("data_run_decode_error_second")
+NTFS_REGRESSION_TESTCASE("data_run_decode_error_size_byte")
+NTFS_REGRESSION_TESTCASE("data_run_vcn_exceeds_bound")
+NTFS_REGRESSION_TESTCASE("efs_stream_malformed")
+NTFS_REGRESSION_TESTCASE("efs_stream_read_failure")
+NTFS_REGRESSION_TESTCASE("efs_stream_too_large")
+NTFS_REGRESSION_TESTCASE("f2a2482f50a933eeea4d1a506651884827c0952d")
+NTFS_REGRESSION_TESTCASE("file_reader_read_failure")
+NTFS_REGRESSION_TESTCASE("file_record_invalid_magic")
+NTFS_REGRESSION_TESTCASE("file_record_read_failure")
+NTFS_REGRESSION_TESTCASE("file_record_size_invalid")
+NTFS_REGRESSION_TESTCASE("file_record_size_shift_overflow")
+NTFS_REGRESSION_TESTCASE("file_record_size_too_big")
+NTFS_REGRESSION_TESTCASE("file_record_unhandled_attribute")
+NTFS_REGRESSION_TESTCASE("file_record_usn_mismatch")
+NTFS_REGRESSION_TESTCASE("find_stream_named_data")
+NTFS_REGRESSION_TESTCASE("fragmented_record_header_factory_throw")
+NTFS_REGRESSION_TESTCASE("full_cache_attribute_list_record_growth")
+NTFS_REGRESSION_TESTCASE("full_cache_index_block_crosses_64kib_block")
+NTFS_REGRESSION_TESTCASE("gap_collation_subnode")
+NTFS_REGRESSION_TESTCASE("index_alloc_block_count_incalculable")
+NTFS_REGRESSION_TESTCASE("index_allocation_must_be_non_resident")
+NTFS_REGRESSION_TESTCASE("index_block_chain_depth_limit")
+NTFS_REGRESSION_TESTCASE("index_block_entry_exceeds_bounds")
+NTFS_REGRESSION_TESTCASE("index_block_entry_header_exceeds_bounds")
+NTFS_REGRESSION_TESTCASE("index_block_entry_total_exceeds_declared_size")
+NTFS_REGRESSION_TESTCASE("index_block_magic_mismatch")
+NTFS_REGRESSION_TESTCASE("index_block_offset_of_us_out_of_bounds")
+NTFS_REGRESSION_TESTCASE("index_block_size_invalid")
+NTFS_REGRESSION_TESTCASE("index_block_size_shift_overflow")
+NTFS_REGRESSION_TESTCASE("index_block_subnode_vcn_overflow")
+NTFS_REGRESSION_TESTCASE("index_block_usn_mismatch")
+NTFS_REGRESSION_TESTCASE("index_entry_no_filename_stream")
+NTFS_REGRESSION_TESTCASE("index_entry_stream_exceeds_bounds")
+NTFS_REGRESSION_TESTCASE("index_entry_stream_smaller_than_expected")
+NTFS_REGRESSION_TESTCASE("index_root_entry_ab_match")
+NTFS_REGRESSION_TESTCASE("index_root_entry_header_exceeds_bounds")
+NTFS_REGRESSION_TESTCASE("index_root_entry_total_exceeds_declared_size")
+NTFS_REGRESSION_TESTCASE("index_root_must_be_resident")
+NTFS_REGRESSION_TESTCASE("index_root_real_entry")
+NTFS_REGRESSION_TESTCASE("index_root_view_not_supported")
+NTFS_REGRESSION_TESTCASE("invalid_header_common")
+NTFS_REGRESSION_TESTCASE("invalid_offset_of_us")
+NTFS_REGRESSION_TESTCASE("mft_addr_narrowing_error")
+NTFS_REGRESSION_TESTCASE("mft_data_run_cluster_lcn_narrowing_error")
+NTFS_REGRESSION_TESTCASE("resident_attr_body_exceeds_bounds")
+NTFS_REGRESSION_TESTCASE("resident_attr_body_out_of_bounds")
+NTFS_REGRESSION_TESTCASE("resident_data_flagged_encrypted")
+NTFS_REGRESSION_TESTCASE("root_record_deleted_skips_parse_attrs")
+NTFS_REGRESSION_TESTCASE("root_record_parse_failure")
+NTFS_REGRESSION_TESTCASE("sector_size_too_small")
+NTFS_REGRESSION_TESTCASE("standard_information_minimal_size")
+NTFS_REGRESSION_TESTCASE("standard_information_must_be_resident")
+NTFS_REGRESSION_TESTCASE("surrogate_pair_names")
+NTFS_REGRESSION_TESTCASE("traverse_attrs_empty_callback")
+NTFS_REGRESSION_TESTCASE("usn_array_exceeds_record_buffer")
+NTFS_REGRESSION_TESTCASE("volume_information_minimal_size")
+NTFS_REGRESSION_TESTCASE("volume_information_must_be_resident")
+NTFS_REGRESSION_TESTCASE("volume_name_must_be_resident")
+NTFS_REGRESSION_TESTCASE("volume_name_resident_present")
+
+#undef NTFS_REGRESSION_TESTCASE
