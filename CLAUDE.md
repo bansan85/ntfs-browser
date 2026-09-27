@@ -84,9 +84,9 @@ The unit tests pin the library logger to a trace-level capturing spdlog sink bef
 
 ## Formatting and linting
 
-CI enforces `clang-format` (config in [.clang-format](.clang-format)) and `gersemi` (config in [.gersemirc](.gersemirc)) for `CMakeLists.txt`. See [.github/workflows/format.yml](.github/workflows/format.yml): a push to `main`, or a PR into it, fails if formatting changes anything. [requirements-linter.txt](requirements-linter.txt) pins `clang-format==23.1.0`; another version can format differently. The gitignored `.venv/` holds both tools at those versions. Run before committing:
+CI enforces `clang-format` (config in [.clang-format](.clang-format)) and `gersemi` (config in [.gersemirc](.gersemirc)) for `CMakeLists.txt`. See [.github/workflows/format.yml](.github/workflows/format.yml): a push to `main`, or a PR into it, fails if formatting changes anything. [pyproject.toml](pyproject.toml) pins `clang-format==23.1.0`; another version can format differently. [uv](https://docs.astral.sh/uv/) resolves both tools from [uv.lock](uv.lock) into the gitignored `.venv/`. Run before committing:
 ```
-bash ./.github/scripts/format.sh
+uv run bash ./.github/scripts/format.sh
 ```
 `.clang-tidy` enables nearly all checks (`Checks: '*'`, minus a short exclusion list), with `WarningsAsErrors: '*'`. CI ([.github/workflows/clang-tidy.yml](.github/workflows/clang-tidy.yml)) runs it on Ubuntu, over the Linux configuration's `compile_commands.json`. `#ifdef _WIN32` code and the Windows-only targets are therefore never linted in CI. A preset tree's `compile_commands.json` serves a local run: `clang-tidy -p build/static <file>`.
 
