@@ -59,17 +59,11 @@ TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
   CheckDirMatchesGroundTruth(volume, "RAW");
 }
 
+#ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
 TEST_CASE(
     "Compressed files decompress to the RAW ground truth (NPS ntfs1, gen2)",
     "[nps][integration]")
 {
-#ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
-  SKIP(
-      "decompression is not compiled in: a compressed attribute is "
-      "rejected on sight (see attr-non-resident.cpp), so there is no "
-      "meaningful ground-truth comparison left to make");
-#endif
-
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
 
   const NtfsVolume<Strategy::NO_CACHE> volume(
@@ -78,3 +72,4 @@ TEST_CASE(
 
   CheckDirMatchesGroundTruth(volume, "Compressed");
 }
+#endif
