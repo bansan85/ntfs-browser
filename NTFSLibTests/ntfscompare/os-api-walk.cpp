@@ -121,6 +121,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
 #else  // POSIX
 
   #include <dirent.h>
+  #include <fcntl.h>
   #include <sys/stat.h>
   #ifdef __linux__
     #include <sys/xattr.h>

@@ -97,7 +97,7 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
 
   if (!Log::Configure(logConfig))
   {
-    std::fprintf(stderr, "Cannot open log file %ls\n",
+    std::fprintf(stderr, "Cannot open log file " NTFSCOMPARE_NATIVE "\n",
                  logConfig.file_path.c_str());
   }
 
@@ -161,7 +161,9 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
   MftScanOptions scanOptions;
   scanOptions.progress = [](ULONGLONG done, ULONGLONG total)
   {
-    std::fprintf(stderr, "\r$MFT: %llu / %llu", done, total);
+    std::fprintf(stderr, "\r$MFT: %llu / %llu",
+                 static_cast<unsigned long long>(done),
+                 static_cast<unsigned long long>(total));
     if (done == total)
     {
       std::fprintf(stderr, "\n");

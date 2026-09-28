@@ -3,6 +3,8 @@
   #include "raw-device-disk-reader.h"
 
   #include <cstdio>
+  #include <string>
+  #include <string_view>
 
   #include <fcntl.h>
   #include <unistd.h>
