@@ -149,8 +149,14 @@ class NTFS_BROWSER_EXPORT FileRecord
 
   [[nodiscard]] std::wstring_view GetFileName() const;
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;
-  void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                   FILETIME* accessTm) const noexcept;
+  // Bytes actually allocated on disk for the unnamed $DATA stream; 0 when
+  // there is none (eg. a directory).
+  [[nodiscard]] ULONGLONG GetAllocatedSize() const noexcept;
+  // changeTm is the last MFT (metadata) change time, distinct from writeTm's
+  // content modification time: it also moves on a rename or attribute change
+  // that leaves the file's content untouched.
+  void GetFileTime(FILETIME* writeTm, FILETIME* createTm, FILETIME* accessTm,
+                   FILETIME* changeTm = nullptr) const noexcept;
 
   // With the volume's recover_errors on, also scans every $INDEX_ALLOCATION
   // block the B+ tree walk itself doesn't reach - recovery for a directory
@@ -163,16 +169,25 @@ class NTFS_BROWSER_EXPORT FileRecord
 
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntry(std::wstring_view fileName) const;
-  [[nodiscard]] const AttrBase<S>* FindStream(std::wstring_view name);
+  [[nodiscard]] const AttrBase<S>* FindStream(std::wstring_view name) const;
 
   [[nodiscard]] bool IsDeleted() const noexcept;
   [[nodiscard]] bool IsDirectory() const noexcept;
   [[nodiscard]] bool IsReadOnly() const noexcept;
   [[nodiscard]] bool IsHidden() const noexcept;
   [[nodiscard]] bool IsSystem() const noexcept;
+  [[nodiscard]] bool IsArchive() const noexcept;
+  // Marks a device file; never set on NTFS's own on-disk files in practice.
+  [[nodiscard]] bool IsDevice() const noexcept;
+  // Set only when no other StdInfoPermission bit is set.
+  [[nodiscard]] bool IsNormal() const noexcept;
+  [[nodiscard]] bool IsTemporary() const noexcept;
   [[nodiscard]] bool IsCompressed() const noexcept;
+  [[nodiscard]] bool IsOffline() const noexcept;
+  [[nodiscard]] bool IsNotContentIndexed() const noexcept;
   [[nodiscard]] bool IsEncrypted() const noexcept;
   [[nodiscard]] bool IsSparse() const noexcept;
+  [[nodiscard]] bool IsReparsePoint() const noexcept;
 };  // FileRecord
 
 }  // namespace NtfsBrowser

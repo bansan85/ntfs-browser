@@ -32,6 +32,14 @@ AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
 {
 }
 
+// A resident attribute's bytes live inline in the MFT record: no separate
+// allocation, so allocated size is the same as the real data size.
+template <Strategy S>
+ULONGLONG AttrResident<S>::GetAllocatedSize() const noexcept
+{
+  return this->GetDataSize();
+}
+
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
 template <Strategy S>

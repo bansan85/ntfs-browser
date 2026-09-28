@@ -2253,6 +2253,9 @@ struct FakeFileName
       NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   // The size NTFS only refreshes in $FILE_NAME on a rename.
   ULONGLONG real_size = 0;
+  // ORed onto the DIRECTORY/NONE flag WriteFileNameAttr() derives on its own,
+  // eg. for a permission bit $FILE_NAME mirrors from $STANDARD_INFORMATION.
+  NtfsBrowser::Flag::Filename extra_flags = NtfsBrowser::Flag::Filename::NONE;
 };
 
 // Writes one resident $FILE_NAME at record[offset] and returns its
@@ -2278,8 +2281,9 @@ DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
   fn.parent_ref = name.parent_ref;
   fn.real_size = name.real_size;
   fn.alloc_size = name.real_size;
-  fn.flags = directory ? NtfsBrowser::Flag::Filename::DIRECTORY
-                       : NtfsBrowser::Flag::Filename::NONE;
+  fn.flags = (directory ? NtfsBrowser::Flag::Filename::DIRECTORY
+                        : NtfsBrowser::Flag::Filename::NONE) |
+             name.extra_flags;
   fn.name_length = static_cast<BYTE>(name.name.size());
   fn.name_space = name.name_space;
   for (size_t i = 0; i < name.name.size(); i++)
@@ -3337,15 +3341,18 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTree()
             MakeMftTreeRecord(dir, kDocsSequence,
                               {{.name = L"Docs", .parent_ref = root}}));
   putRecord(kMftTreeReportIdx,
-            MakeMftTreeRecord(file, kReportSequence,
-                              {{.name = L"report.txt",
-                                .parent_ref = docs,
-                                .real_size = kMftTreeReportStaleSize},
-                               {.name = L"REPORT~1.TXT",
-                                .parent_ref = docs,
-                                .name_space = FilenameNamespace::DOS}},
-                              kMftTreeReportDataSize,
-                              StdInfoPermission::READONLY));
+            MakeMftTreeRecord(
+                file, kReportSequence,
+                {{.name = L"report.txt",
+                  .parent_ref = docs,
+                  .real_size = kMftTreeReportStaleSize,
+                  .extra_flags = NtfsBrowser::Flag::Filename::READONLY |
+                                 NtfsBrowser::Flag::Filename::ARCHIVE},
+                 {.name = L"REPORT~1.TXT",
+                  .parent_ref = docs,
+                  .name_space = FilenameNamespace::DOS}},
+                kMftTreeReportDataSize,
+                StdInfoPermission::READONLY | StdInfoPermission::ARCHIVE));
   putRecord(kMftTreeHardLinkIdx,
             MakeMftTreeRecord(file, 1,
                               {{.name = L"link-a", .parent_ref = root},

@@ -90,11 +90,14 @@ bool ReadEntry(FileRecord<S>& fr, ULONGLONG record, MftEntry& entry)
 
   const AttrBase<S>* data = fr.FindStream({});
   entry.size = data != nullptr ? data->GetDataSize() : fr.GetFileSize();
+  entry.allocated_size = data != nullptr ? data->GetAllocatedSize() : 0;
 
-  fr.GetFileTime(&entry.write_time, &entry.create_time, &entry.access_time);
+  fr.GetFileTime(&entry.write_time, &entry.create_time, &entry.access_time,
+                 &entry.change_time);
   entry.read_only = fr.IsReadOnly();
   entry.hidden = fr.IsHidden();
   entry.system = fr.IsSystem();
+  entry.archive = fr.IsArchive();
   entry.compressed = fr.IsCompressed();
   entry.encrypted = fr.IsEncrypted();
   entry.sparse = fr.IsSparse();

@@ -1075,10 +1075,18 @@ ULONGLONG FileRecord<S>::GetFileSize() const noexcept
   return 0;
 }
 
+template <Strategy S>
+ULONGLONG FileRecord<S>::GetAllocatedSize() const noexcept
+{
+  const AttrBase<S>* data = FindStream({});
+  return data != nullptr ? data->GetAllocatedSize() : 0;
+}
+
 // Get File Times
 template <Strategy S>
 void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                                FILETIME* accessTm) const noexcept
+                                FILETIME* accessTm,
+                                FILETIME* changeTm) const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
       attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
@@ -1090,14 +1098,14 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
       return reinterpret_cast<
                  const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
                  vec.front().get())
-          ->GetFileTime(writeTm, createTm, accessTm);
+          ->GetFileTime(writeTm, createTm, accessTm, changeTm);
     }
     else if constexpr (S == Strategy::FULL_CACHE)
     {
       return reinterpret_cast<const AttrStdInfo<AttrResidentFullCache,
                                                 Strategy::FULL_CACHE>*>(
                  vec.front().get())
-          ->GetFileTime(writeTm, createTm, accessTm);
+          ->GetFileTime(writeTm, createTm, accessTm, changeTm);
     }
     return;
   }
@@ -1116,6 +1124,11 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
   {
     accessTm->dwHighDateTime = 0;
     accessTm->dwLowDateTime = 0;
+  }
+  if (changeTm != nullptr)
+  {
+    changeTm->dwHighDateTime = 0;
+    changeTm->dwLowDateTime = 0;
   }
 }
 
@@ -1402,7 +1415,7 @@ std::optional<IndexEntry>
 
 // Find Data attribute class of
 template <Strategy S>
-const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name)
+const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name) const
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
       getAttr(AttrType::DATA);
@@ -1537,6 +1550,114 @@ bool FileRecord<S>::IsSystem() const noexcept
 }
 
 template <Strategy S>
+bool FileRecord<S>::IsArchive() const noexcept
+{
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               vec.front().get())
+        ->IsArchive();
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               vec.front().get())
+        ->IsArchive();
+  }
+  return false;
+}
+
+template <Strategy S>
+bool FileRecord<S>::IsDevice() const noexcept
+{
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               vec.front().get())
+        ->IsDevice();
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               vec.front().get())
+        ->IsDevice();
+  }
+  return false;
+}
+
+template <Strategy S>
+bool FileRecord<S>::IsNormal() const noexcept
+{
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               vec.front().get())
+        ->IsNormal();
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               vec.front().get())
+        ->IsNormal();
+  }
+  return false;
+}
+
+template <Strategy S>
+bool FileRecord<S>::IsTemporary() const noexcept
+{
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               vec.front().get())
+        ->IsTemporary();
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               vec.front().get())
+        ->IsTemporary();
+  }
+  return false;
+}
+
+template <Strategy S>
 bool FileRecord<S>::IsCompressed() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
@@ -1559,6 +1680,60 @@ bool FileRecord<S>::IsCompressed() const noexcept
                const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
                vec.front().get())
         ->IsCompressed();
+  }
+  return false;
+}
+
+template <Strategy S>
+bool FileRecord<S>::IsOffline() const noexcept
+{
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               vec.front().get())
+        ->IsOffline();
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               vec.front().get())
+        ->IsOffline();
+  }
+  return false;
+}
+
+template <Strategy S>
+bool FileRecord<S>::IsNotContentIndexed() const noexcept
+{
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               vec.front().get())
+        ->IsNotContentIndexed();
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               vec.front().get())
+        ->IsNotContentIndexed();
   }
   return false;
 }
@@ -1613,6 +1788,33 @@ bool FileRecord<S>::IsSparse() const noexcept
                const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
                vec.front().get())
         ->IsSparse();
+  }
+  return false;
+}
+
+template <Strategy S>
+bool FileRecord<S>::IsReparsePoint() const noexcept
+{
+  const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+  if (vec.empty())
+  {
+    return false;
+  }
+
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               vec.front().get())
+        ->IsReparsePoint();
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    return reinterpret_cast<
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               vec.front().get())
+        ->IsReparsePoint();
   }
   return false;
 }

@@ -36,7 +36,8 @@ AttrStdInfo<RESIDENT, S>::~AttrStdInfo()
 template <typename RESIDENT, Strategy S>
 void AttrStdInfo<RESIDENT, S>::GetFileTime(FILETIME* writeTm,
                                            FILETIME* createTm,
-                                           FILETIME* accessTm) const noexcept
+                                           FILETIME* accessTm,
+                                           FILETIME* changeTm) const noexcept
 {
   if (writeTm != nullptr)
   {
@@ -51,6 +52,11 @@ void AttrStdInfo<RESIDENT, S>::GetFileTime(FILETIME* writeTm,
   if (accessTm != nullptr)
   {
     UTC2Local(std_info_.read_time, *accessTm);
+  }
+
+  if (changeTm != nullptr)
+  {
+    UTC2Local(std_info_.mft_time, *changeTm);
   }
 }
 
@@ -83,10 +89,51 @@ bool AttrStdInfo<RESIDENT, S>::IsSystem() const noexcept
 }
 
 template <typename RESIDENT, Strategy S>
+bool AttrStdInfo<RESIDENT, S>::IsArchive() const noexcept
+{
+  return static_cast<bool>(std_info_.permission &
+                           Flag::StdInfoPermission::ARCHIVE);
+}
+
+template <typename RESIDENT, Strategy S>
+bool AttrStdInfo<RESIDENT, S>::IsDevice() const noexcept
+{
+  return static_cast<bool>(std_info_.permission &
+                           Flag::StdInfoPermission::DEVICE);
+}
+
+template <typename RESIDENT, Strategy S>
+bool AttrStdInfo<RESIDENT, S>::IsNormal() const noexcept
+{
+  return static_cast<bool>(std_info_.permission &
+                           Flag::StdInfoPermission::NORMAL);
+}
+
+template <typename RESIDENT, Strategy S>
+bool AttrStdInfo<RESIDENT, S>::IsTemporary() const noexcept
+{
+  return static_cast<bool>(std_info_.permission &
+                           Flag::StdInfoPermission::TEMP);
+}
+
+template <typename RESIDENT, Strategy S>
 bool AttrStdInfo<RESIDENT, S>::IsCompressed() const noexcept
 {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::COMPRESSED);
+}
+
+template <typename RESIDENT, Strategy S>
+bool AttrStdInfo<RESIDENT, S>::IsOffline() const noexcept
+{
+  return static_cast<bool>(std_info_.permission &
+                           Flag::StdInfoPermission::OFFLINE);
+}
+
+template <typename RESIDENT, Strategy S>
+bool AttrStdInfo<RESIDENT, S>::IsNotContentIndexed() const noexcept
+{
+  return static_cast<bool>(std_info_.permission & Flag::StdInfoPermission::NCI);
 }
 
 template <typename RESIDENT, Strategy S>
@@ -101,6 +148,13 @@ bool AttrStdInfo<RESIDENT, S>::IsSparse() const noexcept
 {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::SPARSE);
+}
+
+template <typename RESIDENT, Strategy S>
+bool AttrStdInfo<RESIDENT, S>::IsReparsePoint() const noexcept
+{
+  return static_cast<bool>(std_info_.permission &
+                           Flag::StdInfoPermission::REPARSE);
 }
 
 // UTC filetime to Local filetime

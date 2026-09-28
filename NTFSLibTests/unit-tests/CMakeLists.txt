@@ -39,6 +39,7 @@ set(
   "attr-std-info-legacy-size-tests.cpp"
   "on-disk-struct-layout-tests.cpp"
   "file-record-unparsed-flags-tests.cpp"
+  "file-record-extended-metadata-tests.cpp"
   "fragmented-mft-invalid-record-tests.cpp"
   "find-stream-named-tests.cpp"
   "index-root-entry-lifetime-tests.cpp"

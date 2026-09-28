@@ -66,6 +66,11 @@ ULONGLONG Filename::GetFileSize() const noexcept
   return filename_ != nullptr ? filename_->real_size : 0;
 }
 
+ULONGLONG Filename::GetAllocatedSize() const noexcept
+{
+  return filename_ != nullptr ? filename_->alloc_size : 0;
+}
+
 ULONGLONG Filename::GetParentReference() const noexcept
 {
   return filename_ != nullptr ? filename_->parent_ref & kMftRecordNumberMask
@@ -102,6 +107,13 @@ bool Filename::IsSystem() const noexcept
 {
   return filename_ != nullptr
              ? static_cast<bool>(filename_->flags & Flag::Filename::SYSTEM)
+             : false;
+}
+
+bool Filename::IsArchive() const noexcept
+{
+  return filename_ != nullptr
+             ? static_cast<bool>(filename_->flags & Flag::Filename::ARCHIVE)
              : false;
 }
 
@@ -178,7 +190,8 @@ bool Filename::IsWin32Name() const noexcept
 
 // Change from UTC time to local time
 void Filename::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                           FILETIME* accessTm) const noexcept
+                           FILETIME* accessTm,
+                           FILETIME* changeTm) const noexcept
 {
   if (writeTm != nullptr)
   {
@@ -196,6 +209,12 @@ void Filename::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
   {
     AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>::UTC2Local(
         filename_ != nullptr ? filename_->read_time : 0, *accessTm);
+  }
+
+  if (changeTm != nullptr)
+  {
+    AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>::UTC2Local(
+        filename_ != nullptr ? filename_->mft_time : 0, *changeTm);
   }
 }
 

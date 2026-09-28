@@ -42,13 +42,19 @@ struct MftEntry
   // Real size of the unnamed $DATA stream. Without one, the $FILE_NAME size,
   // which NTFS only refreshes on a rename.
   ULONGLONG size{0};
+  // Allocated size of the unnamed $DATA stream; 0 without one.
+  ULONGLONG allocated_size{0};
   // From $STANDARD_INFORMATION, in local time.
   FILETIME create_time{};
   FILETIME write_time{};
+  // Last MFT (metadata) change time, distinct from write_time's content
+  // modification time.
+  FILETIME change_time{};
   FILETIME access_time{};
   bool read_only{false};
   bool hidden{false};
   bool system{false};
+  bool archive{false};
   bool compressed{false};
   bool encrypted{false};
   bool sparse{false};

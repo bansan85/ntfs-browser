@@ -579,7 +579,8 @@ inline constexpr ULONGLONG kMftTreeReportStaleSize = 999;
 // and a $MFT data run over them, holding:
 //   5  the root directory, sequence 5;
 //   16 "Docs", a directory in the root;
-//   17 "report.txt" in Docs, read-only, with a DOS alias "REPORT~1.TXT";
+//   17 "report.txt" in Docs, read-only and archive, with a DOS alias
+//      "REPORT~1.TXT";
 //   18 a file with two hard links: "link-a" in the root, "link-b" in Docs;
 //   19 "old.tmp", deleted, in Docs;
 //   20 "OldDir", a deleted directory in Docs, its sequence bumped on

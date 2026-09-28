@@ -35,15 +35,22 @@ class AttrStdInfo : public RESIDENT
  private:
   const Attr::StandardInformation& std_info_;
 
-  void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                   FILETIME* accessTm) const noexcept;
+  void GetFileTime(FILETIME* writeTm, FILETIME* createTm, FILETIME* accessTm,
+                   FILETIME* changeTm = nullptr) const noexcept;
   [[nodiscard]] Flag::StdInfoPermission GetFilePermission() const noexcept;
   [[nodiscard]] bool IsReadOnly() const noexcept;
   [[nodiscard]] bool IsHidden() const noexcept;
   [[nodiscard]] bool IsSystem() const noexcept;
-  [[nodiscard]] bool IsCompressed() const noexcept;
-  [[nodiscard]] bool IsEncrypted() const noexcept;
+  [[nodiscard]] bool IsArchive() const noexcept;
+  [[nodiscard]] bool IsDevice() const noexcept;
+  [[nodiscard]] bool IsNormal() const noexcept;
+  [[nodiscard]] bool IsTemporary() const noexcept;
   [[nodiscard]] bool IsSparse() const noexcept;
+  [[nodiscard]] bool IsReparsePoint() const noexcept;
+  [[nodiscard]] bool IsCompressed() const noexcept;
+  [[nodiscard]] bool IsOffline() const noexcept;
+  [[nodiscard]] bool IsNotContentIndexed() const noexcept;
+  [[nodiscard]] bool IsEncrypted() const noexcept;
 
  public:
   // Also used by Filename (src/filename.cpp) for $FILE_NAME timestamps.

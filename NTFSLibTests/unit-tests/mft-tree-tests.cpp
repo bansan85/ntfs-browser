@@ -16,6 +16,7 @@
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "corpus-test-support.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
@@ -77,9 +78,22 @@ void RunMftTreeRebuildsPaths()
     REQUIRE(report->names.size() == 2);
     CHECK(report->names[1].dos_only);
     CHECK(report->size == kMftTreeReportDataSize);
+    // A resident $DATA has no separate allocation: allocated size is the
+    // real data size.
+    CHECK(report->allocated_size == kMftTreeReportDataSize);
     CHECK(report->read_only);
+    CHECK(report->archive);
     CHECK(report->in_use);
     CHECK_FALSE(report->directory);
+    // WriteStandardInformationAttr() gives create/write/change/access
+    // distinct on-disk values, so a wrong field wiring (eg. change_time
+    // reading alter_time) would collapse two of these into one.
+    CHECK(FileTimeToTicks(report->change_time) !=
+          FileTimeToTicks(report->write_time));
+    CHECK(FileTimeToTicks(report->change_time) !=
+          FileTimeToTicks(report->create_time));
+    CHECK(FileTimeToTicks(report->change_time) !=
+          FileTimeToTicks(report->access_time));
   }
 
   SECTION("Each hard link has its own path")

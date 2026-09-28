@@ -674,6 +674,12 @@ ULONGLONG AttrNonResident<S>::GetDataSize() const noexcept
   return attr_header_nr_.real_size;
 }
 
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::GetAllocatedSize() const noexcept
+{
+  return attr_header_nr_.alloc_size;
+}
+
 // Read "bufLen" bytes from "offset" into "bufv", bounded by "limit" total
 // bytes. Number of bytes acturally read is returned in "*actural"
 template <Strategy S>
