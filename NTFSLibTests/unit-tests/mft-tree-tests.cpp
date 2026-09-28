@@ -78,9 +78,9 @@ void RunMftTreeRebuildsPaths()
     REQUIRE(report->names.size() == 2);
     CHECK(report->names[1].dos_only);
     CHECK(report->size == kMftTreeReportDataSize);
-    // A resident $DATA has no separate allocation: allocated size is the
-    // real data size.
-    CHECK(report->allocated_size == kMftTreeReportDataSize);
+    // A resident $DATA's allocated size is its attribute record's own
+    // padded reservation, which exceeds the real data size here.
+    CHECK(report->allocated_size == kMftTreeReportAllocatedSize);
     CHECK(report->read_only);
     CHECK(report->archive);
     CHECK(report->in_use);

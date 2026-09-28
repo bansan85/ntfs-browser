@@ -61,8 +61,10 @@ class NTFS_BROWSER_EXPORT AttrBase
  public:
   [[nodiscard]] virtual const BYTE* GetData() const noexcept = 0;
   [[nodiscard]] virtual ULONGLONG GetDataSize() const noexcept = 0;
-  // Bytes actually allocated on disk for this attribute; equals GetDataSize()
-  // for a resident attribute, since it has no separate allocation.
+  // Bytes reserved on disk for this attribute. For a resident attribute this
+  // is the space NTFS reserves for it within the attribute record, padded to
+  // the record's own alignment - not necessarily GetDataSize(), which is the
+  // real content length alone.
   [[nodiscard]] virtual ULONGLONG GetAllocatedSize() const noexcept = 0;
   [[nodiscard]] virtual std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const = 0;

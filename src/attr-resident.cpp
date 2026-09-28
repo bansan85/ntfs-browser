@@ -32,12 +32,17 @@ AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
 {
 }
 
-// A resident attribute's bytes live inline in the MFT record: no separate
-// allocation, so allocated size is the same as the real data size.
+// A resident attribute's bytes live inline in the MFT record: NTFS still
+// reserves space for them within the attribute record, padded to the
+// record's own 8-byte alignment, which can exceed the real data size by a
+// few bytes. This is what Windows itself reports as a resident attribute's
+// allocation size, so match it instead of returning GetDataSize().
 template <Strategy S>
 ULONGLONG AttrResident<S>::GetAllocatedSize() const noexcept
 {
-  return this->GetDataSize();
+  const auto& header =
+      reinterpret_cast<const Attr::HeaderResident&>(this->GetAttrHeader());
+  return header.header.total_size - header.attr_offset;
 }
 
 // Read "bufLen" bytes from "offset" into "bufv"

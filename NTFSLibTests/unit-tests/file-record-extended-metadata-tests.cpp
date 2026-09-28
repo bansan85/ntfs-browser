@@ -45,9 +45,10 @@ void RunFileRecordExposesExtendedMetadata()
   CHECK(report.IsReadOnly());
   CHECK(report.IsArchive());
 
-  // The unnamed $DATA's own size, not $FILE_NAME's stale
+  // The unnamed $DATA's own padded allocation, not $FILE_NAME's stale
   // kMftTreeReportStaleSize.
-  CHECK(report.GetAllocatedSize() == NtfsBrowserTests::kMftTreeReportDataSize);
+  CHECK(report.GetAllocatedSize() ==
+        NtfsBrowserTests::kMftTreeReportAllocatedSize);
 
   FILETIME writeTm{};
   FILETIME createTm{};

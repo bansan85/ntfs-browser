@@ -574,6 +574,12 @@ inline constexpr ULONGLONG kMftTreeZeroedIdx = 25;
 // rename does.
 inline constexpr DWORD kMftTreeReportDataSize = 37;
 inline constexpr ULONGLONG kMftTreeReportStaleSize = 999;
+// Allocated size of that same resident $DATA: NTFS pads a resident
+// attribute record to an 8-byte boundary, and the allocated size is that
+// padded record length minus its 24-byte HeaderResident, not the raw
+// content length. WriteResidentDataAttr() reproduces the padding, so this
+// is AlignAttrSize(24 + kMftTreeReportDataSize) - 24 = 64 - 24.
+inline constexpr DWORD kMftTreeReportAllocatedSize = 40;
 
 // Same volume as BuildFakeNtfsImage(), with kMftTreeRecordCount record slots
 // and a $MFT data run over them, holding:
