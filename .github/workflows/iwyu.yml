@@ -1,0 +1,73 @@
+---
+name: iwyu
+on:
+  workflow_dispatch:
+jobs:
+  iwyu:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Add the apt.llvm.org clang 23 repo
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key |
+            sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/llvm-toolchain-noble-23.sources
+          Enabled: yes
+          Types: deb deb-src
+          URIs: http://apt.llvm.org/noble/
+          Suites: llvm-toolchain-noble-23
+          Components: main
+          Signed-By: /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          EOF
+          sudo apt-get update
+      - name: Install clang 23 and build tools
+        run: |
+          sudo apt-get install -yq \
+            clang-23 clang-tools-23 clang-format-23 \
+            libclang-23-dev libclang-cpp23-dev llvm-23-dev \
+            cmake ninja-build git
+      - name: Build IWYU (clang_23 branch)
+        env:
+          CC: clang-23
+          CXX: clang++-23
+        run: |
+          git clone --branch clang_23 --depth 1 \
+            https://github.com/include-what-you-use/include-what-you-use.git \
+            "${{ runner.temp }}/iwyu"
+          cmake -S "${{ runner.temp }}/iwyu" -B "${{ runner.temp }}/iwyu-build" \
+            -G Ninja -DCMAKE_PREFIX_PATH=/usr/lib/llvm-23 -DCMAKE_BUILD_TYPE=Release
+          cmake --build "${{ runner.temp }}/iwyu-build" --parallel
+          echo "${{ runner.temp }}/iwyu-build/bin" >>"$GITHUB_PATH"
+      - name: Configure (compile_commands.json only, no build)
+        env:
+          CC: clang-23
+          CXX: clang++-23
+        run: |
+          cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON \
+            -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON \
+            -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON
+      - name: iwyu
+        run: |
+          python3 "${{ runner.temp }}/iwyu/iwyu_tool.py" -p build/ src NTFSLibTests \
+            >iwyu.log || true
+          python3 "${{ runner.temp }}/iwyu/fix_includes.py" --nosafe_headers <iwyu.log
+      - name: clang-format
+        run: |
+          find . \( -path ./3rdparty -o -path ./.claude -o -path ./build \) -prune \
+            -o \( -name '*.cpp' -o -name '*.h' \) -exec clang-format-23 -style=file -i {} +
+      - name: Produce the fix patch
+        run: |
+          git diff >iwyu-fixes.patch
+          git diff --stat
+      - name: Upload results
+        uses: actions/upload-artifact@v5
+        with:
+          name: iwyu-fixes
+          path: |
+            iwyu.log
+            iwyu-fixes.patch
+          if-no-files-found: error
