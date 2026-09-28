@@ -1,11 +1,11 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstddef>
 #include <span>
 #include <string_view>
 #include <vector>
-
-#include <windows.h>
 
 #include <ntfs-browser/disk-reader.h>
 

@@ -1,15 +1,15 @@
 #include "fake-ntfs-image.h"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstring>
 #include <fstream>
 #include <random>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
-
-#include <windows.h>
 
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/data/attr-type.h>
@@ -99,6 +99,41 @@ void WriteEndOfAttributesMarker(FakeRecord& record, DWORD offset)
 {
   const DWORD marker = static_cast<DWORD>(AttrType::ALL);
   std::memcpy(&record[offset], &marker, sizeof(marker));
+}
+
+// Encodes text as on-disk UTF-16LE code units: WORD, not wchar_t, which is
+// only 16 bits on some platforms (eg. Windows) and 32 on others (eg. Linux).
+// A code point above the BMP is split into a surrogate pair; an element
+// already in the surrogate range (eg. one half of a pair a 16-bit wchar_t
+// already split) passes through as one unit, so this is correct whether
+// text arrived pre-split or not.
+std::vector<WORD> ToUtf16(std::wstring_view text)
+{
+  constexpr char32_t kMaxBmp = 0xFFFF;
+  constexpr char32_t kSurrogateBase = 0x10000;
+  constexpr unsigned kSurrogateShift = 10;
+  constexpr char32_t kSurrogateMask = 0x3FF;
+  constexpr WORD kHighSurrogateFirst = 0xD800;
+  constexpr WORD kLowSurrogateFirst = 0xDC00;
+
+  std::vector<WORD> units;
+  units.reserve(text.size());
+  for (const wchar_t ch : text)
+  {
+    const auto codePoint =
+        static_cast<char32_t>(static_cast<std::make_unsigned_t<wchar_t>>(ch));
+    if (codePoint <= kMaxBmp)
+    {
+      units.push_back(static_cast<WORD>(codePoint));
+      continue;
+    }
+    const char32_t offset = codePoint - kSurrogateBase;
+    units.push_back(
+        static_cast<WORD>(kHighSurrogateFirst + (offset >> kSurrogateShift)));
+    units.push_back(
+        static_cast<WORD>(kLowSurrogateFirst + (offset & kSurrogateMask)));
+  }
+  return units;
 }
 
 // Writes record at byteOffset, growing image to the next 64 KiB boundary -
@@ -362,11 +397,12 @@ FakeRecord MakeVolumeRecordWithName(std::wstring_view name)
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 1;
-  attr.attr_size = static_cast<DWORD>(name.size() * sizeof(wchar_t));
+  const std::vector<WORD> encodedName = ToUtf16(name);
+  attr.attr_size = static_cast<DWORD>(encodedName.size() * sizeof(WORD));
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
-  std::memcpy(&record[nameOffset + attr.attr_offset], name.data(),
+  std::memcpy(&record[nameOffset + attr.attr_offset], encodedName.data(),
               attr.attr_size);
 
   WriteEndOfAttributesMarker(record, nameOffset + attr.header.total_size);
@@ -893,9 +929,10 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord()
   attr.header.name_offset = kAttrNameBoundsNameOffset;
 
   // Past total_size (28), but still inside the 1024-byte record buffer.
+  const std::vector<WORD> encodedSentinel = ToUtf16(kAttrNameBoundsSentinel);
   std::memcpy(&record[kAttrOffset + kAttrNameBoundsNameOffset],
-              kAttrNameBoundsSentinel,
-              static_cast<size_t>(kAttrNameBoundsNameLength) * sizeof(wchar_t));
+              encodedSentinel.data(),
+              static_cast<size_t>(kAttrNameBoundsNameLength) * sizeof(WORD));
 
   WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
   return record;
@@ -1165,18 +1202,17 @@ FakeRecord MakeNamedDataStreamRecord()
   attr.header.non_resident = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
+  const std::vector<WORD> encodedName = ToUtf16(kNamedDataStreamName);
   attr.header.name_length = kNamedDataStreamNameLength;
   attr.header.name_offset = static_cast<WORD>(sizeof(attr));
   attr.attr_size = static_cast<DWORD>(kNamedDataStreamContent.size());
-  attr.attr_offset = static_cast<WORD>(
-      sizeof(attr) +
-      static_cast<size_t>(kNamedDataStreamNameLength) * sizeof(wchar_t));
+  attr.attr_offset =
+      static_cast<WORD>(sizeof(attr) + encodedName.size() * sizeof(WORD));
   attr.header.total_size =
       static_cast<DWORD>(attr.attr_offset) + attr.attr_size;
 
-  std::memcpy(
-      &record[kAttrOffset + attr.header.name_offset], kNamedDataStreamName,
-      static_cast<size_t>(kNamedDataStreamNameLength) * sizeof(wchar_t));
+  std::memcpy(&record[kAttrOffset + attr.header.name_offset],
+              encodedName.data(), encodedName.size() * sizeof(WORD));
   std::memcpy(&record[kAttrOffset + attr.attr_offset],
               kNamedDataStreamContent.data(), kNamedDataStreamContent.size());
 
@@ -1884,8 +1920,9 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
       *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(&record[offset]);
   attr.header.type = type;
   attr.header.non_resident = 1;
-  assert(overrides.name.size() <= 255 && "on-disk name_length is one byte");
-  attr.header.name_length = static_cast<BYTE>(overrides.name.size());
+  const std::vector<WORD> encodedName = ToUtf16(overrides.name);
+  assert(encodedName.size() <= 255 && "on-disk name_length is one byte");
+  attr.header.name_length = static_cast<BYTE>(encodedName.size());
   attr.header.flags = overrides.flags.value_or(
       (compUnitSize != 0) ? kAttrFlagCompressed : static_cast<WORD>(0));
   attr.header.id = 0;
@@ -1912,11 +1949,11 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
   const auto headerSize = static_cast<WORD>(
       sizeof(attr) +
       ((compUnitSize != 0) ? NtfsBrowser::Attr::kCompressedSizeFieldSize : 0));
-  const size_t nameBytes = overrides.name.size() * sizeof(wchar_t);
+  const size_t nameBytes = encodedName.size() * sizeof(WORD);
   if (nameBytes != 0)
   {
     attr.header.name_offset = headerSize;
-    std::memcpy(&record[offset + headerSize], overrides.name.data(), nameBytes);
+    std::memcpy(&record[offset + headerSize], encodedName.data(), nameBytes);
   }
   const auto runOffset = static_cast<WORD>(headerSize + nameBytes);
   attr.data_run_offset = runOffset;
@@ -1966,11 +2003,6 @@ struct FakeIndexName
   bool directory;
 };
 
-// A UTF-16 code unit is one on-disk name character; wchar_t must match it
-// for a name to be copied over unit by unit.
-static_assert(sizeof(wchar_t) == sizeof(WORD),
-              "fixtures copy wchar_t names into 16-bit on-disk units");
-
 // Writes "name" as a leaf index entry at "dest" and returns its size in
 // bytes. Entries are packed with no padding, like every other fixture here.
 WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name)
@@ -1983,11 +2015,12 @@ WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name)
   fn.parent_ref = static_cast<ULONGLONG>(MftIdx::ROOT);
   fn.flags = name.directory ? NtfsBrowser::Flag::Filename::DIRECTORY
                             : NtfsBrowser::Flag::Filename::NONE;
-  fn.name_length = static_cast<BYTE>(name.name.size());
+  const std::vector<WORD> encodedName = ToUtf16(name.name);
+  fn.name_length = static_cast<BYTE>(encodedName.size());
   fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
-  for (size_t i = 0; i < name.name.size(); i++)
+  for (size_t i = 0; i < encodedName.size(); i++)
   {
-    fn.name[i] = static_cast<WORD>(name.name[i]);
+    fn.name[i] = encodedName[i];
   }
 
   entry.stream_size =
@@ -2327,7 +2360,7 @@ std::vector<BYTE> BuildFakeNtfsImage()
                     (static_cast<size_t>(MftIdx::ROOT) + 1);
   // FULL_CACHE always reads a 64 KiB block regardless of length requested.
   constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
-  const size_t imageSize = max(recordsEnd, kFullCacheReadBlockSize);
+  const size_t imageSize = std::max(recordsEnd, kFullCacheReadBlockSize);
   std::vector<BYTE> image(imageSize, 0);
   std::memcpy(image.data(), &bpb, sizeof(bpb));
 
@@ -3608,22 +3641,23 @@ DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
                            std::span<const BYTE> body)
 {
   constexpr std::wstring_view kName = L"$EFS";
+  const std::vector<WORD> encodedName = ToUtf16(kName);
   auto& attr =
       *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
   attr.header.type = AttrType::LOGGED_UTILITY_STREAM;
   attr.header.non_resident = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.header.name_length = static_cast<BYTE>(kName.size());
+  attr.header.name_length = static_cast<BYTE>(encodedName.size());
   attr.header.name_offset = static_cast<WORD>(sizeof(attr));
   attr.attr_size = static_cast<DWORD>(body.size());
   attr.attr_offset =
-      static_cast<WORD>(sizeof(attr) + (kName.size() * sizeof(wchar_t)));
+      static_cast<WORD>(sizeof(attr) + (encodedName.size() * sizeof(WORD)));
   attr.header.total_size =
       static_cast<DWORD>(attr.attr_offset) + attr.attr_size;
 
-  std::memcpy(&record[offset + attr.header.name_offset], kName.data(),
-              kName.size() * sizeof(wchar_t));
+  std::memcpy(&record[offset + attr.header.name_offset], encodedName.data(),
+              encodedName.size() * sizeof(WORD));
   std::memcpy(&record[offset + attr.attr_offset], body.data(), body.size());
   return attr.header.total_size;
 }

@@ -10,6 +10,7 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "partition-disk-reader.h"
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
@@ -28,6 +29,17 @@ struct TempImage
   TempImage& operator=(const TempImage&) = delete;
 };
 
+// Opens path through a PartitionDiskReader (offset 0), so this exercises a
+// real on-disk file read without depending on NtfsVolume's own path-based
+// constructor, which only exists on Windows (Win32DiskReader).
+std::unique_ptr<NtfsBrowser::IDiskReader>
+    OpenOnDisk(const std::filesystem::path& path)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::PartitionDiskReader>(0);
+  REQUIRE(reader->Open(path.wstring()));
+  return reader;
+}
+
 }  // namespace
 
 TEST_CASE(
@@ -36,7 +48,7 @@ TEST_CASE(
 {
   TempImage image;
 
-  NtfsVolume<Strategy::NO_CACHE> volume(image.path.wstring());
+  NtfsVolume<Strategy::NO_CACHE> volume(OpenOnDisk(image.path));
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
 
@@ -53,7 +65,7 @@ TEST_CASE(
 {
   TempImage image;
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(image.path.wstring());
+  NtfsVolume<Strategy::FULL_CACHE> volume(OpenOnDisk(image.path));
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
 

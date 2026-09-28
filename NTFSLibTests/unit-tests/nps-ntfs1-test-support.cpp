@@ -40,6 +40,11 @@ void ParseDir(FileRecord<Strategy::NO_CACHE>& dir, ULONGLONG fileRef)
 
 }  // namespace
 
+std::unique_ptr<NtfsBrowser::IDiskReader> OpenNtfs1Image()
+{
+  return OpenBareVolumeImage(kNtfs1Image);
+}
+
 void OpenRootDir(FileRecord<Strategy::NO_CACHE>& dir)
 {
   ParseDir(dir, static_cast<ULONGLONG>(MftIdx::ROOT));

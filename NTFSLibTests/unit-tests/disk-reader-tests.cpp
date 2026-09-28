@@ -7,7 +7,6 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
-#include <windows.h>
 
 #include "memory-disk-reader.h"
 #include "sequential-disk-reader.h"

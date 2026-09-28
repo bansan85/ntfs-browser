@@ -2,19 +2,31 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <random>
 #include <span>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
-#include <windows.h>
 
 #include <ntfs-browser/strategy.h>
 
 #include "file-reader.h"
+#include "partition-disk-reader.h"
 
 namespace
 {
+
+// Opens path through a PartitionDiskReader (offset 0) instead of
+// FileReader's own Open(), which only exists on Windows (Win32DiskReader).
+NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE>
+    OpenOnDisk(const std::filesystem::path& path)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::PartitionDiskReader>(0);
+  REQUIRE(reader->Open(path.wstring()));
+  return NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE>(
+      std::move(reader));
+}
 
 // Writes content to a new temp file and returns its path.
 std::filesystem::path WriteTempFile(std::span<const BYTE> content)
@@ -56,8 +68,8 @@ TEST_CASE("FileReader::ReadInto reads into the caller-provided buffer",
   }
   TempFile file(content);
 
-  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> reader;
-  REQUIRE(reader.Open(file.path.wstring()));
+  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> reader =
+      OpenOnDisk(file.path);
 
   std::array<BYTE, 128> dest{};
   LARGE_INTEGER addr{.QuadPart = 1000};
@@ -74,8 +86,8 @@ TEST_CASE("FileReader::ReadInto fails past end of file", "[file-reader]")
   std::vector<BYTE> content(16, 0xAB);
   TempFile file(content);
 
-  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> reader;
-  REQUIRE(reader.Open(file.path.wstring()));
+  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> reader =
+      OpenOnDisk(file.path);
 
   std::array<BYTE, 128> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};

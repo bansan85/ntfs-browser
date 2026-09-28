@@ -1,23 +1,27 @@
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
-#include <memory>
-#include <string>
-#include <vector>
+// MakePfxKeyProvider() - this whole file's subject - only exists on Windows
+// (PFX import goes through CryptoAPI/CNG): see include/ntfs-browser/efs.h.
+#ifdef _WIN32
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
+  #include <algorithm>
+  #include <filesystem>
+  #include <fstream>
+  #include <iterator>
+  #include <memory>
+  #include <string>
+  #include <vector>
 
-#include <ntfs-browser/efs.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/ntfs-volume.h>
+  #include <catch2/catch_test_macros.hpp>
+  #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include "efs-test-support.h"
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
-#include "test-log-sink.h"
+  #include <ntfs-browser/efs.h>
+  #include <ntfs-browser/file-record.h>
+  #include <ntfs-browser/mft-idx.h>
+  #include <ntfs-browser/ntfs-volume.h>
+
+  #include "efs-test-support.h"
+  #include "fake-ntfs-image.h"
+  #include "memory-disk-reader.h"
+  #include "test-log-sink.h"
 
 namespace fs = std::filesystem;
 
@@ -178,3 +182,5 @@ TEST_CASE("A stream decrypts end to end with a PFX key provider", "[efs][pfx]")
     CHECK(buffer == plaintext);
   }
 }
+
+#endif  // _WIN32

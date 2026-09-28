@@ -76,7 +76,8 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
 {
   NtfsBrowserTests::RequireCorpusImage(kDfttImage);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(kDfttImage.wstring());
+  NtfsVolume<Strategy::NO_CACHE> volume(
+      NtfsBrowserTests::OpenBareVolumeImage(kDfttImage));
   REQUIRE(volume.IsVolumeOK());
 
   // Resident allocated file.
@@ -98,7 +99,8 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   // include_deleted on.
   VolumeOptions options;
   options.include_deleted = true;
-  NtfsVolume<Strategy::NO_CACHE> del_volume(kDfttImage.wstring(), options);
+  NtfsVolume<Strategy::NO_CACHE> del_volume(
+      NtfsBrowserTests::OpenBareVolumeImage(kDfttImage), options);
   REQUIRE(del_volume.IsVolumeOK());
   CheckReadsKeywordFile(del_volume, {34, {}, "r-unalloc", 120, true, false});
 

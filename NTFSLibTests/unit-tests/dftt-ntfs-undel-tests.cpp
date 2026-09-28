@@ -62,11 +62,10 @@ void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NO_CACHE>& volume,
 
   FILETIME create_time{};
   record.GetFileTime(nullptr, &create_time, nullptr);
-  SYSTEMTIME create_st{};
-  REQUIRE(FileTimeToSystemTime(&create_time, &create_st) == TRUE);
-  CHECK(create_st.wYear == 2004);
-  CHECK(create_st.wMonth == 2);
-  CHECK(create_st.wDay == 29);
+  const auto [year, month, day] = NtfsBrowserTests::FileTimeToDate(create_time);
+  CHECK(year == 2004);
+  CHECK(month == 2);
+  CHECK(day == 29);
 
   const AttrBase<Strategy::NO_CACHE>* stream =
       record.FindStream(file.stream_name);
@@ -89,7 +88,8 @@ TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
 
   VolumeOptions options;
   options.include_deleted = true;
-  NtfsVolume<Strategy::NO_CACHE> volume(kDfttImage.wstring(), options);
+  NtfsVolume<Strategy::NO_CACHE> volume(
+      NtfsBrowserTests::OpenBareVolumeImage(kDfttImage), options);
   REQUIRE(volume.IsVolumeOK());
 
   // Resident file.

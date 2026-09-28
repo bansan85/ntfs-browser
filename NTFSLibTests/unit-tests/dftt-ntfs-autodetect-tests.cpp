@@ -41,7 +41,8 @@ void CheckReadsPartitionImage(std::wstring_view imageName)
   const std::filesystem::path imagePath = kAutodetectDir / imageName;
   NtfsBrowserTests::RequireCorpusImage(imagePath);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(imagePath.wstring());
+  NtfsVolume<Strategy::NO_CACHE> volume(
+      NtfsBrowserTests::OpenBareVolumeImage(imagePath));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord root(volume);

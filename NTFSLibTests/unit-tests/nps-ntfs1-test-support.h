@@ -4,9 +4,11 @@
 
 #include <array>
 #include <filesystem>
+#include <memory>
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
@@ -46,6 +48,11 @@ inline constexpr std::array<KnownFile, 5> kKnownFiles{{
     // other directories: naturally, heavily fragmented.
     {"logfile1.txt", 21888890, "be2828dda150f19edf9a0fc87e3ab640"},
 }};
+
+// Opens kNtfs1Image through a PartitionDiskReader, so NtfsVolume's own
+// path-based constructor - Windows-only, since it goes through
+// Win32DiskReader - is never needed for this corpus's bare-volume image.
+[[nodiscard]] std::unique_ptr<NtfsBrowser::IDiskReader> OpenNtfs1Image();
 
 // Parses dir's own file record as the volume's root directory, ready for
 // FindSubEntry(). dir must already be constructed on that volume.

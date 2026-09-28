@@ -208,12 +208,9 @@ void CheckRepairStreamsHoldPtrnPattern(
 // comparison flaky.
 ULONGLONG TickDelta(const FILETIME& a, const FILETIME& b)
 {
-  const ULARGE_INTEGER ua{.LowPart = a.dwLowDateTime,
-                          .HighPart = a.dwHighDateTime};
-  const ULARGE_INTEGER ub{.LowPart = b.dwLowDateTime,
-                          .HighPart = b.dwHighDateTime};
-  return ua.QuadPart > ub.QuadPart ? ua.QuadPart - ub.QuadPart
-                                   : ub.QuadPart - ua.QuadPart;
+  const ULONGLONG ua = NtfsBrowserTests::FileTimeToTicks(a);
+  const ULONGLONG ub = NtfsBrowserTests::FileTimeToTicks(b);
+  return ua > ub ? ua - ub : ub - ua;
 }
 
 // ReadMe.md documents each timestamp only to the whole second, so each one's
@@ -228,9 +225,7 @@ void CheckDeltaMatchesSeconds(ULONGLONG deltaTicks, ULONGLONG expectedSeconds)
 // Year/month/day of ft, converted from its (local-time) FILETIME.
 std::tuple<WORD, WORD, WORD> ToDate(const FILETIME& ft)
 {
-  SYSTEMTIME st{};
-  REQUIRE(FileTimeToSystemTime(&ft, &st) == TRUE);
-  return {st.wYear, st.wMonth, st.wDay};
+  return NtfsBrowserTests::FileTimeToDate(ft);
 }
 
 }  // namespace

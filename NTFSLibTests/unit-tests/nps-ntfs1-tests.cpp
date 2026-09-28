@@ -53,7 +53,7 @@ TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
 
   const NtfsVolume<Strategy::NO_CACHE> volume(
-      NtfsBrowserTests::kNtfs1Image.wstring(), VolumeOptions{});
+      NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   CheckDirMatchesGroundTruth(volume, "RAW");
@@ -73,7 +73,7 @@ TEST_CASE(
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
 
   const NtfsVolume<Strategy::NO_CACHE> volume(
-      NtfsBrowserTests::kNtfs1Image.wstring(), VolumeOptions{});
+      NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   CheckDirMatchesGroundTruth(volume, "Compressed");

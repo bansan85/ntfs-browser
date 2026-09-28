@@ -1,26 +1,30 @@
-#include <ntfs-browser/win-types.h>
+// MakePfxKeyProvider() - this whole file's subject - only exists on Windows
+// (PFX import goes through CryptoAPI/CNG): see include/ntfs-browser/efs.h.
+#ifdef _WIN32
 
-#include <array>
-#include <filesystem>
-#include <fstream>
-#include <memory>
-#include <optional>
-#include <random>
-#include <string>
-#include <string_view>
-#include <vector>
+  #include <ntfs-browser/win-types.h>
 
-#include <catch2/catch_test_macros.hpp>
+  #include <array>
+  #include <filesystem>
+  #include <fstream>
+  #include <memory>
+  #include <optional>
+  #include <random>
+  #include <string>
+  #include <string_view>
+  #include <vector>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/efs.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
-#include <ntfs-browser/volume-options.h>
+  #include <catch2/catch_test_macros.hpp>
 
-#include "md5-test-support.h"
-#include "nps-ntfs1-test-support.h"
+  #include <ntfs-browser/attr-base.h>
+  #include <ntfs-browser/efs.h>
+  #include <ntfs-browser/file-record.h>
+  #include <ntfs-browser/ntfs-volume.h>
+  #include <ntfs-browser/strategy.h>
+  #include <ntfs-browser/volume-options.h>
+
+  #include "md5-test-support.h"
+  #include "nps-ntfs1-test-support.h"
 
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
@@ -77,7 +81,7 @@ TEST_CASE(
 {
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(NtfsBrowserTests::kNtfs1Image.wstring(),
+  NtfsVolume<Strategy::NO_CACHE> volume(NtfsBrowserTests::OpenNtfs1Image(),
                                         VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
@@ -123,9 +127,9 @@ TEST_CASE(
       if (file.name == kReencryptedFile)
       {
         REQUIRE(read == data.size());
-#ifdef NTFS_TEST_HAS_MD5
+  #ifdef NTFS_TEST_HAS_MD5
         CHECK(NtfsBrowserTests::Md5Hex(data) == file.md5);
-#endif
+  #endif
       }
       else
       {
@@ -134,3 +138,5 @@ TEST_CASE(
     }
   }
 }
+
+#endif  // _WIN32

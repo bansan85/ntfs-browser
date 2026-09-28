@@ -1,6 +1,12 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <filesystem>
+#include <memory>
+#include <tuple>
+
+#include <ntfs-browser/disk-reader.h>
 
 namespace NtfsBrowserTests
 {
@@ -24,5 +30,21 @@ inline const std::filesystem::path kFragmentedMftImage =
 // NTFS_BROWSER_REQUIRE_TEST_DATA, FAILs it instead: CI fetches every image
 // this guards, so a skip there would hide a broken fetch.
 void RequireCorpusImage(const std::filesystem::path& image);
+
+// Opens imagePath (a bare-volume image: no MBR, boot sector at byte 0)
+// through a PartitionDiskReader, so NtfsVolume's own path-based constructor -
+// Windows-only, since it goes through Win32DiskReader - is never needed to
+// open a corpus image.
+[[nodiscard]] std::unique_ptr<NtfsBrowser::IDiskReader>
+    OpenBareVolumeImage(const std::filesystem::path& imagePath);
+
+// Combines a FILETIME's two 32-bit halves into its 100 ns tick count since
+// 1601-01-01.
+[[nodiscard]] ULONGLONG FileTimeToTicks(const FILETIME& ft) noexcept;
+
+// Decomposes ft into a Gregorian (year, month, day) triple. A portable stand-
+// in for Win32's FileTimeToSystemTime(), which does not exist off Windows.
+[[nodiscard]] std::tuple<WORD, WORD, WORD>
+    FileTimeToDate(const FILETIME& ft) noexcept;
 
 }  // namespace NtfsBrowserTests

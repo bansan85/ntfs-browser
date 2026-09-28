@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -8,8 +10,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <windows.h>
 
 #include "gap-collation-probe.h"
 #include "named-stream-probe.h"
