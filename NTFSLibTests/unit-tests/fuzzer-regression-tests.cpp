@@ -9,7 +9,11 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <frozen/bits/elsa_std.h>
 #include <frozen/unordered_map.h>
-#include <windows.h>
+
+#include "child-process.h"
+
+using NtfsBrowserTests::ProcessOutput;
+using NtfsBrowserTests::RunProcessCapturingOutput;
 
 namespace fs = std::filesystem;
 
@@ -362,80 +366,6 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
          {true, {"Index Block: sub-node vcn overflows byte offset"}}},
 };
 
-struct RunResult
-{
-  DWORD exit_code = 0;
-  std::string output;
-};
-
-// Reads a child process' combined stdout/stderr through a pipe while
-// waiting for it to exit. The write end must be closed in this process
-// after CreateProcess() -- otherwise ReadFile() blocks forever waiting for
-// an EOF that can only come once every write handle (including this
-// process' own copy) is gone.
-std::string ReadAllAndClose(HANDLE readPipe)
-{
-  std::string output;
-  std::array<char, 4096> chunk{};
-  DWORD bytesRead = 0;
-
-  while (ReadFile(readPipe, chunk.data(), static_cast<DWORD>(chunk.size()),
-                  &bytesRead, nullptr) &&
-         bytesRead > 0)
-  {
-    output.append(chunk.data(), bytesRead);
-  }
-
-  CloseHandle(readPipe);
-  return output;
-}
-
-// Runs exe on testcase; returns its exit code and everything it printed.
-RunResult RunFuzzerOnFile(const fs::path& exe, const fs::path& testcase)
-{
-  SECURITY_ATTRIBUTES pipeAttr{};
-  pipeAttr.nLength = sizeof(pipeAttr);
-  pipeAttr.bInheritHandle = TRUE;
-
-  HANDLE readPipe = nullptr;
-  HANDLE writePipe = nullptr;
-  REQUIRE(CreatePipe(&readPipe, &writePipe, &pipeAttr, 0));
-  // Without this, the child would inherit the read end too, and could
-  // deadlock ReadAllAndClose() above by keeping the write end open.
-  REQUIRE(SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0));
-
-  std::wstring cmdLine = L"\"" + exe.wstring() +
-                         L"\" --inject-read-failures \"" + testcase.wstring() +
-                         L"\"";
-
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  si.dwFlags = STARTF_USESTDHANDLES;
-  si.hStdOutput = writePipe;
-  si.hStdError = writePipe;
-  si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-  PROCESS_INFORMATION pi{};
-
-  const BOOL created = CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr,
-                                      TRUE, 0, nullptr, nullptr, &si, &pi);
-  // Must close this process' copy now regardless of success, or
-  // ReadAllAndClose() below hangs.
-  CloseHandle(writePipe);
-  REQUIRE(created);
-
-  const std::string output = ReadAllAndClose(readPipe);
-
-  WaitForSingleObject(pi.hProcess, INFINITE);
-
-  DWORD exitCode = 0;
-  GetExitCodeProcess(pi.hProcess, &exitCode);
-
-  CloseHandle(pi.hProcess);
-  CloseHandle(pi.hThread);
-
-  return {exitCode, output};
-}
-
 // Runs one saved regression testcase and, if kExpectedErrorMessages has an
 // entry for it, checks its output against that entry's expected messages.
 void RunRegressionTestcase(std::string_view name)
@@ -446,7 +376,8 @@ void RunRegressionTestcase(std::string_view name)
   const fs::path file = fs::path(NTFS_FUZZ_DATA_DIR) / name;
   REQUIRE(fs::exists(file));
 
-  const RunResult result = RunFuzzerOnFile(exe, file);
+  const ProcessOutput result = RunProcessCapturingOutput(
+      exe, {L"--inject-read-failures", file.wstring()});
   CHECK(result.exit_code == 0);
 
   const auto it = kExpectedErrorMessages.find(name);

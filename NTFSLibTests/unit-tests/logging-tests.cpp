@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -22,12 +23,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include <windows.h>
 
 #include <ntfs-browser/log.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
+#include "child-process.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "ntfs-common.h"
@@ -71,7 +72,7 @@ class TempFile
   explicit TempFile(std::wstring_view tag)
       : path_(fs::temp_directory_path() /
               (L"ntfsbrowser-log-" + std::wstring(tag) + L"-" +
-               std::to_wstring(GetCurrentProcessId()) + L".txt"))
+               std::to_wstring(std::random_device{}()) + L".txt"))
   {
     std::error_code ec;
     fs::remove(path_, ec);
@@ -101,28 +102,17 @@ class TempFile
   fs::path path_;
 };
 
-// Opens path for the child process to inherit as a standard stream.
-HANDLE CreateInheritableOutput(const fs::path& path)
-{
-  SECURITY_ATTRIBUTES attr{};
-  attr.nLength = sizeof(attr);
-  attr.bInheritHandle = TRUE;
-
-  return CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, &attr,
-                     CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-}
-
 struct ChildOutput
 {
-  DWORD exit_code = 0;
+  int exit_code = 0;
   std::string out;
   std::string err;
 };
 
 // Runs NtfsFuzzerAfl on the corpus testcase with extraArgs appended, and
-// returns its two standard streams separately. Files rather than pipes,
-// so neither stream can fill a pipe buffer and deadlock the other.
-ChildOutput RunFuzzer(const std::wstring& extraArgs)
+// returns its two standard streams separately. Files rather than a pipe, so
+// neither stream can fill a pipe buffer and deadlock the other.
+ChildOutput RunFuzzer(const std::vector<std::wstring>& extraArgs)
 {
   const fs::path exe(NTFS_FUZZER_AFL_EXE);
   const fs::path testcase =
@@ -133,35 +123,12 @@ ChildOutput RunFuzzer(const std::wstring& extraArgs)
   const TempFile outFile(L"stdout");
   const TempFile errFile(L"stderr");
 
-  HANDLE outHandle = CreateInheritableOutput(outFile.Path());
-  HANDLE errHandle = CreateInheritableOutput(errFile.Path());
-  REQUIRE(outHandle != INVALID_HANDLE_VALUE);
-  REQUIRE(errHandle != INVALID_HANDLE_VALUE);
-
-  std::wstring cmdLine = L"\"" + exe.wstring() + L"\" \"" + testcase.wstring() +
-                         L"\" " + extraArgs;
-
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  si.dwFlags = STARTF_USESTDHANDLES;
-  si.hStdOutput = outHandle;
-  si.hStdError = errHandle;
-  si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-  PROCESS_INFORMATION pi{};
-
-  const BOOL created = CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr,
-                                      TRUE, 0, nullptr, nullptr, &si, &pi);
-  CloseHandle(outHandle);
-  CloseHandle(errHandle);
-  REQUIRE(created);
-
-  WaitForSingleObject(pi.hProcess, INFINITE);
+  std::vector<std::wstring> args{testcase.wstring()};
+  args.insert(args.end(), extraArgs.begin(), extraArgs.end());
 
   ChildOutput result;
-  GetExitCodeProcess(pi.hProcess, &result.exit_code);
-  CloseHandle(pi.hProcess);
-  CloseHandle(pi.hThread);
-
+  result.exit_code = NtfsBrowserTests::RunProcessToFiles(
+      exe, args, outFile.Path(), errFile.Path());
   result.out = outFile.Read();
   result.err = errFile.Read();
   return result;
@@ -196,6 +163,9 @@ TEST_CASE("the --log option parses a target and a level", "[logging]")
     CHECK(config.file_path == "C:\\tmp\\ntfs.log");
   }
 
+#ifdef _WIN32
+  // The wide ParseOption() overload only exists for wmain()'s wide argv,
+  // which only exists on Windows.
   SECTION("wide option, path kept as wide characters")
   {
     REQUIRE(NtfsBrowser::Log::ParseOption(
@@ -203,6 +173,7 @@ TEST_CASE("the --log option parses a target and a level", "[logging]")
     CHECK(config.file_level == Level::kTrace);
     CHECK(config.file_path == fs::path(L"C:\\tmp\\\u30ed.log"));
   }
+#endif
 
   SECTION("repeated, once per target")
   {
@@ -360,8 +331,12 @@ TEST_CASE("Configure() on an unwritable path fails without throwing",
   Config config;
   config.console_level = Level::kWarn;
   config.file_level = Level::kTrace;
-  // A directory that cannot exist, so the sink's fopen() must fail.
+  // A parent directory that cannot exist, so the sink's fopen() must fail.
+#ifdef _WIN32
   config.file_path = "Z:\\ntfs-browser-no-such-directory\\log.txt";
+#else
+  config.file_path = "/ntfs-browser-no-such-directory/log.txt";
+#endif
 
   CHECK_FALSE(NtfsBrowser::Log::Configure(config));
 
@@ -369,6 +344,9 @@ TEST_CASE("Configure() on an unwritable path fails without throwing",
   NtfsBrowser::LogError("still-logging");
 }
 
+#ifdef _WIN32
+// The ANSI code page is a Windows concept, and the wide ParseOption()
+// overload this exercises only exists there.
 TEST_CASE("a log path outside the ANSI code page still opens", "[logging]")
 {
   const RestoreCaptureSink restore;
@@ -392,6 +370,7 @@ TEST_CASE("a log path outside the ANSI code page still opens", "[logging]")
   CHECK(fs::exists(logFile.Path()));
   CHECK_THAT(logFile.Read(), ContainsSubstring("wide-path-line"));
 }
+#endif
 
 TEST_CASE("Configure() replaces the previous sinks wholesale", "[logging]")
 {
@@ -422,7 +401,7 @@ TEST_CASE("the console target splits by level across the two streams",
 {
   SECTION("console:warn: warnings on stderr, stdout silent")
   {
-    const ChildOutput result = RunFuzzer(L"--log=console:warn");
+    const ChildOutput result = RunFuzzer({L"--log=console:warn"});
     CHECK(result.exit_code == 0);
     CHECK_THAT(result.err, ContainsSubstring(std::string(kErrorLine)));
     CHECK_THAT(result.out, !ContainsSubstring(std::string(kErrorLine)));
@@ -431,7 +410,7 @@ TEST_CASE("the console target splits by level across the two streams",
 
   SECTION("console:trace: each line on exactly one stream")
   {
-    const ChildOutput result = RunFuzzer(L"--log=console:trace");
+    const ChildOutput result = RunFuzzer({L"--log=console:trace"});
     CHECK(result.exit_code == 0);
     CHECK_THAT(result.out, ContainsSubstring(std::string(kInfoLine)));
     CHECK_THAT(result.out, !ContainsSubstring(std::string(kErrorLine)));
@@ -441,7 +420,7 @@ TEST_CASE("the console target splits by level across the two streams",
 
   SECTION("console:error: stdout stays silent")
   {
-    const ChildOutput result = RunFuzzer(L"--log=console:error");
+    const ChildOutput result = RunFuzzer({L"--log=console:error"});
     CHECK(result.exit_code == 0);
     CHECK(result.out.empty());
     CHECK_THAT(result.err, ContainsSubstring(std::string(kErrorLine)));
@@ -449,7 +428,7 @@ TEST_CASE("the console target splits by level across the two streams",
 
   SECTION("console:off: nothing on either stream")
   {
-    const ChildOutput result = RunFuzzer(L"--log=console:off");
+    const ChildOutput result = RunFuzzer({L"--log=console:off"});
     CHECK(result.exit_code == 0);
     CHECK(result.out.empty());
     CHECK(result.err.empty());
@@ -457,13 +436,13 @@ TEST_CASE("the console target splits by level across the two streams",
 
   SECTION("an unknown target is rejected with a non-zero exit")
   {
-    const ChildOutput result = RunFuzzer(L"--log=syslog:debug");
+    const ChildOutput result = RunFuzzer({L"--log=syslog:debug"});
     CHECK(result.exit_code != 0);
   }
 
   SECTION("an unknown level is rejected with a non-zero exit")
   {
-    const ChildOutput result = RunFuzzer(L"--log=console:verbose");
+    const ChildOutput result = RunFuzzer({L"--log=console:verbose"});
     CHECK(result.exit_code != 0);
   }
 }
@@ -473,9 +452,8 @@ TEST_CASE("the file target records what the console target is denied",
 {
   const TempFile logFile(L"child");
 
-  const ChildOutput result =
-      RunFuzzer(L"--log=console:off \"--log=file:trace:" +
-                logFile.Path().wstring() + L"\"");
+  const ChildOutput result = RunFuzzer(
+      {L"--log=console:off", L"--log=file:trace:" + logFile.Path().wstring()});
   CHECK(result.exit_code == 0);
   CHECK(result.out.empty());
   CHECK(result.err.empty());

@@ -1,5 +1,7 @@
 set(
   NtfsBrowserTests_SRC
+  "child-process.h"
+  "child-process.cpp"
   "fake-ntfs-image.h"
   "fake-ntfs-image.cpp"
   "memory-disk-reader.h"
