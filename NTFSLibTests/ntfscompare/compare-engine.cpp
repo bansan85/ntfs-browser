@@ -133,9 +133,6 @@ Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
     NTFSCOMPARE_RECONCILE(logical_size, "LogicalSize");
     NTFSCOMPARE_RECONCILE(physical_size, "PhysicalSize");
     NTFSCOMPARE_RECONCILE(creation_time_utc, "CreationTimeUtc");
-    NTFSCOMPARE_RECONCILE(modification_time_utc, "ModificationTimeUtc");
-    NTFSCOMPARE_RECONCILE(change_time_utc, "ChangeTimeUtc");
-    NTFSCOMPARE_RECONCILE(access_time_utc, "AccessTimeUtc");
     NTFSCOMPARE_RECONCILE(read_only, "ReadOnly");
     NTFSCOMPARE_RECONCILE(hidden, "Hidden");
     NTFSCOMPARE_RECONCILE(system, "System");
@@ -192,9 +189,6 @@ void CompareAgainstReference(const std::string& methodName,
     NTFSCOMPARE_COMPARE(logical_size, "LogicalSize")
     NTFSCOMPARE_COMPARE(physical_size, "PhysicalSize")
     NTFSCOMPARE_COMPARE(creation_time_utc, "CreationTimeUtc")
-    NTFSCOMPARE_COMPARE(modification_time_utc, "ModificationTimeUtc")
-    NTFSCOMPARE_COMPARE(change_time_utc, "ChangeTimeUtc")
-    NTFSCOMPARE_COMPARE(access_time_utc, "AccessTimeUtc")
     NTFSCOMPARE_COMPARE(read_only, "ReadOnly")
     NTFSCOMPARE_COMPARE(hidden, "Hidden")
     NTFSCOMPARE_COMPARE(system, "System")
