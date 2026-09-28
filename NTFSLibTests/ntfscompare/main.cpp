@@ -109,24 +109,24 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
     return 1;
   }
 
-  std::fprintf(stderr,
-               "Listing " NTFSCOMPARE_NATIVE " via std::filesystem...\n",
-               targetArg);
-  const Listing stdFsListing = WalkStdFilesystem(target);
-
-  std::fprintf(stderr, "Listing " NTFSCOMPARE_NATIVE " via %s...\n", targetArg,
-               OsApiMethodName());
-  const Listing osApiListing = WalkOsApi(target);
-
+  // std::filesystem and the native API are walked right before they're
+  // compared (below), not here: the target is live, ordinary system
+  // activity keeps changing it, and every NtfsBrowser-based listing this
+  // reference is built from - especially the whole-$MFT scan MftTree needs
+  // - takes real time. Snapshotting std::filesystem/the native API this
+  // early would widen that window instead of closing it, and a field that
+  // changed in between (eg. AccessTimeUtc) would show up as a false
+  // MISMATCH.
   const std::optional<VolumeHandles> volume = OpenVolumeFor(target);
   if (!volume)
   {
-    std::fprintf(
-        stderr,
-        "Cannot open the underlying NTFS volume: the comparison needs the "
-        "three NtfsBrowser-based listings as its reference, so it cannot "
-        "proceed. std::filesystem found %zu entries, %s found %zu.\n",
-        stdFsListing.size(), OsApiMethodName(), osApiListing.size());
+    std::fprintf(stderr,
+                 "Cannot open the underlying NTFS volume: the comparison "
+                 "needs the three NtfsBrowser-based listings as its "
+                 "reference, so it cannot proceed. std::filesystem found "
+                 "%zu entries, %s found %zu.\n",
+                 WalkStdFilesystem(target).size(), OsApiMethodName(),
+                 WalkOsApi(target).size());
     return 1;
   }
 
@@ -174,8 +174,17 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
   Report report;
   const Listing reference = CompareLibraryMethods(
       fullCacheListing, noCacheListing, mftTreeListing, report);
-  CompareAgainstReference("std::filesystem", reference, stdFsListing, report);
-  CompareAgainstReference(OsApiMethodName(), reference, osApiListing, report);
+
+  std::fprintf(stderr,
+               "Listing " NTFSCOMPARE_NATIVE " via std::filesystem...\n",
+               targetArg);
+  CompareAgainstReference("std::filesystem", reference,
+                          WalkStdFilesystem(target), report);
+
+  std::fprintf(stderr, "Listing " NTFSCOMPARE_NATIVE " via %s...\n", targetArg,
+               OsApiMethodName());
+  CompareAgainstReference(OsApiMethodName(), reference, WalkOsApi(target),
+                          report);
 
   const bool hasFindings = PrintReport(report);
   return hasFindings ? 1 : 0;
