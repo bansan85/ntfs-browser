@@ -1,8 +1,7 @@
 #include "attr-vol-name.h"
 
-#include <cstring>
-
 #include "ntfs-common.h"
+#include "utf.h"
 
 namespace NtfsBrowser
 {
@@ -14,8 +13,15 @@ AttrVolName<RESIDENT, S>::AttrVolName(const AttrHeaderCommon& ahc,
 {
   LogTrace("Attribute: Volume Name");
 
-  name_.resize((this->GetDataSize() / 2) + 1, '\0');
-  memcpy(name_.data(), this->GetData(), this->GetDataSize());
+  // The volume name is raw on-disk UTF-16 (WORD, always 16 bits), not
+  // wchar_t (16 bits on Windows, but wider elsewhere): decode rather than
+  // copy its bytes directly into name_'s own.
+  name_ = Utf16ToWide(
+      std::u16string_view(reinterpret_cast<const char16_t*>(this->GetData()),
+                          this->GetDataSize() / sizeof(WORD)));
+  // A trailing NUL GetName()'s view still covers; TrimTrailingNuls()
+  // (ntfs-volume.cpp) strips it before anything logs or compares the name.
+  name_.push_back(L'\0');
 }
 
 // Get NTFS Volume Unicode Name

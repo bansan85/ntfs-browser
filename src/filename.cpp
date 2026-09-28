@@ -31,8 +31,8 @@ void Filename::CopyFilename(const Filename& fn, const Attr::Filename& afn)
   filename_wuc_ = fn.filename_wuc_;
 }
 
-// Get uppercase unicode filename and store it in a buffer
-void Filename::GetFilenameWUC() { filename_wuc_ = GetFilename(); }
+// Decodes the file name and caches it in filename_wuc_, for Compare().
+void Filename::GetFilenameWUC() { GetFilename(); }
 
 // Compare Unicode file name
 int Filename::Compare(std::wstring_view fn) const noexcept
@@ -142,9 +142,13 @@ std::wstring_view Filename::GetFilename() const
     return {};
   }
 
-  std::wstring_view retval(
-      reinterpret_cast<const wchar_t*>(&filename_->name[0]),
-      filename_->name_length);
+  // filename_->name is raw on-disk UTF-16 (WORD, always 16 bits), not
+  // wchar_t (16 bits on Windows, but wider elsewhere): decode rather than
+  // reinterpret_cast, so a name outside the BMP survives intact everywhere.
+  filename_wuc_ = Utf16ToWide(std::u16string_view(
+      reinterpret_cast<const char16_t*>(&filename_->name[0]),
+      filename_->name_length));
+  const std::wstring_view retval = filename_wuc_;
 
   // Guarded: this runs once per directory entry, and the UTF-8 conversion
   // below allocates whether or not anything would print it.

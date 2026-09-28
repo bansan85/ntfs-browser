@@ -4,6 +4,7 @@
 
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -34,6 +35,14 @@ class NTFS_BROWSER_EXPORT AttrBase
  protected:
   const AttrHeaderCommon& attr_header_;
   const NtfsVolume<S>& volume_;
+
+ private:
+  // GetAttrName()'s decoded name, cached since it is const. The on-disk
+  // bytes are raw UTF-16 code units (WORD), which is not what wchar_t is
+  // made of once it is wider than 16 bits, so this is an owned decode, not
+  // a view into attr_header_. AttrBase is never moved or copied, so a
+  // member is safe to alias.
+  mutable std::wstring attr_name_cache_;
 
  public:
   [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const noexcept;

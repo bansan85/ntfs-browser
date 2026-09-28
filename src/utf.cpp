@@ -127,4 +127,45 @@ std::string ToUtf8(std::basic_string_view<CharT> units)
 
 std::string WideToUtf8(std::wstring_view wide) { return ToUtf8(wide); }
 
+std::wstring Utf16ToWide(std::u16string_view units)
+{
+  std::wstring out;
+  out.reserve(units.size());
+
+  if constexpr (sizeof(wchar_t) > sizeof(char16_t))
+  {
+    for (size_t i = 0; i < units.size(); ++i)
+    {
+      const char32_t unit = Widen(units[i]);
+
+      if (unit >= kHighSurrogateFirst && unit <= kHighSurrogateLast &&
+          i + 1 < units.size())
+      {
+        const char32_t low = Widen(units[i + 1]);
+        if (low >= kLowSurrogateFirst && low <= kLowSurrogateLast)
+        {
+          out.push_back(static_cast<wchar_t>(
+              kSurrogateBase +
+              (((unit - kHighSurrogateFirst) << kSurrogateShift) |
+               (low & kSurrogateMask))));
+          ++i;
+          continue;
+        }
+      }
+      out.push_back(static_cast<wchar_t>(unit));
+    }
+  }
+  else
+  {
+    // wchar_t is exactly one code unit wide here: a surrogate pair stays as
+    // two elements, matching how Windows itself represents one.
+    for (const char16_t unit : units)
+    {
+      out.push_back(static_cast<wchar_t>(unit));
+    }
+  }
+
+  return out;
+}
+
 }  // namespace NtfsBrowser

@@ -4,6 +4,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "ntfs-common.h"
+#include "utf.h"
 
 namespace NtfsBrowser
 {
@@ -63,13 +64,17 @@ std::wstring_view AttrBase<S>::GetAttrName() const
     return {};
   }
 
-  std::wstring_view retval{reinterpret_cast<const wchar_t*>(
-                               reinterpret_cast<const BYTE*>(&attr_header_) +
-                               attr_header_.name_offset),
-                           attr_header_.name_length};
+  // The name sits at name_offset bytes past the header, as raw on-disk
+  // UTF-16 (WCHAR, always 16 bits) - not wchar_t, wider than that off
+  // Windows, so this decodes rather than reinterpret_casts.
+  attr_name_cache_ = Utf16ToWide(
+      std::u16string_view(reinterpret_cast<const char16_t*>(
+                              reinterpret_cast<const BYTE*>(&attr_header_) +
+                              attr_header_.name_offset),
+                          attr_header_.name_length));
 
   LogTrace("Unicode Attribute Name");
-  return retval;
+  return attr_name_cache_;
 }
 
 // Verify if this attribute is unnamed

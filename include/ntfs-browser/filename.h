@@ -35,8 +35,12 @@ class NTFS_BROWSER_EXPORT Filename
  private:
   // May be NULL for an IndexEntry
   const Attr::Filename* filename_{nullptr};
-  // Uppercase Unicode File Name, used to compare file names
-  std::wstring_view filename_wuc_;
+  // The decoded file name, filled in by GetFilename() so Compare() and
+  // repeat callers can reuse it without redecoding. Owned, not a view into
+  // the on-disk bytes: those are raw UTF-16 code units (WORD), which is not
+  // what wchar_t is made of once it is wider than 16 bits. mutable:
+  // GetFilename() is const, and is the sole writer.
+  mutable std::wstring filename_wuc_;
 
   void GetFilenameWUC();
 
