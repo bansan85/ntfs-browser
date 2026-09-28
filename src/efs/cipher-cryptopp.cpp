@@ -1,9 +1,15 @@
+#include <ntfs-browser/win-types.h>
+
+#include <array>
 #include <exception>
+#include <memory>
+#include <span>
 
 #include <cryptopp/aes.h>
 #include <cryptopp/des.h>
 #include <cryptopp/modes.h>
 
+#include "efs/fek.h"
 #include "efs/sector-cipher.h"
 #include "ntfs-common.h"
 

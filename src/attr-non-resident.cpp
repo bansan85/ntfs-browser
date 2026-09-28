@@ -5,14 +5,18 @@
 #include <exception>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 #include <gsl/narrow>
-#include <gsl/pointers>
 
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/strategy.h>
 
 #include "attr/header-non-resident.h"
 #include "data/run-entry.h"
+#include "ntfs-browser/win-types.h"
 #include "ntfs-common.h"
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
@@ -25,6 +29,8 @@
 
 namespace NtfsBrowser
 {
+template <Strategy S>
+class FileRecord;
 
 namespace
 {

@@ -1,10 +1,16 @@
 #include "attr-bitmap.h"
 
+#include <ntfs-browser/strategy.h>
+
 #include "attr-non-resident.h"
 #include "attr-resident.h"
+#include "ntfs-browser/win-types.h"
 
 namespace NtfsBrowser
 {
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
 
 template <class TYPE_RESIDENT, Strategy S>
 AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,

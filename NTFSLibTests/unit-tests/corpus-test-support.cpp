@@ -1,8 +1,17 @@
 #include "corpus-test-support.h"
 
+#include <ntfs-browser/win-types.h>
+
+#include <string>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include "partition-disk-reader.h"
+
+namespace NtfsBrowser
+{
+class IDiskReader;
+}  // namespace NtfsBrowser
 
 namespace NtfsBrowserTests
 {

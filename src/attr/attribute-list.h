@@ -4,6 +4,8 @@
 
 #include <cstddef>
 
+#include <ntfs-browser/data/attr-type.h>
+
 namespace NtfsBrowser::Attr
 {
 

@@ -1,35 +1,50 @@
 #include "flag/file-record.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <cstddef>
+#include <exception>
+#include <memory>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/attr-defines.h>
+#include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/file-record.h>
+#include <ntfs-browser/filename.h>
+#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/strategy.h>
 
-#include "attr-bitmap.h"
-#include "attr-data.h"
+#include "attr-bitmap.h"  // IWYU pragma: keep
+#include "attr-data.h"    // IWYU pragma: keep
 #include "attr-file-name.h"
-#include "attr-index-alloc.h"
+#include "attr-index-alloc.h"  // IWYU pragma: keep
 #include "attr-index-root.h"
-#include "attr-list.h"
-#include "attr-non-resident.h"
+#include "attr-list.h"          // IWYU pragma: keep
+#include "attr-non-resident.h"  // IWYU pragma: keep
 #include "attr-resident.h"
 #include "attr-std-info.h"
-#include "attr-vol-info.h"
-#include "attr-vol-name.h"
+#include "attr-vol-info.h"  // IWYU pragma: keep
+#include "attr-vol-name.h"  // IWYU pragma: keep
 #include "attr/header-non-resident.h"
 #include "attr/header-resident.h"
 #include "data/file-record-header.h"
-#include "data/run-entry.h"
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
 #include "index-block.h"
@@ -39,6 +54,8 @@
 
 namespace NtfsBrowser
 {
+template <Strategy S>
+class AttrBase;
 
 namespace
 {

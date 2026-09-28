@@ -1,10 +1,11 @@
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <filesystem>
-#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <vector>
@@ -23,6 +24,7 @@
 
 #include "attr-file-name.h"
 #include "attr-resident.h"
+#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "partition-disk-reader.h"
 

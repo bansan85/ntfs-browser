@@ -1,5 +1,8 @@
+#include <ntfs-browser/win-types.h>
+
 #include <filesystem>
-#include <string>
+#include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 

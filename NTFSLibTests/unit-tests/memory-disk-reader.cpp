@@ -1,9 +1,13 @@
 #include "memory-disk-reader.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <span>
+#include <utility>
 
 namespace NtfsBrowserTests
 {

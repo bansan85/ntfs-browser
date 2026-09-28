@@ -1,5 +1,12 @@
 #include "library-walk.h"
 
+#include <ntfs-browser/win-types.h>
+
+#include <span>
+
+#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/mft-tree.h>
+
 namespace NtfsCompare
 {
 

@@ -6,11 +6,8 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <vector>
 
-#include <gsl/pointers>
-
-#include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/strategy.h>
 
@@ -20,6 +17,8 @@ template <Strategy S>
 class FileRecord;
 template <Strategy S>
 class NtfsVolume;
+enum class Strategy;
+struct AttrHeaderCommon;
 
 template <Strategy S>
 class NTFS_BROWSER_EXPORT AttrBase

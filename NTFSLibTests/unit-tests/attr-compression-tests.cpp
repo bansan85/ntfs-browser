@@ -13,24 +13,33 @@
 // AttrNonResident never read comp_unit_size, so compressed clusters came
 // back as raw, undecoded bytes.
 
+#include <ntfs-browser/win-types.h>
+
+#include <array>
 #include <cstring>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <ntfs-browser/attr-base.h>  // IWYU pragma: keep
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 #include <ntfs-browser/strategy.h>
 
+#include "catch2/catch_message.hpp"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "lznt1/decompress.h"
 #include "memory-disk-reader.h"

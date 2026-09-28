@@ -2,21 +2,25 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <map>
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <span>
-#include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
+#ifdef _WIN32
+  #include <string_view>
+#endif
+
 #include <ntfs-browser/strategy.h>
 
 #include "internal-export.h"
 
 namespace NtfsBrowser
 {
+class IDiskReader;
 
 template <Strategy S>
 class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader

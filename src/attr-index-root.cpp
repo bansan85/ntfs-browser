@@ -1,6 +1,7 @@
 #include "attr-index-root.h"
 
-#include <cstddef>
+#include <ntfs-browser/win-types.h>
+
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -8,8 +9,11 @@
 #include <string_view>
 
 #include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/strategy.h>
 
+#include "attr-resident.h"
 #include "attr/index-root.h"
 #include "data/index-entry.h"
 #include "flag/index-entry.h"
@@ -17,6 +21,9 @@
 
 namespace NtfsBrowser
 {
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
 
 template <typename RESIDENT, Strategy S>
 AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,

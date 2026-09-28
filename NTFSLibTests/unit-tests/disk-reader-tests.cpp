@@ -1,9 +1,13 @@
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <span>
+#include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>

@@ -1,11 +1,15 @@
+#include <ntfs-browser/win-types.h>
+
 #include <cstddef>
 #include <memory>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/strategy.h>
 
 #include "file-reader.h"

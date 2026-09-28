@@ -5,12 +5,13 @@
 #include <list>
 #include <unordered_set>
 
-#include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/strategy.h>
-
 namespace NtfsBrowser
 {
+enum class Strategy;
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
+
 template <typename TYPE_RESIDENT, Strategy S>
 class AttrList : public TYPE_RESIDENT
 {

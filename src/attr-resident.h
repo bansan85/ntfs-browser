@@ -1,5 +1,8 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -8,13 +11,9 @@
 
 namespace NtfsBrowser
 {
-template <Strategy S>
-class FileReader;
 struct AttrHeaderCommon;
-namespace Attr
-{
-struct HeaderResident;
-}  // namespace Attr
+template <Strategy S>
+class FileRecord;
 
 template <Strategy S>
 class AttrResident : public AttrBase<S>

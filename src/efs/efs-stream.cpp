@@ -1,5 +1,7 @@
 #include "efs/efs-stream.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstring>
 
 #include "ntfs-common.h"

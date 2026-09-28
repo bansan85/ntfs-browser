@@ -1,7 +1,11 @@
+#include <ntfs-browser/win-types.h>
+
 #include <array>
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <utility>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 

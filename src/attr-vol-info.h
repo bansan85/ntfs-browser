@@ -1,12 +1,16 @@
 #pragma once
 
-#include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/win-types.h>
 
-#include "attr-resident.h"
+#include <utility>
 
 namespace NtfsBrowser
 {
+enum class Strategy;
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
+
 namespace Attr
 {
 struct VolumeInformation;

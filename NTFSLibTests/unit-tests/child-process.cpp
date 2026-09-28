@@ -1,7 +1,10 @@
 #include "child-process.h"
 
 #include <array>
+#include <cstdlib>
 #include <stdexcept>
+
+#include <sys/types.h>
 
 #ifdef _WIN32
   #include <ntfs-browser/win-types.h>

@@ -1,11 +1,11 @@
 #include "md5-test-support.h"
 
+#include <ntfs-browser/win-types.h>
+
 #ifdef NTFS_TEST_HAS_MD5
 
   #include <array>
   #include <format>
-
-  #include <catch2/catch_test_macros.hpp>
 
   #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
 
@@ -15,6 +15,7 @@
   #elif defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
 
     #include <bcrypt.h>
+    #include <catch2/catch_test_macros.hpp>
     #include <gsl/narrow>
 
   #endif

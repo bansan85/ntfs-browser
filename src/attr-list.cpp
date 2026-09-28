@@ -1,18 +1,29 @@
 #include "attr-list.h"
 
-#include <stdexcept>
+#include <ntfs-browser/win-types.h>
 
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/file-record.h>  // IWYU pragma: keep
 #include <ntfs-browser/mask.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/strategy.h>
 
 #include "attr-non-resident.h"
 #include "attr-resident.h"
 #include "attr/attribute-list.h"
-#include "data/run-entry.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
 {
+struct AttrHeaderCommon;
+template <Strategy S>
+class AttrBase;
 
 namespace
 {

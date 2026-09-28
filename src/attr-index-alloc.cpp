@@ -2,16 +2,18 @@
 
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string_view>
 
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/strategy.h>
 
 #include "data/index-block.h"
 #include "data/index-entry.h"
-#include "data/run-entry.h"
 #include "flag/index-entry.h"
 #include "index-block.h"
+#include "ntfs-browser/win-types.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser

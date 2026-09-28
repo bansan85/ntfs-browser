@@ -1,14 +1,24 @@
 #include "os-api-walk.h"
 
+#include <ntfs-browser/win-types.h>
+
+#include <ctime>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+#ifdef _WIN32
+  #include <windows.h>
+#else
+  #include <linux/stat.h>
+  #include <sys/types.h>
+#endif
 
 #include "time-convert.h"
 
 #ifdef _WIN32
-
-  #include <windows.h>
-
 namespace NtfsCompare
 {
 

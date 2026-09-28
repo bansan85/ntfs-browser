@@ -1,14 +1,22 @@
 #include "attr-std-info.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstddef>
 #include <stdexcept>
 
+#include <ntfs-browser/strategy.h>
+
+#include "attr-resident.h"
 #include "attr/standard-information.h"
 #include "flag/std-info-permission.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
 {
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
 
 template <typename RESIDENT, Strategy S>
 AttrStdInfo<RESIDENT, S>::AttrStdInfo(const AttrHeaderCommon& ahc,

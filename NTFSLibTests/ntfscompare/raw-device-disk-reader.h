@@ -2,6 +2,10 @@
 
 #ifndef _WIN32
 
+  #include <ntfs-browser/win-types.h>
+
+  #include <string_view>
+
   #include <ntfs-browser/disk-reader.h>
 
 namespace NtfsCompare

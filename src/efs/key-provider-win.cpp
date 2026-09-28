@@ -2,6 +2,7 @@
 
   #include <ntfs-browser/win-types.h>
 
+  #include <filesystem>
   #include <fstream>
   #include <iterator>
   #include <string>

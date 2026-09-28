@@ -1,4 +1,9 @@
+#include <ntfs-browser/win-types.h>
+
+#include <cstddef>
 #include <memory>
+#include <string>
+#include <string_view>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -8,7 +13,6 @@
 #include "data/index-entry.h"
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
-#include "flag/index-entry.h"
 
 using NtfsBrowser::IndexEntry;
 

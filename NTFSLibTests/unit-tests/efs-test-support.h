@@ -3,9 +3,8 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <optional>
+#include <cstddef>
 #include <span>
-#include <utility>
 #include <vector>
 
 #include <ntfs-browser/efs.h>

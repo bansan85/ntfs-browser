@@ -1,7 +1,11 @@
 #include "file-record-header.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstring>
 #include <stdexcept>
+
+#include <gsl/pointers>
 
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/strategy.h>

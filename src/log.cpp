@@ -12,6 +12,8 @@
 #include <frozen/bits/elsa_std.h>
 #include <frozen/unordered_map.h>
 #include <spdlog/common.h>
+#include <spdlog/details/log_msg.h>
+#include <spdlog/formatter.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/sink.h>

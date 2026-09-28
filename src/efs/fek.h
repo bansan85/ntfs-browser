@@ -2,7 +2,6 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <optional>
 #include <span>
 #include <vector>

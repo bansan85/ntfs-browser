@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -10,6 +11,8 @@
 #include <frozen/bits/elsa_std.h>
 #include <frozen/unordered_map.h>
 
+#include "catch2/catch_message.hpp"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "child-process.h"
 
 using NtfsBrowserTests::ProcessOutput;

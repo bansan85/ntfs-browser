@@ -2,13 +2,13 @@
 
 #include <vector>
 
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/strategy.h>
-
-#include "attr-resident.h"
-
 namespace NtfsBrowser
 {
+class IndexEntry;
+enum class Strategy;
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
 
 namespace Attr
 {

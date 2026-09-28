@@ -3,11 +3,15 @@
   #include "raw-device-disk-reader.h"
 
   #include <cstdio>
+  #include <span>
   #include <string>
   #include <string_view>
 
   #include <fcntl.h>
+  #include <sys/types.h>
   #include <unistd.h>
+
+  #include "ntfs-browser/win-types.h"
 
 namespace NtfsCompare
 {

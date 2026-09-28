@@ -2,21 +2,28 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/mft-tree.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "entry.h"
 #include "time-convert.h"
+
+namespace NtfsBrowser
+{
+class MftTree;
+enum class Strategy;
+template <Strategy S>
+class NtfsVolume;
+}  // namespace NtfsBrowser
 
 namespace NtfsCompare
 {

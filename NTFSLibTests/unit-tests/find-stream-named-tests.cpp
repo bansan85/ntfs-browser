@@ -1,9 +1,14 @@
+#include <ntfs-browser/win-types.h>
+
+#include <array>
 #include <cstring>
 #include <memory>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -11,6 +16,13 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "named-stream-probe.h"
+
+namespace NtfsBrowser
+{
+template <Strategy S>
+class AttrBase;
+}  // namespace NtfsBrowser
 
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;

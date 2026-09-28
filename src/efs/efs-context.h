@@ -4,13 +4,12 @@
 
 #include <functional>
 #include <memory>
-#include <optional>
 #include <span>
 #include <string>
 #include <vector>
 
 #include <ntfs-browser/efs.h>
-#include <ntfs-browser/strategy.h>
+#include <ntfs-browser/strategy.h>  // IWYU pragma: keep
 
 #include "efs/efs-stream.h"
 #include "efs/sector-cipher.h"
@@ -19,6 +18,11 @@ namespace NtfsBrowser
 {
 template <Strategy S>
 class AttrNonResident;
+
+namespace Efs
+{
+class Fek;
+}  // namespace Efs
 }  // namespace NtfsBrowser
 
 namespace NtfsBrowser::Efs

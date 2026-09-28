@@ -1,5 +1,9 @@
+#include <ntfs-browser/win-types.h>
+
 #include <memory>
 #include <optional>
+#include <utility>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -11,6 +15,7 @@
 #include <ntfs-browser/strategy.h>
 
 #include "fake-ntfs-image.h"
+#include "gap-collation-probe.h"
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::FileRecord;

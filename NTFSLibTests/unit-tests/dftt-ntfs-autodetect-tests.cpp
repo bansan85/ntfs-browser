@@ -1,6 +1,7 @@
+#include <ntfs-browser/win-types.h>
+
 #include <filesystem>
 #include <optional>
-#include <string>
 #include <string_view>
 
 #include <catch2/catch_test_macros.hpp>

@@ -1,14 +1,26 @@
 #include "nps-ntfs1-test-support.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <optional>
+#include <span>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/strategy.h>
+
+namespace NtfsBrowser
+{
+class IDiskReader;
+template <Strategy S>
+class NtfsVolume;
+}  // namespace NtfsBrowser
 
 namespace NtfsBrowserTests
 {

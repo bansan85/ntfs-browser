@@ -1,5 +1,7 @@
 #include "fake-ntfs-image.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <array>
 #include <cassert>

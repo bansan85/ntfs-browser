@@ -1,10 +1,18 @@
 #include "attr/filename.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
+#include <cwchar>
 #include <cwctype>
+#include <string>
+#include <string_view>
 
 #include <ntfs-browser/filename.h>
+#include <ntfs-browser/log.h>
+#include <ntfs-browser/strategy.h>
 
+#include "attr-resident.h"
 #include "attr-std-info.h"
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"

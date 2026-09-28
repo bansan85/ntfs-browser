@@ -1,6 +1,10 @@
 #include "partition-disk-reader.h"
 
+#include <ntfs-browser/win-types.h>
+
+#include <cstddef>
 #include <filesystem>
+#include <span>
 
 namespace NtfsBrowserTests
 {

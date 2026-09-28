@@ -1,8 +1,12 @@
 #include "std-filesystem-walk.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <chrono>
 #include <cstdio>
+#include <optional>
 #include <ratio>
+#include <string>
 #include <system_error>
 #include <utility>
 

@@ -3,17 +3,13 @@
 #include <string>
 #include <string_view>
 
-#include <ntfs-browser/strategy.h>
-
-#include "attr-resident.h"
+#include <ntfs-browser/strategy.h>  // IWYU pragma: keep
 
 namespace NtfsBrowser
 {
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
-template <Strategy S>
-class NtfsVolume;
 
 template <typename RESIDENT, Strategy S>
 class AttrVolName : public RESIDENT

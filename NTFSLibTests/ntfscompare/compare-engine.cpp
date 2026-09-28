@@ -1,8 +1,12 @@
 #include "compare-engine.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <array>
 #include <cstdio>
+#include <optional>
 #include <set>
+#include <utility>
 
 namespace NtfsCompare
 {

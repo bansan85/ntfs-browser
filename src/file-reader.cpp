@@ -1,12 +1,20 @@
 #include "file-reader.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <cstring>
+#include <utility>
+
+#include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/strategy.h>
 
 #include "internal-export.h"
 #include "ntfs-common.h"
 
 #ifdef _WIN32
+  #include <string_view>
+
   #include "win32-disk-reader.h"
 #endif
 

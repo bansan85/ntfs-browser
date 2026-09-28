@@ -1,15 +1,18 @@
-#include <cstring>
+#include <ntfs-browser/win-types.h>
+
+#include <cstddef>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/strategy.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "data/file-record-header.h"
 
 using NtfsBrowser::FileRecordHeader;

@@ -1,13 +1,13 @@
 #pragma once
 
-#include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/filename.h>
-
-#include "attr-resident.h"
 
 namespace NtfsBrowser
 {
 struct AttrHeaderCommon;
+enum class Strategy;
+template <Strategy S>
+class FileRecord;
 
 template <typename RESIDENT, Strategy S>
 class AttrFileName : public RESIDENT, public Filename

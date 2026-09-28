@@ -1,8 +1,11 @@
 #include "sequential-disk-reader.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstring>
 #include <fstream>
 #include <memory>
+#include <utility>
 
 namespace NtfsBrowserTests
 {

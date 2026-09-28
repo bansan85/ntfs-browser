@@ -1,5 +1,10 @@
 #include "attr-vol-name.h"
 
+#include <ntfs-browser/win-types.h>
+
+#include <ntfs-browser/strategy.h>
+
+#include "attr-resident.h"
 #include "ntfs-common.h"
 #include "utf.h"
 

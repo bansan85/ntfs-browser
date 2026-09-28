@@ -2,6 +2,8 @@
 
   #include "linux-utf8.h"
 
+  #include <cstddef>
+
 namespace NtfsCompare
 {
 

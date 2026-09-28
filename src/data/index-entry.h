@@ -5,7 +5,13 @@
 #include <optional>
 #include <string_view>
 
-#include "../flag/index-entry.h"
+namespace NtfsBrowser
+{
+namespace Flag
+{
+enum class IndexEntry : BYTE;
+}  // namespace Flag
+}  // namespace NtfsBrowser
 
 namespace NtfsBrowser::Data
 {

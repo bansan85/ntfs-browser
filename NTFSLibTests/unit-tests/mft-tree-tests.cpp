@@ -1,11 +1,15 @@
+#include <ntfs-browser/win-types.h>
+
 #include <memory>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <spdlog/logger.h>
 #include <spdlog/sinks/ostream_sink.h>
 #include <spdlog/spdlog.h>
 
@@ -16,6 +20,7 @@
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "corpus-test-support.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"

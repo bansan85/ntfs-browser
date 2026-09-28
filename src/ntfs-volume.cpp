@@ -1,27 +1,53 @@
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
+#include <array>
 #include <cstring>
+#include <iterator>
 #include <limits>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
-#include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/attr-defines.h>
+#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/file-record.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/strategy.h>
 
-#include "attr-non-resident.h"
+#include "attr-non-resident.h"  // IWYU pragma: keep
+#include "attr-resident.h"
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
 #include "attr/attribute-list.h"
 #include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
-#include "file-reader.h"
+#include "file-reader.h"  // IWYU pragma: keep
 #include "ntfs-common.h"
 #include "utf.h"
 
 namespace NtfsBrowser
 {
+class IDiskReader;
+
+namespace Efs
+{
+class IEfsKeyProvider;
+}  // namespace Efs
+struct AttrHeaderCommon;
+struct VolumeOptions;
+template <Strategy S>
+class AttrBase;
+
 namespace
 {
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <memory>
 #include <optional>
 #include <span>
@@ -7,12 +9,18 @@
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/strategy.h>
 
 #include "data/run-entry.h"
 
 namespace NtfsBrowser
 {
+enum class Strategy;
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
+template <Strategy S>
+class NtfsVolume;
+
 namespace Attr
 {
 struct HeaderNonResident;

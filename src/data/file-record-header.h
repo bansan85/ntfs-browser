@@ -2,20 +2,22 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <span>
 #include <vector>
 
-#include <gsl/pointers>
-
 #include <ntfs-browser/strategy.h>
 
-#include "../flag/file-record.h"
 #include "../internal-export.h"
 
 namespace NtfsBrowser
 {
+namespace Flag
+{
+enum class FileRecord : WORD;
+}  // namespace Flag
+
 constexpr uint32_t kFileRecordMagic('ELIF');
 
 // Size of Data's named header fields, before the first attribute begins.
@@ -25,7 +27,6 @@ constexpr size_t kMinFileRecordHeaderSize = 48;
 constexpr size_t kMaxFileRecordSize = 4096;
 
 struct AttrHeaderCommon;
-
 template <Strategy S>
 struct FileRecordHeaderImpl;
 

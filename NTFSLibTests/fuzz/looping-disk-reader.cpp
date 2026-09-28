@@ -1,5 +1,7 @@
 #include "looping-disk-reader.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <cstring>
 #include <fstream>

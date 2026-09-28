@@ -1,6 +1,11 @@
 #include "volume-open.h"
 
 #include <cstdio>
+#include <system_error>
+#include <utility>
+
+#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/strategy.h>
 
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;

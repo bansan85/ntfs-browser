@@ -1,5 +1,14 @@
 #include "efs/efs-context.h"
 
+#include <ntfs-browser/win-types.h>
+
+#include <cstddef>
+#include <optional>
+#include <utility>
+
+#include <ntfs-browser/efs.h>
+
+#include "efs/fek.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser::Efs

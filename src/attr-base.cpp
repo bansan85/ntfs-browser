@@ -1,13 +1,20 @@
+#include <ntfs-browser/win-types.h>
+
+#include <string>
+#include <string_view>
+
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/file-record.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/strategy.h>
 
 #include "ntfs-common.h"
 #include "utf.h"
 
 namespace NtfsBrowser
 {
+enum class AttrType : DWORD;
 
 template <Strategy S>
 AttrBase<S>::AttrBase(const AttrHeaderCommon& ahc,

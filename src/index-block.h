@@ -1,19 +1,15 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <memory>
 #include <vector>
 
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/strategy.h>
 
 namespace NtfsBrowser
 {
-namespace Data
-{
-struct IndexBlock;
-}  // namespace Data
-template <Strategy S>
-class AttrIndexAlloc;
+enum class Strategy;
 
 class IndexBlock : public std::vector<IndexEntry>
 {

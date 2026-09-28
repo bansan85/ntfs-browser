@@ -2,10 +2,11 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <spdlog/common.h>
-#include <spdlog/details/log_msg.h>
 #include <spdlog/details/null_mutex.h>
+#include <spdlog/formatter.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/spdlog.h>

@@ -1,5 +1,12 @@
+#include <ntfs-browser/win-types.h>
+
+#include <memory>
+#include <utility>
+#include <vector>
+
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 

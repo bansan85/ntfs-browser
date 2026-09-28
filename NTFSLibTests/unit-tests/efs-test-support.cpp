@@ -1,7 +1,11 @@
 #include "efs-test-support.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <cstring>
+#include <optional>
+#include <utility>
 
 #include <cryptopp/aes.h>
 #include <cryptopp/des.h>

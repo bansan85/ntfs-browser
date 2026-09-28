@@ -1,14 +1,17 @@
+#include <ntfs-browser/win-types.h>
+
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <spdlog/logger.h>
 #include <spdlog/sinks/ostream_sink.h>
 #include <spdlog/spdlog.h>
 
-#include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
@@ -21,9 +24,16 @@
 
 #include "attr-index-root.h"
 #include "attr-resident.h"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
+
+namespace NtfsBrowser
+{
+template <Strategy S>
+class AttrBase;
+}  // namespace NtfsBrowser
 
 using Catch::Matchers::ContainsSubstring;
 using NtfsBrowser::AttrBase;

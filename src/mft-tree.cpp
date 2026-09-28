@@ -1,14 +1,27 @@
-#include <algorithm>
-#include <exception>
-#include <unordered_set>
+#include <ntfs-browser/win-types.h>
 
-#include <ntfs-browser/attr-base.h>
+#include <algorithm>
+#include <cstddef>
+#include <exception>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/mft-tree.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/strategy.h>
 
 #include "attr-file-name.h"
 #include "attr-resident.h"
@@ -16,6 +29,9 @@
 
 namespace NtfsBrowser
 {
+template <Strategy S>
+class AttrBase;
+
 namespace
 {
 

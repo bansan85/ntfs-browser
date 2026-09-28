@@ -1,9 +1,17 @@
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstring>
+#include <ios>
 #include <memory>
 #include <optional>
 #include <random>
+#include <span>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -16,10 +24,12 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "efs-test-support.h"
 #include "efs/efs-stream.h"
 #include "efs/fek.h"
@@ -27,6 +37,12 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
+
+namespace NtfsBrowser
+{
+template <Strategy S>
+class AttrBase;
+}  // namespace NtfsBrowser
 
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::AttrType;

@@ -1,15 +1,11 @@
-#include <memory>
-#include <optional>
-#include <vector>
-
-#include <catch2/catch_template_test_macros.hpp>
-#include <catch2/catch_test_macros.hpp>
 
 // This file's whole purpose is the configuration where neither EFS backend
 // is compiled: efs-tests.cpp (and the Crypto++-based fixtures it needs) are
 // excluded there, so this is the only place that scenario gets covered.
 #if !(defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
       (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)))
+
+  #include <catch2/catch_template_test_macros.hpp>
 
   #include <ntfs-browser/data/attr-type.h>
   #include <ntfs-browser/file-record.h>

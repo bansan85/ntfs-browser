@@ -1,5 +1,6 @@
+#include <ntfs-browser/win-types.h>
+
 #include <array>
-#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <exception>
@@ -12,10 +13,12 @@
 #include <vector>
 
 #include <ntfs-browser/file-record.h>
-#include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/index-entry.h>  // IWYU pragma: keep
 #include <ntfs-browser/log.h>
+#include <ntfs-browser/mask.h>
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "gap-collation-probe.h"

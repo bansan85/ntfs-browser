@@ -1,10 +1,14 @@
 #include "data/index-entry.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstddef>
+#include <memory>
 
 #include <ntfs-browser/index-entry.h>
 
 #include "attr/filename.h"
+#include "flag/index-entry.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser

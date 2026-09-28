@@ -10,13 +10,18 @@
 //
 // usage: ntfscompare [--log=...] <folder>
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstdio>
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <system_error>
 
 #include <ntfs-browser/log.h>
-#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/mft-tree.h>
 
 #include "compare-engine.h"

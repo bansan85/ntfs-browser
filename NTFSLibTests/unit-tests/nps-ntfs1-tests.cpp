@@ -1,6 +1,9 @@
 #include <ntfs-browser/win-types.h>
 
-#include <filesystem>
+#include <array>
+#include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -10,6 +13,8 @@
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
+#include "corpus-test-support.h"
 #include "md5-test-support.h"
 #include "nps-ntfs1-test-support.h"
 

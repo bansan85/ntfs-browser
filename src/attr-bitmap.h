@@ -1,12 +1,18 @@
 #pragma once
 
-#include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/win-types.h>
+
+#include <optional>
+#include <vector>
 
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
 {
+enum class Strategy;
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
 
 template <class TYPE_RESIDENT, Strategy S>
 class AttrBitmap : public TYPE_RESIDENT

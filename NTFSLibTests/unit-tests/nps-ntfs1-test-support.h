@@ -9,11 +9,17 @@
 #include <vector>
 
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
 #include "corpus-test-support.h"
+
+namespace NtfsBrowser
+{
+template <Strategy S>
+class FileRecord;
+template <Strategy S>
+class NtfsVolume;
+}  // namespace NtfsBrowser
 
 namespace NtfsBrowserTests
 {

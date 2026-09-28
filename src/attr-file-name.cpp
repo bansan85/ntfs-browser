@@ -1,15 +1,20 @@
 #include "attr-file-name.h"
 
-#include <cassert>
+#include <ntfs-browser/win-types.h>
+
 #include <cstddef>
 #include <stdexcept>
 
+#include <ntfs-browser/strategy.h>
+
+#include "attr-resident.h"
 #include "attr/filename.h"
-#include "flag/filename.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
 {
+template <Strategy S>
+class FileRecord;
 
 template <typename RESIDENT, Strategy S>
 AttrFileName<RESIDENT, S>::AttrFileName(const AttrHeaderCommon& ahc,

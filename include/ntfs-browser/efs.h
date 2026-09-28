@@ -3,12 +3,13 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstdint>
-#include <filesystem>
-#include <memory>
 #include <optional>
 #include <span>
-#include <string_view>
 #include <vector>
+
+#ifdef _WIN32
+  #include <filesystem>
+#endif
 
 #include <ntfs-browser/export.h>
 

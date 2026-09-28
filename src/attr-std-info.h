@@ -2,13 +2,13 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/file-record.h>
-
-#include "attr-resident.h"
-
 namespace NtfsBrowser
 {
+enum class Strategy;
+struct AttrHeaderCommon;
+template <Strategy S>
+class FileRecord;
+
 namespace Attr
 {
 struct StandardInformation;

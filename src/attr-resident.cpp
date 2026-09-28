@@ -5,10 +5,17 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/attr-base.h>
+#include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/strategy.h>
+
 #include "attr/header-resident.h"
+#include "ntfs-browser/win-types.h"
 
 namespace NtfsBrowser
 {
+template <Strategy S>
+class FileRecord;
 
 namespace
 {
