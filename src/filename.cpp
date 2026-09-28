@@ -32,7 +32,7 @@ void Filename::CopyFilename(const Filename& fn, const Attr::Filename& afn)
 }
 
 // Decodes the file name and caches it in filename_wuc_, for Compare().
-void Filename::GetFilenameWUC() { GetFilename(); }
+void Filename::GetFilenameWUC() { (void)GetFilename(); }
 
 // Compare Unicode file name
 int Filename::Compare(std::wstring_view fn) const noexcept
