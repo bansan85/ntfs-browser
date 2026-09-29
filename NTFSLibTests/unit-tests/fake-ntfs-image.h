@@ -25,10 +25,10 @@ inline constexpr uint64_t kSentinelRecordCount = 5;
 // Every fake record's size; FileRecordHeader asserts on this size internally.
 inline constexpr uint32_t kFakeFileRecordSize = 1024;
 
-// Volume geometry every image built here declares in its BPB: one sector
-// per file record and one sector per cluster.
-inline constexpr WORD kFakeBytesPerSector = kFakeFileRecordSize;
-inline constexpr BYTE kFakeSectorsPerCluster = 1;
+// Volume geometry every image built here declares in its BPB: 512-byte
+// sectors, two per file record and per cluster.
+inline constexpr WORD kFakeBytesPerSector = 512;
+inline constexpr BYTE kFakeSectorsPerCluster = 2;
 // Use this, not kFakeFileRecordSize, for anything sized in clusters.
 inline constexpr DWORD kFakeClusterSize =
     static_cast<DWORD>(kFakeBytesPerSector) * kFakeSectorsPerCluster;

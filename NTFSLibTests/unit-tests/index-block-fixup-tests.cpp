@@ -1,5 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
+#include <cstring>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -8,10 +10,12 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/file-record.h>
+#include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
 #include "attr-index-alloc.h"
+#include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
@@ -34,7 +38,8 @@ TEST_CASE(
     "[attr-index-alloc][regression]")
 {
   constexpr DWORD kIndexBlockSize = NtfsBrowserTests::kForgedIndexBlockSize;
-  constexpr DWORD kSectors = kIndexBlockSize / 1024;
+  constexpr DWORD kSectors =
+      kIndexBlockSize / NtfsBrowser::kUpdateSequenceStride;
 
   CHECK_FALSE(
       IndexBlockUsOffsetInBounds(NtfsBrowserTests::kForgedIndexBlockOffsetOfUs,
@@ -78,5 +83,53 @@ TEST_CASE(
                             { ++*static_cast<int*>(context); }, &callbackCount);
 
   // Entries live behind the rejected block: the callback must never run.
+  CHECK(callbackCount == 0);
+}
+
+TEST_CASE(
+    "FileRecord::TraverseSubEntries must reject an index block whose first "
+    "512-byte block does not end with the update sequence number",
+    "[attr-index-alloc][regression]")
+{
+  constexpr size_t kUsBlockSize = 512;
+  constexpr WORD kTornWord = 0xDEAD;
+
+  std::vector<BYTE> image =
+      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks();
+
+  // The first cluster-aligned index block is VCN 0, the one $INDEX_ROOT
+  // points at.
+  size_t blockOffset = 0;
+  for (; blockOffset + sizeof(DWORD) <= image.size();
+       blockOffset += NtfsBrowserTests::kFakeClusterSize)
+  {
+    DWORD magic = 0;
+    std::memcpy(&magic, image.data() + blockOffset, sizeof(magic));
+    if (magic == kIndexBlockMagic)
+    {
+      break;
+    }
+  }
+  REQUIRE(blockOffset + NtfsBrowserTests::kFakeClusterSize <= image.size());
+
+  // A torn write: the end of the block's first 512 bytes was never given
+  // the sequence number.
+  std::memcpy(image.data() + blockOffset + kUsBlockSize - sizeof(WORD),
+              &kTornWord, sizeof(kTornWord));
+
+  auto reader =
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
+  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<Strategy::NO_CACHE> record(volume);
+  REQUIRE(record.ParseFileRecord(
+      static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::ROOT)));
+  REQUIRE(record.ParseAttrs());
+
+  int callbackCount = 0;
+  record.TraverseSubEntries([](const IndexEntry&, void* context)
+                            { ++*static_cast<int*>(context); }, &callbackCount);
+
   CHECK(callbackCount == 0);
 }

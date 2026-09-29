@@ -319,8 +319,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
 
     try
     {
-      auto header =
-          FileRecordHeader::Factory<S>(record_buffer_, volume_.GetSectorSize());
+      auto header = FileRecordHeader::Factory<S>(record_buffer_);
       return std::make_unique<FileRecordHeaderImpl<S>>(std::move(header));
     }
     catch (const std::exception& e)
@@ -344,8 +343,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
 
   try
   {
-    auto header =
-        FileRecordHeader::Factory<S>(record_buffer_, volume_.GetSectorSize());
+    auto header = FileRecordHeader::Factory<S>(record_buffer_);
     return std::make_unique<FileRecordHeaderImpl<S>>(std::move(header));
   }
   catch (const std::exception& e)

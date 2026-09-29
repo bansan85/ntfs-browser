@@ -554,7 +554,7 @@ bool NtfsVolume<S>::ParseBootSector()
   sector_size_ = bpb->bytes_per_sector;
   LogInfo("Sector Size = {} bytes", sector_size_);
 
-  // Sector size must be >= 2 to prevent integer underflow in fixup-patch pointer arithmetic.
+  // A sector smaller than one WORD cannot be a real BPB value.
   if (sector_size_ < sizeof(WORD))
   {
     LogError("Sector Size must be at least 2 bytes");

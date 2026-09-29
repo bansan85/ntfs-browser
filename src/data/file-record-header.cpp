@@ -16,9 +16,8 @@
 namespace NtfsBrowser
 {
 
-FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
-                                   size_t sector_size)
-    : sector_size(sector_size), buffer_size_(buffer.size())
+FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
+    : buffer_size_(buffer.size())
 {
   if (buffer.size() < kMinFileRecordHeaderSize)
   {
@@ -46,8 +45,9 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer,
     throw std::runtime_error("Offset must be lower than 1024.");
   }
 
-  // A small sector_size can place the array past the buffer's end.
-  const size_t sectors = buffer.size() / sector_size;
+  // A forged offset_of_us can place the array past the buffer's end.
+  const size_t sectors =
+      UpdateSequenceBlockCount(buffer.size(), data->size_of_us);
   if (data->offset_of_us + 2 * (1 + sectors) > buffer.size())
   {
     throw std::runtime_error(
@@ -73,7 +73,7 @@ bool FileRecordHeader::PatchUS() noexcept
       const_cast<WORD*>(reinterpret_cast<const WORD*>(&GetData()->raw[0]));
   for (WORD value : us_array)
   {
-    sector = sector.get() + ((sector_size >> 1U) - 1);
+    sector = sector.get() + ((kUpdateSequenceStride / sizeof(WORD)) - 1);
     // USN error. Ignore if already patched (FULL_CACHE)
     if (*sector != us_number && *sector != value)
     {
@@ -99,15 +99,14 @@ const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
 }
 
 template <Strategy S>
-FileRecordHeaderImpl<S> FileRecordHeader::Factory(std::span<const BYTE> buffer,
-                                                  size_t sector_size)
+FileRecordHeaderImpl<S> FileRecordHeader::Factory(std::span<const BYTE> buffer)
 {
-  return {buffer, sector_size};
+  return FileRecordHeaderImpl<S>{buffer};
 }
 
 FileRecordHeaderImpl<Strategy::NO_CACHE>::FileRecordHeaderImpl(
-    std::span<const BYTE> buffer, size_t sector_size)
-    : FileRecordHeader(buffer, sector_size), data_(buffer)
+    std::span<const BYTE> buffer)
+    : FileRecordHeader(buffer), data_(buffer)
 {
 }
 
@@ -118,8 +117,8 @@ const FileRecordHeader::Data*
 }
 
 FileRecordHeaderImpl<Strategy::FULL_CACHE>::FileRecordHeaderImpl(
-    std::span<const BYTE> buffer, size_t sector_size)
-    : FileRecordHeader(buffer, sector_size)
+    std::span<const BYTE> buffer)
+    : FileRecordHeader(buffer)
 {
   memcpy(&data_.raw[0], buffer.data(), buffer.size());
 }
@@ -138,9 +137,9 @@ template struct FileRecordHeaderImpl<Strategy::FULL_CACHE>;
 // the macro again here, or the unit tests cannot link against it on a shared
 // build.
 template NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeaderImpl<Strategy::NO_CACHE>
-    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
+    FileRecordHeader::Factory(std::span<const BYTE> buffer);
 template NTFS_BROWSER_EXPORT_TESTS_ONLY
     FileRecordHeaderImpl<Strategy::FULL_CACHE>
-    FileRecordHeader::Factory(std::span<const BYTE> buffer, size_t sector_size);
+    FileRecordHeader::Factory(std::span<const BYTE> buffer);
 
 }  // namespace NtfsBrowser

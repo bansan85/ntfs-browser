@@ -26,6 +26,23 @@ constexpr size_t kMinFileRecordHeaderSize = 48;
 // Largest file record size a real NTFS volume can have (a 4Kn volume's).
 constexpr size_t kMaxFileRecordSize = 4096;
 
+// NTFS protects every 512-byte block of a record or index block with one
+// update sequence word, whatever the volume's sector size (a 4Kn volume
+// included).
+constexpr size_t kUpdateSequenceStride = 512;
+
+// Number of 512-byte blocks a buffer's update sequence array covers.
+// size_of_us counts the sequence number itself. It bounds the result, so a
+// forged value cannot make a caller read more array words than the header
+// declares. A shorter array only protects the blocks it covers.
+constexpr size_t UpdateSequenceBlockCount(size_t buffer_size,
+                                          WORD size_of_us) noexcept
+{
+  const size_t declared = size_of_us > 0 ? size_of_us - 1U : 0U;
+  const size_t blocks = buffer_size / kUpdateSequenceStride;
+  return declared < blocks ? declared : blocks;
+}
+
 struct AttrHeaderCommon;
 template <Strategy S>
 struct FileRecordHeaderImpl;
@@ -56,11 +73,10 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
 
   WORD us_number{0};
   std::vector<WORD> us_array{};
-  size_t sector_size;
   // Actual buffer size this instance was constructed with.
   size_t buffer_size_;
 
-  FileRecordHeader(std::span<const BYTE> buffer, size_t sector_size);
+  explicit FileRecordHeader(std::span<const BYTE> buffer);
   virtual ~FileRecordHeader() = default;
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
@@ -68,8 +84,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
   const AttrHeaderCommon* HeaderCommon() noexcept;
 
   template <Strategy S>
-  static FileRecordHeaderImpl<S> Factory(std::span<const BYTE> buffer,
-                                         size_t sector_size);
+  static FileRecordHeaderImpl<S> Factory(std::span<const BYTE> buffer);
 
   virtual const FileRecordHeader::Data* GetData() const = 0;
 };
@@ -85,7 +100,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
 {
   std::span<const BYTE> data_;
 
-  FileRecordHeaderImpl(std::span<const BYTE> buffer, size_t sector_size);
+  explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
   virtual ~FileRecordHeaderImpl() = default;
 
   const FileRecordHeader::Data* GetData() const override;
@@ -97,7 +112,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
 {
   FileRecordHeader::Data data_;
 
-  FileRecordHeaderImpl(std::span<const BYTE> buffer, size_t sector_size);
+  explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
   virtual ~FileRecordHeaderImpl() = default;
 
   const FileRecordHeader::Data* GetData() const override;

@@ -17,6 +17,7 @@
 
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::kFileRecordMagic;
+using NtfsBrowser::kUpdateSequenceStride;
 using NtfsBrowser::Strategy;
 
 namespace
@@ -24,12 +25,11 @@ namespace
 
 // Builds a well-formed record header of exactly bufferSize bytes, with
 // offset_of_attr set to whatever the caller passes in.
-std::vector<BYTE> MakeWellFormedBuffer(size_t bufferSize, size_t sectorSize,
-                                       WORD offsetOfAttr)
+std::vector<BYTE> MakeWellFormedBuffer(size_t bufferSize, WORD offsetOfAttr)
 {
   std::vector<BYTE> storage(bufferSize, 0);
 
-  const size_t sectors = bufferSize / sectorSize;
+  const size_t sectors = bufferSize / kUpdateSequenceStride;
   const WORD offsetOfUs = static_cast<WORD>(bufferSize - 2 * (1 + sectors));
 
   auto& header = *reinterpret_cast<FileRecordHeader::Data*>(storage.data());
@@ -49,14 +49,11 @@ TEST_CASE(
     "[file-record-header][regression]")
 {
   constexpr size_t kBufferSize = 4096;
-  constexpr size_t kSectorSize = 4096;
 
-  const std::vector<BYTE> storage =
-      MakeWellFormedBuffer(kBufferSize, kSectorSize, 64);
+  const std::vector<BYTE> storage = MakeWellFormedBuffer(kBufferSize, 64);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
-  const auto fr =
-      FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer, kSectorSize);
+  const auto fr = FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer);
   CHECK(fr.GetData()->magic == kFileRecordMagic);
 }
 
@@ -66,16 +63,13 @@ TEST_CASE(
     "[file-record-header][regression]")
 {
   constexpr size_t kBufferSize = 4096;
-  constexpr size_t kSectorSize = 4096;
 
-  const std::vector<BYTE> storage =
-      MakeWellFormedBuffer(kBufferSize, kSectorSize, 64);
+  const std::vector<BYTE> storage = MakeWellFormedBuffer(kBufferSize, 64);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
   // FULL_CACHE's ctor memcpy()s the whole buffer into a fixed-size Data
   // member; a too-small member here would overflow it.
-  const auto fr =
-      FileRecordHeader::Factory<Strategy::FULL_CACHE>(buffer, kSectorSize);
+  const auto fr = FileRecordHeader::Factory<Strategy::FULL_CACHE>(buffer);
   CHECK(fr.GetData()->magic == kFileRecordMagic);
 }
 
@@ -85,14 +79,12 @@ TEST_CASE(
     "[file-record-header][regression]")
 {
   constexpr size_t kTooBig = 8192;
-  constexpr size_t kSectorSize = 4096;
 
-  const std::vector<BYTE> storage =
-      MakeWellFormedBuffer(kTooBig, kSectorSize, 64);
+  const std::vector<BYTE> storage = MakeWellFormedBuffer(kTooBig, 64);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
   CHECK_THROWS_MATCHES(
-      (FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer, kSectorSize)),
+      (FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer)),
       std::runtime_error,
       Catch::Matchers::MessageMatches(
           Catch::Matchers::ContainsSubstring("exceeds the maximum")));
@@ -104,15 +96,14 @@ TEST_CASE(
     "[file-record-header][regression]")
 {
   constexpr size_t kDeclaredBufferSize = 2048;
-  constexpr size_t kSectorSize = 2048;
   // Past this instance's buffer, but within raw[]'s static capacity.
   constexpr WORD kOffsetPastOwnSize = 3000;
 
-  const std::vector<BYTE> storage = MakeWellFormedBuffer(
-      kDeclaredBufferSize, kSectorSize, kOffsetPastOwnSize);
+  const std::vector<BYTE> storage =
+      MakeWellFormedBuffer(kDeclaredBufferSize, kOffsetPastOwnSize);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
-  auto fr = FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer, kSectorSize);
+  auto fr = FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer);
 
   // A larger offset_of_attr would build a pointer past the real,
   // 2048-byte allocation backing NO_CACHE's span.

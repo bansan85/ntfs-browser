@@ -59,9 +59,9 @@ constexpr ULONGLONG kMftLcn = 1;
 // Right after FileRecordHeader::Data's fixed header fields.
 constexpr WORD kAttrOffset = 48;
 
-// Points the fixup slot at the record's own last 4 bytes, so PatchUS()
+// Points the fixup slot at the record's own last 6 bytes, so PatchUS()
 // succeeds without a real fixup array.
-constexpr WORD kOffsetOfUs = kFakeFileRecordSize - 4;
+constexpr WORD kOffsetOfUs = kFakeFileRecordSize - 6;
 
 static_assert(kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderNonResident) + 8 <
                   kOffsetOfUs,
@@ -90,7 +90,7 @@ FakeRecord MakeRecordHeader(WORD offsetOfAttr,
   auto& header = *reinterpret_cast<FileRecordHeader::Data*>(record.data());
   header.magic = kFileRecordMagic;
   header.offset_of_us = kOffsetOfUs;
-  header.size_of_us = 2;
+  header.size_of_us = 3;
   header.offset_of_attr = offsetOfAttr;
   header.flags = flags;
 
@@ -347,7 +347,7 @@ FakeRecord MakeInvalidOffsetOfUsRecord()
   auto& header = *reinterpret_cast<FileRecordHeader::Data*>(record.data());
   header.magic = kFileRecordMagic;
   header.offset_of_us = kFakeFileRecordSize;
-  header.size_of_us = 2;
+  header.size_of_us = 3;
 
   return record;
 }
@@ -1628,10 +1628,10 @@ void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
   auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
   std::memset(&block, 0, sizeof(block));
   block.magic = kIndexBlockMagic;
-  // Points at the block's own last 4 bytes, so PatchUS() succeeds trivially
+  // Points at the block's own last 6 bytes, so PatchUS() succeeds trivially
   // without a real fixup array.
-  block.offset_of_us = static_cast<WORD>(kClusterSize - 4);
-  block.size_of_us = 2;
+  block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
+  block.size_of_us = 3;
   block.vcn = vcn;
   block.entry_offset =
       static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
@@ -1796,7 +1796,7 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image, DWORD blockIndex,
   const DWORD sectors = kMultiClusterOrphanIndexBlockSize / kBytesPerSector;
   block.offset_of_us =
       static_cast<WORD>(kMultiClusterOrphanIndexBlockSize - 2 * (1 + sectors));
-  block.size_of_us = 2;
+  block.size_of_us = static_cast<WORD>(1 + sectors);
   block.vcn = vcn;
   block.entry_offset =
       static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
@@ -2198,8 +2198,8 @@ std::vector<BYTE> MakeIndexBlockContent(std::span<const FakeIndexName> names)
   block.magic = kIndexBlockMagic;
   // Points offset_of_us at the fixup slot itself, so PatchUS() trivially
   // succeeds - same technique as BuildFakeNtfsImageWithGapCollationSubNode().
-  block.offset_of_us = static_cast<WORD>(kFakeFileRecordSize - 4);
-  block.size_of_us = 2;
+  block.offset_of_us = static_cast<WORD>(kFakeFileRecordSize - 6);
+  block.size_of_us = 3;
   block.vcn = 0;
   block.entry_offset =
       static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
@@ -3028,10 +3028,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode()
   auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
   std::memset(&block, 0, sizeof(block));
   block.magic = kIndexBlockMagic;
-  // Points at the block's own last 2 bytes, so PatchUS() succeeds
+  // Points at the block's own last 6 bytes, so PatchUS() succeeds
   // trivially without a real fixup array.
-  block.offset_of_us = static_cast<WORD>(kClusterSize - 4);
-  block.size_of_us = 2;
+  block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
+  block.size_of_us = 3;
   block.vcn = 0;
   block.entry_offset =
       static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
@@ -3111,8 +3111,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
     std::memset(&block, 0, sizeof(block));
     block.magic = kIndexBlockMagic;
     // Points offset_of_us at the fixup slot itself, valid for every block.
-    block.offset_of_us = static_cast<WORD>(kClusterSize - 4);
-    block.size_of_us = 2;
+    block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
+    block.size_of_us = 3;
     block.vcn = vcn;
     block.entry_offset = static_cast<DWORD>(
         (blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
@@ -4565,10 +4565,10 @@ NtfsBrowser::Data::IndexBlock&
   auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
   std::memset(&block, 0, sizeof(block));
   block.magic = kIndexBlockMagic;
-  // Points at the block's own last 4 bytes, so PatchUS() succeeds trivially
+  // Points at the block's own last 6 bytes, so PatchUS() succeeds trivially
   // without a real fixup array.
-  block.offset_of_us = static_cast<WORD>(kClusterSize - 4);
-  block.size_of_us = 2;
+  block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
+  block.size_of_us = 3;
   block.vcn = vcn;
   block.entry_offset =
       static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -

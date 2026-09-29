@@ -9,6 +9,7 @@
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 #include <ntfs-browser/strategy.h>
 
+#include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
 #include "flag/index-entry.h"
@@ -61,7 +62,7 @@ bool AttrIndexAlloc<S>::PatchUS(WORD* sector, DWORD sectors, WORD usn,
 {
   for (DWORD i = 0; i < sectors; i++)
   {
-    sector += this->GetSectorSize() / 2;
+    sector += kUpdateSequenceStride / sizeof(WORD);
     sector--;
     // USN error
     if (*sector != usn)
@@ -121,9 +122,6 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   Data::IndexBlock* ibBuf =
       reinterpret_cast<Data::IndexBlock*>(&ib_sh_ptr.get()[0]);
 
-  // Sectors Per Index Block
-  const DWORD sectors = this->GetIndexBlockSize() / this->GetSectorSize();
-
   // Read one Index Block
   std::optional<ULONGLONG> len = this->ReadData(
       byte_offset, {reinterpret_cast<BYTE*>(ibBuf), this->GetIndexBlockSize()});
@@ -138,6 +136,8 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     return false;
   }
 
+  const DWORD sectors = static_cast<DWORD>(
+      UpdateSequenceBlockCount(this->GetIndexBlockSize(), ibBuf->size_of_us));
   if (!IndexBlockUsOffsetInBounds(ibBuf->offset_of_us, sectors,
                                   this->GetIndexBlockSize()))
   {
