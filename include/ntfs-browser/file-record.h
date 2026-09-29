@@ -141,8 +141,12 @@ class NTFS_BROWSER_EXPORT FileRecord
   // Times this record was reused; 0 when no record is parsed.
   [[nodiscard]] WORD GetSequenceNumber() const noexcept;
   // Record number of the base record this extension record belongs to. 0 for
-  // a base record, or when no record is parsed.
+  // a base record, or when no record is parsed. Also 0 for an extension of
+  // $MFT (record 0): use IsExtensionRecord() to tell the two apart.
   [[nodiscard]] ULONGLONG GetBaseRecordReference() const noexcept;
+  // True if the parsed record is an extension record: its base file reference
+  // is not 0, sequence number included. False when no record is parsed.
+  [[nodiscard]] bool IsExtensionRecord() const noexcept;
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
                                       AttrRawCallback cb) noexcept;
   void ClearAttrRawCB() noexcept;

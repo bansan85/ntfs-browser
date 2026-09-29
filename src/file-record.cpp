@@ -934,6 +934,12 @@ ULONGLONG FileRecord<S>::GetBaseRecordReference() const noexcept
              : 0;
 }
 
+template <Strategy S>
+bool FileRecord<S>::IsExtensionRecord() const noexcept
+{
+  return file_record_ && file_record_->GetData()->ref_to_base != 0;
+}
+
 // Install Attribute raw data CallBack routines for a single File Record
 template <Strategy S>
 bool FileRecord<S>::InstallAttrRawCB(AttrType attrType,

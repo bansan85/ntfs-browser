@@ -231,7 +231,37 @@ void RunMftTreeProgressStops()
   CHECK(tree.Entries().empty());
 }
 
+template <Strategy S>
+void RunMftTreeSkipsMftExtensionRecord()
+{
+  const auto volume =
+      std::make_unique<NtfsVolume<S>>(std::make_unique<MemoryDiskReader>(
+          BuildFakeNtfsImageWithMftExtensionRecord()));
+  REQUIRE(volume->IsVolumeOK());
+  REQUIRE(volume->GetRecordsCount() == kMftTreeRecordCount);
+
+  const MftTree tree(*volume);
+
+  CHECK(tree.Find(kMftTreeZeroedIdx) == nullptr);
+  // Same counts as the plain fixture, with the extension counted as one.
+  CHECK(tree.Stats().extensions == 2);
+  CHECK(tree.Stats().in_use == 7);
+  CHECK(tree.Stats().unreadable == 13);
+  CHECK(tree.Entries().size() == 7);
+}
+
 }  // namespace
+
+TEST_CASE("MftTree skips an extension record of $MFT", "[mft-tree][regression]")
+{
+  RunMftTreeSkipsMftExtensionRecord<Strategy::NO_CACHE>();
+}
+
+TEST_CASE("MftTree skips an extension record of $MFT (FULL_CACHE)",
+          "[mft-tree][regression]")
+{
+  RunMftTreeSkipsMftExtensionRecord<Strategy::FULL_CACHE>();
+}
 
 TEST_CASE("MftTree rebuilds paths from $FILE_NAME parent references",
           "[mft-tree]")

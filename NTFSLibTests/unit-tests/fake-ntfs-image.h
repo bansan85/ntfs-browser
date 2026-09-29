@@ -658,6 +658,12 @@ inline constexpr DWORD kMftTreeReportAllocatedSize = 40;
 // $MFT (0) is named "$MFT" in the root.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftTree();
 
+// Same volume as BuildFakeNtfsImageWithMftTree(), with the zero-filled slot
+// kMftTreeZeroedIdx replaced by a nameless extension record of $MFT (record
+// 0), as a fragmented $MFT has. Its base file reference is $MFT's sequence
+// number over record number 0, so its record number alone is 0.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord();
+
 // Real on-disk minimum size of a legacy NTFS 1.2 $STANDARD_INFORMATION
 // attribute, before the Windows-2000-era owner_id/security_id/quota/usn
 // extension appended four more fields.

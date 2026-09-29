@@ -188,7 +188,7 @@ void MftTree::Scan(const NtfsVolume<S>& volume, const MftScanOptions& options)
       stats_.unreadable++;
       continue;
     }
-    if (fr.GetBaseRecordReference() != 0)
+    if (fr.IsExtensionRecord())
     {
       stats_.extensions++;
       continue;
