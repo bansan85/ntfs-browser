@@ -102,6 +102,26 @@ BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER blockAddr) const
   return new_data;
 }
 
+// Reads exactly "length" bytes at "addr" into a buffer this reader owns,
+// bypassing the block cache. FULL_CACHE falls back to it when a whole 64KiB
+// block cannot be read: the block may extend past the end of the medium. The
+// short block MUST NOT be cached as if it were complete.
+template <Strategy S>
+std::optional<std::span<const BYTE>>
+    FileReader<S>::ReadUncached(LARGE_INTEGER addr, DWORD length) const
+{
+  auto exact = std::make_unique<BYTE[]>(length);
+  if (!reader_->ReadInto(addr, std::span<BYTE>{exact.get(), length}))
+  {
+    LogError("Cannot read file at adress {}", addr.QuadPart);
+    return {};
+  }
+
+  const BYTE* const data = exact.get();
+  crossing_reads_.push_back(std::move(exact));
+  return std::span<const BYTE>{data, length};
+}
+
 template <Strategy T>
 template <Strategy Q>
 typename std::enable_if_t<
@@ -126,8 +146,7 @@ typename std::enable_if_t<
     BYTE* block = GetCachedBlock(blockAddr);
     if (block == nullptr)
     {
-      LogError("Cannot read file at adress {}", addr.QuadPart);
-      return {};
+      return ReadUncached(addr, length);
     }
 
     return std::span<const BYTE>{block + addr.QuadPart % READ_BUFFER_SIZE,
@@ -148,8 +167,7 @@ typename std::enable_if_t<
     BYTE* block = GetCachedBlock(blockAddr);
     if (block == nullptr)
     {
-      LogError("Cannot read file at adress {}", addr.QuadPart);
-      return {};
+      return ReadUncached(addr, length);
     }
 
     const auto offsetInBlock =

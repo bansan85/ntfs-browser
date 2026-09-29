@@ -60,6 +60,9 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader
 
   BYTE* GetCachedBlock(LARGE_INTEGER blockAddr) const;
 
+  std::optional<std::span<const BYTE>> ReadUncached(LARGE_INTEGER addr,
+                                                    DWORD length) const;
+
   std::unique_ptr<IDiskReader> reader_;
 
   // Use only for Strategy::NO_CACHE.
