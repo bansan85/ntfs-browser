@@ -104,6 +104,7 @@ class AttrNonResident : public AttrBase<S>
 
   [[nodiscard]] ULONGLONG GetStartVcn() const noexcept;
   [[nodiscard]] ULONGLONG GetLastVcn() const noexcept;
+  [[nodiscard]] ULONGLONG MappedClusters() const noexcept;
 
   // Splices other's own runs onto this instance's, as the next VCN range.
   void AppendRuns(const AttrNonResident& other);

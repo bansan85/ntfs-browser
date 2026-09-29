@@ -233,6 +233,15 @@ void NtfsVolume<S>::Init()
   // Must run after mft_data_/mft_extents_ are set, so it can use them.
   ResolveMftDataExtents();
 
+  if (GetRecordsCount() < baseExtent->GetDataSize() / file_record_size_)
+  {
+    LogWarn(
+        "$MFT claims {} bytes but maps fewer; counting {} records instead of "
+        "{}",
+        baseExtent->GetDataSize(), GetRecordsCount(),
+        baseExtent->GetDataSize() / file_record_size_);
+  }
+
   // Reported OK only once mft_data_ is actually assigned.
   volume_ok_ = true;
 }
@@ -747,7 +756,21 @@ ULONGLONG NtfsVolume<S>::GetRecordsCount() const noexcept
     return 0;
   }
 
-  return (mft_data_->GetDataSize() / file_record_size_);
+  // Records below USER are read from a fixed address, mapped or not.
+  ULONGLONG mappedBytes =
+      static_cast<ULONGLONG>(Enum::MftIdx::USER) * file_record_size_;
+  for (const MftExtent& extent : mft_extents_)
+  {
+    // MappedClusters() never exceeds last_vcn + 1, which TryAddMftExtent()
+    // already checked cannot overflow a byte offset.
+    const ULONGLONG extentEnd =
+        (extent.start_vcn + static_cast<const AttrNonResident<S>*>(extent.attr)
+                                ->MappedClusters()) *
+        cluster_size_;
+    mappedBytes = (std::max)(mappedBytes, extentEnd);
+  }
+
+  return (std::min)(mft_data_->GetDataSize(), mappedBytes) / file_record_size_;
 }
 
 // Get BPB information

@@ -136,6 +136,8 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   // The options this volume was constructed with.
   [[nodiscard]] const VolumeOptions& GetOptions() const noexcept;
   [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
+  // Record slots $MFT holds: its declared size, capped at the clusters its
+  // data runs map, since the size field is not validated on disk.
   [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
 
   [[nodiscard]] WORD GetSectorSize() const noexcept;

@@ -250,7 +250,39 @@ void RunMftTreeSkipsMftExtensionRecord()
   CHECK(tree.Entries().size() == 7);
 }
 
+template <Strategy S>
+void RunMftTreeClampsForgedRealSize()
+{
+  // Aborts a runaway scan, so the test fails instead of spinning.
+  constexpr ULONGLONG kRunawaySlots = 4096;
+
+  const auto volume =
+      std::make_unique<NtfsVolume<S>>(std::make_unique<MemoryDiskReader>(
+          BuildFakeNtfsImageWithHugeMftRealSize()));
+  REQUIRE(volume->IsVolumeOK());
+  CHECK(volume->GetRecordsCount() == kMftTreeRecordCount);
+
+  const MftTree tree(*volume,
+                     MftScanOptions{.progress = [&](ULONGLONG done, ULONGLONG)
+                                    { return done < kRunawaySlots; }});
+
+  CHECK(tree.Stats().slots == kMftTreeRecordCount);
+  CHECK(tree.Stats().complete);
+}
+
 }  // namespace
+
+TEST_CASE("MftTree bounds its scan by the clusters $MFT maps",
+          "[mft-tree][regression]")
+{
+  RunMftTreeClampsForgedRealSize<Strategy::NO_CACHE>();
+}
+
+TEST_CASE("MftTree bounds its scan by the clusters $MFT maps (FULL_CACHE)",
+          "[mft-tree][regression]")
+{
+  RunMftTreeClampsForgedRealSize<Strategy::FULL_CACHE>();
+}
 
 TEST_CASE("MftTree skips an extension record of $MFT", "[mft-tree][regression]")
 {

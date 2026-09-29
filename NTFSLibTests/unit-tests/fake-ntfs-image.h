@@ -696,6 +696,15 @@ inline constexpr DWORD kMftTreeReportAllocatedSize = 40;
 // number over record number 0, so its record number alone is 0.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord();
 
+// $MFT real_size BuildFakeNtfsImageWithHugeMftRealSize() declares: the largest
+// value the field holds, so no record count derived from it is believable.
+inline constexpr ULONGLONG kHugeMftRealSize = ~0ULL;
+
+// Same volume as BuildFakeNtfsImageWithMftTree(), with $MFT's $DATA real_size
+// forged to kHugeMftRealSize while its data run still maps only
+// kMftTreeRecordCount clusters.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithHugeMftRealSize();
+
 // Real on-disk minimum size of a legacy NTFS 1.2 $STANDARD_INFORMATION
 // attribute, before the Windows-2000-era owner_id/security_id/quota/usn
 // extension appended four more fields.

@@ -837,6 +837,22 @@ ULONGLONG AttrNonResident<S>::GetLastVcn() const noexcept
   return attr_header_nr_.last_vcn;
 }
 
+// Clusters from this instance's start VCN through its last run that maps real
+// clusters. A sparse tail maps nothing, and last_vcn is only a declared bound.
+template <Strategy S>
+ULONGLONG AttrNonResident<S>::MappedClusters() const noexcept
+{
+  ULONGLONG mapped = 0;
+  for (const Data::RunEntry& dr : data_run_list_)
+  {
+    if (dr.lcn.has_value())
+    {
+      mapped = dr.last_vcn + 1;
+    }
+  }
+  return mapped;
+}
+
 // Rebases other's own runs onto merged_clusters_ (this instance's own VCN
 // count so far) and appends them, so the two read as one contiguous stream.
 template <Strategy S>

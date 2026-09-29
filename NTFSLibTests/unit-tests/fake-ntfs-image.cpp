@@ -3599,6 +3599,17 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithHugeMftRealSize()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
+
+  const size_t mftOffset = static_cast<size_t>(kMftLcn) * kClusterSize;
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+      &image[mftOffset + kAttrOffset]);
+  attr.real_size = kHugeMftRealSize;
+  return image;
+}
+
 std::vector<BYTE> MakeUncompressedLznt1Chunk(std::span<const BYTE> payload)
 {
   // [MS-XCA] section 2.5.3: input streams are compressed in units of 4096
