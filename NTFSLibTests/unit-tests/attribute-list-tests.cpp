@@ -1,9 +1,13 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
+#include <chrono>
 #include <cstddef>
+#include <exception>
+#include <future>
 #include <memory>
 #include <optional>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -640,4 +644,58 @@ TEMPLATE_TEST_CASE_SIG(
   const auto& data = record.getAttr(AttrType::DATA);
   REQUIRE(data.size() == 1);
   CHECK(data.front()->GetDataSize() == NtfsBrowserTests::kFakeClusterSize);
+}
+
+namespace
+{
+
+// Longest a volume open may take before it counts as hung. A healthy open of
+// a fake image takes milliseconds.
+constexpr std::chrono::seconds kOpenTimeout{10};
+
+// Opens a volume over image on a worker thread. Returns false if that did not
+// finish within kOpenTimeout. The worker is then detached: it keeps spinning
+// until the process exits, since a hung constructor cannot be cancelled.
+template <Strategy S>
+bool OpensWithinTimeout(std::vector<BYTE> image)
+{
+  auto done = std::make_shared<std::promise<void>>();
+  std::future<void> finished = done->get_future();
+
+  std::thread worker(
+      [done, image = std::move(image)]() mutable
+      {
+        try
+        {
+          NtfsVolume<S> volume(
+              std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+                  std::move(image)));
+          done->set_value();
+        }
+        catch (...)
+        {
+          done->set_exception(std::current_exception());
+        }
+      });
+
+  if (finished.wait_for(kOpenTimeout) != std::future_status::ready)
+  {
+    worker.detach();
+    return false;
+  }
+  worker.join();
+  finished.get();
+  return true;
+}
+
+}  // namespace
+
+TEMPLATE_TEST_CASE_SIG(
+    "A $MFT DATA extent whose last VCN overflows a byte offset does not hang "
+    "the volume constructor",
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  CHECK(OpensWithinTimeout<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataLastVcnOverflow()));
 }

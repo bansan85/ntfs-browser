@@ -234,9 +234,11 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters)
 }
 
 // Builds $MFT's base record: a resident $ATTRIBUTE_LIST with one entry per
-// (extension record index, start VCN) pair, then $MFT's own DATA attribute.
+// (extension record index, start VCN) pair, then $MFT's own DATA attribute,
+// whose last VCN is baseLastVcn.
 FakeRecord MakeMftRecordWithDataContinuations(
-    std::span<const std::pair<ULONGLONG, ULONGLONG>> continuations)
+    std::span<const std::pair<ULONGLONG, ULONGLONG>> continuations,
+    ULONGLONG baseLastVcn = 0)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
@@ -282,7 +284,7 @@ FakeRecord MakeMftRecordWithDataContinuations(
   dataAttr.header.flags = 0;
   dataAttr.header.id = 0;
   dataAttr.start_vcn = 0;
-  dataAttr.last_vcn = 0;
+  dataAttr.last_vcn = baseLastVcn;
   dataAttr.data_run_offset = static_cast<WORD>(sizeof(dataAttr));
   dataAttr.comp_unit_size = 0;
   dataAttr.real_size = kFakeFileRecordSize;
@@ -2932,6 +2934,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithUnresolvableMftDataExtent()
               goodRecord);
 
   // kMftUnresolvableExtIdx's slot stays zero-filled and unmapped.
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftDataLastVcnOverflow()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  const std::array<std::pair<ULONGLONG, ULONGLONG>, 1> continuations{
+      {{kMftLastVcnOverflowTargetIdx, 0}}};
+  PutMftRecord(image, mftAddr, static_cast<ULONGLONG>(MftIdx::MFT),
+               MakeMftRecordWithDataContinuations(continuations,
+                                                  kMftLastVcnOverflowLastVcn));
 
   return image;
 }

@@ -60,7 +60,7 @@ struct ExpectedMessages
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 103>
     kExpectedErrorMessages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -367,6 +367,10 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 102>
            "entry size"}}},
         {"index_block_subnode_vcn_overflow",
          {true, {"Index Block: sub-node vcn overflows byte offset"}}},
+        {"mft_data_last_vcn_overflow",
+         {true,
+          {"$MFT DATA continuation's last VCN (18014398509481983) overflows a "
+           "byte offset"}}},
 };
 
 // Runs one saved regression testcase and, if kExpectedErrorMessages has an
@@ -516,6 +520,7 @@ NTFS_REGRESSION_TESTCASE("index_root_view_not_supported")
 NTFS_REGRESSION_TESTCASE("invalid_header_common")
 NTFS_REGRESSION_TESTCASE("invalid_offset_of_us")
 NTFS_REGRESSION_TESTCASE("mft_addr_narrowing_error")
+NTFS_REGRESSION_TESTCASE("mft_data_last_vcn_overflow")
 NTFS_REGRESSION_TESTCASE("mft_data_run_cluster_lcn_narrowing_error")
 NTFS_REGRESSION_TESTCASE("resident_attr_body_exceeds_bounds")
 NTFS_REGRESSION_TESTCASE("resident_attr_body_out_of_bounds")

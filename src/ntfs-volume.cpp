@@ -344,8 +344,9 @@ void NtfsVolume<S>::ResolveMftDataExtents()
   }
 }
 
-// Rejects attr if named, VCN-inverted, mismatched with expectedStartVcn, or
-// overlapping; otherwise inserts it into mft_extents_ in sorted order.
+// Rejects attr if named, VCN-inverted, too large for a byte offset, mismatched
+// with expectedStartVcn, or overlapping; otherwise inserts it into mft_extents_
+// in sorted order.
 template <Strategy S>
 void NtfsVolume<S>::TryAddMftExtent(const AttrBase<S>& attr,
                                     ULONGLONG expectedStartVcn)
@@ -363,6 +364,13 @@ void NtfsVolume<S>::TryAddMftExtent(const AttrBase<S>& attr,
   if (startVcn > lastVcn)
   {
     LogWarn("$MFT DATA continuation has an empty/inverted VCN range");
+    return;
+  }
+
+  if (lastVcn >= (std::numeric_limits<ULONGLONG>::max)() / cluster_size_)
+  {
+    LogWarn("$MFT DATA continuation's last VCN ({}) overflows a byte offset",
+            lastVcn);
     return;
   }
 

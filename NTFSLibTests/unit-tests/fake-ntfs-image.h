@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -383,6 +384,20 @@ inline constexpr ULONGLONG kMftUnresolvableGoodRecord = 205;
 // one resolvable entry - the shape that caused 75a12d9's use-after-free.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithUnresolvableMftDataExtent();
+
+// MFT index the $ATTRIBUTE_LIST entry of the overflow fixture names. At or
+// above Enum::MftIdx::USER, so resolving it consults the $MFT extents.
+inline constexpr ULONGLONG kMftLastVcnOverflowTargetIdx = 16;
+
+// Last VCN forged into $MFT's base DATA attribute: with fake clusters of
+// 1024 bytes, (last VCN + 1) * cluster size is exactly 2^64 and wraps to 0.
+inline constexpr ULONGLONG kMftLastVcnOverflowLastVcn =
+    (std::numeric_limits<ULONGLONG>::max)() / kFakeClusterSize;
+
+// Same volume as BuildFakeNtfsImage(), except $MFT's base DATA attribute
+// claims kMftLastVcnOverflowLastVcn as its last VCN, and its $ATTRIBUTE_LIST
+// names a continuation record past Enum::MftIdx::USER.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftDataLastVcnOverflow();
 
 // Shared with NTFSLibTests/fuzz/named-stream-probe.h, so a fuzz corpus file
 // built from this fixture reaches the same named stream by name.
