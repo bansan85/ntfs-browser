@@ -21,6 +21,7 @@ set(
   "log.cpp"
   "mft-tree.cpp"
   "ntfs-volume.cpp"
+  "upcase.cpp"
   "utf.cpp"
 )
 
@@ -111,6 +112,7 @@ set(
   "lznt1/decompress.h"
   "mft-file-reference.h"
   "ntfs-common.h"
+  "upcase.h"
   "utf.h"
   "win32-disk-reader.h"
 )

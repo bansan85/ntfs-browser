@@ -31,6 +31,10 @@ namespace NtfsBrowser
 template <Strategy S>
 class FileReader;
 
+// The volume's $UpCase table - another implementation detail kept behind a
+// pointer, so this public header doesn't need its definition.
+class UpCaseTable;
+
 template <Strategy S>
 class NTFS_BROWSER_EXPORT NtfsVolume
 {
@@ -102,6 +106,12 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   mutable std::shared_ptr<Efs::IEfsKeyProvider> efs_provider_;
   mutable bool efs_provider_set_{false};
 
+  // The volume's own $UpCase, loaded on first use by GetUpCaseTable(). Stays
+  // null when $UpCase cannot be read; upcase_loaded_ then keeps the failure
+  // from being retried.
+  mutable std::unique_ptr<const UpCaseTable> upcase_;
+  mutable bool upcase_loaded_{false};
+
 #ifdef _WIN32
   [[nodiscard]] bool OpenVolume(_TCHAR volume);
   [[nodiscard]] bool OpenVolume(std::wstring_view path);
@@ -116,6 +126,10 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   [[nodiscard]] const MftExtent* FindMftExtent(ULONGLONG vcn) const noexcept;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadMftData(ULONGLONG offset, std::span<BYTE> buffer) const;
+  // The table names collate by: $UpCase, or the built-in mapping when
+  // $UpCase cannot be read. Only FileRecord<S>, a friend, calls it.
+  [[nodiscard]] const UpCaseTable& GetUpCaseTable() const;
+  [[nodiscard]] std::unique_ptr<const UpCaseTable> LoadUpCaseTable() const;
 
  public:
   [[nodiscard]] bool IsVolumeOK() const noexcept;

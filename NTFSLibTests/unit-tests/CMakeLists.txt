@@ -55,6 +55,7 @@ set(
   "fuzzer-regression-tests.cpp"
   "logging-tests.cpp"
   "utf-tests.cpp"
+  "upcase-collation-tests.cpp"
   "efs-disabled-tests.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/gap-collation-probe.h"

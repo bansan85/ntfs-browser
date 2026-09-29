@@ -104,3 +104,14 @@ TEST_CASE("Compare treats a name as a prefix, not extended by trailing bytes",
   CHECK(entry.Compare(L"System32") > 0);
   CHECK(entry.Compare(L"System") == 0);
 }
+
+TEST_CASE("Compare folds non-ASCII case without depending on the C locale",
+          "[filename][upcase][regression]")
+{
+  const IndexEntry entry = MakeNamedEntry(L"\u00E9");
+  REQUIRE(entry.HasName());
+
+  CHECK(entry.Compare(L"\u00C9") == 0);
+  CHECK(entry.Compare(L"\u00D6") > 0);
+  CHECK(entry.Compare(L"\u00E9") == 0);
+}

@@ -123,6 +123,8 @@ class NTFS_BROWSER_EXPORT FileRecord
       VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName,
                       std::unordered_set<ULONGLONG>& visitedVcns,
                       size_t depth) const;
+  [[nodiscard]] std::optional<IndexEntry>
+      FindSubEntryInOrder(std::wstring_view fileName) const;
   void TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
                        void* context,
                        std::unordered_set<ULONGLONG>& visitedVcns,

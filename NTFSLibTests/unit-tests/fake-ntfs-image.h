@@ -492,6 +492,38 @@ inline constexpr ULONGLONG kGapCollationLeafMftRef = 30;
 // block holding kGapCollationSearchName as its leaf entry.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode();
 
+// Where BuildFakeNtfsImageWithNonAsciiNames() files its names.
+enum class NonAsciiNameLayout
+{
+  // Leaf entries of the root directory's own $INDEX_ROOT.
+  kIndexRoot,
+  // Leaf entries of an $INDEX_ALLOCATION block the $INDEX_ROOT points at.
+  kIndexBlock,
+};
+
+// Names BuildFakeNtfsImageWithNonAsciiNames() files, in that order: e-acute,
+// O-diaeresis and dotless i, each followed by ".txt". Escapes, so the source
+// does not depend on the compiler's source character set.
+inline constexpr wchar_t kNonAsciiAcuteName[] = L"\u00E9.txt";
+inline constexpr wchar_t kNonAsciiAcuteUpperName[] = L"\u00C9.txt";
+inline constexpr wchar_t kNonAsciiDiaeresisName[] = L"\u00D6.txt";
+inline constexpr wchar_t kNonAsciiDotlessName[] = L"\u0131.txt";
+inline constexpr wchar_t kNonAsciiDottedUpperName[] = L"I.txt";
+
+// MFT references those three names declare.
+inline constexpr ULONGLONG kNonAsciiAcuteMftRef = 31;
+inline constexpr ULONGLONG kNonAsciiDiaeresisMftRef = 32;
+inline constexpr ULONGLONG kNonAsciiDotlessMftRef = 33;
+
+// Same volume as BuildFakeNtfsImage(), with the root directory (#5) filing
+// the three names above, sorted as a real volume would sort them under its
+// own $UpCase table: by the uppercase form of each UTF-16 code unit. With
+// withUpCase, $UpCase (#10) is a real 128 KiB table that leaves the dotless i
+// unmapped, as Windows does. Without it, record 10 does not exist.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout layout,
+                                        bool withUpCase);
+
 // Chain length for BuildFakeNtfsImageWithDeepIndexBlockChain(), well past
 // the depth limit; every VCN is distinct, so no cycle guard can stop it.
 inline constexpr DWORD kIndexBlockChainLength = 70;

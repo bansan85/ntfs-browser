@@ -2,9 +2,6 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
-#include <cwchar>
-#include <cwctype>
 #include <string>
 #include <string_view>
 
@@ -18,6 +15,7 @@
 #include "flag/filename.h"
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
+#include "upcase.h"
 #include "utf.h"
 
 namespace NtfsBrowser
@@ -42,31 +40,16 @@ void Filename::CopyFilename(const Filename& fn, const Attr::Filename& afn)
 // Decodes the file name and caches it in filename_wuc_, for Compare().
 void Filename::GetFilenameWUC() { (void)GetFilename(); }
 
-// Compare Unicode file name
 int Filename::Compare(std::wstring_view fn) const noexcept
 {
-  // Only the overlap is safe: the on-disk name isn't null-terminated. Folds
-  // to uppercase, matching NTFS' real $I30 collation order, not the
-  // platform CRT's lowercase-folding comparison.
-  const size_t n = std::min(fn.size(), filename_wuc_.size());
-  for (size_t i = 0; i < n; ++i)
-  {
-    const wint_t ca = std::towupper(static_cast<wint_t>(fn[i]));
-    const wint_t cb = std::towupper(static_cast<wint_t>(filename_wuc_[i]));
-    if (ca != cb)
-    {
-      return ca < cb ? -1 : 1;
-    }
-    if (fn[i] == L'\0')
-    {
-      break;
-    }
-  }
-  if (fn.size() == filename_wuc_.size())
-  {
-    return 0;
-  }
-  return fn.size() < filename_wuc_.size() ? -1 : 1;
+  return Compare(fn, UpCaseTable::BuiltIn());
+}
+
+// Only the decoded name is compared: the on-disk one isn't null-terminated.
+int Filename::Compare(std::wstring_view fn,
+                      const UpCaseTable& upcase) const noexcept
+{
+  return upcase.Compare(fn, filename_wuc_);
 }
 
 ULONGLONG Filename::GetFileSize() const noexcept

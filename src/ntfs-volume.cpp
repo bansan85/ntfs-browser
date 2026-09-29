@@ -34,6 +34,7 @@
 #include "file-reader.h"  // IWYU pragma: keep
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
+#include "upcase.h"
 #include "utf.h"
 
 namespace NtfsBrowser
@@ -854,6 +855,65 @@ std::shared_ptr<Efs::IEfsKeyProvider> NtfsVolume<S>::GetEfsKeyProvider() const
 #endif
   }
   return efs_provider_;
+}
+
+// Reads $UpCase (MFT record 10). Null when it is missing or unusable.
+template <Strategy S>
+std::unique_ptr<const UpCaseTable> NtfsVolume<S>::LoadUpCaseTable() const
+{
+  const auto upcaseRecord = static_cast<ULONGLONG>(Enum::MftIdx::UPCASE);
+  if (!volume_ok_ ||
+      !IsMftRangeMapped(upcaseRecord * file_record_size_, file_record_size_))
+  {
+    return {};
+  }
+
+  // Like the volume's other metadata reads, it MUST NOT depend on
+  // include_deleted.
+  FileRecord<S> record(*this);
+  record.bypass_deleted_gate_ = true;
+  record.SetAttrMask(Mask::DATA);
+  if (!record.ParseFileRecord(upcaseRecord) || !record.ParseAttrs())
+  {
+    return {};
+  }
+
+  const AttrBase<S>* data = record.FindStream({});
+  if (data == nullptr || data->GetDataSize() < kUpCaseByteCount)
+  {
+    return {};
+  }
+
+  std::vector<BYTE> bytes(kUpCaseByteCount);
+  const std::optional<ULONGLONG> len = data->ReadData(0, bytes);
+  if (!len || *len != bytes.size())
+  {
+    return {};
+  }
+
+  std::optional<UpCaseTable> table = UpCaseTable::FromBytes(bytes);
+  if (!table)
+  {
+    return {};
+  }
+  return std::make_unique<const UpCaseTable>(std::move(*table));
+}
+
+// Loads $UpCase on first use. A failure is cached: the built-in mapping
+// answers every later call.
+template <Strategy S>
+const UpCaseTable& NtfsVolume<S>::GetUpCaseTable() const
+{
+  if (!upcase_loaded_)
+  {
+    upcase_loaded_ = true;
+    upcase_ = LoadUpCaseTable();
+    if (!upcase_)
+    {
+      LogInfo("$UpCase is not usable: names collate by the built-in mapping");
+    }
+  }
+  return upcase_ ? *upcase_ : UpCaseTable::BuiltIn();
 }
 
 template class NtfsVolume<Strategy::NO_CACHE>;

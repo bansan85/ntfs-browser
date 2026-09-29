@@ -2131,6 +2131,59 @@ FakeRecord MakeIndexAllocationDirRecord(
   return record;
 }
 
+// Directory record (root, #5): a resident $INDEX_ROOT holding "names" as leaf
+// entries, then the terminating entry.
+FakeRecord MakeIndexRootDirRecordWithNames(std::span<const FakeIndexName> names)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      &record[kAttrOffset]);
+  attr.header.type = AttrType::INDEX_ROOT;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+
+  BYTE* body = &record[kAttrOffset + attr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = kFakeFileRecordSize;
+  root.clusters_per_ib = 1;
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  BYTE* const entries = body + sizeof(NtfsBrowser::Attr::IndexRoot);
+  DWORD leafBytes = 0;
+  for (const FakeIndexName& name : names)
+  {
+    leafBytes += WriteFilenameEntry(entries + leafBytes, name);
+  }
+
+  auto& last =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entries + leafBytes);
+  last.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  last.stream_size = 0;
+  last.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&last.stream) -
+                                reinterpret_cast<BYTE*>(&last));
+
+  root.total_entry_size = leafBytes + last.size;
+  root.alloc_entry_size = root.total_entry_size;
+  root.flags = 0;
+
+  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+                   leafBytes + last.size;
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
+  return record;
+}
+
 // Lays "clusterBytes" down over the real runs of "runs", in run order, growing
 // "image" to hold them; sparse runs consume no bytes and stay zero-filled.
 void LayRunBytes(std::vector<BYTE>& image, const std::vector<FakeDataRun>& runs,
@@ -3086,6 +3139,112 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode()
 
   block.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
   block.alloc_entry_size = block.total_entry_size;
+
+  return image;
+}
+
+namespace
+{
+
+// UTF-16 units in $UpCase: one entry per code unit of the BMP.
+constexpr size_t kUpCaseUnitCount = 65536;
+
+// LCN of the $INDEX_ALLOCATION block the non-ASCII fixture files its names in.
+constexpr DWORD kNonAsciiIndexBlockLcn = 20;
+
+// LCN of $UpCase's data in the non-ASCII fixture, past every record above.
+constexpr DWORD kNonAsciiUpCaseLcn = 64;
+
+// The 128 KiB $UpCase image the non-ASCII fixture stores: the identity map,
+// but for a-z, the Latin-1 letters and y-diaeresis. The dotless i stays
+// unmapped, as it does in a Windows table. Independent of the library.
+std::vector<BYTE> MakeNonAsciiUpCaseBytes()
+{
+  constexpr WORD kLatin1LowerFirst = 0x00E0;
+  constexpr WORD kLatin1LowerLast = 0x00FE;
+  constexpr WORD kDivisionSign = 0x00F7;
+  constexpr WORD kYDiaeresis = 0x00FF;
+  constexpr WORD kCapitalYDiaeresis = 0x0178;
+  constexpr WORD kCaseDistance = 0x20;
+
+  std::vector<BYTE> bytes(kUpCaseUnitCount * sizeof(WORD));
+  for (size_t unit = 0; unit < kUpCaseUnitCount; unit++)
+  {
+    auto upper = static_cast<WORD>(unit);
+    if (unit >= L'a' && unit <= L'z')
+    {
+      upper = static_cast<WORD>(unit - kCaseDistance);
+    }
+    else if (unit >= kLatin1LowerFirst && unit <= kLatin1LowerLast &&
+             unit != kDivisionSign)
+    {
+      upper = static_cast<WORD>(unit - kCaseDistance);
+    }
+    else if (unit == kYDiaeresis)
+    {
+      upper = kCapitalYDiaeresis;
+    }
+    bytes[unit * 2] = static_cast<BYTE>(upper & 0xFF);
+    bytes[unit * 2 + 1] = static_cast<BYTE>(upper >> 8);
+  }
+  return bytes;
+}
+
+}  // namespace
+
+std::vector<BYTE> BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout layout,
+                                                      bool withUpCase)
+{
+  // Sorted by uppercase: E-acute (C9), O-diaeresis (D6), dotless i (131).
+  const std::array<FakeIndexName, 3> names{
+      {{kNonAsciiAcuteName, kNonAsciiAcuteMftRef, false},
+       {kNonAsciiDiaeresisName, kNonAsciiDiaeresisMftRef, false},
+       {kNonAsciiDotlessName, kNonAsciiDotlessMftRef, false}}};
+
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const auto putRecord = [&](MftIdx idx, const FakeRecord& record)
+  {
+    const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                        static_cast<size_t>(idx);
+    std::memcpy(image.data() + offset, record.data(), record.size());
+  };
+
+  if (layout == NonAsciiNameLayout::kIndexRoot)
+  {
+    putRecord(MftIdx::ROOT, MakeIndexRootDirRecordWithNames(names));
+  }
+  else
+  {
+    const std::vector<FakeDataRun> runs{{kNonAsciiIndexBlockLcn, 1}};
+    putRecord(MftIdx::ROOT, MakeIndexAllocationDirRecord(
+                                NtfsBrowser::Flag::StdInfoPermission::ARCHIVE,
+                                0, kFakeFileRecordSize, runs));
+    LayRunBytes(image, runs, MakeIndexBlockContent(names));
+  }
+
+  if (withUpCase)
+  {
+    // $MFT now maps up to record 10, so $UpCase can be read through it.
+    putRecord(MftIdx::MFT, MakeMftRecordWithRealDataRun(
+                               static_cast<DWORD>(kMftLcn),
+                               static_cast<DWORD>(MftIdx::UPCASE) + 1));
+
+    const std::vector<BYTE> table = MakeNonAsciiUpCaseBytes();
+    const std::vector<FakeDataRun> runs{
+        {kNonAsciiUpCaseLcn,
+         static_cast<DWORD>(table.size() / kFakeClusterSize)}};
+
+    FakeRecord upcase =
+        MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+    const DWORD attrSize = WriteNonResidentAttr(
+        upcase, kAttrOffset, AttrType::DATA, 0, table.size(), runs);
+    WriteEndOfAttributesMarker(upcase, kAttrOffset + attrSize);
+    putRecord(MftIdx::UPCASE, upcase);
+
+    LayRunBytes(image, runs, table);
+  }
 
   return image;
 }

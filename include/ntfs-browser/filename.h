@@ -18,6 +18,10 @@ namespace Flag
 enum class Filename : DWORD;
 }  // namespace Flag
 
+// The case mapping NTFS orders names by. An implementation detail: consumers
+// only ever meet it through NtfsVolume, which owns the volume's table.
+class UpCaseTable;
+
 class NTFS_BROWSER_EXPORT Filename
 {
  public:
@@ -45,7 +49,15 @@ class NTFS_BROWSER_EXPORT Filename
   void GetFilenameWUC();
 
  public:
+  // Orders fn against this name in NTFS' collation order: <0 when fn sorts
+  // first, 0 when the names are equal ignoring case, >0 otherwise. Case is
+  // folded with the library's built-in mapping, not the volume's own $UpCase
+  // table: use the overload below when a volume is at hand.
   [[nodiscard]] int Compare(std::wstring_view fn) const noexcept;
+  // Same, folding case through upcase, the table of the volume this name
+  // came from.
+  [[nodiscard]] int Compare(std::wstring_view fn,
+                            const UpCaseTable& upcase) const noexcept;
 
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;
   // Allocated size of the file, as last mirrored into this $FILE_NAME (NTFS

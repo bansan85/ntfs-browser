@@ -50,6 +50,7 @@
 #include "index-block.h"
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
+#include "upcase.h"
 #include "utf.h"
 
 namespace NtfsBrowser
@@ -437,7 +438,7 @@ std::optional<IndexEntry>
     if (ie.HasName())
     {
       // Compare name
-      const int i = ie.Compare(fileName);
+      const int i = ie.Compare(fileName, volume_.GetUpCaseTable());
       if (i == 0)
       {
         // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
@@ -1350,6 +1351,35 @@ template <Strategy S>
 std::optional<IndexEntry>
     FileRecord<S>::FindSubEntry(std::wstring_view fileName) const
 {
+  std::optional<IndexEntry> found = FindSubEntryInOrder(fileName);
+  if (found || !volume_.GetUpCaseTable().IsBuiltIn())
+  {
+    return found;
+  }
+
+  // The built-in mapping can disagree with the volume's own collation, and
+  // the ordered search then stops at a leaf that is not the end of the
+  // name's range. Look at every entry instead.
+  LogDebug("FindSubEntry() scans every entry: no $UpCase table");
+  TraverseSubEntries(
+      [&](const IndexEntry& ie, void*)
+      {
+        if (!found && ie.Compare(fileName, volume_.GetUpCaseTable()) == 0)
+        {
+          found.emplace(ie);
+        }
+      },
+      nullptr);
+  return found;
+}
+
+// FindSubEntry()'s walk down the B+ tree, trusting the entries to be sorted
+// by the volume's collation order. A name that sorts before a leaf entry is
+// reported absent.
+template <Strategy S>
+std::optional<IndexEntry>
+    FileRecord<S>::FindSubEntryInOrder(std::wstring_view fileName) const
+{
   // Start searching from IndexRoot (B+ tree root node)
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
       getAttr(AttrType::INDEX_ROOT);
@@ -1390,13 +1420,15 @@ std::optional<IndexEntry>
   }
 
   std::unordered_set<ULONGLONG> visitedVcns;
+  // Loaded before the walk: reading $UpCase reuses the volume's buffers.
+  const UpCaseTable& upcase = volume_.GetUpCaseTable();
 
   for (const IndexEntry& ie : *all_ie)
   {
     if (ie.HasName())
     {
       // Compare name
-      const int i = ie.Compare(fileName);
+      const int i = ie.Compare(fileName, upcase);
       if (i == 0)
       {
         // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
