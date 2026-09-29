@@ -106,15 +106,16 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           $env:CXXFLAGS = "${{ matrix.cxx_flags }}"
-          cmake --preset ${{ matrix.preset }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install_path" -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" -DNTFS_BROWSER_REQUIRE_TEST_DATA=ON || exit 1
-          cmake --build --preset ${{ matrix.preset }} || exit 1
+          cmake --preset ${{ matrix.preset }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install_path" -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" -DNTFS_BROWSER_REQUIRE_TEST_DATA=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build --preset ${{ matrix.preset }}
       - name: cmake (linux)
         if: runner.os == 'Linux'
         run: |
           cmake --preset ${{ matrix.preset }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} || exit 1
           cmake --build --preset ${{ matrix.preset }} || exit 1
       - name: ctest
-        run: ctest --output-on-failure --test-dir build/${{ matrix.preset }} --parallel 16 || exit 1
+        run: ctest --output-on-failure --test-dir build/${{ matrix.preset }} --parallel 16
   fetchcontent-consumer:
     runs-on: windows-latest
     steps:
@@ -123,7 +124,8 @@ jobs:
           submodules: recursive
       - name: cmake
         run: |
-          cmake -S fetchcontent-consumer -B build_fetchcontent_consumer -DNTFS_BROWSER_FETCHCONTENT_SOURCE_DIR="${{ github.workspace }}" || exit 1
-          cmake --build build_fetchcontent_consumer --target fetchcontent-smoke-test --config Debug --parallel 16 || exit 1
+          cmake -S fetchcontent-consumer -B build_fetchcontent_consumer -DNTFS_BROWSER_FETCHCONTENT_SOURCE_DIR="${{ github.workspace }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build_fetchcontent_consumer --target fetchcontent-smoke-test --config Debug --parallel 16
       - name: run
         run: .\build_fetchcontent_consumer\Debug\fetchcontent-smoke-test.exe
