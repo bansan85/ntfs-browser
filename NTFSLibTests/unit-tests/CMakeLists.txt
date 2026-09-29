@@ -22,6 +22,7 @@ set(
   "disk-reader-tests.cpp"
   "file-reader-tests.cpp"
   "file-reader-full-cache-boundary-tests.cpp"
+  "data-run-lcn-range-tests.cpp"
   "no-cache-lifetime-tests.cpp"
   "attribute-list-tests.cpp"
   "filename-compare-tests.cpp"

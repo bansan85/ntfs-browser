@@ -60,7 +60,7 @@ struct ExpectedMessages
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 104>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
     kExpectedErrorMessages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -116,7 +116,7 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 104>
            "chain, skipping"}}},
         {"mft_data_run_cluster_lcn_narrowing_error",
          {true,
-          {"Cannot read cluster with LCN", "narrowing_error",
+          {"Cannot read cluster with LCN", "byte address overflows",
            "Attribute Parse error: 0x0020",
            "Attribute List parse error (ParseFileRecord)."}}},
         {"fragmented_record_header_factory_throw",
@@ -275,6 +275,10 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 104>
          {true, {"Index Block: index entry exceeds block bounds"}}},
         {"data_run_decode_error_second",
          {true, {"DataRun decode error 2", "Data run LCN underflows."}}},
+        {"data_run_lcn_sum_overflows",
+         {true,
+          {"DataRun decode error: LCN overflows", "Data run LCN overflows."}}},
+        {"data_run_lcn_product_wraps", {true, {"byte address overflows"}}},
         {"data_run_vcn_exceeds_bound",
          {true,
           {"DataRun decode error: VCN exceeds bound",
@@ -481,6 +485,8 @@ NTFS_REGRESSION_TESTCASE("data_flagged_compressed_and_encrypted")
 NTFS_REGRESSION_TESTCASE("data_run_cluster_exceeds_bounds")
 NTFS_REGRESSION_TESTCASE("data_run_decode_error_second")
 NTFS_REGRESSION_TESTCASE("data_run_decode_error_size_byte")
+NTFS_REGRESSION_TESTCASE("data_run_lcn_product_wraps")
+NTFS_REGRESSION_TESTCASE("data_run_lcn_sum_overflows")
 NTFS_REGRESSION_TESTCASE("data_run_vcn_exceeds_bound")
 NTFS_REGRESSION_TESTCASE("efs_stream_malformed")
 NTFS_REGRESSION_TESTCASE("efs_stream_read_failure")

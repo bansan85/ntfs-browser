@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <utility>
 
 #include <ntfs-browser/disk-reader.h>
@@ -133,6 +134,16 @@ typename std::enable_if_t<
   if (length == 0)
   {
     return std::span<const BYTE>{};
+  }
+
+  // A negative address has no block to cache. An end past LLONG_MAX would
+  // overflow the block arithmetic below.
+  if (addr.QuadPart < 0 ||
+      addr.QuadPart > std::numeric_limits<LONGLONG>::max() - length)
+  {
+    LogError("Cannot read file at adress {}: range is out of bounds",
+             addr.QuadPart);
+    return {};
   }
 
   const bool crossesBlock = addr.QuadPart / READ_BUFFER_SIZE !=

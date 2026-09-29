@@ -1297,4 +1297,29 @@ enum class FakeTrailingDefect
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithSplitDataAndTrailingDefect(FakeTrailingDefect defect);
 
+// Where a fixture with a forged run list puts its stream.
+enum class FakeRunHost
+{
+  // A plain non-resident $DATA of the root record.
+  Data,
+  // The $INDEX_ALLOCATION of a root directory: the harness's own read path.
+  IndexAllocation,
+};
+
+// LCN whose product with kFakeClusterSize is exactly 2^64. Computed in
+// unsigned 64 bits that product wraps to 0, so a read at this LCN lands on
+// the boot sector instead of failing. Needs a power-of-two cluster size.
+inline constexpr ULONGLONG kWrappingLcn = ((1ULL << 63) / kFakeClusterSize) * 2;
+
+// Same volume as BuildFakeNtfsImage(), with a 1-cluster stream, of the
+// given kind, whose only run sits at kWrappingLcn. Reading it MUST fail.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithWrappingLcn(FakeRunHost host);
+
+// Same volume as BuildFakeNtfsImage(), with a 2-cluster stream, of the
+// given kind, whose two runs each move the LCN forward by LLONG_MAX. The
+// second run's cumulative LCN overflows a signed 64-bit integer.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithOverflowingLcnSum(FakeRunHost host);
+
 }  // namespace NtfsBrowserTests

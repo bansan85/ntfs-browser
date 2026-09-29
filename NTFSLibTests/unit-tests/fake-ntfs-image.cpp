@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <random>
 #include <span>
@@ -2100,6 +2101,9 @@ struct FakeNonResidentOverrides
   std::optional<WORD> flags;
   // Overrides the initialized size, which defaults to the real size.
   std::optional<ULONGLONG> ini_size;
+  // Hand-encoded run list, terminator included, written instead of the
+  // encoding of "runs": for LCNs EncodeDataRuns() cannot express.
+  std::vector<BYTE> raw_runs;
 };
 
 // Writes one non-resident attribute at record[offset] and returns its
@@ -2162,7 +2166,16 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
                 sizeof(compressedSize));
   }
 
-  const DWORD runLen = EncodeDataRuns(&record[offset + runOffset], runs);
+  DWORD runLen = 0;
+  if (overrides.raw_runs.empty())
+  {
+    runLen = EncodeDataRuns(&record[offset + runOffset], runs);
+  }
+  else
+  {
+    runLen = static_cast<DWORD>(overrides.raw_runs.size());
+    std::memcpy(&record[offset + runOffset], overrides.raw_runs.data(), runLen);
+  }
   attr.header.total_size =
       overrides.total_size.value_or(static_cast<DWORD>(runOffset) + runLen);
   return attr.header.total_size;
@@ -5548,6 +5561,60 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord()
               targetRecord);
 
   return image;
+}
+
+namespace
+{
+
+// Appends one run to "runs": a 1-cluster run whose LCN offset field is the
+// 8-byte value "delta".
+void AppendEightByteLcnRun(std::vector<BYTE>& runs, LONGLONG delta)
+{
+  runs.push_back(0x81);
+  runs.push_back(1);
+  const size_t at = runs.size();
+  runs.resize(at + sizeof(delta));
+  std::memcpy(&runs[at], &delta, sizeof(delta));
+}
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
+// one whose stream, of "host" kind, has the hand-encoded run list "runs".
+// It covers "clusters" 1-cluster runs. No cluster is laid down: a run is
+// never expected to be read successfully.
+std::vector<BYTE> BuildImageWithRawRuns(FakeRunHost host,
+                                        std::vector<BYTE> runs, DWORD clusters)
+{
+  runs.push_back(0x00);  // terminate the run list
+
+  const std::vector<FakeDataRun> placeholder{{{}, clusters}};
+  const ULONGLONG realSize = static_cast<ULONGLONG>(clusters) * kClusterSize;
+  const FakeNonResidentOverrides overrides{.raw_runs = std::move(runs)};
+  const auto permission = NtfsBrowser::Flag::StdInfoPermission::ARCHIVE;
+
+  const FakeRecord record =
+      (host == FakeRunHost::Data)
+          ? MakeNonResidentDataRecord(permission, 0, realSize, placeholder,
+                                      overrides)
+          : MakeIndexAllocationDirRecord(permission, 0, realSize, placeholder,
+                                         overrides);
+  return BuildCompressionImage(record, {}, {});
+}
+
+}  // namespace
+
+std::vector<BYTE> BuildFakeNtfsImageWithWrappingLcn(FakeRunHost host)
+{
+  std::vector<BYTE> runs;
+  AppendEightByteLcnRun(runs, static_cast<LONGLONG>(kWrappingLcn));
+  return BuildImageWithRawRuns(host, std::move(runs), 1);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithOverflowingLcnSum(FakeRunHost host)
+{
+  std::vector<BYTE> runs;
+  AppendEightByteLcnRun(runs, std::numeric_limits<LONGLONG>::max());
+  AppendEightByteLcnRun(runs, std::numeric_limits<LONGLONG>::max());
+  return BuildImageWithRawRuns(host, std::move(runs), 2);
 }
 
 }  // namespace NtfsBrowserTests

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -132,4 +133,39 @@ TEST_CASE(
   REQUIRE(result.has_value());
   REQUIRE(result->size() == 512);
   CHECK(std::equal(result->begin(), result->end(), backing.begin() + 512));
+}
+
+TEST_CASE(
+    "FileReader<FULL_CACHE>::Read rejects a negative address instead of "
+    "returning a view before its cache block",
+    "[file-reader][regression]")
+{
+  std::vector<BYTE> backing(65536);
+  FileReader<Strategy::FULL_CACHE> full(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
+
+  LARGE_INTEGER addr{.QuadPart = -1};
+  CHECK_FALSE(full.Read(addr, 100).has_value());
+}
+
+TEST_CASE(
+    "FileReader<FULL_CACHE>::Read rejects a range that runs past the largest "
+    "signed address",
+    "[file-reader][regression]")
+{
+  std::vector<BYTE> backing(65536);
+  FileReader<Strategy::FULL_CACHE> full(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
+
+  constexpr DWORD kLength = 100;
+  const LONGLONG addresses[] = {std::numeric_limits<LONGLONG>::max(),
+                                std::numeric_limits<LONGLONG>::max() - 10,
+                                std::numeric_limits<LONGLONG>::max() -
+                                    (kLength - 1)};
+  for (const LONGLONG address : addresses)
+  {
+    INFO("address " << address);
+    LARGE_INTEGER addr{.QuadPart = address};
+    CHECK_FALSE(full.Read(addr, kLength).has_value());
+  }
 }

@@ -194,6 +194,19 @@ void AttrNonResident<S>::ParseDataRun()
       break;
     }
 
+    // lcn is never negative here, so only a positive offset can overflow the
+    // sum. It MUST be caught before the addition: signed overflow is UB.
+    if (lcn_offset > 0 &&
+        lcn > std::numeric_limits<LONGLONG>::max() - lcn_offset)
+    {
+      LogRecoverable(recover, "DataRun decode error: LCN overflows");
+      if (!recover)
+      {
+        throw std::runtime_error("Data run LCN overflows.\n");
+      }
+      break;
+    }
+
     lcn += lcn_offset;
     if (lcn < 0)
     {
@@ -238,22 +251,22 @@ std::optional<std::span<const BYTE>>
     AttrNonResident<S>::ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                                      ULONGLONG offset) const
 {
+  // start_lcn and offset are attacker-controlled. Their sum times the
+  // cluster size is a byte address, and MUST NOT wrap past 2^63: a wrapped
+  // address is a valid one, so the read would silently hit other clusters.
+  const ULONGLONG maxLcn =
+      static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) /
+      this->GetClusterSize();
+  if (start_lcn > maxLcn || offset > maxLcn - start_lcn)
+  {
+    LogError("Cannot read cluster with LCN {} + {}: byte address overflows",
+             start_lcn, offset);
+    return {};
+  }
   const ULONGLONG lcn = start_lcn + offset;
 
   LARGE_INTEGER addr;
-
-  // lcn and clusters are both attacker-controlled and otherwise unbounded,
-  // so gsl::narrow() below can throw a gsl::narrowing_error.
-  try
-  {
-    addr.QuadPart = gsl::narrow<LONGLONG>(lcn * this->GetClusterSize());
-  }
-  catch (const std::exception& e)
-  {
-    LogError("Cannot read cluster with LCN {}", lcn);
-    LogException(e);
-    return {};
-  }
+  addr.QuadPart = static_cast<LONGLONG>(lcn * this->GetClusterSize());
 
   std::optional<std::span<const BYTE>> buffer;
   try
