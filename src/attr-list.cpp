@@ -107,8 +107,10 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
       }
       else
       {
-        file_record_list_.emplace_back(fr.volume_);
-        FileRecord<S>& frnew = file_record_list_.back();
+        // Owned by fr, not by this object: the attributes moved into fr
+        // below keep pointing into frnew's bytes.
+        fr.extension_records_.emplace_back(fr.volume_);
+        FileRecord<S>& frnew = fr.extension_records_.back();
 
         frnew.attr_mask_ = am;
         if (!frnew.ParseFileRecord(record_ref))

@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstring>
 #include <fstream>
+#include <optional>
 #include <random>
 #include <span>
 #include <type_traits>
@@ -3645,6 +3646,52 @@ std::vector<BYTE> BuildFakeNtfsImageWithMisalignedCompressedStartVcn()
   return BuildCompressionImage(record, runs, clusterBytes);
 }
 
+namespace
+{
+
+// Writes a malformed attribute at record[offset], as defect describes it.
+void WriteTrailingDefect(FakeRecord& record, DWORD offset,
+                         FakeTrailingDefect defect)
+{
+  // A resident header never fits in this: ParseAttrs() rejects it.
+  constexpr DWORD kUndersizedTotalSize = 8;
+
+  switch (defect)
+  {
+    case FakeTrailingDefect::UndersizedHeader:
+    {
+      auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+          &record[offset]);
+      attr.header.type = AttrType::BITMAP;
+      attr.header.non_resident = 0;
+      attr.header.total_size = kUndersizedTotalSize;
+      break;
+    }
+    case FakeTrailingDefect::UndersizedCompressedField:
+    {
+      auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+          &record[offset]);
+      attr.header.type = AttrType::BITMAP;
+      attr.header.non_resident = 1;
+      attr.comp_unit_size = kCompressionUnitSizeShift;
+      attr.header.total_size = NtfsBrowser::Attr::kHeaderNonResidentBaseSize;
+      break;
+    }
+    case FakeTrailingDefect::RejectedAttribute:
+    {
+      auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+          &record[offset]);
+      attr.header.type = AttrType::STANDARD_INFORMATION;
+      attr.header.non_resident = 1;
+      attr.header.total_size =
+          NtfsBrowser::Attr::kHeaderNonResidentBaseSize + 8;
+      break;
+    }
+  }
+}
+
+}  // namespace
+
 // Writes a resident $EFS attribute holding "body" and returns its total_size.
 DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
                            std::span<const BYTE> body)
@@ -3701,7 +3748,15 @@ std::vector<BYTE>
   {
     if (file.efs_resident)
     {
+      const DWORD efsOffset = offset;
       offset += WriteResidentEfsAttr(record, offset, file.efs_stream);
+      if (file.efs_body_overruns)
+      {
+        // attr_offset + attr_size now reaches past total_size.
+        constexpr DWORD kOverrun = 64;
+        reinterpret_cast<NtfsBrowser::Attr::HeaderResident&>(record[efsOffset])
+            .attr_size += kOverrun;
+      }
     }
     else
     {
@@ -3714,7 +3769,14 @@ std::vector<BYTE>
           file.efs_stream.size(), efsRuns, {.name = L"$EFS"});
     }
   }
-  WriteEndOfAttributesMarker(record, offset);
+  if (file.trailing_undersized_attribute)
+  {
+    WriteTrailingDefect(record, offset, FakeTrailingDefect::UndersizedHeader);
+  }
+  else
+  {
+    WriteEndOfAttributesMarker(record, offset);
+  }
 
   std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
@@ -4714,6 +4776,158 @@ std::filesystem::path WriteFakeNtfsImage()
             static_cast<std::streamsize>(image.size()));
 
   return path;
+}
+
+namespace
+{
+
+// Fixed on-disk size of a nameless $ATTRIBUTE_LIST entry.
+constexpr WORD kListEntrySize =
+    static_cast<WORD>(NtfsBrowser::Attr::kAttributeListEntryHeaderSize);
+
+// LCNs the lifetime fixtures use for cluster data: past the $MFT records
+// (LCN 1 onwards) and distinct, so no two streams share a cluster.
+constexpr DWORD kLifetimeBaseDataLcn = 50;
+constexpr DWORD kLifetimeExtDataLcn = 51;
+constexpr DWORD kLifetimeListLcn = 52;
+
+// Writes one nameless $ATTRIBUTE_LIST entry at dest: type, the record it
+// points to, and the record_size to declare (0 is the forged value).
+void WriteListEntry(BYTE* dest, AttrType type, ULONGLONG record,
+                    WORD recordSize)
+{
+  auto& entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(dest);
+  entry.attr_type = type;
+  entry.record_size = recordSize;
+  entry.name_length = 0;
+  entry.name_offset = 0;
+  entry.start_vcn = 0;
+  entry.base_ref.segment_number = record;
+  entry.base_ref.sequence_number = 0;
+  entry.attr_id = 0;
+}
+
+// Writes a resident $ATTRIBUTE_LIST holding "entryCount" entries, all for
+// $DATA in the lifetime extension record, and returns its total_size. The
+// entry at index "zeroSizeIndex", if any, declares a record_size of 0.
+DWORD WriteLifetimeResidentList(FakeRecord& record, DWORD offset,
+                                size_t entryCount,
+                                std::optional<size_t> zeroSizeIndex = {})
+{
+  auto& attr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  attr.header.type = AttrType::ATTRIBUTE_LIST;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.attr_size = static_cast<DWORD>(kListEntrySize * entryCount);
+  attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
+
+  for (size_t i = 0; i < entryCount; i++)
+  {
+    WriteListEntry(&record[offset + attr.attr_offset + (i * kListEntrySize)],
+                   AttrType::DATA, kAttrListLifetimeExtIdx,
+                   zeroSizeIndex == i ? static_cast<WORD>(0) : kListEntrySize);
+  }
+  return attr.header.total_size;
+}
+
+// Extension record holding one resident $DATA of kAttrListLifetimeDataContent.
+FakeRecord MakeLifetimeResidentDataExtensionRecord()
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+
+  DWORD offset = kAttrOffset;
+  const DWORD dataOffset = offset;
+  offset += WriteResidentDataAttr(record, offset,
+                                  kAttrListLifetimeDataContent.size());
+  std::memcpy(&record[dataOffset + sizeof(NtfsBrowser::Attr::HeaderResident)],
+              kAttrListLifetimeDataContent.data(),
+              kAttrListLifetimeDataContent.size());
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+}  // namespace
+
+std::vector<BYTE> BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  FakeRecord base =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  DWORD offset = kAttrOffset;
+  offset += WriteLifetimeResidentList(base, offset, 2, 1);
+  WriteEndOfAttributesMarker(base, offset);
+
+  PutMftRecord(image, mftAddr, kAttrListLifetimeBaseIdx, base);
+  PutMftRecord(image, mftAddr, kAttrListLifetimeExtIdx,
+               MakeLifetimeResidentDataExtensionRecord());
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithSplitAttributeListAttribute()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  FakeRecord base =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  DWORD offset = kAttrOffset;
+  // VCN 0-0: empty.
+  offset +=
+      WriteNonResidentAttr(base, offset, AttrType::ATTRIBUTE_LIST, 0, 0, {});
+  // VCN 1-1: one entry, stored in its own cluster.
+  const std::vector<FakeDataRun> runs{{kLifetimeListLcn, 1}};
+  offset += WriteNonResidentAttr(base, offset, AttrType::ATTRIBUTE_LIST, 0,
+                                 kListEntrySize, runs, {.start_vcn = 1});
+  WriteEndOfAttributesMarker(base, offset);
+
+  PutMftRecord(image, mftAddr, kAttrListLifetimeBaseIdx, base);
+  PutMftRecord(image, mftAddr, kAttrListLifetimeExtIdx,
+               MakeLifetimeResidentDataExtensionRecord());
+
+  std::vector<BYTE> entry(kListEntrySize, 0);
+  WriteListEntry(entry.data(), AttrType::DATA, kAttrListLifetimeExtIdx,
+                 kListEntrySize);
+  LayRunBytes(image, runs, entry);
+  return image;
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithSplitDataAndTrailingDefect(FakeTrailingDefect defect)
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  const std::vector<FakeDataRun> baseRuns{{kLifetimeBaseDataLcn, 1}};
+  const std::vector<FakeDataRun> extRuns{{kLifetimeExtDataLcn, 1}};
+
+  FakeRecord base =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  DWORD offset = kAttrOffset;
+  offset += WriteLifetimeResidentList(base, offset, 1);
+  offset += WriteNonResidentAttr(base, offset, AttrType::DATA, 0, kClusterSize,
+                                 baseRuns);
+  WriteTrailingDefect(base, offset, defect);
+
+  FakeRecord ext =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  DWORD extOffset = kAttrOffset;
+  extOffset += WriteNonResidentAttr(ext, extOffset, AttrType::DATA, 0, 0,
+                                    extRuns, {.start_vcn = 1});
+  WriteEndOfAttributesMarker(ext, extOffset);
+
+  PutMftRecord(image, mftAddr, kAttrListLifetimeBaseIdx, base);
+  PutMftRecord(image, mftAddr, kAttrListLifetimeExtIdx, ext);
+  LayRunBytes(image, baseRuns, {});
+  LayRunBytes(image, extRuns, {});
+  return image;
 }
 
 }  // namespace NtfsBrowserTests

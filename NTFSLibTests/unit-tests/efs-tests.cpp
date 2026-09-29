@@ -571,6 +571,81 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(record.getAttr(AttrType::DATA).empty());
 }
 
+TEMPLATE_TEST_CASE_SIG(
+    "A recovering parse that stops on a malformed attribute still decrypts "
+    "the stream",
+    "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
+{
+  // Less than one 1024-byte cluster: one encrypted sector run.
+  constexpr size_t kSize = 1000;
+  const std::vector<BYTE> plaintext = NtfsBrowserTests::PlaintextPattern(kSize);
+  const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
+  const TestEfsEntry user = TestUser();
+  auto provider = std::make_shared<TestKeyProvider>();
+  provider->Add(user.thumbprint, user.wrapped_fek,
+                NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
+
+  NtfsBrowserTests::FakeEncryptedFile file;
+  file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
+  file.trailing_undersized_attribute = true;
+  file.streams.push_back({.runs = {{kFirstStreamLcn, 1}},
+                          .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
+                              Algorithm::kAes256, key, plaintext),
+                          .real_size = kSize});
+
+  NtfsVolume<S> volume(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file)),
+      VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+  volume.SetEfsKeyProvider(provider);
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK_FALSE(record.ParseAttrs());
+
+  CHECK(ReadAt<S>(OnlyData<S>(record), 0, kSize) == plaintext);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A recovering parse that rejects the $EFS stream does not read the "
+    "ciphertext back as data",
+    "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
+{
+  // Less than one 1024-byte cluster: one encrypted sector run.
+  constexpr size_t kSize = 1000;
+  const std::vector<BYTE> plaintext = NtfsBrowserTests::PlaintextPattern(kSize);
+  const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
+  const TestEfsEntry user = TestUser();
+  auto provider = std::make_shared<TestKeyProvider>();
+  provider->Add(user.thumbprint, user.wrapped_fek,
+                NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
+
+  NtfsBrowserTests::FakeEncryptedFile file;
+  file.efs_resident = true;
+  file.efs_body_overruns = true;
+  file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
+  file.streams.push_back({.runs = {{kFirstStreamLcn, 1}},
+                          .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
+                              Algorithm::kAes256, key, plaintext),
+                          .real_size = kSize});
+
+  NtfsVolume<S> volume(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file)),
+      VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+  volume.SetEfsKeyProvider(provider);
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  CHECK_FALSE(record.ParseAttrs());
+
+  // Without its keys the stream cannot be read: it must fail, not hand back
+  // the bytes as they sit on disk.
+  CHECK_FALSE(ReadAt<S>(OnlyData<S>(record), 0, kSize).has_value());
+}
+
 TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
                        "[efs]", ((Strategy S), S), Strategy::NO_CACHE,
                        Strategy::FULL_CACHE)

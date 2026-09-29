@@ -99,6 +99,8 @@ void FileRecord<S>::ClearAttrs() noexcept
   {
     arr.clear();
   }
+  // Only now: attributes imported from these records are gone.
+  extension_records_.clear();
 }
 
 // Call user defined Callback routines for an attribute
@@ -550,6 +552,22 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
 
   const bool recover = volume_.GetOptions().recover_errors;
 
+  // Ends the walk early with failure. Strict drops everything parsed so far.
+  // Recovering keeps it, and that partial result must still be usable: its
+  // VCN continuations merged, its encrypted streams given their context.
+  const auto abortWalk = [this, recover]()
+  {
+    if (!recover)
+    {
+      ClearAttrs();
+      return false;
+    }
+    MergeAttributeContinuations();
+    // Only a strict parse can fail here.
+    static_cast<void>(AttachEfsContext());
+    return false;
+  };
+
   // A freed record still parsed its header (IsDeleted() works), but not its
   // attributes: this record exposes no content unless include_deleted opted
   // in, or this is one of the volume's own metadata reads.
@@ -606,11 +624,7 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
     if (ahc->total_size < minTotalSize)
     {
       LogWarn("Attribute total_size too small for its header.");
-      if (!recover)
-      {
-        ClearAttrs();
-      }
-      return false;
+      return abortWalk();
     }
 
     if (ahc->non_resident != 0)
@@ -623,11 +637,7 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
         LogWarn(
             "Compressed attribute total_size too small for its compressed "
             "size field.");
-        if (!recover)
-        {
-          ClearAttrs();
-        }
-        return false;
+        return abortWalk();
       }
     }
 
@@ -657,11 +667,7 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
 
       if (!ParseAttr(*ahc, attrListChain))
       {
-        if (!recover)
-        {
-          ClearAttrs();
-        }
-        return false;
+        return abortWalk();
       }
     }
 

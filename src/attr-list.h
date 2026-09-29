@@ -2,7 +2,6 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <list>
 #include <unordered_set>
 
 namespace NtfsBrowser
@@ -26,10 +25,6 @@ class AttrList : public TYPE_RESIDENT
   AttrList& operator=(AttrList&& other) noexcept = delete;
   AttrList& operator=(AttrList const& other) = delete;
   ~AttrList() override;
-
- private:
-  // Unlike std::vector, appending never moves existing elements' addresses.
-  std::list<FileRecord<S>> file_record_list_;
 };  // AttrList
 
 }  // namespace NtfsBrowser

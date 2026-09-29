@@ -4,6 +4,7 @@
 
 #include <array>
 #include <functional>
+#include <list>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -73,6 +74,12 @@ class NTFS_BROWSER_EXPORT FileRecord
   std::optional<ULONGLONG> file_reference_{};
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
   Mask attr_mask_{Mask::ALL};
+
+  // The extension records $ATTRIBUTE_LIST opened. An attribute imported from
+  // one keeps a reference into its bytes, so they MUST outlive attr_list_:
+  // declared first, destroyed last, and cleared after the attributes.
+  // Unlike std::vector, appending never moves existing elements' addresses.
+  std::list<FileRecord<S>> extension_records_{};
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
   // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.

@@ -802,6 +802,12 @@ struct FakeEncryptedFile
   std::vector<BYTE> efs_stream;
   // Real EFS keeps $EFS non-resident, as here by default.
   bool efs_resident{false};
+  // The resident $EFS declares a body larger than its own attribute: its
+  // constructor rejects it. Needs efs_resident.
+  bool efs_body_overruns{false};
+  // A malformed attribute after the last valid one: its total_size is
+  // smaller than a resident attribute's own header.
+  bool trailing_undersized_attribute{false};
 };
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
@@ -1066,5 +1072,56 @@ inline constexpr ULONGLONG kMalformedIndexEntryMftRef = 113;
 // (bypass_deleted_gate_) so the volume still opens under default
 // VolumeOptions (include_deleted off).
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithDeletedVolumeRecord();
+
+////////////////////////////////////////////////////////////////////////////
+// $ATTRIBUTE_LIST fixtures where the imported attributes' owner record
+// (an extension record) must outlive the parse of the record that imports
+// them.
+////////////////////////////////////////////////////////////////////////////
+
+// MFT index of the base record every fixture below builds.
+inline constexpr ULONGLONG kAttrListLifetimeBaseIdx = 6;
+
+// MFT index of the extension record holding the imported resident $DATA.
+inline constexpr ULONGLONG kAttrListLifetimeExtIdx = 7;
+
+// Body of that resident $DATA: 16 distinct bytes, none of them 0xDD (what a
+// debug heap writes over freed memory) or 0x00, so a stale read cannot pass.
+inline constexpr std::array<BYTE, 16> kAttrListLifetimeDataContent{
+    0x11, 0x2A, 0x3B, 0x4C, 0x5D, 0x6E, 0x7F, 0x80,
+    0x91, 0xA2, 0xB3, 0xC4, 0xD5, 0xE6, 0xF7, 0x08};
+
+// Same volume as BuildFakeNtfsImage(), plus a base record whose resident
+// $ATTRIBUTE_LIST first imports the extension record's $DATA, then has an
+// entry with a zero record_size: AttrList's constructor throws after having
+// moved the imported attribute into the base record.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize();
+
+// Same volume as BuildFakeNtfsImage(), plus a base record with two unnamed,
+// non-resident $ATTRIBUTE_LIST attributes covering VCN 0-0 and VCN 1-1: an
+// empty first one, and a second one whose single entry imports the extension
+// record's $DATA. Their contiguous VCN ranges make them look like the two
+// halves of one split attribute.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithSplitAttributeListAttribute();
+
+// A malformed attribute written right after the last valid one of a record.
+enum class FakeTrailingDefect
+{
+  // total_size is smaller than a resident attribute's own header.
+  UndersizedHeader,
+  // A compressed non-resident attribute whose total_size leaves no room for
+  // its CompressedSize field.
+  UndersizedCompressedField,
+  // A $STANDARD_INFORMATION marked non-resident: its constructor rejects it.
+  RejectedAttribute,
+};
+
+// Same volume as BuildFakeNtfsImage(), plus a base record whose unnamed
+// $DATA (VCN 0) has a continuation (VCN 1) in the extension record, reached
+// through a resident $ATTRIBUTE_LIST, followed by "defect".
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithSplitDataAndTrailingDefect(FakeTrailingDefect defect);
 
 }  // namespace NtfsBrowserTests

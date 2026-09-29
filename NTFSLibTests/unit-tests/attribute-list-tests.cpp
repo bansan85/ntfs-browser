@@ -7,7 +7,9 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-type.h>
@@ -507,4 +509,135 @@ TEST_CASE(
   FileRecord<Strategy::NO_CACHE> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftUnresolvableGoodRecord));
   CHECK_FALSE(record.ParseFileRecord(NtfsBrowserTests::kMftUnresolvableExtIdx));
+}
+
+namespace
+{
+
+// Reads the first "size" bytes of "attr"; empty when the read fails.
+template <Strategy S>
+std::vector<BYTE> ReadFirstBytes(const NtfsBrowser::AttrBase<S>& attr,
+                                 size_t size)
+{
+  std::vector<BYTE> buffer(size, 0xCC);
+  const std::optional<ULONGLONG> read = attr.ReadData(0, buffer);
+  if (!read)
+  {
+    return {};
+  }
+  buffer.resize(static_cast<size_t>(*read));
+  return buffer;
+}
+
+// Allocates blocks of every size a freed file record could have had, filled
+// with a byte that is not part of the expected content: whatever a stale read
+// meets there is then wrong, on any heap that recycles freed blocks.
+std::vector<std::vector<BYTE>> ScribbleOverFreedMemory()
+{
+  // Smallest and largest block: a 4 KiB record buffer or header, and slack.
+  constexpr size_t kMinBlock = 64;
+  constexpr size_t kMaxBlock = 8192;
+  // The heap's size-class granularity, so every class is hit.
+  constexpr size_t kBlockStep = 16;
+  // A class may hold several free blocks.
+  constexpr size_t kBlocksPerSize = 4;
+  // Not in kAttrListLifetimeDataContent, and not the debug heap's 0xDD.
+  constexpr BYTE kFill = 0xEE;
+
+  std::vector<std::vector<BYTE>> blocks;
+  for (size_t size = kMinBlock; size <= kMaxBlock; size += kBlockStep)
+  {
+    for (size_t i = 0; i < kBlocksPerSize; i++)
+    {
+      blocks.emplace_back(size, kFill);
+    }
+  }
+  return blocks;
+}
+
+const std::vector<BYTE> kExpectedLifetimeContent(
+    NtfsBrowserTests::kAttrListLifetimeDataContent.begin(),
+    NtfsBrowserTests::kAttrListLifetimeDataContent.end());
+
+}  // namespace
+
+TEMPLATE_TEST_CASE_SIG(
+    "An $ATTRIBUTE_LIST that fails after importing an attribute leaves it "
+    "readable, when recovering",
+    "[attr-list][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize());
+
+  NtfsVolume<S> volume(std::move(reader),
+                       VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kAttrListLifetimeBaseIdx));
+  CHECK_FALSE(record.ParseAttrs());
+
+  const auto scribbled = ScribbleOverFreedMemory();
+  // The imported attribute's bytes live in the extension record.
+  const auto& data = record.getAttr(AttrType::DATA);
+  REQUIRE(data.size() == 1);
+  CHECK(data.front()->GetAttrType() == AttrType::DATA);
+  CHECK(ReadFirstBytes<S>(*data.front(), kExpectedLifetimeContent.size()) ==
+        kExpectedLifetimeContent);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "Two $ATTRIBUTE_LIST attributes with contiguous VCNs leave the imported "
+    "attribute readable",
+    "[attr-list][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithSplitAttributeListAttribute());
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kAttrListLifetimeBaseIdx));
+  REQUIRE(record.ParseAttrs());
+
+  const auto scribbled = ScribbleOverFreedMemory();
+  // The imported attribute's bytes live in the extension record.
+  const auto& data = record.getAttr(AttrType::DATA);
+  REQUIRE(data.size() == 1);
+  CHECK(data.front()->GetAttrType() == AttrType::DATA);
+  CHECK(ReadFirstBytes<S>(*data.front(), kExpectedLifetimeContent.size()) ==
+        kExpectedLifetimeContent);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A recovering parse that stops on a malformed attribute still merges "
+    "a split attribute",
+    "[attr-list][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  const auto defect =
+      GENERATE(NtfsBrowserTests::FakeTrailingDefect::UndersizedHeader,
+               NtfsBrowserTests::FakeTrailingDefect::UndersizedCompressedField,
+               NtfsBrowserTests::FakeTrailingDefect::RejectedAttribute);
+
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithSplitDataAndTrailingDefect(
+          defect));
+
+  NtfsVolume<S> volume(std::move(reader),
+                       VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kAttrListLifetimeBaseIdx));
+  CHECK_FALSE(record.ParseAttrs());
+
+  // One stream, not its VCN 0 and VCN 1 halves.
+  const auto& data = record.getAttr(AttrType::DATA);
+  REQUIRE(data.size() == 1);
+  CHECK(data.front()->GetDataSize() == NtfsBrowserTests::kFakeClusterSize);
 }
