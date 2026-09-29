@@ -17,6 +17,7 @@
 #include "attr-non-resident.h"
 #include "attr-resident.h"
 #include "attr/attribute-list.h"
+#include "mft-file-reference.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
@@ -113,26 +114,50 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
         FileRecord<S>& frnew = fr.extension_records_.back();
 
         frnew.attr_mask_ = am;
+        frnew.attr_raw_call_back_ = fr.attr_raw_call_back_;
         if (!frnew.ParseFileRecord(record_ref))
         {
           throw std::runtime_error(
               "Attribute List parse error (ParseFileRecord).\n");
         }
-        if (!frnew.ParseAttrs(attrListChain))
-        {
-          throw std::runtime_error(
-              "Attribute List parse error (ParseAttrs).\n");
-        }
 
-        // Insert new found AttrList to fr.AttrList
-        std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-            frnew.getAttr(al_record.attr_type);
-        for (std::unique_ptr<AttrBase<S>>& veci : vec)
+        // A record another file reused since the list was written is not
+        // this file's extension: its attributes belong to someone else.
+        const bool genuine = IsGenuineExtensionRecord(
+            al_record.base_ref.sequence_number, frnew.GetSequenceNumber(),
+            frnew.GetBaseRecordReference(),
+            *fr.file_reference_ & kMftRecordNumberMask);
+        if (!genuine)
         {
-          fr.attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
-              std::move(veci));
+          fr.extension_records_.pop_back();
+          LogRecoverable(recover,
+                         "Attribute List: record {} is not an extension of "
+                         "record {} (reused or foreign) - skipping",
+                         record_ref, *fr.file_reference_);
+          if (!recover)
+          {
+            throw std::runtime_error(
+                "Attribute List names a record of another file.\n");
+          }
         }
-        vec.clear();
+        else
+        {
+          if (!frnew.ParseAttrs(attrListChain))
+          {
+            throw std::runtime_error(
+                "Attribute List parse error (ParseAttrs).\n");
+          }
+
+          // Insert new found AttrList to fr.AttrList
+          std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+              frnew.getAttr(al_record.attr_type);
+          for (std::unique_ptr<AttrBase<S>>& veci : vec)
+          {
+            fr.attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
+                std::move(veci));
+          }
+          vec.clear();
+        }
       }
     }
 

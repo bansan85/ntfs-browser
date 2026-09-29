@@ -97,6 +97,15 @@ FakeRecord MakeRecordHeader(WORD offsetOfAttr,
   return record;
 }
 
+// Makes record an extension record: its own sequence number, and the file
+// reference of the base record it belongs to.
+void SetRecordLink(FakeRecord& record, WORD sequence, ULONGLONG baseRef)
+{
+  auto& header = *reinterpret_cast<FileRecordHeader::Data*>(record.data());
+  header.seq_no = sequence;
+  header.ref_to_base = baseRef;
+}
+
 // Writes the AttrType::ALL end-of-attributes marker at offset.
 void WriteEndOfAttributesMarker(FakeRecord& record, DWORD offset)
 {
@@ -235,10 +244,11 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters)
 
 // Builds $MFT's base record: a resident $ATTRIBUTE_LIST with one entry per
 // (extension record index, start VCN) pair, then $MFT's own DATA attribute,
-// whose last VCN is baseLastVcn.
+// whose last VCN is baseLastVcn. Every entry carries entrySequence as the
+// sequence number of the extension record it names.
 FakeRecord MakeMftRecordWithDataContinuations(
     std::span<const std::pair<ULONGLONG, ULONGLONG>> continuations,
-    ULONGLONG baseLastVcn = 0)
+    ULONGLONG baseLastVcn = 0, WORD entrySequence = 0)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
@@ -270,7 +280,7 @@ FakeRecord MakeMftRecordWithDataContinuations(
     alEntry.name_offset = 0;
     alEntry.start_vcn = continuations[i].second;
     alEntry.base_ref.segment_number = continuations[i].first;
-    alEntry.base_ref.sequence_number = 0;
+    alEntry.base_ref.sequence_number = entrySequence;
     alEntry.attr_id = 0;
   }
 
@@ -301,12 +311,15 @@ FakeRecord MakeMftRecordWithDataContinuations(
 // Extension record holding the continuation instance of $MFT's own DATA
 // attribute: a single non-resident run of clusters clusters at LCN lcn,
 // starting at VCN startVcn - unlike MakeMftRecordWithRealDataRun()'s, which
-// always starts at VCN 0.
+// always starts at VCN 0. It belongs to $MFT (base record 0) and carries
+// sequence number sequence.
 FakeRecord MakeMftDataContinuationExtensionRecord(ULONGLONG startVcn, DWORD lcn,
-                                                  DWORD clusters)
+                                                  DWORD clusters,
+                                                  WORD sequence = 0)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  SetRecordLink(record, sequence, static_cast<ULONGLONG>(MftIdx::MFT));
 
   auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
       &record[kAttrOffset]);
@@ -494,11 +507,13 @@ FakeRecord MakeAttributeListOnlyDirRecord()
 
 // Extension record holding the resident $INDEX_ROOT that
 // kAttributeListDirIdx's $ATTRIBUTE_LIST points to: a single "Foo" entry
-// (file reference 20), plus the terminating nameless entry.
-FakeRecord MakeIndexRootExtensionRecord()
+// (file reference 20), plus the terminating nameless entry. baseIdx is the
+// record it extends; 0 leaves it a base record.
+FakeRecord MakeIndexRootExtensionRecord(ULONGLONG baseIdx = 0)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  SetRecordLink(record, 0, baseIdx);
 
   auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
       &record[kAttrOffset]);
@@ -612,11 +627,12 @@ FakeRecord MakeAttributeListTwoTypesDirRecord()
 
 // Extension record holding both a resident $INDEX_ROOT (the same single
 // "Foo" entry as MakeIndexRootExtensionRecord()) and a minimal
-// non-resident $INDEX_ALLOCATION right after it.
-FakeRecord MakeIndexRootAndAllocExtensionRecord()
+// non-resident $INDEX_ALLOCATION right after it. It extends record baseIdx.
+FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  SetRecordLink(record, 0, baseIdx);
 
   auto& rootAttr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
       &record[kAttrOffset]);
@@ -827,11 +843,13 @@ FakeRecord MakeIndexAllocDirRecord()
 }
 
 // Extension record: a minimal non-resident $INDEX_ALLOCATION whose
-// real_size is the given sentinel.
-FakeRecord MakeIndexAllocationOnlyExtensionRecord(DWORD realSize)
+// real_size is the given sentinel. It extends record baseIdx.
+FakeRecord MakeIndexAllocationOnlyExtensionRecord(DWORD realSize,
+                                                  ULONGLONG baseIdx)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  SetRecordLink(record, 0, baseIdx);
 
   auto& allocAttr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
       &record[kAttrOffset]);
@@ -2476,7 +2494,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectory()
   };
 
   putRecord(kAttributeListDirIdx, MakeAttributeListOnlyDirRecord());
-  putRecord(kIndexExtensionIdx, MakeIndexRootExtensionRecord());
+  putRecord(kIndexExtensionIdx,
+            MakeIndexRootExtensionRecord(kAttributeListDirIdx));
 
   return image;
 }
@@ -2603,21 +2622,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiTypeAttributeListDirectory()
   };
 
   putRecord(kAttrListMultiTypeDirIdx, MakeAttributeListTwoTypesDirRecord());
-  putRecord(kMultiTypeExtensionIdx, MakeIndexRootAndAllocExtensionRecord());
-
-  return image;
-}
-
-std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectoryChainReused()
-{
-  std::vector<BYTE> image = BuildFakeNtfsImageWithAttributeListDirectory();
-
-  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
-  const size_t offset =
-      mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                    static_cast<size_t>(kAttributeListDirIdx2);
-  const FakeRecord record = MakeAttributeListOnlyDirRecord();
-  std::memcpy(image.data() + offset, record.data(), record.size());
+  putRecord(kMultiTypeExtensionIdx,
+            MakeIndexRootAndAllocExtensionRecord(kAttrListMultiTypeDirIdx));
 
   return image;
 }
@@ -2636,13 +2642,17 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedAttributeListDirectory()
 
   putRecord(kUafAttrListDirIdx, MakeFragmentedAttributeListDirRecord());
   putRecord(kUafExtensionIdx0,
-            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[0]));
+            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[0],
+                                                   kUafAttrListDirIdx));
   putRecord(kUafExtensionIdx1,
-            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[1]));
+            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[1],
+                                                   kUafAttrListDirIdx));
   putRecord(kUafExtensionIdx2,
-            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[2]));
+            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[2],
+                                                   kUafAttrListDirIdx));
   putRecord(kUafExtensionIdx3,
-            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[3]));
+            MakeIndexAllocationOnlyExtensionRecord(kUafRealSizeSentinels[3],
+                                                   kUafAttrListDirIdx));
 
   return image;
 }
@@ -2731,7 +2741,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall()
 
   putRecord(kAttributeListDirIdx,
             MakeAttributeListRecordSizeTooSmallDirRecord());
-  putRecord(kIndexExtensionIdx, MakeIndexRootExtensionRecord());
+  putRecord(kIndexExtensionIdx,
+            MakeIndexRootExtensionRecord(kAttributeListDirIdx));
 
   return image;
 }
@@ -2749,7 +2760,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListOffsetMismatch()
   };
 
   putRecord(kAttributeListDirIdx, MakeAttributeListOffsetMismatchDirRecord());
-  putRecord(kIndexExtensionIdx, MakeIndexRootExtensionRecord());
+  putRecord(kIndexExtensionIdx,
+            MakeIndexRootExtensionRecord(kAttributeListDirIdx));
 
   return image;
 }
@@ -2768,8 +2780,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle()
 
   putRecord(static_cast<ULONGLONG>(MftIdx::ROOT),
             MakeAttributeListCycleRecord(kAttrListCycleExtIdx));
-  putRecord(kAttrListCycleExtIdx,
-            MakeAttributeListCycleRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  FakeRecord ext =
+      MakeAttributeListCycleRecord(static_cast<ULONGLONG>(MftIdx::ROOT));
+  SetRecordLink(ext, 0, static_cast<ULONGLONG>(MftIdx::ROOT));
+  putRecord(kAttrListCycleExtIdx, ext);
 
   return image;
 }
@@ -2788,9 +2802,11 @@ std::vector<BYTE> BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory()
 
   putRecord(kAttrListTightPackDirIdx,
             MakeAttributeListTightlyPackedDirRecord());
-  putRecord(kAttrListTightPackExtIdxA, MakeIndexRootExtensionRecord());
+  putRecord(kAttrListTightPackExtIdxA,
+            MakeIndexRootExtensionRecord(kAttrListTightPackDirIdx));
   putRecord(kAttrListTightPackExtIdxB,
-            MakeIndexAllocationOnlyExtensionRecord(kAttrListTightPackRealSize));
+            MakeIndexAllocationOnlyExtensionRecord(kAttrListTightPackRealSize,
+                                                   kAttrListTightPackDirIdx));
 
   return image;
 }
@@ -4808,9 +4824,10 @@ constexpr DWORD kLifetimeExtDataLcn = 51;
 constexpr DWORD kLifetimeListLcn = 52;
 
 // Writes one nameless $ATTRIBUTE_LIST entry at dest: type, the record it
-// points to, and the record_size to declare (0 is the forged value).
+// points to (with the sequence number it claims for it), and the record_size
+// to declare (0 is the forged value).
 void WriteListEntry(BYTE* dest, AttrType type, ULONGLONG record,
-                    WORD recordSize)
+                    WORD recordSize, WORD sequence = 0)
 {
   auto& entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(dest);
   entry.attr_type = type;
@@ -4819,16 +4836,18 @@ void WriteListEntry(BYTE* dest, AttrType type, ULONGLONG record,
   entry.name_offset = 0;
   entry.start_vcn = 0;
   entry.base_ref.segment_number = record;
-  entry.base_ref.sequence_number = 0;
+  entry.base_ref.sequence_number = sequence;
   entry.attr_id = 0;
 }
 
 // Writes a resident $ATTRIBUTE_LIST holding "entryCount" entries, all for
 // $DATA in the lifetime extension record, and returns its total_size. The
-// entry at index "zeroSizeIndex", if any, declares a record_size of 0.
+// entry at index "zeroSizeIndex", if any, declares a record_size of 0. Every
+// entry claims "entrySequence" for the extension record.
 DWORD WriteLifetimeResidentList(FakeRecord& record, DWORD offset,
                                 size_t entryCount,
-                                std::optional<size_t> zeroSizeIndex = {})
+                                std::optional<size_t> zeroSizeIndex = {},
+                                WORD entrySequence = 0)
 {
   auto& attr =
       *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
@@ -4845,16 +4864,23 @@ DWORD WriteLifetimeResidentList(FakeRecord& record, DWORD offset,
   {
     WriteListEntry(&record[offset + attr.attr_offset + (i * kListEntrySize)],
                    AttrType::DATA, kAttrListLifetimeExtIdx,
-                   zeroSizeIndex == i ? static_cast<WORD>(0) : kListEntrySize);
+                   zeroSizeIndex == i ? static_cast<WORD>(0) : kListEntrySize,
+                   entrySequence);
   }
   return attr.header.total_size;
 }
 
+// The extension link of an ordinary extension of kAttrListLifetimeBaseIdx.
+constexpr FakeExtensionLink kOrdinaryLifetimeLink{.base_ref =
+                                                      kAttrListLifetimeBaseIdx};
+
 // Extension record holding one resident $DATA of kAttrListLifetimeDataContent.
-FakeRecord MakeLifetimeResidentDataExtensionRecord()
+FakeRecord MakeLifetimeResidentDataExtensionRecord(
+    const FakeExtensionLink& link = kOrdinaryLifetimeLink)
 {
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  SetRecordLink(record, link.record_sequence, link.base_ref);
 
   DWORD offset = kAttrOffset;
   const DWORD dataOffset = offset;
@@ -4934,6 +4960,7 @@ std::vector<BYTE>
 
   FakeRecord ext =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  SetRecordLink(ext, 0, kAttrListLifetimeBaseIdx);
   DWORD extOffset = kAttrOffset;
   extOffset += WriteNonResidentAttr(ext, extOffset, AttrType::DATA, 0, 0,
                                     extRuns, {.start_vcn = 1});
@@ -4943,6 +4970,85 @@ std::vector<BYTE>
   PutMftRecord(image, mftAddr, kAttrListLifetimeExtIdx, ext);
   LayRunBytes(image, baseRuns, {});
   LayRunBytes(image, extRuns, {});
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithExtensionLink(FakeExtensionLink link)
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  FakeRecord base =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  DWORD offset = kAttrOffset;
+  offset += WriteLifetimeResidentList(base, offset, 1, {}, link.entry_sequence);
+  WriteEndOfAttributesMarker(base, offset);
+
+  PutMftRecord(image, mftAddr, kAttrListLifetimeBaseIdx, base);
+  PutMftRecord(image, mftAddr, kAttrListLifetimeExtIdx,
+               MakeLifetimeResidentDataExtensionRecord(link));
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftDataSplitLink(FakeExtensionLink link)
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  const std::array<std::pair<ULONGLONG, ULONGLONG>, 1> continuations{
+      {{kMftDataSplitExtIdx, kMftDataSplitTargetIdx}}};
+  PutMftRecord(image, mftAddr, static_cast<ULONGLONG>(MftIdx::MFT),
+               MakeMftRecordWithDataContinuations(continuations, 0,
+                                                  link.entry_sequence));
+  PutMftRecord(image, mftAddr, kMftDataSplitExtIdx,
+               MakeMftDataContinuationExtensionRecord(kMftDataSplitTargetIdx,
+                                                      kMftDataSplitLcn, 1,
+                                                      link.record_sequence));
+
+  FakeRecord targetRecord =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  WriteEndOfAttributesMarker(targetRecord, kAttrOffset);
+  PutRecordAt(image, static_cast<size_t>(kMftDataSplitLcn) * kClusterSize,
+              targetRecord);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+
+  const std::array<std::pair<ULONGLONG, ULONGLONG>, 2> continuations{
+      {{kMftTwoExtentsExtIdx, kMftTwoExtentsFirstVcn},
+       {kMftTwoExtentsExtIdx, kMftTwoExtentsSecondVcn}}};
+  PutMftRecord(image, mftAddr, static_cast<ULONGLONG>(MftIdx::MFT),
+               MakeMftRecordWithDataContinuations(continuations));
+
+  const std::vector<FakeDataRun> firstRuns{{kMftTwoExtentsFirstLcn, 1}};
+  const std::vector<FakeDataRun> secondRuns{{kMftTwoExtentsSecondLcn, 1}};
+  FakeRecord ext =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  SetRecordLink(ext, 0, static_cast<ULONGLONG>(MftIdx::MFT));
+  DWORD extOffset = kAttrOffset;
+  extOffset += WriteNonResidentAttr(ext, extOffset, AttrType::DATA, 0,
+                                    kFakeFileRecordSize, firstRuns,
+                                    {.start_vcn = kMftTwoExtentsFirstVcn});
+  extOffset += WriteNonResidentAttr(ext, extOffset, AttrType::DATA, 0,
+                                    kFakeFileRecordSize, secondRuns,
+                                    {.start_vcn = kMftTwoExtentsSecondVcn});
+  WriteEndOfAttributesMarker(ext, extOffset);
+  PutMftRecord(image, mftAddr, kMftTwoExtentsExtIdx, ext);
+
+  FakeRecord targetRecord =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  WriteEndOfAttributesMarker(targetRecord, kAttrOffset);
+  PutRecordAt(image, static_cast<size_t>(kMftTwoExtentsFirstLcn) * kClusterSize,
+              targetRecord);
+  PutRecordAt(image,
+              static_cast<size_t>(kMftTwoExtentsSecondLcn) * kClusterSize,
+              targetRecord);
+
   return image;
 }
 

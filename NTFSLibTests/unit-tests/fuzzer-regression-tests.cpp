@@ -60,7 +60,7 @@ struct ExpectedMessages
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 103>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 104>
     kExpectedErrorMessages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -347,6 +347,8 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 103>
          {true, {"Attribute List parse error (al_record.attr_type)."}}},
         {"attribute_list_extension_parse_attrs_fail",
          {true, {"Attribute List parse error (ParseAttrs)."}}},
+        {"attribute_list_extension_foreign_record",
+         {true, {"is not an extension of record"}}},
         {"attribute_list_zero_record_size",
          {true, {"Attribute List with zero record size has endless loop."}}},
         {"attribute_list_record_size_too_small_on_root",
@@ -435,6 +437,7 @@ NTFS_REGRESSION_TESTCASE("9d6b29a12783a8d0595bf861671e5401493570b5")
 NTFS_REGRESSION_TESTCASE("attr_name_exceeds_total_size")
 NTFS_REGRESSION_TESTCASE("attr_offset_exceeds_record_size")
 NTFS_REGRESSION_TESTCASE("attr_type_slot_aliasing")
+NTFS_REGRESSION_TESTCASE("attribute_list_extension_foreign_record")
 NTFS_REGRESSION_TESTCASE("attribute_list_extension_parse_attrs_fail")
 NTFS_REGRESSION_TESTCASE("attribute_list_extension_record_cycle")
 NTFS_REGRESSION_TESTCASE("attribute_list_invalid_attr_type")

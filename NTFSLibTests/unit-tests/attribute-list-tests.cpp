@@ -90,8 +90,7 @@ TEST_CASE(
     "[file-record][regression]")
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::
-          BuildFakeNtfsImageWithAttributeListDirectoryChainReused());
+      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());
 
   NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
@@ -103,8 +102,8 @@ TEST_CASE(
   REQUIRE(dir.ParseAttrs());
   CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
 
-  // Same FileRecord, unrelated directory relocating to the same record.
-  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx2));
+  // Same FileRecord, same directory: it relocates to the same record again.
+  REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
   REQUIRE(dir.ParseAttrs());
   CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
 }
@@ -698,4 +697,159 @@ TEMPLATE_TEST_CASE_SIG(
 {
   CHECK(OpensWithinTimeout<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataLastVcnOverflow()));
+}
+
+namespace
+{
+
+// Extension links that do not belong to kAttrListLifetimeBaseIdx's list
+// entry: a reused record, or a record of another file.
+constexpr NtfsBrowserTests::FakeExtensionLink kForeignLinks[] = {
+    // Same base, but the record has since been reused (sequence 3 -> 4).
+    {.entry_sequence = 3, .record_sequence = 4, .base_ref = 6},
+    // The record was reused by a live file of its own: no base at all.
+    {.entry_sequence = 3, .record_sequence = 4, .base_ref = 0},
+    // Same sequence, but the record is an extension of another file.
+    {.entry_sequence = 0, .record_sequence = 0, .base_ref = 8},
+};
+
+}  // namespace
+
+TEMPLATE_TEST_CASE_SIG(
+    "An $ATTRIBUTE_LIST entry naming another file's record rejects the "
+    "record by default",
+    "[attr-list][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  const NtfsBrowserTests::FakeExtensionLink link =
+      kForeignLinks[GENERATE(size_t{0}, size_t{1}, size_t{2})];
+
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(link));
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kAttrListLifetimeBaseIdx));
+  CHECK_FALSE(record.ParseAttrs());
+  CHECK(record.getAttr(AttrType::DATA).empty());
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "An $ATTRIBUTE_LIST entry naming another file's record is skipped when "
+    "recovering",
+    "[attr-list][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  const NtfsBrowserTests::FakeExtensionLink link =
+      kForeignLinks[GENERATE(size_t{0}, size_t{1}, size_t{2})];
+
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(link));
+
+  NtfsVolume<S> volume(std::move(reader),
+                       VolumeOptions{.recover_errors = true});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kAttrListLifetimeBaseIdx));
+  CHECK(record.ParseAttrs());
+  CHECK(record.getAttr(AttrType::DATA).empty());
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "An $ATTRIBUTE_LIST entry naming a genuine extension record still "
+    "imports its attribute, sequence numbers included",
+    "[attr-list][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(
+          NtfsBrowserTests::kGenuineExtensionLink));
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kAttrListLifetimeBaseIdx));
+  REQUIRE(record.ParseAttrs());
+
+  const auto& data = record.getAttr(AttrType::DATA);
+  REQUIRE(data.size() == 1);
+  CHECK(ReadFirstBytes<S>(*data.front(), kExpectedLifetimeContent.size()) ==
+        kExpectedLifetimeContent);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A raw attribute callback installed on a record can discard an "
+    "attribute imported from an extension record",
+    "[attr-list][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(
+          NtfsBrowserTests::kGenuineExtensionLink));
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.InstallAttrRawCB(
+      AttrType::DATA, [](const NtfsBrowser::AttrHeaderCommon&, bool& discard)
+      { discard = true; }));
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kAttrListLifetimeBaseIdx));
+  REQUIRE(record.ParseAttrs());
+
+  CHECK(record.getAttr(AttrType::DATA).empty());
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "$MFT's own DATA continuation is ignored when its extension record was "
+    "reused under another sequence number",
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataSplitLink(
+          {.entry_sequence = 3, .record_sequence = 4}));
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  CHECK_FALSE(record.ParseFileRecord(NtfsBrowserTests::kMftDataSplitTargetIdx));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "$MFT's own DATA continuation is followed when its extension record "
+    "carries the sequence number its list entry names",
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataSplitLink(
+          {.entry_sequence = 3, .record_sequence = 3}));
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftDataSplitTargetIdx));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "Two $MFT DATA extents held by one extension record are both mapped",
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord());
+
+  NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftTwoExtentsFirstVcn));
+  CHECK(record.ParseFileRecord(NtfsBrowserTests::kMftTwoExtentsSecondVcn));
 }

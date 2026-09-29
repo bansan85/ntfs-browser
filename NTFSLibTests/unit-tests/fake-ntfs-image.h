@@ -174,16 +174,6 @@ inline constexpr ULONGLONG kMultiTypeExtensionIdx = 11;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMultiTypeAttributeListDirectory();
 
-// MFT index of a second directory record built by
-// BuildFakeNtfsImageWithAttributeListDirectoryChainReused().
-inline constexpr ULONGLONG kAttributeListDirIdx2 = 12;
-
-// Same volume as BuildFakeNtfsImageWithAttributeListDirectory(), plus a
-// second, independent directory record whose $ATTRIBUTE_LIST also
-// relocates $INDEX_ROOT to the same extension record the first one uses.
-[[nodiscard]] std::vector<BYTE>
-    BuildFakeNtfsImageWithAttributeListDirectoryChainReused();
-
 // MFT index of the directory record built by
 // BuildFakeNtfsImageWithFragmentedAttributeListDirectory().
 inline constexpr ULONGLONG kUafAttrListDirIdx = 13;
@@ -333,6 +323,57 @@ inline constexpr DWORD kMftDataSplitLcn = 40;
 // split via $ATTRIBUTE_LIST, its continuation covering kMftDataSplitTargetIdx.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+
+// MFT index of the one extension record holding both of $MFT's DATA extents
+// below. Below Enum::MftIdx::USER (16), so naively reachable.
+inline constexpr ULONGLONG kMftTwoExtentsExtIdx = 6;
+
+// Start VCNs of the two extents. Far apart, so nothing merges them into one.
+inline constexpr ULONGLONG kMftTwoExtentsFirstVcn = 16;
+inline constexpr ULONGLONG kMftTwoExtentsSecondVcn = 32;
+
+// Physical LCNs the two extents map their single cluster to.
+inline constexpr DWORD kMftTwoExtentsFirstLcn = 40;
+inline constexpr DWORD kMftTwoExtentsSecondLcn = 41;
+
+// Same volume as BuildFakeNtfsImage(), except $MFT's $ATTRIBUTE_LIST names one
+// extension record twice, for the two extents above. That record holds both
+// $DATA attributes. A file record sits at each extent's LCN.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord();
+
+// How an extension record relates to the $ATTRIBUTE_LIST entry naming it.
+struct FakeExtensionLink
+{
+  // Sequence number the list entry carries for the extension record.
+  WORD entry_sequence = 0;
+  // Sequence number in the extension record's own header.
+  WORD record_sequence = 0;
+  // Base file reference in the extension record's own header.
+  ULONGLONG base_ref = 0;
+};
+
+// The extension link of a genuine extension of kAttrListLifetimeBaseIdx.
+inline constexpr FakeExtensionLink kGenuineExtensionLink{
+    .entry_sequence = 3,
+    .record_sequence = 3,
+    // Number 6 with sequence 2, as NTFS packs a file reference.
+    .base_ref = 6 | (2ULL << 48)};
+
+// Same volume as BuildFakeNtfsImage(), plus kAttrListLifetimeBaseIdx, whose
+// resident $ATTRIBUTE_LIST names kAttrListLifetimeExtIdx for $DATA. That
+// record holds one resident $DATA of kAttrListLifetimeDataContent, and
+// relates to the list entry as link says.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithExtensionLink(FakeExtensionLink link);
+
+// Same volume as BuildFakeNtfsImage(), except $MFT's own DATA attribute is
+// split via $ATTRIBUTE_LIST like
+// BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList(), with the list
+// entry and the extension record carrying the sequence numbers in link.
+// link.base_ref is ignored: the extension always names $MFT.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMftDataSplitLink(FakeExtensionLink link);
 
 // MFT index of the chain's middle extent, naively reachable.
 inline constexpr ULONGLONG kMftChainExtB = 7;

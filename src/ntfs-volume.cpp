@@ -11,7 +11,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <unordered_set>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -32,6 +32,7 @@
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
 #include "file-reader.h"  // IWYU pragma: keep
+#include "mft-file-reference.h"
 #include "ntfs-common.h"
 #include "utf.h"
 
@@ -63,8 +64,17 @@ std::wstring_view TrimTrailingNuls(std::wstring_view name) noexcept
   return name;
 }
 
-// Caps tracked $MFT DATA-continuation refs against a forged $ATTRIBUTE_LIST.
+// Caps the $MFT DATA entries read from a forged $ATTRIBUTE_LIST.
 constexpr size_t kMaxMftAttrListEntries = 65536;
+
+// One extension record $MFT's $ATTRIBUTE_LIST names for DATA, with the
+// sequence number its entries claim and the start VCN of each entry.
+struct PendingMftExtension
+{
+  ULONGLONG record;
+  WORD sequence;
+  std::vector<ULONGLONG> start_vcns;
+};
 
 }  // namespace
 
@@ -253,15 +263,17 @@ void NtfsVolume<S>::ResolveMftDataExtents()
   const AttrBase<S>& rawList = *listAttrs.front();
   const ULONGLONG selfRef = *listRecord.GetFileReference();
 
-  // Collects (record_ref, start_vcn) for each DATA entry, deduped and capped.
-  std::vector<std::pair<ULONGLONG, ULONGLONG>> pending;
+  // Collects each DATA entry, grouped per extension record, and capped. One
+  // record can hold several extents, so it keeps every start VCN listed.
+  std::vector<PendingMftExtension> pending;
   {
-    std::unordered_set<ULONGLONG> seen;
+    std::unordered_map<ULONGLONG, size_t> indexByRef;
+    size_t listedEntries = 0;
     ULONGLONG offset = 0;
     Attr::AttributeList entry{};
     std::optional<ULONGLONG> len;
     while (
-        pending.size() < kMaxMftAttrListEntries &&
+        listedEntries < kMaxMftAttrListEntries &&
         (len = rawList.ReadData(offset, {reinterpret_cast<BYTE*>(&entry),
                                          Attr::kAttributeListEntryHeaderSize})))
     {
@@ -273,9 +285,19 @@ void NtfsVolume<S>::ResolveMftDataExtents()
 
       const ULONGLONG recordRef = entry.base_ref.segment_number;
       if (entry.attr_type == AttrType::DATA && entry.name_length == 0 &&
-          recordRef != selfRef && seen.insert(recordRef).second)
+          recordRef != selfRef)
       {
-        pending.emplace_back(recordRef, entry.start_vcn);
+        listedEntries++;
+        // A file reference packs the record number and its sequence number.
+        const ULONGLONG key =
+            recordRef | (static_cast<ULONGLONG>(entry.base_ref.sequence_number)
+                         << kMftSequenceShift);
+        const auto [it, inserted] = indexByRef.emplace(key, pending.size());
+        if (inserted)
+        {
+          pending.push_back({recordRef, entry.base_ref.sequence_number, {}});
+        }
+        pending[it->second].start_vcns.push_back(entry.start_vcn);
       }
 
       if (entry.record_size == 0)
@@ -289,17 +311,17 @@ void NtfsVolume<S>::ResolveMftDataExtents()
   // Attempts each ref once reachable, dropping it either way to bound reads.
   while (!pending.empty())
   {
-    std::vector<std::pair<ULONGLONG, ULONGLONG>> stillPending;
+    std::vector<PendingMftExtension> stillPending;
     bool attemptedAny = false;
 
-    for (const auto& [recordRef, startVcn] : pending)
+    for (PendingMftExtension& item : pending)
     {
       const bool reachable =
-          recordRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
-          IsMftRangeMapped(recordRef * file_record_size_, file_record_size_);
+          item.record < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
+          IsMftRangeMapped(item.record * file_record_size_, file_record_size_);
       if (!reachable)
       {
-        stillPending.emplace_back(recordRef, startVcn);
+        stillPending.push_back(std::move(item));
         continue;
       }
       attemptedAny = true;
@@ -309,14 +331,34 @@ void NtfsVolume<S>::ResolveMftDataExtents()
       ext.attr_mask_ = Mask::DATA;
       ext.bypass_deleted_gate_ = true;
 
-      if (ext.ParseFileRecord(recordRef) && ext.ParseAttrs())
+      const bool parsed = ext.ParseFileRecord(item.record);
+      // A record another file reused since the list was written is not
+      // $MFT's extension: its $DATA would map foreign clusters.
+      if (parsed &&
+          !IsGenuineExtensionRecord(item.sequence, ext.GetSequenceNumber(),
+                                    ext.GetBaseRecordReference(),
+                                    selfRef & kMftRecordNumberMask))
+      {
+        mft_extension_records_.pop_back();
+        LogWarn(
+            "$MFT DATA continuation in record {} is not an extension of "
+            "$MFT (reused or foreign); ignoring",
+            item.record);
+      }
+      else if (parsed && ext.ParseAttrs())
       {
         for (const std::unique_ptr<AttrBase<S>>& attr :
              ext.getAttr(AttrType::DATA))
         {
           if (attr->IsNonResident())
           {
-            TryAddMftExtent(*attr, startVcn);
+            // Any start VCN not listed is rejected by TryAddMftExtent().
+            const ULONGLONG startVcn =
+                static_cast<const AttrNonResident<S>&>(*attr).GetStartVcn();
+            const auto listed = std::ranges::find(item.start_vcns, startVcn);
+            TryAddMftExtent(*attr, listed != item.start_vcns.end()
+                                       ? *listed
+                                       : item.start_vcns.front());
           }
         }
       }
@@ -324,7 +366,7 @@ void NtfsVolume<S>::ResolveMftDataExtents()
       {
         mft_extension_records_.pop_back();
         LogWarn("$MFT DATA continuation in record {} could not be resolved",
-                recordRef);
+                item.record);
       }
     }
 
