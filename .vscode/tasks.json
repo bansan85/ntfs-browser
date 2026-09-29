@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CMake: all presets",
+      "type": "shell",
+      "command": "foreach ($p in 'shared','static','no-decompression','efs-cryptopp-only','efs-bcrypt-only','no-efs','shared-vcpkg','static-vcpkg') { cmake --workflow --preset $p; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }",
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}

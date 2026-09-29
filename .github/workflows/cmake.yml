@@ -31,7 +31,6 @@ jobs:
         build_shared_libs: [ON, OFF]
         include:
           - name: windows
-            cxx: cl
             os: windows-latest
             cxx_flags: /MP
           - name: windows
@@ -41,28 +40,24 @@ jobs:
             build_shared_libs: OFF
             preset: static
           - name: windows-no-decompression
-            cxx: cl
             os: windows-latest
             cxx_flags: /MP
             build_type: Debug
             build_shared_libs: OFF
             preset: no-decompression
           - name: windows-no-efs-cryptopp
-            cxx: cl
             os: windows-latest
             cxx_flags: /MP
             build_type: Debug
             build_shared_libs: OFF
             preset: efs-bcrypt-only
           - name: windows-no-efs-bcrypt
-            cxx: cl
             os: windows-latest
             cxx_flags: /MP
             build_type: Debug
             build_shared_libs: OFF
             preset: efs-cryptopp-only
           - name: windows-no-efs
-            cxx: cl
             os: windows-latest
             cxx_flags: /MP
             build_type: Debug
@@ -99,23 +94,20 @@ jobs:
       - name: Decompress test data (Windows)
         if: runner.os == 'Windows'
         run: python .github/scripts/fetch-test-data.py decompress
-      - name: Enable MSVC dev environment
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
       - name: cmake (windows)
         if: runner.os == 'Windows'
         run: |
           $env:CXXFLAGS = "${{ matrix.cxx_flags }}"
-          cmake --preset ${{ matrix.preset }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install_path" -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" -DNTFS_BROWSER_REQUIRE_TEST_DATA=ON
+          cmake --preset ${{ matrix.preset }} -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install_path" -DNTFS_BROWSER_REQUIRE_TEST_DATA=ON
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }} --config ${{ matrix.build_type }}
       - name: cmake (linux)
         if: runner.os == 'Linux'
         run: |
-          cmake --preset ${{ matrix.preset }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} || exit 1
+          cmake --preset ${{ matrix.preset }} -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} || exit 1
           cmake --build --preset ${{ matrix.preset }} || exit 1
       - name: ctest
-        run: ctest --output-on-failure --test-dir build/${{ matrix.preset }} --parallel 16
+        run: ctest --output-on-failure --test-dir build/${{ matrix.preset }} -C ${{ matrix.build_type }} --parallel 16
   fetchcontent-consumer:
     runs-on: windows-latest
     steps:

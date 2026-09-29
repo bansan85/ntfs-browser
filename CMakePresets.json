@@ -1,144 +1,270 @@
 {
-  "version": 6,
-  "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 25,
-    "patch": 0
-  },
-  "configurePresets": [
-    {
-      "name": "base",
-      "hidden": true,
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/${presetName}",
-      "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      }
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
     },
-    {
-      "name": "shared",
-      "displayName": "Shared",
-      "inherits": "base",
-      "cacheVariables": {
-        "BUILD_SHARED_LIBS": "ON"
-      }
-    },
-    {
-      "name": "static",
-      "displayName": "Static",
-      "inherits": "base",
-      "cacheVariables": {
-        "BUILD_SHARED_LIBS": "OFF"
-      }
-    },
-    {
-      "name": "vcpkg-base",
-      "hidden": true,
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "H:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/vcpkg-triplets"
-      }
-    },
-    {
-      "name": "shared-vcpkg",
-      "displayName": "Shared (vcpkg, x64-windows)",
-      "inherits": "vcpkg-base",
-      "cacheVariables": {
-        "BUILD_SHARED_LIBS": "ON",
-        "VCPKG_TARGET_TRIPLET": "x64-windows",
-        "VCPKG_HOST_TRIPLET": "x64-windows"
-      }
-    },
-    {
-      "name": "static-vcpkg",
-      "displayName": "Static /MD (vcpkg, x64-windows-static-md)",
-      "inherits": "vcpkg-base",
-      "cacheVariables": {
-        "BUILD_SHARED_LIBS": "OFF",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
-        "VCPKG_HOST_TRIPLET": "x64-windows-static-md"
-      }
-    },
-    {
-      "name": "no-decompression",
-      "displayName": "Static, LZNT1 decompression disabled",
-      "inherits": "static",
-      "cacheVariables": {
-        "NTFS_BROWSER_ENABLE_DECOMPRESSION": "OFF"
-      }
-    },
-    {
-      "name": "efs-cryptopp-only",
-      "displayName": "Static, EFS decryption via Crypto++ only",
-      "inherits": "static",
-      "cacheVariables": {
-        "NTFS_BROWSER_ENABLE_EFS_BCRYPT": "OFF"
-      }
-    },
-    {
-      "name": "efs-bcrypt-only",
-      "displayName": "Static, EFS decryption via BCrypt only",
-      "inherits": "static",
-      "cacheVariables": {
-        "NTFS_BROWSER_ENABLE_EFS_CRYPTOPP": "OFF"
-      }
-    },
-    {
-      "name": "no-efs",
-      "displayName": "Static, EFS decryption disabled (both backends off)",
-      "inherits": "static",
-      "cacheVariables": {
-        "NTFS_BROWSER_ENABLE_EFS_CRYPTOPP": "OFF",
-        "NTFS_BROWSER_ENABLE_EFS_BCRYPT": "OFF"
-      }
-    }
-  ],
-  "buildPresets": [
-    {
-      "name": "build-base",
-      "hidden": true,
-      "jobs": 16
-    },
-    {
-      "name": "shared",
-      "configurePreset": "shared",
-      "inherits": "build-base"
-    },
-    {
-      "name": "static",
-      "configurePreset": "static",
-      "inherits": "build-base"
-    },
-    {
-      "name": "shared-vcpkg",
-      "configurePreset": "shared-vcpkg",
-      "inherits": "build-base"
-    },
-    {
-      "name": "static-vcpkg",
-      "configurePreset": "static-vcpkg",
-      "inherits": "build-base"
-    },
-    {
-      "name": "no-decompression",
-      "configurePreset": "no-decompression",
-      "inherits": "build-base"
-    },
-    {
-      "name": "efs-cryptopp-only",
-      "configurePreset": "efs-cryptopp-only",
-      "inherits": "build-base"
-    },
-    {
-      "name": "efs-bcrypt-only",
-      "configurePreset": "efs-bcrypt-only",
-      "inherits": "build-base"
-    },
-    {
-      "name": "no-efs",
-      "configurePreset": "no-efs",
-      "inherits": "build-base"
-    }
-  ]
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "shared",
+            "displayName": "Shared",
+            "inherits": "base",
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "ON"
+            }
+        },
+        {
+            "name": "static",
+            "displayName": "Static",
+            "inherits": "base",
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "OFF"
+            }
+        },
+        {
+            "name": "vcpkg-base",
+            "hidden": true,
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "H:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/vcpkg-triplets"
+            }
+        },
+        {
+            "name": "shared-vcpkg",
+            "displayName": "Shared (vcpkg, x64-windows)",
+            "inherits": "vcpkg-base",
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "ON",
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "VCPKG_HOST_TRIPLET": "x64-windows"
+            }
+        },
+        {
+            "name": "static-vcpkg",
+            "displayName": "Static /MD (vcpkg, x64-windows-static-md)",
+            "inherits": "vcpkg-base",
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "OFF",
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+                "VCPKG_HOST_TRIPLET": "x64-windows-static-md"
+            }
+        },
+        {
+            "name": "no-decompression",
+            "displayName": "Static, LZNT1 decompression disabled",
+            "inherits": "static",
+            "cacheVariables": {
+                "NTFS_BROWSER_ENABLE_DECOMPRESSION": "OFF"
+            }
+        },
+        {
+            "name": "efs-cryptopp-only",
+            "displayName": "Static, EFS decryption via Crypto++ only",
+            "inherits": "static",
+            "cacheVariables": {
+                "NTFS_BROWSER_ENABLE_EFS_BCRYPT": "OFF"
+            }
+        },
+        {
+            "name": "efs-bcrypt-only",
+            "displayName": "Static, EFS decryption via BCrypt only",
+            "inherits": "static",
+            "cacheVariables": {
+                "NTFS_BROWSER_ENABLE_EFS_CRYPTOPP": "OFF"
+            }
+        },
+        {
+            "name": "no-efs",
+            "displayName": "Static, EFS decryption disabled (both backends off)",
+            "inherits": "static",
+            "cacheVariables": {
+                "NTFS_BROWSER_ENABLE_EFS_CRYPTOPP": "OFF",
+                "NTFS_BROWSER_ENABLE_EFS_BCRYPT": "OFF"
+            }
+        },
+        {
+            "name": "Visual Studio Community 2022 Release - amd64",
+            "displayName": "Visual Studio Community 2022 Release - amd64",
+            "description": "Using compilers for Visual Studio 17 2022 (x64 architecture)",
+            "generator": "Visual Studio 17 2022",
+            "toolset": "host=x64",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "build-base",
+            "hidden": true,
+            "configuration": "Debug",
+            "jobs": 16
+        },
+        {
+            "name": "shared",
+            "configurePreset": "shared",
+            "inherits": "build-base"
+        },
+        {
+            "name": "static",
+            "configurePreset": "static",
+            "inherits": "build-base"
+        },
+        {
+            "name": "shared-vcpkg",
+            "configurePreset": "shared-vcpkg",
+            "inherits": "build-base"
+        },
+        {
+            "name": "static-vcpkg",
+            "configurePreset": "static-vcpkg",
+            "inherits": "build-base"
+        },
+        {
+            "name": "no-decompression",
+            "configurePreset": "no-decompression",
+            "inherits": "build-base"
+        },
+        {
+            "name": "efs-cryptopp-only",
+            "configurePreset": "efs-cryptopp-only",
+            "inherits": "build-base"
+        },
+        {
+            "name": "efs-bcrypt-only",
+            "configurePreset": "efs-bcrypt-only",
+            "inherits": "build-base"
+        },
+        {
+            "name": "no-efs",
+            "configurePreset": "no-efs",
+            "inherits": "build-base"
+        },
+        {
+            "name": "Visual Studio Community 2022 Release - amd64-debug",
+            "displayName": "Visual Studio Community 2022 Release - amd64 - Debug",
+            "configurePreset": "Visual Studio Community 2022 Release - amd64",
+            "configuration": "Debug"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "shared",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "shared"
+                },
+                {
+                    "type": "build",
+                    "name": "shared"
+                }
+            ]
+        },
+        {
+            "name": "static",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "static"
+                },
+                {
+                    "type": "build",
+                    "name": "static"
+                }
+            ]
+        },
+        {
+            "name": "no-decompression",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "no-decompression"
+                },
+                {
+                    "type": "build",
+                    "name": "no-decompression"
+                }
+            ]
+        },
+        {
+            "name": "efs-cryptopp-only",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "efs-cryptopp-only"
+                },
+                {
+                    "type": "build",
+                    "name": "efs-cryptopp-only"
+                }
+            ]
+        },
+        {
+            "name": "efs-bcrypt-only",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "efs-bcrypt-only"
+                },
+                {
+                    "type": "build",
+                    "name": "efs-bcrypt-only"
+                }
+            ]
+        },
+        {
+            "name": "no-efs",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "no-efs"
+                },
+                {
+                    "type": "build",
+                    "name": "no-efs"
+                }
+            ]
+        },
+        {
+            "name": "shared-vcpkg",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "shared-vcpkg"
+                },
+                {
+                    "type": "build",
+                    "name": "shared-vcpkg"
+                }
+            ]
+        },
+        {
+            "name": "static-vcpkg",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "static-vcpkg"
+                },
+                {
+                    "type": "build",
+                    "name": "static-vcpkg"
+                }
+            ]
+        }
+    ]
 }
