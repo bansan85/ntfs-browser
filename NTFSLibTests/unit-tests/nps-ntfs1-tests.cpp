@@ -64,7 +64,7 @@ TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
   CheckDirMatchesGroundTruth(volume, "RAW");
 }
 
-#ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
 TEST_CASE(
     "Compressed files decompress to the RAW ground truth (NPS ntfs1, gen2)",
     "[nps][integration]")
