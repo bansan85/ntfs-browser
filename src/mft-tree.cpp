@@ -25,6 +25,7 @@
 
 #include "attr-file-name.h"
 #include "attr-resident.h"
+#include "mft-file-reference.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
@@ -41,13 +42,6 @@ constexpr ULONGLONG kRootRecord = static_cast<ULONGLONG>(Enum::MftIdx::ROOT);
 // Records between two progress() calls: often enough for a live progress
 // line, rare enough to cost nothing next to a record read.
 constexpr ULONGLONG kProgressInterval = 4096;
-
-// The sequence number NTFS gives a record when it frees it: one more,
-// skipping 0, since a reference carrying 0 means "do not check".
-WORD NextSequence(WORD sequence) noexcept
-{
-  return sequence == 0xFFFF ? 1 : static_cast<WORD>(sequence + 1);
-}
 
 // The Filename side of a $FILE_NAME attribute. FileRecord<S> always wraps a
 // $FILE_NAME in the AttrFileName over the resident type that matches S.
@@ -305,10 +299,8 @@ bool MftTree::IsValidParent(const MftEntry& child, const MftName& name) const
 
   // The parent is the same one the name was filed under: unchecked, still
   // the same generation, or the generation NTFS freed right after.
-  return name.parent_sequence == 0 ||
-         name.parent_sequence == parent->sequence ||
-         (!parent->in_use &&
-          parent->sequence == NextSequence(name.parent_sequence));
+  return IsSameRecordGeneration(name.parent_sequence, parent->sequence,
+                                parent->in_use);
 }
 
 // Joins name and its ancestors' primary names up to the root, or up to the

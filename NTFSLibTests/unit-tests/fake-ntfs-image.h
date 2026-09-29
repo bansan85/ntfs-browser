@@ -642,6 +642,58 @@ inline constexpr BYTE kMultiClusterOrphanNameLength = 11;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock();
 
+// Names of the four leaf entries, one per index block, of
+// BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks(), in block order.
+inline constexpr std::array<std::wstring_view, 4> kSubClusterBlockNames{
+    L"SubBlock0", L"SubBlock1", L"SubBlock2", L"SubBlock3"};
+
+// Same volume as BuildFakeNtfsImage(), with index blocks of 512 bytes, half a
+// cluster. The root record (#5) holds a directory whose $INDEX_ROOT points
+// only at block 0, while its $INDEX_ALLOCATION maps four blocks. Block i holds
+// kSubClusterBlockNames[i], filed under the root.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks();
+
+// Names of the four leaf entries, one per index block, of
+// BuildFakeNtfsImageWithSplitIndexAllocation(), in block order.
+inline constexpr std::array<std::wstring_view, 4> kSplitBlockNames{
+    L"SplitBlock0", L"SplitBlock1", L"SplitBlock2", L"SplitBlock3"};
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by a
+// directory whose $INDEX_ROOT points only at block 0. Its $INDEX_ALLOCATION
+// is split into two instances of two clusters each, which merge into one
+// stream of four one-cluster blocks. Block i holds kSplitBlockNames[i], filed
+// under the root.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSplitIndexAllocation();
+
+// How a directory record relates to an orphaned index block's entry filed
+// under it.
+struct FakeParentLink
+{
+  // Sequence number in the entry's parent reference. 0 claims nothing.
+  WORD entry_parent_sequence = 0;
+  // Sequence number in the directory record's own header.
+  WORD record_sequence = 0;
+  // Whether the directory record is in use, or freed.
+  bool record_in_use = true;
+};
+
+// MFT reference, name and UTF-16 length of the entry
+// BuildFakeNtfsImageWithOrphanedIndexBlockParentLink() files in its VCN 2
+// block.
+inline constexpr ULONGLONG kOrphanedBlockGenerationMftRef = 104;
+inline constexpr wchar_t kOrphanedBlockGenerationName[] = L"Generation";
+inline constexpr BYTE kOrphanedBlockGenerationNameLength = 10;
+
+// Same volume as BuildFakeNtfsImageWithOrphanedIndexBlocks(), except the entry
+// of its VCN 2 block is kOrphanedBlockGenerationName, filed under the root's
+// record number with link.entry_parent_sequence, while the root record itself
+// carries link.record_sequence and is in use as link says. VCN 0 is reached
+// through the tree. VCN 1's entry names the directory with sequence 0, so the
+// scan always reports it.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(FakeParentLink link);
+
 // Record slots BuildFakeNtfsImageWithMftTree()'s $MFT has room for.
 inline constexpr ULONGLONG kMftTreeRecordCount = 26;
 

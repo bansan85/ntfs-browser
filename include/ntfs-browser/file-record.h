@@ -176,7 +176,9 @@ class NTFS_BROWSER_EXPORT FileRecord
   // whose $INDEX_ROOT or an internal node is corrupt and no longer points at
   // every child block, or whose $INDEX_ROOT attribute is missing entirely.
   // An entry found this way is only reported if its parent reference still
-  // matches this directory, and, with include_deleted off, only if the
+  // matches this directory, sequence number included (0 matches any; a freed
+  // directory also matches the sequence it had before it was freed), and,
+  // with include_deleted off, only if the
   // record it names is still in use under a matching sequence number.
   void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack, void* context) const;
 

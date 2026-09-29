@@ -220,7 +220,199 @@ void RunMissingIndexRootRecoveredWithFlag()
   CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
 }
 
+// Names TraverseSubEntries() reports on the root record of "image", with both
+// recovery flags on, in callback order.
+template <Strategy S>
+std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image)
+{
+  auto reader =
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
+
+  NtfsVolume<S> volume(std::move(reader), kRecoverKeepDeleted);
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> root(volume);
+  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseAttrs());
+
+  return CollectNames(root);
+}
+
+// The scan's block count is what the mapped clusters hold, in blocks: with
+// blocks smaller than a cluster, that is more than the cluster count.
+template <Strategy S>
+void RunSubClusterBlocksAllScanned()
+{
+  const std::vector<std::wstring> names = RecoverRootNames<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks());
+
+  REQUIRE(names.size() == NtfsBrowserTests::kSubClusterBlockNames.size());
+  for (size_t i = 0; i < names.size(); i++)
+  {
+    CHECK(names[i] == NtfsBrowserTests::kSubClusterBlockNames[i]);
+  }
+}
+
+// The scan covers every instance of a split $INDEX_ALLOCATION, not only the
+// one whose header the merged attribute keeps.
+template <Strategy S>
+void RunSplitAllocationAllScanned()
+{
+  const std::vector<std::wstring> names = RecoverRootNames<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithSplitIndexAllocation());
+
+  REQUIRE(names.size() == NtfsBrowserTests::kSplitBlockNames.size());
+  for (size_t i = 0; i < names.size(); i++)
+  {
+    CHECK(names[i] == NtfsBrowserTests::kSplitBlockNames[i]);
+  }
+}
+
+// Whether the entry of the fixture's VCN 2 block, filed under the parent
+// generation "link" describes, is reported next to the fixture's two other
+// orphan-scan entries.
+template <Strategy S>
+bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link)
+{
+  const std::vector<std::wstring> names = RecoverRootNames<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(
+          link));
+
+  REQUIRE(names.size() >= 2);
+  CHECK(names[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  CHECK(names[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
+  if (names.size() == 2)
+  {
+    return false;
+  }
+  REQUIRE(names.size() == 3);
+  CHECK(names[2] == NtfsBrowserTests::kOrphanedBlockGenerationName);
+  return true;
+}
+
+// A stale parent sequence names an earlier directory that used the same
+// record: its leftover entry is not a child of the current one.
+template <Strategy S>
+void RunOrphanEntryOfEarlierParentGenerationRejected()
+{
+  CHECK_FALSE(ParentLinkEntryReported<S>({.entry_parent_sequence = 4,
+                                          .record_sequence = 5,
+                                          .record_in_use = true}));
+  CHECK_FALSE(ParentLinkEntryReported<S>({.entry_parent_sequence = 4,
+                                          .record_sequence = 6,
+                                          .record_in_use = true}));
+}
+
+// The parent sequence is honoured only where it says something: the current
+// generation, or 0, which claims nothing.
+template <Strategy S>
+void RunOrphanEntryOfCurrentParentGenerationReported()
+{
+  CHECK(ParentLinkEntryReported<S>({.entry_parent_sequence = 5,
+                                    .record_sequence = 5,
+                                    .record_in_use = true}));
+  CHECK(ParentLinkEntryReported<S>({.entry_parent_sequence = 0,
+                                    .record_sequence = 5,
+                                    .record_in_use = true}));
+}
+
+// NTFS bumps a directory's sequence number when it frees it, so a freed
+// directory still owns the entries filed under its previous sequence. A live
+// one does not.
+template <Strategy S>
+void RunOrphanEntryOfFreedParentGeneration()
+{
+  CHECK(ParentLinkEntryReported<S>({.entry_parent_sequence = 5,
+                                    .record_sequence = 6,
+                                    .record_in_use = false}));
+  CHECK_FALSE(ParentLinkEntryReported<S>({.entry_parent_sequence = 5,
+                                          .record_sequence = 6,
+                                          .record_in_use = true}));
+}
+
 }  // namespace
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan covers every block when index blocks "
+    "are smaller than a cluster",
+    "[file-record][index-block][regression]")
+{
+  RunSubClusterBlocksAllScanned<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan covers every block when index blocks "
+    "are smaller than a cluster (FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunSubClusterBlocksAllScanned<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan covers every instance of a split "
+    "$INDEX_ALLOCATION",
+    "[file-record][index-block][regression]")
+{
+  RunSplitAllocationAllScanned<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan covers every instance of a split "
+    "$INDEX_ALLOCATION (FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunSplitAllocationAllScanned<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan rejects an entry filed under an earlier "
+    "generation of the directory record",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanEntryOfEarlierParentGenerationRejected<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan rejects an entry filed under an earlier "
+    "generation of the directory record (FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanEntryOfEarlierParentGenerationRejected<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan reports an entry filed under the "
+    "current or an unchecked generation of the directory record",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanEntryOfCurrentParentGenerationReported<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan reports an entry filed under the "
+    "current or an unchecked generation of the directory record (FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanEntryOfCurrentParentGenerationReported<Strategy::FULL_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan accepts the previous generation only "
+    "for a freed directory record",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanEntryOfFreedParentGeneration<Strategy::NO_CACHE>();
+}
+
+TEST_CASE(
+    "TraverseSubEntries recovery scan accepts the previous generation only "
+    "for a freed directory record (FULL_CACHE)",
+    "[file-record][index-block][regression]")
+{
+  RunOrphanEntryOfFreedParentGeneration<Strategy::FULL_CACHE>();
+}
 
 TEST_CASE("TraverseSubEntries ignores an orphaned index block by default",
           "[file-record][index-block][regression]")

@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstddef>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -1271,15 +1272,20 @@ void FileRecord<S>::ScanOrphanedIndexBlocks(
           : 1;
 
   // GetDataSize() (declared real_size) can be forged far past what the
-  // attribute's own data runs actually map; GetLastVcn() bounds the scan to
-  // what the run list claims to cover instead, so a forged size alone can't
-  // drive tens of thousands of doomed ParseIndexBlock() calls.
-  const ULONGLONG mappedClusters =
-      (alloc->GetLastVcn() >= alloc->GetStartVcn())
-          ? alloc->GetLastVcn() - alloc->GetStartVcn() + 1
-          : 0;
-  const ULONGLONG mappedBlockCount =
-      (mappedClusters + clustersPerBlock - 1) / clustersPerBlock;
+  // attribute's own data runs actually map; the mapped VCN range, every merged
+  // instance included, bounds the scan to what the run list claims to cover
+  // instead, so a forged size alone can't drive tens of thousands of doomed
+  // ParseIndexBlock() calls. A range of clusters counts in bytes, not in
+  // clusters, since a block can be smaller than one.
+  const ULONGLONG mappedClusters = (alloc->GetLastVcn() >= alloc->GetStartVcn())
+                                       ? alloc->TotalClusters()
+                                       : 0;
+  const ULONGLONG mappedBytes =
+      (clusterSize != 0 &&
+       mappedClusters > (std::numeric_limits<ULONGLONG>::max)() / clusterSize)
+          ? (std::numeric_limits<ULONGLONG>::max)()
+          : mappedClusters * clusterSize;
+  const ULONGLONG mappedBlockCount = mappedBytes / indexBlockSize;
 
   const ULONGLONG declaredBlockCount = alloc->GetIndexBlockCount();
   const ULONGLONG blockCount = (declaredBlockCount < mappedBlockCount)
@@ -1297,6 +1303,8 @@ void FileRecord<S>::ScanOrphanedIndexBlocks(
   }
 
   const std::optional<ULONGLONG> selfRef = GetFileReference();
+  const WORD selfSequence = GetSequenceNumber();
+  const bool selfInUse = !IsDeleted();
   const bool includeDeleted = volume_.GetOptions().include_deleted;
 
   for (ULONGLONG blockIndex = 0; blockIndex < scanLimit; blockIndex++)
@@ -1323,9 +1331,13 @@ void FileRecord<S>::ScanOrphanedIndexBlocks(
         continue;
       }
       // An orphaned block may hold a stale entry left over from a file
-      // already deleted from this directory - only report one still filed
-      // under it.
-      if (selfRef && ie.GetParentReference() != *selfRef)
+      // already deleted from this directory, or from an earlier directory
+      // that used this record - only report one still filed under this very
+      // directory. Same rule as MftTree: a freed directory keeps the entries
+      // filed under its sequence from before NTFS bumped it.
+      if (selfRef && (ie.GetParentReference() != *selfRef ||
+                      !IsSameRecordGeneration(ie.GetParentSequenceNumber(),
+                                              selfSequence, selfInUse)))
       {
         continue;
       }

@@ -1547,6 +1547,9 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
                                         NtfsBrowser::Flag::FileRecord::DIR);
+  // The sequence its entries' parent references carry.
+  reinterpret_cast<FileRecordHeader::Data*>(record.data())->seq_no =
+      kRootSequenceNumber;
 
   DWORD offset = kAttrOffset;
 
@@ -1704,6 +1707,9 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord()
   FakeRecord record =
       MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
                                         NtfsBrowser::Flag::FileRecord::DIR);
+  // The sequence its entries' parent references carry.
+  reinterpret_cast<FileRecordHeader::Data*>(record.data())->seq_no =
+      kRootSequenceNumber;
 
   DWORD offset = kAttrOffset;
 
@@ -1846,6 +1852,169 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image, DWORD blockIndex,
   block.total_entry_size = e1.size;
   block.alloc_entry_size = e1.size;
 }
+
+// One $INDEX_ALLOCATION instance built by MakeDirectoryWithIndexAllocation():
+// "clusters" clusters at "lcn", from virtual cluster "start_vcn" on.
+struct FakeIndexAllocExtent
+{
+  ULONGLONG start_vcn;
+  DWORD clusters;
+  DWORD lcn;
+};
+
+// Builds a root-directory replacement, sequence kRootSequenceNumber, whose
+// $INDEX_ROOT points only at block 0. Its $INDEX_ALLOCATION has one instance
+// per extent. The first declares declaredBlockCount blocks of ibSize bytes.
+// The others declare no size, as a real continuation does.
+FakeRecord MakeDirectoryWithIndexAllocation(
+    DWORD ibSize, std::span<const FakeIndexAllocExtent> extents,
+    ULONGLONG declaredBlockCount)
+{
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE |
+                                        NtfsBrowser::Flag::FileRecord::DIR);
+  reinterpret_cast<FileRecordHeader::Data*>(record.data())->seq_no =
+      kRootSequenceNumber;
+
+  DWORD offset = kAttrOffset;
+
+  auto& rootAttr =
+      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record[offset]);
+  rootAttr.header.type = AttrType::INDEX_ROOT;
+  rootAttr.header.non_resident = 0;
+  rootAttr.header.name_length = 0;
+  rootAttr.header.flags = 0;
+  rootAttr.header.id = 0;
+  rootAttr.attr_offset = static_cast<WORD>(sizeof(rootAttr));
+
+  BYTE* body = &record[offset + rootAttr.attr_offset];
+  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body);
+  root.attr_type = AttrType::FILE_NAME;
+  root.coll_rule = 0;
+  root.ib_size = ibSize;
+  root.clusters_per_ib =
+      static_cast<BYTE>(ibSize >= kClusterSize ? ibSize / kClusterSize : 1);
+  root.entry_offset =
+      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+                         reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      body + sizeof(NtfsBrowser::Attr::IndexRoot));
+  e1.mft_index = 0;
+  e1.mft_sn = 0;
+  e1.stream_size = 0;
+  e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE |
+             NtfsBrowser::Flag::IndexEntry::LAST;
+  e1.size = static_cast<WORD>(offsetof(NtfsBrowser::Data::IndexEntry, stream) +
+                              sizeof(ULONGLONG));
+  auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
+      reinterpret_cast<BYTE*>(&e1) + e1.size - sizeof(ULONGLONG));
+  subNodeVcn = 0;  // block 0
+
+  root.total_entry_size = e1.size;
+  root.alloc_entry_size = e1.size;
+  root.flags = 0;
+
+  rootAttr.attr_size =
+      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + e1.size;
+  rootAttr.header.total_size =
+      static_cast<DWORD>(sizeof(rootAttr)) + rootAttr.attr_size;
+
+  offset += rootAttr.header.total_size;
+
+  bool first = true;
+  for (const FakeIndexAllocExtent& extent : extents)
+  {
+    auto& allocAttr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+        &record[offset]);
+    allocAttr.header.type = AttrType::INDEX_ALLOCATION;
+    allocAttr.header.non_resident = 1;
+    allocAttr.header.name_length = 0;
+    allocAttr.header.flags = 0;
+    allocAttr.header.id = 0;
+    allocAttr.start_vcn = extent.start_vcn;
+    allocAttr.last_vcn = extent.start_vcn + extent.clusters - 1;
+    allocAttr.data_run_offset = static_cast<WORD>(sizeof(allocAttr));
+    allocAttr.comp_unit_size = 0;
+    allocAttr.real_size = first ? declaredBlockCount * ibSize : 0;
+    allocAttr.alloc_size = allocAttr.real_size;
+    allocAttr.ini_size = allocAttr.real_size;
+    first = false;
+
+    BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
+    DWORD runLen = 0;
+    // High nibble = LCN offset field size, low nibble = length field size.
+    dataRun[runLen++] = 0x41;
+    dataRun[runLen++] = static_cast<BYTE>(extent.clusters);
+    std::memcpy(&dataRun[runLen], &extent.lcn, sizeof(extent.lcn));
+    runLen += sizeof(extent.lcn);
+    dataRun[runLen++] = 0x00;  // terminate the run list
+
+    allocAttr.header.total_size =
+        static_cast<DWORD>(sizeof(allocAttr)) + runLen;
+    offset += allocAttr.header.total_size;
+  }
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// Writes an index block of blockSize bytes at byte offset blockOffset, holding
+// one real leaf entry named "name", filed under parentRef.
+void WriteIndexLeafBlockAt(std::vector<BYTE>& image, size_t blockOffset,
+                           DWORD blockSize, ULONGLONG vcn, ULONGLONG mftRef,
+                           ULONGLONG parentRef, std::wstring_view name)
+{
+  BYTE* const blockStart = image.data() + blockOffset;
+  auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
+  std::memset(&block, 0, sizeof(block));
+  block.magic = kIndexBlockMagic;
+  // Points the USA at the block's own last (1 + sectors) words, so PatchUS()
+  // compares a still-zero range to itself, without a real fixup array.
+  const DWORD sectors = blockSize / kBytesPerSector;
+  block.offset_of_us = static_cast<WORD>(blockSize - 2 * (1 + sectors));
+  block.size_of_us = static_cast<WORD>(1 + sectors);
+  block.vcn = vcn;
+  block.entry_offset =
+      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+                         reinterpret_cast<BYTE*>(&block.entry_offset));
+  block.not_leaf = 0;
+
+  BYTE* body = blockStart + sizeof(NtfsBrowser::Data::IndexBlock);
+  auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body);
+  e1.mft_index = mftRef;
+  e1.mft_sn = 1;
+
+  auto& fn1 = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
+  fn1.parent_ref = parentRef;
+  fn1.flags = NtfsBrowser::Flag::Filename::NONE;
+  fn1.name_length = static_cast<BYTE>(name.size());
+  fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  for (size_t i = 0; i < name.size(); i++)
+  {
+    fn1.name[i] = static_cast<WORD>(name[i]);
+  }
+
+  e1.stream_size =
+      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name.size()]) -
+                        reinterpret_cast<BYTE*>(&fn1));
+  e1.flags = NtfsBrowser::Flag::IndexEntry::LAST;
+  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+                              reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
+
+  block.total_entry_size = e1.size;
+  block.alloc_entry_size = e1.size;
+}
+
+// Clusters BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks()'s
+// $INDEX_ALLOCATION maps: two 512-byte blocks per 1024-byte cluster, so four
+// blocks in all.
+constexpr DWORD kSubClusterAllocClusters = 2;
+
+// Clusters each of BuildFakeNtfsImageWithSplitIndexAllocation()'s two
+// $INDEX_ALLOCATION instances maps: one block per cluster, so four blocks in
+// all.
+constexpr DWORD kSplitExtentClusters = 2;
 
 ////////////////////////////////////////////////////////////////////////////
 // NTFS compression fixtures (see fake-ntfs-image.h for what each builds)
@@ -3480,6 +3649,130 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock()
   WriteMultiClusterIndexLeafBlock(image, 1, kMultiClusterOrphanMftRef, rootRef,
                                   kMultiClusterOrphanName,
                                   kMultiClusterOrphanNameLength);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Patch the shared BPB: index blocks of 2^9 bytes, half a cluster.
+  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_index_block = 0xF7;
+
+  constexpr DWORD kIndexBlockSize = 512;
+  constexpr DWORD kAllocLcn = 220;
+  const std::array<FakeIndexAllocExtent, 1> extents{FakeIndexAllocExtent{
+      .start_vcn = 0, .clusters = kSubClusterAllocClusters, .lcn = kAllocLcn}};
+  const FakeRecord record = MakeDirectoryWithIndexAllocation(
+      kIndexBlockSize, extents, kSubClusterBlockNames.size());
+  const size_t rootOffset = static_cast<size_t>(kMftLcn) * kClusterSize +
+                            static_cast<size_t>(kFakeFileRecordSize) *
+                                static_cast<size_t>(MftIdx::ROOT);
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  const size_t blocksOffset = static_cast<size_t>(kAllocLcn) * kClusterSize;
+  // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
+  // extend past the blocks' real end or its last read fails outright.
+  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  const size_t blocksEnd =
+      blocksOffset + kSubClusterBlockNames.size() * kIndexBlockSize;
+  const size_t alignedBlocksEnd =
+      ((blocksEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
+      kFullCacheReadBlockSize;
+  if (image.size() < alignedBlocksEnd)
+  {
+    image.resize(alignedBlocksEnd, 0);
+  }
+
+  const ULONGLONG rootRef = MakeFileReference(
+      static_cast<ULONGLONG>(MftIdx::ROOT), kRootSequenceNumber);
+  for (size_t i = 0; i < kSubClusterBlockNames.size(); i++)
+  {
+    WriteIndexLeafBlockAt(image, blocksOffset + i * kIndexBlockSize,
+                          kIndexBlockSize, i, 110 + i, rootRef,
+                          kSubClusterBlockNames[i]);
+  }
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithSplitIndexAllocation()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  // Index blocks are one cluster each: block i is VCN i.
+  constexpr DWORD kFirstLcn = 230;
+  constexpr DWORD kSecondLcn = 240;
+  const std::array<FakeIndexAllocExtent, 2> extents{
+      FakeIndexAllocExtent{
+          .start_vcn = 0, .clusters = kSplitExtentClusters, .lcn = kFirstLcn},
+      FakeIndexAllocExtent{.start_vcn = kSplitExtentClusters,
+                           .clusters = kSplitExtentClusters,
+                           .lcn = kSecondLcn}};
+  const FakeRecord record = MakeDirectoryWithIndexAllocation(
+      kClusterSize, extents, kSplitBlockNames.size());
+  const size_t rootOffset = static_cast<size_t>(kMftLcn) * kClusterSize +
+                            static_cast<size_t>(kFakeFileRecordSize) *
+                                static_cast<size_t>(MftIdx::ROOT);
+  std::memcpy(image.data() + rootOffset, record.data(), record.size());
+
+  // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
+  // extend past the blocks' real end or its last read fails outright.
+  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  const size_t blocksEnd =
+      static_cast<size_t>(kSecondLcn + kSplitExtentClusters) * kClusterSize;
+  const size_t alignedBlocksEnd =
+      ((blocksEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
+      kFullCacheReadBlockSize;
+  if (image.size() < alignedBlocksEnd)
+  {
+    image.resize(alignedBlocksEnd, 0);
+  }
+
+  const ULONGLONG rootRef = MakeFileReference(
+      static_cast<ULONGLONG>(MftIdx::ROOT), kRootSequenceNumber);
+  for (size_t i = 0; i < kSplitBlockNames.size(); i++)
+  {
+    const size_t lcn = (i < kSplitExtentClusters)
+                           ? kFirstLcn + i
+                           : kSecondLcn + (i - kSplitExtentClusters);
+    WriteIndexLeafBlockAt(image, lcn * kClusterSize, kClusterSize, i, 120 + i,
+                          rootRef, kSplitBlockNames[i]);
+  }
+
+  return image;
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(FakeParentLink link)
+{
+  std::vector<BYTE> image = BuildFakeNtfsImageWithOrphanedIndexBlocks();
+
+  const size_t rootOffset = static_cast<size_t>(kMftLcn) * kClusterSize +
+                            static_cast<size_t>(kFakeFileRecordSize) *
+                                static_cast<size_t>(MftIdx::ROOT);
+  auto& header =
+      *reinterpret_cast<FileRecordHeader::Data*>(image.data() + rootOffset);
+  header.seq_no = link.record_sequence;
+  header.flags = link.record_in_use ? (NtfsBrowser::Flag::FileRecord::INUSE |
+                                       NtfsBrowser::Flag::FileRecord::DIR)
+                                    : NtfsBrowser::Flag::FileRecord::DIR;
+
+  // VCN 1's entry names the directory unchecked (sequence 0), so it is
+  // reported whatever generation the record is on.
+  WriteOrphanedIndexLeafBlock(
+      image, 1, kOrphanedBlockOrphanMftRef,
+      MakeFileReference(static_cast<ULONGLONG>(MftIdx::ROOT), 0),
+      kOrphanedBlockOrphanName, kOrphanedBlockOrphanNameLength);
+
+  // Replace VCN 2's foreign-parent entry: same directory, this generation.
+  WriteOrphanedIndexLeafBlock(
+      image, 2, kOrphanedBlockGenerationMftRef,
+      MakeFileReference(static_cast<ULONGLONG>(MftIdx::ROOT),
+                        link.entry_parent_sequence),
+      kOrphanedBlockGenerationName, kOrphanedBlockGenerationNameLength);
 
   return image;
 }
