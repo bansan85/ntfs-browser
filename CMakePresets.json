@@ -11,7 +11,8 @@
             "hidden": true,
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_VS_GLOBALS": "UseMultiToolTask=true;EnforceProcessCountAcrossBuilds=true"
             }
         },
         {
@@ -111,8 +112,7 @@
         {
             "name": "build-base",
             "hidden": true,
-            "configuration": "Debug",
-            "jobs": 16
+            "configuration": "Debug"
         },
         {
             "name": "shared",
