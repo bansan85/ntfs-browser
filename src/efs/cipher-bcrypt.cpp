@@ -70,7 +70,7 @@ class BCryptDecryptor final : public SectorDecryptor
     }
 
     // BCrypt advances the IV it is given, so it gets a copy.
-    std::array<BYTE, kMaxBlockSize> iv = MakeSectorIv(offset);
+    std::array<BYTE, kMaxBlockSize> iv = MakeSectorIv(offset, block_size_);
     ULONG produced = 0;
     const NTSTATUS status = BCryptDecrypt(
         key_, sector.data(), static_cast<ULONG>(sector.size()), nullptr,
@@ -85,9 +85,8 @@ class BCryptDecryptor final : public SectorDecryptor
   size_t block_size_{0};
 };
 
-// The AES block size, and the DES-family one, in bytes.
+// The AES block size, in bytes.
 constexpr size_t kAesBlockSize = 16;
-constexpr size_t kDesBlockSize = 8;
 }  // namespace
 
 std::unique_ptr<SectorDecryptor> MakeBCryptDecryptor(const Fek& fek)

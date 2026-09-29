@@ -20,20 +20,32 @@ inline constexpr size_t kSectorSize = 512;
 // Widest cipher block, in bytes: AES. The DES family has 8-byte blocks.
 inline constexpr size_t kMaxBlockSize = 16;
 
-// The 16-byte CBC IV of a sector is two little-endian 64-bit words, each the
-// sum of one of these constants and the byte offset of the sector in the
-// stream. A DES-family cipher takes the first word only. Read off a real
-// AES-256 file. The second word matches the constant published for EFS.
+// The DES-family block size, in bytes.
+inline constexpr size_t kDesBlockSize = 8;
+
+// The 16-byte CBC IV of an AES sector is two little-endian 64-bit words, each
+// the sum of one of these constants and the byte offset of the sector in the
+// stream. Read off a real AES-256 file. The second matches the constant
+// published for EFS.
 inline constexpr ULONGLONG kIvWord0 = 0x5816657be9161312ULL;
 inline constexpr ULONGLONG kIvWord1 = 0x1989adbe44918961ULL;
 
+// The 8-byte CBC IV of a DES, 3DES or DESX sector is one little-endian word,
+// again plus the sector's byte offset. It is not the first AES word. The
+// value is the one ntfs-3g uses (ntfsprogs/ntfsdecrypt.c).
+inline constexpr ULONGLONG kDesIvWord = 0x169119629891ad13ULL;
+
 // Builds the CBC IV of the sector that starts at byte offset "offset" of the
-// stream. Only the first blockSize bytes matter to the caller.
+// stream. "blockSize" is the cipher block size: kDesBlockSize picks the DES
+// word, anything else the two AES words. Only the first blockSize bytes are
+// meaningful to the caller.
 [[nodiscard]] inline std::array<BYTE, kMaxBlockSize>
-    MakeSectorIv(ULONGLONG offset) noexcept
+    MakeSectorIv(ULONGLONG offset, size_t blockSize) noexcept
 {
   std::array<BYTE, kMaxBlockSize> iv{};
-  const std::array<ULONGLONG, 2> words{kIvWord0 + offset, kIvWord1 + offset};
+  const std::array<ULONGLONG, 2> words{
+      (blockSize == kDesBlockSize ? kDesIvWord : kIvWord0) + offset,
+      kIvWord1 + offset};
   for (size_t w = 0; w < words.size(); ++w)
   {
     for (size_t b = 0; b < sizeof(ULONGLONG); ++b)
