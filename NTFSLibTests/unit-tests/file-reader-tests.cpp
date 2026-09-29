@@ -8,6 +8,7 @@
 #include <random>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -98,3 +99,23 @@ TEST_CASE("FileReader::ReadInto fails past end of file", "[file-reader]")
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE_FALSE(reader.ReadInto(addr, dest));
 }
+
+#ifdef _WIN32
+TEST_CASE("FileReader::Open honours the length of a non NUL-terminated view",
+          "[file-reader]")
+{
+  const std::vector<BYTE> content(64, 0x5A);
+  TempFile file(content);
+
+  const std::wstring realPath = file.path.wstring();
+  const std::wstring longer = realPath + L"xyz";
+
+  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> reader;
+  REQUIRE(reader.Open(std::wstring_view(longer.data(), realPath.size())));
+
+  std::array<BYTE, 16> dest{};
+  LARGE_INTEGER addr{.QuadPart = 0};
+  REQUIRE(reader.ReadInto(addr, dest));
+  CHECK(dest[0] == 0x5A);
+}
+#endif

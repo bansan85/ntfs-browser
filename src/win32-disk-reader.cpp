@@ -1,5 +1,7 @@
 #include "win32-disk-reader.h"
 
+#include <string>
+
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
@@ -12,10 +14,13 @@ Win32DiskReader::Win32DiskReader()
 
 bool Win32DiskReader::Open(std::wstring_view path)
 {
-  handle_ = HandlePtr(
-      CreateFileW(path.data(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                  nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
-      &CloseHandle);
+  // A view carries no NUL terminator, and CreateFileW needs one.
+  const std::wstring pathZ(path);
+  handle_ =
+      HandlePtr(CreateFileW(pathZ.c_str(), GENERIC_READ,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
+                &CloseHandle);
   return handle_.get() != INVALID_HANDLE_VALUE;
 }
 
