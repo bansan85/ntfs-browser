@@ -794,6 +794,22 @@ static_assert(kXcaLznt1ExampleDecompressedSize == 142,
 // a FILE_ATTRIBUTE_COMPRESSED file; ReadData() must return decompressed bytes.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCompressedFile();
 
+// Clusters of BuildFakeNtfsImageWithUninitializedTail()'s $DATA stream.
+inline constexpr DWORD kUninitializedTailClusters = 3;
+
+// That stream's real size: the three clusters, short of 72 bytes.
+inline constexpr ULONGLONG kUninitializedTailRealSize = 3000;
+
+// That stream's initialized size. 1500 falls inside the second cluster, so
+// the boundary is deliberately not cluster-aligned.
+inline constexpr ULONGLONG kUninitializedTailIniSize = 1500;
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by a
+// plain, uncompressed $DATA stream whose initialized size is below its real
+// size. Every cluster holds CompressionFixturePattern() residue, so a read
+// past the initialized size must yield zeros, not that residue.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithUninitializedTail();
+
 // Same as BuildFakeNtfsImageWithCompressedFile(), but the unit is *stored*:
 // real runs cover it fully (no sparse pad), so its plain bytes
 // (CompressionFixturePattern(kCompressionUnitSize)) must pass through as-is.
@@ -890,6 +906,8 @@ struct FakeEncryptedStream
   std::vector<FakeDataRun> runs;    // its layout, sparse holes included
   std::vector<BYTE> cluster_bytes;  // laid over the real runs, in order
   ULONGLONG real_size{0};
+  // Initialized size. Nullopt: the same as real_size.
+  std::optional<ULONGLONG> ini_size;
   bool flagged_encrypted{true};  // the 0x4000 bit of the attribute header
   // The compressed attribute flag (bit 0), alongside flagged_encrypted: a
   // combination real NTFS never produces, but a forged record could.

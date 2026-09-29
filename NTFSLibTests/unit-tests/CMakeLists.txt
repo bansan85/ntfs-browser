@@ -35,6 +35,7 @@ set(
   "mft-parse-failure-volume-ok-tests.cpp"
   "attr-name-bounds-tests.cpp"
   "attr-resident-read-data-tests.cpp"
+  "attr-initialized-size-tests.cpp"
   "attr-vol-info-size-tests.cpp"
   "attr-std-info-legacy-size-tests.cpp"
   "on-disk-struct-layout-tests.cpp"

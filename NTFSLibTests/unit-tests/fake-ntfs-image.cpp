@@ -1929,6 +1929,8 @@ struct FakeNonResidentOverrides
   std::wstring_view name;
   // Overrides the flags a compressed/plain attribute would get.
   std::optional<WORD> flags;
+  // Overrides the initialized size, which defaults to the real size.
+  std::optional<ULONGLONG> ini_size;
 };
 
 // Writes one non-resident attribute at record[offset] and returns its
@@ -1967,7 +1969,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
   attr.comp_unit_size = compUnitSize;
   attr.alloc_size = totalClusters * kClusterSize;
   attr.real_size = realSize;
-  attr.ini_size = realSize;
+  attr.ini_size = overrides.ini_size.value_or(realSize);
 
   const auto headerSize = static_cast<WORD>(
       sizeof(attr) +
@@ -3679,6 +3681,21 @@ std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnit()
                                CompressionFixturePattern(kCompressionUnitSize));
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithUninitializedTail()
+{
+  const std::vector<FakeDataRun> runs{
+      {kCompressedDataLcn, kUninitializedTailClusters}};
+
+  const FakeRecord record =
+      MakeNonResidentDataRecord(NtfsBrowser::Flag::StdInfoPermission::ARCHIVE,
+                                0, kUninitializedTailRealSize, runs,
+                                {.ini_size = kUninitializedTailIniSize});
+
+  return BuildCompressionImage(
+      record, runs,
+      CompressionFixturePattern(kUninitializedTailClusters * kClusterSize));
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnit()
 {
   const std::vector<FakeDataRun> runs{{{}, kCompressionUnitClusters}};
@@ -3958,9 +3975,9 @@ std::vector<BYTE>
     {
       flags |= kAttrFlagCompressed;
     }
-    offset += WriteNonResidentAttr(record, offset, AttrType::DATA, 0,
-                                   stream.real_size, stream.runs,
-                                   {.name = stream.name, .flags = flags});
+    offset += WriteNonResidentAttr(
+        record, offset, AttrType::DATA, 0, stream.real_size, stream.runs,
+        {.name = stream.name, .flags = flags, .ini_size = stream.ini_size});
   }
 
   std::vector<FakeDataRun> efsRuns;

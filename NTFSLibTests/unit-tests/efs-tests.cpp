@@ -1016,3 +1016,45 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
     }
   }
 }
+
+TEMPLATE_TEST_CASE_SIG(
+    "An encrypted stream reads as zeros beyond its initialized size",
+    "[efs][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
+{
+  const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
+  const TestEfsEntry user = TestUser();
+  auto provider = std::make_shared<TestKeyProvider>();
+  provider->Add(user.thumbprint, user.wrapped_fek,
+                NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
+
+  constexpr size_t kRealSize = 3000;
+  constexpr size_t kIniSize = 1500;
+  const std::vector<BYTE> head = NtfsBrowserTests::PlaintextPattern(kIniSize);
+
+  // Ciphertext up to the initialized size, then residue the key never wrote.
+  std::vector<BYTE> cluster =
+      NtfsBrowserTests::EfsEncrypt(Algorithm::kAes256, key, head, 0);
+  cluster.resize(ClustersFor(kRealSize) * NtfsBrowserTests::kFakeClusterSize,
+                 0xAB);
+
+  NtfsBrowserTests::FakeEncryptedFile file;
+  file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
+  file.streams.push_back({.runs = {{kFirstStreamLcn, ClustersFor(kRealSize)}},
+                          .cluster_bytes = cluster,
+                          .real_size = kRealSize,
+                          .ini_size = kIniSize});
+
+  std::vector<BYTE> expected = head;
+  expected.resize(kRealSize, 0);
+
+  Opened<S> opened = Open<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
+  const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, kRealSize);
+  REQUIRE(read.has_value());
+  CHECK(*read == expected);
+
+  const auto tail = ReadAt<S>(OnlyData<S>(*opened.record), 2000, 500);
+  REQUIRE(tail.has_value());
+  CHECK(*tail == std::vector<BYTE>(500, 0));
+}

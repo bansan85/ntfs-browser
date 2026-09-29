@@ -1,6 +1,8 @@
 #include "attr-non-resident.h"
 
+#include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstring>
 #include <exception>
 #include <limits>
@@ -796,13 +798,44 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   return actural;
 }
 
-// real_size is 0 on continuation instances; only start_vcn == 0 sets it.
+// Reads are bounded by real_size, and bytes from ini_size on read as zeros:
+// the clusters there hold whatever the disk held before, and are never read
+// (nor decrypted). real_size and ini_size are 0 on continuation instances;
+// only start_vcn == 0 sets them, and a merged attribute is this first one.
 template <Strategy S>
 std::optional<ULONGLONG>
     AttrNonResident<S>::ReadData(ULONGLONG offset,
                                  const std::span<BYTE>& buffer) const
 {
-  return ReadDataBounded(offset, buffer, attr_header_nr_.real_size);
+  const ULONGLONG realSize = attr_header_nr_.real_size;
+  if (buffer.empty())
+  {
+    return 0;
+  }
+  if (offset > realSize)
+  {
+    return {};
+  }
+
+  const ULONGLONG wanted = (std::min)(buffer.size(), realSize - offset);
+  const ULONGLONG initSize = (std::min)(attr_header_nr_.ini_size, realSize);
+  const ULONGLONG initialized =
+      (offset < initSize) ? (std::min)(wanted, initSize - offset) : 0;
+
+  if (initialized != 0)
+  {
+    const std::optional<ULONGLONG> len = ReadDataBounded(
+        offset, buffer.first(static_cast<size_t>(initialized)), realSize);
+    if (!len || *len != initialized)
+    {
+      return {};
+    }
+  }
+
+  std::fill(buffer.begin() + static_cast<std::ptrdiff_t>(initialized),
+            buffer.begin() + static_cast<std::ptrdiff_t>(wanted),
+            static_cast<BYTE>(0));
+  return wanted;
 }
 
 template <Strategy S>
