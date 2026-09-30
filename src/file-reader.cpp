@@ -63,9 +63,9 @@ typename std::enable_if_t<
     std::optional<std::span<const BYTE>>>
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
 {
-  if (buffer_.capacity() < length)
+  if (buffer_.size() < length)
   {
-    buffer_.reserve(length);
+    buffer_.resize(length);
   }
 
   if (!reader_->ReadInto(addr, std::span<BYTE>{buffer_.data(), length}))

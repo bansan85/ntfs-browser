@@ -18,6 +18,7 @@
 #include <ntfs-browser/strategy.h>
 
 #include "file-reader.h"
+#include "memory-disk-reader.h"
 #include "partition-disk-reader.h"
 
 namespace
@@ -98,6 +99,33 @@ TEST_CASE("FileReader::ReadInto fails past end of file", "[file-reader]")
   std::array<BYTE, 128> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE_FALSE(reader.ReadInto(addr, dest));
+}
+
+TEST_CASE("FileReader NO_CACHE Read grows its buffer before filling it",
+          "[file-reader]")
+{
+  std::vector<BYTE> content(4096);
+  for (size_t i = 0; i < content.size(); i++)
+  {
+    content[i] = static_cast<BYTE>(i * 7);
+  }
+
+  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> reader(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
+
+  LARGE_INTEGER first_addr{.QuadPart = 0};
+  const auto first = reader.Read(first_addr, 16);
+  REQUIRE(first.has_value());
+  REQUIRE(first->size() == 16);
+
+  LARGE_INTEGER second_addr{.QuadPart = 100};
+  const auto second = reader.Read(second_addr, 2048);
+  REQUIRE(second.has_value());
+  REQUIRE(second->size() == 2048);
+  for (size_t i = 0; i < second->size(); i++)
+  {
+    REQUIRE((*second)[i] == content[100 + i]);
+  }
 }
 
 #ifdef _WIN32
