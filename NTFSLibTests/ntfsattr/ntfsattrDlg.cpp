@@ -154,7 +154,11 @@ HCURSOR CNtfsattrDlg::OnQueryDragIcon()
   return static_cast<HCURSOR>(m_hIcon);
 }
 
-const std::array<const _TCHAR*, kAttrNums> AttrNames = {
+// One name per attribute type: 0x10 (STANDARD_INFORMATION) to 0x100
+// (LOGGED_UTILITY_STREAM), in steps of 0x10.
+constexpr size_t kAttrNameCount = 16;
+
+const std::array<const _TCHAR*, kAttrNameCount> AttrNames = {
     _T("STANDARD_INFORMATION"),
     _T("ATTRIBUTE_LIST"),
     _T("FILE_NAME"),
@@ -236,7 +240,7 @@ void printattr(const AttrBase<S>& attr, void* context, bool* /* bStop*/)
   CString* dump = static_cast<CString*>(context);
 
   CString line = _T("\r\n");
-  line += AttrNames[ATTR_INDEX(attr.GetAttrType())];
+  line += AttrNames[(static_cast<DWORD>(attr.GetAttrType()) >> 4U) - 1];
 
   std::wstring_view attrname = attr.GetAttrName();
   if (!attrname.empty())

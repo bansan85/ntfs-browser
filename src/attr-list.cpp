@@ -16,6 +16,7 @@
 
 #include "attr-non-resident.h"
 #include "attr-resident.h"
+#include "attr-slot.h"
 #include "attr/attribute-list.h"
 #include "file-record-impl.h"
 #include "mft-file-reference.h"

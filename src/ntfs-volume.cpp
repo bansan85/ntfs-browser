@@ -25,6 +25,7 @@
 
 #include "attr-non-resident.h"  // IWYU pragma: keep
 #include "attr-resident.h"
+#include "attr-slot.h"
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
 #include "attr/attribute-list.h"

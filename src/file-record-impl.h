@@ -16,6 +16,7 @@
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/strategy.h>
 
+#include "attr-slot.h"
 #include "data/file-record-header.h"
 
 namespace NtfsBrowser

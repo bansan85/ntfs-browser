@@ -19,6 +19,8 @@
 #include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "attr-slot.h"
+
 #ifdef _WIN32
   #include <tchar.h>
 #endif

@@ -89,6 +89,7 @@ set(
   "attr-list.h"
   "attr-non-resident.h"
   "attr-resident.h"
+  "attr-slot.h"
   "attr-std-info.h"
   "attr-vol-info.h"
   "attr-vol-name.h"

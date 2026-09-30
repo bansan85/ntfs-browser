@@ -2,51 +2,33 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <ntfs-browser/data/attr-type.h>
-
-// Attribute Type to Index, eg. 0x10->0, 0x30->2
-#define ATTR_INDEX(at) ((static_cast<DWORD>(at) >> 4U) - 1)
-#define ATTR_MASK_(at) ((1U) << ATTR_INDEX(at))  // Attribute Bit Mask
-
 namespace NtfsBrowser
 {
 
 enum class Mask : DWORD
 {
-  // Bit masks of Attributes
-  STANDARD_INFORMATION = ATTR_MASK_(AttrType::STANDARD_INFORMATION),
-  ATTRIBUTE_LIST = ATTR_MASK_(AttrType::ATTRIBUTE_LIST),
-  FILE_NAME = ATTR_MASK_(AttrType::FILE_NAME),
-  OBJECT_ID = ATTR_MASK_(AttrType::OBJECT_ID),
-  SECURITY_DESCRIPTOR = ATTR_MASK_(AttrType::SECURITY_DESCRIPTOR),
-  VOLUME_NAME = ATTR_MASK_(AttrType::VOLUME_NAME),
-  VOLUME_INFORMATION = ATTR_MASK_(AttrType::VOLUME_INFORMATION),
-  DATA = ATTR_MASK_(AttrType::DATA),
-  INDEX_ROOT = ATTR_MASK_(AttrType::INDEX_ROOT),
-  INDEX_ALLOCATION = ATTR_MASK_(AttrType::INDEX_ALLOCATION),
-  BITMAP = ATTR_MASK_(AttrType::BITMAP),
-  REPARSE_POINT = ATTR_MASK_(AttrType::REPARSE_POINT),
-  EA_INFORMATION = ATTR_MASK_(AttrType::EA_INFORMATION),
-  EA = ATTR_MASK_(AttrType::EA),
-  PROPERTY_SET = ATTR_MASK_(AttrType::PROPERTY_SET),
-  LOGGED_UTILITY_STREAM = ATTR_MASK_(AttrType::LOGGED_UTILITY_STREAM),
+  // Bit masks of Attributes: the bit for attribute type T is
+  // 1 << ((T >> 4) - 1), so each type has its own bit.
+  STANDARD_INFORMATION = 0x0001,
+  ATTRIBUTE_LIST = 0x0002,
+  FILE_NAME = 0x0004,
+  OBJECT_ID = 0x0008,
+  SECURITY_DESCRIPTOR = 0x0010,
+  VOLUME_NAME = 0x0020,
+  VOLUME_INFORMATION = 0x0040,
+  DATA = 0x0080,
+  INDEX_ROOT = 0x0100,
+  INDEX_ALLOCATION = 0x0200,
+  BITMAP = 0x0400,
+  REPARSE_POINT = 0x0800,
+  EA_INFORMATION = 0x1000,
+  EA = 0x2000,
+  PROPERTY_SET = 0x4000,
+  LOGGED_UTILITY_STREAM = 0x8000,
   ALL = static_cast<DWORD>(-1)
 };
 
 //NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Mask)
-
-// Attribute Bit Mask
-#define ATTR_MASK(at) static_cast<Mask>(1U << ATTR_INDEX(at))
-
-// True only if "at" is a real AttrType value, not on-disk data that could
-// alias another type's ATTR_INDEX/ATTR_MASK slot. Callers MUST check this
-// before passing a value read from disk to ATTR_INDEX or ATTR_MASK.
-[[nodiscard]] constexpr bool IsValidAttrType(AttrType at) noexcept
-{
-  const DWORD raw = static_cast<DWORD>(at);
-  return raw != 0 && (raw & 0xFU) == 0 &&
-         raw <= static_cast<DWORD>(AttrType::LOGGED_UTILITY_STREAM);
-}
 
 }  // namespace NtfsBrowser
