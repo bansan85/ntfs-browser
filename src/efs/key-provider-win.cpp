@@ -4,7 +4,6 @@
 
   #include <filesystem>
   #include <fstream>
-  #include <iterator>
   #include <string>
 
   #include <ncrypt.h>
@@ -234,12 +233,25 @@ std::shared_ptr<IEfsKeyProvider>
     MakePfxKeyProvider(const std::filesystem::path& pfxPath,
                        std::wstring_view password)
 {
+  std::error_code sizeError;
+  const std::uintmax_t fileSize =
+      std::filesystem::file_size(pfxPath, sizeError);
+  if (!sizeError && fileSize > static_cast<std::uintmax_t>(kMaxPfxSize))
+  {
+    LogWarn("The PFX is too large to be a certificate bundle.");
+    return nullptr;
+  }
+
   std::ifstream file(pfxPath, std::ios::binary);
   std::vector<BYTE> bytes;
   if (file)
   {
-    bytes.assign(std::istreambuf_iterator<char>(file),
-                 std::istreambuf_iterator<char>());
+    // One byte more than expected: a file that grew still trips the limit.
+    const std::streamsize capacity =
+        (sizeError ? kMaxPfxSize : static_cast<std::streamsize>(fileSize)) + 1;
+    bytes.resize(static_cast<size_t>(capacity));
+    file.read(reinterpret_cast<char*>(bytes.data()), capacity);
+    bytes.resize(static_cast<size_t>(file.gcount()));
   }
   if (bytes.empty() || bytes.size() > static_cast<size_t>(kMaxPfxSize))
   {

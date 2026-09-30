@@ -138,6 +138,35 @@ TEST_CASE("A PFX that cannot be opened gives no provider", "[efs][pfx]")
              Catch::Matchers::ContainsSubstring("Cannot read a PFX"));
 }
 
+TEST_CASE("An oversized PFX is refused by its size, before any read",
+          "[efs][pfx]")
+{
+  constexpr std::uintmax_t kJustOverTheLimit = 16ULL * 1024 * 1024 + 1;
+  const fs::path path =
+      fs::temp_directory_path() / "ntfs-browser-oversized.pfx";
+  {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    REQUIRE(out.good());
+    const std::vector<char> chunk(1024 * 1024, 'x');
+    for (std::uintmax_t written = 0;
+         written + chunk.size() <= kJustOverTheLimit; written += chunk.size())
+    {
+      out.write(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+    }
+    out.put('x');
+  }
+  REQUIRE(fs::file_size(path) == kJustOverTheLimit);
+
+  (void)NtfsBrowserTests::TakeCapturedLog();
+  const auto provider = MakePfxKeyProvider(path, kPassword);
+  const std::string log = NtfsBrowserTests::TakeCapturedLog();
+  std::error_code ignored;
+  fs::remove(path, ignored);
+
+  CHECK(provider == nullptr);
+  CHECK_THAT(log, Catch::Matchers::ContainsSubstring("too large"));
+}
+
 TEST_CASE("A stream decrypts end to end with a PFX key provider", "[efs][pfx]")
 {
   using NtfsBrowser::Strategy;
