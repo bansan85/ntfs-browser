@@ -138,10 +138,11 @@ TEMPLATE_TEST_CASE_SIG(
   RunOddSizedAttributesAreParsedAligned<S>();
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry reads an $INDEX_ROOT entry that starts off an 8-byte "
     "boundary",
-    "[index-entry][alignment][regression]")
+    "[index-entry][alignment][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
   constexpr BYTE kShortenedNameLength = 2;
   constexpr WORD kShortenedStreamSize =
@@ -195,11 +196,11 @@ TEST_CASE(
   std::memset(image.data() + attrOffset + totalSize, 0, 2 * sizeof(DWORD));
   Put(image, attrOffset + totalSize, static_cast<DWORD>(AttrType::ALL));
 
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> record(volume);
+  FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kIndexRootVariantADirIdx));
   REQUIRE(record.ParseAttrs());
 
@@ -209,10 +210,11 @@ TEST_CASE(
         NtfsBrowserTests::kIndexRootVariantAMftRef);
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader reads an Update Sequence Array that starts at an odd "
     "offset",
-    "[file-record-header][alignment][regression]")
+    "[file-record-header][alignment][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
   constexpr size_t kRecordSize = 1024;
   constexpr WORD kOddOffsetOfUs = 49;
@@ -229,8 +231,8 @@ TEST_CASE(
   Put(storage, kOddOffsetOfUs + sizeof(WORD), kFirstBlockWord);
   Put(storage, kOddOffsetOfUs + (2 * sizeof(WORD)), kSecondBlockWord);
 
-  const auto record = FileRecordHeader::Factory<Strategy::NO_CACHE>(
-      std::span<const BYTE>(storage));
+  const auto record =
+      FileRecordHeader::Factory<S>(std::span<const BYTE>(storage));
 
   CHECK(record.us_number == kUsn);
   REQUIRE(record.us_array.size() == 2);

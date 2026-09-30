@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/strategy.h>
@@ -35,10 +36,11 @@ WORD Sentinel(size_t i) { return static_cast<WORD>(0xBEEF + i); }
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader must not leak bytes past the declared buffer when "
     "offset_of_us leaves no room for the US array",
-    "[file-record-header][regression]")
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   // Bytes past kDeclaredBufferSize are outside what FileRecordHeader sees.
   std::vector<BYTE> storage(kDeclaredBufferSize + kArrayWords * sizeof(WORD),
@@ -62,7 +64,7 @@ TEST_CASE(
   bool leakedSentinel = false;
   try
   {
-    const auto fr = FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer);
+    const auto fr = FileRecordHeader::Factory<S>(buffer);
 
     leakedSentinel = fr.us_array.size() == kArrayWords && [&]
     {
@@ -85,10 +87,11 @@ TEST_CASE(
   CHECK_FALSE(leakedSentinel);
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader::PatchUS must restore the last word of every 512-byte "
     "block, whatever the volume's sector size (4Kn volumes)",
-    "[file-record-header][regression]")
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   constexpr size_t kRecordSize = 4096;
   constexpr size_t kBlockSize = 512;
@@ -115,7 +118,7 @@ TEST_CASE(
   }
 
   const std::span<const BYTE> buffer(storage.data(), storage.size());
-  auto fr = FileRecordHeader::Factory<Strategy::FULL_CACHE>(buffer);
+  auto fr = FileRecordHeader::Factory<S>(buffer);
 
   REQUIRE(fr.PatchUS());
 

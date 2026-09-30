@@ -38,16 +38,18 @@ using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
 
-TEST_CASE("FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
-          "[file-record][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  FileRecord<S> dir(volume);
   dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
@@ -60,19 +62,20 @@ TEST_CASE("FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
   CHECK(found->GetFileReference() == 20);
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "AttrList merges every attribute type relocated into the same "
     "extension record",
-    "[file-record][regression]")
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithMultiTypeAttributeListDirectory());
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  FileRecord<S> dir(volume);
   dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttrListMultiTypeDirIdx));
@@ -84,18 +87,19 @@ TEST_CASE(
   CHECK_FALSE(dir.getAttr(AttrType::INDEX_ALLOCATION).empty());
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "AttrList chain state does not leak across FileRecord::ParseFileRecord "
     "calls on a reused FileRecord",
-    "[file-record][regression]")
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  FileRecord<S> dir(volume);
   dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttributeListDirIdx));
@@ -108,19 +112,20 @@ TEST_CASE(
   CHECK_FALSE(dir.getAttr(AttrType::INDEX_ROOT).empty());
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "AttrList's FileRecord vector growth does not invalidate "
-    "already-resolved extension records' attributes (FULL_CACHE)",
-    "[file-record][regression]")
+    "already-resolved extension records' attributes",
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithFragmentedAttributeListDirectory());
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::FULL_CACHE> dir(volume);
+  FileRecord<S> dir(volume);
   dir.SetAttrMask(Mask::INDEX_ALLOCATION);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kUafAttrListDirIdx));
@@ -268,20 +273,21 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(record.ParseAttrs());
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "AttrList resolves every entry in a densely-packed (real 26-byte "
     "stride) $ATTRIBUTE_LIST, not just those a multiple of "
     "sizeof(Attr::AttributeList) apart",
-    "[attr-list][regression]")
+    "[attr-list][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> dir(volume);
+  FileRecord<S> dir(volume);
   dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::kAttrListTightPackDirIdx));

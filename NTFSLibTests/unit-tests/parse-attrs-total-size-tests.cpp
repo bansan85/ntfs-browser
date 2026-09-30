@@ -42,18 +42,19 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(record.getAttr(AttrType::REPARSE_POINT).empty());
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a record whose offset_of_attr exceeds its own file "
     "record size",
-    "[file-record][regression]")
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrOffsetOutOfBounds());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> record(volume);
+  FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
 
   CHECK_FALSE(record.ParseAttrs());

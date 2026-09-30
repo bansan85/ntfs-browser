@@ -10,6 +10,7 @@
   #include <string>
   #include <vector>
 
+  #include <catch2/catch_template_test_macros.hpp>
   #include <catch2/catch_test_macros.hpp>
   #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -167,10 +168,11 @@ TEST_CASE("An oversized PFX is refused by its size, before any read",
   CHECK_THAT(log, Catch::Matchers::ContainsSubstring("too large"));
 }
 
-TEST_CASE("A stream decrypts end to end with a PFX key provider", "[efs][pfx]")
+TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
+                       "[efs][pfx]", ((NtfsBrowser::Strategy S), S),
+                       NtfsBrowser::Strategy::NO_CACHE,
+                       NtfsBrowser::Strategy::FULL_CACHE)
 {
-  using NtfsBrowser::Strategy;
-
   for (const TestPfx& pfx : {kCng, kCapi})
   {
     INFO("certificate " << pfx.name);
@@ -191,14 +193,14 @@ TEST_CASE("A stream decrypts end to end with a PFX key provider", "[efs][pfx]")
                                 Algorithm::kAes256, key, plaintext),
                             .real_size = plaintext.size()});
 
-    NtfsBrowser::NtfsVolume<Strategy::NO_CACHE> volume(
+    NtfsBrowser::NtfsVolume<S> volume(
         std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
             NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file)));
     REQUIRE(volume.IsVolumeOK());
     volume.SetEfsKeyProvider(MakePfxKeyProvider(
         DataFile(std::string(pfx.name) + ".pfx"), kPassword));
 
-    NtfsBrowser::FileRecord<Strategy::NO_CACHE> record(volume);
+    NtfsBrowser::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(
         static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::ROOT)));
     REQUIRE(record.ParseAttrs());

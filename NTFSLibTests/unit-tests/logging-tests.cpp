@@ -21,6 +21,7 @@
 #include <system_error>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -219,10 +220,13 @@ TEST_CASE("the default configuration logs warnings, not info", "[logging]")
   CHECK(config.file_path == NtfsBrowser::Log::kDefaultFilePath);
 }
 
-TEST_CASE("the volume name is logged without its terminator", "[logging]")
+TEMPLATE_TEST_CASE_SIG("the volume name is logged without its terminator",
+                       "[logging]", ((NtfsBrowser::Strategy S), S),
+                       NtfsBrowser::Strategy::NO_CACHE,
+                       NtfsBrowser::Strategy::FULL_CACHE)
 {
   (void)NtfsBrowserTests::TakeCapturedLog();
-  const NtfsBrowser::NtfsVolume<NtfsBrowser::Strategy::NO_CACHE> volume(
+  const NtfsBrowser::NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
           NtfsBrowserTests::BuildFakeNtfsImageWithVolumeName()));
   const std::string captured = NtfsBrowserTests::TakeCapturedLog();

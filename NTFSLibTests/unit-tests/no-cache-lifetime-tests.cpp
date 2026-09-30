@@ -66,19 +66,20 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A second FileRecord's read does not corrupt $MFT's attribute "
-    "(NO_CACHE, in-memory volume)",
-    "[ntfs-volume][regression]")
+    " (in-memory volume)",
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
 
-  FileRecord<Strategy::NO_CACHE> root(volume);
+  FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
 
   CHECK(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);

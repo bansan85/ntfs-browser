@@ -61,10 +61,11 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(fr.GetData()->magic == kFileRecordMagic);
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader must reject a buffer larger than kMaxFileRecordSize "
     "with a clear, specific message",
-    "[file-record-header][regression]")
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   constexpr size_t kTooBig = 8192;
 
@@ -72,16 +73,16 @@ TEST_CASE(
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
   CHECK_THROWS_MATCHES(
-      (FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer)),
-      std::runtime_error,
+      (FileRecordHeader::Factory<S>(buffer)), std::runtime_error,
       Catch::Matchers::MessageMatches(
           Catch::Matchers::ContainsSubstring("exceeds the maximum")));
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader::HeaderCommon must bound offset_of_attr against this "
     "instance's own buffer size, not raw[]'s static capacity",
-    "[file-record-header][regression]")
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   constexpr size_t kDeclaredBufferSize = 2048;
   // Past this instance's buffer, but within raw[]'s static capacity.
@@ -91,7 +92,7 @@ TEST_CASE(
       MakeWellFormedBuffer(kDeclaredBufferSize, kOffsetPastOwnSize);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
-  auto fr = FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer);
+  auto fr = FileRecordHeader::Factory<S>(buffer);
 
   // A larger offset_of_attr would build a pointer past the real,
   // 2048-byte allocation backing NO_CACHE's span.

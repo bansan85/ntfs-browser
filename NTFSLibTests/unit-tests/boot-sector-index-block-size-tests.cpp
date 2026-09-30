@@ -2,6 +2,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
@@ -15,15 +16,16 @@
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes an index block "
     "far smaller than Data::IndexBlock",
-    "[ntfs-volume][regression]")
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithTinyIndexBlock());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   INFO("GetIndexBlockSize() = " << volume.GetIndexBlockSize());
   CHECK(volume.GetIndexBlockSize() == NtfsBrowserTests::kTinyIndexBlockSize);

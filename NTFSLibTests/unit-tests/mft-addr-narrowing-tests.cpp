@@ -3,6 +3,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/ntfs-volume.h>
@@ -14,15 +15,16 @@
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume construction must not let an exception escape when the BPB "
     "encodes an mft_addr_ too large for a LONGLONG",
-    "[ntfs-volume][regression]")
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithHugeMftLcn());
 
-  std::optional<NtfsVolume<Strategy::NO_CACHE>> volume;
+  std::optional<NtfsVolume<S>> volume;
   REQUIRE_NOTHROW(volume.emplace(std::move(reader)));
 
   REQUIRE(volume.has_value());

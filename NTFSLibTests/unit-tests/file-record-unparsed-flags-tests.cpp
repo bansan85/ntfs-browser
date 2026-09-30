@@ -2,6 +2,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
@@ -16,18 +17,19 @@ using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecord::IsDeleted()/IsDirectory() must not dereference an empty "
     "file_record_ when called before any successful ParseFileRecord()",
-    "[file-record][regression]")
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> record(volume);
+  FileRecord<S> record(volume);
 
   // A defect here can abort the whole process, not just fail this check.
   CHECK_FALSE(record.IsDeleted());

@@ -5,6 +5,7 @@
 #include <string_view>
 #include <utility>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
@@ -60,38 +61,42 @@ bool Always(size_t /*length*/) { return true; }
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume reads the boot sector in a whole 4Kn sector, so an unbuffered "
     "device accepts it",
-    "[ntfs-volume][regression]")
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &NotMultipleOf4Kn);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   CHECK(volume.IsVolumeOK());
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume still opens a medium too short to serve a whole 4Kn sector",
-    "[ntfs-volume][regression]")
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &AtLeast4Kn);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   CHECK(volume.IsVolumeOK());
 }
 
-TEST_CASE("NtfsVolume rejects a volume whose boot sector cannot be read at all",
-          "[ntfs-volume][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "NtfsVolume rejects a volume whose boot sector cannot be read at all",
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &Always);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   CHECK_FALSE(volume.IsVolumeOK());
 }

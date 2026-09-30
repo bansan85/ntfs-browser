@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
@@ -63,18 +64,19 @@ TEST_CASE(
                                          kIndexBlockSize));
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecord::TraverseSubEntries must not crash when an index block's "
     "offset_of_us is out of bounds",
-    "[attr-index-alloc][regression]")
+    "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithForgedIndexBlock());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> record(volume);
+  FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kIndexAllocDirIdx));
   REQUIRE(record.ParseAttrs());
 
@@ -86,10 +88,11 @@ TEST_CASE(
   CHECK(callbackCount == 0);
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecord::TraverseSubEntries must reject an index block whose first "
     "512-byte block does not end with the update sequence number",
-    "[attr-index-alloc][regression]")
+    "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   constexpr size_t kUsBlockSize = 512;
   constexpr WORD kTornWord = 0xDEAD;
@@ -119,10 +122,10 @@ TEST_CASE(
 
   auto reader =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> record(volume);
+  FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
       static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::ROOT)));
   REQUIRE(record.ParseAttrs());

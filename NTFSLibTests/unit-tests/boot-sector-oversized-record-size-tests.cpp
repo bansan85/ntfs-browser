@@ -2,6 +2,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
@@ -15,29 +16,31 @@
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes an index block "
     "far larger than any plausible size",
-    "[ntfs-volume][regression]")
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedIndexBlock());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   INFO("GetIndexBlockSize() = " << volume.GetIndexBlockSize());
   CHECK_FALSE(volume.IsVolumeOK());
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes a file record "
     "far larger than any plausible size",
-    "[ntfs-volume][regression]")
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedFileRecord());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   INFO("GetFileRecordSize() = " << volume.GetFileRecordSize());
   // GetFileRecordSize() reflects the BPB value directly; IsVolumeOK() fails
@@ -46,16 +49,17 @@ TEST_CASE(
         NtfsBrowserTests::kOversizedFileRecordSize);
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes a file record "
     "size that exceeds kMaxFileRecordSize via the positive "
     "clusters_per_file_record branch",
-    "[ntfs-volume][regression]")
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFileRecordSizeTooBig());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   CHECK(volume.GetFileRecordSize() == NtfsBrowserTests::kFileRecordSizeTooBig);
   CHECK_FALSE(volume.IsVolumeOK());

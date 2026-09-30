@@ -2,6 +2,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
@@ -14,16 +15,17 @@
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not report IsVolumeOK() == true, nor let "
     "GetRecordsCount() dereference a null $MFT DATA attribute, when $MFT's "
     "own file record fails to parse",
-    "[ntfs-volume][regression]")
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCorruptMftRecord());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   CHECK_FALSE(volume.IsVolumeOK());
 

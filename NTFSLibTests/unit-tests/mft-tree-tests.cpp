@@ -309,12 +309,16 @@ TEMPLATE_TEST_CASE_SIG(
   RunMftTreeDropsUnrecoveredRecord<S>();
 }
 
-TEST_CASE("MftTree stops when progress returns false", "[mft-tree]")
+TEMPLATE_TEST_CASE_SIG("MftTree stops when progress returns false",
+                       "[mft-tree]", ((Strategy S), S), Strategy::NO_CACHE,
+                       Strategy::FULL_CACHE)
 {
-  RunMftTreeProgressStops<Strategy::NO_CACHE>();
+  RunMftTreeProgressStops<S>();
 }
 
-TEST_CASE("MftTree logs no warning for never-used record slots", "[mft-tree]")
+TEMPLATE_TEST_CASE_SIG("MftTree logs no warning for never-used record slots",
+                       "[mft-tree]", ((Strategy S), S), Strategy::NO_CACHE,
+                       Strategy::FULL_CACHE)
 {
   const std::shared_ptr<spdlog::logger> logger =
       spdlog::get(std::string(NtfsBrowser::Log::kLoggerName));
@@ -325,7 +329,7 @@ TEST_CASE("MftTree logs no warning for never-used record slots", "[mft-tree]")
   sink->set_pattern("%l %v");
   logger->sinks().push_back(sink);
   {
-    const auto volume = OpenMftTreeVolume<Strategy::NO_CACHE>();
+    const auto volume = OpenMftTreeVolume<S>();
     const MftTree tree(*volume);
   }
   logger->sinks().pop_back();

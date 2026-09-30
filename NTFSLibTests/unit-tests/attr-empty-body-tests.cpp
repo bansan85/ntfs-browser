@@ -1,6 +1,7 @@
 #include <memory>
 #include <utility>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/data/attr-type.h>
@@ -17,18 +18,18 @@ using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-TEST_CASE(
-    "ParseAttrs rejects a resident STANDARD_INFORMATION with an empty body "
-    "(FULL_CACHE)",
-    "[file-record][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "ParseAttrs rejects a resident STANDARD_INFORMATION with an empty body",
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEmptyStandardInformation());
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::FULL_CACHE> record(volume);
+  FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
       NtfsBrowserTests::kLegacyStandardInformationRecordIdx));
 
@@ -36,15 +37,15 @@ TEST_CASE(
   CHECK(record.getAttr(AttrType::STANDARD_INFORMATION).empty());
 }
 
-TEST_CASE(
-    "NtfsVolume rejects a resident VOLUME_INFORMATION with an empty body "
-    "(FULL_CACHE)",
-    "[ntfs-volume][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "NtfsVolume rejects a resident VOLUME_INFORMATION with an empty body",
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEmptyVolumeInformation());
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
 
   CHECK_FALSE(volume.IsVolumeOK());
 }
