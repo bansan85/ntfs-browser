@@ -37,6 +37,7 @@ class LoopingDiskReader : public NtfsBrowser::IDiskReader
  private:
   std::span<const BYTE> data_;
   std::optional<size_t> failing_read_;
+  mutable bool first_read_{true};
   mutable size_t reads_{0};
   mutable size_t pos_{0};
 };

@@ -585,10 +585,23 @@ bool NtfsVolume<S>::OpenVolume(std::unique_ptr<IDiskReader> reader)
 template <Strategy S>
 bool NtfsVolume<S>::ParseBootSector()
 {
-  constexpr DWORD default_sector_size = 512;
+  // Smallest sector size NTFS uses. It is also the size of the BPB read.
+  constexpr DWORD kMinSectorSize = 512;
+  // Largest sector size NTFS supports (4Kn). Windows opens a volume handle
+  // unbuffered, and then only accepts a read length that is a whole number
+  // of the device's sectors.
+  constexpr DWORD kMaxSectorSize = 4096;
   LARGE_INTEGER frAddr{.QuadPart = 0};
   std::optional<std::span<const BYTE>> bpb_buffer =
-      volume_->Read(frAddr, default_sector_size);
+      volume_->Read(frAddr, kMaxSectorSize);
+  if (!bpb_buffer)
+  {
+    // A backing file shorter than kMaxSectorSize cannot serve that read.
+    LogWarn("Cannot read a {}-byte boot sector, retrying with {} bytes",
+            kMaxSectorSize, kMinSectorSize);
+    frAddr.QuadPart = 0;
+    bpb_buffer = volume_->Read(frAddr, kMinSectorSize);
+  }
   if (!bpb_buffer)
   {
     LogError("Read boot sector error");

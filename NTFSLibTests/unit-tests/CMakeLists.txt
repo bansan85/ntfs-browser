@@ -32,6 +32,7 @@ set(
   "index-block-fixup-tests.cpp"
   "boot-sector-index-block-size-tests.cpp"
   "boot-sector-oversized-record-size-tests.cpp"
+  "boot-sector-read-size-tests.cpp"
   "mft-addr-narrowing-tests.cpp"
   "mft-parse-failure-volume-ok-tests.cpp"
   "attr-name-bounds-tests.cpp"
