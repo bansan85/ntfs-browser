@@ -1,10 +1,12 @@
 #include "attr-index-alloc.h"
 
 #include <cstddef>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 #include <ntfs-browser/strategy.h>
@@ -146,11 +148,14 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   }
 
   // Patch US
-  const auto* usnaddr = reinterpret_cast<const WORD*>(
-      reinterpret_cast<const BYTE*>(ibBuf) + ibBuf->offset_of_us);
-  const WORD usn = *usnaddr;
-  const WORD* usarray = usnaddr + 1;
-  if (!PatchUS(reinterpret_cast<WORD*>(ibBuf), sectors, usn, usarray))
+  // offset_of_us is not checked for alignment, so read the words as bytes.
+  const BYTE* const usnaddr =
+      reinterpret_cast<const BYTE*>(ibBuf) + ibBuf->offset_of_us;
+  WORD usn = 0;
+  std::memcpy(&usn, usnaddr, sizeof(usn));
+  std::vector<WORD> usarray(sectors);
+  std::memcpy(usarray.data(), usnaddr + sizeof(usn), sectors * sizeof(WORD));
+  if (!PatchUS(reinterpret_cast<WORD*>(ibBuf), sectors, usn, usarray.data()))
   {
     LogWarn("Index Block parse error: Update Sequence Number");
     return false;
@@ -169,14 +174,13 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   }
 
   const bool recover = this->volume_.GetOptions().recover_errors;
-  const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
-      entry_offset_addr + ibBuf->entry_offset);
+  // An entry's position comes from the disk, so it need not be aligned.
+  const BYTE* cur = entry_offset_addr + ibBuf->entry_offset;
   DWORD ieTotal = 0;
 
   while (true)
   {
-    if (reinterpret_cast<const BYTE*>(ie) + offsetof(Data::IndexEntry, stream) >
-        block_end)
+    if (cur + offsetof(Data::IndexEntry, stream) > block_end)
     {
       LogRecoverable(recover,
                      "Index Block: index entry header exceeds block bounds");
@@ -187,8 +191,8 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       }
       break;
     }
-    if (ie->size == 0 ||
-        reinterpret_cast<const BYTE*>(ie) + ie->size > block_end)
+    const Data::IndexEntry head = ReadIndexEntryHeader(cur);
+    if (head.size == 0 || cur + head.size > block_end)
     {
       LogRecoverable(recover, "Index Block: index entry exceeds block bounds");
       if (!recover)
@@ -199,7 +203,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       break;
     }
 
-    ieTotal += ie->size;
+    ieTotal += head.size;
     if (ieTotal > ibBuf->total_entry_size)
     {
       LogRecoverable(recover,
@@ -213,7 +217,9 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       break;
     }
 
-    if (const std::optional<std::string_view> defect = ValidateIndexEntry(*ie))
+    const AlignedIndexEntry ie = AlignIndexEntry(ib_sh_ptr, cur, head.size);
+    if (const std::optional<std::string_view> defect =
+            ValidateIndexEntry(*ie.entry))
     {
       LogRecoverable(recover, "{}", *defect);
       if (!recover)
@@ -223,16 +229,15 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       }
     }
 
-    ibClass.emplace_back(ib_sh_ptr, *ie);
+    ibClass.emplace_back(ie.owner, *ie.entry);
 
-    if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
+    if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {
       LogTrace("Last Index Entry");
       break;
     }
 
-    ie = reinterpret_cast<const Data::IndexEntry*>(
-        reinterpret_cast<const BYTE*>(ie) + ie->size);  // Pick next
+    cur += head.size;  // Pick next
   }
 
   return true;

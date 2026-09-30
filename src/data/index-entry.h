@@ -2,6 +2,8 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
+#include <memory>
 #include <optional>
 #include <string_view>
 
@@ -34,6 +36,26 @@ struct IndexEntry
 
 namespace NtfsBrowser
 {
+
+// An index entry seen through a properly aligned pointer. The bytes it points
+// at stay alive as long as `owner` does.
+struct AlignedIndexEntry
+{
+  std::shared_ptr<BYTE[]> owner;
+  const Data::IndexEntry* entry;
+};
+
+// Copies out the fixed part of the entry at `at`, whatever its alignment.
+// The caller MUST have checked that offsetof(Data::IndexEntry, stream) bytes
+// fit at `at`.
+[[nodiscard]] Data::IndexEntry ReadIndexEntryHeader(const BYTE* at) noexcept;
+
+// Returns the entry of `size` bytes at `at`, a position inside `buffer`. An
+// entry that is not aligned for Data::IndexEntry moves to an aligned copy
+// first. The caller MUST have checked that `size` bytes fit at `at`.
+[[nodiscard]] AlignedIndexEntry
+    AlignIndexEntry(const std::shared_ptr<BYTE[]>& buffer, const BYTE* at,
+                    size_t size);
 
 // Checks ie's on-disk bounds and sub-node size. Returns the defect message
 // if one is found, or none if ie is well-formed. Callers log it through

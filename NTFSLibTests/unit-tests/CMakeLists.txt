@@ -43,6 +43,7 @@ set(
   "attr-std-info-legacy-size-tests.cpp"
   "attr-empty-body-tests.cpp"
   "on-disk-struct-layout-tests.cpp"
+  "on-disk-alignment-tests.cpp"
   "file-record-unparsed-flags-tests.cpp"
   "file-record-extended-metadata-tests.cpp"
   "fragmented-mft-invalid-record-tests.cpp"

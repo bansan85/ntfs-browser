@@ -6,6 +6,8 @@
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <exception>
 #include <limits>
 #include <memory>
@@ -103,6 +105,26 @@ void FileRecord<S>::ClearAttrs() noexcept
   }
   // Only now: attributes imported from these records are gone.
   extension_records_.clear();
+  realigned_attrs_.clear();
+}
+
+// Returns the attribute header at `at`: in place when it is aligned for the
+// on-disk structs, else in an aligned copy of the `room` bytes from `at` to
+// the end of the record. The copy keeps every read the attribute makes
+// inside the record, as in place.
+template <Strategy S>
+const AttrHeaderCommon& FileRecord<S>::AlignedAttrHeader(const BYTE* at,
+                                                         size_t room)
+{
+  if (reinterpret_cast<std::uintptr_t>(at) % alignof(Attr::HeaderNonResident) ==
+      0)
+  {
+    return *reinterpret_cast<const AttrHeaderCommon*>(at);
+  }
+
+  auto& copy = realigned_attrs_.emplace_back(std::make_unique<BYTE[]>(room));
+  std::memcpy(copy.get(), at, room);
+  return *reinterpret_cast<const AttrHeaderCommon*>(copy.get());
 }
 
 // Call user defined Callback routines for an attribute
@@ -582,15 +604,19 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
   // Visit all attributes
 
   DWORD dataPtr = 0;  // guard if data exceeds file_record_size_ bounds
-  const AttrHeaderCommon* ahc = file_record_->HeaderCommon();
+  const AttrHeaderCommon* first = file_record_->HeaderCommon();
 
-  if (ahc == nullptr)
+  if (first == nullptr)
   {
     return false;
   }
 
   dataPtr += file_record_->GetData()->offset_of_attr;
   bool foundEndMarker = false;
+
+  // An attribute's position comes from the disk, so it need not be aligned
+  // for AttrHeaderCommon. The walk reads each header through a copy.
+  const BYTE* cur = reinterpret_cast<const BYTE*>(first);
 
   while (true)
   {
@@ -602,7 +628,9 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
     {
       break;
     }
-    if (ahc->type == AttrType::ALL)
+    AttrType type{};
+    std::memcpy(&type, cur, sizeof(type));
+    if (type == AttrType::ALL)
     {
       foundEndMarker = true;
       break;
@@ -610,29 +638,34 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
     // From here on, the walk needs the whole header, and the whole
     // attribute, to fit.
     if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrHeaderCommon) >
-            volume_.GetFileRecordSize() ||
-        static_cast<ULONGLONG>(dataPtr) + ahc->total_size >
-            volume_.GetFileRecordSize())
+        volume_.GetFileRecordSize())
+    {
+      break;
+    }
+    AttrHeaderCommon head{};
+    std::memcpy(&head, cur, sizeof(head));
+    if (static_cast<ULONGLONG>(dataPtr) + head.total_size >
+        volume_.GetFileRecordSize())
     {
       break;
     }
 
     const DWORD minTotalSize =
-        ahc->non_resident != 0
+        head.non_resident != 0
             ? Attr::kHeaderNonResidentBaseSize
             : static_cast<DWORD>(sizeof(Attr::HeaderResident));
-    if (ahc->total_size < minTotalSize)
+    if (head.total_size < minTotalSize)
     {
       LogWarn("Attribute total_size too small for its header.");
       return abortWalk();
     }
 
-    if (ahc->non_resident != 0)
+    if (head.non_resident != 0)
     {
-      const auto& nonResident =
-          reinterpret_cast<const Attr::HeaderNonResident&>(*ahc);
+      Attr::HeaderNonResident nonResident{};
+      std::memcpy(&nonResident, cur, sizeof(nonResident));
       if (Attr::HasCompressedSizeField(nonResident) &&
-          ahc->total_size < minTotalSize + Attr::kCompressedSizeFieldSize)
+          head.total_size < minTotalSize + Attr::kCompressedSizeFieldSize)
       {
         LogWarn(
             "Compressed attribute total_size too small for its compressed "
@@ -643,18 +676,18 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
 
     // True only when the type is a real attribute slot and the caller's
     // mask requests that slot.
-    if (IsValidAttrType(ahc->type) &&
-        static_cast<bool>(ATTR_MASK(ahc->type) & attr_mask_))
+    if (IsValidAttrType(head.type) &&
+        static_cast<bool>(ATTR_MASK(head.type) & attr_mask_))
     {
       // Mirrors AttrBase::GetAttrName()'s own bounds check, ahead of
       // constructing the attribute: strict rejects it outright instead of
       // parsing it and letting a later GetAttrName() call find the same
       // defect.
       const bool nameExceedsBounds =
-          ahc->name_length != 0 &&
-          static_cast<ULONGLONG>(ahc->name_offset) +
-                  (static_cast<ULONGLONG>(ahc->name_length) * sizeof(WCHAR)) >
-              ahc->total_size;
+          head.name_length != 0 &&
+          static_cast<ULONGLONG>(head.name_offset) +
+                  (static_cast<ULONGLONG>(head.name_length) * sizeof(WCHAR)) >
+              head.total_size;
       if (nameExceedsBounds)
       {
         LogRecoverable(recover, "Attribute name exceeds attribute bounds.");
@@ -665,16 +698,16 @@ bool FileRecord<S>::ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain)
         }
       }
 
-      if (!ParseAttr(*ahc, attrListChain))
+      if (!ParseAttr(
+              AlignedAttrHeader(cur, volume_.GetFileRecordSize() - dataPtr),
+              attrListChain))
       {
         return abortWalk();
       }
     }
 
-    dataPtr += ahc->total_size;
-    ahc = reinterpret_cast<const AttrHeaderCommon*>(
-        reinterpret_cast<const BYTE*>(ahc) +
-        ahc->total_size);  // next attribute
+    dataPtr += head.total_size;
+    cur += head.total_size;  // next attribute
   }
 
   if (!foundEndMarker)

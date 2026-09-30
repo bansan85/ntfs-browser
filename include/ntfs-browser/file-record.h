@@ -80,6 +80,10 @@ class NTFS_BROWSER_EXPORT FileRecord
   // declared first, destroyed last, and cleared after the attributes.
   // Unlike std::vector, appending never moves existing elements' addresses.
   std::list<FileRecord<S>> extension_records_{};
+  // Aligned copies of the attributes that sit at a misaligned address in
+  // record_buffer_. A parsed attribute keeps a reference into its copy, so
+  // these MUST outlive attr_list_: declared before it, cleared after it.
+  std::vector<std::unique_ptr<BYTE[]>> realigned_attrs_{};
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
   // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.
@@ -97,6 +101,8 @@ class NTFS_BROWSER_EXPORT FileRecord
   std::vector<BYTE> record_buffer_;
 
   void ClearAttrs() noexcept;
+  [[nodiscard]] const AttrHeaderCommon& AlignedAttrHeader(const BYTE* at,
+                                                          size_t room);
   // Splices a non-resident attribute's own VCN-split instances (reached
   // through $ATTRIBUTE_LIST) back into one, so getAttr()/FindStream() see a
   // single, complete attribute per stream.

@@ -83,14 +83,13 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
     return recover;
   }
 
-  const auto* ie = reinterpret_cast<const Data::IndexEntry*>(
-      entry_offset_addr + index_root_copy->entry_offset);
+  // An entry's position comes from the disk, so it need not be aligned.
+  const BYTE* cur = entry_offset_addr + index_root_copy->entry_offset;
   DWORD ieTotal = 0;
 
   while (true)
   {
-    if (reinterpret_cast<const BYTE*>(ie) + offsetof(Data::IndexEntry, stream) >
-        data_end)
+    if (cur + offsetof(Data::IndexEntry, stream) > data_end)
     {
       LogRecoverable(recover,
                      "Index Root: index entry header exceeds attribute bounds");
@@ -101,8 +100,8 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       }
       break;
     }
-    if (ie->size == 0 ||
-        reinterpret_cast<const BYTE*>(ie) + ie->size > data_end)
+    const Data::IndexEntry head = ReadIndexEntryHeader(cur);
+    if (head.size == 0 || cur + head.size > data_end)
     {
       LogRecoverable(recover,
                      "Index Root: index entry exceeds attribute bounds");
@@ -114,7 +113,7 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       break;
     }
 
-    ieTotal += ie->size;
+    ieTotal += head.size;
     if (ieTotal > index_root_copy->total_entry_size)
     {
       LogRecoverable(recover,
@@ -128,7 +127,9 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       break;
     }
 
-    if (const std::optional<std::string_view> defect = ValidateIndexEntry(*ie))
+    const AlignedIndexEntry ie = AlignIndexEntry(data_copy, cur, head.size);
+    if (const std::optional<std::string_view> defect =
+            ValidateIndexEntry(*ie.entry))
     {
       LogRecoverable(recover, "{}", *defect);
       if (!recover)
@@ -138,16 +139,15 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       }
     }
 
-    emplace_back(data_copy, *ie);
+    emplace_back(ie.owner, *ie.entry);
 
-    if ((ie->flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
+    if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {
       LogTrace("Last Index Entry");
       break;
     }
 
-    ie = reinterpret_cast<const Data::IndexEntry*>(
-        reinterpret_cast<const BYTE*>(ie) + ie->size);  // Pick next
+    cur += head.size;  // Pick next
   }
 
   return true;

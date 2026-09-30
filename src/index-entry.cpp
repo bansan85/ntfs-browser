@@ -2,7 +2,10 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <memory>
 
 #include <ntfs-browser/index-entry.h>
@@ -13,6 +16,29 @@
 
 namespace NtfsBrowser
 {
+
+Data::IndexEntry ReadIndexEntryHeader(const BYTE* at) noexcept
+{
+  Data::IndexEntry header{};
+  std::memcpy(&header, at, offsetof(Data::IndexEntry, stream));
+  return header;
+}
+
+AlignedIndexEntry AlignIndexEntry(const std::shared_ptr<BYTE[]>& buffer,
+                                  const BYTE* at, size_t size)
+{
+  if (reinterpret_cast<std::uintptr_t>(at) % alignof(Data::IndexEntry) == 0)
+  {
+    return {buffer, reinterpret_cast<const Data::IndexEntry*>(at)};
+  }
+
+  // The fixed part is read even from an entry whose size is smaller than it.
+  const size_t copied = std::max(size, offsetof(Data::IndexEntry, stream));
+  auto copy =
+      std::make_shared<BYTE[]>(std::max(copied, sizeof(Data::IndexEntry)));
+  std::memcpy(copy.get(), at, copied);
+  return {copy, reinterpret_cast<const Data::IndexEntry*>(copy.get())};
+}
 
 std::optional<std::string_view>
     ValidateIndexEntry(const Data::IndexEntry& ie) noexcept
@@ -100,8 +126,13 @@ bool IndexEntry::IsSubNodePtr() const noexcept
 
 ULONGLONG IndexEntry::GetSubNodeVCN() const noexcept
 {
-  return *reinterpret_cast<const ULONGLONG*>(
-      reinterpret_cast<const BYTE*>(&index_entry_) + index_entry_.size - 8);
+  // size - 8 need not be aligned: the size is not checked for it.
+  ULONGLONG vcn = 0;
+  std::memcpy(&vcn,
+              reinterpret_cast<const BYTE*>(&index_entry_) + index_entry_.size -
+                  sizeof(vcn),
+              sizeof(vcn));
+  return vcn;
 }
 
 }  // namespace NtfsBrowser

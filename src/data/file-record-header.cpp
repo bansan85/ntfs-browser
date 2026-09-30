@@ -56,14 +56,15 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
   }
   // A wrong size_of_us cannot make the loop below read out of bounds.
   us_array.reserve(sectors);
-  const gsl::not_null<const WORD*> usnaddr =
-      reinterpret_cast<const WORD*>(buffer.data() + data->offset_of_us);
-  us_number = *usnaddr;
-  const gsl::not_null<const WORD*> usarray = usnaddr.get() + 1;
+  // offset_of_us is not checked for alignment, so read the words as bytes.
+  const BYTE* const usn = buffer.data() + data->offset_of_us;
+  std::memcpy(&us_number, usn, sizeof(us_number));
 
   for (size_t i = 0; i < sectors; i++)
   {
-    us_array.push_back(usarray.get()[i]);
+    WORD value = 0;
+    std::memcpy(&value, usn + (sizeof(WORD) * (1 + i)), sizeof(value));
+    us_array.push_back(value);
   }
 }
 
