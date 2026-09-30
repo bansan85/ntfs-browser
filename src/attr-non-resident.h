@@ -9,12 +9,13 @@
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
+#include <cstdint>
 
 #include "data/run-entry.h"
 
 namespace NtfsBrowser
 {
-enum class Strategy;
+enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;

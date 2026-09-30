@@ -2,7 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -20,7 +20,7 @@
 namespace NtfsBrowser
 {
 class MftTree;
-enum class Strategy;
+enum class Strategy : std::uint8_t;
 template <Strategy S>
 class NtfsVolume;
 }  // namespace NtfsBrowser

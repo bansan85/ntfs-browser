@@ -4,6 +4,7 @@
 
 #include "attr-non-resident.h"
 #include "internal-export.h"
+#include <cstdint>
 
 namespace NtfsBrowser
 {
@@ -11,7 +12,7 @@ class IndexBlock;
 template <Strategy S>
 class FileRecord;
 struct AttrHeaderCommon;
-enum class Strategy;
+enum class Strategy : std::uint8_t;
 
 // Whether offset_of_us and the Update Sequence Array after it fit inside an
 // index_block_size-byte buffer without overlapping the block header.

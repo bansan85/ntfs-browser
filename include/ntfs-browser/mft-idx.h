@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstdint>
+
 namespace NtfsBrowser::Enum
 {
 
-enum class MftIdx
+enum class MftIdx : std::uint8_t
 {
   // MFT Indexes
   MFT = 0,

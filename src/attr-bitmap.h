@@ -4,13 +4,14 @@
 
 #include <optional>
 #include <vector>
+#include <cstdint>
 
 #include "internal-export.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
 {
-enum class Strategy;
+enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;

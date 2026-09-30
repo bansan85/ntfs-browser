@@ -15,7 +15,7 @@ namespace NtfsBrowser
 {
 namespace Flag
 {
-enum class FileRecord : WORD;
+enum class FileRecord : std::uint8_t;
 }  // namespace Flag
 
 constexpr uint32_t kFileRecordMagic('ELIF');

@@ -5,6 +5,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <cstdint>
 #include <string_view>
 
 #include <ntfs-browser/data/attr-type.h>
@@ -17,7 +18,7 @@ template <Strategy S>
 class FileRecord;
 template <Strategy S>
 class NtfsVolume;
-enum class Strategy;
+enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 
 template <Strategy S>

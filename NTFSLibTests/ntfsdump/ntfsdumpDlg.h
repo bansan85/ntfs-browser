@@ -8,6 +8,8 @@
     #pragma once
   #endif  // _MSC_VER > 1000
 
+  #include <cstdint>
+
 /////////////////////////////////////////////////////////////////////////////
 // CNtfsdumpDlg dialog
 
@@ -20,7 +22,7 @@ class CNtfsdumpDlg : public CDialog
 
   // Dialog Data
   //{{AFX_DATA(CNtfsdumpDlg)
-  enum
+  enum : std::uint8_t
   {
     IDD = IDD_NTFSDUMP_DIALOG
   };

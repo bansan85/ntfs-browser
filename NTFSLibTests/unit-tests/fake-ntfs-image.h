@@ -497,7 +497,7 @@ inline constexpr ULONGLONG kGapCollationLeafMftRef = 30;
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode();
 
 // Where BuildFakeNtfsImageWithNonAsciiNames() files its names.
-enum class NonAsciiNameLayout
+enum class NonAsciiNameLayout : std::uint8_t
 {
   // Leaf entries of the root directory's own $INDEX_ROOT.
   kIndexRoot,
@@ -1300,7 +1300,7 @@ inline constexpr std::array<BYTE, 16> kAttrListLifetimeDataContent{
     BuildFakeNtfsImageWithSplitAttributeListAttribute();
 
 // A malformed attribute written right after the last valid one of a record.
-enum class FakeTrailingDefect
+enum class FakeTrailingDefect : std::uint8_t
 {
   // total_size is smaller than a resident attribute's own header.
   UndersizedHeader,
@@ -1318,7 +1318,7 @@ enum class FakeTrailingDefect
     BuildFakeNtfsImageWithSplitDataAndTrailingDefect(FakeTrailingDefect defect);
 
 // Where a fixture with a forged run list puts its stream.
-enum class FakeRunHost
+enum class FakeRunHost : std::uint8_t
 {
   // A plain non-resident $DATA of the root record.
   Data,

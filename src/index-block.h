@@ -4,12 +4,13 @@
 
 #include <memory>
 #include <vector>
+#include <cstdint>
 
 #include <ntfs-browser/index-entry.h>
 
 namespace NtfsBrowser
 {
-enum class Strategy;
+enum class Strategy : std::uint8_t;
 
 class IndexBlock : public std::vector<IndexEntry>
 {

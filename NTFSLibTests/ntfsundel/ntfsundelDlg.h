@@ -9,6 +9,8 @@
     #pragma once
   #endif  // _MSC_VER > 1000
 
+#include <cstdint>
+
 /////////////////////////////////////////////////////////////////////////////
 // CNtfsundelDlg dialog
 
@@ -21,7 +23,7 @@ class CNtfsundelDlg : public CDialog
 
   // Dialog Data
   //{{AFX_DATA(CNtfsundelDlg)
-  enum
+  enum: std::uint8_t
   {
     IDD = IDD_NTFSUNDEL_DIALOG
   };

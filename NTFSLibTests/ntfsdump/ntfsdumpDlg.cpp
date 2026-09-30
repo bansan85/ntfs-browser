@@ -1,6 +1,7 @@
 #include "StdAfx.h"
 
 #include <algorithm>
+#include <cstdint>
 
 #include <gsl/narrow>
 
@@ -26,7 +27,7 @@ class CAboutDlg : public CDialog
  public:
   CAboutDlg();
 
-  enum
+  enum : std::uint8_t
   {
     IDD = IDD_ABOUTBOX
   };

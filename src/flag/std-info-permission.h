@@ -5,6 +5,7 @@
 namespace NtfsBrowser::Flag
 {
 
+// NOLINTNEXTLINE(performance-enum-size)
 enum class StdInfoPermission : DWORD
 {
   READONLY = 0x00000001,

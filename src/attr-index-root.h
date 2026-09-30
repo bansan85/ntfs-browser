@@ -1,11 +1,12 @@
 #pragma once
 
 #include <vector>
+#include <cstdint>
 
 namespace NtfsBrowser
 {
 class IndexEntry;
-enum class Strategy;
+enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;

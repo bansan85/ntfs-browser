@@ -16,7 +16,7 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void SecureZero(std::span<BYTE> bytes) noexcept;
 
 // The symmetric cipher of an EFS file. The values are the CryptoAPI ALG_IDs
 // that the FEK blob stores.
-enum class Algorithm : DWORD
+enum class Algorithm : WORD
 {
   k3Des = 0x6603,
   kDesx = 0x6604,

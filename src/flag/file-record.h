@@ -1,11 +1,12 @@
 #pragma once
 
 #include <ntfs-browser/win-types.h>
+#include <cstdint>
 
 namespace NtfsBrowser::Flag
 {
 
-enum class FileRecord : WORD
+enum class FileRecord : std::uint8_t
 {
   INUSE = 0x01,
   DIR = 0x02

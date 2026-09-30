@@ -1,12 +1,13 @@
 #pragma once
 
 #include <ntfs-browser/win-types.h>
+#include <cstdint>
 
 #include <unordered_set>
 
 namespace NtfsBrowser
 {
-enum class Strategy;
+enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
