@@ -305,7 +305,9 @@ void NtfsVolume<S>::ResolveMftDataExtents()
         const auto [it, inserted] = indexByRef.emplace(key, pending.size());
         if (inserted)
         {
-          pending.push_back({recordRef, entry.base_ref.sequence_number, {}});
+          pending.push_back({recordRef,
+                             static_cast<WORD>(entry.base_ref.sequence_number),
+                             {}});
         }
         pending[it->second].start_vcns.push_back(entry.start_vcn);
       }
