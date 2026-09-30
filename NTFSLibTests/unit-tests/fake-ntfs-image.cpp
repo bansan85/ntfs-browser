@@ -2655,6 +2655,19 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation()
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithEmptyVolumeInformation()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                                      static_cast<size_t>(MftIdx::VOLUME);
+  const FakeRecord record = MakeVolumeRecordSized(0);
+  std::memcpy(image.data() + offset, record.data(), record.size());
+
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithVolumeName()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();
@@ -2699,6 +2712,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithLegacyStandardInformation()
                     static_cast<size_t>(kLegacyStandardInformationRecordIdx);
   const FakeRecord record =
       MakeStandardInformationRecordSized(kLegacyStandardInformationSize);
+  std::memcpy(image.data() + offset, record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithEmptyStandardInformation()
+{
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
+  const size_t offset =
+      mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
+                    static_cast<size_t>(kLegacyStandardInformationRecordIdx);
+  const FakeRecord record = MakeStandardInformationRecordSized(0);
   std::memcpy(image.data() + offset, record.data(), record.size());
 
   return image;

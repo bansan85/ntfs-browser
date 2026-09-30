@@ -49,6 +49,10 @@ inline constexpr WORD kMinimalVolumeInformationSize = 12;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMinimalVolumeInformation();
 
+// Same volume as BuildFakeNtfsImage(), with $Volume's (#3) VOLUME_INFORMATION
+// attribute declaring no body at all (attr_size 0).
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithEmptyVolumeInformation();
+
 // Volume name BuildFakeNtfsImageWithVolumeName() stores in $Volume's
 // VOLUME_NAME attribute. ASCII, so its UTF-8 form is the same bytes.
 inline constexpr std::wstring_view kFakeVolumeName = L"TESTVOL";
@@ -778,6 +782,12 @@ inline constexpr ULONGLONG kLegacyStandardInformationRecordIdx = 6;
 // FuzzOnce() (which only ever parses MftIdx::ROOT) can reach it directly.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithLegacyStandardInformationOnRoot();
+
+// Same volume as BuildFakeNtfsImage(), plus a record
+// (kLegacyStandardInformationRecordIdx) whose only attribute is a resident
+// $STANDARD_INFORMATION declaring no body at all (attr_size 0).
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithEmptyStandardInformation();
 
 ////////////////////////////////////////////////////////////////////////////
 // NTFS compression (FILE_ATTRIBUTE_COMPRESSED + comp_unit_size + LZNT1)

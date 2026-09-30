@@ -40,6 +40,7 @@ set(
   "attr-initialized-size-tests.cpp"
   "attr-vol-info-size-tests.cpp"
   "attr-std-info-legacy-size-tests.cpp"
+  "attr-empty-body-tests.cpp"
   "on-disk-struct-layout-tests.cpp"
   "file-record-unparsed-flags-tests.cpp"
   "file-record-extended-metadata-tests.cpp"

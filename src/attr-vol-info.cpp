@@ -15,19 +15,28 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-template <typename RESIDENT, Strategy S>
-AttrVolInfo<RESIDENT, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
-                                      const FileRecord<S>& fr)
-    : RESIDENT(ahc, fr),
-      vol_info_(
-          *reinterpret_cast<const Attr::VolumeInformation*>(this->GetData()))
+namespace
 {
-  if (this->GetDataSize() < sizeof(Attr::VolumeInformation))
+// Checks the body size before a reference is bound to it: an empty body may
+// have a null data pointer, which a reference MUST NOT be bound to.
+template <typename RESIDENT>
+const Attr::VolumeInformation& CheckedVolInfo(const RESIDENT& attr)
+{
+  if (attr.GetDataSize() < sizeof(Attr::VolumeInformation))
   {
     throw std::runtime_error(
         "Volume Information attribute smaller than expected.\n");
   }
 
+  return *reinterpret_cast<const Attr::VolumeInformation*>(attr.GetData());
+}
+}  // namespace
+
+template <typename RESIDENT, Strategy S>
+AttrVolInfo<RESIDENT, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
+                                      const FileRecord<S>& fr)
+    : RESIDENT(ahc, fr), vol_info_(CheckedVolInfo<RESIDENT>(*this))
+{
   LogTrace("Attribute: Volume Information");
 }
 

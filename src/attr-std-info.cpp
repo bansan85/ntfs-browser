@@ -18,19 +18,28 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-template <typename RESIDENT, Strategy S>
-AttrStdInfo<RESIDENT, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
-                                      const FileRecord<S>& fr)
-    : RESIDENT(ahc, fr),
-      std_info_(
-          *reinterpret_cast<const Attr::StandardInformation*>(this->GetData()))
+namespace
 {
-  if (this->GetDataSize() < offsetof(Attr::StandardInformation, owner_id))
+// Checks the body size before a reference is bound to it: an empty body may
+// have a null data pointer, which a reference MUST NOT be bound to.
+template <typename RESIDENT>
+const Attr::StandardInformation& CheckedStdInfo(const RESIDENT& attr)
+{
+  if (attr.GetDataSize() < offsetof(Attr::StandardInformation, owner_id))
   {
     throw std::runtime_error(
         "Standard Information attribute smaller than expected.\n");
   }
 
+  return *reinterpret_cast<const Attr::StandardInformation*>(attr.GetData());
+}
+}  // namespace
+
+template <typename RESIDENT, Strategy S>
+AttrStdInfo<RESIDENT, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
+                                      const FileRecord<S>& fr)
+    : RESIDENT(ahc, fr), std_info_(CheckedStdInfo<RESIDENT>(*this))
+{
   LogTrace("Attribute: Standard Information");
 }
 
