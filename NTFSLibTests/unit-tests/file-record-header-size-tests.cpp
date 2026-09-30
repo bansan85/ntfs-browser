@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -43,24 +44,11 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t bufferSize, WORD offsetOfAttr)
 
 }  // namespace
 
-TEST_CASE(
-    "FileRecordHeader must accept a well-formed 4096-byte buffer under "
-    "NO_CACHE (4Kn volumes)",
-    "[file-record-header][regression]")
-{
-  constexpr size_t kBufferSize = 4096;
-
-  const std::vector<BYTE> storage = MakeWellFormedBuffer(kBufferSize, 64);
-  const std::span<const BYTE> buffer(storage.data(), storage.size());
-
-  const auto fr = FileRecordHeader::Factory<Strategy::NO_CACHE>(buffer);
-  CHECK(fr.GetData()->magic == kFileRecordMagic);
-}
-
-TEST_CASE(
-    "FileRecordHeader must accept a well-formed 4096-byte buffer under "
-    "FULL_CACHE (4Kn volumes)",
-    "[file-record-header][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "FileRecordHeader must accept a well-formed 4096-byte buffer "
+    "(4Kn volumes)",
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   constexpr size_t kBufferSize = 4096;
 
@@ -69,7 +57,7 @@ TEST_CASE(
 
   // FULL_CACHE's ctor memcpy()s the whole buffer into a fixed-size Data
   // member; a too-small member here would overflow it.
-  const auto fr = FileRecordHeader::Factory<Strategy::FULL_CACHE>(buffer);
+  const auto fr = FileRecordHeader::Factory<S>(buffer);
   CHECK(fr.GetData()->magic == kFileRecordMagic);
 }
 

@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/data/attr-header-common.h>
@@ -128,20 +129,13 @@ size_t CountRootEntries(std::vector<BYTE> image)
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs binds every attribute at an aligned address, whatever the "
-    "total_size of the attribute before it (NO_CACHE)",
-    "[file-record][alignment][regression]")
+    "total_size of the attribute before it",
+    "[file-record][alignment][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunOddSizedAttributesAreParsedAligned<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "ParseAttrs binds every attribute at an aligned address, whatever the "
-    "total_size of the attribute before it (FULL_CACHE)",
-    "[file-record][alignment][regression]")
-{
-  RunOddSizedAttributesAreParsedAligned<Strategy::FULL_CACHE>();
+  RunOddSizedAttributesAreParsedAligned<S>();
 }
 
 TEST_CASE(

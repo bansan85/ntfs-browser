@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/file-record.h>
@@ -62,18 +63,11 @@ void RunIndexBlockChainDepthIsBounded()
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A chained $INDEX_ALLOCATION deeper than the recursion depth limit is "
     "not fully descended",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunIndexBlockChainDepthIsBounded<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "A chained $INDEX_ALLOCATION deeper than the recursion depth limit is "
-    "not fully descended (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunIndexBlockChainDepthIsBounded<Strategy::FULL_CACHE>();
+  RunIndexBlockChainDepthIsBounded<S>();
 }

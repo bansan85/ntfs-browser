@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/data/attr-type.h>
@@ -22,36 +23,19 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a resident attribute whose total_size is smaller "
     "than its header",
-    "[file-record][regression]")
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithUndersizedAttribute());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> record(volume);
-  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kUndersizedAttrRecordIdx));
-
-  CHECK_FALSE(record.ParseAttrs());
-  CHECK(record.getAttr(AttrType::REPARSE_POINT).empty());
-}
-
-TEST_CASE(
-    "ParseAttrs rejects a resident attribute whose total_size is smaller "
-    "than its header (FULL_CACHE)",
-    "[file-record][regression]")
-{
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithUndersizedAttribute());
-
-  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
-  REQUIRE(volume.IsVolumeOK());
-
-  FileRecord<Strategy::FULL_CACHE> record(volume);
+  FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kUndersizedAttrRecordIdx));
 
   CHECK_FALSE(record.ParseAttrs());

@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/file-record.h>
@@ -53,17 +54,10 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode()
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry descends into a real sub-node across the Z-a collation gap",
-    "[file-record][filename][regression]")
+    "[file-record][filename][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunFindSubEntryDescendsIntoGapCollationSubNode<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "FindSubEntry descends into a real sub-node across the Z-a collation "
-    "gap (FULL_CACHE)",
-    "[file-record][filename][regression]")
-{
-  RunFindSubEntryDescendsIntoGapCollationSubNode<Strategy::FULL_CACHE>();
+  RunFindSubEntryDescendsIntoGapCollationSubNode<S>();
 }

@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/file-record.h>
@@ -60,18 +61,11 @@ void RunFindSubEntryOutlivesReparseTest()
 
 }  // namespace
 
-TEST_CASE(
-    "FindSubEntry's IndexEntry from $INDEX_ROOT outlives a same-size "
-    "reparse (NO_CACHE)",
-    "[index-entry][regression]")
-{
-  RunFindSubEntryOutlivesReparseTest<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry's IndexEntry from $INDEX_ROOT stays correct across a "
-    "reparse (FULL_CACHE)",
-    "[index-entry][regression]")
+    "reparse",
+    "[index-entry][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  RunFindSubEntryOutlivesReparseTest<Strategy::FULL_CACHE>();
+  RunFindSubEntryOutlivesReparseTest<S>();
 }

@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/file-record.h>
@@ -71,14 +72,9 @@ void CheckFindStreamReturnsNamedStream()
 
 }  // namespace
 
-TEST_CASE("FindStream returns a named stream (ADS) by name",
-          "[file-record][regression]")
+TEMPLATE_TEST_CASE_SIG("FindStream returns a named stream (ADS) by name",
+                       "[file-record][regression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  CheckFindStreamReturnsNamedStream<Strategy::NO_CACHE>();
-}
-
-TEST_CASE("FindStream returns a named stream (ADS) by name (FULL_CACHE)",
-          "[file-record][regression]")
-{
-  CheckFindStreamReturnsNamedStream<Strategy::FULL_CACHE>();
+  CheckFindStreamReturnsNamedStream<S>();
 }

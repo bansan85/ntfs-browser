@@ -27,6 +27,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -472,128 +473,75 @@ void CheckShortDecompressedInteriorUnitIsRejected()
 
 }  // namespace
 
-TEST_CASE("A compressed file's data reads back decompressed",
-          "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG("A compressed file's data reads back decompressed",
+                       "[attr-non-resident][compression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  CheckCompressedFileReadsBackDecompressed<Strategy::NO_CACHE>();
+  CheckCompressedFileReadsBackDecompressed<S>();
 }
 
-TEST_CASE("A compressed file's data reads back decompressed (FULL_CACHE)",
-          "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A stored (incompressible) compression unit reads back verbatim",
+    "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckCompressedFileReadsBackDecompressed<Strategy::FULL_CACHE>();
+  CheckStoredCompressionUnitReadsBackVerbatim<S>();
 }
 
-TEST_CASE("A stored (incompressible) compression unit reads back verbatim",
-          "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG("A fully sparse compression unit reads back zero-filled",
+                       "[attr-non-resident][compression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  CheckStoredCompressionUnitReadsBackVerbatim<Strategy::NO_CACHE>();
+  CheckSparseCompressionUnitReadsBackZeroed<S>();
 }
 
-TEST_CASE(
-    "A stored (incompressible) compression unit reads back verbatim "
-    "(FULL_CACHE)",
-    "[attr-non-resident][compression]")
-{
-  CheckStoredCompressionUnitReadsBackVerbatim<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE("A fully sparse compression unit reads back zero-filled",
-          "[attr-non-resident][compression]")
-{
-  CheckSparseCompressionUnitReadsBackZeroed<Strategy::NO_CACHE>();
-}
-
-TEST_CASE("A fully sparse compression unit reads back zero-filled (FULL_CACHE)",
-          "[attr-non-resident][compression]")
-{
-  CheckSparseCompressionUnitReadsBackZeroed<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A compression unit whose compressed bytes span several data runs is "
     "stitched back together before decompressing",
-    "[attr-non-resident][compression]")
+    "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckFragmentedCompressedFileReadsBackDecompressed<Strategy::NO_CACHE>();
+  CheckFragmentedCompressedFileReadsBackDecompressed<S>();
 }
 
-TEST_CASE(
-    "A compression unit whose compressed bytes span several data runs is "
-    "stitched back together before decompressing (FULL_CACHE)",
-    "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A trailing partial compression unit returns exactly real_size bytes",
+    "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckFragmentedCompressedFileReadsBackDecompressed<Strategy::FULL_CACHE>();
+  CheckTrailingPartialCompressionUnit<S>();
 }
 
-TEST_CASE("A trailing partial compression unit returns exactly real_size bytes",
-          "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A corrupt LZNT1 compression unit is rejected, not crashed on",
+    "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckTrailingPartialCompressionUnit<Strategy::NO_CACHE>();
+  CheckCorruptCompressedUnitIsRejected<S>();
 }
 
-TEST_CASE(
-    "A trailing partial compression unit returns exactly real_size bytes "
-    "(FULL_CACHE)",
-    "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A compression unit no data run maps is rejected, not read as a hole",
+    "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckTrailingPartialCompressionUnit<Strategy::FULL_CACHE>();
+  CheckUnmappedCompressionUnitIsRejected<S>();
 }
 
-TEST_CASE("A corrupt LZNT1 compression unit is rejected, not crashed on",
-          "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A compression unit with real clusters after a hole is rejected",
+    "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckCorruptCompressedUnitIsRejected<Strategy::NO_CACHE>();
+  CheckRealClustersAfterHoleIsRejected<S>();
 }
 
-TEST_CASE(
-    "A corrupt LZNT1 compression unit is rejected, not crashed on "
-    "(FULL_CACHE)",
-    "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "An interior compression unit that decompresses short is rejected",
+    "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckCorruptCompressedUnitIsRejected<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE("A compression unit no data run maps is rejected, not read as a hole",
-          "[attr-non-resident][compression]")
-{
-  CheckUnmappedCompressionUnitIsRejected<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "A compression unit no data run maps is rejected, not read as a hole "
-    "(FULL_CACHE)",
-    "[attr-non-resident][compression]")
-{
-  CheckUnmappedCompressionUnitIsRejected<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE("A compression unit with real clusters after a hole is rejected",
-          "[attr-non-resident][compression]")
-{
-  CheckRealClustersAfterHoleIsRejected<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "A compression unit with real clusters after a hole is rejected "
-    "(FULL_CACHE)",
-    "[attr-non-resident][compression]")
-{
-  CheckRealClustersAfterHoleIsRejected<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE("An interior compression unit that decompresses short is rejected",
-          "[attr-non-resident][compression]")
-{
-  CheckShortDecompressedInteriorUnitIsRejected<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "An interior compression unit that decompresses short is rejected "
-    "(FULL_CACHE)",
-    "[attr-non-resident][compression]")
-{
-  CheckShortDecompressedInteriorUnitIsRejected<Strategy::FULL_CACHE>();
+  CheckShortDecompressedInteriorUnitIsRejected<S>();
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -716,91 +664,51 @@ void CheckCompressedHeaderRejected(std::vector<BYTE> image,
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A minimum-size uncompressed non-resident attribute is still accepted",
-    "[file-record][compression]")
+    "[file-record][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckMinimalNonResidentAttributeStillAccepted<Strategy::NO_CACHE>();
+  CheckMinimalNonResidentAttributeStillAccepted<S>();
 }
 
-TEST_CASE(
-    "A minimum-size uncompressed non-resident attribute is still accepted "
-    "(FULL_CACHE)",
-    "[file-record][compression]")
-{
-  CheckMinimalNonResidentAttributeStillAccepted<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A compressed non-resident attribute too small for its CompressedSize "
     "field is rejected",
-    "[file-record][compression]")
+    "[file-record][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckCompressedHeaderRejected<Strategy::NO_CACHE>(
+  CheckCompressedHeaderRejected<S>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize(),
       "Compressed attribute total_size too small for its compressed size "
       "field.");
 }
 
-TEST_CASE(
-    "A compressed non-resident attribute too small for its CompressedSize "
-    "field is rejected (FULL_CACHE)",
-    "[file-record][compression]")
+TEMPLATE_TEST_CASE_SIG("An out-of-range comp_unit_size is rejected",
+                       "[attr-non-resident][compression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  CheckCompressedHeaderRejected<Strategy::FULL_CACHE>(
-      NtfsBrowserTests::
-          BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize(),
-      "Compressed attribute total_size too small for its compressed size "
-      "field.");
-}
-
-TEST_CASE("An out-of-range comp_unit_size is rejected",
-          "[attr-non-resident][compression]")
-{
-  CheckCompressedHeaderRejected<Strategy::NO_CACHE>(
+  CheckCompressedHeaderRejected<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCompUnitSizeOutOfRange(),
       "Compression unit size is out of range.");
 }
 
-TEST_CASE("An out-of-range comp_unit_size is rejected (FULL_CACHE)",
-          "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A compression unit larger than the supported maximum is rejected",
+    "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckCompressedHeaderRejected<Strategy::FULL_CACHE>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithCompUnitSizeOutOfRange(),
-      "Compression unit size is out of range.");
-}
-
-TEST_CASE("A compression unit larger than the supported maximum is rejected",
-          "[attr-non-resident][compression]")
-{
-  CheckCompressedHeaderRejected<Strategy::NO_CACHE>(
+  CheckCompressedHeaderRejected<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedCompressionUnit(),
       "Compression unit size is implausibly large.");
 }
 
-TEST_CASE(
-    "A compression unit larger than the supported maximum is rejected "
-    "(FULL_CACHE)",
-    "[attr-non-resident][compression]")
+TEMPLATE_TEST_CASE_SIG("A misaligned compressed start_vcn is rejected",
+                       "[attr-non-resident][compression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  CheckCompressedHeaderRejected<Strategy::FULL_CACHE>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOversizedCompressionUnit(),
-      "Compression unit size is implausibly large.");
-}
-
-TEST_CASE("A misaligned compressed start_vcn is rejected",
-          "[attr-non-resident][compression]")
-{
-  CheckCompressedHeaderRejected<Strategy::NO_CACHE>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMisalignedCompressedStartVcn(),
-      "Compressed attribute start VCN is not compression unit aligned.");
-}
-
-TEST_CASE("A misaligned compressed start_vcn is rejected (FULL_CACHE)",
-          "[attr-non-resident][compression]")
-{
-  CheckCompressedHeaderRejected<Strategy::FULL_CACHE>(
+  CheckCompressedHeaderRejected<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMisalignedCompressedStartVcn(),
       "Compressed attribute start VCN is not compression unit aligned.");
 }
@@ -868,32 +776,20 @@ void CheckCorruptCompressedIndexAllocationIsRejected()
 
 }  // namespace
 
-TEST_CASE("A compressed $INDEX_ALLOCATION is decompressed and traversed",
-          "[attr-index-alloc][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A compressed $INDEX_ALLOCATION is decompressed and traversed",
+    "[attr-index-alloc][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckCompressedIndexAllocationTraverses<Strategy::NO_CACHE>();
+  CheckCompressedIndexAllocationTraverses<S>();
 }
 
-TEST_CASE(
-    "A compressed $INDEX_ALLOCATION is decompressed and traversed "
-    "(FULL_CACHE)",
-    "[attr-index-alloc][compression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A corrupt compressed $INDEX_ALLOCATION yields no sub entries",
+    "[attr-index-alloc][compression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckCompressedIndexAllocationTraverses<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE("A corrupt compressed $INDEX_ALLOCATION yields no sub entries",
-          "[attr-index-alloc][compression]")
-{
-  CheckCorruptCompressedIndexAllocationIsRejected<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "A corrupt compressed $INDEX_ALLOCATION yields no sub entries "
-    "(FULL_CACHE)",
-    "[attr-index-alloc][compression]")
-{
-  CheckCorruptCompressedIndexAllocationIsRejected<Strategy::FULL_CACHE>();
+  CheckCorruptCompressedIndexAllocationIsRejected<S>();
 }
 
 namespace
@@ -947,14 +843,9 @@ void CheckSurrogatePairNamesTraverse()
 
 }  // namespace
 
-TEST_CASE("Names made of surrogate pairs are traversed and found",
-          "[attr-index-alloc][compression]")
+TEMPLATE_TEST_CASE_SIG("Names made of surrogate pairs are traversed and found",
+                       "[attr-index-alloc][compression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  CheckSurrogatePairNamesTraverse<Strategy::NO_CACHE>();
-}
-
-TEST_CASE("Names made of surrogate pairs are traversed and found (FULL_CACHE)",
-          "[attr-index-alloc][compression]")
-{
-  CheckSurrogatePairNamesTraverse<Strategy::FULL_CACHE>();
+  CheckSurrogatePairNamesTraverse<S>();
 }

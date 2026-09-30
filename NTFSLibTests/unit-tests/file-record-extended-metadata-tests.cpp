@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/data/attr-type.h>
@@ -109,34 +110,20 @@ void RunFilenameExposesExtendedMetadata()
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecord exposes IsArchive(), GetAllocatedSize() and the "
     "change time through GetFileTime()",
-    "[file-record]")
+    "[file-record]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  RunFileRecordExposesExtendedMetadata<Strategy::NO_CACHE>();
+  RunFileRecordExposesExtendedMetadata<S>();
 }
 
-TEST_CASE(
-    "FileRecord exposes IsArchive(), GetAllocatedSize() and the "
-    "change time through GetFileTime() (FULL_CACHE)",
-    "[file-record]")
-{
-  RunFileRecordExposesExtendedMetadata<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "Filename exposes IsArchive() and GetAllocatedSize() from its own "
     "$FILE_NAME",
-    "[file-record]")
+    "[file-record]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  RunFilenameExposesExtendedMetadata<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "Filename exposes IsArchive() and GetAllocatedSize() from its own "
-    "$FILE_NAME (FULL_CACHE)",
-    "[file-record]")
-{
-  RunFilenameExposesExtendedMetadata<Strategy::FULL_CACHE>();
+  RunFilenameExposesExtendedMetadata<S>();
 }

@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
@@ -48,34 +49,18 @@ std::unique_ptr<NtfsBrowser::IDiskReader>
 
 }  // namespace
 
-TEST_CASE(
-    "A second FileRecord's read does not corrupt $MFT's attribute (NO_CACHE)",
-    "[ntfs-volume][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "A second FileRecord's read does not corrupt $MFT's attribute",
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   TempImage image;
 
-  NtfsVolume<Strategy::NO_CACHE> volume(OpenOnDisk(image.path));
+  NtfsVolume<S> volume(OpenOnDisk(image.path));
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
 
-  FileRecord<Strategy::NO_CACHE> root(volume);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
-
-  CHECK(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
-}
-
-TEST_CASE(
-    "A second FileRecord's read does not corrupt $MFT's attribute "
-    "(FULL_CACHE)",
-    "[ntfs-volume][regression]")
-{
-  TempImage image;
-
-  NtfsVolume<Strategy::FULL_CACHE> volume(OpenOnDisk(image.path));
-  REQUIRE(volume.IsVolumeOK());
-  REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
-
-  FileRecord<Strategy::FULL_CACHE> root(volume);
+  FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
 
   CHECK(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);

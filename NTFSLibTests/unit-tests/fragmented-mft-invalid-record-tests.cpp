@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
@@ -29,39 +30,20 @@ static_assert(NtfsBrowserTests::kFragmentedMftInvalidRecordIdx ==
               "one - see fake-ntfs-image.h");
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "FileRecord::ParseFileRecord() must not let an exception escape on the "
     "fragmented-$MFT path when the forged record has an invalid "
     "offset_of_us",
-    "[file-record][regression]")
+    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFragmentedMftInvalidRecord());
 
-  NtfsVolume<Strategy::NO_CACHE> volume(std::move(reader));
+  NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> record(volume);
-
-  bool parsed = true;
-  REQUIRE_NOTHROW(parsed = record.ParseFileRecord(
-                      NtfsBrowserTests::kFragmentedMftInvalidRecordIdx));
-  CHECK_FALSE(parsed);
-}
-
-TEST_CASE(
-    "FileRecord::ParseFileRecord() must not let an exception escape on the "
-    "fragmented-$MFT path when the forged record has an invalid "
-    "offset_of_us (FULL_CACHE)",
-    "[file-record][regression]")
-{
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithFragmentedMftInvalidRecord());
-
-  NtfsVolume<Strategy::FULL_CACHE> volume(std::move(reader));
-  REQUIRE(volume.IsVolumeOK());
-
-  FileRecord<Strategy::FULL_CACHE> record(volume);
+  FileRecord<S> record(volume);
 
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(

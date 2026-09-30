@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/data/attr-type.h>
@@ -71,18 +72,11 @@ void CheckReadDataReturnsActualByteCount()
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "AttrResident::ReadData returns the actual bytes copied, not the "
     "requested buffer size",
-    "[attr-resident][regression]")
+    "[attr-resident][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  CheckReadDataReturnsActualByteCount<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "AttrResident::ReadData returns the actual bytes copied, not the "
-    "requested buffer size (FULL_CACHE)",
-    "[attr-resident][regression]")
-{
-  CheckReadDataReturnsActualByteCount<Strategy::FULL_CACHE>();
+  CheckReadDataReturnsActualByteCount<S>();
 }

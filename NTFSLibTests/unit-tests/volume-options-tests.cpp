@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <spdlog/logger.h>
@@ -450,179 +451,102 @@ void RunDeletedVolumeRecordStillOpens()
 
 }  // namespace
 
-TEST_CASE("VolumeOptions default to both flags off", "[volume-options]")
+TEMPLATE_TEST_CASE_SIG("VolumeOptions default to both flags off",
+                       "[volume-options]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunDefaultsAreBothOff<Strategy::NO_CACHE>();
+  RunDefaultsAreBothOff<S>();
 }
 
-TEST_CASE("VolumeOptions default to both flags off (FULL_CACHE)",
-          "[volume-options]")
+TEMPLATE_TEST_CASE_SIG(
+    "NtfsVolume::GetOptions reflects the constructor argument",
+    "[volume-options]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  RunDefaultsAreBothOff<Strategy::FULL_CACHE>();
+  RunGetOptionsReflectsConstructorArgument<S>();
 }
 
-TEST_CASE("NtfsVolume::GetOptions reflects the constructor argument",
-          "[volume-options]")
+TEMPLATE_TEST_CASE_SIG("include_deleted gates a freed record's attributes",
+                       "[volume-options][regression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunGetOptionsReflectsConstructorArgument<Strategy::NO_CACHE>();
+  RunDeletedRecordContentGating<S>();
 }
 
-TEST_CASE(
-    "NtfsVolume::GetOptions reflects the constructor argument (FULL_CACHE)",
-    "[volume-options]")
-{
-  RunGetOptionsReflectsConstructorArgument<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE("include_deleted gates a freed record's attributes",
-          "[volume-options][regression]")
-{
-  RunDeletedRecordContentGating<Strategy::NO_CACHE>();
-}
-
-TEST_CASE("include_deleted gates a freed record's attributes (FULL_CACHE)",
-          "[volume-options][regression]")
-{
-  RunDeletedRecordContentGating<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A salvageable condition logs Warn when strict and Info when recovering",
-    "[volume-options][regression]")
+    "[volume-options][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  RunSalvageableConditionLogLevel<Strategy::NO_CACHE>();
+  RunSalvageableConditionLogLevel<S>();
 }
 
-TEST_CASE(
-    "A salvageable condition logs Warn when strict and Info when recovering "
-    "(FULL_CACHE)",
-    "[volume-options][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "The orphan scan caps a forged $INDEX_ALLOCATION block count",
+    "[volume-options][file-record][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunSalvageableConditionLogLevel<Strategy::FULL_CACHE>();
+  RunOrphanScanCapsDeclaredBlockCount<S>();
 }
 
-TEST_CASE("The orphan scan caps a forged $INDEX_ALLOCATION block count",
-          "[volume-options][file-record][regression]")
-{
-  RunOrphanScanCapsDeclaredBlockCount<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "The orphan scan caps a forged $INDEX_ALLOCATION block count "
-    "(FULL_CACHE)",
-    "[volume-options][file-record][regression]")
-{
-  RunOrphanScanCapsDeclaredBlockCount<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "The orphan scan converts a multi-cluster index block's index to a VCN",
-    "[volume-options][file-record][regression]")
+    "[volume-options][file-record][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunMultiClusterOrphanScanConvertsBlockIndexToVcn<Strategy::NO_CACHE>();
+  RunMultiClusterOrphanScanConvertsBlockIndexToVcn<S>();
 }
 
-TEST_CASE(
-    "The orphan scan converts a multi-cluster index block's index to a VCN "
-    "(FULL_CACHE)",
-    "[volume-options][file-record][regression]")
-{
-  RunMultiClusterOrphanScanConvertsBlockIndexToVcn<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A bad data run rejects the record by default, keeps a partial run "
     "list when recovering",
-    "[volume-options][attr-non-resident][regression]")
+    "[volume-options][attr-non-resident][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunBadDataRunRejectsOrKeepsPartial<Strategy::NO_CACHE>();
+  RunBadDataRunRejectsOrKeepsPartial<S>();
 }
 
-TEST_CASE(
-    "A bad data run rejects the record by default, keeps a partial run "
-    "list when recovering (FULL_CACHE)",
-    "[volume-options][attr-non-resident][regression]")
-{
-  RunBadDataRunRejectsOrKeepsPartial<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A resident $DATA flagged encrypted rejects the record by default, "
     "keeps it read as is when recovering",
-    "[volume-options][file-record][regression]")
+    "[volume-options][file-record][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunResidentEncryptedDataRejectsOrKeepsAsIs<Strategy::NO_CACHE>();
+  RunResidentEncryptedDataRejectsOrKeepsAsIs<S>();
 }
 
-TEST_CASE(
-    "A resident $DATA flagged encrypted rejects the record by default, "
-    "keeps it read as is when recovering (FULL_CACHE)",
-    "[volume-options][file-record][regression]")
-{
-  RunResidentEncryptedDataRejectsOrKeepsAsIs<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A missing end-of-attributes marker rejects the record by default, "
     "keeps what parsed when recovering",
-    "[volume-options][file-record][regression]")
+    "[volume-options][file-record][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunNoEndMarkerRejectsOrKeepsParsed<Strategy::NO_CACHE>();
+  RunNoEndMarkerRejectsOrKeepsParsed<S>();
 }
 
-TEST_CASE(
-    "A missing end-of-attributes marker rejects the record by default, "
-    "keeps what parsed when recovering (FULL_CACHE)",
-    "[volume-options][file-record][regression]")
-{
-  RunNoEndMarkerRejectsOrKeepsParsed<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A bad entry in an index block skips that block by default, keeps its "
     "prefix when recovering, and never affects the sibling block",
-    "[volume-options][attr-index-alloc][regression]")
+    "[volume-options][attr-index-alloc][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix<Strategy::NO_CACHE>();
+  RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix<S>();
 }
 
-TEST_CASE(
-    "A bad entry in an index block skips that block by default, keeps its "
-    "prefix when recovering, and never affects the sibling block "
-    "(FULL_CACHE)",
-    "[volume-options][attr-index-alloc][regression]")
-{
-  RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A malformed index entry rejects $INDEX_ROOT by default, keeps it "
     "nameless when recovering",
-    "[volume-options][index-entry][regression]")
+    "[volume-options][index-entry][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunMalformedIndexEntryRejectsOrKeepsNameless<Strategy::NO_CACHE>();
+  RunMalformedIndexEntryRejectsOrKeepsNameless<S>();
 }
 
-TEST_CASE(
-    "A malformed index entry rejects $INDEX_ROOT by default, keeps it "
-    "nameless when recovering (FULL_CACHE)",
-    "[volume-options][index-entry][regression]")
-{
-  RunMalformedIndexEntryRejectsOrKeepsNameless<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "A freed $Volume record still opens the volume under default "
     "VolumeOptions",
-    "[volume-options][ntfs-volume][regression]")
+    "[volume-options][ntfs-volume][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunDeletedVolumeRecordStillOpens<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "A freed $Volume record still opens the volume under default "
-    "VolumeOptions (FULL_CACHE)",
-    "[volume-options][ntfs-volume][regression]")
-{
-  RunDeletedVolumeRecordStillOpens<Strategy::FULL_CACHE>();
+  RunDeletedVolumeRecordStillOpens<S>();
 }

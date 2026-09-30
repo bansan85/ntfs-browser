@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/file-record.h>
@@ -334,177 +335,100 @@ void RunOrphanEntryOfFreedParentGeneration()
 
 }  // namespace
 
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan covers every block when index blocks "
     "are smaller than a cluster",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunSubClusterBlocksAllScanned<Strategy::NO_CACHE>();
+  RunSubClusterBlocksAllScanned<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries recovery scan covers every block when index blocks "
-    "are smaller than a cluster (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunSubClusterBlocksAllScanned<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan covers every instance of a split "
     "$INDEX_ALLOCATION",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunSplitAllocationAllScanned<Strategy::NO_CACHE>();
+  RunSplitAllocationAllScanned<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries recovery scan covers every instance of a split "
-    "$INDEX_ALLOCATION (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunSplitAllocationAllScanned<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan rejects an entry filed under an earlier "
     "generation of the directory record",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunOrphanEntryOfEarlierParentGenerationRejected<Strategy::NO_CACHE>();
+  RunOrphanEntryOfEarlierParentGenerationRejected<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries recovery scan rejects an entry filed under an earlier "
-    "generation of the directory record (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunOrphanEntryOfEarlierParentGenerationRejected<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan reports an entry filed under the "
     "current or an unchecked generation of the directory record",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunOrphanEntryOfCurrentParentGenerationReported<Strategy::NO_CACHE>();
+  RunOrphanEntryOfCurrentParentGenerationReported<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries recovery scan reports an entry filed under the "
-    "current or an unchecked generation of the directory record (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunOrphanEntryOfCurrentParentGenerationReported<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan accepts the previous generation only "
     "for a freed directory record",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunOrphanEntryOfFreedParentGeneration<Strategy::NO_CACHE>();
+  RunOrphanEntryOfFreedParentGeneration<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries recovery scan accepts the previous generation only "
-    "for a freed directory record (FULL_CACHE)",
-    "[file-record][index-block][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "TraverseSubEntries ignores an orphaned index block by default",
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunOrphanEntryOfFreedParentGeneration<Strategy::FULL_CACHE>();
+  RunOrphanedBlocksNeedRecoveryFlag<S>();
 }
 
-TEST_CASE("TraverseSubEntries ignores an orphaned index block by default",
-          "[file-record][index-block][regression]")
-{
-  RunOrphanedBlocksNeedRecoveryFlag<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "TraverseSubEntries ignores an orphaned index block by default "
-    "(FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunOrphanedBlocksNeedRecoveryFlag<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds an orphaned block and rejects a "
     "stale parent",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunOrphanedBlocksFoundWithRecoveryFlag<Strategy::NO_CACHE>();
+  RunOrphanedBlocksFoundWithRecoveryFlag<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries recovery scan finds an orphaned block and rejects a "
-    "stale parent (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunOrphanedBlocksFoundWithRecoveryFlag<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds nothing when include_deleted is "
     "off and no named record exists",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunOrphanedBlocksDroppedWithoutIncludeDeleted<Strategy::NO_CACHE>();
+  RunOrphanedBlocksDroppedWithoutIncludeDeleted<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries recovery scan finds nothing when include_deleted is "
-    "off and no named record exists (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunOrphanedBlocksDroppedWithoutIncludeDeleted<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan drops an entry whose named record "
     "exists but has a mismatched sequence number, when include_deleted is "
     "off",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunOrphanedBlocksDroppedOnSequenceMismatch<Strategy::NO_CACHE>();
+  RunOrphanedBlocksDroppedOnSequenceMismatch<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries recovery scan drops an entry whose named record "
-    "exists but has a mismatched sequence number, when include_deleted is "
-    "off (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunOrphanedBlocksDroppedOnSequenceMismatch<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries with no parsed IndexRoot reports nothing by default",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunMissingIndexRootNeedsRecoveryFlag<Strategy::NO_CACHE>();
+  RunMissingIndexRootNeedsRecoveryFlag<S>();
 }
 
-TEST_CASE(
-    "TraverseSubEntries with no parsed IndexRoot reports nothing by default "
-    "(FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunMissingIndexRootNeedsRecoveryFlag<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE(
+TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds entries with no parsed IndexRoot "
     "at all",
-    "[file-record][index-block][regression]")
+    "[file-record][index-block][regression]", ((Strategy S), S),
+    Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunMissingIndexRootRecoveredWithFlag<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "TraverseSubEntries recovery scan finds entries with no parsed IndexRoot "
-    "at all (FULL_CACHE)",
-    "[file-record][index-block][regression]")
-{
-  RunMissingIndexRootRecoveredWithFlag<Strategy::FULL_CACHE>();
+  RunMissingIndexRootRecoveredWithFlag<S>();
 }

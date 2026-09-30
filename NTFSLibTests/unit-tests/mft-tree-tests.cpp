@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <spdlog/logger.h>
@@ -272,64 +273,40 @@ void RunMftTreeClampsForgedRealSize()
 
 }  // namespace
 
-TEST_CASE("MftTree bounds its scan by the clusters $MFT maps",
-          "[mft-tree][regression]")
+TEMPLATE_TEST_CASE_SIG("MftTree bounds its scan by the clusters $MFT maps",
+                       "[mft-tree][regression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunMftTreeClampsForgedRealSize<Strategy::NO_CACHE>();
+  RunMftTreeClampsForgedRealSize<S>();
 }
 
-TEST_CASE("MftTree bounds its scan by the clusters $MFT maps (FULL_CACHE)",
-          "[mft-tree][regression]")
+TEMPLATE_TEST_CASE_SIG("MftTree skips an extension record of $MFT",
+                       "[mft-tree][regression]", ((Strategy S), S),
+                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunMftTreeClampsForgedRealSize<Strategy::FULL_CACHE>();
+  RunMftTreeSkipsMftExtensionRecord<S>();
 }
 
-TEST_CASE("MftTree skips an extension record of $MFT", "[mft-tree][regression]")
+TEMPLATE_TEST_CASE_SIG(
+    "MftTree rebuilds paths from $FILE_NAME parent references", "[mft-tree]",
+    ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  RunMftTreeSkipsMftExtensionRecord<Strategy::NO_CACHE>();
+  RunMftTreeRebuildsPaths<S>();
 }
 
-TEST_CASE("MftTree skips an extension record of $MFT (FULL_CACHE)",
-          "[mft-tree][regression]")
+TEMPLATE_TEST_CASE_SIG("MftTree drops freed records when asked", "[mft-tree]",
+                       ((Strategy S), S), Strategy::NO_CACHE,
+                       Strategy::FULL_CACHE)
 {
-  RunMftTreeSkipsMftExtensionRecord<Strategy::FULL_CACHE>();
+  RunMftTreeWithoutDeleted<S>();
 }
 
-TEST_CASE("MftTree rebuilds paths from $FILE_NAME parent references",
-          "[mft-tree]")
+TEMPLATE_TEST_CASE_SIG(
+    "MftTree drops a record its FileRecord could not parse by default",
+    "[mft-tree][regression]", ((Strategy S), S), Strategy::NO_CACHE,
+    Strategy::FULL_CACHE)
 {
-  RunMftTreeRebuildsPaths<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "MftTree rebuilds paths from $FILE_NAME parent references (FULL_CACHE)",
-    "[mft-tree]")
-{
-  RunMftTreeRebuildsPaths<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE("MftTree drops freed records when asked", "[mft-tree]")
-{
-  RunMftTreeWithoutDeleted<Strategy::NO_CACHE>();
-}
-
-TEST_CASE("MftTree drops freed records when asked (FULL_CACHE)", "[mft-tree]")
-{
-  RunMftTreeWithoutDeleted<Strategy::FULL_CACHE>();
-}
-
-TEST_CASE("MftTree drops a record its FileRecord could not parse by default",
-          "[mft-tree][regression]")
-{
-  RunMftTreeDropsUnrecoveredRecord<Strategy::NO_CACHE>();
-}
-
-TEST_CASE(
-    "MftTree drops a record its FileRecord could not parse by default "
-    "(FULL_CACHE)",
-    "[mft-tree][regression]")
-{
-  RunMftTreeDropsUnrecoveredRecord<Strategy::FULL_CACHE>();
+  RunMftTreeDropsUnrecoveredRecord<S>();
 }
 
 TEST_CASE("MftTree stops when progress returns false", "[mft-tree]")
