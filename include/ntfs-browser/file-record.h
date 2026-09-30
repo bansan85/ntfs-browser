@@ -2,15 +2,13 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <array>
 #include <functional>
-#include <list>
 #include <memory>
 #include <optional>
 #include <string_view>
-#include <unordered_set>
 #include <vector>
 
+#include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/export.h>
@@ -19,21 +17,9 @@
 
 namespace NtfsBrowser
 {
-namespace Efs
-{
-struct WrappedFek;
-}  // namespace Efs
 template <Strategy S>
 class NtfsVolume;
 class IndexEntry;
-
-// On-disk file record header layout - an implementation detail FileRecord
-// keeps behind a pointer so this public header doesn't need its definition.
-template <Strategy S>
-struct FileRecordHeaderImpl;
-
-template <Strategy S>
-class AttrBase;
 
 // User defined Callback routine to handle Directory traversing
 // Will be called by FileRecord::TraverseSubEntries for each sub entry
@@ -54,9 +40,8 @@ class NTFS_BROWSER_EXPORT FileRecord
 {
  public:
   explicit FileRecord(const NtfsVolume<S>& volume);
-  // Defined out of line (= default), so the move needs FileRecordHeaderImpl<S>
-  // complete only in file-record.cpp, not in every other TU that includes
-  // this header.
+  // Defined out of line, so the move needs Impl complete only in
+  // file-record.cpp, not in every other TU that includes this header.
   FileRecord(FileRecord&& other) noexcept;
   FileRecord(FileRecord const& other) = delete;
   FileRecord& operator=(FileRecord&& other) noexcept = delete;
@@ -69,77 +54,9 @@ class NTFS_BROWSER_EXPORT FileRecord
   friend class AttrList;
 
  private:
-  const NtfsVolume<S>& volume_;
-  std::unique_ptr<FileRecordHeaderImpl<S>> file_record_;
-  std::optional<ULONGLONG> file_reference_{};
-  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
-  Mask attr_mask_{Mask::ALL};
-
-  // The extension records $ATTRIBUTE_LIST opened. An attribute imported from
-  // one keeps a reference into its bytes, so they MUST outlive attr_list_:
-  // declared first, destroyed last, and cleared after the attributes.
-  // Unlike std::vector, appending never moves existing elements' addresses.
-  std::list<FileRecord<S>> extension_records_{};
-  // Aligned copies of the attributes that sit at a misaligned address in
-  // record_buffer_. A parsed attribute keeps a reference into its copy, so
-  // these MUST outlive attr_list_: declared before it, cleared after it.
-  std::vector<std::unique_ptr<BYTE[]>> realigned_attrs_{};
-  std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
-
-  // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.
-  bool resolve_attr_list_{true};
-
-  // True bypasses the deleted-record gate in ParseAttrs(): set by
-  // NtfsVolume on its own internal FileRecords ($Volume, $MFT, $MFT
-  // extension records), so a freed one doesn't take the whole volume down,
-  // whatever include_deleted says.
-  bool bypass_deleted_gate_{false};
-
-  // Owned per-instance so this FileRecord's raw bytes (viewed by NO_CACHE
-  // attributes as plain pointers/spans, no copy) are never aliased by
-  // another FileRecord's read (eg. NtfsVolume::mft_record_ vs. this one).
-  std::vector<BYTE> record_buffer_;
-
-  void ClearAttrs() noexcept;
-  [[nodiscard]] const AttrHeaderCommon& AlignedAttrHeader(const BYTE* at,
-                                                          size_t room);
-  // Splices a non-resident attribute's own VCN-split instances (reached
-  // through $ATTRIBUTE_LIST) back into one, so getAttr()/FindStream() see a
-  // single, complete attribute per stream.
-  void MergeAttributeContinuations();
-  // Attaches an EFS decryption context to every encrypted $DATA stream.
-  // False only when strict and an anomalous stream was found: the caller
-  // then rejects the whole record instead of reading it undecrypted.
-  [[nodiscard]] bool AttachEfsContext();
-  [[nodiscard]] std::vector<Efs::WrappedFek> ReadEfsEntries() const;
-  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, bool& bDiscard);
-  template <typename RESIDENT>
-  [[nodiscard]] std::unique_ptr<AttrBase<S>>
-      AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled,
-                std::unordered_set<ULONGLONG>& attrListChain);
-  [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc,
-                               std::unordered_set<ULONGLONG>& attrListChain);
-  // attrListChain carries one $ATTRIBUTE_LIST resolution's already-visited
-  // (record, attribute type) pairs into this record's own attribute parse,
-  // instead of starting a fresh chain.
-  [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain);
-  [[nodiscard]] std::unique_ptr<FileRecordHeaderImpl<S>>
-      ReadFileRecord(ULONGLONG fileRef);
-  [[nodiscard]] std::optional<IndexEntry>
-      VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName,
-                      std::unordered_set<ULONGLONG>& visitedVcns,
-                      size_t depth) const;
-  [[nodiscard]] std::optional<IndexEntry>
-      FindSubEntryInOrder(std::wstring_view fileName) const;
-  void TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
-                       void* context,
-                       std::unordered_set<ULONGLONG>& visitedVcns,
-                       size_t depth) const;
-  // TraverseSubEntries()'s recoverOrphanedBlocks pass: visitedVcns is the set
-  // the normal B+ tree walk already reached, and is extended here in place.
-  void
-      ScanOrphanedIndexBlocks(SUBENTRY_CALLBACK seCallBack, void* context,
-                              std::unordered_set<ULONGLONG>& visitedVcns) const;
+  // Every member and private method, kept out of this header.
+  class Impl;
+  std::unique_ptr<Impl> impl_;
 
  public:
   [[nodiscard]] const NtfsVolume<S>& GetVolume() const noexcept;

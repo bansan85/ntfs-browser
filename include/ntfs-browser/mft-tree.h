@@ -3,10 +3,10 @@
 #include <ntfs-browser/win-types.h>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include <ntfs-browser/export.h>
@@ -112,6 +112,11 @@ class NTFS_BROWSER_EXPORT MftTree
                    const MftScanOptions& options = {});
   explicit MftTree(const NtfsVolume<Strategy::FULL_CACHE>& volume,
                    const MftScanOptions& options = {});
+  MftTree(const MftTree& other);
+  MftTree(MftTree&& other) noexcept;
+  MftTree& operator=(const MftTree& other);
+  MftTree& operator=(MftTree&& other) noexcept;
+  ~MftTree();
 
   // Every kept record, in record number order.
   [[nodiscard]] const std::vector<MftEntry>& Entries() const noexcept;
@@ -137,21 +142,8 @@ class NTFS_BROWSER_EXPORT MftTree
   [[nodiscard]] const MftScanStats& Stats() const noexcept;
 
  private:
-  std::vector<MftEntry> entries_;
-  std::unordered_map<ULONGLONG, size_t> by_record_;
-  std::unordered_map<ULONGLONG, std::vector<ULONGLONG>> children_;
-  // Parallel to entries_.
-  std::vector<bool> reachable_;
-  MftScanStats stats_;
-
-  template <Strategy S>
-  void Scan(const NtfsVolume<S>& volume, const MftScanOptions& options);
-  void Link();
-  [[nodiscard]] bool IsValidParent(const MftEntry& child,
-                                   const MftName& name) const;
-  [[nodiscard]] std::wstring
-      PathThrough(const MftEntry& entry, const MftName& name,
-                  std::optional<ULONGLONG>* lostAncestor) const;
+  class Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace NtfsBrowser

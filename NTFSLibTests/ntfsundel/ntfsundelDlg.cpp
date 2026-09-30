@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 
+#include <array>
 #include <chrono>
 #include <map>
 #include <regex>

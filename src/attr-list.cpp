@@ -17,6 +17,7 @@
 #include "attr-non-resident.h"
 #include "attr-resident.h"
 #include "attr/attribute-list.h"
+#include "file-record-impl.h"
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
 
@@ -46,12 +47,12 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
     : TYPE_RESIDENT(ahc, fr)
 {
   LogTrace("Attribute: Attribute List");
-  if (!fr.file_reference_)
+  if (!fr.impl_->file_reference_)
   {
     throw std::runtime_error("Missing file reference\n");
   }
 
-  const bool recover = fr.volume_.GetOptions().recover_errors;
+  const bool recover = fr.GetVolume().GetOptions().recover_errors;
   ULONGLONG offset = 0;
   std::optional<ULONGLONG> len = 0;
   Attr::AttributeList al_record{};
@@ -59,7 +60,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
 
   // Marks this record's own chain key first, so a cycle back to it is caught.
   attrListChain.insert(
-      MakeChainKey(*fr.file_reference_, AttrType::ATTRIBUTE_LIST));
+      MakeChainKey(*fr.impl_->file_reference_, AttrType::ATTRIBUTE_LIST));
 
   while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
                                         Attr::kAttributeListEntryHeaderSize})))
@@ -95,8 +96,8 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
     const Mask am = ATTR_MASK(al_record.attr_type);
     // Skip contained attributes
     // Skip unwanted attributes
-    if (record_ref != *fr.file_reference_ &&
-        static_cast<bool>(am & fr.attr_mask_))
+    if (record_ref != *fr.impl_->file_reference_ &&
+        static_cast<bool>(am & fr.impl_->attr_mask_))
     {
       if (!attrListChain.insert(MakeChainKey(record_ref, al_record.attr_type))
                .second)
@@ -110,11 +111,11 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
       {
         // Owned by fr, not by this object: the attributes moved into fr
         // below keep pointing into frnew's bytes.
-        fr.extension_records_.emplace_back(fr.volume_);
-        FileRecord<S>& frnew = fr.extension_records_.back();
+        fr.impl_->extension_records_.emplace_back(fr.GetVolume());
+        FileRecord<S>& frnew = fr.impl_->extension_records_.back();
 
-        frnew.attr_mask_ = am;
-        frnew.attr_raw_call_back_ = fr.attr_raw_call_back_;
+        frnew.impl_->attr_mask_ = am;
+        frnew.impl_->attr_raw_call_back_ = fr.impl_->attr_raw_call_back_;
         if (!frnew.ParseFileRecord(record_ref))
         {
           throw std::runtime_error(
@@ -126,14 +127,14 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
         const bool genuine = IsGenuineExtensionRecord(
             al_record.base_ref.sequence_number, frnew.GetSequenceNumber(),
             frnew.GetBaseRecordReference(),
-            *fr.file_reference_ & kMftRecordNumberMask);
+            *fr.impl_->file_reference_ & kMftRecordNumberMask);
         if (!genuine)
         {
-          fr.extension_records_.pop_back();
+          fr.impl_->extension_records_.pop_back();
           LogRecoverable(recover,
                          "Attribute List: record {} is not an extension of "
                          "record {} (reused or foreign) - skipping",
-                         record_ref, *fr.file_reference_);
+                         record_ref, *fr.impl_->file_reference_);
           if (!recover)
           {
             throw std::runtime_error(
@@ -142,7 +143,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
         }
         else
         {
-          if (!frnew.ParseAttrs(attrListChain))
+          if (!frnew.impl_->ParseAttrs(attrListChain))
           {
             throw std::runtime_error(
                 "Attribute List parse error (ParseAttrs).\n");
@@ -153,7 +154,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
               frnew.getAttr(al_record.attr_type);
           for (std::unique_ptr<AttrBase<S>>& veci : vec)
           {
-            fr.attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
+            fr.impl_->attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
                 std::move(veci));
           }
           vec.clear();

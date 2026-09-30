@@ -144,22 +144,67 @@ const MftName* PrimaryName(const MftEntry& entry) noexcept
 
 }  // namespace
 
+class MftTree::Impl
+{
+ public:
+  std::vector<MftEntry> entries_;
+  std::unordered_map<ULONGLONG, size_t> by_record_;
+  std::unordered_map<ULONGLONG, std::vector<ULONGLONG>> children_;
+  // Parallel to entries_.
+  std::vector<bool> reachable_;
+  MftScanStats stats_;
+
+  template <Strategy S>
+  void Scan(const NtfsVolume<S>& volume, const MftScanOptions& options);
+  void Link();
+  [[nodiscard]] const MftEntry* Find(ULONGLONG record) const;
+  [[nodiscard]] std::span<const ULONGLONG> Children(ULONGLONG dirRecord) const;
+  [[nodiscard]] bool IsValidParent(const MftEntry& child,
+                                   const MftName& name) const;
+  [[nodiscard]] std::wstring
+      PathThrough(const MftEntry& entry, const MftName& name,
+                  std::optional<ULONGLONG>* lostAncestor) const;
+};
+
 MftTree::MftTree(const NtfsVolume<Strategy::NO_CACHE>& volume,
                  const MftScanOptions& options)
+    : impl_(std::make_unique<Impl>())
 {
-  Scan(volume, options);
+  impl_->Scan(volume, options);
 }
 
 MftTree::MftTree(const NtfsVolume<Strategy::FULL_CACHE>& volume,
                  const MftScanOptions& options)
+    : impl_(std::make_unique<Impl>())
 {
-  Scan(volume, options);
+  impl_->Scan(volume, options);
 }
+
+MftTree::MftTree(const MftTree& other)
+    : impl_(std::make_unique<Impl>(*other.impl_))
+{
+}
+
+MftTree::MftTree(MftTree&& other) noexcept = default;
+
+MftTree& MftTree::operator=(const MftTree& other)
+{
+  if (this != &other)
+  {
+    impl_ = std::make_unique<Impl>(*other.impl_);
+  }
+  return *this;
+}
+
+MftTree& MftTree::operator=(MftTree&& other) noexcept = default;
+
+MftTree::~MftTree() = default;
 
 // Reads every record slot of volume's $MFT through one reused FileRecord,
 // keeps each base record's entry, then links the entries into a tree.
 template <Strategy S>
-void MftTree::Scan(const NtfsVolume<S>& volume, const MftScanOptions& options)
+void MftTree::Impl::Scan(const NtfsVolume<S>& volume,
+                         const MftScanOptions& options)
 {
   const ULONGLONG total = volume.GetRecordsCount();
   stats_.slots = total;
@@ -225,7 +270,7 @@ void MftTree::Scan(const NtfsVolume<S>& volume, const MftScanOptions& options)
 
 // Validates every name's parent reference, files each record under the
 // parents its valid names give, then marks what the root reaches.
-void MftTree::Link()
+void MftTree::Impl::Link()
 {
   for (MftEntry& entry : entries_)
   {
@@ -279,7 +324,8 @@ void MftTree::Link()
 
 // Whether name's parent reference, read from child's record, names a
 // directory the scan found. See the rules in mft-tree.h.
-bool MftTree::IsValidParent(const MftEntry& child, const MftName& name) const
+bool MftTree::Impl::IsValidParent(const MftEntry& child,
+                                  const MftName& name) const
 {
   // Only the root directory is filed under itself.
   if (name.parent_record == child.record)
@@ -305,8 +351,9 @@ bool MftTree::IsValidParent(const MftEntry& child, const MftName& name) const
 
 // Joins name and its ancestors' primary names up to the root, or up to the
 // record where the chain of valid parent references breaks.
-std::wstring MftTree::PathThrough(const MftEntry& entry, const MftName& name,
-                                  std::optional<ULONGLONG>* lostAncestor) const
+std::wstring
+    MftTree::Impl::PathThrough(const MftEntry& entry, const MftName& name,
+                               std::optional<ULONGLONG>* lostAncestor) const
 {
   if (lostAncestor != nullptr)
   {
@@ -365,16 +412,18 @@ std::wstring MftTree::PathThrough(const MftEntry& entry, const MftName& name,
 
 const std::vector<MftEntry>& MftTree::Entries() const noexcept
 {
-  return entries_;
+  return impl_->entries_;
 }
 
-const MftEntry* MftTree::Find(ULONGLONG record) const
+// The lookup behind MftTree::Find().
+const MftEntry* MftTree::Impl::Find(ULONGLONG record) const
 {
   const auto it = by_record_.find(record);
   return it == by_record_.end() ? nullptr : &entries_[it->second];
 }
 
-std::span<const ULONGLONG> MftTree::Children(ULONGLONG dirRecord) const
+// The lookup behind MftTree::Children().
+std::span<const ULONGLONG> MftTree::Impl::Children(ULONGLONG dirRecord) const
 {
   const auto it = children_.find(dirRecord);
   if (it == children_.end())
@@ -384,16 +433,26 @@ std::span<const ULONGLONG> MftTree::Children(ULONGLONG dirRecord) const
   return it->second;
 }
 
+const MftEntry* MftTree::Find(ULONGLONG record) const
+{
+  return impl_->Find(record);
+}
+
+std::span<const ULONGLONG> MftTree::Children(ULONGLONG dirRecord) const
+{
+  return impl_->Children(dirRecord);
+}
+
 bool MftTree::IsReachable(ULONGLONG record) const
 {
-  const auto it = by_record_.find(record);
-  return it != by_record_.end() && reachable_[it->second];
+  const auto it = impl_->by_record_.find(record);
+  return it != impl_->by_record_.end() && impl_->reachable_[it->second];
 }
 
 std::wstring MftTree::GetPath(ULONGLONG record,
                               std::optional<ULONGLONG>* lostAncestor) const
 {
-  const MftEntry* entry = Find(record);
+  const MftEntry* entry = impl_->Find(record);
   const MftName* name = entry != nullptr ? PrimaryName(*entry) : nullptr;
   if (name == nullptr)
   {
@@ -403,13 +462,13 @@ std::wstring MftTree::GetPath(ULONGLONG record,
     }
     return {};
   }
-  return PathThrough(*entry, *name, lostAncestor);
+  return impl_->PathThrough(*entry, *name, lostAncestor);
 }
 
 std::wstring MftTree::GetPath(ULONGLONG record, size_t nameIndex,
                               std::optional<ULONGLONG>* lostAncestor) const
 {
-  const MftEntry* entry = Find(record);
+  const MftEntry* entry = impl_->Find(record);
   if (entry == nullptr || nameIndex >= entry->names.size())
   {
     if (lostAncestor != nullptr)
@@ -418,9 +477,9 @@ std::wstring MftTree::GetPath(ULONGLONG record, size_t nameIndex,
     }
     return {};
   }
-  return PathThrough(*entry, entry->names[nameIndex], lostAncestor);
+  return impl_->PathThrough(*entry, entry->names[nameIndex], lostAncestor);
 }
 
-const MftScanStats& MftTree::Stats() const noexcept { return stats_; }
+const MftScanStats& MftTree::Stats() const noexcept { return impl_->stats_; }
 
 }  // namespace NtfsBrowser

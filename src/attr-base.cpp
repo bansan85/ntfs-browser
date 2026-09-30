@@ -95,19 +95,19 @@ bool AttrBase<S>::IsUnNamed() const noexcept
 template <Strategy S>
 WORD AttrBase<S>::GetSectorSize() const noexcept
 {
-  return volume_.sector_size_;
+  return volume_.GetSectorSize();
 }
 
 template <Strategy S>
 DWORD AttrBase<S>::GetClusterSize() const noexcept
 {
-  return volume_.cluster_size_;
+  return volume_.GetClusterSize();
 }
 
 template <Strategy S>
 DWORD AttrBase<S>::GetIndexBlockSize() const noexcept
 {
-  return volume_.index_block_size_;
+  return volume_.GetIndexBlockSize();
 }
 
 template class AttrBase<Strategy::NO_CACHE>;

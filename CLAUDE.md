@@ -124,6 +124,14 @@ Class templates are declared in headers and defined in `src/*.cpp`. Each `.cpp` 
 
 A shared build exports symbol by symbol. `generate_export_header` writes `NTFS_BROWSER_EXPORT` into `src/include/ntfs-browser/export.h` in the build tree. A public class or function that crosses the DLL boundary carries it. An internal symbol the unit tests reach through a `src/` header carries `NTFS_BROWSER_EXPORT_TESTS_ONLY` ([src/internal-export.h](src/internal-export.h)) instead. It exports only under `NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS`, which the unit tests' CMakeLists defines on the library. The class-level macro does not reach a member function template: each explicit instantiation of one repeats it. A test that calls a new internal symbol links in a static build, but fails in a shared one until that symbol is marked.
 
+### Hidden state (pimpl)
+
+`NtfsVolume<S>`, `FileRecord<S>` and `MftTree` keep every data member and private method behind a private nested `Impl`, reached through `impl_`. A public header MUST NOT declare a data member or a private method for these classes: add it to `Impl`.
+
+`NtfsVolume<S>::Impl` and `FileRecord<S>::Impl` are defined in [src/ntfs-volume-impl.h](src/ntfs-volume-impl.h) and [src/file-record-impl.h](src/file-record-impl.h), since more than one `.cpp` needs them. `MftTree::Impl` is defined in [src/mft-tree.cpp](src/mft-tree.cpp). An `Impl` is not exported. Only the library's own `.cpp` files reach it, through a friend: `FileRecord<S>` for `NtfsVolume<S>::impl_`, and `NtfsVolume<S>`, `AttrList` for `FileRecord<S>::impl_`. Friendship extends to the friend's nested `Impl`.
+
+`FileRecord<S>::Impl::self_` points back at the owning `FileRecord`. The move constructor MUST repoint it. `Filename`, `IndexEntry` and `AttrBase<S>` stay plain: they hold two or three members, are copied per index entry or read on the hot path, and their subclasses read those members directly.
+
 ### Read path / object graph
 
 - `IDiskReader` ([include/ntfs-browser/disk-reader.h](include/ntfs-browser/disk-reader.h)) abstracts "get raw bytes from a backing store" behind `Open()`/`ReadInto()`. `Win32DiskReader` is the production implementation: a real disk/device handle, or a plain file treated the same way via `CreateFileW`. Tests substitute `MemoryDiskReader` or `SequentialDiskReader`.
