@@ -38,6 +38,7 @@ set(
   "attr-name-bounds-tests.cpp"
   "attr-resident-read-data-tests.cpp"
   "attr-initialized-size-tests.cpp"
+  "attr-bitmap-tests.cpp"
   "attr-vol-info-size-tests.cpp"
   "attr-std-info-legacy-size-tests.cpp"
   "attr-empty-body-tests.cpp"

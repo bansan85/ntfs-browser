@@ -61,8 +61,8 @@ bool AttrBitmap<TYPE_RESIDENT, S>::IsClusterFree(ULONGLONG cluster)
     // Read one cluster of data if buffer mismatch
     if (!current_cluster_ || *current_cluster_ != clusterOffset)
     {
-      std::optional<ULONGLONG> len =
-          this->ReadData(clusterOffset, {bitmap_buf_.data(), clusterSize});
+      std::optional<ULONGLONG> len = this->ReadData(
+          clusterOffset * clusterSize, {bitmap_buf_.data(), clusterSize});
       if (!len || *len != clusterSize)
       {
         current_cluster_ = {};

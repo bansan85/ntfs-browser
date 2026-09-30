@@ -4029,6 +4029,29 @@ std::vector<BYTE> BuildFakeNtfsImageWithUninitializedTail()
       CompressionFixturePattern(kUninitializedTailClusters * kClusterSize));
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterBitmap()
+{
+  const std::vector<FakeDataRun> runs{
+      {kCompressedDataLcn, kMultiClusterBitmapClusters}};
+
+  FakeRecord record =
+      MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
+  DWORD offset = kAttrOffset;
+  offset += WriteStandardInformationAttr(
+      record, offset, NtfsBrowser::Flag::StdInfoPermission::ARCHIVE);
+  offset += WriteNonResidentAttr(
+      record, offset, AttrType::BITMAP, 0,
+      static_cast<ULONGLONG>(kMultiClusterBitmapClusters) * kClusterSize, runs);
+  WriteEndOfAttributesMarker(record, offset);
+
+  std::vector<BYTE> bitmap(
+      static_cast<size_t>(kMultiClusterBitmapClusters) * kClusterSize, 0x00);
+  std::fill_n(bitmap.begin(), kClusterSize, static_cast<BYTE>(0xFF));
+  bitmap[static_cast<size_t>(2) * kClusterSize] = 0x01;
+
+  return BuildCompressionImage(record, runs, bitmap);
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnit()
 {
   const std::vector<FakeDataRun> runs{{{}, kCompressionUnitClusters}};

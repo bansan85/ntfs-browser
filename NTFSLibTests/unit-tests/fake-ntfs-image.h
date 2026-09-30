@@ -877,6 +877,16 @@ inline constexpr ULONGLONG kUninitializedTailIniSize = 1500;
 // (CompressionFixturePattern(kCompressionUnitSize)) must pass through as-is.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnit();
 
+// Clusters of BuildFakeNtfsImageWithMultiClusterBitmap()'s $BITMAP stream.
+inline constexpr DWORD kMultiClusterBitmapClusters = 3;
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by a
+// bare record whose non-resident $BITMAP spans kMultiClusterBitmapClusters
+// whole clusters. Its first cluster is all ones (every tracked cluster used)
+// and its second all zeros (all free). The third is all zeros except bit 0,
+// set.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterBitmap();
+
 // Same as BuildFakeNtfsImageWithCompressedFile(), but the unit is a pure
 // hole (no real cluster); must read back as kCompressionUnitSize zeroes.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnit();

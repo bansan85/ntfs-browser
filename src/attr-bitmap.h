@@ -5,6 +5,7 @@
 #include <optional>
 #include <vector>
 
+#include "internal-export.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
@@ -32,7 +33,8 @@ class AttrBitmap : public TYPE_RESIDENT
 
  public:
   // Verify if a single cluster is free
-  [[nodiscard]] bool IsClusterFree(ULONGLONG cluster);
+  [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY bool
+      IsClusterFree(ULONGLONG cluster);
 
 };  // AttrBitmap
 
