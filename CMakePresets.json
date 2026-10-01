@@ -96,9 +96,8 @@
             }
         },
         {
-            "name": "Visual Studio Community 2022 Release - amd64",
+            "name": "vs2022-amd64",
             "displayName": "Visual Studio Community 2022 Release - amd64",
-            "description": "Using compilers for Visual Studio 17 2022 (x64 architecture)",
             "generator": "Visual Studio 17 2022",
             "toolset": "host=x64",
             "architecture": "x64",
@@ -109,9 +108,8 @@
             }
         },
         {
-            "name": "Visual Studio Community 2026 Release - x86",
+            "name": "vs2026-x86",
             "displayName": "Visual Studio Community 2026 Release - x86",
-            "description": "Using compilers for Visual Studio 18 2026 (x86 architecture)",
             "generator": "Visual Studio 18 2026",
             "toolset": "host=x64",
             "architecture": "Win32",
@@ -169,16 +167,16 @@
             "inherits": "build-base"
         },
         {
-            "name": "Visual Studio Community 2022 Release - amd64-debug",
-            "displayName": "Visual Studio Community 2022 Release - amd64 - Debug",
-            "configurePreset": "Visual Studio Community 2022 Release - amd64",
-            "configuration": "Debug"
+            "name": "vs2022-amd64",
+            "displayName": "Visual Studio Community 2022 Release - amd64",
+            "configurePreset": "vs2022-amd64",
+            "inherits": "build-base"
         },
         {
-            "name": "Visual Studio Community 2026 Release - x86-debug",
-            "displayName": "Visual Studio Community 2026 Release - x86 - Debug",
-            "configurePreset": "Visual Studio Community 2026 Release - x86",
-            "configuration": "Debug"
+            "name": "vs2026-x86",
+            "displayName": "Visual Studio Community 2026 x86",
+            "configurePreset": "vs2026-x86",
+            "inherits": "build-base"
         }
     ],
     "workflowPresets": [
