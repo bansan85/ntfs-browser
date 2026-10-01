@@ -63,6 +63,11 @@ jobs:
             build_type: Debug
             build_shared_libs: OFF
             preset: no-efs
+          - name: windows-x86-debug
+            os: windows-2025-vs2026
+            cxx_flags: /MP
+            build_type: Debug
+            preset: vs2026-x86
           - name: linux-gcc
             cxx: g++
             os: ubuntu-latest
