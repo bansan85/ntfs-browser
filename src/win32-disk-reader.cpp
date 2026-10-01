@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include <gsl/narrow>
+
 #include "ntfs-common.h"
 
 namespace NtfsBrowser
@@ -35,7 +37,7 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
     return false;
   }
 
-  if (ReadFile(handle_.get(), dest.data(), static_cast<DWORD>(dest.size()),
+  if (ReadFile(handle_.get(), dest.data(), gsl::narrow<DWORD>(dest.size()),
                &len, nullptr) == FALSE ||
       len != dest.size())
   {

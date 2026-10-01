@@ -401,7 +401,7 @@ const std::vector<BYTE>*
   std::vector<BYTE> unit;
   try
   {
-    unit.assign(static_cast<size_t>(unitSize), 0);
+    unit.assign(gsl::narrow<size_t>(unitSize), 0);
   }
   catch (const std::exception& e)
   {
@@ -447,7 +447,7 @@ const std::vector<BYTE>*
     try
     {
       compressed.assign(
-          static_cast<size_t>(realClusters * this->GetClusterSize()), 0);
+          gsl::narrow<size_t>(realClusters * this->GetClusterSize()), 0);
     }
     catch (const std::exception& e)
     {
@@ -566,7 +566,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
     const ULONGLONG bytes = toCopy * this->GetClusterSize();
 
     memcpy(buf, unit->data() + offsetInUnit * this->GetClusterSize(),
-           static_cast<size_t>(bytes));
+           gsl::narrow<size_t>(bytes));
 
     buf += bytes;
     clusters -= toCopy;
@@ -840,15 +840,15 @@ std::optional<ULONGLONG>
   if (initialized != 0)
   {
     const std::optional<ULONGLONG> len = ReadDataBounded(
-        offset, buffer.first(static_cast<size_t>(initialized)), realSize);
+        offset, buffer.first(gsl::narrow<size_t>(initialized)), realSize);
     if (!len || *len != initialized)
     {
       return {};
     }
   }
 
-  std::fill(buffer.begin() + static_cast<std::ptrdiff_t>(initialized),
-            buffer.begin() + static_cast<std::ptrdiff_t>(wanted),
+  std::fill(buffer.begin() + gsl::narrow<std::ptrdiff_t>(initialized),
+            buffer.begin() + gsl::narrow<std::ptrdiff_t>(wanted),
             static_cast<BYTE>(0));
   return wanted;
 }

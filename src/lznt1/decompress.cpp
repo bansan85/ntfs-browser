@@ -5,6 +5,8 @@
 #include <cstring>
 #include <stdexcept>
 
+#include <gsl/narrow>
+
 namespace NtfsBrowser::Lznt1
 {
 
@@ -157,7 +159,7 @@ size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest)
         const size_t produced = out - chunkOutStart;
         const unsigned displacementBits = DisplacementBits(produced);
         const unsigned lengthBits = kWordBits - displacementBits;
-        const auto lengthMask = static_cast<WORD>((1U << lengthBits) - 1U);
+        const auto lengthMask = gsl::narrow<WORD>((1U << lengthBits) - 1U);
 
         const size_t length =
             static_cast<size_t>(word & lengthMask) + kLengthBias;

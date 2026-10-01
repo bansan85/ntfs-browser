@@ -6,6 +6,7 @@
   #include <fstream>
   #include <string>
 
+  #include <gsl/narrow>
   #include <ncrypt.h>
   #include <wincrypt.h>
 
@@ -134,7 +135,7 @@ class PrivateKey
 
     DWORD size = 0;
     if (FAILED(NCryptDecrypt(key, input.data(),
-                             static_cast<DWORD>(input.size()), nullptr, nullptr,
+                             gsl::narrow<DWORD>(input.size()), nullptr, nullptr,
                              0, &size, NCRYPT_PAD_PKCS1_FLAG)))
     {
       return std::nullopt;
@@ -142,7 +143,7 @@ class PrivateKey
 
     std::vector<BYTE> output(size);
     if (FAILED(NCryptDecrypt(
-            key, input.data(), static_cast<DWORD>(input.size()), nullptr,
+            key, input.data(), gsl::narrow<DWORD>(input.size()), nullptr,
             output.data(), size, &size, NCRYPT_PAD_PKCS1_FLAG)))
     {
       SecureZero(output);
@@ -163,7 +164,7 @@ class PrivateKey
     }
 
     std::vector<BYTE> buffer(wrapped.begin(), wrapped.end());
-    auto size = static_cast<DWORD>(buffer.size());
+    auto size = gsl::narrow<DWORD>(buffer.size());
     const BOOL ok = CryptDecrypt(key, 0, TRUE, 0, buffer.data(), &size);
     CryptDestroyKey(key);
     if (ok == FALSE)
@@ -192,7 +193,7 @@ class StoreKeyProvider final : public IEfsKeyProvider
       UnwrapFek(std::span<const BYTE> thumbprint,
                 std::span<const BYTE> wrappedFek) const override
   {
-    CRYPT_HASH_BLOB hash{static_cast<DWORD>(thumbprint.size()),
+    CRYPT_HASH_BLOB hash{gsl::narrow<DWORD>(thumbprint.size()),
                          const_cast<BYTE*>(thumbprint.data())};
     const CertPtr cert(CertFindCertificateInStore(store_, kCertEncoding, 0,
                                                   CERT_FIND_SHA1_HASH, &hash,
@@ -249,9 +250,9 @@ std::shared_ptr<IEfsKeyProvider>
     // One byte more than expected: a file that grew still trips the limit.
     const std::streamsize capacity =
         (sizeError ? kMaxPfxSize : static_cast<std::streamsize>(fileSize)) + 1;
-    bytes.resize(static_cast<size_t>(capacity));
+    bytes.resize(gsl::narrow<size_t>(capacity));
     file.read(reinterpret_cast<char*>(bytes.data()), capacity);
-    bytes.resize(static_cast<size_t>(file.gcount()));
+    bytes.resize(gsl::narrow<size_t>(file.gcount()));
   }
   if (bytes.empty() || bytes.size() > static_cast<size_t>(kMaxPfxSize))
   {
@@ -259,7 +260,7 @@ std::shared_ptr<IEfsKeyProvider>
     return nullptr;
   }
 
-  CRYPT_DATA_BLOB blob{static_cast<DWORD>(bytes.size()), bytes.data()};
+  CRYPT_DATA_BLOB blob{gsl::narrow<DWORD>(bytes.size()), bytes.data()};
   const std::wstring passwordZ(password);
   HCERTSTORE store =
       PFXImportCertStore(&blob, passwordZ.c_str(), PKCS12_NO_PERSIST_KEY);

@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/data/attr-defines.h>
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/file-record.h>
@@ -525,7 +527,7 @@ std::optional<ULONGLONG>
         (remaining < availableInExtent) ? remaining : availableInExtent;
 
     const std::optional<ULONGLONG> len = nonResident->ReadExtentData(
-        currentOffset - extentStartByte, {buf, static_cast<size_t>(toRead)});
+        currentOffset - extentStartByte, {buf, gsl::narrow<size_t>(toRead)});
     if (!len || *len != toRead)
     {
       return {};

@@ -7,6 +7,8 @@
 #include <limits>
 #include <utility>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/strategy.h>
 
@@ -182,8 +184,8 @@ typename std::enable_if_t<
     }
 
     const auto offsetInBlock =
-        static_cast<DWORD>(cur.QuadPart % READ_BUFFER_SIZE);
-    const DWORD chunk = static_cast<DWORD>(
+        gsl::narrow<DWORD>(cur.QuadPart % READ_BUFFER_SIZE);
+    const DWORD chunk = gsl::narrow<DWORD>(
         std::min<LONGLONG>(READ_BUFFER_SIZE - offsetInBlock, remaining));
 
     memcpy(out, block + offsetInBlock, chunk);

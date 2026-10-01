@@ -8,6 +8,8 @@
 #include <string_view>
 #include <vector>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 #include <ntfs-browser/strategy.h>
 
@@ -138,7 +140,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     return false;
   }
 
-  const DWORD sectors = static_cast<DWORD>(
+  const DWORD sectors = gsl::narrow<DWORD>(
       UpdateSequenceBlockCount(this->GetIndexBlockSize(), ibBuf->size_of_us));
   if (!IndexBlockUsOffsetInBounds(ibBuf->offset_of_us, sectors,
                                   this->GetIndexBlockSize()))
@@ -167,7 +169,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       reinterpret_cast<const BYTE*>(&(ibBuf->entry_offset));
 
   if (ibBuf->entry_offset >
-      static_cast<ULONGLONG>(block_end - entry_offset_addr))
+      gsl::narrow<ULONGLONG>(block_end - entry_offset_addr))
   {
     LogWarn("Index Block: entry_offset exceeds block bounds");
     return false;

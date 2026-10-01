@@ -3,6 +3,7 @@
   #include <ntfs-browser/win-types.h>
 
   #include <bcrypt.h>
+  #include <gsl/narrow>
 
   #include "efs/sector-cipher.h"
   #include "ntfs-common.h"
@@ -59,7 +60,7 @@ class BCryptDecryptor final : public SectorDecryptor
 
     return BCRYPT_SUCCESS(BCryptGenerateSymmetricKey(
         alg_, &key_, nullptr, 0, const_cast<PUCHAR>(key.data()),
-        static_cast<ULONG>(key.size()), 0));
+        gsl::narrow<ULONG>(key.size()), 0));
   }
 
   bool DecryptSector(ULONGLONG offset, std::span<BYTE> sector) const override
@@ -74,7 +75,7 @@ class BCryptDecryptor final : public SectorDecryptor
     ULONG produced = 0;
     const NTSTATUS status = BCryptDecrypt(
         key_, sector.data(), static_cast<ULONG>(sector.size()), nullptr,
-        iv.data(), static_cast<ULONG>(block_size_), sector.data(),
+        iv.data(), gsl::narrow<ULONG>(block_size_), sector.data(),
         static_cast<ULONG>(sector.size()), &produced, 0);
     return BCRYPT_SUCCESS(status) && produced == sector.size();
   }

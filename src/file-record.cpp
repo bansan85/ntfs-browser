@@ -832,7 +832,7 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
     std::ranges::sort(toErase);
     for (auto it = toErase.rbegin(); it != toErase.rend(); ++it)
     {
-      attrs.erase(attrs.begin() + static_cast<ptrdiff_t>(*it));
+      attrs.erase(attrs.begin() + gsl::narrow<ptrdiff_t>(*it));
     }
   }
 }

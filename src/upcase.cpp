@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include <gsl/narrow>
+
 namespace NtfsBrowser
 {
 namespace
@@ -301,14 +303,14 @@ std::vector<char16_t> MakeBuiltInMap()
   std::vector<char16_t> map(kUpCaseUnitCount);
   for (size_t unit = 0; unit < map.size(); unit++)
   {
-    map[unit] = static_cast<char16_t>(unit);
+    map[unit] = gsl::narrow<char16_t>(unit);
   }
   for (const UpCaseRun& run : kBuiltInRuns)
   {
     for (std::uint32_t unit = run.first; unit <= run.last; unit += run.step)
     {
       map[unit] =
-          static_cast<char16_t>(static_cast<std::int32_t>(unit) + run.delta);
+          gsl::narrow<char16_t>(gsl::narrow<std::int32_t>(unit) + run.delta);
     }
   }
   return map;

@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <string_view>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
@@ -76,7 +78,7 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       reinterpret_cast<const BYTE*>(&(index_root_copy->entry_offset));
 
   if (index_root_copy->entry_offset >
-      static_cast<ULONGLONG>(data_end - entry_offset_addr))
+      gsl::narrow<ULONGLONG>(data_end - entry_offset_addr))
   {
     LogRecoverable(recover,
                    "Index Root: entry_offset exceeds attribute bounds");
