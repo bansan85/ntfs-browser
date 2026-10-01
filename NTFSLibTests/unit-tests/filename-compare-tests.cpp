@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/index-entry.h>
 
@@ -39,15 +40,15 @@ IndexEntry MakeSystemEntry()
   fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < kNameLen; i++)
   {
-    fn.name[i] = static_cast<WORD>(kName[i]);
+    fn.name[i] = gsl::narrow<WORD>(kName[i]);
   }
   // Filler: must never be read by Compare().
   fn.name[kNameLen] = 0xFFFF;
 
   ie.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[kNameLen]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[kNameLen]) -
                         reinterpret_cast<BYTE*>(&fn));
-  ie.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&ie.stream) -
+  ie.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&ie.stream) -
                               reinterpret_cast<BYTE*>(&ie) + ie.stream_size);
 
   return IndexEntry(buffer, ie);
@@ -65,17 +66,17 @@ IndexEntry MakeNamedEntry(std::wstring_view name)
 
   auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&ie.stream);
   fn.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
-  fn.name_length = static_cast<BYTE>(name.size());
+  fn.name_length = gsl::narrow<BYTE>(name.size());
   fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (size_t i = 0; i < name.size(); i++)
   {
-    fn.name[i] = static_cast<WORD>(name[i]);
+    fn.name[i] = gsl::narrow<WORD>(name[i]);
   }
 
   ie.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[name.size()]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[name.size()]) -
                         reinterpret_cast<BYTE*>(&fn));
-  ie.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&ie.stream) -
+  ie.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&ie.stream) -
                               reinterpret_cast<BYTE*>(&ie) + ie.stream_size);
 
   return IndexEntry(buffer, ie);

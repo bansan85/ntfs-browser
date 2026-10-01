@@ -14,6 +14,7 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-type.h>
@@ -370,7 +371,7 @@ std::vector<BYTE> ReadFirstBytes(const NtfsBrowser::AttrBase<S>& attr,
   {
     return {};
   }
-  buffer.resize(static_cast<size_t>(*read));
+  buffer.resize(gsl::narrow<size_t>(*read));
   return buffer;
 }
 

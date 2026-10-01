@@ -7,6 +7,8 @@
 #include <memory>
 #include <utility>
 
+#include <gsl/narrow>
+
 namespace NtfsBrowserTests
 {
 
@@ -47,7 +49,7 @@ SequentialDiskReader::Producer
   {
     return static_cast<bool>(
         in->read(reinterpret_cast<char*>(dest.data()),
-                 static_cast<std::streamsize>(dest.size())));
+                 gsl::narrow<std::streamsize>(dest.size())));
   };
 }
 

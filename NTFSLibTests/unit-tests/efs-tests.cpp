@@ -17,6 +17,7 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/efs.h>
@@ -78,7 +79,7 @@ TestEfsEntry TestUser(BYTE seed = 1, std::vector<BYTE> wrapped = kWrappedFek)
 
 DWORD ClustersFor(size_t bytes)
 {
-  return static_cast<DWORD>((bytes + NtfsBrowserTests::kFakeClusterSize - 1) /
+  return gsl::narrow<DWORD>((bytes + NtfsBrowserTests::kFakeClusterSize - 1) /
                             NtfsBrowserTests::kFakeClusterSize);
 }
 
@@ -158,7 +159,7 @@ std::optional<std::vector<BYTE>> ReadAt(const AttrBase<S>& attr,
   {
     return std::nullopt;
   }
-  buffer.resize(static_cast<size_t>(*read));
+  buffer.resize(gsl::narrow<size_t>(*read));
   return buffer;
 }
 
@@ -176,8 +177,8 @@ std::vector<BYTE> Slice(const std::vector<BYTE>& bytes, size_t offset,
                         size_t size)
 {
   const size_t end = std::min(bytes.size(), offset + size);
-  return {bytes.begin() + static_cast<std::ptrdiff_t>(offset),
-          bytes.begin() + static_cast<std::ptrdiff_t>(end)};
+  return {bytes.begin() + gsl::narrow<std::ptrdiff_t>(offset),
+          bytes.begin() + gsl::narrow<std::ptrdiff_t>(end)};
 }
 
 void Patch32(std::vector<BYTE>& bytes, size_t offset, DWORD value)
@@ -718,7 +719,7 @@ TEMPLATE_TEST_CASE_SIG(
     hostile.push_back(std::move(copy));
   };
   forge(kDdfOffsetField, 0xFFFFFFF0);
-  forge(kDdfOffsetField, static_cast<DWORD>(valid.size()));
+  forge(kDdfOffsetField, gsl::narrow<DWORD>(valid.size()));
   forge(kDrfOffsetField, 0x7FFFFFFF);
   forge(kDdfCount, 0xFFFFFFFF);
   forge(kDdfCount, 65);
@@ -919,7 +920,7 @@ std::vector<BYTE> Counting(size_t length)
   std::vector<BYTE> bytes(length);
   for (size_t i = 0; i < length; ++i)
   {
-    bytes[i] = static_cast<BYTE>(i);
+    bytes[i] = gsl::narrow<BYTE>(i);
   }
   return bytes;
 }

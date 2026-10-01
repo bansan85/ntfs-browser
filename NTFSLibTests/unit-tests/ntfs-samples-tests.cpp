@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/data/attr-type.h>
@@ -131,7 +132,7 @@ bool MatchesPtrnPattern(std::span<const BYTE> data)
 
   for (size_t i = 0; i < data.size(); i++)
   {
-    if (data[i] != static_cast<BYTE>(kPattern[(phase + i) % kPattern.size()]))
+    if (data[i] != gsl::narrow<BYTE>(kPattern[(phase + i) % kPattern.size()]))
     {
       return false;
     }
@@ -158,7 +159,7 @@ bool ContainsPtrnRun(std::span<const BYTE> data, size_t minRunLength)
     size_t j = i;
     while (j < data.size() &&
            data[j] ==
-               static_cast<BYTE>(kPattern[(phase + (j - i)) % kPattern.size()]))
+               gsl::narrow<BYTE>(kPattern[(phase + (j - i)) % kPattern.size()]))
     {
       j++;
     }

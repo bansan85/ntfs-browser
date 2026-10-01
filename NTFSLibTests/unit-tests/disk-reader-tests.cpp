@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include "memory-disk-reader.h"
 #include "sequential-disk-reader.h"
@@ -30,7 +31,7 @@ std::vector<BYTE> MakeContent(size_t size)
   std::vector<BYTE> content(size);
   for (size_t i = 0; i < content.size(); i++)
   {
-    content[i] = static_cast<BYTE>(i);
+    content[i] = gsl::narrow<BYTE>(i);
   }
   return content;
 }
@@ -75,7 +76,7 @@ TEST_CASE("MemoryDiskReader::Open loads a file's content into memory",
   {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(reinterpret_cast<const char*>(content.data()),
-              static_cast<std::streamsize>(content.size()));
+              gsl::narrow<std::streamsize>(content.size()));
   }
 
   MemoryDiskReader reader(std::vector<BYTE>{});
@@ -137,7 +138,7 @@ TEST_CASE("SequentialDiskReader streams a file source incrementally",
   {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(reinterpret_cast<const char*>(content.data()),
-              static_cast<std::streamsize>(content.size()));
+              gsl::narrow<std::streamsize>(content.size()));
   }
 
   std::array<BYTE, 16> first{};
@@ -170,7 +171,7 @@ TEST_CASE("SequentialDiskReader generates data lazily with no backing store",
   SequentialDiskReader reader(MakeGeneratorProducer(
       [&calls](std::span<BYTE> dest)
       {
-        std::fill(dest.begin(), dest.end(), static_cast<BYTE>(calls));
+        std::fill(dest.begin(), dest.end(), gsl::narrow<BYTE>(calls));
         calls++;
       }));
 

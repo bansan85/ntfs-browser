@@ -15,6 +15,7 @@
   #include <vector>
 
   #include <catch2/catch_test_macros.hpp>
+  #include <gsl/narrow>
 
   #include <ntfs-browser/attr-base.h>
   #include <ntfs-browser/efs.h>
@@ -67,7 +68,7 @@ std::filesystem::path WriteTempFile(std::string_view label,
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   REQUIRE(out.good());
   out.write(reinterpret_cast<const char*>(data.data()),
-            static_cast<std::streamsize>(data.size()));
+            gsl::narrow<std::streamsize>(data.size()));
   REQUIRE(out.good());
   return path;
 }

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
@@ -83,7 +84,7 @@ std::vector<BYTE> MakeMinimalUpCaseBytes()
     const size_t upper =
         (unit >= L'a' && unit <= L'z') ? unit - kCaseDistance : unit;
     bytes[unit * 2] = static_cast<BYTE>(upper & 0xFF);
-    bytes[unit * 2 + 1] = static_cast<BYTE>(upper >> kBitsPerByte);
+    bytes[unit * 2 + 1] = gsl::narrow<BYTE>(upper >> kBitsPerByte);
   }
   return bytes;
 }

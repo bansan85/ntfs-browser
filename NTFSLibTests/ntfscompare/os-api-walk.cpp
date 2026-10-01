@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include <gsl/narrow>
+
 #ifdef _WIN32
   #include <windows.h>
 #else
@@ -105,7 +107,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
                                            sizeof(info)) != 0)
           {
             entry.physical_size =
-                static_cast<ULONGLONG>(info.AllocationSize.QuadPart);
+                gsl::narrow<ULONGLONG>(info.AllocationSize.QuadPart);
           }
           CloseHandle(fileHandle);
         }
@@ -220,9 +222,9 @@ Listing WalkOsApi(const std::filesystem::path& root)
       entry.is_directory = isDirectory;
       if (!isDirectory)
       {
-        entry.logical_size = static_cast<ULONGLONG>(st.st_size);
+        entry.logical_size = gsl::narrow<ULONGLONG>(st.st_size);
       }
-      entry.physical_size = static_cast<ULONGLONG>(st.st_blocks) * 512ULL;
+      entry.physical_size = gsl::narrow<ULONGLONG>(st.st_blocks) * 512ULL;
 
       entry.modification_time_utc =
           SecondsNanosToUtcTicks(st.st_mtim.tv_sec, st.st_mtim.tv_nsec);

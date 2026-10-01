@@ -4,6 +4,8 @@
 
   #include <cstddef>
 
+  #include <gsl/narrow>
+
 namespace NtfsCompare
 {
 
@@ -67,7 +69,7 @@ std::wstring Utf8ToWide(std::string_view utf8)
       continue;
     }
 
-    out.push_back(static_cast<wchar_t>(codePoint));
+    out.push_back(gsl::narrow<wchar_t>(codePoint));
     i += length;
   }
 

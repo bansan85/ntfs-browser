@@ -13,6 +13,7 @@
   #include <catch2/catch_template_test_macros.hpp>
   #include <catch2/catch_test_macros.hpp>
   #include <catch2/matchers/catch_matchers_string.hpp>
+  #include <gsl/narrow>
 
   #include <ntfs-browser/efs.h>
   #include <ntfs-browser/file-record.h>
@@ -72,7 +73,7 @@ std::vector<BYTE> Thumbprint(const TestPfx& pfx)
   for (size_t i = 0; i < hex.size(); i += 2)
   {
     bytes.push_back(
-        static_cast<BYTE>(std::stoi(hex.substr(i, 2), nullptr, 16)));
+        gsl::narrow<BYTE>(std::stoi(hex.substr(i, 2), nullptr, 16)));
   }
   return bytes;
 }
@@ -88,7 +89,7 @@ std::vector<BYTE> ExpectedFek()
   std::vector<BYTE> key(32);
   for (size_t i = 0; i < key.size(); ++i)
   {
-    key[i] = static_cast<BYTE>((i + 1) * 3);
+    key[i] = gsl::narrow<BYTE>((i + 1) * 3);
   }
   return NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key);
 }
@@ -152,7 +153,7 @@ TEST_CASE("An oversized PFX is refused by its size, before any read",
     for (std::uintmax_t written = 0;
          written + chunk.size() <= kJustOverTheLimit; written += chunk.size())
     {
-      out.write(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+      out.write(chunk.data(), gsl::narrow<std::streamsize>(chunk.size()));
     }
     out.put('x');
   }

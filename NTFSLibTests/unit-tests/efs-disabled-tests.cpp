@@ -6,6 +6,7 @@
       (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)))
 
   #include <catch2/catch_template_test_macros.hpp>
+  #include <gsl/narrow>
 
   #include <ntfs-browser/data/attr-type.h>
   #include <ntfs-browser/file-record.h>
@@ -50,7 +51,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> buffer(onDisk.size(), 0xCC);
   const std::optional<ULONGLONG> read = data.front()->ReadData(0, buffer);
   REQUIRE(read.has_value());
-  buffer.resize(static_cast<size_t>(*read));
+  buffer.resize(gsl::narrow<size_t>(*read));
   CHECK(buffer == onDisk);
 }
 

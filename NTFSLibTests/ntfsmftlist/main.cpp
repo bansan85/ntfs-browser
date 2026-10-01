@@ -60,7 +60,7 @@ std::string ToUtf8(std::wstring_view text)
   const int length = gsl::narrow<int>(text.size());
   const int size = WideCharToMultiByte(CP_UTF8, 0, text.data(), length, nullptr,
                                        0, nullptr, nullptr);
-  std::string utf8(static_cast<size_t>(size), '\0');
+  std::string utf8(gsl::narrow<size_t>(size), '\0');
   WideCharToMultiByte(CP_UTF8, 0, text.data(), length, utf8.data(), size,
                       nullptr, nullptr);
   return utf8;

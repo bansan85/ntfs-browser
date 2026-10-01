@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/strategy.h>
 
@@ -31,12 +32,12 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t bufferSize, WORD offsetOfAttr)
   std::vector<BYTE> storage(bufferSize, 0);
 
   const size_t sectors = bufferSize / kUpdateSequenceStride;
-  const WORD offsetOfUs = static_cast<WORD>(bufferSize - 2 * (1 + sectors));
+  const WORD offsetOfUs = gsl::narrow<WORD>(bufferSize - 2 * (1 + sectors));
 
   auto& header = *reinterpret_cast<FileRecordHeader::Data*>(storage.data());
   header.magic = kFileRecordMagic;
   header.offset_of_us = offsetOfUs;
-  header.size_of_us = static_cast<WORD>(1 + sectors);
+  header.size_of_us = gsl::narrow<WORD>(1 + sectors);
   header.offset_of_attr = offsetOfAttr;
 
   return storage;

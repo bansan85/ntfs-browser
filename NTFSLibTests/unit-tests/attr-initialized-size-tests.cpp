@@ -9,6 +9,7 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/attr-base.h>  // IWYU pragma: keep
 #include <ntfs-browser/data/attr-type.h>
@@ -47,7 +48,7 @@ std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length)
        at++)
   {
     expected.push_back(at < NtfsBrowserTests::kUninitializedTailIniSize
-                           ? residue[static_cast<size_t>(at)]
+                           ? residue[gsl::narrow<size_t>(at)]
                            : static_cast<BYTE>(0));
   }
   return expected;
@@ -93,7 +94,7 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
     const std::vector<BYTE> expected =
         ExpectedBytes(range.offset, range.length);
     REQUIRE(*read == expected.size());
-    buffer.resize(static_cast<size_t>(*read));
+    buffer.resize(gsl::narrow<size_t>(*read));
     const bool same = buffer == expected;
     CHECK(same);
   }

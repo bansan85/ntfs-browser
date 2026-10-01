@@ -6,6 +6,8 @@
 #include <array>
 #include <string_view>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
@@ -246,7 +248,7 @@ void printattr(const AttrBase<S>& attr, void* context, bool* /* bStop*/)
   if (!attrname.empty())
   {
     line += '(';
-    line += CString(attrname.data(), static_cast<int>(attrname.size()));
+    line += CString(attrname.data(), gsl::narrow<int>(attrname.size()));
     line += ')';
   }
   line += _T("\r\n");

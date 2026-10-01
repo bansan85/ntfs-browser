@@ -14,6 +14,7 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/strategy.h>
@@ -45,7 +46,7 @@ std::filesystem::path WriteTempFile(std::span<const BYTE> content)
 
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   out.write(reinterpret_cast<const char*>(content.data()),
-            static_cast<std::streamsize>(content.size()));
+            gsl::narrow<std::streamsize>(content.size()));
 
   return path;
 }

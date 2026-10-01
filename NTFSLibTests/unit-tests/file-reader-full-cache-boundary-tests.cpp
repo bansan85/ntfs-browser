@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/strategy.h>
@@ -87,8 +88,8 @@ TEST_CASE(
 
   for (const Range& range : ranges)
   {
-    LARGE_INTEGER addrFull{.QuadPart = static_cast<LONGLONG>(range.offset)};
-    LARGE_INTEGER addrExact{.QuadPart = static_cast<LONGLONG>(range.offset)};
+    LARGE_INTEGER addrFull{.QuadPart = gsl::narrow<LONGLONG>(range.offset)};
+    LARGE_INTEGER addrExact{.QuadPart = gsl::narrow<LONGLONG>(range.offset)};
 
     const auto expected = exact.Read(addrExact, range.length);
     REQUIRE(expected.has_value());
@@ -98,7 +99,7 @@ TEST_CASE(
     REQUIRE(actual->size() == expected->size());
     CHECK(std::equal(actual->begin(), actual->end(), expected->begin()));
     CHECK(std::equal(actual->begin(), actual->end(),
-                     backing.begin() + static_cast<ptrdiff_t>(range.offset)));
+                     backing.begin() + gsl::narrow<ptrdiff_t>(range.offset)));
   }
 
   // Reading the same range twice keeps returning the same bytes.

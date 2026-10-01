@@ -30,6 +30,7 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/attr-base.h>  // IWYU pragma: keep
 #include <ntfs-browser/data/attr-type.h>
@@ -98,7 +99,7 @@ std::optional<std::vector<BYTE>> ReadRootData(const FileRecord<S>& record,
     return {};
   }
 
-  buffer.resize(static_cast<size_t>(*read));
+  buffer.resize(gsl::narrow<size_t>(*read));
   return buffer;
 }
 

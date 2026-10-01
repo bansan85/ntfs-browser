@@ -8,6 +8,8 @@
 
 #ifdef _WIN32
   #include <ntfs-browser/win-types.h>
+
+  #include <gsl/narrow>
 #else
   #include <cstring>
 
@@ -92,7 +94,7 @@ std::string ReadAllAndClose(HANDLE readPipe)
   std::array<char, 4096> chunk{};
   DWORD bytesRead = 0;
 
-  while (ReadFile(readPipe, chunk.data(), static_cast<DWORD>(chunk.size()),
+  while (ReadFile(readPipe, chunk.data(), gsl::narrow<DWORD>(chunk.size()),
                   &bytesRead, nullptr) &&
          bytesRead > 0)
   {

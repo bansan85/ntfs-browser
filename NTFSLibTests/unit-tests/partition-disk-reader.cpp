@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <span>
 
+#include <gsl/narrow>
+
 namespace NtfsBrowserTests
 {
 
@@ -29,11 +31,11 @@ bool PartitionDiskReader::ReadInto(LARGE_INTEGER& addr,
   }
 
   file_.clear();
-  file_.seekg(static_cast<std::streamoff>(
-      partition_offset_ + static_cast<ULONGLONG>(addr.QuadPart)));
+  file_.seekg(gsl::narrow<std::streamoff>(
+      partition_offset_ + gsl::narrow<ULONGLONG>(addr.QuadPart)));
   file_.read(reinterpret_cast<char*>(dest.data()),
-             static_cast<std::streamsize>(dest.size()));
-  return static_cast<size_t>(file_.gcount()) == dest.size();
+             gsl::narrow<std::streamsize>(dest.size()));
+  return gsl::narrow<size_t>(file_.gcount()) == dest.size();
 }
 
 }  // namespace NtfsBrowserTests

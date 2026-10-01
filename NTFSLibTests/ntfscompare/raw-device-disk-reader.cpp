@@ -8,6 +8,7 @@
   #include <string_view>
 
   #include <fcntl.h>
+  #include <gsl/narrow>
   #include <sys/types.h>
   #include <unistd.h>
 
@@ -26,7 +27,7 @@ std::string WideToNarrowAscii(std::wstring_view w)
   out.reserve(w.size());
   for (const wchar_t c : w)
   {
-    out.push_back(static_cast<char>(c));
+    out.push_back(gsl::narrow<char>(c));
   }
   return out;
 }

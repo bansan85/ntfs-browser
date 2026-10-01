@@ -7,6 +7,7 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/strategy.h>
 
@@ -32,7 +33,7 @@ constexpr WORD kOffsetOfUs =
     static_cast<WORD>(kDeclaredBufferSize - sizeof(WORD));
 
 // Pattern that never appears anywhere in the declared 1024-byte buffer.
-WORD Sentinel(size_t i) { return static_cast<WORD>(0xBEEF + i); }
+WORD Sentinel(size_t i) { return gsl::narrow<WORD>(0xBEEF + i); }
 
 }  // namespace
 
@@ -113,7 +114,7 @@ TEMPLATE_TEST_CASE_SIG(
     // The array holds each block's true last word; the block itself carries
     // the sequence number, as it does on disk.
     put_word(header.offset_of_us + sizeof(WORD) * (1 + i),
-             static_cast<WORD>(0xA000 + i));
+             gsl::narrow<WORD>(0xA000 + i));
     put_word((i + 1) * kBlockSize - sizeof(WORD), kUsn);
   }
 
@@ -128,6 +129,6 @@ TEMPLATE_TEST_CASE_SIG(
     std::memcpy(&restored,
                 &fr.GetData()->raw[(i + 1) * kBlockSize - sizeof(WORD)],
                 sizeof(restored));
-    CHECK(restored == static_cast<WORD>(0xA000 + i));
+    CHECK(restored == gsl::narrow<WORD>(0xA000 + i));
   }
 }

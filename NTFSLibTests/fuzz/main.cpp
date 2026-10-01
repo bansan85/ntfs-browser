@@ -16,6 +16,7 @@
   #define NOMINMAX
 #endif
 #include <crtdbg.h>
+#include <gsl/narrow>
 #include <malloc.h>  // _resetstkoflw
 #include <windows.h>
 
@@ -247,7 +248,7 @@ int wmain(int argc, wchar_t* argv[])
   if (argCount == 3 && std::wcscmp(args[1], L"--seed") == 0)
   {
     const unsigned seed =
-        static_cast<unsigned>(std::wcstoul(args[2], nullptr, 0));
+        gsl::narrow<unsigned>(std::wcstoul(args[2], nullptr, 0));
     DWORD crashCode = 0;
     printf("Replaying seed=%u\n", seed);
     if (!RunIteration(seed, crashCode))

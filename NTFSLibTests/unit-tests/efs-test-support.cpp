@@ -9,6 +9,7 @@
 
 #include <cryptopp/aes.h>
 #include <cryptopp/des.h>
+#include <gsl/narrow>
 // Silences the weak-algorithm notice: MD5 is what the DESX key expansion uses.
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <cryptopp/md5.h>
@@ -152,10 +153,10 @@ void AppendEntry(std::vector<BYTE>& out, const TestEfsEntry& user)
   const size_t fekOffset = kEntryHeader + kCredentialSize;
   out.resize(base + fekOffset + user.wrapped_fek.size(), 0);
 
-  Put32(out, base + 0x00, static_cast<DWORD>(out.size() - base));
+  Put32(out, base + 0x00, gsl::narrow<DWORD>(out.size() - base));
   Put32(out, base + 0x04, kEntryHeader);
-  Put32(out, base + 0x08, static_cast<DWORD>(user.wrapped_fek.size()));
-  Put32(out, base + 0x0C, static_cast<DWORD>(fekOffset));
+  Put32(out, base + 0x08, gsl::narrow<DWORD>(user.wrapped_fek.size()));
+  Put32(out, base + 0x0C, gsl::narrow<DWORD>(fekOffset));
 
   const size_t cred = base + kEntryHeader;
   Put32(out, cred + 0x00, static_cast<DWORD>(kCredentialSize));
@@ -176,7 +177,7 @@ size_t AppendField(std::vector<BYTE>& out, std::span<const TestEfsEntry> users)
 {
   const size_t offset = out.size();
   out.resize(offset + sizeof(DWORD), 0);
-  Put32(out, offset, static_cast<DWORD>(users.size()));
+  Put32(out, offset, gsl::narrow<DWORD>(users.size()));
   for (const TestEfsEntry& user : users)
   {
     AppendEntry(out, user);
@@ -208,7 +209,7 @@ std::vector<BYTE> TestKey(Algorithm algorithm)
   std::vector<BYTE> key(length);
   for (size_t i = 0; i < length; ++i)
   {
-    key[i] = static_cast<BYTE>((i * 7) + 0x21);
+    key[i] = gsl::narrow<BYTE>((i * 7) + 0x21);
   }
   return key;
 }
@@ -216,8 +217,8 @@ std::vector<BYTE> TestKey(Algorithm algorithm)
 std::vector<BYTE> MakeFekBlob(Algorithm algorithm, std::span<const BYTE> key)
 {
   std::vector<BYTE> blob(16 + key.size(), 0);
-  Put32(blob, 0, static_cast<DWORD>(key.size()));
-  Put32(blob, 4, static_cast<DWORD>(key.size()));
+  Put32(blob, 0, gsl::narrow<DWORD>(key.size()));
+  Put32(blob, 4, gsl::narrow<DWORD>(key.size()));
   Put32(blob, 8, static_cast<DWORD>(algorithm));
   std::copy(key.begin(), key.end(), blob.begin() + 16);
   return blob;
@@ -273,13 +274,13 @@ std::vector<BYTE> MakeEfsStream(std::span<const TestEfsEntry> users,
 
   if (!users.empty())
   {
-    Put32(out, 0x40, static_cast<DWORD>(AppendField(out, users)));
+    Put32(out, 0x40, gsl::narrow<DWORD>(AppendField(out, users)));
   }
   if (!recovery.empty())
   {
-    Put32(out, 0x44, static_cast<DWORD>(AppendField(out, recovery)));
+    Put32(out, 0x44, gsl::narrow<DWORD>(AppendField(out, recovery)));
   }
-  Put32(out, 0x00, static_cast<DWORD>(out.size()));
+  Put32(out, 0x00, gsl::narrow<DWORD>(out.size()));
   return out;
 }
 

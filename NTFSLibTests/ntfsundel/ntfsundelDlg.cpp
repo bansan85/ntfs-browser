@@ -6,6 +6,8 @@
 #include <regex>
 #include <set>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
@@ -483,7 +485,7 @@ void CNtfsundelDlg::OnRecover()
     // Save data
     DWORD l = 0;
     // A failed or partial write must not be reported as success.
-    if (WriteFile(hf.get(), &vec[0], static_cast<DWORD>(*len), &l, nullptr) ==
+    if (WriteFile(hf.get(), &vec[0], gsl::narrow<DWORD>(*len), &l, nullptr) ==
             FALSE ||
         l != *len)
     {

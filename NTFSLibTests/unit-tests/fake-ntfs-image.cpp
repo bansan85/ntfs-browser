@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/mft-idx.h>
@@ -134,7 +136,7 @@ std::vector<WORD> ToUtf16(std::wstring_view text)
   for (const wchar_t ch : text)
   {
     const auto codePoint =
-        static_cast<char32_t>(static_cast<std::make_unsigned_t<wchar_t>>(ch));
+        static_cast<char32_t>(gsl::narrow<std::make_unsigned_t<wchar_t>>(ch));
     if (codePoint <= kMaxBmp)
     {
       units.push_back(static_cast<WORD>(codePoint));
@@ -142,9 +144,9 @@ std::vector<WORD> ToUtf16(std::wstring_view text)
     }
     const char32_t offset = codePoint - kSurrogateBase;
     units.push_back(
-        static_cast<WORD>(kHighSurrogateFirst + (offset >> kSurrogateShift)));
+        gsl::narrow<WORD>(kHighSurrogateFirst + (offset >> kSurrogateShift)));
     units.push_back(
-        static_cast<WORD>(kLowSurrogateFirst + (offset & kSurrogateMask)));
+        gsl::narrow<WORD>(kLowSurrogateFirst + (offset & kSurrogateMask)));
   }
   return units;
 }
@@ -232,7 +234,7 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters)
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
   dataRun[runLen++] = 0x41;
-  dataRun[runLen++] = static_cast<BYTE>(clusters);
+  dataRun[runLen++] = gsl::narrow<BYTE>(clusters);
   std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
   runLen += sizeof(lcn);
   dataRun[runLen++] = 0x00;  // terminate the run list
@@ -266,7 +268,7 @@ FakeRecord MakeMftRecordWithDataContinuations(
   listAttr.header.name_length = 0;
   listAttr.header.flags = 0;
   listAttr.header.id = 0;
-  listAttr.attr_size = entrySize * static_cast<DWORD>(continuations.size());
+  listAttr.attr_size = entrySize * gsl::narrow<DWORD>(continuations.size());
   listAttr.attr_offset = static_cast<WORD>(sizeof(listAttr));
   listAttr.header.total_size =
       static_cast<DWORD>(sizeof(listAttr)) + listAttr.attr_size;
@@ -276,7 +278,7 @@ FakeRecord MakeMftRecordWithDataContinuations(
     auto& alEntry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
         &record[offset + listAttr.attr_offset + i * entrySize]);
     alEntry.attr_type = AttrType::DATA;
-    alEntry.record_size = static_cast<WORD>(entrySize);
+    alEntry.record_size = gsl::narrow<WORD>(entrySize);
     alEntry.name_length = 0;
     alEntry.name_offset = 0;
     alEntry.start_vcn = continuations[i].second;
@@ -341,7 +343,7 @@ FakeRecord MakeMftDataContinuationExtensionRecord(ULONGLONG startVcn, DWORD lcn,
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
   dataRun[runLen++] = 0x41;
-  dataRun[runLen++] = static_cast<BYTE>(clusters);
+  dataRun[runLen++] = gsl::narrow<BYTE>(clusters);
   std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
   runLen += sizeof(lcn);
   dataRun[runLen++] = 0x00;  // terminate the run list
@@ -417,7 +419,7 @@ FakeRecord MakeVolumeRecordWithName(std::wstring_view name)
   attr.header.flags = 0;
   attr.header.id = 1;
   const std::vector<WORD> encodedName = ToUtf16(name);
-  attr.attr_size = static_cast<DWORD>(encodedName.size() * sizeof(WORD));
+  attr.attr_size = gsl::narrow<DWORD>(encodedName.size() * sizeof(WORD));
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
@@ -532,7 +534,7 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG baseIdx = 0)
   root.ib_size = kFakeFileRecordSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1: "Foo", a regular (non-directory) file, reference 20.
@@ -549,12 +551,12 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG baseIdx = 0)
   constexpr wchar_t kFooName[] = L"Foo";
   for (BYTE i = 0; i < fn.name_length; i++)
   {
-    fn.name[i] = static_cast<WORD>(kFooName[i]);
+    fn.name[i] = gsl::narrow<WORD>(kFooName[i]);
   }
 
-  e1.stream_size = static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[3]) -
+  e1.stream_size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[3]) -
                                      reinterpret_cast<BYTE*>(&fn));
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
 
   // Entry 2: the terminating entry - no name, no sub-node.
@@ -562,7 +564,7 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG baseIdx = 0)
       body + sizeof(NtfsBrowser::Attr::IndexRoot) + e1.size);
   e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   e2.stream_size = 0;
-  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+  e2.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
                               reinterpret_cast<BYTE*>(&e2));
 
   root.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
@@ -651,7 +653,7 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
   root.ib_size = kFakeFileRecordSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1: "Foo", a regular (non-directory) file, reference 20.
@@ -668,12 +670,12 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
   constexpr wchar_t kFooName[] = L"Foo";
   for (BYTE i = 0; i < fn.name_length; i++)
   {
-    fn.name[i] = static_cast<WORD>(kFooName[i]);
+    fn.name[i] = gsl::narrow<WORD>(kFooName[i]);
   }
 
-  e1.stream_size = static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[3]) -
+  e1.stream_size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[3]) -
                                      reinterpret_cast<BYTE*>(&fn));
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
 
   // Entry 2: the terminating entry - no name, no sub-node.
@@ -681,7 +683,7 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
       body + sizeof(NtfsBrowser::Attr::IndexRoot) + e1.size);
   e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   e2.stream_size = 0;
-  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+  e2.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
                               reinterpret_cast<BYTE*>(&e2));
 
   root.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
@@ -779,7 +781,7 @@ FakeRecord MakeIndexAllocDirRecord()
   root.clusters_per_ib =
       static_cast<BYTE>(kForgedIndexBlockSize / kClusterSize);
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
@@ -976,7 +978,7 @@ FakeRecord MakeSmallResidentDataRecord()
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size = static_cast<DWORD>(kSmallResidentDataContent.size());
+  attr.attr_size = gsl::narrow<DWORD>(kSmallResidentDataContent.size());
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
@@ -1229,9 +1231,9 @@ FakeRecord MakeNamedDataStreamRecord()
   const std::vector<WORD> encodedName = ToUtf16(kNamedDataStreamName);
   attr.header.name_length = kNamedDataStreamNameLength;
   attr.header.name_offset = static_cast<WORD>(sizeof(attr));
-  attr.attr_size = static_cast<DWORD>(kNamedDataStreamContent.size());
+  attr.attr_size = gsl::narrow<DWORD>(kNamedDataStreamContent.size());
   attr.attr_offset =
-      static_cast<WORD>(sizeof(attr) + encodedName.size() * sizeof(WORD));
+      gsl::narrow<WORD>(sizeof(attr) + encodedName.size() * sizeof(WORD));
   attr.header.total_size =
       static_cast<DWORD>(attr.attr_offset) + attr.attr_size;
 
@@ -1269,7 +1271,7 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mftIndex,
   root.ib_size = kFakeFileRecordSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1: the single real FILE_NAME entry this variant declares.
@@ -1281,17 +1283,17 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mftIndex,
   auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
   fn.parent_ref = parentRef;
   fn.flags = NtfsBrowser::Flag::Filename::NONE;
-  fn.name_length = static_cast<BYTE>(name.size());
+  fn.name_length = gsl::narrow<BYTE>(name.size());
   fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < fn.name_length; i++)
   {
-    fn.name[i] = static_cast<WORD>(name[i]);
+    fn.name[i] = gsl::narrow<WORD>(name[i]);
   }
 
   e1.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[fn.name_length]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[fn.name_length]) -
                         reinterpret_cast<BYTE*>(&fn));
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
 
   // Entry 2: the terminating entry - no name, no sub-node.
@@ -1299,7 +1301,7 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mftIndex,
       body + sizeof(NtfsBrowser::Attr::IndexRoot) + e1.size);
   e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   e2.stream_size = 0;
-  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+  e2.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
                               reinterpret_cast<BYTE*>(&e2));
 
   root.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
@@ -1342,7 +1344,7 @@ FakeRecord MakeRootRecordWithGapCollationSubNode()
   root.ib_size = kFakeFileRecordSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1 ("A_"): non-terminal, so it carries both a name and a sub-node
@@ -1360,14 +1362,14 @@ FakeRecord MakeRootRecordWithGapCollationSubNode()
   fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < fn1.name_length; i++)
   {
-    fn1.name[i] = static_cast<WORD>(kNonTerminalName[i]);
+    fn1.name[i] = gsl::narrow<WORD>(kNonTerminalName[i]);
   }
 
   e1.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
                         reinterpret_cast<BYTE*>(&fn1));
   e1.flags = NtfsBrowser::Flag::IndexEntry::SUBNODE;
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size +
                               sizeof(ULONGLONG));
   auto& subNodeVcn = *reinterpret_cast<ULONGLONG*>(
@@ -1379,7 +1381,7 @@ FakeRecord MakeRootRecordWithGapCollationSubNode()
       body + sizeof(NtfsBrowser::Attr::IndexRoot) + e1.size);
   e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   e2.stream_size = 0;
-  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+  e2.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
                               reinterpret_cast<BYTE*>(&e2));
 
   root.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
@@ -1461,7 +1463,7 @@ FakeRecord MakeIndexBlockChainRootRecord()
   root.ib_size = kClusterSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
@@ -1571,7 +1573,7 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
   root.ib_size = kClusterSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Sole entry: nameless, terminal, pointing at VCN 0 - the only block a
@@ -1656,7 +1658,7 @@ void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
   block.size_of_us = 3;
   block.vcn = vcn;
   block.entry_offset =
-      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+      gsl::narrow<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
                          reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
@@ -1672,14 +1674,14 @@ void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
   fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < nameLength; i++)
   {
-    fn1.name[i] = static_cast<WORD>(name[i]);
+    fn1.name[i] = gsl::narrow<WORD>(name[i]);
   }
 
   e1.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[nameLength]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[nameLength]) -
                         reinterpret_cast<BYTE*>(&fn1));
   e1.flags = NtfsBrowser::Flag::IndexEntry::LAST;
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
 
   block.total_entry_size = e1.size;
@@ -1731,7 +1733,7 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord()
   root.ib_size = kMultiClusterOrphanIndexBlockSize;
   root.clusters_per_ib = kMultiClusterOrphanClustersPerBlock;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
@@ -1783,7 +1785,7 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord()
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
   dataRun[runLen++] = 0x41;
-  dataRun[runLen++] = static_cast<BYTE>(totalClusters);
+  dataRun[runLen++] = gsl::narrow<BYTE>(totalClusters);
   {
     const DWORD lcn = kMultiClusterOrphanLcn;
     std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
@@ -1810,7 +1812,7 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image, DWORD blockIndex,
   const size_t blocksOffset =
       static_cast<size_t>(kMultiClusterOrphanLcn) * kClusterSize;
   BYTE* const blockStart =
-      image.data() + blocksOffset + static_cast<size_t>(vcn) * kClusterSize;
+      image.data() + blocksOffset + gsl::narrow<size_t>(vcn) * kClusterSize;
   auto& block = *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(blockStart);
   std::memset(&block, 0, sizeof(block));
   block.magic = kIndexBlockMagic;
@@ -1820,11 +1822,11 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image, DWORD blockIndex,
   // multi-sector generalization of the single-cluster fixtures' same trick.
   const DWORD sectors = kMultiClusterOrphanIndexBlockSize / kBytesPerSector;
   block.offset_of_us =
-      static_cast<WORD>(kMultiClusterOrphanIndexBlockSize - 2 * (1 + sectors));
-  block.size_of_us = static_cast<WORD>(1 + sectors);
+      gsl::narrow<WORD>(kMultiClusterOrphanIndexBlockSize - 2 * (1 + sectors));
+  block.size_of_us = gsl::narrow<WORD>(1 + sectors);
   block.vcn = vcn;
   block.entry_offset =
-      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+      gsl::narrow<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
                          reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
@@ -1840,14 +1842,14 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image, DWORD blockIndex,
   fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < nameLength; i++)
   {
-    fn1.name[i] = static_cast<WORD>(name[i]);
+    fn1.name[i] = gsl::narrow<WORD>(name[i]);
   }
 
   e1.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[nameLength]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[nameLength]) -
                         reinterpret_cast<BYTE*>(&fn1));
   e1.flags = NtfsBrowser::Flag::IndexEntry::LAST;
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
 
   block.total_entry_size = e1.size;
@@ -1894,9 +1896,9 @@ FakeRecord MakeDirectoryWithIndexAllocation(
   root.coll_rule = 0;
   root.ib_size = ibSize;
   root.clusters_per_ib =
-      static_cast<BYTE>(ibSize >= kClusterSize ? ibSize / kClusterSize : 1);
+      gsl::narrow<BYTE>(ibSize >= kClusterSize ? ibSize / kClusterSize : 1);
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
@@ -1946,7 +1948,7 @@ FakeRecord MakeDirectoryWithIndexAllocation(
     DWORD runLen = 0;
     // High nibble = LCN offset field size, low nibble = length field size.
     dataRun[runLen++] = 0x41;
-    dataRun[runLen++] = static_cast<BYTE>(extent.clusters);
+    dataRun[runLen++] = gsl::narrow<BYTE>(extent.clusters);
     std::memcpy(&dataRun[runLen], &extent.lcn, sizeof(extent.lcn));
     runLen += sizeof(extent.lcn);
     dataRun[runLen++] = 0x00;  // terminate the run list
@@ -1973,11 +1975,11 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image, size_t blockOffset,
   // Points the USA at the block's own last (1 + sectors) words, so PatchUS()
   // compares a still-zero range to itself, without a real fixup array.
   const DWORD sectors = blockSize / kBytesPerSector;
-  block.offset_of_us = static_cast<WORD>(blockSize - 2 * (1 + sectors));
-  block.size_of_us = static_cast<WORD>(1 + sectors);
+  block.offset_of_us = gsl::narrow<WORD>(blockSize - 2 * (1 + sectors));
+  block.size_of_us = gsl::narrow<WORD>(1 + sectors);
   block.vcn = vcn;
   block.entry_offset =
-      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+      gsl::narrow<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
                          reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
@@ -1989,18 +1991,18 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image, size_t blockOffset,
   auto& fn1 = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
   fn1.parent_ref = parentRef;
   fn1.flags = NtfsBrowser::Flag::Filename::NONE;
-  fn1.name_length = static_cast<BYTE>(name.size());
+  fn1.name_length = gsl::narrow<BYTE>(name.size());
   fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (size_t i = 0; i < name.size(); i++)
   {
-    fn1.name[i] = static_cast<WORD>(name[i]);
+    fn1.name[i] = gsl::narrow<WORD>(name[i]);
   }
 
   e1.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name.size()]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name.size()]) -
                         reinterpret_cast<BYTE*>(&fn1));
   e1.flags = NtfsBrowser::Flag::IndexEntry::LAST;
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
 
   block.total_entry_size = e1.size;
@@ -2037,9 +2039,9 @@ DWORD EncodeDataRuns(BYTE* dataRun, const std::vector<FakeDataRun>& runs)
     if (run.lcn)
     {
       dataRun[runLen++] = 0x41;
-      dataRun[runLen++] = static_cast<BYTE>(run.clusters);
+      dataRun[runLen++] = gsl::narrow<BYTE>(run.clusters);
       const LONG delta =
-          static_cast<LONG>(*run.lcn) - static_cast<LONG>(previousLcn);
+          gsl::narrow<LONG>(*run.lcn) - gsl::narrow<LONG>(previousLcn);
       std::memcpy(&dataRun[runLen], &delta, sizeof(delta));
       runLen += sizeof(delta);
       previousLcn = *run.lcn;
@@ -2047,7 +2049,7 @@ DWORD EncodeDataRuns(BYTE* dataRun, const std::vector<FakeDataRun>& runs)
     else
     {
       dataRun[runLen++] = 0x01;
-      dataRun[runLen++] = static_cast<BYTE>(run.clusters);
+      dataRun[runLen++] = gsl::narrow<BYTE>(run.clusters);
     }
   }
 
@@ -2120,7 +2122,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
   attr.header.non_resident = 1;
   const std::vector<WORD> encodedName = ToUtf16(overrides.name);
   assert(encodedName.size() <= 255 && "on-disk name_length is one byte");
-  attr.header.name_length = static_cast<BYTE>(encodedName.size());
+  attr.header.name_length = gsl::narrow<BYTE>(encodedName.size());
   attr.header.flags = overrides.flags.value_or(
       (compUnitSize != 0) ? kAttrFlagCompressed : static_cast<WORD>(0));
   attr.header.id = 0;
@@ -2144,7 +2146,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
   attr.real_size = realSize;
   attr.ini_size = overrides.ini_size.value_or(realSize);
 
-  const auto headerSize = static_cast<WORD>(
+  const auto headerSize = gsl::narrow<WORD>(
       sizeof(attr) +
       ((compUnitSize != 0) ? NtfsBrowser::Attr::kCompressedSizeFieldSize : 0));
   const size_t nameBytes = encodedName.size() * sizeof(WORD);
@@ -2153,7 +2155,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
     attr.header.name_offset = headerSize;
     std::memcpy(&record[offset + headerSize], encodedName.data(), nameBytes);
   }
-  const auto runOffset = static_cast<WORD>(headerSize + nameBytes);
+  const auto runOffset = gsl::narrow<WORD>(headerSize + nameBytes);
   attr.data_run_offset = runOffset;
 
   if (compUnitSize != 0)
@@ -2173,7 +2175,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
   }
   else
   {
-    runLen = static_cast<DWORD>(overrides.raw_runs.size());
+    runLen = gsl::narrow<DWORD>(overrides.raw_runs.size());
     std::memcpy(&record[offset + runOffset], overrides.raw_runs.data(), runLen);
   }
   attr.header.total_size =
@@ -2223,7 +2225,7 @@ WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name)
   fn.flags = name.directory ? NtfsBrowser::Flag::Filename::DIRECTORY
                             : NtfsBrowser::Flag::Filename::NONE;
   const std::vector<WORD> encodedName = ToUtf16(name.name);
-  fn.name_length = static_cast<BYTE>(encodedName.size());
+  fn.name_length = gsl::narrow<BYTE>(encodedName.size());
   fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (size_t i = 0; i < encodedName.size(); i++)
   {
@@ -2231,10 +2233,10 @@ WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name)
   }
 
   entry.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[fn.name_length]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[fn.name_length]) -
                         reinterpret_cast<BYTE*>(&fn));
   entry.size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&entry.stream) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&entry.stream) -
                         reinterpret_cast<BYTE*>(&entry) + entry.stream_size);
   return entry.size;
 }
@@ -2274,7 +2276,7 @@ FakeRecord MakeIndexAllocationDirRecord(
   root.ib_size = kFakeFileRecordSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   BYTE* const entries = body + sizeof(NtfsBrowser::Attr::IndexRoot);
@@ -2339,7 +2341,7 @@ FakeRecord MakeIndexRootDirRecordWithNames(std::span<const FakeIndexName> names)
   root.ib_size = kFakeFileRecordSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   BYTE* const entries = body + sizeof(NtfsBrowser::Attr::IndexRoot);
@@ -2353,7 +2355,7 @@ FakeRecord MakeIndexRootDirRecordWithNames(std::span<const FakeIndexName> names)
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entries + leafBytes);
   last.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   last.stream_size = 0;
-  last.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&last.stream) -
+  last.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&last.stream) -
                                 reinterpret_cast<BYTE*>(&last));
 
   root.total_entry_size = leafBytes + last.size;
@@ -2457,7 +2459,7 @@ std::vector<BYTE> MakeIndexBlockContent(std::span<const FakeIndexName> names)
   block.size_of_us = 3;
   block.vcn = 0;
   block.entry_offset =
-      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+      gsl::narrow<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
                          reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
@@ -2473,7 +2475,7 @@ std::vector<BYTE> MakeIndexBlockContent(std::span<const FakeIndexName> names)
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body + leafBytes);
   last.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   last.stream_size = 0;
-  last.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&last.stream) -
+  last.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&last.stream) -
                                 reinterpret_cast<BYTE*>(&last));
 
   block.total_entry_size = leafBytes + last.size;
@@ -2500,7 +2502,7 @@ constexpr DWORD kAttrAlignment = 8;
 // Rounds an attribute's size up to kAttrAlignment.
 constexpr DWORD AlignAttrSize(size_t size)
 {
-  return static_cast<DWORD>((size + kAttrAlignment - 1) &
+  return gsl::narrow<DWORD>((size + kAttrAlignment - 1) &
                             ~(kAttrAlignment - 1));
 }
 
@@ -2532,7 +2534,7 @@ DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
   attr.header.id = 0;
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.attr_size =
-      static_cast<DWORD>(offsetof(NtfsBrowser::Attr::Filename, name) +
+      gsl::narrow<DWORD>(offsetof(NtfsBrowser::Attr::Filename, name) +
                          name.name.size() * sizeof(WORD));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
@@ -2544,11 +2546,11 @@ DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
   fn.flags = (directory ? NtfsBrowser::Flag::Filename::DIRECTORY
                         : NtfsBrowser::Flag::Filename::NONE) |
              name.extra_flags;
-  fn.name_length = static_cast<BYTE>(name.name.size());
+  fn.name_length = gsl::narrow<BYTE>(name.name.size());
   fn.name_space = name.name_space;
   for (size_t i = 0; i < name.name.size(); i++)
   {
-    fn.name[i] = static_cast<WORD>(name.name[i]);
+    fn.name[i] = gsl::narrow<WORD>(name.name[i]);
   }
 
   return attr.header.total_size;
@@ -2753,7 +2755,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDirectory()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -2881,7 +2883,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiTypeAttributeListDirectory()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -2900,7 +2902,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedAttributeListDirectory()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -2999,7 +3001,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -3019,7 +3021,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListOffsetMismatch()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -3038,7 +3040,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -3060,7 +3062,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -3254,7 +3256,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithIndexRootVariants()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -3314,7 +3316,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode()
   block.size_of_us = 3;
   block.vcn = 0;
   block.entry_offset =
-      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+      gsl::narrow<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
                          reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
@@ -3332,20 +3334,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode()
   fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < fn1.name_length; i++)
   {
-    fn1.name[i] = static_cast<WORD>(kGapCollationSearchName[i]);
+    fn1.name[i] = gsl::narrow<WORD>(kGapCollationSearchName[i]);
   }
 
   e1.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
                         reinterpret_cast<BYTE*>(&fn1));
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
 
   // Entry 2: the terminating entry - no name, no sub-node.
   auto& e2 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body + e1.size);
   e2.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   e2.stream_size = 0;
-  e2.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
+  e2.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e2.stream) -
                               reinterpret_cast<BYTE*>(&e2));
 
   block.total_entry_size = static_cast<DWORD>(e1.size) + e2.size;
@@ -3381,15 +3383,15 @@ std::vector<BYTE> MakeNonAsciiUpCaseBytes()
   std::vector<BYTE> bytes(kUpCaseUnitCount * sizeof(WORD));
   for (size_t unit = 0; unit < kUpCaseUnitCount; unit++)
   {
-    auto upper = static_cast<WORD>(unit);
+    auto upper = gsl::narrow<WORD>(unit);
     if (unit >= L'a' && unit <= L'z')
     {
-      upper = static_cast<WORD>(unit - kCaseDistance);
+      upper = gsl::narrow<WORD>(unit - kCaseDistance);
     }
     else if (unit >= kLatin1LowerFirst && unit <= kLatin1LowerLast &&
              unit != kDivisionSign)
     {
-      upper = static_cast<WORD>(unit - kCaseDistance);
+      upper = gsl::narrow<WORD>(unit - kCaseDistance);
     }
     else if (unit == kYDiaeresis)
     {
@@ -3445,7 +3447,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout layout,
     const std::vector<BYTE> table = MakeNonAsciiUpCaseBytes();
     const std::vector<FakeDataRun> runs{
         {kNonAsciiUpCaseLcn,
-         static_cast<DWORD>(table.size() / kFakeClusterSize)}};
+         gsl::narrow<DWORD>(table.size() / kFakeClusterSize)}};
 
     FakeRecord upcase =
         MakeRecordHeader(kAttrOffset, NtfsBrowser::Flag::FileRecord::INUSE);
@@ -3500,7 +3502,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
     block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
     block.size_of_us = 3;
     block.vcn = vcn;
-    block.entry_offset = static_cast<DWORD>(
+    block.entry_offset = gsl::narrow<DWORD>(
         (blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
         reinterpret_cast<BYTE*>(&block.entry_offset));
 
@@ -3537,15 +3539,15 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
       fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
       for (BYTE i = 0; i < fn1.name_length; i++)
       {
-        fn1.name[i] = static_cast<WORD>(kIndexBlockChainLeafName[i]);
+        fn1.name[i] = gsl::narrow<WORD>(kIndexBlockChainLeafName[i]);
       }
 
-      e1.stream_size = static_cast<WORD>(
+      e1.stream_size = gsl::narrow<WORD>(
           reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
           reinterpret_cast<BYTE*>(&fn1));
       e1.flags = NtfsBrowser::Flag::IndexEntry::LAST;
       e1.size =
-          static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+          gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                             reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
     }
 
@@ -3836,7 +3838,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTree()
   const auto putRecord = [&](ULONGLONG idx, const FakeRecord& record)
   {
     const size_t offset = mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
-                                        static_cast<size_t>(idx);
+                                        gsl::narrow<size_t>(idx);
     std::memcpy(image.data() + offset, record.data(), record.size());
   };
 
@@ -3957,7 +3959,7 @@ std::vector<BYTE> MakeUncompressedLznt1Chunk(std::span<const BYTE> payload)
   // 11-0 == payload size - 1 (the whole chunk's size, header included, minus
   // three) - [MS-XCA] section 2.5.1.2.
   const auto header =
-      static_cast<WORD>(0x3000U | static_cast<unsigned>(payload.size() - 1));
+      gsl::narrow<WORD>(0x3000U | gsl::narrow<unsigned>(payload.size() - 1));
 
   std::vector<BYTE> chunk;
   chunk.reserve(payload.size() + 2);
@@ -4297,11 +4299,11 @@ DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
   attr.header.non_resident = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.header.name_length = static_cast<BYTE>(encodedName.size());
+  attr.header.name_length = gsl::narrow<BYTE>(encodedName.size());
   attr.header.name_offset = static_cast<WORD>(sizeof(attr));
-  attr.attr_size = static_cast<DWORD>(body.size());
+  attr.attr_size = gsl::narrow<DWORD>(body.size());
   attr.attr_offset =
-      static_cast<WORD>(sizeof(attr) + (encodedName.size() * sizeof(WORD)));
+      gsl::narrow<WORD>(sizeof(attr) + (encodedName.size() * sizeof(WORD)));
   attr.header.total_size =
       static_cast<DWORD>(attr.attr_offset) + attr.attr_size;
 
@@ -4355,7 +4357,7 @@ std::vector<BYTE>
     {
       efsRuns.push_back(
           {kFakeEfsStreamLcn,
-           static_cast<DWORD>((file.efs_stream.size() + kClusterSize - 1) /
+           gsl::narrow<DWORD>((file.efs_stream.size() + kClusterSize - 1) /
                               kClusterSize)});
       offset += WriteNonResidentAttr(
           record, offset, AttrType::LOGGED_UTILITY_STREAM, 0,
@@ -4402,7 +4404,7 @@ FakeRecord MakeResidentEncryptedDataRecord()
   attr.header.name_length = 0;
   attr.header.flags = NtfsBrowser::Efs::kAttrFlagEncrypted;
   attr.header.id = 0;
-  attr.attr_size = static_cast<DWORD>(kResidentEncryptedDataContent.size());
+  attr.attr_size = gsl::narrow<DWORD>(kResidentEncryptedDataContent.size());
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
@@ -4737,7 +4739,7 @@ FakeRecord MakeIndexAllocationDirRecordWithOverflowingLcn(DWORD realRunClusters)
   root.ib_size = kFakeFileRecordSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
@@ -4793,7 +4795,7 @@ FakeRecord MakeIndexAllocationDirRecordWithOverflowingLcn(DWORD realRunClusters)
   // Real run: header 0x81 (8-byte LCN-offset field), an 8-byte LE delta of
   // kOverflowingLcn, covering realRunClusters clusters.
   dataRun[runLen++] = 0x81;
-  dataRun[runLen++] = static_cast<BYTE>(realRunClusters);
+  dataRun[runLen++] = gsl::narrow<BYTE>(realRunClusters);
   {
     const auto delta = static_cast<LONGLONG>(kOverflowingLcn);
     std::memcpy(&dataRun[runLen], &delta, sizeof(delta));
@@ -4805,7 +4807,7 @@ FakeRecord MakeIndexAllocationDirRecordWithOverflowingLcn(DWORD realRunClusters)
     // byte 0x01: 1-byte length field, 0-byte offset field).
     dataRun[runLen++] = 0x01;
     dataRun[runLen++] =
-        static_cast<BYTE>(kCompressionUnitClusters - realRunClusters);
+        gsl::narrow<BYTE>(kCompressionUnitClusters - realRunClusters);
   }
   dataRun[runLen++] = 0x00;  // terminate the run list
 
@@ -5024,7 +5026,7 @@ FakeRecord MakeBadIndexBlockEntryRootRecord()
   root.ib_size = kClusterSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1: nameless, non-terminal subnode pointer to VCN 0 (the damaged
@@ -5117,15 +5119,15 @@ WORD WriteBadIndexBlockLeafEntry(BYTE* entryPtr, ULONGLONG mftRef,
   fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < nameLength; i++)
   {
-    fn.name[i] = static_cast<WORD>(name[i]);
+    fn.name[i] = gsl::narrow<WORD>(name[i]);
   }
 
   e.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn.name[nameLength]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[nameLength]) -
                         reinterpret_cast<BYTE*>(&fn));
   e.flags = last ? NtfsBrowser::Flag::IndexEntry::LAST
                  : NtfsBrowser::Flag::IndexEntry{};
-  e.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e.stream) -
+  e.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e.stream) -
                              reinterpret_cast<BYTE*>(&e) + e.stream_size);
   return e.size;
 }
@@ -5148,7 +5150,7 @@ NtfsBrowser::Data::IndexBlock&
   block.size_of_us = 3;
   block.vcn = vcn;
   block.entry_offset =
-      static_cast<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
+      gsl::narrow<DWORD>((blockStart + sizeof(NtfsBrowser::Data::IndexBlock)) -
                          reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
   return block;
@@ -5258,7 +5260,7 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord()
   root.ib_size = kClusterSize;
   root.clusters_per_ib = 1;
   root.entry_offset =
-      static_cast<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
+      gsl::narrow<DWORD>((body + sizeof(NtfsBrowser::Attr::IndexRoot)) -
                          reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
@@ -5278,16 +5280,16 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord()
   constexpr BYTE kRealNameLength = 3;
   for (BYTE i = 0; i < kRealNameLength; i++)
   {
-    fn1.name[i] = static_cast<WORD>(kRealName[i]);
+    fn1.name[i] = gsl::narrow<WORD>(kRealName[i]);
   }
   // Claims far more characters than the entry has room for.
   fn1.name_length = 200;
 
   e1.stream_size =
-      static_cast<WORD>(reinterpret_cast<BYTE*>(&fn1.name[kRealNameLength]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[kRealNameLength]) -
                         reinterpret_cast<BYTE*>(&fn1));
   e1.flags = NtfsBrowser::Flag::IndexEntry::LAST;
-  e1.size = static_cast<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
+  e1.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&e1.stream) -
                               reinterpret_cast<BYTE*>(&e1) + e1.stream_size);
 
   root.total_entry_size = e1.size;
@@ -5366,7 +5368,7 @@ std::filesystem::path WriteFakeNtfsImage()
 
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   out.write(reinterpret_cast<const char*>(image.data()),
-            static_cast<std::streamsize>(image.size()));
+            gsl::narrow<std::streamsize>(image.size()));
 
   return path;
 }
@@ -5418,7 +5420,7 @@ DWORD WriteLifetimeResidentList(FakeRecord& record, DWORD offset,
   attr.header.flags = 0;
   attr.header.id = 0;
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
-  attr.attr_size = static_cast<DWORD>(kListEntrySize * entryCount);
+  attr.attr_size = gsl::narrow<DWORD>(kListEntrySize * entryCount);
   attr.header.total_size = static_cast<DWORD>(sizeof(attr)) + attr.attr_size;
 
   for (size_t i = 0; i < entryCount; i++)
