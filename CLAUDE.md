@@ -88,7 +88,7 @@ CI enforces `clang-format` (config in [.clang-format](.clang-format)) and `gerse
 ```
 uv run bash ./.github/scripts/format.sh
 ```
-`.clang-tidy` enables nearly all checks (`Checks: '*'`, minus a short exclusion list), with `WarningsAsErrors: '*'`. CI ([.github/workflows/clang-tidy.yml](.github/workflows/clang-tidy.yml)) runs it on Ubuntu, over the Linux configuration's `compile_commands.json`. `#ifdef _WIN32` code and the Windows-only targets are therefore never linted in CI. A local run needs a `compile_commands.json`, which the Visual Studio generator does not write: configure a preset with `-G Ninja` from an MSVC developer environment, then `clang-tidy -p build/static <file>`.
+`.clang-tidy` enables nearly all checks (`Checks: '*'`, minus a short exclusion list), with `WarningsAsErrors: '*'`. CI ([.github/workflows/clang-tidy.yml](.github/workflows/clang-tidy.yml)) runs it on Ubuntu, only when triggered manually (`workflow_dispatch`), over the Linux configuration's `compile_commands.json`. `#ifdef _WIN32` code and the Windows-only targets are therefore never linted in CI. A local run needs a `compile_commands.json`, which the Visual Studio generator does not write: configure a preset with `-G Ninja` from an MSVC developer environment, then `clang-tidy -p build/static <file>`.
 
 ## Writing style
 
