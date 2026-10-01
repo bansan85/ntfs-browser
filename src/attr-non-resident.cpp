@@ -779,7 +779,8 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
     ULONGLONG alignedSize = alignedClusters * this->GetClusterSize();
 
     std::optional<ULONGLONG> lenc =
-        ReadVirtualClusters(start_vcn, alignedClusters, {buf, alignedSize});
+        ReadVirtualClusters(start_vcn, alignedClusters,
+                            {buf, gsl::narrow<size_t>(alignedSize)});
     if (!lenc || *lenc != alignedSize)
     {
       return {};
@@ -830,7 +831,8 @@ std::optional<ULONGLONG>
     return {};
   }
 
-  const ULONGLONG wanted = (std::min)(buffer.size(), realSize - offset);
+  const ULONGLONG wanted =
+      (std::min<ULONGLONG>)(buffer.size(), realSize - offset);
   const ULONGLONG initSize = (std::min)(attr_header_nr_.ini_size, realSize);
   const ULONGLONG initialized =
       (offset < initSize) ? (std::min)(wanted, initSize - offset) : 0;

@@ -31,7 +31,7 @@ AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
   bitmap_buf_.resize(bitmap_size_, 0);
 
   std::optional<ULONGLONG> len =
-      this->ReadData(0, {bitmap_buf_.data(), bitmap_size_});
+      this->ReadData(0, {bitmap_buf_.data(), bitmap_buf_.size()});
   if (!len || *len != bitmap_size_)
   {
     bitmap_buf_.clear();
