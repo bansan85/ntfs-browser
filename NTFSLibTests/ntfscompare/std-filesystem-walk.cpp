@@ -20,6 +20,10 @@ namespace
 
 ULONGLONG FileClockToUtcTicks(std::filesystem::file_time_type ft) noexcept
 {
+#ifdef _WIN32
+  // MSVC's file clock counts 100 ns ticks since 1601-01-01: already FILETIME.
+  return static_cast<ULONGLONG>(ft.time_since_epoch().count());
+#else
   const auto sys = std::chrono::file_clock::to_sys(ft);
   const auto sinceEpoch = sys.time_since_epoch();
   const auto seconds =
@@ -30,6 +34,7 @@ ULONGLONG FileClockToUtcTicks(std::filesystem::file_time_type ft) noexcept
   return (static_cast<ULONGLONG>(seconds.count()) + kUnixEpochOffsetSeconds) *
              kTicksPerSecond +
          static_cast<ULONGLONG>(subSecondTicks.count());
+#endif
 }
 
 // The relative path key every method shares: "/"-separated, root-relative.
