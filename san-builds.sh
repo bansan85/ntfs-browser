@@ -2,7 +2,7 @@
 # Sanitizer build matrix for ntfs-browser (clang 23, Ubuntu 24.04 / WSL).
 #
 # usage: san-builds.sh [configure|build|test|all] [name...]
-#   no name = every build. Names: asan asan-shared ubsan tsan msan tysan cfi scudo hwasan nsan
+#   no name = every build. Names: asan asan-shared asan-ptr ubsan tsan msan tysan cfi scudo hwasan nsan
 #
 # msan needs a libc++ built with -DLLVM_USE_SANITIZER=MemoryWithOrigins (libstdc++ and
 # the packaged libc++ are not instrumented and give false positives). The first msan
@@ -29,16 +29,29 @@ LIBCXX_MSAN=${LIBCXX_MSAN:-$ROOT/libcxx-msan}
 JOBS=${JOBS:-$(nproc)}
 
 IGNORELIST=$ROOT/ubsan-3rdparty.ignore
+ASAN_IGNORELIST=$ROOT/asan-3rdparty.ignore
 LOGS=$ROOT/logs
-ALL_NAMES=(asan asan-shared ubsan tsan msan tysan cfi scudo hwasan nsan)
+ALL_NAMES=(asan asan-shared asan-ptr ubsan tsan msan tysan cfi scudo hwasan nsan)
 
 # -O1 keeps stack traces readable; TySan needs optimisation to emit TBAA.
 BASE_FLAGS="-O1 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls"
 
-ASAN_FLAGS="-fsanitize=address,pointer-compare,pointer-subtract,undefined,float-divide-by-zero,local-bounds,vptr -fsanitize-address-use-after-return=always -fno-sanitize-recover=all -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_SANITIZE_STD_ALLOCATOR -D_GLIBCXX_SANITIZE_VECTOR"
+ASAN_FLAGS="-fsanitize=address,undefined,float-divide-by-zero,local-bounds,vptr -fsanitize-address-use-after-return=always -fno-sanitize-recover=all -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_SANITIZE_STD_ALLOCATOR -D_GLIBCXX_SANITIZE_VECTOR"
+
+# asan-ptr adds pointer-compare/pointer-subtract, which give many invalid-pointer-pair false
+# positives on optimised IR (the second pointer is a compiler-made constant such as
+# 0xfffffffffffffff4). They are suppressed file by file; add new offenders as they show up.
+# The plain asan builds do not use pointer-compare/subtract and need no ignorelist.
+ASAN_PTR_FLAGS="-fsanitize=pointer-compare,pointer-subtract -fsanitize-ignorelist=$ASAN_IGNORELIST"
 
 mkdir -p "$ROOT" "$LOGS"
 printf 'src:*/3rdparty/*\n' >"$IGNORELIST"
+cat >"$ASAN_IGNORELIST" <<'EOF'
+src:*/3rdparty/cryptopp/cpu.cpp
+src:*/3rdparty/cryptopp/gf2n.cpp
+src:*/bits/basic_string.h
+src:*/3rdparty/spdlog/include/spdlog/pattern_formatter-inl.h
+EOF
 
 export ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-23
 export ASAN_OPTIONS=detect_stack_use_after_return=1:strict_string_checks=1:detect_invalid_pointer_pairs=2:check_initialization_order=1:strict_init_order=1:detect_odr_violation=2:alloc_dealloc_mismatch=1:detect_leaks=1:halt_on_error=1
@@ -58,6 +71,7 @@ select_build() {
       F=$ASAN_FLAGS
       EXTRA=(-DBUILD_SHARED_LIBS=ON)
       ;;
+    asan-ptr) F="$ASAN_FLAGS $ASAN_PTR_FLAGS" ;;
     ubsan)
       F="-fsanitize=undefined,float-divide-by-zero,local-bounds,vptr,integer,implicit-conversion -fno-sanitize-recover=all -fsanitize-ignorelist=$IGNORELIST -D_GLIBCXX_DEBUG"
       ;;
