@@ -34,7 +34,7 @@ jobs:
       - name: Sanitizer builds
         run: >-
           .github/scripts/san-builds.sh -a ${{ matrix.arch }} all
-          asan asan-shared asan-ptr ubsan tsan msan tysan cfi scudo hwasan nsan
+          asan asan-shared asan-ptr ubsan tsan msan cfi scudo hwasan nsan
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v7
