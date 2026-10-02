@@ -20,7 +20,7 @@ namespace
 
 ULONGLONG FileClockToUtcTicks(std::filesystem::file_time_type ft) noexcept
 {
-  const auto sys = std::chrono::clock_cast<std::chrono::system_clock>(ft);
+  const auto sys = std::chrono::file_clock::to_sys(ft);
   const auto sinceEpoch = sys.time_since_epoch();
   const auto seconds =
       std::chrono::duration_cast<std::chrono::seconds>(sinceEpoch);

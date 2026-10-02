@@ -2,7 +2,9 @@
 # Sanitizer build matrix for ntfs-browser (clang 23, Ubuntu 24.04 / WSL).
 #
 # usage: san-builds.sh [configure|build|test|all] [name...]
-#   no name = every build. Names: asan asan-shared asan-ptr ubsan tsan msan tysan cfi scudo hwasan nsan
+#   no name = every build but tysan. Names: asan asan-shared asan-ptr ubsan tsan msan cfi scudo hwasan nsan
+#   tysan (-fsanitize=type) is experimental and noisy on C++ with the STL (std::array and frozen
+#   tables, structs overlaid on byte buffers): it only runs when named, eg. san-builds.sh all tysan
 #
 # msan needs a libc++ built with -DLLVM_USE_SANITIZER=MemoryWithOrigins (libstdc++ and
 # the packaged libc++ are not instrumented and give false positives). The first msan
@@ -31,7 +33,7 @@ JOBS=${JOBS:-$(nproc)}
 IGNORELIST=$ROOT/ubsan-3rdparty.ignore
 ASAN_IGNORELIST=$ROOT/asan-3rdparty.ignore
 LOGS=$ROOT/logs
-ALL_NAMES=(asan asan-shared asan-ptr ubsan tsan msan tysan cfi scudo hwasan nsan)
+ALL_NAMES=(asan asan-shared asan-ptr ubsan tsan msan cfi scudo hwasan nsan)
 
 # -O1 keeps stack traces readable; TySan needs optimisation to emit TBAA.
 BASE_FLAGS="-O1 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls"
@@ -69,6 +71,7 @@ export HWASAN_OPTIONS=halt_on_error=1
 # Sets F (sanitizer flags) and EXTRA (extra cmake args) for a build name.
 select_build() {
   F=""
+  LF=""
   EXTRA=()
   case $1 in
     asan) F=$ASAN_FLAGS ;;
@@ -82,7 +85,8 @@ select_build() {
       ;;
     tsan) F="-fsanitize=thread" ;;
     msan)
-      F="-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-memory-use-after-dtor -fno-sanitize-recover=all -stdlib=libc++ -nostdinc++ -isystem $LIBCXX_MSAN/include/c++/v1 -L$LIBCXX_MSAN/lib -Wl,-rpath,$LIBCXX_MSAN/lib -lc++abi"
+      F="-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-memory-use-after-dtor -fno-sanitize-recover=all -stdlib=libc++ -nostdinc++ -isystem $LIBCXX_MSAN/include/c++/v1"
+      LF="$F -L$LIBCXX_MSAN/lib -Wl,-rpath,$LIBCXX_MSAN/lib -lc++abi"
       # Crypto++ asm is not instrumented: it would only produce false positives.
       EXTRA=(-DCRYPTOPP_DISABLE_ASM=ON)
       ;;
@@ -113,7 +117,7 @@ ensure_libcxx_msan() {
     -DLLVM_HOST_TRIPLE=x86_64-unknown-linux-gnu -DCMAKE_INSTALL_PREFIX="$LIBCXX_MSAN" \
     -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" -DLLVM_USE_SANITIZER=MemoryWithOrigins \
     -DLLVM_INCLUDE_TESTS=OFF -DLIBCXX_INCLUDE_TESTS=OFF -DLIBCXX_INCLUDE_BENCHMARKS=OFF \
-    -DLIBCXXABI_INCLUDE_TESTS=OFF || return 1
+    -DLIBCXXABI_INCLUDE_TESTS=OFF -DLIBCXXABI_USE_LLVM_UNWINDER=OFF || return 1
   ninja -C "$ROOT/libcxx-msan-build" install-cxx install-cxxabi install-cxx-headers || return 1
   [ -d "$LIBCXX_MSAN/include/c++/v1" ]
 }
@@ -129,7 +133,7 @@ do_configure() {
     -DNTFS_BROWSER_ENABLE_TESTING=ON -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON \
     -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON \
     -DCMAKE_C_FLAGS="$BASE_FLAGS $F" -DCMAKE_CXX_FLAGS="$BASE_FLAGS $F" \
-    -DCMAKE_EXE_LINKER_FLAGS="$F" -DCMAKE_SHARED_LINKER_FLAGS="$F" "${EXTRA[@]}"
+    -DCMAKE_EXE_LINKER_FLAGS="${LF:-$F}" -DCMAKE_SHARED_LINKER_FLAGS="${LF:-$F}" "${EXTRA[@]}"
 }
 
 do_build() { cmake --build "$ROOT/$1" --parallel "$JOBS"; }
