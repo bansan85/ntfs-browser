@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Sanitizer build matrix for ntfs-browser (clang 23, Ubuntu 24.04 / WSL).
 #
-# usage: san-builds.sh [configure|build|test|all] [name...]
+# usage: san-builds.sh [-a x86|x64] [configure|build|test|all] [name...]
+#   -a, --arch  target architecture (default x64, or $ARCH). x86 builds with -m32 into
+#               $ROOT/<name>-x86 (x64 stays in $ROOT/<name>). Needs the 32-bit libs:
+#               sudo apt install gcc-multilib g++-multilib
+#               tsan msan tysan hwasan nsan have no 32-bit x86 runtime and are skipped.
 #   no name = every build but tysan. Names: asan asan-shared asan-ptr ubsan tsan msan cfi scudo hwasan nsan
 #   tysan (-fsanitize=type) is experimental and noisy on C++ with the STL (std::array and frozen
 #   tables, structs overlaid on byte buffers): it only runs when named, eg. san-builds.sh all tysan
@@ -18,6 +22,7 @@
 #   ROOT         build + log root     (default ~/ntfs-san-builds, keep it on ext4)
 #   LLVM_SRC     llvm-project checkout, msan only (default ~/llvm-project)
 #   LIBCXX_MSAN  install dir of the MSan-instrumented libc++ (default $ROOT/libcxx-msan)
+#   ARCH         x64 or x86           (default x64)
 #   JOBS         parallel jobs        (default nproc)
 #
 # prerequisites: sudo apt install clang-23 lld-23 llvm-23 libclang-rt-23-dev ninja-build cmake
@@ -29,6 +34,7 @@ ROOT=${ROOT:-$HOME/ntfs-san-builds}
 LLVM_SRC=${LLVM_SRC:-$HOME/llvm-project}
 LIBCXX_MSAN=${LIBCXX_MSAN:-$ROOT/libcxx-msan}
 JOBS=${JOBS:-$(nproc)}
+ARCH=${ARCH:-x64}
 
 IGNORELIST=$ROOT/ubsan-3rdparty.ignore
 ASAN_IGNORELIST=$ROOT/asan-3rdparty.ignore
@@ -75,6 +81,13 @@ export HWASAN_OPTIONS=halt_on_error=1
 
 # Sets F (sanitizer flags) and EXTRA (extra cmake args) for a build name.
 select_build() {
+  if [ "$ARCH" = x86 ]; then
+    case $1 in tsan | msan | tysan | hwasan | nsan)
+      echo "$1: no 32-bit x86 sanitizer runtime" >&2
+      return 2
+      ;;
+    esac
+  fi
   F=""
   LF=""
   EXTRA=()
@@ -129,33 +142,69 @@ ensure_libcxx_msan() {
 
 do_configure() {
   local n=$1
+  select_build "$n" || return $?
   [ "$n" = msan ] && { ensure_libcxx_msan || return 1; }
-  select_build "$n" || return 1
-  cmake -S "$REPO" -B "$ROOT/$n" -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+  local arch_f="" arch_cmake=()
+  if [ "$ARCH" = x86 ]; then
+    arch_f="-m32 -march=i686"
+    arch_cmake=(-DCMAKE_SYSTEM_PROCESSOR=i686)
+  fi
+  F="$arch_f $F"
+  [ -n "${LF:-}" ] && LF="$arch_f $LF"
+  cmake -S "$REPO" -B "$(bdir "$n")" -G Ninja -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23 \
     -DCMAKE_AR=/usr/bin/llvm-ar-23 -DCMAKE_AS=/usr/bin/llvm-as-23 -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-23 \
     -DCMAKE_LINKER_TYPE=LLD -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DNTFS_BROWSER_ENABLE_TESTING=ON -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON \
     -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON \
     -DCMAKE_C_FLAGS="$BASE_FLAGS $F" -DCMAKE_CXX_FLAGS="$BASE_FLAGS $F" \
-    -DCMAKE_EXE_LINKER_FLAGS="${LF:-$F}" -DCMAKE_SHARED_LINKER_FLAGS="${LF:-$F}" "${EXTRA[@]}"
+    -DCMAKE_EXE_LINKER_FLAGS="${LF:-$F}" -DCMAKE_SHARED_LINKER_FLAGS="${LF:-$F}" "${arch_cmake[@]}" "${EXTRA[@]}"
 }
 
-do_build() { cmake --build "$ROOT/$1" --parallel "$JOBS"; }
+do_build() { cmake --build "$(bdir "$1")" --parallel "$JOBS"; }
 
-do_test() { ctest --test-dir "$ROOT/$1" --output-on-failure -j "$JOBS"; }
+do_test() { ctest --test-dir "$(bdir "$1")" --output-on-failure -j "$JOBS"; }
+
+# Build id / directory: x64 keeps the historical name, x86 gets a suffix.
+bid() { [ "$ARCH" = x86 ] && echo "$1-x86" || echo "$1"; }
+bdir() { echo "$ROOT/$(bid "$1")"; }
 
 # Runs one step for one build, logging to $LOGS and recording the result.
 run_step() {
-  local step=$1 n=$2 log="$LOGS/$2.$1.log"
+  local step=$1 n=$2 log
+  log="$LOGS/$(bid "$n").$step.log"
   echo "=== $n: $step (log: $log)"
-  if "do_$step" "$n" >"$log" 2>&1; then
+  "do_$step" "$n" >"$log" 2>&1
+  local rc=$?
+  if [ $rc -eq 0 ]; then
     RESULTS+=("OK    $n $step")
+  elif [ $rc -eq 2 ]; then
+    RESULTS+=("SKIP  $n $step  ($ARCH unsupported)")
+    return 1
   else
     RESULTS+=("FAIL  $n $step  -> $log")
     return 1
   fi
 }
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    -a | --arch)
+      ARCH=${2:-}
+      shift 2 || { echo "usage: $0 [-a x86|x64] ..." >&2; exit 2; }
+      ;;
+    --arch=*)
+      ARCH=${1#*=}
+      shift
+      ;;
+    *) break ;;
+  esac
+done
+case $ARCH in x86 | x64) ;; *)
+  echo "unknown arch: $ARCH (x86 or x64)" >&2
+  exit 2
+  ;;
+esac
 
 STEP=${1:-all}
 shift || true
@@ -163,7 +212,7 @@ NAMES=("$@")
 [ ${#NAMES[@]} -eq 0 ] && NAMES=("${ALL_NAMES[@]}")
 
 case $STEP in configure | build | test | all) ;; *)
-  echo "usage: $0 [configure|build|test|all] [name...]" >&2
+  echo "usage: $0 [-a x86|x64] [configure|build|test|all] [name...]" >&2
   exit 2
   ;;
 esac
