@@ -32,7 +32,7 @@ namespace
 // combination of resident/non-resident, allocated/deleted, and plain/
 // alternate-data-stream content.
 const std::filesystem::path kDfttImage =
-    NtfsBrowserTests::kDfttDir / "3-kwsrch-ntfs" / "ntfs-img-kw-1.dd";
+    NtfsBrowserTests::DfttDir() / "3-kwsrch-ntfs" / "ntfs-img-kw-1.dd";
 
 // One DFTT test #3 search-term case, addressed by its own MFT record number
 // instead of by path (index.html gives the search term and the file it

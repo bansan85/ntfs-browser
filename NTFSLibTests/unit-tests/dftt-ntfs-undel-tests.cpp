@@ -37,7 +37,7 @@ namespace
 // system with eight deleted files, two deleted directories, and a deleted
 // alternate data stream, none of which were touched afterwards.
 const std::filesystem::path kDfttImage =
-    NtfsBrowserTests::kDfttDir / "7-undel-ntfs" / "7-ntfs-undel.dd";
+    NtfsBrowserTests::DfttDir() / "7-undel-ntfs" / "7-ntfs-undel.dd";
 
 // One DFTT test #7 file, addressed directly by its own MFT record number
 // instead of by path: index.html documents that dir3, the parent of

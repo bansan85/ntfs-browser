@@ -46,7 +46,7 @@ namespace
 // The "ntfs-samples" forensic test image corpus, documented in that repo's
 // ReadMe.md. Each image is checked in there as a gzip/rar archive, too large
 // to check into this one too.
-const std::filesystem::path& kSamplesDir = NtfsBrowserTests::kNtfsSamplesDir;
+const std::filesystem::path& kSamplesDir = NtfsBrowserTests::NtfsSamplesDir();
 const std::filesystem::path kPtrnImage = kSamplesDir / "ntfs-ptrn.raw";
 const std::filesystem::path kRamslackImage = kSamplesDir / "ntfs-ramslack.raw";
 const std::filesystem::path kLastaccessImage =
@@ -449,7 +449,7 @@ TEST_CASE(
     "(ntfs_extremely_fragmented_mft.raw)",
     "[ntfs-samples][integration][fragmented-mft]")
 {
-  const std::filesystem::path& image = NtfsBrowserTests::kFragmentedMftImage;
+  const std::filesystem::path& image = NtfsBrowserTests::FragmentedMftImage();
   if (!std::filesystem::exists(image))
   {
     SKIP("ntfs_extremely_fragmented_mft.raw not present: " << image.string());

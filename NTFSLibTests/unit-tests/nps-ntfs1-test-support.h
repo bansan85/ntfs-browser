@@ -30,7 +30,7 @@ namespace NtfsBrowserTests
 // Converted from the corpus's published .E01 to raw with ewfexport (see
 // narrative.txt and ntfs1-gen2.xml alongside the source images).
 inline const std::filesystem::path kNtfs1Image =
-    kNpsNtfs1Dir / "ntfs1-gen2.raw";
+    NpsNtfs1Dir() / "ntfs1-gen2.raw";
 
 // One of the five files RAW/, Compressed/, and Encrypted/ all hold. size and
 // md5 are the plaintext's, from ntfs1-gen2.xml (the fiwalk ground-truth

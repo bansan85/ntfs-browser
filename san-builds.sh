@@ -32,6 +32,7 @@ JOBS=${JOBS:-$(nproc)}
 
 IGNORELIST=$ROOT/ubsan-3rdparty.ignore
 ASAN_IGNORELIST=$ROOT/asan-3rdparty.ignore
+CFI_IGNORELIST=$ROOT/cfi.ignore
 LOGS=$ROOT/logs
 ALL_NAMES=(asan asan-shared asan-ptr ubsan tsan msan cfi scudo hwasan nsan)
 
@@ -58,6 +59,10 @@ src:*/include/c++/*
 EOF
 cat >"$ASAN_IGNORELIST" <<'EOF'
 src:*/bits/stl_function.h
+EOF
+# libstdc++'s make_shared/allocate_shared cast raw storage to T* before the vtable is set.
+cat >"$CFI_IGNORELIST" <<'EOF'
+src:*/include/c++/*
 EOF
 
 export ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-23
@@ -92,7 +97,7 @@ select_build() {
       ;;
     tysan) F="-fsanitize=type" ;;
     cfi)
-      F="-flto=thin -fvisibility=hidden -fsanitize=cfi,cfi-cast-strict -fno-sanitize-trap=cfi"
+      F="-flto=thin -fvisibility=hidden -fsanitize=cfi,cfi-cast-strict -fno-sanitize-trap=cfi -fsanitize-ignorelist=$CFI_IGNORELIST"
       EXTRA=(-DBUILD_SHARED_LIBS=OFF)
       ;;
     scudo) F="-fsanitize=scudo" ;;

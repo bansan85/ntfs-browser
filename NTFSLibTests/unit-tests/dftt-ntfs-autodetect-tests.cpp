@@ -32,7 +32,7 @@ namespace
 // one (Ext2, UFS2 or UFS1) formatted over it afterwards. Both remain
 // mountable.
 const std::filesystem::path kAutodetectDir =
-    NtfsBrowserTests::kDfttDir / "10-ntfs-autodetect";
+    NtfsBrowserTests::DfttDir() / "10-ntfs-autodetect";
 
 // Opens a DFTT autodetect partition image and confirms the library reads its
 // NTFS side correctly: the root directory's own ntfs.txt is found, and its
