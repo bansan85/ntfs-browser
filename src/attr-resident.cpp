@@ -116,9 +116,13 @@ AttrResidentFullCache::AttrResidentFullCache(
   ValidateResidentBounds(header);
 
   body_.resize(header.attr_size);
-  memcpy(body_.data(),
-         &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
-         header.attr_size);
+  // An empty body has a null data(), which memcpy must not receive.
+  if (header.attr_size != 0)
+  {
+    memcpy(body_.data(),
+           &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
+           header.attr_size);
+  }
 }
 
 const BYTE* AttrResidentFullCache::GetData() const noexcept
