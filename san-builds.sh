@@ -112,6 +112,13 @@ select_build() {
     cfi)
       F="-flto=thin -fvisibility=hidden -fsanitize=cfi,cfi-cast-strict -fno-sanitize-trap=cfi -fsanitize-ignorelist=$CFI_IGNORELIST"
       EXTRA=(-DBUILD_SHARED_LIBS=OFF)
+      # i386 PIE: the jump table entry CFI creates for an address-taken libstdc++ function (eg.
+      # __once_proxy, handed to pthread_once by std::call_once) jumps to a PIC PLT stub that needs
+      # %ebx = GOT, which libc does not set up: it crashes at pc 0. A non-PIE PLT has no such need.
+      if [ "$ARCH" = x86 ]; then
+        F="$F -fno-pie"
+        LF="$F -no-pie"
+      fi
       ;;
     scudo) F="-fsanitize=scudo" ;;
     hwasan) F="-fsanitize=hwaddress -fsanitize-hwaddress-experimental-aliasing" ;;
