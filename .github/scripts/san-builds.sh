@@ -237,3 +237,7 @@ done
 echo
 echo "=== summary"
 printf '%s\n' "${RESULTS[@]}"
+
+# Non-zero when any step failed; a SKIP is not a failure.
+printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL' && exit 1
+exit 0

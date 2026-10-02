@@ -4,3 +4,4 @@
 # jobs in .github/workflows/cmake.yml; a CRLF/LF mismatch makes hashFiles
 # produce different keys per OS, so pin it to LF everywhere.
 .github/scripts/fetch-test-data.py text eol=lf
+.github/scripts/*.sh text eol=lf

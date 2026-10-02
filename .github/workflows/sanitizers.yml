@@ -1,0 +1,43 @@
+---
+name: sanitizers
+on:
+  workflow_dispatch:
+jobs:
+  sanitizers:
+    name: sanitizers (${{ matrix.arch }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86]
+    env:
+      REPO: ${{ github.workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Install clang 23
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 23
+          sudo apt-get install -yq lld-23 llvm-23 libclang-rt-23-dev ninja-build
+      - name: Install 32-bit libraries
+        if: matrix.arch == 'x86'
+        run: sudo apt-get install -yq gcc-multilib g++-multilib
+      - name: Fetch LLVM sources for the MSan libc++
+        if: matrix.arch == 'x64'
+        run: |
+          git clone --depth 1 --branch llvmorg-23.1.0 \
+            https://github.com/llvm/llvm-project "$HOME/llvm-project"
+      - name: Sanitizer builds
+        run: >-
+          .github/scripts/san-builds.sh -a ${{ matrix.arch }} all
+          asan asan-shared asan-ptr ubsan tsan msan tysan cfi scudo hwasan nsan
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sanitizer-logs-${{ matrix.arch }}
+          path: ~/ntfs-san-builds/logs
