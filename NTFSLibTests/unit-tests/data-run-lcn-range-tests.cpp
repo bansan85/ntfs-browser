@@ -1,11 +1,13 @@
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/attr-base.h>  // IWYU pragma: keep
 #include <ntfs-browser/data/attr-type.h>
@@ -60,8 +62,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   // The wrapped address is 0: the boot sector must not come back as data.
   CHECK_FALSE(read.has_value());
-  const std::vector<BYTE> bootSector(image.begin(),
-                                     image.begin() + buffer.size());
+  const std::vector<BYTE> bootSector(
+      image.begin(),
+      image.begin() + gsl::narrow<std::ptrdiff_t>(buffer.size()));
   const bool returnedBootSector = buffer == bootSector;
   CHECK_FALSE(returnedBootSector);
 }

@@ -737,7 +737,8 @@ TEMPLATE_TEST_CASE_SIG(
   for (const size_t length : {size_t{0}, size_t{3}, size_t{0x47}, size_t{0x54},
                               size_t{0x58}, valid.size() - 1})
   {
-    hostile.emplace_back(valid.begin(), valid.begin() + length);
+    hostile.emplace_back(valid.begin(),
+                         valid.begin() + gsl::narrow<std::ptrdiff_t>(length));
   }
   hostile.emplace_back(700, 0xFF);
 
