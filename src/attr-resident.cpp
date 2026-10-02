@@ -1,6 +1,7 @@
 #include "attr-resident.h"
 
 #include <cstring>
+#include <span>
 #include <stdexcept>
 
 #include <gsl/narrow>
@@ -19,6 +20,15 @@ class FileRecord;
 
 namespace
 {
+// Returns the attribute body. ValidateResidentBounds() MUST have accepted
+// the header first.
+std::span<const BYTE> ResidentBody(const Attr::HeaderResident& header)
+{
+  return std::span<const BYTE>(reinterpret_cast<const BYTE*>(&header),
+                               header.header.total_size)
+      .subspan(header.attr_offset, header.attr_size);
+}
+
 // Rejects an attr_offset/attr_size pair reaching past the attribute's own
 // total_size, which is already bounds-checked against the record buffer.
 void ValidateResidentBounds(const Attr::HeaderResident& header)
@@ -81,7 +91,8 @@ std::optional<ULONGLONG>
     actural = bufLen;
   }
 
-  memcpy(buffer.data(), &this->GetData()[offset], actural);
+  const std::span<const BYTE> body(this->GetData(), this->GetDataSize());
+  memcpy(buffer.data(), &body[offset], actural);
 
   return actural;
 }
@@ -93,9 +104,7 @@ AttrResidentNoCache::AttrResidentNoCache(
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
   ValidateResidentBounds(header);
 
-  body_ = std::span<const BYTE>{
-      &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
-      header.attr_size};
+  body_ = ResidentBody(header);
 }
 
 const BYTE* AttrResidentNoCache::GetData() const noexcept
@@ -119,9 +128,7 @@ AttrResidentFullCache::AttrResidentFullCache(
   // An empty body has a null data(), which memcpy must not receive.
   if (header.attr_size != 0)
   {
-    memcpy(body_.data(),
-           &reinterpret_cast<const BYTE*>(&header)[header.attr_offset],
-           header.attr_size);
+    memcpy(body_.data(), ResidentBody(header).data(), header.attr_size);
   }
 }
 

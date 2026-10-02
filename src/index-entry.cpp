@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <span>
 
 #include <ntfs-browser/index-entry.h>
 
@@ -17,26 +18,27 @@
 namespace NtfsBrowser
 {
 
-Data::IndexEntry ReadIndexEntryHeader(const BYTE* at) noexcept
+Data::IndexEntry ReadIndexEntryHeader(std::span<const BYTE> at) noexcept
 {
   Data::IndexEntry header{};
-  std::memcpy(&header, at, offsetof(Data::IndexEntry, stream));
+  std::memcpy(&header, at.data(), offsetof(Data::IndexEntry, stream));
   return header;
 }
 
 AlignedIndexEntry AlignIndexEntry(const std::shared_ptr<BYTE[]>& buffer,
-                                  const BYTE* at, size_t size)
+                                  std::span<const BYTE> at, size_t size)
 {
-  if (reinterpret_cast<std::uintptr_t>(at) % alignof(Data::IndexEntry) == 0)
+  if (reinterpret_cast<std::uintptr_t>(at.data()) % alignof(Data::IndexEntry) ==
+      0)
   {
-    return {buffer, reinterpret_cast<const Data::IndexEntry*>(at)};
+    return {buffer, reinterpret_cast<const Data::IndexEntry*>(at.data())};
   }
 
   // The fixed part is read even from an entry whose size is smaller than it.
   const size_t copied = std::max(size, offsetof(Data::IndexEntry, stream));
   auto const copy =
       std::make_shared<BYTE[]>(std::max(copied, sizeof(Data::IndexEntry)));
-  std::memcpy(copy.get(), at, copied);
+  std::memcpy(copy.get(), at.data(), copied);
   return {copy, reinterpret_cast<const Data::IndexEntry*>(copy.get())};
 }
 
@@ -129,10 +131,9 @@ ULONGLONG IndexEntry::GetSubNodeVCN() const noexcept
 {
   // size - 8 need not be aligned: the size is not checked for it.
   ULONGLONG vcn = 0;
-  std::memcpy(&vcn,
-              reinterpret_cast<const BYTE*>(&index_entry_) + index_entry_.size -
-                  sizeof(vcn),
-              sizeof(vcn));
+  const std::span<const BYTE> raw(reinterpret_cast<const BYTE*>(&index_entry_),
+                                  index_entry_.size);
+  std::memcpy(&vcn, &raw[raw.size() - sizeof(vcn)], sizeof(vcn));
   return vcn;
 }
 

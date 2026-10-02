@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -74,11 +75,11 @@ std::wstring_view AttrBase<S>::GetAttrName() const
   // The name sits at name_offset bytes past the header, as raw on-disk
   // UTF-16 (WCHAR, always 16 bits) - not wchar_t, wider than that off
   // Windows, so this decodes rather than reinterpret_casts.
-  attr_name_cache_ = Utf16ToWide(
-      std::u16string_view(reinterpret_cast<const char16_t*>(
-                              reinterpret_cast<const BYTE*>(&attr_header_) +
-                              attr_header_.name_offset),
-                          attr_header_.name_length));
+  const std::span<const BYTE> attr(reinterpret_cast<const BYTE*>(&attr_header_),
+                                   attr_header_.total_size);
+  attr_name_cache_ = Utf16ToWide(std::u16string_view(
+      reinterpret_cast<const char16_t*>(&attr[attr_header_.name_offset]),
+      attr_header_.name_length));
 
   LogTrace("Unicode Attribute Name");
   return attr_name_cache_;

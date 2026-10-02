@@ -119,23 +119,24 @@ void FileRecord<S>::Impl::ClearAttrs() noexcept
   realigned_attrs_.clear();
 }
 
-// Returns the attribute header at `at`: in place when it is aligned for the
-// on-disk structs, else in an aligned copy of the `room` bytes from `at` to
-// the end of the record. The copy keeps every read the attribute makes
+// Returns the attribute header at the start of `at`, the bytes from there to
+// the end of the record: in place when it is aligned for the on-disk structs,
+// else in an aligned copy of `at`. The copy keeps every read the attribute makes
 // inside the record, as in place.
 template <Strategy S>
-const AttrHeaderCommon& FileRecord<S>::Impl::AlignedAttrHeader(const BYTE* at,
-                                                               size_t room)
+const AttrHeaderCommon&
+    FileRecord<S>::Impl::AlignedAttrHeader(std::span<const BYTE> at)
 {
-  if (reinterpret_cast<std::uintptr_t>(at) % alignof(Attr::HeaderNonResident) ==
+  if (reinterpret_cast<std::uintptr_t>(at.data()) %
+          alignof(Attr::HeaderNonResident) ==
       0)
   {
-    return *reinterpret_cast<const AttrHeaderCommon*>(at);
+    return *reinterpret_cast<const AttrHeaderCommon*>(at.data());
   }
 
   auto const& copy =
-      realigned_attrs_.emplace_back(std::make_unique<BYTE[]>(room));
-  std::memcpy(copy.get(), at, room);
+      realigned_attrs_.emplace_back(std::make_unique<BYTE[]>(at.size()));
+  std::memcpy(copy.get(), at.data(), at.size());
   return *reinterpret_cast<const AttrHeaderCommon*>(copy.get());
 }
 
@@ -635,7 +636,8 @@ bool FileRecord<S>::Impl::ParseAttrs(
 
   // An attribute's position comes from the disk, so it need not be aligned
   // for AttrHeaderCommon. The walk reads each header through a copy.
-  const BYTE* cur = reinterpret_cast<const BYTE*>(first);
+  std::span<const BYTE> cur(reinterpret_cast<const BYTE*>(first),
+                            volume_.GetFileRecordSize() - dataPtr);
 
   while (true)
   {
@@ -648,7 +650,7 @@ bool FileRecord<S>::Impl::ParseAttrs(
       break;
     }
     AttrType type{};
-    std::memcpy(&type, cur, sizeof(type));
+    std::memcpy(&type, cur.data(), sizeof(type));
     if (type == AttrType::ALL)
     {
       foundEndMarker = true;
@@ -662,7 +664,7 @@ bool FileRecord<S>::Impl::ParseAttrs(
       break;
     }
     AttrHeaderCommon head{};
-    std::memcpy(&head, cur, sizeof(head));
+    std::memcpy(&head, cur.data(), sizeof(head));
     if (static_cast<ULONGLONG>(dataPtr) + head.total_size >
         volume_.GetFileRecordSize())
     {
@@ -682,7 +684,7 @@ bool FileRecord<S>::Impl::ParseAttrs(
     if (head.non_resident != 0)
     {
       Attr::HeaderNonResident nonResident{};
-      std::memcpy(&nonResident, cur, sizeof(nonResident));
+      std::memcpy(&nonResident, cur.data(), sizeof(nonResident));
       if (Attr::HasCompressedSizeField(nonResident) &&
           head.total_size < minTotalSize + Attr::kCompressedSizeFieldSize)
       {
@@ -717,16 +719,14 @@ bool FileRecord<S>::Impl::ParseAttrs(
         }
       }
 
-      if (!ParseAttr(
-              AlignedAttrHeader(cur, volume_.GetFileRecordSize() - dataPtr),
-              attrListChain))
+      if (!ParseAttr(AlignedAttrHeader(cur), attrListChain))
       {
         return abortWalk();
       }
     }
 
     dataPtr += head.total_size;
-    cur += head.total_size;  // next attribute
+    cur = cur.subspan(head.total_size);  // next attribute
   }
 
   if (!foundEndMarker)

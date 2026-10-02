@@ -562,11 +562,8 @@ inline constexpr ULONGLONG kOrphanedBlockStaleParentRef = 999;
 // only by scanning every $INDEX_ALLOCATION block, and reachable that way but
 // filed under a different parent.
 inline constexpr wchar_t kOrphanedBlockReachableName[] = L"Reachable";
-inline constexpr BYTE kOrphanedBlockReachableNameLength = 9;
 inline constexpr wchar_t kOrphanedBlockOrphanName[] = L"Orphan";
-inline constexpr BYTE kOrphanedBlockOrphanNameLength = 6;
 inline constexpr wchar_t kOrphanedBlockStaleName[] = L"Stale";
-inline constexpr BYTE kOrphanedBlockStaleNameLength = 5;
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
 // a directory whose $INDEX_ROOT points at a single real $INDEX_ALLOCATION
@@ -629,13 +626,11 @@ inline constexpr ULONGLONG kMultiClusterOrphanMftRef = 106;
 // Name (and UTF-16 length) of the block-0 leaf entry, reachable through the
 // normal B+ tree walk.
 inline constexpr wchar_t kMultiClusterReachableName[] = L"MultiReachable";
-inline constexpr BYTE kMultiClusterReachableNameLength = 14;
 
 // Name (and UTF-16 length) of the block-1 leaf entry: found only if the
 // recovery scan converts its block index (1) to VCN
 // kMultiClusterOrphanClustersPerBlock (2), not VCN 1.
 inline constexpr wchar_t kMultiClusterOrphanName[] = L"MultiOrphan";
-inline constexpr BYTE kMultiClusterOrphanNameLength = 11;
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
 // a directory whose index blocks are kMultiClusterOrphanClustersPerBlock
@@ -687,7 +682,6 @@ struct FakeParentLink
 // block.
 inline constexpr ULONGLONG kOrphanedBlockGenerationMftRef = 104;
 inline constexpr wchar_t kOrphanedBlockGenerationName[] = L"Generation";
-inline constexpr BYTE kOrphanedBlockGenerationNameLength = 10;
 
 // Same volume as BuildFakeNtfsImageWithOrphanedIndexBlocks(), except the entry
 // of its VCN 2 block is kOrphanedBlockGenerationName, filed under the root's
@@ -1228,10 +1222,8 @@ inline constexpr DWORD kBadDataRunSecondLcn = 71;
 // well-formed block (VCN 1), reported either way.
 inline constexpr ULONGLONG kBadIndexBlockFirstMftRef = 111;
 inline constexpr wchar_t kBadIndexBlockFirstName[] = L"First";
-inline constexpr BYTE kBadIndexBlockFirstNameLength = 5;
 inline constexpr ULONGLONG kBadIndexBlockGoodMftRef = 112;
 inline constexpr wchar_t kBadIndexBlockGoodName[] = L"Good";
-inline constexpr BYTE kBadIndexBlockGoodNameLength = 4;
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
 // a directory whose $INDEX_ROOT points directly at two $INDEX_ALLOCATION

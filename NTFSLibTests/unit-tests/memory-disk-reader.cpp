@@ -38,7 +38,8 @@ bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
     return false;
   }
 
-  std::memcpy(dest.data(), data_.data() + addr.QuadPart, dest.size());
+  std::memcpy(dest.data(), &data_[static_cast<size_t>(addr.QuadPart)],
+              dest.size());
   return true;
 }
 

@@ -65,7 +65,7 @@ class AttrNonResident : public AttrBase<S>
   // streams, which hold the same key.
   std::shared_ptr<const Efs::Context> efs_context_;
 
-  [[nodiscard]] static bool PickData(const BYTE*& dataRun, const BYTE* end,
+  [[nodiscard]] static bool PickData(std::span<const BYTE>& dataRun,
                                      ULONGLONG& length, LONGLONG& LCNOffset,
                                      bool recover) noexcept;
   void ParseDataRun();

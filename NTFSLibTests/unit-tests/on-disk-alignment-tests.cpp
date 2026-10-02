@@ -66,7 +66,7 @@ size_t RecordOffset(ULONGLONG idx)
 template <class T>
 void Put(std::vector<BYTE>& image, size_t offset, T value)
 {
-  std::memcpy(image.data() + offset, &value, sizeof(value));
+  std::memcpy(&image.at(offset), &value, sizeof(value));
 }
 
 // Writes a resident attribute of type at offset, kOddAttrSize bytes long.
@@ -176,10 +176,9 @@ TEMPLATE_TEST_CASE_SIG(
       kShortenedStreamSize);
   Put(image, entryOffset + offsetof(NtfsBrowser::Data::IndexEntry, size),
       kShortenedEntrySize);
-  std::memmove(image.data() + entryOffset + kShortenedEntrySize,
-               image.data() + entryOffset + kOriginalEntrySize,
-               kTerminatorSize);
-  std::memset(image.data() + entryOffset + kEntriesSize, 0, 2);
+  std::memmove(&image.at(entryOffset + kShortenedEntrySize),
+               &image.at(entryOffset + kOriginalEntrySize), kTerminatorSize);
+  std::memset(&image.at(entryOffset + kEntriesSize), 0, 2);
 
   Put(image,
       rootOffset + offsetof(NtfsBrowser::Attr::IndexRoot, total_entry_size),
@@ -194,7 +193,7 @@ TEMPLATE_TEST_CASE_SIG(
   const DWORD totalSize = sizeof(NtfsBrowser::Attr::HeaderResident) + attrSize;
   Put(image, attrOffset + offsetof(NtfsBrowser::AttrHeaderCommon, total_size),
       totalSize);
-  std::memset(image.data() + attrOffset + totalSize, 0, 2 * sizeof(DWORD));
+  std::memset(&image.at(attrOffset + totalSize), 0, 2 * sizeof(DWORD));
   Put(image, attrOffset + totalSize, static_cast<DWORD>(AttrType::ALL));
 
   NtfsVolume<S> const volume(
@@ -264,7 +263,7 @@ TEST_CASE(
        blockOffset += NtfsBrowserTests::kFakeClusterSize)
   {
     DWORD magic = 0;
-    std::memcpy(&magic, image.data() + blockOffset, sizeof(magic));
+    std::memcpy(&magic, &image.at(blockOffset), sizeof(magic));
     if (magic == kIndexBlockMagic)
     {
       break;

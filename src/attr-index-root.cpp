@@ -5,10 +5,9 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string_view>
-
-#include <gsl/narrow>
 
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/index-entry.h>
@@ -71,14 +70,13 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
   std::memcpy(data_copy.get(), this->GetData(), data_size);
   LogDebug("Index Root: allocated independent copy of resident data");
 
-  const BYTE* const data_end = data_copy.get() + data_size;
+  const std::span<const BYTE> data(data_copy.get(), data_size);
   const auto* const index_root_copy =
       reinterpret_cast<const Attr::IndexRoot*>(data_copy.get());
-  const auto* const entry_offset_addr =
-      reinterpret_cast<const BYTE*>(&(index_root_copy->entry_offset));
+  constexpr size_t kEntryOffsetPos = offsetof(Attr::IndexRoot, entry_offset);
 
-  if (index_root_copy->entry_offset >
-      gsl::narrow<ULONGLONG>(data_end - entry_offset_addr))
+  if (data.size() < kEntryOffsetPos ||
+      index_root_copy->entry_offset > data.size() - kEntryOffsetPos)
   {
     LogRecoverable(recover,
                    "Index Root: entry_offset exceeds attribute bounds");
@@ -86,14 +84,13 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
   }
 
   // An entry's position comes from the disk, so it need not be aligned.
-  const BYTE* cur = entry_offset_addr + index_root_copy->entry_offset;
+  std::span<const BYTE> cur =
+      data.subspan(kEntryOffsetPos).subspan(index_root_copy->entry_offset);
   DWORD ieTotal = 0;
 
   while (true)
   {
-    // Compare sizes, not cur + n: an entry size from the disk can put that
-    // pointer past the end of the buffer, which is undefined to even form.
-    const auto remaining = static_cast<size_t>(data_end - cur);
+    const size_t remaining = cur.size();
     if (remaining < offsetof(Data::IndexEntry, stream))
     {
       LogRecoverable(recover,
@@ -152,7 +149,7 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       break;
     }
 
-    cur += head.size;  // Pick next
+    cur = cur.subspan(head.size);  // Pick next
   }
 
   return true;

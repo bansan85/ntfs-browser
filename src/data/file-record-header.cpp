@@ -3,9 +3,8 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstring>
+#include <span>
 #include <stdexcept>
-
-#include <gsl/pointers>
 
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/strategy.h>
@@ -57,32 +56,40 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
   // A wrong size_of_us cannot make the loop below read out of bounds.
   us_array.reserve(sectors);
   // offset_of_us is not checked for alignment, so read the words as bytes.
-  const BYTE* const usn = buffer.data() + data->offset_of_us;
-  std::memcpy(&us_number, usn, sizeof(us_number));
+  std::memcpy(&us_number, &buffer[data->offset_of_us], sizeof(us_number));
 
   for (size_t i = 0; i < sectors; i++)
   {
     WORD value = 0;
-    std::memcpy(&value, usn + (sizeof(WORD) * (1 + i)), sizeof(value));
+    std::memcpy(&value, &buffer[data->offset_of_us + (sizeof(WORD) * (1 + i))],
+                sizeof(value));
     us_array.push_back(value);
   }
 }
 
 bool FileRecordHeader::PatchUS() noexcept
 {
-  gsl::not_null<WORD*> sector =
-      const_cast<WORD*>(reinterpret_cast<const WORD*>(&GetData()->raw[0]));
+  const std::span<WORD> words(
+      const_cast<WORD*>(reinterpret_cast<const WORD*>(&GetData()->raw[0])),
+      buffer_size_ / sizeof(WORD));
+  size_t pos = 0;
   for (WORD const value : us_array)
   {
-    sector = sector.get() + ((kUpdateSequenceStride / sizeof(WORD)) - 1);
+    // The last word of each sector holds the USN.
+    pos += (kUpdateSequenceStride / sizeof(WORD)) - 1;
+    if (pos >= words.size())
+    {
+      return false;
+    }
+    WORD& sector = words[pos];
     // USN error. Ignore if already patched (FULL_CACHE)
-    if (*sector != us_number && *sector != value)
+    if (sector != us_number && sector != value)
     {
       return false;
     }
     // Write back correct data
-    *sector = value;
-    sector = sector.get() + 1;
+    sector = value;
+    pos++;
   }
   return true;
 }
@@ -95,8 +102,8 @@ const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
     LogWarn("Offset of attr must be within the file record buffer");
     return nullptr;
   }
-  return reinterpret_cast<const AttrHeaderCommon*>(&GetData()->raw[0] +
-                                                   offset_of_attr);
+  return reinterpret_cast<const AttrHeaderCommon*>(
+      &GetData()->raw[offset_of_attr]);
 }
 
 template <Strategy S>

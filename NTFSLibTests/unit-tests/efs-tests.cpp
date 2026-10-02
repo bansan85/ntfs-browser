@@ -243,7 +243,7 @@ std::vector<BYTE> Slice(const std::vector<BYTE>& bytes, size_t offset,
 
 void Patch32(std::vector<BYTE>& bytes, size_t offset, DWORD value)
 {
-  std::memcpy(bytes.data() + offset, &value, sizeof(value));
+  std::memcpy(&bytes.at(offset), &value, sizeof(value));
 }
 
 // Offsets, in a stream MakeEfsStream() builds for one user, of the fields the

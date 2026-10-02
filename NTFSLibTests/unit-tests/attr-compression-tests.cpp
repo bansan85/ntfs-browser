@@ -178,8 +178,7 @@ TEST_CASE("LZNT1 concatenates chunks and stops at End_of_buffer",
 
   REQUIRE(produced == first.size() + second.size());
   CHECK(std::memcmp(out.data(), first.data(), first.size()) == 0);
-  CHECK(std::memcmp(out.data() + first.size(), second.data(), second.size()) ==
-        0);
+  CHECK(std::memcmp(&out.at(first.size()), second.data(), second.size()) == 0);
 }
 
 TEST_CASE("LZNT1 rejects malformed input instead of reading out of bounds",
@@ -367,8 +366,7 @@ void CheckTrailingPartialCompressionUnit()
   REQUIRE(whole.has_value());
   REQUIRE(whole->size() == total);
   CHECK(std::memcmp(whole->data(), head.data(), head.size()) == 0);
-  CHECK(std::memcmp(whole->data() + head.size(), tail.data(), tail.size()) ==
-        0);
+  CHECK(std::memcmp(&whole->at(head.size()), tail.data(), tail.size()) == 0);
 
   // Oversized read past EOF must truncate to the real count, not invent
   // bytes from sparse padding.

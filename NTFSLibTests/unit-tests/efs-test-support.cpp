@@ -91,7 +91,7 @@ std::vector<BYTE> SectorIv(ULONGLONG offset, size_t blockSize)
     const ULONGLONG w0 = kIvWord0 + offset;
     const ULONGLONG w1 = kIvWord1 + offset;
     std::memcpy(iv.data(), &w0, sizeof(w0));
-    std::memcpy(iv.data() + sizeof(w0), &w1, sizeof(w1));
+    std::memcpy(&iv[sizeof(w0)], &w1, sizeof(w1));
   }
   else
   {
@@ -115,7 +115,8 @@ std::vector<BYTE> EncryptWith(std::span<const BYTE> key,
   {
     const auto iv = SectorIv(streamOffset + done, BlockCipher::BLOCKSIZE);
     CryptoPP::CBC_Mode_ExternalCipher::Encryption cbc(cipher, iv.data());
-    cbc.ProcessData(data.data() + done, data.data() + done, kSector);
+    BYTE* const sector = &data[done];
+    cbc.ProcessData(sector, sector, kSector);
   }
   return data;
 }
@@ -153,8 +154,7 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
   ULONGLONG outWhitening = 0;
   ULONGLONG inWhitening = 0;
   std::memcpy(&outWhitening, md2.data(), sizeof(outWhitening));
-  std::memcpy(&inWhitening, md2.data() + sizeof(outWhitening),
-              sizeof(inWhitening));
+  std::memcpy(&inWhitening, &md2[sizeof(outWhitening)], sizeof(inWhitening));
 
   CryptoPP::DES::Encryption des;
   des.SetKey(desKey.data(), desKey.size());
@@ -168,7 +168,7 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
     std::memcpy(&prev, iv.data(), sizeof(prev));
     for (size_t block = 0; block < kSector; block += kDesBlockSize)
     {
-      BYTE* bytes = data.data() + done + block;
+      BYTE* bytes = &data[done + block];
       ULONGLONG value = 0;
       std::memcpy(&value, bytes, sizeof(value));
       value ^= prev ^ inWhitening;
@@ -185,7 +185,7 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
 
 void Put32(std::vector<BYTE>& out, size_t offset, DWORD value)
 {
-  std::memcpy(out.data() + offset, &value, sizeof(value));
+  std::memcpy(&out.at(offset), &value, sizeof(value));
 }
 
 // Appends one entry, in the layout of a real one, to "out".
@@ -219,9 +219,9 @@ void AppendEntry(std::vector<BYTE>& out, const TestEfsEntry& user)
   const size_t hash = cred + kHashOffset;
   Put32(out, hash + 0x00, kHashHeader);
   Put32(out, hash + 0x04, gsl::narrow<DWORD>(kThumbprintSize));
-  std::memcpy(out.data() + hash + kHashHeader, user.thumbprint.data(),
+  std::memcpy(&out.at(hash + kHashHeader), user.thumbprint.data(),
               kThumbprintSize);
-  std::memcpy(out.data() + base + fekOffset, user.wrapped_fek.data(),
+  std::memcpy(&out.at(base + fekOffset), user.wrapped_fek.data(),
               user.wrapped_fek.size());
 }
 

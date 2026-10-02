@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstring>
+#include <span>
 
 #include <ntfs-browser/data/attr-header-common.h>
 
@@ -48,10 +49,10 @@ inline constexpr DWORD kHeaderNonResidentBaseSize =
     CompressedSize(const HeaderNonResident& header) noexcept
 {
   ULONGLONG size = 0;
-  std::memcpy(&size,
-              reinterpret_cast<const BYTE*>(&header) +
-                  kHeaderNonResidentBaseSize,
-              sizeof(size));
+  const std::span<const BYTE> field(reinterpret_cast<const BYTE*>(&header),
+                                    kHeaderNonResidentBaseSize +
+                                        kCompressedSizeFieldSize);
+  std::memcpy(&size, &field[kHeaderNonResidentBaseSize], sizeof(size));
   return size;
 }
 }  // namespace NtfsBrowser::Attr

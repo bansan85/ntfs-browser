@@ -6,6 +6,7 @@
 #include <list>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
@@ -75,8 +76,8 @@ class FileRecord<S>::Impl
   std::vector<BYTE> record_buffer_;
 
   void ClearAttrs() noexcept;
-  [[nodiscard]] const AttrHeaderCommon& AlignedAttrHeader(const BYTE* at,
-                                                          size_t room);
+  [[nodiscard]] const AttrHeaderCommon&
+      AlignedAttrHeader(std::span<const BYTE> at);
   void MergeAttributeContinuations();
   [[nodiscard]] bool AttachEfsContext();
   [[nodiscard]] std::vector<Efs::WrappedFek> ReadEfsEntries() const;

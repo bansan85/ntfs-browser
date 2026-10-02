@@ -519,7 +519,7 @@ std::optional<ULONGLONG>
                                      std::span<BYTE> buffer) const
 {
   ULONGLONG totalRead = 0;
-  BYTE* buf = buffer.data();
+  std::span<BYTE> out = buffer;
   ULONGLONG remaining = buffer.size();
   ULONGLONG currentOffset = offset;
 
@@ -539,14 +539,15 @@ std::optional<ULONGLONG>
     const ULONGLONG toRead =
         (remaining < availableInExtent) ? remaining : availableInExtent;
 
-    const std::optional<ULONGLONG> len = nonResident->ReadExtentData(
-        currentOffset - extentStartByte, {buf, gsl::narrow<size_t>(toRead)});
+    const std::optional<ULONGLONG> len =
+        nonResident->ReadExtentData(currentOffset - extentStartByte,
+                                    out.first(gsl::narrow<size_t>(toRead)));
     if (!len || *len != toRead)
     {
       return {};
     }
 
-    buf += toRead;
+    out = out.subspan(gsl::narrow<size_t>(toRead));
     currentOffset += toRead;
     remaining -= toRead;
     totalRead += toRead;

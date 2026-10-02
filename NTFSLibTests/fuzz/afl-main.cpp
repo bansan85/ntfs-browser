@@ -12,6 +12,8 @@
 #include <string_view>
 #include <vector>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>  // IWYU pragma: keep
 #include <ntfs-browser/log.h>
@@ -74,8 +76,7 @@ void PatchBpbSignature(std::vector<BYTE>& data)
 {
   if (data.size() >= kBpbSignatureOffset + kBpbSignatureLen)
   {
-    std::memcpy(data.data() + kBpbSignatureOffset, kBpbSignature,
-                kBpbSignatureLen);
+    std::memcpy(&data[kBpbSignatureOffset], kBpbSignature, kBpbSignatureLen);
   }
 }
 
@@ -186,36 +187,37 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
   // Trace on the console by default, so an afl-fuzz run and the saved
   // regression corpus both keep producing every message without a flag.
   Log::Config logConfig{.console_level = Log::Level::kTrace};
+  const std::span<ArgChar*> args(argv, gsl::narrow<size_t>(argc));
   const ArgChar* input = nullptr;
   bool injectFailures = false;
 
-  for (int i = 1; i < argc; i++)
+  for (size_t i = 1; i < args.size(); i++)
   {
-    if (std::basic_string_view<ArgChar>(argv[i]) == kInjectOption)
+    if (std::basic_string_view<ArgChar>(args[i]) == kInjectOption)
     {
       injectFailures = true;
       continue;
     }
-    if (std::basic_string_view<ArgChar>(argv[i]).starts_with(kLogPrefix))
+    if (std::basic_string_view<ArgChar>(args[i]).starts_with(kLogPrefix))
     {
-      if (!Log::ParseOption(argv[i], logConfig))
+      if (!Log::ParseOption(args[i], logConfig))
       {
-        Usage(argv[0]);
+        Usage(args[0]);
         return 1;
       }
       continue;
     }
     if (input != nullptr)
     {
-      Usage(argv[0]);
+      Usage(args[0]);
       return 1;
     }
-    input = argv[i];
+    input = args[i];
   }
 
   if (input == nullptr)
   {
-    Usage(argv[0]);
+    Usage(args[0]);
     return 1;
   }
 

@@ -107,7 +107,7 @@ TEMPLATE_TEST_CASE_SIG(
        blockOffset += NtfsBrowserTests::kFakeClusterSize)
   {
     DWORD magic = 0;
-    std::memcpy(&magic, image.data() + blockOffset, sizeof(magic));
+    std::memcpy(&magic, &image.at(blockOffset), sizeof(magic));
     if (magic == kIndexBlockMagic)
     {
       break;
@@ -117,8 +117,8 @@ TEMPLATE_TEST_CASE_SIG(
 
   // A torn write: the end of the block's first 512 bytes was never given
   // the sequence number.
-  std::memcpy(image.data() + blockOffset + kUsBlockSize - sizeof(WORD),
-              &kTornWord, sizeof(kTornWord));
+  std::memcpy(&image.at(blockOffset + kUsBlockSize - sizeof(WORD)), &kTornWord,
+              sizeof(kTornWord));
 
   auto reader =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));

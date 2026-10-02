@@ -34,7 +34,7 @@ SequentialDiskReader::Producer MakeMemoryProducer(std::vector<BYTE> data)
       return false;
     }
 
-    std::memcpy(dest.data(), data.data() + pos, dest.size());
+    std::memcpy(dest.data(), &data[pos], dest.size());
     pos += dest.size();
     return true;
   };

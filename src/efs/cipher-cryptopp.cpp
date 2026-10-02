@@ -114,14 +114,15 @@ constexpr std::array<BYTE, 12> kDesxSalt2{'S', 'c', 'o', 't', 't', ' ',
   auto digest2 = DesxDigest(fek, kDesxSalt2);
 
   std::array<BYTE, kDesxKeySize> key{};
-  std::copy(digest2.begin() + kHalf, digest2.end(), key.begin());
+  const std::span<const BYTE> halves(digest2);
+  std::ranges::copy(halves.subspan(kHalf), key.begin());
   for (size_t i = 0; i < kWord; ++i)
   {
     key[kHalf + i] = digest1[i] ^ digest1[kWord + i];
     key[kHalf + kWord + i] = digest1[2 * kWord + i] ^ digest1[3 * kWord + i];
   }
-  std::copy(digest2.begin(), digest2.begin() + kHalf,
-            key.begin() + (2 * kHalf));
+  std::ranges::copy(halves.first(kHalf),
+                    std::span<BYTE>(key).subspan(2 * kHalf).begin());
 
   SecureZero(digest1);
   SecureZero(digest2);

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <span>
 #include <utility>
 
 #include <gsl/narrow>
@@ -23,6 +24,8 @@
 
 static constexpr LONGLONG READ_BUFFER_SIZE = 64 * 1024;
 static constexpr LONGLONG MEMORY_BUFFER_SIZE = 512 * READ_BUFFER_SIZE;
+// READ_BUFFER_SIZE as a size_t, to size a std::span over one cached block.
+static constexpr size_t kBlockBytes = static_cast<size_t>(READ_BUFFER_SIZE);
 
 namespace NtfsBrowser
 {
@@ -162,14 +165,14 @@ typename std::enable_if_t<
       return ReadUncached(addr, length);
     }
 
-    return std::span<const BYTE>{block + addr.QuadPart % READ_BUFFER_SIZE,
-                                 length};
+    return std::span<const BYTE>{block, kBlockBytes}.subspan(
+        gsl::narrow<size_t>(addr.QuadPart % READ_BUFFER_SIZE), length);
   }
 
   // Slow path: stitch the range together one block at a time.
   auto assembled = std::make_unique<BYTE[]>(length);
   BYTE* const result = assembled.get();
-  BYTE* out = result;
+  std::span<BYTE> out{result, length};
 
   LARGE_INTEGER cur = addr;
   DWORD remaining = length;
@@ -188,9 +191,10 @@ typename std::enable_if_t<
     const DWORD chunk = gsl::narrow<DWORD>(
         std::min<LONGLONG>(READ_BUFFER_SIZE - offsetInBlock, remaining));
 
-    memcpy(out, block + offsetInBlock, chunk);
+    const std::span<const BYTE> blockBytes{block, kBlockBytes};
+    memcpy(out.data(), &blockBytes[offsetInBlock], chunk);
 
-    out += chunk;
+    out = out.subspan(chunk);
     cur.QuadPart += chunk;
     remaining -= chunk;
   }
@@ -207,7 +211,7 @@ BYTE* FileReader<S>::NextMemory() const
     last_alloc = 0;
     mem_alloc.emplace_back(std::make_unique<BYTE[]>(MEMORY_BUFFER_SIZE));
   }
-  BYTE* retval = &mem_alloc.back()[0] + last_alloc * READ_BUFFER_SIZE;
+  BYTE* retval = &mem_alloc.back()[last_alloc * kBlockBytes];
   last_alloc++;
   return retval;
 }

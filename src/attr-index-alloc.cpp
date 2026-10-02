@@ -5,6 +5,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -61,21 +62,20 @@ AttrIndexAlloc<S>::~AttrIndexAlloc()
 
 // Verify US and update sectors
 template <Strategy S>
-bool AttrIndexAlloc<S>::PatchUS(WORD* sector, DWORD sectors, WORD usn,
-                                const WORD* usarray)
+bool AttrIndexAlloc<S>::PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
+                                std::span<const WORD> usarray)
 {
   for (DWORD i = 0; i < sectors; i++)
   {
-    sector += kUpdateSequenceStride / sizeof(WORD);
-    sector--;
+    // The last word of the i-th sector holds the USN.
+    const size_t pos = ((i + 1) * (kUpdateSequenceStride / sizeof(WORD))) - 1;
     // USN error
-    if (*sector != usn)
+    if (pos >= block.size() || block[pos] != usn)
     {
       return false;
     }
     // Write back correct data
-    *sector = usarray[i];
-    sector++;
+    block[pos] = usarray[i];
   }
 
   return true;
@@ -123,12 +123,11 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   // Allocate buffer for a single Index Block
   std::shared_ptr<BYTE[]> const ib_sh_ptr =
       ibClass.AllocIndexBlock(this->GetIndexBlockSize());
-  Data::IndexBlock* ibBuf =
-      reinterpret_cast<Data::IndexBlock*>(&ib_sh_ptr.get()[0]);
+  const std::span<BYTE> block(ib_sh_ptr.get(), this->GetIndexBlockSize());
+  Data::IndexBlock* ibBuf = reinterpret_cast<Data::IndexBlock*>(block.data());
 
   // Read one Index Block
-  std::optional<ULONGLONG> len = this->ReadData(
-      byte_offset, {reinterpret_cast<BYTE*>(ibBuf), this->GetIndexBlockSize()});
+  std::optional<ULONGLONG> len = this->ReadData(byte_offset, block);
   if (!len || *len != this->GetIndexBlockSize())
   {
     return false;
@@ -151,25 +150,27 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
   // Patch US
   // offset_of_us is not checked for alignment, so read the words as bytes.
-  const BYTE* const usnaddr =
-      reinterpret_cast<const BYTE*>(ibBuf) + ibBuf->offset_of_us;
+  const std::span<const BYTE> usnArea = block.subspan(ibBuf->offset_of_us);
   WORD usn = 0;
-  std::memcpy(&usn, usnaddr, sizeof(usn));
+  std::memcpy(&usn, &usnArea[0], sizeof(usn));
   std::vector<WORD> usarray(sectors);
-  std::memcpy(usarray.data(), usnaddr + sizeof(usn), sectors * sizeof(WORD));
-  if (!PatchUS(reinterpret_cast<WORD*>(ibBuf), sectors, usn, usarray.data()))
+  for (DWORD i = 0; i < sectors; i++)
+  {
+    std::memcpy(&usarray[i], &usnArea[sizeof(usn) + (i * sizeof(WORD))],
+                sizeof(WORD));
+  }
+  if (!PatchUS(
+          {reinterpret_cast<WORD*>(block.data()), block.size() / sizeof(WORD)},
+          sectors, usn, usarray))
   {
     LogWarn("Index Block parse error: Update Sequence Number");
     return false;
   }
 
-  const BYTE* const block_end =
-      reinterpret_cast<const BYTE*>(ibBuf) + this->GetIndexBlockSize();
-  const auto* const entry_offset_addr =
-      reinterpret_cast<const BYTE*>(&(ibBuf->entry_offset));
+  constexpr size_t kEntryOffsetPos = offsetof(Data::IndexBlock, entry_offset);
 
-  if (ibBuf->entry_offset >
-      gsl::narrow<ULONGLONG>(block_end - entry_offset_addr))
+  if (block.size() < kEntryOffsetPos ||
+      ibBuf->entry_offset > block.size() - kEntryOffsetPos)
   {
     LogWarn("Index Block: entry_offset exceeds block bounds");
     return false;
@@ -177,14 +178,14 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
   const bool recover = this->volume_.GetOptions().recover_errors;
   // An entry's position comes from the disk, so it need not be aligned.
-  const BYTE* cur = entry_offset_addr + ibBuf->entry_offset;
+  std::span<const BYTE> cur = std::span<const BYTE>(block)
+                                  .subspan(kEntryOffsetPos)
+                                  .subspan(ibBuf->entry_offset);
   DWORD ieTotal = 0;
 
   while (true)
   {
-    // Compare sizes, not cur + n: an entry size from the disk can put that
-    // pointer past the end of the buffer, which is undefined to even form.
-    const auto remaining = static_cast<size_t>(block_end - cur);
+    const size_t remaining = cur.size();
     if (remaining < offsetof(Data::IndexEntry, stream))
     {
       LogRecoverable(recover,
@@ -242,7 +243,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       break;
     }
 
-    cur += head.size;  // Pick next
+    cur = cur.subspan(head.size);  // Pick next
   }
 
   return true;

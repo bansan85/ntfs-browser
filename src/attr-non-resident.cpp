@@ -102,16 +102,16 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
   ParseDataRun();
 }
 
-// Parse a single DataRun unit. "end" bounds dataRun to the attribute
-// (already validated against the record buffer by FileRecord::ParseAttrs);
-// data_run_offset and the run stream itself are attacker-controlled and
-// otherwise unbounded.
+// Parse a single DataRun unit, and advance dataRun past it. dataRun is bounded
+// to the attribute (already validated against the record buffer by
+// FileRecord::ParseAttrs); data_run_offset and the run stream itself are
+// attacker-controlled and otherwise unbounded.
 template <Strategy S>
-bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
+bool AttrNonResident<S>::PickData(std::span<const BYTE>& dataRun,
                                   ULONGLONG& length, LONGLONG& LCNOffset,
                                   bool recover) noexcept
 {
-  if (dataRun >= end)
+  if (dataRun.empty())
   {
     return false;
   }
@@ -125,8 +125,8 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
     };
     BYTE size;
   };
-  const Length size{.size = *dataRun};
-  dataRun++;
+  const Length size{.size = dataRun.front()};
+  dataRun = dataRun.subspan(1);
 
   if (size.lengthBytes > sizeof(ULONGLONG) ||
       size.offsetBytes > sizeof(LONGLONG))
@@ -135,8 +135,8 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
     return false;
   }
 
-  if (end - dataRun < static_cast<ptrdiff_t>(size.lengthBytes) +
-                          static_cast<ptrdiff_t>(size.offsetBytes))
+  if (dataRun.size() < static_cast<size_t>(size.lengthBytes) +
+                           static_cast<size_t>(size.offsetBytes))
   {
     LogRecoverable(recover,
                    "DataRun decode error: run exceeds attribute bounds");
@@ -144,12 +144,12 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
   }
 
   length = 0;
-  memcpy(&length, dataRun, size.lengthBytes);
+  memcpy(&length, dataRun.data(), size.lengthBytes);
 
-  dataRun += size.lengthBytes;
+  dataRun = dataRun.subspan(size.lengthBytes);
   if (size.offsetBytes != 0)  // Not Sparse File
   {
-    if (static_cast<CHAR>(dataRun[size.offsetBytes - 1]) < 0)
+    if (static_cast<CHAR>(dataRun[size.offsetBytes - 1U]) < 0)
     {
       // Negative the number read.
       LCNOffset = -1;
@@ -158,9 +158,9 @@ bool AttrNonResident<S>::PickData(const BYTE*& dataRun, const BYTE* end,
     {
       LCNOffset = 0;
     }
-    memcpy(&LCNOffset, dataRun, size.offsetBytes);
+    memcpy(&LCNOffset, dataRun.data(), size.offsetBytes);
 
-    dataRun += size.offsetBytes;
+    dataRun = dataRun.subspan(size.offsetBytes);
   }
   else
   {
@@ -182,18 +182,21 @@ void AttrNonResident<S>::ParseDataRun()
            attr_header_nr_.last_vcn);
 
   const bool recover = this->volume_.GetOptions().recover_errors;
-  const BYTE* const attr_start =
-      reinterpret_cast<const BYTE*>(&attr_header_nr_);
-  const BYTE* data_run = attr_start + attr_header_nr_.data_run_offset;
-  const BYTE* const end = attr_start + attr_header_nr_.header.total_size;
+  const std::span<const BYTE> attr_bytes(
+      reinterpret_cast<const BYTE*>(&attr_header_nr_),
+      attr_header_nr_.header.total_size);
+  std::span<const BYTE> data_run =
+      attr_header_nr_.data_run_offset < attr_bytes.size()
+          ? attr_bytes.subspan(attr_header_nr_.data_run_offset)
+          : std::span<const BYTE>{};
   ULONGLONG length = 0;
   LONGLONG lcn_offset = 0;
   LONGLONG lcn = 0;
   ULONGLONG vcn = 0;
 
-  while (data_run < end && *data_run != 0)
+  while (!data_run.empty() && data_run.front() != 0)
   {
-    if (!PickData(data_run, end, length, lcn_offset, recover))
+    if (!PickData(data_run, length, lcn_offset, recover))
     {
       // PickData() already logged which check failed.
       if (!recover)
@@ -548,7 +551,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
     return {};
   }
 
-  BYTE* buf = buffer.data();
+  std::span<BYTE> out = buffer;
   ULONGLONG actural = 0;
 
   while (clusters != 0)
@@ -574,10 +577,12 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
     const ULONGLONG toCopy = (clusters < available) ? clusters : available;
     const ULONGLONG bytes = toCopy * this->GetClusterSize();
 
-    memcpy(buf, unit->data() + offsetInUnit * this->GetClusterSize(),
-           gsl::narrow<size_t>(bytes));
+    const auto byteCount = gsl::narrow<size_t>(bytes);
+    memcpy(out.data(),
+           &(*unit)[gsl::narrow<size_t>(offsetInUnit * this->GetClusterSize())],
+           byteCount);
 
-    buf += bytes;
+    out = out.subspan(byteCount);
     clusters -= toCopy;
     actural += toCopy;
     vcn += toCopy;
@@ -629,7 +634,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
     return {};
   }
 
-  BYTE* buf = buffer.data();
+  std::span<BYTE> out = buffer;
 
   // Traverse the DataRun List to find the according LCN
   for (const Data::RunEntry& dr : data_run_list_)
@@ -649,13 +654,13 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
         {
           break;
         }
-        memcpy(buf, bufferi->data(), bufferi->size());
+        memcpy(out.data(), bufferi->data(), bufferi->size());
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
-        // Decrypts the copy in buf, never the span, which may be the cache.
+        // Decrypts the copy in out, never the span, which may be the cache.
         if (efs_context_ && !efs_context_->Decrypt(vcn * this->GetClusterSize(),
-                                                   {buf, bufferi->size()}))
+                                                   out.first(bufferi->size())))
         {
           return {};
         }
@@ -663,10 +668,11 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
       }
       else
       {
-        memset(buf, 0, clustersToRead * this->GetClusterSize());
+        memset(out.data(), 0, clustersToRead * this->GetClusterSize());
       }
 
-      buf += static_cast<ULONGLONG>(clustersToRead) * this->GetClusterSize();
+      out = out.subspan(gsl::narrow<size_t>(
+          static_cast<ULONGLONG>(clustersToRead) * this->GetClusterSize()));
       clusters -= clustersToRead;
       actural += clustersToRead;
       vcn += clustersToRead;
@@ -732,7 +738,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   }
 
   ULONGLONG bufLen = buffer.size();
-  BYTE* buf = buffer.data();
+  std::span<BYTE> out = buffer;
 
   ULONGLONG actural = 0;
   if (bufLen == 0)
@@ -770,9 +776,9 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
     }
 
     len = (start_bytes < bufLen) ? start_bytes : bufLen;
-    memcpy(buf, &unaligned_buf_first[this->GetClusterSize() - start_bytes],
-           len);
-    buf += len;
+    memcpy(out.data(),
+           &unaligned_buf_first[this->GetClusterSize() - start_bytes], len);
+    out = out.subspan(gsl::narrow<size_t>(len));
     bufLen -= len;
     actural += len;
     start_vcn++;
@@ -788,15 +794,16 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
     // Aligned clusters
     ULONGLONG const alignedSize = alignedClusters * this->GetClusterSize();
 
-    std::optional<ULONGLONG> lenc = ReadVirtualClusters(
-        start_vcn, alignedClusters, {buf, gsl::narrow<size_t>(alignedSize)});
+    std::optional<ULONGLONG> lenc =
+        ReadVirtualClusters(start_vcn, alignedClusters,
+                            out.first(gsl::narrow<size_t>(alignedSize)));
     if (!lenc || *lenc != alignedSize)
     {
       return {};
     }
 
     start_vcn += alignedClusters;
-    buf += alignedSize;
+    out = out.subspan(gsl::narrow<size_t>(alignedSize));
     bufLen %= this->GetClusterSize();
     actural += *lenc;
 
@@ -815,7 +822,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
     return {};
   }
 
-  memcpy(buf, unaligned_buf_last.data(), bufLen);
+  memcpy(out.data(), unaligned_buf_last.data(), bufLen);
   actural += bufLen;
 
   return actural;

@@ -66,7 +66,7 @@ bool LoopingDiskReader::ReadInto(LARGE_INTEGER& /*addr*/,
   while (filled < dest.size())
   {
     const size_t chunk = std::min(dest.size() - filled, data_.size() - pos_);
-    std::memcpy(dest.data() + filled, data_.data() + pos_, chunk);
+    std::memcpy(&dest[filled], &data_[pos_], chunk);
     filled += chunk;
     pos_ += chunk;
     if (pos_ >= data_.size())

@@ -17,9 +17,12 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
+
+#include <gsl/narrow>
 
 #include <ntfs-browser/log.h>
 #include <ntfs-browser/mft-tree.h>
@@ -73,30 +76,31 @@ void Usage(const ArgChar* program)
 int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
 {
   Log::Config logConfig;
+  const std::span<ArgChar*> args(argv, gsl::narrow<size_t>(argc));
   const ArgChar* targetArg = nullptr;
 
-  for (int i = 1; i < argc; i++)
+  for (size_t i = 1; i < args.size(); i++)
   {
-    if (std::basic_string_view<ArgChar>(argv[i]).starts_with(kLogPrefix))
+    if (std::basic_string_view<ArgChar>(args[i]).starts_with(kLogPrefix))
     {
-      if (!Log::ParseOption(argv[i], logConfig))
+      if (!Log::ParseOption(args[i], logConfig))
       {
-        Usage(argv[0]);
+        Usage(args[0]);
         return 1;
       }
       continue;
     }
     if (targetArg != nullptr)
     {
-      Usage(argv[0]);
+      Usage(args[0]);
       return 1;
     }
-    targetArg = argv[i];
+    targetArg = args[i];
   }
 
   if (targetArg == nullptr)
   {
-    Usage(argv[0]);
+    Usage(args[0]);
     return 1;
   }
 

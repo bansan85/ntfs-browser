@@ -113,7 +113,7 @@ size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest)
         throw std::runtime_error(
             "LZNT1: uncompressed chunk exceeds decompressed bounds.\n");
       }
-      std::memcpy(dest.data() + out, src.data() + inPos, payload);
+      std::memcpy(&dest[out], &src[inPos], payload);
       out += payload;
       inPos = chunkEnd;
       continue;

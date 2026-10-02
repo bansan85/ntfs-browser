@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstdint>
+#include <span>
 
 #include "attr-non-resident.h"
 #include "internal-export.h"
@@ -39,8 +40,8 @@ class AttrIndexAlloc : public AttrNonResident<S>
  private:
   ULONGLONG index_block_count_{0};
 
-  [[nodiscard]] bool PatchUS(WORD* sector, DWORD sectors, WORD usn,
-                             const WORD* usarray);
+  [[nodiscard]] bool PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
+                             std::span<const WORD> usarray);
 
   [[nodiscard]] ULONGLONG GetIndexBlockCount() const noexcept;
   [[nodiscard]] bool ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass);

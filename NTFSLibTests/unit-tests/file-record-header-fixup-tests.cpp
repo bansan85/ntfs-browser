@@ -65,7 +65,7 @@ TEMPLATE_TEST_CASE_SIG(
   for (size_t i = 0; i < kArrayWords; i++)
   {
     const WORD sentinel = Sentinel(i);
-    std::memcpy(storage.data() + kDeclaredBufferSize + i * sizeof(WORD),
+    std::memcpy(&storage.at(kDeclaredBufferSize + (i * sizeof(WORD))),
                 &sentinel, sizeof(sentinel));
   }
 
@@ -121,7 +121,7 @@ TEMPLATE_TEST_CASE_SIG(
                                          });
 
   const auto put_word = [&](size_t offset, WORD value)
-  { std::memcpy(storage.data() + offset, &value, sizeof(value)); };
+  { std::memcpy(&storage.at(offset), &value, sizeof(value)); };
 
   put_word(kOffsetOfUsArray, kUsn);
   for (size_t i = 0; i < kBlocks; i++)
