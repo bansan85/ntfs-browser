@@ -130,9 +130,6 @@ const FileRecordHeader::Data*
   return &data_;
 }
 
-template struct FileRecordHeaderImpl<Strategy::NO_CACHE>;
-template struct FileRecordHeaderImpl<Strategy::FULL_CACHE>;
-
 // Class-level NTFS_BROWSER_EXPORT_TESTS_ONLY (on FileRecordHeader) does not
 // reach a member function template's own explicit instantiations: each needs
 // the macro again here, or the unit tests cannot link against it on a shared
