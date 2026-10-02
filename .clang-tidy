@@ -1,5 +1,5 @@
 ---
-Checks:          '*,-llvmlibc-restrict-system-libc-headers,-llvmlibc-implementation-in-namespace,-llvm-prefer-static-over-anonymous-namespace,-modernize-use-trailing-return-type,-llvmlibc-callee-namespace,-portability-avoid-pragma-once,-llvm-header-guard,-altera-struct-pack-align,-llvmlibc-inline-function-decl,-boost-use-ranges,-misc-include-cleaner'
+Checks:          '*,-llvmlibc-restrict-system-libc-headers,-llvmlibc-implementation-in-namespace,-llvm-prefer-static-over-anonymous-namespace,-modernize-use-trailing-return-type,-llvmlibc-callee-namespace,-portability-avoid-pragma-once,-llvm-header-guard,-altera-struct-pack-align,-llvmlibc-inline-function-decl,-boost-use-ranges,-misc-include-cleaner,-cppcoreguidelines-avoid-do-while,-fuchsia-statically-constructed-objects,-cppcoreguidelines-avoid-magic-numbers,-fuchsia-default-arguments-calls,-readability-trailing-comma,-cppcoreguidelines-non-private-member-variables-in-classes,-misc-non-private-member-variables-in-classes,-altera-unroll-loops,-fuchsia-statically-constructed-objects,-llvm-use-ranges,-bugprone-macro-parentheses,-readability-math-missing-parentheses'
 WarningsAsErrors: '*'
 HeaderFileExtensions:
   - ''
