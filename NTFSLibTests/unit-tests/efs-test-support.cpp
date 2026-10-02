@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstring>
 #include <optional>
+#include <random>
 #include <utility>
 
 #include <cryptopp/aes.h>
@@ -245,11 +246,10 @@ std::vector<BYTE> EfsEncrypt(Algorithm algorithm, std::span<const BYTE> key,
 std::vector<BYTE> PlaintextPattern(size_t size)
 {
   std::vector<BYTE> bytes(size);
-  ULONGLONG state = 0x9E3779B97F4A7C15ULL;
+  std::mt19937_64 engine(0x9E3779B97F4A7C15ULL);
   for (BYTE& byte : bytes)
   {
-    state = (state * 6364136223846793005ULL) + 1442695040888963407ULL;
-    byte = static_cast<BYTE>(state >> 56);
+    byte = static_cast<BYTE>(engine() >> 56);
   }
   return bytes;
 }

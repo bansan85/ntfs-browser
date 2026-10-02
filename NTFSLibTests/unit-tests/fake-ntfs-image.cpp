@@ -71,7 +71,12 @@ static_assert(kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderNonResident) + 8 <
                   kOffsetOfUs,
               "attribute data must not reach into the fixup slot");
 
-using FakeRecord = std::array<BYTE, kFakeFileRecordSize>;
+// The readers bind structs (8-byte aligned at most) onto offsets inside a
+// record, so the record itself must start on that boundary: a plain
+// std::array<BYTE> may sit at any stack address.
+struct alignas(8) FakeRecord : std::array<BYTE, kFakeFileRecordSize>
+{
+};
 
 // Packs an on-disk file reference: record number low, sequence number high.
 constexpr ULONGLONG MakeFileReference(ULONGLONG record, WORD sequence)

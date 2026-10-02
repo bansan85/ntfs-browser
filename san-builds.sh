@@ -49,7 +49,11 @@ ASAN_FLAGS="-fsanitize=address,undefined,float-divide-by-zero,local-bounds,vptr 
 ASAN_PTR_FLAGS="-O0 -U_GLIBCXX_SANITIZE_VECTOR -U_GLIBCXX_SANITIZE_STD_ALLOCATOR -fsanitize=pointer-compare,pointer-subtract -fsanitize-ignorelist=$ASAN_IGNORELIST"
 
 mkdir -p "$ROOT" "$LOGS"
-printf 'src:*/3rdparty/*\n' >"$IGNORELIST"
+# -fsanitize=integer flags the unsigned wrap-around that libstdc++ and the 3rdparty code rely on.
+cat >"$IGNORELIST" <<'EOF'
+src:*/3rdparty/*
+src:*/include/c++/*
+EOF
 cat >"$ASAN_IGNORELIST" <<'EOF'
 src:*/bits/stl_function.h
 EOF
