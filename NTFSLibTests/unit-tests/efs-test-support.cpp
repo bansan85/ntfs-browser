@@ -275,7 +275,7 @@ std::vector<BYTE> MakeFekBlob(Algorithm algorithm, std::span<const BYTE> key)
   Put32(blob, kFekKeyLengthField, gsl::narrow<DWORD>(key.size()));
   Put32(blob, kFekEntropyLengthField, gsl::narrow<DWORD>(key.size()));
   Put32(blob, kFekAlgorithmField, static_cast<DWORD>(algorithm));
-  std::copy(key.begin(), key.end(), blob.begin() + kFekHeaderSize);
+  std::ranges::copy(key, blob.begin() + kFekHeaderSize);
   return blob;
 }
 
@@ -352,10 +352,8 @@ std::optional<std::vector<BYTE>>
 {
   for (const Known& known : known_)
   {
-    if (std::equal(thumbprint.begin(), thumbprint.end(),
-                   known.thumbprint.begin(), known.thumbprint.end()) &&
-        std::equal(wrappedFek.begin(), wrappedFek.end(),
-                   known.wrapped_fek.begin(), known.wrapped_fek.end()))
+    if (std::ranges::equal(thumbprint, known.thumbprint) &&
+        std::ranges::equal(wrappedFek, known.wrapped_fek))
     {
       return known.blob;
     }

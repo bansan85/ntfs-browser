@@ -34,7 +34,7 @@ std::vector<fs::path> ListRegressionTestcases()
       files.push_back(entry.path());
     }
   }
-  std::sort(files.begin(), files.end());
+  std::ranges::sort(files);
   return files;
 }
 

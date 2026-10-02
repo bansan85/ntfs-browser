@@ -286,8 +286,7 @@ void MftTree::Impl::Link()
       {
         continue;
       }
-      if (std::find(filedUnder.begin(), filedUnder.end(), name.parent_record) !=
-          filedUnder.end())
+      if (std::ranges::find(filedUnder, name.parent_record) != filedUnder.end())
       {
         continue;
       }

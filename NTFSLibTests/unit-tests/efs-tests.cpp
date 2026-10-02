@@ -933,8 +933,7 @@ TEST_CASE("Secure zero wipes what it is given", "[efs]")
 {
   std::vector<BYTE> secret(kSecretSize, kSecretFill);
   NtfsBrowser::Efs::SecureZero(secret);
-  CHECK(std::all_of(secret.begin(), secret.end(),
-                    [](BYTE byte) { return byte == 0; }));
+  CHECK(std::ranges::all_of(secret, [](BYTE byte) { return byte == 0; }));
 }
 
 TEST_CASE("The cipher backend is selectable, and Crypto++ is the default",
@@ -1071,8 +1070,7 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
       REQUIRE(decryptor != nullptr);
 
       std::vector<BYTE> sector(NtfsBrowser::Efs::kSectorSize, 0);
-      std::copy(answer.ciphertext_block.begin(), answer.ciphertext_block.end(),
-                sector.begin());
+      std::ranges::copy(answer.ciphertext_block, sector.begin());
       REQUIRE(decryptor->DecryptSector(0, sector));
 
       for (size_t i = 0; i < answer.plaintext_block.size(); ++i)

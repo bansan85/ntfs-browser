@@ -196,7 +196,7 @@ TEST_CASE("SequentialDiskReader generates data lazily with no backing store",
   SequentialDiskReader reader(MakeGeneratorProducer(
       [&calls](std::span<BYTE> dest)
       {
-        std::fill(dest.begin(), dest.end(), gsl::narrow<BYTE>(calls));
+        std::ranges::fill(dest, gsl::narrow<BYTE>(calls));
         calls++;
       }));
 
