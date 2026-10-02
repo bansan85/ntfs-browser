@@ -1,8 +1,8 @@
 #pragma once
 
 #include <ntfs-browser/win-types.h>
-#include <cstdint>
 
+#include <cstdint>
 #include <unordered_set>
 
 namespace NtfsBrowser

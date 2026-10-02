@@ -311,7 +311,8 @@ void CNtfsdumpDlg::OnOK()
     // show only the first 16K
     const ULONGLONG datalen = min(data->GetDataSize(), BUFFER_SIZE);
 
-    std::optional<ULONGLONG> len = data->ReadData(0, {filebuf.data(), gsl::narrow<size_t>(datalen)});
+    std::optional<ULONGLONG> len =
+        data->ReadData(0, {filebuf.data(), gsl::narrow<size_t>(datalen)});
     if (!len || *len != datalen)
     {
       MessageBox(_T("Read data error"));

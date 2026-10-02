@@ -2,9 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstdint>
 #include <optional>
 #include <vector>
-#include <cstdint>
 
 #include "internal-export.h"
 #include "ntfs-common.h"

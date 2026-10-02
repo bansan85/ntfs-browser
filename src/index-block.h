@@ -2,9 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstdint>
 #include <memory>
 #include <vector>
-#include <cstdint>
 
 #include <ntfs-browser/index-entry.h>
 

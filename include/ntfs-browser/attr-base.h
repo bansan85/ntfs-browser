@@ -2,10 +2,10 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
-#include <cstdint>
 #include <string_view>
 
 #include <ntfs-browser/data/attr-type.h>

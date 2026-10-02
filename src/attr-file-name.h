@@ -1,7 +1,8 @@
 #pragma once
 
-#include <ntfs-browser/filename.h>
 #include <cstdint>
+
+#include <ntfs-browser/filename.h>
 
 namespace NtfsBrowser
 {

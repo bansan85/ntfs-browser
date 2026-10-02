@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
@@ -9,7 +10,6 @@
 #include <vector>
 
 #include <ntfs-browser/attr-base.h>
-#include <cstdint>
 
 #include "data/run-entry.h"
 

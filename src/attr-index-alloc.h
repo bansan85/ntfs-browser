@@ -2,9 +2,10 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstdint>
+
 #include "attr-non-resident.h"
 #include "internal-export.h"
-#include <cstdint>
 
 namespace NtfsBrowser
 {
