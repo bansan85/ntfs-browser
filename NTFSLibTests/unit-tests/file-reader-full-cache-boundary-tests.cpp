@@ -68,7 +68,7 @@ TEST_CASE(
 
   auto reader_double =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing);
-  FileReader<Strategy::FULL_CACHE> reader(std::move(reader_double));
+  FileReader<Strategy::FULL_CACHE> const reader(std::move(reader_double));
 
   // Straddles the boundary between the first and second 64KiB cache blocks.
   LARGE_INTEGER addr{.QuadPart = kCacheBlockSize - kStraddleBefore};
@@ -103,9 +103,9 @@ TEST_CASE(
     backing[i] = static_cast<BYTE>(i * kPatternStepA + (i >> kBitsPerByte));
   }
 
-  FileReader<Strategy::FULL_CACHE> full(
+  FileReader<Strategy::FULL_CACHE> const full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
-  FileReader<Strategy::NO_CACHE> exact(
+  FileReader<Strategy::NO_CACHE> const exact(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   struct Range
@@ -160,7 +160,7 @@ TEST_CASE(
     backing[i] = static_cast<BYTE>(i * kPatternStepB);
   }
 
-  FileReader<Strategy::FULL_CACHE> full(
+  FileReader<Strategy::FULL_CACHE> const full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   LARGE_INTEGER addr{.QuadPart = kInnerLength};
@@ -176,8 +176,8 @@ TEST_CASE(
     "returning a view before its cache block",
     "[file-reader][regression]")
 {
-  std::vector<BYTE> backing(kCacheBlockSize);
-  FileReader<Strategy::FULL_CACHE> full(
+  std::vector<BYTE> const backing(kCacheBlockSize);
+  FileReader<Strategy::FULL_CACHE> const full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   LARGE_INTEGER addr{.QuadPart = -1};
@@ -189,8 +189,8 @@ TEST_CASE(
     "signed address",
     "[file-reader][regression]")
 {
-  std::vector<BYTE> backing(kCacheBlockSize);
-  FileReader<Strategy::FULL_CACHE> full(
+  std::vector<BYTE> const backing(kCacheBlockSize);
+  FileReader<Strategy::FULL_CACHE> const full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   constexpr DWORD kLength = 100;

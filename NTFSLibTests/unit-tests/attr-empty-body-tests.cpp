@@ -26,7 +26,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEmptyStandardInformation());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -45,7 +45,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEmptyVolumeInformation());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
 
   CHECK_FALSE(volume.IsVolumeOK());
 }

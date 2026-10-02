@@ -58,7 +58,8 @@ constexpr size_t kDesxFekKeySize = 16;
 
 void SecureZero(std::span<BYTE> bytes) noexcept
 {
-  for (BYTE& byte : bytes)
+  // The volatile write keeps the compiler from eliding the wipe.
+  for (BYTE& byte : bytes)  // NOLINT(misc-const-correctness)
   {
     *static_cast<volatile BYTE*>(&byte) = 0;
   }

@@ -121,7 +121,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   }
 
   // Allocate buffer for a single Index Block
-  std::shared_ptr<BYTE[]> ib_sh_ptr =
+  std::shared_ptr<BYTE[]> const ib_sh_ptr =
       ibClass.AllocIndexBlock(this->GetIndexBlockSize());
   Data::IndexBlock* ibBuf =
       reinterpret_cast<Data::IndexBlock*>(&ib_sh_ptr.get()[0]);

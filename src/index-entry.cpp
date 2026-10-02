@@ -34,7 +34,7 @@ AlignedIndexEntry AlignIndexEntry(const std::shared_ptr<BYTE[]>& buffer,
 
   // The fixed part is read even from an entry whose size is smaller than it.
   const size_t copied = std::max(size, offsetof(Data::IndexEntry, stream));
-  auto copy =
+  auto const copy =
       std::make_shared<BYTE[]>(std::max(copied, sizeof(Data::IndexEntry)));
   std::memcpy(copy.get(), at, copied);
   return {copy, reinterpret_cast<const Data::IndexEntry*>(copy.get())};

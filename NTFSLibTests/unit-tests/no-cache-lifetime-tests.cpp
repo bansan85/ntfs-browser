@@ -54,9 +54,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
     Strategy::FULL_CACHE)
 {
-  TempImage image;
+  TempImage const image;
 
-  NtfsVolume<S> volume(OpenOnDisk(image.path));
+  NtfsVolume<S> const volume(OpenOnDisk(image.path));
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
 
@@ -75,7 +75,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
 

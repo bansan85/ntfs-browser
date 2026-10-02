@@ -25,7 +25,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedIndexBlock());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
 
   INFO("GetIndexBlockSize() = " << volume.GetIndexBlockSize());
   CHECK_FALSE(volume.IsVolumeOK());
@@ -40,7 +40,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedFileRecord());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
 
   INFO("GetFileRecordSize() = " << volume.GetFileRecordSize());
   // GetFileRecordSize() reflects the BPB value directly; IsVolumeOK() fails
@@ -59,7 +59,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFileRecordSizeTooBig());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
 
   CHECK(volume.GetFileRecordSize() == NtfsBrowserTests::kFileRecordSizeTooBig);
   CHECK_FALSE(volume.IsVolumeOK());

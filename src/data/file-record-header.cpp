@@ -72,7 +72,7 @@ bool FileRecordHeader::PatchUS() noexcept
 {
   gsl::not_null<WORD*> sector =
       const_cast<WORD*>(reinterpret_cast<const WORD*>(&GetData()->raw[0]));
-  for (WORD value : us_array)
+  for (WORD const value : us_array)
   {
     sector = sector.get() + ((kUpdateSequenceStride / sizeof(WORD)) - 1);
     // USN error. Ignore if already patched (FULL_CACHE)
@@ -89,7 +89,7 @@ bool FileRecordHeader::PatchUS() noexcept
 
 const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
 {
-  WORD offset_of_attr = GetData()->offset_of_attr;
+  WORD const offset_of_attr = GetData()->offset_of_attr;
   if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size_)
   {
     LogWarn("Offset of attr must be within the file record buffer");

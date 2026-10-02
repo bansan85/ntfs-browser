@@ -154,13 +154,13 @@ spdlog::level::level_enum
 // contract allows and its per-cluster message volume wants.
 void AddConsoleSinks(Log::Level level, std::vector<spdlog::sink_ptr>& sinks)
 {
-  auto out = std::make_shared<CeilingSink>(
+  auto const out = std::make_shared<CeilingSink>(
       std::make_shared<spdlog::sinks::stdout_sink_st>(), spdlog::level::warn);
   out->set_level(ToSpdlog(level));
   out->set_pattern(std::string(kConsolePattern));
   sinks.push_back(out);
 
-  auto err = std::make_shared<spdlog::sinks::stderr_sink_st>();
+  auto const err = std::make_shared<spdlog::sinks::stderr_sink_st>();
   err->set_level((std::max)(spdlog::level::warn, ToSpdlog(level)));
   err->set_pattern(std::string(kConsolePattern));
   sinks.push_back(err);
@@ -188,7 +188,7 @@ bool Apply(const Log::Config& config) noexcept
       {
         // Appends: a second Configure() with the same path must not wipe
         // what the first one already wrote.
-        auto file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
+        auto const file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
             config.file_path.native(), false);
         file->set_level(ToSpdlog(config.file_level));
         file->set_pattern(std::string(kFilePattern));
@@ -223,7 +223,7 @@ bool Apply(const Log::Config& config) noexcept
 // Null only if even that could not be built.
 spdlog::logger* EnsureLogger()
 {
-  LoggerHolder& holder = Holder();
+  LoggerHolder const& holder = Holder();
   if (!holder.logger)
   {
     Apply(Log::Config{});

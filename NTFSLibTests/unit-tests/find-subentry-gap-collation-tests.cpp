@@ -37,7 +37,7 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithGapCollationSubNode());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);

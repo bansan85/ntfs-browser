@@ -26,7 +26,7 @@ std::string Narrow(const std::wstring& w)
 {
   std::string out;
   out.reserve(w.size());
-  for (wchar_t c : w)
+  for (wchar_t const c : w)
   {
     out.push_back((c > 0 && c < kAsciiLimit) ? static_cast<char>(c) : '?');
   }

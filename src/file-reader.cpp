@@ -177,7 +177,7 @@ typename std::enable_if_t<
   {
     const LARGE_INTEGER blockAddr{.QuadPart = cur.QuadPart -
                                               cur.QuadPart % READ_BUFFER_SIZE};
-    BYTE* block = GetCachedBlock(blockAddr);
+    BYTE const* block = GetCachedBlock(blockAddr);
     if (block == nullptr)
     {
       return ReadUncached(addr, length);

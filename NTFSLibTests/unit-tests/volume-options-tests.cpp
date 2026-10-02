@@ -58,7 +58,7 @@ namespace
 template <Strategy S>
 void RunDefaultsAreBothOff()
 {
-  NtfsVolume<S> volume(
+  NtfsVolume<S> const volume(
       std::make_unique<MemoryDiskReader>(BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
   CHECK_FALSE(volume.GetOptions().include_deleted);
@@ -69,7 +69,7 @@ void RunDefaultsAreBothOff()
 template <Strategy S>
 void RunGetOptionsReflectsConstructorArgument()
 {
-  NtfsVolume<S> volume(
+  NtfsVolume<S> const volume(
       std::make_unique<MemoryDiskReader>(BuildFakeNtfsImage()),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
@@ -84,7 +84,7 @@ template <Strategy S>
 void RunDeletedRecordContentGating()
 {
   {
-    NtfsVolume<S> volume(
+    NtfsVolume<S> const volume(
         std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithMftTree()));
     REQUIRE(volume.IsVolumeOK());
 
@@ -95,7 +95,7 @@ void RunDeletedRecordContentGating()
     CHECK(record.getAttr(AttrType::FILE_NAME).empty());
   }
   {
-    NtfsVolume<S> volume(
+    NtfsVolume<S> const volume(
         std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithMftTree()),
         VolumeOptions{.include_deleted = true});
     REQUIRE(volume.IsVolumeOK());
@@ -118,16 +118,17 @@ void RunSalvageableConditionLogLevel()
       spdlog::get(std::string(NtfsBrowser::Log::kLoggerName));
   REQUIRE(logger);
 
-  auto captureFor = [&](const VolumeOptions& options)
+  auto const captureFor = [&](const VolumeOptions& options)
   {
     std::ostringstream out;
     const auto sink = std::make_shared<spdlog::sinks::ostream_sink_st>(out);
     sink->set_pattern("%l %v");
     logger->sinks().push_back(sink);
 
-    NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-                             BuildFakeNtfsImageWithAttrNameExceedsTotalSize()),
-                         options);
+    NtfsVolume<S> const volume(
+        std::make_unique<MemoryDiskReader>(
+            BuildFakeNtfsImageWithAttrNameExceedsTotalSize()),
+        options);
     REQUIRE(volume.IsVolumeOK());
     FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(kAttrNameExceedsTotalSizeRecordIdx));
@@ -161,7 +162,7 @@ void RunOrphanScanCapsDeclaredBlockCount()
 {
   auto reader = std::make_unique<MemoryDiskReader>(
       BuildFakeNtfsImageWithHugeOrphanScanBlockCount());
-  NtfsVolume<S> volume(
+  NtfsVolume<S> const volume(
       std::move(reader),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
@@ -195,7 +196,7 @@ void RunOrphanScanCapsDeclaredBlockCount()
 template <Strategy S>
 void RunMultiClusterOrphanScanConvertsBlockIndexToVcn()
 {
-  NtfsVolume<S> volume(
+  NtfsVolume<S> const volume(
       std::make_unique<MemoryDiskReader>(
           BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock()),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
@@ -230,7 +231,7 @@ template <Strategy S>
 void RunBadDataRunRejectsOrKeepsPartial()
 {
   {
-    NtfsVolume<S> volume(
+    NtfsVolume<S> const volume(
         std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithBadDataRun()));
     REQUIRE(volume.IsVolumeOK());
 
@@ -240,7 +241,7 @@ void RunBadDataRunRejectsOrKeepsPartial()
     CHECK(record.getAttr(AttrType::DATA).empty());
   }
   {
-    NtfsVolume<S> volume(
+    NtfsVolume<S> const volume(
         std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithBadDataRun()),
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
@@ -262,7 +263,7 @@ template <Strategy S>
 void RunResidentEncryptedDataRejectsOrKeepsAsIs()
 {
   {
-    NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
+    NtfsVolume<S> const volume(std::make_unique<MemoryDiskReader>(
         BuildFakeNtfsImageWithResidentEncryptedData()));
     REQUIRE(volume.IsVolumeOK());
 
@@ -272,9 +273,10 @@ void RunResidentEncryptedDataRejectsOrKeepsAsIs()
     CHECK(record.getAttr(AttrType::DATA).empty());
   }
   {
-    NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-                             BuildFakeNtfsImageWithResidentEncryptedData()),
-                         VolumeOptions{.recover_errors = true});
+    NtfsVolume<S> const volume(
+        std::make_unique<MemoryDiskReader>(
+            BuildFakeNtfsImageWithResidentEncryptedData()),
+        VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
@@ -292,7 +294,7 @@ template <Strategy S>
 void RunNoEndMarkerRejectsOrKeepsParsed()
 {
   {
-    NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
+    NtfsVolume<S> const volume(std::make_unique<MemoryDiskReader>(
         BuildFakeNtfsImageWithNoEndMarker()));
     REQUIRE(volume.IsVolumeOK());
 
@@ -307,7 +309,7 @@ void RunNoEndMarkerRejectsOrKeepsParsed()
                    "Attribute walk ended without a terminating end marker."));
   }
   {
-    NtfsVolume<S> volume(
+    NtfsVolume<S> const volume(
         std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithNoEndMarker()),
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
@@ -332,7 +334,7 @@ void RunNoEndMarkerRejectsOrKeepsParsed()
 template <Strategy S>
 void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
 {
-  auto traverse = [](FileRecord<S>& root)
+  auto const traverse = [](FileRecord<S>& root)
   {
     std::vector<std::wstring> names;
     root.TraverseSubEntries(
@@ -346,7 +348,7 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
   };
 
   {
-    NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
+    NtfsVolume<S> const volume(std::make_unique<MemoryDiskReader>(
         BuildFakeNtfsImageWithBadIndexBlockEntry()));
     REQUIRE(volume.IsVolumeOK());
 
@@ -360,9 +362,9 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
     CHECK(names[0] == kBadIndexBlockGoodName);
   }
   {
-    NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-                             BuildFakeNtfsImageWithBadIndexBlockEntry()),
-                         VolumeOptions{.recover_errors = true});
+    NtfsVolume<S> const volume(std::make_unique<MemoryDiskReader>(
+                                   BuildFakeNtfsImageWithBadIndexBlockEntry()),
+                               VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
@@ -405,7 +407,7 @@ template <Strategy S>
 void RunMalformedIndexEntryRejectsOrKeepsNameless()
 {
   {
-    NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
+    NtfsVolume<S> const volume(std::make_unique<MemoryDiskReader>(
         BuildFakeNtfsImageWithMalformedIndexEntryFilename()));
     REQUIRE(volume.IsVolumeOK());
 
@@ -416,7 +418,7 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless()
     CHECK(root.getAttr(AttrType::INDEX_ROOT).empty());
   }
   {
-    NtfsVolume<S> volume(
+    NtfsVolume<S> const volume(
         std::make_unique<MemoryDiskReader>(
             BuildFakeNtfsImageWithMalformedIndexEntryFilename()),
         VolumeOptions{.recover_errors = true});
@@ -443,7 +445,7 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless()
 template <Strategy S>
 void RunDeletedVolumeRecordStillOpens()
 {
-  NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
+  NtfsVolume<S> const volume(std::make_unique<MemoryDiskReader>(
       BuildFakeNtfsImageWithDeletedVolumeRecord()));
   CHECK(volume.IsVolumeOK());
   CHECK(volume.GetVersion() == std::pair<BYTE, BYTE>{3, 1});

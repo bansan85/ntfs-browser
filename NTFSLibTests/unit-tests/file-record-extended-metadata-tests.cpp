@@ -40,7 +40,7 @@ void RunFileRecordExposesExtendedMetadata()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> report(volume);
@@ -77,7 +77,7 @@ void RunFilenameExposesExtendedMetadata()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> report(volume);

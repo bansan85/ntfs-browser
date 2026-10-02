@@ -50,7 +50,7 @@ std::optional<ULONGLONG> FindInRoot(NonAsciiNameLayout layout, bool withUpCase,
       NtfsBrowserTests::BuildFakeNtfsImageWithNonAsciiNames(layout,
                                                             withUpCase));
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);

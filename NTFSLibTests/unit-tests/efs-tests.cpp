@@ -290,7 +290,7 @@ TEMPLATE_TEST_CASE_SIG(
                           << ", backend " << static_cast<int>(backend));
 
       Fixture fixture = MakeFixture(algorithm);
-      Opened<S> opened = Open<S>(fixture.image, fixture.provider);
+      Opened<S> const opened = Open<S>(fixture.image, fixture.provider);
       const AttrBase<S>& data = OnlyData<S>(*opened.record);
 
       const auto whole = ReadAt<S>(data, 0, fixture.plaintext.size());
@@ -309,8 +309,8 @@ TEMPLATE_TEST_CASE_SIG(
     "An unaligned read of an encrypted stream returns the plaintext slice",
     "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  Fixture fixture = MakeFixture(Algorithm::kAes256);
-  Opened<S> opened = Open<S>(fixture.image, fixture.provider);
+  Fixture const fixture = MakeFixture(Algorithm::kAes256);
+  Opened<S> const opened = Open<S>(fixture.image, fixture.provider);
   const AttrBase<S>& data = OnlyData<S>(*opened.record);
 
   for (const size_t offset :
@@ -332,7 +332,7 @@ TEMPLATE_TEST_CASE_SIG(
 {
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
   const TestEfsEntry user = TestUser();
-  auto provider = std::make_shared<TestKeyProvider>();
+  auto const provider = std::make_shared<TestKeyProvider>();
   provider->Add(user.thumbprint, user.wrapped_fek,
                 NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
 
@@ -360,7 +360,7 @@ TEMPLATE_TEST_CASE_SIG(
   expected.resize(kTailStart, 0);
   expected.insert(expected.end(), tail.begin(), tail.end());
 
-  Opened<S> opened = Open<S>(
+  Opened<S> const opened = Open<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, expected.size());
   REQUIRE(read.has_value());
@@ -374,7 +374,7 @@ TEMPLATE_TEST_CASE_SIG(
 {
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
   const TestEfsEntry user = TestUser();
-  auto provider = std::make_shared<TestKeyProvider>();
+  auto const provider = std::make_shared<TestKeyProvider>();
   provider->Add(user.thumbprint, user.wrapped_fek,
                 NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
 
@@ -419,7 +419,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A stream nobody holds a key for reads as nullopt, and the parse survives",
     "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  Fixture fixture = MakeFixture(Algorithm::kAes256);
+  Fixture const fixture = MakeFixture(Algorithm::kAes256);
 
   SECTION("no provider is installed")
   {
@@ -436,14 +436,14 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("the provider holds another user's key")
   {
-    auto stranger = std::make_shared<TestKeyProvider>();
+    auto const stranger = std::make_shared<TestKeyProvider>();
     stranger->Add(
         NtfsBrowserTests::TestThumbprint(kStrangerSeed), kWrappedFek,
         NtfsBrowserTests::MakeFekBlob(
             Algorithm::kAes256, NtfsBrowserTests::TestKey(Algorithm::kAes256)));
 
     (void)TakeLog();
-    Opened<S> opened = Open<S>(fixture.image, stranger);
+    Opened<S> const opened = Open<S>(fixture.image, stranger);
     CHECK_FALSE(ReadAt<S>(OnlyData<S>(*opened.record), 0, 100).has_value());
     CHECK_THAT(TakeLog(), Catch::Matchers::ContainsSubstring(
                               "no key provider holds a key for this file"));
@@ -451,7 +451,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("the unwrapped FEK is unusable")
   {
-    auto broken = std::make_shared<TestKeyProvider>();
+    auto const broken = std::make_shared<TestKeyProvider>();
     std::vector<BYTE> blob(kBrokenBlobSize, 0);
     Patch32(blob, 0, kBrokenKeyLength);
     Patch32(blob, kFekAlgorithmField, kBrokenAlgorithmId);
@@ -459,7 +459,7 @@ TEMPLATE_TEST_CASE_SIG(
                 std::move(blob));
 
     (void)TakeLog();
-    Opened<S> opened = Open<S>(fixture.image, broken);
+    Opened<S> const opened = Open<S>(fixture.image, broken);
     CHECK_FALSE(ReadAt<S>(OnlyData<S>(*opened.record), 0, 100).has_value());
     CHECK_THAT(TakeLog(), Catch::Matchers::ContainsSubstring(
                               "the unwrapped FEK is unusable"));
@@ -474,7 +474,7 @@ TEMPLATE_TEST_CASE_SIG(
                             .real_size = kBogusRealSize});
 
     (void)TakeLog();
-    Opened<S> opened =
+    Opened<S> const opened =
         Open<S>(NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file),
                 fixture.provider);
     CHECK_FALSE(ReadAt<S>(OnlyData<S>(*opened.record), 0, 100).has_value());
@@ -498,7 +498,7 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
 
   SECTION("a later DDF entry")
   {
-    auto provider = std::make_shared<TestKeyProvider>();
+    auto const provider = std::make_shared<TestKeyProvider>();
     provider->Add(users[1].thumbprint, users[1].wrapped_fek,
                   NtfsBrowserTests::MakeFekBlob(Algorithm::kAes128, key));
 
@@ -508,14 +508,14 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
                             .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
                                 Algorithm::kAes128, key, plaintext),
                             .real_size = plaintext.size()});
-    Opened<S> opened = Open<S>(
+    Opened<S> const opened = Open<S>(
         NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
     CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
   }
 
   SECTION("a recovery agent's entry")
   {
-    auto provider = std::make_shared<TestKeyProvider>();
+    auto const provider = std::make_shared<TestKeyProvider>();
     provider->Add(recovery[0].thumbprint, recovery[0].wrapped_fek,
                   NtfsBrowserTests::MakeFekBlob(Algorithm::kAes128, key));
 
@@ -525,7 +525,7 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
                             .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
                                 Algorithm::kAes128, key, plaintext),
                             .real_size = plaintext.size()});
-    Opened<S> opened = Open<S>(
+    Opened<S> const opened = Open<S>(
         NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
     CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
   }
@@ -538,7 +538,7 @@ TEMPLATE_TEST_CASE_SIG("A resident $EFS stream works like a non-resident one",
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
   const std::vector<BYTE> plaintext = NtfsBrowserTests::PlaintextPattern(900);
   const TestEfsEntry user = TestUser();
-  auto provider = std::make_shared<TestKeyProvider>();
+  auto const provider = std::make_shared<TestKeyProvider>();
   provider->Add(user.thumbprint, user.wrapped_fek,
                 NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
 
@@ -549,7 +549,7 @@ TEMPLATE_TEST_CASE_SIG("A resident $EFS stream works like a non-resident one",
                           .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
                               Algorithm::kAes256, key, plaintext),
                           .real_size = plaintext.size()});
-  Opened<S> opened = Open<S>(
+  Opened<S> const opened = Open<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
 }
@@ -560,7 +560,7 @@ TEMPLATE_TEST_CASE_SIG(
 {
   // The exact mask ntfsdump/ntfsundel narrow to before reading file data.
   Fixture fixture = MakeFixture(Algorithm::kAes256);
-  Opened<S> opened = Open<S>(fixture.image, fixture.provider, Mask::DATA);
+  Opened<S> const opened = Open<S>(fixture.image, fixture.provider, Mask::DATA);
   CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, fixture.plaintext.size()) ==
         fixture.plaintext);
 }
@@ -571,7 +571,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
   const TestEfsEntry user = TestUser();
-  auto provider = std::make_shared<TestKeyProvider>();
+  auto const provider = std::make_shared<TestKeyProvider>();
   provider->Add(
       user.thumbprint, user.wrapped_fek,
       NtfsBrowserTests::MakeFekBlob(
@@ -588,7 +588,7 @@ TEMPLATE_TEST_CASE_SIG(
                           .flagged_compressed = true});
 
   (void)TakeLog();
-  Opened<S> opened =
+  Opened<S> const opened =
       Open<S>(NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file),
               provider, std::nullopt, VolumeOptions{.recover_errors = true});
 
@@ -606,7 +606,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
   const TestEfsEntry user = TestUser();
-  auto provider = std::make_shared<TestKeyProvider>();
+  auto const provider = std::make_shared<TestKeyProvider>();
   provider->Add(
       user.thumbprint, user.wrapped_fek,
       NtfsBrowserTests::MakeFekBlob(
@@ -644,7 +644,7 @@ TEMPLATE_TEST_CASE_SIG(
   const std::vector<BYTE> plaintext = NtfsBrowserTests::PlaintextPattern(kSize);
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
   const TestEfsEntry user = TestUser();
-  auto provider = std::make_shared<TestKeyProvider>();
+  auto const provider = std::make_shared<TestKeyProvider>();
   provider->Add(user.thumbprint, user.wrapped_fek,
                 NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
 
@@ -680,7 +680,7 @@ TEMPLATE_TEST_CASE_SIG(
   const std::vector<BYTE> plaintext = NtfsBrowserTests::PlaintextPattern(kSize);
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
   const TestEfsEntry user = TestUser();
-  auto provider = std::make_shared<TestKeyProvider>();
+  auto const provider = std::make_shared<TestKeyProvider>();
   provider->Add(user.thumbprint, user.wrapped_fek,
                 NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
 
@@ -806,7 +806,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
   hostile.emplace_back(kHostileStreamSize, kHostileStreamFill);
 
-  Fixture fixture = MakeFixture(Algorithm::kAes256, kBogusRealSize);
+  Fixture const fixture = MakeFixture(Algorithm::kAes256, kBogusRealSize);
   for (const std::vector<BYTE>& stream : hostile)
   {
     INFO("stream of " << stream.size() << " bytes");
@@ -822,7 +822,7 @@ TEMPLATE_TEST_CASE_SIG(
     {
       continue;
     }
-    Opened<S> opened =
+    Opened<S> const opened =
         Open<S>(NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file),
                 fixture.provider);
     CHECK_FALSE(ReadAt<S>(OnlyData<S>(*opened.record), 0, 100).has_value());
@@ -1091,7 +1091,7 @@ TEMPLATE_TEST_CASE_SIG(
 {
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::kAes256);
   const TestEfsEntry user = TestUser();
-  auto provider = std::make_shared<TestKeyProvider>();
+  auto const provider = std::make_shared<TestKeyProvider>();
   provider->Add(user.thumbprint, user.wrapped_fek,
                 NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key));
 
@@ -1115,7 +1115,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> expected = head;
   expected.resize(kRealSize, 0);
 
-  Opened<S> opened = Open<S>(
+  Opened<S> const opened = Open<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, kRealSize);
   REQUIRE(read.has_value());

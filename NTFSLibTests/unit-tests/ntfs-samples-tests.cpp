@@ -118,7 +118,7 @@ void OpenDirPath(FileRecord<Strategy::NO_CACHE>& dir,
                  std::initializer_list<std::wstring_view> parts)
 {
   OpenRootDir(dir);
-  for (std::wstring_view part : parts)
+  for (std::wstring_view const part : parts)
   {
     OpenSubDir(dir, part);
   }
@@ -202,7 +202,7 @@ void CheckRepairStreamsHoldPtrnPattern(
   REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
-  for (std::wstring_view stream_name : {L"$Corrupt", L"$Verify"})
+  for (std::wstring_view const stream_name : {L"$Corrupt", L"$Verify"})
   {
     const AttrBase<Strategy::NO_CACHE>* stream = file.FindStream(stream_name);
     REQUIRE(stream != nullptr);
@@ -249,7 +249,7 @@ TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
 {
   NtfsBrowserTests::RequireCorpusImage(k2mImage);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       OpenWholeDiskImage(k2mImage, kSmallImagePartitionOffset));
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetClusterSize() == 2'097'152);
@@ -273,7 +273,7 @@ TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
 {
   NtfsBrowserTests::RequireCorpusImage(kPtrnImage);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       OpenWholeDiskImage(kPtrnImage, kSmallImagePartitionOffset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -296,7 +296,7 @@ TEST_CASE(
 {
   NtfsBrowserTests::RequireCorpusImage(kRamslackImage);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       OpenWholeDiskImage(kRamslackImage, kSmallImagePartitionOffset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -330,7 +330,7 @@ TEST_CASE(
 {
   NtfsBrowserTests::RequireCorpusImage(kLastaccessImage);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       OpenWholeDiskImage(kLastaccessImage, kSmallImagePartitionOffset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -365,7 +365,7 @@ TEST_CASE(
 {
   NtfsBrowserTests::RequireCorpusImage(kSiVsFnImage);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       OpenWholeDiskImage(kSiVsFnImage, kSmallImagePartitionOffset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -426,9 +426,9 @@ TEST_CASE(
       OpenWholeDiskImage(kNtfsImage, kLargeImagePartitionOffset));
   REQUIRE(volume.IsVolumeOK());
 
-  auto checkAccessTimeMismatch = [&volume](std::wstring_view dirName,
-                                           std::wstring_view fileName,
-                                           ULONGLONG expectedDeltaSeconds)
+  auto const checkAccessTimeMismatch = [&volume](std::wstring_view dirName,
+                                                 std::wstring_view fileName,
+                                                 ULONGLONG expectedDeltaSeconds)
   {
     FileRecord<Strategy::NO_CACHE> dir(volume);
     OpenDirPath(dir, {dirName});
@@ -467,7 +467,7 @@ TEST_CASE(
     SKIP("ntfs_extremely_fragmented_mft.raw not present: " << image.string());
   }
 
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       OpenWholeDiskImage(image, kLargeImagePartitionOffset));
   REQUIRE(volume.IsVolumeOK());
 

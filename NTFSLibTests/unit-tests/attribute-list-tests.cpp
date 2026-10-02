@@ -47,7 +47,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -73,7 +73,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithMultiTypeAttributeListDirectory());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -97,7 +97,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -123,7 +123,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithFragmentedAttributeListDirectory());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -153,8 +153,8 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
 
-  NtfsVolume<S> volume(std::move(reader),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> const volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -171,7 +171,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -189,8 +189,8 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall());
 
-  NtfsVolume<S> volume(std::move(reader),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> const volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -210,7 +210,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -228,8 +228,8 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch());
 
-  NtfsVolume<S> volume(std::move(reader),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> const volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -248,7 +248,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -266,7 +266,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListCycle());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -285,7 +285,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
@@ -314,7 +314,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
   // mft_data_ must be the base extent, not whichever instance parsed first.
   CHECK(volume.GetRecordsCount() == 1);
@@ -332,7 +332,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataExtentChain());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -349,7 +349,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -420,8 +420,8 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize());
 
-  NtfsVolume<S> volume(std::move(reader),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> const volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -446,7 +446,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSplitAttributeListAttribute());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -477,8 +477,8 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::BuildFakeNtfsImageWithSplitDataAndTrailingDefect(
           defect));
 
-  NtfsVolume<S> volume(std::move(reader),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> const volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -504,7 +504,7 @@ constexpr std::chrono::seconds kOpenTimeout{10};
 template <Strategy S>
 bool OpensWithinTimeout(std::vector<BYTE> image)
 {
-  auto done = std::make_shared<std::promise<void>>();
+  auto const done = std::make_shared<std::promise<void>>();
   std::future<void> finished = done->get_future();
 
   std::thread worker(
@@ -512,7 +512,7 @@ bool OpensWithinTimeout(std::vector<BYTE> image)
       {
         try
         {
-          NtfsVolume<S> volume(
+          NtfsVolume<S> const volume(
               std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
                   std::move(image)));
           done->set_value();
@@ -573,7 +573,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(link));
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -594,8 +594,8 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(link));
 
-  NtfsVolume<S> volume(std::move(reader),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> const volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -614,7 +614,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(
           NtfsBrowserTests::kGenuineExtensionLink));
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -637,7 +637,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(
           NtfsBrowserTests::kGenuineExtensionLink));
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -660,7 +660,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataSplitLink(
           {.entry_sequence = 3, .record_sequence = 4}));
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -677,7 +677,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataSplitLink(
           {.entry_sequence = 3, .record_sequence = 3}));
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -692,7 +692,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);

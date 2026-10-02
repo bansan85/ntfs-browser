@@ -105,8 +105,8 @@ template <Strategy S>
 void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
               std::optional<size_t> failingRead = {})
 {
-  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failingRead),
-                       options);
+  NtfsVolume<S> const volume(
+      std::make_unique<LoopingDiskReader>(data, failingRead), options);
   if (!volume.IsVolumeOK())
   {
     return;

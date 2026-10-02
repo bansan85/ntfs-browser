@@ -106,7 +106,7 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
 {
   NtfsBrowserTests::RequireCorpusImage(kDfttImage);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       NtfsBrowserTests::OpenBareVolumeImage(kDfttImage));
   REQUIRE(volume.IsVolumeOK());
 
@@ -122,7 +122,7 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   // include_deleted on.
   VolumeOptions options;
   options.include_deleted = true;
-  NtfsVolume<Strategy::NO_CACHE> del_volume(
+  NtfsVolume<Strategy::NO_CACHE> const del_volume(
       NtfsBrowserTests::OpenBareVolumeImage(kDfttImage), options);
   REQUIRE(del_volume.IsVolumeOK());
   CheckReadsKeywordFile(del_volume, kResidentUnalloc);

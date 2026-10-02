@@ -26,10 +26,10 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  FileRecord<S> const record(volume);
 
   // A defect here can abort the whole process, not just fail this check.
   CHECK_FALSE(record.IsDeleted());

@@ -92,7 +92,7 @@ void RunOddSizedAttributesAreParsedAligned()
   offset += kOddAttrSize;
   Put(image, offset, static_cast<DWORD>(AttrType::ALL));
 
-  NtfsVolume<S> volume(
+  NtfsVolume<S> const volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
@@ -114,7 +114,7 @@ void RunOddSizedAttributesAreParsedAligned()
 // Number of entries TraverseSubEntries() reports for the root directory.
 size_t CountRootEntries(std::vector<BYTE> image)
 {
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
@@ -197,7 +197,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::memset(image.data() + attrOffset + totalSize, 0, 2 * sizeof(DWORD));
   Put(image, attrOffset + totalSize, static_cast<DWORD>(AttrType::ALL));
 
-  NtfsVolume<S> volume(
+  NtfsVolume<S> const volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 

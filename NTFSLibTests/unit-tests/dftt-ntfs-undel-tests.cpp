@@ -116,7 +116,7 @@ TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
 
   VolumeOptions options;
   options.include_deleted = true;
-  NtfsVolume<Strategy::NO_CACHE> volume(
+  NtfsVolume<Strategy::NO_CACHE> const volume(
       NtfsBrowserTests::OpenBareVolumeImage(kDfttImage), options);
   REQUIRE(volume.IsVolumeOK());
 

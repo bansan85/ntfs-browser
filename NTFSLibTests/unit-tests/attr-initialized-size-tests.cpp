@@ -57,8 +57,9 @@ std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length)
 template <Strategy S>
 void CheckReadsBeyondTheInitializedSizeAreZero()
 {
-  NtfsVolume<S> volume(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithUninitializedTail()));
+  NtfsVolume<S> const volume(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          NtfsBrowserTests::BuildFakeNtfsImageWithUninitializedTail()));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);

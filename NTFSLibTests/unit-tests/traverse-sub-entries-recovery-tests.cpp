@@ -59,7 +59,7 @@ void RunOrphanedBlocksNeedRecoveryFlag()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -85,7 +85,7 @@ void RunOrphanedBlocksFoundWithRecoveryFlag()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> volume(std::move(reader), kRecoverKeepDeleted);
+  NtfsVolume<S> const volume(std::move(reader), kRecoverKeepDeleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -113,8 +113,8 @@ void RunOrphanedBlocksDroppedWithoutIncludeDeleted()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> volume(std::move(reader),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> const volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -143,8 +143,8 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch()
         NtfsBrowserTests::
             BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
 
-    NtfsVolume<S> volume(std::move(reader),
-                         VolumeOptions{.recover_errors = true});
+    NtfsVolume<S> const volume(std::move(reader),
+                               VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
@@ -162,7 +162,7 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch()
         NtfsBrowserTests::
             BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
 
-    NtfsVolume<S> volume(std::move(reader), kRecoverKeepDeleted);
+    NtfsVolume<S> const volume(std::move(reader), kRecoverKeepDeleted);
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
@@ -186,7 +186,7 @@ void RunMissingIndexRootNeedsRecoveryFlag()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -206,7 +206,7 @@ void RunMissingIndexRootRecoveredWithFlag()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> volume(std::move(reader), kRecoverKeepDeleted);
+  NtfsVolume<S> const volume(std::move(reader), kRecoverKeepDeleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -229,7 +229,7 @@ std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image)
   auto reader =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
 
-  NtfsVolume<S> volume(std::move(reader), kRecoverKeepDeleted);
+  NtfsVolume<S> const volume(std::move(reader), kRecoverKeepDeleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);

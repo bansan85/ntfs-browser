@@ -46,8 +46,9 @@ TEMPLATE_TEST_CASE_SIG(
   const std::vector<BYTE> image =
       NtfsBrowserTests::BuildFakeNtfsImageWithWrappingLcn(FakeRunHost::Data);
 
-  NtfsVolume<S> volume(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      std::vector<BYTE>(image)));
+  NtfsVolume<S> const volume(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          std::vector<BYTE>(image)));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -76,9 +77,10 @@ TEMPLATE_TEST_CASE_SIG(
 {
   SECTION("strict: the whole attribute is rejected")
   {
-    NtfsVolume<S> volume(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-        NtfsBrowserTests::BuildFakeNtfsImageWithOverflowingLcnSum(
-            FakeRunHost::Data)));
+    NtfsVolume<S> const volume(
+        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+            NtfsBrowserTests::BuildFakeNtfsImageWithOverflowingLcnSum(
+                FakeRunHost::Data)));
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
@@ -89,7 +91,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("recovering: the run decoded before the overflow is kept")
   {
-    NtfsVolume<S> volume(
+    NtfsVolume<S> const volume(
         std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
             NtfsBrowserTests::BuildFakeNtfsImageWithOverflowingLcnSum(
                 FakeRunHost::Data)),

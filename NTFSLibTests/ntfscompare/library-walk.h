@@ -122,7 +122,7 @@ template <NtfsBrowser::Strategy S>
     dir.TraverseSubEntries(
         [](const IndexEntry& ie, void* context)
         {
-          auto* c = static_cast<CallbackContext*>(context);
+          auto const* c = static_cast<CallbackContext*>(context);
 
           // Skip system metafiles and the DOS 8.3 alias: the Win32 name is
           // this tool's path key everywhere.

@@ -70,7 +70,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &NotMultipleOf4Kn);
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
 
   CHECK(volume.IsVolumeOK());
 }
@@ -83,7 +83,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &AtLeast4Kn);
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
 
   CHECK(volume.IsVolumeOK());
 }
@@ -96,7 +96,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &Always);
 
-  NtfsVolume<S> volume(std::move(reader));
+  NtfsVolume<S> const volume(std::move(reader));
 
   CHECK_FALSE(volume.IsVolumeOK());
 }

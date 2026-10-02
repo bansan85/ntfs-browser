@@ -499,7 +499,7 @@ FakeRecord MakeVolumeRecordWithName(std::wstring_view name)
 {
   FakeRecord record = MakeVolumeRecord();
 
-  auto& volInfo = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto const& volInfo = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
       &record[kAttrOffset]);
   const DWORD nameOffset = kAttrOffset + volInfo.header.total_size;
 

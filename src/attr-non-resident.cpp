@@ -760,7 +760,8 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   {
     ULONGLONG len = 0;
     // First cluster, Unaligned
-    std::span<BYTE> unaligned_buf_first = this->volume_.GetClusterBuffer();
+    std::span<BYTE> const unaligned_buf_first =
+        this->volume_.GetClusterBuffer();
     std::optional<ULONGLONG> lenc =
         ReadVirtualClusters(start_vcn, 1, unaligned_buf_first);
     if (!lenc || *lenc != this->GetClusterSize())
@@ -785,7 +786,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   if (alignedClusters != 0)
   {
     // Aligned clusters
-    ULONGLONG alignedSize = alignedClusters * this->GetClusterSize();
+    ULONGLONG const alignedSize = alignedClusters * this->GetClusterSize();
 
     std::optional<ULONGLONG> lenc = ReadVirtualClusters(
         start_vcn, alignedClusters, {buf, gsl::narrow<size_t>(alignedSize)});
@@ -806,7 +807,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   }
 
   // Last cluster, Unaligned
-  std::span<BYTE> unaligned_buf_last = this->volume_.GetClusterBuffer();
+  std::span<BYTE> const unaligned_buf_last = this->volume_.GetClusterBuffer();
   std::optional<ULONGLONG> lenc =
       ReadVirtualClusters(start_vcn, 1, unaligned_buf_last);
   if (!lenc || *lenc != this->GetClusterSize())

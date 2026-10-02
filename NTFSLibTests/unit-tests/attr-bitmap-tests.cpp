@@ -36,8 +36,9 @@ constexpr ULONGLONG kBitsPerBitmapCluster =
 template <Strategy S>
 void CheckClusterFreeAnswersPastTheFirstBitmapCluster()
 {
-  NtfsVolume<S> volume(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMultiClusterBitmap()));
+  NtfsVolume<S> const volume(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          NtfsBrowserTests::BuildFakeNtfsImageWithMultiClusterBitmap()));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);

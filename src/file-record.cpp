@@ -133,7 +133,8 @@ const AttrHeaderCommon& FileRecord<S>::Impl::AlignedAttrHeader(const BYTE* at,
     return *reinterpret_cast<const AttrHeaderCommon*>(at);
   }
 
-  auto& copy = realigned_attrs_.emplace_back(std::make_unique<BYTE[]>(room));
+  auto const& copy =
+      realigned_attrs_.emplace_back(std::make_unique<BYTE[]>(room));
   std::memcpy(copy.get(), at, room);
   return *reinterpret_cast<const AttrHeaderCommon*>(copy.get());
 }
@@ -359,7 +360,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
 
     try
     {
-      auto header = FileRecordHeader::Factory<S>(record_buffer_);
+      auto const header = FileRecordHeader::Factory<S>(record_buffer_);
       return std::make_unique<FileRecordHeaderImpl<S>>(std::move(header));
     }
     catch (const std::exception& e)
@@ -383,7 +384,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
 
   try
   {
-    auto header = FileRecordHeader::Factory<S>(record_buffer_);
+    auto const header = FileRecordHeader::Factory<S>(record_buffer_);
     return std::make_unique<FileRecordHeaderImpl<S>>(std::move(header));
   }
   catch (const std::exception& e)
@@ -800,7 +801,7 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
       // parsed instead of splicing a wrong or partial result together.
       ULONGLONG expectedStartVcn = 0;
       bool contiguous = true;
-      for (size_t idx : indices)
+      for (size_t const idx : indices)
       {
         const auto& instance =
             static_cast<const AttrNonResident<S>&>(*attrs[idx]);
@@ -956,7 +957,7 @@ bool FileRecord<S>::Impl::AttachEfsContext()
   }
 
   // One context for the record: its streams share one FEK, resolved once.
-  auto context = std::make_shared<const Efs::Context>(
+  auto const context = std::make_shared<const Efs::Context>(
       ReadEfsEntries(),
       [&volume = volume_] { return volume.GetEfsKeyProvider(); });
   for (AttrNonResident<S>* stream : encrypted)
@@ -1066,7 +1067,7 @@ template <Strategy S>
 const std::vector<std::unique_ptr<AttrBase<S>>>&
     FileRecord<S>::getAttr(AttrType attrType) const noexcept
 {
-  static std::vector<std::unique_ptr<AttrBase<S>>> dummy{};
+  static std::vector<std::unique_ptr<AttrBase<S>>> const dummy{};
   const DWORD attrIdx = ATTR_INDEX(attrType);
 
   if (attrIdx >= kAttrNums)

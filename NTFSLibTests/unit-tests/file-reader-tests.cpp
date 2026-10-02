@@ -96,9 +96,9 @@ TEMPLATE_TEST_CASE_SIG(
   {
     content[i] = static_cast<BYTE>(i);
   }
-  TempFile file(content);
+  TempFile const file(content);
 
-  NtfsBrowser::FileReader<S> reader = OpenOnDisk<S>(file.path);
+  NtfsBrowser::FileReader<S> const reader = OpenOnDisk<S>(file.path);
 
   std::array<BYTE, kReadIntoSize> dest{};
   LARGE_INTEGER addr{.QuadPart = kReadIntoOffset};
@@ -116,9 +116,9 @@ TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
                        NtfsBrowser::Strategy::FULL_CACHE)
 {
   std::vector<BYTE> content(kTinyFileSize, kTinyFileFill);
-  TempFile file(content);
+  TempFile const file(content);
 
-  NtfsBrowser::FileReader<S> reader = OpenOnDisk<S>(file.path);
+  NtfsBrowser::FileReader<S> const reader = OpenOnDisk<S>(file.path);
 
   std::array<BYTE, kReadIntoSize> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
@@ -134,7 +134,7 @@ TEST_CASE("FileReader NO_CACHE Read grows its buffer before filling it",
     content[i] = static_cast<BYTE>(i * kPatternStep);
   }
 
-  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> reader(
+  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> const reader(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
 
   LARGE_INTEGER first_addr{.QuadPart = 0};

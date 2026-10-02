@@ -37,7 +37,7 @@ IndexEntry MakeSystemEntry()
   constexpr wchar_t kName[] = L"System";
   constexpr BYTE kNameLen = 6;
 
-  auto buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
+  auto const buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
 
   auto& ie = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
   ie.mft_index = kEntryRecordNumber;
@@ -67,7 +67,7 @@ IndexEntry MakeSystemEntry()
 // probe individual code points' collation order).
 IndexEntry MakeNamedEntry(std::wstring_view name)
 {
-  auto buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
+  auto const buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
 
   auto& ie = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
   ie.mft_index = kEntryRecordNumber;
