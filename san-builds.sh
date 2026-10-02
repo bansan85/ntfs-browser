@@ -92,7 +92,7 @@ select_build() {
       ;;
     tysan) F="-fsanitize=type" ;;
     cfi)
-      F="-flto=thin -fvisibility=hidden -fsanitize=cfi,cfi-cast-strict,safe-stack -fno-sanitize-trap=cfi"
+      F="-flto=thin -fvisibility=hidden -fsanitize=cfi,cfi-cast-strict -fno-sanitize-trap=cfi"
       EXTRA=(-DBUILD_SHARED_LIBS=OFF)
       ;;
     scudo) F="-fsanitize=scudo" ;;
