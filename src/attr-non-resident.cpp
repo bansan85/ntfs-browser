@@ -43,6 +43,15 @@ constexpr WORD kMaxCompUnitSizeShift = 16;
 // Real units are <=64KiB (16 clusters * 4KB); 1MiB caps a forged
 // comp_unit_size from over-allocating.
 constexpr ULONGLONG kMaxCompressionUnitSize = 1024ULL * 1024ULL;
+
+// Clusters an attribute header spans. last_vcn is inclusive, so an empty
+// attribute stores it as -1 (all ones) with start_vcn 0: that is 0 clusters,
+// not a count that wraps.
+constexpr ULONGLONG SpannedClusters(const Attr::HeaderNonResident& header)
+{
+  const ULONGLONG span = header.last_vcn - header.start_vcn;
+  return span == std::numeric_limits<ULONGLONG>::max() ? 0 : span + 1;
+}
 }  // namespace
 
 template <Strategy S>
@@ -50,7 +59,7 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
                                     const FileRecord<S>& fr)
     : AttrBase<S>(ahc, fr),
       attr_header_nr_(reinterpret_cast<const Attr::HeaderNonResident&>(ahc)),
-      merged_clusters_(attr_header_nr_.last_vcn - attr_header_nr_.start_vcn + 1)
+      merged_clusters_(SpannedClusters(attr_header_nr_))
 {
   // total_size already covers this field (ParseAttrs()); start_vcn must be
   // unit-aligned or units decode against the wrong window.
@@ -778,9 +787,8 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
     // Aligned clusters
     ULONGLONG alignedSize = alignedClusters * this->GetClusterSize();
 
-    std::optional<ULONGLONG> lenc =
-        ReadVirtualClusters(start_vcn, alignedClusters,
-                            {buf, gsl::narrow<size_t>(alignedSize)});
+    std::optional<ULONGLONG> lenc = ReadVirtualClusters(
+        start_vcn, alignedClusters, {buf, gsl::narrow<size_t>(alignedSize)});
     if (!lenc || *lenc != alignedSize)
     {
       return {};
