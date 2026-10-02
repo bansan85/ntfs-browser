@@ -91,7 +91,10 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 
   while (true)
   {
-    if (cur + offsetof(Data::IndexEntry, stream) > data_end)
+    // Compare sizes, not cur + n: an entry size from the disk can put that
+    // pointer past the end of the buffer, which is undefined to even form.
+    const auto remaining = static_cast<size_t>(data_end - cur);
+    if (remaining < offsetof(Data::IndexEntry, stream))
     {
       LogRecoverable(recover,
                      "Index Root: index entry header exceeds attribute bounds");
@@ -103,7 +106,7 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       break;
     }
     const Data::IndexEntry head = ReadIndexEntryHeader(cur);
-    if (head.size == 0 || cur + head.size > data_end)
+    if (head.size == 0 || head.size > remaining)
     {
       LogRecoverable(recover,
                      "Index Root: index entry exceeds attribute bounds");

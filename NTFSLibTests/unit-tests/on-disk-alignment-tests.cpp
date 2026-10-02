@@ -29,6 +29,7 @@
 #include "data/index-block.h"
 #include "data/index-entry.h"
 #include "fake-ntfs-image.h"
+#include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::AttrHeaderCommon;
@@ -223,10 +224,13 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr WORD kSecondBlockWord = 0xBBBB;
 
   std::vector<BYTE> storage(kRecordSize, 0);
-  auto& header = *reinterpret_cast<FileRecordHeader::Data*>(storage.data());
-  header.magic = kFileRecordMagic;
-  header.offset_of_us = kOddOffsetOfUs;
-  header.size_of_us = 3;
+  NtfsBrowserTests::EditFileRecordHeader(storage,
+                                         [](FileRecordHeader::Data& header)
+                                         {
+                                           header.magic = kFileRecordMagic;
+                                           header.offset_of_us = kOddOffsetOfUs;
+                                           header.size_of_us = 3;
+                                         });
   Put(storage, kOddOffsetOfUs, kUsn);
   Put(storage, kOddOffsetOfUs + sizeof(WORD), kFirstBlockWord);
   Put(storage, kOddOffsetOfUs + (2 * sizeof(WORD)), kSecondBlockWord);

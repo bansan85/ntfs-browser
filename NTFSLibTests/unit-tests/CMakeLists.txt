@@ -4,6 +4,7 @@ set(
   "child-process.cpp"
   "fake-ntfs-image.h"
   "fake-ntfs-image.cpp"
+  "file-record-header-edit.h"
   "memory-disk-reader.h"
   "memory-disk-reader.cpp"
   "sequential-disk-reader.h"

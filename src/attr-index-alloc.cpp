@@ -182,7 +182,10 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
   while (true)
   {
-    if (cur + offsetof(Data::IndexEntry, stream) > block_end)
+    // Compare sizes, not cur + n: an entry size from the disk can put that
+    // pointer past the end of the buffer, which is undefined to even form.
+    const auto remaining = static_cast<size_t>(block_end - cur);
+    if (remaining < offsetof(Data::IndexEntry, stream))
     {
       LogRecoverable(recover,
                      "Index Block: index entry header exceeds block bounds");
@@ -194,7 +197,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       break;
     }
     const Data::IndexEntry head = ReadIndexEntryHeader(cur);
-    if (head.size == 0 || cur + head.size > block_end)
+    if (head.size == 0 || head.size > remaining)
     {
       LogRecoverable(recover, "Index Block: index entry exceeds block bounds");
       if (!recover)

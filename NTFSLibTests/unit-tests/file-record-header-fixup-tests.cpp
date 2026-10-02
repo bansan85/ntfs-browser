@@ -12,6 +12,7 @@
 #include <ntfs-browser/strategy.h>
 
 #include "data/file-record-header.h"
+#include "file-record-header-edit.h"
 
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::kFileRecordMagic;
@@ -47,11 +48,15 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> storage(kDeclaredBufferSize + kArrayWords * sizeof(WORD),
                             0);
 
-  auto& header = *reinterpret_cast<FileRecordHeader::Data*>(storage.data());
-  header.magic = kFileRecordMagic;
-  header.offset_of_us = kOffsetOfUs;
-  // Correct value; it bounds how many array words the ctor reads.
-  header.size_of_us = static_cast<WORD>(kArrayWords + 1);
+  NtfsBrowserTests::EditFileRecordHeader(
+      storage,
+      [](FileRecordHeader::Data& header)
+      {
+        header.magic = kFileRecordMagic;
+        header.offset_of_us = kOffsetOfUs;
+        // Correct value; it bounds how many array words the ctor reads.
+        header.size_of_us = static_cast<WORD>(kArrayWords + 1);
+      });
 
   for (size_t i = 0; i < kArrayWords; i++)
   {
@@ -98,22 +103,28 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr size_t kBlockSize = 512;
   constexpr size_t kBlocks = kRecordSize / kBlockSize;
   constexpr WORD kUsn = 0x7777;
+  constexpr WORD kOffsetOfUsArray = 48;
 
   std::vector<BYTE> storage(kRecordSize, 0);
-  auto& header = *reinterpret_cast<FileRecordHeader::Data*>(storage.data());
-  header.magic = kFileRecordMagic;
-  header.offset_of_us = 48;
-  header.size_of_us = static_cast<WORD>(kBlocks + 1);
+  NtfsBrowserTests::EditFileRecordHeader(storage,
+                                         [](FileRecordHeader::Data& header)
+                                         {
+                                           header.magic = kFileRecordMagic;
+                                           header.offset_of_us =
+                                               kOffsetOfUsArray;
+                                           header.size_of_us =
+                                               static_cast<WORD>(kBlocks + 1);
+                                         });
 
   const auto put_word = [&](size_t offset, WORD value)
   { std::memcpy(storage.data() + offset, &value, sizeof(value)); };
 
-  put_word(header.offset_of_us, kUsn);
+  put_word(kOffsetOfUsArray, kUsn);
   for (size_t i = 0; i < kBlocks; i++)
   {
     // The array holds each block's true last word; the block itself carries
     // the sequence number, as it does on disk.
-    put_word(header.offset_of_us + sizeof(WORD) * (1 + i),
+    put_word(kOffsetOfUsArray + sizeof(WORD) * (1 + i),
              gsl::narrow<WORD>(0xA000 + i));
     put_word((i + 1) * kBlockSize - sizeof(WORD), kUsn);
   }

@@ -38,19 +38,20 @@ BASE_FLAGS="-O1 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls"
 
 ASAN_FLAGS="-fsanitize=address,undefined,float-divide-by-zero,local-bounds,vptr -fsanitize-address-use-after-return=always -fno-sanitize-recover=all -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_SANITIZE_STD_ALLOCATOR -D_GLIBCXX_SANITIZE_VECTOR"
 
-# asan-ptr adds pointer-compare/pointer-subtract, which give many invalid-pointer-pair false
-# positives on optimised IR (the second pointer is a compiler-made constant such as
-# 0xfffffffffffffff4). They are suppressed file by file; add new offenders as they show up.
-# The plain asan builds do not use pointer-compare/subtract and need no ignorelist.
-ASAN_PTR_FLAGS="-fsanitize=pointer-compare,pointer-subtract -fsanitize-ignorelist=$ASAN_IGNORELIST"
+# asan-ptr adds pointer-compare/pointer-subtract. Three things keep it free of false positives:
+# - -O0: at -O1 InstCombine rewrites integer compares into pointer compares against bogus
+#   constants (0xfffffffffffffff4), which show up as invalid-pointer-pair in code that never
+#   compares pointers.
+# - no container annotations: _GLIBCXX_SANITIZE_VECTOR poisons a vector's spare capacity, so
+#   end_of_storage - finish (libstdc++) is reported as a pair of unrelated objects.
+# - the ignorelist below: std::less<T*> is the one sanctioned cross-object pointer comparison
+#   (string::_M_disjunct, shared_ptr::owner_before), but libstdc++ builds it on a plain '<'.
+ASAN_PTR_FLAGS="-O0 -U_GLIBCXX_SANITIZE_VECTOR -U_GLIBCXX_SANITIZE_STD_ALLOCATOR -fsanitize=pointer-compare,pointer-subtract -fsanitize-ignorelist=$ASAN_IGNORELIST"
 
 mkdir -p "$ROOT" "$LOGS"
 printf 'src:*/3rdparty/*\n' >"$IGNORELIST"
 cat >"$ASAN_IGNORELIST" <<'EOF'
-src:*/3rdparty/cryptopp/cpu.cpp
-src:*/3rdparty/cryptopp/gf2n.cpp
-src:*/bits/basic_string.h
-src:*/3rdparty/spdlog/include/spdlog/pattern_formatter-inl.h
+src:*/bits/stl_function.h
 EOF
 
 export ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-23

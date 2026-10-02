@@ -16,6 +16,7 @@
 
 #include "catch2/matchers/catch_matchers.hpp"
 #include "data/file-record-header.h"
+#include "file-record-header-edit.h"
 
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::kFileRecordMagic;
@@ -34,11 +35,15 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t bufferSize, WORD offsetOfAttr)
   const size_t sectors = bufferSize / kUpdateSequenceStride;
   const WORD offsetOfUs = gsl::narrow<WORD>(bufferSize - 2 * (1 + sectors));
 
-  auto& header = *reinterpret_cast<FileRecordHeader::Data*>(storage.data());
-  header.magic = kFileRecordMagic;
-  header.offset_of_us = offsetOfUs;
-  header.size_of_us = gsl::narrow<WORD>(1 + sectors);
-  header.offset_of_attr = offsetOfAttr;
+  NtfsBrowserTests::EditFileRecordHeader(storage,
+                                         [&](FileRecordHeader::Data& header)
+                                         {
+                                           header.magic = kFileRecordMagic;
+                                           header.offset_of_us = offsetOfUs;
+                                           header.size_of_us =
+                                               gsl::narrow<WORD>(1 + sectors);
+                                           header.offset_of_attr = offsetOfAttr;
+                                         });
 
   return storage;
 }
