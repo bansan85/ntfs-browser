@@ -839,7 +839,9 @@ inline constexpr char kXcaLznt1ExampleDecompressed[] =
 
 inline constexpr size_t kXcaLznt1ExampleDecompressedSize =
     sizeof(kXcaLznt1ExampleDecompressed);
-static_assert(kXcaLznt1ExampleDecompressedSize == 142,
+// Decompressed size [MS-XCA] section 3.3 states for its worked example.
+inline constexpr size_t kXcaLznt1ExampleExpectedSize = 142;
+static_assert(kXcaLznt1ExampleDecompressedSize == kXcaLznt1ExampleExpectedSize,
               "[MS-XCA] section 3.3's worked example decompresses to exactly "
               "142 bytes, terminal NUL included");
 

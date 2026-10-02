@@ -20,6 +20,12 @@ class FileRecord;
 
 namespace
 {
+// Selects the low DWORD of a 64-bit FILETIME value.
+constexpr ULONGLONG kLowDwordMask = 0xFFFFFFFFULL;
+
+// Bits in a DWORD: where the high half of a FILETIME value starts.
+constexpr unsigned kDwordBits = 32;
+
 // Checks the body size before a reference is bound to it: an empty body may
 // have a null data pointer, which a reference MUST NOT be bound to.
 template <typename RESIDENT>
@@ -189,8 +195,8 @@ void AttrStdInfo<RESIDENT, S>::UTC2Local(const ULONGLONG& ultm,
   }
 #else
   // No portable timezone conversion outside Windows; time stays in UTC.
-  lftm.dwLowDateTime = static_cast<DWORD>(ultm & 0xFFFFFFFFULL);
-  lftm.dwHighDateTime = static_cast<DWORD>(ultm >> 32);
+  lftm.dwLowDateTime = static_cast<DWORD>(ultm & kLowDwordMask);
+  lftm.dwHighDateTime = static_cast<DWORD>(ultm >> kDwordBits);
 #endif
 }
 

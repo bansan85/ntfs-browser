@@ -31,12 +31,19 @@ class AttrBase;
 namespace
 {
 
+// Width of the AttrType field in a chain key. Every AttrType fits 16 bits.
+constexpr unsigned kChainKeyTypeBits = 16;
+
+// Selects the AttrType bits of a chain key.
+constexpr ULONGLONG kChainKeyTypeMask = 0xFFFFU;
+
 // Packs (record_ref, attr_type) into one key. record_ref fits the high 48
 // bits (MftSegmentReference::segment_number is 48-bit); every AttrType
 // fits the low 16 bits.
 ULONGLONG MakeChainKey(ULONGLONG recordRef, AttrType attrType) noexcept
 {
-  return (recordRef << 16) | (static_cast<ULONGLONG>(attrType) & 0xFFFFU);
+  return (recordRef << kChainKeyTypeBits) |
+         (static_cast<ULONGLONG>(attrType) & kChainKeyTypeMask);
 }
 
 }  // namespace

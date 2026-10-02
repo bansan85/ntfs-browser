@@ -9,6 +9,15 @@ namespace NtfsBrowser::Data
 
 #define NTFS_SIGNATURE "NTFS    "
 
+// Size of the OEM signature field.
+inline constexpr size_t kBpbSignatureSize = 8;
+
+// Size of the volume serial number field.
+inline constexpr size_t kBpbVolumeSerialSize = 8;
+
+// Size of the boot code that fills the sector up to its 0xAA55 marker.
+inline constexpr size_t kBpbBootCodeSize = 430;
+
 #pragma pack(1)
 struct NtfsBpb
 {
@@ -16,7 +25,7 @@ struct NtfsBpb
   BYTE jmp[3];
 
   // signature
-  BYTE signature[8];
+  BYTE signature[kBpbSignatureSize];
 
   // BPB and extended BPB
   WORD bytes_per_sector;
@@ -36,10 +45,10 @@ struct NtfsBpb
   ULONGLONG lcn_mft_mirr;
   DWORD clusters_per_file_record;
   DWORD clusters_per_index_block;
-  BYTE volume_sn[8];
+  BYTE volume_sn[kBpbVolumeSerialSize];
 
   // boot code
-  BYTE code[430];
+  BYTE code[kBpbBootCodeSize];
 
   //0xAA55
   BYTE x_aa;

@@ -147,6 +147,18 @@ namespace NtfsCompare
 namespace
 {
 
+// Bits in a byte: Windows-style attribute DWORDs are assembled byte by byte.
+constexpr unsigned kXattrBitsPerByte = 8;
+
+// Size in bytes of one POSIX st_blocks unit.
+constexpr ULONGLONG kStatBlockSize = 512ULL;
+
+// FILE_ATTRIBUTE_* bits ntfs-3g/ntfs3 report through the xattr.
+constexpr DWORD kAttrArchive = 0x20U;
+constexpr DWORD kAttrSparse = 0x200U;
+constexpr DWORD kAttrCompressed = 0x800U;
+constexpr DWORD kAttrEncrypted = 0x4000U;
+
   // The DWORD FILE_ATTRIBUTE_* bits ntfs-3g/ntfs3 expose verbatim through this
   // xattr, little-endian. No generic POSIX call carries them, so this is
   // best-effort: absent on a non-NTFS mount, or a driver too old to set it.
@@ -160,9 +172,10 @@ bool ReadNtfsAttribXattr(const std::filesystem::path& path, DWORD& value)
   {
     return false;
   }
-  value = static_cast<DWORD>(buf[0]) | (static_cast<DWORD>(buf[1]) << 8) |
-          (static_cast<DWORD>(buf[2]) << 16) |
-          (static_cast<DWORD>(buf[3]) << 24);
+  value = static_cast<DWORD>(buf[0]) |
+          (static_cast<DWORD>(buf[1]) << kXattrBitsPerByte) |
+          (static_cast<DWORD>(buf[2]) << (2 * kXattrBitsPerByte)) |
+          (static_cast<DWORD>(buf[3]) << (3 * kXattrBitsPerByte));
   return true;
 }
   #else
@@ -224,7 +237,8 @@ Listing WalkOsApi(const std::filesystem::path& root)
       {
         entry.logical_size = gsl::narrow<ULONGLONG>(st.st_size);
       }
-      entry.physical_size = gsl::narrow<ULONGLONG>(st.st_blocks) * 512ULL;
+      entry.physical_size =
+          gsl::narrow<ULONGLONG>(st.st_blocks) * kStatBlockSize;
 
       entry.modification_time_utc =
           SecondsNanosToUtcTicks(st.st_mtim.tv_sec, st.st_mtim.tv_nsec);
@@ -253,10 +267,10 @@ Listing WalkOsApi(const std::filesystem::path& root)
         entry.read_only = (ntfsAttrib & 0x1U) != 0;
         entry.hidden = (ntfsAttrib & 0x2U) != 0;
         entry.system = (ntfsAttrib & 0x4U) != 0;
-        entry.archive = (ntfsAttrib & 0x20U) != 0;
-        entry.sparse = (ntfsAttrib & 0x200U) != 0;
-        entry.compressed = (ntfsAttrib & 0x800U) != 0;
-        entry.encrypted = (ntfsAttrib & 0x4000U) != 0;
+        entry.archive = (ntfsAttrib & kAttrArchive) != 0;
+        entry.sparse = (ntfsAttrib & kAttrSparse) != 0;
+        entry.compressed = (ntfsAttrib & kAttrCompressed) != 0;
+        entry.encrypted = (ntfsAttrib & kAttrEncrypted) != 0;
       }
 
       const std::wstring wname = Utf8ToWide(de->d_name);

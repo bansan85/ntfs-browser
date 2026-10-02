@@ -10,12 +10,17 @@ namespace NtfsCompare
 inline constexpr ULONGLONG kTicksPerSecond = 10'000'000ULL;
 // Seconds the Unix epoch (1970-01-01) follows FILETIME's (1601-01-01).
 inline constexpr ULONGLONG kUnixEpochOffsetSeconds = 11'644'473'600ULL;
+// Bits in a DWORD: where a FILETIME's high half starts.
+inline constexpr unsigned kDwordBits = 32;
+// Nanoseconds in one 100 ns FILETIME tick.
+inline constexpr ULONGLONG kNanosPerTick = 100;
 
 // Combines a FILETIME already in UTC into its 100 ns tick count since
 // 1601-01-01.
 [[nodiscard]] inline ULONGLONG FiletimeToUtcTicks(const FILETIME& ft) noexcept
 {
-  return (static_cast<ULONGLONG>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
+  return (static_cast<ULONGLONG>(ft.dwHighDateTime) << kDwordBits) |
+         ft.dwLowDateTime;
 }
 
 #ifdef _WIN32
@@ -47,7 +52,7 @@ inline constexpr ULONGLONG kUnixEpochOffsetSeconds = 11'644'473'600ULL;
 {
   return (static_cast<ULONGLONG>(seconds) + kUnixEpochOffsetSeconds) *
              kTicksPerSecond +
-         static_cast<ULONGLONG>(nanoseconds) / 100;
+         static_cast<ULONGLONG>(nanoseconds) / kNanosPerTick;
 }
 
 }  // namespace NtfsCompare

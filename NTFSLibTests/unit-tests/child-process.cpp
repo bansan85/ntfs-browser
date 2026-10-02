@@ -29,6 +29,12 @@ namespace NtfsBrowserTests
 namespace
 {
 
+// Bytes read from a child's pipe per read() call.
+constexpr size_t kPipeChunkSize = 4096;
+
+// Permissions of a redirect file the child's output is created with: rw-r--r--.
+constexpr unsigned kRedirectFileMode = 0644;
+
 #ifdef _WIN32
 
 // Quotes one Windows command-line argument per the CRT's own argv parsing
@@ -91,7 +97,7 @@ std::wstring BuildCommandLine(const fs::path& exe,
 std::string ReadAllAndClose(HANDLE readPipe)
 {
   std::string output;
-  std::array<char, 4096> chunk{};
+  std::array<char, kPipeChunkSize> chunk{};
   DWORD bytesRead = 0;
 
   while (ReadFile(readPipe, chunk.data(), gsl::narrow<DWORD>(chunk.size()),
@@ -224,7 +230,7 @@ ProcessOutput RunProcessCapturingOutput(const fs::path& exe,
   }
 
   std::string output;
-  std::array<char, 4096> chunk{};
+  std::array<char, kPipeChunkSize> chunk{};
   ssize_t bytesRead = 0;
   while ((bytesRead = read(pipeFds[0], chunk.data(), chunk.size())) > 0)
   {
@@ -295,9 +301,11 @@ int RunProcessToFiles(const fs::path& exe,
   posix_spawn_file_actions_t actions;
   posix_spawn_file_actions_init(&actions);
   posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, stdout_path.c_str(),
-                                   O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                                   O_WRONLY | O_CREAT | O_TRUNC,
+                                   kRedirectFileMode);
   posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, stderr_path.c_str(),
-                                   O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                                   O_WRONLY | O_CREAT | O_TRUNC,
+                                   kRedirectFileMode);
 
   std::vector<std::string> narrowArgs = NarrowArgs(exe, args);
   std::vector<char*> argv = ToArgv(narrowArgs);

@@ -24,6 +24,54 @@ namespace
 // EFS encrypts one 512-byte sector at a time.
 constexpr size_t kSector = 512;
 
+// Cipher block sizes, in bytes.
+constexpr size_t kAesBlockSize = 16;
+constexpr size_t kDesBlockSize = 8;
+
+// Size of an MD5 digest, and of one DESX salt: 11 characters and their NUL.
+constexpr size_t kMd5DigestSize = 16;
+constexpr size_t kDesxSaltSize = 12;
+
+// Key lengths, in bytes. DESX takes 128 bits, which the cipher expands.
+constexpr size_t kAes128KeySize = 16;
+constexpr size_t kAes192KeySize = 24;
+constexpr size_t kAes256KeySize = 32;
+constexpr size_t k3DesKeySize = 24;
+constexpr size_t kDesxKeySize = 16;
+
+// How TestKey() fills a key byte: (index * step) + seed.
+constexpr size_t kKeyByteStep = 7;
+constexpr size_t kKeyByteSeed = 0x21;
+
+// Size of the FEK blob header: key length, entropy, algorithm, reserved.
+constexpr size_t kFekHeaderSize = 16;
+
+// How TestThumbprint() steps from one byte to the next.
+constexpr size_t kThumbprintByteStep = 13;
+
+// Seed of the plaintext pattern's engine: the 64-bit golden ratio constant.
+constexpr ULONGLONG kPatternSeed = 0x9E3779B97F4A7C15ULL;
+
+// Shift that keeps the top byte of a 64-bit engine word.
+constexpr unsigned kTopByteShift = 56;
+
+// Field offsets of a synthetic $EFS stream, entry, credential and hash record.
+constexpr size_t kStreamVersionField = 0x08;
+constexpr size_t kDdfOffsetField = 0x40;
+constexpr size_t kDrfOffsetField = 0x44;
+constexpr size_t kEntryFekLengthField = 0x08;
+constexpr size_t kEntryFekOffsetField = 0x0C;
+constexpr size_t kCredentialHashField = 0x10;
+
+// Offset, in the credential, of its SID type DWORD, and the value it holds.
+constexpr size_t kCredentialSidTypeField = 0x08;
+constexpr DWORD kSidTypeUser = 3;
+
+// Offsets, in a FEK blob, of the key length, entropy length and algorithm.
+constexpr size_t kFekKeyLengthField = 0;
+constexpr size_t kFekEntropyLengthField = 4;
+constexpr size_t kFekAlgorithmField = 8;
+
 // The two IV words, as read off a real AES-256 EFS file. Repeated here on
 // purpose: the tests must not share the library's copy.
 constexpr ULONGLONG kIvWord0 = 0x5816657be9161312ULL;
@@ -38,7 +86,7 @@ constexpr ULONGLONG kDesIvWord = 0x169119629891ad13ULL;
 std::vector<BYTE> SectorIv(ULONGLONG offset, size_t blockSize)
 {
   std::vector<BYTE> iv(blockSize, 0);
-  if (blockSize == 16)
+  if (blockSize == kAesBlockSize)
   {
     const ULONGLONG w0 = kIvWord0 + offset;
     const ULONGLONG w1 = kIvWord1 + offset;
@@ -80,12 +128,12 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
                               ULONGLONG streamOffset)
 {
   // The salts include their terminating NUL: 12 bytes each.
-  constexpr std::array<char, 12> kSalt1{"Dan Simon  "};
-  constexpr std::array<char, 12> kSalt2{"Scott Field"};
+  constexpr std::array<char, kDesxSaltSize> kSalt1{"Dan Simon  "};
+  constexpr std::array<char, kDesxSaltSize> kSalt2{"Scott Field"};
 
-  const auto digest = [&key](const std::array<char, 12>& salt)
+  const auto digest = [&key](const std::array<char, kDesxSaltSize>& salt)
   {
-    std::array<BYTE, 16> md{};
+    std::array<BYTE, kMd5DigestSize> md{};
     CryptoPP::Weak::MD5 hash;
     hash.Update(key.data(), key.size());
     hash.Update(reinterpret_cast<const BYTE*>(salt.data()), salt.size());
@@ -93,19 +141,20 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
     return md;
   };
 
-  const std::array<BYTE, 16> md1 = digest(kSalt1);
+  const std::array<BYTE, kMd5DigestSize> md1 = digest(kSalt1);
   std::array<DWORD, 4> words1{};
   std::memcpy(words1.data(), md1.data(), md1.size());
   const std::array<DWORD, 2> desKeyWords{words1[0] ^ words1[1],
                                          words1[2] ^ words1[3]};
-  std::array<BYTE, 8> desKey{};
+  std::array<BYTE, kDesBlockSize> desKey{};
   std::memcpy(desKey.data(), desKeyWords.data(), desKey.size());
 
-  const std::array<BYTE, 16> md2 = digest(kSalt2);
+  const std::array<BYTE, kMd5DigestSize> md2 = digest(kSalt2);
   ULONGLONG outWhitening = 0;
   ULONGLONG inWhitening = 0;
   std::memcpy(&outWhitening, md2.data(), sizeof(outWhitening));
-  std::memcpy(&inWhitening, md2.data() + 8, sizeof(inWhitening));
+  std::memcpy(&inWhitening, md2.data() + sizeof(outWhitening),
+              sizeof(inWhitening));
 
   CryptoPP::DES::Encryption des;
   des.SetKey(desKey.data(), desKey.size());
@@ -114,10 +163,10 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
   data.resize(((data.size() + kSector - 1) / kSector) * kSector, 0);
   for (size_t done = 0; done < data.size(); done += kSector)
   {
-    const auto iv = SectorIv(streamOffset + done, 8);
+    const auto iv = SectorIv(streamOffset + done, kDesBlockSize);
     ULONGLONG prev = 0;
     std::memcpy(&prev, iv.data(), sizeof(prev));
-    for (size_t block = 0; block < kSector; block += 8)
+    for (size_t block = 0; block < kSector; block += kDesBlockSize)
     {
       BYTE* bytes = data.data() + done + block;
       ULONGLONG value = 0;
@@ -147,7 +196,8 @@ void AppendEntry(std::vector<BYTE>& out, const TestEfsEntry& user)
   constexpr size_t kSidOffset = 0x1C;
   constexpr size_t kHashOffset = 0x38;
   constexpr size_t kHashHeader = 0x14;
-  constexpr size_t kCredentialSize = kHashOffset + kHashHeader + 20;
+  constexpr size_t kCredentialSize =
+      kHashOffset + kHashHeader + kThumbprintSize;
   constexpr size_t kEntryHeader = 0x14;
 
   const size_t base = out.size();
@@ -156,19 +206,21 @@ void AppendEntry(std::vector<BYTE>& out, const TestEfsEntry& user)
 
   Put32(out, base + 0x00, gsl::narrow<DWORD>(out.size() - base));
   Put32(out, base + 0x04, kEntryHeader);
-  Put32(out, base + 0x08, gsl::narrow<DWORD>(user.wrapped_fek.size()));
-  Put32(out, base + 0x0C, gsl::narrow<DWORD>(fekOffset));
+  Put32(out, base + kEntryFekLengthField,
+        gsl::narrow<DWORD>(user.wrapped_fek.size()));
+  Put32(out, base + kEntryFekOffsetField, gsl::narrow<DWORD>(fekOffset));
 
   const size_t cred = base + kEntryHeader;
   Put32(out, cred + 0x00, static_cast<DWORD>(kCredentialSize));
   Put32(out, cred + 0x04, kSidOffset);
-  Put32(out, cred + 0x08, 3);
-  Put32(out, cred + 0x10, kHashOffset);
+  Put32(out, cred + kCredentialSidTypeField, kSidTypeUser);
+  Put32(out, cred + kCredentialHashField, kHashOffset);
 
   const size_t hash = cred + kHashOffset;
   Put32(out, hash + 0x00, kHashHeader);
-  Put32(out, hash + 0x04, 20);
-  std::memcpy(out.data() + hash + kHashHeader, user.thumbprint.data(), 20);
+  Put32(out, hash + 0x04, gsl::narrow<DWORD>(kThumbprintSize));
+  std::memcpy(out.data() + hash + kHashHeader, user.thumbprint.data(),
+              kThumbprintSize);
   std::memcpy(out.data() + base + fekOffset, user.wrapped_fek.data(),
               user.wrapped_fek.size());
 }
@@ -193,35 +245,37 @@ std::vector<BYTE> TestKey(Algorithm algorithm)
   switch (algorithm)
   {
     case Algorithm::kAes128:
-      length = 16;
+      length = kAes128KeySize;
       break;
     case Algorithm::kAes192:
+      length = kAes192KeySize;
+      break;
     case Algorithm::k3Des:
-      length = 24;
+      length = k3DesKeySize;
       break;
     case Algorithm::kDesx:
-      length = 16;
+      length = kDesxKeySize;
       break;
     case Algorithm::kAes256:
-      length = 32;
+      length = kAes256KeySize;
       break;
   }
 
   std::vector<BYTE> key(length);
   for (size_t i = 0; i < length; ++i)
   {
-    key[i] = gsl::narrow<BYTE>((i * 7) + 0x21);
+    key[i] = gsl::narrow<BYTE>((i * kKeyByteStep) + kKeyByteSeed);
   }
   return key;
 }
 
 std::vector<BYTE> MakeFekBlob(Algorithm algorithm, std::span<const BYTE> key)
 {
-  std::vector<BYTE> blob(16 + key.size(), 0);
-  Put32(blob, 0, gsl::narrow<DWORD>(key.size()));
-  Put32(blob, 4, gsl::narrow<DWORD>(key.size()));
-  Put32(blob, 8, static_cast<DWORD>(algorithm));
-  std::copy(key.begin(), key.end(), blob.begin() + 16);
+  std::vector<BYTE> blob(kFekHeaderSize + key.size(), 0);
+  Put32(blob, kFekKeyLengthField, gsl::narrow<DWORD>(key.size()));
+  Put32(blob, kFekEntropyLengthField, gsl::narrow<DWORD>(key.size()));
+  Put32(blob, kFekAlgorithmField, static_cast<DWORD>(algorithm));
+  std::copy(key.begin(), key.end(), blob.begin() + kFekHeaderSize);
   return blob;
 }
 
@@ -246,20 +300,20 @@ std::vector<BYTE> EfsEncrypt(Algorithm algorithm, std::span<const BYTE> key,
 std::vector<BYTE> PlaintextPattern(size_t size)
 {
   std::vector<BYTE> bytes(size);
-  std::mt19937_64 engine(0x9E3779B97F4A7C15ULL);
+  std::mt19937_64 engine(kPatternSeed);
   for (BYTE& byte : bytes)
   {
-    byte = static_cast<BYTE>(engine() >> 56);
+    byte = static_cast<BYTE>(engine() >> kTopByteShift);
   }
   return bytes;
 }
 
-std::array<BYTE, 20> TestThumbprint(BYTE seed)
+std::array<BYTE, kThumbprintSize> TestThumbprint(BYTE seed)
 {
-  std::array<BYTE, 20> thumbprint{};
+  std::array<BYTE, kThumbprintSize> thumbprint{};
   for (size_t i = 0; i < thumbprint.size(); ++i)
   {
-    thumbprint[i] = static_cast<BYTE>(seed + (i * 13));
+    thumbprint[i] = static_cast<BYTE>(seed + (i * kThumbprintByteStep));
   }
   return thumbprint;
 }
@@ -270,21 +324,21 @@ std::vector<BYTE> MakeEfsStream(std::span<const TestEfsEntry> users,
   // The header ends where the first field starts, as in a real stream.
   constexpr size_t kHeaderSize = 0x54;
   std::vector<BYTE> out(kHeaderSize, 0);
-  Put32(out, 0x08, 2);
+  Put32(out, kStreamVersionField, 2);
 
   if (!users.empty())
   {
-    Put32(out, 0x40, gsl::narrow<DWORD>(AppendField(out, users)));
+    Put32(out, kDdfOffsetField, gsl::narrow<DWORD>(AppendField(out, users)));
   }
   if (!recovery.empty())
   {
-    Put32(out, 0x44, gsl::narrow<DWORD>(AppendField(out, recovery)));
+    Put32(out, kDrfOffsetField, gsl::narrow<DWORD>(AppendField(out, recovery)));
   }
   Put32(out, 0x00, gsl::narrow<DWORD>(out.size()));
   return out;
 }
 
-void TestKeyProvider::Add(const std::array<BYTE, 20>& thumbprint,
+void TestKeyProvider::Add(const std::array<BYTE, kThumbprintSize>& thumbprint,
                           std::span<const BYTE> wrappedFek,
                           std::vector<BYTE> blob)
 {

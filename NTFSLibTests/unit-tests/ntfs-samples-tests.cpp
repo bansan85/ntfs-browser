@@ -67,6 +67,17 @@ constexpr ULONGLONG kTicksPerSecond = 10'000'000;
 // ntfs-si-vs-fn.raw share the smaller one; ntfs.raw and
 // ntfs_extremely_fragmented_mft.raw the larger, 1 MiB-aligned one.
 constexpr ULONGLONG kSmallImagePartitionOffset = 65536;
+
+// Byte addresses of /1.txt's RAM slack and cluster slack in the ramslack
+// image, from its ReadMe.md.
+constexpr LONGLONG kRamSlackAddress = 213303;
+constexpr LONGLONG kClusterSlackAddress = 213504;
+
+// Gaps, in seconds, between the two timestamps each timestamp test compares,
+// from the images' ReadMe.md.
+constexpr ULONGLONG kLastaccessDeltaSeconds = 158;
+constexpr ULONGLONG kLongMismatchSeconds = 813;
+constexpr ULONGLONG kShortMismatchSeconds = 120;
 constexpr ULONGLONG kLargeImagePartitionOffset = 1048576;
 
 // Opens imagePath through a PartitionDiskReader, so NtfsVolume sees the NTFS
@@ -296,14 +307,14 @@ TEST_CASE(
   // RAM slack: the tail of /1.txt's last written sector, past its own real
   // size but still inside the sector Windows wrote, holding whatever was on
   // disk before (the "PTRN" pattern).
-  LARGE_INTEGER ramSlackAddr{.QuadPart = 213303};
+  LARGE_INTEGER ramSlackAddr{.QuadPart = kRamSlackAddress};
   const std::optional<std::span<const BYTE>> ramSlack =
       volume.Read(ramSlackAddr, 4);
   REQUIRE(ramSlack.has_value());
   CHECK(MatchesPtrnPattern(*ramSlack));
 
   // Cluster slack: the rest of the cluster past that same sector.
-  LARGE_INTEGER clusterSlackAddr{.QuadPart = 213504};
+  LARGE_INTEGER clusterSlackAddr{.QuadPart = kClusterSlackAddress};
   const std::optional<std::span<const BYTE>> clusterSlack =
       volume.Read(clusterSlackAddr, 4);
   REQUIRE(clusterSlack.has_value());
@@ -341,7 +352,8 @@ TEST_CASE(
 
   // ReadMe.md: 2019-03-03 12:37:55 ($STANDARD_INFORMATION) vs.
   // 2019-03-03 12:35:17 ($I30 FILE_NAME) - 2 min 38 s apart.
-  CheckDeltaMatchesSeconds(TickDelta(stdInfoAccess, indexAccess), 158);
+  CheckDeltaMatchesSeconds(TickDelta(stdInfoAccess, indexAccess),
+                           kLastaccessDeltaSeconds);
 
   CheckRepairStreamsHoldPtrnPattern(volume);
 }
@@ -439,9 +451,9 @@ TEST_CASE(
   };
 
   // ReadMe.md: 2020-07-25 12:49:21 vs. 12:35:48 - 13 min 33 s apart.
-  checkAccessTimeMismatch(L"test_dir_2", L"file_2_1.txt", 813);
+  checkAccessTimeMismatch(L"test_dir_2", L"file_2_1.txt", kLongMismatchSeconds);
   // ReadMe.md: 2020-07-25 12:33:24 vs. 12:35:24 - 2 min apart.
-  checkAccessTimeMismatch(L"test_dir", L"file_1.txt", 120);
+  checkAccessTimeMismatch(L"test_dir", L"file_1.txt", kShortMismatchSeconds);
 }
 
 TEST_CASE(

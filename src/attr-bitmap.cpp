@@ -8,6 +8,12 @@
 
 namespace NtfsBrowser
 {
+namespace
+{
+// Bits in one bitmap byte.
+constexpr unsigned kBitsPerByte = 8;
+}  // namespace
+
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
@@ -56,7 +62,7 @@ bool AttrBitmap<TYPE_RESIDENT, S>::IsClusterFree(ULONGLONG cluster)
     const DWORD clusterSize = this->GetClusterSize();
 
     const ULONGLONG clusterOffset = idx / clusterSize;
-    cluster -= (clusterOffset * clusterSize * 8);
+    cluster -= (clusterOffset * clusterSize * kBitsPerByte);
 
     // Read one cluster of data if buffer mismatch
     if (!current_cluster_ || *current_cluster_ != clusterOffset)

@@ -33,8 +33,12 @@ constexpr size_t kArrayWords =
 constexpr WORD kOffsetOfUs =
     static_cast<WORD>(kDeclaredBufferSize - sizeof(WORD));
 
+// Bases of the two WORD patterns below.
+constexpr WORD kSentinelBase = 0xBEEF;
+constexpr WORD kUsArrayFillBase = 0xA000;
+
 // Pattern that never appears anywhere in the declared 1024-byte buffer.
-WORD Sentinel(size_t i) { return gsl::narrow<WORD>(0xBEEF + i); }
+WORD Sentinel(size_t i) { return gsl::narrow<WORD>(kSentinelBase + i); }
 
 }  // namespace
 
@@ -125,7 +129,7 @@ TEMPLATE_TEST_CASE_SIG(
     // The array holds each block's true last word; the block itself carries
     // the sequence number, as it does on disk.
     put_word(kOffsetOfUsArray + sizeof(WORD) * (1 + i),
-             gsl::narrow<WORD>(0xA000 + i));
+             gsl::narrow<WORD>(kUsArrayFillBase + i));
     put_word((i + 1) * kBlockSize - sizeof(WORD), kUsn);
   }
 
@@ -140,6 +144,6 @@ TEMPLATE_TEST_CASE_SIG(
     std::memcpy(&restored,
                 &fr.GetData()->raw[(i + 1) * kBlockSize - sizeof(WORD)],
                 sizeof(restored));
-    CHECK(restored == gsl::narrow<WORD>(0xA000 + i));
+    CHECK(restored == gsl::narrow<WORD>(kUsArrayFillBase + i));
   }
 }

@@ -66,7 +66,67 @@ namespace
 
 // The wrapped FEK the fixtures store. The test provider matches it byte for
 // byte, so its content only has to be recognisable.
-const std::vector<BYTE> kWrappedFek(32, 0xAB);
+constexpr size_t kWrappedFekSize = 32;
+constexpr BYTE kWrappedFekFill = 0xAB;
+const std::vector<BYTE> kWrappedFek(kWrappedFekSize, kWrappedFekFill);
+
+// Plaintext size of a default fixture file: several sectors, not a multiple
+// of one.
+constexpr size_t kDefaultFileSize = 3000;
+
+// Fill that tells an unread byte from a read one.
+constexpr BYTE kUnreadFill = 0xCC;
+
+// Distance, in clusters, between the extents of the sparse-file fixture, and
+// between the streams of the multi-stream fixture.
+constexpr DWORD kTailExtentGap = 8;
+constexpr DWORD kSecretStreamGap = 10;
+constexpr DWORD kPlainStreamGap = 20;
+
+// The thumbprint seed of a user the provider knows, but the file is not for.
+constexpr BYTE kStrangerSeed = 9;
+
+// A FEK blob the cipher cannot use: its size, key length, and algorithm ids.
+constexpr size_t kBrokenBlobSize = 48;
+constexpr DWORD kBrokenKeyLength = 32;
+constexpr DWORD kBrokenAlgorithmId = 0x1234;
+constexpr DWORD kUnknownAlgorithmId = 0x6611;
+
+// Offset of the algorithm DWORD in a FEK blob, and an unsupported key length.
+constexpr size_t kFekAlgorithmField = 8;
+constexpr DWORD kWrongKeyLength = 16;
+
+// A cluster of ciphertext that is never decrypted, and the size it claims.
+constexpr size_t kBogusClusterSize = 1024;
+constexpr BYTE kBogusClusterFill = 7;
+constexpr ULONGLONG kBogusRealSize = 1000;
+
+// Forged DWORDs of the hostile-stream cases.
+constexpr DWORD kAllOnes = 0xFFFFFFFF;
+constexpr DWORD kNearlyAllOnes = 0xFFFFFFF0;
+constexpr DWORD kLargestSigned = 0x7FFFFFFF;
+constexpr DWORD kHugeCredentialOffset = 0xFFFFFF00;
+constexpr DWORD kTooManyEntries = 65;
+constexpr DWORD kOversizedThumbprint = 21;
+
+// Lengths a stream is truncated to: inside the DDF offset field, short of the
+// DDF count, and short of the first entry.
+constexpr std::array<size_t, 5> kTruncatedLengths{0, 3, 0x47, 0x54, 0x58};
+
+// A stream of one repeated byte, far larger than any real one.
+constexpr size_t kHostileStreamSize = 700;
+constexpr BYTE kHostileStreamFill = 0xFF;
+
+// The random-damage test: its seed, and how many damaged streams it parses.
+constexpr unsigned kDamageSeed = 20260921;
+constexpr int kDamageRounds = 5000;
+
+// The wipe test's buffer: its size and its fill.
+constexpr size_t kSecretSize = 64;
+constexpr BYTE kSecretFill = 0xEE;
+
+// Fill of the residue past a file's initialized size.
+constexpr BYTE kResidueFill = 0xAB;
 
 // Where the first data stream of a fixture starts on disk, in clusters.
 constexpr DWORD kFirstStreamLcn = 30;
@@ -92,7 +152,7 @@ struct Fixture
   std::shared_ptr<TestKeyProvider> provider;
 };
 
-Fixture MakeFixture(Algorithm algorithm, size_t size = 3000)
+Fixture MakeFixture(Algorithm algorithm, size_t size = kDefaultFileSize)
 {
   Fixture fixture;
   fixture.plaintext = NtfsBrowserTests::PlaintextPattern(size);
@@ -153,7 +213,7 @@ template <Strategy S>
 std::optional<std::vector<BYTE>> ReadAt(const AttrBase<S>& attr,
                                         ULONGLONG offset, size_t size)
 {
-  std::vector<BYTE> buffer(size, 0xCC);
+  std::vector<BYTE> buffer(size, kUnreadFill);
   const std::optional<ULONGLONG> read = attr.ReadData(offset, buffer);
   if (!read)
   {
@@ -290,10 +350,11 @@ TEMPLATE_TEST_CASE_SIG(
 
   NtfsBrowserTests::FakeEncryptedFile file;
   file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
-  file.streams.push_back(
-      {.runs = {{kFirstStreamLcn, 2}, {{}, 2}, {kFirstStreamLcn + 8, 1}},
-       .cluster_bytes = cipher,
-       .real_size = kTailStart + tail.size()});
+  file.streams.push_back({.runs = {{kFirstStreamLcn, 2},
+                                   {{}, 2},
+                                   {kFirstStreamLcn + kTailExtentGap, 1}},
+                          .cluster_bytes = cipher,
+                          .real_size = kTailStart + tail.size()});
 
   std::vector<BYTE> expected = head;
   expected.resize(kTailStart, 0);
@@ -328,12 +389,12 @@ TEMPLATE_TEST_CASE_SIG(
                               Algorithm::kAes256, key, unnamed),
                           .real_size = unnamed.size()});
   file.streams.push_back({.name = L"secret",
-                          .runs = {{kFirstStreamLcn + 10, 1}},
+                          .runs = {{kFirstStreamLcn + kSecretStreamGap, 1}},
                           .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
                               Algorithm::kAes256, key, secret),
                           .real_size = secret.size()});
   file.streams.push_back({.name = L"plain",
-                          .runs = {{kFirstStreamLcn + 20, 1}},
+                          .runs = {{kFirstStreamLcn + kPlainStreamGap, 1}},
                           .cluster_bytes = plain,
                           .real_size = plain.size(),
                           .flagged_encrypted = false});
@@ -377,7 +438,7 @@ TEMPLATE_TEST_CASE_SIG(
   {
     auto stranger = std::make_shared<TestKeyProvider>();
     stranger->Add(
-        NtfsBrowserTests::TestThumbprint(9), kWrappedFek,
+        NtfsBrowserTests::TestThumbprint(kStrangerSeed), kWrappedFek,
         NtfsBrowserTests::MakeFekBlob(
             Algorithm::kAes256, NtfsBrowserTests::TestKey(Algorithm::kAes256)));
 
@@ -391,9 +452,9 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("the unwrapped FEK is unusable")
   {
     auto broken = std::make_shared<TestKeyProvider>();
-    std::vector<BYTE> blob(48, 0);
-    Patch32(blob, 0, 32);
-    Patch32(blob, 8, 0x1234);
+    std::vector<BYTE> blob(kBrokenBlobSize, 0);
+    Patch32(blob, 0, kBrokenKeyLength);
+    Patch32(blob, kFekAlgorithmField, kBrokenAlgorithmId);
     broken->Add(NtfsBrowserTests::TestThumbprint(1), kWrappedFek,
                 std::move(blob));
 
@@ -408,8 +469,9 @@ TEMPLATE_TEST_CASE_SIG(
   {
     NtfsBrowserTests::FakeEncryptedFile file;
     file.streams.push_back({.runs = {{kFirstStreamLcn, 1}},
-                            .cluster_bytes = std::vector<BYTE>(1024, 7),
-                            .real_size = 1000});
+                            .cluster_bytes = std::vector<BYTE>(
+                                kBogusClusterSize, kBogusClusterFill),
+                            .real_size = kBogusRealSize});
 
     (void)TakeLog();
     Opened<S> opened =
@@ -718,31 +780,33 @@ TEMPLATE_TEST_CASE_SIG(
     Patch32(copy, offset, value);
     hostile.push_back(std::move(copy));
   };
-  forge(kDdfOffsetField, 0xFFFFFFF0);
+  forge(kDdfOffsetField, kNearlyAllOnes);
   forge(kDdfOffsetField, gsl::narrow<DWORD>(valid.size()));
-  forge(kDrfOffsetField, 0x7FFFFFFF);
-  forge(kDdfCount, 0xFFFFFFFF);
-  forge(kDdfCount, 65);
+  forge(kDrfOffsetField, kLargestSigned);
+  forge(kDdfCount, kAllOnes);
+  forge(kDdfCount, kTooManyEntries);
   forge(kDdfCount, 2);
   forge(kEntryLength, 0);
-  forge(kEntryLength, 0xFFFFFFFF);
-  forge(kEntryCredential, 0xFFFFFF00);
-  forge(kEntryFekLength, 0xFFFFFFFF);
+  forge(kEntryLength, kAllOnes);
+  forge(kEntryCredential, kHugeCredentialOffset);
+  forge(kEntryFekLength, kAllOnes);
   forge(kEntryFekLength, 0);
-  forge(kEntryFekOffset, 0xFFFFFFFF);
-  forge(kCredentialHashField, 0xFFFFFFFF);
-  forge(kThumbprintOffset, 0xFFFFFFFF);
-  forge(kThumbprintSize, 21);
-  forge(kThumbprintSize, 0xFFFFFFFF);
-  for (const size_t length : {size_t{0}, size_t{3}, size_t{0x47}, size_t{0x54},
-                              size_t{0x58}, valid.size() - 1})
+  forge(kEntryFekOffset, kAllOnes);
+  forge(kCredentialHashField, kAllOnes);
+  forge(kThumbprintOffset, kAllOnes);
+  forge(kThumbprintSize, kOversizedThumbprint);
+  forge(kThumbprintSize, kAllOnes);
+  std::vector<size_t> lengths(kTruncatedLengths.begin(),
+                              kTruncatedLengths.end());
+  lengths.push_back(valid.size() - 1);
+  for (const size_t length : lengths)
   {
     hostile.emplace_back(valid.begin(),
                          valid.begin() + gsl::narrow<std::ptrdiff_t>(length));
   }
-  hostile.emplace_back(700, 0xFF);
+  hostile.emplace_back(kHostileStreamSize, kHostileStreamFill);
 
-  Fixture fixture = MakeFixture(Algorithm::kAes256, 1000);
+  Fixture fixture = MakeFixture(Algorithm::kAes256, kBogusRealSize);
   for (const std::vector<BYTE>& stream : hostile)
   {
     INFO("stream of " << stream.size() << " bytes");
@@ -751,8 +815,9 @@ TEMPLATE_TEST_CASE_SIG(
     NtfsBrowserTests::FakeEncryptedFile file;
     file.efs_stream = stream;
     file.streams.push_back({.runs = {{kFirstStreamLcn, 1}},
-                            .cluster_bytes = std::vector<BYTE>(1024, 7),
-                            .real_size = 1000});
+                            .cluster_bytes = std::vector<BYTE>(
+                                kBogusClusterSize, kBogusClusterFill),
+                            .real_size = kBogusRealSize});
     if (stream.empty())
     {
       continue;
@@ -769,8 +834,8 @@ TEST_CASE("A $EFS stream with random damage never crashes the parser", "[efs]")
   const std::array<TestEfsEntry, 2> users{TestUser(1), TestUser(2)};
   const std::vector<BYTE> valid = NtfsBrowserTests::MakeEfsStream(users, users);
 
-  std::mt19937 random(20260921);
-  for (int round = 0; round < 5000; ++round)
+  std::mt19937 random(kDamageSeed);
+  for (int round = 0; round < kDamageRounds; ++round)
   {
     std::vector<BYTE> damaged = valid;
     const int flips = 1 + static_cast<int>(random() % 4);
@@ -837,15 +902,15 @@ TEST_CASE("A FEK blob is checked against its algorithm", "[efs]")
   CHECK_FALSE(Fek::Parse(std::span(good).first(good.size() - 1)).has_value());
 
   std::vector<BYTE> unknown = good;
-  Patch32(unknown, 8, 0x6611);
+  Patch32(unknown, kFekAlgorithmField, kUnknownAlgorithmId);
   CHECK_FALSE(Fek::Parse(unknown).has_value());
 
   std::vector<BYTE> wrongLength = good;
-  Patch32(wrongLength, 0, 16);
+  Patch32(wrongLength, 0, kWrongKeyLength);
   CHECK_FALSE(Fek::Parse(wrongLength).has_value());
 
   std::vector<BYTE> hugeLength = good;
-  Patch32(hugeLength, 0, 0xFFFFFFFF);
+  Patch32(hugeLength, 0, kAllOnes);
   CHECK_FALSE(Fek::Parse(hugeLength).has_value());
 }
 
@@ -866,7 +931,7 @@ TEST_CASE("A DESX FEK carries a 16-byte key, not a 24-byte one", "[efs]")
 
 TEST_CASE("Secure zero wipes what it is given", "[efs]")
 {
-  std::vector<BYTE> secret(64, 0xEE);
+  std::vector<BYTE> secret(kSecretSize, kSecretFill);
   NtfsBrowser::Efs::SecureZero(secret);
   CHECK(std::all_of(secret.begin(), secret.end(),
                     [](BYTE byte) { return byte == 0; }));
@@ -1038,7 +1103,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> cluster =
       NtfsBrowserTests::EfsEncrypt(Algorithm::kAes256, key, head, 0);
   cluster.resize(ClustersFor(kRealSize) * NtfsBrowserTests::kFakeClusterSize,
-                 0xAB);
+                 kResidueFill);
 
   NtfsBrowserTests::FakeEncryptedFile file;
   file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));

@@ -9,11 +9,14 @@ inline constexpr ULONGLONG kMftRecordNumberMask = 0x0000FFFFFFFFFFFFULL;
 // Bit position of the 16-bit sequence number in an on-disk file reference.
 inline constexpr unsigned kMftSequenceShift = 48;
 
+// Largest 16-bit sequence number. The next one wraps to 1, not 0.
+inline constexpr WORD kMftMaxSequence = 0xFFFF;
+
 // The sequence number NTFS gives a record when it frees it: one more,
 // skipping 0, since a reference carrying 0 means "do not check".
 constexpr WORD NextSequence(WORD sequence) noexcept
 {
-  return sequence == 0xFFFF ? 1 : static_cast<WORD>(sequence + 1);
+  return sequence == kMftMaxSequence ? 1 : static_cast<WORD>(sequence + 1);
 }
 
 // True if a file reference carrying "referencedSequence" names the record's

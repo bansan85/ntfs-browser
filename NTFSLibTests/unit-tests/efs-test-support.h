@@ -14,6 +14,9 @@
 namespace NtfsBrowserTests
 {
 
+// Size of a certificate thumbprint: a SHA-1 digest.
+inline constexpr size_t kThumbprintSize = 20;
+
 using NtfsBrowser::Efs::Algorithm;
 
 // Every algorithm EFS can use, for the tests that loop over them.
@@ -44,12 +47,12 @@ inline constexpr std::array<Algorithm, 5> kAllAlgorithms{
 // One user's entry of a synthetic $EFS stream.
 struct TestEfsEntry
 {
-  std::array<BYTE, 20> thumbprint{};
+  std::array<BYTE, kThumbprintSize> thumbprint{};
   std::vector<BYTE> wrapped_fek;
 };
 
 // A thumbprint that differs per seed.
-[[nodiscard]] std::array<BYTE, 20> TestThumbprint(BYTE seed);
+[[nodiscard]] std::array<BYTE, kThumbprintSize> TestThumbprint(BYTE seed);
 
 // Builds an $EFS stream in the layout of a real one: header, DDF, then DRF
 // when "recovery" is not empty.
@@ -62,7 +65,7 @@ struct TestEfsEntry
 class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
 {
  public:
-  void Add(const std::array<BYTE, 20>& thumbprint,
+  void Add(const std::array<BYTE, kThumbprintSize>& thumbprint,
            std::span<const BYTE> wrappedFek, std::vector<BYTE> blob);
 
   [[nodiscard]] std::optional<std::vector<BYTE>>
@@ -72,7 +75,7 @@ class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
  private:
   struct Known
   {
-    std::array<BYTE, 20> thumbprint;
+    std::array<BYTE, kThumbprintSize> thumbprint;
     std::vector<BYTE> wrapped_fek;
     std::vector<BYTE> blob;
   };

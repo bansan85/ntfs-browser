@@ -360,12 +360,15 @@ TEMPLATE_TEST_CASE_SIG(
 namespace
 {
 
+// Fill that tells an unread byte from a read one.
+constexpr BYTE kUnreadFill = 0xCC;
+
 // Reads the first "size" bytes of "attr"; empty when the read fails.
 template <Strategy S>
 std::vector<BYTE> ReadFirstBytes(const NtfsBrowser::AttrBase<S>& attr,
                                  size_t size)
 {
-  std::vector<BYTE> buffer(size, 0xCC);
+  std::vector<BYTE> buffer(size, kUnreadFill);
   const std::optional<ULONGLONG> read = attr.ReadData(0, buffer);
   if (!read)
   {

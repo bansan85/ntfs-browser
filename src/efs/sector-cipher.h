@@ -23,6 +23,9 @@ inline constexpr size_t kMaxBlockSize = 16;
 // The DES-family block size, in bytes.
 inline constexpr size_t kDesBlockSize = 8;
 
+// Bits in one byte, to split an IV word into bytes.
+inline constexpr unsigned kBitsPerByte = 8;
+
 // The 16-byte CBC IV of an AES sector is two little-endian 64-bit words, each
 // the sum of one of these constants and the byte offset of the sector in the
 // stream. Read off a real AES-256 file. The second matches the constant
@@ -50,7 +53,8 @@ inline constexpr ULONGLONG kDesIvWord = 0x169119629891ad13ULL;
   {
     for (size_t b = 0; b < sizeof(ULONGLONG); ++b)
     {
-      iv[(w * sizeof(ULONGLONG)) + b] = static_cast<BYTE>(words[w] >> (8 * b));
+      iv[(w * sizeof(ULONGLONG)) + b] =
+          static_cast<BYTE>(words[w] >> (kBitsPerByte * b));
     }
   }
   return iv;

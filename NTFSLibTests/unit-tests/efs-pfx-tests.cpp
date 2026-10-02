@@ -53,6 +53,12 @@ constexpr TestPfx kCapi{"efs-test-capi",
 // The password every test PFX is protected with.
 constexpr std::wstring_view kPassword = L"efs-test";
 
+// Radix of the hex digits in a thumbprint string.
+constexpr int kHexRadix = 16;
+
+// Size of the AES-256 key the fixtures wrapped.
+constexpr size_t kFekKeySize = 32;
+
 fs::path DataFile(const std::string& name)
 {
   return fs::path(NTFS_EFS_TEST_DATA_DIR) / name;
@@ -73,7 +79,7 @@ std::vector<BYTE> Thumbprint(const TestPfx& pfx)
   for (size_t i = 0; i < hex.size(); i += 2)
   {
     bytes.push_back(
-        gsl::narrow<BYTE>(std::stoi(hex.substr(i, 2), nullptr, 16)));
+        gsl::narrow<BYTE>(std::stoi(hex.substr(i, 2), nullptr, kHexRadix)));
   }
   return bytes;
 }
@@ -86,7 +92,7 @@ std::vector<BYTE> WrappedFek(const TestPfx& pfx)
 // The FEK blob the fixtures wrapped: an AES-256 header, then 32 bytes.
 std::vector<BYTE> ExpectedFek()
 {
-  std::vector<BYTE> key(32);
+  std::vector<BYTE> key(kFekKeySize);
   for (size_t i = 0; i < key.size(); ++i)
   {
     key[i] = gsl::narrow<BYTE>((i + 1) * 3);

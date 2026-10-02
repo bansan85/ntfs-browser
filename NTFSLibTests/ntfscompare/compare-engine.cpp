@@ -14,6 +14,9 @@ namespace NtfsCompare
 namespace
 {
 
+// First code point past ASCII: Narrow() keeps only below it.
+constexpr wchar_t kAsciiLimit = 128;
+
 std::string FormatValue(ULONGLONG v) { return std::to_string(v); }
 std::string FormatValue(bool v) { return v ? "true" : "false"; }
 
@@ -25,7 +28,7 @@ std::string Narrow(const std::wstring& w)
   out.reserve(w.size());
   for (wchar_t c : w)
   {
-    out.push_back((c > 0 && c < 128) ? static_cast<char>(c) : '?');
+    out.push_back((c > 0 && c < kAsciiLimit) ? static_cast<char>(c) : '?');
   }
   return out;
 }

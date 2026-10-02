@@ -47,6 +47,33 @@ struct KeywordFile
   bool is_directory;
 };
 
+// Sizes index.html gives the files: resident, non-resident, and non-resident
+// across fragmented clusters.
+constexpr ULONGLONG kResidentSize = 120;
+constexpr ULONGLONG kNonResidentSize = 2000;
+constexpr ULONGLONG kFragmentedSize = 2600;
+
+// The MFT record of each search-term case, from walking the image.
+constexpr KeywordFile kResidentAlloc{27,    {},   "r-alloc", kResidentSize,
+                                     false, false};
+constexpr KeywordFile kResidentFileAds{29,    L"here", "r-fads", kResidentSize,
+                                       false, false};
+constexpr KeywordFile kResidentDirAds{30,    L"there", "r-dads", kResidentSize,
+                                      false, true};
+constexpr KeywordFile kNonResidentAlloc{
+    33, {}, "n-alloc", kNonResidentSize, false, false};
+constexpr KeywordFile kNonResidentFrag{35,    {},   "n-frag", kFragmentedSize,
+                                       false, false};
+constexpr KeywordFile kNonResidentFileAds{
+    37, L"here", "n-fads", kNonResidentSize, false, false};
+constexpr KeywordFile kNonResidentDirAds{
+    38, L"there", "n-dads", kNonResidentSize, false, true};
+constexpr KeywordFile kResidentUnalloc{34,   {},   "r-unalloc", kResidentSize,
+                                       true, false};
+
+// The non-resident file whose search term sits in its slack space.
+constexpr ULONGLONG kSlackRecord = 36;
+
 // Parses one MFT record from `volume` and checks that the requested stream
 // has the size and deletion/directory state index.html documents, and that
 // its content contains the DFTT search term.
@@ -83,20 +110,13 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
       NtfsBrowserTests::OpenBareVolumeImage(kDfttImage));
   REQUIRE(volume.IsVolumeOK());
 
-  // Resident allocated file.
-  CheckReadsKeywordFile(volume, {27, {}, "r-alloc", 120, false, false});
-  // Resident alternate data stream in an allocated file.
-  CheckReadsKeywordFile(volume, {29, L"here", "r-fads", 120, false, false});
-  // Resident alternate data stream in an allocated directory.
-  CheckReadsKeywordFile(volume, {30, L"there", "r-dads", 120, false, true});
-  // Non-resident allocated file.
-  CheckReadsKeywordFile(volume, {33, {}, "n-alloc", 2000, false, false});
-  // Non-resident allocated file, crossing fragmented clusters.
-  CheckReadsKeywordFile(volume, {35, {}, "n-frag", 2600, false, false});
-  // Non-resident alternate data stream in an allocated file.
-  CheckReadsKeywordFile(volume, {37, L"here", "n-fads", 2000, false, false});
-  // Non-resident alternate data stream in an allocated directory.
-  CheckReadsKeywordFile(volume, {38, L"there", "n-dads", 2000, false, true});
+  CheckReadsKeywordFile(volume, kResidentAlloc);
+  CheckReadsKeywordFile(volume, kResidentFileAds);
+  CheckReadsKeywordFile(volume, kResidentDirAds);
+  CheckReadsKeywordFile(volume, kNonResidentAlloc);
+  CheckReadsKeywordFile(volume, kNonResidentFrag);
+  CheckReadsKeywordFile(volume, kNonResidentFileAds);
+  CheckReadsKeywordFile(volume, kNonResidentDirAds);
 
   // Resident unallocated (deleted) file: ParseAttrs() only sees it with
   // include_deleted on.
@@ -105,20 +125,20 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   NtfsVolume<Strategy::NO_CACHE> del_volume(
       NtfsBrowserTests::OpenBareVolumeImage(kDfttImage), options);
   REQUIRE(del_volume.IsVolumeOK());
-  CheckReadsKeywordFile(del_volume, {34, {}, "r-unalloc", 120, true, false});
+  CheckReadsKeywordFile(del_volume, kResidentUnalloc);
 
   // Non-resident allocated file: index.html places its search term in this
   // file's slack space, past its logical size. ReadData()/GetDataSize()
   // expose only the file's own content, so the term MUST NOT be found there.
   FileRecord slack(volume);
   slack.SetAttrMask(Mask::DATA);
-  REQUIRE(slack.ParseFileRecord(36));
+  REQUIRE(slack.ParseFileRecord(kSlackRecord));
   REQUIRE(slack.ParseAttrs());
   const AttrBase<Strategy::NO_CACHE>* slack_data = slack.FindStream({});
   REQUIRE(slack_data != nullptr);
-  REQUIRE(slack_data->GetDataSize() == 2000);
-  std::vector<BYTE> data(2000);
-  REQUIRE(slack_data->ReadData(0, data) == 2000);
+  REQUIRE(slack_data->GetDataSize() == kNonResidentSize);
+  std::vector<BYTE> data(kNonResidentSize);
+  REQUIRE(slack_data->ReadData(0, data) == kNonResidentSize);
   const std::string_view content(reinterpret_cast<const char*>(data.data()),
                                  data.size());
   CHECK(content.find("n-slack") == std::string_view::npos);

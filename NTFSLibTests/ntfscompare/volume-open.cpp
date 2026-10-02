@@ -61,6 +61,10 @@ namespace NtfsCompare
 namespace
 {
 
+// Capacity of the getmntent_r() line buffer: one page, which holds any
+// realistic /proc/mounts line.
+constexpr size_t kMountLineBufferSize = 4096;
+
 // The mount point whose path is the longest prefix of target, and its
 // device/source. std::nullopt if /proc/mounts lists nothing target sits
 // under (should not happen for a real path).
@@ -82,7 +86,7 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target)
   std::optional<MountInfo> best;
   size_t bestLength = 0;
   struct mntent entry = {};
-  char buffer[4096];
+  char buffer[kMountLineBufferSize];
   while (getmntent_r(mounts, &entry, buffer, sizeof(buffer)) != nullptr)
   {
     const std::string mountStr = entry.mnt_dir;

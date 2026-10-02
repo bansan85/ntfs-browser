@@ -20,6 +20,15 @@ using NtfsBrowser::IndexEntry;
 namespace
 {
 
+// Size of the buffer one fake index entry is built in, zero-filled.
+constexpr size_t kEntryBufferSize = 256;
+
+// The file reference the fake entries carry. Arbitrary.
+constexpr DWORD kEntryRecordNumber = 42;
+
+// UTF-16 code unit placed past the name, to catch a read beyond it.
+constexpr WORD kFillerCodeUnit = 0xFFFF;
+
 // Builds a raw $I30 index entry named "System" (file reference 42),
 // followed in the same buffer by one filler UTF-16 code unit (0xFFFF)
 // immediately past the name, so a read past the real name is detectable.
@@ -28,10 +37,10 @@ IndexEntry MakeSystemEntry()
   constexpr wchar_t kName[] = L"System";
   constexpr BYTE kNameLen = 6;
 
-  auto buffer = std::shared_ptr<BYTE[]>(new BYTE[256]());
+  auto buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
 
   auto& ie = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
-  ie.mft_index = 42;
+  ie.mft_index = kEntryRecordNumber;
   ie.mft_sn = 1;
 
   auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&ie.stream);
@@ -43,7 +52,7 @@ IndexEntry MakeSystemEntry()
     fn.name[i] = gsl::narrow<WORD>(kName[i]);
   }
   // Filler: must never be read by Compare().
-  fn.name[kNameLen] = 0xFFFF;
+  fn.name[kNameLen] = kFillerCodeUnit;
 
   ie.stream_size =
       gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[kNameLen]) -
@@ -58,10 +67,10 @@ IndexEntry MakeSystemEntry()
 // probe individual code points' collation order).
 IndexEntry MakeNamedEntry(std::wstring_view name)
 {
-  auto buffer = std::shared_ptr<BYTE[]>(new BYTE[256]());
+  auto buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
 
   auto& ie = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
-  ie.mft_index = 42;
+  ie.mft_index = kEntryRecordNumber;
   ie.mft_sn = 1;
 
   auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&ie.stream);

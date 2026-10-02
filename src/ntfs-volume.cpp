@@ -70,6 +70,19 @@ std::wstring_view TrimTrailingNuls(std::wstring_view name) noexcept
   return name;
 }
 
+// Length of a Win32 volume device path, NUL excluded: \\.\C:
+constexpr size_t kVolumePathLength = 6;
+
+// Largest -log2 of sectors per cluster the BPB encoding may carry: a cluster
+// of 2^12 sectors, far beyond any real volume.
+constexpr int kMaxSectorsPerClusterShift = 12;
+
+// Largest -log2 of a file record or index block size, in bytes.
+constexpr int kMaxSizeShift = 12;
+
+// Largest literal cluster count of a file record or index block.
+constexpr int kMaxSizeInClusters = 8;
+
 // Caps the $MFT DATA entries read from a forged $ATTRIBUTE_LIST.
 constexpr size_t kMaxMftAttrListEntries = 65536;
 
@@ -554,9 +567,10 @@ bool NtfsVolume<S>::Impl::OpenVolume(_TCHAR volume)
     return false;
   }
 
-  std::array<_TCHAR, 7> volumePath;
-  _sntprintf_s(volumePath.data(), 7, 6, _T("\\\\.\\%c:"), volume);
-  volumePath[6] = _T('\0');
+  std::array<_TCHAR, kVolumePathLength + 1> volumePath;
+  _sntprintf_s(volumePath.data(), volumePath.size(), kVolumePathLength,
+               _T("\\\\.\\%c:"), volume);
+  volumePath[kVolumePathLength] = _T('\0');
 
   return OpenVolume(std::wstring_view(volumePath.data()));
 }
@@ -642,7 +656,7 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
     // is -log2(sectors per cluster), not a literal sector count, letting a
     // single BYTE field reach cluster sizes above 255 sectors (up to 2 MiB
     // at the common 512-byte sector size).
-    if (spc < -12)
+    if (spc < -kMaxSectorsPerClusterShift)
     {
       LogError("sectors_per_cluster magnitude out of range");
       return false;
@@ -662,7 +676,7 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
 
   // Rejects an sz magnitude that would shift 1U by 32 or more (undefined
   // behaviour), or yield a file_record_size_ no real volume could have.
-  if (sz < -12 || sz > 8)
+  if (sz < -kMaxSizeShift || sz > kMaxSizeInClusters)
   {
     LogError("clusters_per_file_record magnitude out of range");
     return false;
@@ -697,7 +711,7 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
 
   // Rejects an sz magnitude that would shift 1U by 32 or more (undefined
   // behaviour), or yield an index_block_size_ no real volume could have.
-  if (sz < -12 || sz > 8)
+  if (sz < -kMaxSizeShift || sz > kMaxSizeInClusters)
   {
     LogError("clusters_per_index_block magnitude out of range");
     return false;

@@ -33,6 +33,13 @@ using NtfsBrowserTests::NonAsciiNameLayout;
 namespace
 {
 
+// Selects the low byte of an UpCase unit.
+constexpr size_t kLowByteMask = 0xFF;
+
+// The UpCase unit U+00E9, and the one the test maps it to: U+0041.
+constexpr size_t kAcuteEUnit = 0xE9;
+constexpr BYTE kMappedUnitLow = 0x41;
+
 // Looks name up in the fixture's root directory, and returns the MFT
 // reference of the entry FindSubEntry() reports, if any.
 template <Strategy S>
@@ -83,7 +90,7 @@ std::vector<BYTE> MakeMinimalUpCaseBytes()
   {
     const size_t upper =
         (unit >= L'a' && unit <= L'z') ? unit - kCaseDistance : unit;
-    bytes[unit * 2] = static_cast<BYTE>(upper & 0xFF);
+    bytes[unit * 2] = static_cast<BYTE>(upper & kLowByteMask);
     bytes[unit * 2 + 1] = gsl::narrow<BYTE>(upper >> kBitsPerByte);
   }
   return bytes;
@@ -201,8 +208,8 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
   {
     std::vector<BYTE> bytes = good;
     // Maps U+00E9 to U+0041.
-    bytes[0xE9 * 2] = 0x41;
-    bytes[0xE9 * 2 + 1] = 0x00;
+    bytes[kAcuteEUnit * 2] = kMappedUnitLow;
+    bytes[kAcuteEUnit * 2 + 1] = 0x00;
 
     const std::optional<UpCaseTable> table = UpCaseTable::FromBytes(bytes);
     REQUIRE(table.has_value());

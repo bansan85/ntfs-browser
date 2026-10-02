@@ -26,6 +26,26 @@
 namespace
 {
 
+// Size of the backing file the read tests fill with a byte pattern.
+constexpr size_t kContentSize = 4096;
+
+// Multiplier of the byte pattern, so a shifted read cannot match by accident.
+constexpr size_t kPatternStep = 7;
+
+// Where, and how much, the ReadInto test reads.
+constexpr size_t kReadIntoOffset = 1000;
+constexpr size_t kReadIntoSize = 128;
+
+// A file too small for the read asked of it, and its fill byte.
+constexpr size_t kTinyFileSize = 16;
+constexpr BYTE kTinyFileFill = 0xAB;
+
+// The two reads of the buffer-growth test: a small one, then a larger one at
+// another offset.
+constexpr DWORD kFirstReadSize = 16;
+constexpr LONGLONG kSecondReadOffset = 100;
+constexpr DWORD kSecondReadSize = 2048;
+
 // Opens path through a PartitionDiskReader (offset 0) instead of
 // FileReader's own Open(), which only exists on Windows (Win32DiskReader).
 template <NtfsBrowser::Strategy S>
@@ -71,7 +91,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-reader]", ((NtfsBrowser::Strategy S), S),
     NtfsBrowser::Strategy::NO_CACHE, NtfsBrowser::Strategy::FULL_CACHE)
 {
-  std::vector<BYTE> content(4096);
+  std::vector<BYTE> content(kContentSize);
   for (size_t i = 0; i < content.size(); i++)
   {
     content[i] = static_cast<BYTE>(i);
@@ -80,13 +100,13 @@ TEMPLATE_TEST_CASE_SIG(
 
   NtfsBrowser::FileReader<S> reader = OpenOnDisk<S>(file.path);
 
-  std::array<BYTE, 128> dest{};
-  LARGE_INTEGER addr{.QuadPart = 1000};
+  std::array<BYTE, kReadIntoSize> dest{};
+  LARGE_INTEGER addr{.QuadPart = kReadIntoOffset};
   REQUIRE(reader.ReadInto(addr, dest));
 
   for (size_t i = 0; i < dest.size(); i++)
   {
-    CHECK(dest[i] == content[1000 + i]);
+    CHECK(dest[i] == content[kReadIntoOffset + i]);
   }
 }
 
@@ -95,12 +115,12 @@ TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
                        NtfsBrowser::Strategy::NO_CACHE,
                        NtfsBrowser::Strategy::FULL_CACHE)
 {
-  std::vector<BYTE> content(16, 0xAB);
+  std::vector<BYTE> content(kTinyFileSize, kTinyFileFill);
   TempFile file(content);
 
   NtfsBrowser::FileReader<S> reader = OpenOnDisk<S>(file.path);
 
-  std::array<BYTE, 128> dest{};
+  std::array<BYTE, kReadIntoSize> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE_FALSE(reader.ReadInto(addr, dest));
 }
@@ -108,27 +128,27 @@ TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
 TEST_CASE("FileReader NO_CACHE Read grows its buffer before filling it",
           "[file-reader]")
 {
-  std::vector<BYTE> content(4096);
+  std::vector<BYTE> content(kContentSize);
   for (size_t i = 0; i < content.size(); i++)
   {
-    content[i] = static_cast<BYTE>(i * 7);
+    content[i] = static_cast<BYTE>(i * kPatternStep);
   }
 
   NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> reader(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
 
   LARGE_INTEGER first_addr{.QuadPart = 0};
-  const auto first = reader.Read(first_addr, 16);
+  const auto first = reader.Read(first_addr, kFirstReadSize);
   REQUIRE(first.has_value());
-  REQUIRE(first->size() == 16);
+  REQUIRE(first->size() == kFirstReadSize);
 
-  LARGE_INTEGER second_addr{.QuadPart = 100};
-  const auto second = reader.Read(second_addr, 2048);
+  LARGE_INTEGER second_addr{.QuadPart = kSecondReadOffset};
+  const auto second = reader.Read(second_addr, kSecondReadSize);
   REQUIRE(second.has_value());
-  REQUIRE(second->size() == 2048);
+  REQUIRE(second->size() == kSecondReadSize);
   for (size_t i = 0; i < second->size(); i++)
   {
-    REQUIRE((*second)[i] == content[100 + i]);
+    REQUIRE((*second)[i] == content[kSecondReadOffset + i]);
   }
 }
 
@@ -147,7 +167,7 @@ TEMPLATE_TEST_CASE_SIG(
   NtfsBrowser::FileReader<S> reader;
   REQUIRE(reader.Open(std::wstring_view(longer.data(), realPath.size())));
 
-  std::array<BYTE, 16> dest{};
+  std::array<BYTE, kTinyFileSize> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE(reader.ReadInto(addr, dest));
   CHECK(dest[0] == 0x5A);

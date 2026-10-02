@@ -16,6 +16,9 @@ class IDiskReader;
 namespace NtfsBrowserTests
 {
 
+// Bits in a DWORD: where a FILETIME's high half starts.
+constexpr unsigned kDwordBits = 32;
+
 void RequireCorpusImage(const std::filesystem::path& image)
 {
   if (std::filesystem::exists(image))
@@ -39,7 +42,8 @@ std::unique_ptr<NtfsBrowser::IDiskReader>
 
 ULONGLONG FileTimeToTicks(const FILETIME& ft) noexcept
 {
-  return (static_cast<ULONGLONG>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
+  return (static_cast<ULONGLONG>(ft.dwHighDateTime) << kDwordBits) |
+         ft.dwLowDateTime;
 }
 
 std::tuple<WORD, WORD, WORD> FileTimeToDate(const FILETIME& ft) noexcept

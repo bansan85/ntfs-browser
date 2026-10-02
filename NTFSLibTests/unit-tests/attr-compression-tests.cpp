@@ -60,6 +60,14 @@ namespace
 // Sentinel fill so untouched bytes are distinguishable from valid (zero) data.
 constexpr BYTE kSentinelByte = 0xCC;
 
+// Fills the bytes after End_of_buffer, which Decompress() must never read.
+constexpr BYTE kNeverReadByte = 0xFF;
+
+// A chunk bigger than the destination it is decompressed into, and that
+// destination.
+constexpr size_t kOversizedChunkSize = 100;
+constexpr size_t kTinyDestSize = 10;
+
 // An opened synthetic volume plus the parsed root FileRecord, kept together
 // because the record's attributes reference both (the volume for reads, the
 // record buffer for their own header bytes).
@@ -153,7 +161,7 @@ TEST_CASE("LZNT1 concatenates chunks and stops at End_of_buffer",
           "[lznt1][compression]")
 {
   const std::vector<BYTE> first =
-      NtfsBrowserTests::CompressionFixturePattern(100);
+      NtfsBrowserTests::CompressionFixturePattern(kOversizedChunkSize);
   const std::vector<BYTE> second =
       NtfsBrowserTests::CompressionFixturePattern(50);
 
@@ -162,7 +170,8 @@ TEST_CASE("LZNT1 concatenates chunks and stops at End_of_buffer",
       NtfsBrowserTests::MakeUncompressedLznt1Chunk(second);
   src.insert(src.end(), secondChunk.begin(), secondChunk.end());
   // End_of_buffer, followed by bytes that must never be looked at.
-  src.insert(src.end(), {0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF});
+  src.insert(src.end(), {0x00, 0x00, kNeverReadByte, kNeverReadByte,
+                         kNeverReadByte, kNeverReadByte});
 
   std::vector<BYTE> out(NtfsBrowser::Lznt1::kChunkSize, kSentinelByte);
   const size_t produced = NtfsBrowser::Lznt1::Decompress(src, out);
@@ -228,8 +237,8 @@ TEST_CASE("LZNT1 rejects malformed input instead of reading out of bounds",
     // Well-formed 100-byte chunk into a 10-byte dest: a real unit never
     // exceeds its own size, so this is malformed.
     const std::vector<BYTE> src = NtfsBrowserTests::MakeUncompressedLznt1Chunk(
-        NtfsBrowserTests::CompressionFixturePattern(100));
-    std::vector<BYTE> tiny(10, kSentinelByte);
+        NtfsBrowserTests::CompressionFixturePattern(kOversizedChunkSize));
+    std::vector<BYTE> tiny(kTinyDestSize, kSentinelByte);
     CHECK_THROWS_AS(NtfsBrowser::Lznt1::Decompress(src, tiny),
                     std::runtime_error);
   }

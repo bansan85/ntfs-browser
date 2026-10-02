@@ -69,7 +69,7 @@ std::optional<std::string_view>
   // GetSubNodeVCN() reads 8 bytes at size - 8, unchecked: a SUBNODE entry
   // must have room for that field regardless of whether it also has a name.
   if ((ie.flags & Flag::IndexEntry::SUBNODE) == Flag::IndexEntry::SUBNODE &&
-      ie.size < offsetof(Data::IndexEntry, stream) + 8)
+      ie.size < offsetof(Data::IndexEntry, stream) + sizeof(ULONGLONG))
   {
     return "Index Entry is a sub-node pointer too small for its VCN field";
   }
@@ -121,7 +121,8 @@ bool IndexEntry::IsSubNodePtr() const noexcept
   // as a usable sub-node pointer: GetSubNodeVCN() reads unchecked at size-8.
   return (index_entry_.flags & Flag::IndexEntry::SUBNODE) ==
              Flag::IndexEntry::SUBNODE &&
-         index_entry_.size >= offsetof(Data::IndexEntry, stream) + 8;
+         index_entry_.size >=
+             offsetof(Data::IndexEntry, stream) + sizeof(ULONGLONG);
 }
 
 ULONGLONG IndexEntry::GetSubNodeVCN() const noexcept

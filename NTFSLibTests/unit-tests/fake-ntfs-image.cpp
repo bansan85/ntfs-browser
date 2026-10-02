@@ -63,18 +63,83 @@ constexpr ULONGLONG kMftLcn = 1;
 // Right after FileRecordHeader::Data's fixed header fields.
 constexpr WORD kAttrOffset = 48;
 
-// Points the fixup slot at the record's own last 6 bytes, so PatchUS()
-// succeeds without a real fixup array.
-constexpr WORD kOffsetOfUs = kFakeFileRecordSize - 6;
+// Size of the fixup slot a block ends with: the USN, then one word per sector.
+constexpr WORD kUsSlotSize = 6;
 
-static_assert(kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderNonResident) + 8 <
+// Points the fixup slot at the record's own last bytes, so PatchUS()
+// succeeds without a real fixup array.
+constexpr WORD kOffsetOfUs = kFakeFileRecordSize - kUsSlotSize;
+
+// Room an attribute reserves after its header for a short data run list.
+constexpr size_t kRunListRoom = 8;
+
+// Data run headers: the high nibble is the LCN offset field size, the low
+// nibble the length field size. A 4-byte offset and a 1-byte length, or an
+// 8-byte offset and a 1-byte length.
+constexpr BYTE kRunHeader4LcnBytes = 0x41;
+constexpr BYTE kRunHeader8LcnBytes = 0x81;
+
+// Alignment the readers need to bind structs onto a record.
+constexpr size_t kRecordAlignment = 8;
+
+// $STANDARD_INFORMATION timestamps whose bytes are all distinct, so a
+// misplaced field cannot match by accident.
+constexpr ULONGLONG kStdInfoCreateTime = 0x0102030405060708ULL;
+constexpr ULONGLONG kStdInfoAlterTime = 0x1112131415161718ULL;
+constexpr ULONGLONG kStdInfoMftTime = 0x2122232425262728ULL;
+constexpr ULONGLONG kStdInfoReadTime = 0x3132333435363738ULL;
+
+// The file reference of the first fake index entry.
+constexpr DWORD kFirstEntryRecord = 20;
+
+// A byte no fixture otherwise holds, to tell a forged one from the original.
+constexpr BYTE kForgedByte = 0xFF;
+
+// A bitmap byte with every bit set, and the mask and shift that split a
+// WORD into bytes.
+constexpr BYTE kAllBitsSet = 0xFF;
+constexpr unsigned kByteMask = 0xFFU;
+constexpr unsigned kBitsPerByte = 8U;
+
+// The index block size field's encoding of a size below one cluster:
+// 0xF7 is -9, so 2^9 bytes.
+constexpr BYTE kSubClusterIndexBlockEncoding = 0xF7;
+
+// First file record of the index leaf blocks the sub-cluster fixture and the
+// split-extent fixture write.
+constexpr DWORD kSubClusterBlockRecordBase = 110;
+constexpr DWORD kSplitBlockRecordBase = 120;
+
+// A forged $FILE_NAME length that claims more characters than fit.
+constexpr BYTE kOverlongNameLength = 200;
+
+// The boot sector's last two bytes: 0xAA55, little-endian.
+constexpr BYTE kBootSignatureLow = 0xAA;
+constexpr BYTE kBootSignatureHigh = 0x55;
+
+// The compressed bytes of the corrupt LZNT1 chunk: a valid chunk header
+// (0xB002, little-endian), then a flag byte, and a compressed word whose
+// displacement (1) reaches before anything was decompressed.
+constexpr BYTE kCorruptChunkHeaderLow = 0x02;
+constexpr BYTE kCorruptChunkHeaderHigh = 0xB0;
+
+// How pattern bytes derive from an index: (i * mul + add) % mod. The modulus
+// is prime and not a power of two, so no block size or cluster size repeats
+// the pattern.
+constexpr unsigned kPatternMul = 31U;
+constexpr unsigned kPatternAdd = 7U;
+constexpr unsigned kPatternMod = 251U;
+
+static_assert(kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderNonResident) +
+                      kRunListRoom <
                   kOffsetOfUs,
               "attribute data must not reach into the fixup slot");
 
 // The readers bind structs (8-byte aligned at most) onto offsets inside a
 // record, so the record itself must start on that boundary: a plain
 // std::array<BYTE> may sit at any stack address.
-struct alignas(8) FakeRecord : std::array<BYTE, kFakeFileRecordSize>
+struct alignas(kRecordAlignment) FakeRecord
+    : std::array<BYTE, kFakeFileRecordSize>
 {
 };
 
@@ -223,7 +288,7 @@ FakeRecord MakeMftRecord()
   attr.real_size = kSentinelRecordCount * kFakeFileRecordSize;
   attr.alloc_size = attr.real_size;
   attr.ini_size = attr.real_size;
-  attr.header.total_size = AlignAttrSize(sizeof(attr) + 8);
+  attr.header.total_size = AlignAttrSize(sizeof(attr) + kRunListRoom);
 
   record[kAttrOffset + sizeof(attr)] = 0x00;
 
@@ -257,7 +322,7 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters)
   BYTE* dataRun = &record[kAttrOffset + attr.data_run_offset];
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
-  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = kRunHeader4LcnBytes;
   dataRun[runLen++] = gsl::narrow<BYTE>(clusters);
   std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
   runLen += sizeof(lcn);
@@ -327,7 +392,7 @@ FakeRecord MakeMftRecordWithDataContinuations(
   dataAttr.real_size = kFakeFileRecordSize;
   dataAttr.alloc_size = dataAttr.real_size;
   dataAttr.ini_size = dataAttr.real_size;
-  dataAttr.header.total_size = AlignAttrSize(sizeof(dataAttr) + 8);
+  dataAttr.header.total_size = AlignAttrSize(sizeof(dataAttr) + kRunListRoom);
 
   record[offset + sizeof(dataAttr)] = 0x00;
 
@@ -366,7 +431,7 @@ FakeRecord MakeMftDataContinuationExtensionRecord(ULONGLONG startVcn, DWORD lcn,
   BYTE* dataRun = &record[kAttrOffset + attr.data_run_offset];
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
-  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = kRunHeader4LcnBytes;
   dataRun[runLen++] = gsl::narrow<BYTE>(clusters);
   std::memcpy(&dataRun[runLen], &lcn, sizeof(lcn));
   runLen += sizeof(lcn);
@@ -477,10 +542,10 @@ FakeRecord MakeStandardInformationRecordSized(WORD attrSize)
 
   auto& stdInfo = *reinterpret_cast<NtfsBrowser::Attr::StandardInformation*>(
       &record[kAttrOffset + attr.attr_offset]);
-  stdInfo.create_time = 0x0102030405060708ULL;
-  stdInfo.alter_time = 0x1112131415161718ULL;
-  stdInfo.mft_time = 0x2122232425262728ULL;
-  stdInfo.read_time = 0x3132333435363738ULL;
+  stdInfo.create_time = kStdInfoCreateTime;
+  stdInfo.alter_time = kStdInfoAlterTime;
+  stdInfo.mft_time = kStdInfoMftTime;
+  stdInfo.read_time = kStdInfoReadTime;
   stdInfo.permission = NtfsBrowser::Flag::StdInfoPermission::READONLY;
   stdInfo.max_version_no = 0;
   stdInfo.version_no = 0;
@@ -567,7 +632,7 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG baseIdx = 0)
   // Entry 1: "Foo", a regular (non-directory) file, reference 20.
   auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
       body + sizeof(NtfsBrowser::Attr::IndexRoot));
-  e1.mft_index = 20;
+  e1.mft_index = kFirstEntryRecord;
   e1.mft_sn = 1;
 
   auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
@@ -687,7 +752,7 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
   // Entry 1: "Foo", a regular (non-directory) file, reference 20.
   auto& e1 = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
       body + sizeof(NtfsBrowser::Attr::IndexRoot));
-  e1.mft_index = 20;
+  e1.mft_index = kFirstEntryRecord;
   e1.mft_sn = 1;
 
   auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&e1.stream);
@@ -740,7 +805,7 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
   allocAttr.real_size = 0;
   allocAttr.alloc_size = 0;
   allocAttr.ini_size = 0;
-  allocAttr.header.total_size = AlignAttrSize(sizeof(allocAttr) + 8);
+  allocAttr.header.total_size = AlignAttrSize(sizeof(allocAttr) + kRunListRoom);
 
   // Data run: a single 0x00 byte terminates the run list immediately -
   // nothing reads through it in this fixture.
@@ -770,7 +835,7 @@ FakeRecord MakeUndersizedResidentAttrRecord()
   attr.header.id = 0;
   attr.header.total_size = kUndersizedTotalSize;
 
-  record[kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderResident)] = 0xFF;
+  record[kAttrOffset + sizeof(NtfsBrowser::Attr::HeaderResident)] = kForgedByte;
 
   return record;
 }
@@ -857,7 +922,7 @@ FakeRecord MakeIndexAllocDirRecord()
   BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
   DWORD runLen = 0;
   // High nibble = 4-byte LCN offset field; low nibble = 1-byte run length.
-  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = kRunHeader4LcnBytes;
   dataRun[runLen++] = static_cast<BYTE>(kForgedIndexBlockSize / kClusterSize);
   {
     const DWORD lcn = kForgedIndexBlockLcn;
@@ -897,7 +962,7 @@ FakeRecord MakeIndexAllocationOnlyExtensionRecord(DWORD realSize,
   allocAttr.real_size = realSize;
   allocAttr.alloc_size = realSize;
   allocAttr.ini_size = realSize;
-  allocAttr.header.total_size = AlignAttrSize(sizeof(allocAttr) + 8);
+  allocAttr.header.total_size = AlignAttrSize(sizeof(allocAttr) + kRunListRoom);
 
   // Data run: a single 0x00 byte terminates the run list immediately.
   record[kAttrOffset + sizeof(allocAttr)] = 0x00;
@@ -1443,7 +1508,7 @@ FakeRecord MakeRootRecordWithGapCollationSubNode()
   BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
-  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = kRunHeader4LcnBytes;
   dataRun[runLen++] = 1;  // 1 cluster
   {
     const DWORD lcn = kGapCollationIndexBlockLcn;
@@ -1541,7 +1606,7 @@ FakeRecord MakeIndexBlockChainRootRecord()
   // Data run header byte: high nibble = LCN offset field size (4 bytes),
   // low nibble = length field size (1 byte) - standard NTFS run encoding
   // (AttrNonResident::PickData, src/attr-non-resident.cpp).
-  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = kRunHeader4LcnBytes;
   dataRun[runLen++] = static_cast<BYTE>(kIndexBlockChainLength);
   {
     const DWORD lcn = kIndexBlockChainLcn;
@@ -1650,7 +1715,7 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
   BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
-  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = kRunHeader4LcnBytes;
   dataRun[runLen++] = static_cast<BYTE>(kOrphanedBlocksCount);
   {
     const DWORD lcn = kOrphanedBlocksLcn;
@@ -1682,7 +1747,7 @@ void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
   block.magic = kIndexBlockMagic;
   // Points at the block's own last 6 bytes, so PatchUS() succeeds trivially
   // without a real fixup array.
-  block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
+  block.offset_of_us = static_cast<WORD>(kClusterSize - kUsSlotSize);
   block.size_of_us = 3;
   block.vcn = vcn;
   block.entry_offset =
@@ -1813,7 +1878,7 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord()
   BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
-  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = kRunHeader4LcnBytes;
   dataRun[runLen++] = gsl::narrow<BYTE>(totalClusters);
   {
     const DWORD lcn = kMultiClusterOrphanLcn;
@@ -1977,7 +2042,7 @@ FakeRecord MakeDirectoryWithIndexAllocation(
     BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
     DWORD runLen = 0;
     // High nibble = LCN offset field size, low nibble = length field size.
-    dataRun[runLen++] = 0x41;
+    dataRun[runLen++] = kRunHeader4LcnBytes;
     dataRun[runLen++] = gsl::narrow<BYTE>(extent.clusters);
     std::memcpy(&dataRun[runLen], &extent.lcn, sizeof(extent.lcn));
     runLen += sizeof(extent.lcn);
@@ -2068,7 +2133,7 @@ DWORD EncodeDataRuns(BYTE* dataRun, const std::vector<FakeDataRun>& runs)
   {
     if (run.lcn)
     {
-      dataRun[runLen++] = 0x41;
+      dataRun[runLen++] = kRunHeader4LcnBytes;
       dataRun[runLen++] = gsl::narrow<BYTE>(run.clusters);
       const LONG delta =
           gsl::narrow<LONG>(*run.lcn) - gsl::narrow<LONG>(previousLcn);
@@ -2107,10 +2172,10 @@ DWORD WriteStandardInformationAttr(
 
   auto& stdInfo = *reinterpret_cast<NtfsBrowser::Attr::StandardInformation*>(
       &record[offset + attr.attr_offset]);
-  stdInfo.create_time = 0x0102030405060708ULL;
-  stdInfo.alter_time = 0x1112131415161718ULL;
-  stdInfo.mft_time = 0x2122232425262728ULL;
-  stdInfo.read_time = 0x3132333435363738ULL;
+  stdInfo.create_time = kStdInfoCreateTime;
+  stdInfo.alter_time = kStdInfoAlterTime;
+  stdInfo.mft_time = kStdInfoMftTime;
+  stdInfo.read_time = kStdInfoReadTime;
   stdInfo.permission = permission;
 
   return attr.header.total_size;
@@ -2469,7 +2534,7 @@ std::vector<BYTE> BuildCompressionImage(const FakeRecord& record,
 // displacement (1) reaches before anything has been decompressed yet.
 std::vector<BYTE> MakeCorruptLznt1Chunk()
 {
-  return {0x02, 0xb0, 0x01, 0x00, 0x00};
+  return {kCorruptChunkHeaderLow, kCorruptChunkHeaderHigh, 0x01, 0x00, 0x00};
 }
 
 // The 1024-byte "INDX"-signed index block a compressed $INDEX_ALLOCATION
@@ -2485,7 +2550,7 @@ std::vector<BYTE> MakeIndexBlockContent(std::span<const FakeIndexName> names)
   block.magic = kIndexBlockMagic;
   // Points offset_of_us at the fixup slot itself, so PatchUS() trivially
   // succeeds - same technique as BuildFakeNtfsImageWithGapCollationSubNode().
-  block.offset_of_us = static_cast<WORD>(kFakeFileRecordSize - 6);
+  block.offset_of_us = static_cast<WORD>(kFakeFileRecordSize - kUsSlotSize);
   block.size_of_us = 3;
   block.vcn = 0;
   block.entry_offset =
@@ -2640,8 +2705,8 @@ std::vector<BYTE> BuildFakeNtfsImage()
   bpb.lcn_mft = kMftLcn;
   bpb.clusters_per_file_record = 1;
   bpb.clusters_per_index_block = 1;
-  bpb.x_aa = 0xAA;
-  bpb.x_55 = 0x55;
+  bpb.x_aa = kBootSignatureLow;
+  bpb.x_55 = kBootSignatureHigh;
 
   const DWORD mftAddr = static_cast<DWORD>(kMftLcn) * kClusterSize;
   const size_t recordsEnd =
@@ -3335,7 +3400,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode()
   block.magic = kIndexBlockMagic;
   // Points at the block's own last 6 bytes, so PatchUS() succeeds
   // trivially without a real fixup array.
-  block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
+  block.offset_of_us = static_cast<WORD>(kClusterSize - kUsSlotSize);
   block.size_of_us = 3;
   block.vcn = 0;
   block.entry_offset =
@@ -3421,8 +3486,8 @@ std::vector<BYTE> MakeNonAsciiUpCaseBytes()
     {
       upper = kCapitalYDiaeresis;
     }
-    bytes[unit * 2] = static_cast<BYTE>(upper & 0xFF);
-    bytes[unit * 2 + 1] = static_cast<BYTE>(upper >> 8);
+    bytes[unit * 2] = static_cast<BYTE>(upper & kByteMask);
+    bytes[unit * 2 + 1] = static_cast<BYTE>(upper >> kBitsPerByte);
   }
   return bytes;
 }
@@ -3523,7 +3588,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
     std::memset(&block, 0, sizeof(block));
     block.magic = kIndexBlockMagic;
     // Points offset_of_us at the fixup slot itself, valid for every block.
-    block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
+    block.offset_of_us = static_cast<WORD>(kClusterSize - kUsSlotSize);
     block.size_of_us = 3;
     block.vcn = vcn;
     block.entry_offset = gsl::narrow<DWORD>(
@@ -3725,7 +3790,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks()
 
   // Patch the shared BPB: index blocks of 2^9 bytes, half a cluster.
   auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
-  bpb.clusters_per_index_block = 0xF7;
+  bpb.clusters_per_index_block = kSubClusterIndexBlockEncoding;
 
   constexpr DWORD kIndexBlockSize = 512;
   constexpr DWORD kAllocLcn = 220;
@@ -3757,8 +3822,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks()
   for (size_t i = 0; i < kSubClusterBlockNames.size(); i++)
   {
     WriteIndexLeafBlockAt(image, blocksOffset + i * kIndexBlockSize,
-                          kIndexBlockSize, i, 110 + i, rootRef,
-                          kSubClusterBlockNames[i]);
+                          kIndexBlockSize, i, kSubClusterBlockRecordBase + i,
+                          rootRef, kSubClusterBlockNames[i]);
   }
 
   return image;
@@ -3804,8 +3869,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitIndexAllocation()
     const size_t lcn = (i < kSplitExtentClusters)
                            ? kFirstLcn + i
                            : kSecondLcn + (i - kSplitExtentClusters);
-    WriteIndexLeafBlockAt(image, lcn * kClusterSize, kClusterSize, i, 120 + i,
-                          rootRef, kSplitBlockNames[i]);
+    WriteIndexLeafBlockAt(image, lcn * kClusterSize, kClusterSize, i,
+                          kSplitBlockRecordBase + i, rootRef,
+                          kSplitBlockNames[i]);
   }
 
   return image;
@@ -3992,8 +4058,8 @@ std::vector<BYTE> MakeUncompressedLznt1Chunk(std::span<const BYTE> payload)
 
   std::vector<BYTE> chunk;
   chunk.reserve(payload.size() + 2);
-  chunk.push_back(static_cast<BYTE>(header & 0xFFU));
-  chunk.push_back(static_cast<BYTE>(header >> 8U));
+  chunk.push_back(static_cast<BYTE>(header & kByteMask));
+  chunk.push_back(static_cast<BYTE>(header >> kBitsPerByte));
   chunk.insert(chunk.end(), payload.begin(), payload.end());
   return chunk;
 }
@@ -4005,7 +4071,8 @@ std::vector<BYTE> CompressionFixturePattern(size_t size)
   {
     // Deliberately not a byte-aligned cycle, so a fixture whose content got
     // shifted by a whole number of bytes/clusters still compares unequal.
-    pattern[i] = static_cast<BYTE>((i * 31U + 7U) % 251U);
+    pattern[i] =
+        static_cast<BYTE>((i * kPatternMul + kPatternAdd) % kPatternMod);
   }
   return pattern;
 }
@@ -4077,7 +4144,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterBitmap()
 
   std::vector<BYTE> bitmap(
       static_cast<size_t>(kMultiClusterBitmapClusters) * kClusterSize, 0x00);
-  std::fill_n(bitmap.begin(), kClusterSize, static_cast<BYTE>(0xFF));
+  std::fill_n(bitmap.begin(), kClusterSize, kAllBitsSet);
   bitmap[static_cast<size_t>(2) * kClusterSize] = 0x01;
 
   return BuildCompressionImage(record, runs, bitmap);
@@ -4307,8 +4374,8 @@ void WriteTrailingDefect(FakeRecord& record, DWORD offset,
           &record[offset]);
       attr.header.type = AttrType::STANDARD_INFORMATION;
       attr.header.non_resident = 1;
-      attr.header.total_size =
-          AlignAttrSize(NtfsBrowser::Attr::kHeaderNonResidentBaseSize + 8);
+      attr.header.total_size = AlignAttrSize(
+          NtfsBrowser::Attr::kHeaderNonResidentBaseSize + kRunListRoom);
       break;
     }
   }
@@ -4822,7 +4889,7 @@ FakeRecord MakeIndexAllocationDirRecordWithOverflowingLcn(DWORD realRunClusters)
   DWORD runLen = 0;
   // Real run: header 0x81 (8-byte LCN-offset field), an 8-byte LE delta of
   // kOverflowingLcn, covering realRunClusters clusters.
-  dataRun[runLen++] = 0x81;
+  dataRun[runLen++] = kRunHeader8LcnBytes;
   dataRun[runLen++] = gsl::narrow<BYTE>(realRunClusters);
   {
     const auto delta = static_cast<LONGLONG>(kOverflowingLcn);
@@ -5114,7 +5181,7 @@ FakeRecord MakeBadIndexBlockEntryRootRecord()
   BYTE* dataRun = &record[offset + allocAttr.data_run_offset];
   DWORD runLen = 0;
   // High nibble = LCN offset field size, low nibble = length field size.
-  dataRun[runLen++] = 0x41;
+  dataRun[runLen++] = kRunHeader4LcnBytes;
   dataRun[runLen++] = 2;  // 2 clusters
   {
     const DWORD lcn = kBadIndexBlockLcn;
@@ -5175,7 +5242,7 @@ NtfsBrowser::Data::IndexBlock&
   block.magic = kIndexBlockMagic;
   // Points at the block's own last 6 bytes, so PatchUS() succeeds trivially
   // without a real fixup array.
-  block.offset_of_us = static_cast<WORD>(kClusterSize - 6);
+  block.offset_of_us = static_cast<WORD>(kClusterSize - kUsSlotSize);
   block.size_of_us = 3;
   block.vcn = vcn;
   block.entry_offset =
@@ -5312,7 +5379,7 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord()
     fn1.name[i] = gsl::narrow<WORD>(kRealName[i]);
   }
   // Claims far more characters than the entry has room for.
-  fn1.name_length = 200;
+  fn1.name_length = kOverlongNameLength;
 
   e1.stream_size =
       gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[kRealNameLength]) -
@@ -5652,7 +5719,7 @@ namespace
 // 8-byte value "delta".
 void AppendEightByteLcnRun(std::vector<BYTE>& runs, LONGLONG delta)
 {
-  runs.push_back(0x81);
+  runs.push_back(kRunHeader8LcnBytes);
   runs.push_back(1);
   const size_t at = runs.size();
   runs.resize(at + sizeof(delta));

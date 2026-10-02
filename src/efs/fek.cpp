@@ -18,6 +18,13 @@ constexpr size_t kFekHeaderSize = 16;
 // Offset of the algorithm DWORD in the FEK header.
 constexpr size_t kAlgorithmOffset = 8;
 
+// Key sizes in bytes. DESX takes 128 bits that the cipher expands.
+constexpr size_t kAes128KeySize = 16;
+constexpr size_t kAes192KeySize = 24;
+constexpr size_t kAes256KeySize = 32;
+constexpr size_t k3DesKeySize = 24;
+constexpr size_t kDesxFekKeySize = 16;
+
 // The key length each cipher takes, in bytes. 3DES carries three 8-byte DES
 // keys. DESX carries 128 bits, which the cipher expands into a DES key and two
 // whitening keys.
@@ -26,15 +33,15 @@ constexpr size_t kAlgorithmOffset = 8;
   switch (algorithm)
   {
     case Algorithm::kAes128:
-      return 16;
+      return kAes128KeySize;
     case Algorithm::kAes192:
-      return 24;
+      return kAes192KeySize;
     case Algorithm::kAes256:
-      return 32;
+      return kAes256KeySize;
     case Algorithm::k3Des:
-      return 24;
+      return k3DesKeySize;
     case Algorithm::kDesx:
-      return 16;
+      return kDesxFekKeySize;
   }
   return std::nullopt;
 }
