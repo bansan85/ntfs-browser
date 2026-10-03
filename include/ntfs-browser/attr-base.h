@@ -34,10 +34,12 @@ class NTFS_BROWSER_EXPORT AttrBase
   virtual ~AttrBase() = default;
 
  protected:
-  const AttrHeaderCommon& attr_header_;
+  // NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes)
   const NtfsVolume<S>& volume_;
+  // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes)
 
  private:
+  const AttrHeaderCommon& attr_header_;
   // GetAttrName()'s decoded name, cached since it is const. The on-disk
   // bytes are raw UTF-16 code units (WORD), which is not what wchar_t is
   // made of once it is wider than 16 bits, so this is an owned decode, not

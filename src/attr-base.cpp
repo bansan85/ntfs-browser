@@ -20,7 +20,7 @@ enum class AttrType : DWORD;
 template <Strategy S>
 AttrBase<S>::AttrBase(const AttrHeaderCommon& ahc,
                       const FileRecord<S>& file_record) noexcept
-    : attr_header_(ahc), volume_(file_record.GetVolume())
+    : volume_(file_record.GetVolume()), attr_header_(ahc)
 {
 }
 
