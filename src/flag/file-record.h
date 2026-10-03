@@ -9,6 +9,7 @@ namespace NtfsBrowser::Flag
 
 enum class FileRecord : std::uint8_t
 {
+  NONE = 0x00,
   INUSE = 0x01,
   DIR = 0x02
 };

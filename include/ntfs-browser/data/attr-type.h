@@ -7,6 +7,9 @@ namespace NtfsBrowser
 
 enum class AttrType : DWORD
 {
+  // Zero-initialised value, never found on disk
+  NONE = 0,
+
   // Attribute Header
 
   STANDARD_INFORMATION = 0x10,
