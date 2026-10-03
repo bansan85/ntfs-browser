@@ -1,0 +1,2 @@
+InheritParentConfig: true
+Checks: '-misc-use-anonymous-namespace,-fuchsia-statically-constructed-objects,-cppcoreguidelines-avoid-do-while,-bugprone-throwing-static-initialization,-cert-err58-cpp,-readability-function-cognitive-complexity'
