@@ -4857,7 +4857,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnitIndexAllocation()
 // LCN whose product with this fixture's cluster size overflows a signed
 // LONGLONG inside ReadClusters()'s gsl::narrow<LONGLONG>() call - same
 // magnitude as kHugeMftLcn, applied to a data run's LCN instead.
-constexpr ULONGLONG kOverflowingLcn = 1ULL << 53;
+constexpr ULONGLONG kOverflowingLcn = 1ULL << 53U;
 
 // Directory record shaped like MakeIndexAllocationDirRecord(), but with a
 // single hand-encoded run (8-byte LCN offset) at kOverflowingLcn, so it

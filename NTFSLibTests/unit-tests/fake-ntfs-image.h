@@ -158,7 +158,7 @@ inline constexpr DWORD kFileRecordSizeTooBig = 8192;
 
 // lcn_mft patched in by BuildFakeNtfsImageWithHugeMftLcn(); with this
 // fixture's fixed cluster size, mft_addr_ ends up exactly 2^63.
-inline constexpr ULONGLONG kHugeMftLcn = 1ULL << 53;
+inline constexpr ULONGLONG kHugeMftLcn = 1ULL << 53U;
 
 // Same volume as BuildFakeNtfsImage(), with lcn_mft patched to kHugeMftLcn
 // so mft_addr_ ends up too large for a LONGLONG.
@@ -362,7 +362,7 @@ inline constexpr FakeExtensionLink kGenuineExtensionLink{
     .entry_sequence = 3,
     .record_sequence = 3,
     // Number 6 with sequence 2, as NTFS packs a file reference.
-    .base_ref = 6 | (2ULL << 48)};
+    .base_ref = 6U | (2ULL << 48U)};
 
 // Same volume as BuildFakeNtfsImage(), plus kAttrListLifetimeBaseIdx, whose
 // resident $ATTRIBUTE_LIST names kAttrListLifetimeExtIdx for $DATA. That
@@ -1323,7 +1323,7 @@ enum class FakeRunHost : std::uint8_t
 // LCN whose product with kFakeClusterSize is exactly 2^64. Computed in
 // unsigned 64 bits that product wraps to 0, so a read at this LCN lands on
 // the boot sector instead of failing. Needs a power-of-two cluster size.
-inline constexpr ULONGLONG kWrappingLcn = ((1ULL << 63) / kFakeClusterSize) * 2;
+inline constexpr ULONGLONG kWrappingLcn = ((1ULL << 63U) / kFakeClusterSize) * 2;
 
 // Same volume as BuildFakeNtfsImage(), with a 1-cluster stream, of the
 // given kind, whose only run sits at kWrappingLcn. Reading it MUST fail.
