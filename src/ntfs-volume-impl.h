@@ -103,6 +103,21 @@ class NtfsVolume<S>::Impl
   [[nodiscard]] bool ParseBootSector();
   void Init();
   void ResolveMftDataExtents();
+
+  // One extension record $MFT's $ATTRIBUTE_LIST names for DATA, with the
+  // sequence number its entries claim and the start VCN of each entry.
+  struct PendingMftExtension
+  {
+    ULONGLONG record;
+    WORD sequence;
+    std::vector<ULONGLONG> start_vcns;
+  };
+
+  [[nodiscard]] static std::vector<PendingMftExtension>
+      CollectPendingMftExtensions(const AttrBase<S>& rawList,
+                                  ULONGLONG selfRef);
+  void ResolvePendingMftExtension(const PendingMftExtension& item,
+                                  ULONGLONG selfRef);
   void TryAddMftExtent(const AttrBase<S>& attr, ULONGLONG expectedStartVcn);
   [[nodiscard]] bool IsMftRangeMapped(ULONGLONG byteOffset,
                                       ULONGLONG length) const noexcept;

@@ -135,7 +135,6 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   std::shared_ptr<BYTE[]> const ib_sh_ptr =
       ibClass.AllocIndexBlock(this->GetIndexBlockSize());
   const std::span<BYTE> block(ib_sh_ptr.get(), this->GetIndexBlockSize());
-  auto* ibBuf = reinterpret_cast<Data::IndexBlock*>(block.data());
 
   // Read one Index Block
   std::optional<ULONGLONG> len = this->ReadData(byte_offset, block);
@@ -144,6 +143,19 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     return false;
   }
 
+  if (!FixupIndexBlock(block))
+  {
+    return false;
+  }
+  return ParseIndexEntries(ib_sh_ptr, block, ibClass);
+}
+
+// Checks the block's magic and update sequence array, then writes each
+// sector's saved last word back over its USN.
+template <Strategy S>
+bool AttrIndexAlloc<S>::FixupIndexBlock(std::span<BYTE> block)
+{
+  const auto* ibBuf = reinterpret_cast<const Data::IndexBlock*>(block.data());
   if (ibBuf->magic != kIndexBlockMagic)
   {
     LogWarn("Index Block parse error: Magic mismatch");
@@ -180,7 +192,31 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     LogWarn("Index Block parse error: Update Sequence Number");
     return false;
   }
+  return true;
+}
 
+// Reports a defect in a block's entries. Returns true when the block must be
+// rejected whole: the entries parsed so far are then discarded too.
+static bool RejectBlockOnDefect(bool recover, std::string_view defect,
+                                IndexBlock& ibClass)
+{
+  LogRecoverable(recover, "{}", defect);
+  if (recover)
+  {
+    return false;
+  }
+  ibClass.clear();
+  return true;
+}
+
+// Walks the entries of a block that FixupIndexBlock() accepted. owner keeps the
+// block's buffer alive for the entries.
+template <Strategy S>
+bool AttrIndexAlloc<S>::ParseIndexEntries(const std::shared_ptr<BYTE[]>& owner,
+                                          std::span<BYTE> block,
+                                          IndexBlock& ibClass)
+{
+  const auto* ibBuf = reinterpret_cast<const Data::IndexBlock*>(block.data());
   constexpr size_t kEntryOffsetPos = offsetof(Data::IndexBlock, entry_offset);
 
   if (block.size() < kEntryOffsetPos ||
@@ -202,52 +238,33 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     const size_t remaining = cur.size();
     if (remaining < offsetof(Data::IndexEntry, stream))
     {
-      LogRecoverable(recover,
-                     "Index Block: index entry header exceeds block bounds");
-      if (!recover)
-      {
-        ibClass.clear();
-        return false;
-      }
-      break;
+      return !RejectBlockOnDefect(
+          recover, "Index Block: index entry header exceeds block bounds",
+          ibClass);
     }
     const Data::IndexEntry head = ReadIndexEntryHeader(cur);
     if (head.size == 0 || head.size > remaining)
     {
-      LogRecoverable(recover, "Index Block: index entry exceeds block bounds");
-      if (!recover)
-      {
-        ibClass.clear();
-        return false;
-      }
-      break;
+      return !RejectBlockOnDefect(
+          recover, "Index Block: index entry exceeds block bounds", ibClass);
     }
 
     ieTotal += head.size;
     if (ieTotal > ibBuf->total_entry_size)
     {
-      LogRecoverable(recover,
-                     "Index Block: index entry total exceeds the block's "
-                     "declared entry size");
-      if (!recover)
-      {
-        ibClass.clear();
-        return false;
-      }
-      break;
+      return !RejectBlockOnDefect(recover,
+                                  "Index Block: index entry total exceeds the "
+                                  "block's declared entry size",
+                                  ibClass);
     }
 
     const AlignedIndexEntry aligned_index_entry =
-        AlignIndexEntry(ib_sh_ptr, cur, head.size);
+        AlignIndexEntry(owner, cur, head.size);
     if (const std::optional<std::string_view> defect =
-            ValidateIndexEntry(*aligned_index_entry.entry))
+            ValidateIndexEntry(*aligned_index_entry.entry);
+        defect && RejectBlockOnDefect(recover, *defect, ibClass))
     {
-      LogRecoverable(recover, "{}", *defect);
-      if (!recover)
-      {
-        ibClass.clear();
-        return false;
-      }
+      return false;
     }
 
     ibClass.emplace_back(aligned_index_entry.owner, *aligned_index_entry.entry);
@@ -255,13 +272,11 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {
       LogTrace("Last Index Entry");
-      break;
+      return true;
     }
 
     cur = cur.subspan(head.size);  // Pick next
   }
-
-  return true;
 }
 
 template class AttrIndexAlloc<Strategy::FULL_CACHE>;

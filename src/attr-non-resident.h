@@ -70,6 +70,8 @@ class AttrNonResident : public AttrBase<S>
                                      ULONGLONG& length, LONGLONG& LCNOffset,
                                      bool recover) noexcept;
   void ParseDataRun();
+  [[nodiscard]] bool AppendDataRun(ULONGLONG length, LONGLONG lcnOffset,
+                                   LONGLONG& lcn, ULONGLONG& vcn, bool recover);
   [[nodiscard]] std::optional<std::span<const BYTE>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;
@@ -92,6 +94,20 @@ class AttrNonResident : public AttrBase<S>
                           ULONGLONG unitClusters) const noexcept;
   [[nodiscard]] const std::vector<BYTE>*
       GetCompressionUnit(ULONGLONG unitIndex) const;
+  // How reading one data run's clusters ended.
+  enum class RunRead : BYTE
+  {
+    kDone,       // Clusters read (or zero-filled, for a sparse run).
+    kShortRead,  // The disk read failed: the caller keeps what it has.
+    kFailed,     // Decryption failed: the whole read fails.
+  };
+
+  [[nodiscard]] RunRead ReadRunClusters(const Data::RunEntry& dataRun,
+                                        ULONGLONG vcn, ULONGLONG clustersToRead,
+                                        std::span<BYTE> out) const;
+  [[nodiscard]] bool DecompressUnit(ULONGLONG unitIndex, ULONGLONG unitFirstVcn,
+                                    ULONGLONG realClusters,
+                                    std::vector<BYTE>& unit) const;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadVirtualClustersCompressed(ULONGLONG vcn, ULONGLONG clusters,
                                     std::span<BYTE> buffer) const;

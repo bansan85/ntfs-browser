@@ -89,6 +89,14 @@ class FileRecord<S>::Impl
   [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc,
                                std::unordered_set<ULONGLONG>& attrListChain);
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain);
+  static void MergeStreamChain(std::vector<std::unique_ptr<AttrBase<S>>>& attrs,
+                               std::vector<size_t>& indices,
+                               std::vector<size_t>& toErase);
+  [[nodiscard]] static const std::vector<IndexEntry>*
+      FileNameIndexRootEntries(const AttrBase<S>& attr);
+  [[nodiscard]] bool VisitAttr(std::span<const BYTE> cur,
+                               const AttrHeaderCommon& head,
+                               std::unordered_set<ULONGLONG>& attrListChain);
   [[nodiscard]] std::unique_ptr<FileRecordHeaderImpl<S>>
       ReadFileRecord(ULONGLONG fileRef);
   [[nodiscard]] std::optional<IndexEntry>

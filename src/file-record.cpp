@@ -75,6 +75,81 @@ constexpr size_t kMaxIndexBlockDepth = 64;
 // blocks is already far past any real directory's index, so this only ever
 // binds on a forged/damaged $INDEX_ALLOCATION.
 constexpr size_t kMaxOrphanScanBlocks = 65536;
+
+// Rejects an attribute of a type that is always resident on disk but claims
+// to be non-resident, before its bytes get reinterpreted as a resident one.
+void RequireResident(const AttrHeaderCommon& ahc, const char* message)
+{
+  if (ahc.non_resident != 0)
+  {
+    throw std::runtime_error(message);
+  }
+}
+
+// How reading the next attribute header of a record's walk ended.
+enum class AttrWalk : BYTE
+{
+  kNext,       // head holds a header whose attribute fits in the record.
+  kEndMarker,  // The terminating AttrType::ALL marker was reached.
+  kRanOut,     // The record ended without a marker, or an attribute overran it.
+  kAbort,      // The attribute is malformed.
+};
+
+// Reads the attribute header at the front of cur, and checks that it and its
+// attribute fit in a record of recordSize bytes, dataPtr bytes into it.
+AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD dataPtr,
+                        DWORD recordSize, AttrHeaderCommon& head)
+{
+  // The on-disk end-of-attributes marker is a single AttrType::ALL value
+  // (4 bytes): check for it as soon as that much room remains, rather
+  // than requiring a full attribute header to fit first.
+  if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrType) > recordSize)
+  {
+    return AttrWalk::kRanOut;
+  }
+  AttrType type{};
+  std::memcpy(&type, cur.data(), sizeof(type));
+  if (type == AttrType::ALL)
+  {
+    return AttrWalk::kEndMarker;
+  }
+  // From here on, the walk needs the whole header, and the whole
+  // attribute, to fit.
+  if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrHeaderCommon) > recordSize)
+  {
+    return AttrWalk::kRanOut;
+  }
+  std::memcpy(&head, cur.data(), sizeof(head));
+  if (static_cast<ULONGLONG>(dataPtr) + head.total_size > recordSize)
+  {
+    return AttrWalk::kRanOut;
+  }
+
+  const DWORD minTotalSize =
+      head.non_resident != 0 ? Attr::kHeaderNonResidentBaseSize
+                             : static_cast<DWORD>(sizeof(Attr::HeaderResident));
+  if (head.total_size < minTotalSize)
+  {
+    LogWarn("Attribute total_size too small for its header.");
+    return AttrWalk::kAbort;
+  }
+
+  if (head.non_resident != 0)
+  {
+    Attr::HeaderNonResident nonResident{};
+    std::memcpy(&nonResident, cur.data(), sizeof(nonResident));
+    if (Attr::HasCompressedSizeField(nonResident) &&
+        head.total_size < minTotalSize + Attr::kCompressedSizeFieldSize)
+    {
+      LogWarn(
+          "Compressed attribute total_size too small for its compressed "
+          "size field.");
+      return AttrWalk::kAbort;
+    }
+  }
+  return AttrWalk::kNext;
+}
+
 }  // namespace
 
 template <Strategy S>
@@ -172,11 +247,8 @@ std::unique_ptr<AttrBase<S>>
     // These attribute types are always resident on disk; reject any
     // record claiming otherwise before its bytes get reinterpreted as one.
     case AttrType::STANDARD_INFORMATION:
-      if (ahc.non_resident != 0)
-      {
-        throw std::runtime_error(
-            "Standard Information attribute must be resident.\n");
-      }
+      RequireResident(ahc,
+                      "Standard Information attribute must be resident.\n");
       return std::make_unique<AttrStdInfo<RESIDENT, S>>(ahc, *self_);
 
     case AttrType::ATTRIBUTE_LIST:
@@ -197,25 +269,15 @@ std::unique_ptr<AttrBase<S>>
                                                      attrListChain);
 
     case AttrType::FILE_NAME:
-      if (ahc.non_resident != 0)
-      {
-        throw std::runtime_error("File Name attribute must be resident.\n");
-      }
+      RequireResident(ahc, "File Name attribute must be resident.\n");
       return std::make_unique<AttrFileName<RESIDENT, S>>(ahc, *self_);
 
     case AttrType::VOLUME_NAME:
-      if (ahc.non_resident != 0)
-      {
-        throw std::runtime_error("Volume Name attribute must be resident.\n");
-      }
+      RequireResident(ahc, "Volume Name attribute must be resident.\n");
       return std::make_unique<AttrVolName<RESIDENT, S>>(ahc, *self_);
 
     case AttrType::VOLUME_INFORMATION:
-      if (ahc.non_resident != 0)
-      {
-        throw std::runtime_error(
-            "Volume Information attribute must be resident.\n");
-      }
+      RequireResident(ahc, "Volume Information attribute must be resident.\n");
       return std::make_unique<AttrVolInfo<RESIDENT, S>>(ahc, *self_);
 
     case AttrType::DATA:
@@ -226,10 +288,7 @@ std::unique_ptr<AttrBase<S>>
       return std::make_unique<AttrData<RESIDENT, S>>(ahc, *self_);
 
     case AttrType::INDEX_ROOT:
-      if (ahc.non_resident != 0)
-      {
-        throw std::runtime_error("Index Root attribute must be resident.\n");
-      }
+      RequireResident(ahc, "Index Root attribute must be resident.\n");
       return std::make_unique<AttrIndexRoot<RESIDENT, S>>(ahc, *self_);
 
     // INDEX_ALLOCATION is always non-resident on disk; reject a record
@@ -643,88 +702,21 @@ bool FileRecord<S>::Impl::ParseAttrs(
 
   while (true)
   {
-    // The on-disk end-of-attributes marker is a single AttrType::ALL value
-    // (4 bytes): check for it as soon as that much room remains, rather
-    // than requiring a full attribute header to fit first.
-    if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrType) >
-        volume_.GetFileRecordSize())
-    {
-      break;
-    }
-    AttrType type{};
-    std::memcpy(&type, cur.data(), sizeof(type));
-    if (type == AttrType::ALL)
+    AttrHeaderCommon head{};
+    const AttrWalk step =
+        ReadAttrHeader(cur, dataPtr, volume_.GetFileRecordSize(), head);
+    if (step == AttrWalk::kEndMarker)
     {
       foundEndMarker = true;
       break;
     }
-    // From here on, the walk needs the whole header, and the whole
-    // attribute, to fit.
-    if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrHeaderCommon) >
-        volume_.GetFileRecordSize())
+    if (step == AttrWalk::kRanOut)
     {
       break;
     }
-    AttrHeaderCommon head{};
-    std::memcpy(&head, cur.data(), sizeof(head));
-    if (static_cast<ULONGLONG>(dataPtr) + head.total_size >
-        volume_.GetFileRecordSize())
+    if (step == AttrWalk::kAbort || !VisitAttr(cur, head, attrListChain))
     {
-      break;
-    }
-
-    const DWORD minTotalSize =
-        head.non_resident != 0
-            ? Attr::kHeaderNonResidentBaseSize
-            : static_cast<DWORD>(sizeof(Attr::HeaderResident));
-    if (head.total_size < minTotalSize)
-    {
-      LogWarn("Attribute total_size too small for its header.");
       return abortWalk();
-    }
-
-    if (head.non_resident != 0)
-    {
-      Attr::HeaderNonResident nonResident{};
-      std::memcpy(&nonResident, cur.data(), sizeof(nonResident));
-      if (Attr::HasCompressedSizeField(nonResident) &&
-          head.total_size < minTotalSize + Attr::kCompressedSizeFieldSize)
-      {
-        LogWarn(
-            "Compressed attribute total_size too small for its compressed "
-            "size field.");
-        return abortWalk();
-      }
-    }
-
-    // True only when the type is a real attribute slot and the caller's
-    // mask requests that slot.
-    if (IsValidAttrType(head.type) &&
-        static_cast<bool>(AttrMask(head.type) & attr_mask_))
-    {
-      // Mirrors AttrBase::GetAttrName()'s own bounds check, ahead of
-      // constructing the attribute: strict rejects it outright instead of
-      // parsing it and letting a later GetAttrName() call find the same
-      // defect.
-      const bool nameExceedsBounds =
-          head.name_length != 0 &&
-          static_cast<ULONGLONG>(head.name_offset) +
-                  (static_cast<ULONGLONG>(head.name_length) * sizeof(WCHAR)) >
-              head.total_size;
-      if (nameExceedsBounds)
-      {
-        LogRecoverable(recover, "Attribute name exceeds attribute bounds.");
-        if (!recover)
-        {
-          ClearAttrs();
-          return false;
-        }
-      }
-
-      if (!ParseAttr(AlignedAttrHeader(cur), attrListChain))
-      {
-        return abortWalk();
-      }
     }
 
     dataPtr += head.total_size;
@@ -752,6 +744,126 @@ bool FileRecord<S>::Impl::ParseAttrs(
   return true;
 }
 
+// Parses the attribute at the front of cur, if its type is wanted. Returns
+// false when it must end the walk.
+template <Strategy S>
+bool FileRecord<S>::Impl::VisitAttr(
+    std::span<const BYTE> cur, const AttrHeaderCommon& head,
+    std::unordered_set<ULONGLONG>& attrListChain)
+{
+  // True only when the type is a real attribute slot and the caller's
+  // mask requests that slot.
+  if (!IsValidAttrType(head.type) ||
+      !static_cast<bool>(AttrMask(head.type) & attr_mask_))
+  {
+    return true;
+  }
+
+  // Mirrors AttrBase::GetAttrName()'s own bounds check, ahead of
+  // constructing the attribute: strict rejects it outright instead of
+  // parsing it and letting a later GetAttrName() call find the same
+  // defect.
+  const bool nameExceedsBounds =
+      head.name_length != 0 &&
+      static_cast<ULONGLONG>(head.name_offset) +
+              (static_cast<ULONGLONG>(head.name_length) * sizeof(WCHAR)) >
+          head.total_size;
+  if (nameExceedsBounds)
+  {
+    const bool recover = volume_.GetOptions().recover_errors;
+    LogRecoverable(recover, "Attribute name exceeds attribute bounds.");
+    if (!recover)
+    {
+      return false;
+    }
+  }
+
+  return ParseAttr(AlignedAttrHeader(cur), attrListChain);
+}
+
+namespace
+{
+
+// Every non-resident instance's index into attrs, grouped by stream name: two
+// differently named streams of the same type (eg. two ADS) must never merge
+// into each other.
+template <Strategy S>
+std::unordered_map<std::wstring, std::vector<size_t>> GroupNonResidentByName(
+    const std::vector<std::unique_ptr<AttrBase<S>>>& attrs)
+{
+  std::unordered_map<std::wstring, std::vector<size_t>> byName;
+  for (size_t i = 0; i < attrs.size(); ++i)
+  {
+    // i < attrs.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const auto& attr = attrs[i];
+    if (attr->IsNonResident())
+    {
+      std::wstring key;
+      if (!attr->IsUnNamed())
+      {
+        key = attr->GetAttrName();
+      }
+      byName[key].push_back(i);
+    }
+  }
+  return byName;
+}
+
+}  // namespace
+
+// Merges the VCN-split instances at indices, all of one stream, into the first
+// one. Appends the indices of the absorbed instances to toErase. A gap, an
+// overlap, or a chain that doesn't start at VCN 0 means a damaged or
+// unsupported layout: every instance is then left exactly as parsed instead of
+// splicing a wrong or partial result together.
+template <Strategy S>
+void FileRecord<S>::Impl::MergeStreamChain(
+    std::vector<std::unique_ptr<AttrBase<S>>>& attrs,
+    std::vector<size_t>& indices, std::vector<size_t>& toErase)
+{
+  // indices only holds indices below attrs.size().
+  const auto nonResident = [&attrs](size_t idx) -> AttrNonResident<S>&
+  {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return static_cast<AttrNonResident<S>&>(*attrs[idx]);
+  };
+
+  std::ranges::sort(indices, {},
+                    [&](size_t idx) { return nonResident(idx).GetStartVcn(); });
+
+  ULONGLONG expectedStartVcn = 0;
+  bool contiguous = true;
+  for (size_t const idx : indices)
+  {
+    const auto& instance = nonResident(idx);
+    if (instance.GetStartVcn() != expectedStartVcn)
+    {
+      contiguous = false;
+      break;
+    }
+    expectedStartVcn = instance.GetLastVcn() + 1;
+  }
+  if (!contiguous)
+  {
+    LogWarn(
+        "Attribute continuation VCNs are not contiguous from 0; leaving "
+        "{} instance(s) unmerged",
+        indices.size());
+    return;
+  }
+
+  auto& keeper = nonResident(indices.front());
+  for (size_t k = 1; k < indices.size(); ++k)
+  {
+    // k < indices.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const size_t idx = indices[k];
+    keeper.AppendRuns(nonResident(idx));
+    toErase.push_back(idx);
+  }
+}
+
 // Splices a non-resident attribute's own VCN-split instances (already all in
 // attr_list_ by now) back into one, so getAttr()/FindStream() see exactly
 // one complete attribute per stream instead of several partial ones.
@@ -765,76 +877,12 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
       continue;
     }
 
-    // Every non-resident instance's index into attrs, grouped by stream
-    // name: two differently named streams of the same type (eg. two ADS)
-    // must never merge into each other.
-    std::unordered_map<std::wstring, std::vector<size_t>> byName;
-    for (size_t i = 0; i < attrs.size(); ++i)
-    {
-      // i < attrs.size() by the loop condition.
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      const auto& attr = attrs[i];
-      if (attr->IsNonResident())
-      {
-        std::wstring key;
-        if (!attr->IsUnNamed())
-        {
-          key = attr->GetAttrName();
-        }
-        byName[key].push_back(i);
-      }
-    }
-
-    // byName only holds indices below attrs.size().
-    const auto nonResident = [&attrs](size_t idx) -> AttrNonResident<S>&
-    {
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      return static_cast<AttrNonResident<S>&>(*attrs[idx]);
-    };
-
     std::vector<size_t> toErase;
-    for (auto& [name, indices] : byName)
+    for (auto& [name, indices] : GroupNonResidentByName<S>(attrs))
     {
-      if (indices.size() < 2)
+      if (indices.size() >= 2)
       {
-        continue;
-      }
-
-      std::ranges::sort(indices, {}, [&](size_t idx)
-                        { return nonResident(idx).GetStartVcn(); });
-
-      // A gap, an overlap, or a chain that doesn't start at VCN 0 means a
-      // damaged or unsupported layout: leave every instance exactly as
-      // parsed instead of splicing a wrong or partial result together.
-      ULONGLONG expectedStartVcn = 0;
-      bool contiguous = true;
-      for (size_t const idx : indices)
-      {
-        const auto& instance = nonResident(idx);
-        if (instance.GetStartVcn() != expectedStartVcn)
-        {
-          contiguous = false;
-          break;
-        }
-        expectedStartVcn = instance.GetLastVcn() + 1;
-      }
-      if (!contiguous)
-      {
-        LogWarn(
-            "Attribute continuation VCNs are not contiguous from 0; leaving "
-            "{} instance(s) unmerged",
-            indices.size());
-        continue;
-      }
-
-      auto& keeper = nonResident(indices.front());
-      for (size_t k = 1; k < indices.size(); ++k)
-      {
-        // k < indices.size() by the loop condition.
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        const size_t idx = indices[k];
-        keeper.AppendRuns(nonResident(idx));
-        toErase.push_back(idx);
+        MergeStreamChain(attrs, indices, toErase);
       }
     }
 
@@ -1311,6 +1359,57 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
   }
 }
 
+namespace
+{
+
+// Number of whole index blocks that mappedClusters clusters hold. A range of
+// clusters counts in bytes, not in clusters, since a block can be smaller than
+// one. The byte count saturates instead of wrapping.
+ULONGLONG MappedIndexBlocks(ULONGLONG mappedClusters, DWORD clusterSize,
+                            DWORD indexBlockSize) noexcept
+{
+  const ULONGLONG mappedBytes =
+      (clusterSize != 0 &&
+       mappedClusters > std::numeric_limits<ULONGLONG>::max() / clusterSize)
+          ? std::numeric_limits<ULONGLONG>::max()
+          : mappedClusters * clusterSize;
+  return mappedBytes / indexBlockSize;
+}
+
+// Decides whether an entry found in an orphaned block is reported. It MUST be
+// filed under this very directory (selfRef, when known). With a volume given,
+// the record it names MUST also still be in use under the same sequence.
+template <Strategy S>
+bool IsOrphanEntryReportable(const IndexEntry& entry,
+                             std::optional<ULONGLONG> selfRef,
+                             WORD selfSequence, bool selfInUse,
+                             const NtfsVolume<S>* checkNamedRecordIn)
+{
+  // An orphaned block may hold a stale entry left over from a file
+  // already deleted from this directory, or from an earlier directory
+  // that used this record - only report one still filed under this very
+  // directory. Same rule as MftTree: a freed directory keeps the entries
+  // filed under its sequence from before NTFS bumped it.
+  if (selfRef && (entry.GetParentReference() != *selfRef ||
+                  !IsSameRecordGeneration(entry.GetParentSequenceNumber(),
+                                          selfSequence, selfInUse)))
+  {
+    return false;
+  }
+  // With include_deleted off, also drop an entry whose named record is
+  // itself freed, or was reused under a different sequence number.
+  if (checkNamedRecordIn != nullptr)
+  {
+    FileRecord<S> named(*checkNamedRecordIn);
+    return named.ParseFileRecord(entry.GetFileReference()) &&
+           !named.IsDeleted() &&
+           named.GetSequenceNumber() == entry.GetSequenceNumber();
+  }
+  return true;
+}
+
+}  // namespace
+
 // Recovery pass for TraverseSubEntries(): a corrupt $INDEX_ROOT or internal
 // node can leave real $INDEX_ALLOCATION blocks with no surviving pointer to
 // them. Since every name appears exactly once in the B+ tree, scanning every
@@ -1350,12 +1449,8 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
   const ULONGLONG mappedClusters = (alloc->GetLastVcn() >= alloc->GetStartVcn())
                                        ? alloc->TotalClusters()
                                        : 0;
-  const ULONGLONG mappedBytes =
-      (clusterSize != 0 &&
-       mappedClusters > std::numeric_limits<ULONGLONG>::max() / clusterSize)
-          ? std::numeric_limits<ULONGLONG>::max()
-          : mappedClusters * clusterSize;
-  const ULONGLONG mappedBlockCount = mappedBytes / indexBlockSize;
+  const ULONGLONG mappedBlockCount =
+      MappedIndexBlocks(mappedClusters, clusterSize, indexBlockSize);
 
   const ULONGLONG declaredBlockCount = alloc->GetIndexBlockCount();
   const ULONGLONG blockCount = (declaredBlockCount < mappedBlockCount)
@@ -1396,35 +1491,12 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
 
     for (const IndexEntry& index_entry : index_block)
     {
-      if (!index_entry.HasName())
+      if (index_entry.HasName() &&
+          IsOrphanEntryReportable(index_entry, selfRef, selfSequence, selfInUse,
+                                  includeDeleted ? nullptr : &volume_))
       {
-        continue;
+        seCallBack(index_entry, context);
       }
-      // An orphaned block may hold a stale entry left over from a file
-      // already deleted from this directory, or from an earlier directory
-      // that used this record - only report one still filed under this very
-      // directory. Same rule as MftTree: a freed directory keeps the entries
-      // filed under its sequence from before NTFS bumped it.
-      if (selfRef &&
-          (index_entry.GetParentReference() != *selfRef ||
-           !IsSameRecordGeneration(index_entry.GetParentSequenceNumber(),
-                                   selfSequence, selfInUse)))
-      {
-        continue;
-      }
-      // With include_deleted off, also drop an entry whose named record is
-      // itself freed, or was reused under a different sequence number.
-      if (!includeDeleted)
-      {
-        FileRecord<S> named(volume_);
-        if (!named.ParseFileRecord(index_entry.GetFileReference()) ||
-            named.IsDeleted() ||
-            named.GetSequenceNumber() != index_entry.GetSequenceNumber())
-        {
-          continue;
-        }
-      }
-      seCallBack(index_entry, context);
     }
   }
 }
@@ -1458,6 +1530,31 @@ std::optional<IndexEntry>
   return found;
 }
 
+// The entries of a file-name $INDEX_ROOT, or null for any other kind of index
+// or for a strategy this library does not know.
+template <Strategy S>
+const std::vector<IndexEntry>*
+    FileRecord<S>::Impl::FileNameIndexRootEntries(const AttrBase<S>& attr)
+{
+  if constexpr (S == Strategy::NO_CACHE)
+  {
+    const auto* index_root = reinterpret_cast<
+        const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(&attr);
+    return index_root->IsFileName() ? index_root : nullptr;
+  }
+  else if constexpr (S == Strategy::FULL_CACHE)
+  {
+    const auto* index_root = reinterpret_cast<
+        const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+        &attr);
+    return index_root->IsFileName() ? index_root : nullptr;
+  }
+  else
+  {
+    return nullptr;
+  }
+}
+
 // FindSubEntry()'s walk down the B+ tree, trusting the entries to be sorted
 // by the volume's collation order. A name that sorts before a leaf entry is
 // reported absent.
@@ -1473,33 +1570,9 @@ std::optional<IndexEntry>
     return {};
   }
 
-  const std::vector<IndexEntry>* all_ie = nullptr;
-
-  if constexpr (S == Strategy::NO_CACHE)
-  {
-    const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(
-        vec.front().get());
-
-    if (!index_root->IsFileName())
-    {
-      return {};
-    }
-    all_ie = index_root;
-  }
-  else if constexpr (S == Strategy::FULL_CACHE)
-  {
-    const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
-        vec.front().get());
-
-    if (!index_root->IsFileName())
-    {
-      return {};
-    }
-    all_ie = index_root;
-  }
-  else
+  const std::vector<IndexEntry>* all_ie =
+      FileNameIndexRootEntries(*vec.front());
+  if (all_ie == nullptr)
   {
     return {};
   }
@@ -1521,28 +1594,19 @@ std::optional<IndexEntry>
         LogDebug("FindSubEntry() found entry in Index Root");
         return index_entry;
       }
-      if (comparison < 0)  // fileName is smaller than IndexEntry
-      {
-        // Visit SubNode
-        if (index_entry.IsSubNodePtr())
-        {
-          // Search in SubNode (IndexBlock)
-          std::optional<IndexEntry> retval = VisitIndexBlock(
-              index_entry.GetSubNodeVCN(), fileName, visitedVcns, 0);
-          if (retval)
-          {
-            return retval;
-          }
-        }
-        // not found
-        else
-        {
-          return {};
-        }
-      }
       // Just step forward if fileName is bigger than IndexEntry
+      if (comparison > 0)
+      {
+        continue;
+      }
+      // fileName is smaller than a leaf entry: not found
+      if (!index_entry.IsSubNodePtr())
+      {
+        return {};
+      }
     }
-    else if (index_entry.IsSubNodePtr())
+
+    if (index_entry.IsSubNodePtr())
     {
       // Search in SubNode (IndexBlock)
       std::optional<IndexEntry> retval = VisitIndexBlock(

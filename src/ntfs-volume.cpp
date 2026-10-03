@@ -86,14 +86,40 @@ constexpr int kMaxSizeInClusters = 8;
 // Caps the $MFT DATA entries read from a forged $ATTRIBUTE_LIST.
 constexpr size_t kMaxMftAttrListEntries = 65536;
 
-// One extension record $MFT's $ATTRIBUTE_LIST names for DATA, with the
-// sequence number its entries claim and the start VCN of each entry.
-struct PendingMftExtension
+// Decodes a BPB size byte: a positive value counts clusters, a negative one is
+// -log2 of the size in bytes. Rejects a magnitude that would shift 1U by 32 or
+// more (undefined behaviour), or yield a size no real volume could have.
+std::optional<DWORD> DecodeBpbSize(char raw, DWORD clusterSize)
 {
-  ULONGLONG record;
-  WORD sequence;
-  std::vector<ULONGLONG> start_vcns;
-};
+  if (raw < -kMaxSizeShift || raw > kMaxSizeInClusters)
+  {
+    return std::nullopt;
+  }
+  if (raw > 0)
+  {
+    return clusterSize * raw;
+  }
+  return 1U << static_cast<unsigned char>(-raw);
+}
+
+// Computes the cluster size from the sectors-per-cluster BPB byte, or nullopt
+// when its magnitude is out of range.
+std::optional<DWORD> DecodeClusterSize(char spc, WORD sectorSize)
+{
+  if (spc >= 0)
+  {
+    return sectorSize * static_cast<unsigned char>(spc);
+  }
+  // Windows 10 1903+ (build 18362) large-cluster encoding: a negative byte
+  // is -log2(sectors per cluster), not a literal sector count, letting a
+  // single BYTE field reach cluster sizes above 255 sectors (up to 2 MiB
+  // at the common 512-byte sector size).
+  if (spc < -kMaxSectorsPerClusterShift)
+  {
+    return std::nullopt;
+  }
+  return sectorSize * (1U << static_cast<unsigned char>(-spc));
+}
 
 }  // namespace
 
@@ -288,55 +314,8 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents()
   const AttrBase<S>& rawList = *listAttrs.front();
   const ULONGLONG selfRef = listRecord.GetFileReference().value();
 
-  // Collects each DATA entry, grouped per extension record, and capped. One
-  // record can hold several extents, so it keeps every start VCN listed.
-  std::vector<PendingMftExtension> pending;
-  {
-    std::unordered_map<ULONGLONG, size_t> indexByRef;
-    size_t listedEntries = 0;
-    ULONGLONG offset = 0;
-    Attr::AttributeList entry{};
-    std::optional<ULONGLONG> len;
-    while (
-        listedEntries < kMaxMftAttrListEntries &&
-        (len = rawList.ReadData(offset, {reinterpret_cast<BYTE*>(&entry),
-                                         Attr::kAttributeListEntryHeaderSize})))
-    {
-      if (*len != Attr::kAttributeListEntryHeaderSize ||
-          !IsValidAttrType(entry.attr_type))
-      {
-        break;
-      }
-
-      const ULONGLONG recordRef = entry.base_ref.segment_number;
-      if (entry.attr_type == AttrType::DATA && entry.name_length == 0 &&
-          recordRef != selfRef)
-      {
-        listedEntries++;
-        // A file reference packs the record number and its sequence number.
-        const ULONGLONG key =
-            recordRef | (static_cast<ULONGLONG>(entry.base_ref.sequence_number)
-                         << kMftSequenceShift);
-        const auto [iterator, inserted] =
-            indexByRef.emplace(key, pending.size());
-        if (inserted)
-        {
-          pending.push_back({recordRef,
-                             static_cast<WORD>(entry.base_ref.sequence_number),
-                             {}});
-        }
-        // it->second is the index of an entry of pending, pushed above or earlier.
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        pending[iterator->second].start_vcns.push_back(entry.start_vcn);
-      }
-
-      if (entry.record_size == 0)
-      {
-        break;
-      }
-      offset += entry.record_size;
-    }
-  }
+  std::vector<PendingMftExtension> pending =
+      CollectPendingMftExtensions(rawList, selfRef);
 
   // Attempts each ref once reachable, dropping it either way to bound reads.
   while (!pending.empty())
@@ -355,49 +334,7 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents()
         continue;
       }
       attemptedAny = true;
-
-      mft_extension_records_.emplace_back(self_);
-      FileRecord<S>& ext = mft_extension_records_.back();
-      ext.impl_->attr_mask_ = Mask::DATA;
-      ext.impl_->bypass_deleted_gate_ = true;
-
-      const bool parsed = ext.ParseFileRecord(item.record);
-      // A record another file reused since the list was written is not
-      // $MFT's extension: its $DATA would map foreign clusters.
-      if (parsed &&
-          !IsGenuineExtensionRecord(item.sequence, ext.GetSequenceNumber(),
-                                    ext.GetBaseRecordReference(),
-                                    selfRef & kMftRecordNumberMask))
-      {
-        mft_extension_records_.pop_back();
-        LogWarn(
-            "$MFT DATA continuation in record {} is not an extension of "
-            "$MFT (reused or foreign); ignoring",
-            item.record);
-      }
-      else if (parsed && ext.ParseAttrs())
-      {
-        for (const std::unique_ptr<AttrBase<S>>& attr :
-             ext.getAttr(AttrType::DATA))
-        {
-          if (attr->IsNonResident())
-          {
-            // Any start VCN not listed is rejected by TryAddMftExtent().
-            const ULONGLONG startVcn =
-                static_cast<const AttrNonResident<S>&>(*attr).GetStartVcn();
-            const auto listed = std::ranges::find(item.start_vcns, startVcn);
-            TryAddMftExtent(*attr, listed != item.start_vcns.end()
-                                       ? *listed
-                                       : item.start_vcns.front());
-          }
-        }
-      }
-      else
-      {
-        mft_extension_records_.pop_back();
-        LogWarn("$MFT DATA continuation in record {} could not be resolved",
-                item.record);
-      }
+      ResolvePendingMftExtension(item, selfRef);
     }
 
     if (!attemptedAny)
@@ -413,6 +350,108 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents()
         "{} of $MFT's own DATA continuation(s) could not be resolved "
         "(unreachable)",
         pending.size());
+  }
+}
+
+// Collects each DATA entry of rawList, grouped per extension record, and capped.
+// One record can hold several extents, so it keeps every start VCN listed.
+template <Strategy S>
+std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
+    NtfsVolume<S>::Impl::CollectPendingMftExtensions(const AttrBase<S>& rawList,
+                                                     ULONGLONG selfRef)
+{
+  std::vector<PendingMftExtension> pending;
+  std::unordered_map<ULONGLONG, size_t> indexByRef;
+  size_t listedEntries = 0;
+  ULONGLONG offset = 0;
+  Attr::AttributeList entry{};
+  std::optional<ULONGLONG> len;
+  while (
+      listedEntries < kMaxMftAttrListEntries &&
+      (len = rawList.ReadData(offset, {reinterpret_cast<BYTE*>(&entry),
+                                       Attr::kAttributeListEntryHeaderSize})))
+  {
+    if (*len != Attr::kAttributeListEntryHeaderSize ||
+        !IsValidAttrType(entry.attr_type))
+    {
+      break;
+    }
+
+    const ULONGLONG recordRef = entry.base_ref.segment_number;
+    if (entry.attr_type == AttrType::DATA && entry.name_length == 0 &&
+        recordRef != selfRef)
+    {
+      listedEntries++;
+      // A file reference packs the record number and its sequence number.
+      const ULONGLONG key =
+          recordRef | (static_cast<ULONGLONG>(entry.base_ref.sequence_number)
+                       << kMftSequenceShift);
+      const auto [iterator, inserted] = indexByRef.emplace(key, pending.size());
+      if (inserted)
+      {
+        pending.push_back(
+            {recordRef, static_cast<WORD>(entry.base_ref.sequence_number), {}});
+      }
+      // it->second is the index of an entry of pending, pushed above or earlier.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      pending[iterator->second].start_vcns.push_back(entry.start_vcn);
+    }
+
+    if (entry.record_size == 0)
+    {
+      break;
+    }
+    offset += entry.record_size;
+  }
+  return pending;
+}
+
+// Opens item's extension record and hands each of its DATA extents to
+// TryAddMftExtent(). The record is dropped again if it is not usable.
+template <Strategy S>
+void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
+    const PendingMftExtension& item, ULONGLONG selfRef)
+{
+  mft_extension_records_.emplace_back(self_);
+  FileRecord<S>& ext = mft_extension_records_.back();
+  ext.impl_->attr_mask_ = Mask::DATA;
+  ext.impl_->bypass_deleted_gate_ = true;
+
+  const bool parsed = ext.ParseFileRecord(item.record);
+  // A record another file reused since the list was written is not
+  // $MFT's extension: its $DATA would map foreign clusters.
+  if (parsed &&
+      !IsGenuineExtensionRecord(item.sequence, ext.GetSequenceNumber(),
+                                ext.GetBaseRecordReference(),
+                                selfRef & kMftRecordNumberMask))
+  {
+    mft_extension_records_.pop_back();
+    LogWarn(
+        "$MFT DATA continuation in record {} is not an extension of "
+        "$MFT (reused or foreign); ignoring",
+        item.record);
+    return;
+  }
+  if (!parsed || !ext.ParseAttrs())
+  {
+    mft_extension_records_.pop_back();
+    LogWarn("$MFT DATA continuation in record {} could not be resolved",
+            item.record);
+    return;
+  }
+
+  for (const std::unique_ptr<AttrBase<S>>& attr : ext.getAttr(AttrType::DATA))
+  {
+    if (attr->IsNonResident())
+    {
+      // Any start VCN not listed is rejected by TryAddMftExtent().
+      const ULONGLONG startVcn =
+          static_cast<const AttrNonResident<S>&>(*attr).GetStartVcn();
+      const auto listed = std::ranges::find(item.start_vcns, startVcn);
+      TryAddMftExtent(*attr, listed != item.start_vcns.end()
+                                 ? *listed
+                                 : item.start_vcns.front());
+    }
   }
 }
 
@@ -650,24 +689,14 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
     return false;
   }
 
-  const char spc = static_cast<char>(bpb->sectors_per_cluster);
-  if (spc >= 0)
+  const std::optional<DWORD> clusterSize = DecodeClusterSize(
+      static_cast<char>(bpb->sectors_per_cluster), sector_size_);
+  if (!clusterSize)
   {
-    cluster_size_ = sector_size_ * static_cast<unsigned char>(spc);
+    LogError("sectors_per_cluster magnitude out of range");
+    return false;
   }
-  else
-  {
-    // Windows 10 1903+ (build 18362) large-cluster encoding: a negative byte
-    // is -log2(sectors per cluster), not a literal sector count, letting a
-    // single BYTE field reach cluster sizes above 255 sectors (up to 2 MiB
-    // at the common 512-byte sector size).
-    if (spc < -kMaxSectorsPerClusterShift)
-    {
-      LogError("sectors_per_cluster magnitude out of range");
-      return false;
-    }
-    cluster_size_ = sector_size_ * (1U << static_cast<unsigned char>(-spc));
-  }
+  cluster_size_ = *clusterSize;
   LogInfo("Cluster Size = {} bytes", cluster_size_);
 
   if (cluster_size_ == 0)
@@ -677,24 +706,14 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
   }
   cluster_buffer_.resize(cluster_size_);
 
-  char raw_size = static_cast<char>(bpb->clusters_per_file_record);
-
-  // Rejects an sz magnitude that would shift 1U by 32 or more (undefined
-  // behaviour), or yield a file_record_size_ no real volume could have.
-  if (raw_size < -kMaxSizeShift || raw_size > kMaxSizeInClusters)
+  const std::optional<DWORD> recordSize = DecodeBpbSize(
+      static_cast<char>(bpb->clusters_per_file_record), cluster_size_);
+  if (!recordSize)
   {
     LogError("clusters_per_file_record magnitude out of range");
     return false;
   }
-
-  if (raw_size > 0)
-  {
-    file_record_size_ = cluster_size_ * raw_size;
-  }
-  else
-  {
-    file_record_size_ = 1U << static_cast<unsigned char>(-raw_size);
-  }
+  file_record_size_ = *recordSize;
   LogInfo("FileRecord Size = {} bytes", file_record_size_);
 
   // Rejects a size too small for the header, or not a whole number of
@@ -712,24 +731,14 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
     return false;
   }
 
-  raw_size = static_cast<char>(bpb->clusters_per_index_block);
-
-  // Rejects an sz magnitude that would shift 1U by 32 or more (undefined
-  // behaviour), or yield an index_block_size_ no real volume could have.
-  if (raw_size < -kMaxSizeShift || raw_size > kMaxSizeInClusters)
+  const std::optional<DWORD> indexBlockSize = DecodeBpbSize(
+      static_cast<char>(bpb->clusters_per_index_block), cluster_size_);
+  if (!indexBlockSize)
   {
     LogError("clusters_per_index_block magnitude out of range");
     return false;
   }
-
-  if (raw_size > 0)
-  {
-    index_block_size_ = cluster_size_ * raw_size;
-  }
-  else
-  {
-    index_block_size_ = 1U << static_cast<unsigned char>(-raw_size);
-  }
+  index_block_size_ = *indexBlockSize;
   LogInfo("IndexBlock Size = {} bytes", index_block_size_);
 
   // Rejects a size too small for the header, or not a whole number of

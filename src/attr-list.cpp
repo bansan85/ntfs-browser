@@ -100,77 +100,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
     LogDebug("Attribute List: 0x{:04x}",
              static_cast<DWORD>(al_record.attr_type));
 
-    const ULONGLONG record_ref = al_record.base_ref.segment_number;
-    const Mask attr_mask = AttrMask(al_record.attr_type);
-    // Skip contained attributes
-    // Skip unwanted attributes
-    if (record_ref != *file_record.impl_->file_reference_ &&
-        static_cast<bool>(attr_mask & file_record.impl_->attr_mask_))
-    {
-      if (!attrListChain.insert(MakeChainKey(record_ref, al_record.attr_type))
-               .second)
-      {
-        LogWarn(
-            "Attribute List: record {}, type 0x{:04x} already resolved in "
-            "this chain, skipping",
-            record_ref, static_cast<DWORD>(al_record.attr_type));
-      }
-      else
-      {
-        // Owned by file_record, not by this object: the attributes moved into file_record
-        // below keep pointing into frnew's bytes.
-        file_record.impl_->extension_records_.emplace_back(
-            file_record.GetVolume());
-        FileRecord<S>& frnew = file_record.impl_->extension_records_.back();
-
-        frnew.impl_->attr_mask_ = attr_mask;
-        frnew.impl_->attr_raw_call_back_ =
-            file_record.impl_->attr_raw_call_back_;
-        if (!frnew.ParseFileRecord(record_ref))
-        {
-          throw std::runtime_error(
-              "Attribute List parse error (ParseFileRecord).\n");
-        }
-
-        // A record another file reused since the list was written is not
-        // this file's extension: its attributes belong to someone else.
-        const bool genuine = IsGenuineExtensionRecord(
-            al_record.base_ref.sequence_number, frnew.GetSequenceNumber(),
-            frnew.GetBaseRecordReference(),
-            *file_record.impl_->file_reference_ & kMftRecordNumberMask);
-        if (!genuine)
-        {
-          file_record.impl_->extension_records_.pop_back();
-          LogRecoverable(recover,
-                         "Attribute List: record {} is not an extension of "
-                         "record {} (reused or foreign) - skipping",
-                         record_ref, *file_record.impl_->file_reference_);
-          if (!recover)
-          {
-            throw std::runtime_error(
-                "Attribute List names a record of another file.\n");
-          }
-        }
-        else
-        {
-          if (!frnew.impl_->ParseAttrs(attrListChain))
-          {
-            throw std::runtime_error(
-                "Attribute List parse error (ParseAttrs).\n");
-          }
-
-          // Insert new found AttrList to fr.AttrList
-          std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-              frnew.getAttr(al_record.attr_type);
-          for (std::unique_ptr<AttrBase<S>>& veci : vec)
-          {
-            file_record.impl_->attr_list_.at(AttrIndex(al_record.attr_type))
-                .push_back(std::move(veci));
-          }
-          vec.clear();
-        }
-      }
-    }
+    ResolveEntry(al_record, file_record, attrListChain, recover);
 
     if (al_record.record_size != 0 &&
         al_record.record_size < Attr::kAttributeListEntryHeaderSize)
@@ -207,6 +137,81 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
   {
     throw std::runtime_error("Attribute List is truncated.\n");
   }
+}
+
+// Moves the attributes entry names, from the extension record that holds them,
+// into file_record. A contained or unwanted attribute is skipped.
+template <typename TYPE_RESIDENT, Strategy S>
+void AttrList<TYPE_RESIDENT, S>::ResolveEntry(
+    const Attr::AttributeList& entry, FileRecord<S>& file_record,
+    std::unordered_set<ULONGLONG>& attrListChain, bool recover)
+{
+  const ULONGLONG record_ref = entry.base_ref.segment_number;
+  const Mask attr_mask = AttrMask(entry.attr_type);
+  // Skip contained attributes
+  // Skip unwanted attributes
+  if (record_ref == *file_record.impl_->file_reference_ ||
+      !static_cast<bool>(attr_mask & file_record.impl_->attr_mask_))
+  {
+    return;
+  }
+
+  if (!attrListChain.insert(MakeChainKey(record_ref, entry.attr_type)).second)
+  {
+    LogWarn(
+        "Attribute List: record {}, type 0x{:04x} already resolved in "
+        "this chain, skipping",
+        record_ref, static_cast<DWORD>(entry.attr_type));
+    return;
+  }
+
+  // Owned by file_record, not by this object: the attributes moved into
+  // file_record below keep pointing into frnew's bytes.
+  file_record.impl_->extension_records_.emplace_back(file_record.GetVolume());
+  FileRecord<S>& frnew = file_record.impl_->extension_records_.back();
+
+  frnew.impl_->attr_mask_ = attr_mask;
+  frnew.impl_->attr_raw_call_back_ = file_record.impl_->attr_raw_call_back_;
+  if (!frnew.ParseFileRecord(record_ref))
+  {
+    throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
+  }
+
+  // A record another file reused since the list was written is not
+  // this file's extension: its attributes belong to someone else.
+  const bool genuine = IsGenuineExtensionRecord(
+      entry.base_ref.sequence_number, frnew.GetSequenceNumber(),
+      frnew.GetBaseRecordReference(),
+      *file_record.impl_->file_reference_ & kMftRecordNumberMask);
+  if (!genuine)
+  {
+    file_record.impl_->extension_records_.pop_back();
+    LogRecoverable(recover,
+                   "Attribute List: record {} is not an extension of "
+                   "record {} (reused or foreign) - skipping",
+                   record_ref, *file_record.impl_->file_reference_);
+    if (!recover)
+    {
+      throw std::runtime_error(
+          "Attribute List names a record of another file.\n");
+    }
+    return;
+  }
+
+  if (!frnew.impl_->ParseAttrs(attrListChain))
+  {
+    throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
+  }
+
+  // Insert new found AttrList to fr.AttrList
+  std::vector<std::unique_ptr<AttrBase<S>>>& vec =
+      frnew.getAttr(entry.attr_type);
+  for (std::unique_ptr<AttrBase<S>>& veci : vec)
+  {
+    file_record.impl_->attr_list_.at(AttrIndex(entry.attr_type))
+        .push_back(std::move(veci));
+  }
+  vec.clear();
 }
 
 template <typename TYPE_RESIDENT, Strategy S>

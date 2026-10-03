@@ -8,6 +8,7 @@
 #include <span>
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/index-entry.h>
@@ -25,6 +26,25 @@ namespace NtfsBrowser
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
+
+namespace
+{
+
+// Reports a defect in an index root's entries. Returns true when the attribute
+// must be rejected whole: the entries parsed so far are then discarded too.
+bool RejectRootOnDefect(bool recover, std::string_view defect,
+                        std::vector<IndexEntry>& entries)
+{
+  LogRecoverable(recover, "{}", defect);
+  if (recover)
+  {
+    return false;
+  }
+  entries.clear();
+  return true;
+}
+
+}  // namespace
 
 template <typename RESIDENT, Strategy S>
 AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
@@ -93,53 +113,34 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
     const size_t remaining = cur.size();
     if (remaining < offsetof(Data::IndexEntry, stream))
     {
-      LogRecoverable(recover,
-                     "Index Root: index entry header exceeds attribute bounds");
-      if (!recover)
-      {
-        clear();
-        return false;
-      }
-      break;
+      return !RejectRootOnDefect(
+          recover, "Index Root: index entry header exceeds attribute bounds",
+          *this);
     }
     const Data::IndexEntry head = ReadIndexEntryHeader(cur);
     if (head.size == 0 || head.size > remaining)
     {
-      LogRecoverable(recover,
-                     "Index Root: index entry exceeds attribute bounds");
-      if (!recover)
-      {
-        clear();
-        return false;
-      }
-      break;
+      return !RejectRootOnDefect(
+          recover, "Index Root: index entry exceeds attribute bounds", *this);
     }
 
     ieTotal += head.size;
     if (ieTotal > index_root_copy->total_entry_size)
     {
-      LogRecoverable(recover,
-                     "Index Root: index entry total exceeds the attribute's "
-                     "declared entry size");
-      if (!recover)
-      {
-        clear();
-        return false;
-      }
-      break;
+      return !RejectRootOnDefect(
+          recover,
+          "Index Root: index entry total exceeds the attribute's declared "
+          "entry size",
+          *this);
     }
 
     const AlignedIndexEntry aligned_index_entry =
         AlignIndexEntry(data_copy, cur, head.size);
     if (const std::optional<std::string_view> defect =
-            ValidateIndexEntry(*aligned_index_entry.entry))
+            ValidateIndexEntry(*aligned_index_entry.entry);
+        defect && RejectRootOnDefect(recover, *defect, *this))
     {
-      LogRecoverable(recover, "{}", *defect);
-      if (!recover)
-      {
-        clear();
-        return false;
-      }
+      return false;
     }
 
     emplace_back(aligned_index_entry.owner, *aligned_index_entry.entry);
@@ -147,13 +148,11 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
     if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {
       LogTrace("Last Index Entry");
-      break;
+      return true;
     }
 
     cur = cur.subspan(head.size);  // Pick next
   }
-
-  return true;
 }
 
 // Check if this IndexRoot contains Filename or IndexView

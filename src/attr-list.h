@@ -11,6 +11,10 @@ enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
+namespace Attr
+{
+struct AttributeList;
+}  // namespace Attr
 
 template <typename TYPE_RESIDENT, Strategy S>
 class AttrList : public TYPE_RESIDENT
@@ -26,6 +30,12 @@ class AttrList : public TYPE_RESIDENT
   AttrList& operator=(AttrList&& other) noexcept = delete;
   AttrList& operator=(AttrList const& other) = delete;
   ~AttrList() override;
+
+ private:
+  static void ResolveEntry(const Attr::AttributeList& entry,
+                           FileRecord<S>& file_record,
+                           std::unordered_set<ULONGLONG>& attrListChain,
+                           bool recover);
 };  // AttrList
 
 }  // namespace NtfsBrowser
