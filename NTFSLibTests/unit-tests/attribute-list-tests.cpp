@@ -139,8 +139,13 @@ TEMPLATE_TEST_CASE_SIG(
   // record's construction time, so a moved FileRecord reads stale memory.
   for (size_t i = 0; i < allocAttrs.size(); i++)
   {
-    CHECK(allocAttrs[i]->GetDataSize() ==
-          NtfsBrowserTests::kUafRealSizeSentinels[i]);
+    // The REQUIRE above checks the size of allocAttrs.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(
+        allocAttrs[i]->GetDataSize() ==
+        // The REQUIRE above makes allocAttrs as long as kUafRealSizeSentinels.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        NtfsBrowserTests::kUafRealSizeSentinels[i]);
   }
 }
 
@@ -300,6 +305,8 @@ TEMPLATE_TEST_CASE_SIG(
 
   const auto& allocAttrs = dir.getAttr(AttrType::INDEX_ALLOCATION);
   REQUIRE(allocAttrs.size() == 1);
+  // The REQUIRE above checks the size of allocAttrs.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(allocAttrs[0]->GetDataSize() ==
         NtfsBrowserTests::kAttrListTightPackRealSize);
 }

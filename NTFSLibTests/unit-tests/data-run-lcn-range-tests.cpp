@@ -59,6 +59,8 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(dataAttrs.size() == 1);
 
   std::vector<BYTE> buffer(NtfsBrowserTests::kFakeClusterSize, kSentinelByte);
+  // The REQUIRE above checks the size of dataAttrs.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const std::optional<ULONGLONG> read = dataAttrs[0]->ReadData(0, buffer);
 
   // The wrapped address is 0: the boot sector must not come back as data.
@@ -108,6 +110,8 @@ TEMPLATE_TEST_CASE_SIG(
     // Only the first run (VCN 0) was kept: the second cluster is unmapped.
     std::vector<BYTE> buffer(2 * NtfsBrowserTests::kFakeClusterSize,
                              kSentinelByte);
+    // The REQUIRE above checks the size of dataAttrs.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK_FALSE(dataAttrs[0]->ReadData(0, buffer).has_value());
   }
 }

@@ -135,6 +135,8 @@ bool MatchesPtrnPattern(std::span<const BYTE> data)
     return false;
   }
 
+  // data is not empty: checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const size_t phase = kPattern.find(static_cast<char>(data[0]));
   if (phase == std::string_view::npos)
   {
@@ -143,6 +145,8 @@ bool MatchesPtrnPattern(std::span<const BYTE> data)
 
   for (size_t i = 0; i < data.size(); i++)
   {
+    // i < data.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (data[i] != gsl::narrow<BYTE>(kPattern[(phase + i) % kPattern.size()]))
     {
       return false;
@@ -160,6 +164,8 @@ bool ContainsPtrnRun(std::span<const BYTE> data, size_t minRunLength)
   size_t i = 0;
   while (i < data.size())
   {
+    // i < data.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const size_t phase = kPattern.find(static_cast<char>(data[i]));
     if (phase == std::string_view::npos)
     {
@@ -168,10 +174,18 @@ bool ContainsPtrnRun(std::span<const BYTE> data, size_t minRunLength)
     }
 
     size_t j = i;
-    while (j < data.size() &&
-           data[j] ==
-               gsl::narrow<BYTE>(kPattern[(phase + (j - i)) % kPattern.size()]))
+    while (j < data.size())
     {
+      const auto expected =
+          // The index is reduced modulo kPattern.size().
+          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+          gsl::narrow<BYTE>(kPattern[(phase + (j - i)) % kPattern.size()]);
+      // j < data.size() by the loop condition.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      if (data[j] != expected)
+      {
+        break;
+      }
       j++;
     }
     if (j - i >= minRunLength)

@@ -80,6 +80,8 @@ TEMPLATE_TEST_CASE_SIG(
     {
       for (size_t i = 0; i < kArrayWords; i++)
       {
+        // us_array.size() == kArrayWords was tested first.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         if (fr.us_array[i] != Sentinel(i))
         {
           return false;

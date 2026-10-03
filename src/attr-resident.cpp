@@ -92,6 +92,8 @@ std::optional<ULONGLONG>
   }
 
   const std::span<const BYTE> body(this->GetData(), this->GetDataSize());
+  // offset < GetDataSize() was checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   memcpy(buffer.data(), &body[offset], actural);
 
   return actural;

@@ -52,7 +52,8 @@ inline constexpr DWORD kHeaderNonResidentBaseSize =
   const std::span<const BYTE> field(reinterpret_cast<const BYTE*>(&header),
                                     kHeaderNonResidentBaseSize +
                                         kCompressedSizeFieldSize);
-  std::memcpy(&size, &field[kHeaderNonResidentBaseSize], sizeof(size));
+  std::memcpy(&size, field.subspan(kHeaderNonResidentBaseSize).data(),
+              sizeof(size));
   return size;
 }
 }  // namespace NtfsBrowser::Attr

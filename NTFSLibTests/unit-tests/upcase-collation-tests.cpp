@@ -90,7 +90,10 @@ std::vector<BYTE> MakeMinimalUpCaseBytes()
   {
     const size_t upper =
         (unit >= L'a' && unit <= L'z') ? unit - kCaseDistance : unit;
+    // bytes holds 2 bytes for each unit below kUpCaseUnitCount.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[unit * 2] = static_cast<BYTE>(upper & kLowByteMask);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[unit * 2 + 1] = gsl::narrow<BYTE>(upper >> kBitsPerByte);
   }
   return bytes;
@@ -208,7 +211,10 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
   {
     std::vector<BYTE> bytes = good;
     // Maps U+00E9 to U+0041.
+    // kAcuteEUnit is below kUpCaseUnitCount, so both of its bytes are in bytes.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[kAcuteEUnit * 2] = kMappedUnitLow;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[kAcuteEUnit * 2 + 1] = 0x00;
 
     const std::optional<UpCaseTable> table = UpCaseTable::FromBytes(bytes);

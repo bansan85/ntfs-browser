@@ -95,6 +95,8 @@ std::vector<BYTE> ExpectedFek()
   std::vector<BYTE> key(kFekKeySize);
   for (size_t i = 0; i < key.size(); ++i)
   {
+    // i < key.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     key[i] = gsl::narrow<BYTE>((i + 1) * 3);
   }
   return NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key);
@@ -116,7 +118,7 @@ TEST_CASE("A PFX key provider unwraps a FEK, whichever way the key is stored",
     CHECK(provider->UnwrapFek(Thumbprint(pfx), wrapped) == ExpectedFek());
 
     std::vector<BYTE> tampered = wrapped;
-    tampered[100] ^= 0x40;
+    tampered.at(100) ^= 0x40;
     CHECK_FALSE(provider->UnwrapFek(Thumbprint(pfx), tampered).has_value());
   }
 }

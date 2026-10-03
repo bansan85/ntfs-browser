@@ -183,7 +183,10 @@ void RunOrphanScanCapsDeclaredBlockCount()
       &names);
 
   REQUIRE(names.size() == 2);
+  // The REQUIRE above checks the size of names.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[0] == kOrphanedBlockReachableName);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[1] == kOrphanedBlockOrphanName);
   CHECK_THAT(TakeCapturedLog(), ContainsSubstring("orphan scan capped at"));
 }
@@ -217,7 +220,10 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn()
       &names);
 
   REQUIRE(names.size() == 2);
+  // The REQUIRE above checks the size of names.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[0] == kMultiClusterReachableName);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[1] == kMultiClusterOrphanName);
 }
 
@@ -359,6 +365,8 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
 
     const std::vector<std::wstring> names = traverse(root);
     REQUIRE(names.size() == 1);
+    // The REQUIRE above checks the size of names.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(names[0] == kBadIndexBlockGoodName);
   }
   {
@@ -374,7 +382,10 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
 
     const std::vector<std::wstring> names = traverse(root);
     REQUIRE(names.size() == 2);
+    // The REQUIRE above checks the size of names.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(names[0] == kBadIndexBlockFirstName);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(names[1] == kBadIndexBlockGoodName);
   }
 }
@@ -433,7 +444,10 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless()
     REQUIRE(rootAttrs.size() == 1);
     const std::vector<IndexEntry>& entries = RootEntries<S>(*rootAttrs.front());
     REQUIRE(entries.size() == 1);
+    // The REQUIRE above checks the size of entries.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(entries[0].GetFileReference() == kMalformedIndexEntryMftRef);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(entries[0].GetFilename().empty());
   }
 }

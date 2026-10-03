@@ -47,9 +47,12 @@ std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length)
                               at < NtfsBrowserTests::kUninitializedTailRealSize;
        at++)
   {
-    expected.push_back(at < NtfsBrowserTests::kUninitializedTailIniSize
-                           ? residue[gsl::narrow<size_t>(at)]
-                           : static_cast<BYTE>(0));
+    expected.push_back(
+        at < NtfsBrowserTests::kUninitializedTailIniSize
+            // at < kUninitializedTailRealSize = residue.size() by the loop condition.
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+            ? residue[gsl::narrow<size_t>(at)]
+            : static_cast<BYTE>(0));
   }
   return expected;
 }
@@ -89,6 +92,8 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
     INFO("offset " << range.offset << ", length " << range.length);
     std::vector<BYTE> buffer(range.length, kSentinelByte);
     const std::optional<ULONGLONG> read =
+        // The REQUIRE above checks that there is one DATA attribute.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         dataAttrs[0]->ReadData(range.offset, buffer);
     REQUIRE(read.has_value());
 

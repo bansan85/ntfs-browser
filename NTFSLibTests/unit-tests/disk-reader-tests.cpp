@@ -55,6 +55,8 @@ std::vector<BYTE> MakeContent(size_t size)
   std::vector<BYTE> content(size);
   for (size_t i = 0; i < content.size(); i++)
   {
+    // i < content.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     content[i] = gsl::narrow<BYTE>(i);
   }
   return content;
@@ -74,7 +76,9 @@ TEST_CASE("MemoryDiskReader reads from a buffer given at construction",
 
   for (size_t i = 0; i < dest.size(); i++)
   {
-    CHECK(dest[i] == content[kMemoryReadOffset + i]);
+    // i < dest.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(dest[i] == content.at(kMemoryReadOffset + i));
   }
 }
 
@@ -112,7 +116,9 @@ TEST_CASE("MemoryDiskReader::Open loads a file's content into memory",
   REQUIRE(reader.ReadInto(addr, dest));
   for (size_t i = 0; i < dest.size(); i++)
   {
-    CHECK(dest[i] == content[kFileReadOffset + i]);
+    // i < dest.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(dest[i] == content.at(kFileReadOffset + i));
   }
 }
 
@@ -131,11 +137,15 @@ TEST_CASE("SequentialDiskReader ignores addr and reads memory data in order",
 
   for (size_t i = 0; i < first.size(); i++)
   {
-    CHECK(first[i] == content[i]);
+    // i < first.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(first[i] == content.at(i));
   }
   for (size_t i = 0; i < second.size(); i++)
   {
-    CHECK(second[i] == content[kChunkSize + i]);
+    // i < second.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(second[i] == content.at(kChunkSize + i));
   }
 }
 
@@ -181,11 +191,15 @@ TEST_CASE("SequentialDiskReader streams a file source incrementally",
 
   for (size_t i = 0; i < first.size(); i++)
   {
-    CHECK(first[i] == content[i]);
+    // i < first.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(first[i] == content.at(i));
   }
   for (size_t i = 0; i < second.size(); i++)
   {
-    CHECK(second[i] == content[kChunkSize + i]);
+    // i < second.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(second[i] == content.at(kChunkSize + i));
   }
 }
 
@@ -207,6 +221,9 @@ TEST_CASE("SequentialDiskReader generates data lazily with no backing store",
   REQUIRE(reader.ReadInto(addr, second));
 
   CHECK(calls == 2);
+  // first and second are arrays of kGeneratedBlockSize = 8 bytes.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(first[0] == 0);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(second[0] == 1);
 }

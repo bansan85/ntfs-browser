@@ -117,6 +117,8 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry)
 
   for (size_t i = 0; i < entry.names.size(); i++)
   {
+    // i < entry.names.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (entry.names[i].dos_only)
     {
       continue;
@@ -136,11 +138,12 @@ std::unique_ptr<NtfsVolume<Strategy::NO_CACHE>>
 {
   // A lone letter, optionally followed by a colon, names a drive.
   const bool driveLetter =
-      (target.size() == 1 || (target.size() == 2 && target[1] == L':')) &&
-      iswalpha(target[0]) != 0;
+      (target.size() == 1 || (target.size() == 2 && target.back() == L':')) &&
+      iswalpha(target.front()) != 0;
   if (driveLetter)
   {
-    return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target[0], options);
+    return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target.front(),
+                                                            options);
   }
   return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target, options);
 }

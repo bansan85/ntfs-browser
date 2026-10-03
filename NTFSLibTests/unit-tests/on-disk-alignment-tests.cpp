@@ -239,7 +239,10 @@ TEMPLATE_TEST_CASE_SIG(
 
   CHECK(record.us_number == kUsn);
   REQUIRE(record.us_array.size() == 2);
+  // The REQUIRE above checks the size of record.us_array.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(record.us_array[0] == kFirstBlockWord);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(record.us_array[1] == kSecondBlockWord);
 }
 

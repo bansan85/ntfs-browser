@@ -101,6 +101,8 @@ std::optional<std::vector<BYTE>> ReadRootData(const FileRecord<S>& record,
   REQUIRE(dataAttrs.size() == 1);
 
   std::vector<BYTE> buffer(size, kSentinelByte);
+  // The REQUIRE above checks the size of dataAttrs.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const std::optional<ULONGLONG> read = dataAttrs[0]->ReadData(offset, buffer);
   if (!read)
   {
@@ -264,6 +266,8 @@ void CheckCompressedFileReadsBackDecompressed()
   CHECK_FALSE(root.record->IsEncrypted());
   // real_size, not GetFileSize(): these minimal fixtures carry no $FILE_NAME.
   REQUIRE(root.record->getAttr(AttrType::DATA).size() == 1);
+  // The REQUIRE above checks that there is one DATA attribute.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(root.record->getAttr(AttrType::DATA)[0]->GetDataSize() ==
         NtfsBrowserTests::kXcaLznt1ExampleDecompressedSize);
 
@@ -358,6 +362,8 @@ void CheckTrailingPartialCompressionUnit()
   const size_t total = head.size() + tail.size();
 
   REQUIRE(root.record->getAttr(AttrType::DATA).size() == 1);
+  // The REQUIRE above checks that there is one DATA attribute.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(root.record->getAttr(AttrType::DATA)[0]->GetDataSize() == total);
 
   // One read spanning both units: stored, then compressed trailing.
@@ -749,6 +755,8 @@ void CheckCompressedIndexAllocationTraverses()
       &names);
 
   REQUIRE(names.size() == 1);
+  // The REQUIRE above checks the size of names.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[0] == NtfsBrowserTests::kCompressedIndexEntryName);
 
   const std::optional<IndexEntry> found =
@@ -837,15 +845,29 @@ void CheckSurrogatePairNamesTraverse()
   for (size_t i = 0; i < seen.size(); i++)
   {
     INFO("entry " << i);
+    // The REQUIRE above checks the size of seen.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(seen[i].name == NtfsBrowserTests::kSurrogateNames[i]);
+    // The kSurrogate* tables hold as many entries as kSurrogateNames.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(seen[i].mft_ref == NtfsBrowserTests::kSurrogateNameMftRefs[i]);
-    CHECK(seen[i].directory == NtfsBrowserTests::kSurrogateNameIsDirectory[i]);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(
+        seen[i].directory ==
+        // The kSurrogate* tables hold as many entries as kSurrogateNames.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        NtfsBrowserTests::kSurrogateNameIsDirectory[i]);
 
     const std::optional<IndexEntry> found =
+        // The REQUIRE above makes seen as long as kSurrogateNames, like the other tables.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         root.record->FindSubEntry(NtfsBrowserTests::kSurrogateNames[i]);
     REQUIRE(found.has_value());
-    CHECK(found->GetFileReference() ==
-          NtfsBrowserTests::kSurrogateNameMftRefs[i]);
+    CHECK(
+        found->GetFileReference() ==
+        // The kSurrogate* tables hold as many entries as kSurrogateNames.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        NtfsBrowserTests::kSurrogateNameMftRefs[i]);
   }
 }
 

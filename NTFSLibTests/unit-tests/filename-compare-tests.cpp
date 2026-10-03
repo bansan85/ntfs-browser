@@ -79,6 +79,8 @@ IndexEntry MakeNamedEntry(std::wstring_view name)
   fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (size_t i = 0; i < name.size(); i++)
   {
+    // i < name.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     fn.name[i] = gsl::narrow<WORD>(name[i]);
   }
 

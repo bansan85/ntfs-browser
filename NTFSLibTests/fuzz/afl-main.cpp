@@ -76,6 +76,8 @@ void PatchBpbSignature(std::vector<BYTE>& data)
 {
   if (data.size() >= kBpbSignatureOffset + kBpbSignatureLen)
   {
+    // The enclosing check leaves room for kBpbSignatureLen bytes at the offset.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&data[kBpbSignatureOffset], kBpbSignature, kBpbSignatureLen);
   }
 }
@@ -193,31 +195,34 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
 
   for (size_t i = 1; i < args.size(); i++)
   {
-    if (std::basic_string_view<ArgChar>(args[i]) == kInjectOption)
+    // i < args.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const ArgChar* const arg = args[i];
+    if (std::basic_string_view<ArgChar>(arg) == kInjectOption)
     {
       injectFailures = true;
       continue;
     }
-    if (std::basic_string_view<ArgChar>(args[i]).starts_with(kLogPrefix))
+    if (std::basic_string_view<ArgChar>(arg).starts_with(kLogPrefix))
     {
-      if (!Log::ParseOption(args[i], logConfig))
+      if (!Log::ParseOption(arg, logConfig))
       {
-        Usage(args[0]);
+        Usage(args.front());
         return 1;
       }
       continue;
     }
     if (input != nullptr)
     {
-      Usage(args[0]);
+      Usage(args.front());
       return 1;
     }
-    input = args[i];
+    input = arg;
   }
 
   if (input == nullptr)
   {
-    Usage(args[0]);
+    Usage(args.front());
     return 1;
   }
 

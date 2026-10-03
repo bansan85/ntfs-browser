@@ -89,6 +89,9 @@ bool AttrBitmap<TYPE_RESIDENT, S>::IsClusterFree(ULONGLONG cluster)
 
   const BYTE fac = cluster % 8;
 
+  // idx is below the cluster size (non-resident) or bitmap_size_ (resident),
+  // which is what bitmap_buf_ holds.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return (bitmap_buf_[idx] & static_cast<BYTE>(1U << fac)) == 0;
 }
 

@@ -53,8 +53,11 @@ inline constexpr ULONGLONG kDesIvWord = 0x169119629891ad13ULL;
   {
     for (size_t b = 0; b < sizeof(ULONGLONG); ++b)
     {
-      iv[(w * sizeof(ULONGLONG)) + b] =
-          static_cast<BYTE>(words[w] >> (kBitsPerByte * b));
+      // w < 2 and b < 8, so the index stays below 16 = iv.size().
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      iv[(w * sizeof(ULONGLONG)) + b] = static_cast<BYTE>(
+          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+          words[w] >> (kBitsPerByte * b));
     }
   }
   return iv;

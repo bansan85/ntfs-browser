@@ -268,6 +268,8 @@ class Utf16Cursor
       return low;
     }
 
+    // Callers test AtEnd() first, so index_ < text_.size().
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto value = static_cast<char32_t>(text_[index_++]);
     if constexpr (sizeof(wchar_t) == sizeof(char16_t))
     {
@@ -303,13 +305,15 @@ std::vector<char16_t> MakeBuiltInMap()
   std::vector<char16_t> map(kUpCaseUnitCount);
   for (size_t unit = 0; unit < map.size(); unit++)
   {
+    // unit < map.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     map[unit] = gsl::narrow<char16_t>(unit);
   }
   for (const UpCaseRun& run : kBuiltInRuns)
   {
     for (std::uint32_t unit = run.first; unit <= run.last; unit += run.step)
     {
-      map[unit] =
+      map.at(unit) =
           gsl::narrow<char16_t>(gsl::narrow<std::int32_t>(unit) + run.delta);
     }
   }
@@ -341,12 +345,20 @@ std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes)
   for (size_t unit = 0; unit < map.size(); unit++)
   {
     const size_t offset = unit * sizeof(char16_t);
-    map[unit] = static_cast<char16_t>(bytes[offset] |
-                                      (bytes[offset + 1] << kBitsPerByte));
+    // bytes.size() >= kUpCaseByteCount = 2 * map.size(), so offset + 1 is in
+    // range. unit < map.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const auto low = bytes[offset];
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const auto high = bytes[offset + 1];
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    map[unit] = static_cast<char16_t>(low | (high << kBitsPerByte));
   }
 
   for (char16_t unit = kLowerA; unit <= kLowerZ; unit++)
   {
+    // unit is an ASCII letter, well below the 65536 entries of map.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (map[unit] != static_cast<char16_t>(unit - kCaseDistance))
     {
       return std::nullopt;
@@ -358,7 +370,12 @@ std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes)
 
 bool UpCaseTable::IsBuiltIn() const noexcept { return built_in_; }
 
-char16_t UpCaseTable::Map(char16_t unit) const noexcept { return map_[unit]; }
+char16_t UpCaseTable::Map(char16_t unit) const noexcept
+{
+  // Both factories build kUpCaseUnitCount entries, one per char16_t value.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  return map_[unit];
+}
 
 int UpCaseTable::Compare(std::wstring_view first,
                          std::wstring_view second) const noexcept

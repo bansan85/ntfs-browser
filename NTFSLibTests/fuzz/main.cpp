@@ -245,9 +245,13 @@ int wmain(int argc, wchar_t* argv[])
 
   const size_t argCount = args.size();
 
+  // argCount == 3 is tested first.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   if (argCount == 3 && std::wcscmp(args[1], L"--seed") == 0)
   {
     const unsigned seed =
+        // argCount == 3 was tested above.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         gsl::narrow<unsigned>(std::wcstoul(args[2], nullptr, 0));
     DWORD crashCode = 0;
     printf("Replaying seed=%u\n", seed);
@@ -263,6 +267,8 @@ int wmain(int argc, wchar_t* argv[])
   std::optional<unsigned long long> maxIterations;
   if (argCount == 2)
   {
+    // argCount == 2 was tested above.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     maxIterations = std::wcstoull(args[1], nullptr, 0);
   }
 

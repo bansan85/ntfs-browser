@@ -91,6 +91,8 @@ std::vector<BYTE> SectorIv(ULONGLONG offset, size_t blockSize)
     const ULONGLONG w0 = kIvWord0 + offset;
     const ULONGLONG w1 = kIvWord1 + offset;
     std::memcpy(iv.data(), &w0, sizeof(w0));
+    // iv holds blockSize == kAesBlockSize = 16 bytes here.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&iv[sizeof(w0)], &w1, sizeof(w1));
   }
   else
@@ -115,6 +117,8 @@ std::vector<BYTE> EncryptWith(std::span<const BYTE> key,
   {
     const auto iv = SectorIv(streamOffset + done, BlockCipher::BLOCKSIZE);
     CryptoPP::CBC_Mode_ExternalCipher::Encryption cbc(cipher, iv.data());
+    // done < data.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     BYTE* const sector = &data[done];
     cbc.ProcessData(sector, sector, kSector);
   }
@@ -145,8 +149,12 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
   const std::array<BYTE, kMd5DigestSize> md1 = digest(kSalt1);
   std::array<DWORD, 4> words1{};
   std::memcpy(words1.data(), md1.data(), md1.size());
-  const std::array<DWORD, 2> desKeyWords{words1[0] ^ words1[1],
-                                         words1[2] ^ words1[3]};
+  // words1 holds 4 words.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const DWORD low = words1[0] ^ words1[1];
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const DWORD high = words1[2] ^ words1[3];
+  const std::array<DWORD, 2> desKeyWords{low, high};
   std::array<BYTE, kDesBlockSize> desKey{};
   std::memcpy(desKey.data(), desKeyWords.data(), desKey.size());
 
@@ -154,6 +162,8 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
   ULONGLONG outWhitening = 0;
   ULONGLONG inWhitening = 0;
   std::memcpy(&outWhitening, md2.data(), sizeof(outWhitening));
+  // md2 is a 16-byte MD5 digest.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::memcpy(&inWhitening, &md2[sizeof(outWhitening)], sizeof(inWhitening));
 
   CryptoPP::DES::Encryption des;
@@ -168,6 +178,8 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
     std::memcpy(&prev, iv.data(), sizeof(prev));
     for (size_t block = 0; block < kSector; block += kDesBlockSize)
     {
+      // data.size() is a multiple of kSector, done < data.size() and block < kSector.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       BYTE* bytes = &data[done + block];
       ULONGLONG value = 0;
       std::memcpy(&value, bytes, sizeof(value));
@@ -264,6 +276,8 @@ std::vector<BYTE> TestKey(Algorithm algorithm)
   std::vector<BYTE> key(length);
   for (size_t i = 0; i < length; ++i)
   {
+    // i < length = key.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     key[i] = gsl::narrow<BYTE>((i * kKeyByteStep) + kKeyByteSeed);
   }
   return key;
@@ -313,6 +327,8 @@ std::array<BYTE, kThumbprintSize> TestThumbprint(BYTE seed)
   std::array<BYTE, kThumbprintSize> thumbprint{};
   for (size_t i = 0; i < thumbprint.size(); ++i)
   {
+    // i < thumbprint.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     thumbprint[i] = static_cast<BYTE>(seed + (i * kThumbprintByteStep));
   }
   return thumbprint;

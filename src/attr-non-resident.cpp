@@ -149,6 +149,8 @@ bool AttrNonResident<S>::PickData(std::span<const BYTE>& dataRun,
   dataRun = dataRun.subspan(size.lengthBytes);
   if (size.offsetBytes != 0)  // Not Sparse File
   {
+    // The size check above leaves at least offsetBytes bytes in dataRun.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (static_cast<CHAR>(dataRun[size.offsetBytes - 1U]) < 0)
     {
       // Negative the number read.
@@ -578,9 +580,12 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
     const ULONGLONG bytes = toCopy * this->GetClusterSize();
 
     const auto byteCount = gsl::narrow<size_t>(bytes);
-    memcpy(out.data(),
-           &(*unit)[gsl::narrow<size_t>(offsetInUnit * this->GetClusterSize())],
-           byteCount);
+    // offsetInUnit < unitClusters, so the offset lies inside the unit.
+    const auto sourceOffset =
+        gsl::narrow<size_t>(offsetInUnit * this->GetClusterSize());
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const BYTE* const source = &(*unit)[sourceOffset];
+    memcpy(out.data(), source, byteCount);
 
     out = out.subspan(byteCount);
     clusters -= toCopy;
@@ -776,8 +781,11 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
     }
 
     len = (start_bytes < bufLen) ? start_bytes : bufLen;
-    memcpy(out.data(),
-           &unaligned_buf_first[this->GetClusterSize() - start_bytes], len);
+    // 0 < start_bytes < GetClusterSize() here, so the index is in the cluster.
+    const size_t sourceOffset = this->GetClusterSize() - start_bytes;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const BYTE* const source = &unaligned_buf_first[sourceOffset];
+    memcpy(out.data(), source, len);
     out = out.subspan(gsl::narrow<size_t>(len));
     bufLen -= len;
     actural += len;

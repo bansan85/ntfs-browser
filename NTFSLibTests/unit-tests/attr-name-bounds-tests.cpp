@@ -43,6 +43,8 @@ TEMPLATE_TEST_CASE_SIG(
   const auto& dataAttrs = record.getAttr(AttrType::DATA);
   REQUIRE(dataAttrs.size() == 1);
 
+  // The REQUIRE above checks the size of dataAttrs.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(dataAttrs[0]->GetAttrName().empty());
 }
 

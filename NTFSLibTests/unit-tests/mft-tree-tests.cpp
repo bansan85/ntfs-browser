@@ -82,6 +82,8 @@ void RunMftTreeRebuildsPaths()
     REQUIRE(report != nullptr);
     CHECK(tree.GetPath(kMftTreeReportIdx) == L"\\Docs\\report.txt");
     REQUIRE(report->names.size() == 2);
+    // The REQUIRE above checks that names holds 2 entries.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(report->names[1].dos_only);
     CHECK(report->size == kMftTreeReportDataSize);
     // A resident $DATA's allocated size is its attribute record's own

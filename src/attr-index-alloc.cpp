@@ -65,16 +65,27 @@ template <Strategy S>
 bool AttrIndexAlloc<S>::PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
                                 std::span<const WORD> usarray)
 {
+  if (usarray.size() < sectors)
+  {
+    return false;
+  }
   for (DWORD i = 0; i < sectors; i++)
   {
     // The last word of the i-th sector holds the USN.
     const size_t pos = ((i + 1) * (kUpdateSequenceStride / sizeof(WORD))) - 1;
     // USN error
-    if (pos >= block.size() || block[pos] != usn)
+    if (pos >= block.size())
+    {
+      return false;
+    }
+    // pos < block.size() above; i < sectors <= usarray.size().
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    if (block[pos] != usn)
     {
       return false;
     }
     // Write back correct data
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     block[pos] = usarray[i];
   }
 
@@ -152,11 +163,14 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   // offset_of_us is not checked for alignment, so read the words as bytes.
   const std::span<const BYTE> usnArea = block.subspan(ibBuf->offset_of_us);
   WORD usn = 0;
-  std::memcpy(&usn, &usnArea[0], sizeof(usn));
+  std::memcpy(&usn, usnArea.data(), sizeof(usn));
   std::vector<WORD> usarray(sectors);
   for (DWORD i = 0; i < sectors; i++)
   {
-    std::memcpy(&usarray[i], &usnArea[sizeof(usn) + (i * sizeof(WORD))],
+    // i < sectors = usarray.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    std::memcpy(&usarray[i],
+                usnArea.subspan(sizeof(usn) + (i * sizeof(WORD))).data(),
                 sizeof(WORD));
   }
   if (!PatchUS(

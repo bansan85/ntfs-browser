@@ -81,26 +81,29 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
 
   for (size_t i = 1; i < args.size(); i++)
   {
-    if (std::basic_string_view<ArgChar>(args[i]).starts_with(kLogPrefix))
+    // i < args.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const ArgChar* const arg = args[i];
+    if (std::basic_string_view<ArgChar>(arg).starts_with(kLogPrefix))
     {
-      if (!Log::ParseOption(args[i], logConfig))
+      if (!Log::ParseOption(arg, logConfig))
       {
-        Usage(args[0]);
+        Usage(args.front());
         return 1;
       }
       continue;
     }
     if (targetArg != nullptr)
     {
-      Usage(args[0]);
+      Usage(args.front());
       return 1;
     }
-    targetArg = args[i];
+    targetArg = arg;
   }
 
   if (targetArg == nullptr)
   {
-    Usage(args[0]);
+    Usage(args.front());
     return 1;
   }
 

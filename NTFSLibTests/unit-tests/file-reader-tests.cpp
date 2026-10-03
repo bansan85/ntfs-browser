@@ -94,6 +94,8 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> content(kContentSize);
   for (size_t i = 0; i < content.size(); i++)
   {
+    // i < content.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     content[i] = static_cast<BYTE>(i);
   }
   TempFile const file(content);
@@ -106,7 +108,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   for (size_t i = 0; i < dest.size(); i++)
   {
-    CHECK(dest[i] == content[kReadIntoOffset + i]);
+    // i < dest.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(dest[i] == content.at(kReadIntoOffset + i));
   }
 }
 
@@ -131,6 +135,8 @@ TEST_CASE("FileReader NO_CACHE Read grows its buffer before filling it",
   std::vector<BYTE> content(kContentSize);
   for (size_t i = 0; i < content.size(); i++)
   {
+    // i < content.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     content[i] = static_cast<BYTE>(i * kPatternStep);
   }
 
@@ -148,7 +154,9 @@ TEST_CASE("FileReader NO_CACHE Read grows its buffer before filling it",
   REQUIRE(second->size() == kSecondReadSize);
   for (size_t i = 0; i < second->size(); i++)
   {
-    REQUIRE((*second)[i] == content[kSecondReadOffset + i]);
+    // i < second->size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    REQUIRE((*second)[i] == content.at(kSecondReadOffset + i));
   }
 }
 
@@ -170,6 +178,8 @@ TEMPLATE_TEST_CASE_SIG(
   std::array<BYTE, kTinyFileSize> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE(reader.ReadInto(addr, dest));
+  // dest holds kTinyFileSize = 16 bytes.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(dest[0] == 0x5A);
 }
 #endif

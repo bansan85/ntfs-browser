@@ -34,6 +34,8 @@ SequentialDiskReader::Producer MakeMemoryProducer(std::vector<BYTE> data)
       return false;
     }
 
+    // The check above bounds pos + dest.size() by data.size().
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(dest.data(), &data[pos], dest.size());
     pos += dest.size();
     return true;

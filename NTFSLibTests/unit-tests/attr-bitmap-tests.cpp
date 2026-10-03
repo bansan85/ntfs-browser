@@ -48,6 +48,8 @@ void CheckClusterFreeAnswersPastTheFirstBitmapCluster()
   const auto& bitmapAttrs = record.getAttr(AttrType::BITMAP);
   REQUIRE(bitmapAttrs.size() == 1);
   auto& bitmap =
+      // The REQUIRE above checks the size of bitmapAttrs.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       static_cast<AttrBitmap<AttrNonResident<S>, S>&>(*bitmapAttrs[0]);
 
   // Second bitmap cluster: all zeros, so every cluster it tracks is free.

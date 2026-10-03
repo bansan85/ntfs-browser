@@ -162,8 +162,8 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
               frnew.getAttr(al_record.attr_type);
           for (std::unique_ptr<AttrBase<S>>& veci : vec)
           {
-            fr.impl_->attr_list_[ATTR_INDEX(al_record.attr_type)].push_back(
-                std::move(veci));
+            fr.impl_->attr_list_.at(ATTR_INDEX(al_record.attr_type))
+                .push_back(std::move(veci));
           }
           vec.clear();
         }

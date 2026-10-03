@@ -192,6 +192,8 @@ typename std::enable_if_t<
         std::min<LONGLONG>(READ_BUFFER_SIZE - offsetInBlock, remaining));
 
     const std::span<const BYTE> blockBytes{block, kBlockBytes};
+    // offsetInBlock is a remainder modulo READ_BUFFER_SIZE = kBlockBytes.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     memcpy(out.data(), &blockBytes[offsetInBlock], chunk);
 
     out = out.subspan(chunk);
@@ -211,6 +213,8 @@ BYTE* FileReader<S>::NextMemory() const
     last_alloc = 0;
     mem_alloc.emplace_back(std::make_unique<BYTE[]>(MEMORY_BUFFER_SIZE));
   }
+  // last_alloc was reset above once the buffer held MEMORY_BUFFER_SIZE bytes.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   BYTE* retval = &mem_alloc.back()[last_alloc * kBlockBytes];
   last_alloc++;
   return retval;

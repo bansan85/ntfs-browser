@@ -499,6 +499,8 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
   SECTION("a later DDF entry")
   {
     auto const provider = std::make_shared<TestKeyProvider>();
+    // users holds 2 entries.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     provider->Add(users[1].thumbprint, users[1].wrapped_fek,
                   NtfsBrowserTests::MakeFekBlob(Algorithm::kAes128, key));
 
@@ -516,6 +518,8 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
   SECTION("a recovery agent's entry")
   {
     auto const provider = std::make_shared<TestKeyProvider>();
+    // recovery holds 1 entry.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     provider->Add(recovery[0].thumbprint, recovery[0].wrapped_fek,
                   NtfsBrowserTests::MakeFekBlob(Algorithm::kAes128, key));
 
@@ -728,7 +732,10 @@ TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
       &names);
 
   REQUIRE(names.size() == 2);
+  // The REQUIRE above checks the size of names.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[0] == NtfsBrowserTests::kEncryptedDirectoryNames[0]);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[1] == NtfsBrowserTests::kEncryptedDirectoryNames[1]);
 }
 
@@ -759,7 +766,10 @@ TEMPLATE_TEST_CASE_SIG(
       &names);
 
   REQUIRE(names.size() == 2);
+  // The REQUIRE above checks the size of names.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[0] == NtfsBrowserTests::kEncryptedDirectoryNames[0]);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[1] == NtfsBrowserTests::kEncryptedDirectoryNames[1]);
 }
 #endif
@@ -841,6 +851,8 @@ TEST_CASE("A $EFS stream with random damage never crashes the parser", "[efs]")
     const int flips = 1 + static_cast<int>(random() % 4);
     for (int i = 0; i < flips; ++i)
     {
+      // The index is reduced modulo damaged.size().
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       damaged[random() % damaged.size()] = static_cast<BYTE>(random());
     }
     if ((random() % 4) == 0)
@@ -867,11 +879,19 @@ TEST_CASE("The $EFS parser reads the users out of a well-formed stream",
 
   for (size_t i = 0; i < 2; ++i)
   {
-    CHECK(std::equal((*parsed)[i].thumbprint.begin(),
-                     (*parsed)[i].thumbprint.end(),
-                     users[i].thumbprint.begin()));
+    // i < 2 = users.size(), and the REQUIRE above checks that parsed holds 3.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK(std::equal(
+        (*parsed)[i].thumbprint.begin(),
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        (*parsed)[i].thumbprint.end(),
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        users[i].thumbprint.begin()));
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK((*parsed)[i].wrapped_fek == users[i].wrapped_fek);
   }
+  // The REQUIRE above checks that parsed holds 3; recovery holds 1.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK((*parsed)[2].wrapped_fek == recovery[0].wrapped_fek);
 
   CHECK(
@@ -985,6 +1005,8 @@ std::vector<BYTE> Counting(size_t length)
   std::vector<BYTE> bytes(length);
   for (size_t i = 0; i < length; ++i)
   {
+    // i < bytes.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[i] = gsl::narrow<BYTE>(i);
   }
   return bytes;
@@ -1075,8 +1097,10 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
 
       for (size_t i = 0; i < answer.plaintext_block.size(); ++i)
       {
-        CHECK(sector[i] == static_cast<BYTE>(answer.plaintext_block[i] ^
-                                             answer.sector_zero_iv[i]));
+        // i < answer.plaintext_block.size() by the loop condition.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        CHECK(sector.at(i) == static_cast<BYTE>(answer.plaintext_block[i] ^
+                                                answer.sector_zero_iv.at(i)));
       }
     }
   }

@@ -298,6 +298,8 @@ void MftTree::Impl::Link()
   reachable_.assign(entries_.size(), false);
   if (const auto root = by_record_.find(kRootRecord); root != by_record_.end())
   {
+    // by_record_ values index entries_; reachable_ is as long as entries_.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     reachable_[root->second] = true;
   }
 
@@ -309,9 +311,12 @@ void MftTree::Impl::Link()
     for (const ULONGLONG child : Children(dir))
     {
       const size_t index = by_record_.at(child);
-      if (!reachable_[index])
+      // by_record_ values index entries_; reachable_ is as long as entries_.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      auto flag = reachable_[index];
+      if (!flag)
       {
-        reachable_[index] = true;
+        flag = true;
         pending.push_back(child);
       }
     }
@@ -418,6 +423,8 @@ const std::vector<MftEntry>& MftTree::Entries() const noexcept
 const MftEntry* MftTree::Impl::Find(ULONGLONG record) const
 {
   const auto it = by_record_.find(record);
+  // by_record_ maps to indices of entries_.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return it == by_record_.end() ? nullptr : &entries_[it->second];
 }
 
@@ -445,6 +452,8 @@ std::span<const ULONGLONG> MftTree::Children(ULONGLONG dirRecord) const
 bool MftTree::IsReachable(ULONGLONG record) const
 {
   const auto it = impl_->by_record_.find(record);
+  // by_record_ values index entries_; reachable_ is as long as entries_.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return it != impl_->by_record_.end() && impl_->reachable_[it->second];
 }
 
@@ -476,6 +485,8 @@ std::wstring MftTree::GetPath(ULONGLONG record, size_t nameIndex,
     }
     return {};
   }
+  // nameIndex < names.size() was checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return impl_->PathThrough(*entry, entry->names[nameIndex], lostAncestor);
 }
 

@@ -63,6 +63,8 @@ TEST_CASE(
   std::vector<BYTE> backing(2 * kCacheBlockSize);
   for (size_t i = 0; i < backing.size(); i++)
   {
+    // i < backing.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     backing[i] = static_cast<BYTE>(i);
   }
 
@@ -84,7 +86,9 @@ TEST_CASE(
     CHECK(result->size() == kLength);
     for (size_t i = 0; i < result->size(); i++)
     {
-      CHECK((*result)[i] == backing[kCacheBlockSize - kStraddleBefore + i]);
+      // i < result->size() by the loop condition.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      CHECK((*result)[i] == backing.at(kCacheBlockSize - kStraddleBefore + i));
     }
   }
 }
@@ -100,6 +104,8 @@ TEST_CASE(
   std::vector<BYTE> backing(kBlock + kTail);
   for (size_t i = 0; i < backing.size(); i++)
   {
+    // i < backing.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     backing[i] = static_cast<BYTE>(i * kPatternStepA + (i >> kBitsPerByte));
   }
 
@@ -157,6 +163,8 @@ TEST_CASE(
   std::vector<BYTE> backing(kTailSize);
   for (size_t i = 0; i < backing.size(); i++)
   {
+    // i < backing.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     backing[i] = static_cast<BYTE>(i * kPatternStepB);
   }
 

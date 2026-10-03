@@ -77,9 +77,11 @@ std::wstring_view AttrBase<S>::GetAttrName() const
   // Windows, so this decodes rather than reinterpret_casts.
   const std::span<const BYTE> attr(reinterpret_cast<const BYTE*>(&attr_header_),
                                    attr_header_.total_size);
+  // The bounds check above puts name_offset below total_size.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const auto* const name = &attr[attr_header_.name_offset];
   attr_name_cache_ = Utf16ToWide(std::u16string_view(
-      reinterpret_cast<const char16_t*>(&attr[attr_header_.name_offset]),
-      attr_header_.name_length));
+      reinterpret_cast<const char16_t*>(name), attr_header_.name_length));
 
   LogTrace("Unicode Attribute Name");
   return attr_name_cache_;

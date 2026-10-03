@@ -53,6 +53,8 @@ void CheckReadDataReturnsActualByteCount()
   std::array<BYTE, kBufferSize> buffer{};
   buffer.fill(kSentinelByte);
 
+  // The REQUIRE above checks the size of dataAttrs.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const std::optional<ULONGLONG> result = dataAttrs[0]->ReadData(0, buffer);
 
   REQUIRE(result.has_value());
@@ -66,6 +68,8 @@ void CheckReadDataReturnsActualByteCount()
   for (size_t i = NtfsBrowserTests::kSmallResidentDataContent.size();
        i < buffer.size(); i++)
   {
+    // i < buffer.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(buffer[i] == kSentinelByte);
   }
 }

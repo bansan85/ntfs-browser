@@ -148,9 +148,9 @@ void FileRecord<S>::Impl::UserCallBack(DWORD attType,
 {
   bDiscard = false;
 
-  if (attr_raw_call_back_[attType] != nullptr)
+  if (attr_raw_call_back_.at(attType) != nullptr)
   {
-    attr_raw_call_back_[attType](ahc, bDiscard);
+    attr_raw_call_back_.at(attType)(ahc, bDiscard);
   }
   else
   {
@@ -318,6 +318,8 @@ bool FileRecord<S>::Impl::ParseAttr(
   {
     LogWarn("Unhandled attribute: 0x{:04X}", static_cast<DWORD>(ahc.type));
   }
+  // attrIndex < kAttrNums was checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   attr_list_[attrIndex].push_back(std::move(attr));
   return true;
 }
@@ -769,16 +771,26 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
     std::unordered_map<std::wstring, std::vector<size_t>> byName;
     for (size_t i = 0; i < attrs.size(); ++i)
     {
-      if (attrs[i]->IsNonResident())
+      // i < attrs.size() by the loop condition.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      const auto& attr = attrs[i];
+      if (attr->IsNonResident())
       {
         std::wstring key;
-        if (!attrs[i]->IsUnNamed())
+        if (!attr->IsUnNamed())
         {
-          key = attrs[i]->GetAttrName();
+          key = attr->GetAttrName();
         }
         byName[key].push_back(i);
       }
     }
+
+    // byName only holds indices below attrs.size().
+    const auto nonResident = [&attrs](size_t idx) -> AttrNonResident<S>&
+    {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      return static_cast<AttrNonResident<S>&>(*attrs[idx]);
+    };
 
     std::vector<size_t> toErase;
     for (auto& [name, indices] : byName)
@@ -788,13 +800,8 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
         continue;
       }
 
-      std::ranges::sort(indices, {},
-                        [&](size_t idx)
-                        {
-                          return static_cast<const AttrNonResident<S>&>(
-                                     *attrs[idx])
-                              .GetStartVcn();
-                        });
+      std::ranges::sort(indices, {}, [&](size_t idx)
+                        { return nonResident(idx).GetStartVcn(); });
 
       // A gap, an overlap, or a chain that doesn't start at VCN 0 means a
       // damaged or unsupported layout: leave every instance exactly as
@@ -803,8 +810,7 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
       bool contiguous = true;
       for (size_t const idx : indices)
       {
-        const auto& instance =
-            static_cast<const AttrNonResident<S>&>(*attrs[idx]);
+        const auto& instance = nonResident(idx);
         if (instance.GetStartVcn() != expectedStartVcn)
         {
           contiguous = false;
@@ -821,12 +827,14 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
         continue;
       }
 
-      auto& keeper = static_cast<AttrNonResident<S>&>(*attrs[indices.front()]);
+      auto& keeper = nonResident(indices.front());
       for (size_t k = 1; k < indices.size(); ++k)
       {
-        keeper.AppendRuns(
-            static_cast<const AttrNonResident<S>&>(*attrs[indices[k]]));
-        toErase.push_back(indices[k]);
+        // k < indices.size() by the loop condition.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        const size_t idx = indices[k];
+        keeper.AppendRuns(nonResident(idx));
+        toErase.push_back(idx);
       }
     }
 
@@ -857,7 +865,7 @@ std::vector<Efs::WrappedFek> FileRecord<S>::Impl::ReadEfsEntries() const
   return {};
 #else
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       attr_list_[ATTR_INDEX(AttrType::LOGGED_UTILITY_STREAM)])
+       std::get<ATTR_INDEX(AttrType::LOGGED_UTILITY_STREAM)>(attr_list_))
   {
     if (attr->GetAttrName() != kEfsStreamName)
     {
@@ -911,7 +919,7 @@ bool FileRecord<S>::Impl::AttachEfsContext()
 #endif
 
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       attr_list_[ATTR_INDEX(AttrType::DATA)])
+       std::get<ATTR_INDEX(AttrType::DATA)>(attr_list_))
   {
     const WORD flags = attr->GetAttrFlags();
     if ((flags & Efs::kAttrFlagEncrypted) == 0)
@@ -1006,6 +1014,8 @@ bool FileRecord<S>::InstallAttrRawCB(AttrType attrType,
     return false;
   }
 
+  // atIdx < kAttrNums was checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   impl_->attr_raw_call_back_[atIdx] = cb;
   return true;
 }
@@ -1049,6 +1059,8 @@ void FileRecord<S>::TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context)
     // skip masked attributes
     if (static_cast<bool>(impl_->attr_mask_ & (static_cast<Mask>(1U << i))))
     {
+      // i < kAttrNums by the loop condition.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       for (const std::unique_ptr<AttrBase<S>>& ab : impl_->attr_list_[i])
       {
         bool bStop = false;
@@ -1075,6 +1087,8 @@ const std::vector<std::unique_ptr<AttrBase<S>>>&
     return dummy;
   }
 
+  // attrIdx < kAttrNums was checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return impl_->attr_list_[attrIdx];
 }
 
@@ -1090,6 +1104,8 @@ std::vector<std::unique_ptr<AttrBase<S>>>&
     return dummy;
   }
 
+  // attrIdx < kAttrNums was checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return impl_->attr_list_[attrIdx];
 }
 
@@ -1100,7 +1116,7 @@ std::wstring_view FileRecord<S>::GetFileName() const
   // A file may have several filenames
   // Return the first Win32 filename
   for (const std::unique_ptr<AttrBase<S>>& fn_ :
-       impl_->attr_list_[ATTR_INDEX(AttrType::FILE_NAME)])
+       std::get<ATTR_INDEX(AttrType::FILE_NAME)>(impl_->attr_list_))
   {
     const Filename* fn;
     if constexpr (S == Strategy::NO_CACHE)
@@ -1135,7 +1151,7 @@ template <Strategy S>
 ULONGLONG FileRecord<S>::GetFileSize() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::FILE_NAME)];
+      std::get<ATTR_INDEX(AttrType::FILE_NAME)>(impl_->attr_list_);
   if (vec.empty())
   {
     return 0;
@@ -1171,7 +1187,7 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                                 FILETIME* changeTm) const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   // Standard Information attribute hold the most updated file time
   if (!vec.empty())
   {
@@ -1598,7 +1614,7 @@ bool FileRecord<S>::IsReadOnly() const noexcept
 {
   // Standard Information attribute holds the most updated file time
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1625,7 +1641,7 @@ template <Strategy S>
 bool FileRecord<S>::IsHidden() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1652,7 +1668,7 @@ template <Strategy S>
 bool FileRecord<S>::IsSystem() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1679,7 +1695,7 @@ template <Strategy S>
 bool FileRecord<S>::IsArchive() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1706,7 +1722,7 @@ template <Strategy S>
 bool FileRecord<S>::IsDevice() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1733,7 +1749,7 @@ template <Strategy S>
 bool FileRecord<S>::IsNormal() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1760,7 +1776,7 @@ template <Strategy S>
 bool FileRecord<S>::IsTemporary() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1787,7 +1803,7 @@ template <Strategy S>
 bool FileRecord<S>::IsCompressed() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1814,7 +1830,7 @@ template <Strategy S>
 bool FileRecord<S>::IsOffline() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1841,7 +1857,7 @@ template <Strategy S>
 bool FileRecord<S>::IsNotContentIndexed() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1868,7 +1884,7 @@ template <Strategy S>
 bool FileRecord<S>::IsEncrypted() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1895,7 +1911,7 @@ template <Strategy S>
 bool FileRecord<S>::IsSparse() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1922,7 +1938,7 @@ template <Strategy S>
 bool FileRecord<S>::IsReparsePoint() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      impl_->attr_list_[ATTR_INDEX(AttrType::STANDARD_INFORMATION)];
+      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;

@@ -118,7 +118,10 @@ constexpr std::array<BYTE, 12> kDesxSalt2{'S', 'c', 'o', 't', 't', ' ',
   std::ranges::copy(halves.subspan(kHalf), key.begin());
   for (size_t i = 0; i < kWord; ++i)
   {
+    // i < 4: the highest digest1 index is 15 of 16, the highest key index 15.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     key[kHalf + i] = digest1[i] ^ digest1[kWord + i];
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     key[kHalf + kWord + i] = digest1[2 * kWord + i] ^ digest1[3 * kWord + i];
   }
   std::ranges::copy(halves.first(kHalf),

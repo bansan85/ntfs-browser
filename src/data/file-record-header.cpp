@@ -56,11 +56,14 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
   // A wrong size_of_us cannot make the loop below read out of bounds.
   us_array.reserve(sectors);
   // offset_of_us is not checked for alignment, so read the words as bytes.
+  // The array fit check above covers the number and every word after it.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::memcpy(&us_number, &buffer[data->offset_of_us], sizeof(us_number));
 
   for (size_t i = 0; i < sectors; i++)
   {
     WORD value = 0;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&value, &buffer[data->offset_of_us + (sizeof(WORD) * (1 + i))],
                 sizeof(value));
     us_array.push_back(value);
@@ -81,6 +84,8 @@ bool FileRecordHeader::PatchUS() noexcept
     {
       return false;
     }
+    // pos < words.size() was checked just above.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     WORD& sector = words[pos];
     // USN error. Ignore if already patched (FULL_CACHE)
     if (sector != us_number && sector != value)

@@ -70,6 +70,8 @@ void RunOrphanedBlocksNeedRecoveryFlag()
 
   const std::vector<std::wstring> normal = CollectNames(root);
   REQUIRE(normal.size() == 1);
+  // The REQUIRE above checks the size of normal.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(normal[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
 }
 
@@ -96,7 +98,10 @@ void RunOrphanedBlocksFoundWithRecoveryFlag()
 
   const std::vector<std::wstring> recovered = CollectNames(root);
   REQUIRE(recovered.size() == 2);
+  // The REQUIRE above checks the size of recovered.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
 }
 
@@ -125,6 +130,8 @@ void RunOrphanedBlocksDroppedWithoutIncludeDeleted()
 
   const std::vector<std::wstring> recovered = CollectNames(root);
   REQUIRE(recovered.size() == 1);
+  // The REQUIRE above checks the size of recovered.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
 }
 
@@ -155,6 +162,8 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch()
 
     const std::vector<std::wstring> recovered = CollectNames(root);
     REQUIRE(recovered.size() == 1);
+    // The REQUIRE above checks the size of recovered.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
   }
   {
@@ -173,7 +182,10 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch()
 
     const std::vector<std::wstring> recovered = CollectNames(root);
     REQUIRE(recovered.size() == 2);
+    // The REQUIRE above checks the size of recovered.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
   }
 }
@@ -217,7 +229,10 @@ void RunMissingIndexRootRecoveredWithFlag()
 
   const std::vector<std::wstring> recovered = CollectNames(root);
   REQUIRE(recovered.size() == 2);
+  // The REQUIRE above checks the size of recovered.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
 }
 
@@ -252,6 +267,8 @@ void RunSubClusterBlocksAllScanned()
   REQUIRE(names.size() == NtfsBrowserTests::kSubClusterBlockNames.size());
   for (size_t i = 0; i < names.size(); i++)
   {
+    // The REQUIRE above checks the size of names.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(names[i] == NtfsBrowserTests::kSubClusterBlockNames[i]);
   }
 }
@@ -267,6 +284,8 @@ void RunSplitAllocationAllScanned()
   REQUIRE(names.size() == NtfsBrowserTests::kSplitBlockNames.size());
   for (size_t i = 0; i < names.size(); i++)
   {
+    // The REQUIRE above checks the size of names.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(names[i] == NtfsBrowserTests::kSplitBlockNames[i]);
   }
 }
@@ -282,13 +301,18 @@ bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link)
           link));
 
   REQUIRE(names.size() >= 2);
+  // The REQUIRE above checks the size of names.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
   if (names.size() == 2)
   {
     return false;
   }
   REQUIRE(names.size() == 3);
+  // The REQUIRE above checks the size of names.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[2] == NtfsBrowserTests::kOrphanedBlockGenerationName);
   return true;
 }

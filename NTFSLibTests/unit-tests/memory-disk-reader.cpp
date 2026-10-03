@@ -38,6 +38,8 @@ bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
     return false;
   }
 
+  // The check above bounds addr + dest.size() by data_.size().
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::memcpy(dest.data(), &data_[static_cast<size_t>(addr.QuadPart)],
               dest.size());
   return true;

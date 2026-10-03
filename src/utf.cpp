@@ -99,11 +99,15 @@ std::string ToUtf8(std::basic_string_view<CharT> units)
 
   for (size_t i = 0; i < units.size(); ++i)
   {
+    // i < units.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const char32_t unit = Widen(units[i]);
 
     if (unit >= kHighSurrogateFirst && unit <= kHighSurrogateLast &&
         i + 1 < units.size())
     {
+      // i + 1 < units.size() is part of the enclosing condition.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       const char32_t low = Widen(units[i + 1]);
       if (low >= kLowSurrogateFirst && low <= kLowSurrogateLast)
       {
@@ -136,11 +140,15 @@ std::wstring Utf16ToWide(std::u16string_view units)
   {
     for (size_t i = 0; i < units.size(); ++i)
     {
+      // i < units.size() by the loop condition.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       const char32_t unit = Widen(units[i]);
 
       if (unit >= kHighSurrogateFirst && unit <= kHighSurrogateLast &&
           i + 1 < units.size())
       {
+        // i + 1 < units.size() is part of the enclosing condition.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         const char32_t low = Widen(units[i + 1]);
         if (low >= kLowSurrogateFirst && low <= kLowSurrogateLast)
         {

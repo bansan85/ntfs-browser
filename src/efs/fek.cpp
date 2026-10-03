@@ -51,6 +51,7 @@ constexpr size_t kDesxFekKeySize = 16;
                               size_t offset) noexcept
 {
   DWORD value = 0;
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::memcpy(&value, &bytes[offset], sizeof(value));
   return value;
 }

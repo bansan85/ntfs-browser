@@ -324,6 +324,8 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents()
                              static_cast<WORD>(entry.base_ref.sequence_number),
                              {}});
         }
+        // it->second is the index of an entry of pending, pushed above or earlier.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         pending[it->second].start_vcns.push_back(entry.start_vcn);
       }
 
@@ -571,7 +573,7 @@ bool NtfsVolume<S>::Impl::OpenVolume(_TCHAR volume)
   std::array<_TCHAR, kVolumePathLength + 1> volumePath;
   _sntprintf_s(volumePath.data(), volumePath.size(), kVolumePathLength,
                _T("\\\\.\\%c:"), volume);
-  volumePath[kVolumePathLength] = _T('\0');
+  std::get<kVolumePathLength>(volumePath) = _T('\0');
 
   return OpenVolume(std::wstring_view(volumePath.data()));
 }
@@ -875,6 +877,8 @@ bool NtfsVolume<S>::InstallAttrRawCB(AttrType attrType,
     return false;
   }
 
+  // atIdx < kAttrNums was checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   impl_->attr_raw_call_back_[atIdx] = cb;
   return true;
 }
@@ -889,8 +893,11 @@ void NtfsVolume<S>::Impl::AttrRawCallBack(DWORD attType,
                                           const AttrHeaderCommon& ahc,
                                           bool& bDiscard) const
 {
+  // The caller passes an index below kAttrNums, as described above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   if (attr_raw_call_back_[attType] != nullptr)
   {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     attr_raw_call_back_[attType](ahc, bDiscard);
   }
 }

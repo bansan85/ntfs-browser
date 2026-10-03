@@ -37,9 +37,12 @@ constexpr size_t kLengthBias = 3;
 
 [[nodiscard]] WORD ReadLe16(std::span<const BYTE> src, size_t offset) noexcept
 {
-  return static_cast<WORD>(
-      static_cast<WORD>(src[offset]) |
-      static_cast<WORD>(static_cast<WORD>(src[offset + 1]) << kBitsPerByte));
+  // Every caller has checked that two bytes remain at "offset".
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const auto low = static_cast<WORD>(src[offset]);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const auto high = static_cast<WORD>(src[offset + 1]);
+  return static_cast<WORD>(low | static_cast<WORD>(high << kBitsPerByte));
 }
 
 // Returns the displacement-field width [MS-XCA] 2.5.1.4 prescribes for a
@@ -65,6 +68,8 @@ void CopyBackReference(std::span<BYTE> dest, size_t& out, size_t displacement,
   size_t from = out - displacement;
   for (size_t i = 0; i < length; i++)
   {
+    // The caller checked displacement <= out and length <= dest.size() - out.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     dest[out] = dest[from];
     out++;
     from++;
@@ -113,6 +118,9 @@ size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest)
         throw std::runtime_error(
             "LZNT1: uncompressed chunk exceeds decompressed bounds.\n");
       }
+      // payload was checked against both src and dest above, so both are in
+      // range.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       std::memcpy(&dest[out], &src[inPos], payload);
       out += payload;
       inPos = chunkEnd;
@@ -123,6 +131,8 @@ size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest)
     const size_t chunkOutStart = out;
     while (inPos < chunkEnd)
     {
+      // The enclosing loop tests inPos < chunkEnd <= src.size().
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       const BYTE flags = src[inPos];
       inPos++;
 
@@ -143,6 +153,8 @@ size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest)
             throw std::runtime_error(
                 "LZNT1: literal exceeds decompressed bounds.\n");
           }
+          // out < dest.size() just above; inPos < chunkEnd <= src.size().
+          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
           dest[out] = src[inPos];
           out++;
           inPos++;

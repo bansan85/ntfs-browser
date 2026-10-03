@@ -133,6 +133,8 @@ ULONGLONG IndexEntry::GetSubNodeVCN() const noexcept
   ULONGLONG vcn = 0;
   const std::span<const BYTE> raw(reinterpret_cast<const BYTE*>(&index_entry_),
                                   index_entry_.size);
+  // HasSubNode() guarantees raw.size() >= sizeof(vcn).
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::memcpy(&vcn, &raw[raw.size() - sizeof(vcn)], sizeof(vcn));
   return vcn;
 }
