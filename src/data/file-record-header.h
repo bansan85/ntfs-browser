@@ -87,7 +87,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
   // Returns nullptr if offset_of_attr doesn't fit in the record buffer.
   const AttrHeaderCommon* HeaderCommon() noexcept;
 
-  virtual const FileRecordHeader::Data* GetData() const = 0;
+  [[nodiscard]] virtual const FileRecordHeader::Data* GetData() const = 0;
 };
 
 template <Strategy S>
@@ -108,7 +108,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
   FileRecordHeaderImpl& operator=(FileRecordHeaderImpl&&) = delete;
   ~FileRecordHeaderImpl() override = default;
 
-  const FileRecordHeader::Data* GetData() const override;
+  [[nodiscard]] const FileRecordHeader::Data* GetData() const override;
 };
 
 template <>
@@ -124,7 +124,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
   FileRecordHeaderImpl& operator=(FileRecordHeaderImpl&&) = delete;
   ~FileRecordHeaderImpl() override = default;
 
-  const FileRecordHeader::Data* GetData() const override;
+  [[nodiscard]] const FileRecordHeader::Data* GetData() const override;
 };
 
 }  // namespace NtfsBrowser
