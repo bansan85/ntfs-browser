@@ -10,6 +10,7 @@
 // MD5 here is only a fixture checksum, not library functionality.
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
+  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): tested with #ifdef.
   #define NTFS_TEST_HAS_MD5 1
 #endif
 

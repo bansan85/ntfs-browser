@@ -9,6 +9,7 @@
 
   #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
 
+  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
     #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
     #include <cryptopp/md5.h>
 

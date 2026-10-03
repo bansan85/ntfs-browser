@@ -2751,7 +2751,8 @@ FakeRecord MakeMftTreeRecord(NtfsBrowser::Flag::FileRecord flags, WORD sequence,
 std::vector<BYTE> BuildFakeNtfsImage()
 {
   NtfsBrowser::Data::NtfsBpb bpb{};
-  std::memcpy(bpb.signature, NTFS_SIGNATURE, sizeof(bpb.signature));
+  std::memcpy(bpb.signature, NtfsBrowser::Data::kNtfsSignature.data(),
+              sizeof(bpb.signature));
   bpb.bytes_per_sector = kBytesPerSector;
   bpb.sectors_per_cluster = kSectorsPerCluster;
   bpb.lcn_mft = kMftLcn;

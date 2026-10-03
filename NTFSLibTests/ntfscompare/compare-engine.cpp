@@ -33,6 +33,22 @@ std::string Narrow(const std::wstring& w)
   return out;
 }
 
+// Calls visit(member pointer, report name) once per compared Entry field.
+template <typename Visitor>
+void ForEachComparedField(Visitor&& visit)
+{
+  visit(&Entry::logical_size, "LogicalSize");
+  visit(&Entry::physical_size, "PhysicalSize");
+  visit(&Entry::creation_time_utc, "CreationTimeUtc");
+  visit(&Entry::read_only, "ReadOnly");
+  visit(&Entry::hidden, "Hidden");
+  visit(&Entry::system, "System");
+  visit(&Entry::archive, "Archive");
+  visit(&Entry::compressed, "Compressed");
+  visit(&Entry::encrypted, "Encrypted");
+  visit(&Entry::sparse, "Sparse");
+}
+
 // Reconciles one field across every source that names this path, recording a
 // LIB-MISMATCH and dropping the field to nullopt on any disagreement.
 template <typename T>
@@ -135,19 +151,12 @@ Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
       }
     }
 
-#define NTFSCOMPARE_RECONCILE(member, field_name) \
-  ref.member = ReconcileField(present, field_name, path, &Entry::member, report)
-    NTFSCOMPARE_RECONCILE(logical_size, "LogicalSize");
-    NTFSCOMPARE_RECONCILE(physical_size, "PhysicalSize");
-    NTFSCOMPARE_RECONCILE(creation_time_utc, "CreationTimeUtc");
-    NTFSCOMPARE_RECONCILE(read_only, "ReadOnly");
-    NTFSCOMPARE_RECONCILE(hidden, "Hidden");
-    NTFSCOMPARE_RECONCILE(system, "System");
-    NTFSCOMPARE_RECONCILE(archive, "Archive");
-    NTFSCOMPARE_RECONCILE(compressed, "Compressed");
-    NTFSCOMPARE_RECONCILE(encrypted, "Encrypted");
-    NTFSCOMPARE_RECONCILE(sparse, "Sparse");
-#undef NTFSCOMPARE_RECONCILE
+    ForEachComparedField(
+        [&](auto member, const char* fieldName)
+        {
+          ref.*member =
+              ReconcileField(present, fieldName, path, member, report);
+        });
 
     reference.emplace(path, ref);
   }
@@ -182,28 +191,19 @@ void CompareAgainstReference(const std::string& methodName,
       stats.mismatched_fields++;
     }
 
-#define NTFSCOMPARE_COMPARE(member, field_name)                            \
-  if (refEntry.member && cand.member)                                      \
-  {                                                                        \
-    if (*refEntry.member != *cand.member)                                  \
-    {                                                                      \
-      report.findings.push_back({"MISMATCH", methodName, path, field_name, \
-                                 FormatValue(*refEntry.member),            \
-                                 FormatValue(*cand.member)});              \
-      stats.mismatched_fields++;                                           \
-    }                                                                      \
-  }
-    NTFSCOMPARE_COMPARE(logical_size, "LogicalSize")
-    NTFSCOMPARE_COMPARE(physical_size, "PhysicalSize")
-    NTFSCOMPARE_COMPARE(creation_time_utc, "CreationTimeUtc")
-    NTFSCOMPARE_COMPARE(read_only, "ReadOnly")
-    NTFSCOMPARE_COMPARE(hidden, "Hidden")
-    NTFSCOMPARE_COMPARE(system, "System")
-    NTFSCOMPARE_COMPARE(archive, "Archive")
-    NTFSCOMPARE_COMPARE(compressed, "Compressed")
-    NTFSCOMPARE_COMPARE(encrypted, "Encrypted")
-    NTFSCOMPARE_COMPARE(sparse, "Sparse")
-#undef NTFSCOMPARE_COMPARE
+    ForEachComparedField(
+        [&](auto member, const char* fieldName)
+        {
+          const auto& refValue = refEntry.*member;
+          const auto& candValue = cand.*member;
+          if (refValue && candValue && *refValue != *candValue)
+          {
+            report.findings.push_back({"MISMATCH", methodName, path, fieldName,
+                                       FormatValue(*refValue),
+                                       FormatValue(*candValue)});
+            stats.mismatched_fields++;
+          }
+        });
   }
 
   for (const auto& [path, entry] : candidate)

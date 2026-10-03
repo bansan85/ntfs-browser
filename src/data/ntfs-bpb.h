@@ -2,12 +2,16 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <string_view>
+
 namespace NtfsBrowser::Data
 {
 
 // NTFS Boot Sector BPB
 
-#define NTFS_SIGNATURE "NTFS    "
+// OEM signature of an NTFS boot sector: "NTFS" padded with spaces to
+// kBpbSignatureSize bytes.
+inline constexpr std::string_view kNtfsSignature = "NTFS    ";
 
 // Size of the OEM signature field.
 inline constexpr size_t kBpbSignatureSize = 8;

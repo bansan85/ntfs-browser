@@ -101,7 +101,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
              static_cast<DWORD>(al_record.attr_type));
 
     const ULONGLONG record_ref = al_record.base_ref.segment_number;
-    const Mask am = ATTR_MASK(al_record.attr_type);
+    const Mask am = AttrMask(al_record.attr_type);
     // Skip contained attributes
     // Skip unwanted attributes
     if (record_ref != *fr.impl_->file_reference_ &&
@@ -162,7 +162,7 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
               frnew.getAttr(al_record.attr_type);
           for (std::unique_ptr<AttrBase<S>>& veci : vec)
           {
-            fr.impl_->attr_list_.at(ATTR_INDEX(al_record.attr_type))
+            fr.impl_->attr_list_.at(AttrIndex(al_record.attr_type))
                 .push_back(std::move(veci));
           }
           vec.clear();

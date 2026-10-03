@@ -42,10 +42,12 @@ using namespace NtfsCompare;
 // other platform has narrow argv and nothing else.
 #ifdef _WIN32
   #define NTFSCOMPARE_MAIN wmain
+  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): spliced into literals.
   #define NTFSCOMPARE_NATIVE "%ls"
 using ArgChar = wchar_t;
 #else
   #define NTFSCOMPARE_MAIN main
+  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): spliced into literals.
   #define NTFSCOMPARE_NATIVE "%s"
 using ArgChar = char;
 #endif

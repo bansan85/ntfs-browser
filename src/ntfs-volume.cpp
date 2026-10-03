@@ -629,8 +629,8 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
   }
   auto bpb = reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
 
-  if (strncmp(reinterpret_cast<const char*>(&bpb->signature[0]), NTFS_SIGNATURE,
-              sizeof(bpb->signature)) != 0)
+  if (strncmp(reinterpret_cast<const char*>(&bpb->signature[0]),
+              Data::kNtfsSignature.data(), sizeof(bpb->signature)) != 0)
   {
     LogWarn("Volume file system is not NTFS");
     return false;
@@ -871,7 +871,7 @@ template <Strategy S>
 bool NtfsVolume<S>::InstallAttrRawCB(AttrType attrType,
                                      AttrRawCallback cb) noexcept
 {
-  const DWORD atIdx = ATTR_INDEX(attrType);
+  const DWORD atIdx = AttrIndex(attrType);
   if (atIdx >= kAttrNums)
   {
     return false;

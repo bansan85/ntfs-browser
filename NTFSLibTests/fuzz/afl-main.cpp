@@ -38,11 +38,13 @@ using NtfsFuzz::LoopingDiskReader;
 #ifdef _WIN32
   #define NTFS_FUZZ_MAIN wmain
   // printf conversion for a native argv or path string.
+  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): spliced into literals.
   #define NTFS_FUZZ_NATIVE "%ls"
 using ArgChar = wchar_t;
 #else
   #define NTFS_FUZZ_MAIN main
   // printf conversion for a native argv or path string.
+  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): spliced into literals.
   #define NTFS_FUZZ_NATIVE "%s"
 using ArgChar = char;
 #endif

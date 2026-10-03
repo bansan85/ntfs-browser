@@ -278,7 +278,7 @@ template <Strategy S>
 bool FileRecord<S>::Impl::ParseAttr(
     const AttrHeaderCommon& ahc, std::unordered_set<ULONGLONG>& attrListChain)
 {
-  const DWORD attrIndex = ATTR_INDEX(ahc.type);
+  const DWORD attrIndex = AttrIndex(ahc.type);
   if (attrIndex >= kAttrNums)
   {
     LogWarn("Invalid Attribute Type: 0x{:04X}", static_cast<DWORD>(ahc.type));
@@ -698,7 +698,7 @@ bool FileRecord<S>::Impl::ParseAttrs(
     // True only when the type is a real attribute slot and the caller's
     // mask requests that slot.
     if (IsValidAttrType(head.type) &&
-        static_cast<bool>(ATTR_MASK(head.type) & attr_mask_))
+        static_cast<bool>(AttrMask(head.type) & attr_mask_))
     {
       // Mirrors AttrBase::GetAttrName()'s own bounds check, ahead of
       // constructing the attribute: strict rejects it outright instead of
@@ -863,7 +863,7 @@ std::vector<Efs::WrappedFek> FileRecord<S>::Impl::ReadEfsEntries() const
   return {};
 #else
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       std::get<ATTR_INDEX(AttrType::LOGGED_UTILITY_STREAM)>(attr_list_))
+       std::get<AttrIndex(AttrType::LOGGED_UTILITY_STREAM)>(attr_list_))
   {
     if (attr->GetAttrName() != kEfsStreamName)
     {
@@ -917,7 +917,7 @@ bool FileRecord<S>::Impl::AttachEfsContext()
 #endif
 
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       std::get<ATTR_INDEX(AttrType::DATA)>(attr_list_))
+       std::get<AttrIndex(AttrType::DATA)>(attr_list_))
   {
     const WORD flags = attr->GetAttrFlags();
     if ((flags & Efs::kAttrFlagEncrypted) == 0)
@@ -1006,7 +1006,7 @@ template <Strategy S>
 bool FileRecord<S>::InstallAttrRawCB(AttrType attrType,
                                      AttrRawCallback cb) noexcept
 {
-  const DWORD atIdx = ATTR_INDEX(attrType);
+  const DWORD atIdx = AttrIndex(attrType);
   if (atIdx >= kAttrNums)
   {
     return false;
@@ -1078,7 +1078,7 @@ const std::vector<std::unique_ptr<AttrBase<S>>>&
     FileRecord<S>::getAttr(AttrType attrType) const noexcept
 {
   static std::vector<std::unique_ptr<AttrBase<S>>> const dummy{};
-  const DWORD attrIdx = ATTR_INDEX(attrType);
+  const DWORD attrIdx = AttrIndex(attrType);
 
   if (attrIdx >= kAttrNums)
   {
@@ -1095,7 +1095,7 @@ std::vector<std::unique_ptr<AttrBase<S>>>&
     FileRecord<S>::getAttr(AttrType attrType) noexcept
 {
   static std::vector<std::unique_ptr<AttrBase<S>>> dummy{};
-  const DWORD attrIdx = ATTR_INDEX(attrType);
+  const DWORD attrIdx = AttrIndex(attrType);
 
   if (attrIdx >= kAttrNums)
   {
@@ -1114,7 +1114,7 @@ std::wstring_view FileRecord<S>::GetFileName() const
   // A file may have several filenames
   // Return the first Win32 filename
   for (const std::unique_ptr<AttrBase<S>>& fn_ :
-       std::get<ATTR_INDEX(AttrType::FILE_NAME)>(impl_->attr_list_))
+       std::get<AttrIndex(AttrType::FILE_NAME)>(impl_->attr_list_))
   {
     const Filename* fn;
     if constexpr (S == Strategy::NO_CACHE)
@@ -1149,7 +1149,7 @@ template <Strategy S>
 ULONGLONG FileRecord<S>::GetFileSize() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::FILE_NAME)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::FILE_NAME)>(impl_->attr_list_);
   if (vec.empty())
   {
     return 0;
@@ -1185,7 +1185,7 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
                                 FILETIME* changeTm) const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   // Standard Information attribute hold the most updated file time
   if (!vec.empty())
   {
@@ -1612,7 +1612,7 @@ bool FileRecord<S>::IsReadOnly() const noexcept
 {
   // Standard Information attribute holds the most updated file time
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1639,7 +1639,7 @@ template <Strategy S>
 bool FileRecord<S>::IsHidden() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1666,7 +1666,7 @@ template <Strategy S>
 bool FileRecord<S>::IsSystem() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1693,7 +1693,7 @@ template <Strategy S>
 bool FileRecord<S>::IsArchive() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1720,7 +1720,7 @@ template <Strategy S>
 bool FileRecord<S>::IsDevice() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1747,7 +1747,7 @@ template <Strategy S>
 bool FileRecord<S>::IsNormal() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1774,7 +1774,7 @@ template <Strategy S>
 bool FileRecord<S>::IsTemporary() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1801,7 +1801,7 @@ template <Strategy S>
 bool FileRecord<S>::IsCompressed() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1828,7 +1828,7 @@ template <Strategy S>
 bool FileRecord<S>::IsOffline() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1855,7 +1855,7 @@ template <Strategy S>
 bool FileRecord<S>::IsNotContentIndexed() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1882,7 +1882,7 @@ template <Strategy S>
 bool FileRecord<S>::IsEncrypted() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1909,7 +1909,7 @@ template <Strategy S>
 bool FileRecord<S>::IsSparse() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;
@@ -1936,7 +1936,7 @@ template <Strategy S>
 bool FileRecord<S>::IsReparsePoint() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<ATTR_INDEX(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
   if (vec.empty())
   {
     return false;

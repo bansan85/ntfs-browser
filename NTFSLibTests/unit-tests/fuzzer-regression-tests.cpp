@@ -430,6 +430,7 @@ TEST_CASE("saved regression corpus is fully covered by kExpectedErrorMessages",
 
 // Registers one ctest-visible TEST_CASE per saved regression testcase, so
 // ctest can rerun a single failing input instead of the whole corpus.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): TEST_CASE needs a literal.
 #define NTFS_REGRESSION_TESTCASE(name)                               \
   TEST_CASE("NtfsFuzzerAfl regression: " name, "[fuzz][regression]") \
   {                                                                  \
