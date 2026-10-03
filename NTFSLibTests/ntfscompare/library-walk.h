@@ -91,7 +91,7 @@ template <NtfsBrowser::Strategy S>
 
   struct Frame
   {
-    ULONGLONG record;
+    ULONGLONG record = 0;
     std::wstring prefix;
   };
   struct CallbackContext

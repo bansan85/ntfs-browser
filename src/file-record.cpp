@@ -342,7 +342,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
       volume_.impl_->mft_data_ == nullptr)
   {
     // Take as continuous disk allocation
-    LARGE_INTEGER frAddr;
+    LARGE_INTEGER frAddr{};
     try
     {
       frAddr.QuadPart = gsl::narrow<LONGLONG>(

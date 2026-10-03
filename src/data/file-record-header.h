@@ -115,7 +115,7 @@ template <>
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY
     FileRecordHeaderImpl<Strategy::FULL_CACHE> : public FileRecordHeader
 {
-  FileRecordHeader::Data data_;
+  FileRecordHeader::Data data_{};
 
   explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
   FileRecordHeaderImpl(const FileRecordHeaderImpl&) = delete;

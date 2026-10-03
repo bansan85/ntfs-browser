@@ -12,9 +12,9 @@ namespace NtfsBrowser::Data
 struct RunEntry
 {
   std::optional<ULONGLONG> lcn;  // empty to indicate sparse data
-  ULONGLONG clusters;
-  ULONGLONG start_vcn;
-  ULONGLONG last_vcn;
+  ULONGLONG clusters = 0;
+  ULONGLONG start_vcn = 0;
+  ULONGLONG last_vcn = 0;
 };
 //typedef class CSList<DataRun_Entry> CDataRunList;
 

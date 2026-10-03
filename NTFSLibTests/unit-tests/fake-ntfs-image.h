@@ -793,7 +793,7 @@ inline constexpr ULONGLONG kLegacyStandardInformationRecordIdx = 6;
 struct FakeDataRun
 {
   std::optional<DWORD> lcn;
-  DWORD clusters;
+  DWORD clusters = 0;
 };
 
 // Compression unit exponent every fixture uses: 4 clusters, one chunk.

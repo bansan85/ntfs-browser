@@ -280,8 +280,8 @@ std::optional<std::span<const BYTE>>
   }
   const ULONGLONG lcn = start_lcn + offset;
 
-  LARGE_INTEGER addr;
-  addr.QuadPart = static_cast<LONGLONG>(lcn * this->GetClusterSize());
+  LARGE_INTEGER addr{.QuadPart =
+                         static_cast<LONGLONG>(lcn * this->GetClusterSize())};
 
   std::optional<std::span<const BYTE>> buffer;
   try
