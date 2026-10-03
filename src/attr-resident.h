@@ -28,8 +28,6 @@ class AttrResident : public AttrBase<S>
 
  public:
   [[nodiscard]] ULONGLONG GetAllocatedSize() const noexcept override;
-
- protected:
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrResident
