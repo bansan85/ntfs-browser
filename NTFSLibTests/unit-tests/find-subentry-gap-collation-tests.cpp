@@ -49,7 +49,8 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode()
   const std::optional<IndexEntry> found =
       root.FindSubEntry(NtfsBrowserTests::kGapCollationSearchName);
   REQUIRE(found.has_value());
-  CHECK(found->GetFileReference() == NtfsBrowserTests::kGapCollationLeafMftRef);
+  CHECK(found.value().GetFileReference() ==
+        NtfsBrowserTests::kGapCollationLeafMftRef);
 }
 
 }  // namespace

@@ -99,8 +99,8 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
 
     const std::vector<BYTE> expected =
         ExpectedBytes(range.offset, range.length);
-    REQUIRE(*read == expected.size());
-    buffer.resize(gsl::narrow<size_t>(*read));
+    REQUIRE(read.value() == expected.size());
+    buffer.resize(gsl::narrow<size_t>(read.value()));
     const bool same = buffer == expected;
     CHECK(same);
   }

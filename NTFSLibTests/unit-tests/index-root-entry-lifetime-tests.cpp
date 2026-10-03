@@ -42,9 +42,10 @@ void RunFindSubEntryOutlivesReparseTest()
   std::optional<IndexEntry> savedEntry =
       record.FindSubEntry(NtfsBrowserTests::kIndexRootVariantAName);
   REQUIRE(savedEntry.has_value());
-  CHECK(savedEntry->GetFileReference() ==
+  CHECK(savedEntry.value().GetFileReference() ==
         NtfsBrowserTests::kIndexRootVariantAMftRef);
-  CHECK(savedEntry->GetFilename() == NtfsBrowserTests::kIndexRootVariantAName);
+  CHECK(savedEntry.value().GetFilename() ==
+        NtfsBrowserTests::kIndexRootVariantAName);
 
   // Reparse the SAME FileRecord object for variant B's record - same fixed
   // size (kFakeFileRecordSize), so record_buffer_ is reused/overwritten in
@@ -54,9 +55,10 @@ void RunFindSubEntryOutlivesReparseTest()
 
   // The entry saved from variant A must be entirely unaffected by parsing a
   // second, different record on the same FileRecord object.
-  CHECK(savedEntry->GetFileReference() ==
+  CHECK(savedEntry.value().GetFileReference() ==
         NtfsBrowserTests::kIndexRootVariantAMftRef);
-  CHECK(savedEntry->GetFilename() == NtfsBrowserTests::kIndexRootVariantAName);
+  CHECK(savedEntry.value().GetFilename() ==
+        NtfsBrowserTests::kIndexRootVariantAName);
 }
 
 }  // namespace

@@ -207,7 +207,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> entry = record.FindSubEntry(L"AA");
   REQUIRE(entry.has_value());
-  CHECK(entry->GetFileReference() ==
+  CHECK(entry.value().GetFileReference() ==
         NtfsBrowserTests::kIndexRootVariantAMftRef);
 }
 

@@ -58,7 +58,7 @@ void CheckReadDataReturnsActualByteCount()
   const std::optional<ULONGLONG> result = dataAttrs[0]->ReadData(0, buffer);
 
   REQUIRE(result.has_value());
-  CHECK(*result == NtfsBrowserTests::kSmallResidentDataContent.size());
+  CHECK(result.value() == NtfsBrowserTests::kSmallResidentDataContent.size());
 
   CHECK(std::memcmp(buffer.data(),
                     NtfsBrowserTests::kSmallResidentDataContent.data(),

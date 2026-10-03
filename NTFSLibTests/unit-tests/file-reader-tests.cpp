@@ -149,17 +149,17 @@ TEST_CASE("FileReader NO_CACHE Read grows its buffer before filling it",
   LARGE_INTEGER first_addr{.QuadPart = 0};
   const auto first = reader.Read(first_addr, kFirstReadSize);
   REQUIRE(first.has_value());
-  REQUIRE(first->size() == kFirstReadSize);
+  REQUIRE(first.value().size() == kFirstReadSize);
 
   LARGE_INTEGER second_addr{.QuadPart = kSecondReadOffset};
   const auto second = reader.Read(second_addr, kSecondReadSize);
   REQUIRE(second.has_value());
-  REQUIRE(second->size() == kSecondReadSize);
-  for (size_t i = 0; i < second->size(); i++)
+  REQUIRE(second.value().size() == kSecondReadSize);
+  for (size_t i = 0; i < second.value().size(); i++)
   {
     // i < second->size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    REQUIRE((*second)[i] == content.at(kSecondReadOffset + i));
+    REQUIRE(second.value()[i] == content.at(kSecondReadOffset + i));
   }
 }
 

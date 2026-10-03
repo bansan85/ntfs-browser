@@ -274,10 +274,11 @@ void CheckCompressedFileReadsBackDecompressed()
   const std::optional<std::vector<BYTE>> data = ReadRootData<S>(
       *root.record, 0, NtfsBrowserTests::kXcaLznt1ExampleDecompressedSize);
   REQUIRE(data.has_value());
-  REQUIRE(data->size() == NtfsBrowserTests::kXcaLznt1ExampleDecompressedSize);
-  CHECK(std::memcmp(data->data(),
+  REQUIRE(data.value().size() ==
+          NtfsBrowserTests::kXcaLznt1ExampleDecompressedSize);
+  CHECK(std::memcmp(data.value().data(),
                     NtfsBrowserTests::kXcaLznt1ExampleDecompressed,
-                    data->size()) == 0);
+                    data.value().size()) == 0);
 }
 
 // I/O matrix row "Stored (incompressible) unit": real runs fill the whole
@@ -296,8 +297,9 @@ void CheckStoredCompressionUnitReadsBackVerbatim()
   const std::optional<std::vector<BYTE>> data =
       ReadRootData<S>(*root.record, 0, expected.size());
   REQUIRE(data.has_value());
-  REQUIRE(data->size() == expected.size());
-  CHECK(std::memcmp(data->data(), expected.data(), expected.size()) == 0);
+  REQUIRE(data.value().size() == expected.size());
+  CHECK(std::memcmp(data.value().data(), expected.data(), expected.size()) ==
+        0);
 }
 
 // I/O matrix row "Fully sparse unit": no real cluster at all, so it must
@@ -312,10 +314,10 @@ void CheckSparseCompressionUnitReadsBackZeroed()
   const std::optional<std::vector<BYTE>> data =
       ReadRootData<S>(*root.record, 0, NtfsBrowserTests::kCompressionUnitSize);
   REQUIRE(data.has_value());
-  REQUIRE(data->size() == NtfsBrowserTests::kCompressionUnitSize);
+  REQUIRE(data.value().size() == NtfsBrowserTests::kCompressionUnitSize);
 
   size_t nonZero = 0;
-  for (const BYTE byte_value : *data)
+  for (const BYTE byte_value : data.value())
   {
     if (byte_value != 0)
     {
@@ -341,8 +343,9 @@ void CheckFragmentedCompressedFileReadsBackDecompressed()
   const std::optional<std::vector<BYTE>> data =
       ReadRootData<S>(*root.record, 0, expected.size());
   REQUIRE(data.has_value());
-  REQUIRE(data->size() == expected.size());
-  CHECK(std::memcmp(data->data(), expected.data(), expected.size()) == 0);
+  REQUIRE(data.value().size() == expected.size());
+  CHECK(std::memcmp(data.value().data(), expected.data(), expected.size()) ==
+        0);
 }
 
 // I/O matrix row "Trailing partial unit at EOF": real_size is not a multiple
@@ -370,17 +373,18 @@ void CheckTrailingPartialCompressionUnit()
   const std::optional<std::vector<BYTE>> whole =
       ReadRootData<S>(*root.record, 0, total);
   REQUIRE(whole.has_value());
-  REQUIRE(whole->size() == total);
-  CHECK(std::memcmp(whole->data(), head.data(), head.size()) == 0);
-  CHECK(std::memcmp(&whole->at(head.size()), tail.data(), tail.size()) == 0);
+  REQUIRE(whole.value().size() == total);
+  CHECK(std::memcmp(whole.value().data(), head.data(), head.size()) == 0);
+  CHECK(std::memcmp(&whole.value().at(head.size()), tail.data(), tail.size()) ==
+        0);
 
   // Oversized read past EOF must truncate to the real count, not invent
   // bytes from sparse padding.
   const std::optional<std::vector<BYTE>> beyond = ReadRootData<S>(
       *root.record, head.size(), NtfsBrowserTests::kCompressionUnitSize);
   REQUIRE(beyond.has_value());
-  REQUIRE(beyond->size() == tail.size());
-  CHECK(std::memcmp(beyond->data(), tail.data(), tail.size()) == 0);
+  REQUIRE(beyond.value().size() == tail.size());
+  CHECK(std::memcmp(beyond.value().data(), tail.data(), tail.size()) == 0);
 }
 
 // I/O matrix row "Corrupt/truncated LZNT1 chunk": ReadData() must fail
@@ -425,8 +429,9 @@ void CheckUnmappedCompressionUnitIsRejected()
   const std::optional<std::vector<BYTE>> mapped =
       ReadRootData<S>(*root.record, 0, expected.size());
   REQUIRE(mapped.has_value());
-  REQUIRE(mapped->size() == expected.size());
-  CHECK(std::memcmp(mapped->data(), expected.data(), expected.size()) == 0);
+  REQUIRE(mapped.value().size() == expected.size());
+  CHECK(std::memcmp(mapped.value().data(), expected.data(), expected.size()) ==
+        0);
 
   // Reading into unit 1 must not be answered with zeroes.
   std::optional<std::vector<BYTE>> unmapped;
@@ -594,7 +599,7 @@ TEST_CASE(
 
   // Same bytes...
   REQUIRE(second.has_value());
-  CHECK(*second == *first);
+  CHECK(second.value() == first.value());
   // ...but served from the cache rather than decompressed again.
   CHECK_THAT(secondTrace, Catch::Matchers::ContainsSubstring(
                               "Compression unit 0 served from cache"));
@@ -623,7 +628,7 @@ TEST_CASE(
 
   REQUIRE(first.has_value());
   REQUIRE(second.has_value());
-  CHECK(*second == *first);
+  CHECK(second.value() == first.value());
   CHECK_THAT(firstTrace, Catch::Matchers::ContainsSubstring(
                              "Decompressed compression unit 0 into 142 bytes"));
   CHECK_THAT(secondTrace,
@@ -762,7 +767,7 @@ void CheckCompressedIndexAllocationTraverses()
   const std::optional<IndexEntry> found =
       root.record->FindSubEntry(NtfsBrowserTests::kCompressedIndexEntryName);
   REQUIRE(found.has_value());
-  CHECK(found->GetFileReference() ==
+  CHECK(found.value().GetFileReference() ==
         NtfsBrowserTests::kCompressedIndexEntryMftRef);
 }
 
@@ -864,7 +869,7 @@ void CheckSurrogatePairNamesTraverse()
         root.record->FindSubEntry(NtfsBrowserTests::kSurrogateNames[i]);
     REQUIRE(found.has_value());
     CHECK(
-        found->GetFileReference() ==
+        found.value().GetFileReference() ==
         // The kSurrogate* tables hold as many entries as kSurrogateNames.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         NtfsBrowserTests::kSurrogateNameMftRefs[i]);

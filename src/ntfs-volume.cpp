@@ -286,7 +286,7 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents()
     return;  // $MFT's DATA attribute fits in the base record alone.
   }
   const AttrBase<S>& rawList = *listAttrs.front();
-  const ULONGLONG selfRef = *listRecord.GetFileReference();
+  const ULONGLONG selfRef = listRecord.GetFileReference().value();
 
   // Collects each DATA entry, grouped per extension record, and capped. One
   // record can hold several extents, so it keeps every start VCN listed.

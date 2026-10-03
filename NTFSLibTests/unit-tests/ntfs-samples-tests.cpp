@@ -108,7 +108,7 @@ void OpenSubDir(FileRecord<Strategy::NO_CACHE>& dir, std::wstring_view name)
   const std::optional<IndexEntry> entry = dir.FindSubEntry(name);
   REQUIRE(entry.has_value());
   dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-  REQUIRE(dir.ParseFileRecord(entry->GetFileReference()));
+  REQUIRE(dir.ParseFileRecord(entry.value().GetFileReference()));
   REQUIRE(dir.ParseAttrs());
 }
 
@@ -214,7 +214,7 @@ void CheckRepairStreamsHoldPtrnPattern(
 
   FileRecord<Strategy::NO_CACHE> file(volume);
   file.SetAttrMask(Mask::DATA);
-  REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
+  REQUIRE(file.ParseFileRecord(entry.value().GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   for (std::wstring_view const stream_name : {L"$Corrupt", L"$Verify"})
@@ -297,7 +297,7 @@ TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
   OpenRootDir(root);
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"2.txt");
   REQUIRE(entry.has_value());
-  CHECK(entry->GetFileSize() > 0);
+  CHECK(entry.value().GetFileSize() > 0);
 
   // /2.txt's own cluster slack (past its real size, still inside its last
   // allocated cluster) isn't checked: ReadData() clamps every read to
@@ -327,14 +327,14 @@ TEST_CASE(
   const std::optional<std::span<const BYTE>> ramSlack =
       volume.Read(ramSlackAddr, 4);
   REQUIRE(ramSlack.has_value());
-  CHECK(MatchesPtrnPattern(*ramSlack));
+  CHECK(MatchesPtrnPattern(ramSlack.value()));
 
   // Cluster slack: the rest of the cluster past that same sector.
   LARGE_INTEGER clusterSlackAddr{.QuadPart = kClusterSlackAddress};
   const std::optional<std::span<const BYTE>> clusterSlack =
       volume.Read(clusterSlackAddr, 4);
   REQUIRE(clusterSlack.has_value());
-  CHECK(MatchesPtrnPattern(*clusterSlack));
+  CHECK(MatchesPtrnPattern(clusterSlack.value()));
 
   CheckRepairStreamsHoldPtrnPattern(volume);
 }
@@ -356,11 +356,11 @@ TEST_CASE(
   REQUIRE(entry.has_value());
 
   FILETIME indexAccess{};
-  entry->GetFileTime(nullptr, nullptr, &indexAccess);
+  entry.value().GetFileTime(nullptr, nullptr, &indexAccess);
 
   FileRecord<Strategy::NO_CACHE> file(volume);
   file.SetAttrMask(Mask::STANDARD_INFORMATION);
-  REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
+  REQUIRE(file.ParseFileRecord(entry.value().GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   FILETIME stdInfoAccess{};
@@ -391,11 +391,11 @@ TEST_CASE(
   REQUIRE(entry.has_value());
 
   FILETIME indexCreate{};
-  entry->GetFileTime(nullptr, &indexCreate, nullptr);
+  entry.value().GetFileTime(nullptr, &indexCreate, nullptr);
 
   FileRecord<Strategy::NO_CACHE> file(volume);
   file.SetAttrMask(Mask::STANDARD_INFORMATION | Mask::FILE_NAME);
-  REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
+  REQUIRE(file.ParseFileRecord(entry.value().GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   FILETIME stdInfoCreate{};

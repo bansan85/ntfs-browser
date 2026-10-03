@@ -135,9 +135,10 @@ TEST_CASE(
 
     const auto actual = full.Read(addrFull, range.length);
     REQUIRE(actual.has_value());
-    REQUIRE(actual->size() == expected->size());
-    CHECK(std::equal(actual->begin(), actual->end(), expected->begin()));
-    CHECK(std::equal(actual->begin(), actual->end(),
+    REQUIRE(actual.value().size() == expected.value().size());
+    CHECK(std::equal(actual.value().begin(), actual.value().end(),
+                     expected.value().begin()));
+    CHECK(std::equal(actual.value().begin(), actual.value().end(),
                      backing.begin() + gsl::narrow<ptrdiff_t>(range.offset)));
   }
 
@@ -145,7 +146,7 @@ TEST_CASE(
   LARGE_INTEGER again{.QuadPart = static_cast<LONGLONG>(kBlock + kInnerOffset)};
   const auto second = full.Read(again, kInnerLength);
   REQUIRE(second.has_value());
-  CHECK(std::equal(second->begin(), second->end(),
+  CHECK(std::equal(second.value().begin(), second.value().end(),
                    backing.begin() +
                        static_cast<ptrdiff_t>(kBlock + kInnerOffset)));
 
@@ -174,8 +175,8 @@ TEST_CASE(
   LARGE_INTEGER addr{.QuadPart = kInnerLength};
   const auto result = full.Read(addr, kInnerLength);
   REQUIRE(result.has_value());
-  REQUIRE(result->size() == kInnerLength);
-  CHECK(std::equal(result->begin(), result->end(),
+  REQUIRE(result.value().size() == kInnerLength);
+  CHECK(std::equal(result.value().begin(), result.value().end(),
                    backing.begin() + kInnerLength));
 }
 

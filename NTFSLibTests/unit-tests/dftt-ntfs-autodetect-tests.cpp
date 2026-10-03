@@ -53,17 +53,17 @@ void CheckReadsPartitionImage(std::wstring_view imageName)
 
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"ntfs.txt");
   REQUIRE(entry.has_value());
-  CHECK_FALSE(entry->IsDirectory());
-  CHECK(entry->GetFileSize() > 0);
+  CHECK_FALSE(entry.value().IsDirectory());
+  CHECK(entry.value().GetFileSize() > 0);
 
   FileRecord file(volume);
   file.SetAttrMask(Mask::DATA);
-  REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
+  REQUIRE(file.ParseFileRecord(entry.value().GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   const AttrBase<Strategy::NO_CACHE>* data = file.FindStream({});
   REQUIRE(data != nullptr);
-  CHECK(data->GetDataSize() == entry->GetFileSize());
+  CHECK(data->GetDataSize() == entry.value().GetFileSize());
 }
 
 }  // namespace

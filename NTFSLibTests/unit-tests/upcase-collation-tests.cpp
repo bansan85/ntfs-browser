@@ -219,10 +219,10 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
 
     const std::optional<UpCaseTable> table = UpCaseTable::FromBytes(bytes);
     REQUIRE(table.has_value());
-    CHECK_FALSE(table->IsBuiltIn());
-    CHECK(table->Map(u'a') == u'A');
-    CHECK(table->Map(u'\u00E9') == u'A');
-    CHECK(table->Map(u'\u00C9') == u'\u00C9');
+    CHECK_FALSE(table.value().IsBuiltIn());
+    CHECK(table.value().Map(u'a') == u'A');
+    CHECK(table.value().Map(u'\u00E9') == u'A');
+    CHECK(table.value().Map(u'\u00C9') == u'\u00C9');
   }
 
   SECTION("a short stream is refused")

@@ -66,7 +66,7 @@ void OpenSubDir(FileRecord<Strategy::NO_CACHE>& dir, std::string_view name)
 {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
-  ParseDir(dir, entry->GetFileReference());
+  ParseDir(dir, entry.value().GetFileReference());
 }
 
 void OpenFile(FileRecord<Strategy::NO_CACHE>& file,
@@ -76,7 +76,7 @@ void OpenFile(FileRecord<Strategy::NO_CACHE>& file,
   REQUIRE(entry.has_value());
 
   file.SetAttrMask(Mask::DATA);
-  REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
+  REQUIRE(file.ParseFileRecord(entry.value().GetFileReference()));
   REQUIRE(file.ParseAttrs());
 }
 

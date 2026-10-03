@@ -295,12 +295,12 @@ TEMPLATE_TEST_CASE_SIG(
 
       const auto whole = ReadAt<S>(data, 0, fixture.plaintext.size());
       REQUIRE(whole.has_value());
-      CHECK(*whole == fixture.plaintext);
+      CHECK(whole.value() == fixture.plaintext);
 
       // A second read: decrypting in place in a shared cache would garble it.
       const auto again = ReadAt<S>(data, 0, fixture.plaintext.size());
       REQUIRE(again.has_value());
-      CHECK(*again == fixture.plaintext);
+      CHECK(again.value() == fixture.plaintext);
     }
   }
 }
@@ -321,7 +321,7 @@ TEMPLATE_TEST_CASE_SIG(
       INFO("offset " << offset << ", length " << length);
       const auto read = ReadAt<S>(data, offset, length);
       REQUIRE(read.has_value());
-      CHECK(*read == Slice(fixture.plaintext, offset, length));
+      CHECK(read.value() == Slice(fixture.plaintext, offset, length));
     }
   }
 }
@@ -364,7 +364,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, expected.size());
   REQUIRE(read.has_value());
-  CHECK(*read == expected);
+  CHECK(read.value() == expected);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -599,7 +599,7 @@ TEMPLATE_TEST_CASE_SIG(
   // Never decrypted: the bytes come back exactly as they sit on disk.
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, onDisk.size());
   REQUIRE(read.has_value());
-  CHECK(*read == onDisk);
+  CHECK(read.value() == onDisk);
   CHECK_THAT(TakeLog(), Catch::Matchers::ContainsSubstring(
                             "flagged both compressed and encrypted"));
 }
@@ -875,28 +875,29 @@ TEST_CASE("The $EFS parser reads the users out of a well-formed stream",
   const auto parsed = NtfsBrowser::Efs::ParseEfsStream(
       NtfsBrowserTests::MakeEfsStream(users, recovery));
   REQUIRE(parsed.has_value());
-  REQUIRE(parsed->size() == 3);
+  REQUIRE(parsed.value().size() == 3);
 
   for (size_t i = 0; i < 2; ++i)
   {
     // i < 2 = users.size(), and the REQUIRE above checks that parsed holds 3.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(std::equal(
-        (*parsed)[i].thumbprint.begin(),
+        parsed.value()[i].thumbprint.begin(),
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        (*parsed)[i].thumbprint.end(),
+        parsed.value()[i].thumbprint.end(),
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         users[i].thumbprint.begin()));
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK((*parsed)[i].wrapped_fek == users[i].wrapped_fek);
+    CHECK(parsed.value()[i].wrapped_fek == users[i].wrapped_fek);
   }
   // The REQUIRE above checks that parsed holds 3; recovery holds 1.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK((*parsed)[2].wrapped_fek == recovery[0].wrapped_fek);
+  CHECK(parsed.value()[2].wrapped_fek == recovery[0].wrapped_fek);
 
   CHECK(
       NtfsBrowser::Efs::ParseEfsStream(NtfsBrowserTests::MakeEfsStream({}, {}))
-          ->empty());
+          .value()
+          .empty());
 }
 
 TEST_CASE("A FEK blob is checked against its algorithm", "[efs]")
@@ -909,9 +910,9 @@ TEST_CASE("A FEK blob is checked against its algorithm", "[efs]")
 
     const std::optional<Fek> fek = Fek::Parse(blob);
     REQUIRE(fek.has_value());
-    CHECK(fek->GetAlgorithm() == algorithm);
-    CHECK(std::equal(fek->GetKey().begin(), fek->GetKey().end(), key.begin(),
-                     key.end()));
+    CHECK(fek.value().GetAlgorithm() == algorithm);
+    CHECK(std::equal(fek.value().GetKey().begin(), fek.value().GetKey().end(),
+                     key.begin(), key.end()));
   }
 
   const std::vector<BYTE> good = NtfsBrowserTests::MakeFekBlob(
@@ -942,7 +943,7 @@ TEST_CASE("A DESX FEK carries a 16-byte key, not a 24-byte one", "[efs]")
   const std::optional<Fek> fek =
       Fek::Parse(NtfsBrowserTests::MakeFekBlob(Algorithm::kDesx, sixteen));
   REQUIRE(fek.has_value());
-  CHECK(fek->GetKey().size() == 16);
+  CHECK(fek.value().GetKey().size() == 16);
 
   CHECK_FALSE(
       Fek::Parse(NtfsBrowserTests::MakeFekBlob(Algorithm::kDesx, twentyFour))
@@ -1079,7 +1080,7 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
       REQUIRE(fek.has_value());
 
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-      auto decryptor = NtfsBrowser::Efs::MakeCryptoPpDecryptor(*fek);
+      auto decryptor = NtfsBrowser::Efs::MakeCryptoPpDecryptor(fek.value());
 #else
       std::unique_ptr<NtfsBrowser::Efs::SectorDecryptor> decryptor;
 #endif
@@ -1141,9 +1142,9 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, kRealSize);
   REQUIRE(read.has_value());
-  CHECK(*read == expected);
+  CHECK(read.value() == expected);
 
   const auto tail = ReadAt<S>(OnlyData<S>(*opened.record), 2000, 500);
   REQUIRE(tail.has_value());
-  CHECK(*tail == std::vector<BYTE>(500, 0));
+  CHECK(tail.value() == std::vector<BYTE>(500, 0));
 }

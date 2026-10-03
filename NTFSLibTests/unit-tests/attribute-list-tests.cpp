@@ -60,7 +60,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> found = dir.FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
-  CHECK(found->GetFileReference() == 20);
+  CHECK(found.value().GetFileReference() == 20);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -301,7 +301,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> found = dir.FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
-  CHECK(found->GetFileReference() == 20);
+  CHECK(found.value().GetFileReference() == 20);
 
   const auto& allocAttrs = dir.getAttr(AttrType::INDEX_ALLOCATION);
   REQUIRE(allocAttrs.size() == 1);
