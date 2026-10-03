@@ -346,7 +346,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
     try
     {
       frAddr.QuadPart = gsl::narrow<LONGLONG>(
-          volume_.GetMFTAddr() + (volume_.GetFileRecordSize()) * fileRef);
+          volume_.GetMFTAddr() + volume_.GetFileRecordSize() * fileRef);
     }
     catch (const std::exception& e)
     {
@@ -375,7 +375,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
   // May be fragmented $MFT, and its DATA attribute itself may be split
   // across extension records - ReadMftData() picks whichever instance
   // covers this offset.
-  const ULONGLONG frAddr = (volume_.GetFileRecordSize()) * fileRef;
+  const ULONGLONG frAddr = volume_.GetFileRecordSize() * fileRef;
 
   if (std::optional<ULONGLONG> len =
           volume_.impl_->ReadMftData(frAddr, record_buffer_);
@@ -1352,8 +1352,8 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
                                        : 0;
   const ULONGLONG mappedBytes =
       (clusterSize != 0 &&
-       mappedClusters > (std::numeric_limits<ULONGLONG>::max)() / clusterSize)
-          ? (std::numeric_limits<ULONGLONG>::max)()
+       mappedClusters > std::numeric_limits<ULONGLONG>::max() / clusterSize)
+          ? std::numeric_limits<ULONGLONG>::max()
           : mappedClusters * clusterSize;
   const ULONGLONG mappedBlockCount = mappedBytes / indexBlockSize;
 

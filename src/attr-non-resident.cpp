@@ -888,7 +888,7 @@ std::optional<ULONGLONG>
 
   // clusters/clusterSize are untrusted; guard the multiply against overflow.
   if (clusterSize != 0 &&
-      clusters > (std::numeric_limits<ULONGLONG>::max)() / clusterSize)
+      clusters > std::numeric_limits<ULONGLONG>::max() / clusterSize)
   {
     LogError("Extent size overflows: {} clusters of {} bytes", clusters,
              clusterSize);

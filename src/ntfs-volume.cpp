@@ -243,7 +243,7 @@ void NtfsVolume<S>::Impl::Init()
   mft_data_ = baseExtent;
 
   // Sentinel: base extent has no $ATTRIBUTE_LIST entry to check against.
-  TryAddMftExtent(*baseExtent, (std::numeric_limits<ULONGLONG>::max)());
+  TryAddMftExtent(*baseExtent, std::numeric_limits<ULONGLONG>::max());
 
   // Must run after mft_data_/mft_extents_ are set, so it can use them.
   ResolveMftDataExtents();
@@ -439,14 +439,14 @@ void NtfsVolume<S>::Impl::TryAddMftExtent(const AttrBase<S>& attr,
     return;
   }
 
-  if (lastVcn >= (std::numeric_limits<ULONGLONG>::max)() / cluster_size_)
+  if (lastVcn >= std::numeric_limits<ULONGLONG>::max() / cluster_size_)
   {
     LogWarn("$MFT DATA continuation's last VCN ({}) overflows a byte offset",
             lastVcn);
     return;
   }
 
-  if (expectedStartVcn != (std::numeric_limits<ULONGLONG>::max)() &&
+  if (expectedStartVcn != std::numeric_limits<ULONGLONG>::max() &&
       startVcn != expectedStartVcn)
   {
     LogWarn(
@@ -744,15 +744,15 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
   // Multiplying two attacker-controlled values can overflow mft_addr_'s type.
   const bool mft_addr_overflows =
       cluster_size_ != 0 &&
-      bpb->lcn_mft > (std::numeric_limits<ULONGLONG>::max)() / cluster_size_;
-  mft_addr_ = mft_addr_overflows ? (std::numeric_limits<ULONGLONG>::max)()
+      bpb->lcn_mft > std::numeric_limits<ULONGLONG>::max() / cluster_size_;
+  mft_addr_ = mft_addr_overflows ? std::numeric_limits<ULONGLONG>::max()
                                  : bpb->lcn_mft * cluster_size_;
   LogInfo("MFT address = 0x{:016X}", mft_addr_);
 
   // Leaves headroom for the per-record byte offset added to mft_addr_
   // later, before it is narrowed to a LONGLONG.
   constexpr ULONGLONG kMaxPlausibleMftAddr =
-      (std::numeric_limits<LONGLONG>::max)() / 2;
+      std::numeric_limits<LONGLONG>::max() / 2;
 
   if (mft_addr_overflows || mft_addr_ > kMaxPlausibleMftAddr)
   {
