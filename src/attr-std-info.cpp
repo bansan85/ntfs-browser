@@ -43,8 +43,8 @@ const Attr::StandardInformation& CheckedStdInfo(const RESIDENT& attr)
 
 template <typename RESIDENT, Strategy S>
 AttrStdInfo<RESIDENT, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
-                                      const FileRecord<S>& fr)
-    : RESIDENT(ahc, fr), std_info_(CheckedStdInfo<RESIDENT>(*this))
+                                      const FileRecord<S>& file_record)
+    : RESIDENT(ahc, file_record), std_info_(CheckedStdInfo<RESIDENT>(*this))
 {
   LogTrace("Attribute: Standard Information");
 }

@@ -86,22 +86,23 @@ constexpr ULONGLONG kDesIvWord = 0x169119629891ad13ULL;
 // AES block, one for the 8-byte DES block.
 std::vector<BYTE> SectorIv(ULONGLONG offset, size_t blockSize)
 {
-  std::vector<BYTE> iv(blockSize, 0);
+  std::vector<BYTE> initialization_vector(blockSize, 0);
   if (blockSize == kAesBlockSize)
   {
-    const ULONGLONG w0 = kIvWord0 + offset;
-    const ULONGLONG w1 = kIvWord1 + offset;
-    std::memcpy(iv.data(), &w0, sizeof(w0));
+    const ULONGLONG first_word = kIvWord0 + offset;
+    const ULONGLONG second_word = kIvWord1 + offset;
+    std::memcpy(initialization_vector.data(), &first_word, sizeof(first_word));
     // iv holds blockSize == kAesBlockSize = 16 bytes here.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    std::memcpy(&iv[sizeof(w0)], &w1, sizeof(w1));
+    std::memcpy(&initialization_vector[sizeof(first_word)], &second_word,
+                sizeof(second_word));
   }
   else
   {
-    const ULONGLONG w0 = kDesIvWord + offset;
-    std::memcpy(iv.data(), &w0, sizeof(w0));
+    const ULONGLONG first_word = kDesIvWord + offset;
+    std::memcpy(initialization_vector.data(), &first_word, sizeof(first_word));
   }
-  return iv;
+  return initialization_vector;
 }
 
 template <class BlockCipher>
@@ -116,8 +117,10 @@ std::vector<BYTE> EncryptWith(std::span<const BYTE> key,
   cipher.SetKey(key.data(), key.size());
   for (size_t done = 0; done < data.size(); done += kSector)
   {
-    const auto iv = SectorIv(streamOffset + done, BlockCipher::BLOCKSIZE);
-    CryptoPP::CBC_Mode_ExternalCipher::Encryption cbc(cipher, iv.data());
+    const auto initialization_vector =
+        SectorIv(streamOffset + done, BlockCipher::BLOCKSIZE);
+    CryptoPP::CBC_Mode_ExternalCipher::Encryption cbc(
+        cipher, initialization_vector.data());
     // done < data.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     BYTE* const sector = &data[done];
@@ -139,12 +142,12 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
 
   const auto digest = [&key](const std::array<char, kDesxSaltSize>& salt)
   {
-    std::array<BYTE, kMd5DigestSize> md{};
+    std::array<BYTE, kMd5DigestSize> digest{};
     CryptoPP::Weak::MD5 hash;
     hash.Update(key.data(), key.size());
     hash.Update(reinterpret_cast<const BYTE*>(salt.data()), salt.size());
-    hash.Final(md.data());
-    return md;
+    hash.Final(digest.data());
+    return digest;
   };
 
   const std::array<BYTE, kMd5DigestSize> md1 = digest(kSalt1);
@@ -174,9 +177,10 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
   data.resize(((data.size() + kSector - 1) / kSector) * kSector, 0);
   for (size_t done = 0; done < data.size(); done += kSector)
   {
-    const auto iv = SectorIv(streamOffset + done, kDesBlockSize);
+    const auto initialization_vector =
+        SectorIv(streamOffset + done, kDesBlockSize);
     ULONGLONG prev = 0;
-    std::memcpy(&prev, iv.data(), sizeof(prev));
+    std::memcpy(&prev, initialization_vector.data(), sizeof(prev));
     for (size_t block = 0; block < kSector; block += kDesBlockSize)
     {
       // data.size() is a multiple of kSector, done < data.size() and block < kSector.

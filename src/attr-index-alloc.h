@@ -28,7 +28,7 @@ template <Strategy S>
 class AttrIndexAlloc : public AttrNonResident<S>
 {
  public:
-  AttrIndexAlloc(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
+  AttrIndexAlloc(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrIndexAlloc(AttrIndexAlloc&& other) noexcept = delete;
   AttrIndexAlloc(AttrIndexAlloc const& other) = delete;
   AttrIndexAlloc& operator=(AttrIndexAlloc&& other) noexcept = delete;

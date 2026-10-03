@@ -20,7 +20,7 @@ template <typename RESIDENT, Strategy S>
 class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntry>
 {
  public:
-  AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
+  AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrIndexRoot(AttrIndexRoot&& other) noexcept = delete;
   AttrIndexRoot(AttrIndexRoot const& other) = delete;
   AttrIndexRoot& operator=(AttrIndexRoot&& other) noexcept = delete;

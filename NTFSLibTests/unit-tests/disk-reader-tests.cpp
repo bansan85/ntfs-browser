@@ -97,10 +97,11 @@ TEST_CASE("MemoryDiskReader::Open loads a file's content into memory",
 {
   const std::vector<BYTE> content = MakeContent(kFileContentSize);
 
-  std::random_device rd;
-  const std::filesystem::path path = std::filesystem::temp_directory_path() /
-                                     (L"ntfsbrowser-memory-disk-reader-test-" +
-                                      std::to_wstring(rd()) + L".bin");
+  std::random_device random_device;
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() /
+      (L"ntfsbrowser-memory-disk-reader-test-" +
+       std::to_wstring(random_device()) + L".bin");
   {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(reinterpret_cast<const char*>(content.data()),
@@ -165,11 +166,11 @@ TEST_CASE("SequentialDiskReader streams a file source incrementally",
 {
   const std::vector<BYTE> content = MakeContent(kSequentialContentSize);
 
-  std::random_device rd;
+  std::random_device random_device;
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /
-      (L"ntfsbrowser-sequential-disk-reader-test-" + std::to_wstring(rd()) +
-       L".bin");
+      (L"ntfsbrowser-sequential-disk-reader-test-" +
+       std::to_wstring(random_device()) + L".bin");
   {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(reinterpret_cast<const char*>(content.data()),

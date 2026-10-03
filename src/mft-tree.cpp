@@ -64,12 +64,12 @@ const Filename& AsFilename(const AttrBase<S>& attr)
 // Returns false when an attribute failed to parse: entry then holds what
 // parsed before the failure.
 template <Strategy S>
-bool ReadEntry(FileRecord<S>& fr, ULONGLONG record, MftEntry& entry)
+bool ReadEntry(FileRecord<S>& file_record, ULONGLONG record, MftEntry& entry)
 {
   bool parsed = false;
   try
   {
-    parsed = fr.ParseAttrs();
+    parsed = file_record.ParseAttrs();
   }
   catch (const std::exception& e)
   {
@@ -77,15 +77,15 @@ bool ReadEntry(FileRecord<S>& fr, ULONGLONG record, MftEntry& entry)
   }
 
   entry.record = record;
-  entry.sequence = fr.GetSequenceNumber();
-  entry.in_use = !fr.IsDeleted();
-  entry.directory = fr.IsDirectory();
+  entry.sequence = file_record.GetSequenceNumber();
+  entry.in_use = !file_record.IsDeleted();
+  entry.directory = file_record.IsDirectory();
 
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       fr.getAttr(AttrType::FILE_NAME))
+       file_record.getAttr(AttrType::FILE_NAME))
   {
-    const Filename& fn = AsFilename<S>(*attr);
-    const std::wstring_view name = fn.GetFilename();
+    const Filename& filename = AsFilename<S>(*attr);
+    const std::wstring_view name = filename.GetFilename();
     if (name.empty())
     {
       continue;
@@ -93,24 +93,25 @@ bool ReadEntry(FileRecord<S>& fr, ULONGLONG record, MftEntry& entry)
 
     MftName& added = entry.names.emplace_back();
     added.name = std::wstring(name);
-    added.parent_record = fn.GetParentReference();
-    added.parent_sequence = fn.GetParentSequenceNumber();
-    added.dos_only = !fn.IsWin32Name();
+    added.parent_record = filename.GetParentReference();
+    added.parent_sequence = filename.GetParentSequenceNumber();
+    added.dos_only = !filename.IsWin32Name();
   }
 
-  const AttrBase<S>* data = fr.FindStream({});
-  entry.size = data != nullptr ? data->GetDataSize() : fr.GetFileSize();
+  const AttrBase<S>* data = file_record.FindStream({});
+  entry.size =
+      data != nullptr ? data->GetDataSize() : file_record.GetFileSize();
   entry.allocated_size = data != nullptr ? data->GetAllocatedSize() : 0;
 
-  fr.GetFileTime(&entry.write_time, &entry.create_time, &entry.access_time,
-                 &entry.change_time);
-  entry.read_only = fr.IsReadOnly();
-  entry.hidden = fr.IsHidden();
-  entry.system = fr.IsSystem();
-  entry.archive = fr.IsArchive();
-  entry.compressed = fr.IsCompressed();
-  entry.encrypted = fr.IsEncrypted();
-  entry.sparse = fr.IsSparse();
+  file_record.GetFileTime(&entry.write_time, &entry.create_time,
+                          &entry.access_time, &entry.change_time);
+  entry.read_only = file_record.IsReadOnly();
+  entry.hidden = file_record.IsHidden();
+  entry.system = file_record.IsSystem();
+  entry.archive = file_record.IsArchive();
+  entry.compressed = file_record.IsCompressed();
+  entry.encrypted = file_record.IsEncrypted();
+  entry.sparse = file_record.IsSparse();
 
   return parsed;
 }
@@ -209,8 +210,8 @@ void MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   const ULONGLONG total = volume.GetRecordsCount();
   stats_.slots = total;
 
-  FileRecord<S> fr(volume);
-  fr.SetAttrMask(Mask::FILE_NAME | Mask::DATA);
+  FileRecord<S> file_record(volume);
+  file_record.SetAttrMask(Mask::FILE_NAME | Mask::DATA);
 
   for (ULONGLONG record = 0; record < total; record++)
   {
@@ -222,17 +223,17 @@ void MftTree::Impl::Scan(const NtfsVolume<S>& volume,
       break;
     }
 
-    if (!fr.ParseFileRecord(record))
+    if (!file_record.ParseFileRecord(record))
     {
       stats_.unreadable++;
       continue;
     }
-    if (fr.IsExtensionRecord())
+    if (file_record.IsExtensionRecord())
     {
       stats_.extensions++;
       continue;
     }
-    if (fr.IsDeleted())
+    if (file_record.IsDeleted())
     {
       stats_.deleted++;
       if (!volume.GetOptions().include_deleted)
@@ -246,7 +247,7 @@ void MftTree::Impl::Scan(const NtfsVolume<S>& volume,
     }
 
     MftEntry entry;
-    if (!ReadEntry(fr, record, entry))
+    if (!ReadEntry(file_record, record, entry))
     {
       stats_.damaged++;
       if (!volume.GetOptions().recover_errors)
@@ -422,21 +423,21 @@ const std::vector<MftEntry>& MftTree::Entries() const noexcept
 // The lookup behind MftTree::Find().
 const MftEntry* MftTree::Impl::Find(ULONGLONG record) const
 {
-  const auto it = by_record_.find(record);
+  const auto iterator = by_record_.find(record);
   // by_record_ maps to indices of entries_.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return it == by_record_.end() ? nullptr : &entries_[it->second];
+  return iterator == by_record_.end() ? nullptr : &entries_[iterator->second];
 }
 
 // The lookup behind MftTree::Children().
 std::span<const ULONGLONG> MftTree::Impl::Children(ULONGLONG dirRecord) const
 {
-  const auto it = children_.find(dirRecord);
-  if (it == children_.end())
+  const auto iterator = children_.find(dirRecord);
+  if (iterator == children_.end())
   {
     return {};
   }
-  return it->second;
+  return iterator->second;
 }
 
 const MftEntry* MftTree::Find(ULONGLONG record) const
@@ -451,10 +452,11 @@ std::span<const ULONGLONG> MftTree::Children(ULONGLONG dirRecord) const
 
 bool MftTree::IsReachable(ULONGLONG record) const
 {
-  const auto it = impl_->by_record_.find(record);
+  const auto iterator = impl_->by_record_.find(record);
   // by_record_ values index entries_; reachable_ is as long as entries_.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return it != impl_->by_record_.end() && impl_->reachable_[it->second];
+  return iterator != impl_->by_record_.end() &&
+         impl_->reachable_[iterator->second];
 }
 
 std::wstring MftTree::GetPath(ULONGLONG record,

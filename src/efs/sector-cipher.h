@@ -45,22 +45,23 @@ inline constexpr ULONGLONG kDesIvWord = 0x169119629891ad13ULL;
 [[nodiscard]] inline std::array<BYTE, kMaxBlockSize>
     MakeSectorIv(ULONGLONG offset, size_t blockSize) noexcept
 {
-  std::array<BYTE, kMaxBlockSize> iv{};
+  std::array<BYTE, kMaxBlockSize> initialization_vector{};
   const std::array<ULONGLONG, 2> words{
       (blockSize == kDesBlockSize ? kDesIvWord : kIvWord0) + offset,
       kIvWord1 + offset};
-  for (size_t w = 0; w < words.size(); ++w)
+  for (size_t word_index = 0; word_index < words.size(); ++word_index)
   {
-    for (size_t b = 0; b < sizeof(ULONGLONG); ++b)
+    for (size_t byte_index = 0; byte_index < sizeof(ULONGLONG); ++byte_index)
     {
       // w < 2 and b < 8, so the index stays below 16 = iv.size().
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      iv[(w * sizeof(ULONGLONG)) + b] = static_cast<BYTE>(
-          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-          words[w] >> (kBitsPerByte * b));
+      initialization_vector[(word_index * sizeof(ULONGLONG)) + byte_index] =
+          static_cast<BYTE>(
+              // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+              words[word_index] >> (kBitsPerByte * byte_index));
     }
   }
-  return iv;
+  return initialization_vector;
 }
 
 // Decrypts EFS data one sector at a time. One instance holds one key.

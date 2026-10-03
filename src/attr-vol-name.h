@@ -15,7 +15,7 @@ template <typename RESIDENT, Strategy S>
 class AttrVolName : public RESIDENT
 {
  public:
-  AttrVolName(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
+  AttrVolName(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrVolName(AttrVolName&& other) noexcept = delete;
   AttrVolName(AttrVolName const& other) = delete;
   AttrVolName& operator=(AttrVolName&& other) noexcept = delete;

@@ -317,7 +317,8 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents()
         const ULONGLONG key =
             recordRef | (static_cast<ULONGLONG>(entry.base_ref.sequence_number)
                          << kMftSequenceShift);
-        const auto [it, inserted] = indexByRef.emplace(key, pending.size());
+        const auto [iterator, inserted] =
+            indexByRef.emplace(key, pending.size());
         if (inserted)
         {
           pending.push_back({recordRef,
@@ -326,7 +327,7 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents()
         }
         // it->second is the index of an entry of pending, pushed above or earlier.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        pending[it->second].start_vcns.push_back(entry.start_vcn);
+        pending[iterator->second].start_vcns.push_back(entry.start_vcn);
       }
 
       if (entry.record_size == 0)
@@ -502,14 +503,15 @@ template <Strategy S>
 const typename NtfsVolume<S>::Impl::MftExtent*
     NtfsVolume<S>::Impl::FindMftExtent(ULONGLONG vcn) const noexcept
 {
-  const auto it = std::upper_bound(mft_extents_.begin(), mft_extents_.end(),
-                                   vcn, [](ULONGLONG v, const MftExtent& extent)
-                                   { return v < extent.start_vcn; });
-  if (it == mft_extents_.begin())
+  const auto iterator =
+      std::upper_bound(mft_extents_.begin(), mft_extents_.end(), vcn,
+                       [](ULONGLONG value, const MftExtent& extent)
+                       { return value < extent.start_vcn; });
+  if (iterator == mft_extents_.begin())
   {
     return nullptr;
   }
-  const MftExtent& candidate = *std::prev(it);
+  const MftExtent& candidate = *std::prev(iterator);
   return (candidate.last_vcn >= vcn) ? &candidate : nullptr;
 }
 
@@ -675,23 +677,23 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
   }
   cluster_buffer_.resize(cluster_size_);
 
-  char sz = static_cast<char>(bpb->clusters_per_file_record);
+  char raw_size = static_cast<char>(bpb->clusters_per_file_record);
 
   // Rejects an sz magnitude that would shift 1U by 32 or more (undefined
   // behaviour), or yield a file_record_size_ no real volume could have.
-  if (sz < -kMaxSizeShift || sz > kMaxSizeInClusters)
+  if (raw_size < -kMaxSizeShift || raw_size > kMaxSizeInClusters)
   {
     LogError("clusters_per_file_record magnitude out of range");
     return false;
   }
 
-  if (sz > 0)
+  if (raw_size > 0)
   {
-    file_record_size_ = cluster_size_ * sz;
+    file_record_size_ = cluster_size_ * raw_size;
   }
   else
   {
-    file_record_size_ = 1U << static_cast<unsigned char>(-sz);
+    file_record_size_ = 1U << static_cast<unsigned char>(-raw_size);
   }
   LogInfo("FileRecord Size = {} bytes", file_record_size_);
 
@@ -710,23 +712,23 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
     return false;
   }
 
-  sz = static_cast<char>(bpb->clusters_per_index_block);
+  raw_size = static_cast<char>(bpb->clusters_per_index_block);
 
   // Rejects an sz magnitude that would shift 1U by 32 or more (undefined
   // behaviour), or yield an index_block_size_ no real volume could have.
-  if (sz < -kMaxSizeShift || sz > kMaxSizeInClusters)
+  if (raw_size < -kMaxSizeShift || raw_size > kMaxSizeInClusters)
   {
     LogError("clusters_per_index_block magnitude out of range");
     return false;
   }
 
-  if (sz > 0)
+  if (raw_size > 0)
   {
-    index_block_size_ = cluster_size_ * sz;
+    index_block_size_ = cluster_size_ * raw_size;
   }
   else
   {
-    index_block_size_ = 1U << static_cast<unsigned char>(-sz);
+    index_block_size_ = 1U << static_cast<unsigned char>(-raw_size);
   }
   LogInfo("IndexBlock Size = {} bytes", index_block_size_);
 
@@ -869,7 +871,7 @@ bool NtfsVolume<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
 // Install Attribute CallBack routines for the whole Volume
 template <Strategy S>
 bool NtfsVolume<S>::InstallAttrRawCB(AttrType attrType,
-                                     AttrRawCallback cb) noexcept
+                                     AttrRawCallback callback) noexcept
 {
   const DWORD atIdx = AttrIndex(attrType);
   if (atIdx >= kAttrNums)
@@ -879,7 +881,7 @@ bool NtfsVolume<S>::InstallAttrRawCB(AttrType attrType,
 
   // atIdx < kAttrNums was checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  impl_->attr_raw_call_back_[atIdx] = cb;
+  impl_->attr_raw_call_back_[atIdx] = callback;
   return true;
 }
 

@@ -28,8 +28,8 @@ class FileRecord;
 
 template <typename RESIDENT, Strategy S>
 AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
-                                          const FileRecord<S>& fr)
-    : RESIDENT(ahc, fr),
+                                          const FileRecord<S>& file_record)
+    : RESIDENT(ahc, file_record),
       index_root_(reinterpret_cast<const Attr::IndexRoot*>(this->GetData()))
 {
   if (this->GetDataSize() < sizeof(Attr::IndexRoot))
@@ -129,9 +129,10 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       break;
     }
 
-    const AlignedIndexEntry ie = AlignIndexEntry(data_copy, cur, head.size);
+    const AlignedIndexEntry aligned_index_entry =
+        AlignIndexEntry(data_copy, cur, head.size);
     if (const std::optional<std::string_view> defect =
-            ValidateIndexEntry(*ie.entry))
+            ValidateIndexEntry(*aligned_index_entry.entry))
     {
       LogRecoverable(recover, "{}", *defect);
       if (!recover)
@@ -141,7 +142,7 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
       }
     }
 
-    emplace_back(ie.owner, *ie.entry);
+    emplace_back(aligned_index_entry.owner, *aligned_index_entry.entry);
 
     if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {

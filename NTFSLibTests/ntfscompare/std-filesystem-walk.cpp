@@ -18,13 +18,14 @@ namespace NtfsCompare
 namespace
 {
 
-ULONGLONG FileClockToUtcTicks(std::filesystem::file_time_type ft) noexcept
+ULONGLONG
+FileClockToUtcTicks(std::filesystem::file_time_type file_time) noexcept
 {
 #ifdef _WIN32
   // MSVC's file clock counts 100 ns ticks since 1601-01-01: already FILETIME.
-  return static_cast<ULONGLONG>(ft.time_since_epoch().count());
+  return static_cast<ULONGLONG>(file_time.time_since_epoch().count());
 #else
-  const auto sys = std::chrono::file_clock::to_sys(ft);
+  const auto sys = std::chrono::file_clock::to_sys(file_time);
   const auto sinceEpoch = sys.time_since_epoch();
   const auto seconds =
       std::chrono::duration_cast<std::chrono::seconds>(sinceEpoch);
@@ -50,29 +51,31 @@ Listing WalkStdFilesystem(const std::filesystem::path& root)
 {
   Listing result;
 
-  std::error_code ec;
+  std::error_code error_code;
   const auto options =
       std::filesystem::directory_options::skip_permission_denied;
-  auto it = std::filesystem::recursive_directory_iterator(root, options, ec);
+  auto iterator =
+      std::filesystem::recursive_directory_iterator(root, options, error_code);
   const auto end = std::filesystem::recursive_directory_iterator();
-  for (; !ec && it != end; it.increment(ec))
+  for (; !error_code && iterator != end; iterator.increment(error_code))
   {
-    const std::filesystem::directory_entry& de = *it;
+    const std::filesystem::directory_entry& directory_entry = *iterator;
 
     // Never recurse into (or past) a symlink/junction as a directory: every
     // method in this tool follows the same policy.
-    if (de.is_symlink(ec))
+    if (directory_entry.is_symlink(error_code))
     {
-      it.disable_recursion_pending();
+      iterator.disable_recursion_pending();
     }
 
     Entry entry;
-    entry.is_directory = de.is_directory(ec) && !de.is_symlink(ec);
+    entry.is_directory = directory_entry.is_directory(error_code) &&
+                         !directory_entry.is_symlink(error_code);
 
     if (!entry.is_directory)
     {
       std::error_code sizeEc;
-      const auto size = de.file_size(sizeEc);
+      const auto size = directory_entry.file_size(sizeEc);
       if (!sizeEc)
       {
         entry.logical_size = size;
@@ -80,18 +83,18 @@ Listing WalkStdFilesystem(const std::filesystem::path& root)
     }
 
     std::error_code timeEc;
-    const auto writeTime = de.last_write_time(timeEc);
+    const auto writeTime = directory_entry.last_write_time(timeEc);
     if (!timeEc)
     {
       entry.modification_time_utc = FileClockToUtcTicks(writeTime);
     }
 
-    result.emplace(RelativeKey(root, de.path()), std::move(entry));
+    result.emplace(RelativeKey(root, directory_entry.path()), std::move(entry));
   }
 
-  if (ec)
+  if (error_code)
   {
-    std::fprintf(stderr, "std::filesystem: %s\n", ec.message().c_str());
+    std::fprintf(stderr, "std::filesystem: %s\n", error_code.message().c_str());
   }
 
   return result;

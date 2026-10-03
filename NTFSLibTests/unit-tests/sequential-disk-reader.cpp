@@ -45,13 +45,13 @@ SequentialDiskReader::Producer MakeMemoryProducer(std::vector<BYTE> data)
 SequentialDiskReader::Producer
     MakeFileStreamProducer(std::filesystem::path path)
 {
-  auto const in = std::make_shared<std::ifstream>(path, std::ios::binary);
+  auto const input = std::make_shared<std::ifstream>(path, std::ios::binary);
 
-  return [in](std::span<BYTE> dest)
+  return [input](std::span<BYTE> dest)
   {
     return static_cast<bool>(
-        in->read(reinterpret_cast<char*>(dest.data()),
-                 gsl::narrow<std::streamsize>(dest.size())));
+        input->read(reinterpret_cast<char*>(dest.data()),
+                    gsl::narrow<std::streamsize>(dest.size())));
   };
 }
 

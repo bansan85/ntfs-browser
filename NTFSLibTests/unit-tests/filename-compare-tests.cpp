@@ -39,28 +39,31 @@ IndexEntry MakeSystemEntry()
 
   auto const buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
 
-  auto& ie = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
-  ie.mft_index = kEntryRecordNumber;
-  ie.mft_sn = 1;
+  auto& index_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
+  index_entry.mft_index = kEntryRecordNumber;
+  index_entry.mft_sn = 1;
 
-  auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&ie.stream);
-  fn.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
-  fn.name_length = kNameLen;
-  fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  auto& filename =
+      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&index_entry.stream);
+  filename.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
+  filename.name_length = kNameLen;
+  filename.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < kNameLen; i++)
   {
-    fn.name[i] = gsl::narrow<WORD>(kName[i]);
+    filename.name[i] = gsl::narrow<WORD>(kName[i]);
   }
   // Filler: must never be read by Compare().
-  fn.name[kNameLen] = kFillerCodeUnit;
+  filename.name[kNameLen] = kFillerCodeUnit;
 
-  ie.stream_size =
-      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[kNameLen]) -
-                        reinterpret_cast<BYTE*>(&fn));
-  ie.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&ie.stream) -
-                              reinterpret_cast<BYTE*>(&ie) + ie.stream_size);
+  index_entry.stream_size =
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[kNameLen]) -
+                        reinterpret_cast<BYTE*>(&filename));
+  index_entry.size = gsl::narrow<WORD>(
+      reinterpret_cast<BYTE*>(&index_entry.stream) -
+      reinterpret_cast<BYTE*>(&index_entry) + index_entry.stream_size);
 
-  return IndexEntry(buffer, ie);
+  return IndexEntry(buffer, index_entry);
 }
 
 // Builds a single raw $I30 index entry with an arbitrary short name (used to
@@ -69,28 +72,31 @@ IndexEntry MakeNamedEntry(std::wstring_view name)
 {
   auto const buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
 
-  auto& ie = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
-  ie.mft_index = kEntryRecordNumber;
-  ie.mft_sn = 1;
+  auto& index_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
+  index_entry.mft_index = kEntryRecordNumber;
+  index_entry.mft_sn = 1;
 
-  auto& fn = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&ie.stream);
-  fn.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
-  fn.name_length = gsl::narrow<BYTE>(name.size());
-  fn.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  auto& filename =
+      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&index_entry.stream);
+  filename.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
+  filename.name_length = gsl::narrow<BYTE>(name.size());
+  filename.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (size_t i = 0; i < name.size(); i++)
   {
     // i < name.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    fn.name[i] = gsl::narrow<WORD>(name[i]);
+    filename.name[i] = gsl::narrow<WORD>(name[i]);
   }
 
-  ie.stream_size =
-      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn.name[name.size()]) -
-                        reinterpret_cast<BYTE*>(&fn));
-  ie.size = gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&ie.stream) -
-                              reinterpret_cast<BYTE*>(&ie) + ie.stream_size);
+  index_entry.stream_size =
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[name.size()]) -
+                        reinterpret_cast<BYTE*>(&filename));
+  index_entry.size = gsl::narrow<WORD>(
+      reinterpret_cast<BYTE*>(&index_entry.stream) -
+      reinterpret_cast<BYTE*>(&index_entry) + index_entry.stream_size);
 
-  return IndexEntry(buffer, ie);
+  return IndexEntry(buffer, index_entry);
 }
 
 }  // namespace

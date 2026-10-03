@@ -24,7 +24,7 @@ template <typename RESIDENT, Strategy S>
 class AttrStdInfo : public RESIDENT
 {
  public:
-  AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
+  AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrStdInfo(AttrStdInfo&& other) noexcept = delete;
   AttrStdInfo(AttrStdInfo const& other) = delete;
   AttrStdInfo& operator=(AttrStdInfo&& other) noexcept = delete;

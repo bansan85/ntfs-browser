@@ -39,10 +39,10 @@ std::wstring Utf8ToWide(std::string_view utf8)
   std::wstring out;
   out.reserve(utf8.size());
 
-  size_t i = 0;
-  while (i < utf8.size())
+  size_t position = 0;
+  while (position < utf8.size())
   {
-    const auto lead = static_cast<unsigned char>(utf8[i]);
+    const auto lead = static_cast<unsigned char>(utf8[position]);
     char32_t codePoint = 0;
     size_t length = 1;
 
@@ -67,11 +67,11 @@ std::wstring Utf8ToWide(std::string_view utf8)
     }
     else
     {
-      i++;
+      position++;
       continue;
     }
 
-    if (i + length > utf8.size())
+    if (position + length > utf8.size())
     {
       break;
     }
@@ -79,7 +79,7 @@ std::wstring Utf8ToWide(std::string_view utf8)
     bool valid = true;
     for (size_t k = 1; k < length; k++)
     {
-      const auto cont = static_cast<unsigned char>(utf8[i + k]);
+      const auto cont = static_cast<unsigned char>(utf8[position + k]);
       if ((cont & kUtf8ContMask) != kUtf8ContTag)
       {
         valid = false;
@@ -90,12 +90,12 @@ std::wstring Utf8ToWide(std::string_view utf8)
 
     if (!valid)
     {
-      i++;
+      position++;
       continue;
     }
 
     out.push_back(gsl::narrow<wchar_t>(codePoint));
-    i += length;
+    position += length;
   }
 
   return out;

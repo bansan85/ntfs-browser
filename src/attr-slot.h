@@ -45,9 +45,9 @@ inline constexpr DWORD kAttrTypeLowNibbleMask = 0xFU;
 // True only if "at" is a real AttrType value, not on-disk data that could
 // alias another type's AttrIndex/AttrMask slot. Callers MUST check this
 // before passing a value read from disk to AttrIndex or AttrMask.
-[[nodiscard]] constexpr bool IsValidAttrType(AttrType at) noexcept
+[[nodiscard]] constexpr bool IsValidAttrType(AttrType attr_type) noexcept
 {
-  const auto raw = static_cast<DWORD>(at);
+  const auto raw = static_cast<DWORD>(attr_type);
   return raw != 0 && (raw & kAttrTypeLowNibbleMask) == 0 &&
          raw <= static_cast<DWORD>(AttrType::LOGGED_UTILITY_STREAM);
 }

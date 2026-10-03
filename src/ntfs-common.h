@@ -108,6 +108,6 @@ inline bool IsLogged(Log::Level level) noexcept
 // is never a format string; the trailing newline some throw sites write
 // is dropped, so one exception still yields one line.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
-    LogException(const std::exception& e) noexcept;
+    LogException(const std::exception& exception) noexcept;
 
 }  // namespace NtfsBrowser

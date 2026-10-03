@@ -33,8 +33,8 @@ class NTFS_BROWSER_EXPORT Filename
   virtual ~Filename() = default;
 
  protected:
-  void SetFilename(const Attr::Filename& fn);
-  void CopyFilename(const Filename& fn, const Attr::Filename& afn);
+  void SetFilename(const Attr::Filename& filename);
+  void CopyFilename(const Filename& filename, const Attr::Filename& afn);
 
  private:
   // May be NULL for an IndexEntry
@@ -53,10 +53,10 @@ class NTFS_BROWSER_EXPORT Filename
   // first, 0 when the names are equal ignoring case, >0 otherwise. Case is
   // folded with the library's built-in mapping, not the volume's own $UpCase
   // table: use the overload below when a volume is at hand.
-  [[nodiscard]] int Compare(std::wstring_view fn) const noexcept;
+  [[nodiscard]] int Compare(std::wstring_view file_name) const noexcept;
   // Same, folding case through upcase, the table of the volume this name
   // came from.
-  [[nodiscard]] int Compare(std::wstring_view fn,
+  [[nodiscard]] int Compare(std::wstring_view file_name,
                             const UpCaseTable& upcase) const noexcept;
 
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;

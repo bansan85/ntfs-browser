@@ -109,10 +109,10 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target)
 
 std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
 {
-  std::error_code ec;
+  std::error_code error_code;
   const std::filesystem::path canonical =
-      std::filesystem::weakly_canonical(target, ec);
-  if (ec)
+      std::filesystem::weakly_canonical(target, error_code);
+  if (error_code)
   {
     std::fprintf(stderr, "Cannot resolve %s\n", target.c_str());
     return std::nullopt;

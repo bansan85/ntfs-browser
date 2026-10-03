@@ -1323,7 +1323,8 @@ enum class FakeRunHost : std::uint8_t
 // LCN whose product with kFakeClusterSize is exactly 2^64. Computed in
 // unsigned 64 bits that product wraps to 0, so a read at this LCN lands on
 // the boot sector instead of failing. Needs a power-of-two cluster size.
-inline constexpr ULONGLONG kWrappingLcn = ((1ULL << 63U) / kFakeClusterSize) * 2;
+inline constexpr ULONGLONG kWrappingLcn =
+    ((1ULL << 63U) / kFakeClusterSize) * 2;
 
 // Same volume as BuildFakeNtfsImage(), with a 1-cluster stream, of the
 // given kind, whose only run sits at kWrappingLcn. Reading it MUST fail.

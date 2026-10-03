@@ -19,7 +19,7 @@ template <Strategy S>
 class AttrResident : public AttrBase<S>
 {
  public:
-  AttrResident(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
+  AttrResident(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrResident(AttrResident&& other) noexcept = delete;
   AttrResident(AttrResident const& other) = delete;
   AttrResident& operator=(AttrResident&& other) noexcept = delete;
@@ -36,7 +36,7 @@ class AttrResidentNoCache : public AttrResident<Strategy::NO_CACHE>
 {
  public:
   AttrResidentNoCache(const AttrHeaderCommon& ahc,
-                      const FileRecord<Strategy::NO_CACHE>& fr);
+                      const FileRecord<Strategy::NO_CACHE>& file_record);
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
 
@@ -48,7 +48,7 @@ class AttrResidentFullCache : public AttrResident<Strategy::FULL_CACHE>
 {
  public:
   AttrResidentFullCache(const AttrHeaderCommon& ahc,
-                        const FileRecord<Strategy::FULL_CACHE>& fr);
+                        const FileRecord<Strategy::FULL_CACHE>& file_record);
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
 

@@ -117,41 +117,41 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
     return;
   }
 
-  FileRecord fr(volume);
+  FileRecord file_record(volume);
   // Without DATA here, FindStream() below never sees a named $DATA
   // attribute on ROOT to walk. BITMAP and OBJECT_ID reach AttrBitmap and
   // the unhandled-attribute path of ParseAttr().
-  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION | Mask::DATA |
-                 Mask::BITMAP | Mask::OBJECT_ID);
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+  file_record.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION |
+                          Mask::DATA | Mask::BITMAP | Mask::OBJECT_ID);
+  if (!file_record.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
   {
     // file_record_ is guaranteed empty here, exercising IsDeleted()/
     // IsDirectory()'s guard against it.
-    (void)fr.IsDeleted();
-    (void)fr.IsDirectory();
+    (void)file_record.IsDeleted();
+    (void)file_record.IsDirectory();
     return;
   }
-  if (!fr.ParseAttrs())
+  if (!file_record.ParseAttrs())
   {
     return;
   }
 
   // An empty callback is rejected up front, exercising that guard.
-  fr.TraverseAttrs(nullptr, nullptr);
+  file_record.TraverseAttrs(nullptr, nullptr);
 
-  fr.TraverseSubEntries([](const IndexEntry&, void*) {}, nullptr);
+  file_record.TraverseSubEntries([](const IndexEntry&, void*) {}, nullptr);
 
   // FindStream() calls GetAttrName() on every named $DATA attribute it
   // walks, regardless of the name passed in.
-  (void)fr.FindStream(kNamedDataStreamName);
+  (void)file_record.FindStream(kNamedDataStreamName);
 
   // An empty name exercises FindStream()'s unnamed-stream branch, which the
   // call above (a fixed non-empty name) never reaches.
-  (void)fr.FindStream(L"");
+  (void)file_record.FindStream(L"");
 
   // Unlike TraverseSubEntries() above, FindSubEntry() actually compares
   // names, exercising a real B+-tree sub-node descent.
-  (void)fr.FindSubEntry(kGapCollationSearchName);
+  (void)file_record.FindSubEntry(kGapCollationSearchName);
 }
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash

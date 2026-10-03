@@ -120,56 +120,58 @@ template <NtfsBrowser::Strategy S>
         .result = &result, .stack = &stack, .prefix = &frame.prefix};
 
     dir.TraverseSubEntries(
-        [](const IndexEntry& ie, void* context)
+        [](const IndexEntry& index_entry, void* context)
         {
-          auto const* c = static_cast<CallbackContext*>(context);
+          auto const* callback_context = static_cast<CallbackContext*>(context);
 
           // Skip system metafiles and the DOS 8.3 alias: the Win32 name is
           // this tool's path key everywhere.
-          if (ie.GetFileReference() <
+          if (index_entry.GetFileReference() <
                   static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
-              !ie.IsWin32Name())
+              !index_entry.IsWin32Name())
           {
             return;
           }
-          const std::wstring_view name = ie.GetFilename();
+          const std::wstring_view name = index_entry.GetFilename();
           if (name.empty())
           {
             return;
           }
 
           Entry entry;
-          entry.is_directory = ie.IsDirectory();
-          entry.logical_size = ie.GetFileSize();
-          entry.physical_size = ie.GetAllocatedSize();
-          entry.read_only = ie.IsReadOnly();
-          entry.hidden = ie.IsHidden();
-          entry.system = ie.IsSystem();
-          entry.archive = ie.IsArchive();
-          entry.compressed = ie.IsCompressed();
-          entry.encrypted = ie.IsEncrypted();
-          entry.sparse = ie.IsSparse();
+          entry.is_directory = index_entry.IsDirectory();
+          entry.logical_size = index_entry.GetFileSize();
+          entry.physical_size = index_entry.GetAllocatedSize();
+          entry.read_only = index_entry.IsReadOnly();
+          entry.hidden = index_entry.IsHidden();
+          entry.system = index_entry.IsSystem();
+          entry.archive = index_entry.IsArchive();
+          entry.compressed = index_entry.IsCompressed();
+          entry.encrypted = index_entry.IsEncrypted();
+          entry.sparse = index_entry.IsSparse();
 
           FILETIME writeTm{};
           FILETIME createTm{};
           FILETIME accessTm{};
           FILETIME changeTm{};
-          ie.GetFileTime(&writeTm, &createTm, &accessTm, &changeTm);
+          index_entry.GetFileTime(&writeTm, &createTm, &accessTm, &changeTm);
           entry.modification_time_utc = LibraryFiletimeToUtcTicks(writeTm);
           entry.creation_time_utc = LibraryFiletimeToUtcTicks(createTm);
           entry.access_time_utc = LibraryFiletimeToUtcTicks(accessTm);
           entry.change_time_utc = LibraryFiletimeToUtcTicks(changeTm);
 
           const std::wstring path =
-              c->prefix->empty() ? std::wstring(name)
-                                 : *c->prefix + L"/" + std::wstring(name);
+              callback_context->prefix->empty()
+                  ? std::wstring(name)
+                  : *callback_context->prefix + L"/" + std::wstring(name);
           const bool isDirectory = entry.is_directory;
-          const ULONGLONG childRecord = ie.GetFileReference();
-          c->result->emplace(path, std::move(entry));
+          const ULONGLONG childRecord = index_entry.GetFileReference();
+          callback_context->result->emplace(path, std::move(entry));
 
           if (isDirectory)
           {
-            c->stack->push_back({.record = childRecord, .prefix = path});
+            callback_context->stack->push_back(
+                {.record = childRecord, .prefix = path});
           }
         },
         &ctx);

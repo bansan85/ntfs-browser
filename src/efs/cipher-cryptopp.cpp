@@ -42,9 +42,10 @@ class CryptoPpDecryptor final : public SectorDecryptor
 
     try
     {
-      const std::array<BYTE, kMaxBlockSize> iv =
+      const std::array<BYTE, kMaxBlockSize> initialization_vector =
           MakeSectorIv(offset, BlockCipher::BLOCKSIZE);
-      CryptoPP::CBC_Mode_ExternalCipher::Decryption cbc(cipher_, iv.data());
+      CryptoPP::CBC_Mode_ExternalCipher::Decryption cbc(
+          cipher_, initialization_vector.data());
       cbc.ProcessData(sector.data(), sector.data(), sector.size());
       return true;
     }

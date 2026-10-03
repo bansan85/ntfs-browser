@@ -20,7 +20,7 @@ template <class TYPE_RESIDENT, Strategy S>
 class AttrBitmap : public TYPE_RESIDENT
 {
  public:
-  AttrBitmap(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
+  AttrBitmap(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrBitmap(AttrBitmap&& other) noexcept = delete;
   AttrBitmap(AttrBitmap const& other) = delete;
   AttrBitmap& operator=(AttrBitmap&& other) noexcept = delete;

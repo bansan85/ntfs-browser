@@ -125,18 +125,18 @@ void FileRecord<S>::Impl::ClearAttrs() noexcept
 // inside the record, as in place.
 template <Strategy S>
 const AttrHeaderCommon&
-    FileRecord<S>::Impl::AlignedAttrHeader(std::span<const BYTE> at)
+    FileRecord<S>::Impl::AlignedAttrHeader(std::span<const BYTE> bytes)
 {
-  if (reinterpret_cast<std::uintptr_t>(at.data()) %
+  if (reinterpret_cast<std::uintptr_t>(bytes.data()) %
           alignof(Attr::HeaderNonResident) ==
       0)
   {
-    return *reinterpret_cast<const AttrHeaderCommon*>(at.data());
+    return *reinterpret_cast<const AttrHeaderCommon*>(bytes.data());
   }
 
   auto const& copy =
-      realigned_attrs_.emplace_back(std::make_unique<BYTE[]>(at.size()));
-  std::memcpy(copy.get(), at.data(), at.size());
+      realigned_attrs_.emplace_back(std::make_unique<BYTE[]>(bytes.size()));
+  std::memcpy(copy.get(), bytes.data(), bytes.size());
   return *reinterpret_cast<const AttrHeaderCommon*>(copy.get());
 }
 
@@ -408,8 +408,9 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
     impl_->file_record_.reset();
   }
 
-  std::unique_ptr<FileRecordHeaderImpl<S>> fr = impl_->ReadFileRecord(fileRef);
-  if (!fr)
+  std::unique_ptr<FileRecordHeaderImpl<S>> header =
+      impl_->ReadFileRecord(fileRef);
+  if (!header)
   {
     LogError("Cannot read file record {}", fileRef);
 
@@ -422,20 +423,20 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
 
   // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
   // meets this on every such slot. A caller gets false either way.
-  if (fr->GetData()->magic != kFileRecordMagic)
+  if (header->GetData()->magic != kFileRecordMagic)
   {
     LogDebug("Invalid file record");
     return false;
   }
 
-  if (!fr->PatchUS())
+  if (!header->PatchUS())
   {
     LogWarn("Update Sequence Number error");
     return false;
   }
 
   LogDebug("File Record {} Found", fileRef);
-  impl_->file_record_ = std::move(fr);
+  impl_->file_record_ = std::move(header);
 
   return true;
 }
@@ -466,36 +467,37 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
     return {};
   }
 
-  IndexBlock ib;
+  IndexBlock index_block;
   if (!static_cast<AttrIndexAlloc<S>*>(vec.front().get())
-           ->ParseIndexBlock(vcn, ib))
+           ->ParseIndexBlock(vcn, index_block))
   {
     return {};
   }
 
-  for (const IndexEntry& ie : ib)
+  for (const IndexEntry& index_entry : index_block)
   {
-    if (ie.HasName())
+    if (index_entry.HasName())
     {
       // Compare name
-      const int i = ie.Compare(fileName, volume_.impl_->GetUpCaseTable());
-      if (i == 0)
+      const int comparison =
+          index_entry.Compare(fileName, volume_.impl_->GetUpCaseTable());
+      if (comparison == 0)
       {
         // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
         // alive after ib is destroyed.
         LogDebug("VisitIndexBlock() found entry in sub-node");
-        return ie;
+        return index_entry;
       }
-      if (i < 0)  // fileName is smaller than IndexEntry
+      if (comparison < 0)  // fileName is smaller than IndexEntry
       {
         // Visit SubNode
-        if (!ie.IsSubNodePtr())
+        if (!index_entry.IsSubNodePtr())
         {
           return {};  // not found
         }
         // Search in SubNode (IndexBlock), recursive call
         std::optional<IndexEntry> retval = VisitIndexBlock(
-            ie.GetSubNodeVCN(), fileName, visitedVcns, depth + 1);
+            index_entry.GetSubNodeVCN(), fileName, visitedVcns, depth + 1);
         if (retval)
         {
           return retval;
@@ -503,11 +505,11 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
       }
       // Just step forward if fileName is bigger than IndexEntry
     }
-    else if (ie.IsSubNodePtr())
+    else if (index_entry.IsSubNodePtr())
     {
       // Search in SubNode (IndexBlock), recursive call
-      std::optional<IndexEntry> retval =
-          VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns, depth + 1);
+      std::optional<IndexEntry> retval = VisitIndexBlock(
+          index_entry.GetSubNodeVCN(), fileName, visitedVcns, depth + 1);
       if (retval)
       {
         return retval;
@@ -547,25 +549,25 @@ void FileRecord<S>::Impl::TraverseSubNode(
     return;
   }
 
-  IndexBlock ib;
+  IndexBlock index_block;
   if (!static_cast<AttrIndexAlloc<S>*>(vec.front().get())
-           ->ParseIndexBlock(vcn, ib))
+           ->ParseIndexBlock(vcn, index_block))
   {
     return;
   }
 
-  for (const IndexEntry& ie : ib)
+  for (const IndexEntry& index_entry : index_block)
   {
-    if (ie.IsSubNodePtr())
+    if (index_entry.IsSubNodePtr())
     {
       // recursive call
-      TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context, visitedVcns,
-                      depth + 1);
+      TraverseSubNode(index_entry.GetSubNodeVCN(), seCallBack, context,
+                      visitedVcns, depth + 1);
     }
 
-    if (ie.HasName())
+    if (index_entry.HasName())
     {
-      seCallBack(ie, context);
+      seCallBack(index_entry, context);
     }
   }
 }
@@ -1004,7 +1006,7 @@ bool FileRecord<S>::IsExtensionRecord() const noexcept
 // Install Attribute raw data CallBack routines for a single File Record
 template <Strategy S>
 bool FileRecord<S>::InstallAttrRawCB(AttrType attrType,
-                                     AttrRawCallback cb) noexcept
+                                     AttrRawCallback callback) noexcept
 {
   const DWORD atIdx = AttrIndex(attrType);
   if (atIdx >= kAttrNums)
@@ -1014,7 +1016,7 @@ bool FileRecord<S>::InstallAttrRawCB(AttrType attrType,
 
   // atIdx < kAttrNums was checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  impl_->attr_raw_call_back_[atIdx] = cb;
+  impl_->attr_raw_call_back_[atIdx] = callback;
   return true;
 }
 
@@ -1022,9 +1024,9 @@ bool FileRecord<S>::InstallAttrRawCB(AttrType attrType,
 template <Strategy S>
 void FileRecord<S>::ClearAttrRawCB() noexcept
 {
-  for (AttrRawCallback& cb : impl_->attr_raw_call_back_)
+  for (AttrRawCallback& callback : impl_->attr_raw_call_back_)
   {
-    cb = nullptr;
+    callback = nullptr;
   }
 }
 
@@ -1059,10 +1061,10 @@ void FileRecord<S>::TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context)
     {
       // i < kAttrNums by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      for (const std::unique_ptr<AttrBase<S>>& ab : impl_->attr_list_[i])
+      for (const std::unique_ptr<AttrBase<S>>& attr_base : impl_->attr_list_[i])
       {
         bool bStop = false;
-        attrCallBack(*ab.get(), context, &bStop);
+        attrCallBack(*attr_base.get(), context, &bStop);
         if (bStop)
         {
           return;
@@ -1116,16 +1118,16 @@ std::wstring_view FileRecord<S>::GetFileName() const
   for (const std::unique_ptr<AttrBase<S>>& fn_ :
        std::get<AttrIndex(AttrType::FILE_NAME)>(impl_->attr_list_))
   {
-    const Filename* fn;
+    const Filename* filename;
     if constexpr (S == Strategy::NO_CACHE)
     {
-      fn = reinterpret_cast<
+      filename = reinterpret_cast<
           const AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
           fn_.get());
     }
     else if constexpr (S == Strategy::FULL_CACHE)
     {
-      fn = reinterpret_cast<
+      filename = reinterpret_cast<
           const AttrFileName<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
           fn_.get());
     }
@@ -1135,9 +1137,9 @@ std::wstring_view FileRecord<S>::GetFileName() const
       return {};
     }
 
-    if (fn->IsWin32Name() && !fn->GetFilename().empty())
+    if (filename->IsWin32Name() && !filename->GetFilename().empty())
     {
-      return fn->GetFilename();
+      return filename->GetFilename();
     }
   }
 
@@ -1258,27 +1260,27 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
 
   if constexpr (S == Strategy::NO_CACHE)
   {
-    const auto* ir = reinterpret_cast<
+    const auto* index_root = reinterpret_cast<
         const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(
         vec.front().get());
 
-    if (!ir->IsFileName())
+    if (!index_root->IsFileName())
     {
       return;
     }
-    all_ie = ir;
+    all_ie = index_root;
   }
   else if constexpr (S == Strategy::FULL_CACHE)
   {
-    const auto* ir = reinterpret_cast<
+    const auto* index_root = reinterpret_cast<
         const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
         vec.front().get());
 
-    if (!ir->IsFileName())
+    if (!index_root->IsFileName())
     {
       return;
     }
-    all_ie = ir;
+    all_ie = index_root;
   }
   else
   {
@@ -1288,18 +1290,18 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
 
   std::unordered_set<ULONGLONG> visitedVcns;
 
-  for (const IndexEntry& ie : *all_ie)
+  for (const IndexEntry& index_entry : *all_ie)
   {
     // Visit subnode first
-    if (ie.IsSubNodePtr())
+    if (index_entry.IsSubNodePtr())
     {
-      impl_->TraverseSubNode(ie.GetSubNodeVCN(), seCallBack, context,
+      impl_->TraverseSubNode(index_entry.GetSubNodeVCN(), seCallBack, context,
                              visitedVcns, 0);
     }
 
-    if (ie.HasName())
+    if (index_entry.HasName())
     {
-      seCallBack(ie, context);
+      seCallBack(index_entry, context);
     }
   }
 
@@ -1383,8 +1385,8 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
       continue;
     }
 
-    IndexBlock ib;
-    if (!alloc->ParseIndexBlock(vcn, ib))
+    IndexBlock index_block;
+    if (!alloc->ParseIndexBlock(vcn, index_block))
     {
       continue;
     }
@@ -1392,9 +1394,9 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
     LogInfo("TraverseSubEntries() recovery: reporting orphaned index block {}",
             vcn);
 
-    for (const IndexEntry& ie : ib)
+    for (const IndexEntry& index_entry : index_block)
     {
-      if (!ie.HasName())
+      if (!index_entry.HasName())
       {
         continue;
       }
@@ -1403,9 +1405,10 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
       // that used this record - only report one still filed under this very
       // directory. Same rule as MftTree: a freed directory keeps the entries
       // filed under its sequence from before NTFS bumped it.
-      if (selfRef && (ie.GetParentReference() != *selfRef ||
-                      !IsSameRecordGeneration(ie.GetParentSequenceNumber(),
-                                              selfSequence, selfInUse)))
+      if (selfRef &&
+          (index_entry.GetParentReference() != *selfRef ||
+           !IsSameRecordGeneration(index_entry.GetParentSequenceNumber(),
+                                   selfSequence, selfInUse)))
       {
         continue;
       }
@@ -1414,14 +1417,14 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
       if (!includeDeleted)
       {
         FileRecord<S> named(volume_);
-        if (!named.ParseFileRecord(ie.GetFileReference()) ||
+        if (!named.ParseFileRecord(index_entry.GetFileReference()) ||
             named.IsDeleted() ||
-            named.GetSequenceNumber() != ie.GetSequenceNumber())
+            named.GetSequenceNumber() != index_entry.GetSequenceNumber())
         {
           continue;
         }
       }
-      seCallBack(ie, context);
+      seCallBack(index_entry, context);
     }
   }
 }
@@ -1442,12 +1445,13 @@ std::optional<IndexEntry>
   // name's range. Look at every entry instead.
   LogDebug("FindSubEntry() scans every entry: no $UpCase table");
   TraverseSubEntries(
-      [&](const IndexEntry& ie, void*)
+      [&](const IndexEntry& index_entry, void*)
       {
         if (!found &&
-            ie.Compare(fileName, impl_->volume_.impl_->GetUpCaseTable()) == 0)
+            index_entry.Compare(fileName,
+                                impl_->volume_.impl_->GetUpCaseTable()) == 0)
         {
-          found.emplace(ie);
+          found.emplace(index_entry);
         }
       },
       nullptr);
@@ -1473,27 +1477,27 @@ std::optional<IndexEntry>
 
   if constexpr (S == Strategy::NO_CACHE)
   {
-    const auto* ir = reinterpret_cast<
+    const auto* index_root = reinterpret_cast<
         const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(
         vec.front().get());
 
-    if (!ir->IsFileName())
+    if (!index_root->IsFileName())
     {
       return {};
     }
-    all_ie = ir;
+    all_ie = index_root;
   }
   else if constexpr (S == Strategy::FULL_CACHE)
   {
-    const auto* ir = reinterpret_cast<
+    const auto* index_root = reinterpret_cast<
         const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
         vec.front().get());
 
-    if (!ir->IsFileName())
+    if (!index_root->IsFileName())
     {
       return {};
     }
-    all_ie = ir;
+    all_ie = index_root;
   }
   else
   {
@@ -1504,27 +1508,27 @@ std::optional<IndexEntry>
   // Loaded before the walk: reading $UpCase reuses the volume's buffers.
   const UpCaseTable& upcase = volume_.impl_->GetUpCaseTable();
 
-  for (const IndexEntry& ie : *all_ie)
+  for (const IndexEntry& index_entry : *all_ie)
   {
-    if (ie.HasName())
+    if (index_entry.HasName())
     {
       // Compare name
-      const int i = ie.Compare(fileName, upcase);
-      if (i == 0)
+      const int comparison = index_entry.Compare(fileName, upcase);
+      if (comparison == 0)
       {
         // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
         // alive independently of this FileRecord.
         LogDebug("FindSubEntry() found entry in Index Root");
-        return ie;
+        return index_entry;
       }
-      if (i < 0)  // fileName is smaller than IndexEntry
+      if (comparison < 0)  // fileName is smaller than IndexEntry
       {
         // Visit SubNode
-        if (ie.IsSubNodePtr())
+        if (index_entry.IsSubNodePtr())
         {
           // Search in SubNode (IndexBlock)
-          std::optional<IndexEntry> retval =
-              VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns, 0);
+          std::optional<IndexEntry> retval = VisitIndexBlock(
+              index_entry.GetSubNodeVCN(), fileName, visitedVcns, 0);
           if (retval)
           {
             return retval;
@@ -1538,11 +1542,11 @@ std::optional<IndexEntry>
       }
       // Just step forward if fileName is bigger than IndexEntry
     }
-    else if (ie.IsSubNodePtr())
+    else if (index_entry.IsSubNodePtr())
     {
       // Search in SubNode (IndexBlock)
-      std::optional<IndexEntry> retval =
-          VisitIndexBlock(ie.GetSubNodeVCN(), fileName, visitedVcns, 0);
+      std::optional<IndexEntry> retval = VisitIndexBlock(
+          index_entry.GetSubNodeVCN(), fileName, visitedVcns, 0);
       if (retval)
       {
         return retval;

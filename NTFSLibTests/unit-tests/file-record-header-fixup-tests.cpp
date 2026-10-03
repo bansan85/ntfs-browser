@@ -39,7 +39,7 @@ constexpr WORD kSentinelBase = 0xBEEF;
 constexpr WORD kUsArrayFillBase = 0xA000;
 
 // Pattern that never appears anywhere in the declared 1024-byte buffer.
-WORD Sentinel(size_t i) { return gsl::narrow<WORD>(kSentinelBase + i); }
+WORD Sentinel(size_t index) { return gsl::narrow<WORD>(kSentinelBase + index); }
 
 }  // namespace
 
@@ -75,15 +75,15 @@ TEMPLATE_TEST_CASE_SIG(
   bool leakedSentinel = false;
   try
   {
-    const auto fr = FileRecordHeaderImpl<S>(buffer);
+    const auto header = FileRecordHeaderImpl<S>(buffer);
 
-    leakedSentinel = fr.us_array.size() == kArrayWords && [&]
+    leakedSentinel = header.us_array.size() == kArrayWords && [&]
     {
       for (size_t i = 0; i < kArrayWords; i++)
       {
         // us_array.size() == kArrayWords was tested first.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        if (fr.us_array[i] != Sentinel(i))
+        if (header.us_array[i] != Sentinel(i))
         {
           return false;
         }
@@ -137,15 +137,15 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   const std::span<const BYTE> buffer(storage.data(), storage.size());
-  auto fr = FileRecordHeaderImpl<S>(buffer);
+  auto header = FileRecordHeaderImpl<S>(buffer);
 
-  REQUIRE(fr.PatchUS());
+  REQUIRE(header.PatchUS());
 
   for (size_t i = 0; i < kBlocks; i++)
   {
     WORD restored = 0;
     std::memcpy(&restored,
-                &fr.GetData()->raw[(i + 1) * kBlockSize - sizeof(WORD)],
+                &header.GetData()->raw[(i + 1) * kBlockSize - sizeof(WORD)],
                 sizeof(restored));
     CHECK(restored == gsl::narrow<WORD>(kUsArrayFillBase + i));
   }

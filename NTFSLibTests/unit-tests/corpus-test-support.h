@@ -54,11 +54,11 @@ void RequireCorpusImage(const std::filesystem::path& image);
 
 // Combines a FILETIME's two 32-bit halves into its 100 ns tick count since
 // 1601-01-01.
-[[nodiscard]] ULONGLONG FileTimeToTicks(const FILETIME& ft) noexcept;
+[[nodiscard]] ULONGLONG FileTimeToTicks(const FILETIME& file_time) noexcept;
 
 // Decomposes ft into a Gregorian (year, month, day) triple. A portable stand-
 // in for Win32's FileTimeToSystemTime(), which does not exist off Windows.
 [[nodiscard]] std::tuple<WORD, WORD, WORD>
-    FileTimeToDate(const FILETIME& ft) noexcept;
+    FileTimeToDate(const FILETIME& file_time) noexcept;
 
 }  // namespace NtfsBrowserTests

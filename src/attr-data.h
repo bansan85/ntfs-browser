@@ -12,8 +12,8 @@ template <class TYPE_RESIDENT, Strategy S>
 class AttrData : public TYPE_RESIDENT
 {
  public:
-  AttrData(const AttrHeaderCommon& ahc, const FileRecord<S>& fr)
-      : TYPE_RESIDENT(ahc, fr)
+  AttrData(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record)
+      : TYPE_RESIDENT(ahc, file_record)
   {
     LogTrace("Attribute: Data ({}Resident)",
              this->IsNonResident() ? "Non" : "");

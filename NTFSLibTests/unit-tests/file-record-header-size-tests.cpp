@@ -64,8 +64,8 @@ TEMPLATE_TEST_CASE_SIG(
 
   // FULL_CACHE's ctor memcpy()s the whole buffer into a fixed-size Data
   // member; a too-small member here would overflow it.
-  const auto fr = FileRecordHeaderImpl<S>(buffer);
-  CHECK(fr.GetData()->magic == kFileRecordMagic);
+  const auto header = FileRecordHeaderImpl<S>(buffer);
+  CHECK(header.GetData()->magic == kFileRecordMagic);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -99,9 +99,9 @@ TEMPLATE_TEST_CASE_SIG(
       MakeWellFormedBuffer(kDeclaredBufferSize, kOffsetPastOwnSize);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
-  auto fr = FileRecordHeaderImpl<S>(buffer);
+  auto header = FileRecordHeaderImpl<S>(buffer);
 
   // A larger offset_of_attr would build a pointer past the real,
   // 2048-byte allocation backing NO_CACHE's span.
-  CHECK(fr.HeaderCommon() == nullptr);
+  CHECK(header.HeaderCommon() == nullptr);
 }

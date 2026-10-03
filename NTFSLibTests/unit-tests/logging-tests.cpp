@@ -78,8 +78,8 @@ class TempFile final
               (L"ntfsbrowser-log-" + std::wstring(tag) + L"-" +
                std::to_wstring(std::random_device{}()) + L".txt"))
   {
-    std::error_code ec;
-    fs::remove(path_, ec);
+    std::error_code error_code;
+    fs::remove(path_, error_code);
   }
 
   TempFile(TempFile&&) = delete;
@@ -89,16 +89,16 @@ class TempFile final
 
   ~TempFile()
   {
-    std::error_code ec;
-    fs::remove(path_, ec);
+    std::error_code error_code;
+    fs::remove(path_, error_code);
   }
 
   [[nodiscard]] const fs::path& Path() const noexcept { return path_; }
 
   [[nodiscard]] std::string Read() const
   {
-    std::ifstream in(path_, std::ios::binary);
-    return {(std::istreambuf_iterator<char>(in)),
+    std::ifstream input(path_, std::ios::binary);
+    return {(std::istreambuf_iterator<char>(input)),
             std::istreambuf_iterator<char>()};
   }
 

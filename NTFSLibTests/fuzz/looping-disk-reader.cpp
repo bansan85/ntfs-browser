@@ -28,13 +28,13 @@ constexpr size_t kBootSectorStreamBytes = 512;
 std::optional<std::vector<BYTE>>
     LoopingDiskReader::LoadFile(const std::filesystem::path& path)
 {
-  std::ifstream in(path, std::ios::binary);
-  if (!in)
+  std::ifstream input(path, std::ios::binary);
+  if (!input)
   {
     return {};
   }
 
-  std::vector<BYTE> data(std::istreambuf_iterator<char>(in), {});
+  std::vector<BYTE> data(std::istreambuf_iterator<char>(input), {});
   if (data.empty())
   {
     return {};

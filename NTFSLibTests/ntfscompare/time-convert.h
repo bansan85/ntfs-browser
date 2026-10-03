@@ -17,10 +17,11 @@ inline constexpr ULONGLONG kNanosPerTick = 100;
 
 // Combines a FILETIME already in UTC into its 100 ns tick count since
 // 1601-01-01.
-[[nodiscard]] inline ULONGLONG FiletimeToUtcTicks(const FILETIME& ft) noexcept
+[[nodiscard]] inline ULONGLONG
+    FiletimeToUtcTicks(const FILETIME& file_time) noexcept
 {
-  return (static_cast<ULONGLONG>(ft.dwHighDateTime) << kDwordBits) |
-         ft.dwLowDateTime;
+  return (static_cast<ULONGLONG>(file_time.dwHighDateTime) << kDwordBits) |
+         file_time.dwLowDateTime;
 }
 
 #ifdef _WIN32

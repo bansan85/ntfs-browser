@@ -59,10 +59,11 @@ NtfsBrowser::FileReader<S> OpenOnDisk(const std::filesystem::path& path)
 // Writes content to a new temp file and returns its path.
 std::filesystem::path WriteTempFile(std::span<const BYTE> content)
 {
-  std::random_device rd;
+  std::random_device random_device;
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /
-      (L"ntfsbrowser-reader-test-" + std::to_wstring(rd()) + L".bin");
+      (L"ntfsbrowser-reader-test-" + std::to_wstring(random_device()) +
+       L".bin");
 
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   out.write(reinterpret_cast<const char*>(content.data()),

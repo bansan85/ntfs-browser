@@ -80,7 +80,7 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
-                                      AttrRawCallback cb) noexcept;
+                                      AttrRawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;
 
   // Sets the source of the keys that decrypt EFS files. A null provider

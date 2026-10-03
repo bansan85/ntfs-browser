@@ -161,38 +161,39 @@ bool MatchesPtrnPattern(std::span<const BYTE> data)
 bool ContainsPtrnRun(std::span<const BYTE> data, size_t minRunLength)
 {
   constexpr std::string_view kPattern = "PTRN";
-  size_t i = 0;
-  while (i < data.size())
+  size_t position = 0;
+  while (position < data.size())
   {
     // i < data.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    const size_t phase = kPattern.find(static_cast<char>(data[i]));
+    const size_t phase = kPattern.find(static_cast<char>(data[position]));
     if (phase == std::string_view::npos)
     {
-      i++;
+      position++;
       continue;
     }
 
-    size_t j = i;
-    while (j < data.size())
+    size_t run_end = position;
+    while (run_end < data.size())
     {
       const auto expected =
           // The index is reduced modulo kPattern.size().
           // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-          gsl::narrow<BYTE>(kPattern[(phase + (j - i)) % kPattern.size()]);
+          gsl::narrow<BYTE>(
+              kPattern[(phase + (run_end - position)) % kPattern.size()]);
       // j < data.size() by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      if (data[j] != expected)
+      if (data[run_end] != expected)
       {
         break;
       }
-      j++;
+      run_end++;
     }
-    if (j - i >= minRunLength)
+    if (run_end - position >= minRunLength)
     {
       return true;
     }
-    i = j > i ? j : i + 1;
+    position = run_end > position ? run_end : position + 1;
   }
   return false;
 }
@@ -234,11 +235,12 @@ void CheckRepairStreamsHoldPtrnPattern(
 // UTC-to-local conversion (AttrStdInfo::UTC2Local), which depends on the
 // test machine's own timezone and would otherwise make an exact wall-clock
 // comparison flaky.
-ULONGLONG TickDelta(const FILETIME& a, const FILETIME& b)
+ULONGLONG TickDelta(const FILETIME& first, const FILETIME& second)
 {
-  const ULONGLONG ua = NtfsBrowserTests::FileTimeToTicks(a);
-  const ULONGLONG ub = NtfsBrowserTests::FileTimeToTicks(b);
-  return ua > ub ? ua - ub : ub - ua;
+  const ULONGLONG first_ticks = NtfsBrowserTests::FileTimeToTicks(first);
+  const ULONGLONG second_ticks = NtfsBrowserTests::FileTimeToTicks(second);
+  return first_ticks > second_ticks ? first_ticks - second_ticks
+                                    : second_ticks - first_ticks;
 }
 
 // ReadMe.md documents each timestamp only to the whole second, so each one's
@@ -251,9 +253,9 @@ void CheckDeltaMatchesSeconds(ULONGLONG deltaTicks, ULONGLONG expectedSeconds)
 }
 
 // Year/month/day of ft, converted from its (local-time) FILETIME.
-std::tuple<WORD, WORD, WORD> ToDate(const FILETIME& ft)
+std::tuple<WORD, WORD, WORD> ToDate(const FILETIME& file_time)
 {
-  return NtfsBrowserTests::FileTimeToDate(ft);
+  return NtfsBrowserTests::FileTimeToDate(file_time);
 }
 
 }  // namespace
@@ -273,10 +275,10 @@ TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
 
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntry& ie, void* context)
+      [](const IndexEntry& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
-            ie.GetFilename());
+            index_entry.GetFilename());
       },
       &names);
   CHECK_FALSE(names.empty());

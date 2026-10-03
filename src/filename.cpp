@@ -21,35 +21,35 @@
 namespace NtfsBrowser
 {
 
-void Filename::SetFilename(const Attr::Filename& fn)
+void Filename::SetFilename(const Attr::Filename& filename)
 {
-  filename_ = &fn;
+  filename_ = &filename;
 
   GetFilenameWUC();
 }
 
 // Copy pointer buffers
-void Filename::CopyFilename(const Filename& fn, const Attr::Filename& afn)
+void Filename::CopyFilename(const Filename& filename, const Attr::Filename& afn)
 {
   LogTrace("Filename Copied");
 
   filename_ = &afn;
-  filename_wuc_ = fn.filename_wuc_;
+  filename_wuc_ = filename.filename_wuc_;
 }
 
 // Decodes the file name and caches it in filename_wuc_, for Compare().
 void Filename::GetFilenameWUC() { (void)GetFilename(); }
 
-int Filename::Compare(std::wstring_view fn) const noexcept
+int Filename::Compare(std::wstring_view file_name) const noexcept
 {
-  return Compare(fn, UpCaseTable::BuiltIn());
+  return Compare(file_name, UpCaseTable::BuiltIn());
 }
 
 // Only the decoded name is compared: the on-disk one isn't null-terminated.
-int Filename::Compare(std::wstring_view fn,
+int Filename::Compare(std::wstring_view file_name,
                       const UpCaseTable& upcase) const noexcept
 {
-  return upcase.Compare(fn, filename_wuc_);
+  return upcase.Compare(file_name, filename_wuc_);
 }
 
 ULONGLONG Filename::GetFileSize() const noexcept

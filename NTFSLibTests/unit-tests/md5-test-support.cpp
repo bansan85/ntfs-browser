@@ -31,9 +31,9 @@ std::string HexEncode(std::span<const BYTE> digest)
 {
   std::string hex;
   hex.reserve(digest.size() * 2);
-  for (const BYTE b : digest)
+  for (const BYTE byte_value : digest)
   {
-    hex += std::format("{:02x}", b);
+    hex += std::format("{:02x}", byte_value);
   }
   return hex;
 }

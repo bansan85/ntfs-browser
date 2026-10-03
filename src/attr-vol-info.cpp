@@ -34,8 +34,8 @@ const Attr::VolumeInformation& CheckedVolInfo(const RESIDENT& attr)
 
 template <typename RESIDENT, Strategy S>
 AttrVolInfo<RESIDENT, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
-                                      const FileRecord<S>& fr)
-    : RESIDENT(ahc, fr), vol_info_(CheckedVolInfo<RESIDENT>(*this))
+                                      const FileRecord<S>& file_record)
+    : RESIDENT(ahc, file_record), vol_info_(CheckedVolInfo<RESIDENT>(*this))
 {
   LogTrace("Attribute: Volume Information");
 }

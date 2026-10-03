@@ -89,10 +89,10 @@ template <Strategy S>
 BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER blockAddr) const
 {
   const size_t index = blockAddr.QuadPart / READ_BUFFER_SIZE;
-  const auto it = map_buffer_.find(index);
-  if (it != map_buffer_.end())
+  const auto iterator = map_buffer_.find(index);
+  if (iterator != map_buffer_.end())
   {
-    return it->second;
+    return iterator->second;
   }
 
   BYTE* new_data = NextMemory();

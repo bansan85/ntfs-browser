@@ -50,7 +50,7 @@ struct AlignedIndexEntry
 // alignment. The caller MUST have checked that offsetof(Data::IndexEntry, stream) bytes
 // fit in `at`.
 [[nodiscard]] Data::IndexEntry
-    ReadIndexEntryHeader(std::span<const BYTE> at) noexcept;
+    ReadIndexEntryHeader(std::span<const BYTE> bytes) noexcept;
 
 // Returns the entry of `size` bytes at the start of `at`, a range inside
 // `buffer`. An entry that is not aligned for Data::IndexEntry moves to an
@@ -58,12 +58,12 @@ struct AlignedIndexEntry
 // `at`.
 [[nodiscard]] AlignedIndexEntry
     AlignIndexEntry(const std::shared_ptr<BYTE[]>& buffer,
-                    std::span<const BYTE> at, size_t size);
+                    std::span<const BYTE> bytes, size_t size);
 
 // Checks ie's on-disk bounds and sub-node size. Returns the defect message
 // if one is found, or none if ie is well-formed. Callers log it through
 // LogRecoverable, at whichever level (strict vs. recovering) applies there.
 [[nodiscard]] std::optional<std::string_view>
-    ValidateIndexEntry(const Data::IndexEntry& ie) noexcept;
+    ValidateIndexEntry(const Data::IndexEntry& index_entry) noexcept;
 
 }  // namespace NtfsBrowser

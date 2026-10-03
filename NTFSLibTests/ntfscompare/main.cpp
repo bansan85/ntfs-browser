@@ -116,8 +116,8 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
   }
 
   const std::filesystem::path target(targetArg);
-  std::error_code ec;
-  if (!std::filesystem::is_directory(target, ec))
+  std::error_code error_code;
+  if (!std::filesystem::is_directory(target, error_code))
   {
     std::fprintf(stderr, NTFSCOMPARE_NATIVE " is not a directory\n", targetArg);
     return 1;

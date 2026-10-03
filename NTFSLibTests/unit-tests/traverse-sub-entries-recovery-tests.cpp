@@ -42,10 +42,10 @@ std::vector<std::wstring> CollectNames(const FileRecord<S>& root)
 {
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntry& ie, void* context)
+      [](const IndexEntry& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
-            ie.GetFilename());
+            index_entry.GetFilename());
       },
       &names);
   return names;

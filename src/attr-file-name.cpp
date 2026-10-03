@@ -18,8 +18,8 @@ class FileRecord;
 
 template <typename RESIDENT, Strategy S>
 AttrFileName<RESIDENT, S>::AttrFileName(const AttrHeaderCommon& ahc,
-                                        const FileRecord<S>& fr)
-    : RESIDENT(ahc, fr)
+                                        const FileRecord<S>& file_record)
+    : RESIDENT(ahc, file_record)
 {
   LogTrace("Attribute: File Name");
 
@@ -28,17 +28,18 @@ AttrFileName<RESIDENT, S>::AttrFileName(const AttrHeaderCommon& ahc,
     throw std::runtime_error("File Name attribute smaller than expected.\n");
   }
 
-  const auto& fn = *reinterpret_cast<const Attr::Filename*>(this->GetData());
+  const auto& filename =
+      *reinterpret_cast<const Attr::Filename*>(this->GetData());
   // Attribute size MUST cover fixed header and name data.
   if (this->GetDataSize() <
       offsetof(Attr::Filename, name) +
-          (static_cast<ULONGLONG>(fn.name_length) * sizeof(WORD)))
+          (static_cast<ULONGLONG>(filename.name_length) * sizeof(WORD)))
   {
     throw std::runtime_error(
         "File Name attribute name exceeds attribute bounds.\n");
   }
 
-  SetFilename(fn);
+  SetFilename(filename);
 }
 
 template <typename RESIDENT, Strategy S>

@@ -21,13 +21,13 @@ namespace
 {
 // Device node paths are always plain ASCII, so a per-code-point narrow cast
 // is exact - no need for a general wide -> UTF-8 encoder just for this.
-std::string WideToNarrowAscii(std::wstring_view w)
+std::string WideToNarrowAscii(std::wstring_view wide)
 {
   std::string out;
-  out.reserve(w.size());
-  for (const wchar_t c : w)
+  out.reserve(wide.size());
+  for (const wchar_t character : wide)
   {
-    out.push_back(gsl::narrow<char>(c));
+    out.push_back(gsl::narrow<char>(character));
   }
   return out;
 }
@@ -51,8 +51,9 @@ bool RawDeviceDiskReader::Open(std::wstring_view path)
 bool RawDeviceDiskReader::ReadInto(LARGE_INTEGER& addr,
                                    std::span<BYTE> dest) const
 {
-  const ssize_t n = pread(fd_, dest.data(), dest.size(), addr.QuadPart);
-  if (n < 0 || static_cast<size_t>(n) != dest.size())
+  const ssize_t bytes_read =
+      pread(fd_, dest.data(), dest.size(), addr.QuadPart);
+  if (bytes_read < 0 || static_cast<size_t>(bytes_read) != dest.size())
   {
     std::fprintf(stderr, "Cannot read device at offset %lld\n",
                  static_cast<long long>(addr.QuadPart));

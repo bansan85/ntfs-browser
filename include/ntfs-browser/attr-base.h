@@ -25,7 +25,8 @@ template <Strategy S>
 class NTFS_BROWSER_EXPORT AttrBase
 {
  public:
-  AttrBase(const AttrHeaderCommon& ahc, const FileRecord<S>& fr) noexcept;
+  AttrBase(const AttrHeaderCommon& ahc,
+           const FileRecord<S>& file_record) noexcept;
   AttrBase(AttrBase&& other) noexcept = delete;
   AttrBase(AttrBase const& other) = delete;
   AttrBase& operator=(AttrBase&& other) noexcept = delete;

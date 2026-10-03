@@ -19,7 +19,7 @@ class AttrList : public TYPE_RESIDENT
   // attrListChain: (record, attribute type) pairs already resolved along
   // the current $ATTRIBUTE_LIST chain, threaded through every extension
   // record opened along the way.
-  AttrList(const AttrHeaderCommon& ahc, FileRecord<S>& fr,
+  AttrList(const AttrHeaderCommon& ahc, FileRecord<S>& file_record,
            std::unordered_set<ULONGLONG>& attrListChain);
   AttrList(AttrList&& other) noexcept = delete;
   AttrList(AttrList const& other) = delete;

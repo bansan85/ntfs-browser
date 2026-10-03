@@ -56,8 +56,8 @@ constexpr ULONGLONG SpannedClusters(const Attr::HeaderNonResident& header)
 
 template <Strategy S>
 AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
-                                    const FileRecord<S>& fr)
-    : AttrBase<S>(ahc, fr),
+                                    const FileRecord<S>& file_record)
+    : AttrBase<S>(ahc, file_record),
       attr_header_nr_(reinterpret_cast<const Attr::HeaderNonResident&>(ahc)),
       merged_clusters_(SpannedClusters(attr_header_nr_))
 {
@@ -236,14 +236,15 @@ void AttrNonResident<S>::ParseDataRun()
              lcn_offset == 0 ? ", Sparse Data" : "");
 
     // Store LCN, Data size (clusters) into list
-    Data::RunEntry dr;
-    dr.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : lcn;
-    dr.clusters = length;
-    dr.start_vcn = vcn;
+    Data::RunEntry data_run;
+    data_run.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : lcn;
+    data_run.clusters = length;
+    data_run.start_vcn = vcn;
     vcn += length;
-    dr.last_vcn = vcn - 1;
+    data_run.last_vcn = vcn - 1;
 
-    if (dr.last_vcn > (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn))
+    if (data_run.last_vcn >
+        (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn))
     {
       LogRecoverable(recover, "DataRun decode error: VCN exceeds bound");
       if (!recover)
@@ -254,7 +255,7 @@ void AttrNonResident<S>::ParseDataRun()
       break;
     }
 
-    data_run_list_.push_back(dr);
+    data_run_list_.push_back(data_run);
   }
 }
 
@@ -336,28 +337,28 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
   ULONGLONG realClusters = 0;
   bool sawHole = false;
 
-  for (const Data::RunEntry& dr : data_run_list_)
+  for (const Data::RunEntry& data_run : data_run_list_)
   {
     if (vcn >= unitEnd)
     {
       break;
     }
-    if (dr.last_vcn < vcn)
+    if (data_run.last_vcn < vcn)
     {
       // Entirely before the unit (or before what has been counted so far).
       continue;
     }
-    if (dr.start_vcn > vcn)
+    if (data_run.start_vcn > vcn)
     {
       LogWarn("Compression unit at VCN {} is not fully mapped", unitFirstVcn);
       return {};
     }
 
-    const ULONGLONG inRun = dr.last_vcn - vcn + 1;
+    const ULONGLONG inRun = data_run.last_vcn - vcn + 1;
     const ULONGLONG left = unitEnd - vcn;
     const ULONGLONG take = (inRun < left) ? inRun : left;
 
-    if (dr.lcn)
+    if (data_run.lcn)
     {
       if (sawHole)
       {
@@ -642,19 +643,19 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
   std::span<BYTE> out = buffer;
 
   // Traverse the DataRun List to find the according LCN
-  for (const Data::RunEntry& dr : data_run_list_)
+  for (const Data::RunEntry& data_run : data_run_list_)
   {
-    if (vcn >= dr.start_vcn && vcn <= dr.last_vcn)
+    if (vcn >= data_run.start_vcn && vcn <= data_run.last_vcn)
     {
       // Clusters from read pointer to the end
-      const ULONGLONG vcns = dr.last_vcn - vcn + 1;
+      const ULONGLONG vcns = data_run.last_vcn - vcn + 1;
       // Fragmented data, we must go on
       const ULONGLONG clustersToRead = clusters > vcns ? vcns : clusters;
 
-      if (dr.lcn)
+      if (data_run.lcn)
       {
-        std::optional<std::span<const BYTE>> bufferi =
-            ReadClusters(clustersToRead, *dr.lcn, vcn - dr.start_vcn);
+        std::optional<std::span<const BYTE>> bufferi = ReadClusters(
+            clustersToRead, *data_run.lcn, vcn - data_run.start_vcn);
         if (!bufferi)
         {
           break;
@@ -915,11 +916,11 @@ template <Strategy S>
 ULONGLONG AttrNonResident<S>::MappedClusters() const noexcept
 {
   ULONGLONG mapped = 0;
-  for (const Data::RunEntry& dr : data_run_list_)
+  for (const Data::RunEntry& data_run : data_run_list_)
   {
-    if (dr.lcn.has_value())
+    if (data_run.lcn.has_value())
     {
-      mapped = dr.last_vcn + 1;
+      mapped = data_run.last_vcn + 1;
     }
   }
   return mapped;
@@ -930,11 +931,11 @@ ULONGLONG AttrNonResident<S>::MappedClusters() const noexcept
 template <Strategy S>
 void AttrNonResident<S>::AppendRuns(const AttrNonResident& other)
 {
-  for (Data::RunEntry dr : other.data_run_list_)
+  for (Data::RunEntry data_run : other.data_run_list_)
   {
-    dr.start_vcn += merged_clusters_;
-    dr.last_vcn += merged_clusters_;
-    data_run_list_.push_back(dr);
+    data_run.start_vcn += merged_clusters_;
+    data_run.last_vcn += merged_clusters_;
+    data_run_list_.push_back(data_run);
   }
   merged_clusters_ += other.merged_clusters_;
 }

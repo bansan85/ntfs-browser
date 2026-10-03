@@ -171,7 +171,7 @@ void AddConsoleSinks(Log::Level level, std::vector<spdlog::sink_ptr>& sinks)
 // file sink could not be opened; the console target is installed anyway.
 bool Apply(const Log::Config& config) noexcept
 {
-  bool ok = true;
+  bool is_ok = true;
 
   try
   {
@@ -196,7 +196,7 @@ bool Apply(const Log::Config& config) noexcept
       }
       catch (...)
       {
-        ok = false;
+        is_ok = false;
       }
     }
 
@@ -216,7 +216,7 @@ bool Apply(const Log::Config& config) noexcept
     return false;
   }
 
-  return ok;
+  return is_ok;
 }
 
 // The library logger, created with the default configuration on first use.
@@ -259,9 +259,9 @@ bool ParseLevel(std::basic_string_view<CharT> text, Log::Level& level) noexcept
 
 }  // namespace
 
-void LogException(const std::exception& e) noexcept
+void LogException(const std::exception& exception) noexcept
 {
-  std::string_view message(e.what());
+  std::string_view message(exception.what());
   // Several throw sites end their message with a newline. spdlog adds its
   // own, so without this one exception would print a blank line after it.
   while (!message.empty() && (message.back() == '\n' || message.back() == '\r'))

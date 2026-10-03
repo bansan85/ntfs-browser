@@ -44,8 +44,8 @@ void ValidateResidentBounds(const Attr::HeaderResident& header)
 
 template <Strategy S>
 AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
-                              const FileRecord<S>& fr)
-    : AttrBase<S>(ahc, fr)
+                              const FileRecord<S>& file_record)
+    : AttrBase<S>(ahc, file_record)
 {
 }
 
@@ -100,8 +100,9 @@ std::optional<ULONGLONG>
 }
 
 AttrResidentNoCache::AttrResidentNoCache(
-    const AttrHeaderCommon& ahc, const FileRecord<Strategy::NO_CACHE>& fr)
-    : AttrResident(ahc, fr)
+    const AttrHeaderCommon& ahc,
+    const FileRecord<Strategy::NO_CACHE>& file_record)
+    : AttrResident(ahc, file_record)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
   ValidateResidentBounds(header);
@@ -120,8 +121,9 @@ ULONGLONG AttrResidentNoCache::GetDataSize() const noexcept
 }
 
 AttrResidentFullCache::AttrResidentFullCache(
-    const AttrHeaderCommon& ahc, const FileRecord<Strategy::FULL_CACHE>& fr)
-    : AttrResident(ahc, fr)
+    const AttrHeaderCommon& ahc,
+    const FileRecord<Strategy::FULL_CACHE>& file_record)
+    : AttrResident(ahc, file_record)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
   ValidateResidentBounds(header);

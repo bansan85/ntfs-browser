@@ -24,7 +24,7 @@ class IndexEntry;
 // User defined Callback routine to handle Directory traversing
 // Will be called by FileRecord::TraverseSubEntries for each sub entry
 using SUBENTRY_CALLBACK =
-    std::function<void(const IndexEntry& ie, void* context)>;
+    std::function<void(const IndexEntry& index_entry, void* context)>;
 
 // User defined Callback routine to handle FileRecord parsed attributes
 // Will be called by FileRecord::TraverseAttrs() for each attribute
@@ -73,7 +73,7 @@ class NTFS_BROWSER_EXPORT FileRecord
   // is not 0, sequence number included. False when no record is parsed.
   [[nodiscard]] bool IsExtensionRecord() const noexcept;
   [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
-                                      AttrRawCallback cb) noexcept;
+                                      AttrRawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;
 
   void SetAttrMask(Mask mask) noexcept;

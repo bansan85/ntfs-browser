@@ -17,7 +17,7 @@ class NTFS_BROWSER_EXPORT IndexEntry : public Filename
 {
  public:
   explicit IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
-                      const Data::IndexEntry& ie);
+                      const Data::IndexEntry& index_entry);
   IndexEntry(IndexEntry&& other) noexcept = default;
   IndexEntry(IndexEntry const& other) = default;
   IndexEntry& operator=(IndexEntry&& other) noexcept = delete;

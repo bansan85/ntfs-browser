@@ -42,38 +42,42 @@ constexpr char32_t kThreeByteTag = 0xE0;
 constexpr char32_t kFourByteTag = 0xF0;
 
 // Appends cp's UTF-8 encoding to out.
-void AppendUtf8(std::string& out, char32_t cp)
+void AppendUtf8(std::string& out, char32_t code_point)
 {
-  if (cp < kOneByteLimit)
+  if (code_point < kOneByteLimit)
   {
-    out.push_back(static_cast<char>(cp));
+    out.push_back(static_cast<char>(code_point));
     return;
   }
-  if (cp < kTwoByteLimit)
+  if (code_point < kTwoByteLimit)
   {
-    out.push_back(static_cast<char>(kTwoByteTag | (cp >> kContinuationShift)));
     out.push_back(
-        static_cast<char>(kContinuationTag | (cp & kContinuationMask)));
+        static_cast<char>(kTwoByteTag | (code_point >> kContinuationShift)));
+    out.push_back(
+        static_cast<char>(kContinuationTag | (code_point & kContinuationMask)));
     return;
   }
-  if (cp < kThreeByteLimit)
+  if (code_point < kThreeByteLimit)
   {
-    out.push_back(
-        static_cast<char>(kThreeByteTag | (cp >> (2 * kContinuationShift))));
+    out.push_back(static_cast<char>(kThreeByteTag |
+                                    (code_point >> (2 * kContinuationShift))));
     out.push_back(static_cast<char>(
-        kContinuationTag | ((cp >> kContinuationShift) & kContinuationMask)));
+        kContinuationTag |
+        ((code_point >> kContinuationShift) & kContinuationMask)));
     out.push_back(
-        static_cast<char>(kContinuationTag | (cp & kContinuationMask)));
+        static_cast<char>(kContinuationTag | (code_point & kContinuationMask)));
     return;
   }
-  out.push_back(
-      static_cast<char>(kFourByteTag | (cp >> (3 * kContinuationShift))));
+  out.push_back(static_cast<char>(kFourByteTag |
+                                  (code_point >> (3 * kContinuationShift))));
   out.push_back(static_cast<char>(
       kContinuationTag |
-      ((cp >> (2 * kContinuationShift)) & kContinuationMask)));
+      ((code_point >> (2 * kContinuationShift)) & kContinuationMask)));
   out.push_back(static_cast<char>(
-      kContinuationTag | ((cp >> kContinuationShift) & kContinuationMask)));
-  out.push_back(static_cast<char>(kContinuationTag | (cp & kContinuationMask)));
+      kContinuationTag |
+      ((code_point >> kContinuationShift) & kContinuationMask)));
+  out.push_back(
+      static_cast<char>(kContinuationTag | (code_point & kContinuationMask)));
 }
 
 // True for a code unit that is one half of a surrogate pair.

@@ -13,8 +13,8 @@ namespace NtfsBrowser
 
 template <typename RESIDENT, Strategy S>
 AttrVolName<RESIDENT, S>::AttrVolName(const AttrHeaderCommon& ahc,
-                                      const FileRecord<S>& fr)
-    : RESIDENT(ahc, fr)
+                                      const FileRecord<S>& file_record)
+    : RESIDENT(ahc, file_record)
 {
   LogTrace("Attribute: Volume Name");
 

@@ -37,8 +37,8 @@ bool IndexBlockUsOffsetInBounds(WORD offset_of_us, DWORD sectors,
 
 template <Strategy S>
 AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
-                                  const FileRecord<S>& fr)
-    : AttrNonResident<S>(ahc, fr)
+                                  const FileRecord<S>& file_record)
+    : AttrNonResident<S>(ahc, file_record)
 {
   LogTrace("Attribute: Index Allocation");
 
@@ -237,9 +237,10 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       break;
     }
 
-    const AlignedIndexEntry ie = AlignIndexEntry(ib_sh_ptr, cur, head.size);
+    const AlignedIndexEntry aligned_index_entry =
+        AlignIndexEntry(ib_sh_ptr, cur, head.size);
     if (const std::optional<std::string_view> defect =
-            ValidateIndexEntry(*ie.entry))
+            ValidateIndexEntry(*aligned_index_entry.entry))
     {
       LogRecoverable(recover, "{}", *defect);
       if (!recover)
@@ -249,7 +250,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       }
     }
 
-    ibClass.emplace_back(ie.owner, *ie.entry);
+    ibClass.emplace_back(aligned_index_entry.owner, *aligned_index_entry.entry);
 
     if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {

@@ -175,10 +175,10 @@ void RunOrphanScanCapsDeclaredBlockCount()
   (void)TakeCapturedLog();
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntry& ie, void* context)
+      [](const IndexEntry& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
-            ie.GetFilename());
+            index_entry.GetFilename());
       },
       &names);
 
@@ -212,10 +212,10 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn()
 
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntry& ie, void* context)
+      [](const IndexEntry& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
-            ie.GetFilename());
+            index_entry.GetFilename());
       },
       &names);
 
@@ -344,10 +344,10 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
   {
     std::vector<std::wstring> names;
     root.TraverseSubEntries(
-        [](const IndexEntry& ie, void* context)
+        [](const IndexEntry& index_entry, void* context)
         {
           static_cast<std::vector<std::wstring>*>(context)->emplace_back(
-              ie.GetFilename());
+              index_entry.GetFilename());
         },
         &names);
     return names;

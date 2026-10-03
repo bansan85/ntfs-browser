@@ -19,13 +19,13 @@ MemoryDiskReader::MemoryDiskReader(std::vector<BYTE> data)
 
 bool MemoryDiskReader::Open(std::wstring_view path)
 {
-  std::ifstream in(std::filesystem::path(path), std::ios::binary);
-  if (!in)
+  std::ifstream input(std::filesystem::path(path), std::ios::binary);
+  if (!input)
   {
     return false;
   }
 
-  data_.assign(std::istreambuf_iterator<char>(in),
+  data_.assign(std::istreambuf_iterator<char>(input),
                std::istreambuf_iterator<char>());
   return true;
 }

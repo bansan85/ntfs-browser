@@ -166,9 +166,9 @@ constexpr DWORD kAttrEncrypted = 0x4000U;
 bool ReadNtfsAttribXattr(const std::filesystem::path& path, DWORD& value)
 {
   unsigned char buf[4];
-  const ssize_t n =
+  const ssize_t xattr_size =
       getxattr(path.c_str(), "system.ntfs_attrib", buf, sizeof(buf));
-  if (n != static_cast<ssize_t>(sizeof(buf)))
+  if (xattr_size != static_cast<ssize_t>(sizeof(buf)))
   {
     return false;
   }
@@ -220,35 +220,35 @@ Listing WalkOsApi(const std::filesystem::path& root)
 
       const std::filesystem::path full = frame.dir / de->d_name;
 
-      struct stat st = {};
-      if (lstat(full.c_str(), &st) != 0)
+      struct stat file_stat = {};
+      if (lstat(full.c_str(), &file_stat) != 0)
       {
         continue;
       }
 
       // Never recurse into a symlink: every method in this tool follows the
       // same policy.
-      const bool isSymlink = S_ISLNK(st.st_mode);
-      const bool isDirectory = S_ISDIR(st.st_mode);
+      const bool isSymlink = S_ISLNK(file_stat.st_mode);
+      const bool isDirectory = S_ISDIR(file_stat.st_mode);
 
       Entry entry;
       entry.is_directory = isDirectory;
       if (!isDirectory)
       {
-        entry.logical_size = gsl::narrow<ULONGLONG>(st.st_size);
+        entry.logical_size = gsl::narrow<ULONGLONG>(file_stat.st_size);
       }
       entry.physical_size =
-          gsl::narrow<ULONGLONG>(st.st_blocks) * kStatBlockSize;
+          gsl::narrow<ULONGLONG>(file_stat.st_blocks) * kStatBlockSize;
 
-      entry.modification_time_utc =
-          SecondsNanosToUtcTicks(st.st_mtim.tv_sec, st.st_mtim.tv_nsec);
-      entry.access_time_utc =
-          SecondsNanosToUtcTicks(st.st_atim.tv_sec, st.st_atim.tv_nsec);
+      entry.modification_time_utc = SecondsNanosToUtcTicks(
+          file_stat.st_mtim.tv_sec, file_stat.st_mtim.tv_nsec);
+      entry.access_time_utc = SecondsNanosToUtcTicks(file_stat.st_atim.tv_sec,
+                                                     file_stat.st_atim.tv_nsec);
       // ctime is Unix's own "inode change time": the closest analog to
       // NTFS' change/MFT-modification time, though a different OS's concept,
       // not literally the same field - the point of comparing it.
-      entry.change_time_utc =
-          SecondsNanosToUtcTicks(st.st_ctim.tv_sec, st.st_ctim.tv_nsec);
+      entry.change_time_utc = SecondsNanosToUtcTicks(file_stat.st_ctim.tv_sec,
+                                                     file_stat.st_ctim.tv_nsec);
 
   #ifdef STATX_BTIME
       struct statx stx = {};

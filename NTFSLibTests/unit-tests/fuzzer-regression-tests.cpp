@@ -395,11 +395,12 @@ void RunRegressionTestcase(std::string_view name)
       exe, {L"--inject-read-failures", file.wstring()});
   CHECK(result.exit_code == 0);
 
-  const auto it = kExpectedErrorMessages.find(name);
-  if (it != kExpectedErrorMessages.end() && it->second.check_expected_messages)
+  const auto iterator = kExpectedErrorMessages.find(name);
+  if (iterator != kExpectedErrorMessages.end() &&
+      iterator->second.check_expected_messages)
   {
     INFO("captured output:\n" << result.output);
-    for (const std::string_view message : it->second.messages)
+    for (const std::string_view message : iterator->second.messages)
     {
       // Trailing array slots past this testcase's own messages are
       // empty padding; stop there instead of matching real content.

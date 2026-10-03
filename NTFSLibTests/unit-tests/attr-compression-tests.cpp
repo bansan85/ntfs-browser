@@ -315,9 +315,9 @@ void CheckSparseCompressionUnitReadsBackZeroed()
   REQUIRE(data->size() == NtfsBrowserTests::kCompressionUnitSize);
 
   size_t nonZero = 0;
-  for (const BYTE b : *data)
+  for (const BYTE byte_value : *data)
   {
-    if (b != 0)
+    if (byte_value != 0)
     {
       nonZero++;
     }
@@ -747,10 +747,10 @@ void CheckCompressedIndexAllocationTraverses()
 
   std::vector<std::wstring> names;
   root.record->TraverseSubEntries(
-      [](const IndexEntry& ie, void* context)
+      [](const IndexEntry& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
-            ie.GetFilename());
+            index_entry.GetFilename());
       },
       &names);
 
@@ -833,11 +833,11 @@ void CheckSurrogatePairNamesTraverse()
 
   std::vector<SeenEntry> seen;
   root.record->TraverseSubEntries(
-      [](const IndexEntry& ie, void* context)
+      [](const IndexEntry& index_entry, void* context)
       {
         static_cast<std::vector<SeenEntry>*>(context)->push_back(
-            {std::wstring(ie.GetFilename()), ie.GetFileReference(),
-             ie.IsDirectory()});
+            {std::wstring(index_entry.GetFilename()),
+             index_entry.GetFileReference(), index_entry.IsDirectory()});
       },
       &seen);
 

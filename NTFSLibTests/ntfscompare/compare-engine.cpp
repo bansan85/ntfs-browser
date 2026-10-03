@@ -17,18 +17,20 @@ namespace
 // First code point past ASCII: Narrow() keeps only below it.
 constexpr wchar_t kAsciiLimit = 128;
 
-std::string FormatValue(ULONGLONG v) { return std::to_string(v); }
-std::string FormatValue(bool v) { return v ? "true" : "false"; }
+std::string FormatValue(ULONGLONG value) { return std::to_string(value); }
+std::string FormatValue(bool value) { return value ? "true" : "false"; }
 
 // ASCII-safe narrowing for a report line. Names round-trip correctly through
 // the wide Listing key every method shares; this is display only.
-std::string Narrow(const std::wstring& w)
+std::string Narrow(const std::wstring& wide)
 {
   std::string out;
-  out.reserve(w.size());
-  for (wchar_t const c : w)
+  out.reserve(wide.size());
+  for (wchar_t const character : wide)
   {
-    out.push_back((c > 0 && c < kAsciiLimit) ? static_cast<char>(c) : '?');
+    out.push_back((character > 0 && character < kAsciiLimit)
+                      ? static_cast<char>(character)
+                      : '?');
   }
   return out;
 }
@@ -59,18 +61,18 @@ std::optional<T> ReconcileField(const std::vector<const Entry*>& sources,
 {
   std::optional<T> found;
   bool disagree = false;
-  for (const Entry* s : sources)
+  for (const Entry* source : sources)
   {
-    const std::optional<T>& v = s->*member;
-    if (!v)
+    const std::optional<T>& value = source->*member;
+    if (!value)
     {
       continue;
     }
     if (!found)
     {
-      found = v;
+      found = value;
     }
-    else if (*v != *found)
+    else if (*value != *found)
     {
       disagree = true;
     }
@@ -102,9 +104,9 @@ Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
                                        {"mft-tree", &mftTree}}};
 
   std::set<std::wstring> allPaths;
-  for (const Source& s : sources)
+  for (const Source& source : sources)
   {
-    for (const auto& [path, entry] : *s.listing)
+    for (const auto& [path, entry] : *source.listing)
     {
       allPaths.insert(path);
     }
@@ -115,18 +117,18 @@ Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
   for (const std::wstring& path : allPaths)
   {
     std::vector<const Entry*> present;
-    for (const Source& s : sources)
+    for (const Source& source : sources)
     {
-      const auto it = s.listing->find(path);
-      if (it == s.listing->end())
+      const auto iterator = source.listing->find(path);
+      if (iterator == source.listing->end())
       {
-        report.findings.push_back({"LIB-MISSING", s.name, path, "", "",
+        report.findings.push_back({"LIB-MISSING", source.name, path, "", "",
                                    "present in the other library methods"});
         stats.missing++;
       }
       else
       {
-        present.push_back(&it->second);
+        present.push_back(&iterator->second);
       }
     }
 
@@ -138,9 +140,9 @@ Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
 
     Entry ref;
     ref.is_directory = present.front()->is_directory;
-    for (const Entry* e : present)
+    for (const Entry* entry : present)
     {
-      if (e->is_directory != ref.is_directory)
+      if (entry->is_directory != ref.is_directory)
       {
         report.findings.push_back({"LIB-MISMATCH",
                                    "library (full-cache/no-cache/mft-tree)",
@@ -173,15 +175,15 @@ void CompareAgainstReference(const std::string& methodName,
 
   for (const auto& [path, refEntry] : reference)
   {
-    const auto it = candidate.find(path);
-    if (it == candidate.end())
+    const auto iterator = candidate.find(path);
+    if (iterator == candidate.end())
     {
       report.findings.push_back({"MISSING", methodName, path, "", "", ""});
       stats.missing++;
       continue;
     }
     stats.compared_entries++;
-    const Entry& cand = it->second;
+    const Entry& cand = iterator->second;
 
     if (cand.is_directory != refEntry.is_directory)
     {
@@ -220,33 +222,35 @@ void CompareAgainstReference(const std::string& methodName,
 
 bool PrintReport(const Report& report)
 {
-  for (const Finding& f : report.findings)
+  for (const Finding& finding : report.findings)
   {
-    if (f.field.empty())
+    if (finding.field.empty())
     {
-      std::printf("[%s] %s: \"%s\"", f.kind.c_str(), f.method.c_str(),
-                  Narrow(f.path).c_str());
-      if (!f.actual.empty())
+      std::printf("[%s] %s: \"%s\"", finding.kind.c_str(),
+                  finding.method.c_str(), Narrow(finding.path).c_str());
+      if (!finding.actual.empty())
       {
-        std::printf(" (%s)", f.actual.c_str());
+        std::printf(" (%s)", finding.actual.c_str());
       }
       std::printf("\n");
     }
     else
     {
-      std::printf("[%s] %s: \"%s\" %s: expected=%s actual=%s\n", f.kind.c_str(),
-                  f.method.c_str(), Narrow(f.path).c_str(), f.field.c_str(),
-                  f.expected.c_str(), f.actual.c_str());
+      std::printf("[%s] %s: \"%s\" %s: expected=%s actual=%s\n",
+                  finding.kind.c_str(), finding.method.c_str(),
+                  Narrow(finding.path).c_str(), finding.field.c_str(),
+                  finding.expected.c_str(), finding.actual.c_str());
     }
   }
 
   std::printf("\n");
-  for (const MethodStats& s : report.stats)
+  for (const MethodStats& method_stats : report.stats)
   {
     std::printf(
         "%-12s compared=%zu missing=%zu extra=%zu mismatched_fields=%zu\n",
-        s.name.c_str(), s.compared_entries, s.missing, s.extra,
-        s.mismatched_fields);
+        method_stats.name.c_str(), method_stats.compared_entries,
+        method_stats.missing, method_stats.extra,
+        method_stats.mismatched_fields);
   }
 
   return !report.findings.empty();

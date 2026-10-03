@@ -77,7 +77,7 @@ class FileRecord<S>::Impl
 
   void ClearAttrs() noexcept;
   [[nodiscard]] const AttrHeaderCommon&
-      AlignedAttrHeader(std::span<const BYTE> at);
+      AlignedAttrHeader(std::span<const BYTE> bytes);
   void MergeAttributeContinuations();
   [[nodiscard]] bool AttachEfsContext();
   [[nodiscard]] std::vector<Efs::WrappedFek> ReadEfsEntries() const;

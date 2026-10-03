@@ -37,7 +37,8 @@ template <Strategy S>
 class AttrNonResident : public AttrBase<S>
 {
  public:
-  AttrNonResident(const AttrHeaderCommon& ahc, const FileRecord<S>& fr);
+  AttrNonResident(const AttrHeaderCommon& ahc,
+                  const FileRecord<S>& file_record);
   AttrNonResident(AttrNonResident&& other) noexcept = delete;
   AttrNonResident(AttrNonResident const& other) = delete;
   AttrNonResident& operator=(AttrNonResident&& other) noexcept = delete;
