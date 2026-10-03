@@ -26,7 +26,6 @@ class AttrResident : public AttrBase<S>
   AttrResident& operator=(AttrResident const& other) = delete;
   ~AttrResident() override = default;
 
- public:
   [[nodiscard]] ULONGLONG GetAllocatedSize() const noexcept override;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
