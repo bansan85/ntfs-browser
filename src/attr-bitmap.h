@@ -30,7 +30,7 @@ class AttrBitmap : public TYPE_RESIDENT
  private:
   ULONGLONG bitmap_size_;         // Bitmap data size
   std::vector<BYTE> bitmap_buf_;  // Bitmap data buffer
-  std::optional<ULONGLONG> current_cluster_{};
+  std::optional<ULONGLONG> current_cluster_;
 
  public:
   // Verify if a single cluster is free

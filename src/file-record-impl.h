@@ -46,7 +46,7 @@ class FileRecord<S>::Impl
   FileRecord<S>* self_;
   const NtfsVolume<S>& volume_;
   std::unique_ptr<FileRecordHeaderImpl<S>> file_record_;
-  std::optional<ULONGLONG> file_reference_{};
+  std::optional<ULONGLONG> file_reference_;
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
   Mask attr_mask_{Mask::ALL};
 
@@ -54,11 +54,11 @@ class FileRecord<S>::Impl
   // one keeps a reference into its bytes, so they MUST outlive attr_list_:
   // declared first, destroyed last, and cleared after the attributes.
   // Unlike std::vector, appending never moves existing elements' addresses.
-  std::list<FileRecord<S>> extension_records_{};
+  std::list<FileRecord<S>> extension_records_;
   // Aligned copies of the attributes that sit at a misaligned address in
   // record_buffer_. A parsed attribute keeps a reference into its copy, so
   // these MUST outlive attr_list_: declared before it, cleared after it.
-  std::vector<std::unique_ptr<BYTE[]>> realigned_attrs_{};
+  std::vector<std::unique_ptr<BYTE[]>> realigned_attrs_;
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
   // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.

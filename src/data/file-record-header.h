@@ -72,7 +72,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
   };
 
   WORD us_number{0};
-  std::vector<WORD> us_array{};
+  std::vector<WORD> us_array;
   // Actual buffer size this instance was constructed with.
   size_t buffer_size_;
 
