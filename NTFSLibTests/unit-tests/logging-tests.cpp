@@ -98,8 +98,8 @@ class TempFile
   [[nodiscard]] std::string Read() const
   {
     std::ifstream in(path_, std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(in)),
-                       std::istreambuf_iterator<char>());
+    return {(std::istreambuf_iterator<char>(in)),
+            std::istreambuf_iterator<char>()};
   }
 
  private:
