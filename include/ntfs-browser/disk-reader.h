@@ -14,6 +14,11 @@ namespace NtfsBrowser
 class IDiskReader
 {
  public:
+  IDiskReader() = default;
+  IDiskReader(const IDiskReader&) = delete;
+  IDiskReader& operator=(const IDiskReader&) = delete;
+  IDiskReader(IDiskReader&&) = delete;
+  IDiskReader& operator=(IDiskReader&&) = delete;
   virtual ~IDiskReader() = default;
 
   // Opens the backing store at path.

@@ -111,12 +111,6 @@ const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
       &GetData()->raw[offset_of_attr]);
 }
 
-template <Strategy S>
-FileRecordHeaderImpl<S> FileRecordHeader::Factory(std::span<const BYTE> buffer)
-{
-  return FileRecordHeaderImpl<S>{buffer};
-}
-
 FileRecordHeaderImpl<Strategy::NO_CACHE>::FileRecordHeaderImpl(
     std::span<const BYTE> buffer)
     : FileRecordHeader(buffer), data_(buffer)
@@ -141,15 +135,5 @@ const FileRecordHeader::Data*
 {
   return &data_;
 }
-
-// Class-level NTFS_BROWSER_EXPORT_TESTS_ONLY (on FileRecordHeader) does not
-// reach a member function template's own explicit instantiations: each needs
-// the macro again here, or the unit tests cannot link against it on a shared
-// build.
-template NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeaderImpl<Strategy::NO_CACHE>
-    FileRecordHeader::Factory(std::span<const BYTE> buffer);
-template NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::FULL_CACHE>
-    FileRecordHeader::Factory(std::span<const BYTE> buffer);
 
 }  // namespace NtfsBrowser

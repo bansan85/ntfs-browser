@@ -36,6 +36,7 @@ using NtfsBrowser::AttrHeaderCommon;
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::FileRecordHeader;
+using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::kFileRecordMagic;
 using NtfsBrowser::NtfsVolume;
@@ -234,8 +235,7 @@ TEMPLATE_TEST_CASE_SIG(
   Put(storage, kOddOffsetOfUs + sizeof(WORD), kFirstBlockWord);
   Put(storage, kOddOffsetOfUs + (2 * sizeof(WORD)), kSecondBlockWord);
 
-  const auto record =
-      FileRecordHeader::Factory<S>(std::span<const BYTE>(storage));
+  const auto record = FileRecordHeaderImpl<S>(std::span<const BYTE>(storage));
 
   CHECK(record.us_number == kUsn);
   REQUIRE(record.us_array.size() == 2);

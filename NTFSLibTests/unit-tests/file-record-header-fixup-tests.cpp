@@ -15,6 +15,7 @@
 #include "file-record-header-edit.h"
 
 using NtfsBrowser::FileRecordHeader;
+using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::kFileRecordMagic;
 using NtfsBrowser::Strategy;
 
@@ -74,7 +75,7 @@ TEMPLATE_TEST_CASE_SIG(
   bool leakedSentinel = false;
   try
   {
-    const auto fr = FileRecordHeader::Factory<S>(buffer);
+    const auto fr = FileRecordHeaderImpl<S>(buffer);
 
     leakedSentinel = fr.us_array.size() == kArrayWords && [&]
     {
@@ -136,7 +137,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   const std::span<const BYTE> buffer(storage.data(), storage.size());
-  auto fr = FileRecordHeader::Factory<S>(buffer);
+  auto fr = FileRecordHeaderImpl<S>(buffer);
 
   REQUIRE(fr.PatchUS());
 

@@ -19,6 +19,7 @@
 #include "file-record-header-edit.h"
 
 using NtfsBrowser::FileRecordHeader;
+using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::kFileRecordMagic;
 using NtfsBrowser::kUpdateSequenceStride;
 using NtfsBrowser::Strategy;
@@ -63,7 +64,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   // FULL_CACHE's ctor memcpy()s the whole buffer into a fixed-size Data
   // member; a too-small member here would overflow it.
-  const auto fr = FileRecordHeader::Factory<S>(buffer);
+  const auto fr = FileRecordHeaderImpl<S>(buffer);
   CHECK(fr.GetData()->magic == kFileRecordMagic);
 }
 
@@ -79,7 +80,7 @@ TEMPLATE_TEST_CASE_SIG(
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
   CHECK_THROWS_MATCHES(
-      (FileRecordHeader::Factory<S>(buffer)), std::runtime_error,
+      (FileRecordHeaderImpl<S>(buffer)), std::runtime_error,
       Catch::Matchers::MessageMatches(
           Catch::Matchers::ContainsSubstring("exceeds the maximum")));
 }
@@ -98,7 +99,7 @@ TEMPLATE_TEST_CASE_SIG(
       MakeWellFormedBuffer(kDeclaredBufferSize, kOffsetPastOwnSize);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
-  auto fr = FileRecordHeader::Factory<S>(buffer);
+  auto fr = FileRecordHeaderImpl<S>(buffer);
 
   // A larger offset_of_attr would build a pointer past the real,
   // 2048-byte allocation backing NO_CACHE's span.

@@ -77,14 +77,15 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
   size_t buffer_size_;
 
   explicit FileRecordHeader(std::span<const BYTE> buffer);
+  FileRecordHeader(const FileRecordHeader&) = delete;
+  FileRecordHeader& operator=(const FileRecordHeader&) = delete;
+  FileRecordHeader(FileRecordHeader&&) = delete;
+  FileRecordHeader& operator=(FileRecordHeader&&) = delete;
   virtual ~FileRecordHeader() = default;
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
   // Returns nullptr if offset_of_attr doesn't fit in the record buffer.
   const AttrHeaderCommon* HeaderCommon() noexcept;
-
-  template <Strategy S>
-  static FileRecordHeaderImpl<S> Factory(std::span<const BYTE> buffer);
 
   virtual const FileRecordHeader::Data* GetData() const = 0;
 };
@@ -101,7 +102,11 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
   std::span<const BYTE> data_;
 
   explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
-  virtual ~FileRecordHeaderImpl() = default;
+  FileRecordHeaderImpl(const FileRecordHeaderImpl&) = delete;
+  FileRecordHeaderImpl& operator=(const FileRecordHeaderImpl&) = delete;
+  FileRecordHeaderImpl(FileRecordHeaderImpl&&) = delete;
+  FileRecordHeaderImpl& operator=(FileRecordHeaderImpl&&) = delete;
+  ~FileRecordHeaderImpl() override = default;
 
   const FileRecordHeader::Data* GetData() const override;
 };
@@ -113,7 +118,11 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
   FileRecordHeader::Data data_;
 
   explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
-  virtual ~FileRecordHeaderImpl() = default;
+  FileRecordHeaderImpl(const FileRecordHeaderImpl&) = delete;
+  FileRecordHeaderImpl& operator=(const FileRecordHeaderImpl&) = delete;
+  FileRecordHeaderImpl(FileRecordHeaderImpl&&) = delete;
+  FileRecordHeaderImpl& operator=(FileRecordHeaderImpl&&) = delete;
+  ~FileRecordHeaderImpl() override = default;
 
   const FileRecordHeader::Data* GetData() const override;
 };

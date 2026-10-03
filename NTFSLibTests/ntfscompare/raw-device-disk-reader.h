@@ -21,6 +21,8 @@ class RawDeviceDiskReader : public NtfsBrowser::IDiskReader
   RawDeviceDiskReader() = default;
   RawDeviceDiskReader(const RawDeviceDiskReader&) = delete;
   RawDeviceDiskReader& operator=(const RawDeviceDiskReader&) = delete;
+  RawDeviceDiskReader(RawDeviceDiskReader&&) = delete;
+  RawDeviceDiskReader& operator=(RawDeviceDiskReader&&) = delete;
   ~RawDeviceDiskReader() override;
 
   bool Open(std::wstring_view path) override;

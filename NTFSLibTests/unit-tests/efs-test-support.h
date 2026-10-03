@@ -83,7 +83,7 @@ class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
 };
 
 // Puts the cipher backend back when a test that changes it ends.
-class BackendGuard
+class BackendGuard final
 {
  public:
   BackendGuard() noexcept : previous_(NtfsBrowser::Efs::GetCipherBackend()) {}

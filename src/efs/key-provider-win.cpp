@@ -31,7 +31,7 @@ using CertPtr =
 
 // Owns a certificate's private key handle, CNG or CryptoAPI, and frees it
 // when the certificate did not keep it.
-class PrivateKey
+class PrivateKey final
 {
  public:
   PrivateKey(const PrivateKey& other) = delete;

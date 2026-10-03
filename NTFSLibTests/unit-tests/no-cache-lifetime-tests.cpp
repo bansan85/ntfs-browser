@@ -27,13 +27,15 @@ using NtfsBrowser::Enum::MftIdx;
 namespace
 {
 
-struct TempImage
+struct TempImage final
 {
   std::filesystem::path path = NtfsBrowserTests::WriteFakeNtfsImage();
   TempImage() = default;
   ~TempImage() { std::filesystem::remove(path); }
   TempImage(const TempImage&) = delete;
   TempImage& operator=(const TempImage&) = delete;
+  TempImage(TempImage&&) = delete;
+  TempImage& operator=(TempImage&&) = delete;
 };
 
 // Opens path through a PartitionDiskReader (offset 0), so this exercises a

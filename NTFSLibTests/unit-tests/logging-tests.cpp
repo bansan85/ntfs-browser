@@ -57,7 +57,7 @@ constexpr std::string_view kErrorLine = "Cluster Size can't be null";
 
 // Puts the trace-level capturing sink back once a test has replaced the
 // library logger's sinks with a configuration of its own.
-class RestoreCaptureSink
+class RestoreCaptureSink final
 {
  public:
   RestoreCaptureSink() = default;
@@ -70,7 +70,7 @@ class RestoreCaptureSink
 
 // A path in the temp directory that no other test uses, removed again by
 // the destructor.
-class TempFile
+class TempFile final
 {
  public:
   explicit TempFile(std::wstring_view tag)

@@ -39,16 +39,11 @@ using KeyProviderSource = std::function<std::shared_ptr<IEfsKeyProvider>()>;
 // streams: its $EFS entries, and the key resolved from them once. A failed
 // resolution is remembered too, so a file nobody holds a key for is not
 // retried on every read.
-class Context
+class Context final
 {
  public:
   // "entries" is empty when the record has no usable $EFS stream.
   Context(std::vector<WrappedFek> entries, KeyProviderSource providerSource);
-  Context(Context&& other) noexcept = delete;
-  Context(Context const& other) = delete;
-  Context& operator=(Context&& other) noexcept = delete;
-  Context& operator=(Context const& other) = delete;
-  ~Context() = default;
 
   template <Strategy S>
   friend class NtfsBrowser::AttrNonResident;

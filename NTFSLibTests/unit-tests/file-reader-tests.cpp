@@ -71,7 +71,7 @@ std::filesystem::path WriteTempFile(std::span<const BYTE> content)
   return path;
 }
 
-struct TempFile
+struct TempFile final
 {
   std::filesystem::path path;
 
@@ -81,6 +81,8 @@ struct TempFile
   }
   TempFile(const TempFile&) = delete;
   TempFile& operator=(const TempFile&) = delete;
+  TempFile(TempFile&&) = delete;
+  TempFile& operator=(TempFile&&) = delete;
   ~TempFile() { std::filesystem::remove(path); }
 };
 

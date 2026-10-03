@@ -363,8 +363,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
 
     try
     {
-      auto const header = FileRecordHeader::Factory<S>(record_buffer_);
-      return std::make_unique<FileRecordHeaderImpl<S>>(std::move(header));
+      return std::make_unique<FileRecordHeaderImpl<S>>(record_buffer_);
     }
     catch (const std::exception& e)
     {
@@ -387,13 +386,12 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
 
   try
   {
-    auto const header = FileRecordHeader::Factory<S>(record_buffer_);
-    return std::make_unique<FileRecordHeaderImpl<S>>(std::move(header));
+    return std::make_unique<FileRecordHeaderImpl<S>>(record_buffer_);
   }
   catch (const std::exception& e)
   {
-    // Reachable through the same FileRecordHeader::Factory<S>() call as
-    // the direct-allocation path above.
+    // Reachable through the same constructor call as the direct-allocation
+    // path above.
     LogException(e);
     return {};
   }
