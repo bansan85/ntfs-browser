@@ -16,7 +16,7 @@ namespace NtfsBrowserTests
 // them is undefined behaviour. This edits the header through a full-size
 // copy and writes only the named header fields back.
 template <typename Edit>
-void EditFileRecordHeader(std::span<BYTE> buffer, Edit&& edit)
+void EditFileRecordHeader(std::span<BYTE> buffer, const Edit& edit)
 {
   assert(buffer.size() >= NtfsBrowser::kMinFileRecordHeaderSize);
   NtfsBrowser::FileRecordHeader::Data header{};
