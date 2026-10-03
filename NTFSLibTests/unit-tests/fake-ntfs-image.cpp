@@ -209,7 +209,7 @@ void SetRecordLink(FakeRecord& record, WORD sequence, ULONGLONG baseRef)
 // Writes the AttrType::ALL end-of-attributes marker at offset.
 void WriteEndOfAttributesMarker(FakeRecord& record, DWORD offset)
 {
-  const DWORD marker = static_cast<DWORD>(AttrType::ALL);
+  const auto marker = static_cast<DWORD>(AttrType::ALL);
   std::memcpy(&record.at(offset), &marker, sizeof(marker));
 }
 

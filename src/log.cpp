@@ -131,7 +131,7 @@ struct LoggerHolder
 LoggerHolder& Holder()
 {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-  static LoggerHolder* const holder = new LoggerHolder();
+  static auto* const holder = new LoggerHolder();
   return *holder;
 }
 
@@ -292,7 +292,7 @@ bool ParseOptionImpl(std::basic_string_view<CharT> arg, Config& config) noexcept
     return false;
   }
 
-  constexpr CharT kSeparator = static_cast<CharT>(':');
+  constexpr auto kSeparator = static_cast<CharT>(':');
 
   const std::basic_string_view<CharT> value = arg.substr(kOptionPrefix.size());
   const size_t targetEnd = value.find(kSeparator);

@@ -135,7 +135,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   std::shared_ptr<BYTE[]> const ib_sh_ptr =
       ibClass.AllocIndexBlock(this->GetIndexBlockSize());
   const std::span<BYTE> block(ib_sh_ptr.get(), this->GetIndexBlockSize());
-  Data::IndexBlock* ibBuf = reinterpret_cast<Data::IndexBlock*>(block.data());
+  auto* ibBuf = reinterpret_cast<Data::IndexBlock*>(block.data());
 
   // Read one Index Block
   std::optional<ULONGLONG> len = this->ReadData(byte_offset, block);
@@ -150,7 +150,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     return false;
   }
 
-  const DWORD sectors = gsl::narrow<DWORD>(
+  const auto sectors = gsl::narrow<DWORD>(
       UpdateSequenceBlockCount(this->GetIndexBlockSize(), ibBuf->size_of_us));
   if (!IndexBlockUsOffsetInBounds(ibBuf->offset_of_us, sectors,
                                   this->GetIndexBlockSize()))

@@ -188,7 +188,7 @@ typename std::enable_if_t<
 
     const auto offsetInBlock =
         gsl::narrow<DWORD>(cur.QuadPart % READ_BUFFER_SIZE);
-    const DWORD chunk = gsl::narrow<DWORD>(
+    const auto chunk = gsl::narrow<DWORD>(
         std::min<LONGLONG>(READ_BUFFER_SIZE - offsetInBlock, remaining));
 
     const std::span<const BYTE> blockBytes{block, kBlockBytes};

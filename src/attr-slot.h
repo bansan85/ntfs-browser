@@ -36,7 +36,7 @@ inline constexpr DWORD kAttrTypeLowNibbleMask = 0xFU;
 // before passing a value read from disk to ATTR_INDEX or ATTR_MASK.
 [[nodiscard]] constexpr bool IsValidAttrType(AttrType at) noexcept
 {
-  const DWORD raw = static_cast<DWORD>(at);
+  const auto raw = static_cast<DWORD>(at);
   return raw != 0 && (raw & kAttrTypeLowNibbleMask) == 0 &&
          raw <= static_cast<DWORD>(AttrType::LOGGED_UTILITY_STREAM);
 }

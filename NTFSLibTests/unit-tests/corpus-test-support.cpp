@@ -64,7 +64,7 @@ std::tuple<WORD, WORD, WORD> FileTimeToDate(const FILETIME& ft) noexcept
   // can represent. See http://howardhinnant.github.io/date_algorithms.html.
   const long long zAdj = z + 719468;
   const long long era = (zAdj >= 0 ? zAdj : zAdj - 146096) / 146097;
-  const unsigned doe = static_cast<unsigned>(zAdj - era * 146097);
+  const auto doe = static_cast<unsigned>(zAdj - era * 146097);
   const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
   const long long y = static_cast<long long>(yoe) + era * 400;
   const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);

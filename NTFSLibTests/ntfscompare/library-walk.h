@@ -48,7 +48,7 @@ template <NtfsBrowser::Strategy S>
     return std::nullopt;
   }
 
-  ULONGLONG record = static_cast<ULONGLONG>(Enum::MftIdx::ROOT);
+  auto record = static_cast<ULONGLONG>(Enum::MftIdx::ROOT);
   size_t pos = 0;
   while (pos < relativePath.size())
   {
