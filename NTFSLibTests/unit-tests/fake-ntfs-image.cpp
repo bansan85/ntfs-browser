@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <random>
@@ -2782,8 +2783,8 @@ FakeRecord MakeMftTreeRecord(NtfsBrowser::Flag::FileRecord flags, WORD sequence,
 std::vector<BYTE> BuildFakeNtfsImage()
 {
   NtfsBrowser::Data::NtfsBpb bpb{};
-  std::memcpy(bpb.signature, NtfsBrowser::Data::kNtfsSignature.data(),
-              sizeof(bpb.signature));
+  std::memcpy(std::data(bpb.signature),
+              NtfsBrowser::Data::kNtfsSignature.data(), sizeof(bpb.signature));
   bpb.bytes_per_sector = kBytesPerSector;
   bpb.sectors_per_cluster = kSectorsPerCluster;
   bpb.lcn_mft = kMftLcn;

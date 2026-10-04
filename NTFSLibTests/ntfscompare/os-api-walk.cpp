@@ -4,6 +4,7 @@
 
 #include <array>
 #include <ctime>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -214,7 +215,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
     for (struct dirent* de = readdir(handle); de != nullptr;
          de = readdir(handle))
     {
-      const std::string_view name = de->d_name;
+      const std::string_view name = std::data(de->d_name);
       if (name == "." || name == "..")
       {
         continue;
@@ -275,7 +276,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
         entry.encrypted = (ntfsAttrib & kAttrEncrypted) != 0;
       }
 
-      const std::wstring wname = Utf8ToWide(de->d_name);
+      const std::wstring wname = Utf8ToWide(std::data(de->d_name));
       const std::wstring path =
           frame.prefix.empty() ? wname : frame.prefix + L"/" + wname;
       result.emplace(path, entry);
