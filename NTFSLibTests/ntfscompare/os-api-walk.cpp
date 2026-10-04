@@ -169,7 +169,7 @@ bool ReadNtfsAttribXattr(const std::filesystem::path& path, DWORD& value)
   std::array<unsigned char, 4> buf{};
   const ssize_t xattr_size =
       getxattr(path.c_str(), "system.ntfs_attrib", buf.data(), buf.size());
-  if (xattr_size != static_cast<ssize_t>(buf.size()))
+  if (std::cmp_not_equal(xattr_size, buf.size()))
   {
     return false;
   }
