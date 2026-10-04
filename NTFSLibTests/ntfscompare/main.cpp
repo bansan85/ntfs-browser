@@ -86,7 +86,7 @@ void Usage(const ArgChar* program)
       "NtfsVolume<NO_CACHE> and MftTree.\n"));
 }
 
-int Run(int argc, ArgChar* argv[])
+int Run(int argc, ArgChar** argv)
 {
   Log::Config logConfig;
   const std::span<ArgChar*> args(argv, gsl::narrow<size_t>(argc));

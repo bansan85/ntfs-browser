@@ -197,7 +197,7 @@ void Usage(const ArgChar* program)
 
 // Runs one AFL testcase file (the non-option argument) through the library
 // once.
-int Run(int argc, ArgChar* argv[])
+int Run(int argc, ArgChar** argv)
 {
   // Trace on the console by default, so an afl-fuzz run and the saved
   // regression corpus both keep producing every message without a flag.
