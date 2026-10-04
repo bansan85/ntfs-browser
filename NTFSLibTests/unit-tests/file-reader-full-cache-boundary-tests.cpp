@@ -18,6 +18,7 @@
 
 #include "file-reader.h"
 #include "memory-disk-reader.h"
+#include "optional-access.h"
 
 using NtfsBrowser::FileReader;
 using NtfsBrowser::Strategy;
@@ -137,10 +138,13 @@ TEST_CASE(
 
     const auto actual = full.Read(addrFull, range.length);
     REQUIRE(actual.has_value());
-    REQUIRE(actual.value().size() == expected.value().size());
-    CHECK(std::equal(actual.value().begin(), actual.value().end(),
-                     expected.value().begin()));
-    CHECK(std::equal(actual.value().begin(), actual.value().end(),
+    REQUIRE(NtfsBrowserTests::Unwrap(actual).size() ==
+            NtfsBrowserTests::Unwrap(expected).size());
+    CHECK(std::equal(NtfsBrowserTests::Unwrap(actual).begin(),
+                     NtfsBrowserTests::Unwrap(actual).end(),
+                     NtfsBrowserTests::Unwrap(expected).begin()));
+    CHECK(std::equal(NtfsBrowserTests::Unwrap(actual).begin(),
+                     NtfsBrowserTests::Unwrap(actual).end(),
                      backing.begin() + gsl::narrow<ptrdiff_t>(range.offset)));
   }
 
@@ -148,7 +152,8 @@ TEST_CASE(
   LARGE_INTEGER again{.QuadPart = static_cast<LONGLONG>(kBlock + kInnerOffset)};
   const auto second = full.Read(again, kInnerLength);
   REQUIRE(second.has_value());
-  CHECK(std::equal(second.value().begin(), second.value().end(),
+  CHECK(std::equal(NtfsBrowserTests::Unwrap(second).begin(),
+                   NtfsBrowserTests::Unwrap(second).end(),
                    backing.begin() +
                        static_cast<ptrdiff_t>(kBlock + kInnerOffset)));
 
@@ -177,8 +182,9 @@ TEST_CASE(
   LARGE_INTEGER addr{.QuadPart = kInnerLength};
   const auto result = full.Read(addr, kInnerLength);
   REQUIRE(result.has_value());
-  REQUIRE(result.value().size() == kInnerLength);
-  CHECK(std::equal(result.value().begin(), result.value().end(),
+  REQUIRE(NtfsBrowserTests::Unwrap(result).size() == kInnerLength);
+  CHECK(std::equal(NtfsBrowserTests::Unwrap(result).begin(),
+                   NtfsBrowserTests::Unwrap(result).end(),
                    backing.begin() + kInnerLength));
 }
 

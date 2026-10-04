@@ -15,6 +15,8 @@
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/strategy.h>
 
+#include "optional-access.h"
+
 namespace NtfsBrowser
 {
 class IDiskReader;
@@ -66,7 +68,7 @@ void OpenSubDir(FileRecord<Strategy::NO_CACHE>& dir, std::string_view name)
 {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
-  ParseDir(dir, entry.value().GetFileReference());
+  ParseDir(dir, NtfsBrowserTests::Unwrap(entry).GetFileReference());
 }
 
 void OpenFile(FileRecord<Strategy::NO_CACHE>& file,
@@ -76,7 +78,8 @@ void OpenFile(FileRecord<Strategy::NO_CACHE>& file,
   REQUIRE(entry.has_value());
 
   file.SetAttrMask(Mask::DATA);
-  REQUIRE(file.ParseFileRecord(entry.value().GetFileReference()));
+  REQUIRE(
+      file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 }
 

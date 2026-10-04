@@ -18,6 +18,7 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "optional-access.h"
 
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
@@ -58,7 +59,8 @@ void CheckReadDataReturnsActualByteCount()
   const std::optional<ULONGLONG> result = dataAttrs[0]->ReadData(0, buffer);
 
   REQUIRE(result.has_value());
-  CHECK(result.value() == NtfsBrowserTests::kSmallResidentDataContent.size());
+  CHECK(NtfsBrowserTests::Unwrap(result) ==
+        NtfsBrowserTests::kSmallResidentDataContent.size());
 
   CHECK(std::memcmp(buffer.data(),
                     NtfsBrowserTests::kSmallResidentDataContent.data(),

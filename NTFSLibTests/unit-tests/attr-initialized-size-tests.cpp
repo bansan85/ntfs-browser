@@ -22,6 +22,7 @@
 #include "catch2/catch_message.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "optional-access.h"
 
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
@@ -100,8 +101,8 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
 
     const std::vector<BYTE> expected =
         ExpectedBytes(range.offset, range.length);
-    REQUIRE(read.value() == expected.size());
-    buffer.resize(gsl::narrow<size_t>(read.value()));
+    REQUIRE(NtfsBrowserTests::Unwrap(read) == expected.size());
+    buffer.resize(gsl::narrow<size_t>(NtfsBrowserTests::Unwrap(read)));
     const bool same = buffer == expected;
     CHECK(same);
   }

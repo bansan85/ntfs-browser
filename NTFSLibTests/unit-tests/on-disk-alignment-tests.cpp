@@ -31,6 +31,7 @@
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
+#include "optional-access.h"
 
 using NtfsBrowser::AttrHeaderCommon;
 using NtfsBrowser::AttrType;
@@ -209,7 +210,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> entry = record.FindSubEntry(L"AA");
   REQUIRE(entry.has_value());
-  CHECK(entry.value().GetFileReference() ==
+  CHECK(NtfsBrowserTests::Unwrap(entry).GetFileReference() ==
         NtfsBrowserTests::kIndexRootVariantAMftRef);
 }
 

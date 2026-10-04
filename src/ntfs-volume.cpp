@@ -312,7 +312,13 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents()
     return;  // $MFT's DATA attribute fits in the base record alone.
   }
   const AttrBase<S>& rawList = *listAttrs.front();
-  const ULONGLONG selfRef = listRecord.GetFileReference().value();
+  const std::optional<ULONGLONG> listRef = listRecord.GetFileReference();
+  if (!listRef.has_value())
+  {
+    LogDebug("$MFT's own $ATTRIBUTE_LIST has no file reference; assuming none");
+    return;
+  }
+  const ULONGLONG selfRef = *listRef;
 
   std::vector<PendingMftExtension> pending =
       CollectPendingMftExtensions(rawList, selfRef);

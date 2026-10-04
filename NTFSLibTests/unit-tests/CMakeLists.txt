@@ -11,6 +11,7 @@ set(
   "sequential-disk-reader.cpp"
   "partition-disk-reader.h"
   "partition-disk-reader.cpp"
+  "optional-access.h"
   "test-log-sink.h"
   "test-log-sink.cpp"
   "md5-test-support.h"

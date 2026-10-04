@@ -148,9 +148,14 @@ void AttrList<TYPE_RESIDENT, S>::ResolveEntry(
 {
   const ULONGLONG record_ref = entry.base_ref.segment_number;
   const Mask attr_mask = AttrMask(entry.attr_type);
+  if (!file_record.impl_->file_reference_)
+  {
+    throw std::runtime_error("Missing file reference\n");
+  }
+  const ULONGLONG selfRef = *file_record.impl_->file_reference_;
   // Skip contained attributes
   // Skip unwanted attributes
-  if (record_ref == *file_record.impl_->file_reference_ ||
+  if (record_ref == selfRef ||
       !static_cast<bool>(attr_mask & file_record.impl_->attr_mask_))
   {
     return;
@@ -181,15 +186,14 @@ void AttrList<TYPE_RESIDENT, S>::ResolveEntry(
   // this file's extension: its attributes belong to someone else.
   const bool genuine = IsGenuineExtensionRecord(
       entry.base_ref.sequence_number, frnew.GetSequenceNumber(),
-      frnew.GetBaseRecordReference(),
-      *file_record.impl_->file_reference_ & kMftRecordNumberMask);
+      frnew.GetBaseRecordReference(), selfRef & kMftRecordNumberMask);
   if (!genuine)
   {
     file_record.impl_->extension_records_.pop_back();
     LogRecoverable(recover,
                    "Attribute List: record {} is not an extension of "
                    "record {} (reused or foreign) - skipping",
-                   record_ref, *file_record.impl_->file_reference_);
+                   record_ref, selfRef);
     if (!recover)
     {
       throw std::runtime_error(

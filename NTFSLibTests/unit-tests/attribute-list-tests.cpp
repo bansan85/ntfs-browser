@@ -29,6 +29,7 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "optional-access.h"
 
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
@@ -60,7 +61,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> found = dir.FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
-  CHECK(found.value().GetFileReference() == 20);
+  CHECK(NtfsBrowserTests::Unwrap(found).GetFileReference() == 20);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -301,7 +302,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> found = dir.FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
-  CHECK(found.value().GetFileReference() == 20);
+  CHECK(NtfsBrowserTests::Unwrap(found).GetFileReference() == 20);
 
   const auto& allocAttrs = dir.getAttr(AttrType::INDEX_ALLOCATION);
   REQUIRE(allocAttrs.size() == 1);

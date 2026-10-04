@@ -15,6 +15,7 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "optional-access.h"
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
@@ -42,9 +43,9 @@ void RunFindSubEntryOutlivesReparseTest()
   std::optional<IndexEntry> savedEntry =
       record.FindSubEntry(NtfsBrowserTests::kIndexRootVariantAName);
   REQUIRE(savedEntry.has_value());
-  CHECK(savedEntry.value().GetFileReference() ==
+  CHECK(NtfsBrowserTests::Unwrap(savedEntry).GetFileReference() ==
         NtfsBrowserTests::kIndexRootVariantAMftRef);
-  CHECK(savedEntry.value().GetFilename() ==
+  CHECK(NtfsBrowserTests::Unwrap(savedEntry).GetFilename() ==
         NtfsBrowserTests::kIndexRootVariantAName);
 
   // Reparse the SAME FileRecord object for variant B's record - same fixed
@@ -55,9 +56,9 @@ void RunFindSubEntryOutlivesReparseTest()
 
   // The entry saved from variant A must be entirely unaffected by parsing a
   // second, different record on the same FileRecord object.
-  CHECK(savedEntry.value().GetFileReference() ==
+  CHECK(NtfsBrowserTests::Unwrap(savedEntry).GetFileReference() ==
         NtfsBrowserTests::kIndexRootVariantAMftRef);
-  CHECK(savedEntry.value().GetFilename() ==
+  CHECK(NtfsBrowserTests::Unwrap(savedEntry).GetFilename() ==
         NtfsBrowserTests::kIndexRootVariantAName);
 }
 

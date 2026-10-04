@@ -18,6 +18,7 @@
 #include "fake-ntfs-image.h"
 #include "gap-collation-probe.h"
 #include "memory-disk-reader.h"
+#include "optional-access.h"
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
@@ -49,7 +50,7 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode()
   const std::optional<IndexEntry> found =
       root.FindSubEntry(NtfsBrowserTests::kGapCollationSearchName);
   REQUIRE(found.has_value());
-  CHECK(found.value().GetFileReference() ==
+  CHECK(NtfsBrowserTests::Unwrap(found).GetFileReference() ==
         NtfsBrowserTests::kGapCollationLeafMftRef);
 }
 
