@@ -1241,16 +1241,16 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
   {
     if constexpr (S == Strategy::NO_CACHE)
     {
-      return reinterpret_cast<
-                 const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
-                 vec.front().get())
+      reinterpret_cast<
+          const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+          vec.front().get())
           ->GetFileTime(writeTm, createTm, accessTm, changeTm);
     }
     else if constexpr (S == Strategy::FULL_CACHE)
     {
-      return reinterpret_cast<const AttrStdInfo<AttrResidentFullCache,
-                                                Strategy::FULL_CACHE>*>(
-                 vec.front().get())
+      reinterpret_cast<
+          const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+          vec.front().get())
           ->GetFileTime(writeTm, createTm, accessTm, changeTm);
     }
     return;
