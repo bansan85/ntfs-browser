@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <optional>
 #include <vector>
 
@@ -14,20 +13,28 @@ namespace Data
 struct IndexEntry;
 }  // namespace Data
 
-class NTFS_BROWSER_EXPORT IndexEntry : public Filename
+// A read-only window on one index entry. It does not own the bytes it reads:
+// they belong to the IndexBlock or AttrIndexRoot it came from, and the view
+// MUST NOT outlive it. A traversal callback receives one. Convert it to an
+// IndexEntry to keep it.
+class NTFS_BROWSER_EXPORT IndexEntryView : public Filename
 {
  public:
-  explicit IndexEntry(std::shared_ptr<std::vector<BYTE>> sh_ptr,
-                      const Data::IndexEntry& index_entry);
-  IndexEntry(IndexEntry&& other) noexcept = default;
-  IndexEntry(IndexEntry const& other) = default;
-  IndexEntry& operator=(IndexEntry&& other) noexcept = delete;
-  IndexEntry& operator=(IndexEntry const& other) = delete;
-  ~IndexEntry() override = default;
+  explicit IndexEntryView(const Data::IndexEntry& index_entry);
+  IndexEntryView(IndexEntryView&& other) noexcept = default;
+  IndexEntryView(IndexEntryView const& other) = default;
+  IndexEntryView& operator=(IndexEntryView&& other) noexcept = delete;
+  IndexEntryView& operator=(IndexEntryView const& other) = delete;
+  ~IndexEntryView() override = default;
+
+  friend class IndexEntry;
 
  private:
-  std::shared_ptr<std::vector<BYTE>> sh_ptr_;
-  const Data::IndexEntry& index_entry_;
+  const Data::IndexEntry* index_entry_;
+
+  // Points the view, and the file name it decoded, at another copy of the
+  // same bytes.
+  void Rebind(const Data::IndexEntry& index_entry);
 
  public:
   [[nodiscard]] ULONGLONG GetFileReference() const noexcept;
@@ -37,6 +44,22 @@ class NTFS_BROWSER_EXPORT IndexEntry : public Filename
   [[nodiscard]] WORD GetSequenceNumber() const noexcept;
   [[nodiscard]] bool IsSubNodePtr() const noexcept;
   [[nodiscard]] ULONGLONG GetSubNodeVCN() const noexcept;
+};  // IndexEntryView
+
+// An index entry that owns its bytes: the entry alone, not the block it was
+// read from. It stays valid after that block, or the FileRecord, is gone.
+class NTFS_BROWSER_EXPORT IndexEntry : public IndexEntryView
+{
+ public:
+  explicit IndexEntry(const IndexEntryView& view);
+  IndexEntry(IndexEntry&& other) noexcept = default;
+  IndexEntry(IndexEntry const& other);
+  IndexEntry& operator=(IndexEntry&& other) noexcept = delete;
+  IndexEntry& operator=(IndexEntry const& other) = delete;
+  ~IndexEntry() override = default;
+
+ private:
+  std::vector<BYTE> bytes_;
 };  // IndexEntry
 
 }  // namespace NtfsBrowser

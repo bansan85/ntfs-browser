@@ -1,11 +1,13 @@
 #pragma once
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstdint>
 #include <vector>
 
 namespace NtfsBrowser
 {
-class IndexEntry;
+class IndexEntryView;
 enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
@@ -17,7 +19,7 @@ struct IndexRoot;
 }  // namespace Attr
 
 template <typename RESIDENT, Strategy S>
-class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntry>
+class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntryView>
 {
  public:
   AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
@@ -32,6 +34,11 @@ class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntry>
 
  private:
   const Attr::IndexRoot* index_root_;
+  // A private copy of the resident data, which the entries are views into.
+  std::vector<BYTE> index_data_;
+  // Aligned copies of the entries that sit at a misaligned address in
+  // index_data_.
+  std::vector<std::vector<BYTE>> realigned_;
 
   [[nodiscard]] bool ParseIndexEntries();
   [[nodiscard]] bool IsFileName() const noexcept;

@@ -132,9 +132,8 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   }
 
   // Allocate buffer for a single Index Block
-  std::shared_ptr<std::vector<BYTE>> const ib_sh_ptr =
+  const std::span<BYTE> block =
       ibClass.AllocIndexBlock(this->GetIndexBlockSize());
-  const std::span<BYTE> block(ib_sh_ptr->data(), this->GetIndexBlockSize());
 
   // Read one Index Block
   std::optional<ULONGLONG> len = this->ReadData(byte_offset, block);
@@ -147,7 +146,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   {
     return false;
   }
-  return ParseIndexEntries(ib_sh_ptr, block, ibClass);
+  return ParseIndexEntries(block, ibClass);
 }
 
 // Checks the block's magic and update sequence array, then writes each
@@ -209,12 +208,11 @@ static bool RejectBlockOnDefect(bool recover, std::string_view defect,
   return true;
 }
 
-// Walks the entries of a block that FixupIndexBlock() accepted. owner keeps the
-// block's buffer alive for the entries.
+// Walks the entries of a block that FixupIndexBlock() accepted. They become
+// views into ibClass, which owns the block's buffer.
 template <Strategy S>
-bool AttrIndexAlloc<S>::ParseIndexEntries(
-    const std::shared_ptr<std::vector<BYTE>>& owner, std::span<BYTE> block,
-    IndexBlock& ibClass)
+bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
+                                          IndexBlock& ibClass)
 {
   const auto* ibBuf = reinterpret_cast<const Data::IndexBlock*>(block.data());
   constexpr size_t kEntryOffsetPos = offsetof(Data::IndexBlock, entry_offset);
@@ -258,16 +256,16 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(
                                   ibClass);
     }
 
-    const AlignedIndexEntry aligned_index_entry =
-        AlignIndexEntry(owner, cur, head.size);
+    const Data::IndexEntry& aligned_index_entry =
+        AlignIndexEntry(ibClass.realigned_, cur, head.size);
     if (const std::optional<std::string_view> defect =
-            ValidateIndexEntry(*aligned_index_entry.entry);
+            ValidateIndexEntry(aligned_index_entry);
         defect && RejectBlockOnDefect(recover, *defect, ibClass))
     {
       return false;
     }
 
-    ibClass.emplace_back(aligned_index_entry.owner, *aligned_index_entry.entry);
+    ibClass.emplace_back(aligned_index_entry);
 
     if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {

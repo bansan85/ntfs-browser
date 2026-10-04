@@ -48,7 +48,7 @@ class AttrBase;
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
-using NtfsBrowser::IndexEntry;
+using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
@@ -724,7 +724,7 @@ TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
 
   std::vector<std::wstring> names;
   opened.record->TraverseSubEntries(
-      [](const IndexEntry& entry, void* context)
+      [](const IndexEntryView& entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             entry.GetFilename());
@@ -758,7 +758,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   std::vector<std::wstring> names;
   opened.record->TraverseSubEntries(
-      [](const IndexEntry& entry, void* context)
+      [](const IndexEntryView& entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             entry.GetFilename());

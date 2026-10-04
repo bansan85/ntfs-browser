@@ -26,23 +26,23 @@ Data::IndexEntry ReadIndexEntryHeader(std::span<const BYTE> bytes) noexcept
   return header;
 }
 
-AlignedIndexEntry
-    AlignIndexEntry(const std::shared_ptr<std::vector<BYTE>>& buffer,
+const Data::IndexEntry&
+    AlignIndexEntry(std::vector<std::vector<BYTE>>& realigned,
                     std::span<const BYTE> bytes, size_t size)
 {
   if (reinterpret_cast<std::uintptr_t>(bytes.data()) %
           alignof(Data::IndexEntry) ==
       0)
   {
-    return {buffer, reinterpret_cast<const Data::IndexEntry*>(bytes.data())};
+    return *reinterpret_cast<const Data::IndexEntry*>(bytes.data());
   }
 
   // The fixed part is read even from an entry whose size is smaller than it.
   const size_t copied = std::max(size, offsetof(Data::IndexEntry, stream));
-  auto const copy = std::make_shared<std::vector<BYTE>>(
-      std::max(copied, sizeof(Data::IndexEntry)));
-  std::memcpy(copy->data(), bytes.data(), copied);
-  return {copy, reinterpret_cast<const Data::IndexEntry*>(copy->data())};
+  auto& copy =
+      realigned.emplace_back(std::max(copied, sizeof(Data::IndexEntry)));
+  std::memcpy(copy.data(), bytes.data(), copied);
+  return *reinterpret_cast<const Data::IndexEntry*>(copy.data());
 }
 
 std::optional<std::string_view>
@@ -85,9 +85,8 @@ std::optional<std::string_view>
   return std::nullopt;
 }
 
-IndexEntry::IndexEntry(std::shared_ptr<std::vector<BYTE>> sh_ptr,
-                       const Data::IndexEntry& index_entry)
-    : sh_ptr_(sh_ptr), index_entry_(index_entry)
+IndexEntryView::IndexEntryView(const Data::IndexEntry& index_entry)
+    : index_entry_(&index_entry)
 {
   LogTrace("Index Entry");
 
@@ -112,33 +111,75 @@ IndexEntry::IndexEntry(std::shared_ptr<std::vector<BYTE>> sh_ptr,
   SetFilename(*reinterpret_cast<const Attr::Filename*>(&index_entry.stream));
 }
 
-ULONGLONG IndexEntry::GetFileReference() const noexcept
+void IndexEntryView::Rebind(const Data::IndexEntry& index_entry)
 {
-  return index_entry_.mft_index;
+  index_entry_ = &index_entry;
+
+  // The copy holds the same bytes, so the constructor above accepted or
+  // rejected the name exactly as it did for the original.
+  if (index_entry.stream_size != 0 && !ValidateIndexEntry(index_entry))
+  {
+    CopyFilename(*this,
+                 *reinterpret_cast<const Attr::Filename*>(&index_entry.stream));
+  }
 }
 
-WORD IndexEntry::GetSequenceNumber() const noexcept
+namespace
 {
-  return static_cast<WORD>(index_entry_.mft_sn);
+
+// Copies the entry's own bytes, whatever block they sit in. The buffer is
+// padded to a whole Data::IndexEntry, since its fixed part is read even from
+// an entry whose size is smaller than that.
+std::vector<BYTE> CopyEntryBytes(const Data::IndexEntry& index_entry)
+{
+  const size_t copied =
+      std::max<size_t>(index_entry.size, offsetof(Data::IndexEntry, stream));
+  std::vector<BYTE> bytes(std::max(copied, sizeof(Data::IndexEntry)));
+  std::memcpy(bytes.data(), &index_entry, copied);
+  return bytes;
 }
 
-bool IndexEntry::IsSubNodePtr() const noexcept
+}  // namespace
+
+IndexEntry::IndexEntry(const IndexEntryView& view)
+    : IndexEntryView(view), bytes_(CopyEntryBytes(*view.index_entry_))
+{
+  Rebind(*reinterpret_cast<const Data::IndexEntry*>(bytes_.data()));
+}
+
+IndexEntry::IndexEntry(IndexEntry const& other)
+    : IndexEntryView(other), bytes_(other.bytes_)
+{
+  Rebind(*reinterpret_cast<const Data::IndexEntry*>(bytes_.data()));
+}
+
+ULONGLONG IndexEntryView::GetFileReference() const noexcept
+{
+  return index_entry_->mft_index;
+}
+
+WORD IndexEntryView::GetSequenceNumber() const noexcept
+{
+  return static_cast<WORD>(index_entry_->mft_sn);
+}
+
+bool IndexEntryView::IsSubNodePtr() const noexcept
 {
   // A recovering parse still keeps a too-small SUBNODE entry (matching the
   // matrix's "kept nameless" disposition), but must never let it be treated
   // as a usable sub-node pointer: GetSubNodeVCN() reads unchecked at size-8.
-  return (index_entry_.flags & Flag::IndexEntry::SUBNODE) ==
+  return (index_entry_->flags & Flag::IndexEntry::SUBNODE) ==
              Flag::IndexEntry::SUBNODE &&
-         index_entry_.size >=
+         index_entry_->size >=
              offsetof(Data::IndexEntry, stream) + sizeof(ULONGLONG);
 }
 
-ULONGLONG IndexEntry::GetSubNodeVCN() const noexcept
+ULONGLONG IndexEntryView::GetSubNodeVCN() const noexcept
 {
   // size - 8 need not be aligned: the size is not checked for it.
   ULONGLONG vcn = 0;
-  const std::span<const BYTE> raw(reinterpret_cast<const BYTE*>(&index_entry_),
-                                  index_entry_.size);
+  const std::span<const BYTE> raw(reinterpret_cast<const BYTE*>(index_entry_),
+                                  index_entry_->size);
   // HasSubNode() guarantees raw.size() >= sizeof(vcn).
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::memcpy(&vcn, &raw[raw.size() - sizeof(vcn)], sizeof(vcn));

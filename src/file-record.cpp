@@ -532,7 +532,7 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
     return {};
   }
 
-  for (const IndexEntry& index_entry : index_block)
+  for (const IndexEntryView& index_entry : index_block)
   {
     if (index_entry.HasName())
     {
@@ -541,10 +541,10 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
           index_entry.Compare(fileName, volume_.impl_->GetUpCaseTable());
       if (comparison == 0)
       {
-        // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
-        // alive after ib is destroyed.
+        // Must be a copy: the view dies with index_block, the IndexEntry
+        // keeps its own bytes.
         LogDebug("VisitIndexBlock() found entry in sub-node");
-        return index_entry;
+        return IndexEntry(index_entry);
       }
       if (comparison < 0)  // fileName is smaller than IndexEntry
       {
@@ -614,7 +614,7 @@ void FileRecord<S>::Impl::TraverseSubNode(
     return;
   }
 
-  for (const IndexEntry& index_entry : index_block)
+  for (const IndexEntryView& index_entry : index_block)
   {
     if (index_entry.IsSubNodePtr())
     {
@@ -1303,7 +1303,7 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
     return;
   }
 
-  const std::vector<IndexEntry>* all_ie;
+  const std::vector<IndexEntryView>* all_ie;
 
   if constexpr (S == Strategy::NO_CACHE)
   {
@@ -1337,7 +1337,7 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
 
   std::unordered_set<ULONGLONG> visitedVcns;
 
-  for (const IndexEntry& index_entry : *all_ie)
+  for (const IndexEntryView& index_entry : *all_ie)
   {
     // Visit subnode first
     if (index_entry.IsSubNodePtr())
@@ -1379,7 +1379,7 @@ ULONGLONG MappedIndexBlocks(ULONGLONG mappedClusters, DWORD clusterSize,
 // filed under this very directory (selfRef, when known). With a volume given,
 // the record it names MUST also still be in use under the same sequence.
 template <Strategy S>
-bool IsOrphanEntryReportable(const IndexEntry& entry,
+bool IsOrphanEntryReportable(const IndexEntryView& entry,
                              std::optional<ULONGLONG> selfRef,
                              WORD selfSequence, bool selfInUse,
                              const NtfsVolume<S>* checkNamedRecordIn)
@@ -1488,7 +1488,7 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
     LogInfo("TraverseSubEntries() recovery: reporting orphaned index block {}",
             vcn);
 
-    for (const IndexEntry& index_entry : index_block)
+    for (const IndexEntryView& index_entry : index_block)
     {
       if (index_entry.HasName() &&
           IsOrphanEntryReportable(index_entry, selfRef, selfSequence, selfInUse,
@@ -1516,7 +1516,7 @@ std::optional<IndexEntry>
   // name's range. Look at every entry instead.
   LogDebug("FindSubEntry() scans every entry: no $UpCase table");
   TraverseSubEntries(
-      [&](const IndexEntry& index_entry, void*)
+      [&](const IndexEntryView& index_entry, void*)
       {
         if (!found &&
             index_entry.Compare(fileName,
@@ -1532,7 +1532,7 @@ std::optional<IndexEntry>
 // The entries of a file-name $INDEX_ROOT, or null for any other kind of index
 // or for a strategy this library does not know.
 template <Strategy S>
-const std::vector<IndexEntry>*
+const std::vector<IndexEntryView>*
     FileRecord<S>::Impl::FileNameIndexRootEntries(const AttrBase<S>& attr)
 {
   if constexpr (S == Strategy::NO_CACHE)
@@ -1569,7 +1569,7 @@ std::optional<IndexEntry>
     return {};
   }
 
-  const std::vector<IndexEntry>* all_ie =
+  const std::vector<IndexEntryView>* all_ie =
       FileNameIndexRootEntries(*vec.front());
   if (all_ie == nullptr)
   {
@@ -1580,7 +1580,7 @@ std::optional<IndexEntry>
   // Loaded before the walk: reading $UpCase reuses the volume's buffers.
   const UpCaseTable& upcase = volume_.impl_->GetUpCaseTable();
 
-  for (const IndexEntry& index_entry : *all_ie)
+  for (const IndexEntryView& index_entry : *all_ie)
   {
     if (index_entry.HasName())
     {
@@ -1588,10 +1588,10 @@ std::optional<IndexEntry>
       const int comparison = index_entry.Compare(fileName, upcase);
       if (comparison == 0)
       {
-        // Must be a copy: ie's shared_ptr<BYTE[]> keeps its backing bytes
-        // alive independently of this FileRecord.
+        // Must be a copy: the view dies with this FileRecord, the IndexEntry
+        // keeps its own bytes.
         LogDebug("FindSubEntry() found entry in Index Root");
-        return index_entry;
+        return IndexEntry(index_entry);
       }
       // Just step forward if fileName is bigger than IndexEntry
       if (comparison > 0)

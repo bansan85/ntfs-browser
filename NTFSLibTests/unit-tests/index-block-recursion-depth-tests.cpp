@@ -20,6 +20,7 @@
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
+using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
@@ -55,7 +56,7 @@ void RunIndexBlockChainDepthIsBounded()
   SECTION("TraverseSubEntries")
   {
     int visited = 0;
-    root.TraverseSubEntries([](const IndexEntry&, void* context)
+    root.TraverseSubEntries([](const IndexEntryView&, void* context)
                             { ++(*static_cast<int*>(context)); }, &visited);
     CHECK(visited == 0);
   }

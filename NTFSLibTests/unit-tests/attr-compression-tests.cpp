@@ -50,6 +50,7 @@
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
+using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
@@ -753,7 +754,7 @@ void CheckCompressedIndexAllocationTraverses()
 
   std::vector<std::wstring> names;
   root.record->TraverseSubEntries(
-      [](const IndexEntry& index_entry, void* context)
+      [](const IndexEntryView& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             index_entry.GetFilename());
@@ -786,7 +787,7 @@ void CheckCorruptCompressedIndexAllocationIsRejected()
   const std::string trace = CaptureTrace(
       [&]
       {
-        root.record->TraverseSubEntries([](const IndexEntry&, void* context)
+        root.record->TraverseSubEntries([](const IndexEntryView&, void* context)
                                         { (*static_cast<size_t*>(context))++; },
                                         &visited);
       });
@@ -839,7 +840,7 @@ void CheckSurrogatePairNamesTraverse()
 
   std::vector<SeenEntry> seen;
   root.record->TraverseSubEntries(
-      [](const IndexEntry& index_entry, void* context)
+      [](const IndexEntryView& index_entry, void* context)
       {
         static_cast<std::vector<SeenEntry>*>(context)->push_back(
             {std::wstring(index_entry.GetFilename()),

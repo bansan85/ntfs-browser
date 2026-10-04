@@ -120,7 +120,7 @@ template <NtfsBrowser::Strategy S>
         .result = &result, .stack = &stack, .prefix = &frame.prefix};
 
     dir.TraverseSubEntries(
-        [](const IndexEntry& index_entry, void* context)
+        [](const IndexEntryView& index_entry, void* context)
         {
           auto const* callback_context = static_cast<CallbackContext*>(context);
 

@@ -154,7 +154,7 @@ void FuzzOnce(unsigned seed)
       continue;
     }
 
-    fr.TraverseSubEntries([](const IndexEntry&, void*) {}, nullptr);
+    fr.TraverseSubEntries([](const IndexEntryView&, void*) {}, nullptr);
   }
 }
 

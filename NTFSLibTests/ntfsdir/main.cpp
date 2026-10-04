@@ -149,7 +149,7 @@ struct Total
   int dirs = 0;
 };
 
-void printfile(const IndexEntry& ie, void* context)
+void printfile(const IndexEntryView& ie, void* context)
 {
   Total& total = *static_cast<Total*>(context);
   // Hide system metafiles

@@ -33,7 +33,7 @@ namespace
 // Reports a defect in an index root's entries. Returns true when the attribute
 // must be rejected whole: the entries parsed so far are then discarded too.
 bool RejectRootOnDefect(bool recover, std::string_view defect,
-                        std::vector<IndexEntry>& entries)
+                        std::vector<IndexEntryView>& entries)
 {
   LogRecoverable(recover, "{}", defect);
   if (recover)
@@ -79,20 +79,21 @@ AttrIndexRoot<RESIDENT, S>::~AttrIndexRoot()
 }
 
 // Parses every index entry, bounding each step against the resident
-// attribute's own size. Every returned IndexEntry keeps its own copy of
-// the backing bytes alive, independent of this object's lifetime.
+// attribute's own size. The entries are views into index_data_, a copy
+// independent of the record's buffer. An IndexEntry made from one owns its
+// bytes, independent of this object's lifetime.
 template <typename RESIDENT, Strategy S>
 bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 {
   const bool recover = this->volume_.GetOptions().recover_errors;
   const ULONGLONG data_size = this->GetDataSize();
-  const auto data_copy = std::make_shared<std::vector<BYTE>>(data_size);
-  std::memcpy(data_copy->data(), this->GetData(), data_size);
+  index_data_.resize(data_size);
+  std::memcpy(index_data_.data(), this->GetData(), data_size);
   LogDebug("Index Root: allocated independent copy of resident data");
 
-  const std::span<const BYTE> data(data_copy->data(), data_size);
+  const std::span<const BYTE> data(index_data_.data(), data_size);
   const auto* const index_root_copy =
-      reinterpret_cast<const Attr::IndexRoot*>(data_copy->data());
+      reinterpret_cast<const Attr::IndexRoot*>(index_data_.data());
   constexpr size_t kEntryOffsetPos = offsetof(Attr::IndexRoot, entry_offset);
 
   if (data.size() < kEntryOffsetPos ||
@@ -134,16 +135,16 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
           *this);
     }
 
-    const AlignedIndexEntry aligned_index_entry =
-        AlignIndexEntry(data_copy, cur, head.size);
+    const Data::IndexEntry& aligned_index_entry =
+        AlignIndexEntry(realigned_, cur, head.size);
     if (const std::optional<std::string_view> defect =
-            ValidateIndexEntry(*aligned_index_entry.entry);
+            ValidateIndexEntry(aligned_index_entry);
         defect && RejectRootOnDefect(recover, *defect, *this))
     {
       return false;
     }
 
-    emplace_back(aligned_index_entry.owner, *aligned_index_entry.entry);
+    emplace_back(aligned_index_entry);
 
     if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
     {

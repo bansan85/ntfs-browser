@@ -141,7 +141,7 @@ struct Total
 
 // TraverseSubEntries callback: prints one directory entry and tallies it
 // into context, a Total*.
-void printfile(const IndexEntry& ie, void* context)
+void printfile(const IndexEntryView& ie, void* context)
 {
   Total& total = *static_cast<Total*>(context);
   if (ie.GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::USER))

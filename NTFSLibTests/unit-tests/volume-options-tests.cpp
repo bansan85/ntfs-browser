@@ -43,7 +43,7 @@ using NtfsBrowser::AttrResidentFullCache;
 using NtfsBrowser::AttrResidentNoCache;
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
-using NtfsBrowser::IndexEntry;
+using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
@@ -175,7 +175,7 @@ void RunOrphanScanCapsDeclaredBlockCount()
   (void)TakeCapturedLog();
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntry& index_entry, void* context)
+      [](const IndexEntryView& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             index_entry.GetFilename());
@@ -212,7 +212,7 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn()
 
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntry& index_entry, void* context)
+      [](const IndexEntryView& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             index_entry.GetFilename());
@@ -344,7 +344,7 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
   {
     std::vector<std::wstring> names;
     root.TraverseSubEntries(
-        [](const IndexEntry& index_entry, void* context)
+        [](const IndexEntryView& index_entry, void* context)
         {
           static_cast<std::vector<std::wstring>*>(context)->emplace_back(
               index_entry.GetFilename());
@@ -394,7 +394,7 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
 // AttrBase<S> to the concrete AttrIndexRoot<RESIDENT, S> - itself a
 // std::vector<IndexEntry> - the way FileRecord<S>'s own code does.
 template <Strategy S>
-const std::vector<IndexEntry>& RootEntries(const AttrBase<S>& attr)
+const std::vector<IndexEntryView>& RootEntries(const AttrBase<S>& attr)
 {
   if constexpr (S == Strategy::NO_CACHE)
   {
@@ -442,7 +442,8 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless()
 
     const auto& rootAttrs = root.getAttr(AttrType::INDEX_ROOT);
     REQUIRE(rootAttrs.size() == 1);
-    const std::vector<IndexEntry>& entries = RootEntries<S>(*rootAttrs.front());
+    const std::vector<IndexEntryView>& entries =
+        RootEntries<S>(*rootAttrs.front());
     REQUIRE(entries.size() == 1);
     // The REQUIRE above checks the size of entries.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

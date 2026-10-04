@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -17,6 +18,7 @@
 #include "flag/filename.h"
 
 using NtfsBrowser::IndexEntry;
+using NtfsBrowser::IndexEntryView;
 
 namespace
 {
@@ -38,10 +40,10 @@ IndexEntry MakeSystemEntry()
   constexpr std::wstring_view kName = L"System";
   constexpr BYTE kNameLen = 6;
 
-  auto const buffer = std::make_shared<std::vector<BYTE>>(kEntryBufferSize);
+  std::vector<BYTE> buffer(kEntryBufferSize);
 
   auto& index_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer->data());
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.data());
   index_entry.mft_index = kEntryRecordNumber;
   index_entry.mft_sn = 1;
 
@@ -64,17 +66,17 @@ IndexEntry MakeSystemEntry()
       reinterpret_cast<BYTE*>(&index_entry.stream) -
       reinterpret_cast<BYTE*>(&index_entry) + index_entry.stream_size);
 
-  return IndexEntry(buffer, index_entry);
+  return IndexEntry(IndexEntryView(index_entry));
 }
 
 // Builds a single raw $I30 index entry with an arbitrary short name (used to
 // probe individual code points' collation order).
 IndexEntry MakeNamedEntry(std::wstring_view name)
 {
-  auto const buffer = std::make_shared<std::vector<BYTE>>(kEntryBufferSize);
+  std::vector<BYTE> buffer(kEntryBufferSize);
 
   auto& index_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer->data());
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.data());
   index_entry.mft_index = kEntryRecordNumber;
   index_entry.mft_sn = 1;
 
@@ -97,7 +99,7 @@ IndexEntry MakeNamedEntry(std::wstring_view name)
       reinterpret_cast<BYTE*>(&index_entry.stream) -
       reinterpret_cast<BYTE*>(&index_entry) + index_entry.stream_size);
 
-  return IndexEntry(buffer, index_entry);
+  return IndexEntry(IndexEntryView(index_entry));
 }
 
 }  // namespace
@@ -122,6 +124,19 @@ TEST_CASE("Compare treats a name as a prefix, not extended by trailing bytes",
 
   CHECK(entry.Compare(L"System32") > 0);
   CHECK(entry.Compare(L"System") == 0);
+}
+
+TEST_CASE("A copied IndexEntry reads its own bytes, not the original's",
+          "[filename][regression]")
+{
+  std::optional<IndexEntry> original = MakeSystemEntry();
+  const IndexEntry copy(*original);
+  original.reset();
+
+  REQUIRE(copy.HasName());
+  CHECK(copy.GetFilename() == L"System");
+  CHECK(copy.GetFileReference() == kEntryRecordNumber);
+  CHECK(copy.IsDirectory());
 }
 
 TEST_CASE("Compare folds non-ASCII case without depending on the C locale",

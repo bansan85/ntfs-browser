@@ -38,6 +38,7 @@ using NtfsBrowser::FileRecord;
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::IndexEntry;
+using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::kFileRecordMagic;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
@@ -124,7 +125,7 @@ size_t CountRootEntries(std::vector<BYTE> image)
   REQUIRE(record.ParseAttrs());
 
   size_t count = 0;
-  record.TraverseSubEntries([](const IndexEntry&, void* context)
+  record.TraverseSubEntries([](const IndexEntryView&, void* context)
                             { ++*static_cast<size_t*>(context); }, &count);
   return count;
 }

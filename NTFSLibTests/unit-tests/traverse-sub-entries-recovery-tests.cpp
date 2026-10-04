@@ -20,7 +20,7 @@
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::FileRecord;
-using NtfsBrowser::IndexEntry;
+using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
@@ -42,7 +42,7 @@ std::vector<std::wstring> CollectNames(const FileRecord<S>& root)
 {
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntry& index_entry, void* context)
+      [](const IndexEntryView& index_entry, void* context)
       {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             index_entry.GetFilename());

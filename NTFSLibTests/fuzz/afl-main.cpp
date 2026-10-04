@@ -140,7 +140,7 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
   // An empty callback is rejected up front, exercising that guard.
   file_record.TraverseAttrs(nullptr, nullptr);
 
-  file_record.TraverseSubEntries([](const IndexEntry&, void*) {}, nullptr);
+  file_record.TraverseSubEntries([](const IndexEntryView&, void*) {}, nullptr);
 
   // FindStream() calls GetAttrName() on every named $DATA attribute it
   // walks, regardless of the name passed in.

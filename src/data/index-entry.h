@@ -40,26 +40,18 @@ struct IndexEntry
 namespace NtfsBrowser
 {
 
-// An index entry seen through a properly aligned pointer. The bytes it points
-// at stay alive as long as `owner` does.
-struct AlignedIndexEntry
-{
-  std::shared_ptr<std::vector<BYTE>> owner;
-  const Data::IndexEntry* entry;
-};
-
 // Copies out the fixed part of the entry at the start of `at`, whatever its
 // alignment. The caller MUST have checked that offsetof(Data::IndexEntry, stream) bytes
 // fit in `at`.
 [[nodiscard]] Data::IndexEntry
     ReadIndexEntryHeader(std::span<const BYTE> bytes) noexcept;
 
-// Returns the entry of `size` bytes at the start of `at`, a range inside
-// `buffer`. An entry that is not aligned for Data::IndexEntry moves to an
-// aligned copy first. The caller MUST have checked that `size` bytes fit in
-// `at`.
-[[nodiscard]] AlignedIndexEntry
-    AlignIndexEntry(const std::shared_ptr<std::vector<BYTE>>& buffer,
+// Returns the entry of `size` bytes at the start of `bytes`. An entry that is
+// not aligned for Data::IndexEntry moves to an aligned copy first, which is
+// appended to `realigned`: that vector MUST outlive the returned reference.
+// The caller MUST have checked that `size` bytes fit in `bytes`.
+[[nodiscard]] const Data::IndexEntry&
+    AlignIndexEntry(std::vector<std::vector<BYTE>>& realigned,
                     std::span<const BYTE> bytes, size_t size);
 
 // Checks ie's on-disk bounds and sub-node size. Returns the defect message

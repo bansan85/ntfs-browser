@@ -20,11 +20,13 @@ namespace NtfsBrowser
 template <Strategy S>
 class NtfsVolume;
 class IndexEntry;
+class IndexEntryView;
 
 // User defined Callback routine to handle Directory traversing
-// Will be called by FileRecord::TraverseSubEntries for each sub entry
+// Will be called by FileRecord::TraverseSubEntries for each sub entry. The
+// view is only valid during the call: build an IndexEntry from it to keep it.
 using SUBENTRY_CALLBACK =
-    std::function<void(const IndexEntry& index_entry, void* context)>;
+    std::function<void(const IndexEntryView& index_entry, void* context)>;
 
 // User defined Callback routine to handle FileRecord parsed attributes
 // Will be called by FileRecord::TraverseAttrs() for each attribute

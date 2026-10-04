@@ -29,6 +29,7 @@ class IndexEntry;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexBlockUsOffsetInBounds;
 using NtfsBrowser::IndexEntry;
+using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Data::IndexBlock;
@@ -81,7 +82,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(record.ParseAttrs());
 
   int callbackCount = 0;
-  record.TraverseSubEntries([](const IndexEntry&, void* context)
+  record.TraverseSubEntries([](const IndexEntryView&, void* context)
                             { ++*static_cast<int*>(context); }, &callbackCount);
 
   // Entries live behind the rejected block: the callback must never run.
@@ -131,7 +132,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(record.ParseAttrs());
 
   int callbackCount = 0;
-  record.TraverseSubEntries([](const IndexEntry&, void* context)
+  record.TraverseSubEntries([](const IndexEntryView&, void* context)
                             { ++*static_cast<int*>(context); }, &callbackCount);
 
   CHECK(callbackCount == 0);

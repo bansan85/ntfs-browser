@@ -3,7 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstdint>
-#include <memory>
+#include <span>
 #include <vector>
 
 #include <ntfs-browser/index-entry.h>
@@ -12,7 +12,9 @@ namespace NtfsBrowser
 {
 enum class Strategy : std::uint8_t;
 
-class IndexBlock : public std::vector<IndexEntry>
+// The entries are views into bytes_ and realigned_, which this object owns:
+// they MUST NOT outlive it.
+class IndexBlock : public std::vector<IndexEntryView>
 {
  public:
   IndexBlock() noexcept;
@@ -26,9 +28,13 @@ class IndexBlock : public std::vector<IndexEntry>
   friend class AttrIndexAlloc;
 
  private:
-  std::shared_ptr<std::vector<BYTE>> index_block_;
+  // The block as read from disk.
+  std::vector<BYTE> bytes_;
+  // Aligned copies of the entries that sit at a misaligned address in bytes_.
+  std::vector<std::vector<BYTE>> realigned_;
 
-  [[nodiscard]] std::shared_ptr<std::vector<BYTE>> AllocIndexBlock(DWORD size);
+  // Drops the previous content and returns a zeroed buffer of `size` bytes.
+  [[nodiscard]] std::span<BYTE> AllocIndexBlock(DWORD size);
 };  // IndexBlock
 
 }  // namespace NtfsBrowser

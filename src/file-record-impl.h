@@ -30,6 +30,7 @@ struct WrappedFek;
 template <Strategy S>
 class NtfsVolume;
 class IndexEntry;
+class IndexEntryView;
 
 // Everything FileRecord<S> keeps out of its public header: the members, and the
 // private methods that work on them. Friends of FileRecord<S> (AttrList,
@@ -92,7 +93,7 @@ class FileRecord<S>::Impl
   static void MergeStreamChain(std::vector<std::unique_ptr<AttrBase<S>>>& attrs,
                                std::vector<size_t>& indices,
                                std::vector<size_t>& toErase);
-  [[nodiscard]] static const std::vector<IndexEntry>*
+  [[nodiscard]] static const std::vector<IndexEntryView>*
       FileNameIndexRootEntries(const AttrBase<S>& attr);
   [[nodiscard]] bool VisitAttr(std::span<const BYTE> cur,
                                const AttrHeaderCommon& head,
