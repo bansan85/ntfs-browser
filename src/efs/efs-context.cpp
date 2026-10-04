@@ -24,6 +24,7 @@ Context::Context(std::vector<WrappedFek> entries,
 
 // Builds the decryptor of the selected backend. Falls back to Crypto++ when
 // BCrypt is not the selected one, or cannot take this cipher (DESX).
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 std::unique_ptr<SectorDecryptor> Context::MakeDecryptor(const Fek& fek) const
 {
 #if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
