@@ -352,7 +352,9 @@ std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes)
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto high = bytes[offset + 1];
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    map[unit] = static_cast<char16_t>(low | (high << kBitsPerByte));
+    map[unit] =
+        static_cast<char16_t>(static_cast<unsigned>(low) |
+                              (static_cast<unsigned>(high) << kBitsPerByte));
   }
 
   for (char16_t unit = kLowerA; unit <= kLowerZ; unit++)
