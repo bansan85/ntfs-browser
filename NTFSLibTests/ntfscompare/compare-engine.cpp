@@ -37,7 +37,7 @@ std::string Narrow(const std::wstring& wide)
 
 // Calls visit(member pointer, report name) once per compared Entry field.
 template <typename Visitor>
-void ForEachComparedField(Visitor&& visit)
+void ForEachComparedField(const Visitor& visit)
 {
   visit(&Entry::logical_size, "LogicalSize");
   visit(&Entry::physical_size, "PhysicalSize");
