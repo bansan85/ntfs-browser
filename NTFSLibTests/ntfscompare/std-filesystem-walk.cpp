@@ -89,7 +89,7 @@ Listing WalkStdFilesystem(const std::filesystem::path& root)
       entry.modification_time_utc = FileClockToUtcTicks(writeTime);
     }
 
-    result.emplace(RelativeKey(root, directory_entry.path()), std::move(entry));
+    result.emplace(RelativeKey(root, directory_entry.path()), entry);
   }
 
   if (error_code)

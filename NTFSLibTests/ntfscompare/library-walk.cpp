@@ -70,7 +70,7 @@ Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG startRecord)
         const std::wstring path =
             frame.prefix.empty() ? name.name : frame.prefix + L"/" + name.name;
         const bool isDirectory = out.is_directory;
-        result.emplace(path, std::move(out));
+        result.emplace(path, out);
 
         if (isDirectory)
         {
