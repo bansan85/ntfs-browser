@@ -13,3 +13,4 @@
 /.claude/
 /test-data/
 /.vscode/settings.json
+/CMakeUserPresets.json
