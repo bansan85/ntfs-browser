@@ -108,8 +108,8 @@ class NtfsVolume<S>::Impl
   // sequence number its entries claim and the start VCN of each entry.
   struct PendingMftExtension
   {
-    ULONGLONG record;
-    WORD sequence;
+    ULONGLONG record{0};
+    WORD sequence{0};
     std::vector<ULONGLONG> start_vcns;
   };
 
