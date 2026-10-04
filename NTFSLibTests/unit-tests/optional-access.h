@@ -36,7 +36,7 @@ template <typename T>
   {
     throw std::bad_optional_access();
   }
-  return std::move(*opt);
+  return *std::move(opt);
 }
 
-} // namespace NtfsBrowserTests
+}  // namespace NtfsBrowserTests
