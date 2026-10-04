@@ -211,10 +211,12 @@ ProcessOutput RunProcessCapturingOutput(const fs::path& exe,
 
   posix_spawn_file_actions_t actions;
   posix_spawn_file_actions_init(&actions);
-  posix_spawn_file_actions_adddup2(&actions, pipeFds[1], STDOUT_FILENO);
-  posix_spawn_file_actions_adddup2(&actions, pipeFds[1], STDERR_FILENO);
-  posix_spawn_file_actions_addclose(&actions, pipeFds[0]);
-  posix_spawn_file_actions_addclose(&actions, pipeFds[1]);
+  posix_spawn_file_actions_adddup2(&actions, std::get<1>(pipeFds),
+                                   STDOUT_FILENO);
+  posix_spawn_file_actions_adddup2(&actions, std::get<1>(pipeFds),
+                                   STDERR_FILENO);
+  posix_spawn_file_actions_addclose(&actions, std::get<0>(pipeFds));
+  posix_spawn_file_actions_addclose(&actions, std::get<1>(pipeFds));
 
   std::vector<std::string> narrowArgs = NarrowArgs(exe, args);
   std::vector<char*> argv = ToArgv(narrowArgs);
@@ -225,10 +227,10 @@ ProcessOutput RunProcessCapturingOutput(const fs::path& exe,
   posix_spawn_file_actions_destroy(&actions);
   // Must close this process' copy now regardless of success, or the read
   // loop below never sees EOF.
-  close(pipeFds[1]);
+  close(std::get<1>(pipeFds));
   if (spawned != 0)
   {
-    close(pipeFds[0]);
+    close(std::get<0>(pipeFds));
     throw std::runtime_error(std::string("posix_spawn failed: ") +
                              std::strerror(spawned));
   }
@@ -236,11 +238,12 @@ ProcessOutput RunProcessCapturingOutput(const fs::path& exe,
   std::string output;
   std::array<char, kPipeChunkSize> chunk{};
   ssize_t bytesRead = 0;
-  while ((bytesRead = read(pipeFds[0], chunk.data(), chunk.size())) > 0)
+  while ((bytesRead = read(std::get<0>(pipeFds), chunk.data(), chunk.size())) >
+         0)
   {
     output.append(chunk.data(), static_cast<std::size_t>(bytesRead));
   }
-  close(pipeFds[0]);
+  close(std::get<0>(pipeFds));
 
   int status = 0;
   waitpid(pid, &status, 0);

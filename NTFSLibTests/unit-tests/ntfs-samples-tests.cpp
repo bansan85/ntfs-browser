@@ -179,11 +179,10 @@ bool ContainsPtrnRun(std::span<const BYTE> data, size_t minRunLength)
     size_t run_end = position;
     while (run_end < data.size())
     {
-      const auto expected =
+      const auto expected = gsl::narrow<BYTE>(
           // The index is reduced modulo kPattern.size().
           // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-          gsl::narrow<BYTE>(
-              kPattern[(phase + (run_end - position)) % kPattern.size()]);
+          kPattern[(phase + (run_end - position)) % kPattern.size()]);
       // j < data.size() by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       if (data[run_end] != expected)

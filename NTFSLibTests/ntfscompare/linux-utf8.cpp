@@ -42,6 +42,8 @@ std::wstring Utf8ToWide(std::string_view utf8)
   size_t position = 0;
   while (position < utf8.size())
   {
+    // position < utf8.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto lead = static_cast<unsigned char>(utf8[position]);
     char32_t codePoint = 0;
     size_t length = 1;
@@ -79,6 +81,8 @@ std::wstring Utf8ToWide(std::string_view utf8)
     bool valid = true;
     for (size_t k = 1; k < length; k++)
     {
+      // position + length was checked against utf8.size() above.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       const auto cont = static_cast<unsigned char>(utf8[position + k]);
       if ((cont & kUtf8ContMask) != kUtf8ContTag)
       {

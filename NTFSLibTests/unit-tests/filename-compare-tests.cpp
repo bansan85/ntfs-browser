@@ -54,6 +54,8 @@ IndexEntry MakeSystemEntry()
   filename.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < kNameLen; i++)
   {
+    // i is below kNameLen, the length of kName.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     filename.name[i] = gsl::narrow<WORD>(kName[i]);
   }
   // Filler: must never be read by Compare().

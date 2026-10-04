@@ -454,10 +454,13 @@ std::span<const ULONGLONG> MftTree::Children(ULONGLONG dirRecord) const
 bool MftTree::IsReachable(ULONGLONG record) const
 {
   const auto iterator = impl_->by_record_.find(record);
+  if (iterator == impl_->by_record_.end())
+  {
+    return false;
+  }
   // by_record_ values index entries_; reachable_ is as long as entries_.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return iterator != impl_->by_record_.end() &&
-         impl_->reachable_[iterator->second];
+  return impl_->reachable_[iterator->second];
 }
 
 std::wstring MftTree::GetPath(ULONGLONG record,

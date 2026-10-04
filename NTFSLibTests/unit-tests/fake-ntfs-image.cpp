@@ -659,6 +659,8 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG baseIdx = 0)
   constexpr std::wstring_view kFooName = L"Foo";
   for (BYTE i = 0; i < filename.name_length; i++)
   {
+    // i is below name_length, the length of the name.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     filename.name[i] = gsl::narrow<WORD>(kFooName[i]);
   }
 
@@ -787,6 +789,8 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
   constexpr std::wstring_view kFooName = L"Foo";
   for (BYTE i = 0; i < filename.name_length; i++)
   {
+    // i is below name_length, the length of the name.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     filename.name[i] = gsl::narrow<WORD>(kFooName[i]);
   }
 
@@ -1499,6 +1503,8 @@ FakeRecord MakeRootRecordWithGapCollationSubNode()
   fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < fn1.name_length; i++)
   {
+    // i is below name_length, the length of the name.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     fn1.name[i] = gsl::narrow<WORD>(kNonTerminalName[i]);
   }
 
@@ -3512,6 +3518,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode()
   fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < fn1.name_length; i++)
   {
+    // i is below name_length, the length of the name.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     fn1.name[i] = gsl::narrow<WORD>(kGapCollationSearchName[i]);
   }
 
@@ -3720,6 +3728,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
       fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
       for (BYTE i = 0; i < fn1.name_length; i++)
       {
+        // i is below name_length, the length of the name.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         fn1.name[i] = gsl::narrow<WORD>(kIndexBlockChainLeafName[i]);
       }
 
@@ -5516,6 +5526,8 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord()
   constexpr BYTE kRealNameLength = 3;
   for (BYTE i = 0; i < kRealNameLength; i++)
   {
+    // i is below name_length, the length of the name.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     fn1.name[i] = gsl::narrow<WORD>(kRealName[i]);
   }
   // Claims far more characters than the entry has room for.
