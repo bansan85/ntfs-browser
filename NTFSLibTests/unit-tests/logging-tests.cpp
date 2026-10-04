@@ -9,6 +9,7 @@
 // over a saved corpus file and takes --log itself - with its two standard
 // streams sent to two separate files.
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -235,7 +236,7 @@ TEMPLATE_TEST_CASE_SIG("the volume name is logged without its terminator",
   CHECK_THAT(captured, ContainsSubstring("NTFS volume name: TESTVOL"));
   // AttrVolName pads its buffer with a terminator its view still covers.
   // UTF-8 has no terminator, so a NUL byte must not reach the line.
-  CHECK(captured.find('\0') == std::string::npos);
+  CHECK(std::ranges::find(captured, '\0') == captured.end());
 }
 
 TEST_CASE("each sink keeps its own level", "[logging]")

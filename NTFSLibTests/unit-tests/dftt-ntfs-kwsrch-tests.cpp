@@ -3,10 +3,12 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/attr-base.h>
 #include <ntfs-browser/file-record.h>
@@ -96,7 +98,8 @@ void CheckReadsKeywordFile(const NtfsVolume<Strategy::NO_CACHE>& volume,
   REQUIRE(stream->ReadData(0, data) == file.size);
   const std::string_view content(reinterpret_cast<const char*>(data.data()),
                                  data.size());
-  CHECK(content.find(file.keyword) != std::string_view::npos);
+  CHECK_THAT(std::string(content),
+             Catch::Matchers::ContainsSubstring(std::string(file.keyword)));
 }
 
 }  // namespace
@@ -141,5 +144,6 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   REQUIRE(slack_data->ReadData(0, data) == kNonResidentSize);
   const std::string_view content(reinterpret_cast<const char*>(data.data()),
                                  data.size());
-  CHECK(content.find("n-slack") == std::string_view::npos);
+  CHECK_THAT(std::string(content),
+             !Catch::Matchers::ContainsSubstring("n-slack"));
 }
