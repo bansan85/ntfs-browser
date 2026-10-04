@@ -3564,12 +3564,9 @@ std::vector<BYTE> MakeNonAsciiUpCaseBytes()
   for (size_t unit = 0; unit < kUpCaseUnitCount; unit++)
   {
     auto upper = gsl::narrow<WORD>(unit);
-    if (unit >= L'a' && unit <= L'z')
-    {
-      upper = gsl::narrow<WORD>(unit - kCaseDistance);
-    }
-    else if (unit >= kLatin1LowerFirst && unit <= kLatin1LowerLast &&
-             unit != kDivisionSign)
+    if ((unit >= L'a' && unit <= L'z') ||
+        (unit >= kLatin1LowerFirst && unit <= kLatin1LowerLast &&
+         unit != kDivisionSign))
     {
       upper = gsl::narrow<WORD>(unit - kCaseDistance);
     }
