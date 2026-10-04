@@ -101,7 +101,7 @@ bool FileRecordHeader::PatchUS() noexcept
   return true;
 }
 
-const AttrHeaderCommon* FileRecordHeader::HeaderCommon() noexcept
+const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept
 {
   WORD const offset_of_attr = GetData()->offset_of_attr;
   if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size_)

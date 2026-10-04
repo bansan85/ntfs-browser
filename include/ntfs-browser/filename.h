@@ -46,7 +46,7 @@ class NTFS_BROWSER_EXPORT Filename
   // GetFilename() is const, and is the sole writer.
   mutable std::wstring filename_wuc_;
 
-  void GetFilenameWUC();
+  void GetFilenameWUC() const;
 
  public:
   // Orders fn against this name in NTFS' collation order: <0 when fn sorts
