@@ -72,6 +72,8 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
 
 bool FileRecordHeader::PatchUS() noexcept
 {
+  // The update sequence is patched in place, in the buffer the caller owns.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
   const std::span<WORD> words(
       const_cast<WORD*>(reinterpret_cast<const WORD*>(&GetData()->raw[0])),
       buffer_size_ / sizeof(WORD));
