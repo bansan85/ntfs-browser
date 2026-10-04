@@ -127,8 +127,8 @@ template <Strategy S>
 NtfsVolume<S>::Impl::Impl(NtfsVolume<S>& self, const VolumeOptions& options)
     : self_(&self),
       volume_(std::make_unique<FileReader<S>>()),
-      options_(options),
-      mft_record_(self)
+      mft_record_(self),
+      options_(options)
 {
 }
 
