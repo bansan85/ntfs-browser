@@ -194,10 +194,12 @@ bool AttrIndexAlloc<S>::FixupIndexBlock(std::span<BYTE> block)
   return true;
 }
 
+namespace
+{
 // Reports a defect in a block's entries. Returns true when the block must be
 // rejected whole: the entries parsed so far are then discarded too.
-static bool RejectBlockOnDefect(bool recover, std::string_view defect,
-                                IndexBlock& ibClass)
+bool RejectBlockOnDefect(bool recover, std::string_view defect,
+                         IndexBlock& ibClass)
 {
   LogRecoverable(recover, "{}", defect);
   if (recover)
@@ -207,6 +209,7 @@ static bool RejectBlockOnDefect(bool recover, std::string_view defect,
   ibClass.clear();
   return true;
 }
+}  // namespace
 
 // Walks the entries of a block that FixupIndexBlock() accepted. They become
 // views into ibClass, which owns the block's buffer.
