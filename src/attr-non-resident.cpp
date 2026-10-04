@@ -644,7 +644,7 @@ std::optional<ULONGLONG>
 // Reads clustersToRead clusters of dataRun, starting at vcn, into the front of
 // out: off the disk, or zero-filled for a sparse run. Decrypts the copy in out.
 template <Strategy S>
-typename AttrNonResident<S>::RunRead
+AttrNonResident<S>::RunRead
     AttrNonResident<S>::ReadRunClusters(const Data::RunEntry& dataRun,
                                         ULONGLONG vcn, ULONGLONG clustersToRead,
                                         std::span<BYTE> out) const

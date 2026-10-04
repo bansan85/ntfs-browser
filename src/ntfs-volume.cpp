@@ -545,7 +545,7 @@ bool NtfsVolume<S>::Impl::IsMftRangeMapped(ULONGLONG byteOffset,
 
 // Finds the accepted extent covering vcn, or nullptr if unresolved.
 template <Strategy S>
-const typename NtfsVolume<S>::Impl::MftExtent*
+const NtfsVolume<S>::Impl::MftExtent*
     NtfsVolume<S>::Impl::FindMftExtent(ULONGLONG vcn) const noexcept
 {
   const auto iterator =

@@ -42,14 +42,14 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader
   bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
   template <Strategy S2 = S>
-  typename std::enable_if_t<
+  std::enable_if_t<
       std::is_same_v<std::integral_constant<Strategy, S2>,
                      std::integral_constant<Strategy, Strategy::NO_CACHE>>,
       std::optional<std::span<const BYTE>>>
       Read(LARGE_INTEGER& addr, DWORD length) const;
 
   template <Strategy S2 = S>
-  typename std::enable_if_t<
+  std::enable_if_t<
       std::is_same_v<std::integral_constant<Strategy, S2>,
                      std::integral_constant<Strategy, Strategy::FULL_CACHE>>,
       std::optional<std::span<const BYTE>>>

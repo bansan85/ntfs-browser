@@ -59,7 +59,7 @@ class CryptoPpDecryptor final : public SectorDecryptor
  private:
   // Crypto++'s external-cipher mode takes a non-const cipher, though it
   // only reads the key schedule.
-  mutable typename BlockCipher::Decryption cipher_;
+  mutable BlockCipher::Decryption cipher_;
 };
 
 template <class BlockCipher>

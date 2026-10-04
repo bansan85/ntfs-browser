@@ -62,7 +62,7 @@ bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
 
 template <Strategy T>
 template <Strategy Q>
-typename std::enable_if_t<
+std::enable_if_t<
     std::is_same_v<std::integral_constant<Strategy, Q>,
                    std::integral_constant<Strategy, Strategy::NO_CACHE>>,
     std::optional<std::span<const BYTE>>>
@@ -130,7 +130,7 @@ std::optional<std::span<const BYTE>>
 
 template <Strategy T>
 template <Strategy Q>
-typename std::enable_if_t<
+std::enable_if_t<
     std::is_same_v<std::integral_constant<Strategy, Q>,
                    std::integral_constant<Strategy, Strategy::FULL_CACHE>>,
     std::optional<std::span<const BYTE>>>
