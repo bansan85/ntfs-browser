@@ -83,12 +83,10 @@ void Usage(const ArgChar* program)
       stderr,
       "Compares 6 ways of recursively listing <folder>: std::filesystem, "
       "the platform's native API, and NtfsBrowser via NtfsVolume<FULL_CACHE>, "
-      "NtfsVolume<NO_CACHE> and MftTree.\n");
+      "NtfsVolume<NO_CACHE> and MftTree.\n"));
 }
 
-}  // namespace
-
-int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
+int Run(int argc, ArgChar* argv[])
 {
   Log::Config logConfig;
   const std::span<ArgChar*> args(argv, gsl::narrow<size_t>(argc));
@@ -222,4 +220,20 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
 
   const bool hasFindings = PrintReport(report);
   return hasFindings ? 1 : 0;
+}
+
+}  // namespace
+
+// Keeps any exception from escaping main().
+int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
+{
+  try
+  {
+    return Run(argc, argv);
+  }
+  catch (...)
+  {
+    static_cast<void>(std::fprintf(stderr, "Unhandled exception\n"));
+    return 1;
+  }
 }

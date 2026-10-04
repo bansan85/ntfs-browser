@@ -195,11 +195,9 @@ void Usage(const ArgChar* program)
       std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str()));
 }
 
-}  // namespace
-
 // Runs one AFL testcase file (the non-option argument) through the library
 // once.
-int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
+int Run(int argc, ArgChar* argv[])
 {
   // Trace on the console by default, so an afl-fuzz run and the saved
   // regression corpus both keep producing every message without a flag.
@@ -283,4 +281,20 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
   }
 
   return 0;
+}
+
+}  // namespace
+
+// Keeps any exception from escaping main().
+int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
+{
+  try
+  {
+    return Run(argc, argv);
+  }
+  catch (...)
+  {
+    static_cast<void>(std::fprintf(stderr, "Unhandled exception\n"));
+    return 1;
+  }
 }
