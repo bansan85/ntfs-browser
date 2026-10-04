@@ -7,7 +7,7 @@
   #include <array>
   #include <format>
 
-  #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
+  #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
 
   // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
     #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
@@ -40,7 +40,7 @@ std::string HexEncode(std::span<const BYTE> digest)
 
 }  // namespace
 
-  #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
+  #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
 
 std::string Md5Hex(std::span<const BYTE> data)
 {
