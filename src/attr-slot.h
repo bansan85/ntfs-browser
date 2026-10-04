@@ -16,21 +16,21 @@ namespace NtfsBrowser
 constexpr size_t kAttrNums = 16;
 
 // Attribute Type to Index, eg. 0x10->0, 0x30->2
-[[nodiscard]] constexpr DWORD AttrIndex(AttrType at) noexcept
+[[nodiscard]] constexpr DWORD AttrIndex(AttrType type) noexcept
 {
-  return (static_cast<DWORD>(at) >> 4U) - 1;
+  return (static_cast<DWORD>(type) >> 4U) - 1;
 }
 
 // Attribute Bit Mask, as a plain integer.
-[[nodiscard]] constexpr DWORD AttrMaskBits(AttrType at) noexcept
+[[nodiscard]] constexpr DWORD AttrMaskBits(AttrType type) noexcept
 {
-  return 1U << AttrIndex(at);
+  return 1U << AttrIndex(type);
 }
 
 // Attribute Bit Mask
-[[nodiscard]] constexpr Mask AttrMask(AttrType at) noexcept
+[[nodiscard]] constexpr Mask AttrMask(AttrType type) noexcept
 {
-  return static_cast<Mask>(AttrMaskBits(at));
+  return static_cast<Mask>(AttrMaskBits(type));
 }
 
 static_assert(static_cast<DWORD>(Mask::STANDARD_INFORMATION) ==
