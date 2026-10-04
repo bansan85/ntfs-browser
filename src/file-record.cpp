@@ -360,9 +360,13 @@ bool FileRecord<S>::Impl::ParseAttr(
   try
   {
     if constexpr (S == Strategy::NO_CACHE)
+    {
       attr = AllocAttr<AttrResidentNoCache>(ahc, bUnhandled, attrListChain);
+    }
     else
+    {
       attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled, attrListChain);
+    }
   }
   catch (const std::exception& e)
   {
