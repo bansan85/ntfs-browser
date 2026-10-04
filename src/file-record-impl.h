@@ -45,7 +45,7 @@ class FileRecord<S>::Impl
   // methods that need a public one go through it. A pointer, not a reference:
   // FileRecord's move constructor MUST repoint it.
   FileRecord<S>* self_;
-  const NtfsVolume<S>& volume_;
+  const NtfsVolume<S>* volume_;
   std::unique_ptr<FileRecordHeaderImpl<S>> file_record_;
   std::optional<ULONGLONG> file_reference_;
   std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};

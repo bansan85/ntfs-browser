@@ -125,7 +125,7 @@ std::optional<DWORD> DecodeClusterSize(char spc, WORD sectorSize)
 
 template <Strategy S>
 NtfsVolume<S>::Impl::Impl(NtfsVolume<S>& self, const VolumeOptions& options)
-    : self_(self),
+    : self_(&self),
       volume_(std::make_unique<FileReader<S>>()),
       options_(options),
       mft_record_(self)
@@ -178,7 +178,7 @@ void NtfsVolume<S>::Impl::Init()
   // volume unreadable.
   mft_record_.impl_->bypass_deleted_gate_ = true;
 
-  FileRecord vol(self_);
+  FileRecord vol(*self_);
   vol.impl_->bypass_deleted_gate_ = true;
   vol.SetAttrMask(Mask::VOLUME_NAME | Mask::VOLUME_INFORMATION);
   if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::VOLUME)))
@@ -293,7 +293,7 @@ template <Strategy S>
 void NtfsVolume<S>::Impl::ResolveMftDataExtents()
 {
   // Isolated from mft_record_; resolve_attr_list_ = false skips AttrList.
-  FileRecord<S> listRecord(self_);
+  FileRecord<S> listRecord(*self_);
   listRecord.impl_->attr_mask_ = Mask::ATTRIBUTE_LIST;
   listRecord.impl_->resolve_attr_list_ = false;
   listRecord.impl_->bypass_deleted_gate_ = true;
@@ -418,7 +418,7 @@ template <Strategy S>
 void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
     const PendingMftExtension& item, ULONGLONG selfRef)
 {
-  mft_extension_records_.emplace_back(self_);
+  mft_extension_records_.emplace_back(*self_);
   FileRecord<S>& ext = mft_extension_records_.back();
   ext.impl_->attr_mask_ = Mask::DATA;
   ext.impl_->bypass_deleted_gate_ = true;
@@ -963,7 +963,7 @@ std::unique_ptr<const UpCaseTable> NtfsVolume<S>::Impl::LoadUpCaseTable() const
 
   // Like the volume's other metadata reads, it MUST NOT depend on
   // include_deleted.
-  FileRecord<S> record(self_);
+  FileRecord<S> record(*self_);
   record.impl_->bypass_deleted_gate_ = true;
   record.SetAttrMask(Mask::DATA);
   if (!record.ParseFileRecord(upcaseRecord) || !record.ParseAttrs())

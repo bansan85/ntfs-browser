@@ -45,7 +45,7 @@ class NtfsVolume<S>::Impl
   Impl(NtfsVolume<S>& self, const VolumeOptions& options);
 
   // The NtfsVolume this belongs to. The FileRecords it owns are built over it.
-  NtfsVolume<S>& self_;
+  NtfsVolume<S>* self_;
   WORD sector_size_{0};
   DWORD cluster_size_{0};
   DWORD file_record_size_{0};

@@ -155,7 +155,7 @@ AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD dataPtr,
 template <Strategy S>
 FileRecord<S>::Impl::Impl(FileRecord<S>& self,
                           const NtfsVolume<S>& volume) noexcept
-    : self_(&self), volume_(volume)
+    : self_(&self), volume_(&volume)
 {
 }
 
@@ -178,7 +178,7 @@ FileRecord<S>::~FileRecord() = default;
 template <Strategy S>
 const NtfsVolume<S>& FileRecord<S>::GetVolume() const noexcept
 {
-  return impl_->volume_;
+  return *impl_->volume_;
 }
 
 // Drops every parsed attribute, then the records and copies they point into.
@@ -228,7 +228,7 @@ void FileRecord<S>::Impl::UserCallBack(DWORD attType,
   }
   else
   {
-    volume_.impl_->AttrRawCallBack(attType, ahc, bDiscard);
+    volume_->impl_->AttrRawCallBack(attType, ahc, bDiscard);
   }
 }
 
@@ -391,20 +391,20 @@ template <Strategy S>
 std::unique_ptr<FileRecordHeaderImpl<S>>
     FileRecord<S>::Impl::ReadFileRecord(ULONGLONG fileRef)
 {
-  if (record_buffer_.size() != volume_.GetFileRecordSize())
+  if (record_buffer_.size() != volume_->GetFileRecordSize())
   {
-    record_buffer_.resize(volume_.GetFileRecordSize());
+    record_buffer_.resize(volume_->GetFileRecordSize());
   }
 
   if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
-      volume_.impl_->mft_data_ == nullptr)
+      volume_->impl_->mft_data_ == nullptr)
   {
     // Take as continuous disk allocation
     LARGE_INTEGER frAddr{};
     try
     {
       frAddr.QuadPart = gsl::narrow<LONGLONG>(
-          volume_.GetMFTAddr() + volume_.GetFileRecordSize() * fileRef);
+          volume_->GetMFTAddr() + volume_->GetFileRecordSize() * fileRef);
     }
     catch (const std::exception& e)
     {
@@ -414,7 +414,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
       return {};
     }
 
-    if (!volume_.ReadInto(frAddr, record_buffer_))
+    if (!volume_->ReadInto(frAddr, record_buffer_))
     {
       return {};
     }
@@ -433,11 +433,11 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
   // May be fragmented $MFT, and its DATA attribute itself may be split
   // across extension records - ReadMftData() picks whichever instance
   // covers this offset.
-  const ULONGLONG frAddr = volume_.GetFileRecordSize() * fileRef;
+  const ULONGLONG frAddr = volume_->GetFileRecordSize() * fileRef;
 
   if (std::optional<ULONGLONG> len =
-          volume_.impl_->ReadMftData(frAddr, record_buffer_);
-      !len || *len != volume_.GetFileRecordSize())
+          volume_->impl_->ReadMftData(frAddr, record_buffer_);
+      !len || *len != volume_->GetFileRecordSize())
   {
     return {};
   }
@@ -538,7 +538,7 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
     {
       // Compare name
       const int comparison =
-          index_entry.Compare(fileName, volume_.impl_->GetUpCaseTable());
+          index_entry.Compare(fileName, volume_->impl_->GetUpCaseTable());
       if (comparison == 0)
       {
         // Must be a copy: the view dies with index_block, the IndexEntry
@@ -652,7 +652,7 @@ bool FileRecord<S>::Impl::ParseAttrs(
   // Clear previous data
   ClearAttrs();
 
-  const bool recover = volume_.GetOptions().recover_errors;
+  const bool recover = volume_->GetOptions().recover_errors;
 
   // Ends the walk early with failure. Strict drops everything parsed so far.
   // Recovering keeps it, and that partial result must still be usable: its
@@ -674,7 +674,7 @@ bool FileRecord<S>::Impl::ParseAttrs(
   // attributes: this record exposes no content unless include_deleted opted
   // in, or this is one of the volume's own metadata reads.
   if (!bypass_deleted_gate_ && self_->IsDeleted() &&
-      !volume_.GetOptions().include_deleted)
+      !volume_->GetOptions().include_deleted)
   {
     LogDebug("ParseAttrs() skipped: file record {} is deleted",
              file_reference_ ? *file_reference_ : 0);
@@ -697,13 +697,13 @@ bool FileRecord<S>::Impl::ParseAttrs(
   // An attribute's position comes from the disk, so it need not be aligned
   // for AttrHeaderCommon. The walk reads each header through a copy.
   std::span<const BYTE> cur(reinterpret_cast<const BYTE*>(first),
-                            volume_.GetFileRecordSize() - dataPtr);
+                            volume_->GetFileRecordSize() - dataPtr);
 
   while (true)
   {
     AttrHeaderCommon head{};
     const AttrWalk step =
-        ReadAttrHeader(cur, dataPtr, volume_.GetFileRecordSize(), head);
+        ReadAttrHeader(cur, dataPtr, volume_->GetFileRecordSize(), head);
     if (step == AttrWalk::kEndMarker)
     {
       foundEndMarker = true;
@@ -769,7 +769,7 @@ bool FileRecord<S>::Impl::VisitAttr(
           head.total_size;
   if (nameExceedsBounds)
   {
-    const bool recover = volume_.GetOptions().recover_errors;
+    const bool recover = volume_->GetOptions().recover_errors;
     LogRecoverable(recover, "Attribute name exceeds attribute bounds.");
     if (!recover)
     {
@@ -958,7 +958,7 @@ bool FileRecord<S>::Impl::AttachEfsContext()
   // recovering. Checked with or without a decryption backend compiled in:
   // the anomaly is in the flags, not in what can decrypt them.
   constexpr WORD kAttrFlagCompressed = 0x0001;
-  const bool recover = volume_.GetOptions().recover_errors;
+  const bool recover = volume_->GetOptions().recover_errors;
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
@@ -1014,7 +1014,7 @@ bool FileRecord<S>::Impl::AttachEfsContext()
   // One context for the record: its streams share one FEK, resolved once.
   auto const context = std::make_shared<const Efs::Context>(
       ReadEfsEntries(),
-      [&volume = volume_] { return volume.GetEfsKeyProvider(); });
+      [&volume = *volume_] { return volume.GetEfsKeyProvider(); });
   for (AttrNonResident<S>* stream : encrypted)
   {
     stream->SetEfsContext(context);
@@ -1285,7 +1285,7 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
 {
   assert(seCallBack);
 
-  const bool recover = impl_->volume_.GetOptions().recover_errors;
+  const bool recover = impl_->volume_->GetOptions().recover_errors;
 
   // Start traversing from IndexRoot (B+ tree root node)
 
@@ -1432,8 +1432,8 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
   // expects) is in clusters when a block spans a whole cluster or more, but
   // in index_block_size units when a cluster is too big to hold one - the
   // same conversion ParseIndexBlock() itself applies.
-  const DWORD indexBlockSize = volume_.GetIndexBlockSize();
-  const DWORD clusterSize = volume_.GetClusterSize();
+  const DWORD indexBlockSize = volume_->GetIndexBlockSize();
+  const DWORD clusterSize = volume_->GetClusterSize();
   const ULONGLONG clustersPerBlock =
       (clusterSize != 0 && indexBlockSize >= clusterSize)
           ? indexBlockSize / clusterSize
@@ -1469,7 +1469,7 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
   const std::optional<ULONGLONG> selfRef = file_reference_;
   const WORD selfSequence = self_->GetSequenceNumber();
   const bool selfInUse = !self_->IsDeleted();
-  const bool includeDeleted = volume_.GetOptions().include_deleted;
+  const bool includeDeleted = volume_->GetOptions().include_deleted;
 
   for (ULONGLONG blockIndex = 0; blockIndex < scanLimit; blockIndex++)
   {
@@ -1492,7 +1492,7 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
     {
       if (index_entry.HasName() &&
           IsOrphanEntryReportable(index_entry, selfRef, selfSequence, selfInUse,
-                                  includeDeleted ? nullptr : &volume_))
+                                  includeDeleted ? nullptr : volume_))
       {
         seCallBack(index_entry, context);
       }
@@ -1506,7 +1506,7 @@ std::optional<IndexEntry>
     FileRecord<S>::FindSubEntry(std::wstring_view fileName) const
 {
   std::optional<IndexEntry> found = impl_->FindSubEntryInOrder(fileName);
-  if (found || !impl_->volume_.impl_->GetUpCaseTable().IsBuiltIn())
+  if (found || !impl_->volume_->impl_->GetUpCaseTable().IsBuiltIn())
   {
     return found;
   }
@@ -1520,7 +1520,7 @@ std::optional<IndexEntry>
       {
         if (!found &&
             index_entry.Compare(fileName,
-                                impl_->volume_.impl_->GetUpCaseTable()) == 0)
+                                impl_->volume_->impl_->GetUpCaseTable()) == 0)
         {
           found.emplace(index_entry);
         }
@@ -1578,7 +1578,7 @@ std::optional<IndexEntry>
 
   std::unordered_set<ULONGLONG> visitedVcns;
   // Loaded before the walk: reading $UpCase reuses the volume's buffers.
-  const UpCaseTable& upcase = volume_.impl_->GetUpCaseTable();
+  const UpCaseTable& upcase = volume_->impl_->GetUpCaseTable();
 
   for (const IndexEntryView& index_entry : *all_ie)
   {
