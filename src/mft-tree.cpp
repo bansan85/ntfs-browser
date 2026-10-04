@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -399,13 +400,13 @@ std::wstring
   }
 
   std::wstring path;
-  for (auto part = parts.rbegin(); part != parts.rend(); ++part)
+  for (const auto* const part : parts | std::views::reverse)
   {
     if (!path.empty() || !lost)
     {
       path += L'\\';
     }
-    path += **part;
+    path += *part;
   }
 
   if (lostAncestor != nullptr)

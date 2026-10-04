@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -886,9 +887,9 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
     }
 
     std::ranges::sort(toErase);
-    for (auto it = toErase.rbegin(); it != toErase.rend(); ++it)
+    for (const auto index : toErase | std::views::reverse)
     {
-      attrs.erase(attrs.begin() + gsl::narrow<ptrdiff_t>(*it));
+      attrs.erase(attrs.begin() + gsl::narrow<ptrdiff_t>(index));
     }
   }
 }
