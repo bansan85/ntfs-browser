@@ -43,7 +43,7 @@ SequentialDiskReader::Producer MakeMemoryProducer(std::vector<BYTE> data)
 }
 
 SequentialDiskReader::Producer
-    MakeFileStreamProducer(std::filesystem::path path)
+    MakeFileStreamProducer(const std::filesystem::path& path)
 {
   auto const input = std::make_shared<std::ifstream>(path, std::ios::binary);
 

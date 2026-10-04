@@ -79,7 +79,7 @@ class NTFS_BROWSER_EXPORT FileRecord
   void ClearAttrRawCB() noexcept;
 
   void SetAttrMask(Mask mask) noexcept;
-  void TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context);
+  void TraverseAttrs(const ATTRS_CALLBACK<S>& attrCallBack, void* context);
   [[nodiscard]] const std::vector<std::unique_ptr<AttrBase<S>>>&
       getAttr(AttrType attrType) const noexcept;
   [[nodiscard]] std::vector<std::unique_ptr<AttrBase<S>>>&
@@ -105,7 +105,8 @@ class NTFS_BROWSER_EXPORT FileRecord
   // directory also matches the sequence it had before it was freed), and,
   // with include_deleted off, only if the
   // record it names is still in use under a matching sequence number.
-  void TraverseSubEntries(SUBENTRY_CALLBACK seCallBack, void* context) const;
+  void TraverseSubEntries(const SUBENTRY_CALLBACK& seCallBack,
+                          void* context) const;
 
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntry(std::wstring_view fileName) const;

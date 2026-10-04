@@ -593,7 +593,7 @@ template <Strategy S>
 // The depth limit and the visited-VCN set bound the recursion.
 // NOLINTNEXTLINE(misc-no-recursion)
 void FileRecord<S>::Impl::TraverseSubNode(
-    ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack, void* context,
+    ULONGLONG vcn, const SUBENTRY_CALLBACK& seCallBack, void* context,
     std::unordered_set<ULONGLONG>& visitedVcns, size_t depth) const
 {
   if (depth >= kMaxIndexBlockDepth)
@@ -1102,7 +1102,8 @@ void FileRecord<S>::SetAttrMask(Mask mask) noexcept
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine
 template <Strategy S>
-void FileRecord<S>::TraverseAttrs(ATTRS_CALLBACK<S> attrCallBack, void* context)
+void FileRecord<S>::TraverseAttrs(const ATTRS_CALLBACK<S>& attrCallBack,
+                                  void* context)
 {
   if (!attrCallBack)
   {
@@ -1289,7 +1290,7 @@ void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
 // Traverse all sub directories and files contained
 // Call user defined callback routine once found an entry
 template <Strategy S>
-void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
+void FileRecord<S>::TraverseSubEntries(const SUBENTRY_CALLBACK& seCallBack,
                                        void* context) const
 {
   assert(seCallBack);
@@ -1425,7 +1426,7 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
 // all - unlike the normal walk, in VCN order rather than collation order.
 template <Strategy S>
 void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
-    SUBENTRY_CALLBACK seCallBack, void* context,
+    const SUBENTRY_CALLBACK& seCallBack, void* context,
     std::unordered_set<ULONGLONG>& visitedVcns) const
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =

@@ -106,12 +106,13 @@ class FileRecord<S>::Impl
                       size_t depth) const;
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntryInOrder(std::wstring_view fileName) const;
-  void TraverseSubNode(ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack,
+  void TraverseSubNode(ULONGLONG vcn, const SUBENTRY_CALLBACK& seCallBack,
                        void* context,
                        std::unordered_set<ULONGLONG>& visitedVcns,
                        size_t depth) const;
   void
-      ScanOrphanedIndexBlocks(SUBENTRY_CALLBACK seCallBack, void* context,
+      ScanOrphanedIndexBlocks(const SUBENTRY_CALLBACK& seCallBack,
+                              void* context,
                               std::unordered_set<ULONGLONG>& visitedVcns) const;
 };
 
