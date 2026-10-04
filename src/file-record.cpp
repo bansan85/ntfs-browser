@@ -1166,7 +1166,7 @@ std::wstring_view FileRecord<S>::GetFileName() const
   for (const std::unique_ptr<AttrBase<S>>& fn_ :
        std::get<AttrIndex(AttrType::FILE_NAME)>(impl_->attr_list_))
   {
-    const Filename* filename;
+    const Filename* filename = nullptr;
     if constexpr (S == Strategy::NO_CACHE)
     {
       filename = reinterpret_cast<
@@ -1304,7 +1304,7 @@ void FileRecord<S>::TraverseSubEntries(SUBENTRY_CALLBACK seCallBack,
     return;
   }
 
-  const std::vector<IndexEntryView>* all_ie;
+  const std::vector<IndexEntryView>* all_ie = nullptr;
 
   if constexpr (S == Strategy::NO_CACHE)
   {
