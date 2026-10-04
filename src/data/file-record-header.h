@@ -86,7 +86,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
   // Returns nullptr if offset_of_attr doesn't fit in the record buffer.
-  const AttrHeaderCommon* HeaderCommon() const noexcept;
+  [[nodiscard]] const AttrHeaderCommon* HeaderCommon() const noexcept;
 
   [[nodiscard]] virtual const FileRecordHeader::Data* GetData() const = 0;
 };
