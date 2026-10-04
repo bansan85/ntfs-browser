@@ -99,7 +99,7 @@ TEMPLATE_TEST_CASE_SIG(
       MakeWellFormedBuffer(kDeclaredBufferSize, kOffsetPastOwnSize);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
-  auto header = FileRecordHeaderImpl<S>(buffer);
+  const auto header = FileRecordHeaderImpl<S>(buffer);
 
   // A larger offset_of_attr would build a pointer past the real,
   // 2048-byte allocation backing NO_CACHE's span.
