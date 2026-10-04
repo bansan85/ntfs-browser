@@ -4474,6 +4474,9 @@ void WriteTrailingDefect(FakeRecord& record, DWORD offset,
 
 }  // namespace
 
+namespace
+{
+
 // Writes a resident $EFS attribute holding "body" and returns its total_size.
 DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
                            std::span<const BYTE> body)
@@ -4498,6 +4501,8 @@ DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
   std::memcpy(&record.at(offset + attr.attr_offset), body.data(), body.size());
   return attr.header.total_size;
 }
+
+}  // namespace
 
 std::vector<BYTE>
     BuildFakeNtfsImageWithEncryptedFile(const FakeEncryptedFile& file)
@@ -4575,6 +4580,9 @@ std::vector<BYTE>
   return image;
 }
 
+namespace
+{
+
 // Builds a root-directory replacement whose sole attribute is a RESIDENT
 // $DATA carrying the EFS "encrypted" attribute-header flag. Real NTFS never
 // encrypts a resident stream (EFS only ever leaves file data non-resident),
@@ -4602,6 +4610,8 @@ FakeRecord MakeResidentEncryptedDataRecord()
   WriteEndOfAttributesMarker(record, kAttrOffset + attr.header.total_size);
   return record;
 }
+
+}  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImageWithResidentEncryptedData()
 {
@@ -4892,6 +4902,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnitIndexAllocation()
           CompressionFixturePattern(kShortDecompressedUnitSize)));
 }
 
+namespace
+{
+
 // LCN whose product with this fixture's cluster size overflows a signed
 // LONGLONG inside ReadClusters()'s gsl::narrow<LONGLONG>() call - same
 // magnitude as kHugeMftLcn, applied to a data run's LCN instead.
@@ -5011,6 +5024,8 @@ FakeRecord MakeIndexAllocationDirRecordWithOverflowingLcn(DWORD realRunClusters)
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }
+
+}  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnitBadLcn()
 {
@@ -5185,6 +5200,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithBadDataRun()
   std::memcpy(&image.at(rootOffset), record.data(), record.size());
   return image;
 }
+
+namespace
+{
 
 // LCN where BuildFakeNtfsImageWithBadIndexBlockEntry() writes its two real,
 // sibling index blocks (VCN 0 and VCN 1), clear of every other fixture's
@@ -5412,6 +5430,8 @@ void WriteBadIndexBlockGoodBlock(std::vector<BYTE>& image, ULONGLONG parentRef)
   block.alloc_entry_size = sizeGood;
 }
 
+}  // namespace
+
 std::vector<BYTE> BuildFakeNtfsImageWithBadIndexBlockEntry()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();
@@ -5445,6 +5465,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithBadIndexBlockEntry()
 
   return image;
 }
+
+namespace
+{
 
 // Builds a root-directory replacement whose $INDEX_ROOT holds a single,
 // terminal entry: a real 3-character name is written on disk, but
@@ -5523,6 +5546,8 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord()
   return record;
 }
 
+}  // namespace
+
 std::vector<BYTE> BuildFakeNtfsImageWithMalformedIndexEntryFilename()
 {
   std::vector<BYTE> image = BuildFakeNtfsImage();
@@ -5533,6 +5558,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithMalformedIndexEntryFilename()
   std::memcpy(&image.at(rootOffset), record.data(), record.size());
   return image;
 }
+
+namespace
+{
 
 // Builds a root-directory replacement whose sole resident $DATA attribute's
 // total_size reaches exactly to the end of the file record: no bytes are
@@ -5560,6 +5588,8 @@ FakeRecord MakeNoEndMarkerRecord()
 
   return record;
 }
+
+}  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImageWithNoEndMarker()
 {
