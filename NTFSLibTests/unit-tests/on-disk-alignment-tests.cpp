@@ -149,7 +149,8 @@ TEMPLATE_TEST_CASE_SIG(
 {
   constexpr BYTE kShortenedNameLength = 2;
   constexpr WORD kShortenedStreamSize =
-      offsetof(NtfsBrowser::Attr::Filename, name) + (2 * kShortenedNameLength);
+      offsetof(NtfsBrowser::Attr::Filename, name) +
+      (size_t{2} * kShortenedNameLength);
   constexpr WORD kShortenedEntrySize =
       offsetof(NtfsBrowser::Data::IndexEntry, stream) + kShortenedStreamSize;
   constexpr WORD kTerminatorSize =

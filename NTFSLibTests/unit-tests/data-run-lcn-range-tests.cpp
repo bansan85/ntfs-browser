@@ -108,7 +108,7 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(dataAttrs.size() == 1);
 
     // Only the first run (VCN 0) was kept: the second cluster is unmapped.
-    std::vector<BYTE> buffer(2 * NtfsBrowserTests::kFakeClusterSize,
+    std::vector<BYTE> buffer(size_t{2} * NtfsBrowserTests::kFakeClusterSize,
                              kSentinelByte);
     // The REQUIRE above checks the size of dataAttrs.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

@@ -254,7 +254,7 @@ std::vector<WORD> ToUtf16(std::wstring_view text)
 void PutRecordAt(std::vector<BYTE>& image, size_t byteOffset,
                  const FakeRecord& record)
 {
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   const size_t neededEnd = byteOffset + record.size();
   const size_t alignedEnd =
       ((neededEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
@@ -324,7 +324,7 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters)
   attr.last_vcn = clusters - 1;
   attr.data_run_offset = static_cast<WORD>(sizeof(attr));
   attr.comp_unit_size = 0;
-  attr.real_size = clusters * kClusterSize;
+  attr.real_size = ULONGLONG{clusters} * kClusterSize;
   attr.alloc_size = attr.real_size;
   attr.ini_size = attr.real_size;
 
@@ -1634,7 +1634,7 @@ FakeRecord MakeIndexBlockChainRootRecord()
   allocAttr.last_vcn = kIndexBlockChainLength - 1;
   allocAttr.data_run_offset = static_cast<WORD>(sizeof(allocAttr));
   allocAttr.comp_unit_size = 0;
-  allocAttr.real_size = kIndexBlockChainLength * kClusterSize;
+  allocAttr.real_size = ULONGLONG{kIndexBlockChainLength} * kClusterSize;
   allocAttr.alloc_size = allocAttr.real_size;
   allocAttr.ini_size = allocAttr.real_size;
 
@@ -2544,7 +2544,7 @@ void LayRunBytes(std::vector<BYTE>& image, const std::vector<FakeDataRun>& runs,
   // Grow the image so every real run fits, rounded up to FULL_CACHE's whole
   // 64KiB read block - same reasoning as
   // BuildFakeNtfsImageWithDeepIndexBlockChain().
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   size_t highestEnd = image.size();
   for (const FakeDataRun& run : runs)
   {
@@ -2787,7 +2787,7 @@ std::vector<BYTE> BuildFakeNtfsImage()
       mftAddr + static_cast<size_t>(kFakeFileRecordSize) *
                     (static_cast<size_t>(MftIdx::ROOT) + 1);
   // FULL_CACHE always reads a 64 KiB block regardless of length requested.
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   const size_t imageSize = std::max(recordsEnd, kFullCacheReadBlockSize);
   std::vector<BYTE> image(imageSize, 0);
   std::memcpy(image.data(), &bpb, sizeof(bpb));
@@ -3651,7 +3651,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain()
       static_cast<size_t>(kIndexBlockChainLength) * kClusterSize;
   // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
   // extend past the chain's real end or its last read fails outright.
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   const size_t chainEnd = chainOffset + chainBytes;
   const size_t alignedChainEnd =
       ((chainEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
@@ -3748,7 +3748,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks()
       static_cast<size_t>(kOrphanedBlocksCount) * kClusterSize;
   // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
   // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   const size_t blocksEnd = blocksOffset + blocksBytes;
   const size_t alignedBlocksEnd =
       ((blocksEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
@@ -3843,7 +3843,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock()
       kMultiClusterOrphanIndexBlockSize;
   // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
   // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   const size_t blocksEnd = blocksOffset + blocksBytes;
   const size_t alignedBlocksEnd =
       ((blocksEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *
@@ -3886,7 +3886,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks()
   const size_t blocksOffset = static_cast<size_t>(kAllocLcn) * kClusterSize;
   // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
   // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   const size_t blocksEnd =
       blocksOffset + kSubClusterBlockNames.size() * kIndexBlockSize;
   const size_t alignedBlocksEnd =
@@ -3931,7 +3931,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitIndexAllocation()
 
   // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
   // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   const size_t blocksEnd =
       static_cast<size_t>(kSecondLcn + kSplitExtentClusters) * kClusterSize;
   const size_t alignedBlocksEnd =
@@ -4204,7 +4204,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithUninitializedTail()
 
   return BuildCompressionImage(
       record, runs,
-      CompressionFixturePattern(kUninitializedTailClusters * kClusterSize));
+      CompressionFixturePattern(size_t{kUninitializedTailClusters} *
+                                kClusterSize));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterBitmap()
@@ -4958,7 +4959,7 @@ FakeRecord MakeIndexAllocationDirRecordWithOverflowingLcn(DWORD realRunClusters)
   allocAttr.start_vcn = 0;
   allocAttr.last_vcn = kCompressionUnitClusters - 1;
   allocAttr.comp_unit_size = kCompressionUnitSizeShift;
-  allocAttr.alloc_size = kCompressionUnitClusters * kClusterSize;
+  allocAttr.alloc_size = ULONGLONG{kCompressionUnitClusters} * kClusterSize;
   allocAttr.real_size = kFakeFileRecordSize;
   allocAttr.ini_size = allocAttr.real_size;
 
@@ -5414,7 +5415,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithBadIndexBlockEntry()
   const size_t blocksBytes = 2ULL * kClusterSize;
   // FULL_CACHE always reads a whole 64KiB-aligned block, so the image must
   // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t kFullCacheReadBlockSize = 64 * 1024;
+  constexpr size_t kFullCacheReadBlockSize = size_t{64} * 1024;
   const size_t blocksEnd = blocksOffset + blocksBytes;
   const size_t alignedBlocksEnd =
       ((blocksEnd + kFullCacheReadBlockSize - 1) / kFullCacheReadBlockSize) *

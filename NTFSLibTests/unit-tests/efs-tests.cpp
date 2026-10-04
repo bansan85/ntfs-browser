@@ -1125,7 +1125,8 @@ TEMPLATE_TEST_CASE_SIG(
   // Ciphertext up to the initialized size, then residue the key never wrote.
   std::vector<BYTE> cluster =
       NtfsBrowserTests::EfsEncrypt(Algorithm::kAes256, key, head, 0);
-  cluster.resize(ClustersFor(kRealSize) * NtfsBrowserTests::kFakeClusterSize,
+  cluster.resize(size_t{ClustersFor(kRealSize)} *
+                     NtfsBrowserTests::kFakeClusterSize,
                  kResidueFill);
 
   NtfsBrowserTests::FakeEncryptedFile file;

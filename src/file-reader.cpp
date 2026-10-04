@@ -22,7 +22,7 @@
   #include "win32-disk-reader.h"
 #endif
 
-static constexpr LONGLONG READ_BUFFER_SIZE = 64 * 1024;
+static constexpr LONGLONG READ_BUFFER_SIZE = LONGLONG{64} * 1024;
 static constexpr LONGLONG MEMORY_BUFFER_SIZE = 512 * READ_BUFFER_SIZE;
 // READ_BUFFER_SIZE as a size_t, to size a std::span over one cached block.
 static constexpr size_t kBlockBytes = static_cast<size_t>(READ_BUFFER_SIZE);
