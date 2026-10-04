@@ -202,7 +202,9 @@ int Run(int argc, ArgChar** argv)
 
 }  // namespace
 
-// Keeps any exception from escaping main().
+// Keeps any exception from escaping main(). PrintErr itself could throw only
+// on a broken stderr, which nothing can report.
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
 {
   try
