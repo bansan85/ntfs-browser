@@ -658,7 +658,7 @@ bool FileRecord<S>::Impl::ParseAttrs(
   // Ends the walk early with failure. Strict drops everything parsed so far.
   // Recovering keeps it, and that partial result must still be usable: its
   // VCN continuations merged, its encrypted streams given their context.
-  const auto abortWalk = [this, recover]()
+  const auto abortWalk = [this, recover]
   {
     if (!recover)
     {
