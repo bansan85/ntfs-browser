@@ -18,7 +18,10 @@
   #include <sys/wait.h>
   #include <unistd.h>
 
+  #ifdef __APPLE__
+// macOS headers do not declare environ.
 extern char** environ;
+  #endif
 #endif
 
 namespace fs = std::filesystem;
