@@ -21,14 +21,8 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-namespace NtfsBrowser
-{
-class IndexEntry;
-}  // namespace NtfsBrowser
-
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexBlockUsOffsetInBounds;
-using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
