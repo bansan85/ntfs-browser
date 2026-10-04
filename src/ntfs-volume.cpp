@@ -371,12 +371,15 @@ std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
   size_t listedEntries = 0;
   ULONGLONG offset = 0;
   Attr::AttributeList entry{};
-  std::optional<ULONGLONG> len;
-  while (
-      listedEntries < kMaxMftAttrListEntries &&
-      (len = rawList.ReadData(offset, {reinterpret_cast<BYTE*>(&entry),
-                                       Attr::kAttributeListEntryHeaderSize})))
+  while (listedEntries < kMaxMftAttrListEntries)
   {
+    const std::optional<ULONGLONG> len =
+        rawList.ReadData(offset, {reinterpret_cast<BYTE*>(&entry),
+                                  Attr::kAttributeListEntryHeaderSize});
+    if (!len)
+    {
+      break;
+    }
     if (*len != Attr::kAttributeListEntryHeaderSize ||
         !IsValidAttrType(entry.attr_type))
     {
