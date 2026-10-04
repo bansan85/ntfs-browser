@@ -9,13 +9,10 @@
 #include <string_view>
 #include <vector>
 
-namespace NtfsBrowser
-{
-namespace Flag
+namespace NtfsBrowser::Flag
 {
 enum class IndexEntry : BYTE;
-}  // namespace Flag
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Flag
 
 namespace NtfsBrowser::Data
 {

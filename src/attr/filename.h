@@ -2,14 +2,11 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser
-{
-namespace Flag
+namespace NtfsBrowser::Flag
 {
 enum class Filename : DWORD;
 enum class FilenameNamespace : BYTE;
-}  // namespace Flag
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Flag
 
 namespace NtfsBrowser::Attr
 {
