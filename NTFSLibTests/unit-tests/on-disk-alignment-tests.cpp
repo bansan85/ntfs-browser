@@ -280,5 +280,6 @@ TEST_CASE(
       blockOffset + offsetof(NtfsBrowser::Data::IndexBlock, offset_of_us),
       kOddOffsetOfUs);
 
-  CHECK(CountRootEntries(std::move(image)) == expected);
+  const size_t actual = CountRootEntries(std::move(image));
+  CHECK(actual == expected);
 }
