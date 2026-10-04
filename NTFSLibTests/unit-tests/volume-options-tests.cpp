@@ -49,7 +49,28 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
-using namespace NtfsBrowserTests;
+using NtfsBrowserTests::BuildFakeNtfsImage;
+using NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
+using NtfsBrowserTests::BuildFakeNtfsImageWithBadDataRun;
+using NtfsBrowserTests::BuildFakeNtfsImageWithBadIndexBlockEntry;
+using NtfsBrowserTests::BuildFakeNtfsImageWithDeletedVolumeRecord;
+using NtfsBrowserTests::BuildFakeNtfsImageWithHugeOrphanScanBlockCount;
+using NtfsBrowserTests::BuildFakeNtfsImageWithMalformedIndexEntryFilename;
+using NtfsBrowserTests::BuildFakeNtfsImageWithMftTree;
+using NtfsBrowserTests::BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock;
+using NtfsBrowserTests::BuildFakeNtfsImageWithNoEndMarker;
+using NtfsBrowserTests::BuildFakeNtfsImageWithResidentEncryptedData;
+using NtfsBrowserTests::kAttrNameExceedsTotalSizeRecordIdx;
+using NtfsBrowserTests::kBadIndexBlockFirstName;
+using NtfsBrowserTests::kBadIndexBlockGoodName;
+using NtfsBrowserTests::kMalformedIndexEntryMftRef;
+using NtfsBrowserTests::kMftTreeDeletedFileIdx;
+using NtfsBrowserTests::kMultiClusterOrphanName;
+using NtfsBrowserTests::kMultiClusterReachableName;
+using NtfsBrowserTests::kOrphanedBlockOrphanName;
+using NtfsBrowserTests::kOrphanedBlockReachableName;
+using NtfsBrowserTests::MemoryDiskReader;
+using NtfsBrowserTests::TakeCapturedLog;
 
 namespace
 {

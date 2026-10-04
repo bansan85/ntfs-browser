@@ -34,8 +34,20 @@
 #include "std-filesystem-walk.h"
 #include "volume-open.h"
 
-using namespace NtfsBrowser;
-using namespace NtfsCompare;
+using NtfsBrowser::MftScanOptions;
+using NtfsBrowser::MftTree;
+using NtfsCompare::Listing;
+using NtfsCompare::OpenVolumeFor;
+using NtfsCompare::OsApiMethodName;
+using NtfsCompare::Report;
+using NtfsCompare::ResolveDirectoryRecord;
+using NtfsCompare::VolumeHandles;
+using NtfsCompare::WalkLibraryIndex;
+using NtfsCompare::WalkMftTree;
+using NtfsCompare::WalkOsApi;
+using NtfsCompare::WalkStdFilesystem;
+
+namespace Log = NtfsBrowser::Log;
 
 // main() only ever sees argv through the active ANSI code page on Windows,
 // which cannot express every path; wmain()'s argv is wide instead. Every

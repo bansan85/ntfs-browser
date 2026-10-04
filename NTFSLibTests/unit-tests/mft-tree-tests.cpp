@@ -35,7 +35,26 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
-using namespace NtfsBrowserTests;
+using NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
+using NtfsBrowserTests::BuildFakeNtfsImageWithHugeMftRealSize;
+using NtfsBrowserTests::BuildFakeNtfsImageWithMftExtensionRecord;
+using NtfsBrowserTests::BuildFakeNtfsImageWithMftTree;
+using NtfsBrowserTests::FileTimeToTicks;
+using NtfsBrowserTests::kAttrNameExceedsTotalSizeRecordIdx;
+using NtfsBrowserTests::kMftTreeDeletedChildIdx;
+using NtfsBrowserTests::kMftTreeDeletedDirIdx;
+using NtfsBrowserTests::kMftTreeDeletedFileIdx;
+using NtfsBrowserTests::kMftTreeDocsIdx;
+using NtfsBrowserTests::kMftTreeExtensionIdx;
+using NtfsBrowserTests::kMftTreeHardLinkIdx;
+using NtfsBrowserTests::kMftTreeRecordCount;
+using NtfsBrowserTests::kMftTreeReportAllocatedSize;
+using NtfsBrowserTests::kMftTreeReportDataSize;
+using NtfsBrowserTests::kMftTreeReportIdx;
+using NtfsBrowserTests::kMftTreeReusedDirIdx;
+using NtfsBrowserTests::kMftTreeStaleChildIdx;
+using NtfsBrowserTests::kMftTreeZeroedIdx;
+using NtfsBrowserTests::MemoryDiskReader;
 
 namespace
 {

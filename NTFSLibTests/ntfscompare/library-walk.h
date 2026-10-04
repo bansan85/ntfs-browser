@@ -38,17 +38,20 @@ template <NtfsBrowser::Strategy S>
     ResolveDirectoryRecord(NtfsBrowser::NtfsVolume<S>& volume,
                            std::wstring_view relativePath)
 {
-  using namespace NtfsBrowser;
+  using NtfsBrowser::FileRecord;
+  using NtfsBrowser::IndexEntry;
+  using NtfsBrowser::Mask;
 
   FileRecord<S> current(volume);
   current.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-  if (!current.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)) ||
+  if (!current.ParseFileRecord(
+          static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::ROOT)) ||
       !current.ParseAttrs())
   {
     return std::nullopt;
   }
 
-  auto record = static_cast<ULONGLONG>(Enum::MftIdx::ROOT);
+  auto record = static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::ROOT);
   size_t pos = 0;
   while (pos < relativePath.size())
   {
@@ -85,7 +88,9 @@ template <NtfsBrowser::Strategy S>
 [[nodiscard]] Listing WalkLibraryIndex(NtfsBrowser::NtfsVolume<S>& volume,
                                        ULONGLONG startRecord)
 {
-  using namespace NtfsBrowser;
+  using NtfsBrowser::FileRecord;
+  using NtfsBrowser::IndexEntryView;
+  using NtfsBrowser::Mask;
 
   Listing result;
 
@@ -127,7 +132,7 @@ template <NtfsBrowser::Strategy S>
           // Skip system metafiles and the DOS 8.3 alias: the Win32 name is
           // this tool's path key everywhere.
           if (index_entry.GetFileReference() <
-                  static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
+                  static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::USER) ||
               !index_entry.IsWin32Name())
           {
             return;

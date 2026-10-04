@@ -27,10 +27,18 @@
 #include "looping-disk-reader.h"
 #include "named-stream-probe.h"
 
-using namespace NtfsBrowser;
+using NtfsBrowser::FileRecord;
+using NtfsBrowser::IndexEntryView;
+using NtfsBrowser::Mask;
+using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Strategy;
+using NtfsBrowser::VolumeOptions;
 using NtfsFuzz::kGapCollationSearchName;
 using NtfsFuzz::kNamedDataStreamName;
 using NtfsFuzz::LoopingDiskReader;
+
+namespace Enum = NtfsBrowser::Enum;
+namespace Log = NtfsBrowser::Log;
 
 // Windows gives a wmain() the command line as wide characters. A narrow
 // main() only ever sees it through the active ANSI code page, which cannot
