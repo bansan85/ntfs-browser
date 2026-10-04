@@ -55,8 +55,9 @@ bool RawDeviceDiskReader::ReadInto(LARGE_INTEGER& addr,
       pread(fd_, dest.data(), dest.size(), addr.QuadPart);
   if (bytes_read < 0 || static_cast<size_t>(bytes_read) != dest.size())
   {
-    std::fprintf(stderr, "Cannot read device at offset %lld\n",
-                 static_cast<long long>(addr.QuadPart));
+    static_cast<void>(std::fprintf(stderr,
+                                   "Cannot read device at offset %lld\n",
+                                   static_cast<long long>(addr.QuadPart)));
     return false;
   }
   return true;

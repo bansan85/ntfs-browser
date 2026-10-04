@@ -114,23 +114,25 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       std::filesystem::weakly_canonical(target, error_code);
   if (error_code)
   {
-    std::fprintf(stderr, "Cannot resolve %s\n", target.c_str());
+    static_cast<void>(
+        std::fprintf(stderr, "Cannot resolve %s\n", target.c_str()));
     return std::nullopt;
   }
 
   const std::optional<MountInfo> mount = FindMount(canonical);
   if (!mount)
   {
-    std::fprintf(stderr, "Cannot find the mount point backing %s\n",
-                 canonical.c_str());
+    static_cast<void>(std::fprintf(
+        stderr, "Cannot find the mount point backing %s\n", canonical.c_str()));
     return std::nullopt;
   }
   if (!mount->device.starts_with("/dev/"))
   {
-    std::fprintf(stderr,
-                 "%s is not backed by a real block device (mounted from "
-                 "\"%s\")\n",
-                 canonical.c_str(), mount->device.c_str());
+    static_cast<void>(
+        std::fprintf(stderr,
+                     "%s is not backed by a real block device (mounted from "
+                     "\"%s\")\n",
+                     canonical.c_str(), mount->device.c_str()));
     return std::nullopt;
   }
   const std::wstring devicePath(mount->device.begin(), mount->device.end());
@@ -141,8 +143,9 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       fullCacheReader->Open(devicePath) && noCacheReader->Open(devicePath);
   if (!opened)
   {
-    std::fprintf(stderr, "Cannot open %s (root privileges may be required)\n",
-                 mount->device.c_str());
+    static_cast<void>(std::fprintf(
+        stderr, "Cannot open %s (root privileges may be required)\n",
+        mount->device.c_str()));
     return std::nullopt;
   }
 
@@ -153,7 +156,8 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       std::move(noCacheReader));
   if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK())
   {
-    std::fprintf(stderr, "%s is not an NTFS volume\n", mount->device.c_str());
+    static_cast<void>(std::fprintf(stderr, "%s is not an NTFS volume\n",
+                                   mount->device.c_str()));
     return std::nullopt;
   }
 

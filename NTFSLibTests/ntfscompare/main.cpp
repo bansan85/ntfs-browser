@@ -75,10 +75,11 @@ constexpr std::string_view kLogPrefix = Log::kOptionPrefix;
 
 void Usage(const ArgChar* program)
 {
-  std::fprintf(stderr, "usage: " NTFSCOMPARE_NATIVE " [--log=...] <folder>\n",
-               program);
-  std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str());
-  std::fprintf(
+  static_cast<void>(std::fprintf(
+      stderr, "usage: " NTFSCOMPARE_NATIVE " [--log=...] <folder>\n", program));
+  static_cast<void>(
+      std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str()));
+  static_cast<void>(std::fprintf(
       stderr,
       "Compares 6 ways of recursively listing <folder>: std::filesystem, "
       "the platform's native API, and NtfsBrowser via NtfsVolume<FULL_CACHE>, "
@@ -123,15 +124,17 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
 
   if (!Log::Configure(logConfig))
   {
-    std::fprintf(stderr, "Cannot open log file " NTFSCOMPARE_NATIVE "\n",
-                 logConfig.file_path.c_str());
+    static_cast<void>(
+        std::fprintf(stderr, "Cannot open log file " NTFSCOMPARE_NATIVE "\n",
+                     logConfig.file_path.c_str()));
   }
 
   const std::filesystem::path target(targetArg);
   std::error_code error_code;
   if (!std::filesystem::is_directory(target, error_code))
   {
-    std::fprintf(stderr, NTFSCOMPARE_NATIVE " is not a directory\n", targetArg);
+    static_cast<void>(std::fprintf(
+        stderr, NTFSCOMPARE_NATIVE " is not a directory\n", targetArg));
     return 1;
   }
 
@@ -146,13 +149,14 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
   const std::optional<VolumeHandles> volume = OpenVolumeFor(target);
   if (!volume)
   {
-    std::fprintf(stderr,
-                 "Cannot open the underlying NTFS volume: the comparison "
-                 "needs the three NtfsBrowser-based listings as its "
-                 "reference, so it cannot proceed. std::filesystem found "
-                 "%zu entries, %s found %zu.\n",
-                 WalkStdFilesystem(target).size(), OsApiMethodName(),
-                 WalkOsApi(target).size());
+    static_cast<void>(
+        std::fprintf(stderr,
+                     "Cannot open the underlying NTFS volume: the comparison "
+                     "needs the three NtfsBrowser-based listings as its "
+                     "reference, so it cannot proceed. std::filesystem found "
+                     "%zu entries, %s found %zu.\n",
+                     WalkStdFilesystem(target).size(), OsApiMethodName(),
+                     WalkOsApi(target).size()));
     return 1;
   }
 
@@ -162,37 +166,38 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
       ResolveDirectoryRecord(*volume->no_cache, volume->relative_path);
   if (!fullCacheRecord || !noCacheRecord)
   {
-    std::fprintf(stderr,
-                 "Cannot resolve " NTFSCOMPARE_NATIVE
-                 " within its NTFS volume\n",
-                 targetArg);
+    static_cast<void>(std::fprintf(stderr,
+                                   "Cannot resolve " NTFSCOMPARE_NATIVE
+                                   " within its NTFS volume\n",
+                                   targetArg));
     return 1;
   }
 
-  std::fprintf(stderr,
-               "Listing " NTFSCOMPARE_NATIVE " via NtfsVolume<FULL_CACHE>...\n",
-               targetArg);
+  static_cast<void>(std::fprintf(
+      stderr, "Listing " NTFSCOMPARE_NATIVE " via NtfsVolume<FULL_CACHE>...\n",
+      targetArg));
   const Listing fullCacheListing =
       WalkLibraryIndex(*volume->full_cache, *fullCacheRecord);
 
-  std::fprintf(stderr,
-               "Listing " NTFSCOMPARE_NATIVE " via NtfsVolume<NO_CACHE>...\n",
-               targetArg);
+  static_cast<void>(std::fprintf(
+      stderr, "Listing " NTFSCOMPARE_NATIVE " via NtfsVolume<NO_CACHE>...\n",
+      targetArg));
   const Listing noCacheListing =
       WalkLibraryIndex(*volume->no_cache, *noCacheRecord);
 
-  std::fprintf(stderr,
-               "Scanning the whole $MFT for MftTree (this can take a "
-               "while on a large volume)...\n");
+  static_cast<void>(
+      std::fprintf(stderr,
+                   "Scanning the whole $MFT for MftTree (this can take a "
+                   "while on a large volume)...\n"));
   MftScanOptions scanOptions;
   scanOptions.progress = [](ULONGLONG done, ULONGLONG total)
   {
-    std::fprintf(stderr, "\r$MFT: %llu / %llu",
-                 static_cast<unsigned long long>(done),
-                 static_cast<unsigned long long>(total));
+    static_cast<void>(std::fprintf(stderr, "\r$MFT: %llu / %llu",
+                                   static_cast<unsigned long long>(done),
+                                   static_cast<unsigned long long>(total)));
     if (done == total)
     {
-      std::fprintf(stderr, "\n");
+      static_cast<void>(std::fprintf(stderr, "\n"));
     }
     return true;
   };
@@ -203,14 +208,15 @@ int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
   const Listing reference = CompareLibraryMethods(
       fullCacheListing, noCacheListing, mftTreeListing, report);
 
-  std::fprintf(stderr,
-               "Listing " NTFSCOMPARE_NATIVE " via std::filesystem...\n",
-               targetArg);
+  static_cast<void>(std::fprintf(
+      stderr, "Listing " NTFSCOMPARE_NATIVE " via std::filesystem...\n",
+      targetArg));
   CompareAgainstReference("std::filesystem", reference,
                           WalkStdFilesystem(target), report);
 
-  std::fprintf(stderr, "Listing " NTFSCOMPARE_NATIVE " via %s...\n", targetArg,
-               OsApiMethodName());
+  static_cast<void>(std::fprintf(stderr,
+                                 "Listing " NTFSCOMPARE_NATIVE " via %s...\n",
+                                 targetArg, OsApiMethodName()));
   CompareAgainstReference(OsApiMethodName(), reference, WalkOsApi(target),
                           report);
 

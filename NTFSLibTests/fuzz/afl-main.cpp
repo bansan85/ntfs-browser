@@ -184,11 +184,13 @@ void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
 // Prints command-line usage help.
 void Usage(const ArgChar* program)
 {
-  std::fprintf(stderr,
-               "usage: " NTFS_FUZZ_NATIVE
-               " [--log=...] [--inject-read-failures] <input-file>\n",
-               program);
-  std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str());
+  static_cast<void>(
+      std::fprintf(stderr,
+                   "usage: " NTFS_FUZZ_NATIVE
+                   " [--log=...] [--inject-read-failures] <input-file>\n",
+                   program));
+  static_cast<void>(
+      std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str()));
 }
 
 }  // namespace
@@ -239,8 +241,9 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
 
   if (!Log::Configure(logConfig))
   {
-    std::fprintf(stderr, "Cannot open log file " NTFS_FUZZ_NATIVE "\n",
-                 logConfig.file_path.c_str());
+    static_cast<void>(
+        std::fprintf(stderr, "Cannot open log file " NTFS_FUZZ_NATIVE "\n",
+                     logConfig.file_path.c_str()));
   }
 
   std::optional<std::vector<BYTE>> data =

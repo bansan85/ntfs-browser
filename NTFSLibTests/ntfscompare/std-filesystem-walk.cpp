@@ -94,7 +94,8 @@ Listing WalkStdFilesystem(const std::filesystem::path& root)
 
   if (error_code)
   {
-    std::fprintf(stderr, "std::filesystem: %s\n", error_code.message().c_str());
+    static_cast<void>(std::fprintf(stderr, "std::filesystem: %s\n",
+                                   error_code.message().c_str()));
   }
 
   return result;
