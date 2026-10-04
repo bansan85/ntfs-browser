@@ -86,19 +86,18 @@ class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
 [[nodiscard]] constexpr bool
     BackendAvailable(NtfsBrowser::Efs::CipherBackend backend) noexcept
 {
-  if (backend == NtfsBrowser::Efs::CipherBackend::kCryptoPp)
-  {
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-    return true;
+  constexpr bool kHasCryptoPp = true;
 #else
-    return false;
+  constexpr bool kHasCryptoPp = false;
 #endif
-  }
 #if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-  return true;
+  constexpr bool kHasBCrypt = true;
 #else
-  return false;
+  constexpr bool kHasBCrypt = false;
 #endif
+  return backend == NtfsBrowser::Efs::CipherBackend::kCryptoPp ? kHasCryptoPp
+                                                               : kHasBCrypt;
 }
 
 }  // namespace NtfsBrowserTests
