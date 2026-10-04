@@ -62,9 +62,9 @@ IndexEntry MakeSystemEntry()
   index_entry.stream_size =
       gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[kNameLen]) -
                         reinterpret_cast<BYTE*>(&filename));
-  index_entry.size = gsl::narrow<WORD>(
-      reinterpret_cast<BYTE*>(&index_entry.stream) -
-      reinterpret_cast<BYTE*>(&index_entry) + index_entry.stream_size);
+  index_entry.size = gsl::narrow<WORD>(&index_entry.stream -
+                                       reinterpret_cast<BYTE*>(&index_entry) +
+                                       index_entry.stream_size);
 
   return IndexEntry(IndexEntryView(index_entry));
 }
@@ -95,9 +95,9 @@ IndexEntry MakeNamedEntry(std::wstring_view name)
   index_entry.stream_size =
       gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[name.size()]) -
                         reinterpret_cast<BYTE*>(&filename));
-  index_entry.size = gsl::narrow<WORD>(
-      reinterpret_cast<BYTE*>(&index_entry.stream) -
-      reinterpret_cast<BYTE*>(&index_entry) + index_entry.stream_size);
+  index_entry.size = gsl::narrow<WORD>(&index_entry.stream -
+                                       reinterpret_cast<BYTE*>(&index_entry) +
+                                       index_entry.stream_size);
 
   return IndexEntry(IndexEntryView(index_entry));
 }
