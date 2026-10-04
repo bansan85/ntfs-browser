@@ -91,10 +91,9 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target)
   while (getmntent_r(mounts, &entry, buffer.data(), buffer.size()) != nullptr)
   {
     const std::string mountStr = entry.mnt_dir;
-    const bool isPrefix =
-        targetStr.compare(0, mountStr.size(), mountStr) == 0 &&
-        (targetStr.size() == mountStr.size() ||
-         targetStr[mountStr.size()] == '/');
+    const bool isPrefix = targetStr.starts_with(mountStr) &&
+                          (targetStr.size() == mountStr.size() ||
+                           targetStr[mountStr.size()] == '/');
     if (isPrefix && mountStr.size() >= bestLength)
     {
       bestLength = mountStr.size();
