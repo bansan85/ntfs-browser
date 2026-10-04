@@ -209,10 +209,9 @@ const AttrHeaderCommon&
     return *reinterpret_cast<const AttrHeaderCommon*>(bytes.data());
   }
 
-  auto const& copy =
-      realigned_attrs_.emplace_back(std::make_unique<BYTE[]>(bytes.size()));
-  std::memcpy(copy.get(), bytes.data(), bytes.size());
-  return *reinterpret_cast<const AttrHeaderCommon*>(copy.get());
+  auto& copy = realigned_attrs_.emplace_back(bytes.size());
+  std::memcpy(copy.data(), bytes.data(), bytes.size());
+  return *reinterpret_cast<const AttrHeaderCommon*>(copy.data());
 }
 
 // Call user defined Callback routines for an attribute

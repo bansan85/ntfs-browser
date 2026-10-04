@@ -1,5 +1,6 @@
 #include "volume-open.h"
 
+#include <array>
 #include <cstdio>
 #include <system_error>
 #include <utility>
@@ -86,8 +87,8 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target)
   std::optional<MountInfo> best;
   size_t bestLength = 0;
   struct mntent entry = {};
-  char buffer[kMountLineBufferSize];
-  while (getmntent_r(mounts, &entry, buffer, sizeof(buffer)) != nullptr)
+  std::array<char, kMountLineBufferSize> buffer{};
+  while (getmntent_r(mounts, &entry, buffer.data(), buffer.size()) != nullptr)
   {
     const std::string mountStr = entry.mnt_dir;
     const bool isPrefix =

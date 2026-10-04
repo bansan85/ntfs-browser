@@ -139,7 +139,8 @@ TEST_CASE("LZNT1 decompresses the [MS-XCA] section 3.3 worked example",
       NtfsBrowserTests::kXcaLznt1ExampleCompressed, out);
 
   REQUIRE(produced == NtfsBrowserTests::kXcaLznt1ExampleDecompressedSize);
-  CHECK(std::memcmp(out.data(), NtfsBrowserTests::kXcaLznt1ExampleDecompressed,
+  CHECK(std::memcmp(out.data(),
+                    NtfsBrowserTests::kXcaLznt1ExampleDecompressed.data(),
                     produced) == 0);
 }
 
@@ -277,7 +278,7 @@ void CheckCompressedFileReadsBackDecompressed()
   REQUIRE(data.value().size() ==
           NtfsBrowserTests::kXcaLznt1ExampleDecompressedSize);
   CHECK(std::memcmp(data.value().data(),
-                    NtfsBrowserTests::kXcaLznt1ExampleDecompressed,
+                    NtfsBrowserTests::kXcaLznt1ExampleDecompressed.data(),
                     data.value().size()) == 0);
 }
 

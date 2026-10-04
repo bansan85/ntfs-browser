@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
@@ -34,13 +35,13 @@ constexpr WORD kFillerCodeUnit = 0xFFFF;
 // immediately past the name, so a read past the real name is detectable.
 IndexEntry MakeSystemEntry()
 {
-  constexpr wchar_t kName[] = L"System";
+  constexpr std::wstring_view kName = L"System";
   constexpr BYTE kNameLen = 6;
 
-  auto const buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
+  auto const buffer = std::make_shared<std::vector<BYTE>>(kEntryBufferSize);
 
   auto& index_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer->data());
   index_entry.mft_index = kEntryRecordNumber;
   index_entry.mft_sn = 1;
 
@@ -70,10 +71,10 @@ IndexEntry MakeSystemEntry()
 // probe individual code points' collation order).
 IndexEntry MakeNamedEntry(std::wstring_view name)
 {
-  auto const buffer = std::shared_ptr<BYTE[]>(new BYTE[kEntryBufferSize]());
+  auto const buffer = std::make_shared<std::vector<BYTE>>(kEntryBufferSize);
 
   auto& index_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.get());
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer->data());
   index_entry.mft_index = kEntryRecordNumber;
   index_entry.mft_sn = 1;
 

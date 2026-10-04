@@ -58,7 +58,7 @@ class FileRecord<S>::Impl
   // Aligned copies of the attributes that sit at a misaligned address in
   // record_buffer_. A parsed attribute keeps a reference into its copy, so
   // these MUST outlive attr_list_: declared before it, cleared after it.
-  std::vector<std::unique_ptr<BYTE[]>> realigned_attrs_;
+  std::vector<std::vector<BYTE>> realigned_attrs_;
   std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
 
   // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.

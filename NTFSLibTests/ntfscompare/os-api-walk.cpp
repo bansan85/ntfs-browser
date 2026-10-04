@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <array>
 #include <ctime>
 #include <optional>
 #include <string>
@@ -165,17 +166,18 @@ constexpr DWORD kAttrEncrypted = 0x4000U;
   #ifdef __linux__
 bool ReadNtfsAttribXattr(const std::filesystem::path& path, DWORD& value)
 {
-  unsigned char buf[4];
+  std::array<unsigned char, 4> buf{};
   const ssize_t xattr_size =
-      getxattr(path.c_str(), "system.ntfs_attrib", buf, sizeof(buf));
-  if (xattr_size != static_cast<ssize_t>(sizeof(buf)))
+      getxattr(path.c_str(), "system.ntfs_attrib", buf.data(), buf.size());
+  if (xattr_size != static_cast<ssize_t>(buf.size()))
   {
     return false;
   }
-  value = static_cast<DWORD>(buf[0]) |
-          (static_cast<DWORD>(buf[1]) << kXattrBitsPerByte) |
-          (static_cast<DWORD>(buf[2]) << (2 * kXattrBitsPerByte)) |
-          (static_cast<DWORD>(buf[3]) << (3 * kXattrBitsPerByte));
+  value = 0;
+  for (size_t i = 0; i < buf.size(); i++)
+  {
+    value |= static_cast<DWORD>(buf.at(i)) << (i * kXattrBitsPerByte);
+  }
   return true;
 }
   #else

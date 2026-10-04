@@ -7,6 +7,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace NtfsBrowser
 {
@@ -28,8 +29,9 @@ struct IndexEntry
   WORD size;               // Length of the index entry
   WORD stream_size;        // Length of the stream
   Flag::IndexEntry flags;  // Flags
-  BYTE padding[3];         // Padding
-  BYTE stream;             // Stream
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+  BYTE padding[3];  // Padding
+  BYTE stream;      // Stream
   // VCN of the sub node in Index Allocation, Offset = Size - 8
 };
 
@@ -42,7 +44,7 @@ namespace NtfsBrowser
 // at stay alive as long as `owner` does.
 struct AlignedIndexEntry
 {
-  std::shared_ptr<BYTE[]> owner;
+  std::shared_ptr<std::vector<BYTE>> owner;
   const Data::IndexEntry* entry;
 };
 
@@ -57,7 +59,7 @@ struct AlignedIndexEntry
 // aligned copy first. The caller MUST have checked that `size` bytes fit in
 // `at`.
 [[nodiscard]] AlignedIndexEntry
-    AlignIndexEntry(const std::shared_ptr<BYTE[]>& buffer,
+    AlignIndexEntry(const std::shared_ptr<std::vector<BYTE>>& buffer,
                     std::span<const BYTE> bytes, size_t size);
 
 // Checks ie's on-disk bounds and sub-node size. Returns the defect message

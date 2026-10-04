@@ -132,9 +132,9 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   }
 
   // Allocate buffer for a single Index Block
-  std::shared_ptr<BYTE[]> const ib_sh_ptr =
+  std::shared_ptr<std::vector<BYTE>> const ib_sh_ptr =
       ibClass.AllocIndexBlock(this->GetIndexBlockSize());
-  const std::span<BYTE> block(ib_sh_ptr.get(), this->GetIndexBlockSize());
+  const std::span<BYTE> block(ib_sh_ptr->data(), this->GetIndexBlockSize());
 
   // Read one Index Block
   std::optional<ULONGLONG> len = this->ReadData(byte_offset, block);
@@ -212,9 +212,9 @@ static bool RejectBlockOnDefect(bool recover, std::string_view defect,
 // Walks the entries of a block that FixupIndexBlock() accepted. owner keeps the
 // block's buffer alive for the entries.
 template <Strategy S>
-bool AttrIndexAlloc<S>::ParseIndexEntries(const std::shared_ptr<BYTE[]>& owner,
-                                          std::span<BYTE> block,
-                                          IndexBlock& ibClass)
+bool AttrIndexAlloc<S>::ParseIndexEntries(
+    const std::shared_ptr<std::vector<BYTE>>& owner, std::span<BYTE> block,
+    IndexBlock& ibClass)
 {
   const auto* ibBuf = reinterpret_cast<const Data::IndexBlock*>(block.data());
   constexpr size_t kEntryOffsetPos = offsetof(Data::IndexBlock, entry_offset);

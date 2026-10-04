@@ -1,6 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <limits>
 #include <memory>
@@ -121,9 +122,10 @@ TEST_CASE(
   };
   // Inside the partial block, ending exactly at the end, and straddling into
   // it from the full block before.
-  const Range ranges[] = {{kBlock + kInnerOffset, kInnerLength},
-                          {kBlock + kTail - kInnerLength, kInnerLength},
-                          {kBlock - kStraddleBefore, kStraddleLength}};
+  const auto ranges =
+      std::to_array<Range>({{kBlock + kInnerOffset, kInnerLength},
+                            {kBlock + kTail - kInnerLength, kInnerLength},
+                            {kBlock - kStraddleBefore, kStraddleLength}});
 
   for (const Range& range : ranges)
   {
@@ -203,10 +205,10 @@ TEST_CASE(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   constexpr DWORD kLength = 100;
-  const LONGLONG addresses[] = {std::numeric_limits<LONGLONG>::max(),
-                                std::numeric_limits<LONGLONG>::max() - 10,
-                                std::numeric_limits<LONGLONG>::max() -
-                                    (kLength - 1)};
+  const auto addresses = std::to_array<LONGLONG>(
+      {std::numeric_limits<LONGLONG>::max(),
+       std::numeric_limits<LONGLONG>::max() - 10,
+       std::numeric_limits<LONGLONG>::max() - (kLength - 1)});
   for (const LONGLONG address : addresses)
   {
     INFO("address " << address);

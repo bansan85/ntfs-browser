@@ -80,7 +80,7 @@ void OnTerminate()
 // NtfsBpb::signature sits 3 bytes in, after the boot sector's jump instruction.
 constexpr size_t kBpbSignatureOffset = 3;
 // The exact bytes NtfsBpb::signature must hold to pass validation.
-constexpr char kBpbSignature[] = "NTFS    ";
+constexpr std::string_view kBpbSignature = "NTFS    ";
 // Byte length of kBpbSignature, excluding its terminator.
 constexpr size_t kBpbSignatureLen = 8;
 
@@ -109,7 +109,7 @@ SequentialDiskReader::Producer
         if (nthCall == 0 && injectSignature &&
             dest.size() >= kBpbSignatureOffset + kBpbSignatureLen)
         {
-          std::memcpy(dest.data() + kBpbSignatureOffset, kBpbSignature,
+          std::memcpy(dest.data() + kBpbSignatureOffset, kBpbSignature.data(),
                       kBpbSignatureLen);
         }
         nthCall++;

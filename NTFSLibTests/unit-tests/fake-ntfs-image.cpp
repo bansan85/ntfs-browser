@@ -653,7 +653,7 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG baseIdx = 0)
   filename.flags = NtfsBrowser::Flag::Filename::NONE;
   filename.name_length = 3;
   filename.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
-  constexpr wchar_t kFooName[] = L"Foo";
+  constexpr std::wstring_view kFooName = L"Foo";
   for (BYTE i = 0; i < filename.name_length; i++)
   {
     filename.name[i] = gsl::narrow<WORD>(kFooName[i]);
@@ -780,7 +780,7 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
   filename.flags = NtfsBrowser::Flag::Filename::NONE;
   filename.name_length = 3;
   filename.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
-  constexpr wchar_t kFooName[] = L"Foo";
+  constexpr std::wstring_view kFooName = L"Foo";
   for (BYTE i = 0; i < filename.name_length; i++)
   {
     filename.name[i] = gsl::narrow<WORD>(kFooName[i]);
@@ -1068,9 +1068,8 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord()
                         2 * static_cast<DWORD>(kAttrNameBoundsNameLength) >
                     sizeof(NtfsBrowser::Attr::HeaderResident) + kBodySize,
                 "name must exceed total_size");
-  static_assert(sizeof(kAttrNameBoundsSentinel) - sizeof(wchar_t) ==
-                    static_cast<size_t>(kAttrNameBoundsNameLength) *
-                        sizeof(wchar_t),
+  static_assert(kAttrNameBoundsSentinel.size() ==
+                    static_cast<size_t>(kAttrNameBoundsNameLength),
                 "sentinel length must match name_length exactly");
 
   attr.header.name_length = kAttrNameBoundsNameLength;
@@ -1489,7 +1488,7 @@ FakeRecord MakeRootRecordWithGapCollationSubNode()
       *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
   fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::ROOT);
   fn1.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
-  constexpr wchar_t kNonTerminalName[] = L"A_";
+  constexpr std::wstring_view kNonTerminalName = L"A_";
   fn1.name_length = 2;
   fn1.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
   for (BYTE i = 0; i < fn1.name_length; i++)
@@ -2663,11 +2662,9 @@ std::vector<BYTE> MakeIndexBlockContent(std::span<const FakeIndexName> names)
 // the surrogate-pair one decompresses to.
 std::vector<BYTE> MakeCompressedIndexBlockContent()
 {
-  const FakeIndexName comp{
-      .name = std::wstring_view(kCompressedIndexEntryName,
-                                kCompressedIndexEntryNameLength),
-      .mft_ref = kCompressedIndexEntryMftRef,
-      .directory = false};
+  const FakeIndexName comp{.name = kCompressedIndexEntryName,
+                           .mft_ref = kCompressedIndexEntryMftRef,
+                           .directory = false};
   return MakeIndexBlockContent(std::span(&comp, 1));
 }
 
@@ -5488,7 +5485,7 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord()
 
   // The real, on-disk name is short; stream_size (and hence e1.size) is
   // sized to it, not to the forged name_length below.
-  constexpr wchar_t kRealName[] = L"Bad";
+  constexpr std::wstring_view kRealName = L"Bad";
   constexpr BYTE kRealNameLength = 3;
   for (BYTE i = 0; i < kRealNameLength; i++)
   {

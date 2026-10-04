@@ -86,13 +86,13 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 {
   const bool recover = this->volume_.GetOptions().recover_errors;
   const ULONGLONG data_size = this->GetDataSize();
-  const auto data_copy = std::make_shared<BYTE[]>(data_size);
-  std::memcpy(data_copy.get(), this->GetData(), data_size);
+  const auto data_copy = std::make_shared<std::vector<BYTE>>(data_size);
+  std::memcpy(data_copy->data(), this->GetData(), data_size);
   LogDebug("Index Root: allocated independent copy of resident data");
 
-  const std::span<const BYTE> data(data_copy.get(), data_size);
+  const std::span<const BYTE> data(data_copy->data(), data_size);
   const auto* const index_root_copy =
-      reinterpret_cast<const Attr::IndexRoot*>(data_copy.get());
+      reinterpret_cast<const Attr::IndexRoot*>(data_copy->data());
   constexpr size_t kEntryOffsetPos = offsetof(Attr::IndexRoot, entry_offset);
 
   if (data.size() < kEntryOffsetPos ||

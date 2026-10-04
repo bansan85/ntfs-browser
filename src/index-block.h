@@ -26,9 +26,9 @@ class IndexBlock : public std::vector<IndexEntry>
   friend class AttrIndexAlloc;
 
  private:
-  std::shared_ptr<BYTE[]> index_block_;
+  std::shared_ptr<std::vector<BYTE>> index_block_;
 
-  [[nodiscard]] std::shared_ptr<BYTE[]> AllocIndexBlock(DWORD size);
+  [[nodiscard]] std::shared_ptr<std::vector<BYTE>> AllocIndexBlock(DWORD size);
 };  // IndexBlock
 
 }  // namespace NtfsBrowser

@@ -1,6 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -77,7 +78,7 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
     ULONGLONG offset;
     size_t length;
   };
-  const Range ranges[] = {
+  const auto ranges = std::to_array<Range>({
       {0, 3000},     // the whole stream, aligned start, unaligned end
       {0, 1024},     // wholly initialized, one aligned cluster
       {1400, 300},   // straddles the initialized size
@@ -85,7 +86,7 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
       {2000, 500},   // wholly uninitialized, unaligned
       {1024, 2048},  // aligned start, reaches past the real size
       {2990, 100}    // clamped by the real size
-  };
+  });
 
   for (const Range& range : ranges)
   {

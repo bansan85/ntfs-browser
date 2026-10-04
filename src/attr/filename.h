@@ -27,7 +27,8 @@ struct Filename
   DWORD er;                            // Used by EAs and Reparse
   BYTE name_length;                    // Filename length in characters
   Flag::FilenameNamespace name_space;  // Filename space
-  WORD name[1];                        // Filename
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+  WORD name[1];  // Filename
 };
 
 }  // namespace NtfsBrowser::Attr

@@ -557,14 +557,15 @@ namespace
 
 // Extension links that do not belong to kAttrListLifetimeBaseIdx's list
 // entry: a reused record, or a record of another file.
-constexpr NtfsBrowserTests::FakeExtensionLink kForeignLinks[] = {
-    // Same base, but the record has since been reused (sequence 3 -> 4).
-    {.entry_sequence = 3, .record_sequence = 4, .base_ref = 6},
-    // The record was reused by a live file of its own: no base at all.
-    {.entry_sequence = 3, .record_sequence = 4, .base_ref = 0},
-    // Same sequence, but the record is an extension of another file.
-    {.entry_sequence = 0, .record_sequence = 0, .base_ref = 8},
-};
+constexpr auto kForeignLinks =
+    std::to_array<NtfsBrowserTests::FakeExtensionLink>({
+        // Same base, but the record has since been reused (sequence 3 -> 4).
+        {.entry_sequence = 3, .record_sequence = 4, .base_ref = 6},
+        // The record was reused by a live file of its own: no base at all.
+        {.entry_sequence = 3, .record_sequence = 4, .base_ref = 0},
+        // Same sequence, but the record is an extension of another file.
+        {.entry_sequence = 0, .record_sequence = 0, .base_ref = 8},
+    });
 
 }  // namespace
 
@@ -575,7 +576,7 @@ TEMPLATE_TEST_CASE_SIG(
     Strategy::FULL_CACHE)
 {
   const NtfsBrowserTests::FakeExtensionLink link =
-      kForeignLinks[GENERATE(size_t{0}, size_t{1}, size_t{2})];
+      kForeignLinks.at(GENERATE(size_t{0}, size_t{1}, size_t{2}));
 
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(link));
@@ -596,7 +597,7 @@ TEMPLATE_TEST_CASE_SIG(
     Strategy::FULL_CACHE)
 {
   const NtfsBrowserTests::FakeExtensionLink link =
-      kForeignLinks[GENERATE(size_t{0}, size_t{1}, size_t{2})];
+      kForeignLinks.at(GENERATE(size_t{0}, size_t{1}, size_t{2}));
 
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(link));

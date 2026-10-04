@@ -69,7 +69,7 @@ constexpr std::string_view kInjectOption = "--inject-read-failures";
 // NtfsBpb::signature sits 3 bytes in, after the boot sector's jump instruction.
 constexpr size_t kBpbSignatureOffset = 3;
 // The exact bytes NtfsBpb::signature must hold to pass validation.
-constexpr char kBpbSignature[] = "NTFS    ";
+constexpr std::string_view kBpbSignature = "NTFS    ";
 // Byte length of kBpbSignature, excluding its terminator.
 constexpr size_t kBpbSignatureLen = 8;
 
@@ -80,7 +80,8 @@ void PatchBpbSignature(std::vector<BYTE>& data)
   {
     // The enclosing check leaves room for kBpbSignatureLen bytes at the offset.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    std::memcpy(&data[kBpbSignatureOffset], kBpbSignature, kBpbSignatureLen);
+    std::memcpy(&data[kBpbSignatureOffset], kBpbSignature.data(),
+                kBpbSignatureLen);
   }
 }
 

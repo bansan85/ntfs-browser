@@ -21,7 +21,8 @@ struct IndexBlock
   DWORD total_entry_size;  // Total size of the index entries
   DWORD alloc_entry_size;  // Allocated size of index entries
   BYTE not_leaf;           // 1 if not leaf node (has children)
-  BYTE padding[3];         // Padding
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+  BYTE padding[3];  // Padding
 };
 
 }  // namespace NtfsBrowser::Data

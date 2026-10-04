@@ -68,6 +68,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
       WORD align;              // Align to 4 byte boundary
       DWORD record_no;         // Number of this MFT Record
     };
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
     BYTE raw[kMaxFileRecordSize];
   };
 

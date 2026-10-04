@@ -70,12 +70,12 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader
 
   // Strategy::FULL_CACHE
   mutable std::unordered_map<size_t, BYTE*> map_buffer_;
-  mutable std::vector<std::unique_ptr<BYTE[]>> mem_alloc;
+  mutable std::vector<std::vector<BYTE>> mem_alloc;
   mutable size_t last_alloc = 0;
 
   // Owns stitched-together buffers for crossing reads, kept alive for
   // this reader's lifetime.
-  mutable std::vector<std::unique_ptr<BYTE[]>> crossing_reads_;
+  mutable std::vector<std::vector<BYTE>> crossing_reads_;
 };
 
 }  // namespace NtfsBrowser

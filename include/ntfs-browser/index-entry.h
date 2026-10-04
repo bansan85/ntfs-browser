@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/filename.h>
@@ -16,7 +17,7 @@ struct IndexEntry;
 class NTFS_BROWSER_EXPORT IndexEntry : public Filename
 {
  public:
-  explicit IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
+  explicit IndexEntry(std::shared_ptr<std::vector<BYTE>> sh_ptr,
                       const Data::IndexEntry& index_entry);
   IndexEntry(IndexEntry&& other) noexcept = default;
   IndexEntry(IndexEntry const& other) = default;
@@ -25,7 +26,7 @@ class NTFS_BROWSER_EXPORT IndexEntry : public Filename
   ~IndexEntry() override = default;
 
  private:
-  std::shared_ptr<BYTE[]> sh_ptr_;
+  std::shared_ptr<std::vector<BYTE>> sh_ptr_;
   const Data::IndexEntry& index_entry_;
 
  public:

@@ -46,9 +46,9 @@ class AttrIndexAlloc : public AttrNonResident<S>
   [[nodiscard]] ULONGLONG GetIndexBlockCount() const noexcept;
   [[nodiscard]] bool ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass);
   [[nodiscard]] bool FixupIndexBlock(std::span<BYTE> block);
-  [[nodiscard]] bool ParseIndexEntries(const std::shared_ptr<BYTE[]>& owner,
-                                       std::span<BYTE> block,
-                                       IndexBlock& ibClass);
+  [[nodiscard]] bool
+      ParseIndexEntries(const std::shared_ptr<std::vector<BYTE>>& owner,
+                        std::span<BYTE> block, IndexBlock& ibClass);
 };  // AttrIndexAlloc
 
 }  // namespace NtfsBrowser

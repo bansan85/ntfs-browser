@@ -222,7 +222,7 @@ inline constexpr BYTE kAttrNameBoundsNameLength = 6;
 
 // Deterministic bytes written at kAttrNameBoundsNameOffset, exactly
 // kAttrNameBoundsNameLength wide characters (excluding the terminator).
-inline constexpr wchar_t kAttrNameBoundsSentinel[] = L"PWNED!";
+inline constexpr std::wstring_view kAttrNameBoundsSentinel = L"PWNED!";
 
 // Same volume as BuildFakeNtfsImage(), plus a record whose single resident
 // $DATA attribute declares a name reaching past its own total_size, while
@@ -467,8 +467,8 @@ inline constexpr ULONGLONG kIndexRootVariantAMftRef = 30;
 inline constexpr ULONGLONG kIndexRootVariantBMftRef = 40;
 
 // File names each variant's single FILE_NAME entry declares.
-inline constexpr wchar_t kIndexRootVariantAName[] = L"AAA";
-inline constexpr wchar_t kIndexRootVariantBName[] = L"BBB";
+inline constexpr std::wstring_view kIndexRootVariantAName = L"AAA";
+inline constexpr std::wstring_view kIndexRootVariantBName = L"BBB";
 
 // Same volume as BuildFakeNtfsImage(), plus two same-size directory records,
 // each holding its own resident $INDEX_ROOT with a distinct FILE_NAME entry.
@@ -508,11 +508,11 @@ enum class NonAsciiNameLayout : std::uint8_t
 // Names BuildFakeNtfsImageWithNonAsciiNames() files, in that order: e-acute,
 // O-diaeresis and dotless i, each followed by ".txt". Escapes, so the source
 // does not depend on the compiler's source character set.
-inline constexpr wchar_t kNonAsciiAcuteName[] = L"\u00E9.txt";
-inline constexpr wchar_t kNonAsciiAcuteUpperName[] = L"\u00C9.txt";
-inline constexpr wchar_t kNonAsciiDiaeresisName[] = L"\u00D6.txt";
-inline constexpr wchar_t kNonAsciiDotlessName[] = L"\u0131.txt";
-inline constexpr wchar_t kNonAsciiDottedUpperName[] = L"I.txt";
+inline constexpr std::wstring_view kNonAsciiAcuteName = L"\u00E9.txt";
+inline constexpr std::wstring_view kNonAsciiAcuteUpperName = L"\u00C9.txt";
+inline constexpr std::wstring_view kNonAsciiDiaeresisName = L"\u00D6.txt";
+inline constexpr std::wstring_view kNonAsciiDotlessName = L"\u0131.txt";
+inline constexpr std::wstring_view kNonAsciiDottedUpperName = L"I.txt";
 
 // MFT references those three names declare.
 inline constexpr ULONGLONG kNonAsciiAcuteMftRef = 31;
@@ -537,7 +537,7 @@ inline constexpr ULONGLONG kIndexBlockChainLeafMftRef = 99;
 
 // Name (and UTF-16 length) of the chain's leaf entry, reachable only by
 // descending past every other block first.
-inline constexpr wchar_t kIndexBlockChainLeafName[] = L"Deep";
+inline constexpr std::wstring_view kIndexBlockChainLeafName = L"Deep";
 inline constexpr BYTE kIndexBlockChainLeafNameLength = 4;
 
 // Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
@@ -561,9 +561,9 @@ inline constexpr ULONGLONG kOrphanedBlockStaleParentRef = 999;
 // three leaf entries: reachable through the normal B+ tree walk, reachable
 // only by scanning every $INDEX_ALLOCATION block, and reachable that way but
 // filed under a different parent.
-inline constexpr wchar_t kOrphanedBlockReachableName[] = L"Reachable";
-inline constexpr wchar_t kOrphanedBlockOrphanName[] = L"Orphan";
-inline constexpr wchar_t kOrphanedBlockStaleName[] = L"Stale";
+inline constexpr std::wstring_view kOrphanedBlockReachableName = L"Reachable";
+inline constexpr std::wstring_view kOrphanedBlockOrphanName = L"Orphan";
+inline constexpr std::wstring_view kOrphanedBlockStaleName = L"Stale";
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
 // a directory whose $INDEX_ROOT points at a single real $INDEX_ALLOCATION
@@ -625,12 +625,13 @@ inline constexpr ULONGLONG kMultiClusterOrphanMftRef = 106;
 
 // Name (and UTF-16 length) of the block-0 leaf entry, reachable through the
 // normal B+ tree walk.
-inline constexpr wchar_t kMultiClusterReachableName[] = L"MultiReachable";
+inline constexpr std::wstring_view kMultiClusterReachableName =
+    L"MultiReachable";
 
 // Name (and UTF-16 length) of the block-1 leaf entry: found only if the
 // recovery scan converts its block index (1) to VCN
 // kMultiClusterOrphanClustersPerBlock (2), not VCN 1.
-inline constexpr wchar_t kMultiClusterOrphanName[] = L"MultiOrphan";
+inline constexpr std::wstring_view kMultiClusterOrphanName = L"MultiOrphan";
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
 // a directory whose index blocks are kMultiClusterOrphanClustersPerBlock
@@ -681,7 +682,7 @@ struct FakeParentLink
 // BuildFakeNtfsImageWithOrphanedIndexBlockParentLink() files in its VCN 2
 // block.
 inline constexpr ULONGLONG kOrphanedBlockGenerationMftRef = 104;
-inline constexpr wchar_t kOrphanedBlockGenerationName[] = L"Generation";
+inline constexpr std::wstring_view kOrphanedBlockGenerationName = L"Generation";
 
 // Same volume as BuildFakeNtfsImageWithOrphanedIndexBlocks(), except the entry
 // of its VCN 2 block is kOrphanedBlockGenerationName, filed under the root's
@@ -825,14 +826,14 @@ inline constexpr std::array<BYTE, 59> kXcaLznt1ExampleCompressed{
     0x45, 0x00, 0xbe, 0x00, 0x9e, 0x00, 0x04, 0x01, 0x18, 0x90, 0x00};
 
 // The ANSI string kXcaLznt1ExampleCompressed decompresses to ([MS-XCA]
-// section 3.3); sizeof(), not strlen(), is the byte count since the
-// terminal NUL is part of the data.
-inline constexpr char kXcaLznt1ExampleDecompressed[] =
+// section 3.3); the byte count is size() + 1 since the terminal NUL is part
+// of the data.
+inline constexpr std::string_view kXcaLznt1ExampleDecompressed =
     "F# F# G A A G F# E D D E F# F# E E F# F# G A A G F# E D D E F# E D D E E "
     "F# D E F# G F# D E F# G F# E D E A F# F# G A A G F# E D D E F# E D D";
 
 inline constexpr size_t kXcaLznt1ExampleDecompressedSize =
-    sizeof(kXcaLznt1ExampleDecompressed);
+    kXcaLznt1ExampleDecompressed.size() + 1;
 // Decompressed size [MS-XCA] section 3.3 states for its worked example.
 inline constexpr size_t kXcaLznt1ExampleExpectedSize = 142;
 static_assert(kXcaLznt1ExampleDecompressedSize == kXcaLznt1ExampleExpectedSize,
@@ -1041,7 +1042,7 @@ inline constexpr std::array<ULONGLONG, 2> kEncryptedDirectoryMftRefs{40, 41};
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData();
 
 // Name (and UTF-16 length) of the leaf entry the decompressed unit holds.
-inline constexpr wchar_t kCompressedIndexEntryName[] = L"Comp";
+inline constexpr std::wstring_view kCompressedIndexEntryName = L"Comp";
 inline constexpr BYTE kCompressedIndexEntryNameLength = 4;
 
 // mft reference that same entry declares.
@@ -1221,9 +1222,9 @@ inline constexpr DWORD kBadDataRunSecondLcn = 71;
 // block (VCN 0), reported only when recovering; "Good" in the sibling,
 // well-formed block (VCN 1), reported either way.
 inline constexpr ULONGLONG kBadIndexBlockFirstMftRef = 111;
-inline constexpr wchar_t kBadIndexBlockFirstName[] = L"First";
+inline constexpr std::wstring_view kBadIndexBlockFirstName = L"First";
 inline constexpr ULONGLONG kBadIndexBlockGoodMftRef = 112;
-inline constexpr wchar_t kBadIndexBlockGoodName[] = L"Good";
+inline constexpr std::wstring_view kBadIndexBlockGoodName = L"Good";
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
 // a directory whose $INDEX_ROOT points directly at two $INDEX_ALLOCATION

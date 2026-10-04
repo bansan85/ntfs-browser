@@ -8,6 +8,7 @@
 #include <cstring>
 #include <memory>
 #include <span>
+#include <vector>
 
 #include <ntfs-browser/index-entry.h>
 
@@ -25,8 +26,9 @@ Data::IndexEntry ReadIndexEntryHeader(std::span<const BYTE> bytes) noexcept
   return header;
 }
 
-AlignedIndexEntry AlignIndexEntry(const std::shared_ptr<BYTE[]>& buffer,
-                                  std::span<const BYTE> bytes, size_t size)
+AlignedIndexEntry
+    AlignIndexEntry(const std::shared_ptr<std::vector<BYTE>>& buffer,
+                    std::span<const BYTE> bytes, size_t size)
 {
   if (reinterpret_cast<std::uintptr_t>(bytes.data()) %
           alignof(Data::IndexEntry) ==
@@ -37,10 +39,10 @@ AlignedIndexEntry AlignIndexEntry(const std::shared_ptr<BYTE[]>& buffer,
 
   // The fixed part is read even from an entry whose size is smaller than it.
   const size_t copied = std::max(size, offsetof(Data::IndexEntry, stream));
-  auto const copy =
-      std::make_shared<BYTE[]>(std::max(copied, sizeof(Data::IndexEntry)));
-  std::memcpy(copy.get(), bytes.data(), copied);
-  return {copy, reinterpret_cast<const Data::IndexEntry*>(copy.get())};
+  auto const copy = std::make_shared<std::vector<BYTE>>(
+      std::max(copied, sizeof(Data::IndexEntry)));
+  std::memcpy(copy->data(), bytes.data(), copied);
+  return {copy, reinterpret_cast<const Data::IndexEntry*>(copy->data())};
 }
 
 std::optional<std::string_view>
@@ -83,7 +85,7 @@ std::optional<std::string_view>
   return std::nullopt;
 }
 
-IndexEntry::IndexEntry(std::shared_ptr<BYTE[]> sh_ptr,
+IndexEntry::IndexEntry(std::shared_ptr<std::vector<BYTE>> sh_ptr,
                        const Data::IndexEntry& index_entry)
     : sh_ptr_(sh_ptr), index_entry_(index_entry)
 {

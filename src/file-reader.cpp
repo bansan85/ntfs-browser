@@ -116,14 +116,14 @@ template <Strategy S>
 std::optional<std::span<const BYTE>>
     FileReader<S>::ReadUncached(LARGE_INTEGER addr, DWORD length) const
 {
-  auto exact = std::make_unique<BYTE[]>(length);
-  if (!reader_->ReadInto(addr, std::span<BYTE>{exact.get(), length}))
+  std::vector<BYTE> exact(length);
+  if (!reader_->ReadInto(addr, exact))
   {
     LogError("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
 
-  const BYTE* const data = exact.get();
+  const BYTE* const data = exact.data();
   crossing_reads_.push_back(std::move(exact));
   return std::span<const BYTE>{data, length};
 }
@@ -170,8 +170,8 @@ typename std::enable_if_t<
   }
 
   // Slow path: stitch the range together one block at a time.
-  auto assembled = std::make_unique<BYTE[]>(length);
-  BYTE* const result = assembled.get();
+  std::vector<BYTE> assembled(length);
+  BYTE* const result = assembled.data();
   std::span<BYTE> out{result, length};
 
   LARGE_INTEGER cur = addr;
@@ -211,7 +211,7 @@ BYTE* FileReader<S>::NextMemory() const
   if (mem_alloc.empty() || last_alloc * READ_BUFFER_SIZE == MEMORY_BUFFER_SIZE)
   {
     last_alloc = 0;
-    mem_alloc.emplace_back(std::make_unique<BYTE[]>(MEMORY_BUFFER_SIZE));
+    mem_alloc.emplace_back(MEMORY_BUFFER_SIZE);
   }
   // last_alloc was reset above once the buffer held MEMORY_BUFFER_SIZE bytes.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

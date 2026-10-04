@@ -26,15 +26,18 @@ inline constexpr size_t kBpbBootCodeSize = 430;
 struct NtfsBpb
 {
   // jump instruction
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE jmp[3];
 
   // signature
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE signature[kBpbSignatureSize];
 
   // BPB and extended BPB
   WORD bytes_per_sector;
   BYTE sectors_per_cluster;
   WORD reserved_sectors;
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE zeros1[3];
   WORD not_used1;
   BYTE media_descriptor;
@@ -49,9 +52,11 @@ struct NtfsBpb
   ULONGLONG lcn_mft_mirr;
   DWORD clusters_per_file_record;
   DWORD clusters_per_index_block;
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE volume_sn[kBpbVolumeSerialSize];
 
   // boot code
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE code[kBpbBootCodeSize];
 
   //0xAA55
