@@ -21,12 +21,10 @@ class FileRecord;
 template <class TYPE_RESIDENT, Strategy S>
 AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
                                          const FileRecord<S>& file_record)
-    : TYPE_RESIDENT(ahc, file_record)
+    : TYPE_RESIDENT(ahc, file_record), bitmap_size_(this->GetDataSize())
 {
   LogTrace("Attribute: Bitmap ({}Resident)",
            this->IsNonResident() ? "Non" : "");
-
-  bitmap_size_ = this->GetDataSize();
 
   if (this->IsNonResident())
   {
