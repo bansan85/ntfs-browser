@@ -395,7 +395,7 @@ void RunRegressionTestcase(std::string_view name)
       exe, {L"--inject-read-failures", file.wstring()});
   CHECK(result.exit_code == 0);
 
-  const auto iterator = kExpectedErrorMessages.find(name);
+  const auto* const iterator = kExpectedErrorMessages.find(name);
   if (iterator != kExpectedErrorMessages.end() &&
       iterator->second.check_expected_messages)
   {

@@ -674,7 +674,7 @@ bool NtfsVolume<S>::Impl::ParseBootSector()
     LogError("Read boot sector error");
     return false;
   }
-  auto bpb = reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
+  const auto* bpb = reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
 
   if (strncmp(reinterpret_cast<const char*>(&bpb->signature[0]),
               Data::kNtfsSignature.data(), sizeof(bpb->signature)) != 0)
