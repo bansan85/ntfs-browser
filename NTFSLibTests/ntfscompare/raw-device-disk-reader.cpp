@@ -2,7 +2,6 @@
 
   #include "raw-device-disk-reader.h"
 
-  #include <cstdio>
   #include <span>
   #include <string>
   #include <string_view>
@@ -12,6 +11,7 @@
   #include <sys/types.h>
   #include <unistd.h>
 
+  #include "console.h"
   #include "ntfs-browser/win-types.h"
 
 namespace NtfsCompare
@@ -44,6 +44,8 @@ RawDeviceDiskReader::~RawDeviceDiskReader()
 bool RawDeviceDiskReader::Open(std::wstring_view path)
 {
   const std::string narrow = WideToNarrowAscii(path);
+  // POSIX open() is variadic and has no fixed-arity form.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
   fd_ = open(narrow.c_str(), O_RDONLY);
   return fd_ >= 0;
 }
@@ -55,9 +57,7 @@ bool RawDeviceDiskReader::ReadInto(LARGE_INTEGER& addr,
       pread(fd_, dest.data(), dest.size(), addr.QuadPart);
   if (bytes_read < 0 || static_cast<size_t>(bytes_read) != dest.size())
   {
-    static_cast<void>(std::fprintf(stderr,
-                                   "Cannot read device at offset %lld\n",
-                                   static_cast<long long>(addr.QuadPart)));
+    PrintErr("Cannot read device at offset {}\n", addr.QuadPart);
     return false;
   }
   return true;

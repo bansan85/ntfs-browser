@@ -3,10 +3,11 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstdio>
 #include <optional>
 #include <set>
 #include <utility>
+
+#include "console.h"
 
 namespace NtfsCompare
 {
@@ -226,31 +227,29 @@ bool PrintReport(const Report& report)
   {
     if (finding.field.empty())
     {
-      std::printf("[%s] %s: \"%s\"", finding.kind.c_str(),
-                  finding.method.c_str(), Narrow(finding.path).c_str());
+      PrintOut("[{}] {}: \"{}\"", finding.kind, finding.method,
+               Narrow(finding.path));
       if (!finding.actual.empty())
       {
-        std::printf(" (%s)", finding.actual.c_str());
+        PrintOut(" ({})", finding.actual);
       }
-      std::printf("\n");
+      PrintOut("\n");
     }
     else
     {
-      std::printf("[%s] %s: \"%s\" %s: expected=%s actual=%s\n",
-                  finding.kind.c_str(), finding.method.c_str(),
-                  Narrow(finding.path).c_str(), finding.field.c_str(),
-                  finding.expected.c_str(), finding.actual.c_str());
+      PrintOut("[{}] {}: \"{}\" {}: expected={} actual={}\n", finding.kind,
+               finding.method, Narrow(finding.path), finding.field,
+               finding.expected, finding.actual);
     }
   }
 
-  std::printf("\n");
+  PrintOut("\n");
   for (const MethodStats& method_stats : report.stats)
   {
-    std::printf(
-        "%-12s compared=%zu missing=%zu extra=%zu mismatched_fields=%zu\n",
-        method_stats.name.c_str(), method_stats.compared_entries,
-        method_stats.missing, method_stats.extra,
-        method_stats.mismatched_fields);
+    PrintOut("{:<12} compared={} missing={} extra={} mismatched_fields={}\n",
+             method_stats.name, method_stats.compared_entries,
+             method_stats.missing, method_stats.extra,
+             method_stats.mismatched_fields);
   }
 
   return !report.findings.empty();

@@ -1,10 +1,11 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstdio>
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <format>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <span>
@@ -45,15 +46,9 @@ namespace Log = NtfsBrowser::Log;
 // express every path. Every other platform has narrow argv and nothing else.
 #ifdef _WIN32
   #define NTFS_FUZZ_MAIN wmain
-  // printf conversion for a native argv or path string.
-  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): spliced into literals.
-  #define NTFS_FUZZ_NATIVE "%ls"
 using ArgChar = wchar_t;
 #else
   #define NTFS_FUZZ_MAIN main
-  // printf conversion for a native argv or path string.
-  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): spliced into literals.
-  #define NTFS_FUZZ_NATIVE "%s"
 using ArgChar = char;
 #endif
 
@@ -186,13 +181,10 @@ void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
 // Prints command-line usage help.
 void Usage(const ArgChar* program)
 {
-  static_cast<void>(
-      std::fprintf(stderr,
-                   "usage: " NTFS_FUZZ_NATIVE
-                   " [--log=...] [--inject-read-failures] <input-file>\n",
-                   program));
-  static_cast<void>(
-      std::fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str()));
+  std::cerr << std::format(
+      "usage: {} [--log=...] [--inject-read-failures] <input-file>\n",
+      std::filesystem::path(program).string());
+  std::cerr << std::format("  {}\n", Log::kOptionUsage);
 }
 
 // Runs one AFL testcase file (the non-option argument) through the library
@@ -241,9 +233,8 @@ int Run(int argc, ArgChar** argv)
 
   if (!Log::Configure(logConfig))
   {
-    static_cast<void>(
-        std::fprintf(stderr, "Cannot open log file " NTFS_FUZZ_NATIVE "\n",
-                     logConfig.file_path.c_str()));
+    std::cerr << std::format("Cannot open log file {}\n",
+                             logConfig.file_path.string());
   }
 
   std::optional<std::vector<BYTE>> data =
@@ -294,7 +285,7 @@ int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
   }
   catch (...)
   {
-    static_cast<void>(std::fprintf(stderr, "Unhandled exception\n"));
+    std::cerr << "Unhandled exception\n";
     return 1;
   }
 }

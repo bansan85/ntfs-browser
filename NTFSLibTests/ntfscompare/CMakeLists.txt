@@ -4,6 +4,7 @@
 add_executable(
   NtfsCompare
   "main.cpp"
+  "console.h"
   "entry.h"
   "time-convert.h"
   "compare-engine.h"

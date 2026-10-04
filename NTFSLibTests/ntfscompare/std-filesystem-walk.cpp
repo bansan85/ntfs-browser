@@ -3,13 +3,13 @@
 #include <ntfs-browser/win-types.h>
 
 #include <chrono>
-#include <cstdio>
 #include <optional>
 #include <ratio>
 #include <string>
 #include <system_error>
 #include <utility>
 
+#include "console.h"
 #include "time-convert.h"
 
 namespace NtfsCompare
@@ -94,8 +94,7 @@ Listing WalkStdFilesystem(const std::filesystem::path& root)
 
   if (error_code)
   {
-    static_cast<void>(std::fprintf(stderr, "std::filesystem: %s\n",
-                                   error_code.message().c_str()));
+    PrintErr("std::filesystem: {}\n", error_code.message());
   }
 
   return result;

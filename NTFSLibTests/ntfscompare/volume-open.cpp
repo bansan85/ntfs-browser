@@ -1,12 +1,13 @@
 #include "volume-open.h"
 
 #include <array>
-#include <cstdio>
 #include <system_error>
 #include <utility>
 
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
+
+#include "console.h"
 
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
@@ -23,8 +24,7 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       std::filesystem::weakly_canonical(target, ec);
   if (ec || canonical.root_name().empty())
   {
-    std::fprintf(stderr, "Cannot determine a drive letter for %ls\n",
-                 target.c_str());
+    PrintErr("Cannot determine a drive letter for {}\n", NativeText(target));
     return std::nullopt;
   }
   const wchar_t driveLetter = canonical.root_name().wstring().front();
@@ -36,10 +36,11 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(driveLetter);
   if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK())
   {
-    std::fprintf(stderr,
-                 "Cannot open %lc: as an NTFS volume (running as "
-                 "Administrator may be required)\n",
-                 driveLetter);
+    // A drive letter is always ASCII.
+    PrintErr(
+        "Cannot open {}: as an NTFS volume (running as "
+        "Administrator may be required)\n",
+        static_cast<char>(driveLetter));
     return std::nullopt;
   }
 
@@ -117,25 +118,22 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       std::filesystem::weakly_canonical(target, error_code);
   if (error_code)
   {
-    static_cast<void>(
-        std::fprintf(stderr, "Cannot resolve %s\n", target.c_str()));
+    PrintErr("Cannot resolve {}\n", NativeText(target));
     return std::nullopt;
   }
 
   const std::optional<MountInfo> mount = FindMount(canonical);
   if (!mount)
   {
-    static_cast<void>(std::fprintf(
-        stderr, "Cannot find the mount point backing %s\n", canonical.c_str()));
+    PrintErr("Cannot find the mount point backing {}\n", NativeText(canonical));
     return std::nullopt;
   }
   if (!mount->device.starts_with("/dev/"))
   {
-    static_cast<void>(
-        std::fprintf(stderr,
-                     "%s is not backed by a real block device (mounted from "
-                     "\"%s\")\n",
-                     canonical.c_str(), mount->device.c_str()));
+    PrintErr(
+        "{} is not backed by a real block device (mounted from "
+        "\"{}\")\n",
+        NativeText(canonical), mount->device);
     return std::nullopt;
   }
   const std::wstring devicePath(mount->device.begin(), mount->device.end());
@@ -146,9 +144,8 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       fullCacheReader->Open(devicePath) && noCacheReader->Open(devicePath);
   if (!opened)
   {
-    static_cast<void>(std::fprintf(
-        stderr, "Cannot open %s (root privileges may be required)\n",
-        mount->device.c_str()));
+    PrintErr("Cannot open {} (root privileges may be required)\n",
+             mount->device);
     return std::nullopt;
   }
 
@@ -159,8 +156,7 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       std::move(noCacheReader));
   if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK())
   {
-    static_cast<void>(std::fprintf(stderr, "%s is not an NTFS volume\n",
-                                   mount->device.c_str()));
+    PrintErr("{} is not an NTFS volume\n", mount->device);
     return std::nullopt;
   }
 
