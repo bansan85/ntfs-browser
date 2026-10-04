@@ -15,8 +15,10 @@ namespace NtfsBrowser::Efs
 {
 
 Context::Context(std::vector<WrappedFek> entries,
-                 KeyProviderSource providerSource)
-    : entries_(std::move(entries)), provider_source_(std::move(providerSource))
+                 KeyProviderSource providerSource, CipherBackend backend)
+    : entries_(std::move(entries)),
+      provider_source_(std::move(providerSource)),
+      backend_(backend)
 {
 }
 
@@ -25,7 +27,7 @@ Context::Context(std::vector<WrappedFek> entries,
 std::unique_ptr<SectorDecryptor> Context::MakeDecryptor(const Fek& fek) const
 {
 #if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-  if (GetCipherBackend() == CipherBackend::kBCrypt)
+  if (backend_ == CipherBackend::kBCrypt)
   {
     if (std::unique_ptr<SectorDecryptor> decryptor = MakeBCryptDecryptor(fek))
     {

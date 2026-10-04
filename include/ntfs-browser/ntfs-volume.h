@@ -92,5 +92,19 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   // creates the default one: the current user's certificate store, on Windows.
   // Null where there is none, or after SetEfsKeyProvider(nullptr).
   [[nodiscard]] std::shared_ptr<Efs::IEfsKeyProvider> GetEfsKeyProvider() const;
+
+  // Selects the cipher backend of this volume. Returns false, and keeps the
+  // current one, where the backend is unavailable: kBCrypt exists on Windows
+  // only, and either backend can also be left out of the build entirely (see
+  // the NTFS_BROWSER_ENABLE_EFS_CRYPTOPP / NTFS_BROWSER_ENABLE_EFS_BCRYPT
+  // CMake options). When both are compiled in, BCrypt has no DESX, so a DESX
+  // file falls back to kCryptoPp regardless of which backend is selected;
+  // with only kBCrypt compiled in, a DESX file has no usable backend at all.
+  // A file record parsed earlier keeps the backend it saw.
+  [[nodiscard]] bool SetEfsCipherBackend(Efs::CipherBackend backend) noexcept;
+
+  // The backend SetEfsCipherBackend() last accepted. Defaults to whichever
+  // backend the build compiled in; kCryptoPp if both are.
+  [[nodiscard]] Efs::CipherBackend GetEfsCipherBackend() const noexcept;
 };  // NtfsVolume
 }  // namespace NtfsBrowser

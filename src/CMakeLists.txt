@@ -42,7 +42,6 @@ if(NTFS_BROWSER_EFS_MASTER)
     APPEND ${PROJECT_NAME}_SRC
     "efs/efs-context.cpp"
     "efs/efs-stream.cpp"
-    "efs/efs.cpp"
   )
 endif()
 

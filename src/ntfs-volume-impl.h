@@ -90,6 +90,16 @@ class NtfsVolume<S>::Impl
   BYTE version_major_{0};
   BYTE version_minor_{0};
   mutable bool efs_provider_set_{false};
+
+  // The selected EFS cipher backend. Defaults to whichever one is compiled
+  // in, Crypto++ first.
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
+  Efs::CipherBackend efs_backend_{Efs::CipherBackend::kCryptoPp};
+#elif defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
+  Efs::CipherBackend efs_backend_{Efs::CipherBackend::kBCrypt};
+#else
+  Efs::CipherBackend efs_backend_{Efs::CipherBackend::kCryptoPp};
+#endif
   mutable bool upcase_loaded_{false};
 
   // Fixed for the volume's lifetime; set by the constructor, read back

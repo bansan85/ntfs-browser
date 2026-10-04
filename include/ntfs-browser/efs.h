@@ -23,20 +23,6 @@ enum class CipherBackend : std::uint8_t
   kBCrypt
 };
 
-// Selects the symmetric cipher backend for every volume. Returns false, and
-// keeps the current one, where the backend is unavailable: kBCrypt exists on
-// Windows only, and either backend can also be left out of the build entirely
-// (see the NTFS_BROWSER_ENABLE_EFS_CRYPTOPP / NTFS_BROWSER_ENABLE_EFS_BCRYPT
-// CMake options). When both are compiled in, BCrypt has no DESX, so a DESX
-// file falls back to kCryptoPp regardless of which backend is selected; with
-// only kBCrypt compiled in, a DESX file has no usable backend at all.
-[[nodiscard]] NTFS_BROWSER_EXPORT bool
-    SetCipherBackend(CipherBackend backend) noexcept;
-
-// The backend SetCipherBackend() last accepted. Defaults to whichever backend
-// the build compiled in; kCryptoPp if both are.
-[[nodiscard]] NTFS_BROWSER_EXPORT CipherBackend GetCipherBackend() noexcept;
-
 // Unwraps the File Encryption Key (FEK) of an EFS file. A file carries one
 // RSA-wrapped copy of it per user allowed to read the file.
 class IEfsKeyProvider

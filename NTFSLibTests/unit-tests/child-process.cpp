@@ -20,6 +20,7 @@
 
   #ifdef __APPLE__
 // macOS headers do not declare environ.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern char** environ;
   #endif
 #endif

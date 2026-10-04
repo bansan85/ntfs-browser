@@ -11,10 +11,9 @@ int main()
   NtfsBrowser::Log::Configure(NtfsBrowser::Log::Config{});
 
 // Decompression and EFS decryption are both optional features.
-#ifdef FETCHCONTENT_SMOKE_TEST_EFS
-  const NtfsBrowser::Efs::CipherBackend backend =
-      NtfsBrowser::Efs::GetCipherBackend();
-  (void)backend;
+#if defined(FETCHCONTENT_SMOKE_TEST_EFS) && defined(_WIN32)
+  const auto provider = NtfsBrowser::Efs::MakeCertStoreKeyProvider();
+  (void)provider;
 #endif
 
   return EXIT_SUCCESS;

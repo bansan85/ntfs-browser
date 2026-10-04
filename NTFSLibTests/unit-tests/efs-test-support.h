@@ -82,19 +82,23 @@ class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
   std::vector<Known> known_;
 };
 
-// Puts the cipher backend back when a test that changes it ends.
-class BackendGuard final
+// Whether this build compiled the backend in.
+[[nodiscard]] constexpr bool
+    BackendAvailable(NtfsBrowser::Efs::CipherBackend backend) noexcept
 {
- public:
-  BackendGuard() noexcept : previous_(NtfsBrowser::Efs::GetCipherBackend()) {}
-  BackendGuard(const BackendGuard& other) = delete;
-  BackendGuard& operator=(const BackendGuard& other) = delete;
-  BackendGuard(BackendGuard&& other) noexcept = delete;
-  BackendGuard& operator=(BackendGuard&& other) noexcept = delete;
-  ~BackendGuard() { (void)NtfsBrowser::Efs::SetCipherBackend(previous_); }
-
- private:
-  NtfsBrowser::Efs::CipherBackend previous_;
-};
+  if (backend == NtfsBrowser::Efs::CipherBackend::kCryptoPp)
+  {
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
+    return true;
+#else
+    return false;
+#endif
+  }
+#if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
+  return true;
+#else
+  return false;
+#endif
+}
 
 }  // namespace NtfsBrowserTests

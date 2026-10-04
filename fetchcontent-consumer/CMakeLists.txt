@@ -42,8 +42,8 @@ FetchContent_MakeAvailable(ntfs-browser)
 add_executable(fetchcontent-smoke-test "main.cpp")
 target_link_libraries(fetchcontent-smoke-test PRIVATE NtfsBrowser)
 # Tells main.cpp whether an EFS backend is actually linked in, mirroring the
-# NTFS_BROWSER_ENABLE_EFS_CRYPTOPP/_BCRYPT choice above: GetCipherBackend() has
-# no definition to call when neither is on.
+# NTFS_BROWSER_ENABLE_EFS_CRYPTOPP/_BCRYPT choice above: the EFS key providers
+# have no definition to call when neither is on.
 target_compile_definitions(
   fetchcontent-smoke-test
   PRIVATE

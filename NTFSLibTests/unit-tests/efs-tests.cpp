@@ -186,11 +186,13 @@ struct Opened
 // "mask" is nullopt for the default Mask::ALL; passing one exercises the
 // same SetAttrMask() a caller narrowing to Mask::DATA would use. "options"
 // defaults to strict; a test of a salvageable condition passes recover_errors.
+// "backend" is nullopt for the volume's default.
 template <Strategy S>
 Opened<S> Open(std::vector<BYTE> image,
                std::shared_ptr<IEfsKeyProvider> provider,
                std::optional<Mask> mask = std::nullopt,
-               const VolumeOptions& options = {})
+               const VolumeOptions& options = {},
+               std::optional<CipherBackend> backend = std::nullopt)
 {
   Opened<S> opened;
   opened.volume = std::make_unique<NtfsVolume<S>>(
@@ -198,6 +200,10 @@ Opened<S> Open(std::vector<BYTE> image,
       options);
   REQUIRE(opened.volume->IsVolumeOK());
   opened.volume->SetEfsKeyProvider(std::move(provider));
+  if (backend)
+  {
+    REQUIRE(opened.volume->SetEfsCipherBackend(*backend));
+  }
 
   opened.record = std::make_unique<FileRecord<S>>(*opened.volume);
   if (mask)
@@ -266,14 +272,12 @@ TEMPLATE_TEST_CASE_SIG(
     "An encrypted stream reads back as its plaintext, whatever the cipher",
     "[efs]", ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
 {
-  const NtfsBrowserTests::BackendGuard guard;
-
   for (const Algorithm algorithm : NtfsBrowserTests::kAllAlgorithms)
   {
     for (const CipherBackend backend :
          {CipherBackend::kCryptoPp, CipherBackend::kBCrypt})
     {
-      if (!NtfsBrowser::Efs::SetCipherBackend(backend))
+      if (!NtfsBrowserTests::BackendAvailable(backend))
       {
         continue;
       }
@@ -291,7 +295,8 @@ TEMPLATE_TEST_CASE_SIG(
                           << ", backend " << static_cast<int>(backend));
 
       Fixture fixture = MakeFixture(algorithm);
-      Opened<S> const opened = Open<S>(fixture.image, fixture.provider);
+      Opened<S> const opened =
+          Open<S>(fixture.image, fixture.provider, std::nullopt, {}, backend);
       const AttrBase<S>& data = OnlyData<S>(*opened.record);
 
       const auto whole = ReadAt<S>(data, 0, fixture.plaintext.size());
@@ -963,28 +968,31 @@ TEST_CASE("Secure zero wipes what it is given", "[efs]")
   CHECK(std::ranges::all_of(secret, [](BYTE byte) { return byte == 0; }));
 }
 
-TEST_CASE("The cipher backend is selectable, and Crypto++ is the default",
+TEST_CASE("The cipher backend is selectable per volume, Crypto++ by default",
           "[efs]")
 {
-  const NtfsBrowserTests::BackendGuard guard;
+  const Fixture fixture = MakeFixture(Algorithm::kAes256);
+  Opened<Strategy::NO_CACHE> const opened =
+      Open<Strategy::NO_CACHE>(fixture.image, fixture.provider);
+  NtfsVolume<Strategy::NO_CACHE>& volume = *opened.volume;
 
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-  CHECK(NtfsBrowser::Efs::SetCipherBackend(CipherBackend::kCryptoPp));
-  CHECK(NtfsBrowser::Efs::GetCipherBackend() == CipherBackend::kCryptoPp);
+  CHECK(volume.GetEfsCipherBackend() == CipherBackend::kCryptoPp);
 #else
   // Crypto++ is not compiled in: the file only builds at all because BCrypt
-  // is, so that is the default instead (mirrors efs.cpp's g_backend default).
-  CHECK_FALSE(NtfsBrowser::Efs::SetCipherBackend(CipherBackend::kCryptoPp));
-  CHECK(NtfsBrowser::Efs::GetCipherBackend() == CipherBackend::kBCrypt);
+  // is, so that is the default instead.
+  CHECK(volume.GetEfsCipherBackend() == CipherBackend::kBCrypt);
 #endif
 
-#if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-  CHECK(NtfsBrowser::Efs::SetCipherBackend(CipherBackend::kBCrypt));
-  CHECK(NtfsBrowser::Efs::GetCipherBackend() == CipherBackend::kBCrypt);
-#else
-  CHECK_FALSE(NtfsBrowser::Efs::SetCipherBackend(CipherBackend::kBCrypt));
-  CHECK(NtfsBrowser::Efs::GetCipherBackend() == CipherBackend::kCryptoPp);
-#endif
+  for (const CipherBackend backend :
+       {CipherBackend::kCryptoPp, CipherBackend::kBCrypt})
+  {
+    const CipherBackend before = volume.GetEfsCipherBackend();
+    CHECK(volume.SetEfsCipherBackend(backend) ==
+          NtfsBrowserTests::BackendAvailable(backend));
+    CHECK(volume.GetEfsCipherBackend() ==
+          (NtfsBrowserTests::BackendAvailable(backend) ? backend : before));
+  }
 }
 
 namespace
@@ -1035,8 +1043,6 @@ const std::vector<BYTE> kDesSectorZeroIv =
 TEST_CASE("Sector decryption matches the published block-cipher vectors",
           "[efs]")
 {
-  const NtfsBrowserTests::BackendGuard guard;
-
   // FIPS-197 appendix C for AES. For 3DES, the FIPS 81 vector: with all three
   // keys equal, 3DES is single DES.
   const std::vector<KnownAnswer> answers{
@@ -1071,7 +1077,7 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
     for (const CipherBackend backend :
          {CipherBackend::kCryptoPp, CipherBackend::kBCrypt})
     {
-      if (!NtfsBrowser::Efs::SetCipherBackend(backend))
+      if (!NtfsBrowserTests::BackendAvailable(backend))
       {
         continue;
       }

@@ -41,7 +41,7 @@ installed with `NtfsVolume::SetEfsKeyProvider()`:
 The supported ciphers are AES-256, AES-192, AES-128, 3DES and DESX. Only AES-256
 was checked against a real volume. The others are covered by known-answer and
 round-trip tests. The DESX key layout is a guess, and untested on real data.
-`Efs::SetCipherBackend()` picks the library that runs the cipher: Crypto++
+`NtfsVolume::SetEfsCipherBackend()` picks the library that runs the cipher: Crypto++
 (the default) or, on Windows, BCrypt. BCrypt has no DESX, so DESX always uses
 Crypto++.
 

@@ -950,6 +950,31 @@ std::shared_ptr<Efs::IEfsKeyProvider> NtfsVolume<S>::GetEfsKeyProvider() const
   return impl_->efs_provider_;
 }
 
+template <Strategy S>
+bool NtfsVolume<S>::SetEfsCipherBackend(Efs::CipherBackend backend) noexcept
+{
+  if (backend == Efs::CipherBackend::kCryptoPp)
+  {
+#ifndef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
+    return false;
+#endif
+  }
+  else if (backend == Efs::CipherBackend::kBCrypt)
+  {
+#if !(defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
+    return false;
+#endif
+  }
+  impl_->efs_backend_ = backend;
+  return true;
+}
+
+template <Strategy S>
+Efs::CipherBackend NtfsVolume<S>::GetEfsCipherBackend() const noexcept
+{
+  return impl_->efs_backend_;
+}
+
 // Reads $UpCase (MFT record 10). Null when it is missing or unusable.
 template <Strategy S>
 std::unique_ptr<const UpCaseTable> NtfsVolume<S>::Impl::LoadUpCaseTable() const

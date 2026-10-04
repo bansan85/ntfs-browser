@@ -43,7 +43,8 @@ class Context final
 {
  public:
   // "entries" is empty when the record has no usable $EFS stream.
-  Context(std::vector<WrappedFek> entries, KeyProviderSource providerSource);
+  Context(std::vector<WrappedFek> entries, KeyProviderSource providerSource,
+          CipherBackend backend);
 
   template <Strategy S>
   friend class NtfsBrowser::AttrNonResident;
@@ -51,6 +52,7 @@ class Context final
  private:
   std::vector<WrappedFek> entries_;
   KeyProviderSource provider_source_;
+  CipherBackend backend_;
 
   // Set by the first Decrypt(), whether or not it found a key.
   mutable bool resolved_{false};

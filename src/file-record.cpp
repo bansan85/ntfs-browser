@@ -1014,8 +1014,8 @@ bool FileRecord<S>::Impl::AttachEfsContext()
 
   // One context for the record: its streams share one FEK, resolved once.
   auto const context = std::make_shared<const Efs::Context>(
-      ReadEfsEntries(),
-      [&volume = *volume_] { return volume.GetEfsKeyProvider(); });
+      ReadEfsEntries(), [&volume = *volume_]
+      { return volume.GetEfsKeyProvider(); }, volume_->GetEfsCipherBackend());
   for (AttrNonResident<S>* stream : encrypted)
   {
     stream->SetEfsContext(context);
