@@ -506,6 +506,8 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
 
 // Visit IndexBlocks recursivly to find a specific Filename
 template <Strategy S>
+// The depth limit and the visited-VCN set bound the recursion.
+// NOLINTNEXTLINE(misc-no-recursion)
 std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
     ULONGLONG vcn, std::wstring_view fileName,
     std::unordered_set<ULONGLONG>& visitedVcns, size_t depth) const
@@ -588,6 +590,8 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
 // visitedVcns guards against a malformed/malicious B+ tree where a
 // subnode VCN is revisited, which would otherwise recurse without bound.
 template <Strategy S>
+// The depth limit and the visited-VCN set bound the recursion.
+// NOLINTNEXTLINE(misc-no-recursion)
 void FileRecord<S>::Impl::TraverseSubNode(
     ULONGLONG vcn, SUBENTRY_CALLBACK seCallBack, void* context,
     std::unordered_set<ULONGLONG>& visitedVcns, size_t depth) const
