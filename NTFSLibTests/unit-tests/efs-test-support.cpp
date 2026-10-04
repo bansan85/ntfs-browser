@@ -319,6 +319,8 @@ std::vector<BYTE> EfsEncrypt(Algorithm algorithm, std::span<const BYTE> key,
 std::vector<BYTE> PlaintextPattern(size_t size)
 {
   std::vector<BYTE> bytes(size);
+  // A fixed seed keeps the pattern reproducible.
+  // NOLINTNEXTLINE(bugprone-random-generator-seed,cert-msc32-c,cert-msc51-cpp)
   std::mt19937_64 engine(kPatternSeed);
   for (BYTE& byte : bytes)
   {

@@ -846,6 +846,8 @@ TEST_CASE("A $EFS stream with random damage never crashes the parser", "[efs]")
   const std::array<TestEfsEntry, 2> users{TestUser(1), TestUser(2)};
   const std::vector<BYTE> valid = NtfsBrowserTests::MakeEfsStream(users, users);
 
+  // A fixed seed keeps the damage reproducible.
+  // NOLINTNEXTLINE(bugprone-random-generator-seed,cert-msc32-c,cert-msc51-cpp)
   std::mt19937 random(kDamageSeed);
   for (int round = 0; round < kDamageRounds; ++round)
   {
