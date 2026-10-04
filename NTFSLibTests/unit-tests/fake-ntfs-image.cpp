@@ -165,7 +165,7 @@ ULONGLONG& SubNodeVcnSlot(NtfsBrowser::Data::IndexEntry& index_entry)
   const std::span<BYTE> raw(reinterpret_cast<BYTE*>(&index_entry),
                             index_entry.size);
   return *reinterpret_cast<ULONGLONG*>(
-      &gsl::at(raw, raw.size() - sizeof(ULONGLONG)));
+      &gsl::at(raw, gsl::narrow<gsl::index>(raw.size() - sizeof(ULONGLONG))));
 }
 
 // Rounds a size up to kAttrAlignment.
@@ -380,8 +380,10 @@ FakeRecord MakeMftRecordWithDataContinuations(
     alEntry.record_size = gsl::narrow<WORD>(entrySize);
     alEntry.name_length = 0;
     alEntry.name_offset = 0;
-    alEntry.start_vcn = gsl::at(continuations, i).second;
-    alEntry.base_ref.segment_number = gsl::at(continuations, i).first;
+    alEntry.start_vcn =
+        gsl::at(continuations, gsl::narrow<gsl::index>(i)).second;
+    alEntry.base_ref.segment_number =
+        gsl::at(continuations, gsl::narrow<gsl::index>(i)).first;
     alEntry.base_ref.sequence_number = entrySequence;
     alEntry.attr_id = 0;
   }
@@ -667,8 +669,10 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG baseIdx = 0)
       first_entry.stream_size));
 
   // Entry 2: the terminating entry - no name, no sub-node.
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot) + first_entry.size));
+  auto& second_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+                                        first_entry.size)));
   second_entry.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   second_entry.stream_size = 0;
   second_entry.size = gsl::narrow<WORD>(AlignAttrSize(
@@ -793,8 +797,10 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG baseIdx)
       first_entry.stream_size));
 
   // Entry 2: the terminating entry - no name, no sub-node.
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot) + first_entry.size));
+  auto& second_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+                                        first_entry.size)));
   second_entry.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   second_entry.stream_size = 0;
   second_entry.size = gsl::narrow<WORD>(AlignAttrSize(
@@ -1027,7 +1033,7 @@ FakeRecord MakeFragmentedAttributeListDirRecord()
   for (size_t i = 0; i < extensionIdxs.size(); i++)
   {
     auto& entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
-        &gsl::at(body, i * kEntrySize));
+        &gsl::at(body, gsl::narrow<gsl::index>(i * kEntrySize)));
     entry.attr_type = AttrType::INDEX_ALLOCATION;
     entry.record_size = kEntrySize;
     entry.name_length = 0;
@@ -1422,8 +1428,10 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mftIndex,
       first_entry.stream_size));
 
   // Entry 2: the terminating entry - no name, no sub-node.
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot) + first_entry.size));
+  auto& second_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+                                        first_entry.size)));
   second_entry.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   second_entry.stream_size = 0;
   second_entry.size = gsl::narrow<WORD>(AlignAttrSize(
@@ -1504,8 +1512,10 @@ FakeRecord MakeRootRecordWithGapCollationSubNode()
   subNodeVcn = 0;
 
   // Entry 2: the terminating entry - no name, no sub-node.
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot) + first_entry.size));
+  auto& second_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+                                        first_entry.size)));
   second_entry.flags = NtfsBrowser::Flag::IndexEntry::LAST;
   second_entry.stream_size = 0;
   second_entry.size = gsl::narrow<WORD>(AlignAttrSize(
@@ -5226,8 +5236,10 @@ FakeRecord MakeBadIndexBlockEntryRootRecord()
   SubNodeVcnSlot(first_entry) = 0;
 
   // Entry 2: nameless, terminal subnode pointer to VCN 1 (the good block).
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot) + first_entry.size));
+  auto& second_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+                                        first_entry.size)));
   second_entry.mft_index = 0;
   second_entry.mft_sn = 0;
   second_entry.stream_size = 0;
