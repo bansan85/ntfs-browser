@@ -173,9 +173,11 @@ void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
   {
     FuzzOnce<S>(data, options, failingRead);
   }
+  // NOLINTNEXTLINE(bugprone-empty-catch)
   catch (const std::exception&)
   {
   }
+  // NOLINTNEXTLINE(bugprone-empty-catch)
   catch (...)
   {
   }
