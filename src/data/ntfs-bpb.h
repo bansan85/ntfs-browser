@@ -10,17 +10,17 @@ namespace NtfsBrowser::Data
 // NTFS Boot Sector BPB
 
 // OEM signature of an NTFS boot sector: "NTFS" padded with spaces to
-// kBpbSignatureSize bytes.
-inline constexpr std::string_view kNtfsSignature = "NTFS    ";
+// bpb_signature_size bytes.
+inline constexpr std::string_view ntfs_signature = "NTFS    ";
 
 // Size of the OEM signature field.
-inline constexpr size_t kBpbSignatureSize = 8;
+inline constexpr size_t bpb_signature_size = 8;
 
 // Size of the volume serial number field.
-inline constexpr size_t kBpbVolumeSerialSize = 8;
+inline constexpr size_t bpb_volume_serial_size = 8;
 
 // Size of the boot code that fills the sector up to its 0xAA55 marker.
-inline constexpr size_t kBpbBootCodeSize = 430;
+inline constexpr size_t bpb_boot_code_size = 430;
 
 #pragma pack(1)
 struct NtfsBpb
@@ -31,7 +31,7 @@ struct NtfsBpb
 
   // signature
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-  BYTE signature[kBpbSignatureSize];
+  BYTE signature[bpb_signature_size];
 
   // BPB and extended BPB
   WORD bytes_per_sector;
@@ -53,11 +53,11 @@ struct NtfsBpb
   DWORD clusters_per_file_record;
   DWORD clusters_per_index_block;
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-  BYTE volume_sn[kBpbVolumeSerialSize];
+  BYTE volume_sn[bpb_volume_serial_size];
 
   // boot code
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-  BYTE code[kBpbBootCodeSize];
+  BYTE code[bpb_boot_code_size];
 
   //0xAA55
   BYTE x_aa;

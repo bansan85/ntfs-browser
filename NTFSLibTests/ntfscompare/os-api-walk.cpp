@@ -68,13 +68,13 @@ Listing WalkOsApi(const std::filesystem::path& root)
 
       // Never recurse into a reparse point (symlink/junction): every method
       // in this tool follows the same policy.
-      const bool isReparse =
+      const bool is_reparse =
           (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-      const bool isDirectory =
+      const bool is_directory =
           (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
       Entry entry;
-      entry.is_directory = isDirectory;
+      entry.is_directory = is_directory;
       entry.read_only = (fd.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0;
       entry.hidden = (fd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0;
       entry.system = (fd.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) != 0;
@@ -89,7 +89,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
       // ChangeTimeUtc stays unset: no documented Win32 API exposes NTFS'
       // own MFT change time.
 
-      if (!isDirectory)
+      if (!is_directory)
       {
         entry.logical_size =
             (static_cast<ULONGLONG>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
@@ -98,26 +98,26 @@ Listing WalkOsApi(const std::filesystem::path& root)
         // uncompressed file it just returns the logical size again, not the
         // allocation. FileStandardInfo::AllocationSize is the one that always
         // reflects clusters actually allocated, compressed or not.
-        const HANDLE fileHandle = CreateFileW(
+        const HANDLE file_handle = CreateFileW(
             full.c_str(), FILE_READ_ATTRIBUTES,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-        if (fileHandle != INVALID_HANDLE_VALUE)
+        if (file_handle != INVALID_HANDLE_VALUE)
         {
           FILE_STANDARD_INFO info{};
-          if (GetFileInformationByHandleEx(fileHandle, FileStandardInfo, &info,
+          if (GetFileInformationByHandleEx(file_handle, FileStandardInfo, &info,
                                            sizeof(info)) != 0)
           {
             entry.physical_size =
                 gsl::narrow<ULONGLONG>(info.AllocationSize.QuadPart);
           }
-          CloseHandle(fileHandle);
+          CloseHandle(file_handle);
         }
       }
 
       result.emplace(path, entry);
 
-      if (isDirectory && !isReparse)
+      if (is_directory && !is_reparse)
       {
         stack.push_back({.dir = full, .prefix = path});
       }
@@ -150,16 +150,16 @@ namespace
 {
 
 // Bits in a byte: Windows-style attribute DWORDs are assembled byte by byte.
-constexpr unsigned kXattrBitsPerByte = 8;
+constexpr unsigned xattr_bits_per_byte = 8;
 
 // Size in bytes of one POSIX st_blocks unit.
-constexpr ULONGLONG kStatBlockSize = 512ULL;
+constexpr ULONGLONG stat_block_size = 512ULL;
 
 // FILE_ATTRIBUTE_* bits ntfs-3g/ntfs3 report through the xattr.
-constexpr DWORD kAttrArchive = 0x20U;
-constexpr DWORD kAttrSparse = 0x200U;
-constexpr DWORD kAttrCompressed = 0x800U;
-constexpr DWORD kAttrEncrypted = 0x4000U;
+constexpr DWORD attr_archive = 0x20U;
+constexpr DWORD attr_sparse = 0x200U;
+constexpr DWORD attr_compressed = 0x800U;
+constexpr DWORD attr_encrypted = 0x4000U;
 
   // The DWORD FILE_ATTRIBUTE_* bits ntfs-3g/ntfs3 expose verbatim through this
   // xattr, little-endian. No generic POSIX call carries them, so this is
@@ -177,7 +177,7 @@ bool ReadNtfsAttribXattr(const std::filesystem::path& path, DWORD& value)
   value = 0;
   for (size_t i = 0; i < buf.size(); i++)
   {
-    value |= static_cast<DWORD>(buf.at(i)) << (i * kXattrBitsPerByte);
+    value |= static_cast<DWORD>(buf.at(i)) << (i * xattr_bits_per_byte);
   }
   return true;
 }
@@ -231,17 +231,17 @@ Listing WalkOsApi(const std::filesystem::path& root)
 
       // Never recurse into a symlink: every method in this tool follows the
       // same policy.
-      const bool isSymlink = S_ISLNK(file_stat.st_mode);
-      const bool isDirectory = S_ISDIR(file_stat.st_mode);
+      const bool is_symlink = S_ISLNK(file_stat.st_mode);
+      const bool is_directory = S_ISDIR(file_stat.st_mode);
 
       Entry entry;
-      entry.is_directory = isDirectory;
-      if (!isDirectory)
+      entry.is_directory = is_directory;
+      if (!is_directory)
       {
         entry.logical_size = gsl::narrow<ULONGLONG>(file_stat.st_size);
       }
       entry.physical_size =
-          gsl::narrow<ULONGLONG>(file_stat.st_blocks) * kStatBlockSize;
+          gsl::narrow<ULONGLONG>(file_stat.st_blocks) * stat_block_size;
 
       entry.modification_time_utc = SecondsNanosToUtcTicks(
           file_stat.st_mtim.tv_sec, file_stat.st_mtim.tv_nsec);
@@ -264,16 +264,16 @@ Listing WalkOsApi(const std::filesystem::path& root)
       }
   #endif
 
-      DWORD ntfsAttrib = 0;
-      if (ReadNtfsAttribXattr(full, ntfsAttrib))
+      DWORD ntfs_attrib = 0;
+      if (ReadNtfsAttribXattr(full, ntfs_attrib))
       {
-        entry.read_only = (ntfsAttrib & 0x1U) != 0;
-        entry.hidden = (ntfsAttrib & 0x2U) != 0;
-        entry.system = (ntfsAttrib & 0x4U) != 0;
-        entry.archive = (ntfsAttrib & kAttrArchive) != 0;
-        entry.sparse = (ntfsAttrib & kAttrSparse) != 0;
-        entry.compressed = (ntfsAttrib & kAttrCompressed) != 0;
-        entry.encrypted = (ntfsAttrib & kAttrEncrypted) != 0;
+        entry.read_only = (ntfs_attrib & 0x1U) != 0;
+        entry.hidden = (ntfs_attrib & 0x2U) != 0;
+        entry.system = (ntfs_attrib & 0x4U) != 0;
+        entry.archive = (ntfs_attrib & attr_archive) != 0;
+        entry.sparse = (ntfs_attrib & attr_sparse) != 0;
+        entry.compressed = (ntfs_attrib & attr_compressed) != 0;
+        entry.encrypted = (ntfs_attrib & attr_encrypted) != 0;
       }
 
       const std::wstring wname = Utf8ToWide(std::data(de->d_name));
@@ -281,7 +281,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
           frame.prefix.empty() ? wname : frame.prefix + L"/" + wname;
       result.emplace(path, entry);
 
-      if (isDirectory && !isSymlink)
+      if (is_directory && !is_symlink)
       {
         stack.push_back({.dir = full, .prefix = path});
       }

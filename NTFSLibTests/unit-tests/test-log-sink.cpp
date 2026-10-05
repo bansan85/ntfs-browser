@@ -68,12 +68,12 @@ std::shared_ptr<CaptureSink>& Sink()
 void InstallCaptureSink()
 {
   NtfsBrowser::Log::Config config;
-  config.console_level = NtfsBrowser::Log::Level::kOff;
-  config.file_level = NtfsBrowser::Log::Level::kOff;
+  config.console_level = NtfsBrowser::Log::Level::Off;
+  config.file_level = NtfsBrowser::Log::Level::Off;
   NtfsBrowser::Log::Configure(config);
 
   const std::shared_ptr<spdlog::logger> logger =
-      spdlog::get(std::string(NtfsBrowser::Log::kLoggerName));
+      spdlog::get(std::string(NtfsBrowser::Log::logger_name));
   if (!logger)
   {
     return;

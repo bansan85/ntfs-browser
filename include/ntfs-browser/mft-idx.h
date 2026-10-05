@@ -8,22 +8,22 @@ namespace NtfsBrowser::Enum
 enum class MftIdx : std::uint8_t
 {
   // MFT Indexes
-  MFT = 0,
-  MFT_MIRR = 1,
-  LOG_FILE = 2,
-  VOLUME = 3,
-  ATTR_DEF = 4,
-  ROOT = 5,
-  BITMAP = 6,
-  BOOT = 7,
-  BAD_CLUSTER = 8,
-  SECURE = 9,
-  UPCASE = 10,
-  EXTEND = 11,
-  RESERVED12 = 12,
-  RESERVED13 = 13,
-  RESERVED14 = 14,
-  RESERVED15 = 15,
-  USER = 16
+  Mft = 0,
+  MftMirr = 1,
+  LogFile = 2,
+  Volume = 3,
+  AttrDef = 4,
+  Root = 5,
+  Bitmap = 6,
+  Boot = 7,
+  BadCluster = 8,
+  Secure = 9,
+  UpCase = 10,
+  Extend = 11,
+  Reserved12 = 12,
+  Reserved13 = 13,
+  Reserved14 = 14,
+  Reserved15 = 15,
+  User = 16
 };
 }  // namespace NtfsBrowser::Enum

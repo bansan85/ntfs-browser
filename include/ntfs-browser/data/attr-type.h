@@ -8,27 +8,27 @@ namespace NtfsBrowser
 enum class AttrType : DWORD
 {
   // Zero-initialised value, never found on disk
-  NONE = 0,
+  None = 0,
 
   // Attribute Header
 
-  STANDARD_INFORMATION = 0x10,
-  ATTRIBUTE_LIST = 0x20,
-  FILE_NAME = 0x30,
-  OBJECT_ID = 0x40,
-  SECURITY_DESCRIPTOR = 0x50,
-  VOLUME_NAME = 0x60,
-  VOLUME_INFORMATION = 0x70,
-  DATA = 0x80,
-  INDEX_ROOT = 0x90,
-  INDEX_ALLOCATION = 0xA0,
-  BITMAP = 0xB0,
-  REPARSE_POINT = 0xC0,
-  EA_INFORMATION = 0xD0,
-  EA = 0xE0,
-  PROPERTY_SET = 0xF0,
-  LOGGED_UTILITY_STREAM = 0x100,
-  ALL = static_cast<DWORD>(-1)
+  StandardInformation = 0x10,
+  AttributeList = 0x20,
+  FileName = 0x30,
+  ObjectId = 0x40,
+  SecurityDescriptor = 0x50,
+  VolumeName = 0x60,
+  VolumeInformation = 0x70,
+  Data = 0x80,
+  IndexRoot = 0x90,
+  IndexAllocation = 0xA0,
+  Bitmap = 0xB0,
+  ReparsePoint = 0xC0,
+  EaInformation = 0xD0,
+  Ea = 0xE0,
+  PropertySet = 0xF0,
+  LoggedUtilityStream = 0x100,
+  All = static_cast<DWORD>(-1)
 };
 
 }  // namespace NtfsBrowser

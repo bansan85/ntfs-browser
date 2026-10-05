@@ -21,10 +21,10 @@ namespace NtfsBrowser::Efs
 namespace
 {
 // Certificate encodings a lookup by hash accepts.
-constexpr DWORD kCertEncoding = X509_ASN_ENCODING | PKCS_7_ASN_ENCODING;
+constexpr DWORD cert_encoding = X509_ASN_ENCODING | PKCS_7_ASN_ENCODING;
 
 // A PFX bigger than this is not a certificate bundle. Bounds the read.
-constexpr std::streamsize kMaxPfxSize = 16 * 1024 * 1024;
+constexpr std::streamsize max_pfx_size = 16 * 1024 * 1024;
 
 using CertPtr =
     std::unique_ptr<const CERT_CONTEXT, decltype(&CertFreeCertificateContext)>;
@@ -47,13 +47,13 @@ class PrivateKey final
       return;
     }
 
-    BOOL mustFree = FALSE;
+    BOOL must_free = FALSE;
     valid_ =
         CryptAcquireCertificatePrivateKey(
             &cert,
             CRYPT_ACQUIRE_PREFER_NCRYPT_KEY_FLAG | CRYPT_ACQUIRE_SILENT_FLAG,
-            nullptr, &handle_, &key_spec_, &mustFree) != FALSE;
-    must_free_ = mustFree != FALSE;
+            nullptr, &handle_, &key_spec_, &must_free) != FALSE;
+    must_free_ = must_free != FALSE;
     if (!valid_)
     {
       LogDebug("CryptAcquireCertificatePrivateKey failed: 0x{:08X}.",
@@ -112,11 +112,11 @@ class PrivateKey final
 
     size = sizeof(handle_);
     DWORD spec = 0;
-    DWORD specSize = sizeof(spec);
+    DWORD spec_size = sizeof(spec);
     if (CertGetCertificateContextProperty(&cert, CERT_KEY_PROV_HANDLE_PROP_ID,
                                           &handle_, &size) != FALSE &&
         CertGetCertificateContextProperty(&cert, CERT_KEY_SPEC_PROP_ID, &spec,
-                                          &specSize) != FALSE)
+                                          &spec_size) != FALSE)
     {
       key_spec_ = spec;
       valid_ = true;
@@ -191,11 +191,11 @@ class StoreKeyProvider final : public IEfsKeyProvider
 
   std::optional<std::vector<BYTE>>
       UnwrapFek(std::span<const BYTE> thumbprint,
-                std::span<const BYTE> wrappedFek) const override
+                std::span<const BYTE> wrapped_fek) const override
   {
     CRYPT_HASH_BLOB hash{gsl::narrow<DWORD>(thumbprint.size()),
                          const_cast<BYTE*>(thumbprint.data())};
-    const CertPtr cert(CertFindCertificateInStore(store_, kCertEncoding, 0,
+    const CertPtr cert(CertFindCertificateInStore(store_, cert_encoding, 0,
                                                   CERT_FIND_SHA1_HASH, &hash,
                                                   nullptr),
                        &CertFreeCertificateContext);
@@ -210,7 +210,7 @@ class StoreKeyProvider final : public IEfsKeyProvider
       LogDebug("The certificate has no usable private key.");
       return std::nullopt;
     }
-    return key.Decrypt(wrappedFek);
+    return key.Decrypt(wrapped_fek);
   }
 
  private:
@@ -231,39 +231,40 @@ std::shared_ptr<IEfsKeyProvider> MakeCertStoreKeyProvider()
 }
 
 std::shared_ptr<IEfsKeyProvider>
-    MakePfxKeyProvider(const std::filesystem::path& pfxPath,
+    MakePfxKeyProvider(const std::filesystem::path& pfx_path,
                        std::wstring_view password)
 {
-  std::error_code sizeError;
-  const std::uintmax_t fileSize =
-      std::filesystem::file_size(pfxPath, sizeError);
-  if (!sizeError && fileSize > static_cast<std::uintmax_t>(kMaxPfxSize))
+  std::error_code size_error;
+  const std::uintmax_t file_size =
+      std::filesystem::file_size(pfx_path, size_error);
+  if (!size_error && file_size > static_cast<std::uintmax_t>(max_pfx_size))
   {
     LogWarn("The PFX is too large to be a certificate bundle.");
     return nullptr;
   }
 
-  std::ifstream file(pfxPath, std::ios::binary);
+  std::ifstream file(pfx_path, std::ios::binary);
   std::vector<BYTE> bytes;
   if (file)
   {
     // One byte more than expected: a file that grew still trips the limit.
     const std::streamsize capacity =
-        (sizeError ? kMaxPfxSize : static_cast<std::streamsize>(fileSize)) + 1;
+        (size_error ? max_pfx_size : static_cast<std::streamsize>(file_size)) +
+        1;
     bytes.resize(gsl::narrow<size_t>(capacity));
     file.read(reinterpret_cast<char*>(bytes.data()), capacity);
     bytes.resize(gsl::narrow<size_t>(file.gcount()));
   }
-  if (bytes.empty() || bytes.size() > static_cast<size_t>(kMaxPfxSize))
+  if (bytes.empty() || bytes.size() > static_cast<size_t>(max_pfx_size))
   {
     LogWarn("Cannot read a PFX from the given path.");
     return nullptr;
   }
 
   CRYPT_DATA_BLOB blob{gsl::narrow<DWORD>(bytes.size()), bytes.data()};
-  const std::wstring passwordZ(password);
+  const std::wstring password_z(password);
   HCERTSTORE store =
-      PFXImportCertStore(&blob, passwordZ.c_str(), PKCS12_NO_PERSIST_KEY);
+      PFXImportCertStore(&blob, password_z.c_str(), PKCS12_NO_PERSIST_KEY);
   if (store == nullptr)
   {
     LogWarn("Cannot import the PFX: wrong password, or not a PFX.");

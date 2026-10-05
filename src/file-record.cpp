@@ -69,13 +69,13 @@ namespace
 {
 // Chosen well above any real NTFS directory's B+ tree depth, but low enough
 // to unwind long before a forged chain overflows the stack.
-constexpr size_t kMaxIndexBlockDepth = 64;
+constexpr size_t max_index_block_depth = 64;
 
 // Caps the orphan-block recovery scan: an attacker-controlled declared block
 // count must not drive an unbounded number of ParseIndexBlock() calls. 65536
 // blocks is already far past any real directory's index, so this only ever
 // binds on a forged/damaged $INDEX_ALLOCATION.
-constexpr size_t kMaxOrphanScanBlocks = 65536;
+constexpr size_t max_orphan_scan_blocks = 65536;
 
 // Rejects an attribute of a type that is always resident on disk but claims
 // to be non-resident, before its bytes get reinterpreted as a resident one.
@@ -90,65 +90,65 @@ void RequireResident(const AttrHeaderCommon& ahc, const char* message)
 // How reading the next attribute header of a record's walk ended.
 enum class AttrWalk : BYTE
 {
-  kNext,       // head holds a header whose attribute fits in the record.
-  kEndMarker,  // The terminating AttrType::ALL marker was reached.
-  kRanOut,     // The record ended without a marker, or an attribute overran it.
-  kAbort,      // The attribute is malformed.
+  Next,       // head holds a header whose attribute fits in the record.
+  EndMarker,  // The terminating AttrType::ALL marker was reached.
+  RanOut,     // The record ended without a marker, or an attribute overran it.
+  Abort,      // The attribute is malformed.
 };
 
 // Reads the attribute header at the front of cur, and checks that it and its
 // attribute fit in a record of recordSize bytes, dataPtr bytes into it.
-AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD dataPtr,
-                        DWORD recordSize, AttrHeaderCommon& head)
+AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD data_ptr,
+                        DWORD record_size, AttrHeaderCommon& head)
 {
   // The on-disk end-of-attributes marker is a single AttrType::ALL value
   // (4 bytes): check for it as soon as that much room remains, rather
   // than requiring a full attribute header to fit first.
-  if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrType) > recordSize)
+  if (static_cast<ULONGLONG>(data_ptr) + sizeof(AttrType) > record_size)
   {
-    return AttrWalk::kRanOut;
+    return AttrWalk::RanOut;
   }
   AttrType type{};
   std::memcpy(&type, cur.data(), sizeof(type));
-  if (type == AttrType::ALL)
+  if (type == AttrType::All)
   {
-    return AttrWalk::kEndMarker;
+    return AttrWalk::EndMarker;
   }
   // From here on, the walk needs the whole header, and the whole
   // attribute, to fit.
-  if (static_cast<ULONGLONG>(dataPtr) + sizeof(AttrHeaderCommon) > recordSize)
+  if (static_cast<ULONGLONG>(data_ptr) + sizeof(AttrHeaderCommon) > record_size)
   {
-    return AttrWalk::kRanOut;
+    return AttrWalk::RanOut;
   }
   std::memcpy(&head, cur.data(), sizeof(head));
-  if (static_cast<ULONGLONG>(dataPtr) + head.total_size > recordSize)
+  if (static_cast<ULONGLONG>(data_ptr) + head.total_size > record_size)
   {
-    return AttrWalk::kRanOut;
+    return AttrWalk::RanOut;
   }
 
-  const DWORD minTotalSize =
-      head.non_resident != 0 ? Attr::kHeaderNonResidentBaseSize
+  const DWORD min_total_size =
+      head.non_resident != 0 ? Attr::header_non_resident_base_size
                              : static_cast<DWORD>(sizeof(Attr::HeaderResident));
-  if (head.total_size < minTotalSize)
+  if (head.total_size < min_total_size)
   {
     LogWarn("Attribute total_size too small for its header.");
-    return AttrWalk::kAbort;
+    return AttrWalk::Abort;
   }
 
   if (head.non_resident != 0)
   {
-    Attr::HeaderNonResident nonResident{};
-    std::memcpy(&nonResident, cur.data(), sizeof(nonResident));
-    if (Attr::HasCompressedSizeField(nonResident) &&
-        head.total_size < minTotalSize + Attr::kCompressedSizeFieldSize)
+    Attr::HeaderNonResident non_resident{};
+    std::memcpy(&non_resident, cur.data(), sizeof(non_resident));
+    if (Attr::HasCompressedSizeField(non_resident) &&
+        head.total_size < min_total_size + Attr::compressed_size_field_size)
     {
       LogWarn(
           "Compressed attribute total_size too small for its compressed "
           "size field.");
-      return AttrWalk::kAbort;
+      return AttrWalk::Abort;
     }
   }
-  return AttrWalk::kNext;
+  return AttrWalk::Next;
 }
 
 }  // namespace
@@ -156,7 +156,7 @@ AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD dataPtr,
 template <Strategy S>
 FileRecord<S>::Impl::Impl(FileRecord<S>& self,
                           const NtfsVolume<S>& volume) noexcept
-    : self_(&self), volume_(&volume)
+    : self(&self), volume(&volume)
 {
 }
 
@@ -170,7 +170,7 @@ template <Strategy S>
 FileRecord<S>::FileRecord(FileRecord&& other) noexcept
     : impl_(std::move(other.impl_))
 {
-  impl_->self_ = this;
+  impl_->self = this;
 }
 
 template <Strategy S>
@@ -179,20 +179,20 @@ FileRecord<S>::~FileRecord() = default;
 template <Strategy S>
 const NtfsVolume<S>& FileRecord<S>::GetVolume() const noexcept
 {
-  return *impl_->volume_;
+  return *impl_->volume;
 }
 
 // Drops every parsed attribute, then the records and copies they point into.
 template <Strategy S>
 void FileRecord<S>::Impl::ClearAttrs() noexcept
 {
-  for (std::vector<std::unique_ptr<AttrBase<S>>>& arr : attr_list_)
+  for (std::vector<std::unique_ptr<AttrBase<S>>>& arr : attr_list)
   {
     arr.clear();
   }
   // Only now: attributes imported from these records are gone.
-  extension_records_.clear();
-  realigned_attrs_.clear();
+  extension_records.clear();
+  realigned_attrs.clear();
 }
 
 // Returns the attribute header at the start of `at`, the bytes from there to
@@ -210,124 +210,123 @@ const AttrHeaderCommon&
     return *reinterpret_cast<const AttrHeaderCommon*>(bytes.data());
   }
 
-  auto& copy = realigned_attrs_.emplace_back(bytes.size());
+  auto& copy = realigned_attrs.emplace_back(bytes.size());
   std::memcpy(copy.data(), bytes.data(), bytes.size());
   return *reinterpret_cast<const AttrHeaderCommon*>(copy.data());
 }
 
 // Call user defined Callback routines for an attribute
 template <Strategy S>
-void FileRecord<S>::Impl::UserCallBack(DWORD attType,
+void FileRecord<S>::Impl::UserCallBack(DWORD att_type,
                                        const AttrHeaderCommon& ahc,
-                                       bool& bDiscard)
+                                       bool& discard)
 {
-  bDiscard = false;
+  discard = false;
 
-  if (attr_raw_call_back_.at(attType) != nullptr)
+  if (attr_raw_call_back.at(att_type) != nullptr)
   {
-    attr_raw_call_back_.at(attType)(ahc, bDiscard);
+    attr_raw_call_back.at(att_type)(ahc, discard);
   }
   else
   {
-    volume_->impl_->AttrRawCallBack(attType, ahc, bDiscard);
+    volume->impl_->AttrRawCallBack(att_type, ahc, discard);
   }
 }
 
-// Wraps one raw attribute in the class that matches its type. bUnhandled is
+// Wraps one raw attribute in the class that matches its type. unhandled is
 // set for a type this library has no wrapper for.
 template <Strategy S>
-template <typename RESIDENT>
-std::unique_ptr<AttrBase<S>>
-    FileRecord<S>::Impl::AllocAttr(const AttrHeaderCommon& ahc,
-                                   bool& bUnhandled,
-                                   std::unordered_set<ULONGLONG>& attrListChain)
+template <typename Resident>
+std::unique_ptr<AttrBase<S>> FileRecord<S>::Impl::AllocAttr(
+    const AttrHeaderCommon& ahc, bool& unhandled,
+    std::unordered_set<ULONGLONG>& attr_list_chain)
 {
   switch (ahc.type)
   {
     // These attribute types are always resident on disk; reject any
     // record claiming otherwise before its bytes get reinterpreted as one.
-    case AttrType::STANDARD_INFORMATION:
+    case AttrType::StandardInformation:
       RequireResident(ahc,
                       "Standard Information attribute must be resident.\n");
-      return std::make_unique<AttrStdInfo<RESIDENT, S>>(ahc, *self_);
+      return std::make_unique<AttrStdInfo<Resident, S>>(ahc, *self);
 
-    case AttrType::ATTRIBUTE_LIST:
-      if (!resolve_attr_list_)
+    case AttrType::AttributeList:
+      if (!resolve_attr_list)
       {
         if (ahc.non_resident != 0)
         {
-          return std::make_unique<AttrNonResident<S>>(ahc, *self_);
+          return std::make_unique<AttrNonResident<S>>(ahc, *self);
         }
-        return std::make_unique<RESIDENT>(ahc, *self_);
+        return std::make_unique<Resident>(ahc, *self);
       }
       if (ahc.non_resident != 0)
       {
-        return std::make_unique<AttrList<AttrNonResident<S>, S>>(ahc, *self_,
-                                                                 attrListChain);
+        return std::make_unique<AttrList<AttrNonResident<S>, S>>(
+            ahc, *self, attr_list_chain);
       }
-      return std::make_unique<AttrList<RESIDENT, S>>(ahc, *self_,
-                                                     attrListChain);
+      return std::make_unique<AttrList<Resident, S>>(ahc, *self,
+                                                     attr_list_chain);
 
-    case AttrType::FILE_NAME:
+    case AttrType::FileName:
       RequireResident(ahc, "File Name attribute must be resident.\n");
-      return std::make_unique<AttrFileName<RESIDENT, S>>(ahc, *self_);
+      return std::make_unique<AttrFileName<Resident, S>>(ahc, *self);
 
-    case AttrType::VOLUME_NAME:
+    case AttrType::VolumeName:
       RequireResident(ahc, "Volume Name attribute must be resident.\n");
-      return std::make_unique<AttrVolName<RESIDENT, S>>(ahc, *self_);
+      return std::make_unique<AttrVolName<Resident, S>>(ahc, *self);
 
-    case AttrType::VOLUME_INFORMATION:
+    case AttrType::VolumeInformation:
       RequireResident(ahc, "Volume Information attribute must be resident.\n");
-      return std::make_unique<AttrVolInfo<RESIDENT, S>>(ahc, *self_);
+      return std::make_unique<AttrVolInfo<Resident, S>>(ahc, *self);
 
-    case AttrType::DATA:
+    case AttrType::Data:
       if (ahc.non_resident != 0)
       {
-        return std::make_unique<AttrData<AttrNonResident<S>, S>>(ahc, *self_);
+        return std::make_unique<AttrData<AttrNonResident<S>, S>>(ahc, *self);
       }
-      return std::make_unique<AttrData<RESIDENT, S>>(ahc, *self_);
+      return std::make_unique<AttrData<Resident, S>>(ahc, *self);
 
-    case AttrType::INDEX_ROOT:
+    case AttrType::IndexRoot:
       RequireResident(ahc, "Index Root attribute must be resident.\n");
-      return std::make_unique<AttrIndexRoot<RESIDENT, S>>(ahc, *self_);
+      return std::make_unique<AttrIndexRoot<Resident, S>>(ahc, *self);
 
     // INDEX_ALLOCATION is always non-resident on disk; reject a record
     // claiming otherwise before its bytes get reinterpreted as one.
-    case AttrType::INDEX_ALLOCATION:
+    case AttrType::IndexAllocation:
       if (ahc.non_resident == 0)
       {
         throw std::runtime_error(
             "Index Allocation attribute must be non-resident.\n");
       }
-      return std::make_unique<AttrIndexAlloc<S>>(ahc, *self_);
+      return std::make_unique<AttrIndexAlloc<S>>(ahc, *self);
 
-    case AttrType::BITMAP:
+    case AttrType::Bitmap:
       if (ahc.non_resident != 0)
       {
-        return std::make_unique<AttrBitmap<AttrNonResident<S>, S>>(ahc, *self_);
+        return std::make_unique<AttrBitmap<AttrNonResident<S>, S>>(ahc, *self);
       }
       // Resident Bitmap may exist in a directory's FileRecord
       // or in $MFT for a very small volume in theory
-      return std::make_unique<AttrBitmap<RESIDENT, S>>(ahc, *self_);
+      return std::make_unique<AttrBitmap<Resident, S>>(ahc, *self);
 
     // $EFS, the only one this library reads, is read through the generic
     // wrappers. Any other logged utility stream is not needed, but not
     // worth a warning either.
-    case AttrType::LOGGED_UTILITY_STREAM:
+    case AttrType::LoggedUtilityStream:
       if (ahc.non_resident != 0)
       {
-        return std::make_unique<AttrNonResident<S>>(ahc, *self_);
+        return std::make_unique<AttrNonResident<S>>(ahc, *self);
       }
-      return std::make_unique<RESIDENT>(ahc, *self_);
+      return std::make_unique<Resident>(ahc, *self);
 
     // Unhandled Attributes
     default:
-      bUnhandled = true;
+      unhandled = true;
       if (ahc.non_resident != 0)
       {
-        return std::make_unique<AttrNonResident<S>>(ahc, *self_);
+        return std::make_unique<AttrNonResident<S>>(ahc, *self);
       }
-      return std::make_unique<RESIDENT>(ahc, *self_);
+      return std::make_unique<Resident>(ahc, *self);
   }
 }
 
@@ -335,37 +334,37 @@ std::unique_ptr<AttrBase<S>>
 // Return False on error
 template <Strategy S>
 bool FileRecord<S>::Impl::ParseAttr(
-    const AttrHeaderCommon& ahc, std::unordered_set<ULONGLONG>& attrListChain)
+    const AttrHeaderCommon& ahc, std::unordered_set<ULONGLONG>& attr_list_chain)
 {
-  const DWORD attrIndex = AttrIndex(ahc.type);
-  if (attrIndex >= kAttrNums)
+  const DWORD attr_index = AttrIndex(ahc.type);
+  if (attr_index >= attr_nums)
   {
     LogWarn("Invalid Attribute Type: 0x{:04X}", static_cast<DWORD>(ahc.type));
     return false;
   }
 
-  bool bDiscard = false;
-  UserCallBack(attrIndex, ahc, bDiscard);
+  bool discard = false;
+  UserCallBack(attr_index, ahc, discard);
 
-  if (bDiscard)
+  if (discard)
   {
     LogDebug("User Callback has processed this Attribute: 0x{:04X}",
              static_cast<DWORD>(ahc.type));
     return true;
   }
 
-  bool bUnhandled = false;
+  bool unhandled = false;
 
   std::unique_ptr<AttrBase<S>> attr;
   try
   {
-    if constexpr (S == Strategy::NO_CACHE)
+    if constexpr (S == Strategy::NoCache)
     {
-      attr = AllocAttr<AttrResidentNoCache>(ahc, bUnhandled, attrListChain);
+      attr = AllocAttr<AttrResidentNoCache>(ahc, unhandled, attr_list_chain);
     }
     else
     {
-      attr = AllocAttr<AttrResidentFullCache>(ahc, bUnhandled, attrListChain);
+      attr = AllocAttr<AttrResidentFullCache>(ahc, unhandled, attr_list_chain);
     }
   }
   catch (const std::exception& e)
@@ -377,13 +376,13 @@ bool FileRecord<S>::Impl::ParseAttr(
     return false;
   }
 
-  if (bUnhandled)
+  if (unhandled)
   {
     LogWarn("Unhandled attribute: 0x{:04X}", static_cast<DWORD>(ahc.type));
   }
-  // attrIndex < kAttrNums was checked above.
+  // attrIndex < attr_nums was checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  attr_list_[attrIndex].push_back(std::move(attr));
+  attr_list[attr_index].push_back(std::move(attr));
   return true;
 }
 
@@ -394,22 +393,22 @@ bool FileRecord<S>::Impl::ParseAttr(
 // fragmented across the disk.
 template <Strategy S>
 std::unique_ptr<FileRecordHeaderImpl<S>>
-    FileRecord<S>::Impl::ReadFileRecord(ULONGLONG fileRef)
+    FileRecord<S>::Impl::ReadFileRecord(ULONGLONG file_ref)
 {
-  if (record_buffer_.size() != volume_->GetFileRecordSize())
+  if (record_buffer.size() != volume->GetFileRecordSize())
   {
-    record_buffer_.resize(volume_->GetFileRecordSize());
+    record_buffer.resize(volume->GetFileRecordSize());
   }
 
-  if (fileRef < static_cast<ULONGLONG>(Enum::MftIdx::USER) ||
-      volume_->impl_->mft_data_ == nullptr)
+  if (file_ref < static_cast<ULONGLONG>(Enum::MftIdx::User) ||
+      volume->impl_->mft_data == nullptr)
   {
     // Take as continuous disk allocation
-    LARGE_INTEGER frAddr{};
+    LARGE_INTEGER fr_addr{};
     try
     {
-      frAddr.QuadPart = gsl::narrow<LONGLONG>(
-          volume_->GetMFTAddr() + volume_->GetFileRecordSize() * fileRef);
+      fr_addr.QuadPart = gsl::narrow<LONGLONG>(
+          volume->GetMFTAddr() + volume->GetFileRecordSize() * file_ref);
     }
     catch (const std::exception& e)
     {
@@ -419,14 +418,14 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
       return {};
     }
 
-    if (!volume_->ReadInto(frAddr, record_buffer_))
+    if (!volume->ReadInto(fr_addr, record_buffer))
     {
       return {};
     }
 
     try
     {
-      return std::make_unique<FileRecordHeaderImpl<S>>(record_buffer_);
+      return std::make_unique<FileRecordHeaderImpl<S>>(record_buffer);
     }
     catch (const std::exception& e)
     {
@@ -438,18 +437,18 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
   // May be fragmented $MFT, and its DATA attribute itself may be split
   // across extension records - ReadMftData() picks whichever instance
   // covers this offset.
-  const ULONGLONG frAddr = volume_->GetFileRecordSize() * fileRef;
+  const ULONGLONG fr_addr = volume->GetFileRecordSize() * file_ref;
 
   if (std::optional<ULONGLONG> len =
-          volume_->impl_->ReadMftData(frAddr, record_buffer_);
-      !len || *len != volume_->GetFileRecordSize())
+          volume->impl_->ReadMftData(fr_addr, record_buffer);
+      !len || *len != volume->GetFileRecordSize())
   {
     return {};
   }
 
   try
   {
-    return std::make_unique<FileRecordHeaderImpl<S>>(record_buffer_);
+    return std::make_unique<FileRecordHeaderImpl<S>>(record_buffer);
   }
   catch (const std::exception& e)
   {
@@ -462,31 +461,31 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
 
 // Read File Record, verify and patch the US (update sequence)
 template <Strategy S>
-bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
+bool FileRecord<S>::ParseFileRecord(ULONGLONG file_ref)
 {
   // Clear previous data
   impl_->ClearAttrs();
-  if (impl_->file_record_)
+  if (impl_->file_record)
   {
-    impl_->file_record_.reset();
+    impl_->file_record.reset();
   }
 
   std::unique_ptr<FileRecordHeaderImpl<S>> header =
-      impl_->ReadFileRecord(fileRef);
+      impl_->ReadFileRecord(file_ref);
   if (!header)
   {
-    LogError("Cannot read file record {}", fileRef);
+    LogError("Cannot read file record {}", file_ref);
 
-    impl_->file_reference_ = {};
+    impl_->file_reference = {};
 
     return false;
   }
 
-  impl_->file_reference_ = fileRef;
+  impl_->file_reference = file_ref;
 
   // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
   // meets this on every such slot. A caller gets false either way.
-  if (header->GetData()->magic != kFileRecordMagic)
+  if (header->GetData()->magic != file_record_magic)
   {
     LogDebug("Invalid file record");
     return false;
@@ -498,8 +497,8 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG fileRef)
     return false;
   }
 
-  LogDebug("File Record {} Found", fileRef);
-  impl_->file_record_ = std::move(header);
+  LogDebug("File Record {} Found", file_ref);
+  impl_->file_record = std::move(header);
 
   return true;
 }
@@ -509,10 +508,10 @@ template <Strategy S>
 // The depth limit and the visited-VCN set bound the recursion.
 // NOLINTNEXTLINE(misc-no-recursion)
 std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
-    ULONGLONG vcn, std::wstring_view fileName,
-    std::unordered_set<ULONGLONG>& visitedVcns, size_t depth) const
+    ULONGLONG vcn, std::wstring_view file_name,
+    std::unordered_set<ULONGLONG>& visited_vcns, size_t depth) const
 {
-  if (depth >= kMaxIndexBlockDepth)
+  if (depth >= max_index_block_depth)
   {
     LogWarn("VisitIndexBlock() aborting: recursion depth limit exceeded");
     return {};
@@ -520,13 +519,13 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
 
   // A subnode VCN already on this walk means the on-disk B+ tree is
   // malformed (self-loop or cycle) - stop instead of recursing forever.
-  if (!visitedVcns.insert(vcn).second)
+  if (!visited_vcns.insert(vcn).second)
   {
     return {};
   }
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      self_->getAttr(AttrType::INDEX_ALLOCATION);
+      self->GetAttr(AttrType::IndexAllocation);
   if (vec.empty())
   {
     return {};
@@ -545,7 +544,7 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
     {
       // Compare name
       const int comparison =
-          index_entry.Compare(fileName, volume_->impl_->GetUpCaseTable());
+          index_entry.Compare(file_name, volume->impl_->GetUpCaseTable());
       if (comparison == 0)
       {
         // Must be a copy: the view dies with index_block, the IndexEntry
@@ -562,7 +561,7 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
         }
         // Search in SubNode (IndexBlock), recursive call
         std::optional<IndexEntry> retval = VisitIndexBlock(
-            index_entry.GetSubNodeVCN(), fileName, visitedVcns, depth + 1);
+            index_entry.GetSubNodeVCN(), file_name, visited_vcns, depth + 1);
         if (retval)
         {
           return retval;
@@ -574,7 +573,7 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
     {
       // Search in SubNode (IndexBlock), recursive call
       std::optional<IndexEntry> retval = VisitIndexBlock(
-          index_entry.GetSubNodeVCN(), fileName, visitedVcns, depth + 1);
+          index_entry.GetSubNodeVCN(), file_name, visited_vcns, depth + 1);
       if (retval)
       {
         return retval;
@@ -593,10 +592,10 @@ template <Strategy S>
 // The depth limit and the visited-VCN set bound the recursion.
 // NOLINTNEXTLINE(misc-no-recursion)
 void FileRecord<S>::Impl::TraverseSubNode(
-    ULONGLONG vcn, const SUBENTRY_CALLBACK& seCallBack, void* context,
-    std::unordered_set<ULONGLONG>& visitedVcns, size_t depth) const
+    ULONGLONG vcn, const SubentryCallback& se_call_back, void* context,
+    std::unordered_set<ULONGLONG>& visited_vcns, size_t depth) const
 {
-  if (depth >= kMaxIndexBlockDepth)
+  if (depth >= max_index_block_depth)
   {
     LogWarn("TraverseSubNode() aborting: recursion depth limit exceeded");
     return;
@@ -604,13 +603,13 @@ void FileRecord<S>::Impl::TraverseSubNode(
 
   // A subnode VCN already on this walk means the on-disk B+ tree is
   // malformed (self-loop or cycle) - stop instead of recursing forever.
-  if (!visitedVcns.insert(vcn).second)
+  if (!visited_vcns.insert(vcn).second)
   {
     return;
   }
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      self_->getAttr(AttrType::INDEX_ALLOCATION);
+      self->GetAttr(AttrType::IndexAllocation);
   if (vec.empty())
   {
     return;
@@ -628,13 +627,13 @@ void FileRecord<S>::Impl::TraverseSubNode(
     if (index_entry.IsSubNodePtr())
     {
       // recursive call
-      TraverseSubNode(index_entry.GetSubNodeVCN(), seCallBack, context,
-                      visitedVcns, depth + 1);
+      TraverseSubNode(index_entry.GetSubNodeVCN(), se_call_back, context,
+                      visited_vcns, depth + 1);
     }
 
     if (index_entry.HasName())
     {
-      seCallBack(index_entry, context);
+      se_call_back(index_entry, context);
     }
   }
 }
@@ -645,8 +644,8 @@ template <Strategy S>
 bool FileRecord<S>::ParseAttrs()
 {
   // A fresh chain, unrelated to any previous ParseFileRecord() on this object.
-  std::unordered_set<ULONGLONG> attrListChain;
-  return impl_->ParseAttrs(attrListChain);
+  std::unordered_set<ULONGLONG> attr_list_chain;
+  return impl_->ParseAttrs(attr_list_chain);
 }
 
 // attrListChain carries one $ATTRIBUTE_LIST resolution's already-visited
@@ -654,19 +653,19 @@ bool FileRecord<S>::ParseAttrs()
 // instead of starting a fresh chain.
 template <Strategy S>
 bool FileRecord<S>::Impl::ParseAttrs(
-    std::unordered_set<ULONGLONG>& attrListChain)
+    std::unordered_set<ULONGLONG>& attr_list_chain)
 {
-  assert(file_record_);
+  assert(file_record);
 
   // Clear previous data
   ClearAttrs();
 
-  const bool recover = volume_->GetOptions().recover_errors;
+  const bool recover = volume->GetOptions().recover_errors;
 
   // Ends the walk early with failure. Strict drops everything parsed so far.
   // Recovering keeps it, and that partial result must still be usable: its
   // VCN continuations merged, its encrypted streams given their context.
-  const auto abortWalk = [this, recover]
+  const auto abort_walk = [this, recover]
   {
     if (!recover)
     {
@@ -682,56 +681,56 @@ bool FileRecord<S>::Impl::ParseAttrs(
   // A freed record still parsed its header (IsDeleted() works), but not its
   // attributes: this record exposes no content unless include_deleted opted
   // in, or this is one of the volume's own metadata reads.
-  if (!bypass_deleted_gate_ && self_->IsDeleted() &&
-      !volume_->GetOptions().include_deleted)
+  if (!bypass_deleted_gate && self->IsDeleted() &&
+      !volume->GetOptions().include_deleted)
   {
     LogDebug("ParseAttrs() skipped: file record {} is deleted",
-             file_reference_ ? *file_reference_ : 0);
+             file_reference ? *file_reference : 0);
     return false;
   }
 
   // Visit all attributes
 
-  DWORD dataPtr = 0;  // guard if data exceeds file_record_size_ bounds
-  const AttrHeaderCommon* first = file_record_->HeaderCommon();
+  DWORD data_ptr = 0;  // guard if data exceeds file_record_size_ bounds
+  const AttrHeaderCommon* first = file_record->HeaderCommon();
 
   if (first == nullptr)
   {
     return false;
   }
 
-  dataPtr += file_record_->GetData()->offset_of_attr;
-  bool foundEndMarker = false;
+  data_ptr += file_record->GetData()->offset_of_attr;
+  bool found_end_marker = false;
 
   // An attribute's position comes from the disk, so it need not be aligned
   // for AttrHeaderCommon. The walk reads each header through a copy.
   std::span<const BYTE> cur(reinterpret_cast<const BYTE*>(first),
-                            volume_->GetFileRecordSize() - dataPtr);
+                            volume->GetFileRecordSize() - data_ptr);
 
   while (true)
   {
     AttrHeaderCommon head{};
     const AttrWalk step =
-        ReadAttrHeader(cur, dataPtr, volume_->GetFileRecordSize(), head);
-    if (step == AttrWalk::kEndMarker)
+        ReadAttrHeader(cur, data_ptr, volume->GetFileRecordSize(), head);
+    if (step == AttrWalk::EndMarker)
     {
-      foundEndMarker = true;
+      found_end_marker = true;
       break;
     }
-    if (step == AttrWalk::kRanOut)
+    if (step == AttrWalk::RanOut)
     {
       break;
     }
-    if (step == AttrWalk::kAbort || !VisitAttr(cur, head, attrListChain))
+    if (step == AttrWalk::Abort || !VisitAttr(cur, head, attr_list_chain))
     {
-      return abortWalk();
+      return abort_walk();
     }
 
-    dataPtr += head.total_size;
+    data_ptr += head.total_size;
     cur = cur.subspan(head.total_size);  // next attribute
   }
 
-  if (!foundEndMarker)
+  if (!found_end_marker)
   {
     LogRecoverable(recover,
                    "Attribute walk ended without a terminating end marker.");
@@ -757,12 +756,12 @@ bool FileRecord<S>::Impl::ParseAttrs(
 template <Strategy S>
 bool FileRecord<S>::Impl::VisitAttr(
     std::span<const BYTE> cur, const AttrHeaderCommon& head,
-    std::unordered_set<ULONGLONG>& attrListChain)
+    std::unordered_set<ULONGLONG>& attr_list_chain)
 {
   // True only when the type is a real attribute slot and the caller's
   // mask requests that slot.
   if (!IsValidAttrType(head.type) ||
-      !static_cast<bool>(AttrMask(head.type) & attr_mask_))
+      !static_cast<bool>(AttrMask(head.type) & attr_mask))
   {
     return true;
   }
@@ -771,14 +770,14 @@ bool FileRecord<S>::Impl::VisitAttr(
   // constructing the attribute: strict rejects it outright instead of
   // parsing it and letting a later GetAttrName() call find the same
   // defect.
-  const bool nameExceedsBounds =
+  const bool name_exceeds_bounds =
       head.name_length != 0 &&
       static_cast<ULONGLONG>(head.name_offset) +
               (static_cast<ULONGLONG>(head.name_length) * sizeof(WCHAR)) >
           head.total_size;
-  if (nameExceedsBounds)
+  if (name_exceeds_bounds)
   {
-    const bool recover = volume_->GetOptions().recover_errors;
+    const bool recover = volume->GetOptions().recover_errors;
     LogRecoverable(recover, "Attribute name exceeds attribute bounds.");
     if (!recover)
     {
@@ -786,7 +785,7 @@ bool FileRecord<S>::Impl::VisitAttr(
     }
   }
 
-  return ParseAttr(AlignedAttrHeader(cur), attrListChain);
+  return ParseAttr(AlignedAttrHeader(cur), attr_list_chain);
 }
 
 namespace
@@ -799,7 +798,7 @@ template <Strategy S>
 std::unordered_map<std::wstring, std::vector<size_t>> GroupNonResidentByName(
     const std::vector<std::unique_ptr<AttrBase<S>>>& attrs)
 {
-  std::unordered_map<std::wstring, std::vector<size_t>> byName;
+  std::unordered_map<std::wstring, std::vector<size_t>> by_name;
   for (size_t i = 0; i < attrs.size(); ++i)
   {
     // i < attrs.size() by the loop condition.
@@ -812,10 +811,10 @@ std::unordered_map<std::wstring, std::vector<size_t>> GroupNonResidentByName(
       {
         key = attr->GetAttrName();
       }
-      byName[key].push_back(i);
+      by_name[key].push_back(i);
     }
   }
-  return byName;
+  return by_name;
 }
 
 }  // namespace
@@ -828,29 +827,29 @@ std::unordered_map<std::wstring, std::vector<size_t>> GroupNonResidentByName(
 template <Strategy S>
 void FileRecord<S>::Impl::MergeStreamChain(
     std::vector<std::unique_ptr<AttrBase<S>>>& attrs,
-    std::vector<size_t>& indices, std::vector<size_t>& toErase)
+    std::vector<size_t>& indices, std::vector<size_t>& to_erase)
 {
   // indices only holds indices below attrs.size().
-  const auto nonResident = [&attrs](size_t idx) -> AttrNonResident<S>&
+  const auto non_resident = [&attrs](size_t idx) -> AttrNonResident<S>&
   {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     return static_cast<AttrNonResident<S>&>(*attrs[idx]);
   };
 
-  std::ranges::sort(indices, {},
-                    [&](size_t idx) { return nonResident(idx).GetStartVcn(); });
+  std::ranges::sort(indices, {}, [&](size_t idx)
+                    { return non_resident(idx).GetStartVcn(); });
 
-  ULONGLONG expectedStartVcn = 0;
+  ULONGLONG expected_start_vcn = 0;
   bool contiguous = true;
   for (size_t const idx : indices)
   {
-    const auto& instance = nonResident(idx);
-    if (instance.GetStartVcn() != expectedStartVcn)
+    const auto& instance = non_resident(idx);
+    if (instance.GetStartVcn() != expected_start_vcn)
     {
       contiguous = false;
       break;
     }
-    expectedStartVcn = instance.GetLastVcn() + 1;
+    expected_start_vcn = instance.GetLastVcn() + 1;
   }
   if (!contiguous)
   {
@@ -861,14 +860,14 @@ void FileRecord<S>::Impl::MergeStreamChain(
     return;
   }
 
-  auto& keeper = nonResident(indices.front());
+  auto& keeper = non_resident(indices.front());
   for (size_t k = 1; k < indices.size(); ++k)
   {
     // k < indices.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const size_t idx = indices[k];
-    keeper.AppendRuns(nonResident(idx));
-    toErase.push_back(idx);
+    keeper.AppendRuns(non_resident(idx));
+    to_erase.push_back(idx);
   }
 }
 
@@ -878,24 +877,24 @@ void FileRecord<S>::Impl::MergeStreamChain(
 template <Strategy S>
 void FileRecord<S>::Impl::MergeAttributeContinuations()
 {
-  for (std::vector<std::unique_ptr<AttrBase<S>>>& attrs : attr_list_)
+  for (std::vector<std::unique_ptr<AttrBase<S>>>& attrs : attr_list)
   {
     if (attrs.size() < 2)
     {
       continue;
     }
 
-    std::vector<size_t> toErase;
+    std::vector<size_t> to_erase;
     for (auto& [name, indices] : GroupNonResidentByName<S>(attrs))
     {
       if (indices.size() >= 2)
       {
-        MergeStreamChain(attrs, indices, toErase);
+        MergeStreamChain(attrs, indices, to_erase);
       }
     }
 
-    std::ranges::sort(toErase);
-    for (const auto index : toErase | std::views::reverse)
+    std::ranges::sort(to_erase);
+    for (const auto index : to_erase | std::views::reverse)
     {
       attrs.erase(attrs.begin() + gsl::narrow<ptrdiff_t>(index));
     }
@@ -904,10 +903,10 @@ void FileRecord<S>::Impl::MergeAttributeContinuations()
 
 // The largest $EFS stream read. It holds a few key entries, a few KiB at
 // most. A forged size must not decide how much memory a parse allocates.
-constexpr ULONGLONG kMaxEfsStreamSize = 64ULL * 1024;
+constexpr ULONGLONG max_efs_stream_size = 64ULL * 1024;
 
 // Name of the $LOGGED_UTILITY_STREAM that holds the EFS keys.
-constexpr std::wstring_view kEfsStreamName = L"$EFS";
+constexpr std::wstring_view efs_stream_name = L"$EFS";
 
 // Copies the key entries out of this record's $EFS stream. Returns none if the
 // stream is absent or malformed: the parse goes on, and the read that needs
@@ -921,21 +920,21 @@ std::vector<Efs::WrappedFek> FileRecord<S>::Impl::ReadEfsEntries() const
   return {};
 #else
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       std::get<AttrIndex(AttrType::LOGGED_UTILITY_STREAM)>(attr_list_))
+       std::get<AttrIndex(AttrType::LoggedUtilityStream)>(attr_list))
   {
-    if (attr->GetAttrName() != kEfsStreamName)
+    if (attr->GetAttrName() != efs_stream_name)
     {
       continue;
     }
 
     const ULONGLONG size = attr->GetDataSize();
-    if (size > kMaxEfsStreamSize)
+    if (size > max_efs_stream_size)
     {
       LogWarn("$EFS stream is too large: {} bytes.", size);
       return {};
     }
 
-    // Owned copy: under NO_CACHE the attribute's bytes are short-lived.
+    // Owned copy: under NoCache the attribute's bytes are short-lived.
     std::vector<BYTE> bytes(static_cast<size_t>(size));
     const std::optional<ULONGLONG> read = attr->ReadData(0, bytes);
     if (!read || *read != size)
@@ -966,8 +965,8 @@ bool FileRecord<S>::Impl::AttachEfsContext()
   // that combination is left undecrypted rather than misprocessed, when
   // recovering. Checked with or without a decryption backend compiled in:
   // the anomaly is in the flags, not in what can decrypt them.
-  constexpr WORD kAttrFlagCompressed = 0x0001;
-  const bool recover = volume_->GetOptions().recover_errors;
+  constexpr WORD attr_flag_compressed = 0x0001;
+  const bool recover = volume->GetOptions().recover_errors;
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
@@ -975,14 +974,14 @@ bool FileRecord<S>::Impl::AttachEfsContext()
 #endif
 
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       std::get<AttrIndex(AttrType::DATA)>(attr_list_))
+       std::get<AttrIndex(AttrType::Data)>(attr_list))
   {
     const WORD flags = attr->GetAttrFlags();
-    if ((flags & Efs::kAttrFlagEncrypted) == 0)
+    if ((flags & Efs::attr_flag_encrypted) == 0)
     {
       continue;
     }
-    if ((flags & kAttrFlagCompressed) != 0)
+    if ((flags & attr_flag_compressed) != 0)
     {
       LogRecoverable(recover,
                      "A $DATA stream is flagged both compressed and "
@@ -995,8 +994,8 @@ bool FileRecord<S>::Impl::AttachEfsContext()
       continue;
     }
 
-    auto* nonResident = dynamic_cast<AttrNonResident<S>*>(attr.get());
-    if (nonResident == nullptr)
+    auto* non_resident = dynamic_cast<AttrNonResident<S>*>(attr.get());
+    if (non_resident == nullptr)
     {
       LogRecoverable(recover,
                      "A resident $DATA is flagged encrypted. Read as is.");
@@ -1009,7 +1008,7 @@ bool FileRecord<S>::Impl::AttachEfsContext()
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
-    encrypted.push_back(nonResident);
+    encrypted.push_back(non_resident);
 #endif
   }
 
@@ -1022,8 +1021,8 @@ bool FileRecord<S>::Impl::AttachEfsContext()
 
   // One context for the record: its streams share one FEK, resolved once.
   auto const context = std::make_shared<const Efs::Context>(
-      ReadEfsEntries(), [&volume = *volume_]
-      { return volume.GetEfsKeyProvider(); }, volume_->GetEfsCipherBackend());
+      ReadEfsEntries(), [&volume = *volume]
+      { return volume.GetEfsKeyProvider(); }, volume->GetEfsCipherBackend());
   for (AttrNonResident<S>* stream : encrypted)
   {
     stream->SetEfsContext(context);
@@ -1035,44 +1034,43 @@ bool FileRecord<S>::Impl::AttachEfsContext()
 template <Strategy S>
 std::optional<ULONGLONG> FileRecord<S>::GetFileReference() const noexcept
 {
-  return impl_->file_reference_;
+  return impl_->file_reference;
 }
 
 template <Strategy S>
 WORD FileRecord<S>::GetSequenceNumber() const noexcept
 {
-  return impl_->file_record_ ? impl_->file_record_->GetData()->seq_no : 0;
+  return impl_->file_record ? impl_->file_record->GetData()->seq_no : 0;
 }
 
 template <Strategy S>
 ULONGLONG FileRecord<S>::GetBaseRecordReference() const noexcept
 {
-  return impl_->file_record_ ? impl_->file_record_->GetData()->ref_to_base &
-                                   kMftRecordNumberMask
-                             : 0;
+  return impl_->file_record ? impl_->file_record->GetData()->ref_to_base &
+                                  mft_record_number_mask
+                            : 0;
 }
 
 template <Strategy S>
 bool FileRecord<S>::IsExtensionRecord() const noexcept
 {
-  return impl_->file_record_ &&
-         impl_->file_record_->GetData()->ref_to_base != 0;
+  return impl_->file_record && impl_->file_record->GetData()->ref_to_base != 0;
 }
 
 // Install Attribute raw data CallBack routines for a single File Record
 template <Strategy S>
-bool FileRecord<S>::InstallAttrRawCB(AttrType attrType,
+bool FileRecord<S>::InstallAttrRawCB(AttrType attr_type,
                                      AttrRawCallback callback) noexcept
 {
-  const DWORD atIdx = AttrIndex(attrType);
-  if (atIdx >= kAttrNums)
+  const DWORD at_idx = AttrIndex(attr_type);
+  if (at_idx >= attr_nums)
   {
     return false;
   }
 
-  // atIdx < kAttrNums was checked above.
+  // atIdx < attr_nums was checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  impl_->attr_raw_call_back_[atIdx] = callback;
+  impl_->attr_raw_call_back[at_idx] = callback;
   return true;
 }
 
@@ -1080,7 +1078,7 @@ bool FileRecord<S>::InstallAttrRawCB(AttrType attrType,
 template <Strategy S>
 void FileRecord<S>::ClearAttrRawCB() noexcept
 {
-  for (AttrRawCallback& callback : impl_->attr_raw_call_back_)
+  for (AttrRawCallback& callback : impl_->attr_raw_call_back)
   {
     callback = nullptr;
   }
@@ -1091,38 +1089,38 @@ template <Strategy S>
 void FileRecord<S>::SetAttrMask(Mask mask) noexcept
 {
   // Standard Information and Attribute List is needed always
-  impl_->attr_mask_ = mask | Mask::STANDARD_INFORMATION | Mask::ATTRIBUTE_LIST;
+  impl_->attr_mask = mask | Mask::StandardInformation | Mask::AttributeList;
 
   // The $EFS stream holds the key of every encrypted $DATA.
-  if ((mask & Mask::DATA) == Mask::DATA)
+  if ((mask & Mask::Data) == Mask::Data)
   {
-    impl_->attr_mask_ |= Mask::LOGGED_UTILITY_STREAM;
+    impl_->attr_mask |= Mask::LoggedUtilityStream;
   }
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine
 template <Strategy S>
-void FileRecord<S>::TraverseAttrs(const ATTRS_CALLBACK<S>& attrCallBack,
+void FileRecord<S>::TraverseAttrs(const AttrsCallback<S>& attr_call_back,
                                   void* context)
 {
-  if (!attrCallBack)
+  if (!attr_call_back)
   {
     LogWarn("TraverseAttrs() called with an empty callback");
     return;
   }
 
-  for (size_t i = 0; i < kAttrNums; i++)
+  for (size_t i = 0; i < attr_nums; i++)
   {
     // skip masked attributes
-    if (static_cast<bool>(impl_->attr_mask_ & (static_cast<Mask>(1U << i))))
+    if (static_cast<bool>(impl_->attr_mask & (static_cast<Mask>(1U << i))))
     {
-      // i < kAttrNums by the loop condition.
+      // i < attr_nums by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      for (const std::unique_ptr<AttrBase<S>>& attr_base : impl_->attr_list_[i])
+      for (const std::unique_ptr<AttrBase<S>>& attr_base : impl_->attr_list[i])
       {
-        bool bStop = false;
-        attrCallBack(*attr_base.get(), context, &bStop);
-        if (bStop)
+        bool stop = false;
+        attr_call_back(*attr_base.get(), context, &stop);
+        if (stop)
         {
           return;
         }
@@ -1134,36 +1132,36 @@ void FileRecord<S>::TraverseAttrs(const ATTRS_CALLBACK<S>& attrCallBack,
 // Find Attributes
 template <Strategy S>
 const std::vector<std::unique_ptr<AttrBase<S>>>&
-    FileRecord<S>::getAttr(AttrType attrType) const noexcept
+    FileRecord<S>::GetAttr(AttrType attr_type) const noexcept
 {
   static std::vector<std::unique_ptr<AttrBase<S>>> const dummy{};
-  const DWORD attrIdx = AttrIndex(attrType);
+  const DWORD attr_idx = AttrIndex(attr_type);
 
-  if (attrIdx >= kAttrNums)
+  if (attr_idx >= attr_nums)
   {
     return dummy;
   }
 
-  // attrIdx < kAttrNums was checked above.
+  // attrIdx < attr_nums was checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return impl_->attr_list_[attrIdx];
+  return impl_->attr_list[attr_idx];
 }
 
 template <Strategy S>
 std::vector<std::unique_ptr<AttrBase<S>>>&
-    FileRecord<S>::getAttr(AttrType attrType) noexcept
+    FileRecord<S>::GetAttr(AttrType attr_type) noexcept
 {
   static std::vector<std::unique_ptr<AttrBase<S>>> dummy{};
-  const DWORD attrIdx = AttrIndex(attrType);
+  const DWORD attr_idx = AttrIndex(attr_type);
 
-  if (attrIdx >= kAttrNums)
+  if (attr_idx >= attr_nums)
   {
     return dummy;
   }
 
-  // attrIdx < kAttrNums was checked above.
+  // attrIdx < attr_nums was checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return impl_->attr_list_[attrIdx];
+  return impl_->attr_list[attr_idx];
 }
 
 // Get File Name (First Win32 name)
@@ -1172,21 +1170,21 @@ std::wstring_view FileRecord<S>::GetFileName() const
 {
   // A file may have several filenames
   // Return the first Win32 filename
-  for (const std::unique_ptr<AttrBase<S>>& fn_ :
-       std::get<AttrIndex(AttrType::FILE_NAME)>(impl_->attr_list_))
+  for (const std::unique_ptr<AttrBase<S>>& fn :
+       std::get<AttrIndex(AttrType::FileName)>(impl_->attr_list))
   {
     const Filename* filename = nullptr;
-    if constexpr (S == Strategy::NO_CACHE)
+    if constexpr (S == Strategy::NoCache)
     {
       filename = reinterpret_cast<
-          const AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
-          fn_.get());
+          const AttrFileName<AttrResidentNoCache, Strategy::NoCache>*>(
+          fn.get());
     }
-    else if constexpr (S == Strategy::FULL_CACHE)
+    else if constexpr (S == Strategy::FullCache)
     {
       filename = reinterpret_cast<
-          const AttrFileName<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
-          fn_.get());
+          const AttrFileName<AttrResidentFullCache, Strategy::FullCache>*>(
+          fn.get());
     }
     else
     {
@@ -1208,22 +1206,22 @@ template <Strategy S>
 ULONGLONG FileRecord<S>::GetFileSize() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::FILE_NAME)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::FileName)>(impl_->attr_list);
   if (vec.empty())
   {
     return 0;
   }
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrFileName<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->GetFileSize();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
-    return reinterpret_cast<const AttrFileName<AttrResidentFullCache,
-                                               Strategy::FULL_CACHE>*>(
+    return reinterpret_cast<
+               const AttrFileName<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->GetFileSize();
   }
@@ -1239,86 +1237,86 @@ ULONGLONG FileRecord<S>::GetAllocatedSize() const noexcept
 
 // Get File Times
 template <Strategy S>
-void FileRecord<S>::GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                                FILETIME* accessTm,
-                                FILETIME* changeTm) const noexcept
+void FileRecord<S>::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
+                                FILETIME* access_tm,
+                                FILETIME* change_tm) const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   // Standard Information attribute hold the most updated file time
   if (!vec.empty())
   {
-    if constexpr (S == Strategy::NO_CACHE)
+    if constexpr (S == Strategy::NoCache)
     {
       reinterpret_cast<
-          const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+          const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
           vec.front().get())
-          ->GetFileTime(writeTm, createTm, accessTm, changeTm);
+          ->GetFileTime(write_tm, create_tm, access_tm, change_tm);
     }
-    else if constexpr (S == Strategy::FULL_CACHE)
+    else if constexpr (S == Strategy::FullCache)
     {
       reinterpret_cast<
-          const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+          const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
           vec.front().get())
-          ->GetFileTime(writeTm, createTm, accessTm, changeTm);
+          ->GetFileTime(write_tm, create_tm, access_tm, change_tm);
     }
     return;
   }
 
-  if (writeTm != nullptr)
+  if (write_tm != nullptr)
   {
-    writeTm->dwHighDateTime = 0;
-    writeTm->dwLowDateTime = 0;
+    write_tm->dwHighDateTime = 0;
+    write_tm->dwLowDateTime = 0;
   }
-  if (createTm != nullptr)
+  if (create_tm != nullptr)
   {
-    createTm->dwHighDateTime = 0;
-    createTm->dwLowDateTime = 0;
+    create_tm->dwHighDateTime = 0;
+    create_tm->dwLowDateTime = 0;
   }
-  if (accessTm != nullptr)
+  if (access_tm != nullptr)
   {
-    accessTm->dwHighDateTime = 0;
-    accessTm->dwLowDateTime = 0;
+    access_tm->dwHighDateTime = 0;
+    access_tm->dwLowDateTime = 0;
   }
-  if (changeTm != nullptr)
+  if (change_tm != nullptr)
   {
-    changeTm->dwHighDateTime = 0;
-    changeTm->dwLowDateTime = 0;
+    change_tm->dwHighDateTime = 0;
+    change_tm->dwLowDateTime = 0;
   }
 }
 
 // Traverse all sub directories and files contained
 // Call user defined callback routine once found an entry
 template <Strategy S>
-void FileRecord<S>::TraverseSubEntries(const SUBENTRY_CALLBACK& seCallBack,
+void FileRecord<S>::TraverseSubEntries(const SubentryCallback& se_call_back,
                                        void* context) const
 {
-  assert(seCallBack);
+  assert(se_call_back);
 
-  const bool recover = impl_->volume_->GetOptions().recover_errors;
+  const bool recover = impl_->volume->GetOptions().recover_errors;
 
   // Start traversing from IndexRoot (B+ tree root node)
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      getAttr(AttrType::INDEX_ROOT);
+      GetAttr(AttrType::IndexRoot);
   if (vec.empty())
   {
     // No IndexRoot at all to start the normal walk from, but $INDEX_ALLOCATION
     // blocks may still exist and hold every entry.
     if (recover)
     {
-      std::unordered_set<ULONGLONG> visitedVcns;
-      impl_->ScanOrphanedIndexBlocks(seCallBack, context, visitedVcns);
+      std::unordered_set<ULONGLONG> visited_vcns;
+      impl_->ScanOrphanedIndexBlocks(se_call_back, context, visited_vcns);
     }
     return;
   }
 
   const std::vector<IndexEntryView>* all_ie = nullptr;
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+        const AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>*>(
         vec.front().get());
 
     if (!index_root->IsFileName())
@@ -1327,10 +1325,10 @@ void FileRecord<S>::TraverseSubEntries(const SUBENTRY_CALLBACK& seCallBack,
     }
     all_ie = index_root;
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+        const AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>*>(
         vec.front().get());
 
     if (!index_root->IsFileName())
@@ -1345,26 +1343,26 @@ void FileRecord<S>::TraverseSubEntries(const SUBENTRY_CALLBACK& seCallBack,
     return;
   }
 
-  std::unordered_set<ULONGLONG> visitedVcns;
+  std::unordered_set<ULONGLONG> visited_vcns;
 
   for (const IndexEntryView& index_entry : *all_ie)
   {
     // Visit subnode first
     if (index_entry.IsSubNodePtr())
     {
-      impl_->TraverseSubNode(index_entry.GetSubNodeVCN(), seCallBack, context,
-                             visitedVcns, 0);
+      impl_->TraverseSubNode(index_entry.GetSubNodeVCN(), se_call_back, context,
+                             visited_vcns, 0);
     }
 
     if (index_entry.HasName())
     {
-      seCallBack(index_entry, context);
+      se_call_back(index_entry, context);
     }
   }
 
   if (recover)
   {
-    impl_->ScanOrphanedIndexBlocks(seCallBack, context, visitedVcns);
+    impl_->ScanOrphanedIndexBlocks(se_call_back, context, visited_vcns);
   }
 }
 
@@ -1374,15 +1372,15 @@ namespace
 // Number of whole index blocks that mappedClusters clusters hold. A range of
 // clusters counts in bytes, not in clusters, since a block can be smaller than
 // one. The byte count saturates instead of wrapping.
-ULONGLONG MappedIndexBlocks(ULONGLONG mappedClusters, DWORD clusterSize,
-                            DWORD indexBlockSize) noexcept
+ULONGLONG MappedIndexBlocks(ULONGLONG mapped_clusters, DWORD cluster_size,
+                            DWORD index_block_size) noexcept
 {
-  const ULONGLONG mappedBytes =
-      (clusterSize != 0 &&
-       mappedClusters > std::numeric_limits<ULONGLONG>::max() / clusterSize)
+  const ULONGLONG mapped_bytes =
+      (cluster_size != 0 &&
+       mapped_clusters > std::numeric_limits<ULONGLONG>::max() / cluster_size)
           ? std::numeric_limits<ULONGLONG>::max()
-          : mappedClusters * clusterSize;
-  return mappedBytes / indexBlockSize;
+          : mapped_clusters * cluster_size;
+  return mapped_bytes / index_block_size;
 }
 
 // Decides whether an entry found in an orphaned block is reported. It MUST be
@@ -1390,26 +1388,26 @@ ULONGLONG MappedIndexBlocks(ULONGLONG mappedClusters, DWORD clusterSize,
 // the record it names MUST also still be in use under the same sequence.
 template <Strategy S>
 bool IsOrphanEntryReportable(const IndexEntryView& entry,
-                             std::optional<ULONGLONG> selfRef,
-                             WORD selfSequence, bool selfInUse,
-                             const NtfsVolume<S>* checkNamedRecordIn)
+                             std::optional<ULONGLONG> self_ref,
+                             WORD self_sequence, bool self_in_use,
+                             const NtfsVolume<S>* check_named_record_in)
 {
   // An orphaned block may hold a stale entry left over from a file
   // already deleted from this directory, or from an earlier directory
   // that used this record - only report one still filed under this very
   // directory. Same rule as MftTree: a freed directory keeps the entries
   // filed under its sequence from before NTFS bumped it.
-  if (selfRef && (entry.GetParentReference() != *selfRef ||
-                  !IsSameRecordGeneration(entry.GetParentSequenceNumber(),
-                                          selfSequence, selfInUse)))
+  if (self_ref && (entry.GetParentReference() != *self_ref ||
+                   !IsSameRecordGeneration(entry.GetParentSequenceNumber(),
+                                           self_sequence, self_in_use)))
   {
     return false;
   }
   // With include_deleted off, also drop an entry whose named record is
   // itself freed, or was reused under a different sequence number.
-  if (checkNamedRecordIn != nullptr)
+  if (check_named_record_in != nullptr)
   {
-    FileRecord<S> named(*checkNamedRecordIn);
+    FileRecord<S> named(*check_named_record_in);
     return named.ParseFileRecord(entry.GetFileReference()) &&
            !named.IsDeleted() &&
            named.GetSequenceNumber() == entry.GetSequenceNumber();
@@ -1426,11 +1424,11 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
 // all - unlike the normal walk, in VCN order rather than collation order.
 template <Strategy S>
 void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
-    const SUBENTRY_CALLBACK& seCallBack, void* context,
-    std::unordered_set<ULONGLONG>& visitedVcns) const
+    const SubentryCallback& se_call_back, void* context,
+    std::unordered_set<ULONGLONG>& visited_vcns) const
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      self_->getAttr(AttrType::INDEX_ALLOCATION);
+      self->GetAttr(AttrType::IndexAllocation);
   if (vec.empty())
   {
     return;
@@ -1442,11 +1440,11 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
   // expects) is in clusters when a block spans a whole cluster or more, but
   // in index_block_size units when a cluster is too big to hold one - the
   // same conversion ParseIndexBlock() itself applies.
-  const DWORD indexBlockSize = volume_->GetIndexBlockSize();
-  const DWORD clusterSize = volume_->GetClusterSize();
-  const ULONGLONG clustersPerBlock =
-      (clusterSize != 0 && indexBlockSize >= clusterSize)
-          ? indexBlockSize / clusterSize
+  const DWORD index_block_size = volume->GetIndexBlockSize();
+  const DWORD cluster_size = volume->GetClusterSize();
+  const ULONGLONG clusters_per_block =
+      (cluster_size != 0 && index_block_size >= cluster_size)
+          ? index_block_size / cluster_size
           : 1;
 
   // GetDataSize() (declared real_size) can be forged far past what the
@@ -1455,36 +1453,37 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
   // instead, so a forged size alone can't drive tens of thousands of doomed
   // ParseIndexBlock() calls. A range of clusters counts in bytes, not in
   // clusters, since a block can be smaller than one.
-  const ULONGLONG mappedClusters = (alloc->GetLastVcn() >= alloc->GetStartVcn())
-                                       ? alloc->TotalClusters()
-                                       : 0;
-  const ULONGLONG mappedBlockCount =
-      MappedIndexBlocks(mappedClusters, clusterSize, indexBlockSize);
+  const ULONGLONG mapped_clusters =
+      (alloc->GetLastVcn() >= alloc->GetStartVcn()) ? alloc->TotalClusters()
+                                                    : 0;
+  const ULONGLONG mapped_block_count =
+      MappedIndexBlocks(mapped_clusters, cluster_size, index_block_size);
 
-  const ULONGLONG declaredBlockCount = alloc->GetIndexBlockCount();
-  const ULONGLONG blockCount = (declaredBlockCount < mappedBlockCount)
-                                   ? declaredBlockCount
-                                   : mappedBlockCount;
-  const ULONGLONG scanLimit =
-      (blockCount < kMaxOrphanScanBlocks) ? blockCount : kMaxOrphanScanBlocks;
-  if (declaredBlockCount > kMaxOrphanScanBlocks ||
-      declaredBlockCount > mappedBlockCount)
+  const ULONGLONG declared_block_count = alloc->GetIndexBlockCount();
+  const ULONGLONG block_count = (declared_block_count < mapped_block_count)
+                                    ? declared_block_count
+                                    : mapped_block_count;
+  const ULONGLONG scan_limit = (block_count < max_orphan_scan_blocks)
+                                   ? block_count
+                                   : max_orphan_scan_blocks;
+  if (declared_block_count > max_orphan_scan_blocks ||
+      declared_block_count > mapped_block_count)
   {
     LogInfo(
         "TraverseSubEntries() recovery: orphan scan capped at {} of {} "
         "index blocks",
-        scanLimit, declaredBlockCount);
+        scan_limit, declared_block_count);
   }
 
-  const std::optional<ULONGLONG> selfRef = file_reference_;
-  const WORD selfSequence = self_->GetSequenceNumber();
-  const bool selfInUse = !self_->IsDeleted();
-  const bool includeDeleted = volume_->GetOptions().include_deleted;
+  const std::optional<ULONGLONG> self_ref = file_reference;
+  const WORD self_sequence = self->GetSequenceNumber();
+  const bool self_in_use = !self->IsDeleted();
+  const bool include_deleted = volume->GetOptions().include_deleted;
 
-  for (ULONGLONG blockIndex = 0; blockIndex < scanLimit; blockIndex++)
+  for (ULONGLONG block_index = 0; block_index < scan_limit; block_index++)
   {
-    const ULONGLONG vcn = blockIndex * clustersPerBlock;
-    if (!visitedVcns.insert(vcn).second)
+    const ULONGLONG vcn = block_index * clusters_per_block;
+    if (!visited_vcns.insert(vcn).second)
     {
       continue;
     }
@@ -1501,10 +1500,11 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
     for (const IndexEntryView& index_entry : index_block)
     {
       if (index_entry.HasName() &&
-          IsOrphanEntryReportable(index_entry, selfRef, selfSequence, selfInUse,
-                                  includeDeleted ? nullptr : volume_))
+          IsOrphanEntryReportable(index_entry, self_ref, self_sequence,
+                                  self_in_use,
+                                  include_deleted ? nullptr : volume))
       {
-        seCallBack(index_entry, context);
+        se_call_back(index_entry, context);
       }
     }
   }
@@ -1513,10 +1513,10 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
 // Find a specific Filename from InexRoot described B+ tree
 template <Strategy S>
 std::optional<IndexEntry>
-    FileRecord<S>::FindSubEntry(std::wstring_view fileName) const
+    FileRecord<S>::FindSubEntry(std::wstring_view file_name) const
 {
-  std::optional<IndexEntry> found = impl_->FindSubEntryInOrder(fileName);
-  if (found || !impl_->volume_->impl_->GetUpCaseTable().IsBuiltIn())
+  std::optional<IndexEntry> found = impl_->FindSubEntryInOrder(file_name);
+  if (found || !impl_->volume->impl_->GetUpCaseTable().IsBuiltIn())
   {
     return found;
   }
@@ -1529,8 +1529,8 @@ std::optional<IndexEntry>
       [&](const IndexEntryView& index_entry, void*)
       {
         if (!found &&
-            index_entry.Compare(fileName,
-                                impl_->volume_->impl_->GetUpCaseTable()) == 0)
+            index_entry.Compare(file_name,
+                                impl_->volume->impl_->GetUpCaseTable()) == 0)
         {
           found.emplace(index_entry);
         }
@@ -1545,16 +1545,16 @@ template <Strategy S>
 const std::vector<IndexEntryView>*
     FileRecord<S>::Impl::FileNameIndexRootEntries(const AttrBase<S>& attr)
 {
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>*>(&attr);
+        const AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>*>(&attr);
     return index_root->IsFileName() ? index_root : nullptr;
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+        const AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>*>(
         &attr);
     return index_root->IsFileName() ? index_root : nullptr;
   }
@@ -1569,11 +1569,11 @@ const std::vector<IndexEntryView>*
 // reported absent.
 template <Strategy S>
 std::optional<IndexEntry>
-    FileRecord<S>::Impl::FindSubEntryInOrder(std::wstring_view fileName) const
+    FileRecord<S>::Impl::FindSubEntryInOrder(std::wstring_view file_name) const
 {
   // Start searching from IndexRoot (B+ tree root node)
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      self_->getAttr(AttrType::INDEX_ROOT);
+      self->GetAttr(AttrType::IndexRoot);
   if (vec.empty())
   {
     return {};
@@ -1586,16 +1586,16 @@ std::optional<IndexEntry>
     return {};
   }
 
-  std::unordered_set<ULONGLONG> visitedVcns;
+  std::unordered_set<ULONGLONG> visited_vcns;
   // Loaded before the walk: reading $UpCase reuses the volume's buffers.
-  const UpCaseTable& upcase = volume_->impl_->GetUpCaseTable();
+  const UpCaseTable& upcase = volume->impl_->GetUpCaseTable();
 
   for (const IndexEntryView& index_entry : *all_ie)
   {
     if (index_entry.HasName())
     {
       // Compare name
-      const int comparison = index_entry.Compare(fileName, upcase);
+      const int comparison = index_entry.Compare(file_name, upcase);
       if (comparison == 0)
       {
         // Must be a copy: the view dies with this FileRecord, the IndexEntry
@@ -1619,7 +1619,7 @@ std::optional<IndexEntry>
     {
       // Search in SubNode (IndexBlock)
       std::optional<IndexEntry> retval = VisitIndexBlock(
-          index_entry.GetSubNodeVCN(), fileName, visitedVcns, 0);
+          index_entry.GetSubNodeVCN(), file_name, visited_vcns, 0);
       if (retval)
       {
         return retval;
@@ -1635,7 +1635,7 @@ template <Strategy S>
 const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name) const
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      getAttr(AttrType::DATA);
+      GetAttr(AttrType::Data);
   for (const std::unique_ptr<AttrBase<S>>& data : vec)
   {
     // Unnamed stream
@@ -1660,28 +1660,28 @@ const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name) const
 template <Strategy S>
 bool FileRecord<S>::IsDeleted() const noexcept
 {
-  if (!impl_->file_record_)
+  if (!impl_->file_record)
   {
     LogWarn("IsDeleted() called on a FileRecord with no parsed record");
     return false;
   }
 
-  return !static_cast<bool>(impl_->file_record_->GetData()->flags &
-                            Flag::FileRecord::INUSE);
+  return !static_cast<bool>(impl_->file_record->GetData()->flags &
+                            Flag::FileRecord::InUse);
 }
 
 // Check if it's a directory
 template <Strategy S>
 bool FileRecord<S>::IsDirectory() const noexcept
 {
-  if (!impl_->file_record_)
+  if (!impl_->file_record)
   {
     LogWarn("IsDirectory() called on a FileRecord with no parsed record");
     return false;
   }
 
-  return static_cast<bool>(impl_->file_record_->GetData()->flags &
-                           Flag::FileRecord::DIR);
+  return static_cast<bool>(impl_->file_record->GetData()->flags &
+                           Flag::FileRecord::Dir);
 }
 
 template <Strategy S>
@@ -1689,23 +1689,23 @@ bool FileRecord<S>::IsReadOnly() const noexcept
 {
   // Standard Information attribute holds the most updated file time
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsReadOnly();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsReadOnly();
   }
@@ -1716,23 +1716,23 @@ template <Strategy S>
 bool FileRecord<S>::IsHidden() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsHidden();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsHidden();
   }
@@ -1743,23 +1743,23 @@ template <Strategy S>
 bool FileRecord<S>::IsSystem() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsSystem();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsSystem();
   }
@@ -1770,23 +1770,23 @@ template <Strategy S>
 bool FileRecord<S>::IsArchive() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsArchive();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsArchive();
   }
@@ -1797,23 +1797,23 @@ template <Strategy S>
 bool FileRecord<S>::IsDevice() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsDevice();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsDevice();
   }
@@ -1824,23 +1824,23 @@ template <Strategy S>
 bool FileRecord<S>::IsNormal() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsNormal();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsNormal();
   }
@@ -1851,23 +1851,23 @@ template <Strategy S>
 bool FileRecord<S>::IsTemporary() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsTemporary();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsTemporary();
   }
@@ -1878,23 +1878,23 @@ template <Strategy S>
 bool FileRecord<S>::IsCompressed() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsCompressed();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsCompressed();
   }
@@ -1905,23 +1905,23 @@ template <Strategy S>
 bool FileRecord<S>::IsOffline() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsOffline();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsOffline();
   }
@@ -1932,23 +1932,23 @@ template <Strategy S>
 bool FileRecord<S>::IsNotContentIndexed() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsNotContentIndexed();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsNotContentIndexed();
   }
@@ -1959,23 +1959,23 @@ template <Strategy S>
 bool FileRecord<S>::IsEncrypted() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsEncrypted();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsEncrypted();
   }
@@ -1986,23 +1986,23 @@ template <Strategy S>
 bool FileRecord<S>::IsSparse() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsSparse();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsSparse();
   }
@@ -2013,42 +2013,29 @@ template <Strategy S>
 bool FileRecord<S>::IsReparsePoint() const noexcept
 {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<AttrIndex(AttrType::STANDARD_INFORMATION)>(impl_->attr_list_);
+      std::get<AttrIndex(AttrType::StandardInformation)>(impl_->attr_list);
   if (vec.empty())
   {
     return false;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NO_CACHE>*>(
+               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
                vec.front().get())
         ->IsReparsePoint();
   }
-  else if constexpr (S == Strategy::FULL_CACHE)
+  else if constexpr (S == Strategy::FullCache)
   {
     return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
+               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
                vec.front().get())
         ->IsReparsePoint();
   }
   return false;
 }
 
-template class FileRecord<Strategy::NO_CACHE>;
-template class FileRecord<Strategy::FULL_CACHE>;
-
-/*
-template <Strategy S>
-template <typename RESIDENT>
-std::unique_ptr<AttrBase<Strategy::FULL_CACHE>>
-    FileRecord<S>::AllocAttr<AttrResidentFullCache>(
-        const AttrHeaderCommon& ahc, bool& bUnhandled);
-template <Strategy S>
-template <typename RESIDENT>
-std::unique_ptr<AttrBase<Strategy::NO_CACHE>>
-    FileRecord<S>::AllocAttr<AttrResidentNoCache>(
-        const AttrHeaderCommon& ahc, bool& bUnhandled);
-        */
+template class FileRecord<Strategy::NoCache>;
+template class FileRecord<Strategy::FullCache>;
 }  // namespace NtfsBrowser

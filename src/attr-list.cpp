@@ -32,30 +32,30 @@ namespace
 {
 
 // Width of the AttrType field in a chain key. Every AttrType fits 16 bits.
-constexpr unsigned kChainKeyTypeBits = 16;
+constexpr unsigned chain_key_type_bits = 16;
 
 // Selects the AttrType bits of a chain key.
-constexpr ULONGLONG kChainKeyTypeMask = 0xFFFFU;
+constexpr ULONGLONG chain_key_type_mask = 0xFFFFU;
 
 // Packs (record_ref, attr_type) into one key. record_ref fits the high 48
 // bits (MftSegmentReference::segment_number is 48-bit); every AttrType
 // fits the low 16 bits.
-ULONGLONG MakeChainKey(ULONGLONG recordRef, AttrType attrType) noexcept
+ULONGLONG MakeChainKey(ULONGLONG record_ref, AttrType attr_type) noexcept
 {
-  return (recordRef << kChainKeyTypeBits) |
-         (static_cast<ULONGLONG>(attrType) & kChainKeyTypeMask);
+  return (record_ref << chain_key_type_bits) |
+         (static_cast<ULONGLONG>(attr_type) & chain_key_type_mask);
 }
 
 }  // namespace
 
-template <typename TYPE_RESIDENT, Strategy S>
-AttrList<TYPE_RESIDENT, S>::AttrList(
+template <typename Resident, Strategy S>
+AttrList<Resident, S>::AttrList(
     const AttrHeaderCommon& ahc, FileRecord<S>& file_record,
-    std::unordered_set<ULONGLONG>& attrListChain)
-    : TYPE_RESIDENT(ahc, file_record)
+    std::unordered_set<ULONGLONG>& attr_list_chain)
+    : Resident(ahc, file_record)
 {
   LogTrace("Attribute: Attribute List");
-  if (!file_record.impl_->file_reference_)
+  if (!file_record.impl_->file_reference)
   {
     throw std::runtime_error("Missing file reference\n");
   }
@@ -67,13 +67,14 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
   bool truncated = false;
 
   // Marks this record's own chain key first, so a cycle back to it is caught.
-  attrListChain.insert(MakeChainKey(*file_record.impl_->file_reference_,
-                                    AttrType::ATTRIBUTE_LIST));
+  attr_list_chain.insert(MakeChainKey(*file_record.impl_->file_reference,
+                                      AttrType::AttributeList));
 
-  while ((len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
-                                        Attr::kAttributeListEntryHeaderSize})))
+  while (
+      (len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
+                                     Attr::attribute_list_entry_header_size})))
   {
-    if (*len != Attr::kAttributeListEntryHeaderSize)
+    if (*len != Attr::attribute_list_entry_header_size)
     {
       // A resident list's normal end already exited the loop above (ReadData
       // returns nullopt at offset >= size); a non-resident list's normal end
@@ -86,7 +87,8 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
             recover,
             "Attribute List: ReadData returned {} bytes, "
             "expected {} - stopping",
-            *len, static_cast<ULONGLONG>(Attr::kAttributeListEntryHeaderSize));
+            *len,
+            static_cast<ULONGLONG>(Attr::attribute_list_entry_header_size));
       }
       break;
     }
@@ -100,17 +102,17 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
     LogDebug("Attribute List: 0x{:04x}",
              static_cast<DWORD>(al_record.attr_type));
 
-    ResolveEntry(al_record, file_record, attrListChain, recover);
+    ResolveEntry(al_record, file_record, attr_list_chain, recover);
 
     if (al_record.record_size != 0 &&
-        al_record.record_size < Attr::kAttributeListEntryHeaderSize)
+        al_record.record_size < Attr::attribute_list_entry_header_size)
     {
       truncated = true;
       LogRecoverable(recover,
                      "Attribute List: record_size {} is smaller than the "
                      "entry header {} - stopping",
                      al_record.record_size,
-                     static_cast<WORD>(Attr::kAttributeListEntryHeaderSize));
+                     static_cast<WORD>(Attr::attribute_list_entry_header_size));
       break;
     }
     if (al_record.record_size == 0)
@@ -141,27 +143,27 @@ AttrList<TYPE_RESIDENT, S>::AttrList(
 
 // Moves the attributes entry names, from the extension record that holds them,
 // into file_record. A contained or unwanted attribute is skipped.
-template <typename TYPE_RESIDENT, Strategy S>
-void AttrList<TYPE_RESIDENT, S>::ResolveEntry(
+template <typename Resident, Strategy S>
+void AttrList<Resident, S>::ResolveEntry(
     const Attr::AttributeList& entry, FileRecord<S>& file_record,
-    std::unordered_set<ULONGLONG>& attrListChain, bool recover)
+    std::unordered_set<ULONGLONG>& attr_list_chain, bool recover)
 {
   const ULONGLONG record_ref = entry.base_ref.segment_number;
   const Mask attr_mask = AttrMask(entry.attr_type);
-  if (!file_record.impl_->file_reference_)
+  if (!file_record.impl_->file_reference)
   {
     throw std::runtime_error("Missing file reference\n");
   }
-  const ULONGLONG selfRef = *file_record.impl_->file_reference_;
+  const ULONGLONG self_ref = *file_record.impl_->file_reference;
   // Skip contained attributes
   // Skip unwanted attributes
-  if (record_ref == selfRef ||
-      !static_cast<bool>(attr_mask & file_record.impl_->attr_mask_))
+  if (record_ref == self_ref ||
+      !static_cast<bool>(attr_mask & file_record.impl_->attr_mask))
   {
     return;
   }
 
-  if (!attrListChain.insert(MakeChainKey(record_ref, entry.attr_type)).second)
+  if (!attr_list_chain.insert(MakeChainKey(record_ref, entry.attr_type)).second)
   {
     LogWarn(
         "Attribute List: record {}, type 0x{:04x} already resolved in "
@@ -172,11 +174,11 @@ void AttrList<TYPE_RESIDENT, S>::ResolveEntry(
 
   // Owned by file_record, not by this object: the attributes moved into
   // file_record below keep pointing into frnew's bytes.
-  file_record.impl_->extension_records_.emplace_back(file_record.GetVolume());
-  FileRecord<S>& frnew = file_record.impl_->extension_records_.back();
+  file_record.impl_->extension_records.emplace_back(file_record.GetVolume());
+  FileRecord<S>& frnew = file_record.impl_->extension_records.back();
 
-  frnew.impl_->attr_mask_ = attr_mask;
-  frnew.impl_->attr_raw_call_back_ = file_record.impl_->attr_raw_call_back_;
+  frnew.impl_->attr_mask = attr_mask;
+  frnew.impl_->attr_raw_call_back = file_record.impl_->attr_raw_call_back;
   if (!frnew.ParseFileRecord(record_ref))
   {
     throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
@@ -186,14 +188,14 @@ void AttrList<TYPE_RESIDENT, S>::ResolveEntry(
   // this file's extension: its attributes belong to someone else.
   const bool genuine = IsGenuineExtensionRecord(
       entry.base_ref.sequence_number, frnew.GetSequenceNumber(),
-      frnew.GetBaseRecordReference(), selfRef & kMftRecordNumberMask);
+      frnew.GetBaseRecordReference(), self_ref & mft_record_number_mask);
   if (!genuine)
   {
-    file_record.impl_->extension_records_.pop_back();
+    file_record.impl_->extension_records.pop_back();
     LogRecoverable(recover,
                    "Attribute List: record {} is not an extension of "
                    "record {} (reused or foreign) - skipping",
-                   record_ref, selfRef);
+                   record_ref, self_ref);
     if (!recover)
     {
       throw std::runtime_error(
@@ -202,33 +204,32 @@ void AttrList<TYPE_RESIDENT, S>::ResolveEntry(
     return;
   }
 
-  if (!frnew.impl_->ParseAttrs(attrListChain))
+  if (!frnew.impl_->ParseAttrs(attr_list_chain))
   {
     throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
   }
 
   // Insert new found AttrList to fr.AttrList
   std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      frnew.getAttr(entry.attr_type);
+      frnew.GetAttr(entry.attr_type);
   for (std::unique_ptr<AttrBase<S>>& veci : vec)
   {
-    file_record.impl_->attr_list_.at(AttrIndex(entry.attr_type))
+    file_record.impl_->attr_list.at(AttrIndex(entry.attr_type))
         .push_back(std::move(veci));
   }
   vec.clear();
 }
 
-template <typename TYPE_RESIDENT, Strategy S>
-AttrList<TYPE_RESIDENT, S>::~AttrList()
+template <typename Resident, Strategy S>
+AttrList<Resident, S>::~AttrList()
 {
   LogTrace("AttrList deleted");
 }
 
-template class AttrList<AttrNonResident<Strategy::FULL_CACHE>,
-                        Strategy::FULL_CACHE>;
-template class AttrList<AttrNonResident<Strategy::NO_CACHE>,
-                        Strategy::NO_CACHE>;
-template class AttrList<AttrResidentFullCache, Strategy::FULL_CACHE>;
-template class AttrList<AttrResidentNoCache, Strategy::NO_CACHE>;
+template class AttrList<AttrNonResident<Strategy::FullCache>,
+                        Strategy::FullCache>;
+template class AttrList<AttrNonResident<Strategy::NoCache>, Strategy::NoCache>;
+template class AttrList<AttrResidentFullCache, Strategy::FullCache>;
+template class AttrList<AttrResidentNoCache, Strategy::NoCache>;
 
 }  // namespace NtfsBrowser

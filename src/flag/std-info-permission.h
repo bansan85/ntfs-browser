@@ -8,19 +8,19 @@ namespace NtfsBrowser::Flag
 // NOLINTNEXTLINE(performance-enum-size)
 enum class StdInfoPermission : DWORD
 {
-  READONLY = 0x00000001,
-  HIDDEN = 0x00000002,
-  SYSTEM = 0x00000004,
-  ARCHIVE = 0x00000020,
-  DEVICE = 0x00000040,
-  NORMAL = 0x00000080,
-  TEMP = 0x00000100,
-  SPARSE = 0x00000200,
-  REPARSE = 0x00000400,
-  COMPRESSED = 0x00000800,
-  OFFLINE = 0x00001000,
-  NCI = 0x00002000,
-  ENCRYPTED = 0x00004000
+  ReadOnly = 0x00000001,
+  Hidden = 0x00000002,
+  System = 0x00000004,
+  Archive = 0x00000020,
+  Device = 0x00000040,
+  Normal = 0x00000080,
+  Temp = 0x00000100,
+  Sparse = 0x00000200,
+  Reparse = 0x00000400,
+  Compressed = 0x00000800,
+  Offline = 0x00001000,
+  Nci = 0x00002000,
+  Encrypted = 0x00004000
 };
 
 //NOLINTNEXTLINE

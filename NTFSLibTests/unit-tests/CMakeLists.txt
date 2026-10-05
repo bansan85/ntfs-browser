@@ -94,7 +94,7 @@ add_executable(NtfsBrowserTests ${NtfsBrowserTests_SRC})
 
 # spdlog: the capturing sink the tests install on the library's logger is an
 # spdlog sink. The library keeps spdlog private, so the tests link it too.
-# frozen: fuzzer-regression-tests.cpp builds its own kExpectedErrorMessages map
+# frozen: fuzzer-regression-tests.cpp builds its own expected_error_messages map
 # with it, independent of the library's own (private) use of frozen.
 target_link_libraries(
   NtfsBrowserTests

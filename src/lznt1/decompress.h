@@ -35,7 +35,7 @@ namespace NtfsBrowser::Lznt1
 {
 
 // LZNT1 chunk size; [MS-XCA] 2.5.3 fixes streams at 4096-byte units.
-inline constexpr size_t kChunkSize = 4096;
+inline constexpr size_t chunk_size = 4096;
 
 // Decompresses one LZNT1 buffer, "src", into "dest" and returns the byte
 // count written. "src" MUST hold exactly the compressed data; "dest" MUST

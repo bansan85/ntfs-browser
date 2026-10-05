@@ -53,36 +53,36 @@ std::unique_ptr<NtfsBrowser::IDiskReader>
 
 TEMPLATE_TEST_CASE_SIG(
     "A second FileRecord's read does not corrupt $MFT's attribute",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   TempImage const image;
 
   NtfsVolume<S> const volume(OpenOnDisk(image.path));
   REQUIRE(volume.IsVolumeOK());
-  REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
+  REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 
   FileRecord<S> root(volume);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
 
-  CHECK(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
+  CHECK(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A second FileRecord's read does not corrupt $MFT's attribute "
     " (in-memory volume)",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 
   NtfsVolume<S> const volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
-  REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
+  REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 
   FileRecord<S> root(volume);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
 
-  CHECK(volume.GetRecordsCount() == NtfsBrowserTests::kSentinelRecordCount);
+  CHECK(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 }

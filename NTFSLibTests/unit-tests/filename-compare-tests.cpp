@@ -24,45 +24,45 @@ namespace
 {
 
 // Size of the buffer one fake index entry is built in, zero-filled.
-constexpr size_t kEntryBufferSize = 256;
+constexpr size_t entry_buffer_size = 256;
 
 // The file reference the fake entries carry. Arbitrary.
-constexpr DWORD kEntryRecordNumber = 42;
+constexpr DWORD entry_record_number = 42;
 
 // UTF-16 code unit placed past the name, to catch a read beyond it.
-constexpr WORD kFillerCodeUnit = 0xFFFF;
+constexpr WORD filler_code_unit = 0xFFFF;
 
 // Builds a raw $I30 index entry named "System" (file reference 42),
 // followed in the same buffer by one filler UTF-16 code unit (0xFFFF)
 // immediately past the name, so a read past the real name is detectable.
 IndexEntry MakeSystemEntry()
 {
-  constexpr std::wstring_view kName = L"System";
-  constexpr BYTE kNameLen = 6;
+  constexpr std::wstring_view name_value = L"System";
+  constexpr BYTE name_len = 6;
 
-  std::vector<BYTE> buffer(kEntryBufferSize);
+  std::vector<BYTE> buffer(entry_buffer_size);
 
   auto& index_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.data());
-  index_entry.mft_index = kEntryRecordNumber;
+  index_entry.mft_index = entry_record_number;
   index_entry.mft_sn = 1;
 
   auto& filename =
       *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&index_entry.stream);
-  filename.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
-  filename.name_length = kNameLen;
-  filename.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
-  for (BYTE i = 0; i < kNameLen; i++)
+  filename.flags = NtfsBrowser::Flag::Filename::Directory;
+  filename.name_length = name_len;
+  filename.name_space = NtfsBrowser::Flag::FilenameNamespace::Win32;
+  for (BYTE i = 0; i < name_len; i++)
   {
-    // i is below kNameLen, the length of kName.
+    // i is below name_len, the length of name.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    filename.name[i] = gsl::narrow<WORD>(kName[i]);
+    filename.name[i] = gsl::narrow<WORD>(name_value[i]);
   }
   // Filler: must never be read by Compare().
-  filename.name[kNameLen] = kFillerCodeUnit;
+  filename.name[name_len] = filler_code_unit;
 
   index_entry.stream_size =
-      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[kNameLen]) -
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[name_len]) -
                         reinterpret_cast<BYTE*>(&filename));
   index_entry.size = gsl::narrow<WORD>(&index_entry.stream -
                                        reinterpret_cast<BYTE*>(&index_entry) +
@@ -75,18 +75,18 @@ IndexEntry MakeSystemEntry()
 // probe individual code points' collation order).
 IndexEntry MakeNamedEntry(std::wstring_view name)
 {
-  std::vector<BYTE> buffer(kEntryBufferSize);
+  std::vector<BYTE> buffer(entry_buffer_size);
 
   auto& index_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.data());
-  index_entry.mft_index = kEntryRecordNumber;
+  index_entry.mft_index = entry_record_number;
   index_entry.mft_sn = 1;
 
   auto& filename =
       *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&index_entry.stream);
-  filename.flags = NtfsBrowser::Flag::Filename::DIRECTORY;
+  filename.flags = NtfsBrowser::Flag::Filename::Directory;
   filename.name_length = gsl::narrow<BYTE>(name.size());
-  filename.name_space = NtfsBrowser::Flag::FilenameNamespace::WIN_32;
+  filename.name_space = NtfsBrowser::Flag::FilenameNamespace::Win32;
   for (size_t i = 0; i < name.size(); i++)
   {
     // i < name.size() by the loop condition.
@@ -137,7 +137,7 @@ TEST_CASE("A copied IndexEntry reads its own bytes, not the original's",
 
   REQUIRE(copy.HasName());
   CHECK(copy.GetFilename() == L"System");
-  CHECK(copy.GetFileReference() == kEntryRecordNumber);
+  CHECK(copy.GetFileReference() == entry_record_number);
   CHECK(copy.IsDirectory());
 }
 

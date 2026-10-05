@@ -11,8 +11,8 @@ enum class Strategy : std::uint8_t;
 template <Strategy S>
 class FileRecord;
 
-template <typename RESIDENT, Strategy S>
-class AttrFileName : public RESIDENT, public Filename
+template <typename Resident, Strategy S>
+class AttrFileName : public Resident, public Filename
 {
  public:
   AttrFileName(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);

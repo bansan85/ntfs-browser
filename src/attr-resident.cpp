@@ -69,11 +69,11 @@ std::optional<ULONGLONG>
     AttrResident<S>::ReadData(ULONGLONG offset,
                               const std::span<BYTE>& buffer) const
 {
-  ULONGLONG bufLen = buffer.size();
+  ULONGLONG buf_len = buffer.size();
   ULONGLONG actural = 0;
-  if (bufLen == 0)
+  if (buf_len == 0)
   {
-    return bufLen;
+    return buf_len;
   }
 
   // offset parameter error
@@ -82,13 +82,13 @@ std::optional<ULONGLONG>
     return {};
   }
 
-  if ((offset + bufLen) > this->GetDataSize())
+  if ((offset + buf_len) > this->GetDataSize())
   {
     actural = gsl::narrow<DWORD>(this->GetDataSize() - offset);  // Beyond scope
   }
   else
   {
-    actural = bufLen;
+    actural = buf_len;
   }
 
   const std::span<const BYTE> body(this->GetData(), this->GetDataSize());
@@ -101,7 +101,7 @@ std::optional<ULONGLONG>
 
 AttrResidentNoCache::AttrResidentNoCache(
     const AttrHeaderCommon& ahc,
-    const FileRecord<Strategy::NO_CACHE>& file_record)
+    const FileRecord<Strategy::NoCache>& file_record)
     : AttrResident(ahc, file_record)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
@@ -122,7 +122,7 @@ ULONGLONG AttrResidentNoCache::GetDataSize() const noexcept
 
 AttrResidentFullCache::AttrResidentFullCache(
     const AttrHeaderCommon& ahc,
-    const FileRecord<Strategy::FULL_CACHE>& file_record)
+    const FileRecord<Strategy::FullCache>& file_record)
     : AttrResident(ahc, file_record)
 {
   const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);

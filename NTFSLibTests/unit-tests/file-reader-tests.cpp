@@ -28,24 +28,24 @@ namespace
 {
 
 // Size of the backing file the read tests fill with a byte pattern.
-constexpr size_t kContentSize = 4096;
+constexpr size_t content_size = 4096;
 
 // Multiplier of the byte pattern, so a shifted read cannot match by accident.
-constexpr size_t kPatternStep = 7;
+constexpr size_t pattern_step = 7;
 
 // Where, and how much, the ReadInto test reads.
-constexpr size_t kReadIntoOffset = 1000;
-constexpr size_t kReadIntoSize = 128;
+constexpr size_t read_into_offset = 1000;
+constexpr size_t read_into_size = 128;
 
 // A file too small for the read asked of it, and its fill byte.
-constexpr size_t kTinyFileSize = 16;
-constexpr BYTE kTinyFileFill = 0xAB;
+constexpr size_t tiny_file_size = 16;
+constexpr BYTE tiny_file_fill = 0xAB;
 
 // The two reads of the buffer-growth test: a small one, then a larger one at
 // another offset.
-constexpr DWORD kFirstReadSize = 16;
-constexpr LONGLONG kSecondReadOffset = 100;
-constexpr DWORD kSecondReadSize = 2048;
+constexpr DWORD first_read_size = 16;
+constexpr LONGLONG second_read_offset = 100;
+constexpr DWORD second_read_size = 2048;
 
 // Opens path through a PartitionDiskReader (offset 0) instead of
 // FileReader's own Open(), which only exists on Windows (Win32DiskReader).
@@ -93,9 +93,9 @@ struct TempFile final
 TEMPLATE_TEST_CASE_SIG(
     "FileReader::ReadInto reads into the caller-provided buffer",
     "[file-reader]", ((NtfsBrowser::Strategy S), S),
-    NtfsBrowser::Strategy::NO_CACHE, NtfsBrowser::Strategy::FULL_CACHE)
+    NtfsBrowser::Strategy::NoCache, NtfsBrowser::Strategy::FullCache)
 {
-  std::vector<BYTE> content(kContentSize);
+  std::vector<BYTE> content(content_size);
   for (size_t i = 0; i < content.size(); i++)
   {
     // i < content.size() by the loop condition.
@@ -106,61 +106,62 @@ TEMPLATE_TEST_CASE_SIG(
 
   NtfsBrowser::FileReader<S> const reader = OpenOnDisk<S>(file.path);
 
-  std::array<BYTE, kReadIntoSize> dest{};
-  LARGE_INTEGER addr{.QuadPart = kReadIntoOffset};
+  std::array<BYTE, read_into_size> dest{};
+  LARGE_INTEGER addr{.QuadPart = read_into_offset};
   REQUIRE(reader.ReadInto(addr, dest));
 
   for (size_t i = 0; i < dest.size(); i++)
   {
     // i < dest.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(dest[i] == content.at(kReadIntoOffset + i));
+    CHECK(dest[i] == content.at(read_into_offset + i));
   }
 }
 
 TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
                        "[file-reader]", ((NtfsBrowser::Strategy S), S),
-                       NtfsBrowser::Strategy::NO_CACHE,
-                       NtfsBrowser::Strategy::FULL_CACHE)
+                       NtfsBrowser::Strategy::NoCache,
+                       NtfsBrowser::Strategy::FullCache)
 {
-  std::vector<BYTE> content(kTinyFileSize, kTinyFileFill);
+  std::vector<BYTE> content(tiny_file_size, tiny_file_fill);
   TempFile const file(content);
 
   NtfsBrowser::FileReader<S> const reader = OpenOnDisk<S>(file.path);
 
-  std::array<BYTE, kReadIntoSize> dest{};
+  std::array<BYTE, read_into_size> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE_FALSE(reader.ReadInto(addr, dest));
 }
 
-TEST_CASE("FileReader NO_CACHE Read grows its buffer before filling it",
+TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
           "[file-reader]")
 {
-  std::vector<BYTE> content(kContentSize);
+  std::vector<BYTE> content(content_size);
   for (size_t i = 0; i < content.size(); i++)
   {
     // i < content.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    content[i] = static_cast<BYTE>(i * kPatternStep);
+    content[i] = static_cast<BYTE>(i * pattern_step);
   }
 
-  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NO_CACHE> const reader(
+  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NoCache> const reader(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
 
   LARGE_INTEGER first_addr{.QuadPart = 0};
-  const auto first = reader.Read(first_addr, kFirstReadSize);
+  const auto first = reader.Read(first_addr, first_read_size);
   REQUIRE(first.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(first).size() == kFirstReadSize);
+  REQUIRE(NtfsBrowserTests::Unwrap(first).size() == first_read_size);
 
-  LARGE_INTEGER second_addr{.QuadPart = kSecondReadOffset};
-  const auto second = reader.Read(second_addr, kSecondReadSize);
+  LARGE_INTEGER second_addr{.QuadPart = second_read_offset};
+  const auto second = reader.Read(second_addr, second_read_size);
   REQUIRE(second.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(second).size() == kSecondReadSize);
+  REQUIRE(NtfsBrowserTests::Unwrap(second).size() == second_read_size);
   for (size_t i = 0; i < NtfsBrowserTests::Unwrap(second).size(); i++)
   {
     // i < second->size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    REQUIRE(NtfsBrowserTests::Unwrap(second)[i] == content.at(kSecondReadOffset + i));
+    REQUIRE(NtfsBrowserTests::Unwrap(second)[i] ==
+            content.at(second_read_offset + i));
   }
 }
 
@@ -168,21 +169,21 @@ TEST_CASE("FileReader NO_CACHE Read grows its buffer before filling it",
 TEMPLATE_TEST_CASE_SIG(
     "FileReader::Open honours the length of a non NUL-terminated view",
     "[file-reader]", ((NtfsBrowser::Strategy S), S),
-    NtfsBrowser::Strategy::NO_CACHE, NtfsBrowser::Strategy::FULL_CACHE)
+    NtfsBrowser::Strategy::NoCache, NtfsBrowser::Strategy::FullCache)
 {
   const std::vector<BYTE> content(64, 0x5A);
   TempFile file(content);
 
-  const std::wstring realPath = file.path.wstring();
-  const std::wstring longer = realPath + L"xyz";
+  const std::wstring real_path = file.path.wstring();
+  const std::wstring longer = real_path + L"xyz";
 
   NtfsBrowser::FileReader<S> reader;
-  REQUIRE(reader.Open(std::wstring_view(longer.data(), realPath.size())));
+  REQUIRE(reader.Open(std::wstring_view(longer.data(), real_path.size())));
 
-  std::array<BYTE, kTinyFileSize> dest{};
+  std::array<BYTE, tiny_file_size> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE(reader.ReadInto(addr, dest));
-  // dest holds kTinyFileSize = 16 bytes.
+  // dest holds tiny_file_size = 16 bytes.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(dest[0] == 0x5A);
 }

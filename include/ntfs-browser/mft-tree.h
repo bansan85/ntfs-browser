@@ -102,15 +102,15 @@ struct MftScanStats
 // parent, even when its own record is lost.
 //
 // The scan reads every MFT record once and copies out each record's names:
-// build it from a NO_CACHE volume, since FULL_CACHE would also keep the whole
+// build it from a NoCache volume, since FullCache would also keep the whole
 // $MFT in memory.
 class NTFS_BROWSER_EXPORT MftTree
 {
  public:
   // Scans every record of volume's $MFT.
-  explicit MftTree(const NtfsVolume<Strategy::NO_CACHE>& volume,
+  explicit MftTree(const NtfsVolume<Strategy::NoCache>& volume,
                    const MftScanOptions& options = {});
-  explicit MftTree(const NtfsVolume<Strategy::FULL_CACHE>& volume,
+  explicit MftTree(const NtfsVolume<Strategy::FullCache>& volume,
                    const MftScanOptions& options = {});
   MftTree(const MftTree& other);
   MftTree(MftTree&& other) noexcept;
@@ -124,7 +124,7 @@ class NTFS_BROWSER_EXPORT MftTree
   [[nodiscard]] const MftEntry* Find(ULONGLONG record) const;
   // Records filed under dirRecord through a valid parent reference, once
   // each, even when several of their names sit in it.
-  [[nodiscard]] std::span<const ULONGLONG> Children(ULONGLONG dirRecord) const;
+  [[nodiscard]] std::span<const ULONGLONG> Children(ULONGLONG dir_record) const;
   // Whether valid parent references lead from record up to the root.
   [[nodiscard]] bool IsReachable(ULONGLONG record) const;
   // Path of record through its first non-DOS name: "\dir\file" when it
@@ -133,11 +133,11 @@ class NTFS_BROWSER_EXPORT MftTree
   // receives. Empty when the record is not kept or has no name.
   [[nodiscard]] std::wstring
       GetPath(ULONGLONG record,
-              std::optional<ULONGLONG>* lostAncestor = nullptr) const;
+              std::optional<ULONGLONG>* lost_ancestor = nullptr) const;
   // Same, through names[nameIndex], to reach each hard link of a file.
   [[nodiscard]] std::wstring
-      GetPath(ULONGLONG record, size_t nameIndex,
-              std::optional<ULONGLONG>* lostAncestor = nullptr) const;
+      GetPath(ULONGLONG record, size_t name_index,
+              std::optional<ULONGLONG>* lost_ancestor = nullptr) const;
   // What the scan met, record slot by record slot.
   [[nodiscard]] const MftScanStats& Stats() const noexcept;
 

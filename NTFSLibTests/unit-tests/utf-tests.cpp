@@ -45,9 +45,9 @@ TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]")
        std::wstring{static_cast<wchar_t>(0xD83D), L'A'}, replacement + "A"},
   };
 
-  for (const Case& testCase : cases)
+  for (const Case& test_case : cases)
   {
-    INFO(testCase.name);
-    CHECK(NtfsBrowser::WideToUtf8(testCase.input) == testCase.expected);
+    INFO(test_case.name);
+    CHECK(NtfsBrowser::WideToUtf8(test_case.input) == test_case.expected);
   }
 }

@@ -10,7 +10,7 @@
 namespace NtfsCompare
 {
 
-Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG startRecord)
+Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG start_record)
 {
   using NtfsBrowser::MftEntry;
   using NtfsBrowser::MftName;
@@ -23,7 +23,7 @@ Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG startRecord)
     std::wstring prefix;
   };
   std::vector<Frame> stack;
-  stack.push_back({.record = startRecord, .prefix = L""});
+  stack.push_back({.record = start_record, .prefix = L""});
 
   while (!stack.empty())
   {
@@ -32,7 +32,7 @@ Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG startRecord)
 
     for (const ULONGLONG child : tree.Children(frame.record))
     {
-      if (child < static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::USER))
+      if (child < static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::User))
       {
         continue;
       }
@@ -69,10 +69,10 @@ Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG startRecord)
 
         const std::wstring path =
             frame.prefix.empty() ? name.name : frame.prefix + L"/" + name.name;
-        const bool isDirectory = out.is_directory;
+        const bool is_directory = out.is_directory;
         result.emplace(path, out);
 
-        if (isDirectory)
+        if (is_directory)
         {
           stack.push_back({.record = child, .prefix = path});
         }

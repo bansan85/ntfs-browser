@@ -58,25 +58,25 @@ namespace NtfsBrowser
 template <class... Args>
 void LogTrace(std::format_string<Args...> fmt, Args&&... args) noexcept
 {
-  Log::Detail::Write(Log::Level::kTrace, fmt, std::forward<Args>(args)...);
+  Log::Detail::Write(Log::Level::Trace, fmt, std::forward<Args>(args)...);
 }
 
 template <class... Args>
 void LogDebug(std::format_string<Args...> fmt, Args&&... args) noexcept
 {
-  Log::Detail::Write(Log::Level::kDebug, fmt, std::forward<Args>(args)...);
+  Log::Detail::Write(Log::Level::Debug, fmt, std::forward<Args>(args)...);
 }
 
 template <class... Args>
 void LogInfo(std::format_string<Args...> fmt, Args&&... args) noexcept
 {
-  Log::Detail::Write(Log::Level::kInfo, fmt, std::forward<Args>(args)...);
+  Log::Detail::Write(Log::Level::Info, fmt, std::forward<Args>(args)...);
 }
 
 template <class... Args>
 void LogWarn(std::format_string<Args...> fmt, Args&&... args) noexcept
 {
-  Log::Detail::Write(Log::Level::kWarn, fmt, std::forward<Args>(args)...);
+  Log::Detail::Write(Log::Level::Warn, fmt, std::forward<Args>(args)...);
 }
 
 // A salvageable condition: Info when recover is true (recover_errors is on,
@@ -86,14 +86,14 @@ template <class... Args>
 void LogRecoverable(bool recover, std::format_string<Args...> fmt,
                     Args&&... args) noexcept
 {
-  Log::Detail::Write(recover ? Log::Level::kInfo : Log::Level::kWarn, fmt,
+  Log::Detail::Write(recover ? Log::Level::Info : Log::Level::Warn, fmt,
                      std::forward<Args>(args)...);
 }
 
 template <class... Args>
 void LogError(std::format_string<Args...> fmt, Args&&... args) noexcept
 {
-  Log::Detail::Write(Log::Level::kError, fmt, std::forward<Args>(args)...);
+  Log::Detail::Write(Log::Level::Error, fmt, std::forward<Args>(args)...);
 }
 
 // True while a message at this level would reach a sink. A call site

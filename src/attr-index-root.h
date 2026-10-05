@@ -18,8 +18,8 @@ namespace Attr
 struct IndexRoot;
 }  // namespace Attr
 
-template <typename RESIDENT, Strategy S>
-class AttrIndexRoot : public RESIDENT, public std::vector<IndexEntryView>
+template <typename Resident, Strategy S>
+class AttrIndexRoot : public Resident, public std::vector<IndexEntryView>
 {
  public:
   AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);

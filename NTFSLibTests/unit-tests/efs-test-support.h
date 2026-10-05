@@ -15,14 +15,14 @@ namespace NtfsBrowserTests
 {
 
 // Size of a certificate thumbprint: a SHA-1 digest.
-inline constexpr size_t kThumbprintSize = 20;
+inline constexpr size_t thumbprint_size_value = 20;
 
 using NtfsBrowser::Efs::Algorithm;
 
 // Every algorithm EFS can use, for the tests that loop over them.
-inline constexpr std::array<Algorithm, 5> kAllAlgorithms{
-    Algorithm::kAes128, Algorithm::kAes192, Algorithm::kAes256,
-    Algorithm::k3Des, Algorithm::kDesx};
+inline constexpr std::array<Algorithm, 5> all_algorithms{
+    Algorithm::Aes128, Algorithm::Aes192, Algorithm::Aes256, Algorithm::_3Des,
+    Algorithm::Desx};
 
 // A fixed, arbitrary key of the length the algorithm takes.
 [[nodiscard]] std::vector<BYTE> TestKey(Algorithm algorithm);
@@ -38,7 +38,7 @@ inline constexpr std::array<Algorithm, 5> kAllAlgorithms{
 [[nodiscard]] std::vector<BYTE> EfsEncrypt(Algorithm algorithm,
                                            std::span<const BYTE> key,
                                            std::span<const BYTE> plaintext,
-                                           ULONGLONG streamOffset = 0);
+                                           ULONGLONG stream_offset = 0);
 
 // A deterministic, non-repeating byte pattern, so a misplaced or garbled
 // slice cannot pass for the right one.
@@ -47,12 +47,12 @@ inline constexpr std::array<Algorithm, 5> kAllAlgorithms{
 // One user's entry of a synthetic $EFS stream.
 struct TestEfsEntry
 {
-  std::array<BYTE, kThumbprintSize> thumbprint{};
+  std::array<BYTE, thumbprint_size_value> thumbprint{};
   std::vector<BYTE> wrapped_fek;
 };
 
 // A thumbprint that differs per seed.
-[[nodiscard]] std::array<BYTE, kThumbprintSize> TestThumbprint(BYTE seed);
+[[nodiscard]] std::array<BYTE, thumbprint_size_value> TestThumbprint(BYTE seed);
 
 // Builds an $EFS stream in the layout of a real one: header, DDF, then DRF
 // when "recovery" is not empty.
@@ -65,17 +65,17 @@ struct TestEfsEntry
 class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
 {
  public:
-  void Add(const std::array<BYTE, kThumbprintSize>& thumbprint,
-           std::span<const BYTE> wrappedFek, std::vector<BYTE> blob);
+  void Add(const std::array<BYTE, thumbprint_size_value>& thumbprint,
+           std::span<const BYTE> wrapped_fek, std::vector<BYTE> blob);
 
   [[nodiscard]] std::optional<std::vector<BYTE>>
       UnwrapFek(std::span<const BYTE> thumbprint,
-                std::span<const BYTE> wrappedFek) const override;
+                std::span<const BYTE> wrapped_fek) const override;
 
  private:
   struct Known
   {
-    std::array<BYTE, kThumbprintSize> thumbprint;
+    std::array<BYTE, thumbprint_size_value> thumbprint;
     std::vector<BYTE> wrapped_fek;
     std::vector<BYTE> blob;
   };
@@ -87,17 +87,17 @@ class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
     BackendAvailable(NtfsBrowser::Efs::CipherBackend backend) noexcept
 {
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-  constexpr bool kHasCryptoPp = true;
+  constexpr bool has_crypto_pp = true;
 #else
-  constexpr bool kHasCryptoPp = false;
+  constexpr bool has_crypto_pp = false;
 #endif
 #if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-  constexpr bool kHasBCrypt = true;
+  constexpr bool has_b_crypt = true;
 #else
-  constexpr bool kHasBCrypt = false;
+  constexpr bool has_b_crypt = false;
 #endif
-  return backend == NtfsBrowser::Efs::CipherBackend::kCryptoPp ? kHasCryptoPp
-                                                               : kHasBCrypt;
+  return backend == NtfsBrowser::Efs::CipherBackend::CryptoPp ? has_crypto_pp
+                                                              : has_b_crypt;
 }
 
 }  // namespace NtfsBrowserTests

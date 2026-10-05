@@ -27,20 +27,20 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
     PrintErr("Cannot determine a drive letter for {}\n", NativeText(target));
     return std::nullopt;
   }
-  const wchar_t driveLetter = canonical.root_name().wstring().front();
+  const wchar_t drive_letter = canonical.root_name().wstring().front();
 
   VolumeHandles handles;
   handles.full_cache =
-      std::make_unique<NtfsVolume<Strategy::FULL_CACHE>>(driveLetter);
+      std::make_unique<NtfsVolume<Strategy::FullCache>>(drive_letter);
   handles.no_cache =
-      std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(driveLetter);
+      std::make_unique<NtfsVolume<Strategy::NoCache>>(drive_letter);
   if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK())
   {
     // A drive letter is always ASCII.
     PrintErr(
         "Cannot open {}: as an NTFS volume (running as "
         "Administrator may be required)\n",
-        static_cast<char>(driveLetter));
+        static_cast<char>(drive_letter));
     return std::nullopt;
   }
 
@@ -65,7 +65,7 @@ namespace
 
 // Capacity of the getmntent_r() line buffer: one page, which holds any
 // realistic /proc/mounts line.
-constexpr size_t kMountLineBufferSize = 4096;
+constexpr size_t mount_line_buffer_size = 4096;
 
 // The mount point whose path is the longest prefix of target, and its
 // device/source. std::nullopt if /proc/mounts lists nothing target sits
@@ -84,23 +84,23 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target)
     return std::nullopt;
   }
 
-  const std::string targetStr = target.string();
+  const std::string target_str = target.string();
   std::optional<MountInfo> best;
-  size_t bestLength = 0;
+  size_t best_length = 0;
   struct mntent entry = {};
-  std::array<char, kMountLineBufferSize> buffer{};
+  std::array<char, mount_line_buffer_size> buffer{};
   while (getmntent_r(mounts, &entry, buffer.data(), buffer.size()) != nullptr)
   {
-    const std::string mountStr = entry.mnt_dir;
-    const bool isPrefix =
-        targetStr.starts_with(mountStr) &&
-        (targetStr.size() == mountStr.size() ||
+    const std::string mount_str = entry.mnt_dir;
+    const bool is_prefix =
+        target_str.starts_with(mount_str) &&
+        (target_str.size() == mount_str.size() ||
          // The size test just above is false, so targetStr is longer.
          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-         targetStr[mountStr.size()] == '/');
-    if (isPrefix && mountStr.size() >= bestLength)
+         target_str[mount_str.size()] == '/');
+    if (is_prefix && mount_str.size() >= best_length)
     {
-      bestLength = mountStr.size();
+      best_length = mount_str.size();
       best =
           MountInfo{.mount_point = entry.mnt_dir, .device = entry.mnt_fsname};
     }
@@ -136,12 +136,12 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
         NativeText(canonical), mount->device);
     return std::nullopt;
   }
-  const std::wstring devicePath(mount->device.begin(), mount->device.end());
+  const std::wstring device_path(mount->device.begin(), mount->device.end());
 
-  auto fullCacheReader = std::make_unique<RawDeviceDiskReader>();
-  auto noCacheReader = std::make_unique<RawDeviceDiskReader>();
-  const bool opened =
-      fullCacheReader->Open(devicePath) && noCacheReader->Open(devicePath);
+  auto full_cache_reader = std::make_unique<RawDeviceDiskReader>();
+  auto no_cache_reader = std::make_unique<RawDeviceDiskReader>();
+  const bool opened = full_cache_reader->Open(device_path) &&
+                      no_cache_reader->Open(device_path);
   if (!opened)
   {
     PrintErr("Cannot open {} (root privileges may be required)\n",
@@ -150,10 +150,10 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
   }
 
   VolumeHandles handles;
-  handles.full_cache = std::make_unique<NtfsVolume<Strategy::FULL_CACHE>>(
-      std::move(fullCacheReader));
-  handles.no_cache = std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(
-      std::move(noCacheReader));
+  handles.full_cache = std::make_unique<NtfsVolume<Strategy::FullCache>>(
+      std::move(full_cache_reader));
+  handles.no_cache = std::make_unique<NtfsVolume<Strategy::NoCache>>(
+      std::move(no_cache_reader));
   if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK())
   {
     PrintErr("{} is not an NTFS volume\n", mount->device);

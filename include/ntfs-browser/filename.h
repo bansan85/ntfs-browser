@@ -84,9 +84,9 @@ class NTFS_BROWSER_EXPORT Filename
 
   // changeTm is the last MFT (metadata) change time, distinct from writeTm's
   // content modification time.
-  virtual void GetFileTime(FILETIME* writeTm, FILETIME* createTm,
-                           FILETIME* accessTm,
-                           FILETIME* changeTm = nullptr) const noexcept;
+  virtual void GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
+                           FILETIME* access_tm,
+                           FILETIME* change_tm = nullptr) const noexcept;
 };  // Filename
 
 }  // namespace NtfsBrowser

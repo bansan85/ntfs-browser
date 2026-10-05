@@ -16,15 +16,15 @@ namespace Attr
 struct AttributeList;
 }  // namespace Attr
 
-template <typename TYPE_RESIDENT, Strategy S>
-class AttrList : public TYPE_RESIDENT
+template <typename Resident, Strategy S>
+class AttrList : public Resident
 {
  public:
   // attrListChain: (record, attribute type) pairs already resolved along
   // the current $ATTRIBUTE_LIST chain, threaded through every extension
   // record opened along the way.
   AttrList(const AttrHeaderCommon& ahc, FileRecord<S>& file_record,
-           std::unordered_set<ULONGLONG>& attrListChain);
+           std::unordered_set<ULONGLONG>& attr_list_chain);
   AttrList(AttrList&& other) noexcept = delete;
   AttrList(AttrList const& other) = delete;
   AttrList& operator=(AttrList&& other) noexcept = delete;
@@ -34,7 +34,7 @@ class AttrList : public TYPE_RESIDENT
  private:
   static void ResolveEntry(const Attr::AttributeList& entry,
                            FileRecord<S>& file_record,
-                           std::unordered_set<ULONGLONG>& attrListChain,
+                           std::unordered_set<ULONGLONG>& attr_list_chain,
                            bool recover);
 };  // AttrList
 

@@ -25,8 +25,8 @@ using NtfsBrowser::VolumeOptions;
 TEMPLATE_TEST_CASE_SIG(
     "GetAttrName rejects a name whose offset/length exceed the attribute's "
     "total_size, when recovering",
-    "[attr-base][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[attr-base][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize());
@@ -37,22 +37,22 @@ TEMPLATE_TEST_CASE_SIG(
 
   FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      NtfsBrowserTests::kAttrNameExceedsTotalSizeRecordIdx));
+      NtfsBrowserTests::attr_name_exceeds_total_size_record_idx));
   REQUIRE(record.ParseAttrs());
 
-  const auto& dataAttrs = record.getAttr(AttrType::DATA);
-  REQUIRE(dataAttrs.size() == 1);
+  const auto& data_attrs = record.GetAttr(AttrType::Data);
+  REQUIRE(data_attrs.size() == 1);
 
   // The REQUIRE above checks the size of dataAttrs.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(dataAttrs[0]->GetAttrName().empty());
+  CHECK(data_attrs[0]->GetAttrName().empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A masked-in attribute name exceeding total_size rejects the whole "
     "record by default",
-    "[attr-base][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[attr-base][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize());
@@ -62,7 +62,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      NtfsBrowserTests::kAttrNameExceedsTotalSizeRecordIdx));
+      NtfsBrowserTests::attr_name_exceeds_total_size_record_idx));
   CHECK_FALSE(record.ParseAttrs());
-  CHECK(record.getAttr(AttrType::DATA).empty());
+  CHECK(record.GetAttr(AttrType::Data).empty());
 }

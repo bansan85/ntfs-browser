@@ -1,7 +1,7 @@
 // Recursively lists a folder six ways and reports where they disagree.
 //
-// The three NtfsBrowser-based listings (NtfsVolume<FULL_CACHE>,
-// NtfsVolume<NO_CACHE>, MftTree) are the reference: all three read the same
+// The three NtfsBrowser-based listings (NtfsVolume<FullCache>,
+// NtfsVolume<NoCache>, MftTree) are the reference: all three read the same
 // on-disk NTFS metadata through different code paths, so they must agree on
 // everything. std::filesystem and the platform's native API (Windows API or
 // Linux API) are then diffed against that reference, field by field, on
@@ -66,65 +66,65 @@ namespace
 {
 
 #ifdef _WIN32
-constexpr std::wstring_view kLogPrefix = Log::kOptionPrefixW;
+constexpr std::wstring_view log_prefix = Log::option_prefix_w;
 #else
-constexpr std::string_view kLogPrefix = Log::kOptionPrefix;
+constexpr std::string_view log_prefix = Log::option_prefix;
 #endif
 
 void Usage(const ArgChar* program)
 {
   PrintErr("usage: {} [--log=...] <folder>\n", NativeText(program));
-  PrintErr("  {}\n", Log::kOptionUsage);
+  PrintErr("  {}\n", Log::option_usage);
   PrintErr(
       "Compares 6 ways of recursively listing <folder>: std::filesystem, "
-      "the platform's native API, and NtfsBrowser via NtfsVolume<FULL_CACHE>, "
-      "NtfsVolume<NO_CACHE> and MftTree.\n");
+      "the platform's native API, and NtfsBrowser via NtfsVolume<FullCache>, "
+      "NtfsVolume<NoCache> and MftTree.\n");
 }
 
 int Run(int argc, ArgChar** argv)
 {
-  Log::Config logConfig;
+  Log::Config log_config;
   const std::span<ArgChar*> args(argv, gsl::narrow<size_t>(argc));
-  const ArgChar* targetArg = nullptr;
+  const ArgChar* target_arg = nullptr;
 
   for (size_t i = 1; i < args.size(); i++)
   {
     // i < args.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const ArgChar* const arg = args[i];
-    if (std::basic_string_view<ArgChar>(arg).starts_with(kLogPrefix))
+    if (std::basic_string_view<ArgChar>(arg).starts_with(log_prefix))
     {
-      if (!Log::ParseOption(arg, logConfig))
+      if (!Log::ParseOption(arg, log_config))
       {
         Usage(args.front());
         return 1;
       }
       continue;
     }
-    if (targetArg != nullptr)
+    if (target_arg != nullptr)
     {
       Usage(args.front());
       return 1;
     }
-    targetArg = arg;
+    target_arg = arg;
   }
 
-  if (targetArg == nullptr)
+  if (target_arg == nullptr)
   {
     Usage(args.front());
     return 1;
   }
 
-  if (!Log::Configure(logConfig))
+  if (!Log::Configure(log_config))
   {
-    PrintErr("Cannot open log file {}\n", NativeText(logConfig.file_path));
+    PrintErr("Cannot open log file {}\n", NativeText(log_config.file_path));
   }
 
-  const std::filesystem::path target(targetArg);
+  const std::filesystem::path target(target_arg);
   std::error_code error_code;
   if (!std::filesystem::is_directory(target, error_code))
   {
-    PrintErr("{} is not a directory\n", NativeText(targetArg));
+    PrintErr("{} is not a directory\n", NativeText(target_arg));
     return 1;
   }
 
@@ -149,30 +149,31 @@ int Run(int argc, ArgChar** argv)
     return 1;
   }
 
-  const std::optional<ULONGLONG> fullCacheRecord =
+  const std::optional<ULONGLONG> full_cache_record =
       ResolveDirectoryRecord(*volume->full_cache, volume->relative_path);
-  const std::optional<ULONGLONG> noCacheRecord =
+  const std::optional<ULONGLONG> no_cache_record =
       ResolveDirectoryRecord(*volume->no_cache, volume->relative_path);
-  if (!fullCacheRecord || !noCacheRecord)
+  if (!full_cache_record || !no_cache_record)
   {
     PrintErr("Cannot resolve {} within its NTFS volume\n",
-             NativeText(targetArg));
+             NativeText(target_arg));
     return 1;
   }
 
-  PrintErr("Listing {} via NtfsVolume<FULL_CACHE>...\n", NativeText(targetArg));
-  const Listing fullCacheListing =
-      WalkLibraryIndex(*volume->full_cache, *fullCacheRecord);
+  PrintErr("Listing {} via NtfsVolume<FullCache>...\n",
+           NativeText(target_arg));
+  const Listing full_cache_listing =
+      WalkLibraryIndex(*volume->full_cache, *full_cache_record);
 
-  PrintErr("Listing {} via NtfsVolume<NO_CACHE>...\n", NativeText(targetArg));
-  const Listing noCacheListing =
-      WalkLibraryIndex(*volume->no_cache, *noCacheRecord);
+  PrintErr("Listing {} via NtfsVolume<NoCache>...\n", NativeText(target_arg));
+  const Listing no_cache_listing =
+      WalkLibraryIndex(*volume->no_cache, *no_cache_record);
 
   PrintErr(
       "Scanning the whole $MFT for MftTree (this can take a "
       "while on a large volume)...\n");
-  MftScanOptions scanOptions;
-  scanOptions.progress = [](ULONGLONG done, ULONGLONG total)
+  MftScanOptions scan_options;
+  scan_options.progress = [](ULONGLONG done, ULONGLONG total)
   {
     PrintErr("\r$MFT: {} / {}", done, total);
     if (done == total)
@@ -181,23 +182,23 @@ int Run(int argc, ArgChar** argv)
     }
     return true;
   };
-  const MftTree tree(*volume->no_cache, scanOptions);
-  const Listing mftTreeListing = WalkMftTree(tree, *noCacheRecord);
+  const MftTree tree(*volume->no_cache, scan_options);
+  const Listing mft_tree_listing = WalkMftTree(tree, *no_cache_record);
 
   Report report;
   const Listing reference = CompareLibraryMethods(
-      fullCacheListing, noCacheListing, mftTreeListing, report);
+      full_cache_listing, no_cache_listing, mft_tree_listing, report);
 
-  PrintErr("Listing {} via std::filesystem...\n", NativeText(targetArg));
+  PrintErr("Listing {} via std::filesystem...\n", NativeText(target_arg));
   CompareAgainstReference("std::filesystem", reference,
                           WalkStdFilesystem(target), report);
 
-  PrintErr("Listing {} via {}...\n", NativeText(targetArg), OsApiMethodName());
+  PrintErr("Listing {} via {}...\n", NativeText(target_arg), OsApiMethodName());
   CompareAgainstReference(OsApiMethodName(), reference, WalkOsApi(target),
                           report);
 
-  const bool hasFindings = PrintReport(report);
-  return hasFindings ? 1 : 0;
+  const bool has_findings = PrintReport(report);
+  return has_findings ? 1 : 0;
 }
 
 }  // namespace

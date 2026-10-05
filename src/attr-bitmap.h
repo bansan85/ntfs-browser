@@ -16,8 +16,8 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-template <class TYPE_RESIDENT, Strategy S>
-class AttrBitmap : public TYPE_RESIDENT
+template <class Resident, Strategy S>
+class AttrBitmap : public Resident
 {
  public:
   AttrBitmap(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);

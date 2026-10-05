@@ -18,32 +18,33 @@
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"
 
+using NtfsBrowser::file_record_magic;
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::FileRecordHeaderImpl;
-using NtfsBrowser::kFileRecordMagic;
-using NtfsBrowser::kUpdateSequenceStride;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::update_sequence_stride;
 
 namespace
 {
 
 // Builds a well-formed record header of exactly bufferSize bytes, with
 // offset_of_attr set to whatever the caller passes in.
-std::vector<BYTE> MakeWellFormedBuffer(size_t bufferSize, WORD offsetOfAttr)
+std::vector<BYTE> MakeWellFormedBuffer(size_t buffer_size, WORD offset_of_attr)
 {
-  std::vector<BYTE> storage(bufferSize, 0);
+  std::vector<BYTE> storage(buffer_size, 0);
 
-  const size_t sectors = bufferSize / kUpdateSequenceStride;
-  const WORD offsetOfUs = gsl::narrow<WORD>(bufferSize - 2 * (1 + sectors));
+  const size_t sectors = buffer_size / update_sequence_stride;
+  const WORD offset_of_us = gsl::narrow<WORD>(buffer_size - 2 * (1 + sectors));
 
   NtfsBrowserTests::EditFileRecordHeader(storage,
                                          [&](FileRecordHeader::Data& header)
                                          {
-                                           header.magic = kFileRecordMagic;
-                                           header.offset_of_us = offsetOfUs;
+                                           header.magic = file_record_magic;
+                                           header.offset_of_us = offset_of_us;
                                            header.size_of_us =
                                                gsl::narrow<WORD>(1 + sectors);
-                                           header.offset_of_attr = offsetOfAttr;
+                                           header.offset_of_attr =
+                                               offset_of_attr;
                                          });
 
   return storage;
@@ -54,29 +55,29 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t bufferSize, WORD offsetOfAttr)
 TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader must accept a well-formed 4096-byte buffer "
     "(4Kn volumes)",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
-  constexpr size_t kBufferSize = 4096;
+  constexpr size_t buffer_size_value = 4096;
 
-  const std::vector<BYTE> storage = MakeWellFormedBuffer(kBufferSize, 64);
+  const std::vector<BYTE> storage = MakeWellFormedBuffer(buffer_size_value, 64);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
-  // FULL_CACHE's ctor memcpy()s the whole buffer into a fixed-size Data
+  // FullCache's ctor memcpy()s the whole buffer into a fixed-size Data
   // member; a too-small member here would overflow it.
   const auto header = FileRecordHeaderImpl<S>(buffer);
-  CHECK(header.GetData()->magic == kFileRecordMagic);
+  CHECK(header.GetData()->magic == file_record_magic);
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "FileRecordHeader must reject a buffer larger than kMaxFileRecordSize "
+    "FileRecordHeader must reject a buffer larger than max_file_record_size "
     "with a clear, specific message",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
-  constexpr size_t kTooBig = 8192;
+  constexpr size_t too_big = 8192;
 
-  const std::vector<BYTE> storage = MakeWellFormedBuffer(kTooBig, 64);
+  const std::vector<BYTE> storage = MakeWellFormedBuffer(too_big, 64);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
   CHECK_THROWS_MATCHES(
@@ -88,20 +89,20 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader::HeaderCommon must bound offset_of_attr against this "
     "instance's own buffer size, not raw[]'s static capacity",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
-  constexpr size_t kDeclaredBufferSize = 2048;
+  constexpr size_t declared_buffer_size = 2048;
   // Past this instance's buffer, but within raw[]'s static capacity.
-  constexpr WORD kOffsetPastOwnSize = 3000;
+  constexpr WORD offset_past_own_size = 3000;
 
   const std::vector<BYTE> storage =
-      MakeWellFormedBuffer(kDeclaredBufferSize, kOffsetPastOwnSize);
+      MakeWellFormedBuffer(declared_buffer_size, offset_past_own_size);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
   const auto header = FileRecordHeaderImpl<S>(buffer);
 
   // A larger offset_of_attr would build a pointer past the real,
-  // 2048-byte allocation backing NO_CACHE's span.
+  // 2048-byte allocation backing NoCache's span.
   CHECK(header.HeaderCommon() == nullptr);
 }

@@ -33,8 +33,8 @@ namespace
 // Both flags on: the recovery scan runs, and Decision 4's include_deleted
 // filter is bypassed, so only the pre-existing parent-reference check
 // applies.
-constexpr VolumeOptions kRecoverKeepDeleted{.include_deleted = true,
-                                            .recover_errors = true};
+constexpr VolumeOptions recover_keep_deleted{.include_deleted = true,
+                                             .recover_errors = true};
 
 // Collects every name TraverseSubEntries() reports, in callback order.
 template <Strategy S>
@@ -63,16 +63,16 @@ void RunOrphanedBlocksNeedRecoveryFlag()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::vector<std::wstring> normal = CollectNames(root);
   REQUIRE(normal.size() == 1);
   // The REQUIRE above checks the size of normal.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(normal[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  CHECK(normal[0] == NtfsBrowserTests::orphaned_block_reachable_name);
 }
 
 // With recover_errors on and include_deleted on, every $INDEX_ALLOCATION
@@ -87,22 +87,22 @@ void RunOrphanedBlocksFoundWithRecoveryFlag()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> const volume(std::move(reader), kRecoverKeepDeleted);
+  NtfsVolume<S> const volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::vector<std::wstring> recovered = CollectNames(root);
   REQUIRE(recovered.size() == 2);
   // The REQUIRE above checks the size of recovered.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
+  CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
 }
 
 // With include_deleted off (the default), Decision 4 additionally requires
@@ -123,16 +123,16 @@ void RunOrphanedBlocksDroppedWithoutIncludeDeleted()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::vector<std::wstring> recovered = CollectNames(root);
   REQUIRE(recovered.size() == 1);
   // The REQUIRE above checks the size of recovered.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
 }
 
 // Decision 4's other drop condition: with include_deleted off, an
@@ -155,38 +155,38 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+    root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     REQUIRE(root.ParseAttrs());
 
     const std::vector<std::wstring> recovered = CollectNames(root);
     REQUIRE(recovered.size() == 1);
     // The REQUIRE above checks the size of recovered.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+    CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
   }
   {
     auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
         NtfsBrowserTests::
             BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
 
-    NtfsVolume<S> const volume(std::move(reader), kRecoverKeepDeleted);
+    NtfsVolume<S> const volume(std::move(reader), recover_keep_deleted);
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+    root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     REQUIRE(root.ParseAttrs());
 
     const std::vector<std::wstring> recovered = CollectNames(root);
     REQUIRE(recovered.size() == 2);
     // The REQUIRE above checks the size of recovered.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+    CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
+    CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
   }
 }
 
@@ -202,9 +202,9 @@ void RunMissingIndexRootNeedsRecoveryFlag()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ALLOCATION);
+  root.SetAttrMask(Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   CHECK(CollectNames(root).empty());
@@ -218,22 +218,22 @@ void RunMissingIndexRootRecoveredWithFlag()
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> const volume(std::move(reader), kRecoverKeepDeleted);
+  NtfsVolume<S> const volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ALLOCATION);
+  root.SetAttrMask(Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::vector<std::wstring> recovered = CollectNames(root);
   REQUIRE(recovered.size() == 2);
   // The REQUIRE above checks the size of recovered.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
+  CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
 }
 
 // Names TraverseSubEntries() reports on the root record of "image", with both
@@ -244,13 +244,13 @@ std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image)
   auto reader =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
 
-  NtfsVolume<S> const volume(std::move(reader), kRecoverKeepDeleted);
+  NtfsVolume<S> const volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   return CollectNames(root);
@@ -264,12 +264,12 @@ void RunSubClusterBlocksAllScanned()
   const std::vector<std::wstring> names = RecoverRootNames<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks());
 
-  REQUIRE(names.size() == NtfsBrowserTests::kSubClusterBlockNames.size());
+  REQUIRE(names.size() == NtfsBrowserTests::sub_cluster_block_names.size());
   for (size_t i = 0; i < names.size(); i++)
   {
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[i] == NtfsBrowserTests::kSubClusterBlockNames[i]);
+    CHECK(names[i] == NtfsBrowserTests::sub_cluster_block_names[i]);
   }
 }
 
@@ -281,12 +281,12 @@ void RunSplitAllocationAllScanned()
   const std::vector<std::wstring> names = RecoverRootNames<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSplitIndexAllocation());
 
-  REQUIRE(names.size() == NtfsBrowserTests::kSplitBlockNames.size());
+  REQUIRE(names.size() == NtfsBrowserTests::split_block_names.size());
   for (size_t i = 0; i < names.size(); i++)
   {
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[i] == NtfsBrowserTests::kSplitBlockNames[i]);
+    CHECK(names[i] == NtfsBrowserTests::split_block_names[i]);
   }
 }
 
@@ -303,9 +303,9 @@ bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link)
   REQUIRE(names.size() >= 2);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == NtfsBrowserTests::kOrphanedBlockReachableName);
+  CHECK(names[0] == NtfsBrowserTests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[1] == NtfsBrowserTests::kOrphanedBlockOrphanName);
+  CHECK(names[1] == NtfsBrowserTests::orphaned_block_orphan_name);
   if (names.size() == 2)
   {
     return false;
@@ -313,7 +313,7 @@ bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link)
   REQUIRE(names.size() == 3);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[2] == NtfsBrowserTests::kOrphanedBlockGenerationName);
+  CHECK(names[2] == NtfsBrowserTests::orphaned_block_generation_name);
   return true;
 }
 
@@ -363,7 +363,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan covers every block when index blocks "
     "are smaller than a cluster",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunSubClusterBlocksAllScanned<S>();
 }
@@ -372,7 +372,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan covers every instance of a split "
     "$INDEX_ALLOCATION",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunSplitAllocationAllScanned<S>();
 }
@@ -381,7 +381,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan rejects an entry filed under an earlier "
     "generation of the directory record",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunOrphanEntryOfEarlierParentGenerationRejected<S>();
 }
@@ -390,7 +390,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan reports an entry filed under the "
     "current or an unchecked generation of the directory record",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunOrphanEntryOfCurrentParentGenerationReported<S>();
 }
@@ -399,7 +399,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan accepts the previous generation only "
     "for a freed directory record",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunOrphanEntryOfFreedParentGeneration<S>();
 }
@@ -407,7 +407,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries ignores an orphaned index block by default",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunOrphanedBlocksNeedRecoveryFlag<S>();
 }
@@ -416,7 +416,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds an orphaned block and rejects a "
     "stale parent",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunOrphanedBlocksFoundWithRecoveryFlag<S>();
 }
@@ -425,7 +425,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds nothing when include_deleted is "
     "off and no named record exists",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunOrphanedBlocksDroppedWithoutIncludeDeleted<S>();
 }
@@ -435,7 +435,7 @@ TEMPLATE_TEST_CASE_SIG(
     "exists but has a mismatched sequence number, when include_deleted is "
     "off",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunOrphanedBlocksDroppedOnSequenceMismatch<S>();
 }
@@ -443,7 +443,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries with no parsed IndexRoot reports nothing by default",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunMissingIndexRootNeedsRecoveryFlag<S>();
 }
@@ -452,7 +452,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds entries with no parsed IndexRoot "
     "at all",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunMissingIndexRootRecoveredWithFlag<S>();
 }

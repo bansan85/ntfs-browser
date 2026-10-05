@@ -26,15 +26,15 @@ FileClockToUtcTicks(std::filesystem::file_time_type file_time) noexcept
   return static_cast<ULONGLONG>(file_time.time_since_epoch().count());
 #else
   const auto sys = std::chrono::file_clock::to_sys(file_time);
-  const auto sinceEpoch = sys.time_since_epoch();
+  const auto since_epoch = sys.time_since_epoch();
   const auto seconds =
-      std::chrono::duration_cast<std::chrono::seconds>(sinceEpoch);
-  const auto subSecondTicks = std::chrono::duration_cast<
-      std::chrono::duration<long long, std::ratio<1, 10'000'000>>>(sinceEpoch -
+      std::chrono::duration_cast<std::chrono::seconds>(since_epoch);
+  const auto sub_second_ticks = std::chrono::duration_cast<
+      std::chrono::duration<long long, std::ratio<1, 10'000'000>>>(since_epoch -
                                                                    seconds);
-  return (static_cast<ULONGLONG>(seconds.count()) + kUnixEpochOffsetSeconds) *
-             kTicksPerSecond +
-         static_cast<ULONGLONG>(subSecondTicks.count());
+  return (static_cast<ULONGLONG>(seconds.count()) + unix_epoch_offset_seconds) *
+             ticks_per_second +
+         static_cast<ULONGLONG>(sub_second_ticks.count());
 #endif
 }
 
@@ -74,19 +74,19 @@ Listing WalkStdFilesystem(const std::filesystem::path& root)
 
     if (!entry.is_directory)
     {
-      std::error_code sizeEc;
-      const auto size = directory_entry.file_size(sizeEc);
-      if (!sizeEc)
+      std::error_code size_ec;
+      const auto size = directory_entry.file_size(size_ec);
+      if (!size_ec)
       {
         entry.logical_size = size;
       }
     }
 
-    std::error_code timeEc;
-    const auto writeTime = directory_entry.last_write_time(timeEc);
-    if (!timeEc)
+    std::error_code time_ec;
+    const auto write_time = directory_entry.last_write_time(time_ec);
+    if (!time_ec)
     {
-      entry.modification_time_utc = FileClockToUtcTicks(writeTime);
+      entry.modification_time_utc = FileClockToUtcTicks(write_time);
     }
 
     result.emplace(RelativeKey(root, directory_entry.path()), entry);

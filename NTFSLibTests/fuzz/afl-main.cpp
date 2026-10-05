@@ -34,9 +34,9 @@ using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
-using NtfsFuzz::kGapCollationSearchName;
-using NtfsFuzz::kNamedDataStreamName;
+using NtfsFuzz::gap_collation_search_name;
 using NtfsFuzz::LoopingDiskReader;
+using NtfsFuzz::named_data_stream_name;
 
 namespace Enum = NtfsBrowser::Enum;
 namespace Log = NtfsBrowser::Log;
@@ -55,48 +55,48 @@ using ArgChar = char;
 namespace
 {
 
-// Log::kOptionPrefix in the character type this platform's argv has.
+// Log::option_prefix in the character type this platform's argv has.
 #ifdef _WIN32
-constexpr std::wstring_view kLogPrefix = Log::kOptionPrefixW;
+constexpr std::wstring_view log_prefix = Log::option_prefix_w;
 #else
-constexpr std::string_view kLogPrefix = Log::kOptionPrefix;
+constexpr std::string_view log_prefix = Log::option_prefix;
 #endif
 
 // Argument that turns on the read failure sweep, in argv's character type.
 #ifdef _WIN32
-constexpr std::wstring_view kInjectOption = L"--inject-read-failures";
+constexpr std::wstring_view inject_option = L"--inject-read-failures";
 #else
-constexpr std::string_view kInjectOption = "--inject-read-failures";
+constexpr std::string_view inject_option = "--inject-read-failures";
 #endif
 
 // NtfsBpb::signature sits 3 bytes in, after the boot sector's jump instruction.
-constexpr size_t kBpbSignatureOffset = 3;
+constexpr size_t bpb_signature_offset = 3;
 // The exact bytes NtfsBpb::signature must hold to pass validation.
-constexpr std::string_view kBpbSignature = "NTFS    ";
-// Byte length of kBpbSignature, excluding its terminator.
-constexpr size_t kBpbSignatureLen = 8;
+constexpr std::string_view bpb_signature = "NTFS    ";
+// Byte length of bpb_signature, excluding its terminator.
+constexpr size_t bpb_signature_len = 8;
 
 // Overwrites the boot sector signature so ParseBootSector() accepts it.
 void PatchBpbSignature(std::vector<BYTE>& data)
 {
-  if (data.size() >= kBpbSignatureOffset + kBpbSignatureLen)
+  if (data.size() >= bpb_signature_offset + bpb_signature_len)
   {
-    // The enclosing check leaves room for kBpbSignatureLen bytes at the offset.
+    // The enclosing check leaves room for bpb_signature_len bytes at the offset.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    std::memcpy(&data[kBpbSignatureOffset], kBpbSignature.data(),
-                kBpbSignatureLen);
+    std::memcpy(&data[bpb_signature_offset], bpb_signature.data(),
+                bpb_signature_len);
   }
 }
 
 // How many successive ReadInto() calls get a one-shot injected failure,
 // one run each. Covers the boot sector, $MFT and root record reads and the
 // first index block reads. Later reads mostly repeat those code paths.
-constexpr size_t kInjectedFailureRuns = 16;
+constexpr size_t injected_failure_runs = 16;
 
 // The two VolumeOptions combinations every input is run under: strict
 // (both flags off, the default) and fully recovering (both on). Exercises
 // both the "reject the damaged item whole" and "salvage it" code paths.
-constexpr std::array<VolumeOptions, 2> kVolumeOptionModes{
+constexpr std::array<VolumeOptions, 2> volume_option_modes{
     VolumeOptions{},
     VolumeOptions{.include_deleted = true, .recover_errors = true}};
 
@@ -104,18 +104,18 @@ constexpr std::array<VolumeOptions, 2> kVolumeOptionModes{
 // entries. A thrown exception counts as handled input rejection; only a
 // real crash escapes, which AFL detects via this process's exit status.
 //
-// Templated on Strategy so the same input drives both NO_CACHE and
-// FULL_CACHE (see main()): some bugs only manifest in FULL_CACHE's object
+// Templated on Strategy so the same input drives both NoCache and
+// FullCache (see main()): some bugs only manifest in FullCache's object
 // graph and are otherwise invisible to this fuzzer.
 //
 // failingRead makes that one ReadInto() call fail, exercising the
 // disk-read error paths a looping reader never reaches on its own.
 template <Strategy S>
 void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
-              std::optional<size_t> failingRead = {})
+              std::optional<size_t> failing_read = {})
 {
   NtfsVolume<S> const volume(
-      std::make_unique<LoopingDiskReader>(data, failingRead), options);
+      std::make_unique<LoopingDiskReader>(data, failing_read), options);
   if (!volume.IsVolumeOK())
   {
     return;
@@ -125,9 +125,9 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
   // Without DATA here, FindStream() below never sees a named $DATA
   // attribute on ROOT to walk. BITMAP and OBJECT_ID reach AttrBitmap and
   // the unhandled-attribute path of ParseAttr().
-  file_record.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION |
-                          Mask::DATA | Mask::BITMAP | Mask::OBJECT_ID);
-  if (!file_record.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+  file_record.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation | Mask::Data |
+                          Mask::Bitmap | Mask::ObjectId);
+  if (!file_record.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root)))
   {
     // file_record_ is guaranteed empty here, exercising IsDeleted()/
     // IsDirectory()'s guard against it.
@@ -147,7 +147,7 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
 
   // FindStream() calls GetAttrName() on every named $DATA attribute it
   // walks, regardless of the name passed in.
-  (void)file_record.FindStream(kNamedDataStreamName);
+  (void)file_record.FindStream(named_data_stream_name);
 
   // An empty name exercises FindStream()'s unnamed-stream branch, which the
   // call above (a fixed non-empty name) never reaches.
@@ -155,18 +155,18 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
 
   // Unlike TraverseSubEntries() above, FindSubEntry() actually compares
   // names, exercising a real B+-tree sub-node descent.
-  (void)file_record.FindSubEntry(kGapCollationSearchName);
+  (void)file_record.FindSubEntry(gap_collation_search_name);
 }
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash
 // may escape.
 template <Strategy S>
 void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
-                std::optional<size_t> failingRead = {})
+                std::optional<size_t> failing_read = {})
 {
   try
   {
-    FuzzOnce<S>(data, options, failingRead);
+    FuzzOnce<S>(data, options, failing_read);
   }
   // NOLINTNEXTLINE(bugprone-empty-catch)
   catch (const std::exception&)
@@ -184,7 +184,7 @@ void Usage(const ArgChar* program)
   std::cerr << std::format(
       "usage: {} [--log=...] [--inject-read-failures] <input-file>\n",
       std::filesystem::path(program).string());
-  std::cerr << std::format("  {}\n", Log::kOptionUsage);
+  std::cerr << std::format("  {}\n", Log::option_usage);
 }
 
 // Runs one AFL testcase file (the non-option argument) through the library
@@ -193,24 +193,24 @@ int Run(int argc, ArgChar** argv)
 {
   // Trace on the console by default, so an afl-fuzz run and the saved
   // regression corpus both keep producing every message without a flag.
-  Log::Config logConfig{.console_level = Log::Level::kTrace};
+  Log::Config log_config{.console_level = Log::Level::Trace};
   const std::span<ArgChar*> args(argv, gsl::narrow<size_t>(argc));
   const ArgChar* input = nullptr;
-  bool injectFailures = false;
+  bool inject_failures = false;
 
   for (size_t i = 1; i < args.size(); i++)
   {
     // i < args.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const ArgChar* const arg = args[i];
-    if (std::basic_string_view<ArgChar>(arg) == kInjectOption)
+    if (std::basic_string_view<ArgChar>(arg) == inject_option)
     {
-      injectFailures = true;
+      inject_failures = true;
       continue;
     }
-    if (std::basic_string_view<ArgChar>(arg).starts_with(kLogPrefix))
+    if (std::basic_string_view<ArgChar>(arg).starts_with(log_prefix))
     {
-      if (!Log::ParseOption(arg, logConfig))
+      if (!Log::ParseOption(arg, log_config))
       {
         Usage(args.front());
         return 1;
@@ -231,10 +231,10 @@ int Run(int argc, ArgChar** argv)
     return 1;
   }
 
-  if (!Log::Configure(logConfig))
+  if (!Log::Configure(log_config))
   {
     std::cerr << std::format("Cannot open log file {}\n",
-                             logConfig.file_path.string());
+                             log_config.file_path.string());
   }
 
   std::optional<std::vector<BYTE>> data =
@@ -250,24 +250,24 @@ int Run(int argc, ArgChar** argv)
   // Guarded independently, so one run's exception can't skip the others.
   // Each strategy runs once per VolumeOptions mode, so both the strict
   // (reject-whole) and recovering (salvage) code paths are exercised.
-  for (const VolumeOptions& options : kVolumeOptionModes)
+  for (const VolumeOptions& options : volume_option_modes)
   {
-    RunGuarded<Strategy::NO_CACHE>(*data, options);
-    RunGuarded<Strategy::FULL_CACHE>(*data, options);
+    RunGuarded<Strategy::NoCache>(*data, options);
+    RunGuarded<Strategy::FullCache>(*data, options);
   }
 
-  if (!injectFailures)
+  if (!inject_failures)
   {
     return 0;
   }
 
-  for (size_t failingRead = 0; failingRead < kInjectedFailureRuns;
-       ++failingRead)
+  for (size_t failing_read = 0; failing_read < injected_failure_runs;
+       ++failing_read)
   {
-    for (const VolumeOptions& options : kVolumeOptionModes)
+    for (const VolumeOptions& options : volume_option_modes)
     {
-      RunGuarded<Strategy::NO_CACHE>(*data, options, failingRead);
-      RunGuarded<Strategy::FULL_CACHE>(*data, options, failingRead);
+      RunGuarded<Strategy::NoCache>(*data, options, failing_read);
+      RunGuarded<Strategy::FullCache>(*data, options, failing_read);
     }
   }
 

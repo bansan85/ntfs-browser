@@ -39,7 +39,7 @@
 #include "ntfs-common.h"
 #include "test-log-sink.h"
 
-namespace fs = std::filesystem;
+namespace Fs = std::filesystem;
 
 using Catch::Matchers::ContainsSubstring;
 using NtfsBrowser::Log::Config;
@@ -51,10 +51,10 @@ namespace
 // Corpus testcase driven by the child-process cases below. Its run logs an
 // info line (the sector size) and an error line (the null cluster size),
 // so one run exercises both halves of the console split.
-constexpr std::string_view kSplitTestcase = "cluster_size_null";
+constexpr std::string_view split_testcase = "cluster_size_null";
 // Substrings those two lines are recognised by.
-constexpr std::string_view kInfoLine = "Sector Size = ";
-constexpr std::string_view kErrorLine = "Cluster Size can't be null";
+constexpr std::string_view info_line = "Sector Size = ";
+constexpr std::string_view error_line = "Cluster Size can't be null";
 
 // Puts the trace-level capturing sink back once a test has replaced the
 // library logger's sinks with a configuration of its own.
@@ -75,12 +75,12 @@ class TempFile final
 {
  public:
   explicit TempFile(std::wstring_view tag)
-      : path_(fs::temp_directory_path() /
+      : path_(Fs::temp_directory_path() /
               (L"ntfsbrowser-log-" + std::wstring(tag) + L"-" +
                std::to_wstring(std::random_device{}()) + L".txt"))
   {
     std::error_code error_code;
-    fs::remove(path_, error_code);
+    Fs::remove(path_, error_code);
   }
 
   TempFile(TempFile&&) = delete;
@@ -91,10 +91,10 @@ class TempFile final
   ~TempFile()
   {
     std::error_code error_code;
-    fs::remove(path_, error_code);
+    Fs::remove(path_, error_code);
   }
 
-  [[nodiscard]] const fs::path& Path() const noexcept { return path_; }
+  [[nodiscard]] const Fs::path& Path() const noexcept { return path_; }
 
   [[nodiscard]] std::string Read() const
   {
@@ -104,7 +104,7 @@ class TempFile final
   }
 
  private:
-  fs::path path_;
+  Fs::path path_;
 };
 
 struct ChildOutput
@@ -117,25 +117,25 @@ struct ChildOutput
 // Runs NtfsFuzzerAfl on the corpus testcase with extraArgs appended, and
 // returns its two standard streams separately. Files rather than a pipe, so
 // neither stream can fill a pipe buffer and deadlock the other.
-ChildOutput RunFuzzer(const std::vector<std::wstring>& extraArgs)
+ChildOutput RunFuzzer(const std::vector<std::wstring>& extra_args)
 {
-  const fs::path exe(NTFS_FUZZER_AFL_EXE);
-  const fs::path testcase =
-      fs::path(NTFS_FUZZ_DATA_DIR) / std::string(kSplitTestcase);
-  REQUIRE(fs::exists(exe));
-  REQUIRE(fs::exists(testcase));
+  const Fs::path exe(NTFS_FUZZER_AFL_EXE);
+  const Fs::path testcase =
+      Fs::path(NTFS_FUZZ_DATA_DIR) / std::string(split_testcase);
+  REQUIRE(Fs::exists(exe));
+  REQUIRE(Fs::exists(testcase));
 
-  const TempFile outFile(L"stdout");
-  const TempFile errFile(L"stderr");
+  const TempFile out_file(L"stdout");
+  const TempFile err_file(L"stderr");
 
   std::vector<std::wstring> args{testcase.wstring()};
-  args.insert(args.end(), extraArgs.begin(), extraArgs.end());
+  args.insert(args.end(), extra_args.begin(), extra_args.end());
 
   ChildOutput result;
   result.exit_code = NtfsBrowserTests::RunProcessToFiles(
-      exe, args, outFile.Path(), errFile.Path());
-  result.out = outFile.Read();
-  result.err = errFile.Read();
+      exe, args, out_file.Path(), err_file.Path());
+  result.out = out_file.Read();
+  result.err = err_file.Read();
   return result;
 }
 
@@ -148,23 +148,23 @@ TEST_CASE("the --log option parses a target and a level", "[logging]")
   SECTION("console level")
   {
     REQUIRE(NtfsBrowser::Log::ParseOption("--log=console:debug", config));
-    CHECK(config.console_level == Level::kDebug);
-    CHECK(config.file_level == Level::kOff);
+    CHECK(config.console_level == Level::Debug);
+    CHECK(config.file_level == Level::Off);
   }
 
   SECTION("file level, default path")
   {
     REQUIRE(NtfsBrowser::Log::ParseOption("--log=file:debug", config));
-    CHECK(config.file_level == Level::kDebug);
-    CHECK(config.file_path == NtfsBrowser::Log::kDefaultFilePath);
-    CHECK(config.console_level == Level::kWarn);
+    CHECK(config.file_level == Level::Debug);
+    CHECK(config.file_path == NtfsBrowser::Log::default_file_path);
+    CHECK(config.console_level == Level::Warn);
   }
 
   SECTION("file level and path, drive letter kept")
   {
     REQUIRE(NtfsBrowser::Log::ParseOption("--log=file:trace:C:\\tmp\\ntfs.log",
                                           config));
-    CHECK(config.file_level == Level::kTrace);
+    CHECK(config.file_level == Level::Trace);
     CHECK(config.file_path == "C:\\tmp\\ntfs.log");
   }
 
@@ -175,8 +175,8 @@ TEST_CASE("the --log option parses a target and a level", "[logging]")
   {
     REQUIRE(NtfsBrowser::Log::ParseOption(
         L"--log=file:trace:C:\\tmp\\\u30ed.log", config));
-    CHECK(config.file_level == Level::kTrace);
-    CHECK(config.file_path == fs::path(L"C:\\tmp\\\u30ed.log"));
+    CHECK(config.file_level == Level::Trace);
+    CHECK(config.file_path == Fs::path(L"C:\\tmp\\\u30ed.log"));
   }
 #endif
 
@@ -184,14 +184,14 @@ TEST_CASE("the --log option parses a target and a level", "[logging]")
   {
     REQUIRE(NtfsBrowser::Log::ParseOption("--log=console:error", config));
     REQUIRE(NtfsBrowser::Log::ParseOption("--log=file:trace", config));
-    CHECK(config.console_level == Level::kError);
-    CHECK(config.file_level == Level::kTrace);
+    CHECK(config.console_level == Level::Error);
+    CHECK(config.file_level == Level::Trace);
   }
 
   SECTION("either target may be off")
   {
     REQUIRE(NtfsBrowser::Log::ParseOption("--log=console:off", config));
-    CHECK(config.console_level == Level::kOff);
+    CHECK(config.console_level == Level::Off);
   }
 }
 
@@ -207,24 +207,24 @@ TEST_CASE("the --log option rejects a malformed value and changes nothing",
     Config config;
     INFO("option: " << option);
     CHECK_FALSE(NtfsBrowser::Log::ParseOption(option, config));
-    CHECK(config.console_level == Level::kWarn);
-    CHECK(config.file_level == Level::kOff);
-    CHECK(config.file_path == NtfsBrowser::Log::kDefaultFilePath);
+    CHECK(config.console_level == Level::Warn);
+    CHECK(config.file_level == Level::Off);
+    CHECK(config.file_path == NtfsBrowser::Log::default_file_path);
   }
 }
 
 TEST_CASE("the default configuration logs warnings, not info", "[logging]")
 {
   const Config config;
-  CHECK(config.console_level == Level::kWarn);
-  CHECK(config.file_level == Level::kOff);
-  CHECK(config.file_path == NtfsBrowser::Log::kDefaultFilePath);
+  CHECK(config.console_level == Level::Warn);
+  CHECK(config.file_level == Level::Off);
+  CHECK(config.file_path == NtfsBrowser::Log::default_file_path);
 }
 
 TEMPLATE_TEST_CASE_SIG("the volume name is logged without its terminator",
                        "[logging]", ((NtfsBrowser::Strategy S), S),
-                       NtfsBrowser::Strategy::NO_CACHE,
-                       NtfsBrowser::Strategy::FULL_CACHE)
+                       NtfsBrowser::Strategy::NoCache,
+                       NtfsBrowser::Strategy::FullCache)
 {
   (void)NtfsBrowserTests::TakeCapturedLog();
   const NtfsBrowser::NtfsVolume<S> volume(
@@ -242,12 +242,12 @@ TEMPLATE_TEST_CASE_SIG("the volume name is logged without its terminator",
 TEST_CASE("each sink keeps its own level", "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile logFile(L"levels");
+  const TempFile log_file(L"levels");
 
   Config config;
-  config.console_level = Level::kOff;
-  config.file_level = Level::kWarn;
-  config.file_path = logFile.Path();
+  config.console_level = Level::Off;
+  config.file_level = Level::Warn;
+  config.file_path = log_file.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   NtfsBrowser::LogTrace("trace-only-line");
@@ -258,7 +258,7 @@ TEST_CASE("each sink keeps its own level", "[logging]")
   // Drops the file sink, which closes the file before it is read back.
   NtfsBrowserTests::InstallCaptureSink();
 
-  const std::string contents = logFile.Read();
+  const std::string contents = log_file.Read();
   CHECK_THAT(contents, ContainsSubstring("warn-line"));
   CHECK_THAT(contents, ContainsSubstring("error-line"));
   CHECK_THAT(contents, !ContainsSubstring("trace-only-line"));
@@ -268,12 +268,12 @@ TEST_CASE("each sink keeps its own level", "[logging]")
 TEST_CASE("a file sink at trace records every level", "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile logFile(L"trace");
+  const TempFile log_file(L"trace");
 
   Config config;
-  config.console_level = Level::kOff;
-  config.file_level = Level::kTrace;
-  config.file_path = logFile.Path();
+  config.console_level = Level::Off;
+  config.file_level = Level::Trace;
+  config.file_path = log_file.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   NtfsBrowser::LogTrace("recorded-trace");
@@ -281,7 +281,7 @@ TEST_CASE("a file sink at trace records every level", "[logging]")
 
   NtfsBrowserTests::InstallCaptureSink();
 
-  const std::string contents = logFile.Read();
+  const std::string contents = log_file.Read();
   CHECK_THAT(contents, ContainsSubstring("recorded-trace"));
   CHECK_THAT(contents, ContainsSubstring("recorded-error"));
 }
@@ -289,30 +289,30 @@ TEST_CASE("a file sink at trace records every level", "[logging]")
 TEST_CASE("both targets off writes nothing at all", "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile logFile(L"silent");
+  const TempFile log_file(L"silent");
 
   Config config;
-  config.console_level = Level::kOff;
-  config.file_level = Level::kOff;
-  config.file_path = logFile.Path();
+  config.console_level = Level::Off;
+  config.file_level = Level::Off;
+  config.file_path = log_file.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   NtfsBrowser::LogError("never-written");
 
   NtfsBrowserTests::InstallCaptureSink();
-  CHECK_FALSE(fs::exists(logFile.Path()));
+  CHECK_FALSE(Fs::exists(log_file.Path()));
 }
 
 TEST_CASE("a message carrying braces is not treated as a format string",
           "[logging]")
 {
   const RestoreCaptureSink restore;
-  const TempFile logFile(L"braces");
+  const TempFile log_file(L"braces");
 
   Config config;
-  config.console_level = Level::kOff;
-  config.file_level = Level::kTrace;
-  config.file_path = logFile.Path();
+  config.console_level = Level::Off;
+  config.file_level = Level::Trace;
+  config.file_path = log_file.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   // What LogException() relays: runtime text, never a format string.
@@ -323,7 +323,7 @@ TEST_CASE("a message carrying braces is not treated as a format string",
 
   // Carriage returns go first: spdlog ends a line with \r\n here, which
   // would hide the thrower's own newline from the check below.
-  std::string contents = logFile.Read();
+  std::string contents = log_file.Read();
   std::erase(contents, '\r');
 
   CHECK_THAT(contents, ContainsSubstring("relayed {0} {bad} text\n"));
@@ -337,8 +337,8 @@ TEST_CASE("Configure() on an unwritable path fails without throwing",
   const RestoreCaptureSink restore;
 
   Config config;
-  config.console_level = Level::kWarn;
-  config.file_level = Level::kTrace;
+  config.console_level = Level::Warn;
+  config.file_level = Level::Trace;
   // A parent directory that cannot exist, so the sink's fopen() must fail.
 #ifdef _WIN32
   config.file_path = "Z:\\ntfs-browser-no-such-directory\\log.txt";
@@ -361,22 +361,22 @@ TEST_CASE("a log path outside the ANSI code page still opens", "[logging]")
   // Japanese kana, which no Western Windows ANSI code page can express.
   // The file only opens if the path stays wide from --log through to the
   // sink's fopen().
-  const TempFile logFile(L"\u30ed\u30b0");
+  const TempFile log_file(L"\u30ed\u30b0");
 
   Config config;
   REQUIRE(NtfsBrowser::Log::ParseOption(
-      std::wstring(L"--log=file:trace:") + logFile.Path().wstring(), config));
-  CHECK(config.file_path == logFile.Path());
+      std::wstring(L"--log=file:trace:") + log_file.Path().wstring(), config));
+  CHECK(config.file_path == log_file.Path());
 
-  config.console_level = Level::kOff;
+  config.console_level = Level::Off;
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
   NtfsBrowser::LogError("wide-path-line");
 
   NtfsBrowserTests::InstallCaptureSink();
 
-  CHECK(fs::exists(logFile.Path()));
-  CHECK_THAT(logFile.Read(), ContainsSubstring("wide-path-line"));
+  CHECK(Fs::exists(log_file.Path()));
+  CHECK_THAT(log_file.Read(), ContainsSubstring("wide-path-line"));
 }
 #endif
 
@@ -387,8 +387,8 @@ TEST_CASE("Configure() replaces the previous sinks wholesale", "[logging]")
   const TempFile second(L"second");
 
   Config config;
-  config.console_level = Level::kOff;
-  config.file_level = Level::kTrace;
+  config.console_level = Level::Off;
+  config.file_level = Level::Trace;
   config.file_path = first.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
   NtfsBrowser::LogError("into-first");
@@ -411,19 +411,19 @@ TEST_CASE("the console target splits by level across the two streams",
   {
     const ChildOutput result = RunFuzzer({L"--log=console:warn"});
     CHECK(result.exit_code == 0);
-    CHECK_THAT(result.err, ContainsSubstring(std::string(kErrorLine)));
-    CHECK_THAT(result.out, !ContainsSubstring(std::string(kErrorLine)));
-    CHECK_THAT(result.out, !ContainsSubstring(std::string(kInfoLine)));
+    CHECK_THAT(result.err, ContainsSubstring(std::string(error_line)));
+    CHECK_THAT(result.out, !ContainsSubstring(std::string(error_line)));
+    CHECK_THAT(result.out, !ContainsSubstring(std::string(info_line)));
   }
 
   SECTION("console:trace: each line on exactly one stream")
   {
     const ChildOutput result = RunFuzzer({L"--log=console:trace"});
     CHECK(result.exit_code == 0);
-    CHECK_THAT(result.out, ContainsSubstring(std::string(kInfoLine)));
-    CHECK_THAT(result.out, !ContainsSubstring(std::string(kErrorLine)));
-    CHECK_THAT(result.err, ContainsSubstring(std::string(kErrorLine)));
-    CHECK_THAT(result.err, !ContainsSubstring(std::string(kInfoLine)));
+    CHECK_THAT(result.out, ContainsSubstring(std::string(info_line)));
+    CHECK_THAT(result.out, !ContainsSubstring(std::string(error_line)));
+    CHECK_THAT(result.err, ContainsSubstring(std::string(error_line)));
+    CHECK_THAT(result.err, !ContainsSubstring(std::string(info_line)));
   }
 
   SECTION("console:error: stdout stays silent")
@@ -431,7 +431,7 @@ TEST_CASE("the console target splits by level across the two streams",
     const ChildOutput result = RunFuzzer({L"--log=console:error"});
     CHECK(result.exit_code == 0);
     CHECK(result.out.empty());
-    CHECK_THAT(result.err, ContainsSubstring(std::string(kErrorLine)));
+    CHECK_THAT(result.err, ContainsSubstring(std::string(error_line)));
   }
 
   SECTION("console:off: nothing on either stream")
@@ -458,15 +458,15 @@ TEST_CASE("the console target splits by level across the two streams",
 TEST_CASE("the file target records what the console target is denied",
           "[logging]")
 {
-  const TempFile logFile(L"child");
+  const TempFile log_file(L"child");
 
   const ChildOutput result = RunFuzzer(
-      {L"--log=console:off", L"--log=file:trace:" + logFile.Path().wstring()});
+      {L"--log=console:off", L"--log=file:trace:" + log_file.Path().wstring()});
   CHECK(result.exit_code == 0);
   CHECK(result.out.empty());
   CHECK(result.err.empty());
 
-  const std::string contents = logFile.Read();
-  CHECK_THAT(contents, ContainsSubstring(std::string(kInfoLine)));
-  CHECK_THAT(contents, ContainsSubstring(std::string(kErrorLine)));
+  const std::string contents = log_file.Read();
+  CHECK_THAT(contents, ContainsSubstring(std::string(info_line)));
+  CHECK_THAT(contents, ContainsSubstring(std::string(error_line)));
 }

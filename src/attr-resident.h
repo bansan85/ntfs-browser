@@ -31,11 +31,11 @@ class AttrResident : public AttrBase<S>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrResident
 
-class AttrResidentNoCache : public AttrResident<Strategy::NO_CACHE>
+class AttrResidentNoCache : public AttrResident<Strategy::NoCache>
 {
  public:
   AttrResidentNoCache(const AttrHeaderCommon& ahc,
-                      const FileRecord<Strategy::NO_CACHE>& file_record);
+                      const FileRecord<Strategy::NoCache>& file_record);
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
 
@@ -43,11 +43,11 @@ class AttrResidentNoCache : public AttrResident<Strategy::NO_CACHE>
   std::span<const BYTE> body_;
 };
 
-class AttrResidentFullCache : public AttrResident<Strategy::FULL_CACHE>
+class AttrResidentFullCache : public AttrResident<Strategy::FullCache>
 {
  public:
   AttrResidentFullCache(const AttrHeaderCommon& ahc,
-                        const FileRecord<Strategy::FULL_CACHE>& file_record);
+                        const FileRecord<Strategy::FullCache>& file_record);
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
 

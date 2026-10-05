@@ -29,7 +29,7 @@ struct AttributeList
 };
 
 // Real on-disk size of a nameless $ATTRIBUTE_LIST entry's fixed header.
-inline constexpr size_t kAttributeListEntryHeaderSize =
+inline constexpr size_t attribute_list_entry_header_size =
     offsetof(AttributeList, attr_id) + sizeof(AttributeList::attr_id);
 
 }  // namespace NtfsBrowser::Attr

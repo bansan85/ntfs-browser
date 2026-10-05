@@ -31,7 +31,7 @@ struct UpCaseRun
 // Unicode 15.1 simple uppercase mapping of the BMP, generated from the
 // Unicode Character Database. Runs with step 2 are the alternating
 // upper/lower pairs of the Latin, Greek and Cyrillic blocks.
-constexpr auto kBuiltInRuns = std::to_array<UpCaseRun>({
+constexpr auto built_in_runs = std::to_array<UpCaseRun>({
     {.first = 0x0061, .last = 0x007A, .step = 1, .delta = -32},
     {.first = 0x00B5, .last = 0x00B5, .step = 1, .delta = 743},
     {.first = 0x00E0, .last = 0x00F6, .step = 1, .delta = -32},
@@ -226,25 +226,25 @@ constexpr auto kBuiltInRuns = std::to_array<UpCaseRun>({
 
 // A valid $UpCase maps a-z to A-Z, on every volume. FromBytes() relies on
 // this to reject a wiped or forged table.
-constexpr char16_t kLowerA = u'a';
-constexpr char16_t kLowerZ = u'z';
-constexpr char16_t kCaseDistance = 0x20;
+constexpr char16_t lower_a = u'a';
+constexpr char16_t lower_z = u'z';
+constexpr char16_t case_distance = 0x20;
 
 // Bits in one byte: the shift that joins the two bytes of a stored entry.
-constexpr unsigned kBitsPerByte = 8;
+constexpr unsigned bits_per_byte = 8;
 
 // First and last unit of the UTF-16 surrogate area.
-constexpr char32_t kHighSurrogateFirst = 0xD800;
-constexpr char32_t kLowSurrogateFirst = 0xDC00;
+constexpr char32_t high_surrogate_first = 0xD800;
+constexpr char32_t low_surrogate_first = 0xDC00;
 // Highest code point Unicode defines.
-constexpr char32_t kMaxCodePoint = 0x10FFFF;
+constexpr char32_t max_code_point = 0x10FFFF;
 // Stands in for a wchar_t that is not a code point.
-constexpr char16_t kReplacementCharacter = 0xFFFD;
+constexpr char16_t replacement_character = 0xFFFD;
 // First code point above the BMP, and the shift and mask that split the
 // rest into the two 10-bit halves of a surrogate pair.
-constexpr char32_t kSupplementaryBase = 0x10000;
-constexpr unsigned kSurrogateShift = 10;
-constexpr char32_t kSurrogateMask = 0x3FF;
+constexpr char32_t supplementary_base = 0x10000;
+constexpr unsigned surrogate_shift = 10;
+constexpr char32_t surrogate_mask = 0x3FF;
 
 // Yields the UTF-16 code units of a wide string one at a time. On Windows
 // wchar_t already is a UTF-16 unit. Elsewhere it holds a whole code point,
@@ -277,19 +277,19 @@ class Utf16Cursor
     }
     else
     {
-      if (value < kSupplementaryBase)
+      if (value < supplementary_base)
       {
         return static_cast<char16_t>(value);
       }
-      if (value > kMaxCodePoint)
+      if (value > max_code_point)
       {
-        return kReplacementCharacter;
+        return replacement_character;
       }
-      const char32_t offset = value - kSupplementaryBase;
-      pending_low_ =
-          static_cast<char16_t>(kLowSurrogateFirst + (offset & kSurrogateMask));
-      return static_cast<char16_t>(kHighSurrogateFirst +
-                                   (offset >> kSurrogateShift));
+      const char32_t offset = value - supplementary_base;
+      pending_low_ = static_cast<char16_t>(low_surrogate_first +
+                                           (offset & surrogate_mask));
+      return static_cast<char16_t>(high_surrogate_first +
+                                   (offset >> surrogate_shift));
     }
   }
 
@@ -299,17 +299,17 @@ class Utf16Cursor
   char16_t pending_low_{0};
 };
 
-// Expands kBuiltInRuns into a full table.
+// Expands built_in_runs into a full table.
 std::vector<char16_t> MakeBuiltInMap()
 {
-  std::vector<char16_t> map(kUpCaseUnitCount);
+  std::vector<char16_t> map(up_case_unit_count);
   for (size_t unit = 0; unit < map.size(); unit++)
   {
     // unit < map.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     map[unit] = gsl::narrow<char16_t>(unit);
   }
-  for (const UpCaseRun& run : kBuiltInRuns)
+  for (const UpCaseRun& run : built_in_runs)
   {
     for (std::uint32_t unit = run.first; unit <= run.last; unit += run.step)
     {
@@ -323,8 +323,8 @@ std::vector<char16_t> MakeBuiltInMap()
 }  // namespace
 
 // Private: callers go through BuiltIn() or FromBytes().
-UpCaseTable::UpCaseTable(std::vector<char16_t> map, bool builtIn)
-    : map_(std::move(map)), built_in_(builtIn)
+UpCaseTable::UpCaseTable(std::vector<char16_t> map, bool built_in)
+    : map_(std::move(map)), built_in_(built_in)
 {
 }
 
@@ -336,16 +336,16 @@ const UpCaseTable& UpCaseTable::BuiltIn()
 
 std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes)
 {
-  if (bytes.size() < kUpCaseByteCount)
+  if (bytes.size() < up_case_byte_count)
   {
     return std::nullopt;
   }
 
-  std::vector<char16_t> map(kUpCaseUnitCount);
+  std::vector<char16_t> map(up_case_unit_count);
   for (size_t unit = 0; unit < map.size(); unit++)
   {
     const size_t offset = unit * sizeof(char16_t);
-    // bytes.size() >= kUpCaseByteCount = 2 * map.size(), so offset + 1 is in
+    // bytes.size() >= up_case_byte_count = 2 * map.size(), so offset + 1 is in
     // range. unit < map.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto low = bytes[offset];
@@ -354,14 +354,14 @@ std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes)
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     map[unit] =
         static_cast<char16_t>(static_cast<unsigned>(low) |
-                              (static_cast<unsigned>(high) << kBitsPerByte));
+                              (static_cast<unsigned>(high) << bits_per_byte));
   }
 
-  for (char16_t unit = kLowerA; unit <= kLowerZ; unit++)
+  for (char16_t unit = lower_a; unit <= lower_z; unit++)
   {
     // unit is an ASCII letter, well below the 65536 entries of map.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    if (map[unit] != static_cast<char16_t>(unit - kCaseDistance))
+    if (map[unit] != static_cast<char16_t>(unit - case_distance))
     {
       return std::nullopt;
     }
@@ -374,7 +374,7 @@ bool UpCaseTable::IsBuiltIn() const noexcept { return built_in_; }
 
 char16_t UpCaseTable::Map(char16_t unit) const noexcept
 {
-  // Both factories build kUpCaseUnitCount entries, one per char16_t value.
+  // Both factories build up_case_unit_count entries, one per char16_t value.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return map_[unit];
 }
@@ -386,11 +386,11 @@ int UpCaseTable::Compare(std::wstring_view first,
   Utf16Cursor right(second);
   while (!left.AtEnd() && !right.AtEnd())
   {
-    const char16_t leftUnit = Map(left.Next());
-    const char16_t rightUnit = Map(right.Next());
-    if (leftUnit != rightUnit)
+    const char16_t left_unit = Map(left.Next());
+    const char16_t right_unit = Map(right.Next());
+    if (left_unit != right_unit)
     {
-      return leftUnit < rightUnit ? -1 : 1;
+      return left_unit < right_unit ? -1 : 1;
     }
   }
   if (left.AtEnd() && right.AtEnd())

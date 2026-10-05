@@ -20,8 +20,8 @@ using NtfsBrowser::Strategy;
 
 TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a resident STANDARD_INFORMATION with an empty body",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEmptyStandardInformation());
@@ -31,16 +31,16 @@ TEMPLATE_TEST_CASE_SIG(
 
   FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      NtfsBrowserTests::kLegacyStandardInformationRecordIdx));
+      NtfsBrowserTests::legacy_standard_information_record_idx));
 
   CHECK_FALSE(record.ParseAttrs());
-  CHECK(record.getAttr(AttrType::STANDARD_INFORMATION).empty());
+  CHECK(record.GetAttr(AttrType::StandardInformation).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a resident VOLUME_INFORMATION with an empty body",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEmptyVolumeInformation());

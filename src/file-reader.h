@@ -44,34 +44,34 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader
   template <Strategy S2 = S>
   std::enable_if_t<
       std::is_same_v<std::integral_constant<Strategy, S2>,
-                     std::integral_constant<Strategy, Strategy::NO_CACHE>>,
+                     std::integral_constant<Strategy, Strategy::NoCache>>,
       std::optional<std::span<const BYTE>>>
       Read(LARGE_INTEGER& addr, DWORD length) const;
 
   template <Strategy S2 = S>
   std::enable_if_t<
       std::is_same_v<std::integral_constant<Strategy, S2>,
-                     std::integral_constant<Strategy, Strategy::FULL_CACHE>>,
+                     std::integral_constant<Strategy, Strategy::FullCache>>,
       std::optional<std::span<const BYTE>>>
       Read(LARGE_INTEGER& addr, DWORD length) const;
 
  private:
   BYTE* NextMemory() const;
 
-  BYTE* GetCachedBlock(LARGE_INTEGER blockAddr) const;
+  BYTE* GetCachedBlock(LARGE_INTEGER block_addr) const;
 
   std::optional<std::span<const BYTE>> ReadUncached(LARGE_INTEGER addr,
                                                     DWORD length) const;
 
   std::unique_ptr<IDiskReader> reader_;
 
-  // Use only for Strategy::NO_CACHE.
+  // Use only for Strategy::NoCache.
   mutable std::vector<BYTE> buffer_;
 
-  // Strategy::FULL_CACHE
+  // Strategy::FullCache
   mutable std::unordered_map<size_t, BYTE*> map_buffer_;
-  mutable std::vector<std::vector<BYTE>> mem_alloc;
-  mutable size_t last_alloc = 0;
+  mutable std::vector<std::vector<BYTE>> mem_alloc_;
+  mutable size_t last_alloc_ = 0;
 
   // Owns stitched-together buffers for crossing reads, kept alive for
   // this reader's lifetime.

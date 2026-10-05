@@ -27,27 +27,27 @@ namespace
 
 // Size of the buffer the MemoryDiskReader tests read from, where they read,
 // and how much.
-constexpr size_t kMemoryContentSize = 256;
-constexpr size_t kMemoryReadOffset = 100;
-constexpr size_t kMemoryReadSize = 32;
+constexpr size_t memory_content_size = 256;
+constexpr size_t memory_read_offset = 100;
+constexpr size_t memory_read_size = 32;
 
 // A buffer too small for the read asked of it.
-constexpr size_t kTinyContentSize = 16;
+constexpr size_t tiny_content_size = 16;
 
 // The file loaded by Open(): its size, and the window read back from it.
-constexpr size_t kFileContentSize = 64;
-constexpr size_t kFileReadSize = 16;
-constexpr LONGLONG kFileReadOffset = 10;
+constexpr size_t file_content_size = 64;
+constexpr size_t file_read_size = 16;
+constexpr LONGLONG file_read_offset = 10;
 
 // The sequential tests: a source of three chunks, the chunk size, and an
 // address the reader must ignore.
-constexpr size_t kSequentialContentSize = 48;
-constexpr size_t kChunkSize = 16;
-constexpr LONGLONG kIgnoredAddress = 12345;
+constexpr size_t sequential_content_size = 48;
+constexpr size_t chunk_size = 16;
+constexpr LONGLONG ignored_address = 12345;
 
 // A source smaller than one chunk, and the size of a generated block.
-constexpr size_t kShortSourceSize = 8;
-constexpr size_t kGeneratedBlockSize = 8;
+constexpr size_t short_source_size = 8;
+constexpr size_t generated_block_size = 8;
 
 // Builds size bytes of distinct, predictable content for read checks.
 std::vector<BYTE> MakeContent(size_t size)
@@ -67,27 +67,27 @@ std::vector<BYTE> MakeContent(size_t size)
 TEST_CASE("MemoryDiskReader reads from a buffer given at construction",
           "[disk-reader][memory]")
 {
-  const std::vector<BYTE> content = MakeContent(kMemoryContentSize);
+  const std::vector<BYTE> content = MakeContent(memory_content_size);
   MemoryDiskReader reader(content);
 
-  std::array<BYTE, kMemoryReadSize> dest{};
-  LARGE_INTEGER addr{.QuadPart = kMemoryReadOffset};
+  std::array<BYTE, memory_read_size> dest{};
+  LARGE_INTEGER addr{.QuadPart = memory_read_offset};
   REQUIRE(reader.ReadInto(addr, dest));
 
   for (size_t i = 0; i < dest.size(); i++)
   {
     // i < dest.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(dest[i] == content.at(kMemoryReadOffset + i));
+    CHECK(dest[i] == content.at(memory_read_offset + i));
   }
 }
 
 TEST_CASE("MemoryDiskReader fails reads past the end of its buffer",
           "[disk-reader][memory]")
 {
-  MemoryDiskReader reader(MakeContent(kTinyContentSize));
+  MemoryDiskReader reader(MakeContent(tiny_content_size));
 
-  std::array<BYTE, kMemoryReadSize> dest{};
+  std::array<BYTE, memory_read_size> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE_FALSE(reader.ReadInto(addr, dest));
 }
@@ -95,7 +95,7 @@ TEST_CASE("MemoryDiskReader fails reads past the end of its buffer",
 TEST_CASE("MemoryDiskReader::Open loads a file's content into memory",
           "[disk-reader][memory]")
 {
-  const std::vector<BYTE> content = MakeContent(kFileContentSize);
+  const std::vector<BYTE> content = MakeContent(file_content_size);
 
   std::random_device random_device;
   const std::filesystem::path path =
@@ -112,26 +112,26 @@ TEST_CASE("MemoryDiskReader::Open loads a file's content into memory",
   REQUIRE(reader.Open(path.wstring()));
   std::filesystem::remove(path);
 
-  std::array<BYTE, kFileReadSize> dest{};
-  LARGE_INTEGER addr{.QuadPart = kFileReadOffset};
+  std::array<BYTE, file_read_size> dest{};
+  LARGE_INTEGER addr{.QuadPart = file_read_offset};
   REQUIRE(reader.ReadInto(addr, dest));
   for (size_t i = 0; i < dest.size(); i++)
   {
     // i < dest.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(dest[i] == content.at(kFileReadOffset + i));
+    CHECK(dest[i] == content.at(file_read_offset + i));
   }
 }
 
 TEST_CASE("SequentialDiskReader ignores addr and reads memory data in order",
           "[disk-reader][sequential]")
 {
-  const std::vector<BYTE> content = MakeContent(kSequentialContentSize);
+  const std::vector<BYTE> content = MakeContent(sequential_content_size);
   SequentialDiskReader reader(MakeMemoryProducer(content));
 
-  std::array<BYTE, kChunkSize> first{};
-  std::array<BYTE, kChunkSize> second{};
-  LARGE_INTEGER addr{.QuadPart = kIgnoredAddress};
+  std::array<BYTE, chunk_size> first{};
+  std::array<BYTE, chunk_size> second{};
+  LARGE_INTEGER addr{.QuadPart = ignored_address};
 
   REQUIRE(reader.ReadInto(addr, first));
   REQUIRE(reader.ReadInto(addr, second));
@@ -146,7 +146,7 @@ TEST_CASE("SequentialDiskReader ignores addr and reads memory data in order",
   {
     // i < second.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(second[i] == content.at(kChunkSize + i));
+    CHECK(second[i] == content.at(chunk_size + i));
   }
 }
 
@@ -154,9 +154,9 @@ TEST_CASE("SequentialDiskReader fails once its memory source is exhausted",
           "[disk-reader][sequential]")
 {
   SequentialDiskReader reader(
-      MakeMemoryProducer(MakeContent(kShortSourceSize)));
+      MakeMemoryProducer(MakeContent(short_source_size)));
 
-  std::array<BYTE, kChunkSize> dest{};
+  std::array<BYTE, chunk_size> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE_FALSE(reader.ReadInto(addr, dest));
 }
@@ -164,7 +164,7 @@ TEST_CASE("SequentialDiskReader fails once its memory source is exhausted",
 TEST_CASE("SequentialDiskReader streams a file source incrementally",
           "[disk-reader][sequential]")
 {
-  const std::vector<BYTE> content = MakeContent(kSequentialContentSize);
+  const std::vector<BYTE> content = MakeContent(sequential_content_size);
 
   std::random_device random_device;
   const std::filesystem::path path =
@@ -177,8 +177,8 @@ TEST_CASE("SequentialDiskReader streams a file source incrementally",
               gsl::narrow<std::streamsize>(content.size()));
   }
 
-  std::array<BYTE, kChunkSize> first{};
-  std::array<BYTE, kChunkSize> second{};
+  std::array<BYTE, chunk_size> first{};
+  std::array<BYTE, chunk_size> second{};
   // Closes reader (and its ifstream) before the file is removed below.
   {
     SequentialDiskReader reader(MakeFileStreamProducer(path));
@@ -200,7 +200,7 @@ TEST_CASE("SequentialDiskReader streams a file source incrementally",
   {
     // i < second.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(second[i] == content.at(kChunkSize + i));
+    CHECK(second[i] == content.at(chunk_size + i));
   }
 }
 
@@ -215,14 +215,14 @@ TEST_CASE("SequentialDiskReader generates data lazily with no backing store",
         calls++;
       }));
 
-  std::array<BYTE, kGeneratedBlockSize> first{};
-  std::array<BYTE, kGeneratedBlockSize> second{};
+  std::array<BYTE, generated_block_size> first{};
+  std::array<BYTE, generated_block_size> second{};
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE(reader.ReadInto(addr, first));
   REQUIRE(reader.ReadInto(addr, second));
 
   CHECK(calls == 2);
-  // first and second are arrays of kGeneratedBlockSize = 8 bytes.
+  // first and second are arrays of generated_block_size = 8 bytes.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(first[0] == 0);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

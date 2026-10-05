@@ -14,11 +14,11 @@
 using namespace NtfsBrowser;
 
 // Prints command-line usage help.
-void usage()
+void Usage()
 {
   printf("Invalid parameter\n");
   printf("Usage: ntfsdir [--log=...] \"path\"\n");
-  printf("  %s\n", std::string(Log::kOptionUsage).c_str());
+  printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("eg. ntfsdir c:\n");
   printf("eg. ntfsdir c:\\windows\n");
   printf("eg. ntfsdir \"c:\\program files\\common files\"\n");
@@ -26,7 +26,7 @@ void usage()
 
 // Strips a leading drive-letter prefix (eg. "c:") off *ppath and returns
 // the letter. Advances *ppath past the prefix; returns '\0' on no match.
-wchar_t getvolume(wchar_t** ppath)
+wchar_t Getvolume(wchar_t** ppath)
 {
   wchar_t* p = *ppath;
 
@@ -99,7 +99,7 @@ wchar_t getvolume(wchar_t** ppath)
 
 // Splits off and returns the first path segment of ppath (up to the next
 // '\' or '"'), and removes that segment from ppath in place.
-std::wstring getpathname(std::wstring& ppath)
+std::wstring Getpathname(std::wstring& ppath)
 {
   std::wstring pathname;
   size_t len = 0;
@@ -141,10 +141,10 @@ struct Total
 
 // TraverseSubEntries callback: prints one directory entry and tallies it
 // into context, a Total*.
-void printfile(const IndexEntryView& ie, void* context)
+void Printfile(const IndexEntryView& ie, void* context)
 {
   Total& total = *static_cast<Total*>(context);
-  if (ie.GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::USER))
+  if (ie.GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::User))
   {
     return;
   }
@@ -192,18 +192,19 @@ void printfile(const IndexEntryView& ie, void* context)
   }
 }
 
+// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
 int wmain(int argc, wchar_t* argv[])
 {
-  Log::Config logConfig;
+  Log::Config log_config;
   wchar_t* path = nullptr;
 
   for (int i = 1; i < argc; i++)
   {
-    if (std::wstring_view(argv[i]).starts_with(Log::kOptionPrefixW))
+    if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w))
     {
-      if (!Log::ParseOption(argv[i], logConfig))
+      if (!Log::ParseOption(argv[i], log_config))
       {
-        usage();
+        Usage();
         return -1;
       }
       continue;
@@ -211,7 +212,7 @@ int wmain(int argc, wchar_t* argv[])
     // Exactly one path argument, and it may come before or after --log=.
     if (path != nullptr)
     {
-      usage();
+      Usage();
       return -1;
     }
     path = argv[i];
@@ -219,23 +220,23 @@ int wmain(int argc, wchar_t* argv[])
 
   if (path == nullptr)
   {
-    usage();
+    Usage();
     return -1;
   }
 
-  if (!Log::Configure(logConfig))
+  if (!Log::Configure(log_config))
   {
-    fprintf(stderr, "Cannot open log file %ls\n", logConfig.file_path.c_str());
+    fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
   }
 
-  const wchar_t volname = getvolume(&path);
+  const wchar_t volname = Getvolume(&path);
   if (volname == L'\0')
   {
-    usage();
+    Usage();
     return -1;
   }
 
-  NtfsVolume<Strategy::NO_CACHE> volume(volname);
+  NtfsVolume<Strategy::NoCache> volume(volname);
   if (!volume.IsVolumeOK())
   {
     printf("Cannot get NTFS BPB from boot sector of volume %lc\n", volname);
@@ -244,9 +245,9 @@ int wmain(int argc, wchar_t* argv[])
 
   FileRecord fr(volume);
 
-  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root)))
   {
     printf("Cannot read root directory of volume %lc\n", volname);
     return -1;
@@ -263,7 +264,7 @@ int wmain(int argc, wchar_t* argv[])
 
   while (true)
   {
-    pathname = getpathname(wpath);
+    pathname = Getpathname(wpath);
     if (pathname.empty())
     {
       break;
@@ -295,7 +296,7 @@ int wmain(int argc, wchar_t* argv[])
   }
 
   Total total;
-  fr.TraverseSubEntries(printfile, &total);
+  fr.TraverseSubEntries(Printfile, &total);
 
   printf("Files: %d, Directories: %d\n", total.files, total.dirs);
 

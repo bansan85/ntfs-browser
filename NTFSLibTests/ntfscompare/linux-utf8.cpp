@@ -12,26 +12,26 @@ namespace NtfsCompare
 namespace
 {
 // UTF-8 lead byte of a 1-byte sequence: bit 7 clear.
-constexpr unsigned kUtf8AsciiBit = 0x80U;
+constexpr unsigned utf8_ascii_bit = 0x80U;
 
 // UTF-8 lead bytes, per sequence length: the bits that identify the length
 // (mask), the pattern they hold (tag), and the bits left for the code point.
-constexpr unsigned kUtf8Lead2Mask = 0xE0U;
-constexpr unsigned kUtf8Lead2Tag = 0xC0U;
-constexpr unsigned kUtf8Lead2Payload = 0x1FU;
-constexpr unsigned kUtf8Lead3Mask = 0xF0U;
-constexpr unsigned kUtf8Lead3Tag = 0xE0U;
-constexpr unsigned kUtf8Lead3Payload = 0x0FU;
-constexpr unsigned kUtf8Lead4Mask = 0xF8U;
-constexpr unsigned kUtf8Lead4Tag = 0xF0U;
-constexpr unsigned kUtf8Lead4Payload = 0x07U;
+constexpr unsigned utf8_lead2_mask = 0xE0U;
+constexpr unsigned utf8_lead2_tag = 0xC0U;
+constexpr unsigned utf8_lead2_payload = 0x1FU;
+constexpr unsigned utf8_lead3_mask = 0xF0U;
+constexpr unsigned utf8_lead3_tag = 0xE0U;
+constexpr unsigned utf8_lead3_payload = 0x0FU;
+constexpr unsigned utf8_lead4_mask = 0xF8U;
+constexpr unsigned utf8_lead4_tag = 0xF0U;
+constexpr unsigned utf8_lead4_payload = 0x07U;
 
 // UTF-8 continuation byte: the bits that identify it (mask), the pattern
 // they hold (tag), the bits left for the code point, and how many there are.
-constexpr unsigned kUtf8ContMask = 0xC0U;
-constexpr unsigned kUtf8ContTag = 0x80U;
-constexpr unsigned kUtf8ContPayload = 0x3FU;
-constexpr unsigned kUtf8ContBits = 6U;
+constexpr unsigned utf8_cont_mask = 0xC0U;
+constexpr unsigned utf8_cont_tag = 0x80U;
+constexpr unsigned utf8_cont_payload = 0x3FU;
+constexpr unsigned utf8_cont_bits = 6U;
 }  // namespace
 
 std::wstring Utf8ToWide(std::string_view utf8)
@@ -45,26 +45,26 @@ std::wstring Utf8ToWide(std::string_view utf8)
     // position < utf8.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto lead = static_cast<unsigned char>(utf8[position]);
-    char32_t codePoint = 0;
+    char32_t code_point = 0;
     size_t length = 1;
 
-    if ((lead & kUtf8AsciiBit) == 0)
+    if ((lead & utf8_ascii_bit) == 0)
     {
-      codePoint = lead;
+      code_point = lead;
     }
-    else if ((lead & kUtf8Lead2Mask) == kUtf8Lead2Tag)
+    else if ((lead & utf8_lead2_mask) == utf8_lead2_tag)
     {
-      codePoint = lead & kUtf8Lead2Payload;
+      code_point = lead & utf8_lead2_payload;
       length = 2;
     }
-    else if ((lead & kUtf8Lead3Mask) == kUtf8Lead3Tag)
+    else if ((lead & utf8_lead3_mask) == utf8_lead3_tag)
     {
-      codePoint = lead & kUtf8Lead3Payload;
+      code_point = lead & utf8_lead3_payload;
       length = 3;
     }
-    else if ((lead & kUtf8Lead4Mask) == kUtf8Lead4Tag)
+    else if ((lead & utf8_lead4_mask) == utf8_lead4_tag)
     {
-      codePoint = lead & kUtf8Lead4Payload;
+      code_point = lead & utf8_lead4_payload;
       length = 4;
     }
     else
@@ -84,12 +84,12 @@ std::wstring Utf8ToWide(std::string_view utf8)
       // position + length was checked against utf8.size() above.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       const auto cont = static_cast<unsigned char>(utf8[position + k]);
-      if ((cont & kUtf8ContMask) != kUtf8ContTag)
+      if ((cont & utf8_cont_mask) != utf8_cont_tag)
       {
         valid = false;
         break;
       }
-      codePoint = (codePoint << kUtf8ContBits) | (cont & kUtf8ContPayload);
+      code_point = (code_point << utf8_cont_bits) | (cont & utf8_cont_payload);
     }
 
     if (!valid)
@@ -98,7 +98,7 @@ std::wstring Utf8ToWide(std::string_view utf8)
       continue;
     }
 
-    out.push_back(gsl::narrow<wchar_t>(codePoint));
+    out.push_back(gsl::narrow<wchar_t>(code_point));
     position += length;
   }
 

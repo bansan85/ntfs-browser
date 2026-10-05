@@ -23,7 +23,7 @@ namespace
 
 // Sector size of the emulated 4Kn disk: every read at offset 0 MUST be a
 // multiple of it.
-constexpr size_t kSector4Kn = 4096;
+constexpr size_t sector4_kn = 4096;
 
 // Wraps an in-memory image and rejects a read at offset 0 whose length the
 // emulated medium would refuse. The boot sector is the only such read.
@@ -53,9 +53,9 @@ class StrictBootReadReader : public NtfsBrowser::IDiskReader
   bool (*reject_)(size_t length);
 };
 
-bool NotMultipleOf4Kn(size_t length) { return length % kSector4Kn != 0; }
+bool NotMultipleOf4Kn(size_t length) { return length % sector4_kn != 0; }
 
-bool AtLeast4Kn(size_t length) { return length >= kSector4Kn; }
+bool AtLeast4Kn(size_t length) { return length >= sector4_kn; }
 
 bool Always(size_t /*length*/) { return true; }
 
@@ -64,8 +64,8 @@ bool Always(size_t /*length*/) { return true; }
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume reads the boot sector in a whole 4Kn sector, so an unbuffered "
     "device accepts it",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &NotMultipleOf4Kn);
@@ -77,8 +77,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume still opens a medium too short to serve a whole 4Kn sector",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &AtLeast4Kn);
@@ -90,8 +90,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a volume whose boot sector cannot be read at all",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &Always);

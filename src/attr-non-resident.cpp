@@ -38,11 +38,11 @@ namespace
 {
 // Max comp_unit_size exponent; keeps 2^comp_unit_size from overflowing
 // before use.
-constexpr WORD kMaxCompUnitSizeShift = 16;
+constexpr WORD max_comp_unit_size_shift = 16;
 
 // Real units are <=64KiB (16 clusters * 4KB); 1MiB caps a forged
 // comp_unit_size from over-allocating.
-constexpr ULONGLONG kMaxCompressionUnitSize = 1024ULL * 1024ULL;
+constexpr ULONGLONG max_compression_unit_size = 1024ULL * 1024ULL;
 
 // Clusters an attribute header spans. last_vcn is inclusive, so an empty
 // attribute stores it as -1 (all ones) with start_vcn 0: that is 0 clusters,
@@ -72,14 +72,14 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
         "Compressed attribute rejected: decompression is not compiled "
         "in.\n");
 #else
-    if (attr_header_nr_.comp_unit_size > kMaxCompUnitSizeShift)
+    if (attr_header_nr_.comp_unit_size > max_comp_unit_size_shift)
     {
       throw std::runtime_error("Compression unit size is out of range.\n");
     }
 
     comp_unit_clusters_ = 1ULL << attr_header_nr_.comp_unit_size;
-    const ULONGLONG unitSize = comp_unit_clusters_ * this->GetClusterSize();
-    if (unitSize == 0 || unitSize > kMaxCompressionUnitSize)
+    const ULONGLONG unit_size = comp_unit_clusters_ * this->GetClusterSize();
+    if (unit_size == 0 || unit_size > max_compression_unit_size)
     {
       throw std::runtime_error("Compression unit size is implausibly large.\n");
     }
@@ -93,7 +93,7 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
 
     LogDebug(
         "Compressed attribute: {} clusters ({} bytes) per compression unit",
-        comp_unit_clusters_, unitSize);
+        comp_unit_clusters_, unit_size);
     LogDebug("Compressed size = {} bytes",
              Attr::CompressedSize(attr_header_nr_));
 #endif
@@ -107,11 +107,11 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
 // FileRecord::ParseAttrs); data_run_offset and the run stream itself are
 // attacker-controlled and otherwise unbounded.
 template <Strategy S>
-bool AttrNonResident<S>::PickData(std::span<const BYTE>& dataRun,
-                                  ULONGLONG& length, LONGLONG& LCNOffset,
+bool AttrNonResident<S>::PickData(std::span<const BYTE>& data_run,
+                                  ULONGLONG& length, LONGLONG& lcn_offset,
                                   bool recover) noexcept
 {
-  if (dataRun.empty())
+  if (data_run.empty())
   {
     return false;
   }
@@ -120,23 +120,23 @@ bool AttrNonResident<S>::PickData(std::span<const BYTE>& dataRun,
   {
     struct
     {
-      BYTE lengthBytes : 4;
-      BYTE offsetBytes : 4;
+      BYTE length_bytes : 4;
+      BYTE offset_bytes : 4;
     };
     BYTE size;
   };
-  const Length size{.size = dataRun.front()};
-  dataRun = dataRun.subspan(1);
+  const Length size{.size = data_run.front()};
+  data_run = data_run.subspan(1);
 
-  if (size.lengthBytes > sizeof(ULONGLONG) ||
-      size.offsetBytes > sizeof(LONGLONG))
+  if (size.length_bytes > sizeof(ULONGLONG) ||
+      size.offset_bytes > sizeof(LONGLONG))
   {
     LogRecoverable(recover, "DataRun decode error 1: 0x{:02X}", size.size);
     return false;
   }
 
-  if (dataRun.size() < static_cast<size_t>(size.lengthBytes) +
-                           static_cast<size_t>(size.offsetBytes))
+  if (data_run.size() < static_cast<size_t>(size.length_bytes) +
+                            static_cast<size_t>(size.offset_bytes))
   {
     LogRecoverable(recover,
                    "DataRun decode error: run exceeds attribute bounds");
@@ -144,29 +144,29 @@ bool AttrNonResident<S>::PickData(std::span<const BYTE>& dataRun,
   }
 
   length = 0;
-  memcpy(&length, dataRun.data(), size.lengthBytes);
+  memcpy(&length, data_run.data(), size.length_bytes);
 
-  dataRun = dataRun.subspan(size.lengthBytes);
-  if (size.offsetBytes != 0)  // Not Sparse File
+  data_run = data_run.subspan(size.length_bytes);
+  if (size.offset_bytes != 0)  // Not Sparse File
   {
     // The size check above leaves at least offsetBytes bytes in dataRun.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    if (static_cast<CHAR>(dataRun[size.offsetBytes - 1U]) < 0)
+    if (static_cast<CHAR>(data_run[size.offset_bytes - 1U]) < 0)
     {
       // Negative the number read.
-      LCNOffset = -1;
+      lcn_offset = -1;
     }
     else
     {
-      LCNOffset = 0;
+      lcn_offset = 0;
     }
-    memcpy(&LCNOffset, dataRun.data(), size.offsetBytes);
+    memcpy(&lcn_offset, data_run.data(), size.offset_bytes);
 
-    dataRun = dataRun.subspan(size.offsetBytes);
+    data_run = data_run.subspan(size.offset_bytes);
   }
   else
   {
-    LCNOffset = 0;
+    lcn_offset = 0;
   }
 
   return true;
@@ -219,13 +219,13 @@ void AttrNonResident<S>::ParseDataRun()
 // vcn, and appends it to the run list. Returns false on an error that recovery
 // tolerates; when strict, the same error throws.
 template <Strategy S>
-bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcnOffset,
+bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
                                        LONGLONG& lcn, ULONGLONG& vcn,
                                        bool recover)
 {
   // lcn is never negative here, so only a positive offset can overflow the
   // sum. It MUST be caught before the addition: signed overflow is UB.
-  if (lcnOffset > 0 && lcn > std::numeric_limits<LONGLONG>::max() - lcnOffset)
+  if (lcn_offset > 0 && lcn > std::numeric_limits<LONGLONG>::max() - lcn_offset)
   {
     LogRecoverable(recover, "DataRun decode error: LCN overflows");
     if (!recover)
@@ -235,7 +235,7 @@ bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcnOffset,
     return false;
   }
 
-  lcn += lcnOffset;
+  lcn += lcn_offset;
   if (lcn < 0)
   {
     LogRecoverable(recover, "DataRun decode error 2");
@@ -247,11 +247,11 @@ bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcnOffset,
   }
 
   LogDebug("Data length = {} clusters, LCN = {}{}", length, lcn,
-           lcnOffset == 0 ? ", Sparse Data" : "");
+           lcn_offset == 0 ? ", Sparse Data" : "");
 
   // Store LCN, Data size (clusters) into list
   Data::RunEntry data_run;
-  data_run.lcn = (lcnOffset == 0) ? std::optional<ULONGLONG>{} : lcn;
+  data_run.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : lcn;
   data_run.clusters = length;
   data_run.start_vcn = vcn;
   vcn += length;
@@ -283,10 +283,10 @@ std::optional<std::span<const BYTE>>
   // start_lcn and offset are attacker-controlled. Their sum times the
   // cluster size is a byte address, and MUST NOT wrap past 2^63: a wrapped
   // address is a valid one, so the read would silently hit other clusters.
-  const ULONGLONG maxLcn =
+  const ULONGLONG max_lcn =
       static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) /
       this->GetClusterSize();
-  if (start_lcn > maxLcn || offset > maxLcn - start_lcn)
+  if (start_lcn > max_lcn || offset > max_lcn - start_lcn)
   {
     LogError("Cannot read cluster with LCN {} + {}: byte address overflows",
              start_lcn, offset);
@@ -332,9 +332,9 @@ ULONGLONG AttrNonResident<S>::TotalClusters() const noexcept
 // a whole unit, except for a trailing partial unit at the attribute's end.
 template <Strategy S>
 ULONGLONG
-    AttrNonResident<S>::UnitClusters(ULONGLONG unitFirstVcn) const noexcept
+    AttrNonResident<S>::UnitClusters(ULONGLONG unit_first_vcn) const noexcept
 {
-  const ULONGLONG remaining = TotalClusters() - unitFirstVcn;
+  const ULONGLONG remaining = TotalClusters() - unit_first_vcn;
   return (remaining < comp_unit_clusters_) ? remaining : comp_unit_clusters_;
 }
 
@@ -344,16 +344,16 @@ ULONGLONG
 // legally have.
 template <Strategy S>
 std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
-    ULONGLONG unitFirstVcn, ULONGLONG unitClusters) const noexcept
+    ULONGLONG unit_first_vcn, ULONGLONG unit_clusters) const noexcept
 {
-  const ULONGLONG unitEnd = unitFirstVcn + unitClusters;
-  ULONGLONG vcn = unitFirstVcn;
-  ULONGLONG realClusters = 0;
-  bool sawHole = false;
+  const ULONGLONG unit_end = unit_first_vcn + unit_clusters;
+  ULONGLONG vcn = unit_first_vcn;
+  ULONGLONG real_clusters = 0;
+  bool saw_hole = false;
 
   for (const Data::RunEntry& data_run : data_run_list_)
   {
-    if (vcn >= unitEnd)
+    if (vcn >= unit_end)
     {
       break;
     }
@@ -364,49 +364,49 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
     }
     if (data_run.start_vcn > vcn)
     {
-      LogWarn("Compression unit at VCN {} is not fully mapped", unitFirstVcn);
+      LogWarn("Compression unit at VCN {} is not fully mapped", unit_first_vcn);
       return {};
     }
 
-    const ULONGLONG inRun = data_run.last_vcn - vcn + 1;
-    const ULONGLONG left = unitEnd - vcn;
-    const ULONGLONG take = (inRun < left) ? inRun : left;
+    const ULONGLONG in_run = data_run.last_vcn - vcn + 1;
+    const ULONGLONG left = unit_end - vcn;
+    const ULONGLONG take = (in_run < left) ? in_run : left;
 
     if (data_run.lcn)
     {
-      if (sawHole)
+      if (saw_hole)
       {
         LogWarn("Compression unit at VCN {} has real clusters after a hole",
-                unitFirstVcn);
+                unit_first_vcn);
         return {};
       }
-      realClusters += take;
+      real_clusters += take;
     }
     else
     {
-      sawHole = true;
+      saw_hole = true;
     }
 
     vcn += take;
   }
 
-  if (vcn != unitEnd)
+  if (vcn != unit_end)
   {
     // The run list ran out before the unit did.
-    LogWarn("Compression unit at VCN {} is not fully mapped", unitFirstVcn);
+    LogWarn("Compression unit at VCN {} is not fully mapped", unit_first_vcn);
     return {};
   }
 
-  return realClusters;
+  return real_clusters;
 }
 
 // Reads the realClusters stored clusters of a compressed unit and LZNT1-decodes
 // them into unit, which holds the whole unit's size. Returns false on a read or
 // decompression failure.
 template <Strategy S>
-bool AttrNonResident<S>::DecompressUnit(ULONGLONG unitIndex,
-                                        ULONGLONG unitFirstVcn,
-                                        ULONGLONG realClusters,
+bool AttrNonResident<S>::DecompressUnit(ULONGLONG unit_index,
+                                        ULONGLONG unit_first_vcn,
+                                        ULONGLONG real_clusters,
                                         std::vector<BYTE>& unit) const
 {
 #ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
@@ -419,50 +419,50 @@ bool AttrNonResident<S>::DecompressUnit(ULONGLONG unitIndex,
   try
   {
     compressed.assign(
-        gsl::narrow<size_t>(realClusters * this->GetClusterSize()), 0);
+        gsl::narrow<size_t>(real_clusters * this->GetClusterSize()), 0);
   }
   catch (const std::exception& e)
   {
-    LogError("Cannot allocate compressed data of unit {}", unitIndex);
+    LogError("Cannot allocate compressed data of unit {}", unit_index);
     LogException(e);
     return false;
   }
 
   const std::optional<ULONGLONG> len =
-      ReadVirtualClustersRaw(unitFirstVcn, realClusters, compressed);
+      ReadVirtualClustersRaw(unit_first_vcn, real_clusters, compressed);
   if (!len || *len != compressed.size())
   {
-    LogError("Cannot read compressed compression unit {}", unitIndex);
+    LogError("Cannot read compressed compression unit {}", unit_index);
     return false;
   }
 
   // requiredSize: expected output length - the trailing unit may compress
   // short of unit.size(), else short output is zero-padded as if valid.
-  const ULONGLONG unitFirstByte = unitFirstVcn * this->GetClusterSize();
-  ULONGLONG requiredSize = 0;
-  if (attr_header_nr_.real_size > unitFirstByte)
+  const ULONGLONG unit_first_byte = unit_first_vcn * this->GetClusterSize();
+  ULONGLONG required_size = 0;
+  if (attr_header_nr_.real_size > unit_first_byte)
   {
-    const ULONGLONG left = attr_header_nr_.real_size - unitFirstByte;
-    requiredSize = std::min<ULONGLONG>(left, unit.size());
+    const ULONGLONG left = attr_header_nr_.real_size - unit_first_byte;
+    required_size = std::min<ULONGLONG>(left, unit.size());
   }
 
   try
   {
     const size_t produced = Lznt1::Decompress(compressed, unit);
-    LogDebug("Decompressed compression unit {} into {} bytes", unitIndex,
+    LogDebug("Decompressed compression unit {} into {} bytes", unit_index,
              static_cast<ULONGLONG>(produced));
-    if (produced < requiredSize)
+    if (produced < required_size)
     {
       LogWarn(
           "Compression unit {} decompressed to {} bytes, expected at "
           "least {}",
-          unitIndex, static_cast<ULONGLONG>(produced), requiredSize);
+          unit_index, static_cast<ULONGLONG>(produced), required_size);
       return false;
     }
   }
   catch (const std::exception& e)
   {
-    LogError("Cannot decompress compression unit {}", unitIndex);
+    LogError("Cannot decompress compression unit {}", unit_index);
     LogException(e);
     return false;
   }
@@ -473,72 +473,72 @@ bool AttrNonResident<S>::DecompressUnit(ULONGLONG unitIndex,
 // Materializes one whole compression unit - decompressing it if needed - and
 // returns it, or nullptr on a read/decompression failure. The returned unit
 // is retained in comp_unit_cache_, so it is never decompressed twice within
-// one ReadData() call, nor - under FULL_CACHE - across calls.
+// one ReadData() call, nor - under FullCache - across calls.
 template <Strategy S>
 const std::vector<BYTE>*
-    AttrNonResident<S>::GetCompressionUnit(ULONGLONG unitIndex) const
+    AttrNonResident<S>::GetCompressionUnit(ULONGLONG unit_index) const
 {
-  const auto cached = comp_unit_cache_.find(unitIndex);
+  const auto cached = comp_unit_cache_.find(unit_index);
   if (cached != comp_unit_cache_.end())
   {
-    LogDebug("Compression unit {} served from cache", unitIndex);
+    LogDebug("Compression unit {} served from cache", unit_index);
     return &cached->second;
   }
 
-  const ULONGLONG unitFirstVcn = unitIndex * comp_unit_clusters_;
-  if (unitFirstVcn >= TotalClusters())
+  const ULONGLONG unit_first_vcn = unit_index * comp_unit_clusters_;
+  if (unit_first_vcn >= TotalClusters())
   {
-    LogWarn("Compression unit {} exceeds DataRun bounds", unitIndex);
+    LogWarn("Compression unit {} exceeds DataRun bounds", unit_index);
     return nullptr;
   }
 
-  const ULONGLONG unitClusters = UnitClusters(unitFirstVcn);
-  const ULONGLONG unitSize = unitClusters * this->GetClusterSize();
+  const ULONGLONG unit_clusters = UnitClusters(unit_first_vcn);
+  const ULONGLONG unit_size = unit_clusters * this->GetClusterSize();
 
-  // Bounded by kMaxCompressionUnitSize (constructor-validated), so this
+  // Bounded by max_compression_unit_size (constructor-validated), so this
   // can't be driven arbitrarily large.
   std::vector<BYTE> unit;
   try
   {
-    unit.assign(gsl::narrow<size_t>(unitSize), 0);
+    unit.assign(gsl::narrow<size_t>(unit_size), 0);
   }
   catch (const std::exception& e)
   {
-    LogError("Cannot allocate compression unit {}", unitIndex);
+    LogError("Cannot allocate compression unit {}", unit_index);
     LogException(e);
     return nullptr;
   }
 
-  const std::optional<ULONGLONG> realClustersOpt =
-      LeadingRealClusters(unitFirstVcn, unitClusters);
-  if (!realClustersOpt)
+  const std::optional<ULONGLONG> real_clusters_opt =
+      LeadingRealClusters(unit_first_vcn, unit_clusters);
+  if (!real_clusters_opt)
   {
     // LeadingRealClusters() already traced which layout it rejected.
     return nullptr;
   }
-  const ULONGLONG realClusters = *realClustersOpt;
+  const ULONGLONG real_clusters = *real_clusters_opt;
 
-  if (realClusters == 0)
+  if (real_clusters == 0)
   {
-    LogDebug("Compression unit {} is sparse", unitIndex);
+    LogDebug("Compression unit {} is sparse", unit_index);
   }
-  else if (realClusters == unitClusters)
+  else if (real_clusters == unit_clusters)
   {
     // Stored unit: raw, uncompressed bytes.
     const std::optional<ULONGLONG> len =
-        ReadVirtualClustersRaw(unitFirstVcn, unitClusters, unit);
-    if (!len || *len != unitSize)
+        ReadVirtualClustersRaw(unit_first_vcn, unit_clusters, unit);
+    if (!len || *len != unit_size)
     {
-      LogError("Cannot read stored compression unit {}", unitIndex);
+      LogError("Cannot read stored compression unit {}", unit_index);
       return nullptr;
     }
   }
-  else if (!DecompressUnit(unitIndex, unitFirstVcn, realClusters, unit))
+  else if (!DecompressUnit(unit_index, unit_first_vcn, real_clusters, unit))
   {
     return nullptr;
   }
 
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     // Evicting here still holds "decompressed at most once per call": unit
     // indices only increase within a call.
@@ -549,11 +549,11 @@ const std::vector<BYTE>*
   // ReadData() into consumer code.
   try
   {
-    return &comp_unit_cache_.emplace(unitIndex, std::move(unit)).first->second;
+    return &comp_unit_cache_.emplace(unit_index, std::move(unit)).first->second;
   }
   catch (const std::exception& e)
   {
-    LogError("Cannot cache compression unit {}", unitIndex);
+    LogError("Cannot cache compression unit {}", unit_index);
     LogException(e);
     return nullptr;
   }
@@ -585,39 +585,39 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
 
   while (clusters != 0)
   {
-    const ULONGLONG unitIndex = vcn / comp_unit_clusters_;
-    const ULONGLONG unitFirstVcn = unitIndex * comp_unit_clusters_;
+    const ULONGLONG unit_index = vcn / comp_unit_clusters_;
+    const ULONGLONG unit_first_vcn = unit_index * comp_unit_clusters_;
 
-    const std::vector<BYTE>* unit = GetCompressionUnit(unitIndex);
+    const std::vector<BYTE>* unit = GetCompressionUnit(unit_index);
     if (unit == nullptr)
     {
       break;
     }
 
-    const ULONGLONG offsetInUnit = vcn - unitFirstVcn;
-    const ULONGLONG unitClusters = unit->size() / this->GetClusterSize();
-    if (offsetInUnit >= unitClusters)
+    const ULONGLONG offset_in_unit = vcn - unit_first_vcn;
+    const ULONGLONG unit_clusters = unit->size() / this->GetClusterSize();
+    if (offset_in_unit >= unit_clusters)
     {
-      LogWarn("Compression unit {} is shorter than expected", unitIndex);
+      LogWarn("Compression unit {} is shorter than expected", unit_index);
       break;
     }
 
-    const ULONGLONG available = unitClusters - offsetInUnit;
-    const ULONGLONG toCopy = (clusters < available) ? clusters : available;
-    const ULONGLONG bytes = toCopy * this->GetClusterSize();
+    const ULONGLONG available = unit_clusters - offset_in_unit;
+    const ULONGLONG to_copy = (clusters < available) ? clusters : available;
+    const ULONGLONG bytes = to_copy * this->GetClusterSize();
 
-    const auto byteCount = gsl::narrow<size_t>(bytes);
+    const auto byte_count = gsl::narrow<size_t>(bytes);
     // offsetInUnit < unitClusters, so the offset lies inside the unit.
-    const auto sourceOffset =
-        gsl::narrow<size_t>(offsetInUnit * this->GetClusterSize());
+    const auto source_offset =
+        gsl::narrow<size_t>(offset_in_unit * this->GetClusterSize());
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    const BYTE* const source = &(*unit)[sourceOffset];
-    memcpy(out.data(), source, byteCount);
+    const BYTE* const source = &(*unit)[source_offset];
+    memcpy(out.data(), source, byte_count);
 
-    out = out.subspan(byteCount);
-    clusters -= toCopy;
-    actural += toCopy;
-    vcn += toCopy;
+    out = out.subspan(byte_count);
+    clusters -= to_copy;
+    actural += to_copy;
+    vcn += to_copy;
   }
 
   actural *= this->GetClusterSize();
@@ -644,22 +644,21 @@ std::optional<ULONGLONG>
 // Reads clustersToRead clusters of dataRun, starting at vcn, into the front of
 // out: off the disk, or zero-filled for a sparse run. Decrypts the copy in out.
 template <Strategy S>
-AttrNonResident<S>::RunRead
-    AttrNonResident<S>::ReadRunClusters(const Data::RunEntry& dataRun,
-                                        ULONGLONG vcn, ULONGLONG clustersToRead,
-                                        std::span<BYTE> out) const
+AttrNonResident<S>::RunRead AttrNonResident<S>::ReadRunClusters(
+    const Data::RunEntry& data_run, ULONGLONG vcn, ULONGLONG clusters_to_read,
+    std::span<BYTE> out) const
 {
-  if (!dataRun.lcn)
+  if (!data_run.lcn)
   {
-    memset(out.data(), 0, clustersToRead * this->GetClusterSize());
-    return RunRead::kDone;
+    memset(out.data(), 0, clusters_to_read * this->GetClusterSize());
+    return RunRead::Done;
   }
 
   std::optional<std::span<const BYTE>> bufferi =
-      ReadClusters(clustersToRead, *dataRun.lcn, vcn - dataRun.start_vcn);
+      ReadClusters(clusters_to_read, *data_run.lcn, vcn - data_run.start_vcn);
   if (!bufferi)
   {
-    return RunRead::kShortRead;
+    return RunRead::ShortRead;
   }
   memcpy(out.data(), bufferi->data(), bufferi->size());
 
@@ -669,10 +668,10 @@ AttrNonResident<S>::RunRead
   if (efs_context_ && !efs_context_->Decrypt(vcn * this->GetClusterSize(),
                                              out.first(bufferi->size())))
   {
-    return RunRead::kFailed;
+    return RunRead::Failed;
   }
 #endif
-  return RunRead::kDone;
+  return RunRead::Done;
 }
 
 // Uncompressed read path: walk the data runs, reading real clusters off disk
@@ -710,24 +709,24 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
       // Clusters from read pointer to the end
       const ULONGLONG vcns = data_run.last_vcn - vcn + 1;
       // Fragmented data, we must go on
-      const ULONGLONG clustersToRead = clusters > vcns ? vcns : clusters;
+      const ULONGLONG clusters_to_read = clusters > vcns ? vcns : clusters;
 
       const RunRead status =
-          ReadRunClusters(data_run, vcn, clustersToRead, out);
-      if (status == RunRead::kShortRead)
+          ReadRunClusters(data_run, vcn, clusters_to_read, out);
+      if (status == RunRead::ShortRead)
       {
         break;
       }
-      if (status == RunRead::kFailed)
+      if (status == RunRead::Failed)
       {
         return {};
       }
 
       out = out.subspan(gsl::narrow<size_t>(
-          static_cast<ULONGLONG>(clustersToRead) * this->GetClusterSize()));
-      clusters -= clustersToRead;
-      actural += clustersToRead;
-      vcn += clustersToRead;
+          static_cast<ULONGLONG>(clusters_to_read) * this->GetClusterSize()));
+      clusters -= clusters_to_read;
+      actural += clusters_to_read;
+      vcn += clusters_to_read;
 
       if (clusters == 0)
       {
@@ -778,22 +777,22 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   // To be simple and efficient, only implemented cluster based accessing
   // So cluster unaligned data address should be processed carefully here
 
-  // NO_CACHE keeps no state across calls (its raw cluster reads are redone
+  // NoCache keeps no state across calls (its raw cluster reads are redone
   // every time too), so any decompressed unit left over from a previous
   // ReadData() is dropped here. Within this call the cache still stands, so
   // the up-to-3 partial/aligned ReadVirtualClusters() calls below share one
-  // decompression per unit they overlap. FULL_CACHE keeps its units for the
+  // decompression per unit they overlap. FullCache keeps its units for the
   // attribute's whole lifetime instead - see comp_unit_cache_'s declaration.
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     comp_unit_cache_.clear();
   }
 
-  ULONGLONG bufLen = buffer.size();
+  ULONGLONG buf_len = buffer.size();
   std::span<BYTE> out = buffer;
 
   ULONGLONG actural = 0;
-  if (bufLen == 0)
+  if (buf_len == 0)
   {
     return actural;
   }
@@ -803,9 +802,9 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   {
     return {};
   }
-  if (offset + bufLen > limit)
+  if (offset + buf_len > limit)
   {
-    bufLen = gsl::narrow<DWORD>(limit - offset);
+    buf_len = gsl::narrow<DWORD>(limit - offset);
   }
 
   // First cluster Number
@@ -827,42 +826,42 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
       return {};
     }
 
-    len = (start_bytes < bufLen) ? start_bytes : bufLen;
+    len = (start_bytes < buf_len) ? start_bytes : buf_len;
     // 0 < start_bytes < GetClusterSize() here, so the index is in the cluster.
-    const size_t sourceOffset = this->GetClusterSize() - start_bytes;
+    const size_t source_offset = this->GetClusterSize() - start_bytes;
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    const BYTE* const source = &unaligned_buf_first[sourceOffset];
+    const BYTE* const source = &unaligned_buf_first[source_offset];
     memcpy(out.data(), source, len);
     out = out.subspan(gsl::narrow<size_t>(len));
-    bufLen -= len;
+    buf_len -= len;
     actural += len;
     start_vcn++;
   }
-  if (bufLen == 0)
+  if (buf_len == 0)
   {
     return actural;
   }
 
-  const ULONGLONG alignedClusters = bufLen / this->GetClusterSize();
-  if (alignedClusters != 0)
+  const ULONGLONG aligned_clusters = buf_len / this->GetClusterSize();
+  if (aligned_clusters != 0)
   {
     // Aligned clusters
-    ULONGLONG const alignedSize = alignedClusters * this->GetClusterSize();
+    ULONGLONG const aligned_size = aligned_clusters * this->GetClusterSize();
 
     std::optional<ULONGLONG> lenc =
-        ReadVirtualClusters(start_vcn, alignedClusters,
-                            out.first(gsl::narrow<size_t>(alignedSize)));
-    if (!lenc || *lenc != alignedSize)
+        ReadVirtualClusters(start_vcn, aligned_clusters,
+                            out.first(gsl::narrow<size_t>(aligned_size)));
+    if (!lenc || *lenc != aligned_size)
     {
       return {};
     }
 
-    start_vcn += alignedClusters;
-    out = out.subspan(gsl::narrow<size_t>(alignedSize));
-    bufLen %= this->GetClusterSize();
+    start_vcn += aligned_clusters;
+    out = out.subspan(gsl::narrow<size_t>(aligned_size));
+    buf_len %= this->GetClusterSize();
     actural += *lenc;
 
-    if (bufLen == 0)
+    if (buf_len == 0)
     {
       return actural;
     }
@@ -877,8 +876,8 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
     return {};
   }
 
-  memcpy(out.data(), unaligned_buf_last.data(), bufLen);
-  actural += bufLen;
+  memcpy(out.data(), unaligned_buf_last.data(), buf_len);
+  actural += buf_len;
 
   return actural;
 }
@@ -892,26 +891,26 @@ std::optional<ULONGLONG>
     AttrNonResident<S>::ReadData(ULONGLONG offset,
                                  const std::span<BYTE>& buffer) const
 {
-  const ULONGLONG realSize = attr_header_nr_.real_size;
+  const ULONGLONG real_size = attr_header_nr_.real_size;
   if (buffer.empty())
   {
     return 0;
   }
-  if (offset > realSize)
+  if (offset > real_size)
   {
     return {};
   }
 
   const ULONGLONG wanted =
-      (std::min<ULONGLONG>)(buffer.size(), realSize - offset);
-  const ULONGLONG initSize = (std::min)(attr_header_nr_.ini_size, realSize);
+      (std::min<ULONGLONG>)(buffer.size(), real_size - offset);
+  const ULONGLONG init_size = (std::min)(attr_header_nr_.ini_size, real_size);
   const ULONGLONG initialized =
-      (offset < initSize) ? (std::min)(wanted, initSize - offset) : 0;
+      (offset < init_size) ? (std::min)(wanted, init_size - offset) : 0;
 
   if (initialized != 0)
   {
     const std::optional<ULONGLONG> len = ReadDataBounded(
-        offset, buffer.first(gsl::narrow<size_t>(initialized)), realSize);
+        offset, buffer.first(gsl::narrow<size_t>(initialized)), real_size);
     if (!len || *len != initialized)
     {
       return {};
@@ -930,18 +929,18 @@ std::optional<ULONGLONG>
                                        const std::span<BYTE>& buffer) const
 {
   const ULONGLONG clusters = TotalClusters();
-  const DWORD clusterSize = this->GetClusterSize();
+  const DWORD cluster_size = this->GetClusterSize();
 
   // clusters/clusterSize are untrusted; guard the multiply against overflow.
-  if (clusterSize != 0 &&
-      clusters > std::numeric_limits<ULONGLONG>::max() / clusterSize)
+  if (cluster_size != 0 &&
+      clusters > std::numeric_limits<ULONGLONG>::max() / cluster_size)
   {
     LogError("Extent size overflows: {} clusters of {} bytes", clusters,
-             clusterSize);
+             cluster_size);
     return {};
   }
 
-  return ReadDataBounded(offset, buffer, clusters * clusterSize);
+  return ReadDataBounded(offset, buffer, clusters * cluster_size);
 }
 
 template <Strategy S>
@@ -986,7 +985,7 @@ void AttrNonResident<S>::AppendRuns(const AttrNonResident& other)
   merged_clusters_ += other.merged_clusters_;
 }
 
-template class AttrNonResident<Strategy::NO_CACHE>;
-template class AttrNonResident<Strategy::FULL_CACHE>;
+template class AttrNonResident<Strategy::NoCache>;
+template class AttrNonResident<Strategy::FullCache>;
 
 }  // namespace NtfsBrowser

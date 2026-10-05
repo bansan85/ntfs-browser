@@ -113,7 +113,7 @@ DWORD AttrBase<S>::GetIndexBlockSize() const noexcept
   return volume_.GetIndexBlockSize();
 }
 
-template class AttrBase<Strategy::NO_CACHE>;
-template class AttrBase<Strategy::FULL_CACHE>;
+template class AttrBase<Strategy::NoCache>;
+template class AttrBase<Strategy::FullCache>;
 
 }  // namespace NtfsBrowser

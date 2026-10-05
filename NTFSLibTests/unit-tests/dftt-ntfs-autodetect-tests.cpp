@@ -32,24 +32,24 @@ namespace
 // partition image holds a valid NTFS filesystem, plus a second, unrelated
 // one (Ext2, UFS2 or UFS1) formatted over it afterwards. Both remain
 // mountable.
-const std::filesystem::path kAutodetectDir =
+const std::filesystem::path autodetect_dir =
     NtfsBrowserTests::DfttDir() / "10-ntfs-autodetect";
 
 // Opens a DFTT autodetect partition image and confirms the library reads its
 // NTFS side correctly: the root directory's own ntfs.txt is found, and its
 // $DATA attribute reads back the size the index entry advertises.
-void CheckReadsPartitionImage(std::wstring_view imageName)
+void CheckReadsPartitionImage(std::wstring_view image_name)
 {
-  const std::filesystem::path imagePath = kAutodetectDir / imageName;
-  NtfsBrowserTests::RequireCorpusImage(imagePath);
+  const std::filesystem::path image_path = autodetect_dir / image_name;
+  NtfsBrowserTests::RequireCorpusImage(image_path);
 
-  NtfsVolume<Strategy::NO_CACHE> const volume(
-      NtfsBrowserTests::OpenBareVolumeImage(imagePath));
+  NtfsVolume<Strategy::NoCache> const volume(
+      NtfsBrowserTests::OpenBareVolumeImage(image_path));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"ntfs.txt");
@@ -58,12 +58,12 @@ void CheckReadsPartitionImage(std::wstring_view imageName)
   CHECK(NtfsBrowserTests::Unwrap(entry).GetFileSize() > 0);
 
   FileRecord file(volume);
-  file.SetAttrMask(Mask::DATA);
+  file.SetAttrMask(Mask::Data);
   REQUIRE(
       file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
-  const AttrBase<Strategy::NO_CACHE>* data = file.FindStream({});
+  const AttrBase<Strategy::NoCache>* data = file.FindStream({});
   REQUIRE(data != nullptr);
   CHECK(data->GetDataSize() == NtfsBrowserTests::Unwrap(entry).GetFileSize());
 }

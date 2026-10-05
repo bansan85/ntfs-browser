@@ -59,18 +59,18 @@ class AttrNonResident : public AttrBase<S>
   ULONGLONG comp_unit_clusters_{0};
 
   // Decompressed compression units, keyed by unit index; lifetime follows
-  // Strategy (FULL_CACHE keeps them, NO_CACHE clears per ReadData()).
+  // Strategy (FullCache keeps them, NoCache clears per ReadData()).
   mutable std::unordered_map<ULONGLONG, std::vector<BYTE>> comp_unit_cache_;
 
   // Set only on an encrypted stream. Shared with the record's other encrypted
   // streams, which hold the same key.
   std::shared_ptr<const Efs::Context> efs_context_;
 
-  [[nodiscard]] static bool PickData(std::span<const BYTE>& dataRun,
-                                     ULONGLONG& length, LONGLONG& LCNOffset,
+  [[nodiscard]] static bool PickData(std::span<const BYTE>& data_run,
+                                     ULONGLONG& length, LONGLONG& lcn_offset,
                                      bool recover) noexcept;
   void ParseDataRun();
-  [[nodiscard]] bool AppendDataRun(ULONGLONG length, LONGLONG lcnOffset,
+  [[nodiscard]] bool AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
                                    LONGLONG& lcn, ULONGLONG& vcn, bool recover);
   [[nodiscard]] std::optional<std::span<const BYTE>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
@@ -88,25 +88,27 @@ class AttrNonResident : public AttrBase<S>
   // Compression support. See attr-non-resident.cpp for the compression-unit
   // layout these implement.
   [[nodiscard]] ULONGLONG TotalClusters() const noexcept;
-  [[nodiscard]] ULONGLONG UnitClusters(ULONGLONG unitFirstVcn) const noexcept;
+  [[nodiscard]] ULONGLONG UnitClusters(ULONGLONG unit_first_vcn) const noexcept;
   [[nodiscard]] std::optional<ULONGLONG>
-      LeadingRealClusters(ULONGLONG unitFirstVcn,
-                          ULONGLONG unitClusters) const noexcept;
+      LeadingRealClusters(ULONGLONG unit_first_vcn,
+                          ULONGLONG unit_clusters) const noexcept;
   [[nodiscard]] const std::vector<BYTE>*
-      GetCompressionUnit(ULONGLONG unitIndex) const;
+      GetCompressionUnit(ULONGLONG unit_index) const;
   // How reading one data run's clusters ended.
   enum class RunRead : BYTE
   {
-    kDone,       // Clusters read (or zero-filled, for a sparse run).
-    kShortRead,  // The disk read failed: the caller keeps what it has.
-    kFailed,     // Decryption failed: the whole read fails.
+    Done,       // Clusters read (or zero-filled, for a sparse run).
+    ShortRead,  // The disk read failed: the caller keeps what it has.
+    Failed,     // Decryption failed: the whole read fails.
   };
 
-  [[nodiscard]] RunRead ReadRunClusters(const Data::RunEntry& dataRun,
-                                        ULONGLONG vcn, ULONGLONG clustersToRead,
+  [[nodiscard]] RunRead ReadRunClusters(const Data::RunEntry& data_run,
+                                        ULONGLONG vcn,
+                                        ULONGLONG clusters_to_read,
                                         std::span<BYTE> out) const;
-  [[nodiscard]] bool DecompressUnit(ULONGLONG unitIndex, ULONGLONG unitFirstVcn,
-                                    ULONGLONG realClusters,
+  [[nodiscard]] bool DecompressUnit(ULONGLONG unit_index,
+                                    ULONGLONG unit_first_vcn,
+                                    ULONGLONG real_clusters,
                                     std::vector<BYTE>& unit) const;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadVirtualClustersCompressed(ULONGLONG vcn, ULONGLONG clusters,

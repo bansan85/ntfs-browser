@@ -43,15 +43,15 @@ AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
   LogTrace("Attribute: Index Allocation");
 
   // Get total number of Index Blocks
-  const ULONGLONG ibTotalSize = this->GetDataSize();
-  if (ibTotalSize % this->GetIndexBlockSize() != 0)
+  const ULONGLONG ib_total_size = this->GetDataSize();
+  if (ib_total_size % this->GetIndexBlockSize() != 0)
   {
     LogWarn("Cannot calulate number of IndexBlocks, total size = {}, unit = {}",
-            ibTotalSize, this->GetIndexBlockSize());
+            ib_total_size, this->GetIndexBlockSize());
     return;
   }
 
-  index_block_count_ = ibTotalSize / this->GetIndexBlockSize();
+  index_block_count_ = ib_total_size / this->GetIndexBlockSize();
 }
 
 template <Strategy S>
@@ -72,7 +72,7 @@ bool AttrIndexAlloc<S>::PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
   for (DWORD i = 0; i < sectors; i++)
   {
     // The last word of the i-th sector holds the USN.
-    const size_t pos = ((i + 1) * (kUpdateSequenceStride / sizeof(WORD))) - 1;
+    const size_t pos = ((i + 1) * (update_sequence_stride / sizeof(WORD))) - 1;
     // USN error
     if (pos >= block.size())
     {
@@ -103,7 +103,7 @@ ULONGLONG AttrIndexAlloc<S>::GetIndexBlockCount() const noexcept
 // ibClass holds the parsed Index Entries
 template <Strategy S>
 bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
-                                        IndexBlock& ibClass)
+                                        IndexBlock& ib_class)
 {
   // On disk, a sub-node VCN is in clusters when an index block spans a whole
   // cluster or more, but in index_block_size units when a cluster is too
@@ -133,7 +133,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
   // Allocate buffer for a single Index Block
   const std::span<BYTE> block =
-      ibClass.AllocIndexBlock(this->GetIndexBlockSize());
+      ib_class.AllocIndexBlock(this->GetIndexBlockSize());
 
   // Read one Index Block
   std::optional<ULONGLONG> len = this->ReadData(byte_offset, block);
@@ -146,7 +146,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   {
     return false;
   }
-  return ParseIndexEntries(block, ibClass);
+  return ParseIndexEntries(block, ib_class);
 }
 
 // Checks the block's magic and update sequence array, then writes each
@@ -154,16 +154,16 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 template <Strategy S>
 bool AttrIndexAlloc<S>::FixupIndexBlock(std::span<BYTE> block)
 {
-  const auto* ibBuf = reinterpret_cast<const Data::IndexBlock*>(block.data());
-  if (ibBuf->magic != kIndexBlockMagic)
+  const auto* ib_buf = reinterpret_cast<const Data::IndexBlock*>(block.data());
+  if (ib_buf->magic != index_block_magic)
   {
     LogWarn("Index Block parse error: Magic mismatch");
     return false;
   }
 
   const auto sectors = gsl::narrow<DWORD>(
-      UpdateSequenceBlockCount(this->GetIndexBlockSize(), ibBuf->size_of_us));
-  if (!IndexBlockUsOffsetInBounds(ibBuf->offset_of_us, sectors,
+      UpdateSequenceBlockCount(this->GetIndexBlockSize(), ib_buf->size_of_us));
+  if (!IndexBlockUsOffsetInBounds(ib_buf->offset_of_us, sectors,
                                   this->GetIndexBlockSize()))
   {
     LogWarn("Index Block parse error: offset_of_us out of bounds");
@@ -172,16 +172,16 @@ bool AttrIndexAlloc<S>::FixupIndexBlock(std::span<BYTE> block)
 
   // Patch US
   // offset_of_us is not checked for alignment, so read the words as bytes.
-  const std::span<const BYTE> usnArea = block.subspan(ibBuf->offset_of_us);
+  const std::span<const BYTE> usn_area = block.subspan(ib_buf->offset_of_us);
   WORD usn = 0;
-  std::memcpy(&usn, usnArea.data(), sizeof(usn));
+  std::memcpy(&usn, usn_area.data(), sizeof(usn));
   std::vector<WORD> usarray(sectors);
   for (DWORD i = 0; i < sectors; i++)
   {
     // i < sectors = usarray.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&usarray[i],
-                usnArea.subspan(sizeof(usn) + (i * sizeof(WORD))).data(),
+                usn_area.subspan(sizeof(usn) + (i * sizeof(WORD))).data(),
                 sizeof(WORD));
   }
   if (!PatchUS(
@@ -199,14 +199,14 @@ namespace
 // Reports a defect in a block's entries. Returns true when the block must be
 // rejected whole: the entries parsed so far are then discarded too.
 bool RejectBlockOnDefect(bool recover, std::string_view defect,
-                         IndexBlock& ibClass)
+                         IndexBlock& ib_class)
 {
   LogRecoverable(recover, "{}", defect);
   if (recover)
   {
     return false;
   }
-  ibClass.clear();
+  ib_class.clear();
   return true;
 }
 }  // namespace
@@ -215,13 +215,13 @@ bool RejectBlockOnDefect(bool recover, std::string_view defect,
 // views into ibClass, which owns the block's buffer.
 template <Strategy S>
 bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
-                                          IndexBlock& ibClass)
+                                          IndexBlock& ib_class)
 {
-  const auto* ibBuf = reinterpret_cast<const Data::IndexBlock*>(block.data());
-  constexpr size_t kEntryOffsetPos = offsetof(Data::IndexBlock, entry_offset);
+  const auto* ib_buf = reinterpret_cast<const Data::IndexBlock*>(block.data());
+  constexpr size_t entry_offset_pos = offsetof(Data::IndexBlock, entry_offset);
 
-  if (block.size() < kEntryOffsetPos ||
-      ibBuf->entry_offset > block.size() - kEntryOffsetPos)
+  if (block.size() < entry_offset_pos ||
+      ib_buf->entry_offset > block.size() - entry_offset_pos)
   {
     LogWarn("Index Block: entry_offset exceeds block bounds");
     return false;
@@ -230,9 +230,9 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
   const bool recover = this->volume_.GetOptions().recover_errors;
   // An entry's position comes from the disk, so it need not be aligned.
   std::span<const BYTE> cur = std::span<const BYTE>(block)
-                                  .subspan(kEntryOffsetPos)
-                                  .subspan(ibBuf->entry_offset);
-  DWORD ieTotal = 0;
+                                  .subspan(entry_offset_pos)
+                                  .subspan(ib_buf->entry_offset);
+  DWORD ie_total = 0;
 
   while (true)
   {
@@ -241,36 +241,36 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
     {
       return !RejectBlockOnDefect(
           recover, "Index Block: index entry header exceeds block bounds",
-          ibClass);
+          ib_class);
     }
     const Data::IndexEntry head = ReadIndexEntryHeader(cur);
     if (head.size == 0 || head.size > remaining)
     {
       return !RejectBlockOnDefect(
-          recover, "Index Block: index entry exceeds block bounds", ibClass);
+          recover, "Index Block: index entry exceeds block bounds", ib_class);
     }
 
-    ieTotal += head.size;
-    if (ieTotal > ibBuf->total_entry_size)
+    ie_total += head.size;
+    if (ie_total > ib_buf->total_entry_size)
     {
       return !RejectBlockOnDefect(recover,
                                   "Index Block: index entry total exceeds the "
                                   "block's declared entry size",
-                                  ibClass);
+                                  ib_class);
     }
 
     const Data::IndexEntry& aligned_index_entry =
-        AlignIndexEntry(ibClass.realigned_, cur, head.size);
+        AlignIndexEntry(ib_class.realigned_, cur, head.size);
     if (const std::optional<std::string_view> defect =
             ValidateIndexEntry(aligned_index_entry);
-        defect && RejectBlockOnDefect(recover, *defect, ibClass))
+        defect && RejectBlockOnDefect(recover, *defect, ib_class))
     {
       return false;
     }
 
-    ibClass.emplace_back(aligned_index_entry);
+    ib_class.emplace_back(aligned_index_entry);
 
-    if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
+    if ((head.flags & Flag::IndexEntry::Last) == Flag::IndexEntry::Last)
     {
       LogTrace("Last Index Entry");
       return true;
@@ -280,7 +280,7 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
   }
 }
 
-template class AttrIndexAlloc<Strategy::FULL_CACHE>;
-template class AttrIndexAlloc<Strategy::NO_CACHE>;
+template class AttrIndexAlloc<Strategy::FullCache>;
+template class AttrIndexAlloc<Strategy::NoCache>;
 
 }  // namespace NtfsBrowser

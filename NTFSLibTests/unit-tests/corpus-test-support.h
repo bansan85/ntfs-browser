@@ -50,7 +50,7 @@ void RequireCorpusImage(const std::filesystem::path& image);
 // Windows-only, since it goes through Win32DiskReader - is never needed to
 // open a corpus image.
 [[nodiscard]] std::unique_ptr<NtfsBrowser::IDiskReader>
-    OpenBareVolumeImage(const std::filesystem::path& imagePath);
+    OpenBareVolumeImage(const std::filesystem::path& image_path);
 
 // Combines a FILETIME's two 32-bit halves into its 100 ns tick count since
 // 1601-01-01.

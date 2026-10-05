@@ -19,8 +19,8 @@ using NtfsBrowser::Strategy;
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes an index block "
     "far larger than any plausible size",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedIndexBlock());
@@ -34,8 +34,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes a file record "
     "far larger than any plausible size",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedFileRecord());
@@ -46,21 +46,22 @@ TEMPLATE_TEST_CASE_SIG(
   // GetFileRecordSize() reflects the BPB value directly; IsVolumeOK() fails
   // regardless, from an unrelated $Volume read failure this size triggers.
   CHECK(volume.GetFileRecordSize() !=
-        NtfsBrowserTests::kOversizedFileRecordSize);
+        NtfsBrowserTests::oversized_file_record_size);
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes a file record "
-    "size that exceeds kMaxFileRecordSize via the positive "
+    "size that exceeds max_file_record_size via the positive "
     "clusters_per_file_record branch",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFileRecordSizeTooBig());
 
   NtfsVolume<S> const volume(std::move(reader));
 
-  CHECK(volume.GetFileRecordSize() == NtfsBrowserTests::kFileRecordSizeTooBig);
+  CHECK(volume.GetFileRecordSize() ==
+        NtfsBrowserTests::file_record_size_too_big);
   CHECK_FALSE(volume.IsVolumeOK());
 }

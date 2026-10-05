@@ -29,7 +29,7 @@ namespace NtfsBrowser::Efs
 {
 
 // The bit of an attribute header's flags that marks its stream as encrypted.
-inline constexpr WORD kAttrFlagEncrypted = 0x4000;
+inline constexpr WORD attr_flag_encrypted = 0x4000;
 
 // Where a record's key provider comes from. It is called on the first
 // decryption only, so a volume creates its default provider lazily.
@@ -43,7 +43,7 @@ class Context final
 {
  public:
   // "entries" is empty when the record has no usable $EFS stream.
-  Context(std::vector<WrappedFek> entries, KeyProviderSource providerSource,
+  Context(std::vector<WrappedFek> entries, KeyProviderSource provider_source,
           CipherBackend backend);
 
   template <Strategy S>
@@ -62,7 +62,7 @@ class Context final
   // Decrypts data in place. "streamOffset" is the byte offset of data[0] in
   // its stream, and both it and the size MUST be sector aligned. Returns
   // false, with a warning naming the cause, if the data cannot be decrypted.
-  [[nodiscard]] bool Decrypt(ULONGLONG streamOffset,
+  [[nodiscard]] bool Decrypt(ULONGLONG stream_offset,
                              std::span<BYTE> data) const;
 
   void Resolve() const;

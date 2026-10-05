@@ -11,8 +11,8 @@
 namespace NtfsBrowserTests
 {
 
-PartitionDiskReader::PartitionDiskReader(ULONGLONG partitionOffset)
-    : partition_offset_(partitionOffset)
+PartitionDiskReader::PartitionDiskReader(ULONGLONG partition_offset)
+    : partition_offset_(partition_offset)
 {
 }
 

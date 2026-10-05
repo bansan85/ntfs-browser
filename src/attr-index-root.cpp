@@ -46,10 +46,10 @@ bool RejectRootOnDefect(bool recover, std::string_view defect,
 
 }  // namespace
 
-template <typename RESIDENT, Strategy S>
-AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
+template <typename Resident, Strategy S>
+AttrIndexRoot<Resident, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
                                           const FileRecord<S>& file_record)
-    : RESIDENT(ahc, file_record),
+    : Resident(ahc, file_record),
       index_root_(reinterpret_cast<const Attr::IndexRoot*>(this->GetData()))
 {
   if (this->GetDataSize() < sizeof(Attr::IndexRoot))
@@ -72,8 +72,8 @@ AttrIndexRoot<RESIDENT, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
   }
 }
 
-template <typename RESIDENT, Strategy S>
-AttrIndexRoot<RESIDENT, S>::~AttrIndexRoot()
+template <typename Resident, Strategy S>
+AttrIndexRoot<Resident, S>::~AttrIndexRoot()
 {
   LogTrace("AttrIndexRoot deleted");
 }
@@ -82,8 +82,8 @@ AttrIndexRoot<RESIDENT, S>::~AttrIndexRoot()
 // attribute's own size. The entries are views into index_data_, a copy
 // independent of the record's buffer. An IndexEntry made from one owns its
 // bytes, independent of this object's lifetime.
-template <typename RESIDENT, Strategy S>
-bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
+template <typename Resident, Strategy S>
+bool AttrIndexRoot<Resident, S>::ParseIndexEntries()
 {
   const bool recover = this->volume_.GetOptions().recover_errors;
   const ULONGLONG data_size = this->GetDataSize();
@@ -94,10 +94,10 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
   const std::span<const BYTE> data(index_data_.data(), data_size);
   const auto* const index_root_copy =
       reinterpret_cast<const Attr::IndexRoot*>(index_data_.data());
-  constexpr size_t kEntryOffsetPos = offsetof(Attr::IndexRoot, entry_offset);
+  constexpr size_t entry_offset_pos = offsetof(Attr::IndexRoot, entry_offset);
 
-  if (data.size() < kEntryOffsetPos ||
-      index_root_copy->entry_offset > data.size() - kEntryOffsetPos)
+  if (data.size() < entry_offset_pos ||
+      index_root_copy->entry_offset > data.size() - entry_offset_pos)
   {
     LogRecoverable(recover,
                    "Index Root: entry_offset exceeds attribute bounds");
@@ -106,8 +106,8 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 
   // An entry's position comes from the disk, so it need not be aligned.
   std::span<const BYTE> cur =
-      data.subspan(kEntryOffsetPos).subspan(index_root_copy->entry_offset);
-  DWORD ieTotal = 0;
+      data.subspan(entry_offset_pos).subspan(index_root_copy->entry_offset);
+  DWORD ie_total = 0;
 
   while (true)
   {
@@ -125,8 +125,8 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
           recover, "Index Root: index entry exceeds attribute bounds", *this);
     }
 
-    ieTotal += head.size;
-    if (ieTotal > index_root_copy->total_entry_size)
+    ie_total += head.size;
+    if (ie_total > index_root_copy->total_entry_size)
     {
       return !RejectRootOnDefect(
           recover,
@@ -146,7 +146,7 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 
     emplace_back(aligned_index_entry);
 
-    if ((head.flags & Flag::IndexEntry::LAST) == Flag::IndexEntry::LAST)
+    if ((head.flags & Flag::IndexEntry::Last) == Flag::IndexEntry::Last)
     {
       LogTrace("Last Index Entry");
       return true;
@@ -157,13 +157,13 @@ bool AttrIndexRoot<RESIDENT, S>::ParseIndexEntries()
 }
 
 // Check if this IndexRoot contains Filename or IndexView
-template <typename RESIDENT, Strategy S>
-bool AttrIndexRoot<RESIDENT, S>::IsFileName() const noexcept
+template <typename Resident, Strategy S>
+bool AttrIndexRoot<Resident, S>::IsFileName() const noexcept
 {
-  return index_root_->attr_type == AttrType::FILE_NAME;
+  return index_root_->attr_type == AttrType::FileName;
 }
 
-template class AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>;
-template class AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>;
+template class AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>;
+template class AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>;
 
 }  // namespace NtfsBrowser

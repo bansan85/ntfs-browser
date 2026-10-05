@@ -2,7 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-static constexpr DWORD kIndexBlockMagic = 'XDNI';
+static constexpr DWORD index_block_magic = 'XDNI';
 
 namespace NtfsBrowser::Data
 {

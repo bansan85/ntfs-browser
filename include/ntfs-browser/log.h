@@ -10,55 +10,55 @@ namespace NtfsBrowser::Log
 {
 
 // Severity of a message, and, for a sink, the least severe message it
-// accepts. Ordered most to least severe. kOff never matches a message, so
+// accepts. Ordered most to least severe. off never matches a message, so
 // as a sink threshold it silences that sink.
 // The names carry a k prefix because <windows.h> defines ERROR and MFC
 // defines TRACE as macros, which an ERROR or TRACE enumerator would hit.
 // One byte wide: it is only ever a small tag.
 enum class Level : std::uint8_t
 {
-  kOff,
-  kError,
-  kWarn,
-  kInfo,
-  kDebug,
-  kTrace
+  Off,
+  Error,
+  Warn,
+  Info,
+  Debug,
+  Trace
 };
 
 // Prefix of the command-line argument ParseOption() accepts.
-inline constexpr std::string_view kOptionPrefix = "--log=";
+inline constexpr std::string_view option_prefix = "--log=";
 
 #ifdef _WIN32
-// kOptionPrefix for an executable whose entry point is wmain(), whose
+// option_prefix for an executable whose entry point is wmain(), whose
 // argv is wide.
-inline constexpr std::wstring_view kOptionPrefixW = L"--log=";
+inline constexpr std::wstring_view option_prefix_w = L"--log=";
 #endif
 
 // One line of help for --log, for an executable's usage text.
-inline constexpr std::string_view kOptionUsage =
+inline constexpr std::string_view option_usage =
     "--log=<console|file>:<off|error|warn|info|debug|trace>[:<path>]";
 
 // Where the file sink writes when --log=file:<level> names no path.
 // Relative, so it lands in the current directory. ASCII, so it means the
 // same file whichever encoding a platform's paths use.
-inline constexpr std::string_view kDefaultFilePath = "ntfs-browser.log";
+inline constexpr std::string_view default_file_path = "ntfs-browser.log";
 
 // Name of the logger the library emits through. It is deliberately not the
 // process-wide default logger, which belongs to the host application.
-inline constexpr std::string_view kLoggerName = "ntfs-browser";
+inline constexpr std::string_view logger_name = "ntfs-browser";
 
 // Runtime logging configuration, one level per target. The console target
-// is split by severity: kError and kWarn go to stderr, kInfo and below go
+// is split by severity: error and warn go to stderr, info and below go
 // to stdout, so a message is printed to exactly one stream.
 struct Config
 {
-  Level console_level = Level::kWarn;
-  Level file_level = Level::kOff;
+  Level console_level = Level::Warn;
+  Level file_level = Level::Off;
   // A path, not a byte string: on Windows it holds the wide characters
   // the filesystem itself uses, so a file outside the active ANSI code
   // page opens. Assigning a narrow string still reads it through that
   // code page, so such a name MUST be assigned as a std::wstring.
-  std::filesystem::path file_path{kDefaultFilePath};
+  std::filesystem::path file_path{default_file_path};
 };
 
 // Applies config, replacing the library logger's sinks and their levels
@@ -74,7 +74,7 @@ NTFS_BROWSER_EXPORT bool Configure(const Config& config) noexcept;
 // the named target is touched, so the option may be repeated once per
 // target. Splits on the first two colons only, so a Windows path keeps its
 // drive letter. Returns false - leaving config untouched - if arg lacks
-// kOptionPrefix, or names an unknown target or level.
+// option_prefix, or names an unknown target or level.
 NTFS_BROWSER_EXPORT bool ParseOption(std::string_view arg,
                                      Config& config) noexcept;
 

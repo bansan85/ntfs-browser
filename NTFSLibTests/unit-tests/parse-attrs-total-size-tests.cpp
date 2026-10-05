@@ -26,8 +26,8 @@ using NtfsBrowser::Enum::MftIdx;
 TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a resident attribute whose total_size is smaller "
     "than its header",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithUndersizedAttribute());
@@ -36,17 +36,17 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kUndersizedAttrRecordIdx));
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::undersized_attr_record_idx));
 
   CHECK_FALSE(record.ParseAttrs());
-  CHECK(record.getAttr(AttrType::REPARSE_POINT).empty());
+  CHECK(record.GetAttr(AttrType::ReparsePoint).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a record whose offset_of_attr exceeds its own file "
     "record size",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrOffsetOutOfBounds());
@@ -55,7 +55,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
 
   CHECK_FALSE(record.ParseAttrs());
 }

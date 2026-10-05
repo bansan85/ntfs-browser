@@ -26,21 +26,21 @@ using NtfsBrowser::VolumeOptions;
 namespace
 {
 
-// Reads dirName's copy of every kKnownFiles entry and checks it against its
+// Reads dirName's copy of every known_files entry and checks it against its
 // ground truth size and MD5 (from ntfs1-gen2.xml). Both RAW's own on-disk
 // bytes and Compressed's LZNT1-decompressed ones are expected to match it
 // directly: Encrypted needs a decryption step first, covered separately in
 // nps-ntfs1-efs-tests.cpp.
-void CheckDirMatchesGroundTruth(const NtfsVolume<Strategy::NO_CACHE>& volume,
-                                std::string_view dirName)
+void CheckDirMatchesGroundTruth(const NtfsVolume<Strategy::NoCache>& volume,
+                                std::string_view dir_name)
 {
-  FileRecord<Strategy::NO_CACHE> dir(volume);
+  FileRecord<Strategy::NoCache> dir(volume);
   NtfsBrowserTests::OpenRootDir(dir);
-  NtfsBrowserTests::OpenSubDir(dir, dirName);
+  NtfsBrowserTests::OpenSubDir(dir, dir_name);
 
-  for (const NtfsBrowserTests::KnownFile& file : NtfsBrowserTests::kKnownFiles)
+  for (const NtfsBrowserTests::KnownFile& file : NtfsBrowserTests::known_files)
   {
-    INFO(dirName << "/" << file.name);
+    INFO(dir_name << "/" << file.name);
     const std::vector<BYTE> data =
         NtfsBrowserTests::ReadFile(volume, dir, file.name);
     CHECK(data.size() == file.size);
@@ -55,10 +55,10 @@ void CheckDirMatchesGroundTruth(const NtfsVolume<Strategy::NO_CACHE>& volume,
 TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
           "[nps][integration]")
 {
-  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
+  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
-  const NtfsVolume<Strategy::NO_CACHE> volume(
-      NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
+  const NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),
+                                             VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   CheckDirMatchesGroundTruth(volume, "RAW");
@@ -69,10 +69,10 @@ TEST_CASE(
     "Compressed files decompress to the RAW ground truth (NPS ntfs1, gen2)",
     "[nps][integration]")
 {
-  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
+  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
-  const NtfsVolume<Strategy::NO_CACHE> volume(
-      NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
+  const NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),
+                                             VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   CheckDirMatchesGroundTruth(volume, "Compressed");

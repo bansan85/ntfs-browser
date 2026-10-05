@@ -30,8 +30,8 @@ namespace
 
 // Bitmap bits one fake cluster holds: what separates one bitmap cluster from
 // the next in a cluster index.
-constexpr ULONGLONG kBitsPerBitmapCluster =
-    static_cast<ULONGLONG>(NtfsBrowserTests::kFakeClusterSize) * 8;
+constexpr ULONGLONG bits_per_bitmap_cluster =
+    static_cast<ULONGLONG>(NtfsBrowserTests::fake_cluster_size) * 8;
 
 template <Strategy S>
 void CheckClusterFreeAnswersPastTheFirstBitmapCluster()
@@ -42,38 +42,38 @@ void CheckClusterFreeAnswersPastTheFirstBitmapCluster()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  const auto& bitmapAttrs = record.getAttr(AttrType::BITMAP);
-  REQUIRE(bitmapAttrs.size() == 1);
+  const auto& bitmap_attrs = record.GetAttr(AttrType::Bitmap);
+  REQUIRE(bitmap_attrs.size() == 1);
   auto& bitmap =
       // The REQUIRE above checks the size of bitmapAttrs.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      static_cast<AttrBitmap<AttrNonResident<S>, S>&>(*bitmapAttrs[0]);
+      static_cast<AttrBitmap<AttrNonResident<S>, S>&>(*bitmap_attrs[0]);
 
   // Second bitmap cluster: all zeros, so every cluster it tracks is free.
-  CHECK(bitmap.IsClusterFree(kBitsPerBitmapCluster));
-  CHECK(bitmap.IsClusterFree(kBitsPerBitmapCluster + 7));
+  CHECK(bitmap.IsClusterFree(bits_per_bitmap_cluster));
+  CHECK(bitmap.IsClusterFree(bits_per_bitmap_cluster + 7));
 
   // Third bitmap cluster: only its first bit is set.
-  CHECK_FALSE(bitmap.IsClusterFree(2 * kBitsPerBitmapCluster));
-  CHECK(bitmap.IsClusterFree(2 * kBitsPerBitmapCluster + 1));
+  CHECK_FALSE(bitmap.IsClusterFree(2 * bits_per_bitmap_cluster));
+  CHECK(bitmap.IsClusterFree(2 * bits_per_bitmap_cluster + 1));
 
   // First bitmap cluster: all ones, read again after leaving it.
   CHECK_FALSE(bitmap.IsClusterFree(0));
-  CHECK_FALSE(bitmap.IsClusterFree(kBitsPerBitmapCluster - 1));
+  CHECK_FALSE(bitmap.IsClusterFree(bits_per_bitmap_cluster - 1));
 
   // Back to the second one.
-  CHECK(bitmap.IsClusterFree(kBitsPerBitmapCluster + 1));
+  CHECK(bitmap.IsClusterFree(bits_per_bitmap_cluster + 1));
 }
 
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
     "A non-resident bitmap answers for clusters past its first cluster",
-    "[attr-bitmap][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[attr-bitmap][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   CheckClusterFreeAnswersPastTheFirstBitmapCluster<S>();
 }

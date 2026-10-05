@@ -179,7 +179,7 @@ const std::array<const _TCHAR*, kAttrNameCount> AttrNames = {
     _T("LOGGED_UTILITY_STREAM")};
 
 // ugly but work !
-void appenddata(CString& lines, const BYTE* data, DWORD datalen)
+void AppendData(CString& lines, const BYTE* data, DWORD datalen)
 {
   // "01 02 03 04 05 06 07 08 - 09 0A 0B 0C 0D 0E 0F   123456789ABCDEF";
 
@@ -237,7 +237,7 @@ void appenddata(CString& lines, const BYTE* data, DWORD datalen)
 }
 
 template <Strategy S>
-void printattr(const AttrBase<S>& attr, void* context, bool* /* bStop*/)
+void PrintAttr(const AttrBase<S>& attr, void* context, bool* /* stop*/)
 {
   CString* dump = static_cast<CString*>(context);
 
@@ -253,7 +253,7 @@ void printattr(const AttrBase<S>& attr, void* context, bool* /* bStop*/)
   }
   line += _T("\r\n");
 
-  appenddata(line, reinterpret_cast<const BYTE*>(&attr.GetAttrHeader()),
+  AppendData(line, reinterpret_cast<const BYTE*>(&attr.GetAttrHeader()),
              attr.GetAttrTotalSize());
 
   *dump += line;
@@ -282,7 +282,7 @@ void CNtfsattrDlg::OnOK()
 
   const _TCHAR volname = m_filename.GetAt(0);
 
-  NtfsVolume<Strategy::FULL_CACHE> volume(volname);
+  NtfsVolume<Strategy::FullCache> volume(volname);
   if (!volume.IsVolumeOK())
   {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
@@ -294,9 +294,9 @@ void CNtfsattrDlg::OnOK()
   FileRecord fr(volume);
   // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root)))
   {
     MessageBox(_T("Cannot read root directory of volume"));
     return;
@@ -365,13 +365,13 @@ void CNtfsattrDlg::OnOK()
   }
 
   // parse all attributes
-  fr.SetAttrMask(Mask::ALL);
+  fr.SetAttrMask(Mask::All);
   if (!fr.ParseAttrs())
   {
     MessageBox(_T("Cannot parse file attributes"));
     return;
   }
 
-  fr.TraverseAttrs(printattr<Strategy::FULL_CACHE>, &m_dump);
+  fr.TraverseAttrs(PrintAttr<Strategy::FullCache>, &m_dump);
   UpdateData(FALSE);
 }

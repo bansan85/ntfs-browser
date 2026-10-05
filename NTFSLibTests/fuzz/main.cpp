@@ -78,11 +78,11 @@ void OnTerminate()
 }
 
 // NtfsBpb::signature sits 3 bytes in, after the boot sector's jump instruction.
-constexpr size_t kBpbSignatureOffset = 3;
+constexpr size_t bpb_signature_offset = 3;
 // The exact bytes NtfsBpb::signature must hold to pass validation.
-constexpr std::string_view kBpbSignature = "NTFS    ";
-// Byte length of kBpbSignature, excluding its terminator.
-constexpr size_t kBpbSignatureLen = 8;
+constexpr std::string_view bpb_signature = "NTFS    ";
+// Byte length of bpb_signature, excluding its terminator.
+constexpr size_t bpb_signature_len = 8;
 
 // Serves an endless RNG stream, patching a valid boot-sector signature
 // into the first read 95% of the time, so most iterations reach real
@@ -91,11 +91,11 @@ SequentialDiskReader::Producer
     MakeRandomProducer(std::mt19937_64::result_type seed)
 {
   std::mt19937_64 rng(seed);
-  const bool injectSignature =
+  const bool inject_signature =
       std::uniform_int_distribution<int>(1, 100)(rng) <= 95;
 
   return MakeGeneratorProducer(
-      [rng, injectSignature, nthCall = 0](std::span<BYTE> dest) mutable
+      [rng, inject_signature, nth_call = 0](std::span<BYTE> dest) mutable
       {
         size_t filled = 0;
         while (filled < dest.size())
@@ -106,19 +106,19 @@ SequentialDiskReader::Producer
           filled += chunk;
         }
 
-        if (nthCall == 0 && injectSignature &&
-            dest.size() >= kBpbSignatureOffset + kBpbSignatureLen)
+        if (nth_call == 0 && inject_signature &&
+            dest.size() >= bpb_signature_offset + bpb_signature_len)
         {
-          std::memcpy(dest.data() + kBpbSignatureOffset, kBpbSignature.data(),
-                      kBpbSignatureLen);
+          std::memcpy(dest.data() + bpb_signature_offset, bpb_signature.data(),
+                      bpb_signature_len);
         }
-        nthCall++;
+        nth_call++;
       });
 }
 
 // The two VolumeOptions combinations every seed is run under: strict (both
 // flags off, the default) and fully recovering (both on).
-constexpr std::array<VolumeOptions, 2> kVolumeOptionModes{
+constexpr std::array<VolumeOptions, 2> volume_option_modes{
     VolumeOptions{},
     VolumeOptions{.include_deleted = true, .recover_errors = true}};
 
@@ -129,9 +129,9 @@ constexpr std::array<VolumeOptions, 2> kVolumeOptionModes{
 // both the strict and recovering code paths are exercised.
 void FuzzOnce(unsigned seed)
 {
-  for (const VolumeOptions& options : kVolumeOptionModes)
+  for (const VolumeOptions& options : volume_option_modes)
   {
-    NtfsVolume<Strategy::NO_CACHE> volume(
+    NtfsVolume<Strategy::NoCache> volume(
         std::make_unique<SequentialDiskReader>(MakeRandomProducer(seed)),
         options);
     if (!volume.IsVolumeOK())
@@ -140,8 +140,8 @@ void FuzzOnce(unsigned seed)
     }
 
     FileRecord fr(volume);
-    fr.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::ROOT)))
+    fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root)))
     {
       // file_record_ is guaranteed empty here, exercising IsDeleted()/
       // IsDirectory()'s guard against it.
@@ -177,9 +177,9 @@ void FuzzOnceCaught(unsigned seed)
 
 // Runs one seed under SEH and reports whether it crashed. Kept free of
 // C++ objects needing unwinding, since MSVC forbids __try alongside that.
-bool RunIteration(unsigned seed, DWORD& crashCode)
+bool RunIteration(unsigned seed, DWORD& crash_code)
 {
-  crashCode = 0;
+  crash_code = 0;
   g_crt_failure = false;
 
   __try
@@ -188,8 +188,8 @@ bool RunIteration(unsigned seed, DWORD& crashCode)
   }
   __except (EXCEPTION_EXECUTE_HANDLER)
   {
-    crashCode = GetExceptionCode();
-    if (crashCode == EXCEPTION_STACK_OVERFLOW)
+    crash_code = GetExceptionCode();
+    if (crash_code == EXCEPTION_STACK_OVERFLOW)
     {
       // Otherwise the consumed guard page never detects a later overflow.
       _resetstkoflw();
@@ -204,6 +204,7 @@ bool RunIteration(unsigned seed, DWORD& crashCode)
 
 // With no args, fuzzes forever until Ctrl+C. With one numeric arg, fuzzes
 // for that many iterations. With "--seed <seed>", replays one iteration.
+// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
 int wmain(int argc, wchar_t* argv[])
 {
   // Unbuffered, so an escaping CRT abort() can't strand output.
@@ -213,63 +214,63 @@ int wmain(int argc, wchar_t* argv[])
   std::set_terminate(OnTerminate);
 
   // Sends debug-heap/assert failures to stderr instead of a blocking dialog.
-  for (const int reportType : {_CRT_WARN, _CRT_ERROR, _CRT_ASSERT})
+  for (const int report_type : {_CRT_WARN, _CRT_ERROR, _CRT_ASSERT})
   {
-    _CrtSetReportMode(reportType, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(reportType, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(report_type, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(report_type, _CRTDBG_FILE_STDERR);
   }
 
   // --log= options are consumed here; args holds everything else, so the
   // positional argument checks below stay as they were.
-  Log::Config logConfig;
+  Log::Config log_config;
   std::vector<wchar_t*> args{argv[0]};
   for (int i = 1; i < argc; i++)
   {
-    if (std::wstring_view(argv[i]).starts_with(Log::kOptionPrefixW))
+    if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w))
     {
-      if (!Log::ParseOption(argv[i], logConfig))
+      if (!Log::ParseOption(argv[i], log_config))
       {
         fprintf(stderr, "usage: %ls [--log=...] [iterations | --seed <seed>]\n",
                 argv[0]);
-        fprintf(stderr, "  %s\n", std::string(Log::kOptionUsage).c_str());
+        fprintf(stderr, "  %s\n", std::string(Log::option_usage).c_str());
         return 1;
       }
       continue;
     }
     args.push_back(argv[i]);
   }
-  if (!Log::Configure(logConfig))
+  if (!Log::Configure(log_config))
   {
-    fprintf(stderr, "Cannot open log file %ls\n", logConfig.file_path.c_str());
+    fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
   }
 
-  const size_t argCount = args.size();
+  const size_t arg_count = args.size();
 
   // argCount == 3 is tested first.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  if (argCount == 3 && std::wcscmp(args[1], L"--seed") == 0)
+  if (arg_count == 3 && std::wcscmp(args[1], L"--seed") == 0)
   {
     const unsigned seed =
         // argCount == 3 was tested above.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         gsl::narrow<unsigned>(std::wcstoul(args[2], nullptr, 0));
-    DWORD crashCode = 0;
+    DWORD crash_code = 0;
     printf("Replaying seed=%u\n", seed);
-    if (!RunIteration(seed, crashCode))
+    if (!RunIteration(seed, crash_code))
     {
-      printf("CRASH (SEH 0x%08lX) seed=%u\n", crashCode, seed);
+      printf("CRASH (SEH 0x%08lX) seed=%u\n", crash_code, seed);
       return 1;
     }
     printf("No crash.\n");
     return 0;
   }
 
-  std::optional<unsigned long long> maxIterations;
-  if (argCount == 2)
+  std::optional<unsigned long long> max_iterations;
+  if (arg_count == 2)
   {
     // argCount == 2 was tested above.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    maxIterations = std::wcstoull(args[1], nullptr, 0);
+    max_iterations = std::wcstoull(args[1], nullptr, 0);
   }
 
   SetConsoleCtrlHandler(OnConsoleEvent, TRUE);
@@ -282,7 +283,7 @@ int wmain(int argc, wchar_t* argv[])
       "Fuzzing NtfsVolume with an endless random stream. Press Ctrl+C to "
       "stop.\n");
 
-  while (!g_stop && (!maxIterations || iterations < *maxIterations))
+  while (!g_stop && (!max_iterations || iterations < *max_iterations))
   {
     const unsigned seed = rd();
     ++iterations;
@@ -290,14 +291,14 @@ int wmain(int argc, wchar_t* argv[])
     // Printed before running, so an escaping crash still shows the seed.
     printf("seed=%u\r", seed);
 
-    DWORD crashCode = 0;
-    if (!RunIteration(seed, crashCode))
+    DWORD crash_code = 0;
+    if (!RunIteration(seed, crash_code))
     {
       ++crashes;
       printf(
           "\nCRASH (SEH 0x%08lX) at iteration %llu, seed=%u -- repro with "
           "\"NtfsFuzzer --seed %u\"\n",
-          crashCode, iterations, seed, seed);
+          crash_code, iterations, seed, seed);
     }
 
     if (iterations % 10000 == 0)

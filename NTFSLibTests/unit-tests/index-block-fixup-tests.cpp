@@ -33,37 +33,38 @@ TEST_CASE(
     "Update Sequence Array past the index block buffer",
     "[attr-index-alloc][regression]")
 {
-  constexpr DWORD kIndexBlockSize = NtfsBrowserTests::kForgedIndexBlockSize;
-  constexpr DWORD kSectors =
-      kIndexBlockSize / NtfsBrowser::kUpdateSequenceStride;
+  constexpr DWORD index_block_size = NtfsBrowserTests::forged_index_block_size;
+  constexpr DWORD sectors =
+      index_block_size / NtfsBrowser::update_sequence_stride;
 
-  CHECK_FALSE(
-      IndexBlockUsOffsetInBounds(NtfsBrowserTests::kForgedIndexBlockOffsetOfUs,
-                                 kSectors, kIndexBlockSize));
+  CHECK_FALSE(IndexBlockUsOffsetInBounds(
+      NtfsBrowserTests::forged_index_block_offset_of_us, sectors,
+      index_block_size));
 
   // Right after the header, with room for the whole array: accepted.
-  constexpr WORD kValidOffset = static_cast<WORD>(sizeof(IndexBlock));
-  CHECK(IndexBlockUsOffsetInBounds(kValidOffset, kSectors, kIndexBlockSize));
+  constexpr WORD valid_offset = static_cast<WORD>(sizeof(IndexBlock));
+  CHECK(IndexBlockUsOffsetInBounds(valid_offset, sectors, index_block_size));
 
   // Inside the header, though still within the buffer: rejected.
   CHECK_FALSE(IndexBlockUsOffsetInBounds(
-      static_cast<WORD>(sizeof(IndexBlock) - 1), kSectors, kIndexBlockSize));
+      static_cast<WORD>(sizeof(IndexBlock) - 1), sectors, index_block_size));
 
   // Exactly fills the buffer: accepted.
-  constexpr WORD kExactFitOffset =
-      static_cast<WORD>(kIndexBlockSize - 2 * (1 + kSectors));
-  CHECK(IndexBlockUsOffsetInBounds(kExactFitOffset, kSectors, kIndexBlockSize));
+  constexpr WORD exact_fit_offset =
+      static_cast<WORD>(index_block_size - 2 * (1 + sectors));
+  CHECK(
+      IndexBlockUsOffsetInBounds(exact_fit_offset, sectors, index_block_size));
 
   // One byte more spills past the buffer: rejected.
-  CHECK_FALSE(IndexBlockUsOffsetInBounds(kExactFitOffset + 1, kSectors,
-                                         kIndexBlockSize));
+  CHECK_FALSE(IndexBlockUsOffsetInBounds(exact_fit_offset + 1, sectors,
+                                         index_block_size));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord::TraverseSubEntries must not crash when an index block's "
     "offset_of_us is out of bounds",
-    "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithForgedIndexBlock());
@@ -72,48 +73,49 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kIndexAllocDirIdx));
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::index_alloc_dir_idx));
   REQUIRE(record.ParseAttrs());
 
-  int callbackCount = 0;
+  int callback_count = 0;
   record.TraverseSubEntries([](const IndexEntryView&, void* context)
-                            { ++*static_cast<int*>(context); }, &callbackCount);
+                            { ++*static_cast<int*>(context); },
+                            &callback_count);
 
   // Entries live behind the rejected block: the callback must never run.
-  CHECK(callbackCount == 0);
+  CHECK(callback_count == 0);
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord::TraverseSubEntries must reject an index block whose first "
     "512-byte block does not end with the update sequence number",
-    "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
-  constexpr size_t kUsBlockSize = 512;
-  constexpr WORD kTornWord = 0xDEAD;
+  constexpr size_t us_block_size = 512;
+  constexpr WORD torn_word = 0xDEAD;
 
   std::vector<BYTE> image =
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks();
 
   // The first cluster-aligned index block is VCN 0, the one $INDEX_ROOT
   // points at.
-  size_t blockOffset = 0;
-  for (; blockOffset + sizeof(DWORD) <= image.size();
-       blockOffset += NtfsBrowserTests::kFakeClusterSize)
+  size_t block_offset = 0;
+  for (; block_offset + sizeof(DWORD) <= image.size();
+       block_offset += NtfsBrowserTests::fake_cluster_size)
   {
     DWORD magic = 0;
-    std::memcpy(&magic, &image.at(blockOffset), sizeof(magic));
-    if (magic == kIndexBlockMagic)
+    std::memcpy(&magic, &image.at(block_offset), sizeof(magic));
+    if (magic == index_block_magic)
     {
       break;
     }
   }
-  REQUIRE(blockOffset + NtfsBrowserTests::kFakeClusterSize <= image.size());
+  REQUIRE(block_offset + NtfsBrowserTests::fake_cluster_size <= image.size());
 
   // A torn write: the end of the block's first 512 bytes was never given
   // the sequence number.
-  std::memcpy(&image.at(blockOffset + kUsBlockSize - sizeof(WORD)), &kTornWord,
-              sizeof(kTornWord));
+  std::memcpy(&image.at(block_offset + us_block_size - sizeof(WORD)),
+              &torn_word, sizeof(torn_word));
 
   auto reader =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
@@ -122,12 +124,13 @@ TEMPLATE_TEST_CASE_SIG(
 
   FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::ROOT)));
+      static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  int callbackCount = 0;
+  int callback_count = 0;
   record.TraverseSubEntries([](const IndexEntryView&, void* context)
-                            { ++*static_cast<int*>(context); }, &callbackCount);
+                            { ++*static_cast<int*>(context); },
+                            &callback_count);
 
-  CHECK(callbackCount == 0);
+  CHECK(callback_count == 0);
 }

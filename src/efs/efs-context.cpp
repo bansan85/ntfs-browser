@@ -15,9 +15,9 @@ namespace NtfsBrowser::Efs
 {
 
 Context::Context(std::vector<WrappedFek> entries,
-                 KeyProviderSource providerSource, CipherBackend backend)
+                 KeyProviderSource provider_source, CipherBackend backend)
     : entries_(std::move(entries)),
-      provider_source_(std::move(providerSource)),
+      provider_source_(std::move(provider_source)),
       backend_(backend)
 {
 }
@@ -28,7 +28,7 @@ Context::Context(std::vector<WrappedFek> entries,
 std::unique_ptr<SectorDecryptor> Context::MakeDecryptor(const Fek& fek) const
 {
 #if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-  if (backend_ == CipherBackend::kBCrypt)
+  if (backend_ == CipherBackend::BCrypt)
   {
     if (std::unique_ptr<SectorDecryptor> decryptor = MakeBCryptDecryptor(fek))
     {
@@ -96,7 +96,7 @@ void Context::Resolve() const
   }
 }
 
-bool Context::Decrypt(ULONGLONG streamOffset, std::span<BYTE> data) const
+bool Context::Decrypt(ULONGLONG stream_offset, std::span<BYTE> data) const
 {
   if (!resolved_)
   {
@@ -109,16 +109,16 @@ bool Context::Decrypt(ULONGLONG streamOffset, std::span<BYTE> data) const
     return false;
   }
 
-  if (data.size() % kSectorSize != 0 || streamOffset % kSectorSize != 0)
+  if (data.size() % sector_size != 0 || stream_offset % sector_size != 0)
   {
     LogWarn("Encrypted read is not sector aligned.");
     return false;
   }
 
-  for (size_t done = 0; done < data.size(); done += kSectorSize)
+  for (size_t done = 0; done < data.size(); done += sector_size)
   {
-    if (!decryptor_->DecryptSector(streamOffset + done,
-                                   data.subspan(done, kSectorSize)))
+    if (!decryptor_->DecryptSector(stream_offset + done,
+                                   data.subspan(done, sector_size)))
     {
       return false;
     }

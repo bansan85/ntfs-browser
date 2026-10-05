@@ -20,8 +20,8 @@ using NtfsBrowser::Strategy;
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord::IsDeleted()/IsDirectory() must not dereference an empty "
     "file_record_ when called before any successful ParseFileRecord()",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());

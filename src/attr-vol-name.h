@@ -11,8 +11,8 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-template <typename RESIDENT, Strategy S>
-class AttrVolName : public RESIDENT
+template <typename Resident, Strategy S>
+class AttrVolName : public Resident
 {
  public:
   AttrVolName(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);

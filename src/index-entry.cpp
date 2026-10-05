@@ -75,8 +75,8 @@ std::optional<std::string_view>
 
   // GetSubNodeVCN() reads 8 bytes at size - 8, unchecked: a SUBNODE entry
   // must have room for that field regardless of whether it also has a name.
-  if ((index_entry.flags & Flag::IndexEntry::SUBNODE) ==
-          Flag::IndexEntry::SUBNODE &&
+  if ((index_entry.flags & Flag::IndexEntry::SubNode) ==
+          Flag::IndexEntry::SubNode &&
       index_entry.size < offsetof(Data::IndexEntry, stream) + sizeof(ULONGLONG))
   {
     return "Index Entry is a sub-node pointer too small for its VCN field";
@@ -168,8 +168,8 @@ bool IndexEntryView::IsSubNodePtr() const noexcept
   // A recovering parse still keeps a too-small SUBNODE entry (matching the
   // matrix's "kept nameless" disposition), but must never let it be treated
   // as a usable sub-node pointer: GetSubNodeVCN() reads unchecked at size-8.
-  return (index_entry_->flags & Flag::IndexEntry::SUBNODE) ==
-             Flag::IndexEntry::SUBNODE &&
+  return (index_entry_->flags & Flag::IndexEntry::SubNode) ==
+             Flag::IndexEntry::SubNode &&
          index_entry_->size >=
              offsetof(Data::IndexEntry, stream) + sizeof(ULONGLONG);
 }

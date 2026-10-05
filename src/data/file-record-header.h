@@ -18,18 +18,18 @@ namespace Flag
 enum class FileRecord : std::uint8_t;
 }  // namespace Flag
 
-constexpr uint32_t kFileRecordMagic('ELIF');
+constexpr uint32_t file_record_magic('ELIF');
 
 // Size of Data's named header fields, before the first attribute begins.
-constexpr size_t kMinFileRecordHeaderSize = 48;
+constexpr size_t min_file_record_header_size = 48;
 
 // Largest file record size a real NTFS volume can have (a 4Kn volume's).
-constexpr size_t kMaxFileRecordSize = 4096;
+constexpr size_t max_file_record_size = 4096;
 
 // NTFS protects every 512-byte block of a record or index block with one
 // update sequence word, whatever the volume's sector size (a 4Kn volume
 // included).
-constexpr size_t kUpdateSequenceStride = 512;
+constexpr size_t update_sequence_stride = 512;
 
 // Number of 512-byte blocks a buffer's update sequence array covers.
 // size_of_us counts the sequence number itself. It bounds the result, so a
@@ -39,7 +39,7 @@ constexpr size_t UpdateSequenceBlockCount(size_t buffer_size,
                                           WORD size_of_us) noexcept
 {
   const size_t declared = size_of_us > 0 ? size_of_us - 1U : 0U;
-  const size_t blocks = buffer_size / kUpdateSequenceStride;
+  const size_t blocks = buffer_size / update_sequence_stride;
   return declared < blocks ? declared : blocks;
 }
 
@@ -69,13 +69,13 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
       DWORD record_no;         // Number of this MFT Record
     };
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    BYTE raw[kMaxFileRecordSize];
+    BYTE raw[max_file_record_size];
   };
 
   WORD us_number{0};
   std::vector<WORD> us_array;
   // Actual buffer size this instance was constructed with.
-  size_t buffer_size_;
+  size_t buffer_size;
 
   explicit FileRecordHeader(std::span<const BYTE> buffer);
   FileRecordHeader(const FileRecordHeader&) = delete;
@@ -98,9 +98,9 @@ struct FileRecordHeaderImpl
 
 template <>
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::NO_CACHE> : public FileRecordHeader
+    FileRecordHeaderImpl<Strategy::NoCache> : public FileRecordHeader
 {
-  std::span<const BYTE> data_;
+  std::span<const BYTE> data;
 
   explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
   FileRecordHeaderImpl(const FileRecordHeaderImpl&) = delete;
@@ -114,9 +114,9 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
 
 template <>
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::FULL_CACHE> : public FileRecordHeader
+    FileRecordHeaderImpl<Strategy::FullCache> : public FileRecordHeader
 {
-  FileRecordHeader::Data data_{};
+  FileRecordHeader::Data data{};
 
   explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
   FileRecordHeaderImpl(const FileRecordHeaderImpl&) = delete;

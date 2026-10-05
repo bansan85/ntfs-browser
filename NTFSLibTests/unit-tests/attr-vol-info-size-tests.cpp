@@ -21,8 +21,8 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must accept a real-size (12-byte) VOLUME_INFORMATION "
     "attribute, not just whatever sizeof(Attr::VolumeInformation) currently "
     "computes to",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMinimalVolumeInformation());

@@ -25,17 +25,17 @@ class IndexEntryView;
 // User defined Callback routine to handle Directory traversing
 // Will be called by FileRecord::TraverseSubEntries for each sub entry. The
 // view is only valid during the call: build an IndexEntry from it to keep it.
-using SUBENTRY_CALLBACK =
+using SubentryCallback =
     std::function<void(const IndexEntryView& index_entry, void* context)>;
 
 // User defined Callback routine to handle FileRecord parsed attributes
 // Will be called by FileRecord::TraverseAttrs() for each attribute
 // attrClass is the according attribute's wrapping class, CAttr_xxx
-// Set bStop to true if don't want to continue
-// Set bStop to false to continue processing
+// Set stop to true if don't want to continue
+// Set stop to false to continue processing
 template <Strategy S>
-using ATTRS_CALLBACK =
-    std::function<void(const AttrBase<S>& attr, void* context, bool* bStop)>;
+using AttrsCallback =
+    std::function<void(const AttrBase<S>& attr, void* context, bool* stop)>;
 
 template <Strategy S>
 class NTFS_BROWSER_EXPORT FileRecord
@@ -52,7 +52,7 @@ class NTFS_BROWSER_EXPORT FileRecord
   virtual ~FileRecord();
   friend class AttrBase<S>;
   friend class NtfsVolume<S>;
-  template <class TYPE_RESIDENT, Strategy>
+  template <class Resident, Strategy>
   friend class AttrList;
 
  private:
@@ -62,7 +62,7 @@ class NTFS_BROWSER_EXPORT FileRecord
 
  public:
   [[nodiscard]] const NtfsVolume<S>& GetVolume() const noexcept;
-  [[nodiscard]] bool ParseFileRecord(ULONGLONG fileRef);
+  [[nodiscard]] bool ParseFileRecord(ULONGLONG file_ref);
   [[nodiscard]] bool ParseAttrs();
   [[nodiscard]] std::optional<ULONGLONG> GetFileReference() const noexcept;
   // Times this record was reused; 0 when no record is parsed.
@@ -74,16 +74,16 @@ class NTFS_BROWSER_EXPORT FileRecord
   // True if the parsed record is an extension record: its base file reference
   // is not 0, sequence number included. False when no record is parsed.
   [[nodiscard]] bool IsExtensionRecord() const noexcept;
-  [[nodiscard]] bool InstallAttrRawCB(AttrType attrType,
+  [[nodiscard]] bool InstallAttrRawCB(AttrType attr_type,
                                       AttrRawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;
 
   void SetAttrMask(Mask mask) noexcept;
-  void TraverseAttrs(const ATTRS_CALLBACK<S>& attrCallBack, void* context);
+  void TraverseAttrs(const AttrsCallback<S>& attr_call_back, void* context);
   [[nodiscard]] const std::vector<std::unique_ptr<AttrBase<S>>>&
-      getAttr(AttrType attrType) const noexcept;
+      GetAttr(AttrType attr_type) const noexcept;
   [[nodiscard]] std::vector<std::unique_ptr<AttrBase<S>>>&
-      getAttr(AttrType attrType) noexcept;
+      GetAttr(AttrType attr_type) noexcept;
 
   [[nodiscard]] std::wstring_view GetFileName() const;
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;
@@ -93,8 +93,8 @@ class NTFS_BROWSER_EXPORT FileRecord
   // changeTm is the last MFT (metadata) change time, distinct from writeTm's
   // content modification time: it also moves on a rename or attribute change
   // that leaves the file's content untouched.
-  void GetFileTime(FILETIME* writeTm, FILETIME* createTm, FILETIME* accessTm,
-                   FILETIME* changeTm = nullptr) const noexcept;
+  void GetFileTime(FILETIME* write_tm, FILETIME* create_tm, FILETIME* access_tm,
+                   FILETIME* change_tm = nullptr) const noexcept;
 
   // With the volume's recover_errors on, also scans every $INDEX_ALLOCATION
   // block the B+ tree walk itself doesn't reach - recovery for a directory
@@ -105,11 +105,11 @@ class NTFS_BROWSER_EXPORT FileRecord
   // directory also matches the sequence it had before it was freed), and,
   // with include_deleted off, only if the
   // record it names is still in use under a matching sequence number.
-  void TraverseSubEntries(const SUBENTRY_CALLBACK& seCallBack,
+  void TraverseSubEntries(const SubentryCallback& se_call_back,
                           void* context) const;
 
   [[nodiscard]] std::optional<IndexEntry>
-      FindSubEntry(std::wstring_view fileName) const;
+      FindSubEntry(std::wstring_view file_name) const;
   [[nodiscard]] const AttrBase<S>* FindStream(std::wstring_view name) const;
 
   [[nodiscard]] bool IsDeleted() const noexcept;

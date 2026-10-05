@@ -27,7 +27,7 @@ class LoopingDiskReader : public NtfsBrowser::IDiskReader
 
   // failingRead is the 0-based index of the one ReadInto() call that fails.
   explicit LoopingDiskReader(std::span<const BYTE> data,
-                             std::optional<size_t> failingRead = {});
+                             std::optional<size_t> failing_read = {});
 
   bool Open(std::wstring_view path) override;
 

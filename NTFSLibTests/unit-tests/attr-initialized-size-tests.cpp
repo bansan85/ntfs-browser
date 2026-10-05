@@ -34,7 +34,7 @@ namespace
 {
 
 // Fills the read buffer so a byte ReadData() left untouched shows up.
-constexpr BYTE kSentinelByte = 0xCC;
+constexpr BYTE sentinel_byte = 0xCC;
 
 // What a read of [offset, offset + length) must return: the residue pattern
 // below the initialized size, zeros between it and the real size, and nothing
@@ -42,16 +42,17 @@ constexpr BYTE kSentinelByte = 0xCC;
 std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length)
 {
   const std::vector<BYTE> residue = NtfsBrowserTests::CompressionFixturePattern(
-      NtfsBrowserTests::kUninitializedTailRealSize);
+      NtfsBrowserTests::uninitialized_tail_real_size);
 
   std::vector<BYTE> expected;
-  for (ULONGLONG at = offset; at < offset + length &&
-                              at < NtfsBrowserTests::kUninitializedTailRealSize;
+  for (ULONGLONG at = offset;
+       at < offset + length &&
+       at < NtfsBrowserTests::uninitialized_tail_real_size;
        at++)
   {
     expected.push_back(
-        at < NtfsBrowserTests::kUninitializedTailIniSize
-            // at < kUninitializedTailRealSize = residue.size() by the loop condition.
+        at < NtfsBrowserTests::uninitialized_tail_ini_size
+            // at < uninitialized_tail_real_size = residue.size() by the loop condition.
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
             ? residue[gsl::narrow<size_t>(at)]
             : static_cast<BYTE>(0));
@@ -68,11 +69,11 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  const auto& dataAttrs = record.getAttr(AttrType::DATA);
-  REQUIRE(dataAttrs.size() == 1);
+  const auto& data_attrs = record.GetAttr(AttrType::Data);
+  REQUIRE(data_attrs.size() == 1);
 
   struct Range
   {
@@ -92,11 +93,11 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
   for (const Range& range : ranges)
   {
     INFO("offset " << range.offset << ", length " << range.length);
-    std::vector<BYTE> buffer(range.length, kSentinelByte);
+    std::vector<BYTE> buffer(range.length, sentinel_byte);
     const std::optional<ULONGLONG> read =
         // The REQUIRE above checks that there is one DATA attribute.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        dataAttrs[0]->ReadData(range.offset, buffer);
+        data_attrs[0]->ReadData(range.offset, buffer);
     REQUIRE(read.has_value());
 
     const std::vector<BYTE> expected =
@@ -112,8 +113,8 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
 
 TEMPLATE_TEST_CASE_SIG(
     "A non-resident stream reads as zeros beyond its initialized size",
-    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   CheckReadsBeyondTheInitializedSizeAreZero<S>();
 }

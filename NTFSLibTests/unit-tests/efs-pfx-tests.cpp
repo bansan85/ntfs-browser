@@ -25,7 +25,7 @@
   #include "memory-disk-reader.h"
   #include "test-log-sink.h"
 
-namespace fs = std::filesystem;
+namespace Fs = std::filesystem;
 
 using NtfsBrowser::Efs::MakePfxKeyProvider;
 using NtfsBrowserTests::Algorithm;
@@ -45,26 +45,26 @@ struct TestPfx
 
 // One key in CNG storage, one in CryptoAPI storage, which is what a real EFS
 // certificate uses. Both are unwrapped with different calls.
-constexpr TestPfx kCng{"efs-test-cng",
-                       "02E4E09AA6DFDC115B5EDF1435D7C39D04733175"};
-constexpr TestPfx kCapi{"efs-test-capi",
-                        "74463DBBC1B1333314670FB8665E8398B203207E"};
+constexpr TestPfx cng_value{"efs-test-cng",
+                            "02E4E09AA6DFDC115B5EDF1435D7C39D04733175"};
+constexpr TestPfx capi_value{"efs-test-capi",
+                             "74463DBBC1B1333314670FB8665E8398B203207E"};
 
 // The password every test PFX is protected with.
-constexpr std::wstring_view kPassword = L"efs-test";
+constexpr std::wstring_view password_value = L"efs-test";
 
 // Radix of the hex digits in a thumbprint string.
-constexpr int kHexRadix = 16;
+constexpr int hex_radix = 16;
 
 // Size of the AES-256 key the fixtures wrapped.
-constexpr size_t kFekKeySize = 32;
+constexpr size_t fek_key_size = 32;
 
-fs::path DataFile(const std::string& name)
+Fs::path DataFile(const std::string& name)
 {
-  return fs::path(NTFS_EFS_TEST_DATA_DIR) / name;
+  return Fs::path(NTFS_EFS_TEST_DATA_DIR) / name;
 }
 
-std::vector<BYTE> ReadWholeFile(const fs::path& path)
+std::vector<BYTE> ReadWholeFile(const Fs::path& path)
 {
   std::ifstream file(path, std::ios::binary);
   REQUIRE(file.good());
@@ -79,7 +79,7 @@ std::vector<BYTE> Thumbprint(const TestPfx& pfx)
   for (size_t i = 0; i < hex.size(); i += 2)
   {
     bytes.push_back(
-        gsl::narrow<BYTE>(std::stoi(hex.substr(i, 2), nullptr, kHexRadix)));
+        gsl::narrow<BYTE>(std::stoi(hex.substr(i, 2), nullptr, hex_radix)));
   }
   return bytes;
 }
@@ -92,14 +92,14 @@ std::vector<BYTE> WrappedFek(const TestPfx& pfx)
 // The FEK blob the fixtures wrapped: an AES-256 header, then 32 bytes.
 std::vector<BYTE> ExpectedFek()
 {
-  std::vector<BYTE> key(kFekKeySize);
+  std::vector<BYTE> key(fek_key_size);
   for (size_t i = 0; i < key.size(); ++i)
   {
     // i < key.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     key[i] = gsl::narrow<BYTE>((i + 1) * 3);
   }
-  return NtfsBrowserTests::MakeFekBlob(Algorithm::kAes256, key);
+  return NtfsBrowserTests::MakeFekBlob(Algorithm::Aes256, key);
 }
 
 }  // namespace
@@ -107,11 +107,12 @@ std::vector<BYTE> ExpectedFek()
 TEST_CASE("A PFX key provider unwraps a FEK, whichever way the key is stored",
           "[efs][pfx]")
 {
-  for (const TestPfx& pfx : {kCng, kCapi})
+  for (const TestPfx& pfx : {cng_value, capi_value})
   {
     INFO("certificate " << pfx.name);
     const std::shared_ptr<NtfsBrowser::Efs::IEfsKeyProvider> provider =
-        MakePfxKeyProvider(DataFile(std::string(pfx.name) + ".pfx"), kPassword);
+        MakePfxKeyProvider(DataFile(std::string(pfx.name) + ".pfx"),
+                           password_value);
     REQUIRE(provider != nullptr);
 
     const std::vector<BYTE> wrapped = WrappedFek(pfx);
@@ -127,11 +128,12 @@ TEST_CASE("A PFX key provider only knows the certificates of its own file",
           "[efs][pfx]")
 {
   const auto provider =
-      MakePfxKeyProvider(DataFile("efs-test-cng.pfx"), kPassword);
+      MakePfxKeyProvider(DataFile("efs-test-cng.pfx"), password_value);
   REQUIRE(provider != nullptr);
 
   CHECK_FALSE(
-      provider->UnwrapFek(Thumbprint(kCapi), WrappedFek(kCapi)).has_value());
+      provider->UnwrapFek(Thumbprint(capi_value), WrappedFek(capi_value))
+          .has_value());
 }
 
 TEST_CASE("A PFX that cannot be opened gives no provider", "[efs][pfx]")
@@ -142,8 +144,9 @@ TEST_CASE("A PFX that cannot be opened gives no provider", "[efs][pfx]")
   CHECK_THAT(NtfsBrowserTests::TakeCapturedLog(),
              Catch::Matchers::ContainsSubstring("Cannot import the PFX"));
 
-  CHECK(MakePfxKeyProvider(DataFile("garbage.pfx"), kPassword) == nullptr);
-  CHECK(MakePfxKeyProvider(DataFile("no-such-file.pfx"), kPassword) == nullptr);
+  CHECK(MakePfxKeyProvider(DataFile("garbage.pfx"), password_value) == nullptr);
+  CHECK(MakePfxKeyProvider(DataFile("no-such-file.pfx"), password_value) ==
+        nullptr);
   CHECK_THAT(NtfsBrowserTests::TakeCapturedLog(),
              Catch::Matchers::ContainsSubstring("Cannot read a PFX"));
 }
@@ -151,27 +154,27 @@ TEST_CASE("A PFX that cannot be opened gives no provider", "[efs][pfx]")
 TEST_CASE("An oversized PFX is refused by its size, before any read",
           "[efs][pfx]")
 {
-  constexpr std::uintmax_t kJustOverTheLimit = 16ULL * 1024 * 1024 + 1;
-  const fs::path path =
-      fs::temp_directory_path() / "ntfs-browser-oversized.pfx";
+  constexpr std::uintmax_t just_over_the_limit = 16ULL * 1024 * 1024 + 1;
+  const Fs::path path =
+      Fs::temp_directory_path() / "ntfs-browser-oversized.pfx";
   {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     REQUIRE(out.good());
     const std::vector<char> chunk(1024 * 1024, 'x');
     for (std::uintmax_t written = 0;
-         written + chunk.size() <= kJustOverTheLimit; written += chunk.size())
+         written + chunk.size() <= just_over_the_limit; written += chunk.size())
     {
       out.write(chunk.data(), gsl::narrow<std::streamsize>(chunk.size()));
     }
     out.put('x');
   }
-  REQUIRE(fs::file_size(path) == kJustOverTheLimit);
+  REQUIRE(Fs::file_size(path) == just_over_the_limit);
 
   (void)NtfsBrowserTests::TakeCapturedLog();
-  const auto provider = MakePfxKeyProvider(path, kPassword);
+  const auto provider = MakePfxKeyProvider(path, password_value);
   const std::string log = NtfsBrowserTests::TakeCapturedLog();
   std::error_code ignored;
-  fs::remove(path, ignored);
+  Fs::remove(path, ignored);
 
   CHECK(provider == nullptr);
   CHECK_THAT(log, Catch::Matchers::ContainsSubstring("too large"));
@@ -179,10 +182,10 @@ TEST_CASE("An oversized PFX is refused by its size, before any read",
 
 TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
                        "[efs][pfx]", ((NtfsBrowser::Strategy S), S),
-                       NtfsBrowser::Strategy::NO_CACHE,
-                       NtfsBrowser::Strategy::FULL_CACHE)
+                       NtfsBrowser::Strategy::NoCache,
+                       NtfsBrowser::Strategy::FullCache)
 {
-  for (const TestPfx& pfx : {kCng, kCapi})
+  for (const TestPfx& pfx : {cng_value, capi_value})
   {
     INFO("certificate " << pfx.name);
     const std::vector<BYTE> blob = ExpectedFek();
@@ -199,7 +202,7 @@ TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
     file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
     file.streams.push_back({.runs = {{30, 2}},
                             .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
-                                Algorithm::kAes256, key, plaintext),
+                                Algorithm::Aes256, key, plaintext),
                             .real_size = plaintext.size()});
 
     NtfsBrowser::NtfsVolume<S> volume(
@@ -207,14 +210,14 @@ TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
             NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file)));
     REQUIRE(volume.IsVolumeOK());
     volume.SetEfsKeyProvider(MakePfxKeyProvider(
-        DataFile(std::string(pfx.name) + ".pfx"), kPassword));
+        DataFile(std::string(pfx.name) + ".pfx"), password_value));
 
     NtfsBrowser::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(
-        static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::ROOT)));
+        static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::Root)));
     REQUIRE(record.ParseAttrs());
 
-    const auto& data = record.getAttr(NtfsBrowser::AttrType::DATA);
+    const auto& data = record.GetAttr(NtfsBrowser::AttrType::Data);
     REQUIRE(data.size() == 1);
     std::vector<BYTE> buffer(plaintext.size());
     const auto read = data.front()->ReadData(0, buffer);

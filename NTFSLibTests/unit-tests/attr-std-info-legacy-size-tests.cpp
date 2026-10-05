@@ -23,8 +23,8 @@ TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs accepts a real-size (48-byte) NTFS 1.2 STANDARD_INFORMATION "
     "attribute, not just whatever sizeof(Attr::StandardInformation) "
     "currently computes to",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithLegacyStandardInformation());
@@ -34,9 +34,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      NtfsBrowserTests::kLegacyStandardInformationRecordIdx));
+      NtfsBrowserTests::legacy_standard_information_record_idx));
 
   CHECK(record.ParseAttrs());
-  CHECK_FALSE(record.getAttr(AttrType::STANDARD_INFORMATION).empty());
+  CHECK_FALSE(record.GetAttr(AttrType::StandardInformation).empty());
   CHECK(record.IsReadOnly());
 }

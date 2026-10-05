@@ -38,26 +38,26 @@ namespace
 {
 
 // The root directory's record number, fixed by NTFS.
-constexpr ULONGLONG kRootRecord = static_cast<ULONGLONG>(Enum::MftIdx::ROOT);
+constexpr ULONGLONG root_record = static_cast<ULONGLONG>(Enum::MftIdx::Root);
 
 // Records between two progress() calls: often enough for a live progress
 // line, rare enough to cost nothing next to a record read.
-constexpr ULONGLONG kProgressInterval = 4096;
+constexpr ULONGLONG progress_interval = 4096;
 
 // The Filename side of a $FILE_NAME attribute. FileRecord<S> always wraps a
 // $FILE_NAME in the AttrFileName over the resident type that matches S.
 template <Strategy S>
 const Filename& AsFilename(const AttrBase<S>& attr)
 {
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return static_cast<
-        const AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>&>(attr);
+        const AttrFileName<AttrResidentNoCache, Strategy::NoCache>&>(attr);
   }
   else
   {
     return static_cast<
-        const AttrFileName<AttrResidentFullCache, Strategy::FULL_CACHE>&>(attr);
+        const AttrFileName<AttrResidentFullCache, Strategy::FullCache>&>(attr);
   }
 }
 
@@ -83,7 +83,7 @@ bool ReadEntry(FileRecord<S>& file_record, ULONGLONG record, MftEntry& entry)
   entry.directory = file_record.IsDirectory();
 
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       file_record.getAttr(AttrType::FILE_NAME))
+       file_record.GetAttr(AttrType::FileName))
   {
     const Filename& filename = AsFilename<S>(*attr);
     const std::wstring_view name = filename.GetFilename();
@@ -149,33 +149,33 @@ const MftName* PrimaryName(const MftEntry& entry) noexcept
 class MftTree::Impl
 {
  public:
-  std::vector<MftEntry> entries_;
-  std::unordered_map<ULONGLONG, size_t> by_record_;
-  std::unordered_map<ULONGLONG, std::vector<ULONGLONG>> children_;
+  std::vector<MftEntry> entries;
+  std::unordered_map<ULONGLONG, size_t> by_record;
+  std::unordered_map<ULONGLONG, std::vector<ULONGLONG>> children;
   // Parallel to entries_.
-  std::vector<bool> reachable_;
-  MftScanStats stats_;
+  std::vector<bool> reachable;
+  MftScanStats stats;
 
   template <Strategy S>
   void Scan(const NtfsVolume<S>& volume, const MftScanOptions& options);
   void Link();
   [[nodiscard]] const MftEntry* Find(ULONGLONG record) const;
-  [[nodiscard]] std::span<const ULONGLONG> Children(ULONGLONG dirRecord) const;
+  [[nodiscard]] std::span<const ULONGLONG> Children(ULONGLONG dir_record) const;
   [[nodiscard]] bool IsValidParent(const MftEntry& child,
                                    const MftName& name) const;
   [[nodiscard]] std::wstring
       PathThrough(const MftEntry& entry, const MftName& name,
-                  std::optional<ULONGLONG>* lostAncestor) const;
+                  std::optional<ULONGLONG>* lost_ancestor) const;
 };
 
-MftTree::MftTree(const NtfsVolume<Strategy::NO_CACHE>& volume,
+MftTree::MftTree(const NtfsVolume<Strategy::NoCache>& volume,
                  const MftScanOptions& options)
     : impl_(std::make_unique<Impl>())
 {
   impl_->Scan(volume, options);
 }
 
-MftTree::MftTree(const NtfsVolume<Strategy::FULL_CACHE>& volume,
+MftTree::MftTree(const NtfsVolume<Strategy::FullCache>& volume,
                  const MftScanOptions& options)
     : impl_(std::make_unique<Impl>())
 {
@@ -209,34 +209,34 @@ void MftTree::Impl::Scan(const NtfsVolume<S>& volume,
                          const MftScanOptions& options)
 {
   const ULONGLONG total = volume.GetRecordsCount();
-  stats_.slots = total;
+  stats.slots = total;
 
   FileRecord<S> file_record(volume);
-  file_record.SetAttrMask(Mask::FILE_NAME | Mask::DATA);
+  file_record.SetAttrMask(Mask::FileName | Mask::Data);
 
   for (ULONGLONG record = 0; record < total; record++)
   {
-    // Every kProgressInterval records, the caller follows along or stops.
-    if (options.progress && record % kProgressInterval == 0 &&
+    // Every progress_interval records, the caller follows along or stops.
+    if (options.progress && record % progress_interval == 0 &&
         !options.progress(record, total))
     {
-      stats_.complete = false;
+      stats.complete = false;
       break;
     }
 
     if (!file_record.ParseFileRecord(record))
     {
-      stats_.unreadable++;
+      stats.unreadable++;
       continue;
     }
     if (file_record.IsExtensionRecord())
     {
-      stats_.extensions++;
+      stats.extensions++;
       continue;
     }
     if (file_record.IsDeleted())
     {
-      stats_.deleted++;
+      stats.deleted++;
       if (!volume.GetOptions().include_deleted)
       {
         continue;
@@ -244,29 +244,29 @@ void MftTree::Impl::Scan(const NtfsVolume<S>& volume,
     }
     else
     {
-      stats_.in_use++;
+      stats.in_use++;
     }
 
     MftEntry entry;
     if (!ReadEntry(file_record, record, entry))
     {
-      stats_.damaged++;
+      stats.damaged++;
       if (!volume.GetOptions().recover_errors)
       {
         continue;  // Strict: a damaged record is dropped, not kept partial.
       }
     }
-    by_record_.emplace(record, entries_.size());
-    entries_.push_back(std::move(entry));
+    by_record.emplace(record, entries.size());
+    entries.push_back(std::move(entry));
   }
 
-  if (options.progress && stats_.complete)
+  if (options.progress && stats.complete)
   {
     options.progress(total, total);
   }
 
   LogInfo("MFT scan: {} slots, {} in use, {} deleted, {} unreadable",
-          stats_.slots, stats_.in_use, stats_.deleted, stats_.unreadable);
+          stats.slots, stats.in_use, stats.deleted, stats.unreadable);
   Link();
 }
 
@@ -274,48 +274,49 @@ void MftTree::Impl::Scan(const NtfsVolume<S>& volume,
 // parents its valid names give, then marks what the root reaches.
 void MftTree::Impl::Link()
 {
-  for (MftEntry& entry : entries_)
+  for (MftEntry& entry : entries)
   {
     // Parents this entry is already filed under: two hard links in one
     // directory still list the record once.
-    std::vector<ULONGLONG> filedUnder;
+    std::vector<ULONGLONG> filed_under;
     for (MftName& name : entry.names)
     {
       name.parent_valid = IsValidParent(entry, name);
       // Only a valid, non-DOS name files a record, and the root is filed
       // under nothing.
-      if (!name.parent_valid || name.dos_only || entry.record == kRootRecord)
+      if (!name.parent_valid || name.dos_only || entry.record == root_record)
       {
         continue;
       }
-      if (std::ranges::find(filedUnder, name.parent_record) != filedUnder.end())
+      if (std::ranges::find(filed_under, name.parent_record) !=
+          filed_under.end())
       {
         continue;
       }
-      filedUnder.push_back(name.parent_record);
-      children_[name.parent_record].push_back(entry.record);
+      filed_under.push_back(name.parent_record);
+      children[name.parent_record].push_back(entry.record);
     }
   }
 
-  reachable_.assign(entries_.size(), false);
-  if (const auto root = by_record_.find(kRootRecord); root != by_record_.end())
+  reachable.assign(entries.size(), false);
+  if (const auto root = by_record.find(root_record); root != by_record.end())
   {
     // by_record_ values index entries_; reachable_ is as long as entries_.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    reachable_[root->second] = true;
+    reachable[root->second] = true;
   }
 
-  std::vector<ULONGLONG> pending{kRootRecord};
+  std::vector<ULONGLONG> pending{root_record};
   while (!pending.empty())
   {
     const ULONGLONG dir = pending.back();
     pending.pop_back();
     for (const ULONGLONG child : Children(dir))
     {
-      const size_t index = by_record_.at(child);
+      const size_t index = by_record.at(child);
       // by_record_ values index entries_; reachable_ is as long as entries_.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      auto flag = reachable_[index];
+      auto flag = reachable[index];
       if (!flag)
       {
         flag = true;
@@ -324,8 +325,8 @@ void MftTree::Impl::Link()
     }
   }
 
-  stats_.unreachable = static_cast<ULONGLONG>(
-      std::count(reachable_.begin(), reachable_.end(), false));
+  stats.unreachable = static_cast<ULONGLONG>(
+      std::count(reachable.begin(), reachable.end(), false));
 }
 
 // Whether name's parent reference, read from child's record, names a
@@ -336,13 +337,13 @@ bool MftTree::Impl::IsValidParent(const MftEntry& child,
   // Only the root directory is filed under itself.
   if (name.parent_record == child.record)
   {
-    return child.record == kRootRecord;
+    return child.record == root_record;
   }
 
   const MftEntry* parent = Find(name.parent_record);
   if (parent == nullptr)
   {
-    return name.parent_record == kRootRecord;
+    return name.parent_record == root_record;
   }
   if (!parent->directory)
   {
@@ -359,13 +360,13 @@ bool MftTree::Impl::IsValidParent(const MftEntry& child,
 // record where the chain of valid parent references breaks.
 std::wstring
     MftTree::Impl::PathThrough(const MftEntry& entry, const MftName& name,
-                               std::optional<ULONGLONG>* lostAncestor) const
+                               std::optional<ULONGLONG>* lost_ancestor) const
 {
-  if (lostAncestor != nullptr)
+  if (lost_ancestor != nullptr)
   {
-    lostAncestor->reset();
+    lost_ancestor->reset();
   }
-  if (entry.record == kRootRecord)
+  if (entry.record == root_record)
   {
     return L"\\";
   }
@@ -385,13 +386,13 @@ std::wstring
       lost = parent;
       break;
     }
-    if (parent == kRootRecord)
+    if (parent == root_record)
     {
       break;
     }
 
-    const MftEntry* parentEntry = Find(parent);
-    current = parentEntry != nullptr ? PrimaryName(*parentEntry) : nullptr;
+    const MftEntry* parent_entry = Find(parent);
+    current = parent_entry != nullptr ? PrimaryName(*parent_entry) : nullptr;
     if (current == nullptr)
     {
       lost = parent;
@@ -409,32 +410,32 @@ std::wstring
     path += *part;
   }
 
-  if (lostAncestor != nullptr)
+  if (lost_ancestor != nullptr)
   {
-    *lostAncestor = lost;
+    *lost_ancestor = lost;
   }
   return path;
 }
 
 const std::vector<MftEntry>& MftTree::Entries() const noexcept
 {
-  return impl_->entries_;
+  return impl_->entries;
 }
 
 // The lookup behind MftTree::Find().
 const MftEntry* MftTree::Impl::Find(ULONGLONG record) const
 {
-  const auto iterator = by_record_.find(record);
+  const auto iterator = by_record.find(record);
   // by_record_ maps to indices of entries_.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return iterator == by_record_.end() ? nullptr : &entries_[iterator->second];
+  return iterator == by_record.end() ? nullptr : &entries[iterator->second];
 }
 
 // The lookup behind MftTree::Children().
-std::span<const ULONGLONG> MftTree::Impl::Children(ULONGLONG dirRecord) const
+std::span<const ULONGLONG> MftTree::Impl::Children(ULONGLONG dir_record) const
 {
-  const auto iterator = children_.find(dirRecord);
-  if (iterator == children_.end())
+  const auto iterator = children.find(dir_record);
+  if (iterator == children.end())
   {
     return {};
   }
@@ -446,56 +447,56 @@ const MftEntry* MftTree::Find(ULONGLONG record) const
   return impl_->Find(record);
 }
 
-std::span<const ULONGLONG> MftTree::Children(ULONGLONG dirRecord) const
+std::span<const ULONGLONG> MftTree::Children(ULONGLONG dir_record) const
 {
-  return impl_->Children(dirRecord);
+  return impl_->Children(dir_record);
 }
 
 bool MftTree::IsReachable(ULONGLONG record) const
 {
-  const auto iterator = impl_->by_record_.find(record);
-  if (iterator == impl_->by_record_.end())
+  const auto iterator = impl_->by_record.find(record);
+  if (iterator == impl_->by_record.end())
   {
     return false;
   }
   // by_record_ values index entries_; reachable_ is as long as entries_.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return impl_->reachable_[iterator->second];
+  return impl_->reachable[iterator->second];
 }
 
 std::wstring MftTree::GetPath(ULONGLONG record,
-                              std::optional<ULONGLONG>* lostAncestor) const
+                              std::optional<ULONGLONG>* lost_ancestor) const
 {
   const MftEntry* entry = impl_->Find(record);
   const MftName* name = entry != nullptr ? PrimaryName(*entry) : nullptr;
   if (name == nullptr)
   {
-    if (lostAncestor != nullptr)
+    if (lost_ancestor != nullptr)
     {
-      lostAncestor->reset();
+      lost_ancestor->reset();
     }
     return {};
   }
-  return impl_->PathThrough(*entry, *name, lostAncestor);
+  return impl_->PathThrough(*entry, *name, lost_ancestor);
 }
 
-std::wstring MftTree::GetPath(ULONGLONG record, size_t nameIndex,
-                              std::optional<ULONGLONG>* lostAncestor) const
+std::wstring MftTree::GetPath(ULONGLONG record, size_t name_index,
+                              std::optional<ULONGLONG>* lost_ancestor) const
 {
   const MftEntry* entry = impl_->Find(record);
-  if (entry == nullptr || nameIndex >= entry->names.size())
+  if (entry == nullptr || name_index >= entry->names.size())
   {
-    if (lostAncestor != nullptr)
+    if (lost_ancestor != nullptr)
     {
-      lostAncestor->reset();
+      lost_ancestor->reset();
     }
     return {};
   }
   // nameIndex < names.size() was checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return impl_->PathThrough(*entry, entry->names[nameIndex], lostAncestor);
+  return impl_->PathThrough(*entry, entry->names[name_index], lost_ancestor);
 }
 
-const MftScanStats& MftTree::Stats() const noexcept { return impl_->stats_; }
+const MftScanStats& MftTree::Stats() const noexcept { return impl_->stats; }
 
 }  // namespace NtfsBrowser

@@ -38,22 +38,22 @@ class BCryptDecryptor final : public SectorDecryptor
 
   // Opens the algorithm in CBC mode and imports the key. Returns false if
   // BCrypt refuses either.
-  [[nodiscard]] bool Init(LPCWSTR algorithmId, std::span<const BYTE> key,
-                          size_t blockSize)
+  [[nodiscard]] bool Init(LPCWSTR algorithm_id, std::span<const BYTE> key,
+                          size_t block_size)
   {
-    block_size_ = blockSize;
+    block_size_ = block_size;
     if (!BCRYPT_SUCCESS(
-            BCryptOpenAlgorithmProvider(&alg_, algorithmId, nullptr, 0)))
+            BCryptOpenAlgorithmProvider(&alg_, algorithm_id, nullptr, 0)))
     {
       return false;
     }
 
     // BCrypt wants the chaining mode as a wide string, terminator included.
-    constexpr std::wstring_view kCbc = BCRYPT_CHAIN_MODE_CBC;
+    constexpr std::wstring_view cbc = BCRYPT_CHAIN_MODE_CBC;
     if (!BCRYPT_SUCCESS(BCryptSetProperty(
             alg_, BCRYPT_CHAINING_MODE,
-            reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(kCbc.data())),
-            static_cast<ULONG>((kCbc.size() + 1) * sizeof(wchar_t)), 0)))
+            reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(cbc.data())),
+            static_cast<ULONG>((cbc.size() + 1) * sizeof(wchar_t)), 0)))
     {
       return false;
     }
@@ -65,13 +65,13 @@ class BCryptDecryptor final : public SectorDecryptor
 
   bool DecryptSector(ULONGLONG offset, std::span<BYTE> sector) const override
   {
-    if (sector.size() != kSectorSize)
+    if (sector.size() != sector_size)
     {
       return false;
     }
 
     // BCrypt advances the IV it is given, so it gets a copy.
-    std::array<BYTE, kMaxBlockSize> iv = MakeSectorIv(offset, block_size_);
+    std::array<BYTE, max_block_size> iv = MakeSectorIv(offset, block_size_);
     ULONG produced = 0;
     const NTSTATUS status = BCryptDecrypt(
         key_, sector.data(), static_cast<ULONG>(sector.size()), nullptr,
@@ -87,31 +87,31 @@ class BCryptDecryptor final : public SectorDecryptor
 };
 
 // The AES block size, in bytes.
-constexpr size_t kAesBlockSize = 16;
+constexpr size_t aes_block_size = 16;
 }  // namespace
 
 std::unique_ptr<SectorDecryptor> MakeBCryptDecryptor(const Fek& fek)
 {
-  LPCWSTR algorithmId = nullptr;
-  size_t blockSize = 0;
+  LPCWSTR algorithm_id = nullptr;
+  size_t block_size = 0;
   switch (fek.GetAlgorithm())
   {
-    case Algorithm::kAes128:
-    case Algorithm::kAes192:
-    case Algorithm::kAes256:
-      algorithmId = BCRYPT_AES_ALGORITHM;
-      blockSize = kAesBlockSize;
+    case Algorithm::Aes128:
+    case Algorithm::Aes192:
+    case Algorithm::Aes256:
+      algorithm_id = BCRYPT_AES_ALGORITHM;
+      block_size = aes_block_size;
       break;
-    case Algorithm::k3Des:
-      algorithmId = BCRYPT_3DES_ALGORITHM;
-      blockSize = kDesBlockSize;
+    case Algorithm::_3Des:
+      algorithm_id = BCRYPT_3DES_ALGORITHM;
+      block_size = des_block_size;
       break;
-    case Algorithm::kDesx:
+    case Algorithm::Desx:
       return nullptr;
   }
 
   auto decryptor = std::make_unique<BCryptDecryptor>();
-  if (!decryptor->Init(algorithmId, fek.GetKey(), blockSize))
+  if (!decryptor->Init(algorithm_id, fek.GetKey(), block_size))
   {
     LogWarn("BCrypt cannot use this FEK.");
     return nullptr;

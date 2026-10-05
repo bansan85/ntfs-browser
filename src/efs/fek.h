@@ -18,11 +18,11 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void SecureZero(std::span<BYTE> bytes) noexcept;
 // that the FEK blob stores.
 enum class Algorithm : WORD
 {
-  k3Des = 0x6603,
-  kDesx = 0x6604,
-  kAes128 = 0x660E,
-  kAes192 = 0x660F,
-  kAes256 = 0x6610
+  _3Des = 0x6603,
+  Desx = 0x6604,
+  Aes128 = 0x660E,
+  Aes192 = 0x660F,
+  Aes256 = 0x6610
 };
 
 // A File Encryption Key: a cipher and its key. Owns its bytes and wipes them

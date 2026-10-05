@@ -49,6 +49,9 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
+using NtfsBrowserTests::attr_name_exceeds_total_size_record_idx;
+using NtfsBrowserTests::bad_index_block_first_name;
+using NtfsBrowserTests::bad_index_block_good_name;
 using NtfsBrowserTests::BuildFakeNtfsImage;
 using NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
 using NtfsBrowserTests::BuildFakeNtfsImageWithBadDataRun;
@@ -60,16 +63,13 @@ using NtfsBrowserTests::BuildFakeNtfsImageWithMftTree;
 using NtfsBrowserTests::BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock;
 using NtfsBrowserTests::BuildFakeNtfsImageWithNoEndMarker;
 using NtfsBrowserTests::BuildFakeNtfsImageWithResidentEncryptedData;
-using NtfsBrowserTests::kAttrNameExceedsTotalSizeRecordIdx;
-using NtfsBrowserTests::kBadIndexBlockFirstName;
-using NtfsBrowserTests::kBadIndexBlockGoodName;
-using NtfsBrowserTests::kMalformedIndexEntryMftRef;
-using NtfsBrowserTests::kMftTreeDeletedFileIdx;
-using NtfsBrowserTests::kMultiClusterOrphanName;
-using NtfsBrowserTests::kMultiClusterReachableName;
-using NtfsBrowserTests::kOrphanedBlockOrphanName;
-using NtfsBrowserTests::kOrphanedBlockReachableName;
+using NtfsBrowserTests::malformed_index_entry_mft_ref;
 using NtfsBrowserTests::MemoryDiskReader;
+using NtfsBrowserTests::mft_tree_deleted_file_idx;
+using NtfsBrowserTests::multi_cluster_orphan_name;
+using NtfsBrowserTests::multi_cluster_reachable_name;
+using NtfsBrowserTests::orphaned_block_orphan_name;
+using NtfsBrowserTests::orphaned_block_reachable_name;
 using NtfsBrowserTests::TakeCapturedLog;
 
 namespace
@@ -110,10 +110,10 @@ void RunDeletedRecordContentGating()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(kMftTreeDeletedFileIdx));
+    REQUIRE(record.ParseFileRecord(mft_tree_deleted_file_idx));
     CHECK(record.IsDeleted());
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.getAttr(AttrType::FILE_NAME).empty());
+    CHECK(record.GetAttr(AttrType::FileName).empty());
   }
   {
     NtfsVolume<S> const volume(
@@ -122,10 +122,10 @@ void RunDeletedRecordContentGating()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(kMftTreeDeletedFileIdx));
+    REQUIRE(record.ParseFileRecord(mft_tree_deleted_file_idx));
     CHECK(record.IsDeleted());
     CHECK(record.ParseAttrs());
-    CHECK_FALSE(record.getAttr(AttrType::FILE_NAME).empty());
+    CHECK_FALSE(record.GetAttr(AttrType::FileName).empty());
   }
 }
 
@@ -136,10 +136,10 @@ template <Strategy S>
 void RunSalvageableConditionLogLevel()
 {
   const std::shared_ptr<spdlog::logger> logger =
-      spdlog::get(std::string(NtfsBrowser::Log::kLoggerName));
+      spdlog::get(std::string(NtfsBrowser::Log::logger_name));
   REQUIRE(logger);
 
-  auto const captureFor = [&](const VolumeOptions& options)
+  auto const capture_for = [&](const VolumeOptions& options)
   {
     std::ostringstream out;
     const auto sink = std::make_shared<spdlog::sinks::ostream_sink_st>(out);
@@ -152,20 +152,20 @@ void RunSalvageableConditionLogLevel()
         options);
     REQUIRE(volume.IsVolumeOK());
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(kAttrNameExceedsTotalSizeRecordIdx));
+    REQUIRE(record.ParseFileRecord(attr_name_exceeds_total_size_record_idx));
     (void)record.ParseAttrs();
 
     logger->sinks().pop_back();
     return out.str();
   };
 
-  const std::string strict = captureFor({});
+  const std::string strict = capture_for({});
   CHECK_THAT(strict,
              ContainsSubstring("warning Attribute name exceeds attribute "
                                "bounds."));
 
   const std::string recovering =
-      captureFor(VolumeOptions{.recover_errors = true});
+      capture_for(VolumeOptions{.recover_errors = true});
   CHECK_THAT(recovering,
              ContainsSubstring("info Attribute name exceeds attribute "
                                "bounds."));
@@ -174,7 +174,7 @@ void RunSalvageableConditionLogLevel()
                                 "bounds."));
 }
 
-// The orphan scan caps its work at FileRecord's internal kMaxOrphanScanBlocks
+// The orphan scan caps its work at FileRecord's internal max_orphan_scan_blocks
 // instead of the attribute's own (attacker-controlled) declared block count,
 // and logs once when the cap binds. The 3 real blocks stay reachable either
 // way.
@@ -189,8 +189,8 @@ void RunOrphanScanCapsDeclaredBlockCount()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   (void)TakeCapturedLog();
@@ -206,9 +206,9 @@ void RunOrphanScanCapsDeclaredBlockCount()
   REQUIRE(names.size() == 2);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == kOrphanedBlockReachableName);
+  CHECK(names[0] == orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[1] == kOrphanedBlockOrphanName);
+  CHECK(names[1] == orphaned_block_orphan_name);
   CHECK_THAT(TakeCapturedLog(), ContainsSubstring("orphan scan capped at"));
 }
 
@@ -227,8 +227,8 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   std::vector<std::wstring> names;
@@ -243,9 +243,9 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn()
   REQUIRE(names.size() == 2);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == kMultiClusterReachableName);
+  CHECK(names[0] == multi_cluster_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[1] == kMultiClusterOrphanName);
+  CHECK(names[1] == multi_cluster_orphan_name);
 }
 
 // Matrix row "Bad data run": a non-resident attribute's data run decodes
@@ -263,9 +263,9 @@ void RunBadDataRunRejectsOrKeepsPartial()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.getAttr(AttrType::DATA).empty());
+    CHECK(record.GetAttr(AttrType::Data).empty());
   }
   {
     NtfsVolume<S> const volume(
@@ -274,9 +274,9 @@ void RunBadDataRunRejectsOrKeepsPartial()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     CHECK(record.ParseAttrs());
-    CHECK(record.getAttr(AttrType::DATA).size() == 1);
+    CHECK(record.GetAttr(AttrType::Data).size() == 1);
   }
 }
 
@@ -295,9 +295,9 @@ void RunResidentEncryptedDataRejectsOrKeepsAsIs()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.getAttr(AttrType::DATA).empty());
+    CHECK(record.GetAttr(AttrType::Data).empty());
   }
   {
     NtfsVolume<S> const volume(
@@ -307,9 +307,9 @@ void RunResidentEncryptedDataRejectsOrKeepsAsIs()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     CHECK(record.ParseAttrs());
-    CHECK(record.getAttr(AttrType::DATA).size() == 1);
+    CHECK(record.GetAttr(AttrType::Data).size() == 1);
   }
 }
 
@@ -326,11 +326,11 @@ void RunNoEndMarkerRejectsOrKeepsParsed()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
 
     (void)TakeCapturedLog();
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.getAttr(AttrType::DATA).empty());
+    CHECK(record.GetAttr(AttrType::Data).empty());
     CHECK_THAT(TakeCapturedLog(),
                ContainsSubstring(
                    "Attribute walk ended without a terminating end marker."));
@@ -342,11 +342,11 @@ void RunNoEndMarkerRejectsOrKeepsParsed()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
 
     (void)TakeCapturedLog();
     CHECK(record.ParseAttrs());
-    CHECK(record.getAttr(AttrType::DATA).size() == 1);
+    CHECK(record.GetAttr(AttrType::Data).size() == 1);
     CHECK_THAT(TakeCapturedLog(),
                ContainsSubstring(
                    "Attribute walk ended without a terminating end marker."));
@@ -380,15 +380,15 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     REQUIRE(root.ParseAttrs());
 
     const std::vector<std::wstring> names = traverse(root);
     REQUIRE(names.size() == 1);
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[0] == kBadIndexBlockGoodName);
+    CHECK(names[0] == bad_index_block_good_name);
   }
   {
     NtfsVolume<S> const volume(std::make_unique<MemoryDiskReader>(
@@ -397,17 +397,17 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     REQUIRE(root.ParseAttrs());
 
     const std::vector<std::wstring> names = traverse(root);
     REQUIRE(names.size() == 2);
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[0] == kBadIndexBlockFirstName);
+    CHECK(names[0] == bad_index_block_first_name);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[1] == kBadIndexBlockGoodName);
+    CHECK(names[1] == bad_index_block_good_name);
   }
 }
 
@@ -417,16 +417,15 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix()
 template <Strategy S>
 const std::vector<IndexEntryView>& RootEntries(const AttrBase<S>& attr)
 {
-  if constexpr (S == Strategy::NO_CACHE)
+  if constexpr (S == Strategy::NoCache)
   {
     return static_cast<
-        const AttrIndexRoot<AttrResidentNoCache, Strategy::NO_CACHE>&>(attr);
+        const AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>&>(attr);
   }
   else
   {
     return static_cast<
-        const AttrIndexRoot<AttrResidentFullCache, Strategy::FULL_CACHE>&>(
-        attr);
+        const AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>&>(attr);
   }
 }
 
@@ -444,10 +443,10 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::INDEX_ROOT);
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    root.SetAttrMask(Mask::IndexRoot);
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     CHECK_FALSE(root.ParseAttrs());
-    CHECK(root.getAttr(AttrType::INDEX_ROOT).empty());
+    CHECK(root.GetAttr(AttrType::IndexRoot).empty());
   }
   {
     NtfsVolume<S> const volume(
@@ -457,18 +456,18 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless()
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::INDEX_ROOT);
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    root.SetAttrMask(Mask::IndexRoot);
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     REQUIRE(root.ParseAttrs());
 
-    const auto& rootAttrs = root.getAttr(AttrType::INDEX_ROOT);
-    REQUIRE(rootAttrs.size() == 1);
+    const auto& root_attrs = root.GetAttr(AttrType::IndexRoot);
+    REQUIRE(root_attrs.size() == 1);
     const std::vector<IndexEntryView>& entries =
-        RootEntries<S>(*rootAttrs.front());
+        RootEntries<S>(*root_attrs.front());
     REQUIRE(entries.size() == 1);
     // The REQUIRE above checks the size of entries.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(entries[0].GetFileReference() == kMalformedIndexEntryMftRef);
+    CHECK(entries[0].GetFileReference() == malformed_index_entry_mft_ref);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(entries[0].GetFilename().empty());
   }
@@ -490,31 +489,31 @@ void RunDeletedVolumeRecordStillOpens()
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG("VolumeOptions default to both flags off",
-                       "[volume-options]", ((Strategy S), S),
-                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
+                       "[volume-options]", ((Strategy S), S), Strategy::NoCache,
+                       Strategy::FullCache)
 {
   RunDefaultsAreBothOff<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume::GetOptions reflects the constructor argument",
-    "[volume-options]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[volume-options]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   RunGetOptionsReflectsConstructorArgument<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("include_deleted gates a freed record's attributes",
                        "[volume-options][regression]", ((Strategy S), S),
-                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
+                       Strategy::NoCache, Strategy::FullCache)
 {
   RunDeletedRecordContentGating<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A salvageable condition logs Warn when strict and Info when recovering",
-    "[volume-options][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[volume-options][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   RunSalvageableConditionLogLevel<S>();
 }
@@ -522,7 +521,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "The orphan scan caps a forged $INDEX_ALLOCATION block count",
     "[volume-options][file-record][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunOrphanScanCapsDeclaredBlockCount<S>();
 }
@@ -530,7 +529,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "The orphan scan converts a multi-cluster index block's index to a VCN",
     "[volume-options][file-record][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunMultiClusterOrphanScanConvertsBlockIndexToVcn<S>();
 }
@@ -539,7 +538,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A bad data run rejects the record by default, keeps a partial run "
     "list when recovering",
     "[volume-options][attr-non-resident][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunBadDataRunRejectsOrKeepsPartial<S>();
 }
@@ -548,7 +547,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A resident $DATA flagged encrypted rejects the record by default, "
     "keeps it read as is when recovering",
     "[volume-options][file-record][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunResidentEncryptedDataRejectsOrKeepsAsIs<S>();
 }
@@ -557,7 +556,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A missing end-of-attributes marker rejects the record by default, "
     "keeps what parsed when recovering",
     "[volume-options][file-record][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunNoEndMarkerRejectsOrKeepsParsed<S>();
 }
@@ -566,7 +565,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A bad entry in an index block skips that block by default, keeps its "
     "prefix when recovering, and never affects the sibling block",
     "[volume-options][attr-index-alloc][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix<S>();
 }
@@ -575,7 +574,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A malformed index entry rejects $INDEX_ROOT by default, keeps it "
     "nameless when recovering",
     "[volume-options][index-entry][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunMalformedIndexEntryRejectsOrKeepsNameless<S>();
 }
@@ -584,7 +583,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A freed $Volume record still opens the volume under default "
     "VolumeOptions",
     "[volume-options][ntfs-volume][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunDeletedVolumeRecordStillOpens<S>();
 }

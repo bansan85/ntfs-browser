@@ -39,37 +39,37 @@ namespace
 
 // The console target reproduces the message and nothing else, so what a
 // consumer sees is exactly what the library wrote.
-constexpr std::string_view kConsolePattern = "%v";
+constexpr std::string_view console_pattern = "%v";
 // A log file is read long after the run, so each line is dated and says
 // which level produced it.
-constexpr std::string_view kFilePattern = "[%Y-%m-%d %H:%M:%S.%e] [%l] %v";
+constexpr std::string_view file_pattern = "[%Y-%m-%d %H:%M:%S.%e] [%l] %v";
 
 // Level names --log accepts, paired with the level each one selects.
-constexpr frozen::unordered_map<std::string_view, Log::Level, 6> kLevelNames{
-    {"off", Log::Level::kOff},     {"error", Log::Level::kError},
-    {"warn", Log::Level::kWarn},   {"info", Log::Level::kInfo},
-    {"debug", Log::Level::kDebug}, {"trace", Log::Level::kTrace}};
+constexpr frozen::unordered_map<std::string_view, Log::Level, 6> level_names{
+    {"off", Log::Level::Off},     {"error", Log::Level::Error},
+    {"warn", Log::Level::Warn},   {"info", Log::Level::Info},
+    {"debug", Log::Level::Debug}, {"trace", Log::Level::Trace}};
 
 // Target names --log accepts.
-constexpr std::string_view kConsoleTarget = "console";
-constexpr std::string_view kFileTarget = "file";
+constexpr std::string_view console_target = "console";
+constexpr std::string_view file_target = "file";
 
 // spdlog counterpart of a public level.
 spdlog::level::level_enum ToSpdlog(Log::Level level) noexcept
 {
   switch (level)
   {
-    case Log::Level::kError:
+    case Log::Level::Error:
       return spdlog::level::err;
-    case Log::Level::kWarn:
+    case Log::Level::Warn:
       return spdlog::level::warn;
-    case Log::Level::kInfo:
+    case Log::Level::Info:
       return spdlog::level::info;
-    case Log::Level::kDebug:
+    case Log::Level::Debug:
       return spdlog::level::debug;
-    case Log::Level::kTrace:
+    case Log::Level::Trace:
       return spdlog::level::trace;
-    case Log::Level::kOff:
+    case Log::Level::Off:
       break;
   }
   return spdlog::level::off;
@@ -157,12 +157,12 @@ void AddConsoleSinks(Log::Level level, std::vector<spdlog::sink_ptr>& sinks)
   auto const out = std::make_shared<CeilingSink>(
       std::make_shared<spdlog::sinks::stdout_sink_st>(), spdlog::level::warn);
   out->set_level(ToSpdlog(level));
-  out->set_pattern(std::string(kConsolePattern));
+  out->set_pattern(std::string(console_pattern));
   sinks.push_back(out);
 
   auto const err = std::make_shared<spdlog::sinks::stderr_sink_st>();
   err->set_level((std::max)(spdlog::level::warn, ToSpdlog(level)));
-  err->set_pattern(std::string(kConsolePattern));
+  err->set_pattern(std::string(console_pattern));
   sinks.push_back(err);
 }
 
@@ -177,12 +177,12 @@ bool Apply(const Log::Config& config) noexcept
   {
     std::vector<spdlog::sink_ptr> sinks;
 
-    if (config.console_level != Log::Level::kOff)
+    if (config.console_level != Log::Level::Off)
     {
       AddConsoleSinks(config.console_level, sinks);
     }
 
-    if (config.file_level != Log::Level::kOff)
+    if (config.file_level != Log::Level::Off)
     {
       try
       {
@@ -191,7 +191,7 @@ bool Apply(const Log::Config& config) noexcept
         auto const file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
             config.file_path.native(), false);
         file->set_level(ToSpdlog(config.file_level));
-        file->set_pattern(std::string(kFilePattern));
+        file->set_pattern(std::string(file_pattern));
         sinks.push_back(file);
       }
       catch (...)
@@ -201,13 +201,13 @@ bool Apply(const Log::Config& config) noexcept
     }
 
     auto logger = std::make_shared<spdlog::logger>(
-        std::string(Log::kLoggerName), sinks.begin(), sinks.end());
+        std::string(Log::logger_name), sinks.begin(), sinks.end());
     logger->set_level(LeastSevere(sinks));
     // The holder is never destroyed, so nothing would flush the file sink
     // at exit; every line is therefore flushed as it is written.
     logger->flush_on(spdlog::level::trace);
 
-    spdlog::drop(std::string(Log::kLoggerName));
+    spdlog::drop(std::string(Log::logger_name));
     spdlog::register_logger(logger);
     Holder().logger = std::move(logger);
   }
@@ -246,7 +246,7 @@ bool EqualsAscii(std::basic_string_view<CharT> text,
 template <typename CharT>
 bool ParseLevel(std::basic_string_view<CharT> text, Log::Level& level) noexcept
 {
-  for (const auto& [name, value] : kLevelNames)
+  for (const auto& [name, value] : level_names)
   {
     if (EqualsAscii(text, name))
     {
@@ -269,7 +269,7 @@ void LogException(const std::exception& exception) noexcept
     message.remove_suffix(1);
   }
 
-  Log::Detail::Emit(Log::Level::kError, message);
+  Log::Detail::Emit(Log::Level::Error, message);
 }
 
 }  // namespace NtfsBrowser
@@ -286,63 +286,63 @@ namespace
 template <typename CharT>
 bool ParseOptionImpl(std::basic_string_view<CharT> arg, Config& config) noexcept
 {
-  if (arg.size() < kOptionPrefix.size() ||
-      !EqualsAscii(arg.substr(0, kOptionPrefix.size()), kOptionPrefix))
+  if (arg.size() < option_prefix.size() ||
+      !EqualsAscii(arg.substr(0, option_prefix.size()), option_prefix))
   {
     return false;
   }
 
-  constexpr auto kSeparator = static_cast<CharT>(':');
+  constexpr auto separator = static_cast<CharT>(':');
 
-  const std::basic_string_view<CharT> value = arg.substr(kOptionPrefix.size());
-  const size_t targetEnd = value.find(kSeparator);
-  if (targetEnd == std::basic_string_view<CharT>::npos)
+  const std::basic_string_view<CharT> value = arg.substr(option_prefix.size());
+  const size_t target_end = value.find(separator);
+  if (target_end == std::basic_string_view<CharT>::npos)
   {
     return false;
   }
 
-  const std::basic_string_view<CharT> target = value.substr(0, targetEnd);
-  const std::basic_string_view<CharT> rest = value.substr(targetEnd + 1);
+  const std::basic_string_view<CharT> target = value.substr(0, target_end);
+  const std::basic_string_view<CharT> rest = value.substr(target_end + 1);
   // Only the first two colons split the option, so "C:\dir\ntfs.log"
   // survives as one path field.
-  const size_t levelEnd = rest.find(kSeparator);
-  const std::basic_string_view<CharT> levelText = rest.substr(0, levelEnd);
-  const bool hasPath = levelEnd != std::basic_string_view<CharT>::npos;
+  const size_t level_end = rest.find(separator);
+  const std::basic_string_view<CharT> level_text = rest.substr(0, level_end);
+  const bool has_path = level_end != std::basic_string_view<CharT>::npos;
   const std::basic_string_view<CharT> path =
-      hasPath ? rest.substr(levelEnd + 1) : std::basic_string_view<CharT>{};
+      has_path ? rest.substr(level_end + 1) : std::basic_string_view<CharT>{};
 
-  Level level = Level::kOff;
-  if (!ParseLevel(levelText, level))
+  Level level = Level::Off;
+  if (!ParseLevel(level_text, level))
   {
     return false;
   }
 
   // A path field belongs to the file target only, and an empty one names
   // no file at all.
-  if (hasPath && (!EqualsAscii(target, kFileTarget) || path.empty()))
+  if (has_path && (!EqualsAscii(target, file_target) || path.empty()))
   {
     return false;
   }
 
-  if (EqualsAscii(target, kConsoleTarget))
+  if (EqualsAscii(target, console_target))
   {
     config.console_level = level;
     return true;
   }
 
-  if (!EqualsAscii(target, kFileTarget))
+  if (!EqualsAscii(target, file_target))
   {
     return false;
   }
 
   // Built before anything is committed: the conversion allocates, and
   // config must come back untouched whenever this returns false.
-  std::filesystem::path filePath;
-  if (hasPath)
+  std::filesystem::path file_path;
+  if (has_path)
   {
     try
     {
-      filePath.assign(path);
+      file_path.assign(path);
     }
     catch (...)
     {
@@ -351,9 +351,9 @@ bool ParseOptionImpl(std::basic_string_view<CharT> arg, Config& config) noexcept
   }
 
   config.file_level = level;
-  if (hasPath)
+  if (has_path)
   {
-    config.file_path = std::move(filePath);
+    config.file_path = std::move(file_path);
   }
   return true;
 }

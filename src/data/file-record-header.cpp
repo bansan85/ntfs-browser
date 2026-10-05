@@ -16,15 +16,15 @@ namespace NtfsBrowser
 {
 
 FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
-    : buffer_size_(buffer.size())
+    : buffer_size(buffer.size())
 {
-  if (buffer.size() < kMinFileRecordHeaderSize)
+  if (buffer.size() < min_file_record_header_size)
   {
     throw std::runtime_error(
         "Buffer size of FileRecordHeader is smaller than the minimum file "
         "record header size.");
   }
-  if (buffer.size() > kMaxFileRecordSize)
+  if (buffer.size() > max_file_record_size)
   {
     throw std::runtime_error(
         "Buffer size of FileRecordHeader exceeds the maximum supported file "
@@ -33,7 +33,7 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
 
   const Data* data = reinterpret_cast<const Data*>(buffer.data());
 
-  if (data->magic != kFileRecordMagic)
+  if (data->magic != file_record_magic)
   {
     us_number = 0;
     return;
@@ -76,13 +76,13 @@ bool FileRecordHeader::PatchUS() noexcept
   // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
   const std::span<WORD> words(
       const_cast<WORD*>(reinterpret_cast<const WORD*>(&GetData()->raw[0])),
-      buffer_size_ / sizeof(WORD));
+      buffer_size / sizeof(WORD));
   // NOLINTEND(cppcoreguidelines-pro-type-const-cast)
   size_t pos = 0;
   for (WORD const value : us_array)
   {
     // The last word of each sector holds the USN.
-    pos += (kUpdateSequenceStride / sizeof(WORD)) - 1;
+    pos += (update_sequence_stride / sizeof(WORD)) - 1;
     if (pos >= words.size())
     {
       return false;
@@ -90,7 +90,7 @@ bool FileRecordHeader::PatchUS() noexcept
     // pos < words.size() was checked just above.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     WORD& sector = words[pos];
-    // USN error. Ignore if already patched (FULL_CACHE)
+    // USN error. Ignore if already patched (FullCache)
     if (sector != us_number && sector != value)
     {
       return false;
@@ -105,7 +105,7 @@ bool FileRecordHeader::PatchUS() noexcept
 const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept
 {
   WORD const offset_of_attr = GetData()->offset_of_attr;
-  if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size_)
+  if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size)
   {
     LogWarn("Offset of attr must be within the file record buffer");
     return nullptr;
@@ -114,29 +114,29 @@ const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept
       &GetData()->raw[offset_of_attr]);
 }
 
-FileRecordHeaderImpl<Strategy::NO_CACHE>::FileRecordHeaderImpl(
+FileRecordHeaderImpl<Strategy::NoCache>::FileRecordHeaderImpl(
     std::span<const BYTE> buffer)
-    : FileRecordHeader(buffer), data_(buffer)
+    : FileRecordHeader(buffer), data(buffer)
 {
 }
 
 const FileRecordHeader::Data*
-    FileRecordHeaderImpl<Strategy::NO_CACHE>::GetData() const
+    FileRecordHeaderImpl<Strategy::NoCache>::GetData() const
 {
-  return reinterpret_cast<const Data*>(data_.data());
+  return reinterpret_cast<const Data*>(data.data());
 }
 
-FileRecordHeaderImpl<Strategy::FULL_CACHE>::FileRecordHeaderImpl(
+FileRecordHeaderImpl<Strategy::FullCache>::FileRecordHeaderImpl(
     std::span<const BYTE> buffer)
     : FileRecordHeader(buffer)
 {
-  memcpy(&data_.raw[0], buffer.data(), buffer.size());
+  memcpy(&data.raw[0], buffer.data(), buffer.size());
 }
 
 const FileRecordHeader::Data*
-    FileRecordHeaderImpl<Strategy::FULL_CACHE>::GetData() const
+    FileRecordHeaderImpl<Strategy::FullCache>::GetData() const
 {
-  return &data_;
+  return &data;
 }
 
 }  // namespace NtfsBrowser

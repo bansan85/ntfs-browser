@@ -33,15 +33,15 @@ namespace
 {
 
 // Fills the read buffer so a byte ReadData() left untouched shows up.
-constexpr BYTE kSentinelByte = 0xCC;
+constexpr BYTE sentinel_byte = 0xCC;
 
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
     "A cluster read whose byte address wraps past 2^64 fails instead of "
     "reading the wrapped address",
-    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   const std::vector<BYTE> image =
       NtfsBrowserTests::BuildFakeNtfsImageWithWrappingLcn(FakeRunHost::Data);
@@ -52,30 +52,30 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  const auto& dataAttrs = record.getAttr(AttrType::DATA);
-  REQUIRE(dataAttrs.size() == 1);
+  const auto& data_attrs = record.GetAttr(AttrType::Data);
+  REQUIRE(data_attrs.size() == 1);
 
-  std::vector<BYTE> buffer(NtfsBrowserTests::kFakeClusterSize, kSentinelByte);
+  std::vector<BYTE> buffer(NtfsBrowserTests::fake_cluster_size, sentinel_byte);
   // The REQUIRE above checks the size of dataAttrs.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  const std::optional<ULONGLONG> read = dataAttrs[0]->ReadData(0, buffer);
+  const std::optional<ULONGLONG> read = data_attrs[0]->ReadData(0, buffer);
 
   // The wrapped address is 0: the boot sector must not come back as data.
   CHECK_FALSE(read.has_value());
-  const std::vector<BYTE> bootSector(
+  const std::vector<BYTE> boot_sector(
       image.begin(),
       image.begin() + gsl::narrow<std::ptrdiff_t>(buffer.size()));
-  const bool returnedBootSector = buffer == bootSector;
-  CHECK_FALSE(returnedBootSector);
+  const bool returned_boot_sector = buffer == boot_sector;
+  CHECK_FALSE(returned_boot_sector);
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A data run list whose cumulative LCN overflows is rejected",
-    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   SECTION("strict: the whole attribute is rejected")
   {
@@ -86,9 +86,9 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.getAttr(AttrType::DATA).empty());
+    CHECK(record.GetAttr(AttrType::Data).empty());
   }
 
   SECTION("recovering: the run decoded before the overflow is kept")
@@ -101,17 +101,17 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
     CHECK(record.ParseAttrs());
 
-    const auto& dataAttrs = record.getAttr(AttrType::DATA);
-    REQUIRE(dataAttrs.size() == 1);
+    const auto& data_attrs = record.GetAttr(AttrType::Data);
+    REQUIRE(data_attrs.size() == 1);
 
     // Only the first run (VCN 0) was kept: the second cluster is unmapped.
-    std::vector<BYTE> buffer(size_t{2} * NtfsBrowserTests::kFakeClusterSize,
-                             kSentinelByte);
+    std::vector<BYTE> buffer(size_t{2} * NtfsBrowserTests::fake_cluster_size,
+                             sentinel_byte);
     // The REQUIRE above checks the size of dataAttrs.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK_FALSE(dataAttrs[0]->ReadData(0, buffer).has_value());
+    CHECK_FALSE(data_attrs[0]->ReadData(0, buffer).has_value());
   }
 }

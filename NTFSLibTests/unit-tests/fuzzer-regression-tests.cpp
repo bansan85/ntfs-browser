@@ -18,16 +18,16 @@
 using NtfsBrowserTests::ProcessOutput;
 using NtfsBrowserTests::RunProcessCapturingOutput;
 
-namespace fs = std::filesystem;
+namespace Fs = std::filesystem;
 
 namespace
 {
 
 // Lists the saved AFL testcases under NTFS_FUZZ_DATA_DIR, sorted.
-std::vector<fs::path> ListRegressionTestcases()
+std::vector<Fs::path> ListRegressionTestcases()
 {
-  std::vector<fs::path> files;
-  for (const auto& entry : fs::directory_iterator(fs::path(NTFS_FUZZ_DATA_DIR)))
+  std::vector<Fs::path> files;
+  for (const auto& entry : Fs::directory_iterator(Fs::path(NTFS_FUZZ_DATA_DIR)))
   {
     if (entry.is_regular_file())
     {
@@ -39,20 +39,20 @@ std::vector<fs::path> ListRegressionTestcases()
 }
 
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
-inline constexpr bool kDecompressionEnabled = true;
+inline constexpr bool decompression_enabled = true;
 #else
-inline constexpr bool kDecompressionEnabled = false;
+inline constexpr bool decompression_enabled = false;
 #endif
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
-inline constexpr bool kEfsEnabled = true;
+inline constexpr bool efs_enabled = true;
 #else
-inline constexpr bool kEfsEnabled = false;
+inline constexpr bool efs_enabled = false;
 #endif
 
-inline constexpr std::size_t kMaxExpectedMessages = 7;
-using MessageList = std::array<std::string_view, kMaxExpectedMessages>;
+inline constexpr std::size_t max_expected_messages = 7;
+using MessageList = std::array<std::string_view, max_expected_messages>;
 
 struct ExpectedMessages
 {
@@ -61,7 +61,7 @@ struct ExpectedMessages
 };
 
 constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
-    kExpectedErrorMessages{
+    expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
           {"DataRun decode error: run exceeds attribute bounds",
@@ -148,12 +148,12 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
            "TraverseSubNode() aborting: recursion depth limit exceeded",
            "TraverseSubEntries() recovery: reporting orphaned index block"}}},
         {"compressed_index_allocation",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"Decompressed compression unit 0 into 1024 bytes",
            "per compression unit", "Compressed size = "}}},
         {"surrogate_pair_names",
          {true,
-          kDecompressionEnabled
+          decompression_enabled
               ? MessageList{"File Name: \xF0\x93\x82\x80",
                             "File Name: \xF0\x9F\x90\x9C",
                             "File Name: "
@@ -172,12 +172,12 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
                             "not "
                             "compiled in."}}},
         {"corrupt_compressed_index_allocation",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"Cannot decompress compression unit 0",
            "LZNT1: back-reference before start of chunk.",
            "per compression unit", "Compressed size = "}}},
         {"compressed_index_allocation_comp_unit_size_out_of_range",
-         {true, kDecompressionEnabled
+         {true, decompression_enabled
                     ? MessageList{"Compression unit size is out of range.",
                                   "Attribute Parse error: 0x00A0"}
                     : MessageList{"Attribute Parse error: 0x00A0",
@@ -185,7 +185,7 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
                                   "decompression is not "
                                   "compiled in."}}},
         {"compressed_index_allocation_oversized_compression_unit",
-         {true, kDecompressionEnabled
+         {true, decompression_enabled
                     ? MessageList{"Compression unit size is implausibly large.",
                                   "Attribute Parse error: 0x00A0"}
                     : MessageList{"Attribute Parse error: 0x00A0",
@@ -194,7 +194,7 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
                                   "compiled in."}}},
         {"compressed_index_allocation_misaligned_start_vcn",
          {true,
-          kDecompressionEnabled
+          decompression_enabled
               ? MessageList{"Compressed attribute start VCN is not compression "
                             "unit aligned.",
                             "Attribute Parse error: 0x00A0"}
@@ -207,49 +207,49 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
           {"Compressed attribute total_size too small for its compressed "
            "size field."}}},
         {"compressed_index_allocation_unmapped_unit",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"Compression unit at VCN 0 is not fully mapped"}}},
         {"compressed_index_allocation_real_after_hole",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"Compression unit at VCN 0 has real clusters after a hole"}}},
         {"compressed_index_allocation_sparse_unit",
-         {kDecompressionEnabled, {"Compression unit 0 is sparse"}}},
+         {decompression_enabled, {"Compression unit 0 is sparse"}}},
         {"compressed_index_allocation_short_decompressed_unit",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"Decompressed compression unit 0 into 100 bytes",
            "Compression unit 0 decompressed to 100 bytes, expected at "
            "least 4096"}}},
         {"compressed_index_allocation_stored_unit_bad_lcn",
-         {kDecompressionEnabled, {"Cannot read stored compression unit 0"}}},
+         {decompression_enabled, {"Cannot read stored compression unit 0"}}},
         {"compressed_index_allocation_compressed_unit_bad_lcn",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"Cannot read compressed compression unit 0"}}},
         {"compressed_index_allocation_lznt1_invalid_signature",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"LZNT1: invalid chunk header signature.",
            "Cannot decompress compression unit 0"}}},
         {"compressed_index_allocation_lznt1_chunk_exceeds_src_bounds",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"LZNT1: chunk exceeds compressed data bounds.",
            "Cannot decompress compression unit 0"}}},
         {"compressed_index_allocation_lznt1_uncompressed_chunk_exceeds_dest",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"LZNT1: uncompressed chunk exceeds decompressed bounds.",
            "Cannot decompress compression unit 0"}}},
         {"compressed_index_allocation_lznt1_chunk_over_4096",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"LZNT1: chunk decompresses to more than 4096 bytes.",
            "Cannot decompress compression unit 0"}}},
         {"compressed_index_allocation_lznt1_literal_exceeds_dest",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"LZNT1: literal exceeds decompressed bounds.",
            "Cannot decompress compression unit 0"}}},
         {"compressed_index_allocation_lznt1_truncated_word",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"LZNT1: truncated compressed word.",
            "Cannot decompress compression unit 0"}}},
         {"compressed_index_allocation_lznt1_backreference_exceeds_dest",
-         {kDecompressionEnabled,
+         {decompression_enabled,
           {"LZNT1: back-reference exceeds decompressed bounds.",
            "Cannot decompress compression unit 0"}}},
         {"index_block_magic_mismatch",
@@ -322,16 +322,16 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
          {true, {"FindStream() found the unnamed stream"}}},
         {"corrupt_mft_record_volume_ok", {true, {"Invalid file record"}}},
         {"efs_stream_too_large",
-         {kEfsEnabled, {"$EFS stream is too large: 131072 bytes."}}},
+         {efs_enabled, {"$EFS stream is too large: 131072 bytes."}}},
         {"efs_stream_read_failure",
-         {kEfsEnabled, {"Cannot read the $EFS stream."}}},
+         {efs_enabled, {"Cannot read the $EFS stream."}}},
         {"data_flagged_compressed_and_encrypted",
          {true,
           {"A $DATA stream is flagged both compressed and encrypted; NTFS "
            "never combines them. Reading it undecrypted."}}},
         {"resident_data_flagged_encrypted",
          {true, {"A resident $DATA is flagged encrypted. Read as is."}}},
-        {"efs_stream_malformed", {kEfsEnabled, {"Malformed $EFS stream."}}},
+        {"efs_stream_malformed", {efs_enabled, {"Malformed $EFS stream."}}},
         {"standard_information_must_be_resident",
          {true, {"Standard Information attribute must be resident."}}},
         {"volume_name_must_be_resident",
@@ -381,22 +381,22 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
            "byte offset"}}},
 };
 
-// Runs one saved regression testcase and, if kExpectedErrorMessages has an
+// Runs one saved regression testcase and, if expected_error_messages has an
 // entry for it, checks its output against that entry's expected messages.
 void RunRegressionTestcase(std::string_view name)
 {
-  const fs::path exe(NTFS_FUZZER_AFL_EXE);
-  REQUIRE(fs::exists(exe));
+  const Fs::path exe(NTFS_FUZZER_AFL_EXE);
+  REQUIRE(Fs::exists(exe));
 
-  const fs::path file = fs::path(NTFS_FUZZ_DATA_DIR) / name;
-  REQUIRE(fs::exists(file));
+  const Fs::path file = Fs::path(NTFS_FUZZ_DATA_DIR) / name;
+  REQUIRE(Fs::exists(file));
 
   const ProcessOutput result = RunProcessCapturingOutput(
       exe, {L"--inject-read-failures", file.wstring()});
   CHECK(result.exit_code == 0);
 
-  const auto* const iterator = kExpectedErrorMessages.find(name);
-  if (iterator != kExpectedErrorMessages.end() &&
+  const auto* const iterator = expected_error_messages.find(name);
+  if (iterator != expected_error_messages.end() &&
       iterator->second.check_expected_messages)
   {
     INFO("captured output:\n" << result.output);
@@ -416,17 +416,17 @@ void RunRegressionTestcase(std::string_view name)
 
 }  // namespace
 
-TEST_CASE("saved regression corpus is fully covered by kExpectedErrorMessages",
+TEST_CASE("saved regression corpus is fully covered by expected_error_messages",
           "[fuzz][regression]")
 {
-  const std::vector<fs::path> files = ListRegressionTestcases();
+  const std::vector<Fs::path> files = ListRegressionTestcases();
   REQUIRE_FALSE(files.empty());
 
-  for (const fs::path& file : files)
+  for (const Fs::path& file : files)
   {
-    CHECK(kExpectedErrorMessages.contains(file.filename().string()));
+    CHECK(expected_error_messages.contains(file.filename().string()));
   }
-  CHECK(files.size() == kExpectedErrorMessages.size());
+  CHECK(files.size() == expected_error_messages.size());
 }
 
 // Registers one ctest-visible TEST_CASE per saved regression testcase, so

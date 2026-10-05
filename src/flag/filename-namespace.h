@@ -7,9 +7,9 @@ namespace NtfsBrowser::Flag
 
 enum class FilenameNamespace : BYTE
 {
-  POSIX = 0x00,
-  WIN_32 = 0x01,
-  DOS = 0x02
+  Posix = 0x00,
+  Win32 = 0x01,
+  Dos = 0x02
 };
 
 //NOLINTNEXTLINE

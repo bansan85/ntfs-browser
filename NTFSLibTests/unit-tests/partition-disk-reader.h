@@ -17,7 +17,7 @@ namespace NtfsBrowserTests
 class PartitionDiskReader : public NtfsBrowser::IDiskReader
 {
  public:
-  explicit PartitionDiskReader(ULONGLONG partitionOffset);
+  explicit PartitionDiskReader(ULONGLONG partition_offset);
 
   bool Open(std::wstring_view path) override;
 

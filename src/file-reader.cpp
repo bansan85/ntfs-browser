@@ -22,10 +22,11 @@
   #include "win32-disk-reader.h"
 #endif
 
-static constexpr LONGLONG READ_BUFFER_SIZE = LONGLONG{64} * 1024;
-static constexpr LONGLONG MEMORY_BUFFER_SIZE = 512 * READ_BUFFER_SIZE;
+static constexpr LONGLONG read_buffer_size = LONGLONG{64} * 1024;
+static constexpr LONGLONG memory_buffer_size = 512 * read_buffer_size;
 // READ_BUFFER_SIZE as a size_t, to size a std::span over one cached block.
-static constexpr size_t kBlockBytes = static_cast<size_t>(READ_BUFFER_SIZE);
+static constexpr size_t block_bytes_value =
+    static_cast<size_t>(read_buffer_size);
 
 namespace NtfsBrowser
 {
@@ -64,7 +65,7 @@ template <Strategy T>
 template <Strategy Q>
 std::enable_if_t<
     std::is_same_v<std::integral_constant<Strategy, Q>,
-                   std::integral_constant<Strategy, Strategy::NO_CACHE>>,
+                   std::integral_constant<Strategy, Strategy::NoCache>>,
     std::optional<std::span<const BYTE>>>
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
 {
@@ -86,9 +87,9 @@ std::enable_if_t<
 // containing "blockAddr" - which must already be 64KiB-aligned - and
 // returns a pointer to its start, or nullptr on a read failure.
 template <Strategy S>
-BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER blockAddr) const
+BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER block_addr) const
 {
-  const size_t index = blockAddr.QuadPart / READ_BUFFER_SIZE;
+  const size_t index = block_addr.QuadPart / read_buffer_size;
   const auto iterator = map_buffer_.find(index);
   if (iterator != map_buffer_.end())
   {
@@ -98,8 +99,8 @@ BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER blockAddr) const
   BYTE* new_data = NextMemory();
 
   if (!reader_->ReadInto(
-          blockAddr,
-          std::span<BYTE>{new_data, static_cast<size_t>(READ_BUFFER_SIZE)}))
+          block_addr,
+          std::span<BYTE>{new_data, static_cast<size_t>(read_buffer_size)}))
   {
     return nullptr;
   }
@@ -109,7 +110,7 @@ BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER blockAddr) const
 }
 
 // Reads exactly "length" bytes at "addr" into a buffer this reader owns,
-// bypassing the block cache. FULL_CACHE falls back to it when a whole 64KiB
+// bypassing the block cache. FullCache falls back to it when a whole 64KiB
 // block cannot be read: the block may extend past the end of the medium. The
 // short block MUST NOT be cached as if it were complete.
 template <Strategy S>
@@ -132,7 +133,7 @@ template <Strategy T>
 template <Strategy Q>
 std::enable_if_t<
     std::is_same_v<std::integral_constant<Strategy, Q>,
-                   std::integral_constant<Strategy, Strategy::FULL_CACHE>>,
+                   std::integral_constant<Strategy, Strategy::FullCache>>,
     std::optional<std::span<const BYTE>>>
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
 {
@@ -151,22 +152,22 @@ std::enable_if_t<
     return {};
   }
 
-  const bool crossesBlock = addr.QuadPart / READ_BUFFER_SIZE !=
-                            (addr.QuadPart + length - 1) / READ_BUFFER_SIZE;
+  const bool crosses_block = addr.QuadPart / read_buffer_size !=
+                             (addr.QuadPart + length - 1) / read_buffer_size;
 
-  if (!crossesBlock)
+  if (!crosses_block)
   {
     // Fast path: the request fits in a single block; return a zero-copy view.
-    const LARGE_INTEGER blockAddr{.QuadPart = addr.QuadPart -
-                                              addr.QuadPart % READ_BUFFER_SIZE};
-    BYTE* block = GetCachedBlock(blockAddr);
+    const LARGE_INTEGER block_addr{
+        .QuadPart = addr.QuadPart - addr.QuadPart % read_buffer_size};
+    BYTE* block = GetCachedBlock(block_addr);
     if (block == nullptr)
     {
       return ReadUncached(addr, length);
     }
 
-    return std::span<const BYTE>{block, kBlockBytes}.subspan(
-        gsl::narrow<size_t>(addr.QuadPart % READ_BUFFER_SIZE), length);
+    return std::span<const BYTE>{block, block_bytes_value}.subspan(
+        gsl::narrow<size_t>(addr.QuadPart % read_buffer_size), length);
   }
 
   // Slow path: stitch the range together one block at a time.
@@ -178,23 +179,23 @@ std::enable_if_t<
   DWORD remaining = length;
   while (remaining != 0)
   {
-    const LARGE_INTEGER blockAddr{.QuadPart = cur.QuadPart -
-                                              cur.QuadPart % READ_BUFFER_SIZE};
-    BYTE const* block = GetCachedBlock(blockAddr);
+    const LARGE_INTEGER block_addr{.QuadPart = cur.QuadPart -
+                                               cur.QuadPart % read_buffer_size};
+    BYTE const* block = GetCachedBlock(block_addr);
     if (block == nullptr)
     {
       return ReadUncached(addr, length);
     }
 
-    const auto offsetInBlock =
-        gsl::narrow<DWORD>(cur.QuadPart % READ_BUFFER_SIZE);
+    const auto offset_in_block =
+        gsl::narrow<DWORD>(cur.QuadPart % read_buffer_size);
     const auto chunk = gsl::narrow<DWORD>(
-        std::min<LONGLONG>(READ_BUFFER_SIZE - offsetInBlock, remaining));
+        std::min<LONGLONG>(read_buffer_size - offset_in_block, remaining));
 
-    const std::span<const BYTE> blockBytes{block, kBlockBytes};
-    // offsetInBlock is a remainder modulo READ_BUFFER_SIZE = kBlockBytes.
+    const std::span<const BYTE> block_bytes{block, block_bytes_value};
+    // offsetInBlock is a remainder modulo READ_BUFFER_SIZE = block_bytes.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    memcpy(out.data(), &blockBytes[offsetInBlock], chunk);
+    memcpy(out.data(), &block_bytes[offset_in_block], chunk);
 
     out = out.subspan(chunk);
     cur.QuadPart += chunk;
@@ -208,30 +209,31 @@ std::enable_if_t<
 template <Strategy S>
 BYTE* FileReader<S>::NextMemory() const
 {
-  if (mem_alloc.empty() || last_alloc * READ_BUFFER_SIZE == MEMORY_BUFFER_SIZE)
+  if (mem_alloc_.empty() ||
+      last_alloc_ * read_buffer_size == memory_buffer_size)
   {
-    last_alloc = 0;
-    mem_alloc.emplace_back(MEMORY_BUFFER_SIZE);
+    last_alloc_ = 0;
+    mem_alloc_.emplace_back(memory_buffer_size);
   }
   // last_alloc was reset above once the buffer held MEMORY_BUFFER_SIZE bytes.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  BYTE* retval = &mem_alloc.back()[last_alloc * kBlockBytes];
-  last_alloc++;
+  BYTE* retval = &mem_alloc_.back()[last_alloc_ * block_bytes_value];
+  last_alloc_++;
   return retval;
 }
 
-template class FileReader<Strategy::NO_CACHE>;
-template class FileReader<Strategy::FULL_CACHE>;
+template class FileReader<Strategy::NoCache>;
+template class FileReader<Strategy::FullCache>;
 
 // Class-level NTFS_BROWSER_EXPORT_TESTS_ONLY (on FileReader) does not reach a
 // member function template's own explicit instantiations: each needs the
 // macro again here, or the unit tests cannot link against it on a shared
 // build.
 template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<std::span<const BYTE>>
-    FileReader<Strategy::NO_CACHE>::Read<Strategy::NO_CACHE>(
-        LARGE_INTEGER& addr, DWORD length) const;
+    FileReader<Strategy::NoCache>::Read<Strategy::NoCache>(LARGE_INTEGER& addr,
+                                                           DWORD length) const;
 template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<std::span<const BYTE>>
-    FileReader<Strategy::FULL_CACHE>::Read<Strategy::FULL_CACHE>(
+    FileReader<Strategy::FullCache>::Read<Strategy::FullCache>(
         LARGE_INTEGER& addr, DWORD length) const;
 
 }  // namespace NtfsBrowser

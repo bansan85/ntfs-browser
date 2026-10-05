@@ -26,12 +26,12 @@ struct HeaderNonResident
 };
 
 // Size (bytes) of the trailing CompressedSize field described above.
-inline constexpr DWORD kCompressedSizeFieldSize =
+inline constexpr DWORD compressed_size_field_size =
     static_cast<DWORD>(sizeof(ULONGLONG));
 
 // Base header size (64 bytes, no CompressedSize); named so ParseAttrs()'s
 // two size gates read clearly.
-inline constexpr DWORD kHeaderNonResidentBaseSize =
+inline constexpr DWORD header_non_resident_base_size =
     static_cast<DWORD>(sizeof(HeaderNonResident));
 
 // True if this attribute is compressed and therefore declares the trailing
@@ -44,15 +44,15 @@ inline constexpr DWORD kHeaderNonResidentBaseSize =
 
 // Reads the trailing CompressedSize field. Valid only once
 // HasCompressedSizeField(header) is true and total_size was checked to cover
-// kHeaderNonResidentBaseSize + kCompressedSizeFieldSize bytes.
+// header_non_resident_base_size + compressed_size_field_size bytes.
 [[nodiscard]] inline ULONGLONG
     CompressedSize(const HeaderNonResident& header) noexcept
 {
   ULONGLONG size = 0;
   const std::span<const BYTE> field(reinterpret_cast<const BYTE*>(&header),
-                                    kHeaderNonResidentBaseSize +
-                                        kCompressedSizeFieldSize);
-  std::memcpy(&size, field.subspan(kHeaderNonResidentBaseSize).data(),
+                                    header_non_resident_base_size +
+                                        compressed_size_field_size);
+  std::memcpy(&size, field.subspan(header_non_resident_base_size).data(),
               sizeof(size));
   return size;
 }

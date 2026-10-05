@@ -35,31 +35,31 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
+using NtfsBrowserTests::attr_name_exceeds_total_size_record_idx;
 using NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
 using NtfsBrowserTests::BuildFakeNtfsImageWithHugeMftRealSize;
 using NtfsBrowserTests::BuildFakeNtfsImageWithMftExtensionRecord;
 using NtfsBrowserTests::BuildFakeNtfsImageWithMftTree;
 using NtfsBrowserTests::FileTimeToTicks;
-using NtfsBrowserTests::kAttrNameExceedsTotalSizeRecordIdx;
-using NtfsBrowserTests::kMftTreeDeletedChildIdx;
-using NtfsBrowserTests::kMftTreeDeletedDirIdx;
-using NtfsBrowserTests::kMftTreeDeletedFileIdx;
-using NtfsBrowserTests::kMftTreeDocsIdx;
-using NtfsBrowserTests::kMftTreeExtensionIdx;
-using NtfsBrowserTests::kMftTreeHardLinkIdx;
-using NtfsBrowserTests::kMftTreeRecordCount;
-using NtfsBrowserTests::kMftTreeReportAllocatedSize;
-using NtfsBrowserTests::kMftTreeReportDataSize;
-using NtfsBrowserTests::kMftTreeReportIdx;
-using NtfsBrowserTests::kMftTreeReusedDirIdx;
-using NtfsBrowserTests::kMftTreeStaleChildIdx;
-using NtfsBrowserTests::kMftTreeZeroedIdx;
 using NtfsBrowserTests::MemoryDiskReader;
+using NtfsBrowserTests::mft_tree_deleted_child_idx;
+using NtfsBrowserTests::mft_tree_deleted_dir_idx;
+using NtfsBrowserTests::mft_tree_deleted_file_idx;
+using NtfsBrowserTests::mft_tree_docs_idx;
+using NtfsBrowserTests::mft_tree_extension_idx;
+using NtfsBrowserTests::mft_tree_hard_link_idx;
+using NtfsBrowserTests::mft_tree_record_count;
+using NtfsBrowserTests::mft_tree_report_allocated_size;
+using NtfsBrowserTests::mft_tree_report_data_size;
+using NtfsBrowserTests::mft_tree_report_idx;
+using NtfsBrowserTests::mft_tree_reused_dir_idx;
+using NtfsBrowserTests::mft_tree_stale_child_idx;
+using NtfsBrowserTests::mft_tree_zeroed_idx;
 
 namespace
 {
 
-constexpr ULONGLONG kRoot = static_cast<ULONGLONG>(MftIdx::ROOT);
+constexpr ULONGLONG root_value = static_cast<ULONGLONG>(MftIdx::Root);
 
 // Opens BuildFakeNtfsImageWithMftTree() as a volume.
 template <Strategy S>
@@ -70,7 +70,7 @@ std::unique_ptr<NtfsVolume<S>>
       std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithMftTree()),
       options);
   REQUIRE(volume->IsVolumeOK());
-  REQUIRE(volume->GetRecordsCount() == kMftTreeRecordCount);
+  REQUIRE(volume->GetRecordsCount() == mft_tree_record_count);
   return volume;
 }
 
@@ -91,23 +91,23 @@ void RunMftTreeRebuildsPaths()
       OpenMftTreeVolume<S>(VolumeOptions{.include_deleted = true});
   const MftTree tree(*volume);
 
-  CHECK(tree.GetPath(kRoot) == L"\\");
-  CHECK(tree.GetPath(static_cast<ULONGLONG>(MftIdx::MFT)) == L"\\$MFT");
-  CHECK(tree.GetPath(kMftTreeDocsIdx) == L"\\Docs");
+  CHECK(tree.GetPath(root_value) == L"\\");
+  CHECK(tree.GetPath(static_cast<ULONGLONG>(MftIdx::Mft)) == L"\\$MFT");
+  CHECK(tree.GetPath(mft_tree_docs_idx) == L"\\Docs");
 
   SECTION("A DOS alias stays out of the path and the size comes from $DATA")
   {
-    const MftEntry* report = tree.Find(kMftTreeReportIdx);
+    const MftEntry* report = tree.Find(mft_tree_report_idx);
     REQUIRE(report != nullptr);
-    CHECK(tree.GetPath(kMftTreeReportIdx) == L"\\Docs\\report.txt");
+    CHECK(tree.GetPath(mft_tree_report_idx) == L"\\Docs\\report.txt");
     REQUIRE(report->names.size() == 2);
     // The REQUIRE above checks that names holds 2 entries.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(report->names[1].dos_only);
-    CHECK(report->size == kMftTreeReportDataSize);
+    CHECK(report->size == mft_tree_report_data_size);
     // A resident $DATA's allocated size is its attribute record's own
     // padded reservation, which exceeds the real data size here.
-    CHECK(report->allocated_size == kMftTreeReportAllocatedSize);
+    CHECK(report->allocated_size == mft_tree_report_allocated_size);
     CHECK(report->read_only);
     CHECK(report->archive);
     CHECK(report->in_use);
@@ -125,53 +125,53 @@ void RunMftTreeRebuildsPaths()
 
   SECTION("Each hard link has its own path")
   {
-    CHECK(tree.GetPath(kMftTreeHardLinkIdx) == L"\\link-a");
-    CHECK(tree.GetPath(kMftTreeHardLinkIdx, 1) == L"\\Docs\\link-b");
+    CHECK(tree.GetPath(mft_tree_hard_link_idx) == L"\\link-a");
+    CHECK(tree.GetPath(mft_tree_hard_link_idx, 1) == L"\\Docs\\link-b");
   }
 
   SECTION("Children lists each record once, in record order")
   {
-    CHECK(ChildrenOf(tree, kRoot) ==
-          std::vector<ULONGLONG>{static_cast<ULONGLONG>(MftIdx::MFT),
-                                 kMftTreeDocsIdx, kMftTreeHardLinkIdx,
-                                 kMftTreeReusedDirIdx});
-    CHECK(ChildrenOf(tree, kMftTreeDocsIdx) ==
-          std::vector<ULONGLONG>{kMftTreeReportIdx, kMftTreeHardLinkIdx,
-                                 kMftTreeDeletedFileIdx,
-                                 kMftTreeDeletedDirIdx});
-    CHECK(ChildrenOf(tree, kMftTreeDeletedDirIdx) ==
-          std::vector<ULONGLONG>{kMftTreeDeletedChildIdx});
+    CHECK(ChildrenOf(tree, root_value) ==
+          std::vector<ULONGLONG>{static_cast<ULONGLONG>(MftIdx::Mft),
+                                 mft_tree_docs_idx, mft_tree_hard_link_idx,
+                                 mft_tree_reused_dir_idx});
+    CHECK(ChildrenOf(tree, mft_tree_docs_idx) ==
+          std::vector<ULONGLONG>{mft_tree_report_idx, mft_tree_hard_link_idx,
+                                 mft_tree_deleted_file_idx,
+                                 mft_tree_deleted_dir_idx});
+    CHECK(ChildrenOf(tree, mft_tree_deleted_dir_idx) ==
+          std::vector<ULONGLONG>{mft_tree_deleted_child_idx});
   }
 
   SECTION("A deleted subtree stays linked through the bumped sequence number")
   {
-    const MftEntry* deleted = tree.Find(kMftTreeDeletedFileIdx);
+    const MftEntry* deleted = tree.Find(mft_tree_deleted_file_idx);
     REQUIRE(deleted != nullptr);
     CHECK_FALSE(deleted->in_use);
-    CHECK(tree.GetPath(kMftTreeDeletedFileIdx) == L"\\Docs\\old.tmp");
-    CHECK(tree.GetPath(kMftTreeDeletedChildIdx) ==
+    CHECK(tree.GetPath(mft_tree_deleted_file_idx) == L"\\Docs\\old.tmp");
+    CHECK(tree.GetPath(mft_tree_deleted_child_idx) ==
           L"\\Docs\\OldDir\\draft.doc");
-    CHECK(tree.IsReachable(kMftTreeDeletedChildIdx));
+    CHECK(tree.IsReachable(mft_tree_deleted_child_idx));
   }
 
   SECTION("A parent reference to a reused record breaks the path there")
   {
     std::optional<ULONGLONG> lost;
-    CHECK(tree.GetPath(kMftTreeStaleChildIdx, &lost) == L"stale.txt");
-    CHECK(lost == kMftTreeReusedDirIdx);
-    CHECK_FALSE(tree.IsReachable(kMftTreeStaleChildIdx));
+    CHECK(tree.GetPath(mft_tree_stale_child_idx, &lost) == L"stale.txt");
+    CHECK(lost == mft_tree_reused_dir_idx);
+    CHECK_FALSE(tree.IsReachable(mft_tree_stale_child_idx));
   }
 
   SECTION("Extension records and unused slots are not entries")
   {
-    CHECK(tree.Find(kMftTreeExtensionIdx) == nullptr);
-    CHECK(tree.Find(kMftTreeZeroedIdx) == nullptr);
+    CHECK(tree.Find(mft_tree_extension_idx) == nullptr);
+    CHECK(tree.Find(mft_tree_zeroed_idx) == nullptr);
   }
 
   SECTION("Stats count every slot")
   {
     const MftScanStats& stats = tree.Stats();
-    CHECK(stats.slots == kMftTreeRecordCount);
+    CHECK(stats.slots == mft_tree_record_count);
     // $MFT, $Volume, the root, Docs, report.txt, the hard link, NewDir.
     CHECK(stats.in_use == 7);
     CHECK(stats.deleted == 4);
@@ -194,11 +194,11 @@ void RunMftTreeWithoutDeleted()
   const auto volume = OpenMftTreeVolume<S>();
   const MftTree tree(*volume);
 
-  CHECK(tree.Find(kMftTreeDeletedFileIdx) == nullptr);
-  CHECK(tree.Find(kMftTreeDeletedDirIdx) == nullptr);
-  CHECK(tree.Find(kMftTreeStaleChildIdx) == nullptr);
-  CHECK(ChildrenOf(tree, kMftTreeDocsIdx) ==
-        std::vector<ULONGLONG>{kMftTreeReportIdx, kMftTreeHardLinkIdx});
+  CHECK(tree.Find(mft_tree_deleted_file_idx) == nullptr);
+  CHECK(tree.Find(mft_tree_deleted_dir_idx) == nullptr);
+  CHECK(tree.Find(mft_tree_stale_child_idx) == nullptr);
+  CHECK(ChildrenOf(tree, mft_tree_docs_idx) ==
+        std::vector<ULONGLONG>{mft_tree_report_idx, mft_tree_hard_link_idx});
   CHECK(tree.Entries().size() == 7);
   CHECK(tree.Stats().deleted == 4);
   CHECK(tree.Stats().unreachable == 1);
@@ -221,7 +221,7 @@ void RunMftTreeDropsUnrecoveredRecord()
 
     const MftTree tree(*volume);
     CHECK(tree.Stats().damaged == 1);
-    CHECK(tree.Find(kAttrNameExceedsTotalSizeRecordIdx) == nullptr);
+    CHECK(tree.Find(attr_name_exceeds_total_size_record_idx) == nullptr);
   }
   {
     const auto volume = std::make_unique<NtfsVolume<S>>(
@@ -232,7 +232,7 @@ void RunMftTreeDropsUnrecoveredRecord()
 
     const MftTree tree(*volume);
     CHECK(tree.Stats().damaged == 0);
-    CHECK(tree.Find(kAttrNameExceedsTotalSizeRecordIdx) != nullptr);
+    CHECK(tree.Find(attr_name_exceeds_total_size_record_idx) != nullptr);
   }
 }
 
@@ -260,11 +260,11 @@ void RunMftTreeSkipsMftExtensionRecord()
       std::make_unique<NtfsVolume<S>>(std::make_unique<MemoryDiskReader>(
           BuildFakeNtfsImageWithMftExtensionRecord()));
   REQUIRE(volume->IsVolumeOK());
-  REQUIRE(volume->GetRecordsCount() == kMftTreeRecordCount);
+  REQUIRE(volume->GetRecordsCount() == mft_tree_record_count);
 
   const MftTree tree(*volume);
 
-  CHECK(tree.Find(kMftTreeZeroedIdx) == nullptr);
+  CHECK(tree.Find(mft_tree_zeroed_idx) == nullptr);
   // Same counts as the plain fixture, with the extension counted as one.
   CHECK(tree.Stats().extensions == 2);
   CHECK(tree.Stats().in_use == 7);
@@ -276,19 +276,19 @@ template <Strategy S>
 void RunMftTreeClampsForgedRealSize()
 {
   // Aborts a runaway scan, so the test fails instead of spinning.
-  constexpr ULONGLONG kRunawaySlots = 4096;
+  constexpr ULONGLONG runaway_slots = 4096;
 
   const auto volume =
       std::make_unique<NtfsVolume<S>>(std::make_unique<MemoryDiskReader>(
           BuildFakeNtfsImageWithHugeMftRealSize()));
   REQUIRE(volume->IsVolumeOK());
-  CHECK(volume->GetRecordsCount() == kMftTreeRecordCount);
+  CHECK(volume->GetRecordsCount() == mft_tree_record_count);
 
   const MftTree tree(*volume,
                      MftScanOptions{.progress = [&](ULONGLONG done, ULONGLONG)
-                                    { return done < kRunawaySlots; }});
+                                    { return done < runaway_slots; }});
 
-  CHECK(tree.Stats().slots == kMftTreeRecordCount);
+  CHECK(tree.Stats().slots == mft_tree_record_count);
   CHECK(tree.Stats().complete);
 }
 
@@ -296,53 +296,53 @@ void RunMftTreeClampsForgedRealSize()
 
 TEMPLATE_TEST_CASE_SIG("MftTree bounds its scan by the clusters $MFT maps",
                        "[mft-tree][regression]", ((Strategy S), S),
-                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
+                       Strategy::NoCache, Strategy::FullCache)
 {
   RunMftTreeClampsForgedRealSize<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree skips an extension record of $MFT",
                        "[mft-tree][regression]", ((Strategy S), S),
-                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
+                       Strategy::NoCache, Strategy::FullCache)
 {
   RunMftTreeSkipsMftExtensionRecord<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "MftTree rebuilds paths from $FILE_NAME parent references", "[mft-tree]",
-    ((Strategy S), S), Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    ((Strategy S), S), Strategy::NoCache, Strategy::FullCache)
 {
   RunMftTreeRebuildsPaths<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree drops freed records when asked", "[mft-tree]",
-                       ((Strategy S), S), Strategy::NO_CACHE,
-                       Strategy::FULL_CACHE)
+                       ((Strategy S), S), Strategy::NoCache,
+                       Strategy::FullCache)
 {
   RunMftTreeWithoutDeleted<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "MftTree drops a record its FileRecord could not parse by default",
-    "[mft-tree][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[mft-tree][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   RunMftTreeDropsUnrecoveredRecord<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree stops when progress returns false",
-                       "[mft-tree]", ((Strategy S), S), Strategy::NO_CACHE,
-                       Strategy::FULL_CACHE)
+                       "[mft-tree]", ((Strategy S), S), Strategy::NoCache,
+                       Strategy::FullCache)
 {
   RunMftTreeProgressStops<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree logs no warning for never-used record slots",
-                       "[mft-tree]", ((Strategy S), S), Strategy::NO_CACHE,
-                       Strategy::FULL_CACHE)
+                       "[mft-tree]", ((Strategy S), S), Strategy::NoCache,
+                       Strategy::FullCache)
 {
   const std::shared_ptr<spdlog::logger> logger =
-      spdlog::get(std::string(NtfsBrowser::Log::kLoggerName));
+      spdlog::get(std::string(NtfsBrowser::Log::logger_name));
   REQUIRE(logger);
 
   std::ostringstream out;

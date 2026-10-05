@@ -9,23 +9,23 @@ enum class Mask : DWORD
 {
   // Bit masks of Attributes: the bit for attribute type T is
   // 1 << ((T >> 4) - 1), so each type has its own bit.
-  STANDARD_INFORMATION = 0x0001,
-  ATTRIBUTE_LIST = 0x0002,
-  FILE_NAME = 0x0004,
-  OBJECT_ID = 0x0008,
-  SECURITY_DESCRIPTOR = 0x0010,
-  VOLUME_NAME = 0x0020,
-  VOLUME_INFORMATION = 0x0040,
-  DATA = 0x0080,
-  INDEX_ROOT = 0x0100,
-  INDEX_ALLOCATION = 0x0200,
-  BITMAP = 0x0400,
-  REPARSE_POINT = 0x0800,
-  EA_INFORMATION = 0x1000,
-  EA = 0x2000,
-  PROPERTY_SET = 0x4000,
-  LOGGED_UTILITY_STREAM = 0x8000,
-  ALL = static_cast<DWORD>(-1)
+  StandardInformation = 0x0001,
+  AttributeList = 0x0002,
+  FileName = 0x0004,
+  ObjectId = 0x0008,
+  SecurityDescriptor = 0x0010,
+  VolumeName = 0x0020,
+  VolumeInformation = 0x0040,
+  Data = 0x0080,
+  IndexRoot = 0x0100,
+  IndexAllocation = 0x0200,
+  Bitmap = 0x0400,
+  ReparsePoint = 0x0800,
+  EaInformation = 0x1000,
+  Ea = 0x2000,
+  PropertySet = 0x4000,
+  LoggedUtilityStream = 0x8000,
+  All = static_cast<DWORD>(-1)
 };
 
 //NOLINTNEXTLINE

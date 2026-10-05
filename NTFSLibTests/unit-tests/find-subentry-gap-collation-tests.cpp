@@ -42,24 +42,24 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> found =
-      root.FindSubEntry(NtfsBrowserTests::kGapCollationSearchName);
+      root.FindSubEntry(NtfsBrowserTests::gap_collation_search_name);
   REQUIRE(found.has_value());
   CHECK(NtfsBrowserTests::Unwrap(found).GetFileReference() ==
-        NtfsBrowserTests::kGapCollationLeafMftRef);
+        NtfsBrowserTests::gap_collation_leaf_mft_ref);
 }
 
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry descends into a real sub-node across the Z-a collation gap",
-    "[file-record][filename][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    "[file-record][filename][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   RunFindSubEntryDescendsIntoGapCollationSubNode<S>();
 }

@@ -36,7 +36,7 @@ namespace
 // DFTT test #7 ("NTFS Undelete", http://dftt.sf.net): a 6 MB NTFS file
 // system with eight deleted files, two deleted directories, and a deleted
 // alternate data stream, none of which were touched afterwards.
-const std::filesystem::path kDfttImage =
+const std::filesystem::path dftt_image =
     NtfsBrowserTests::DfttDir() / "7-undel-ntfs" / "7-ntfs-undel.dd";
 
 // One DFTT test #7 file, addressed directly by its own MFT record number
@@ -53,37 +53,37 @@ struct DeletedFile
 
 // Facts from the image's index.html, per file. The MD5s are skipped without
 // NTFS_TEST_HAS_MD5.
-constexpr DeletedFile kResidentFile{
+constexpr DeletedFile resident_file{
     37, {}, 101, "9036637712b491904cd0bfbdbe648453"};
-constexpr DeletedFile kSingleClusterFile{
+constexpr DeletedFile single_cluster_file{
     31, {}, 780, "59b20779f69ff9f0ac5fcd2c38835a79"};
 // A multiple cluster, non-fragmented file, and its named ADS: same record.
-constexpr DeletedFile kMultiClusterFile{
+constexpr DeletedFile multi_cluster_file{
     32, {}, 3801, "ffd27bd782bdce67750b6b9ee069d2ef"};
-constexpr DeletedFile kMultiClusterAds{32, L"ADS", 1234,
-                                       "ba1b9eedb1c091ddca253d35dde8f616"};
+constexpr DeletedFile multi_cluster_ads{32, L"ADS", 1234,
+                                        "ba1b9eedb1c091ddca253d35dde8f616"};
 // Fragmented files, interleaved with each other on disk.
-constexpr DeletedFile kFragmentedFile1{
+constexpr DeletedFile fragmented_file1{
     29, {}, 1584, "7a3bc5b763bef201202108f4ba128149"};
-constexpr DeletedFile kFragmentedFile2{
+constexpr DeletedFile fragmented_file2{
     30, {}, 3873, "0e80ab84ef0087e60dfc67b88a1cf13e"};
 // Files in deleted directories.
-constexpr DeletedFile kInDeletedDir1File{
+constexpr DeletedFile in_deleted_dir1_file{
     36, {}, 1715, "59cf0e9cd107bc1e75afb7374f6e05bb"};
-constexpr DeletedFile kInDeletedDir2File{
+constexpr DeletedFile in_deleted_dir2_file{
     35, {}, 2027, "21121699487f3fbbdb9a4b3391b6d3e0"};
 // In a directory whose own MFT record has been reallocated.
-constexpr DeletedFile kInReallocatedDirFile{
+constexpr DeletedFile in_reallocated_dir_file{
     38, {}, 1005, "c229626f6a71b167ad7e50c4f2fccdb1"};
 
 // Recovers one deleted file by MFT record number and checks it against its
 // known size and MD5 (from index.html, skipped without NTFS_TEST_HAS_MD5),
 // plus the Feb 29, 2004 (leap year) creation date every file here shares.
-void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NO_CACHE>& volume,
+void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NoCache>& volume,
                               const DeletedFile& file)
 {
   FileRecord record(volume);
-  record.SetAttrMask(Mask::DATA | Mask::STANDARD_INFORMATION);
+  record.SetAttrMask(Mask::Data | Mask::StandardInformation);
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted());
   REQUIRE(record.ParseAttrs());
@@ -95,7 +95,7 @@ void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NO_CACHE>& volume,
   CHECK(month == 2);
   CHECK(day == 29);
 
-  const AttrBase<Strategy::NO_CACHE>* stream =
+  const AttrBase<Strategy::NoCache>* stream =
       record.FindStream(file.stream_name);
   REQUIRE(stream != nullptr);
   REQUIRE(stream->GetDataSize() == file.size);
@@ -112,23 +112,23 @@ void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NO_CACHE>& volume,
 TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
           "[dftt][integration]")
 {
-  NtfsBrowserTests::RequireCorpusImage(kDfttImage);
+  NtfsBrowserTests::RequireCorpusImage(dftt_image);
 
   VolumeOptions options;
   options.include_deleted = true;
-  NtfsVolume<Strategy::NO_CACHE> const volume(
-      NtfsBrowserTests::OpenBareVolumeImage(kDfttImage), options);
+  NtfsVolume<Strategy::NoCache> const volume(
+      NtfsBrowserTests::OpenBareVolumeImage(dftt_image), options);
   REQUIRE(volume.IsVolumeOK());
 
-  CheckRecoversDeletedFile(volume, kResidentFile);
-  CheckRecoversDeletedFile(volume, kSingleClusterFile);
-  CheckRecoversDeletedFile(volume, kMultiClusterFile);
-  CheckRecoversDeletedFile(volume, kMultiClusterAds);
-  CheckRecoversDeletedFile(volume, kFragmentedFile1);
-  CheckRecoversDeletedFile(volume, kFragmentedFile2);
-  CheckRecoversDeletedFile(volume, kInDeletedDir1File);
-  CheckRecoversDeletedFile(volume, kInDeletedDir2File);
-  CheckRecoversDeletedFile(volume, kInReallocatedDirFile);
+  CheckRecoversDeletedFile(volume, resident_file);
+  CheckRecoversDeletedFile(volume, single_cluster_file);
+  CheckRecoversDeletedFile(volume, multi_cluster_file);
+  CheckRecoversDeletedFile(volume, multi_cluster_ads);
+  CheckRecoversDeletedFile(volume, fragmented_file1);
+  CheckRecoversDeletedFile(volume, fragmented_file2);
+  CheckRecoversDeletedFile(volume, in_deleted_dir1_file);
+  CheckRecoversDeletedFile(volume, in_deleted_dir2_file);
+  CheckRecoversDeletedFile(volume, in_reallocated_dir_file);
 
   // The two deleted directories themselves.
   FileRecord dir1(volume);

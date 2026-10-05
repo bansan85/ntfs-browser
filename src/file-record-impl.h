@@ -44,37 +44,37 @@ class FileRecord<S>::Impl
   // The FileRecord this belongs to. Attributes are built over it, and private
   // methods that need a public one go through it. A pointer, not a reference:
   // FileRecord's move constructor MUST repoint it.
-  FileRecord<S>* self_;
-  const NtfsVolume<S>* volume_;
-  std::unique_ptr<FileRecordHeaderImpl<S>> file_record_;
-  std::optional<ULONGLONG> file_reference_;
-  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
-  Mask attr_mask_{Mask::ALL};
+  FileRecord<S>* self;
+  const NtfsVolume<S>* volume;
+  std::unique_ptr<FileRecordHeaderImpl<S>> file_record;
+  std::optional<ULONGLONG> file_reference;
+  std::array<AttrRawCallback, attr_nums> attr_raw_call_back{};
+  Mask attr_mask{Mask::All};
 
   // The extension records $ATTRIBUTE_LIST opened. An attribute imported from
   // one keeps a reference into its bytes, so they MUST outlive attr_list_:
   // declared first, destroyed last, and cleared after the attributes.
   // Unlike std::vector, appending never moves existing elements' addresses.
-  std::list<FileRecord<S>> extension_records_;
+  std::list<FileRecord<S>> extension_records;
   // Aligned copies of the attributes that sit at a misaligned address in
   // record_buffer_. A parsed attribute keeps a reference into its copy, so
   // these MUST outlive attr_list_: declared before it, cleared after it.
-  std::vector<std::vector<BYTE>> realigned_attrs_;
-  std::array<std::vector<std::unique_ptr<AttrBase<S>>>, kAttrNums> attr_list_{};
+  std::vector<std::vector<BYTE>> realigned_attrs;
+  std::array<std::vector<std::unique_ptr<AttrBase<S>>>, attr_nums> attr_list{};
 
   // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.
-  bool resolve_attr_list_{true};
+  bool resolve_attr_list{true};
 
   // True bypasses the deleted-record gate in ParseAttrs(): set by
   // NtfsVolume on its own internal FileRecords ($Volume, $MFT, $MFT
   // extension records), so a freed one doesn't take the whole volume down,
   // whatever include_deleted says.
-  bool bypass_deleted_gate_{false};
+  bool bypass_deleted_gate{false};
 
-  // Owned per-instance so this FileRecord's raw bytes (viewed by NO_CACHE
+  // Owned per-instance so this FileRecord's raw bytes (viewed by NoCache
   // attributes as plain pointers/spans, no copy) are never aliased by
   // another FileRecord's read (eg. NtfsVolume's $MFT record vs. this one).
-  std::vector<BYTE> record_buffer_;
+  std::vector<BYTE> record_buffer;
 
   void ClearAttrs() noexcept;
   [[nodiscard]] const AttrHeaderCommon&
@@ -82,38 +82,37 @@ class FileRecord<S>::Impl
   void MergeAttributeContinuations();
   [[nodiscard]] bool AttachEfsContext();
   [[nodiscard]] std::vector<Efs::WrappedFek> ReadEfsEntries() const;
-  void UserCallBack(DWORD attType, const AttrHeaderCommon& ahc, bool& bDiscard);
-  template <typename RESIDENT>
+  void UserCallBack(DWORD att_type, const AttrHeaderCommon& ahc, bool& discard);
+  template <typename Resident>
   [[nodiscard]] std::unique_ptr<AttrBase<S>>
-      AllocAttr(const AttrHeaderCommon& ahc, bool& bUnhandled,
-                std::unordered_set<ULONGLONG>& attrListChain);
+      AllocAttr(const AttrHeaderCommon& ahc, bool& unhandled,
+                std::unordered_set<ULONGLONG>& attr_list_chain);
   [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc,
-                               std::unordered_set<ULONGLONG>& attrListChain);
-  [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attrListChain);
+                               std::unordered_set<ULONGLONG>& attr_list_chain);
+  [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
   static void MergeStreamChain(std::vector<std::unique_ptr<AttrBase<S>>>& attrs,
                                std::vector<size_t>& indices,
-                               std::vector<size_t>& toErase);
+                               std::vector<size_t>& to_erase);
   [[nodiscard]] static const std::vector<IndexEntryView>*
       FileNameIndexRootEntries(const AttrBase<S>& attr);
   [[nodiscard]] bool VisitAttr(std::span<const BYTE> cur,
                                const AttrHeaderCommon& head,
-                               std::unordered_set<ULONGLONG>& attrListChain);
+                               std::unordered_set<ULONGLONG>& attr_list_chain);
   [[nodiscard]] std::unique_ptr<FileRecordHeaderImpl<S>>
-      ReadFileRecord(ULONGLONG fileRef);
+      ReadFileRecord(ULONGLONG file_ref);
   [[nodiscard]] std::optional<IndexEntry>
-      VisitIndexBlock(ULONGLONG vcn, std::wstring_view fileName,
-                      std::unordered_set<ULONGLONG>& visitedVcns,
+      VisitIndexBlock(ULONGLONG vcn, std::wstring_view file_name,
+                      std::unordered_set<ULONGLONG>& visited_vcns,
                       size_t depth) const;
   [[nodiscard]] std::optional<IndexEntry>
-      FindSubEntryInOrder(std::wstring_view fileName) const;
-  void TraverseSubNode(ULONGLONG vcn, const SUBENTRY_CALLBACK& seCallBack,
+      FindSubEntryInOrder(std::wstring_view file_name) const;
+  void TraverseSubNode(ULONGLONG vcn, const SubentryCallback& se_call_back,
                        void* context,
-                       std::unordered_set<ULONGLONG>& visitedVcns,
+                       std::unordered_set<ULONGLONG>& visited_vcns,
                        size_t depth) const;
-  void
-      ScanOrphanedIndexBlocks(const SUBENTRY_CALLBACK& seCallBack,
-                              void* context,
-                              std::unordered_set<ULONGLONG>& visitedVcns) const;
+  void ScanOrphanedIndexBlocks(
+      const SubentryCallback& se_call_back, void* context,
+      std::unordered_set<ULONGLONG>& visited_vcns) const;
 };
 
 }  // namespace NtfsBrowser

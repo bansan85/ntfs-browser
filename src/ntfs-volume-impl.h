@@ -45,25 +45,25 @@ class NtfsVolume<S>::Impl
   Impl(NtfsVolume<S>& self, const VolumeOptions& options);
 
   // The NtfsVolume this belongs to. The FileRecords it owns are built over it.
-  NtfsVolume<S>* self_;
-  ULONGLONG mft_addr_{0};
-  std::unique_ptr<FileReader<S>> volume_;
+  NtfsVolume<S>* self;
+  ULONGLONG mft_addr{0};
+  std::unique_ptr<FileReader<S>> volume;
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
-  const AttrBase<S>* mft_data_{nullptr};  // $MFT Data Attribute (base extent)
+  const AttrBase<S>* mft_data{nullptr};  // $MFT Data Attribute (base extent)
 
   // The volume's own $UpCase, loaded on first use by GetUpCaseTable(). Stays
   // null when $UpCase cannot be read; upcase_loaded_ then keeps the failure
   // from being retried.
-  mutable std::unique_ptr<const UpCaseTable> upcase_;
+  mutable std::unique_ptr<const UpCaseTable> upcase;
 
-  FileRecord<S> mft_record_;  // $MFT File Record
+  FileRecord<S> mft_record;  // $MFT File Record
 
   // EFS key source. efs_provider_set_ tells "never chosen", which lets the
   // default provider be created on the first decryption, from "chosen to be
   // none" (SetEfsKeyProvider(nullptr)), which disables decryption.
-  mutable std::shared_ptr<Efs::IEfsKeyProvider> efs_provider_;
+  mutable std::shared_ptr<Efs::IEfsKeyProvider> efs_provider;
 
   // One VCN range $MFT's own DATA attribute maps: base extent or continuation.
   struct MftExtent
@@ -74,38 +74,38 @@ class NtfsVolume<S>::Impl
   };
 
   // Sorted by start_vcn; binary-searched per file-record read.
-  std::vector<MftExtent> mft_extents_;
+  std::vector<MftExtent> mft_extents;
 
-  // Owns extension FileRecords; std::list keeps FULL_CACHE pointers stable.
-  std::list<FileRecord<S>> mft_extension_records_;
+  // Owns extension FileRecords; std::list keeps FullCache pointers stable.
+  std::list<FileRecord<S>> mft_extension_records;
 
-  mutable std::vector<BYTE> cluster_buffer_;
+  mutable std::vector<BYTE> cluster_buffer;
 
-  std::array<AttrRawCallback, kAttrNums> attr_raw_call_back_{};
-  DWORD cluster_size_{0};
-  DWORD file_record_size_{0};
-  DWORD index_block_size_{0};
-  WORD sector_size_{0};
-  bool volume_ok_{false};
-  BYTE version_major_{0};
-  BYTE version_minor_{0};
-  mutable bool efs_provider_set_{false};
+  std::array<AttrRawCallback, attr_nums> attr_raw_call_back{};
+  DWORD cluster_size{0};
+  DWORD file_record_size{0};
+  DWORD index_block_size{0};
+  WORD sector_size{0};
+  bool volume_ok{false};
+  BYTE version_major{0};
+  BYTE version_minor{0};
+  mutable bool efs_provider_set{false};
 
   // The selected EFS cipher backend. Defaults to whichever one is compiled
   // in, Crypto++ first.
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-  Efs::CipherBackend efs_backend_{Efs::CipherBackend::kCryptoPp};
+  Efs::CipherBackend efs_backend{Efs::CipherBackend::CryptoPp};
 #elif defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-  Efs::CipherBackend efs_backend_{Efs::CipherBackend::kBCrypt};
+  Efs::CipherBackend efs_backend{Efs::CipherBackend::BCrypt};
 #else
-  Efs::CipherBackend efs_backend_{Efs::CipherBackend::kCryptoPp};
+  Efs::CipherBackend efs_backend{Efs::CipherBackend::CryptoPp};
 #endif
-  mutable bool upcase_loaded_{false};
+  mutable bool upcase_loaded{false};
 
   // Fixed for the volume's lifetime; set by the constructor, read back
   // through GetOptions(). No setter: every component that reads it goes
   // through this one volume-wide copy.
-  VolumeOptions options_;
+  VolumeOptions options;
 
 #ifdef _WIN32
   [[nodiscard]] bool OpenVolume(_TCHAR volume);
@@ -126,12 +126,12 @@ class NtfsVolume<S>::Impl
   };
 
   [[nodiscard]] static std::vector<PendingMftExtension>
-      CollectPendingMftExtensions(const AttrBase<S>& rawList,
-                                  ULONGLONG selfRef);
+      CollectPendingMftExtensions(const AttrBase<S>& raw_list,
+                                  ULONGLONG self_ref);
   void ResolvePendingMftExtension(const PendingMftExtension& item,
-                                  ULONGLONG selfRef);
-  void TryAddMftExtent(const AttrBase<S>& attr, ULONGLONG expectedStartVcn);
-  [[nodiscard]] bool IsMftRangeMapped(ULONGLONG byteOffset,
+                                  ULONGLONG self_ref);
+  void TryAddMftExtent(const AttrBase<S>& attr, ULONGLONG expected_start_vcn);
+  [[nodiscard]] bool IsMftRangeMapped(ULONGLONG byte_offset,
                                       ULONGLONG length) const noexcept;
   [[nodiscard]] const MftExtent* FindMftExtent(ULONGLONG vcn) const noexcept;
   [[nodiscard]] std::optional<ULONGLONG>
@@ -139,8 +139,8 @@ class NtfsVolume<S>::Impl
   [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
   [[nodiscard]] const UpCaseTable& GetUpCaseTable() const;
   [[nodiscard]] std::unique_ptr<const UpCaseTable> LoadUpCaseTable() const;
-  void AttrRawCallBack(DWORD attType, const AttrHeaderCommon& ahc,
-                       bool& bDiscard) const;
+  void AttrRawCallBack(DWORD att_type, const AttrHeaderCommon& ahc,
+                       bool& discard) const;
 };
 
 }  // namespace NtfsBrowser

@@ -22,19 +22,19 @@ namespace
 {
 
 // Command-line switch that adds the records NTFS freed to the listing.
-constexpr std::wstring_view kDeletedOption = L"--deleted";
+constexpr std::wstring_view deleted_option = L"--deleted";
 // Command-line switch that salvages a damaged item instead of rejecting it.
-constexpr std::wstring_view kRecoverOption = L"--recover";
+constexpr std::wstring_view recover_option = L"--recover";
 
 // Width of every column before the path, separators included, so an extra
 // hard link's "=" line lines up under the path it follows.
-constexpr int kPathColumn = 63;
+constexpr int path_column = 63;
 
 // Prints command-line usage help.
-void usage()
+void Usage()
 {
   printf("Usage: ntfsmftlist [--log=...] [--deleted] [--recover] <volume>\n");
-  printf("  %s\n", std::string(Log::kOptionUsage).c_str());
+  printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("  --deleted     also list the records NTFS freed\n");
   printf("  --recover     salvage a damaged item instead of rejecting it\n");
   printf("  <volume>      a drive letter (c:), or a device or image path\n");
@@ -68,11 +68,11 @@ std::string ToUtf8(std::wstring_view text)
 
 // The path of one name of entry, as shown in the listing.
 std::string DisplayPath(const MftTree& tree, const MftEntry& entry,
-                        std::optional<size_t> nameIndex)
+                        std::optional<size_t> name_index)
 {
   std::optional<ULONGLONG> lost;
-  const std::wstring path = nameIndex
-                                ? tree.GetPath(entry.record, *nameIndex, &lost)
+  const std::wstring path = name_index
+                                ? tree.GetPath(entry.record, *name_index, &lost)
                                 : tree.GetPath(entry.record, &lost);
   if (path.empty())
   {
@@ -91,10 +91,10 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry)
   SYSTEMTIME st{};
   FileTimeToSystemTime(&entry.write_time, &st);
 
-  std::string sizeColumn = "<DIR>";
+  std::string size_column = "<DIR>";
   if (!entry.directory)
   {
-    sizeColumn = std::to_string(entry.size);
+    size_column = std::to_string(entry.size);
   }
 
   size_t links = 0;
@@ -109,8 +109,8 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry)
   const std::string path = DisplayPath(tree, entry, std::nullopt);
   printf("%10llu %5u %-3s %14s %04u-%02u-%02u %02u:%02u %c%c%c%c%c%c %2zu %s\n",
          entry.record, entry.sequence, entry.in_use ? "" : "DEL",
-         sizeColumn.c_str(), st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute,
-         entry.read_only ? 'R' : '-', entry.hidden ? 'H' : '-',
+         size_column.c_str(), st.wYear, st.wMonth, st.wDay, st.wHour,
+         st.wMinute, entry.read_only ? 'R' : '-', entry.hidden ? 'H' : '-',
          entry.system ? 'S' : '-', entry.compressed ? 'C' : '-',
          entry.encrypted ? 'E' : '-', entry.sparse ? 'P' : '-', links,
          path.c_str());
@@ -126,62 +126,63 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry)
     const std::string other = DisplayPath(tree, entry, i);
     if (other != path)
     {
-      printf("%*s= %s\n", kPathColumn, "", other.c_str());
+      printf("%*s= %s\n", path_column, "", other.c_str());
     }
   }
 }
 
 // Opens target as a drive letter ("c" or "c:"), or else as a device or
 // image path.
-std::unique_ptr<NtfsVolume<Strategy::NO_CACHE>>
+std::unique_ptr<NtfsVolume<Strategy::NoCache>>
     OpenVolume(std::wstring_view target, const VolumeOptions& options)
 {
   // A lone letter, optionally followed by a colon, names a drive.
-  const bool driveLetter =
+  const bool drive_letter =
       (target.size() == 1 || (target.size() == 2 && target.back() == L':')) &&
       iswalpha(target.front()) != 0;
-  if (driveLetter)
+  if (drive_letter)
   {
-    return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target.front(),
-                                                            options);
+    return std::make_unique<NtfsVolume<Strategy::NoCache>>(target.front(),
+                                                           options);
   }
-  return std::make_unique<NtfsVolume<Strategy::NO_CACHE>>(target, options);
+  return std::make_unique<NtfsVolume<Strategy::NoCache>>(target, options);
 }
 
 }  // namespace
 
+// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
 int wmain(int argc, wchar_t* argv[])
 {
-  Log::Config logConfig;
-  VolumeOptions volumeOptions;
-  MftScanOptions scanOptions;
+  Log::Config log_config;
+  VolumeOptions volume_options;
+  MftScanOptions scan_options;
   const wchar_t* target = nullptr;
 
   for (int i = 1; i < argc; i++)
   {
     const std::wstring_view arg(argv[i]);
-    if (arg.starts_with(Log::kOptionPrefixW))
+    if (arg.starts_with(Log::option_prefix_w))
     {
-      if (!Log::ParseOption(arg, logConfig))
+      if (!Log::ParseOption(arg, log_config))
       {
-        usage();
+        Usage();
         return -1;
       }
       continue;
     }
-    if (arg == kDeletedOption)
+    if (arg == deleted_option)
     {
-      volumeOptions.include_deleted = true;
+      volume_options.include_deleted = true;
       continue;
     }
-    if (arg == kRecoverOption)
+    if (arg == recover_option)
     {
-      volumeOptions.recover_errors = true;
+      volume_options.recover_errors = true;
       continue;
     }
     if (target != nullptr)
     {
-      usage();
+      Usage();
       return -1;
     }
     target = argv[i];
@@ -189,26 +190,26 @@ int wmain(int argc, wchar_t* argv[])
 
   if (target == nullptr)
   {
-    usage();
+    Usage();
     return -1;
   }
 
-  if (!Log::Configure(logConfig))
+  if (!Log::Configure(log_config))
   {
-    fprintf(stderr, "Cannot open log file %ls\n", logConfig.file_path.c_str());
+    fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
   }
 
   SetConsoleOutputCP(CP_UTF8);
 
-  const std::unique_ptr<NtfsVolume<Strategy::NO_CACHE>> volume =
-      OpenVolume(target, volumeOptions);
+  const std::unique_ptr<NtfsVolume<Strategy::NoCache>> volume =
+      OpenVolume(target, volume_options);
   if (!volume->IsVolumeOK())
   {
     fprintf(stderr, "Cannot open %ls as an NTFS volume\n", target);
     return -1;
   }
 
-  scanOptions.progress = [](ULONGLONG done, ULONGLONG total)
+  scan_options.progress = [](ULONGLONG done, ULONGLONG total)
   {
     fprintf(stderr, "\rScanning $MFT: %llu / %llu", done, total);
     if (done == total)
@@ -218,7 +219,7 @@ int wmain(int argc, wchar_t* argv[])
     return true;
   };
 
-  const MftTree tree(*volume, scanOptions);
+  const MftTree tree(*volume, scan_options);
 
   printf("%10s %5s %-3s %14s %-16s %-6s %2s %s\n", "Record", "Seq", "", "Size",
          "Last write", "Attrib", "Ln", "Path");

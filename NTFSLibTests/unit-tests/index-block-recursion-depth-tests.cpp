@@ -41,15 +41,15 @@ void RunIndexBlockChainDepthIsBounded()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
+  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
   SECTION("FindSubEntry")
   {
     const std::optional<IndexEntry> found =
-        root.FindSubEntry(NtfsBrowserTests::kIndexBlockChainLeafName);
+        root.FindSubEntry(NtfsBrowserTests::index_block_chain_leaf_name);
     CHECK_FALSE(found.has_value());
   }
 
@@ -68,7 +68,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A chained $INDEX_ALLOCATION deeper than the recursion depth limit is "
     "not fully descended",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NO_CACHE, Strategy::FULL_CACHE)
+    Strategy::NoCache, Strategy::FullCache)
 {
   RunIndexBlockChainDepthIsBounded<S>();
 }

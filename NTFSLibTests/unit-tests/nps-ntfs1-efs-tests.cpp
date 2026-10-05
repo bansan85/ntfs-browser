@@ -38,7 +38,7 @@ namespace
 {
 
 // The only Encrypted/* file whose $EFS entry matches a provided key.
-constexpr std::string_view kReencryptedFile = "logfile1.txt";
+constexpr std::string_view reencrypted_file = "logfile1.txt";
 
 // One of the two EFS recovery keys narrative.txt promises at the corpus
 // root, both unlocking the same certificate: exported without a password,
@@ -49,7 +49,7 @@ struct EfsKey
   std::wstring_view password;
 };
 
-constexpr std::array<EfsKey, 2> kEfsKeys{{
+constexpr std::array<EfsKey, 2> efs_keys{{
     {"EFS-key-no-password.pfx", L""},
     {"EFS-key-password.pfx", L"password"},
 }};
@@ -80,20 +80,20 @@ TEST_CASE(
     "dictates (NPS ntfs1, gen2)",
     "[nps][integration][efs]")
 {
-  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::kNtfs1Image);
+  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
-  NtfsVolume<Strategy::NO_CACHE> volume(NtfsBrowserTests::OpenNtfs1Image(),
-                                        VolumeOptions{});
+  NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),
+                                       VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NO_CACHE> root(volume);
+  FileRecord<Strategy::NoCache> root(volume);
   NtfsBrowserTests::OpenRootDir(root);
 
-  FileRecord<Strategy::NO_CACHE> encrypted_dir(volume);
+  FileRecord<Strategy::NoCache> encrypted_dir(volume);
   NtfsBrowserTests::OpenRootDir(encrypted_dir);
   NtfsBrowserTests::OpenSubDir(encrypted_dir, "Encrypted");
 
-  for (const EfsKey& key : kEfsKeys)
+  for (const EfsKey& key : efs_keys)
   {
     INFO("key " << key.pfx_name);
 
@@ -110,13 +110,13 @@ TEST_CASE(
     volume.SetEfsKeyProvider(provider);
 
     for (const NtfsBrowserTests::KnownFile& file :
-         NtfsBrowserTests::kKnownFiles)
+         NtfsBrowserTests::known_files)
     {
       INFO("file " << file.name);
 
-      FileRecord<Strategy::NO_CACHE> stream_owner(volume);
+      FileRecord<Strategy::NoCache> stream_owner(volume);
       NtfsBrowserTests::OpenFile(stream_owner, encrypted_dir, file.name);
-      const AttrBase<Strategy::NO_CACHE>* stream = stream_owner.FindStream({});
+      const AttrBase<Strategy::NoCache>* stream = stream_owner.FindStream({});
       REQUIRE(stream != nullptr);
       CHECK(stream->GetDataSize() == file.size);
 
@@ -125,7 +125,7 @@ TEST_CASE(
 
       // Only this file was rewritten after the volume's EFS certificate
       // changed.
-      if (file.name == kReencryptedFile)
+      if (file.name == reencrypted_file)
       {
         REQUIRE(read == data.size());
   #ifdef NTFS_TEST_HAS_MD5

@@ -19,8 +19,8 @@ namespace NtfsBrowser::Efs
 // Which library decrypts the file data once the key is known.
 enum class CipherBackend : std::uint8_t
 {
-  kCryptoPp,
-  kBCrypt
+  CryptoPp,
+  BCrypt
 };
 
 // Unwraps the File Encryption Key (FEK) of an EFS file. A file carries one
@@ -41,7 +41,7 @@ class IEfsKeyProvider
   // little-endian, the CryptoAPI byte order. The caller wipes the result.
   [[nodiscard]] virtual std::optional<std::vector<BYTE>>
       UnwrapFek(std::span<const BYTE> thumbprint,
-                std::span<const BYTE> wrappedFek) const = 0;
+                std::span<const BYTE> wrapped_fek) const = 0;
 };
 
 #ifdef _WIN32
@@ -55,7 +55,7 @@ class IEfsKeyProvider
 // file cannot be read or the password is wrong. The keys stay in memory: they
 // are never added to the user's key storage.
 [[nodiscard]] NTFS_BROWSER_EXPORT std::shared_ptr<IEfsKeyProvider>
-    MakePfxKeyProvider(const std::filesystem::path& pfxPath,
+    MakePfxKeyProvider(const std::filesystem::path& pfx_path,
                        std::wstring_view password);
 #endif
 

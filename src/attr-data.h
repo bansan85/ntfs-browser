@@ -8,12 +8,12 @@
 namespace NtfsBrowser
 {
 
-template <class TYPE_RESIDENT, Strategy S>
-class AttrData : public TYPE_RESIDENT
+template <class Resident, Strategy S>
+class AttrData : public Resident
 {
  public:
   AttrData(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record)
-      : TYPE_RESIDENT(ahc, file_record)
+      : Resident(ahc, file_record)
   {
     LogTrace("Attribute: Data ({}Resident)",
              this->IsNonResident() ? "Non" : "");

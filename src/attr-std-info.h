@@ -20,8 +20,8 @@ namespace Flag
 enum class StdInfoPermission : DWORD;
 }  // namespace Flag
 
-template <typename RESIDENT, Strategy S>
-class AttrStdInfo : public RESIDENT
+template <typename Resident, Strategy S>
+class AttrStdInfo : public Resident
 {
  public:
   AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
@@ -37,8 +37,8 @@ class AttrStdInfo : public RESIDENT
  private:
   const Attr::StandardInformation& std_info_;
 
-  void GetFileTime(FILETIME* writeTm, FILETIME* createTm, FILETIME* accessTm,
-                   FILETIME* changeTm = nullptr) const noexcept;
+  void GetFileTime(FILETIME* write_tm, FILETIME* create_tm, FILETIME* access_tm,
+                   FILETIME* change_tm = nullptr) const noexcept;
   [[nodiscard]] Flag::StdInfoPermission GetFilePermission() const noexcept;
   [[nodiscard]] bool IsReadOnly() const noexcept;
   [[nodiscard]] bool IsHidden() const noexcept;

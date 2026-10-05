@@ -19,8 +19,8 @@ namespace
 {
 // Checks the body size before a reference is bound to it: an empty body may
 // have a null data pointer, which a reference MUST NOT be bound to.
-template <typename RESIDENT>
-const Attr::VolumeInformation& CheckedVolInfo(const RESIDENT& attr)
+template <typename Resident>
+const Attr::VolumeInformation& CheckedVolInfo(const Resident& attr)
 {
   if (attr.GetDataSize() < sizeof(Attr::VolumeInformation))
   {
@@ -32,27 +32,27 @@ const Attr::VolumeInformation& CheckedVolInfo(const RESIDENT& attr)
 }
 }  // namespace
 
-template <typename RESIDENT, Strategy S>
-AttrVolInfo<RESIDENT, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
+template <typename Resident, Strategy S>
+AttrVolInfo<Resident, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
                                       const FileRecord<S>& file_record)
-    : RESIDENT(ahc, file_record), vol_info_(CheckedVolInfo<RESIDENT>(*this))
+    : Resident(ahc, file_record), vol_info_(CheckedVolInfo<Resident>(*this))
 {
   LogTrace("Attribute: Volume Information");
 }
 
-template <typename RESIDENT, Strategy S>
-AttrVolInfo<RESIDENT, S>::~AttrVolInfo()
+template <typename Resident, Strategy S>
+AttrVolInfo<Resident, S>::~AttrVolInfo()
 {
   LogTrace("AttrVolInfo deleted");
 }
 
-template <typename RESIDENT, Strategy S>
-std::pair<BYTE, BYTE> AttrVolInfo<RESIDENT, S>::GetVersion() const noexcept
+template <typename Resident, Strategy S>
+std::pair<BYTE, BYTE> AttrVolInfo<Resident, S>::GetVersion() const noexcept
 {
   return {vol_info_.major_version, vol_info_.minor_version};
 }
 
-template class AttrVolInfo<AttrResidentFullCache, Strategy::FULL_CACHE>;
-template class AttrVolInfo<AttrResidentNoCache, Strategy::NO_CACHE>;
+template class AttrVolInfo<AttrResidentFullCache, Strategy::FullCache>;
+template class AttrVolInfo<AttrResidentNoCache, Strategy::NoCache>;
 
 }  // namespace NtfsBrowser

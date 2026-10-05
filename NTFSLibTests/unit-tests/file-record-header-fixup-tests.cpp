@@ -14,74 +14,74 @@
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"
 
+using NtfsBrowser::file_record_magic;
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::FileRecordHeaderImpl;
-using NtfsBrowser::kFileRecordMagic;
 using NtfsBrowser::Strategy;
 
 namespace
 {
 
 // Matches the record buffer size FileRecord always allocates.
-constexpr size_t kDeclaredBufferSize = 1024;
+constexpr size_t declared_buffer_size = 1024;
 
 // Number of WORDs FileRecordHeader reads into the US array: one per
 // 512-byte block.
-constexpr size_t kArrayWords =
-    kDeclaredBufferSize / NtfsBrowser::kUpdateSequenceStride;
+constexpr size_t array_words =
+    declared_buffer_size / NtfsBrowser::update_sequence_stride;
 
 // Places the US array's first word exactly at the buffer's declared end.
-constexpr WORD kOffsetOfUs =
-    static_cast<WORD>(kDeclaredBufferSize - sizeof(WORD));
+constexpr WORD offset_of_us_value =
+    static_cast<WORD>(declared_buffer_size - sizeof(WORD));
 
 // Bases of the two WORD patterns below.
-constexpr WORD kSentinelBase = 0xBEEF;
-constexpr WORD kUsArrayFillBase = 0xA000;
+constexpr WORD sentinel_base = 0xBEEF;
+constexpr WORD us_array_fill_base = 0xA000;
 
 // Pattern that never appears anywhere in the declared 1024-byte buffer.
-WORD Sentinel(size_t index) { return gsl::narrow<WORD>(kSentinelBase + index); }
+WORD Sentinel(size_t index) { return gsl::narrow<WORD>(sentinel_base + index); }
 
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader must not leak bytes past the declared buffer when "
     "offset_of_us leaves no room for the US array",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
-  // Bytes past kDeclaredBufferSize are outside what FileRecordHeader sees.
-  std::vector<BYTE> storage(kDeclaredBufferSize + kArrayWords * sizeof(WORD),
+  // Bytes past declared_buffer_size are outside what FileRecordHeader sees.
+  std::vector<BYTE> storage(declared_buffer_size + array_words * sizeof(WORD),
                             0);
 
   NtfsBrowserTests::EditFileRecordHeader(
       storage,
       [](FileRecordHeader::Data& header)
       {
-        header.magic = kFileRecordMagic;
-        header.offset_of_us = kOffsetOfUs;
+        header.magic = file_record_magic;
+        header.offset_of_us = offset_of_us_value;
         // Correct value; it bounds how many array words the ctor reads.
-        header.size_of_us = static_cast<WORD>(kArrayWords + 1);
+        header.size_of_us = static_cast<WORD>(array_words + 1);
       });
 
-  for (size_t i = 0; i < kArrayWords; i++)
+  for (size_t i = 0; i < array_words; i++)
   {
     const WORD sentinel = Sentinel(i);
-    std::memcpy(&storage.at(kDeclaredBufferSize + (i * sizeof(WORD))),
+    std::memcpy(&storage.at(declared_buffer_size + (i * sizeof(WORD))),
                 &sentinel, sizeof(sentinel));
   }
 
-  const std::span<const BYTE> buffer(storage.data(), kDeclaredBufferSize);
+  const std::span<const BYTE> buffer(storage.data(), declared_buffer_size);
 
-  bool leakedSentinel = false;
+  bool leaked_sentinel = false;
   try
   {
     const auto header = FileRecordHeaderImpl<S>(buffer);
 
-    leakedSentinel = header.us_array.size() == kArrayWords && [&]
+    leaked_sentinel = header.us_array.size() == array_words && [&]
     {
-      for (size_t i = 0; i < kArrayWords; i++)
+      for (size_t i = 0; i < array_words; i++)
       {
-        // us_array.size() == kArrayWords was tested first.
+        // us_array.size() == array_words was tested first.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         if (header.us_array[i] != Sentinel(i))
         {
@@ -94,46 +94,46 @@ TEMPLATE_TEST_CASE_SIG(
   catch (const std::runtime_error&)
   {
     // A fix may reject the record outright instead of truncating it.
-    leakedSentinel = false;
+    leaked_sentinel = false;
   }
 
-  CHECK_FALSE(leakedSentinel);
+  CHECK_FALSE(leaked_sentinel);
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader::PatchUS must restore the last word of every 512-byte "
     "block, whatever the volume's sector size (4Kn volumes)",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
-  constexpr size_t kRecordSize = 4096;
-  constexpr size_t kBlockSize = 512;
-  constexpr size_t kBlocks = kRecordSize / kBlockSize;
-  constexpr WORD kUsn = 0x7777;
-  constexpr WORD kOffsetOfUsArray = 48;
+  constexpr size_t record_size = 4096;
+  constexpr size_t block_size = 512;
+  constexpr size_t blocks = record_size / block_size;
+  constexpr WORD usn = 0x7777;
+  constexpr WORD offset_of_us_array = 48;
 
-  std::vector<BYTE> storage(kRecordSize, 0);
+  std::vector<BYTE> storage(record_size, 0);
   NtfsBrowserTests::EditFileRecordHeader(storage,
                                          [](FileRecordHeader::Data& header)
                                          {
-                                           header.magic = kFileRecordMagic;
+                                           header.magic = file_record_magic;
                                            header.offset_of_us =
-                                               kOffsetOfUsArray;
+                                               offset_of_us_array;
                                            header.size_of_us =
-                                               static_cast<WORD>(kBlocks + 1);
+                                               static_cast<WORD>(blocks + 1);
                                          });
 
   const auto put_word = [&](size_t offset, WORD value)
   { std::memcpy(&storage.at(offset), &value, sizeof(value)); };
 
-  put_word(kOffsetOfUsArray, kUsn);
-  for (size_t i = 0; i < kBlocks; i++)
+  put_word(offset_of_us_array, usn);
+  for (size_t i = 0; i < blocks; i++)
   {
     // The array holds each block's true last word; the block itself carries
     // the sequence number, as it does on disk.
-    put_word(kOffsetOfUsArray + sizeof(WORD) * (1 + i),
-             gsl::narrow<WORD>(kUsArrayFillBase + i));
-    put_word((i + 1) * kBlockSize - sizeof(WORD), kUsn);
+    put_word(offset_of_us_array + sizeof(WORD) * (1 + i),
+             gsl::narrow<WORD>(us_array_fill_base + i));
+    put_word((i + 1) * block_size - sizeof(WORD), usn);
   }
 
   const std::span<const BYTE> buffer(storage.data(), storage.size());
@@ -141,12 +141,12 @@ TEMPLATE_TEST_CASE_SIG(
 
   REQUIRE(header.PatchUS());
 
-  for (size_t i = 0; i < kBlocks; i++)
+  for (size_t i = 0; i < blocks; i++)
   {
     WORD restored = 0;
     std::memcpy(&restored,
-                &header.GetData()->raw[(i + 1) * kBlockSize - sizeof(WORD)],
+                &header.GetData()->raw[(i + 1) * block_size - sizeof(WORD)],
                 sizeof(restored));
-    CHECK(restored == gsl::narrow<WORD>(kUsArrayFillBase + i));
+    CHECK(restored == gsl::narrow<WORD>(us_array_fill_base + i));
   }
 }

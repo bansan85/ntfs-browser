@@ -44,10 +44,11 @@ class AttrIndexAlloc : public AttrNonResident<S>
                              std::span<const WORD> usarray);
 
   [[nodiscard]] ULONGLONG GetIndexBlockCount() const noexcept;
-  [[nodiscard]] bool ParseIndexBlock(const ULONGLONG& vcn, IndexBlock& ibClass);
+  [[nodiscard]] bool ParseIndexBlock(const ULONGLONG& vcn,
+                                     IndexBlock& ib_class);
   [[nodiscard]] bool FixupIndexBlock(std::span<BYTE> block);
   [[nodiscard]] bool ParseIndexEntries(std::span<BYTE> block,
-                                       IndexBlock& ibClass);
+                                       IndexBlock& ib_class);
 };  // AttrIndexAlloc
 
 }  // namespace NtfsBrowser

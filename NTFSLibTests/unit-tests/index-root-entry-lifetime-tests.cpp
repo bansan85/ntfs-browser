@@ -37,29 +37,31 @@ void RunFindSubEntryOutlivesReparseTest()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kIndexRootVariantADirIdx));
+  REQUIRE(
+      record.ParseFileRecord(NtfsBrowserTests::index_root_variant_a_dir_idx));
   REQUIRE(record.ParseAttrs());
 
-  std::optional<IndexEntry> savedEntry =
-      record.FindSubEntry(NtfsBrowserTests::kIndexRootVariantAName);
-  REQUIRE(savedEntry.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(savedEntry).GetFileReference() ==
-        NtfsBrowserTests::kIndexRootVariantAMftRef);
-  CHECK(NtfsBrowserTests::Unwrap(savedEntry).GetFilename() ==
-        NtfsBrowserTests::kIndexRootVariantAName);
+  std::optional<IndexEntry> saved_entry =
+      record.FindSubEntry(NtfsBrowserTests::index_root_variant_a_name);
+  REQUIRE(saved_entry.has_value());
+  CHECK(NtfsBrowserTests::Unwrap(saved_entry).GetFileReference() ==
+        NtfsBrowserTests::index_root_variant_a_mft_ref);
+  CHECK(NtfsBrowserTests::Unwrap(saved_entry).GetFilename() ==
+        NtfsBrowserTests::index_root_variant_a_name);
 
   // Reparse the SAME FileRecord object for variant B's record - same fixed
-  // size (kFakeFileRecordSize), so record_buffer_ is reused/overwritten in
+  // size (fake_file_record_size), so record_buffer_ is reused/overwritten in
   // place, not reallocated.
-  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::kIndexRootVariantBDirIdx));
+  REQUIRE(
+      record.ParseFileRecord(NtfsBrowserTests::index_root_variant_b_dir_idx));
   REQUIRE(record.ParseAttrs());
 
   // The entry saved from variant A must be entirely unaffected by parsing a
   // second, different record on the same FileRecord object.
-  CHECK(NtfsBrowserTests::Unwrap(savedEntry).GetFileReference() ==
-        NtfsBrowserTests::kIndexRootVariantAMftRef);
-  CHECK(NtfsBrowserTests::Unwrap(savedEntry).GetFilename() ==
-        NtfsBrowserTests::kIndexRootVariantAName);
+  CHECK(NtfsBrowserTests::Unwrap(saved_entry).GetFileReference() ==
+        NtfsBrowserTests::index_root_variant_a_mft_ref);
+  CHECK(NtfsBrowserTests::Unwrap(saved_entry).GetFilename() ==
+        NtfsBrowserTests::index_root_variant_a_name);
 }
 
 }  // namespace
@@ -67,8 +69,8 @@ void RunFindSubEntryOutlivesReparseTest()
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry's IndexEntry from $INDEX_ROOT stays correct across a "
     "reparse",
-    "[index-entry][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[index-entry][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   RunFindSubEntryOutlivesReparseTest<S>();
 }

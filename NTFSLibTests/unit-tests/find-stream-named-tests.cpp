@@ -44,7 +44,7 @@ void CheckFindStreamReturnsNamedStream()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::ROOT)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(record.ParseAttrs());
 
   // The "not found" case must still correctly return nullptr: no stream
@@ -52,18 +52,18 @@ void CheckFindStreamReturnsNamedStream()
   CHECK(record.FindStream(L"nonexistent") == nullptr);
 
   const AttrBase<S>* stream =
-      record.FindStream(NtfsBrowserTests::kNamedDataStreamName);
+      record.FindStream(NtfsBrowserTests::named_data_stream_name);
   REQUIRE(stream != nullptr);
 
-  CHECK(stream->GetAttrName() == NtfsBrowserTests::kNamedDataStreamName);
+  CHECK(stream->GetAttrName() == NtfsBrowserTests::named_data_stream_name);
 
   // Confirm it's genuinely the named stream's own data, not some other
   // attribute.
   REQUIRE(stream->GetDataSize() ==
-          NtfsBrowserTests::kNamedDataStreamContent.size());
+          NtfsBrowserTests::named_data_stream_content.size());
   CHECK(std::memcmp(stream->GetData(),
-                    NtfsBrowserTests::kNamedDataStreamContent.data(),
-                    NtfsBrowserTests::kNamedDataStreamContent.size()) == 0);
+                    NtfsBrowserTests::named_data_stream_content.data(),
+                    NtfsBrowserTests::named_data_stream_content.size()) == 0);
 
   // Requesting the unnamed stream must still correctly return nullptr: this
   // fixture's only $DATA attribute is named, not unnamed.
@@ -74,7 +74,7 @@ void CheckFindStreamReturnsNamedStream()
 
 TEMPLATE_TEST_CASE_SIG("FindStream returns a named stream (ADS) by name",
                        "[file-record][regression]", ((Strategy S), S),
-                       Strategy::NO_CACHE, Strategy::FULL_CACHE)
+                       Strategy::NoCache, Strategy::FullCache)
 {
   CheckFindStreamReturnsNamedStream<S>();
 }

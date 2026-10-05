@@ -16,7 +16,7 @@ namespace
 {
 
 // First code point past ASCII: Narrow() keeps only below it.
-constexpr wchar_t kAsciiLimit = 128;
+constexpr wchar_t ascii_limit = 128;
 
 std::string FormatValue(ULONGLONG value) { return std::to_string(value); }
 std::string FormatValue(bool value) { return value ? "true" : "false"; }
@@ -29,7 +29,7 @@ std::string Narrow(const std::wstring& wide)
   out.reserve(wide.size());
   for (wchar_t const character : wide)
   {
-    out.push_back((character > 0 && character < kAsciiLimit)
+    out.push_back((character > 0 && character < ascii_limit)
                       ? static_cast<char>(character)
                       : '?');
   }
@@ -90,8 +90,9 @@ std::optional<T> ReconcileField(const std::vector<const Entry*>& sources,
 
 }  // namespace
 
-Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
-                              const Listing& mftTree, Report& report)
+Listing CompareLibraryMethods(const Listing& full_cache,
+                              const Listing& no_cache, const Listing& mft_tree,
+                              Report& report)
 {
   Listing reference;
 
@@ -100,22 +101,22 @@ Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
     const char* name;
     const Listing* listing;
   };
-  const std::array<Source, 3> sources{{{"full-cache", &fullCache},
-                                       {"no-cache", &noCache},
-                                       {"mft-tree", &mftTree}}};
+  const std::array<Source, 3> sources{{{"full-cache", &full_cache},
+                                       {"no-cache", &no_cache},
+                                       {"mft-tree", &mft_tree}}};
 
-  std::set<std::wstring> allPaths;
+  std::set<std::wstring> all_paths;
   for (const Source& source : sources)
   {
     for (const auto& [path, entry] : *source.listing)
     {
-      allPaths.insert(path);
+      all_paths.insert(path);
     }
   }
 
   MethodStats stats{.name = "library"};
 
-  for (const std::wstring& path : allPaths)
+  for (const std::wstring& path : all_paths)
   {
     std::vector<const Entry*> present;
     for (const Source& source : sources)
@@ -155,10 +156,10 @@ Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
     }
 
     ForEachComparedField(
-        [&](auto member, const char* fieldName)
+        [&](auto member, const char* field_name)
         {
           ref.*member =
-              ReconcileField(present, fieldName, path, member, report);
+              ReconcileField(present, field_name, path, member, report);
         });
 
     reference.emplace(path, ref);
@@ -168,42 +169,42 @@ Listing CompareLibraryMethods(const Listing& fullCache, const Listing& noCache,
   return reference;
 }
 
-void CompareAgainstReference(const std::string& methodName,
+void CompareAgainstReference(const std::string& method_name,
                              const Listing& reference, const Listing& candidate,
                              Report& report)
 {
-  MethodStats stats{.name = methodName};
+  MethodStats stats{.name = method_name};
 
-  for (const auto& [path, refEntry] : reference)
+  for (const auto& [path, ref_entry] : reference)
   {
     const auto iterator = candidate.find(path);
     if (iterator == candidate.end())
     {
-      report.findings.push_back({"MISSING", methodName, path, "", "", ""});
+      report.findings.push_back({"MISSING", method_name, path, "", "", ""});
       stats.missing++;
       continue;
     }
     stats.compared_entries++;
     const Entry& cand = iterator->second;
 
-    if (cand.is_directory != refEntry.is_directory)
+    if (cand.is_directory != ref_entry.is_directory)
     {
-      report.findings.push_back({"MISMATCH", methodName, path, "Type",
-                                 refEntry.is_directory ? "DIR" : "FILE",
+      report.findings.push_back({"MISMATCH", method_name, path, "Type",
+                                 ref_entry.is_directory ? "DIR" : "FILE",
                                  cand.is_directory ? "DIR" : "FILE"});
       stats.mismatched_fields++;
     }
 
     ForEachComparedField(
-        [&](auto member, const char* fieldName)
+        [&](auto member, const char* field_name)
         {
-          const auto& refValue = refEntry.*member;
-          const auto& candValue = cand.*member;
-          if (refValue && candValue && *refValue != *candValue)
+          const auto& ref_value = ref_entry.*member;
+          const auto& cand_value = cand.*member;
+          if (ref_value && cand_value && *ref_value != *cand_value)
           {
-            report.findings.push_back({"MISMATCH", methodName, path, fieldName,
-                                       FormatValue(*refValue),
-                                       FormatValue(*candValue)});
+            report.findings.push_back({"MISMATCH", method_name, path,
+                                       field_name, FormatValue(*ref_value),
+                                       FormatValue(*cand_value)});
             stats.mismatched_fields++;
           }
         });
@@ -213,7 +214,7 @@ void CompareAgainstReference(const std::string& methodName,
   {
     if (!reference.contains(path))
     {
-      report.findings.push_back({"EXTRA", methodName, path, "", "", ""});
+      report.findings.push_back({"EXTRA", method_name, path, "", "", ""});
       stats.extra++;
     }
   }

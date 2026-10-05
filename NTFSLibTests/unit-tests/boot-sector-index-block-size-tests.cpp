@@ -19,8 +19,8 @@ using NtfsBrowser::Strategy;
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes an index block "
     "far smaller than Data::IndexBlock",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache)
 {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithTinyIndexBlock());
@@ -28,8 +28,8 @@ TEMPLATE_TEST_CASE_SIG(
   NtfsVolume<S> const volume(std::move(reader));
 
   INFO("GetIndexBlockSize() = " << volume.GetIndexBlockSize());
-  CHECK(volume.GetIndexBlockSize() == NtfsBrowserTests::kTinyIndexBlockSize);
+  CHECK(volume.GetIndexBlockSize() == NtfsBrowserTests::tiny_index_block_size);
 
-  // kTinyIndexBlockSize doesn't fit Data::IndexBlock's own header.
+  // tiny_index_block_size doesn't fit Data::IndexBlock's own header.
   CHECK_FALSE(volume.IsVolumeOK());
 }

@@ -38,17 +38,17 @@ using NtfsBrowser::Enum::MftIdx;
 namespace
 {
 
-// All names in kKnownFiles and this corpus's directories are ASCII, so a
+// All names in known_files and this corpus's directories are ASCII, so a
 // byte-for-byte widening is exact.
 std::wstring Widen(std::string_view narrow)
 {
   return {narrow.begin(), narrow.end()};
 }
 
-void ParseDir(FileRecord<Strategy::NO_CACHE>& dir, ULONGLONG fileRef)
+void ParseDir(FileRecord<Strategy::NoCache>& dir, ULONGLONG file_ref)
 {
-  dir.SetAttrMask(Mask::INDEX_ROOT | Mask::INDEX_ALLOCATION);
-  REQUIRE(dir.ParseFileRecord(fileRef));
+  dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  REQUIRE(dir.ParseFileRecord(file_ref));
   REQUIRE(dir.ParseAttrs());
 }
 
@@ -56,41 +56,41 @@ void ParseDir(FileRecord<Strategy::NO_CACHE>& dir, ULONGLONG fileRef)
 
 std::unique_ptr<NtfsBrowser::IDiskReader> OpenNtfs1Image()
 {
-  return OpenBareVolumeImage(kNtfs1Image);
+  return OpenBareVolumeImage(ntfs1_image);
 }
 
-void OpenRootDir(FileRecord<Strategy::NO_CACHE>& dir)
+void OpenRootDir(FileRecord<Strategy::NoCache>& dir)
 {
-  ParseDir(dir, static_cast<ULONGLONG>(MftIdx::ROOT));
+  ParseDir(dir, static_cast<ULONGLONG>(MftIdx::Root));
 }
 
-void OpenSubDir(FileRecord<Strategy::NO_CACHE>& dir, std::string_view name)
+void OpenSubDir(FileRecord<Strategy::NoCache>& dir, std::string_view name)
 {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
   ParseDir(dir, NtfsBrowserTests::Unwrap(entry).GetFileReference());
 }
 
-void OpenFile(FileRecord<Strategy::NO_CACHE>& file,
-              const FileRecord<Strategy::NO_CACHE>& dir, std::string_view name)
+void OpenFile(FileRecord<Strategy::NoCache>& file,
+              const FileRecord<Strategy::NoCache>& dir, std::string_view name)
 {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
 
-  file.SetAttrMask(Mask::DATA);
+  file.SetAttrMask(Mask::Data);
   REQUIRE(
       file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 }
 
-std::vector<BYTE> ReadFile(const NtfsVolume<Strategy::NO_CACHE>& volume,
-                           const FileRecord<Strategy::NO_CACHE>& dir,
+std::vector<BYTE> ReadFile(const NtfsVolume<Strategy::NoCache>& volume,
+                           const FileRecord<Strategy::NoCache>& dir,
                            std::string_view name)
 {
-  FileRecord<Strategy::NO_CACHE> file(volume);
+  FileRecord<Strategy::NoCache> file(volume);
   OpenFile(file, dir, name);
 
-  const AttrBase<Strategy::NO_CACHE>* stream = file.FindStream({});
+  const AttrBase<Strategy::NoCache>* stream = file.FindStream({});
   REQUIRE(stream != nullptr);
 
   std::vector<BYTE> data(stream->GetDataSize());

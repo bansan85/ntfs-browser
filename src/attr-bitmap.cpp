@@ -11,17 +11,17 @@ namespace NtfsBrowser
 namespace
 {
 // Bits in one bitmap byte.
-constexpr unsigned kBitsPerByte = 8;
+constexpr unsigned bits_per_byte = 8;
 }  // namespace
 
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-template <class TYPE_RESIDENT, Strategy S>
-AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
-                                         const FileRecord<S>& file_record)
-    : TYPE_RESIDENT(ahc, file_record), bitmap_size_(this->GetDataSize())
+template <class Resident, Strategy S>
+AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
+                                        const FileRecord<S>& file_record)
+    : Resident(ahc, file_record), bitmap_size_(this->GetDataSize())
 {
   LogTrace("Attribute: Bitmap ({}Resident)",
            this->IsNonResident() ? "Non" : "");
@@ -46,8 +46,8 @@ AttrBitmap<TYPE_RESIDENT, S>::AttrBitmap(const AttrHeaderCommon& ahc,
   LogDebug("{} bytes of resident Bitmap data read", bitmap_size_);
 }
 
-template <class TYPE_RESIDENT, Strategy S>
-bool AttrBitmap<TYPE_RESIDENT, S>::IsClusterFree(ULONGLONG cluster)
+template <class Resident, Strategy S>
+bool AttrBitmap<Resident, S>::IsClusterFree(ULONGLONG cluster)
 {
   if (bitmap_buf_.empty())
   {
@@ -57,23 +57,23 @@ bool AttrBitmap<TYPE_RESIDENT, S>::IsClusterFree(ULONGLONG cluster)
   if (this->IsNonResident())
   {
     const ULONGLONG idx = cluster >> 3U;
-    const DWORD clusterSize = this->GetClusterSize();
+    const DWORD cluster_size = this->GetClusterSize();
 
-    const ULONGLONG clusterOffset = idx / clusterSize;
-    cluster -= (clusterOffset * clusterSize * kBitsPerByte);
+    const ULONGLONG cluster_offset = idx / cluster_size;
+    cluster -= (cluster_offset * cluster_size * bits_per_byte);
 
     // Read one cluster of data if buffer mismatch
-    if (!current_cluster_ || *current_cluster_ != clusterOffset)
+    if (!current_cluster_ || *current_cluster_ != cluster_offset)
     {
       std::optional<ULONGLONG> len = this->ReadData(
-          clusterOffset * clusterSize, {bitmap_buf_.data(), clusterSize});
-      if (!len || *len != clusterSize)
+          cluster_offset * cluster_size, {bitmap_buf_.data(), cluster_size});
+      if (!len || *len != cluster_size)
       {
         current_cluster_ = {};
         return false;
       }
 
-      current_cluster_ = clusterOffset;
+      current_cluster_ = cluster_offset;
     }
   }
 
@@ -93,11 +93,11 @@ bool AttrBitmap<TYPE_RESIDENT, S>::IsClusterFree(ULONGLONG cluster)
   return (bitmap_buf_[idx] & static_cast<BYTE>(1U << fac)) == 0;
 }
 
-template class AttrBitmap<AttrNonResident<Strategy::FULL_CACHE>,
-                          Strategy::FULL_CACHE>;
-template class AttrBitmap<AttrNonResident<Strategy::NO_CACHE>,
-                          Strategy::NO_CACHE>;
-template class AttrBitmap<AttrResidentFullCache, Strategy::FULL_CACHE>;
-template class AttrBitmap<AttrResidentNoCache, Strategy::NO_CACHE>;
+template class AttrBitmap<AttrNonResident<Strategy::FullCache>,
+                          Strategy::FullCache>;
+template class AttrBitmap<AttrNonResident<Strategy::NoCache>,
+                          Strategy::NoCache>;
+template class AttrBitmap<AttrResidentFullCache, Strategy::FullCache>;
+template class AttrBitmap<AttrResidentNoCache, Strategy::NoCache>;
 
 }  // namespace NtfsBrowser

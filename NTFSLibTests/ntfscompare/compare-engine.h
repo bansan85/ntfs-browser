@@ -46,16 +46,16 @@ struct Report
 // against: for a path/field, the value every source that has it agrees on.
 // A disagreeing path/field is already reported here and left out of the
 // reference, so it can't cascade into false positives downstream.
-[[nodiscard]] Listing CompareLibraryMethods(const Listing& fullCache,
-                                            const Listing& noCache,
-                                            const Listing& mftTree,
+[[nodiscard]] Listing CompareLibraryMethods(const Listing& full_cache,
+                                            const Listing& no_cache,
+                                            const Listing& mft_tree,
                                             Report& report);
 
 // Passe 2/3: diffs candidate (std::filesystem, or the native OS API) against
 // the Passe 1 reference, on every field both sides have a value for. A field
 // candidate structurally never provides (std::nullopt on its side) is never
 // compared, and so never reported.
-void CompareAgainstReference(const std::string& methodName,
+void CompareAgainstReference(const std::string& method_name,
                              const Listing& reference, const Listing& candidate,
                              Report& report);
 

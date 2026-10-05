@@ -15,40 +15,40 @@ namespace NtfsBrowser::Efs
 
 // EFS encrypts each 512-byte sector on its own, whatever the sector size of
 // the volume is.
-inline constexpr size_t kSectorSize = 512;
+inline constexpr size_t sector_size = 512;
 
 // Widest cipher block, in bytes: AES. The DES family has 8-byte blocks.
-inline constexpr size_t kMaxBlockSize = 16;
+inline constexpr size_t max_block_size = 16;
 
 // The DES-family block size, in bytes.
-inline constexpr size_t kDesBlockSize = 8;
+inline constexpr size_t des_block_size = 8;
 
 // Bits in one byte, to split an IV word into bytes.
-inline constexpr unsigned kBitsPerByte = 8;
+inline constexpr unsigned bits_per_byte = 8;
 
 // The 16-byte CBC IV of an AES sector is two little-endian 64-bit words, each
 // the sum of one of these constants and the byte offset of the sector in the
 // stream. Read off a real AES-256 file. The second matches the constant
 // published for EFS.
-inline constexpr ULONGLONG kIvWord0 = 0x5816657be9161312ULL;
-inline constexpr ULONGLONG kIvWord1 = 0x1989adbe44918961ULL;
+inline constexpr ULONGLONG iv_word0 = 0x5816657be9161312ULL;
+inline constexpr ULONGLONG iv_word1 = 0x1989adbe44918961ULL;
 
 // The 8-byte CBC IV of a DES, 3DES or DESX sector is one little-endian word,
 // again plus the sector's byte offset. It is not the first AES word. The
 // value is the one ntfs-3g uses (ntfsprogs/ntfsdecrypt.c).
-inline constexpr ULONGLONG kDesIvWord = 0x169119629891ad13ULL;
+inline constexpr ULONGLONG des_iv_word = 0x169119629891ad13ULL;
 
 // Builds the CBC IV of the sector that starts at byte offset "offset" of the
-// stream. "blockSize" is the cipher block size: kDesBlockSize picks the DES
+// stream. "blockSize" is the cipher block size: des_block_size picks the DES
 // word, anything else the two AES words. Only the first blockSize bytes are
 // meaningful to the caller.
-[[nodiscard]] inline std::array<BYTE, kMaxBlockSize>
-    MakeSectorIv(ULONGLONG offset, size_t blockSize) noexcept
+[[nodiscard]] inline std::array<BYTE, max_block_size>
+    MakeSectorIv(ULONGLONG offset, size_t block_size) noexcept
 {
-  std::array<BYTE, kMaxBlockSize> initialization_vector{};
+  std::array<BYTE, max_block_size> initialization_vector{};
   const std::array<ULONGLONG, 2> words{
-      (blockSize == kDesBlockSize ? kDesIvWord : kIvWord0) + offset,
-      kIvWord1 + offset};
+      (block_size == des_block_size ? des_iv_word : iv_word0) + offset,
+      iv_word1 + offset};
   for (size_t word_index = 0; word_index < words.size(); ++word_index)
   {
     for (size_t byte_index = 0; byte_index < sizeof(ULONGLONG); ++byte_index)
@@ -58,7 +58,7 @@ inline constexpr ULONGLONG kDesIvWord = 0x169119629891ad13ULL;
       initialization_vector[(word_index * sizeof(ULONGLONG)) + byte_index] =
           static_cast<BYTE>(
               // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-              words[word_index] >> (kBitsPerByte * byte_index));
+              words[word_index] >> (bits_per_byte * byte_index));
     }
   }
   return initialization_vector;
@@ -75,7 +75,7 @@ class SectorDecryptor
   SectorDecryptor& operator=(SectorDecryptor const& other) = delete;
   virtual ~SectorDecryptor() = default;
 
-  // Decrypts, in place, the kSectorSize bytes of one sector. "offset" is the
+  // Decrypts, in place, the sector_size bytes of one sector. "offset" is the
   // byte offset of that sector in its stream. Returns false on a cipher error.
   [[nodiscard]] virtual bool DecryptSector(ULONGLONG offset,
                                            std::span<BYTE> sector) const = 0;

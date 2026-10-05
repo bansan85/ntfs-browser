@@ -32,7 +32,7 @@ using NtfsBrowserTests::FileTimeToTicks;
 namespace
 {
 
-// kMftTreeReportIdx's $STANDARD_INFORMATION carries READONLY | ARCHIVE and,
+// mft_tree_report_idx's $STANDARD_INFORMATION carries READONLY | ARCHIVE and,
 // per WriteStandardInformationAttr(), four distinct timestamps.
 template <Strategy S>
 void RunFileRecordExposesExtendedMetadata()
@@ -44,28 +44,28 @@ void RunFileRecordExposesExtendedMetadata()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> report(volume);
-  REQUIRE(report.ParseFileRecord(NtfsBrowserTests::kMftTreeReportIdx));
+  REQUIRE(report.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 
   CHECK(report.IsReadOnly());
   CHECK(report.IsArchive());
 
   // The unnamed $DATA's own padded allocation, not $FILE_NAME's stale
-  // kMftTreeReportStaleSize.
+  // mft_tree_report_stale_size.
   CHECK(report.GetAllocatedSize() ==
-        NtfsBrowserTests::kMftTreeReportAllocatedSize);
+        NtfsBrowserTests::mft_tree_report_allocated_size);
 
-  FILETIME writeTm{};
-  FILETIME createTm{};
-  FILETIME accessTm{};
-  FILETIME changeTm{};
-  report.GetFileTime(&writeTm, &createTm, &accessTm, &changeTm);
-  CHECK(FileTimeToTicks(changeTm) != FileTimeToTicks(writeTm));
-  CHECK(FileTimeToTicks(changeTm) != FileTimeToTicks(createTm));
-  CHECK(FileTimeToTicks(changeTm) != FileTimeToTicks(accessTm));
+  FILETIME write_tm{};
+  FILETIME create_tm{};
+  FILETIME access_tm{};
+  FILETIME change_tm{};
+  report.GetFileTime(&write_tm, &create_tm, &access_tm, &change_tm);
+  CHECK(FileTimeToTicks(change_tm) != FileTimeToTicks(write_tm));
+  CHECK(FileTimeToTicks(change_tm) != FileTimeToTicks(create_tm));
+  CHECK(FileTimeToTicks(change_tm) != FileTimeToTicks(access_tm));
 }
 
-// kMftTreeReportIdx's own $FILE_NAME now also carries READONLY | ARCHIVE
+// mft_tree_report_idx's own $FILE_NAME now also carries READONLY | ARCHIVE
 // (WriteFileNameAttr()'s extra_flags), independently of $STANDARD_INFORMATION.
 // Reached the same way FileRecord::GetFileTime() and IndexEntry itself reach
 // it internally (src/file-record.cpp, src/mft-tree.cpp): this record's
@@ -81,31 +81,31 @@ void RunFilenameExposesExtendedMetadata()
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> report(volume);
-  REQUIRE(report.ParseFileRecord(NtfsBrowserTests::kMftTreeReportIdx));
+  REQUIRE(report.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 
-  const auto& fileNameAttrs = report.getAttr(AttrType::FILE_NAME);
-  REQUIRE_FALSE(fileNameAttrs.empty());
+  const auto& file_name_attrs = report.GetAttr(AttrType::FileName);
+  REQUIRE_FALSE(file_name_attrs.empty());
 
-  const Filename* ownFileName = nullptr;
-  if constexpr (S == Strategy::NO_CACHE)
+  const Filename* own_file_name = nullptr;
+  if constexpr (S == Strategy::NoCache)
   {
-    ownFileName = reinterpret_cast<
-        const AttrFileName<AttrResidentNoCache, Strategy::NO_CACHE>*>(
-        fileNameAttrs.front().get());
+    own_file_name = reinterpret_cast<
+        const AttrFileName<AttrResidentNoCache, Strategy::NoCache>*>(
+        file_name_attrs.front().get());
   }
   else
   {
-    ownFileName = reinterpret_cast<
-        const AttrFileName<AttrResidentFullCache, Strategy::FULL_CACHE>*>(
-        fileNameAttrs.front().get());
+    own_file_name = reinterpret_cast<
+        const AttrFileName<AttrResidentFullCache, Strategy::FullCache>*>(
+        file_name_attrs.front().get());
   }
 
-  CHECK(ownFileName->IsReadOnly());
-  CHECK(ownFileName->IsArchive());
+  CHECK(own_file_name->IsReadOnly());
+  CHECK(own_file_name->IsArchive());
   // $FILE_NAME's own alloc_size/real_size pair, read independently of
   // FileRecord::GetAllocatedSize()'s $DATA-sourced one.
-  CHECK(ownFileName->GetAllocatedSize() == ownFileName->GetFileSize());
+  CHECK(own_file_name->GetAllocatedSize() == own_file_name->GetFileSize());
 }
 
 }  // namespace
@@ -113,8 +113,7 @@ void RunFilenameExposesExtendedMetadata()
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord exposes IsArchive(), GetAllocatedSize() and the "
     "change time through GetFileTime()",
-    "[file-record]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache)
 {
   RunFileRecordExposesExtendedMetadata<S>();
 }
@@ -122,8 +121,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "Filename exposes IsArchive() and GetAllocatedSize() from its own "
     "$FILE_NAME",
-    "[file-record]", ((Strategy S), S), Strategy::NO_CACHE,
-    Strategy::FULL_CACHE)
+    "[file-record]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache)
 {
   RunFilenameExposesExtendedMetadata<S>();
 }
