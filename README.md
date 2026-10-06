@@ -1,5 +1,6 @@
 # ntfs-browser
-C++20 Fast NTFS browser under Windows.
+C++20 Fast NTFS browser. Windows-first; the library, its unit tests,
+`NtfsCompare` and `NtfsFuzzerAfl` also build on Linux.
 
 
 
@@ -13,7 +14,9 @@ This project improves the historical software by:
 
   - fixing minor bugs,
   - rewriting it with C++20 coding style,
-  - caching `ReadFile` in `CAttrNonResident::ReadClusters`,
+  - caching disk reads (the original's `ReadFile` in
+    `CAttrNonResident::ReadClusters`), now in `FileReader` under
+    `Strategy::FullCache`,
   - reading LZNT1-compressed files and directories
     (`FILE_ATTRIBUTE_COMPRESSED`), which the original skipped entirely:
     compression units are decompressed transparently, so `ReadData()` keeps
@@ -55,8 +58,9 @@ vcpkg, configure with `-DNTFS_BROWSER_USE_INSTALLED_CRYPTOPP=ON`.
 
 ## Tests
 
-The unit tests are Windows-only. Most of them build synthetic NTFS images in
-memory and need nothing else:
+The unit tests build and run on Windows and Linux (CI runs them with MSVC, GCC
+and Clang). Most of them build synthetic NTFS images in memory and need nothing
+else:
 
 ```
 cmake --preset static

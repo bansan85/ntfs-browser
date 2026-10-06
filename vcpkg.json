@@ -15,12 +15,9 @@
   ],
   "features": {
     "tests": {
-      "description": "Pull in Catch2 for NtfsBrowserTests (NTFS_BROWSER_USE_INSTALLED_CATCH2; Windows only, the tests do not build elsewhere)",
+      "description": "Pull in Catch2 for NtfsBrowserTests (NTFS_BROWSER_USE_INSTALLED_CATCH2)",
       "dependencies": [
-        {
-          "name": "catch2",
-          "platform": "windows"
-        }
+        "catch2"
       ]
     },
     "efs-cryptopp": {

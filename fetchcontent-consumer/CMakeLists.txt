@@ -32,7 +32,7 @@ if(NTFS_BROWSER_FETCHCONTENT_SOURCE_DIR)
 else()
   FetchContent_Declare(
     ntfs-browser
-    GIT_REPOSITORY https://github.com/bansai85/ntfs-browser.git
+    GIT_REPOSITORY https://github.com/bansan85/ntfs-browser.git
     GIT_TAG main
     GIT_SUBMODULES_RECURSE ON
   )
