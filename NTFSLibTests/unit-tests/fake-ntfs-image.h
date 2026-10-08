@@ -16,8 +16,7 @@
 #include "gap-collation-probe.h"
 #include "named-stream-probe.h"
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // Fake record count $MFT reports; arbitrary, tests just check it survives.
 inline constexpr uint64_t sentinel_record_count = 5;
@@ -80,10 +79,10 @@ inline constexpr ULONGLONG index_extension_idx = 7;
 // total_size = 17, smaller than sizeof(Attr::HeaderResident) (24).
 inline constexpr ULONGLONG undersized_attr_record_idx = 8;
 
-// Same volume as BuildFakeNtfsImage(), plus a record (undersized_attr_record_idx)
-// whose single attribute is smaller than a resident attribute's own fixed
-// header - regression fixture for an attribute whose size/offset fields get
-// read from bytes past its own declared extent.
+// Same volume as BuildFakeNtfsImage(), plus a record
+// (undersized_attr_record_idx) whose single attribute is smaller than a
+// resident attribute's own fixed header - regression fixture for an attribute
+// whose size/offset fields get read from bytes past its own declared extent.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithUndersizedAttribute();
 
 // MFT index of the directory record built by
@@ -149,7 +148,8 @@ inline constexpr DWORD oversized_file_record_size = 0x80000000;
 // Yields a file_record_size_ twice FileRecordHeader::max_file_record_size.
 inline constexpr BYTE file_record_size_too_big_clusters_per_file_record = 8;
 
-// file_record_size_ that file_record_size_too_big_clusters_per_file_record produces.
+// file_record_size_ that file_record_size_too_big_clusters_per_file_record
+// produces.
 inline constexpr DWORD file_record_size_too_big = 8192;
 
 // Same volume as BuildFakeNtfsImage(), with clusters_per_file_record patched
@@ -324,7 +324,8 @@ inline constexpr ULONGLONG mft_data_split_target_idx = 16;
 inline constexpr DWORD mft_data_split_lcn = 40;
 
 // Same volume as BuildFakeNtfsImage(), except $MFT's own DATA attribute is
-// split via $ATTRIBUTE_LIST, its continuation covering mft_data_split_target_idx.
+// split via $ATTRIBUTE_LIST, its continuation covering
+// mft_data_split_target_idx.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
 
@@ -347,8 +348,7 @@ inline constexpr DWORD mft_two_extents_second_lcn = 41;
     BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord();
 
 // How an extension record relates to the $ATTRIBUTE_LIST entry naming it.
-struct FakeExtensionLink
-{
+struct FakeExtensionLink {
   // Sequence number the list entry carries for the extension record.
   WORD entry_sequence = 0;
   // Sequence number in the extension record's own header.
@@ -391,7 +391,8 @@ inline constexpr DWORD mft_chain_ext_b_lcn = 200;
 // Clusters mft_chain_ext_b's extent covers - must reach mft_chain_ext_a.
 inline constexpr DWORD mft_chain_ext_b_clusters = 50;
 
-// MFT index of the final extent, reachable only via mft_chain_ext_b's own extent.
+// MFT index of the final extent, reachable only via mft_chain_ext_b's own
+// extent.
 inline constexpr ULONGLONG mft_chain_ext_a = 120;
 
 // Start VCN of mft_chain_ext_a's continuation; also its target record's index.
@@ -440,8 +441,8 @@ inline constexpr ULONGLONG mft_last_vcn_overflow_last_vcn =
     std::numeric_limits<ULONGLONG>::max() / fake_cluster_size;
 
 // Same volume as BuildFakeNtfsImage(), except $MFT's base DATA attribute
-// claims mft_last_vcn_overflow_last_vcn as its last VCN, and its $ATTRIBUTE_LIST
-// names a continuation record past Enum::MftIdx::USER.
+// claims mft_last_vcn_overflow_last_vcn as its last VCN, and its
+// $ATTRIBUTE_LIST names a continuation record past Enum::MftIdx::USER.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftDataLastVcnOverflow();
 
 // Shared with NTFSLibTests/fuzz/named-stream-probe.h, so a fuzz corpus file
@@ -497,12 +498,11 @@ inline constexpr ULONGLONG gap_collation_leaf_mft_ref = 30;
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode();
 
 // Where BuildFakeNtfsImageWithNonAsciiNames() files its names.
-enum class NonAsciiNameLayout : std::uint8_t
-{
+enum class NonAsciiNameLayout : std::uint8_t {
   // Leaf entries of the root directory's own $INDEX_ROOT.
   IndexRoot,
   // Leaf entries of an $INDEX_ALLOCATION block the $INDEX_ROOT points at.
-  IndexBlock,
+  IndexBlock
 };
 
 // Names BuildFakeNtfsImageWithNonAsciiNames() files, in that order: e-acute,
@@ -637,8 +637,8 @@ inline constexpr std::wstring_view multi_cluster_orphan_name = L"MultiOrphan";
 // a directory whose index blocks are multi_cluster_orphan_clusters_per_block
 // clusters wide: $INDEX_ROOT points only at block 0 (VCN 0,
 // multi_cluster_reachable_name), while $INDEX_ALLOCATION also covers block 1
-// (VCN multi_cluster_orphan_clusters_per_block, multi_cluster_orphan_name), which
-// no B+ tree pointer reaches.
+// (VCN multi_cluster_orphan_clusters_per_block, multi_cluster_orphan_name),
+// which no B+ tree pointer reaches.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock();
 
@@ -668,8 +668,7 @@ inline constexpr std::array<std::wstring_view, 4> split_block_names{
 
 // How a directory record relates to an orphaned index block's entry filed
 // under it.
-struct FakeParentLink
-{
+struct FakeParentLink {
   // Sequence number in the entry's parent reference. 0 claims nothing.
   WORD entry_parent_sequence = 0;
   // Sequence number in the directory record's own header.
@@ -792,8 +791,7 @@ inline constexpr ULONGLONG legacy_standard_information_record_idx = 6;
 // One data run: "clusters" clusters at LCN "lcn", or a sparse hole when
 // "lcn" is empty. Encodes into NTFS' real run-list format, so fixtures can
 // describe fragmented/sparse layouts. "clusters" must fit one length byte.
-struct FakeDataRun
-{
+struct FakeDataRun {
   std::optional<DWORD> lcn;
   DWORD clusters = 0;
 };
@@ -820,11 +818,11 @@ inline constexpr DWORD fragmented_compressed_data_lcn = 35;
 // data, decompressing to xca_lznt1_example_decompressed. Used verbatim so no
 // compressor need be written in this read-only-library repo.
 inline constexpr std::array<BYTE, 59> xca_lznt1_example_compressed{
-    0x38, 0xb0, 0x88, 0x46, 0x23, 0x20, 0x00, 0x20, 0x47, 0x20, 0x41, 0x00,
-    0x10, 0xa2, 0x47, 0x01, 0xa0, 0x45, 0x20, 0x44, 0x00, 0x08, 0x45, 0x01,
-    0x50, 0x79, 0x00, 0xc0, 0x45, 0x20, 0x05, 0x24, 0x13, 0x88, 0x05, 0xb4,
-    0x02, 0x4a, 0x44, 0xef, 0x03, 0x58, 0x02, 0x8c, 0x09, 0x16, 0x01, 0x48,
-    0x45, 0x00, 0xbe, 0x00, 0x9e, 0x00, 0x04, 0x01, 0x18, 0x90, 0x00};
+    0x38, 0xB0, 0x88, 0x46, 0x23, 0x20, 0x00, 0x20, 0x47, 0x20, 0x41, 0x00,
+    0x10, 0xA2, 0x47, 0x01, 0xA0, 0x45, 0x20, 0x44, 0x00, 0x08, 0x45, 0x01,
+    0x50, 0x79, 0x00, 0xC0, 0x45, 0x20, 0x05, 0x24, 0x13, 0x88, 0x05, 0xB4,
+    0x02, 0x4A, 0x44, 0xEF, 0x03, 0x58, 0x02, 0x8C, 0x09, 0x16, 0x01, 0x48,
+    0x45, 0x00, 0xBE, 0x00, 0x9E, 0x00, 0x04, 0x01, 0x18, 0x90, 0x00};
 
 // The ANSI string xca_lznt1_example_compressed decompresses to ([MS-XCA]
 // section 3.3); the byte count is size() + 1 since the terminal NUL is part
@@ -946,8 +944,8 @@ inline constexpr DWORD compressed_attr_truncated_total_size = 71;
 inline constexpr WORD comp_unit_size_out_of_range_shift = 64;
 
 // Same as BuildFakeNtfsImageWithCompressedFile(), with comp_unit_size set to
-// comp_unit_size_out_of_range_shift; AttrNonResident<S>'s constructor must reject
-// the shift before ever using it.
+// comp_unit_size_out_of_range_shift; AttrNonResident<S>'s constructor must
+// reject the shift before ever using it.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCompUnitSizeOutOfRange();
 
 // A well-defined shift (2048 clusters) past the largest buffered unit size.
@@ -972,8 +970,7 @@ inline constexpr DWORD fake_efs_stream_lcn = 60;
 
 // One non-resident $DATA stream of an encrypted fake file. The bytes are
 // stored as given: encrypting them is the test's job.
-struct FakeEncryptedStream
-{
+struct FakeEncryptedStream {
   std::wstring name;                // empty: the unnamed stream
   std::vector<FakeDataRun> runs;    // its layout, sparse holes included
   std::vector<BYTE> cluster_bytes;  // laid over the real runs, in order
@@ -988,8 +985,7 @@ struct FakeEncryptedStream
 
 // An encrypted file: a root record with the ENCRYPTED std-info flag, these
 // $DATA streams, and an $EFS stream.
-struct FakeEncryptedFile
-{
+struct FakeEncryptedFile {
   std::vector<FakeEncryptedStream> streams;
   // Bytes of the $EFS stream. Empty: the record has none.
   std::vector<BYTE> efs_stream;
@@ -1299,15 +1295,14 @@ inline constexpr std::array<BYTE, 16> attr_list_lifetime_data_content{
     BuildFakeNtfsImageWithSplitAttributeListAttribute();
 
 // A malformed attribute written right after the last valid one of a record.
-enum class FakeTrailingDefect : std::uint8_t
-{
+enum class FakeTrailingDefect : std::uint8_t {
   // total_size is smaller than a resident attribute's own header.
   UndersizedHeader,
   // A compressed non-resident attribute whose total_size leaves no room for
   // its CompressedSize field.
   UndersizedCompressedField,
   // A $STANDARD_INFORMATION marked non-resident: its constructor rejects it.
-  RejectedAttribute,
+  RejectedAttribute
 };
 
 // Same volume as BuildFakeNtfsImage(), plus a base record whose unnamed
@@ -1317,12 +1312,11 @@ enum class FakeTrailingDefect : std::uint8_t
     BuildFakeNtfsImageWithSplitDataAndTrailingDefect(FakeTrailingDefect defect);
 
 // Where a fixture with a forged run list puts its stream.
-enum class FakeRunHost : std::uint8_t
-{
+enum class FakeRunHost : std::uint8_t {
   // A plain non-resident $DATA of the root record.
   Data,
   // The $INDEX_ALLOCATION of a root directory: the harness's own read path.
-  IndexAllocation,
+  IndexAllocation
 };
 
 // LCN whose product with fake_cluster_size is exactly 2^64. Computed in

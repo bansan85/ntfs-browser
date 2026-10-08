@@ -13,8 +13,8 @@
 
 #include "data/run-entry.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
@@ -22,27 +22,30 @@ class FileRecord;
 template <Strategy S>
 class NtfsVolume;
 
-namespace Attr
-{
+namespace Attr {
+
 struct HeaderNonResident;
+
 }  // namespace Attr
-namespace Efs
-{
+
+namespace Efs {
+
 class Context;
+
 }  // namespace Efs
+
 ////////////////////////////////
 // NonResident Attributes
 ////////////////////////////////
 template <Strategy S>
-class AttrNonResident : public AttrBase<S>
-{
+class AttrNonResident : public AttrBase<S> {
  public:
   AttrNonResident(const AttrHeaderCommon& ahc,
                   const FileRecord<S>& file_record);
   AttrNonResident(AttrNonResident&& other) noexcept = delete;
-  AttrNonResident(AttrNonResident const& other) = delete;
+  AttrNonResident(const AttrNonResident& other) = delete;
   AttrNonResident& operator=(AttrNonResident&& other) noexcept = delete;
-  AttrNonResident& operator=(AttrNonResident const& other) = delete;
+  AttrNonResident& operator=(const AttrNonResident& other) = delete;
   ~AttrNonResident() override = default;
 
   friend class FileRecord<S>;
@@ -95,11 +98,10 @@ class AttrNonResident : public AttrBase<S>
   [[nodiscard]] const std::vector<BYTE>*
       GetCompressionUnit(ULONGLONG unit_index) const;
   // How reading one data run's clusters ended.
-  enum class RunRead : BYTE
-  {
+  enum class RunRead : BYTE {
     Done,       // Clusters read (or zero-filled, for a sparse run).
     ShortRead,  // The disk read failed: the caller keeps what it has.
-    Failed,     // Decryption failed: the whole read fails.
+    Failed      // Decryption failed: the whole read fails.
   };
 
   [[nodiscard]] RunRead ReadRunClusters(const Data::RunEntry& data_run,
@@ -136,4 +138,5 @@ class AttrNonResident : public AttrBase<S>
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrNonResident
+
 }  // namespace NtfsBrowser

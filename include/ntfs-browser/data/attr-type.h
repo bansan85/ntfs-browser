@@ -2,11 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
-enum class AttrType : DWORD
-{
+enum class AttrType : DWORD {
   // Zero-initialised value, never found on disk
   None = 0,
 

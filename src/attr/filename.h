@@ -2,17 +2,16 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Flag
-{
+namespace NtfsBrowser::Flag {
+
 enum class Filename : DWORD;
 enum class FilenameNamespace : BYTE;
+
 }  // namespace NtfsBrowser::Flag
 
-namespace NtfsBrowser::Attr
-{
+namespace NtfsBrowser::Attr {
 
-struct Filename
-{
+struct Filename {
   ULONGLONG parent_ref;                // File reference to the parent directory
   ULONGLONG create_time;               // File creation time
   ULONGLONG alter_time;                // File altered time

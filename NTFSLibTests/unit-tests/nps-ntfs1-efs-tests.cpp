@@ -34,8 +34,7 @@ using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Efs::MakePfxKeyProvider;
 
-namespace
-{
+namespace {
 
 // The only Encrypted/* file whose $EFS entry matches a provided key.
 constexpr std::string_view reencrypted_file = "logfile1.txt";
@@ -43,8 +42,7 @@ constexpr std::string_view reencrypted_file = "logfile1.txt";
 // One of the two EFS recovery keys narrative.txt promises at the corpus
 // root, both unlocking the same certificate: exported without a password,
 // and exported with the password "password".
-struct EfsKey
-{
+struct EfsKey {
   std::string_view pfx_name;
   std::wstring_view password;
 };
@@ -58,8 +56,7 @@ constexpr std::array<EfsKey, 2> efs_keys{{
 // only reads a PFX from the host filesystem, not from inside the volume, so
 // the key extracted from the image has to land on disk first.
 std::filesystem::path WriteTempFile(std::string_view label,
-                                    const std::vector<BYTE>& data)
-{
+                                    const std::vector<BYTE>& data) {
   std::random_device rd;
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /
@@ -78,8 +75,7 @@ std::filesystem::path WriteTempFile(std::string_view label,
 TEST_CASE(
     "Encrypted files decrypt or fail to decrypt as their own $EFS entry "
     "dictates (NPS ntfs1, gen2)",
-    "[nps][integration][efs]")
-{
+    "[nps][integration][efs]") {
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
   NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),
@@ -93,8 +89,7 @@ TEST_CASE(
   NtfsBrowserTests::OpenRootDir(encrypted_dir);
   NtfsBrowserTests::OpenSubDir(encrypted_dir, "Encrypted");
 
-  for (const EfsKey& key : efs_keys)
-  {
+  for (const EfsKey& key : efs_keys) {
     INFO("key " << key.pfx_name);
 
     // The key file itself sits unencrypted at the volume root, so a plain
@@ -110,8 +105,7 @@ TEST_CASE(
     volume.SetEfsKeyProvider(provider);
 
     for (const NtfsBrowserTests::KnownFile& file :
-         NtfsBrowserTests::known_files)
-    {
+         NtfsBrowserTests::known_files) {
       INFO("file " << file.name);
 
       FileRecord<Strategy::NoCache> stream_owner(volume);
@@ -125,15 +119,12 @@ TEST_CASE(
 
       // Only this file was rewritten after the volume's EFS certificate
       // changed.
-      if (file.name == reencrypted_file)
-      {
+      if (file.name == reencrypted_file) {
         REQUIRE(read == data.size());
   #ifdef NTFS_TEST_HAS_MD5
         CHECK(NtfsBrowserTests::Md5Hex(data) == file.md5);
   #endif
-      }
-      else
-      {
+      } else {
         CHECK(read == std::nullopt);
       }
     }

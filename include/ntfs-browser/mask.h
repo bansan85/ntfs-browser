@@ -2,11 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
-enum class Mask : DWORD
-{
+enum class Mask : DWORD {
   // Bit masks of Attributes: the bit for attribute type T is
   // 1 << ((T >> 4) - 1), so each type has its own bit.
   StandardInformation = 0x0001,
@@ -28,7 +26,7 @@ enum class Mask : DWORD
   All = static_cast<DWORD>(-1)
 };
 
-//NOLINTNEXTLINE
+// NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Mask)
 
 }  // namespace NtfsBrowser

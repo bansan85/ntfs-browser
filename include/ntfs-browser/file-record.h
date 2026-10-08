@@ -15,8 +15,8 @@
 #include <ntfs-browser/mask.h>
 #include <ntfs-browser/strategy.h>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 template <Strategy S>
 class NtfsVolume;
 class IndexEntry;
@@ -38,16 +38,15 @@ using AttrsCallback =
     std::function<void(const AttrBase<S>& attr, void* context, bool* stop)>;
 
 template <Strategy S>
-class NTFS_BROWSER_EXPORT FileRecord
-{
+class NTFS_BROWSER_EXPORT FileRecord {
  public:
   explicit FileRecord(const NtfsVolume<S>& volume);
   // Defined out of line, so the move needs Impl complete only in
   // file-record.cpp, not in every other TU that includes this header.
   FileRecord(FileRecord&& other) noexcept;
-  FileRecord(FileRecord const& other) = delete;
+  FileRecord(const FileRecord& other) = delete;
   FileRecord& operator=(FileRecord&& other) noexcept = delete;
-  FileRecord& operator=(FileRecord const& other) = delete;
+  FileRecord& operator=(const FileRecord& other) = delete;
 
   virtual ~FileRecord();
   friend class AttrBase<S>;

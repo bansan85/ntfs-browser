@@ -8,20 +8,19 @@
 
 #include <ntfs-browser/index-entry.h>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 enum class Strategy : std::uint8_t;
 
 // The entries are views into bytes_ and realigned_, which this object owns:
 // they MUST NOT outlive it.
-class IndexBlock : public std::vector<IndexEntryView>
-{
+class IndexBlock : public std::vector<IndexEntryView> {
  public:
   IndexBlock() noexcept;
   IndexBlock(IndexBlock&& other) noexcept = delete;
-  IndexBlock(IndexBlock const& other) = delete;
+  IndexBlock(const IndexBlock& other) = delete;
   IndexBlock& operator=(IndexBlock&& other) noexcept = delete;
-  IndexBlock& operator=(IndexBlock const& other) = delete;
+  IndexBlock& operator=(const IndexBlock& other) = delete;
   virtual ~IndexBlock() = default;
 
   template <Strategy S>

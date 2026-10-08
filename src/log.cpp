@@ -32,10 +32,8 @@ static_assert(
     "spdlog's filename type must match the platform's native path "
     "type; check SPDLOG_WCHAR_FILENAMES");
 
-namespace NtfsBrowser
-{
-namespace
-{
+namespace NtfsBrowser {
+namespace {
 
 // The console target reproduces the message and nothing else, so what a
 // consumer sees is exactly what the library wrote.
@@ -55,10 +53,8 @@ constexpr std::string_view console_target = "console";
 constexpr std::string_view file_target = "file";
 
 // spdlog counterpart of a public level.
-spdlog::level::level_enum ToSpdlog(Log::Level level) noexcept
-{
-  switch (level)
-  {
+spdlog::level::level_enum ToSpdlog(Log::Level level) noexcept {
+  switch (level) {
     case Log::Level::Error:
       return spdlog::level::err;
     case Log::Level::Warn:
@@ -79,14 +75,11 @@ spdlog::level::level_enum ToSpdlog(Log::Level level) noexcept
 // spdlog gives a sink a minimum level only. Without this the stdout half
 // of the console target would repeat every warning and error that its
 // stderr half already printed.
-class CeilingSink final : public spdlog::sinks::sink
-{
+class CeilingSink final : public spdlog::sinks::sink {
  public:
   CeilingSink(std::shared_ptr<spdlog::sinks::sink> inner,
               spdlog::level::level_enum ceiling)
-      : inner_(std::move(inner)), ceiling_(ceiling)
-  {
-  }
+      : inner_(std::move(inner)), ceiling_(ceiling) {}
 
   CeilingSink(CeilingSink&&) = delete;
   CeilingSink(const CeilingSink&) = delete;
@@ -94,10 +87,8 @@ class CeilingSink final : public spdlog::sinks::sink
   CeilingSink& operator=(const CeilingSink&) = delete;
   ~CeilingSink() override = default;
 
-  void log(const spdlog::details::log_msg& msg) override
-  {
-    if (msg.level >= ceiling_)
-    {
+  void log(const spdlog::details::log_msg& msg) override {
+    if (msg.level >= ceiling_) {
       return;
     }
     inner_->log(msg);
@@ -105,13 +96,12 @@ class CeilingSink final : public spdlog::sinks::sink
 
   void flush() override { inner_->flush(); }
 
-  void set_pattern(const std::string& pattern) override
-  {
+  void set_pattern(const std::string& pattern) override {
     inner_->set_pattern(pattern);
   }
 
-  void set_formatter(std::unique_ptr<spdlog::formatter> sink_formatter) override
-  {
+  void set_formatter(
+      std::unique_ptr<spdlog::formatter> sink_formatter) override {
     inner_->set_formatter(std::move(sink_formatter));
   }
 
@@ -123,13 +113,11 @@ class CeilingSink final : public spdlog::sinks::sink
 // Holds the library logger. Deliberately never destroyed: objects with
 // static storage duration log from their destructors, and a logger
 // destroyed before them would be used after its lifetime ended.
-struct LoggerHolder
-{
+struct LoggerHolder {
   std::shared_ptr<spdlog::logger> logger;
 };
 
-LoggerHolder& Holder()
-{
+LoggerHolder& Holder() {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   static auto* const holder = new LoggerHolder();
   return *holder;
@@ -138,11 +126,9 @@ LoggerHolder& Holder()
 // The least severe level any sink accepts, which is the level the logger
 // itself must sit at for every sink to see what it asked for.
 spdlog::level::level_enum
-    LeastSevere(const std::vector<spdlog::sink_ptr>& sinks) noexcept
-{
+    LeastSevere(const std::vector<spdlog::sink_ptr>& sinks) noexcept {
   spdlog::level::level_enum result = spdlog::level::off;
-  for (const spdlog::sink_ptr& sink : sinks)
-  {
+  for (const spdlog::sink_ptr& sink : sinks) {
     result = (std::min)(result, sink->level());
   }
   return result;
@@ -152,15 +138,14 @@ spdlog::level::level_enum
 // stderr sink floored at warn, so each message lands on one stream only.
 // The _st sinks take no lock, which the library's single-threaded
 // contract allows and its per-cluster message volume wants.
-void AddConsoleSinks(Log::Level level, std::vector<spdlog::sink_ptr>& sinks)
-{
-  auto const out = std::make_shared<CeilingSink>(
+void AddConsoleSinks(Log::Level level, std::vector<spdlog::sink_ptr>& sinks) {
+  const auto out = std::make_shared<CeilingSink>(
       std::make_shared<spdlog::sinks::stdout_sink_st>(), spdlog::level::warn);
   out->set_level(ToSpdlog(level));
   out->set_pattern(std::string(console_pattern));
   sinks.push_back(out);
 
-  auto const err = std::make_shared<spdlog::sinks::stderr_sink_st>();
+  const auto err = std::make_shared<spdlog::sinks::stderr_sink_st>();
   err->set_level((std::max)(spdlog::level::warn, ToSpdlog(level)));
   err->set_pattern(std::string(console_pattern));
   sinks.push_back(err);
@@ -169,33 +154,26 @@ void AddConsoleSinks(Log::Level level, std::vector<spdlog::sink_ptr>& sinks)
 // Installs the sinks config asks for on a freshly built logger, which
 // replaces any logger a previous call left behind. Returns false if the
 // file sink could not be opened; the console target is installed anyway.
-bool Apply(const Log::Config& config) noexcept
-{
+bool Apply(const Log::Config& config) noexcept {
   bool is_ok = true;
 
-  try
-  {
+  try {
     std::vector<spdlog::sink_ptr> sinks;
 
-    if (config.console_level != Log::Level::Off)
-    {
+    if (config.console_level != Log::Level::Off) {
       AddConsoleSinks(config.console_level, sinks);
     }
 
-    if (config.file_level != Log::Level::Off)
-    {
-      try
-      {
+    if (config.file_level != Log::Level::Off) {
+      try {
         // Appends: a second Configure() with the same path must not wipe
         // what the first one already wrote.
-        auto const file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
+        const auto file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
             config.file_path.native(), false);
         file->set_level(ToSpdlog(config.file_level));
         file->set_pattern(std::string(file_pattern));
         sinks.push_back(file);
-      }
-      catch (...)
-      {
+      } catch (...) {
         is_ok = false;
       }
     }
@@ -210,9 +188,7 @@ bool Apply(const Log::Config& config) noexcept
     spdlog::drop(std::string(Log::logger_name));
     spdlog::register_logger(logger);
     Holder().logger = std::move(logger);
-  }
-  catch (...)
-  {
+  } catch (...) {
     return false;
   }
 
@@ -221,11 +197,9 @@ bool Apply(const Log::Config& config) noexcept
 
 // The library logger, created with the default configuration on first use.
 // Null only if even that could not be built.
-spdlog::logger* EnsureLogger()
-{
-  LoggerHolder const& holder = Holder();
-  if (!holder.logger)
-  {
+spdlog::logger* EnsureLogger() {
+  const LoggerHolder& holder = Holder();
+  if (!holder.logger) {
     Apply(Log::Config{});
   }
   return holder.logger.get();
@@ -235,21 +209,18 @@ spdlog::logger* EnsureLogger()
 // accepts is ASCII, so one parser can serve both a narrow and a wide argv.
 template <typename CharT>
 bool EqualsAscii(std::basic_string_view<CharT> text,
-                 std::string_view ascii) noexcept
-{
-  return std::equal(text.begin(), text.end(), ascii.begin(), ascii.end(),
-                    [](CharT lhs, char rhs)
-                    { return lhs == static_cast<CharT>(rhs); });
+                 std::string_view ascii) noexcept {
+  return std::equal(
+      text.begin(), text.end(), ascii.begin(), ascii.end(),
+      [](CharT lhs, char rhs) { return lhs == static_cast<CharT>(rhs); });
 }
 
 // Maps a --log level name onto its level. False if the name is unknown.
 template <typename CharT>
-bool ParseLevel(std::basic_string_view<CharT> text, Log::Level& level) noexcept
-{
-  for (const auto& [name, value] : level_names)
-  {
-    if (EqualsAscii(text, name))
-    {
+bool ParseLevel(std::basic_string_view<CharT> text,
+                Log::Level& level) noexcept {
+  for (const auto& [name, value] : level_names) {
+    if (EqualsAscii(text, name)) {
       level = value;
       return true;
     }
@@ -259,13 +230,12 @@ bool ParseLevel(std::basic_string_view<CharT> text, Log::Level& level) noexcept
 
 }  // namespace
 
-void LogException(const std::exception& exception) noexcept
-{
+void LogException(const std::exception& exception) noexcept {
   std::string_view message(exception.what());
   // Several throw sites end their message with a newline. spdlog adds its
   // own, so without this one exception would print a blank line after it.
-  while (!message.empty() && (message.back() == '\n' || message.back() == '\r'))
-  {
+  while (!message.empty() &&
+         (message.back() == '\n' || message.back() == '\r')) {
     message.remove_suffix(1);
   }
 
@@ -274,21 +244,18 @@ void LogException(const std::exception& exception) noexcept
 
 }  // namespace NtfsBrowser
 
-namespace NtfsBrowser::Log
-{
+namespace NtfsBrowser::Log {
 
 bool Configure(const Config& config) noexcept { return Apply(config); }
 
-namespace
-{
+namespace {
 
 // ParseOption(), over whichever character type the executable's argv has.
 template <typename CharT>
-bool ParseOptionImpl(std::basic_string_view<CharT> arg, Config& config) noexcept
-{
+bool ParseOptionImpl(std::basic_string_view<CharT> arg,
+                     Config& config) noexcept {
   if (arg.size() < option_prefix.size() ||
-      !EqualsAscii(arg.substr(0, option_prefix.size()), option_prefix))
-  {
+      !EqualsAscii(arg.substr(0, option_prefix.size()), option_prefix)) {
     return false;
   }
 
@@ -296,8 +263,7 @@ bool ParseOptionImpl(std::basic_string_view<CharT> arg, Config& config) noexcept
 
   const std::basic_string_view<CharT> value = arg.substr(option_prefix.size());
   const size_t target_end = value.find(separator);
-  if (target_end == std::basic_string_view<CharT>::npos)
-  {
+  if (target_end == std::basic_string_view<CharT>::npos) {
     return false;
   }
 
@@ -312,47 +278,38 @@ bool ParseOptionImpl(std::basic_string_view<CharT> arg, Config& config) noexcept
       has_path ? rest.substr(level_end + 1) : std::basic_string_view<CharT>{};
 
   Level level = Level::Off;
-  if (!ParseLevel(level_text, level))
-  {
+  if (!ParseLevel(level_text, level)) {
     return false;
   }
 
   // A path field belongs to the file target only, and an empty one names
   // no file at all.
-  if (has_path && (!EqualsAscii(target, file_target) || path.empty()))
-  {
+  if (has_path && (!EqualsAscii(target, file_target) || path.empty())) {
     return false;
   }
 
-  if (EqualsAscii(target, console_target))
-  {
+  if (EqualsAscii(target, console_target)) {
     config.console_level = level;
     return true;
   }
 
-  if (!EqualsAscii(target, file_target))
-  {
+  if (!EqualsAscii(target, file_target)) {
     return false;
   }
 
   // Built before anything is committed: the conversion allocates, and
   // config must come back untouched whenever this returns false.
   std::filesystem::path file_path;
-  if (has_path)
-  {
-    try
-    {
+  if (has_path) {
+    try {
       file_path.assign(path);
-    }
-    catch (...)
-    {
+    } catch (...) {
       return false;
     }
   }
 
   config.file_level = level;
-  if (has_path)
-  {
+  if (has_path) {
     config.file_path = std::move(file_path);
   }
   return true;
@@ -360,50 +317,38 @@ bool ParseOptionImpl(std::basic_string_view<CharT> arg, Config& config) noexcept
 
 }  // namespace
 
-bool ParseOption(std::string_view arg, Config& config) noexcept
-{
+bool ParseOption(std::string_view arg, Config& config) noexcept {
   return ParseOptionImpl(arg, config);
 }
 
 #ifdef _WIN32
-bool ParseOption(std::wstring_view arg, Config& config) noexcept
-{
+bool ParseOption(std::wstring_view arg, Config& config) noexcept {
   return ParseOptionImpl(arg, config);
 }
 #endif
 
 }  // namespace NtfsBrowser::Log
 
-namespace NtfsBrowser::Log::Detail
-{
+namespace NtfsBrowser::Log::Detail {
 
-bool IsEnabled(Level level) noexcept
-{
-  try
-  {
+bool IsEnabled(Level level) noexcept {
+  try {
     const spdlog::logger* const logger = EnsureLogger();
     return logger != nullptr && logger->should_log(ToSpdlog(level));
-  }
-  catch (...)
-  {
+  } catch (...) {
     return false;
   }
 }
 
-void Emit(Level level, std::string_view message) noexcept
-{
-  try
-  {
+void Emit(Level level, std::string_view message) noexcept {
+  try {
     spdlog::logger* const logger = EnsureLogger();
-    if (logger == nullptr)
-    {
+    if (logger == nullptr) {
       return;
     }
     logger->log(ToSpdlog(level),
                 spdlog::string_view_t(message.data(), message.size()));
-  }
-  catch (...)
-  {
+  } catch (...) {
     // Nothing is left to report the failure with, so the line is dropped.
     return;
   }

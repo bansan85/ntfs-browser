@@ -24,14 +24,14 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
-struct TempImage final
-{
+struct TempImage final {
   std::filesystem::path path = NtfsBrowserTests::WriteFakeNtfsImage();
   TempImage() = default;
+
   ~TempImage() { std::filesystem::remove(path); }
+
   TempImage(const TempImage&) = delete;
   TempImage& operator=(const TempImage&) = delete;
   TempImage(TempImage&&) = delete;
@@ -42,8 +42,7 @@ struct TempImage final
 // real on-disk file read without depending on NtfsVolume's own path-based
 // constructor, which only exists on Windows (Win32DiskReader).
 std::unique_ptr<NtfsBrowser::IDiskReader>
-    OpenOnDisk(const std::filesystem::path& path)
-{
+    OpenOnDisk(const std::filesystem::path& path) {
   auto reader = std::make_unique<NtfsBrowserTests::PartitionDiskReader>(0);
   REQUIRE(reader->Open(path.wstring()));
   return reader;
@@ -54,11 +53,10 @@ std::unique_ptr<NtfsBrowser::IDiskReader>
 TEMPLATE_TEST_CASE_SIG(
     "A second FileRecord's read does not corrupt $MFT's attribute",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
-  TempImage const image;
+    Strategy::FullCache) {
+  const TempImage image;
 
-  NtfsVolume<S> const volume(OpenOnDisk(image.path));
+  const NtfsVolume<S> volume(OpenOnDisk(image.path));
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 
@@ -72,12 +70,11 @@ TEMPLATE_TEST_CASE_SIG(
     "A second FileRecord's read does not corrupt $MFT's attribute "
     " (in-memory volume)",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 

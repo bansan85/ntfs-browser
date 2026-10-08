@@ -18,8 +18,7 @@
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-namespace
-{
+namespace {
 
 // Sector size of the emulated 4Kn disk: every read at offset 0 MUST be a
 // multiple of it.
@@ -27,22 +26,17 @@ constexpr size_t sector4_kn = 4096;
 
 // Wraps an in-memory image and rejects a read at offset 0 whose length the
 // emulated medium would refuse. The boot sector is the only such read.
-class StrictBootReadReader : public NtfsBrowser::IDiskReader
-{
+class StrictBootReadReader : public NtfsBrowser::IDiskReader {
  public:
   // reject decides, from the read length, whether the read at 0 fails.
   StrictBootReadReader(std::vector<BYTE> image, bool (*reject)(size_t length))
-      : inner_(std::move(image)), reject_(reject)
-  {
-  }
+      : inner_(std::move(image)), reject_(reject) {}
 
   bool Open(std::wstring_view path) override { return inner_.Open(path); }
 
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
-                              std::span<BYTE> dest) const override
-  {
-    if (addr.QuadPart == 0 && reject_(dest.size()))
-    {
+                              std::span<BYTE> dest) const override {
+    if (addr.QuadPart == 0 && reject_(dest.size())) {
       return false;
     }
     return inner_.ReadInto(addr, dest);
@@ -65,12 +59,11 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume reads the boot sector in a whole 4Kn sector, so an unbuffered "
     "device accepts it",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &NotMultipleOf4Kn);
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
 
   CHECK(volume.IsVolumeOK());
 }
@@ -78,12 +71,11 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume still opens a medium too short to serve a whole 4Kn sector",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &AtLeast4Kn);
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
 
   CHECK(volume.IsVolumeOK());
 }
@@ -91,12 +83,11 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a volume whose boot sector cannot be read at all",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &Always);
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
 
   CHECK_FALSE(volume.IsVolumeOK());
 }

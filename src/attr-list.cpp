@@ -22,14 +22,13 @@
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 struct AttrHeaderCommon;
 template <Strategy S>
 class AttrBase;
 
-namespace
-{
+namespace {
 
 // Width of the AttrType field in a chain key. Every AttrType fits 16 bits.
 constexpr unsigned chain_key_type_bits = 16;
@@ -40,8 +39,7 @@ constexpr ULONGLONG chain_key_type_mask = 0xFFFFU;
 // Packs (record_ref, attr_type) into one key. record_ref fits the high 48
 // bits (MftSegmentReference::segment_number is 48-bit); every AttrType
 // fits the low 16 bits.
-ULONGLONG MakeChainKey(ULONGLONG record_ref, AttrType attr_type) noexcept
-{
+ULONGLONG MakeChainKey(ULONGLONG record_ref, AttrType attr_type) noexcept {
   return (record_ref << chain_key_type_bits) |
          (static_cast<ULONGLONG>(attr_type) & chain_key_type_mask);
 }
@@ -49,14 +47,12 @@ ULONGLONG MakeChainKey(ULONGLONG record_ref, AttrType attr_type) noexcept
 }  // namespace
 
 template <typename Resident, Strategy S>
-AttrList<Resident, S>::AttrList(
-    const AttrHeaderCommon& ahc, FileRecord<S>& file_record,
-    std::unordered_set<ULONGLONG>& attr_list_chain)
-    : Resident(ahc, file_record)
-{
+AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
+                                FileRecord<S>& file_record,
+                                std::unordered_set<ULONGLONG>& attr_list_chain)
+    : Resident(ahc, file_record) {
   LogTrace("Attribute: Attribute List");
-  if (!file_record.impl_->file_reference)
-  {
+  if (!file_record.impl_->file_reference) {
     throw std::runtime_error("Missing file reference\n");
   }
 
@@ -70,18 +66,15 @@ AttrList<Resident, S>::AttrList(
   attr_list_chain.insert(MakeChainKey(*file_record.impl_->file_reference,
                                       AttrType::AttributeList));
 
-  while (
-      (len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
-                                     Attr::attribute_list_entry_header_size})))
-  {
-    if (*len != Attr::attribute_list_entry_header_size)
-    {
+  while ((
+      len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
+                                    Attr::attribute_list_entry_header_size}))) {
+    if (*len != Attr::attribute_list_entry_header_size) {
       // A resident list's normal end already exited the loop above (ReadData
       // returns nullopt at offset >= size); a non-resident list's normal end
       // is this exact zero-byte read, landing precisely on the declared
       // size. Anything else here is a truncated entry.
-      if (*len != 0 || offset != this->GetDataSize())
-      {
+      if (*len != 0 || offset != this->GetDataSize()) {
         truncated = true;
         LogRecoverable(
             recover,
@@ -93,8 +86,7 @@ AttrList<Resident, S>::AttrList(
       break;
     }
 
-    if (!IsValidAttrType(al_record.attr_type))
-    {
+    if (!IsValidAttrType(al_record.attr_type)) {
       throw std::runtime_error(
           "Attribute List parse error (al_record.attr_type).\n");
     }
@@ -105,8 +97,7 @@ AttrList<Resident, S>::AttrList(
     ResolveEntry(al_record, file_record, attr_list_chain, recover);
 
     if (al_record.record_size != 0 &&
-        al_record.record_size < Attr::attribute_list_entry_header_size)
-    {
+        al_record.record_size < Attr::attribute_list_entry_header_size) {
       truncated = true;
       LogRecoverable(recover,
                      "Attribute List: record_size {} is smaller than the "
@@ -115,8 +106,7 @@ AttrList<Resident, S>::AttrList(
                      static_cast<WORD>(Attr::attribute_list_entry_header_size));
       break;
     }
-    if (al_record.record_size == 0)
-    {
+    if (al_record.record_size == 0) {
       throw std::runtime_error(
           "Attribute List with zero record size has endless loop.\n");
     }
@@ -126,8 +116,7 @@ AttrList<Resident, S>::AttrList(
   // A resident list's normal end (ReadData returning nullopt) can still land
   // past its own declared size, when the last entry's record_size
   // overshoots it - not caught by either check above.
-  if (!truncated && offset != this->GetDataSize())
-  {
+  if (!truncated && offset != this->GetDataSize()) {
     truncated = true;
     LogRecoverable(recover,
                    "Attribute List ended at offset {} instead of its "
@@ -135,8 +124,7 @@ AttrList<Resident, S>::AttrList(
                    offset, this->GetDataSize());
   }
 
-  if (truncated && !recover)
-  {
+  if (truncated && !recover) {
     throw std::runtime_error("Attribute List is truncated.\n");
   }
 }
@@ -146,25 +134,22 @@ AttrList<Resident, S>::AttrList(
 template <typename Resident, Strategy S>
 void AttrList<Resident, S>::ResolveEntry(
     const Attr::AttributeList& entry, FileRecord<S>& file_record,
-    std::unordered_set<ULONGLONG>& attr_list_chain, bool recover)
-{
+    std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
   const ULONGLONG record_ref = entry.base_ref.segment_number;
   const Mask attr_mask = AttrMask(entry.attr_type);
-  if (!file_record.impl_->file_reference)
-  {
+  if (!file_record.impl_->file_reference) {
     throw std::runtime_error("Missing file reference\n");
   }
   const ULONGLONG self_ref = *file_record.impl_->file_reference;
   // Skip contained attributes
   // Skip unwanted attributes
   if (record_ref == self_ref ||
-      !static_cast<bool>(attr_mask & file_record.impl_->attr_mask))
-  {
+      !static_cast<bool>(attr_mask & file_record.impl_->attr_mask)) {
     return;
   }
 
-  if (!attr_list_chain.insert(MakeChainKey(record_ref, entry.attr_type)).second)
-  {
+  if (!attr_list_chain.insert(MakeChainKey(record_ref, entry.attr_type))
+           .second) {
     LogWarn(
         "Attribute List: record {}, type 0x{:04x} already resolved in "
         "this chain, skipping",
@@ -179,8 +164,7 @@ void AttrList<Resident, S>::ResolveEntry(
 
   frnew.impl_->attr_mask = attr_mask;
   frnew.impl_->attr_raw_call_back = file_record.impl_->attr_raw_call_back;
-  if (!frnew.ParseFileRecord(record_ref))
-  {
+  if (!frnew.ParseFileRecord(record_ref)) {
     throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
   }
 
@@ -189,31 +173,27 @@ void AttrList<Resident, S>::ResolveEntry(
   const bool genuine = IsGenuineExtensionRecord(
       entry.base_ref.sequence_number, frnew.GetSequenceNumber(),
       frnew.GetBaseRecordReference(), self_ref & mft_record_number_mask);
-  if (!genuine)
-  {
+  if (!genuine) {
     file_record.impl_->extension_records.pop_back();
     LogRecoverable(recover,
                    "Attribute List: record {} is not an extension of "
                    "record {} (reused or foreign) - skipping",
                    record_ref, self_ref);
-    if (!recover)
-    {
+    if (!recover) {
       throw std::runtime_error(
           "Attribute List names a record of another file.\n");
     }
     return;
   }
 
-  if (!frnew.impl_->ParseAttrs(attr_list_chain))
-  {
+  if (!frnew.impl_->ParseAttrs(attr_list_chain)) {
     throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
   }
 
   // Insert new found AttrList to fr.AttrList
   std::vector<std::unique_ptr<AttrBase<S>>>& vec =
       frnew.GetAttr(entry.attr_type);
-  for (std::unique_ptr<AttrBase<S>>& veci : vec)
-  {
+  for (std::unique_ptr<AttrBase<S>>& veci : vec) {
     file_record.impl_->attr_list.at(AttrIndex(entry.attr_type))
         .push_back(std::move(veci));
   }
@@ -221,8 +201,7 @@ void AttrList<Resident, S>::ResolveEntry(
 }
 
 template <typename Resident, Strategy S>
-AttrList<Resident, S>::~AttrList()
-{
+AttrList<Resident, S>::~AttrList() {
   LogTrace("AttrList deleted");
 }
 

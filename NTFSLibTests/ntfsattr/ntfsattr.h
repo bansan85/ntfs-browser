@@ -19,8 +19,7 @@
 // See ntfsattr.cpp for the implementation of this class
 //
 
-class CNtfsattrApp : public CWinApp
-{
+class CNtfsattrApp : public CWinApp {
  public:
   CNtfsattrApp();
 
@@ -44,6 +43,7 @@ class CNtfsattrApp : public CWinApp
 /////////////////////////////////////////////////////////////////////////////
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+// Microsoft Visual C++ will insert additional declarations immediately before
+// the previous line.
 
 #endif  // !defined(AFX_NTFSATTR_H__AC7D1972_E501_4372_92FF_C01F78585AD6__INCLUDED_)

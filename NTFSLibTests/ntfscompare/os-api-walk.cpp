@@ -23,41 +23,35 @@
 #include "time-convert.h"
 
 #ifdef _WIN32
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
 const char* OsApiMethodName() noexcept { return "Windows API"; }
 
-Listing WalkOsApi(const std::filesystem::path& root)
-{
+Listing WalkOsApi(const std::filesystem::path& root) {
   Listing result;
 
-  struct Frame
-  {
+  struct Frame {
     std::filesystem::path dir;
     std::wstring prefix;
   };
+
   std::vector<Frame> stack;
   stack.push_back({.dir = root, .prefix = L""});
 
-  while (!stack.empty())
-  {
+  while (!stack.empty()) {
     const Frame frame = std::move(stack.back());
     stack.pop_back();
 
     const std::wstring pattern = (frame.dir / L"*").wstring();
     WIN32_FIND_DATAW fd{};
     const HANDLE handle = FindFirstFileW(pattern.c_str(), &fd);
-    if (handle == INVALID_HANDLE_VALUE)
-    {
+    if (handle == INVALID_HANDLE_VALUE) {
       continue;
     }
 
-    do
-    {
+    do {
       const std::wstring_view name = fd.cFileName;
-      if (name == L"." || name == L"..")
-      {
+      if (name == L"." || name == L"..") {
         continue;
       }
 
@@ -89,8 +83,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
       // ChangeTimeUtc stays unset: no documented Win32 API exposes NTFS'
       // own MFT change time.
 
-      if (!is_directory)
-      {
+      if (!is_directory) {
         entry.logical_size =
             (static_cast<ULONGLONG>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
 
@@ -102,12 +95,10 @@ Listing WalkOsApi(const std::filesystem::path& root)
             full.c_str(), FILE_READ_ATTRIBUTES,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-        if (file_handle != INVALID_HANDLE_VALUE)
-        {
+        if (file_handle != INVALID_HANDLE_VALUE) {
           FILE_STANDARD_INFO info{};
           if (GetFileInformationByHandleEx(file_handle, FileStandardInfo, &info,
-                                           sizeof(info)) != 0)
-          {
+                                           sizeof(info)) != 0) {
             entry.physical_size =
                 gsl::narrow<ULONGLONG>(info.AllocationSize.QuadPart);
           }
@@ -117,12 +108,10 @@ Listing WalkOsApi(const std::filesystem::path& root)
 
       result.emplace(path, entry);
 
-      if (is_directory && !is_reparse)
-      {
+      if (is_directory && !is_reparse) {
         stack.push_back({.dir = full, .prefix = path});
       }
-    }
-    while (FindNextFileW(handle, &fd) != 0);
+    } while (FindNextFileW(handle, &fd) != 0);
 
     FindClose(handle);
   }
@@ -143,11 +132,9 @@ Listing WalkOsApi(const std::filesystem::path& root)
 
   #include "linux-utf8.h"
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
-namespace
-{
+namespace {
 
 // Bits in a byte: Windows-style attribute DWORDs are assembled byte by byte.
 constexpr unsigned xattr_bits_per_byte = 8;
@@ -165,18 +152,15 @@ constexpr DWORD attr_encrypted = 0x4000U;
   // xattr, little-endian. No generic POSIX call carries them, so this is
   // best-effort: absent on a non-NTFS mount, or a driver too old to set it.
   #ifdef __linux__
-bool ReadNtfsAttribXattr(const std::filesystem::path& path, DWORD& value)
-{
+bool ReadNtfsAttribXattr(const std::filesystem::path& path, DWORD& value) {
   std::array<unsigned char, 4> buf{};
   const ssize_t xattr_size =
       getxattr(path.c_str(), "system.ntfs_attrib", buf.data(), buf.size());
-  if (std::cmp_not_equal(xattr_size, buf.size()))
-  {
+  if (std::cmp_not_equal(xattr_size, buf.size())) {
     return false;
   }
   value = 0;
-  for (size_t i = 0; i < buf.size(); i++)
-  {
+  for (size_t i = 0; i < buf.size(); i++) {
     value |= static_cast<DWORD>(buf.at(i)) << (i * xattr_bits_per_byte);
   }
   return true;
@@ -189,43 +173,37 @@ bool ReadNtfsAttribXattr(const std::filesystem::path&, DWORD&) { return false; }
 
 const char* OsApiMethodName() noexcept { return "Linux API"; }
 
-Listing WalkOsApi(const std::filesystem::path& root)
-{
+Listing WalkOsApi(const std::filesystem::path& root) {
   Listing result;
 
-  struct Frame
-  {
+  struct Frame {
     std::filesystem::path dir;
     std::wstring prefix;
   };
+
   std::vector<Frame> stack;
   stack.push_back({.dir = root, .prefix = L""});
 
-  while (!stack.empty())
-  {
+  while (!stack.empty()) {
     const Frame frame = std::move(stack.back());
     stack.pop_back();
 
     DIR* handle = opendir(frame.dir.c_str());
-    if (handle == nullptr)
-    {
+    if (handle == nullptr) {
       continue;
     }
 
     for (struct dirent* de = readdir(handle); de != nullptr;
-         de = readdir(handle))
-    {
+         de = readdir(handle)) {
       const std::string_view name = std::data(de->d_name);
-      if (name == "." || name == "..")
-      {
+      if (name == "." || name == "..") {
         continue;
       }
 
       const std::filesystem::path full = frame.dir / de->d_name;
 
       struct stat file_stat = {};
-      if (lstat(full.c_str(), &file_stat) != 0)
-      {
+      if (lstat(full.c_str(), &file_stat) != 0) {
         continue;
       }
 
@@ -236,8 +214,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
 
       Entry entry;
       entry.is_directory = is_directory;
-      if (!is_directory)
-      {
+      if (!is_directory) {
         entry.logical_size = gsl::narrow<ULONGLONG>(file_stat.st_size);
       }
       entry.physical_size =
@@ -257,16 +234,14 @@ Listing WalkOsApi(const std::filesystem::path& root)
       struct statx stx = {};
       if (statx(AT_FDCWD, full.c_str(), AT_SYMLINK_NOFOLLOW, STATX_BTIME,
                 &stx) == 0 &&
-          (stx.stx_mask & STATX_BTIME) != 0)
-      {
+          (stx.stx_mask & STATX_BTIME) != 0) {
         entry.creation_time_utc =
             SecondsNanosToUtcTicks(stx.stx_btime.tv_sec, stx.stx_btime.tv_nsec);
       }
   #endif
 
       DWORD ntfs_attrib = 0;
-      if (ReadNtfsAttribXattr(full, ntfs_attrib))
-      {
+      if (ReadNtfsAttribXattr(full, ntfs_attrib)) {
         entry.read_only = (ntfs_attrib & 0x1U) != 0;
         entry.hidden = (ntfs_attrib & 0x2U) != 0;
         entry.system = (ntfs_attrib & 0x4U) != 0;
@@ -281,8 +256,7 @@ Listing WalkOsApi(const std::filesystem::path& root)
           frame.prefix.empty() ? wname : frame.prefix + L"/" + wname;
       result.emplace(path, entry);
 
-      if (is_directory && !is_symlink)
-      {
+      if (is_directory && !is_symlink) {
         stack.push_back({.dir = full, .prefix = path});
       }
     }

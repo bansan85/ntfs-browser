@@ -5,20 +5,21 @@
 #include <cstdint>
 #include <unordered_set>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
-namespace Attr
-{
+
+namespace Attr {
+
 struct AttributeList;
+
 }  // namespace Attr
 
 template <typename Resident, Strategy S>
-class AttrList : public Resident
-{
+class AttrList : public Resident {
  public:
   // attrListChain: (record, attribute type) pairs already resolved along
   // the current $ATTRIBUTE_LIST chain, threaded through every extension
@@ -26,9 +27,9 @@ class AttrList : public Resident
   AttrList(const AttrHeaderCommon& ahc, FileRecord<S>& file_record,
            std::unordered_set<ULONGLONG>& attr_list_chain);
   AttrList(AttrList&& other) noexcept = delete;
-  AttrList(AttrList const& other) = delete;
+  AttrList(const AttrList& other) = delete;
   AttrList& operator=(AttrList&& other) noexcept = delete;
-  AttrList& operator=(AttrList const& other) = delete;
+  AttrList& operator=(const AttrList& other) = delete;
   ~AttrList() override;
 
  private:

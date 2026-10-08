@@ -4,31 +4,33 @@
 
 #include <cstdint>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace Attr
-{
+namespace Attr {
+
 struct StandardInformation;
+
 }  // namespace Attr
-namespace Flag
-{
+
+namespace Flag {
+
 enum class StdInfoPermission : DWORD;
+
 }  // namespace Flag
 
 template <typename Resident, Strategy S>
-class AttrStdInfo : public Resident
-{
+class AttrStdInfo : public Resident {
  public:
   AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrStdInfo(AttrStdInfo&& other) noexcept = delete;
-  AttrStdInfo(AttrStdInfo const& other) = delete;
+  AttrStdInfo(const AttrStdInfo& other) = delete;
   AttrStdInfo& operator=(AttrStdInfo&& other) noexcept = delete;
-  AttrStdInfo& operator=(AttrStdInfo const& other) = delete;
+  AttrStdInfo& operator=(const AttrStdInfo& other) = delete;
   ~AttrStdInfo() override;
 
   template <Strategy>
@@ -58,4 +60,5 @@ class AttrStdInfo : public Resident
   // Also used by Filename (src/filename.cpp) for $FILE_NAME timestamps.
   static void UTC2Local(const ULONGLONG& ultm, FILETIME& lftm) noexcept;
 };  // AttrStdInfo
+
 }  // namespace NtfsBrowser

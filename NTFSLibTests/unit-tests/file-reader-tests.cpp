@@ -24,8 +24,7 @@
 #include "optional-access.h"
 #include "partition-disk-reader.h"
 
-namespace
-{
+namespace {
 
 // Size of the backing file the read tests fill with a byte pattern.
 constexpr size_t content_size = 4096;
@@ -50,16 +49,14 @@ constexpr DWORD second_read_size = 2048;
 // Opens path through a PartitionDiskReader (offset 0) instead of
 // FileReader's own Open(), which only exists on Windows (Win32DiskReader).
 template <NtfsBrowser::Strategy S>
-NtfsBrowser::FileReader<S> OpenOnDisk(const std::filesystem::path& path)
-{
+NtfsBrowser::FileReader<S> OpenOnDisk(const std::filesystem::path& path) {
   auto reader = std::make_unique<NtfsBrowserTests::PartitionDiskReader>(0);
   REQUIRE(reader->Open(path.wstring()));
   return NtfsBrowser::FileReader<S>(std::move(reader));
 }
 
 // Writes content to a new temp file and returns its path.
-std::filesystem::path WriteTempFile(std::span<const BYTE> content)
-{
+std::filesystem::path WriteTempFile(std::span<const BYTE> content) {
   std::random_device random_device;
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /
@@ -73,18 +70,17 @@ std::filesystem::path WriteTempFile(std::span<const BYTE> content)
   return path;
 }
 
-struct TempFile final
-{
+struct TempFile final {
   std::filesystem::path path;
 
   explicit TempFile(std::span<const BYTE> content)
-      : path(WriteTempFile(content))
-  {
-  }
+      : path(WriteTempFile(content)) {}
+
   TempFile(const TempFile&) = delete;
   TempFile& operator=(const TempFile&) = delete;
   TempFile(TempFile&&) = delete;
   TempFile& operator=(TempFile&&) = delete;
+
   ~TempFile() { std::filesystem::remove(path); }
 };
 
@@ -93,25 +89,22 @@ struct TempFile final
 TEMPLATE_TEST_CASE_SIG(
     "FileReader::ReadInto reads into the caller-provided buffer",
     "[file-reader]", ((NtfsBrowser::Strategy S), S),
-    NtfsBrowser::Strategy::NoCache, NtfsBrowser::Strategy::FullCache)
-{
+    NtfsBrowser::Strategy::NoCache, NtfsBrowser::Strategy::FullCache) {
   std::vector<BYTE> content(content_size);
-  for (size_t i = 0; i < content.size(); i++)
-  {
+  for (size_t i = 0; i < content.size(); i++) {
     // i < content.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     content[i] = static_cast<BYTE>(i);
   }
-  TempFile const file(content);
+  const TempFile file(content);
 
-  NtfsBrowser::FileReader<S> const reader = OpenOnDisk<S>(file.path);
+  const NtfsBrowser::FileReader<S> reader = OpenOnDisk<S>(file.path);
 
   std::array<BYTE, read_into_size> dest{};
   LARGE_INTEGER addr{.QuadPart = read_into_offset};
   REQUIRE(reader.ReadInto(addr, dest));
 
-  for (size_t i = 0; i < dest.size(); i++)
-  {
+  for (size_t i = 0; i < dest.size(); i++) {
     // i < dest.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(dest[i] == content.at(read_into_offset + i));
@@ -121,12 +114,11 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
                        "[file-reader]", ((NtfsBrowser::Strategy S), S),
                        NtfsBrowser::Strategy::NoCache,
-                       NtfsBrowser::Strategy::FullCache)
-{
+                       NtfsBrowser::Strategy::FullCache) {
   std::vector<BYTE> content(tiny_file_size, tiny_file_fill);
-  TempFile const file(content);
+  const TempFile file(content);
 
-  NtfsBrowser::FileReader<S> const reader = OpenOnDisk<S>(file.path);
+  const NtfsBrowser::FileReader<S> reader = OpenOnDisk<S>(file.path);
 
   std::array<BYTE, read_into_size> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
@@ -134,17 +126,15 @@ TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
 }
 
 TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
-          "[file-reader]")
-{
+          "[file-reader]") {
   std::vector<BYTE> content(content_size);
-  for (size_t i = 0; i < content.size(); i++)
-  {
+  for (size_t i = 0; i < content.size(); i++) {
     // i < content.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     content[i] = static_cast<BYTE>(i * pattern_step);
   }
 
-  NtfsBrowser::FileReader<NtfsBrowser::Strategy::NoCache> const reader(
+  const NtfsBrowser::FileReader<NtfsBrowser::Strategy::NoCache> reader(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
 
   LARGE_INTEGER first_addr{.QuadPart = 0};
@@ -156,8 +146,7 @@ TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
   const auto second = reader.Read(second_addr, second_read_size);
   REQUIRE(second.has_value());
   REQUIRE(NtfsBrowserTests::Unwrap(second).size() == second_read_size);
-  for (size_t i = 0; i < NtfsBrowserTests::Unwrap(second).size(); i++)
-  {
+  for (size_t i = 0; i < NtfsBrowserTests::Unwrap(second).size(); i++) {
     // i < second->size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     REQUIRE(NtfsBrowserTests::Unwrap(second)[i] ==
@@ -169,8 +158,7 @@ TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
 TEMPLATE_TEST_CASE_SIG(
     "FileReader::Open honours the length of a non NUL-terminated view",
     "[file-reader]", ((NtfsBrowser::Strategy S), S),
-    NtfsBrowser::Strategy::NoCache, NtfsBrowser::Strategy::FullCache)
-{
+    NtfsBrowser::Strategy::NoCache, NtfsBrowser::Strategy::FullCache) {
   const std::vector<BYTE> content(64, 0x5A);
   TempFile file(content);
 

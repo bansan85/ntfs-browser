@@ -5,23 +5,21 @@
 
 #include "ntfs-common.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 template <class Resident, Strategy S>
-class AttrData : public Resident
-{
+class AttrData : public Resident {
  public:
   AttrData(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record)
-      : Resident(ahc, file_record)
-  {
+      : Resident(ahc, file_record) {
     LogTrace("Attribute: Data ({}Resident)",
              this->IsNonResident() ? "Non" : "");
   }
+
   AttrData(AttrData&& other) noexcept = delete;
-  AttrData(AttrData const& other) = delete;
+  AttrData(const AttrData& other) = delete;
   AttrData& operator=(AttrData&& other) noexcept = delete;
-  AttrData& operator=(AttrData const& other) = delete;
+  AttrData& operator=(const AttrData& other) = delete;
 
   ~AttrData() override { LogTrace("AttrData deleted"); }
 };  // AttrData

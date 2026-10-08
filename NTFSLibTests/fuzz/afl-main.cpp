@@ -52,8 +52,7 @@ using ArgChar = wchar_t;
 using ArgChar = char;
 #endif
 
-namespace
-{
+namespace {
 
 // Log::option_prefix in the character type this platform's argv has.
 #ifdef _WIN32
@@ -77,11 +76,10 @@ constexpr std::string_view bpb_signature = "NTFS    ";
 constexpr size_t bpb_signature_len = 8;
 
 // Overwrites the boot sector signature so ParseBootSector() accepts it.
-void PatchBpbSignature(std::vector<BYTE>& data)
-{
-  if (data.size() >= bpb_signature_offset + bpb_signature_len)
-  {
-    // The enclosing check leaves room for bpb_signature_len bytes at the offset.
+void PatchBpbSignature(std::vector<BYTE>& data) {
+  if (data.size() >= bpb_signature_offset + bpb_signature_len) {
+    // The enclosing check leaves room for bpb_signature_len bytes at the
+    // offset.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&data[bpb_signature_offset], bpb_signature.data(),
                 bpb_signature_len);
@@ -112,12 +110,10 @@ constexpr std::array<VolumeOptions, 2> volume_option_modes{
 // disk-read error paths a looping reader never reaches on its own.
 template <Strategy S>
 void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
-              std::optional<size_t> failing_read = {})
-{
-  NtfsVolume<S> const volume(
+              std::optional<size_t> failing_read = {}) {
+  const NtfsVolume<S> volume(
       std::make_unique<LoopingDiskReader>(data, failing_read), options);
-  if (!volume.IsVolumeOK())
-  {
+  if (!volume.IsVolumeOK()) {
     return;
   }
 
@@ -127,16 +123,15 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
   // the unhandled-attribute path of ParseAttr().
   file_record.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation | Mask::Data |
                           Mask::Bitmap | Mask::ObjectId);
-  if (!file_record.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root)))
-  {
+  if (!file_record.ParseFileRecord(
+          static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
     // file_record_ is guaranteed empty here, exercising IsDeleted()/
     // IsDirectory()'s guard against it.
     (void)file_record.IsDeleted();
     (void)file_record.IsDirectory();
     return;
   }
-  if (!file_record.ParseAttrs())
-  {
+  if (!file_record.ParseAttrs()) {
     return;
   }
 
@@ -162,25 +157,20 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
 // may escape.
 template <Strategy S>
 void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
-                std::optional<size_t> failing_read = {})
-{
-  try
-  {
+                std::optional<size_t> failing_read = {}) {
+  try {
     FuzzOnce<S>(data, options, failing_read);
   }
   // NOLINTNEXTLINE(bugprone-empty-catch)
-  catch (const std::exception&)
-  {
+  catch (const std::exception&) {
   }
   // NOLINTNEXTLINE(bugprone-empty-catch)
-  catch (...)
-  {
+  catch (...) {
   }
 }
 
 // Prints command-line usage help.
-void Usage(const ArgChar* program)
-{
+void Usage(const ArgChar* program) {
   std::cerr << std::format(
       "usage: {} [--log=...] [--inject-read-failures] <input-file>\n",
       std::filesystem::path(program).string());
@@ -189,8 +179,7 @@ void Usage(const ArgChar* program)
 
 // Runs one AFL testcase file (the non-option argument) through the library
 // once.
-int Run(int argc, ArgChar** argv)
-{
+int Run(int argc, ArgChar** argv) {
   // Trace on the console by default, so an afl-fuzz run and the saved
   // regression corpus both keep producing every message without a flag.
   Log::Config log_config{.console_level = Log::Level::Trace};
@@ -198,49 +187,41 @@ int Run(int argc, ArgChar** argv)
   const ArgChar* input = nullptr;
   bool inject_failures = false;
 
-  for (size_t i = 1; i < args.size(); i++)
-  {
+  for (size_t i = 1; i < args.size(); i++) {
     // i < args.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const ArgChar* const arg = args[i];
-    if (std::basic_string_view<ArgChar>(arg) == inject_option)
-    {
+    if (std::basic_string_view<ArgChar>(arg) == inject_option) {
       inject_failures = true;
       continue;
     }
-    if (std::basic_string_view<ArgChar>(arg).starts_with(log_prefix))
-    {
-      if (!Log::ParseOption(arg, log_config))
-      {
+    if (std::basic_string_view<ArgChar>(arg).starts_with(log_prefix)) {
+      if (!Log::ParseOption(arg, log_config)) {
         Usage(args.front());
         return 1;
       }
       continue;
     }
-    if (input != nullptr)
-    {
+    if (input != nullptr) {
       Usage(args.front());
       return 1;
     }
     input = arg;
   }
 
-  if (input == nullptr)
-  {
+  if (input == nullptr) {
     Usage(args.front());
     return 1;
   }
 
-  if (!Log::Configure(log_config))
-  {
+  if (!Log::Configure(log_config)) {
     std::cerr << std::format("Cannot open log file {}\n",
                              log_config.file_path.string());
   }
 
   std::optional<std::vector<BYTE>> data =
       LoopingDiskReader::LoadFile(std::filesystem::path(input));
-  if (!data)
-  {
+  if (!data) {
     // Empty/unreadable testcase: nothing a looping reader could serve.
     return 0;
   }
@@ -250,22 +231,18 @@ int Run(int argc, ArgChar** argv)
   // Guarded independently, so one run's exception can't skip the others.
   // Each strategy runs once per VolumeOptions mode, so both the strict
   // (reject-whole) and recovering (salvage) code paths are exercised.
-  for (const VolumeOptions& options : volume_option_modes)
-  {
+  for (const VolumeOptions& options : volume_option_modes) {
     RunGuarded<Strategy::NoCache>(*data, options);
     RunGuarded<Strategy::FullCache>(*data, options);
   }
 
-  if (!inject_failures)
-  {
+  if (!inject_failures) {
     return 0;
   }
 
   for (size_t failing_read = 0; failing_read < injected_failure_runs;
-       ++failing_read)
-  {
-    for (const VolumeOptions& options : volume_option_modes)
-    {
+       ++failing_read) {
+    for (const VolumeOptions& options : volume_option_modes) {
       RunGuarded<Strategy::NoCache>(*data, options, failing_read);
       RunGuarded<Strategy::FullCache>(*data, options, failing_read);
     }
@@ -277,14 +254,10 @@ int Run(int argc, ArgChar** argv)
 }  // namespace
 
 // Keeps any exception from escaping main().
-int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[])
-{
-  try
-  {
+int NTFS_FUZZ_MAIN(int argc, ArgChar* argv[]) {
+  try {
     return Run(argc, argv);
-  }
-  catch (...)
-  {
+  } catch (...) {
     std::cerr << "Unhandled exception\n";
     return 1;
   }

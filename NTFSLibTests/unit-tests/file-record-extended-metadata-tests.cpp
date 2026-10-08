@@ -29,18 +29,16 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowserTests::FileTimeToTicks;
 
-namespace
-{
+namespace {
 
 // mft_tree_report_idx's $STANDARD_INFORMATION carries READONLY | ARCHIVE and,
 // per WriteStandardInformationAttr(), four distinct timestamps.
 template <Strategy S>
-void RunFileRecordExposesExtendedMetadata()
-{
+void RunFileRecordExposesExtendedMetadata() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> report(volume);
@@ -72,12 +70,11 @@ void RunFileRecordExposesExtendedMetadata()
 // directories have no $INDEX_ROOT in this fixture, so FindSubEntry() isn't an
 // option here.
 template <Strategy S>
-void RunFilenameExposesExtendedMetadata()
-{
+void RunFilenameExposesExtendedMetadata() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> report(volume);
@@ -88,14 +85,11 @@ void RunFilenameExposesExtendedMetadata()
   REQUIRE_FALSE(file_name_attrs.empty());
 
   const Filename* own_file_name = nullptr;
-  if constexpr (S == Strategy::NoCache)
-  {
+  if constexpr (S == Strategy::NoCache) {
     own_file_name = reinterpret_cast<
         const AttrFileName<AttrResidentNoCache, Strategy::NoCache>*>(
         file_name_attrs.front().get());
-  }
-  else
-  {
+  } else {
     own_file_name = reinterpret_cast<
         const AttrFileName<AttrResidentFullCache, Strategy::FullCache>*>(
         file_name_attrs.front().get());
@@ -113,15 +107,15 @@ void RunFilenameExposesExtendedMetadata()
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord exposes IsArchive(), GetAllocatedSize() and the "
     "change time through GetFileTime()",
-    "[file-record]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache)
-{
+    "[file-record]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache) {
   RunFileRecordExposesExtendedMetadata<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "Filename exposes IsArchive() and GetAllocatedSize() from its own "
     "$FILE_NAME",
-    "[file-record]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache)
-{
+    "[file-record]", ((Strategy S), S), Strategy::NoCache,
+    Strategy::FullCache) {
   RunFilenameExposesExtendedMetadata<S>();
 }

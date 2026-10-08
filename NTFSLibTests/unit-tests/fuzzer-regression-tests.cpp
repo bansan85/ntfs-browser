@@ -20,17 +20,14 @@ using NtfsBrowserTests::RunProcessCapturingOutput;
 
 namespace Fs = std::filesystem;
 
-namespace
-{
+namespace {
 
 // Lists the saved AFL testcases under NTFS_FUZZ_DATA_DIR, sorted.
-std::vector<Fs::path> ListRegressionTestcases()
-{
+std::vector<Fs::path> ListRegressionTestcases() {
   std::vector<Fs::path> files;
-  for (const auto& entry : Fs::directory_iterator(Fs::path(NTFS_FUZZ_DATA_DIR)))
-  {
-    if (entry.is_regular_file())
-    {
+  for (const auto& entry :
+       Fs::directory_iterator(Fs::path(NTFS_FUZZ_DATA_DIR))) {
+    if (entry.is_regular_file()) {
       files.push_back(entry.path());
     }
   }
@@ -54,8 +51,7 @@ inline constexpr bool efs_enabled = false;
 inline constexpr std::size_t max_expected_messages = 7;
 using MessageList = std::array<std::string_view, max_expected_messages>;
 
-struct ExpectedMessages
-{
+struct ExpectedMessages {
   bool check_expected_messages;
   MessageList messages;
 };
@@ -383,8 +379,7 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
 
 // Runs one saved regression testcase and, if expected_error_messages has an
 // entry for it, checks its output against that entry's expected messages.
-void RunRegressionTestcase(std::string_view name)
-{
+void RunRegressionTestcase(std::string_view name) {
   const Fs::path exe(NTFS_FUZZER_AFL_EXE);
   REQUIRE(Fs::exists(exe));
 
@@ -397,15 +392,12 @@ void RunRegressionTestcase(std::string_view name)
 
   const auto* const iterator = expected_error_messages.find(name);
   if (iterator != expected_error_messages.end() &&
-      iterator->second.check_expected_messages)
-  {
+      iterator->second.check_expected_messages) {
     INFO("captured output:\n" << result.output);
-    for (const std::string_view message : iterator->second.messages)
-    {
+    for (const std::string_view message : iterator->second.messages) {
       // Trailing array slots past this testcase's own messages are
       // empty padding; stop there instead of matching real content.
-      if (message.empty())
-      {
+      if (message.empty()) {
         break;
       }
       CHECK_THAT(result.output,
@@ -417,13 +409,11 @@ void RunRegressionTestcase(std::string_view name)
 }  // namespace
 
 TEST_CASE("saved regression corpus is fully covered by expected_error_messages",
-          "[fuzz][regression]")
-{
+          "[fuzz][regression]") {
   const std::vector<Fs::path> files = ListRegressionTestcases();
   REQUIRE_FALSE(files.empty());
 
-  for (const Fs::path& file : files)
-  {
+  for (const Fs::path& file : files) {
     CHECK(expected_error_messages.contains(file.filename().string()));
   }
   CHECK(files.size() == expected_error_messages.size());
@@ -432,10 +422,9 @@ TEST_CASE("saved regression corpus is fully covered by expected_error_messages",
 // Registers one ctest-visible TEST_CASE per saved regression testcase, so
 // ctest can rerun a single failing input instead of the whole corpus.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): TEST_CASE needs a literal.
-#define NTFS_REGRESSION_TESTCASE(name)                               \
-  TEST_CASE("NtfsFuzzerAfl regression: " name, "[fuzz][regression]") \
-  {                                                                  \
-    RunRegressionTestcase(name);                                     \
+#define NTFS_REGRESSION_TESTCASE(name)                                 \
+  TEST_CASE("NtfsFuzzerAfl regression: " name, "[fuzz][regression]") { \
+    RunRegressionTestcase(name);                                       \
   }
 
 NTFS_REGRESSION_TESTCASE("0724c913e1b2f0607bb5cd3ebfacb596db4458e9")

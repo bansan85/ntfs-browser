@@ -7,46 +7,38 @@
 #include <ntfs-browser/mft-idx.h>
 #include <ntfs-browser/mft-tree.h>
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
-Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG start_record)
-{
+Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG start_record) {
   using NtfsBrowser::MftEntry;
   using NtfsBrowser::MftName;
 
   Listing result;
 
-  struct Frame
-  {
+  struct Frame {
     ULONGLONG record;
     std::wstring prefix;
   };
+
   std::vector<Frame> stack;
   stack.push_back({.record = start_record, .prefix = L""});
 
-  while (!stack.empty())
-  {
+  while (!stack.empty()) {
     const Frame frame = std::move(stack.back());
     stack.pop_back();
 
-    for (const ULONGLONG child : tree.Children(frame.record))
-    {
-      if (child < static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::User))
-      {
+    for (const ULONGLONG child : tree.Children(frame.record)) {
+      if (child < static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::User)) {
         continue;
       }
       const MftEntry* entry = tree.Find(child);
-      if (entry == nullptr)
-      {
+      if (entry == nullptr) {
         continue;
       }
 
-      for (const MftName& name : entry->names)
-      {
+      for (const MftName& name : entry->names) {
         if (name.dos_only || !name.parent_valid ||
-            name.parent_record != frame.record)
-        {
+            name.parent_record != frame.record) {
           continue;
         }
 
@@ -72,8 +64,7 @@ Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG start_record)
         const bool is_directory = out.is_directory;
         result.emplace(path, out);
 
-        if (is_directory)
-        {
+        if (is_directory) {
           stack.push_back({.record = child, .prefix = path});
         }
       }

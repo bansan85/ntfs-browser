@@ -20,8 +20,7 @@
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 
-namespace
-{
+namespace {
 
 // Size of the buffer one fake index entry is built in, zero-filled.
 constexpr size_t entry_buffer_size = 256;
@@ -35,8 +34,7 @@ constexpr WORD filler_code_unit = 0xFFFF;
 // Builds a raw $I30 index entry named "System" (file reference 42),
 // followed in the same buffer by one filler UTF-16 code unit (0xFFFF)
 // immediately past the name, so a read past the real name is detectable.
-IndexEntry MakeSystemEntry()
-{
+IndexEntry MakeSystemEntry() {
   constexpr std::wstring_view name_value = L"System";
   constexpr BYTE name_len = 6;
 
@@ -52,8 +50,7 @@ IndexEntry MakeSystemEntry()
   filename.flags = NtfsBrowser::Flag::Filename::Directory;
   filename.name_length = name_len;
   filename.name_space = NtfsBrowser::Flag::FilenameNamespace::Win32;
-  for (BYTE i = 0; i < name_len; i++)
-  {
+  for (BYTE i = 0; i < name_len; i++) {
     // i is below name_len, the length of name.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     filename.name[i] = gsl::narrow<WORD>(name_value[i]);
@@ -73,8 +70,7 @@ IndexEntry MakeSystemEntry()
 
 // Builds a single raw $I30 index entry with an arbitrary short name (used to
 // probe individual code points' collation order).
-IndexEntry MakeNamedEntry(std::wstring_view name)
-{
+IndexEntry MakeNamedEntry(std::wstring_view name) {
   std::vector<BYTE> buffer(entry_buffer_size);
 
   auto& index_entry =
@@ -87,8 +83,7 @@ IndexEntry MakeNamedEntry(std::wstring_view name)
   filename.flags = NtfsBrowser::Flag::Filename::Directory;
   filename.name_length = gsl::narrow<BYTE>(name.size());
   filename.name_space = NtfsBrowser::Flag::FilenameNamespace::Win32;
-  for (size_t i = 0; i < name.size(); i++)
-  {
+  for (size_t i = 0; i < name.size(); i++) {
     // i < name.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     filename.name[i] = gsl::narrow<WORD>(name[i]);
@@ -107,8 +102,7 @@ IndexEntry MakeNamedEntry(std::wstring_view name)
 }  // namespace
 
 TEST_CASE("Compare orders code points in the Z-a gap by uppercase collation",
-          "[filename][regression]")
-{
+          "[filename][regression]") {
   const IndexEntry entry = MakeNamedEntry(L"a");
   REQUIRE(entry.HasName());
   REQUIRE(entry.GetFilename() == L"a");
@@ -118,8 +112,7 @@ TEST_CASE("Compare orders code points in the Z-a gap by uppercase collation",
 }
 
 TEST_CASE("Compare treats a name as a prefix, not extended by trailing bytes",
-          "[filename][regression]")
-{
+          "[filename][regression]") {
   const IndexEntry entry = MakeSystemEntry();
   REQUIRE(entry.HasName());
   REQUIRE(entry.GetFilename() == L"System");
@@ -129,8 +122,7 @@ TEST_CASE("Compare treats a name as a prefix, not extended by trailing bytes",
 }
 
 TEST_CASE("A copied IndexEntry reads its own bytes, not the original's",
-          "[filename][regression]")
-{
+          "[filename][regression]") {
   std::optional<IndexEntry> original = MakeSystemEntry();
   const IndexEntry copy(*original);
   original.reset();
@@ -142,8 +134,7 @@ TEST_CASE("A copied IndexEntry reads its own bytes, not the original's",
 }
 
 TEST_CASE("Compare folds non-ASCII case without depending on the C locale",
-          "[filename][upcase][regression]")
-{
+          "[filename][upcase][regression]") {
   const IndexEntry entry = MakeNamedEntry(L"\u00E9");
   REQUIRE(entry.HasName());
 

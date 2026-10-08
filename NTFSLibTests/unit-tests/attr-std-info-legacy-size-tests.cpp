@@ -24,12 +24,11 @@ TEMPLATE_TEST_CASE_SIG(
     "attribute, not just whatever sizeof(Attr::StandardInformation) "
     "currently computes to",
     "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithLegacyStandardInformation());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);

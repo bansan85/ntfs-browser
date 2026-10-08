@@ -13,15 +13,12 @@
 
 #include <gsl/narrow>
 
-namespace NtfsBrowser
-{
-namespace
-{
+namespace NtfsBrowser {
+namespace {
 
 // One run of the built-in mapping: every step-th unit from first to last
 // maps to itself plus delta.
-struct UpCaseRun
-{
+struct UpCaseRun {
   char16_t first;
   char16_t last;
   std::uint8_t step;
@@ -249,20 +246,16 @@ constexpr char32_t surrogate_mask = 0x3FF;
 // Yields the UTF-16 code units of a wide string one at a time. On Windows
 // wchar_t already is a UTF-16 unit. Elsewhere it holds a whole code point,
 // which becomes a surrogate pair.
-class Utf16Cursor
-{
+class Utf16Cursor {
  public:
   explicit Utf16Cursor(std::wstring_view text) noexcept : text_(text) {}
 
-  [[nodiscard]] bool AtEnd() const noexcept
-  {
+  [[nodiscard]] bool AtEnd() const noexcept {
     return pending_low_ == 0 && index_ >= text_.size();
   }
 
-  [[nodiscard]] char16_t Next() noexcept
-  {
-    if (pending_low_ != 0)
-    {
+  [[nodiscard]] char16_t Next() noexcept {
+    if (pending_low_ != 0) {
       const char16_t low = pending_low_;
       pending_low_ = 0;
       return low;
@@ -271,18 +264,13 @@ class Utf16Cursor
     // Callers test AtEnd() first, so index_ < text_.size().
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto value = static_cast<char32_t>(text_[index_++]);
-    if constexpr (sizeof(wchar_t) == sizeof(char16_t))
-    {
+    if constexpr (sizeof(wchar_t) == sizeof(char16_t)) {
       return static_cast<char16_t>(value);
-    }
-    else
-    {
-      if (value < supplementary_base)
-      {
+    } else {
+      if (value < supplementary_base) {
         return static_cast<char16_t>(value);
       }
-      if (value > max_code_point)
-      {
+      if (value > max_code_point) {
         return replacement_character;
       }
       const char32_t offset = value - supplementary_base;
@@ -300,19 +288,15 @@ class Utf16Cursor
 };
 
 // Expands built_in_runs into a full table.
-std::vector<char16_t> MakeBuiltInMap()
-{
+std::vector<char16_t> MakeBuiltInMap() {
   std::vector<char16_t> map(up_case_unit_count);
-  for (size_t unit = 0; unit < map.size(); unit++)
-  {
+  for (size_t unit = 0; unit < map.size(); unit++) {
     // unit < map.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     map[unit] = gsl::narrow<char16_t>(unit);
   }
-  for (const UpCaseRun& run : built_in_runs)
-  {
-    for (std::uint32_t unit = run.first; unit <= run.last; unit += run.step)
-    {
+  for (const UpCaseRun& run : built_in_runs) {
+    for (std::uint32_t unit = run.first; unit <= run.last; unit += run.step) {
       map.at(unit) =
           gsl::narrow<char16_t>(gsl::narrow<std::int32_t>(unit) + run.delta);
     }
@@ -324,26 +308,20 @@ std::vector<char16_t> MakeBuiltInMap()
 
 // Private: callers go through BuiltIn() or FromBytes().
 UpCaseTable::UpCaseTable(std::vector<char16_t> map, bool built_in)
-    : map_(std::move(map)), built_in_(built_in)
-{
-}
+    : map_(std::move(map)), built_in_(built_in) {}
 
-const UpCaseTable& UpCaseTable::BuiltIn()
-{
+const UpCaseTable& UpCaseTable::BuiltIn() {
   static const UpCaseTable table(MakeBuiltInMap(), true);
   return table;
 }
 
-std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes)
-{
-  if (bytes.size() < up_case_byte_count)
-  {
+std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes) {
+  if (bytes.size() < up_case_byte_count) {
     return std::nullopt;
   }
 
   std::vector<char16_t> map(up_case_unit_count);
-  for (size_t unit = 0; unit < map.size(); unit++)
-  {
+  for (size_t unit = 0; unit < map.size(); unit++) {
     const size_t offset = unit * sizeof(char16_t);
     // bytes.size() >= up_case_byte_count = 2 * map.size(), so offset + 1 is in
     // range. unit < map.size() by the loop condition.
@@ -357,12 +335,10 @@ std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes)
                               (static_cast<unsigned>(high) << bits_per_byte));
   }
 
-  for (char16_t unit = lower_a; unit <= lower_z; unit++)
-  {
+  for (char16_t unit = lower_a; unit <= lower_z; unit++) {
     // unit is an ASCII letter, well below the 65536 entries of map.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    if (map[unit] != static_cast<char16_t>(unit - case_distance))
-    {
+    if (map[unit] != static_cast<char16_t>(unit - case_distance)) {
       return std::nullopt;
     }
   }
@@ -372,29 +348,24 @@ std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes)
 
 bool UpCaseTable::IsBuiltIn() const noexcept { return built_in_; }
 
-char16_t UpCaseTable::Map(char16_t unit) const noexcept
-{
+char16_t UpCaseTable::Map(char16_t unit) const noexcept {
   // Both factories build up_case_unit_count entries, one per char16_t value.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return map_[unit];
 }
 
 int UpCaseTable::Compare(std::wstring_view first,
-                         std::wstring_view second) const noexcept
-{
+                         std::wstring_view second) const noexcept {
   Utf16Cursor left(first);
   Utf16Cursor right(second);
-  while (!left.AtEnd() && !right.AtEnd())
-  {
+  while (!left.AtEnd() && !right.AtEnd()) {
     const char16_t left_unit = Map(left.Next());
     const char16_t right_unit = Map(right.Next());
-    if (left_unit != right_unit)
-    {
+    if (left_unit != right_unit) {
       return left_unit < right_unit ? -1 : 1;
     }
   }
-  if (left.AtEnd() && right.AtEnd())
-  {
+  if (left.AtEnd() && right.AtEnd()) {
     return 0;
   }
   return left.AtEnd() ? -1 : 1;

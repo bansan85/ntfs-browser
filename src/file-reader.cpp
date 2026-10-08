@@ -28,25 +28,20 @@ static constexpr LONGLONG memory_buffer_size = 512 * read_buffer_size;
 static constexpr size_t block_bytes_value =
     static_cast<size_t>(read_buffer_size);
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 template <Strategy S>
 FileReader<S>::FileReader() = default;
 
 template <Strategy S>
 FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader)
-    : reader_(std::move(reader))
-{
-}
+    : reader_(std::move(reader)) {}
 
 #ifdef _WIN32
 template <Strategy S>
-bool FileReader<S>::Open(std::wstring_view volume)
-{
+bool FileReader<S>::Open(std::wstring_view volume) {
   auto reader = std::make_unique<Win32DiskReader>();
-  if (!reader->Open(volume))
-  {
+  if (!reader->Open(volume)) {
     return false;
   }
 
@@ -56,8 +51,7 @@ bool FileReader<S>::Open(std::wstring_view volume)
 #endif
 
 template <Strategy S>
-bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
-{
+bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {
   return reader_->ReadInto(addr, dest);
 }
 
@@ -67,15 +61,12 @@ std::enable_if_t<
     std::is_same_v<std::integral_constant<Strategy, Q>,
                    std::integral_constant<Strategy, Strategy::NoCache>>,
     std::optional<std::span<const BYTE>>>
-    FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
-{
-  if (buffer_.size() < length)
-  {
+    FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const {
+  if (buffer_.size() < length) {
     buffer_.resize(length);
   }
 
-  if (!reader_->ReadInto(addr, std::span<BYTE>{buffer_.data(), length}))
-  {
+  if (!reader_->ReadInto(addr, std::span<BYTE>{buffer_.data(), length})) {
     LogError("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
@@ -87,12 +78,10 @@ std::enable_if_t<
 // containing "blockAddr" - which must already be 64KiB-aligned - and
 // returns a pointer to its start, or nullptr on a read failure.
 template <Strategy S>
-BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER block_addr) const
-{
+BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER block_addr) const {
   const size_t index = block_addr.QuadPart / read_buffer_size;
   const auto iterator = map_buffer_.find(index);
-  if (iterator != map_buffer_.end())
-  {
+  if (iterator != map_buffer_.end()) {
     return iterator->second;
   }
 
@@ -100,8 +89,7 @@ BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER block_addr) const
 
   if (!reader_->ReadInto(
           block_addr,
-          std::span<BYTE>{new_data, static_cast<size_t>(read_buffer_size)}))
-  {
+          std::span<BYTE>{new_data, static_cast<size_t>(read_buffer_size)})) {
     return nullptr;
   }
 
@@ -115,11 +103,9 @@ BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER block_addr) const
 // short block MUST NOT be cached as if it were complete.
 template <Strategy S>
 std::optional<std::span<const BYTE>>
-    FileReader<S>::ReadUncached(LARGE_INTEGER addr, DWORD length) const
-{
+    FileReader<S>::ReadUncached(LARGE_INTEGER addr, DWORD length) const {
   std::vector<BYTE> exact(length);
-  if (!reader_->ReadInto(addr, exact))
-  {
+  if (!reader_->ReadInto(addr, exact)) {
     LogError("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
@@ -135,18 +121,15 @@ std::enable_if_t<
     std::is_same_v<std::integral_constant<Strategy, Q>,
                    std::integral_constant<Strategy, Strategy::FullCache>>,
     std::optional<std::span<const BYTE>>>
-    FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const
-{
-  if (length == 0)
-  {
+    FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const {
+  if (length == 0) {
     return std::span<const BYTE>{};
   }
 
   // A negative address has no block to cache. An end past LLONG_MAX would
   // overflow the block arithmetic below.
   if (addr.QuadPart < 0 ||
-      addr.QuadPart > std::numeric_limits<LONGLONG>::max() - length)
-  {
+      addr.QuadPart > std::numeric_limits<LONGLONG>::max() - length) {
     LogError("Cannot read file at adress {}: range is out of bounds",
              addr.QuadPart);
     return {};
@@ -155,14 +138,12 @@ std::enable_if_t<
   const bool crosses_block = addr.QuadPart / read_buffer_size !=
                              (addr.QuadPart + length - 1) / read_buffer_size;
 
-  if (!crosses_block)
-  {
+  if (!crosses_block) {
     // Fast path: the request fits in a single block; return a zero-copy view.
     const LARGE_INTEGER block_addr{
         .QuadPart = addr.QuadPart - addr.QuadPart % read_buffer_size};
     BYTE* block = GetCachedBlock(block_addr);
-    if (block == nullptr)
-    {
+    if (block == nullptr) {
       return ReadUncached(addr, length);
     }
 
@@ -177,13 +158,11 @@ std::enable_if_t<
 
   LARGE_INTEGER cur = addr;
   DWORD remaining = length;
-  while (remaining != 0)
-  {
+  while (remaining != 0) {
     const LARGE_INTEGER block_addr{.QuadPart = cur.QuadPart -
                                                cur.QuadPart % read_buffer_size};
     BYTE const* block = GetCachedBlock(block_addr);
-    if (block == nullptr)
-    {
+    if (block == nullptr) {
       return ReadUncached(addr, length);
     }
 
@@ -207,11 +186,9 @@ std::enable_if_t<
 }
 
 template <Strategy S>
-BYTE* FileReader<S>::NextMemory() const
-{
+BYTE* FileReader<S>::NextMemory() const {
   if (mem_alloc_.empty() ||
-      last_alloc_ * read_buffer_size == memory_buffer_size)
-  {
+      last_alloc_ * read_buffer_size == memory_buffer_size) {
     last_alloc_ = 0;
     mem_alloc_.emplace_back(memory_buffer_size);
   }

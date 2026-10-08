@@ -4,11 +4,9 @@
 
 static constexpr DWORD index_block_magic = 'XDNI';
 
-namespace NtfsBrowser::Data
-{
+namespace NtfsBrowser::Data {
 
-struct IndexBlock
-{
+struct IndexBlock {
   // Index Block Header
   DWORD magic;        // "INDX"
   WORD offset_of_us;  // Offset of Update Sequence

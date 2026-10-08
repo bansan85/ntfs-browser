@@ -30,8 +30,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // Fills the read buffer so a byte ReadData() left untouched shows up.
 constexpr BYTE sentinel_byte = 0xCC;
@@ -39,8 +38,7 @@ constexpr BYTE sentinel_byte = 0xCC;
 // What a read of [offset, offset + length) must return: the residue pattern
 // below the initialized size, zeros between it and the real size, and nothing
 // past the real size.
-std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length)
-{
+std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length) {
   const std::vector<BYTE> residue = NtfsBrowserTests::CompressionFixturePattern(
       NtfsBrowserTests::uninitialized_tail_real_size);
 
@@ -48,11 +46,11 @@ std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length)
   for (ULONGLONG at = offset;
        at < offset + length &&
        at < NtfsBrowserTests::uninitialized_tail_real_size;
-       at++)
-  {
+       at++) {
     expected.push_back(
         at < NtfsBrowserTests::uninitialized_tail_ini_size
-            // at < uninitialized_tail_real_size = residue.size() by the loop condition.
+            // at < uninitialized_tail_real_size = residue.size() by the loop
+            // condition.
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
             ? residue[gsl::narrow<size_t>(at)]
             : static_cast<BYTE>(0));
@@ -61,9 +59,8 @@ std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length)
 }
 
 template <Strategy S>
-void CheckReadsBeyondTheInitializedSizeAreZero()
-{
-  NtfsVolume<S> const volume(
+void CheckReadsBeyondTheInitializedSizeAreZero() {
+  const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
           NtfsBrowserTests::BuildFakeNtfsImageWithUninitializedTail()));
   REQUIRE(volume.IsVolumeOK());
@@ -75,11 +72,11 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
   const auto& data_attrs = record.GetAttr(AttrType::Data);
   REQUIRE(data_attrs.size() == 1);
 
-  struct Range
-  {
+  struct Range {
     ULONGLONG offset;
     size_t length;
   };
+
   const auto ranges = std::to_array<Range>({
       {0, 3000},     // the whole stream, aligned start, unaligned end
       {0, 1024},     // wholly initialized, one aligned cluster
@@ -90,8 +87,7 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
       {2990, 100}    // clamped by the real size
   });
 
-  for (const Range& range : ranges)
-  {
+  for (const Range& range : ranges) {
     INFO("offset " << range.offset << ", length " << range.length);
     std::vector<BYTE> buffer(range.length, sentinel_byte);
     const std::optional<ULONGLONG> read =
@@ -114,7 +110,6 @@ void CheckReadsBeyondTheInitializedSizeAreZero()
 TEMPLATE_TEST_CASE_SIG(
     "A non-resident stream reads as zeros beyond its initialized size",
     "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckReadsBeyondTheInitializedSizeAreZero<S>();
 }

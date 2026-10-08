@@ -30,15 +30,13 @@ namespace Fs = std::filesystem;
 using NtfsBrowser::Efs::MakePfxKeyProvider;
 using NtfsBrowserTests::Algorithm;
 
-namespace
-{
+namespace {
 
 // One throwaway certificate of NTFSLibTests/unit-tests/data, made in memory
 // for these tests alone. Its key is of no value. "wrapped" holds a FEK
 // wrapped with its public key, in the little-endian byte order of a real
 // $EFS stream.
-struct TestPfx
-{
+struct TestPfx {
   const char* name;
   const char* thumbprint;
 };
@@ -59,42 +57,35 @@ constexpr int hex_radix = 16;
 // Size of the AES-256 key the fixtures wrapped.
 constexpr size_t fek_key_size = 32;
 
-Fs::path DataFile(const std::string& name)
-{
+Fs::path DataFile(const std::string& name) {
   return Fs::path(NTFS_EFS_TEST_DATA_DIR) / name;
 }
 
-std::vector<BYTE> ReadWholeFile(const Fs::path& path)
-{
+std::vector<BYTE> ReadWholeFile(const Fs::path& path) {
   std::ifstream file(path, std::ios::binary);
   REQUIRE(file.good());
   return {std::istreambuf_iterator<char>(file),
           std::istreambuf_iterator<char>()};
 }
 
-std::vector<BYTE> Thumbprint(const TestPfx& pfx)
-{
+std::vector<BYTE> Thumbprint(const TestPfx& pfx) {
   const std::string hex = pfx.thumbprint;
   std::vector<BYTE> bytes;
-  for (size_t i = 0; i < hex.size(); i += 2)
-  {
+  for (size_t i = 0; i < hex.size(); i += 2) {
     bytes.push_back(
         gsl::narrow<BYTE>(std::stoi(hex.substr(i, 2), nullptr, hex_radix)));
   }
   return bytes;
 }
 
-std::vector<BYTE> WrappedFek(const TestPfx& pfx)
-{
+std::vector<BYTE> WrappedFek(const TestPfx& pfx) {
   return ReadWholeFile(DataFile(std::string(pfx.name) + ".wrapped-fek.bin"));
 }
 
 // The FEK blob the fixtures wrapped: an AES-256 header, then 32 bytes.
-std::vector<BYTE> ExpectedFek()
-{
+std::vector<BYTE> ExpectedFek() {
   std::vector<BYTE> key(fek_key_size);
-  for (size_t i = 0; i < key.size(); ++i)
-  {
+  for (size_t i = 0; i < key.size(); ++i) {
     // i < key.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     key[i] = gsl::narrow<BYTE>((i + 1) * 3);
@@ -105,10 +96,8 @@ std::vector<BYTE> ExpectedFek()
 }  // namespace
 
 TEST_CASE("A PFX key provider unwraps a FEK, whichever way the key is stored",
-          "[efs][pfx]")
-{
-  for (const TestPfx& pfx : {cng_value, capi_value})
-  {
+          "[efs][pfx]") {
+  for (const TestPfx& pfx : {cng_value, capi_value}) {
     INFO("certificate " << pfx.name);
     const std::shared_ptr<NtfsBrowser::Efs::IEfsKeyProvider> provider =
         MakePfxKeyProvider(DataFile(std::string(pfx.name) + ".pfx"),
@@ -125,8 +114,7 @@ TEST_CASE("A PFX key provider unwraps a FEK, whichever way the key is stored",
 }
 
 TEST_CASE("A PFX key provider only knows the certificates of its own file",
-          "[efs][pfx]")
-{
+          "[efs][pfx]") {
   const auto provider =
       MakePfxKeyProvider(DataFile("efs-test-cng.pfx"), password_value);
   REQUIRE(provider != nullptr);
@@ -136,8 +124,7 @@ TEST_CASE("A PFX key provider only knows the certificates of its own file",
           .has_value());
 }
 
-TEST_CASE("A PFX that cannot be opened gives no provider", "[efs][pfx]")
-{
+TEST_CASE("A PFX that cannot be opened gives no provider", "[efs][pfx]") {
   (void)NtfsBrowserTests::TakeCapturedLog();
 
   CHECK(MakePfxKeyProvider(DataFile("efs-test-cng.pfx"), L"wrong") == nullptr);
@@ -152,8 +139,7 @@ TEST_CASE("A PFX that cannot be opened gives no provider", "[efs][pfx]")
 }
 
 TEST_CASE("An oversized PFX is refused by its size, before any read",
-          "[efs][pfx]")
-{
+          "[efs][pfx]") {
   constexpr std::uintmax_t just_over_the_limit = 16ULL * 1024 * 1024 + 1;
   const Fs::path path =
       Fs::temp_directory_path() / "ntfs-browser-oversized.pfx";
@@ -162,8 +148,8 @@ TEST_CASE("An oversized PFX is refused by its size, before any read",
     REQUIRE(out.good());
     const std::vector<char> chunk(1024 * 1024, 'x');
     for (std::uintmax_t written = 0;
-         written + chunk.size() <= just_over_the_limit; written += chunk.size())
-    {
+         written + chunk.size() <= just_over_the_limit;
+         written += chunk.size()) {
       out.write(chunk.data(), gsl::narrow<std::streamsize>(chunk.size()));
     }
     out.put('x');
@@ -183,10 +169,8 @@ TEST_CASE("An oversized PFX is refused by its size, before any read",
 TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
                        "[efs][pfx]", ((NtfsBrowser::Strategy S), S),
                        NtfsBrowser::Strategy::NoCache,
-                       NtfsBrowser::Strategy::FullCache)
-{
-  for (const TestPfx& pfx : {cng_value, capi_value})
-  {
+                       NtfsBrowser::Strategy::FullCache) {
+  for (const TestPfx& pfx : {cng_value, capi_value}) {
     INFO("certificate " << pfx.name);
     const std::vector<BYTE> blob = ExpectedFek();
     const std::vector<BYTE> key(blob.begin() + 16, blob.end());

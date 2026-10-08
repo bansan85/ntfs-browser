@@ -17,8 +17,7 @@ CNtfsundelApp::CNtfsundelApp() {}
 
 CNtfsundelApp theApp;
 
-BOOL CNtfsundelApp::InitInstance()
-{
+BOOL CNtfsundelApp::InitInstance() {
   CNtfsundelDlg dlg;
   m_pMainWnd = &dlg;
   dlg.DoModal();

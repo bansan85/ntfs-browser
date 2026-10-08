@@ -29,8 +29,7 @@ using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
 using NtfsBrowserTests::FakeRunHost;
 
-namespace
-{
+namespace {
 
 // Fills the read buffer so a byte ReadData() left untouched shows up.
 constexpr BYTE sentinel_byte = 0xCC;
@@ -41,12 +40,11 @@ TEMPLATE_TEST_CASE_SIG(
     "A cluster read whose byte address wraps past 2^64 fails instead of "
     "reading the wrapped address",
     "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   const std::vector<BYTE> image =
       NtfsBrowserTests::BuildFakeNtfsImageWithWrappingLcn(FakeRunHost::Data);
 
-  NtfsVolume<S> const volume(
+  const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
           std::vector<BYTE>(image)));
   REQUIRE(volume.IsVolumeOK());
@@ -75,11 +73,9 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A data run list whose cumulative LCN overflows is rejected",
     "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
-  SECTION("strict: the whole attribute is rejected")
-  {
-    NtfsVolume<S> const volume(
+    Strategy::FullCache) {
+  SECTION("strict: the whole attribute is rejected") {
+    const NtfsVolume<S> volume(
         std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
             NtfsBrowserTests::BuildFakeNtfsImageWithOverflowingLcnSum(
                 FakeRunHost::Data)));
@@ -91,9 +87,8 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK(record.GetAttr(AttrType::Data).empty());
   }
 
-  SECTION("recovering: the run decoded before the overflow is kept")
-  {
-    NtfsVolume<S> const volume(
+  SECTION("recovering: the run decoded before the overflow is kept") {
+    const NtfsVolume<S> volume(
         std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
             NtfsBrowserTests::BuildFakeNtfsImageWithOverflowingLcnSum(
                 FakeRunHost::Data)),

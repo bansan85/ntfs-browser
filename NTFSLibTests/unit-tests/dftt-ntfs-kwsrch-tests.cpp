@@ -26,8 +26,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 
-namespace
-{
+namespace {
 
 // DFTT test #3 ("NTFS Keyword Search #1", http://dftt.sf.net): an 8 MB NTFS
 // file system holding ten ASCII search terms, each placed to exercise one
@@ -39,8 +38,7 @@ const std::filesystem::path dftt_image =
 // One DFTT test #3 search-term case, addressed by its own MFT record number
 // instead of by path (index.html gives the search term and the file it
 // lives in; the record numbers themselves come from walking the image).
-struct KeywordFile
-{
+struct KeywordFile {
   ULONGLONG mft_record;
   std::wstring_view stream_name;  // {} for the unnamed $DATA stream
   std::string_view keyword;
@@ -80,8 +78,7 @@ constexpr ULONGLONG slack_record = 36;
 // has the size and deletion/directory state index.html documents, and that
 // its content contains the DFTT search term.
 void CheckReadsKeywordFile(const NtfsVolume<Strategy::NoCache>& volume,
-                           const KeywordFile& file)
-{
+                           const KeywordFile& file) {
   FileRecord record(volume);
   record.SetAttrMask(Mask::Data);
   REQUIRE(record.ParseFileRecord(file.mft_record));
@@ -105,11 +102,10 @@ void CheckReadsKeywordFile(const NtfsVolume<Strategy::NoCache>& volume,
 }  // namespace
 
 TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
-          "[dftt][integration]")
-{
+          "[dftt][integration]") {
   NtfsBrowserTests::RequireCorpusImage(dftt_image);
 
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       NtfsBrowserTests::OpenBareVolumeImage(dftt_image));
   REQUIRE(volume.IsVolumeOK());
 
@@ -125,7 +121,7 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   // include_deleted on.
   VolumeOptions options;
   options.include_deleted = true;
-  NtfsVolume<Strategy::NoCache> const del_volume(
+  const NtfsVolume<Strategy::NoCache> del_volume(
       NtfsBrowserTests::OpenBareVolumeImage(dftt_image), options);
   REQUIRE(del_volume.IsVolumeOK());
   CheckReadsKeywordFile(del_volume, resident_unalloc);

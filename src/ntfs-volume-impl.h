@@ -25,8 +25,7 @@
   #include <tchar.h>
 #endif
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 // Caches reads from the volume's backing IDiskReader.
 template <Strategy S>
@@ -39,8 +38,7 @@ class UpCaseTable;
 // private methods that work on them. FileRecord<S>, a friend of NtfsVolume<S>,
 // reaches it through NtfsVolume<S>::impl_.
 template <Strategy S>
-class NtfsVolume<S>::Impl
-{
+class NtfsVolume<S>::Impl {
  public:
   Impl(NtfsVolume<S>& self, const VolumeOptions& options);
 
@@ -66,8 +64,7 @@ class NtfsVolume<S>::Impl
   mutable std::shared_ptr<Efs::IEfsKeyProvider> efs_provider;
 
   // One VCN range $MFT's own DATA attribute maps: base extent or continuation.
-  struct MftExtent
-  {
+  struct MftExtent {
     ULONGLONG start_vcn;
     ULONGLONG last_vcn;
     const AttrBase<S>* attr;
@@ -118,8 +115,7 @@ class NtfsVolume<S>::Impl
 
   // One extension record $MFT's $ATTRIBUTE_LIST names for DATA, with the
   // sequence number its entries claim and the start VCN of each entry.
-  struct PendingMftExtension
-  {
+  struct PendingMftExtension {
     ULONGLONG record{0};
     WORD sequence{0};
     std::vector<ULONGLONG> start_vcns;

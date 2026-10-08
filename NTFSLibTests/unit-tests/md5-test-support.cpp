@@ -21,18 +21,14 @@
 
   #endif
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
-namespace
-{
+namespace {
 
-std::string HexEncode(std::span<const BYTE> digest)
-{
+std::string HexEncode(std::span<const BYTE> digest) {
   std::string hex;
   hex.reserve(digest.size() * 2);
-  for (const BYTE byte_value : digest)
-  {
+  for (const BYTE byte_value : digest) {
     hex += std::format("{:02x}", byte_value);
   }
   return hex;
@@ -42,8 +38,7 @@ std::string HexEncode(std::span<const BYTE> digest)
 
   #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
 
-std::string Md5Hex(std::span<const BYTE> data)
-{
+std::string Md5Hex(std::span<const BYTE> data) {
   std::array<BYTE, CryptoPP::Weak::MD5::DIGESTSIZE> digest{};
   CryptoPP::Weak::MD5().CalculateDigest(digest.data(), data.data(),
                                         data.size());
@@ -52,8 +47,7 @@ std::string Md5Hex(std::span<const BYTE> data)
 
   #else
 
-std::string Md5Hex(std::span<const BYTE> data)
-{
+std::string Md5Hex(std::span<const BYTE> data) {
   std::array<BYTE, 16> digest{};
   const NTSTATUS status = BCryptHash(
       BCRYPT_MD5_ALG_HANDLE, nullptr, 0, const_cast<BYTE*>(data.data()),

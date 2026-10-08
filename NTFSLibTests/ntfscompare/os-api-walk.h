@@ -4,8 +4,7 @@
 
 #include "entry.h"
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
 // Recursively lists root via the platform's own native directory-enumeration
 // API: FindFirstFileW/FindNextFileW plus GetCompressedFileSizeW on Windows,

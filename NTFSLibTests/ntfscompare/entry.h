@@ -6,14 +6,12 @@
 #include <optional>
 #include <string>
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
 // One file or directory's metadata, as one method reports it. A field left
 // std::nullopt means this method cannot structurally provide it - not a
 // disagreement with another method, which reports std::nullopt the same way.
-struct Entry
-{
+struct Entry {
   bool is_directory = false;
   std::optional<ULONGLONG> logical_size;
   std::optional<ULONGLONG> physical_size;

@@ -12,14 +12,14 @@
 #include "flag/std-info-permission.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace
-{
+namespace {
+
 // Selects the low DWORD of a 64-bit FILETIME value.
 constexpr ULONGLONG low_dword_mask = 0xFFFFFFFFULL;
 
@@ -29,29 +29,26 @@ constexpr unsigned dword_bits = 32;
 // Checks the body size before a reference is bound to it: an empty body may
 // have a null data pointer, which a reference MUST NOT be bound to.
 template <typename Resident>
-const Attr::StandardInformation& CheckedStdInfo(const Resident& attr)
-{
-  if (attr.GetDataSize() < offsetof(Attr::StandardInformation, owner_id))
-  {
+const Attr::StandardInformation& CheckedStdInfo(const Resident& attr) {
+  if (attr.GetDataSize() < offsetof(Attr::StandardInformation, owner_id)) {
     throw std::runtime_error(
         "Standard Information attribute smaller than expected.\n");
   }
 
   return *reinterpret_cast<const Attr::StandardInformation*>(attr.GetData());
 }
+
 }  // namespace
 
 template <typename Resident, Strategy S>
 AttrStdInfo<Resident, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
                                       const FileRecord<S>& file_record)
-    : Resident(ahc, file_record), std_info_(CheckedStdInfo<Resident>(*this))
-{
+    : Resident(ahc, file_record), std_info_(CheckedStdInfo<Resident>(*this)) {
   LogTrace("Attribute: Standard Information");
 }
 
 template <typename Resident, Strategy S>
-AttrStdInfo<Resident, S>::~AttrStdInfo()
-{
+AttrStdInfo<Resident, S>::~AttrStdInfo() {
   LogTrace("AttrStdInfo deleted");
 }
 
@@ -60,122 +57,103 @@ template <typename Resident, Strategy S>
 void AttrStdInfo<Resident, S>::GetFileTime(FILETIME* write_tm,
                                            FILETIME* create_tm,
                                            FILETIME* access_tm,
-                                           FILETIME* change_tm) const noexcept
-{
-  if (write_tm != nullptr)
-  {
+                                           FILETIME* change_tm) const noexcept {
+  if (write_tm != nullptr) {
     UTC2Local(std_info_.alter_time, *write_tm);
   }
 
-  if (create_tm != nullptr)
-  {
+  if (create_tm != nullptr) {
     UTC2Local(std_info_.create_time, *create_tm);
   }
 
-  if (access_tm != nullptr)
-  {
+  if (access_tm != nullptr) {
     UTC2Local(std_info_.read_time, *access_tm);
   }
 
-  if (change_tm != nullptr)
-  {
+  if (change_tm != nullptr) {
     UTC2Local(std_info_.mft_time, *change_tm);
   }
 }
 
 template <typename Resident, Strategy S>
 Flag::StdInfoPermission
-    AttrStdInfo<Resident, S>::GetFilePermission() const noexcept
-{
+    AttrStdInfo<Resident, S>::GetFilePermission() const noexcept {
   return std_info_.permission;
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsReadOnly() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsReadOnly() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::ReadOnly);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsHidden() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsHidden() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Hidden);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsSystem() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsSystem() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::System);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsArchive() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsArchive() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Archive);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsDevice() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsDevice() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Device);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsNormal() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsNormal() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Normal);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsTemporary() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsTemporary() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Temp);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsCompressed() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsCompressed() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Compressed);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsOffline() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsOffline() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Offline);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsNotContentIndexed() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsNotContentIndexed() const noexcept {
   return static_cast<bool>(std_info_.permission & Flag::StdInfoPermission::Nci);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsEncrypted() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsEncrypted() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Encrypted);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsSparse() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsSparse() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Sparse);
 }
 
 template <typename Resident, Strategy S>
-bool AttrStdInfo<Resident, S>::IsReparsePoint() const noexcept
-{
+bool AttrStdInfo<Resident, S>::IsReparsePoint() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Flag::StdInfoPermission::Reparse);
 }
@@ -183,14 +161,12 @@ bool AttrStdInfo<Resident, S>::IsReparsePoint() const noexcept
 // UTC filetime to Local filetime
 template <typename Resident, Strategy S>
 void AttrStdInfo<Resident, S>::UTC2Local(const ULONGLONG& ultm,
-                                         FILETIME& lftm) noexcept
-{
+                                         FILETIME& lftm) noexcept {
 #ifdef _WIN32
   const _ULARGE_INTEGER fti{.QuadPart = ultm};
   FILETIME ftt{.dwLowDateTime = fti.LowPart, .dwHighDateTime = fti.HighPart};
 
-  if (FileTimeToLocalFileTime(&ftt, &lftm) == 0)
-  {
+  if (FileTimeToLocalFileTime(&ftt, &lftm) == 0) {
     lftm = ftt;
   }
 #else

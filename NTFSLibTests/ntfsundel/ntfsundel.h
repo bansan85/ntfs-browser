@@ -19,8 +19,7 @@
 // See ntfsundel.cpp for the implementation of this class
 //
 
-class CNtfsundelApp : public CWinApp
-{
+class CNtfsundelApp : public CWinApp {
  public:
   CNtfsundelApp();
 
@@ -44,6 +43,7 @@ class CNtfsundelApp : public CWinApp
 /////////////////////////////////////////////////////////////////////////////
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+// Microsoft Visual C++ will insert additional declarations immediately before
+// the previous line.
 
 #endif  // !defined(AFX_NTFSUNDEL_H__D30C74B8_CB9F_4E88_9894_9439DFAF3DD3__INCLUDED_)

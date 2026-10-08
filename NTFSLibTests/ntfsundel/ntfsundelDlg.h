@@ -14,8 +14,7 @@
 /////////////////////////////////////////////////////////////////////////////
 // CNtfsundelDlg dialog
 
-class CNtfsundelDlg : public CDialog
-{
+class CNtfsundelDlg : public CDialog {
   // Construction
 
  public:
@@ -23,10 +22,8 @@ class CNtfsundelDlg : public CDialog
 
   // Dialog Data
   //{{AFX_DATA(CNtfsundelDlg)
-  enum : std::uint8_t
-  {
-    IDD = IDD_NTFSUNDEL_DIALOG
-  };
+  enum : std::uint8_t { IDD = IDD_NTFSUNDEL_DIALOG };
+
   CListCtrl m_files;
   CComboBox m_driver;
   CString m_filter;
@@ -57,6 +54,7 @@ class CNtfsundelDlg : public CDialog
 };
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+// Microsoft Visual C++ will insert additional declarations immediately before
+// the previous line.
 
 #endif  // !defined(AFX_NTFSUNDELDLG_H__18A9AB66_79B0_4691_95B0_DA24D5C6231F__INCLUDED_)

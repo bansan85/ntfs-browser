@@ -21,23 +21,20 @@
 #include "flag/index-entry.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace
-{
+namespace {
 
 // Reports a defect in an index root's entries. Returns true when the attribute
 // must be rejected whole: the entries parsed so far are then discarded too.
 bool RejectRootOnDefect(bool recover, std::string_view defect,
-                        std::vector<IndexEntryView>& entries)
-{
+                        std::vector<IndexEntryView>& entries) {
   LogRecoverable(recover, "{}", defect);
-  if (recover)
-  {
+  if (recover) {
     return false;
   }
   entries.clear();
@@ -50,31 +47,26 @@ template <typename Resident, Strategy S>
 AttrIndexRoot<Resident, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
                                           const FileRecord<S>& file_record)
     : Resident(ahc, file_record),
-      index_root_(reinterpret_cast<const Attr::IndexRoot*>(this->GetData()))
-{
-  if (this->GetDataSize() < sizeof(Attr::IndexRoot))
-  {
+      index_root_(reinterpret_cast<const Attr::IndexRoot*>(this->GetData())) {
+  if (this->GetDataSize() < sizeof(Attr::IndexRoot)) {
     throw std::runtime_error("Index Root attribute smaller than expected.\n");
   }
 
   LogTrace("Attribute: Index Root");
 
-  if (!IsFileName())
-  {
+  if (!IsFileName()) {
     LogWarn("Index View not supported");
     return;
   }
 
-  if (!ParseIndexEntries())
-  {
+  if (!ParseIndexEntries()) {
     throw std::runtime_error(
         "Index Root attribute has a malformed index entry.\n");
   }
 }
 
 template <typename Resident, Strategy S>
-AttrIndexRoot<Resident, S>::~AttrIndexRoot()
-{
+AttrIndexRoot<Resident, S>::~AttrIndexRoot() {
   LogTrace("AttrIndexRoot deleted");
 }
 
@@ -83,8 +75,7 @@ AttrIndexRoot<Resident, S>::~AttrIndexRoot()
 // independent of the record's buffer. An IndexEntry made from one owns its
 // bytes, independent of this object's lifetime.
 template <typename Resident, Strategy S>
-bool AttrIndexRoot<Resident, S>::ParseIndexEntries()
-{
+bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
   const bool recover = this->volume_.GetOptions().recover_errors;
   const ULONGLONG data_size = this->GetDataSize();
   index_data_.resize(data_size);
@@ -97,8 +88,7 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries()
   constexpr size_t entry_offset_pos = offsetof(Attr::IndexRoot, entry_offset);
 
   if (data.size() < entry_offset_pos ||
-      index_root_copy->entry_offset > data.size() - entry_offset_pos)
-  {
+      index_root_copy->entry_offset > data.size() - entry_offset_pos) {
     LogRecoverable(recover,
                    "Index Root: entry_offset exceeds attribute bounds");
     return recover;
@@ -109,25 +99,21 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries()
       data.subspan(entry_offset_pos).subspan(index_root_copy->entry_offset);
   DWORD ie_total = 0;
 
-  while (true)
-  {
+  while (true) {
     const size_t remaining = cur.size();
-    if (remaining < offsetof(Data::IndexEntry, stream))
-    {
+    if (remaining < offsetof(Data::IndexEntry, stream)) {
       return !RejectRootOnDefect(
           recover, "Index Root: index entry header exceeds attribute bounds",
           *this);
     }
     const Data::IndexEntry head = ReadIndexEntryHeader(cur);
-    if (head.size == 0 || head.size > remaining)
-    {
+    if (head.size == 0 || head.size > remaining) {
       return !RejectRootOnDefect(
           recover, "Index Root: index entry exceeds attribute bounds", *this);
     }
 
     ie_total += head.size;
-    if (ie_total > index_root_copy->total_entry_size)
-    {
+    if (ie_total > index_root_copy->total_entry_size) {
       return !RejectRootOnDefect(
           recover,
           "Index Root: index entry total exceeds the attribute's declared "
@@ -139,15 +125,13 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries()
         AlignIndexEntry(realigned_, cur, head.size);
     if (const std::optional<std::string_view> defect =
             ValidateIndexEntry(aligned_index_entry);
-        defect && RejectRootOnDefect(recover, *defect, *this))
-    {
+        defect && RejectRootOnDefect(recover, *defect, *this)) {
       return false;
     }
 
     emplace_back(aligned_index_entry);
 
-    if ((head.flags & Flag::IndexEntry::Last) == Flag::IndexEntry::Last)
-    {
+    if ((head.flags & Flag::IndexEntry::Last) == Flag::IndexEntry::Last) {
       LogTrace("Last Index Entry");
       return true;
     }
@@ -158,8 +142,7 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries()
 
 // Check if this IndexRoot contains Filename or IndexView
 template <typename Resident, Strategy S>
-bool AttrIndexRoot<Resident, S>::IsFileName() const noexcept
-{
+bool AttrIndexRoot<Resident, S>::IsFileName() const noexcept {
   return index_root_->attr_type == AttrType::FileName;
 }
 

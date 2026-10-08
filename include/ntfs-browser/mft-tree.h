@@ -12,15 +12,14 @@
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/strategy.h>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 template <Strategy S>
 class NtfsVolume;
 
 // One $FILE_NAME of an MFT record. A record has one per hard link, plus a
 // DOS 8.3 alias when its long name needs one.
-struct MftName
-{
+struct MftName {
   std::wstring name;
   ULONGLONG parent_record{0};
   WORD parent_sequence{0};
@@ -32,8 +31,7 @@ struct MftName
 };
 
 // What one MFT base record says about its file, copied out of the record.
-struct MftEntry
-{
+struct MftEntry {
   ULONGLONG record{0};
   WORD sequence{0};
   bool in_use{false};
@@ -60,15 +58,13 @@ struct MftEntry
   bool sparse{false};
 };
 
-struct MftScanOptions
-{
+struct MftScanOptions {
   // Called every few thousand records, and once at the end. Returning false
   // stops the scan: the tree then holds the records scanned so far.
   std::function<bool(ULONGLONG done, ULONGLONG total)> progress;
 };
 
-struct MftScanStats
-{
+struct MftScanStats {
   // Record slots $MFT has room for.
   ULONGLONG slots{0};
   // Base records in use.
@@ -104,8 +100,7 @@ struct MftScanStats
 // The scan reads every MFT record once and copies out each record's names:
 // build it from a NoCache volume, since FullCache would also keep the whole
 // $MFT in memory.
-class NTFS_BROWSER_EXPORT MftTree
-{
+class NTFS_BROWSER_EXPORT MftTree {
  public:
   // Scans every record of volume's $MFT.
   explicit MftTree(const NtfsVolume<Strategy::NoCache>& volume,

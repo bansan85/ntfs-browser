@@ -5,27 +5,27 @@
 #include <cstdint>
 #include <utility>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace Attr
-{
+namespace Attr {
+
 struct VolumeInformation;
+
 }  // namespace Attr
 
 template <typename Resident, Strategy S>
-class AttrVolInfo : public Resident
-{
+class AttrVolInfo : public Resident {
  public:
   AttrVolInfo(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrVolInfo(AttrVolInfo&& other) noexcept = delete;
-  AttrVolInfo(AttrVolInfo const& other) = delete;
+  AttrVolInfo(const AttrVolInfo& other) = delete;
   AttrVolInfo& operator=(AttrVolInfo&& other) noexcept = delete;
-  AttrVolInfo& operator=(AttrVolInfo const& other) = delete;
+  AttrVolInfo& operator=(const AttrVolInfo& other) = delete;
 
   ~AttrVolInfo() override;
 

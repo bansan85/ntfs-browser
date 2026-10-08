@@ -4,13 +4,11 @@
 #include <string>
 #include <vector>
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // Exit code plus everything a child process wrote, stdout and stderr
 // combined in the order it wrote them.
-struct ProcessOutput
-{
+struct ProcessOutput {
   int exit_code = 0;
   std::string output;
 };

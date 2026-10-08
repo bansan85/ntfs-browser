@@ -9,46 +9,38 @@
 
 #include <gsl/narrow>
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 SequentialDiskReader::SequentialDiskReader(Producer producer)
-    : producer_(std::move(producer))
-{
-}
+    : producer_(std::move(producer)) {}
 
 bool SequentialDiskReader::Open(std::wstring_view /*path*/) { return true; }
 
 bool SequentialDiskReader::ReadInto(LARGE_INTEGER& /*addr*/,
-                                    std::span<BYTE> dest) const
-{
+                                    std::span<BYTE> dest) const {
   return producer_(dest);
 }
 
-SequentialDiskReader::Producer MakeMemoryProducer(std::vector<BYTE> data)
-{
-  return [data = std::move(data), pos = size_t{0}](std::span<BYTE> dest) mutable
-  {
-    if (pos + dest.size() > data.size())
-    {
-      return false;
-    }
+SequentialDiskReader::Producer MakeMemoryProducer(std::vector<BYTE> data) {
+  return
+      [data = std::move(data), pos = size_t{0}](std::span<BYTE> dest) mutable {
+        if (pos + dest.size() > data.size()) {
+          return false;
+        }
 
-    // The check above bounds pos + dest.size() by data.size().
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    std::memcpy(dest.data(), &data[pos], dest.size());
-    pos += dest.size();
-    return true;
-  };
+        // The check above bounds pos + dest.size() by data.size().
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        std::memcpy(dest.data(), &data[pos], dest.size());
+        pos += dest.size();
+        return true;
+      };
 }
 
 SequentialDiskReader::Producer
-    MakeFileStreamProducer(const std::filesystem::path& path)
-{
-  auto const input = std::make_shared<std::ifstream>(path, std::ios::binary);
+    MakeFileStreamProducer(const std::filesystem::path& path) {
+  const auto input = std::make_shared<std::ifstream>(path, std::ios::binary);
 
-  return [input](std::span<BYTE> dest)
-  {
+  return [input](std::span<BYTE> dest) {
     return static_cast<bool>(
         input->read(reinterpret_cast<char*>(dest.data()),
                     gsl::narrow<std::streamsize>(dest.size())));
@@ -56,10 +48,8 @@ SequentialDiskReader::Producer
 }
 
 SequentialDiskReader::Producer
-    MakeGeneratorProducer(std::function<void(std::span<BYTE>)> generate)
-{
-  return [generate = std::move(generate)](std::span<BYTE> dest)
-  {
+    MakeGeneratorProducer(std::function<void(std::span<BYTE>)> generate) {
+  return [generate = std::move(generate)](std::span<BYTE> dest) {
     generate(dest);
     return true;
   };

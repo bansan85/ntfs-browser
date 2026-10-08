@@ -27,8 +27,7 @@ using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // Both flags on: the recovery scan runs, and Decision 4's include_deleted
 // filter is bypassed, so only the pre-existing parent-reference check
@@ -38,12 +37,10 @@ constexpr VolumeOptions recover_keep_deleted{.include_deleted = true,
 
 // Collects every name TraverseSubEntries() reports, in callback order.
 template <Strategy S>
-std::vector<std::wstring> CollectNames(const FileRecord<S>& root)
-{
+std::vector<std::wstring> CollectNames(const FileRecord<S>& root) {
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntryView& index_entry, void* context)
-      {
+      [](const IndexEntryView& index_entry, void* context) {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             index_entry.GetFilename());
       },
@@ -54,12 +51,11 @@ std::vector<std::wstring> CollectNames(const FileRecord<S>& root)
 // By default, TraverseSubEntries() only follows the B+ tree's own pointers,
 // so an index block no pointer reaches stays invisible.
 template <Strategy S>
-void RunOrphanedBlocksNeedRecoveryFlag()
-{
+void RunOrphanedBlocksNeedRecoveryFlag() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -82,12 +78,11 @@ void RunOrphanedBlocksNeedRecoveryFlag()
 // off, Decision 4's filter drops every one of them instead (see
 // RunOrphanedBlocksDroppedWithoutIncludeDeleted below).
 template <Strategy S>
-void RunOrphanedBlocksFoundWithRecoveryFlag()
-{
+void RunOrphanedBlocksFoundWithRecoveryFlag() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> const volume(std::move(reader), recover_keep_deleted);
+  const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -113,12 +108,11 @@ void RunOrphanedBlocksFoundWithRecoveryFlag()
 // above. Decision 4 only governs the orphan scan though: Reachable comes
 // from the normal B+ tree walk and is unaffected, so it still appears.
 template <Strategy S>
-void RunOrphanedBlocksDroppedWithoutIncludeDeleted()
-{
+void RunOrphanedBlocksDroppedWithoutIncludeDeleted() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> const volume(std::move(reader),
+  const NtfsVolume<S> volume(std::move(reader),
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
@@ -143,14 +137,13 @@ void RunOrphanedBlocksDroppedWithoutIncludeDeleted()
 // on, Decision 4 is bypassed entirely and the entry is kept, confirming the
 // drop above is specifically about the sequence mismatch.
 template <Strategy S>
-void RunOrphanedBlocksDroppedOnSequenceMismatch()
-{
+void RunOrphanedBlocksDroppedOnSequenceMismatch() {
   {
     auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
         NtfsBrowserTests::
             BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
 
-    NtfsVolume<S> const volume(std::move(reader),
+    const NtfsVolume<S> volume(std::move(reader),
                                VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
@@ -171,7 +164,7 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch()
         NtfsBrowserTests::
             BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
 
-    NtfsVolume<S> const volume(std::move(reader), recover_keep_deleted);
+    const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
@@ -193,12 +186,11 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch()
 // With no $INDEX_ROOT at all, the normal walk has nowhere to start, so
 // without the recovery flag TraverseSubEntries() reports nothing.
 template <Strategy S>
-void RunMissingIndexRootNeedsRecoveryFlag()
-{
+void RunMissingIndexRootNeedsRecoveryFlag() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -213,12 +205,11 @@ void RunMissingIndexRootNeedsRecoveryFlag()
 // With the recovery flag, a record with no parsed $INDEX_ROOT still yields
 // every entry reachable through $INDEX_ALLOCATION alone.
 template <Strategy S>
-void RunMissingIndexRootRecoveredWithFlag()
-{
+void RunMissingIndexRootRecoveredWithFlag() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
-  NtfsVolume<S> const volume(std::move(reader), recover_keep_deleted);
+  const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -239,12 +230,11 @@ void RunMissingIndexRootRecoveredWithFlag()
 // Names TraverseSubEntries() reports on the root record of "image", with both
 // recovery flags on, in callback order.
 template <Strategy S>
-std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image)
-{
+std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image) {
   auto reader =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
 
-  NtfsVolume<S> const volume(std::move(reader), recover_keep_deleted);
+  const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -259,14 +249,12 @@ std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image)
 // The scan's block count is what the mapped clusters hold, in blocks: with
 // blocks smaller than a cluster, that is more than the cluster count.
 template <Strategy S>
-void RunSubClusterBlocksAllScanned()
-{
+void RunSubClusterBlocksAllScanned() {
   const std::vector<std::wstring> names = RecoverRootNames<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks());
 
   REQUIRE(names.size() == NtfsBrowserTests::sub_cluster_block_names.size());
-  for (size_t i = 0; i < names.size(); i++)
-  {
+  for (size_t i = 0; i < names.size(); i++) {
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(names[i] == NtfsBrowserTests::sub_cluster_block_names[i]);
@@ -276,14 +264,12 @@ void RunSubClusterBlocksAllScanned()
 // The scan covers every instance of a split $INDEX_ALLOCATION, not only the
 // one whose header the merged attribute keeps.
 template <Strategy S>
-void RunSplitAllocationAllScanned()
-{
+void RunSplitAllocationAllScanned() {
   const std::vector<std::wstring> names = RecoverRootNames<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSplitIndexAllocation());
 
   REQUIRE(names.size() == NtfsBrowserTests::split_block_names.size());
-  for (size_t i = 0; i < names.size(); i++)
-  {
+  for (size_t i = 0; i < names.size(); i++) {
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(names[i] == NtfsBrowserTests::split_block_names[i]);
@@ -294,8 +280,7 @@ void RunSplitAllocationAllScanned()
 // generation "link" describes, is reported next to the fixture's two other
 // orphan-scan entries.
 template <Strategy S>
-bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link)
-{
+bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link) {
   const std::vector<std::wstring> names = RecoverRootNames<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(
           link));
@@ -306,8 +291,7 @@ bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link)
   CHECK(names[0] == NtfsBrowserTests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(names[1] == NtfsBrowserTests::orphaned_block_orphan_name);
-  if (names.size() == 2)
-  {
+  if (names.size() == 2) {
     return false;
   }
   REQUIRE(names.size() == 3);
@@ -320,8 +304,7 @@ bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link)
 // A stale parent sequence names an earlier directory that used the same
 // record: its leftover entry is not a child of the current one.
 template <Strategy S>
-void RunOrphanEntryOfEarlierParentGenerationRejected()
-{
+void RunOrphanEntryOfEarlierParentGenerationRejected() {
   CHECK_FALSE(ParentLinkEntryReported<S>({.entry_parent_sequence = 4,
                                           .record_sequence = 5,
                                           .record_in_use = true}));
@@ -333,8 +316,7 @@ void RunOrphanEntryOfEarlierParentGenerationRejected()
 // The parent sequence is honoured only where it says something: the current
 // generation, or 0, which claims nothing.
 template <Strategy S>
-void RunOrphanEntryOfCurrentParentGenerationReported()
-{
+void RunOrphanEntryOfCurrentParentGenerationReported() {
   CHECK(ParentLinkEntryReported<S>({.entry_parent_sequence = 5,
                                     .record_sequence = 5,
                                     .record_in_use = true}));
@@ -347,8 +329,7 @@ void RunOrphanEntryOfCurrentParentGenerationReported()
 // directory still owns the entries filed under its previous sequence. A live
 // one does not.
 template <Strategy S>
-void RunOrphanEntryOfFreedParentGeneration()
-{
+void RunOrphanEntryOfFreedParentGeneration() {
   CHECK(ParentLinkEntryReported<S>({.entry_parent_sequence = 5,
                                     .record_sequence = 6,
                                     .record_in_use = false}));
@@ -363,8 +344,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan covers every block when index blocks "
     "are smaller than a cluster",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunSubClusterBlocksAllScanned<S>();
 }
 
@@ -372,8 +352,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan covers every instance of a split "
     "$INDEX_ALLOCATION",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunSplitAllocationAllScanned<S>();
 }
 
@@ -381,8 +360,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan rejects an entry filed under an earlier "
     "generation of the directory record",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunOrphanEntryOfEarlierParentGenerationRejected<S>();
 }
 
@@ -390,8 +368,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan reports an entry filed under the "
     "current or an unchecked generation of the directory record",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunOrphanEntryOfCurrentParentGenerationReported<S>();
 }
 
@@ -399,16 +376,14 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan accepts the previous generation only "
     "for a freed directory record",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunOrphanEntryOfFreedParentGeneration<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries ignores an orphaned index block by default",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunOrphanedBlocksNeedRecoveryFlag<S>();
 }
 
@@ -416,8 +391,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds an orphaned block and rejects a "
     "stale parent",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunOrphanedBlocksFoundWithRecoveryFlag<S>();
 }
 
@@ -425,8 +399,7 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds nothing when include_deleted is "
     "off and no named record exists",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunOrphanedBlocksDroppedWithoutIncludeDeleted<S>();
 }
 
@@ -435,16 +408,14 @@ TEMPLATE_TEST_CASE_SIG(
     "exists but has a mismatched sequence number, when include_deleted is "
     "off",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunOrphanedBlocksDroppedOnSequenceMismatch<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries with no parsed IndexRoot reports nothing by default",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunMissingIndexRootNeedsRecoveryFlag<S>();
 }
 
@@ -452,7 +423,6 @@ TEMPLATE_TEST_CASE_SIG(
     "TraverseSubEntries recovery scan finds entries with no parsed IndexRoot "
     "at all",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunMissingIndexRootRecoveredWithFlag<S>();
 }

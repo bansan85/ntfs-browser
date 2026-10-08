@@ -23,8 +23,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::VolumeOptions;
 
-namespace
-{
+namespace {
 
 // Reads dirName's copy of every known_files entry and checks it against its
 // ground truth size and MD5 (from ntfs1-gen2.xml). Both RAW's own on-disk
@@ -32,14 +31,13 @@ namespace
 // directly: Encrypted needs a decryption step first, covered separately in
 // nps-ntfs1-efs-tests.cpp.
 void CheckDirMatchesGroundTruth(const NtfsVolume<Strategy::NoCache>& volume,
-                                std::string_view dir_name)
-{
+                                std::string_view dir_name) {
   FileRecord<Strategy::NoCache> dir(volume);
   NtfsBrowserTests::OpenRootDir(dir);
   NtfsBrowserTests::OpenSubDir(dir, dir_name);
 
-  for (const NtfsBrowserTests::KnownFile& file : NtfsBrowserTests::known_files)
-  {
+  for (const NtfsBrowserTests::KnownFile& file :
+       NtfsBrowserTests::known_files) {
     INFO(dir_name << "/" << file.name);
     const std::vector<BYTE> data =
         NtfsBrowserTests::ReadFile(volume, dir, file.name);
@@ -53,8 +51,7 @@ void CheckDirMatchesGroundTruth(const NtfsVolume<Strategy::NoCache>& volume,
 }  // namespace
 
 TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
-          "[nps][integration]")
-{
+          "[nps][integration]") {
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
   const NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),
@@ -67,8 +64,7 @@ TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
 TEST_CASE(
     "Compressed files decompress to the RAW ground truth (NPS ntfs1, gen2)",
-    "[nps][integration]")
-{
+    "[nps][integration]") {
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
   const NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),

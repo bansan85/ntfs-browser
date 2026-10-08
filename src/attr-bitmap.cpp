@@ -6,12 +6,12 @@
 #include "attr-resident.h"
 #include "ntfs-browser/win-types.h"
 
-namespace NtfsBrowser
-{
-namespace
-{
+namespace NtfsBrowser {
+namespace {
+
 // Bits in one bitmap byte.
 constexpr unsigned bits_per_byte = 8;
+
 }  // namespace
 
 struct AttrHeaderCommon;
@@ -20,14 +20,12 @@ class FileRecord;
 
 template <class Resident, Strategy S>
 AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
-                                        const FileRecord<S>& file_record)
-    : Resident(ahc, file_record), bitmap_size_(this->GetDataSize())
-{
+                                    const FileRecord<S>& file_record)
+    : Resident(ahc, file_record), bitmap_size_(this->GetDataSize()) {
   LogTrace("Attribute: Bitmap ({}Resident)",
            this->IsNonResident() ? "Non" : "");
 
-  if (this->IsNonResident())
-  {
+  if (this->IsNonResident()) {
     bitmap_buf_.resize(this->GetClusterSize(), 0);
     return;
   }
@@ -36,8 +34,7 @@ AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
 
   std::optional<ULONGLONG> len =
       this->ReadData(0, {bitmap_buf_.data(), bitmap_buf_.size()});
-  if (!len || *len != bitmap_size_)
-  {
+  if (!len || *len != bitmap_size_) {
     bitmap_buf_.clear();
     LogWarn("Read Resident Bitmap data failed");
     return;
@@ -47,15 +44,12 @@ AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
 }
 
 template <class Resident, Strategy S>
-bool AttrBitmap<Resident, S>::IsClusterFree(ULONGLONG cluster)
-{
-  if (bitmap_buf_.empty())
-  {
+bool AttrBitmap<Resident, S>::IsClusterFree(ULONGLONG cluster) {
+  if (bitmap_buf_.empty()) {
     return false;
   }
 
-  if (this->IsNonResident())
-  {
+  if (this->IsNonResident()) {
     const ULONGLONG idx = cluster >> 3U;
     const DWORD cluster_size = this->GetClusterSize();
 
@@ -63,12 +57,10 @@ bool AttrBitmap<Resident, S>::IsClusterFree(ULONGLONG cluster)
     cluster -= (cluster_offset * cluster_size * bits_per_byte);
 
     // Read one cluster of data if buffer mismatch
-    if (!current_cluster_ || *current_cluster_ != cluster_offset)
-    {
+    if (!current_cluster_ || *current_cluster_ != cluster_offset) {
       std::optional<ULONGLONG> len = this->ReadData(
           cluster_offset * cluster_size, {bitmap_buf_.data(), cluster_size});
-      if (!len || *len != cluster_size)
-      {
+      if (!len || *len != cluster_size) {
         current_cluster_ = {};
         return false;
       }
@@ -80,8 +72,7 @@ bool AttrBitmap<Resident, S>::IsClusterFree(ULONGLONG cluster)
   // All the Bitmap data is already in BitmapBuf
   const ULONGLONG idx = cluster >> 3U;
   // Resident data bounds check error
-  if (!this->IsNonResident() && idx >= bitmap_size_)
-  {
+  if (!this->IsNonResident() && idx >= bitmap_size_) {
     return true;
   }
 

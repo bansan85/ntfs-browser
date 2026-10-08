@@ -22,12 +22,11 @@ TEMPLATE_TEST_CASE_SIG(
     "attribute, not just whatever sizeof(Attr::VolumeInformation) currently "
     "computes to",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMinimalVolumeInformation());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
 
   CHECK(volume.IsVolumeOK());
   CHECK(volume.GetVersion() == std::pair<BYTE, BYTE>{3, 1});

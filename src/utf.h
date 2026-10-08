@@ -5,8 +5,7 @@
 
 #include "internal-export.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 // Converts an on-disk name to UTF-8, for logging. An unpaired surrogate
 // becomes U+FFFD, so the result is always well-formed UTF-8.

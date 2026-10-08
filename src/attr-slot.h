@@ -7,8 +7,7 @@
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/mask.h>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 // Number of attribute types, so the size of any per-type table. It is one
 // slot per multiple of 0x10 from 0x10 (STANDARD_INFORMATION) to 0x100
@@ -16,20 +15,17 @@ namespace NtfsBrowser
 constexpr size_t attr_nums = 16;
 
 // Attribute Type to Index, eg. 0x10->0, 0x30->2
-[[nodiscard]] constexpr DWORD AttrIndex(AttrType type) noexcept
-{
+[[nodiscard]] constexpr DWORD AttrIndex(AttrType type) noexcept {
   return (static_cast<DWORD>(type) >> 4U) - 1;
 }
 
 // Attribute Bit Mask, as a plain integer.
-[[nodiscard]] constexpr DWORD AttrMaskBits(AttrType type) noexcept
-{
+[[nodiscard]] constexpr DWORD AttrMaskBits(AttrType type) noexcept {
   return 1U << AttrIndex(type);
 }
 
 // Attribute Bit Mask
-[[nodiscard]] constexpr Mask AttrMask(AttrType type) noexcept
-{
+[[nodiscard]] constexpr Mask AttrMask(AttrType type) noexcept {
   return static_cast<Mask>(AttrMaskBits(type));
 }
 
@@ -45,8 +41,7 @@ inline constexpr DWORD attr_type_low_nibble_mask = 0xFU;
 // True only if "at" is a real AttrType value, not on-disk data that could
 // alias another type's AttrIndex/AttrMask slot. Callers MUST check this
 // before passing a value read from disk to AttrIndex or AttrMask.
-[[nodiscard]] constexpr bool IsValidAttrType(AttrType attr_type) noexcept
-{
+[[nodiscard]] constexpr bool IsValidAttrType(AttrType attr_type) noexcept {
   const auto raw = static_cast<DWORD>(attr_type);
   return raw != 0 && (raw & attr_type_low_nibble_mask) == 0 &&
          raw <= static_cast<DWORD>(AttrType::LoggedUtilityStream);

@@ -6,19 +6,16 @@
 
 #include <ntfs-browser/data/attr-type.h>
 
-namespace NtfsBrowser::Attr
-{
+namespace NtfsBrowser::Attr {
 
 // Both members are bitfields sharing one ULONGLONG allocation unit, so
 // this struct is exactly 8 bytes, the real on-disk base file reference size.
-struct MftSegmentReference
-{
+struct MftSegmentReference {
   ULONGLONG segment_number : 48;
   ULONGLONG sequence_number : 16;
 };
 
-struct AttributeList
-{
+struct AttributeList {
   AttrType attr_type;            // Attribute type
   WORD record_size;              // Record length
   BYTE name_length;              // Name length in characters

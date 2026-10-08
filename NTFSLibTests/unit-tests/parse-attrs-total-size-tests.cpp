@@ -27,12 +27,11 @@ TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a resident attribute whose total_size is smaller "
     "than its header",
     "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithUndersizedAttribute());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -46,12 +45,11 @@ TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a record whose offset_of_attr exceeds its own file "
     "record size",
     "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrOffsetOutOfBounds());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);

@@ -27,11 +27,9 @@ extern char** environ;
 
 namespace Fs = std::filesystem;
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
-namespace
-{
+namespace {
 
 // Bytes read from a child's pipe per read() call.
 constexpr size_t pipe_chunk_size = 4096;
@@ -44,36 +42,28 @@ constexpr unsigned redirect_file_mode = 0644;
 // Quotes one Windows command-line argument per the CRT's own argv parsing
 // rules, so an embedded space, quote or backslash round-trips instead of
 // splitting the argument early.
-void AppendQuotedArg(std::wstring& cmd, const std::wstring& arg)
-{
-  if (!arg.empty() && arg.find_first_of(L" \t\n\v\"") == std::wstring::npos)
-  {
+void AppendQuotedArg(std::wstring& cmd, const std::wstring& arg) {
+  if (!arg.empty() && arg.find_first_of(L" \t\n\v\"") == std::wstring::npos) {
     cmd += arg;
     return;
   }
 
   cmd += L'"';
-  for (auto it = arg.begin();; ++it)
-  {
+  for (auto it = arg.begin();; ++it) {
     std::size_t backslashes = 0;
-    while (it != arg.end() && *it == L'\\')
-    {
+    while (it != arg.end() && *it == L'\\') {
       ++backslashes;
       ++it;
     }
 
-    if (it == arg.end())
-    {
+    if (it == arg.end()) {
       cmd.append(backslashes * 2, L'\\');
       break;
     }
-    if (*it == L'"')
-    {
+    if (*it == L'"') {
       cmd.append(backslashes * 2 + 1, L'\\');
       cmd += L'"';
-    }
-    else
-    {
+    } else {
       cmd.append(backslashes, L'\\');
       cmd += *it;
     }
@@ -82,12 +72,10 @@ void AppendQuotedArg(std::wstring& cmd, const std::wstring& arg)
 }
 
 std::wstring BuildCommandLine(const Fs::path& exe,
-                              const std::vector<std::wstring>& args)
-{
+                              const std::vector<std::wstring>& args) {
   std::wstring cmd;
   AppendQuotedArg(cmd, exe.wstring());
-  for (const std::wstring& arg : args)
-  {
+  for (const std::wstring& arg : args) {
     cmd += L' ';
     AppendQuotedArg(cmd, arg);
   }
@@ -98,16 +86,14 @@ std::wstring BuildCommandLine(const Fs::path& exe,
 // must already be closed in this process -- otherwise ReadFile() blocks
 // forever waiting for an EOF that can only come once every write handle
 // (including this process' own copy) is gone.
-std::string ReadAllAndClose(HANDLE read_pipe)
-{
+std::string ReadAllAndClose(HANDLE read_pipe) {
   std::string output;
   std::array<char, pipe_chunk_size> chunk{};
   DWORD bytes_read = 0;
 
   while (ReadFile(read_pipe, chunk.data(), gsl::narrow<DWORD>(chunk.size()),
                   &bytes_read, nullptr) &&
-         bytes_read > 0)
-  {
+         bytes_read > 0) {
     output.append(chunk.data(), bytes_read);
   }
 
@@ -118,24 +104,20 @@ std::string ReadAllAndClose(HANDLE read_pipe)
 #else
 
 std::vector<std::string> NarrowArgs(const Fs::path& exe,
-                                    const std::vector<std::wstring>& args)
-{
+                                    const std::vector<std::wstring>& args) {
   std::vector<std::string> narrow;
   narrow.reserve(args.size() + 1);
   narrow.push_back(exe.string());
-  for (const std::wstring& arg : args)
-  {
+  for (const std::wstring& arg : args) {
     narrow.push_back(Fs::path(arg).string());
   }
   return narrow;
 }
 
-std::vector<char*> ToArgv(std::vector<std::string>& narrow_args)
-{
+std::vector<char*> ToArgv(std::vector<std::string>& narrow_args) {
   std::vector<char*> argv;
   argv.reserve(narrow_args.size() + 1);
-  for (std::string& arg : narrow_args)
-  {
+  for (std::string& arg : narrow_args) {
     argv.push_back(arg.data());
   }
   argv.push_back(nullptr);
@@ -147,8 +129,7 @@ std::vector<char*> ToArgv(std::vector<std::string>& narrow_args)
 }  // namespace
 
 ProcessOutput RunProcessCapturingOutput(const Fs::path& exe,
-                                        const std::vector<std::wstring>& args)
-{
+                                        const std::vector<std::wstring>& args) {
 #ifdef _WIN32
 
   SECURITY_ATTRIBUTES pipe_attr{};
@@ -157,14 +138,12 @@ ProcessOutput RunProcessCapturingOutput(const Fs::path& exe,
 
   HANDLE read_pipe = nullptr;
   HANDLE write_pipe = nullptr;
-  if (!CreatePipe(&read_pipe, &write_pipe, &pipe_attr, 0))
-  {
+  if (!CreatePipe(&read_pipe, &write_pipe, &pipe_attr, 0)) {
     throw std::runtime_error("CreatePipe failed");
   }
   // Without this, the child would inherit the read end too, and could
   // deadlock ReadAllAndClose() below by keeping the write end open.
-  if (!SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0))
-  {
+  if (!SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0)) {
     throw std::runtime_error("SetHandleInformation failed");
   }
 
@@ -184,8 +163,7 @@ ProcessOutput RunProcessCapturingOutput(const Fs::path& exe,
   // Must close this process' copy now regardless of success, or
   // ReadAllAndClose() below hangs.
   CloseHandle(write_pipe);
-  if (!created)
-  {
+  if (!created) {
     CloseHandle(read_pipe);
     throw std::runtime_error("CreateProcessW failed");
   }
@@ -205,8 +183,7 @@ ProcessOutput RunProcessCapturingOutput(const Fs::path& exe,
 #else
 
   std::array<int, 2> pipe_fds{-1, -1};
-  if (pipe(pipe_fds.data()) != 0)
-  {
+  if (pipe(pipe_fds.data()) != 0) {
     throw std::runtime_error("pipe failed");
   }
 
@@ -229,8 +206,7 @@ ProcessOutput RunProcessCapturingOutput(const Fs::path& exe,
   // Must close this process' copy now regardless of success, or the read
   // loop below never sees EOF.
   close(std::get<1>(pipe_fds));
-  if (spawned != 0)
-  {
+  if (spawned != 0) {
     close(std::get<0>(pipe_fds));
     throw std::runtime_error(std::string("posix_spawn failed: ") +
                              std::strerror(spawned));
@@ -240,8 +216,7 @@ ProcessOutput RunProcessCapturingOutput(const Fs::path& exe,
   std::array<char, pipe_chunk_size> chunk{};
   ssize_t bytes_read = 0;
   while ((bytes_read =
-              read(std::get<0>(pipe_fds), chunk.data(), chunk.size())) > 0)
-  {
+              read(std::get<0>(pipe_fds), chunk.data(), chunk.size())) > 0) {
     output.append(chunk.data(), static_cast<std::size_t>(bytes_read));
   }
   close(std::get<0>(pipe_fds));
@@ -257,8 +232,8 @@ ProcessOutput RunProcessCapturingOutput(const Fs::path& exe,
 
 int RunProcessToFiles(const Fs::path& exe,
                       const std::vector<std::wstring>& args,
-                      const Fs::path& stdout_path, const Fs::path& stderr_path)
-{
+                      const Fs::path& stdout_path,
+                      const Fs::path& stderr_path) {
 #ifdef _WIN32
 
   SECURITY_ATTRIBUTES file_attr{};
@@ -271,8 +246,8 @@ int RunProcessToFiles(const Fs::path& exe,
   const HANDLE err_handle =
       CreateFileW(stderr_path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                   &file_attr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (out_handle == INVALID_HANDLE_VALUE || err_handle == INVALID_HANDLE_VALUE)
-  {
+  if (out_handle == INVALID_HANDLE_VALUE ||
+      err_handle == INVALID_HANDLE_VALUE) {
     throw std::runtime_error("CreateFileW failed");
   }
 
@@ -291,8 +266,7 @@ int RunProcessToFiles(const Fs::path& exe,
                      nullptr, nullptr, &si, &pi);
   CloseHandle(out_handle);
   CloseHandle(err_handle);
-  if (!created)
-  {
+  if (!created) {
     throw std::runtime_error("CreateProcessW failed");
   }
 
@@ -323,8 +297,7 @@ int RunProcessToFiles(const Fs::path& exe,
   const int spawned =
       posix_spawn(&pid, exe.c_str(), &actions, nullptr, argv.data(), environ);
   posix_spawn_file_actions_destroy(&actions);
-  if (spawned != 0)
-  {
+  if (spawned != 0) {
     throw std::runtime_error(std::string("posix_spawn failed: ") +
                              std::strerror(spawned));
   }

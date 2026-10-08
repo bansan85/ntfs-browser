@@ -10,12 +10,10 @@
 #include "catch2/catch_message.hpp"
 #include "utf.h"
 
-namespace
-{
+namespace {
 
 // One decoder input and the UTF-8 bytes it must produce.
-struct Case
-{
+struct Case {
   const char* name;
   std::wstring input;
   std::string expected;
@@ -23,8 +21,7 @@ struct Case
 
 }  // namespace
 
-TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]")
-{
+TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]") {
   // U+FFFD REPLACEMENT CHARACTER, what an unpaired surrogate becomes.
   const std::string replacement = "\xEF\xBF\xBD";
 
@@ -45,8 +42,7 @@ TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]")
        std::wstring{static_cast<wchar_t>(0xD83D), L'A'}, replacement + "A"},
   };
 
-  for (const Case& test_case : cases)
-  {
+  for (const Case& test_case : cases) {
     INFO(test_case.name);
     CHECK(NtfsBrowser::WideToUtf8(test_case.input) == test_case.expected);
   }

@@ -14,19 +14,19 @@
 #include "efs/efs-stream.h"
 #include "efs/sector-cipher.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 template <Strategy S>
 class AttrNonResident;
 
-namespace Efs
-{
+namespace Efs {
+
 class Fek;
+
 }  // namespace Efs
 }  // namespace NtfsBrowser
 
-namespace NtfsBrowser::Efs
-{
+namespace NtfsBrowser::Efs {
 
 // The bit of an attribute header's flags that marks its stream as encrypted.
 inline constexpr WORD attr_flag_encrypted = 0x4000;
@@ -39,8 +39,7 @@ using KeyProviderSource = std::function<std::shared_ptr<IEfsKeyProvider>()>;
 // streams: its $EFS entries, and the key resolved from them once. A failed
 // resolution is remembered too, so a file nobody holds a key for is not
 // retried on every read.
-class Context final
-{
+class Context final {
  public:
   // "entries" is empty when the record has no usable $EFS stream.
   Context(std::vector<WrappedFek> entries, KeyProviderSource provider_source,

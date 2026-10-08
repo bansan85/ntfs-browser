@@ -4,17 +4,11 @@
 
 #include <cstdint>
 
-namespace NtfsBrowser::Flag
-{
+namespace NtfsBrowser::Flag {
 
-enum class FileRecord : std::uint8_t
-{
-  None = 0x00,
-  InUse = 0x01,
-  Dir = 0x02
-};
+enum class FileRecord : std::uint8_t { None = 0x00, InUse = 0x01, Dir = 0x02 };
 
-//NOLINTNEXTLINE
+// NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::FileRecord)
 
 }  // namespace NtfsBrowser::Flag

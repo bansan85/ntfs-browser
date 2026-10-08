@@ -12,15 +12,12 @@
 #include "console.h"
 #include "time-convert.h"
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
-namespace
-{
+namespace {
 
 ULONGLONG
-FileClockToUtcTicks(std::filesystem::file_time_type file_time) noexcept
-{
+FileClockToUtcTicks(std::filesystem::file_time_type file_time) noexcept {
 #ifdef _WIN32
   // MSVC's file clock counts 100 ns ticks since 1601-01-01: already FILETIME.
   return static_cast<ULONGLONG>(file_time.time_since_epoch().count());
@@ -40,15 +37,13 @@ FileClockToUtcTicks(std::filesystem::file_time_type file_time) noexcept
 
 // The relative path key every method shares: "/"-separated, root-relative.
 std::wstring RelativeKey(const std::filesystem::path& root,
-                         const std::filesystem::path& full)
-{
+                         const std::filesystem::path& full) {
   return full.lexically_relative(root).generic_wstring();
 }
 
 }  // namespace
 
-Listing WalkStdFilesystem(const std::filesystem::path& root)
-{
+Listing WalkStdFilesystem(const std::filesystem::path& root) {
   Listing result;
 
   std::error_code error_code;
@@ -57,14 +52,12 @@ Listing WalkStdFilesystem(const std::filesystem::path& root)
   auto iterator =
       std::filesystem::recursive_directory_iterator(root, options, error_code);
   const auto end = std::filesystem::recursive_directory_iterator();
-  for (; !error_code && iterator != end; iterator.increment(error_code))
-  {
+  for (; !error_code && iterator != end; iterator.increment(error_code)) {
     const std::filesystem::directory_entry& directory_entry = *iterator;
 
     // Never recurse into (or past) a symlink/junction as a directory: every
     // method in this tool follows the same policy.
-    if (directory_entry.is_symlink(error_code))
-    {
+    if (directory_entry.is_symlink(error_code)) {
       iterator.disable_recursion_pending();
     }
 
@@ -72,28 +65,24 @@ Listing WalkStdFilesystem(const std::filesystem::path& root)
     entry.is_directory = directory_entry.is_directory(error_code) &&
                          !directory_entry.is_symlink(error_code);
 
-    if (!entry.is_directory)
-    {
+    if (!entry.is_directory) {
       std::error_code size_ec;
       const auto size = directory_entry.file_size(size_ec);
-      if (!size_ec)
-      {
+      if (!size_ec) {
         entry.logical_size = size;
       }
     }
 
     std::error_code time_ec;
     const auto write_time = directory_entry.last_write_time(time_ec);
-    if (!time_ec)
-    {
+    if (!time_ec) {
       entry.modification_time_utc = FileClockToUtcTicks(write_time);
     }
 
     result.emplace(RelativeKey(root, directory_entry.path()), entry);
   }
 
-  if (error_code)
-  {
+  if (error_code) {
     PrintErr("std::filesystem: {}\n", error_code.message());
   }
 

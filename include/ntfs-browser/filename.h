@@ -6,30 +6,30 @@
 
 #include <ntfs-browser/export.h>
 
-namespace NtfsBrowser
-{
-namespace Attr
-{
+namespace NtfsBrowser {
+namespace Attr {
+
 struct Filename;
+
 }  // namespace Attr
 
-namespace Flag
-{
+namespace Flag {
+
 enum class Filename : DWORD;
+
 }  // namespace Flag
 
 // The case mapping NTFS orders names by. An implementation detail: consumers
 // only ever meet it through NtfsVolume, which owns the volume's table.
 class UpCaseTable;
 
-class NTFS_BROWSER_EXPORT Filename
-{
+class NTFS_BROWSER_EXPORT Filename {
  public:
   Filename() = default;
   Filename(Filename&& other) noexcept = default;
-  Filename(Filename const& other) = default;
+  Filename(const Filename& other) = default;
   Filename& operator=(Filename&& other) noexcept = delete;
-  Filename& operator=(Filename const& other) = delete;
+  Filename& operator=(const Filename& other) = delete;
   virtual ~Filename() = default;
 
  protected:

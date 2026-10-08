@@ -21,12 +21,11 @@ using NtfsBrowser::Strategy;
 TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a resident STANDARD_INFORMATION with an empty body",
     "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEmptyStandardInformation());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -40,12 +39,11 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a resident VOLUME_INFORMATION with an empty body",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEmptyVolumeInformation());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
 
   CHECK_FALSE(volume.IsVolumeOK());
 }

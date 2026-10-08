@@ -1,4 +1,3 @@
-
 // This file's whole purpose is the configuration where neither EFS backend
 // is compiled: efs-tests.cpp (and the Crypto++-based fixtures it needs) are
 // excluded there, so this is the only place that scenario gets covered.
@@ -26,8 +25,7 @@ using NtfsBrowser::Enum::MftIdx;
 TEMPLATE_TEST_CASE_SIG(
     "An encrypted stream reads back as raw ciphertext when no EFS backend "
     "is compiled in",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache)
-{
+    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
   const std::vector<BYTE> onDisk(NtfsBrowserTests::fake_cluster_size, 0x42);
 
   NtfsBrowserTests::FakeEncryptedFile file;

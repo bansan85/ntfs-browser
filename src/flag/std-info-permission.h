@@ -2,12 +2,10 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Flag
-{
+namespace NtfsBrowser::Flag {
 
 // NOLINTNEXTLINE(performance-enum-size)
-enum class StdInfoPermission : DWORD
-{
+enum class StdInfoPermission : DWORD {
   ReadOnly = 0x00000001,
   Hidden = 0x00000002,
   System = 0x00000004,
@@ -23,7 +21,7 @@ enum class StdInfoPermission : DWORD
   Encrypted = 0x00004000
 };
 
-//NOLINTNEXTLINE
+// NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::StdInfoPermission)
 
 }  // namespace NtfsBrowser::Flag

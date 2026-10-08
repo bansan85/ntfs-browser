@@ -17,16 +17,16 @@
 #include "entry.h"
 #include "time-convert.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 class MftTree;
 enum class Strategy : std::uint8_t;
 template <Strategy S>
 class NtfsVolume;
+
 }  // namespace NtfsBrowser
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
 // Resolves relativePath (components separated by '/', matching the "/"-joined
 // keys every Listing uses; empty means the volume's root) to the MFT record
@@ -36,8 +36,7 @@ namespace NtfsCompare
 template <NtfsBrowser::Strategy S>
 [[nodiscard]] std::optional<ULONGLONG>
     ResolveDirectoryRecord(NtfsBrowser::NtfsVolume<S>& volume,
-                           std::wstring_view relative_path)
-{
+                           std::wstring_view relative_path) {
   using NtfsBrowser::FileRecord;
   using NtfsBrowser::IndexEntry;
   using NtfsBrowser::Mask;
@@ -46,34 +45,29 @@ template <NtfsBrowser::Strategy S>
   current.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
   if (!current.ParseFileRecord(
           static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::Root)) ||
-      !current.ParseAttrs())
-  {
+      !current.ParseAttrs()) {
     return std::nullopt;
   }
 
   auto record = static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::Root);
   size_t pos = 0;
-  while (pos < relative_path.size())
-  {
+  while (pos < relative_path.size()) {
     const size_t next = relative_path.find(L'/', pos);
     const std::wstring_view component = relative_path.substr(
         pos,
         next == std::wstring_view::npos ? std::wstring_view::npos : next - pos);
     pos = (next == std::wstring_view::npos) ? relative_path.size() : next + 1;
-    if (component.empty())
-    {
+    if (component.empty()) {
       continue;
     }
 
     const std::optional<IndexEntry> entry = current.FindSubEntry(component);
-    if (!entry || !entry->IsDirectory())
-    {
+    if (!entry || !entry->IsDirectory()) {
       return std::nullopt;
     }
     record = entry->GetFileReference();
 
-    if (!current.ParseFileRecord(record) || !current.ParseAttrs())
-    {
+    if (!current.ParseFileRecord(record) || !current.ParseAttrs()) {
       return std::nullopt;
     }
   }
@@ -86,21 +80,19 @@ template <NtfsBrowser::Strategy S>
 // (Filename/IndexEntry) for its fields.
 template <NtfsBrowser::Strategy S>
 [[nodiscard]] Listing WalkLibraryIndex(NtfsBrowser::NtfsVolume<S>& volume,
-                                       ULONGLONG start_record)
-{
+                                       ULONGLONG start_record) {
   using NtfsBrowser::FileRecord;
   using NtfsBrowser::IndexEntryView;
   using NtfsBrowser::Mask;
 
   Listing result;
 
-  struct Frame
-  {
+  struct Frame {
     ULONGLONG record = 0;
     std::wstring prefix;
   };
-  struct CallbackContext
-  {
+
+  struct CallbackContext {
     Listing* result;
     std::vector<Frame>* stack;
     const std::wstring* prefix;
@@ -109,15 +101,13 @@ template <NtfsBrowser::Strategy S>
   std::vector<Frame> stack;
   stack.push_back({.record = start_record, .prefix = L""});
 
-  while (!stack.empty())
-  {
+  while (!stack.empty()) {
     const Frame frame = std::move(stack.back());
     stack.pop_back();
 
     FileRecord<S> dir(volume);
     dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
-    if (!dir.ParseFileRecord(frame.record) || !dir.ParseAttrs())
-    {
+    if (!dir.ParseFileRecord(frame.record) || !dir.ParseAttrs()) {
       continue;
     }
 
@@ -125,21 +115,18 @@ template <NtfsBrowser::Strategy S>
         .result = &result, .stack = &stack, .prefix = &frame.prefix};
 
     dir.TraverseSubEntries(
-        [](const IndexEntryView& index_entry, void* context)
-        {
-          auto const* callback_context = static_cast<CallbackContext*>(context);
+        [](const IndexEntryView& index_entry, void* context) {
+          const auto* callback_context = static_cast<CallbackContext*>(context);
 
           // Skip system metafiles and the DOS 8.3 alias: the Win32 name is
           // this tool's path key everywhere.
           if (index_entry.GetFileReference() <
                   static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::User) ||
-              !index_entry.IsWin32Name())
-          {
+              !index_entry.IsWin32Name()) {
             return;
           }
           const std::wstring_view name = index_entry.GetFilename();
-          if (name.empty())
-          {
+          if (name.empty()) {
             return;
           }
 
@@ -174,8 +161,7 @@ template <NtfsBrowser::Strategy S>
           const ULONGLONG child_record = index_entry.GetFileReference();
           callback_context->result->emplace(path, std::move(entry));
 
-          if (is_directory)
-          {
+          if (is_directory) {
             callback_context->stack->push_back(
                 {.record = child_record, .prefix = path});
           }

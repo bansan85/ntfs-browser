@@ -25,8 +25,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // Bitmap bits one fake cluster holds: what separates one bitmap cluster from
 // the next in a cluster index.
@@ -34,9 +33,8 @@ constexpr ULONGLONG bits_per_bitmap_cluster =
     static_cast<ULONGLONG>(NtfsBrowserTests::fake_cluster_size) * 8;
 
 template <Strategy S>
-void CheckClusterFreeAnswersPastTheFirstBitmapCluster()
-{
-  NtfsVolume<S> const volume(
+void CheckClusterFreeAnswersPastTheFirstBitmapCluster() {
+  const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
           NtfsBrowserTests::BuildFakeNtfsImageWithMultiClusterBitmap()));
   REQUIRE(volume.IsVolumeOK());
@@ -73,7 +71,6 @@ void CheckClusterFreeAnswersPastTheFirstBitmapCluster()
 TEMPLATE_TEST_CASE_SIG(
     "A non-resident bitmap answers for clusters past its first cluster",
     "[attr-bitmap][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckClusterFreeAnswersPastTheFirstBitmapCluster<S>();
 }

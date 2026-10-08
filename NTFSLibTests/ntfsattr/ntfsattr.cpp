@@ -20,8 +20,7 @@ CNtfsattrApp::CNtfsattrApp() {}
 
 CNtfsattrApp theApp;
 
-BOOL CNtfsattrApp::InitInstance()
-{
+BOOL CNtfsattrApp::InitInstance() {
   AfxEnableControlContainer();
 
   CNtfsattrDlg dlg;

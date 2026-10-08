@@ -2,17 +2,15 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Flag
-{
+namespace NtfsBrowser::Flag {
 
-enum class IndexEntry : BYTE
-{
+enum class IndexEntry : BYTE {
   None = 0x00,
   SubNode = 0x01,  // Index entry points to a sub-node
   Last = 0x02      // Last index entry in the node, no Stream
 };
 
-//NOLINTNEXTLINE
+// NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::IndexEntry)
 
 }  // namespace NtfsBrowser::Flag

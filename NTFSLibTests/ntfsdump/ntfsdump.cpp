@@ -17,8 +17,7 @@ CNtfsdumpApp::CNtfsdumpApp() {}
 
 CNtfsdumpApp theApp;
 
-BOOL CNtfsdumpApp::InitInstance()
-{
+BOOL CNtfsdumpApp::InitInstance() {
   AfxEnableControlContainer();
 
   CNtfsdumpDlg dlg;

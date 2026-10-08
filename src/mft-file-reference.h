@@ -2,8 +2,8 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 // Low 48 bits of an on-disk file reference: the MFT record number.
 inline constexpr ULONGLONG mft_record_number_mask = 0x0000FFFFFFFFFFFFULL;
 // Bit position of the 16-bit sequence number in an on-disk file reference.
@@ -14,8 +14,7 @@ inline constexpr WORD mft_max_sequence = 0xFFFF;
 
 // The sequence number NTFS gives a record when it frees it: one more,
 // skipping 0, since a reference carrying 0 means "do not check".
-constexpr WORD NextSequence(WORD sequence) noexcept
-{
+constexpr WORD NextSequence(WORD sequence) noexcept {
   return sequence == mft_max_sequence ? 1 : static_cast<WORD>(sequence + 1);
 }
 
@@ -24,8 +23,7 @@ constexpr WORD NextSequence(WORD sequence) noexcept
 // one NTFS bumped it to on deletion. A live record MUST NOT get the last rule.
 constexpr bool IsSameRecordGeneration(WORD referenced_sequence,
                                       WORD record_sequence,
-                                      bool record_in_use) noexcept
-{
+                                      bool record_in_use) noexcept {
   return referenced_sequence == 0 || referenced_sequence == record_sequence ||
          (!record_in_use &&
           record_sequence == NextSequence(referenced_sequence));
@@ -38,10 +36,10 @@ constexpr bool IsSameRecordGeneration(WORD referenced_sequence,
 constexpr bool
     IsGenuineExtensionRecord(WORD entry_sequence, WORD record_sequence,
                              ULONGLONG record_base_ref,
-                             ULONGLONG listing_record_number) noexcept
-{
+                             ULONGLONG listing_record_number) noexcept {
   // Sequence: unclaimed or equal. Base: the listing file.
   return (entry_sequence == 0 || entry_sequence == record_sequence) &&
          (record_base_ref & mft_record_number_mask) == listing_record_number;
 }
+
 }  // namespace NtfsBrowser

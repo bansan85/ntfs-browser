@@ -2,8 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsFuzz
-{
+namespace NtfsFuzz {
 
 // Named-stream name shared between fake-ntfs-image.h's fixture and
 // afl-main.cpp's FuzzOnce(), so the two can't silently drift apart.

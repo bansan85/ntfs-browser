@@ -5,14 +5,12 @@
 #include <span>
 #include <string_view>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 // Abstracts "get raw bytes from a backing store" so FileReader<S> doesn't
 // depend on a Win32 file/device handle directly. An implementation decides
 // what addr/dest mean (eg. a disk offset, or an ignored parameter).
-class IDiskReader
-{
+class IDiskReader {
  public:
   IDiskReader() = default;
   IDiskReader(const IDiskReader&) = delete;

@@ -6,25 +6,24 @@
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/filename.h>
 
-namespace NtfsBrowser
-{
-namespace Data
-{
+namespace NtfsBrowser {
+namespace Data {
+
 struct IndexEntry;
+
 }  // namespace Data
 
 // A read-only window on one index entry. It does not own the bytes it reads:
 // they belong to the IndexBlock or AttrIndexRoot it came from, and the view
 // MUST NOT outlive it. A traversal callback receives one. Convert it to an
 // IndexEntry to keep it.
-class NTFS_BROWSER_EXPORT IndexEntryView : public Filename
-{
+class NTFS_BROWSER_EXPORT IndexEntryView : public Filename {
  public:
   explicit IndexEntryView(const Data::IndexEntry& index_entry);
   IndexEntryView(IndexEntryView&& other) noexcept = default;
-  IndexEntryView(IndexEntryView const& other) = default;
+  IndexEntryView(const IndexEntryView& other) = default;
   IndexEntryView& operator=(IndexEntryView&& other) noexcept = delete;
-  IndexEntryView& operator=(IndexEntryView const& other) = delete;
+  IndexEntryView& operator=(const IndexEntryView& other) = delete;
   ~IndexEntryView() override = default;
 
   friend class IndexEntry;
@@ -48,14 +47,13 @@ class NTFS_BROWSER_EXPORT IndexEntryView : public Filename
 
 // An index entry that owns its bytes: the entry alone, not the block it was
 // read from. It stays valid after that block, or the FileRecord, is gone.
-class NTFS_BROWSER_EXPORT IndexEntry : public IndexEntryView
-{
+class NTFS_BROWSER_EXPORT IndexEntry : public IndexEntryView {
  public:
   explicit IndexEntry(const IndexEntryView& view);
   IndexEntry(IndexEntry&& other) noexcept = default;
-  IndexEntry(IndexEntry const& other);
+  IndexEntry(const IndexEntry& other);
   IndexEntry& operator=(IndexEntry&& other) noexcept = delete;
-  IndexEntry& operator=(IndexEntry const& other) = delete;
+  IndexEntry& operator=(const IndexEntry& other) = delete;
   ~IndexEntry() override = default;
 
  private:

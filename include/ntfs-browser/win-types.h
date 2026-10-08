@@ -25,13 +25,11 @@ using CHAR = char;
 // char16_t, not wchar_t: NTFS names are UTF-16, and wchar_t is 4 bytes here.
 using WCHAR = char16_t;
 
-struct LARGE_INTEGER
-{
+struct LARGE_INTEGER {
   LONGLONG QuadPart;
 };
 
-struct FILETIME
-{
+struct FILETIME {
   DWORD dwLowDateTime;
   DWORD dwHighDateTime;
 };
@@ -39,41 +37,34 @@ struct FILETIME
 // Reproduces <winnt.h>'s bitwise operators for a scoped enum, since
 // Mask/Flag::* enums are used as OR/AND-able bitmasks throughout the library.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-  #define DEFINE_ENUM_FLAG_OPERATORS(ENUMTYPE)                           \
-    inline constexpr ENUMTYPE operator|(ENUMTYPE a, ENUMTYPE b) noexcept \
-    {                                                                    \
-      return static_cast<ENUMTYPE>(                                      \
-          static_cast<std::underlying_type_t<ENUMTYPE>>(a) |             \
-          static_cast<std::underlying_type_t<ENUMTYPE>>(b));             \
-    }                                                                    \
-    inline ENUMTYPE& operator|=(ENUMTYPE& a, ENUMTYPE b) noexcept        \
-    {                                                                    \
-      return a = a | b;                                                  \
-    }                                                                    \
-    inline constexpr ENUMTYPE operator&(ENUMTYPE a, ENUMTYPE b) noexcept \
-    {                                                                    \
-      return static_cast<ENUMTYPE>(                                      \
-          static_cast<std::underlying_type_t<ENUMTYPE>>(a) &             \
-          static_cast<std::underlying_type_t<ENUMTYPE>>(b));             \
-    }                                                                    \
-    inline ENUMTYPE& operator&=(ENUMTYPE& a, ENUMTYPE b) noexcept        \
-    {                                                                    \
-      return a = a & b;                                                  \
-    }                                                                    \
-    inline constexpr ENUMTYPE operator~(ENUMTYPE a) noexcept             \
-    {                                                                    \
-      return static_cast<ENUMTYPE>(                                      \
-          ~static_cast<std::underlying_type_t<ENUMTYPE>>(a));            \
-    }                                                                    \
-    inline constexpr ENUMTYPE operator^(ENUMTYPE a, ENUMTYPE b) noexcept \
-    {                                                                    \
-      return static_cast<ENUMTYPE>(                                      \
-          static_cast<std::underlying_type_t<ENUMTYPE>>(a) ^             \
-          static_cast<std::underlying_type_t<ENUMTYPE>>(b));             \
-    }                                                                    \
-    inline ENUMTYPE& operator^=(ENUMTYPE& a, ENUMTYPE b) noexcept        \
-    {                                                                    \
-      return a = a ^ b;                                                  \
+  #define DEFINE_ENUM_FLAG_OPERATORS(ENUMTYPE)                             \
+    inline constexpr ENUMTYPE operator|(ENUMTYPE a, ENUMTYPE b) noexcept { \
+      return static_cast<ENUMTYPE>(                                        \
+          static_cast<std::underlying_type_t<ENUMTYPE>>(a) |               \
+          static_cast<std::underlying_type_t<ENUMTYPE>>(b));               \
+    }                                                                      \
+    inline ENUMTYPE& operator|=(ENUMTYPE& a, ENUMTYPE b) noexcept {        \
+      return a = a | b;                                                    \
+    }                                                                      \
+    inline constexpr ENUMTYPE operator&(ENUMTYPE a, ENUMTYPE b) noexcept { \
+      return static_cast<ENUMTYPE>(                                        \
+          static_cast<std::underlying_type_t<ENUMTYPE>>(a) &               \
+          static_cast<std::underlying_type_t<ENUMTYPE>>(b));               \
+    }                                                                      \
+    inline ENUMTYPE& operator&=(ENUMTYPE& a, ENUMTYPE b) noexcept {        \
+      return a = a & b;                                                    \
+    }                                                                      \
+    inline constexpr ENUMTYPE operator~(ENUMTYPE a) noexcept {             \
+      return static_cast<ENUMTYPE>(                                        \
+          ~static_cast<std::underlying_type_t<ENUMTYPE>>(a));              \
+    }                                                                      \
+    inline constexpr ENUMTYPE operator^(ENUMTYPE a, ENUMTYPE b) noexcept { \
+      return static_cast<ENUMTYPE>(                                        \
+          static_cast<std::underlying_type_t<ENUMTYPE>>(a) ^               \
+          static_cast<std::underlying_type_t<ENUMTYPE>>(b));               \
+    }                                                                      \
+    inline ENUMTYPE& operator^=(ENUMTYPE& a, ENUMTYPE b) noexcept {        \
+      return a = a ^ b;                                                    \
     }
 
 #endif

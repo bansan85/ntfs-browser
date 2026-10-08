@@ -11,11 +11,11 @@
 
 #include "../internal-export.h"
 
-namespace NtfsBrowser
-{
-namespace Flag
-{
+namespace NtfsBrowser {
+namespace Flag {
+
 enum class FileRecord : std::uint8_t;
+
 }  // namespace Flag
 
 constexpr uint32_t file_record_magic('ELIF');
@@ -36,8 +36,7 @@ constexpr size_t update_sequence_stride = 512;
 // forged value cannot make a caller read more array words than the header
 // declares. A shorter array only protects the blocks it covers.
 constexpr size_t UpdateSequenceBlockCount(size_t buffer_size,
-                                          WORD size_of_us) noexcept
-{
+                                          WORD size_of_us) noexcept {
   const size_t declared = size_of_us > 0 ? size_of_us - 1U : 0U;
   const size_t blocks = buffer_size / update_sequence_stride;
   return declared < blocks ? declared : blocks;
@@ -47,12 +46,9 @@ struct AttrHeaderCommon;
 template <Strategy S>
 struct FileRecordHeaderImpl;
 
-struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
-{
-  union Data
-  {
-    struct
-    {
+struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader {
+  union Data {
+    struct {
       DWORD magic;          // "FILE"
       WORD offset_of_us;    // Offset of Update Sequence
       WORD size_of_us;      // Size in words of Update Sequence Number & Array
@@ -68,6 +64,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
       WORD align;              // Align to 4 byte boundary
       DWORD record_no;         // Number of this MFT Record
     };
+
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
     BYTE raw[max_file_record_size];
   };
@@ -92,14 +89,11 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader
 };
 
 template <Strategy S>
-struct FileRecordHeaderImpl
-{
-};
+struct FileRecordHeaderImpl {};
 
 template <>
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::NoCache> : public FileRecordHeader
-{
+    FileRecordHeaderImpl<Strategy::NoCache> : public FileRecordHeader {
   std::span<const BYTE> data;
 
   explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
@@ -114,8 +108,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
 
 template <>
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::FullCache> : public FileRecordHeader
-{
+    FileRecordHeaderImpl<Strategy::FullCache> : public FileRecordHeader {
   FileRecordHeader::Data data{};
 
   explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);

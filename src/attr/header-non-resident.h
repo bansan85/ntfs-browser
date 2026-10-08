@@ -7,10 +7,9 @@
 
 #include <ntfs-browser/data/attr-header-common.h>
 
-namespace NtfsBrowser::Attr
-{
-struct HeaderNonResident
-{
+namespace NtfsBrowser::Attr {
+
+struct HeaderNonResident {
   AttrHeaderCommon header;  // Common data structure
   ULONGLONG start_vcn;      // Starting VCN
   ULONGLONG last_vcn;       // Last VCN
@@ -37,8 +36,7 @@ inline constexpr DWORD header_non_resident_base_size =
 // True if this attribute is compressed and therefore declares the trailing
 // CompressedSize field.
 [[nodiscard]] inline bool
-    HasCompressedSizeField(const HeaderNonResident& header) noexcept
-{
+    HasCompressedSizeField(const HeaderNonResident& header) noexcept {
   return header.comp_unit_size != 0;
 }
 
@@ -46,8 +44,7 @@ inline constexpr DWORD header_non_resident_base_size =
 // HasCompressedSizeField(header) is true and total_size was checked to cover
 // header_non_resident_base_size + compressed_size_field_size bytes.
 [[nodiscard]] inline ULONGLONG
-    CompressedSize(const HeaderNonResident& header) noexcept
-{
+    CompressedSize(const HeaderNonResident& header) noexcept {
   ULONGLONG size = 0;
   const std::span<const BYTE> field(reinterpret_cast<const BYTE*>(&header),
                                     header_non_resident_base_size +
@@ -56,4 +53,5 @@ inline constexpr DWORD header_non_resident_base_size =
               sizeof(size));
   return size;
 }
+
 }  // namespace NtfsBrowser::Attr

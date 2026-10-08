@@ -6,8 +6,7 @@
 // Exercises exported symbols from across the public API, to prove the
 // library links correctly when consumed via FetchContent: DLL import/export
 // with BUILD_SHARED_LIBS on, plus every optional feature this build enables.
-int main()
-{
+int main() {
   NtfsBrowser::Log::Configure(NtfsBrowser::Log::Config{});
 
 // Decompression and EFS decryption are both optional features.

@@ -18,13 +18,12 @@
 
 #include "internal-export.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 class IDiskReader;
 
 template <Strategy S>
-class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader
-{
+class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
  public:
   FileReader();
 

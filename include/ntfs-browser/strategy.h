@@ -2,13 +2,8 @@
 
 #include <cstdint>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
-enum class Strategy : std::uint8_t
-{
-  NoCache,
-  FullCache
-};
+enum class Strategy : std::uint8_t { NoCache, FullCache };
 
 }  // namespace NtfsBrowser

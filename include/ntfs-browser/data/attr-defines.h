@@ -2,8 +2,8 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 struct AttrHeaderCommon;
 
 // User defined Callback routines to process raw attribute data
@@ -11,4 +11,5 @@ struct AttrHeaderCommon;
 // Set discard to false to let FileRecord process it
 using AttrRawCallback = void (*)(const AttrHeaderCommon& attr_head,
                                  bool& discard);
+
 }  // namespace NtfsBrowser

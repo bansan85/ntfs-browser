@@ -18,8 +18,7 @@
 
 using namespace NtfsBrowser;
 
-namespace
-{
+namespace {
 
 // Command-line switch that adds the records NTFS freed to the listing.
 constexpr std::wstring_view deleted_option = L"--deleted";
@@ -31,8 +30,7 @@ constexpr std::wstring_view recover_option = L"--recover";
 constexpr int path_column = 63;
 
 // Prints command-line usage help.
-void Usage()
-{
+void Usage() {
   printf("Usage: ntfsmftlist [--log=...] [--deleted] [--recover] <volume>\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("  --deleted     also list the records NTFS freed\n");
@@ -51,10 +49,8 @@ void Usage()
 
 // Converts to UTF-8, which the console is switched to, so every name prints
 // whatever the active code page.
-std::string ToUtf8(std::wstring_view text)
-{
-  if (text.empty())
-  {
+std::string ToUtf8(std::wstring_view text) {
+  if (text.empty()) {
     return {};
   }
   const int length = gsl::narrow<int>(text.size());
@@ -68,40 +64,33 @@ std::string ToUtf8(std::wstring_view text)
 
 // The path of one name of entry, as shown in the listing.
 std::string DisplayPath(const MftTree& tree, const MftEntry& entry,
-                        std::optional<size_t> name_index)
-{
+                        std::optional<size_t> name_index) {
   std::optional<ULONGLONG> lost;
   const std::wstring path = name_index
                                 ? tree.GetPath(entry.record, *name_index, &lost)
                                 : tree.GetPath(entry.record, &lost);
-  if (path.empty())
-  {
+  if (path.empty()) {
     return "<no name>";
   }
-  if (lost)
-  {
+  if (lost) {
     return "<lost #" + std::to_string(*lost) + ">\\" + ToUtf8(path);
   }
   return ToUtf8(path);
 }
 
 // Prints one listing line for entry, then one line per other hard link.
-void PrintEntry(const MftTree& tree, const MftEntry& entry)
-{
+void PrintEntry(const MftTree& tree, const MftEntry& entry) {
   SYSTEMTIME st{};
   FileTimeToSystemTime(&entry.write_time, &st);
 
   std::string size_column = "<DIR>";
-  if (!entry.directory)
-  {
+  if (!entry.directory) {
     size_column = std::to_string(entry.size);
   }
 
   size_t links = 0;
-  for (const MftName& name : entry.names)
-  {
-    if (!name.dos_only)
-    {
+  for (const MftName& name : entry.names) {
+    if (!name.dos_only) {
       links++;
     }
   }
@@ -115,17 +104,14 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry)
          entry.encrypted ? 'E' : '-', entry.sparse ? 'P' : '-', links,
          path.c_str());
 
-  for (size_t i = 0; i < entry.names.size(); i++)
-  {
+  for (size_t i = 0; i < entry.names.size(); i++) {
     // i < entry.names.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    if (entry.names[i].dos_only)
-    {
+    if (entry.names[i].dos_only) {
       continue;
     }
     const std::string other = DisplayPath(tree, entry, i);
-    if (other != path)
-    {
+    if (other != path) {
       printf("%*s= %s\n", path_column, "", other.c_str());
     }
   }
@@ -134,14 +120,12 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry)
 // Opens target as a drive letter ("c" or "c:"), or else as a device or
 // image path.
 std::unique_ptr<NtfsVolume<Strategy::NoCache>>
-    OpenVolume(std::wstring_view target, const VolumeOptions& options)
-{
+    OpenVolume(std::wstring_view target, const VolumeOptions& options) {
   // A lone letter, optionally followed by a colon, names a drive.
   const bool drive_letter =
       (target.size() == 1 || (target.size() == 2 && target.back() == L':')) &&
       iswalpha(target.front()) != 0;
-  if (drive_letter)
-  {
+  if (drive_letter) {
     return std::make_unique<NtfsVolume<Strategy::NoCache>>(target.front(),
                                                            options);
   }
@@ -151,51 +135,42 @@ std::unique_ptr<NtfsVolume<Strategy::NoCache>>
 }  // namespace
 
 // NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
-int wmain(int argc, wchar_t* argv[])
-{
+int wmain(int argc, wchar_t* argv[]) {
   Log::Config log_config;
   VolumeOptions volume_options;
   MftScanOptions scan_options;
   const wchar_t* target = nullptr;
 
-  for (int i = 1; i < argc; i++)
-  {
+  for (int i = 1; i < argc; i++) {
     const std::wstring_view arg(argv[i]);
-    if (arg.starts_with(Log::option_prefix_w))
-    {
-      if (!Log::ParseOption(arg, log_config))
-      {
+    if (arg.starts_with(Log::option_prefix_w)) {
+      if (!Log::ParseOption(arg, log_config)) {
         Usage();
         return -1;
       }
       continue;
     }
-    if (arg == deleted_option)
-    {
+    if (arg == deleted_option) {
       volume_options.include_deleted = true;
       continue;
     }
-    if (arg == recover_option)
-    {
+    if (arg == recover_option) {
       volume_options.recover_errors = true;
       continue;
     }
-    if (target != nullptr)
-    {
+    if (target != nullptr) {
       Usage();
       return -1;
     }
     target = argv[i];
   }
 
-  if (target == nullptr)
-  {
+  if (target == nullptr) {
     Usage();
     return -1;
   }
 
-  if (!Log::Configure(log_config))
-  {
+  if (!Log::Configure(log_config)) {
     fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
   }
 
@@ -203,17 +178,14 @@ int wmain(int argc, wchar_t* argv[])
 
   const std::unique_ptr<NtfsVolume<Strategy::NoCache>> volume =
       OpenVolume(target, volume_options);
-  if (!volume->IsVolumeOK())
-  {
+  if (!volume->IsVolumeOK()) {
     fprintf(stderr, "Cannot open %ls as an NTFS volume\n", target);
     return -1;
   }
 
-  scan_options.progress = [](ULONGLONG done, ULONGLONG total)
-  {
+  scan_options.progress = [](ULONGLONG done, ULONGLONG total) {
     fprintf(stderr, "\rScanning $MFT: %llu / %llu", done, total);
-    if (done == total)
-    {
+    if (done == total) {
       fprintf(stderr, "\n");
     }
     return true;
@@ -223,8 +195,7 @@ int wmain(int argc, wchar_t* argv[])
 
   printf("%10s %5s %-3s %14s %-16s %-6s %2s %s\n", "Record", "Seq", "", "Size",
          "Last write", "Attrib", "Ln", "Path");
-  for (const MftEntry& entry : tree.Entries())
-  {
+  for (const MftEntry& entry : tree.Entries()) {
     PrintEntry(tree, entry);
   }
 

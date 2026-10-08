@@ -2,11 +2,9 @@
 
 #include <cstdint>
 
-namespace NtfsBrowser::Enum
-{
+namespace NtfsBrowser::Enum {
 
-enum class MftIdx : std::uint8_t
-{
+enum class MftIdx : std::uint8_t {
   // MFT Indexes
   Mft = 0,
   MftMirr = 1,
@@ -26,4 +24,5 @@ enum class MftIdx : std::uint8_t
   Reserved15 = 15,
   User = 16
 };
+
 }  // namespace NtfsBrowser::Enum

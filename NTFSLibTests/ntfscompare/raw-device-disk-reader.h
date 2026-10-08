@@ -8,15 +8,13 @@
 
   #include <ntfs-browser/disk-reader.h>
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
 // Production IDiskReader for Linux: opens a raw block device node (eg.
 // "/dev/sdb1") read-only and reads it with pread(). A partition's own device
 // node already exposes offsets relative to the partition's start, so unlike
 // a whole-disk image file, no separate offsetting is needed.
-class RawDeviceDiskReader : public NtfsBrowser::IDiskReader
-{
+class RawDeviceDiskReader : public NtfsBrowser::IDiskReader {
  public:
   RawDeviceDiskReader() = default;
   RawDeviceDiskReader(const RawDeviceDiskReader&) = delete;

@@ -62,8 +62,7 @@ using ArgChar = wchar_t;
 using ArgChar = char;
 #endif
 
-namespace
-{
+namespace {
 
 #ifdef _WIN32
 constexpr std::wstring_view log_prefix = Log::option_prefix_w;
@@ -71,8 +70,7 @@ constexpr std::wstring_view log_prefix = Log::option_prefix_w;
 constexpr std::string_view log_prefix = Log::option_prefix;
 #endif
 
-void Usage(const ArgChar* program)
-{
+void Usage(const ArgChar* program) {
   PrintErr("usage: {} [--log=...] <folder>\n", NativeText(program));
   PrintErr("  {}\n", Log::option_usage);
   PrintErr(
@@ -81,49 +79,41 @@ void Usage(const ArgChar* program)
       "NtfsVolume<NoCache> and MftTree.\n");
 }
 
-int Run(int argc, ArgChar** argv)
-{
+int Run(int argc, ArgChar** argv) {
   Log::Config log_config;
   const std::span<ArgChar*> args(argv, gsl::narrow<size_t>(argc));
   const ArgChar* target_arg = nullptr;
 
-  for (size_t i = 1; i < args.size(); i++)
-  {
+  for (size_t i = 1; i < args.size(); i++) {
     // i < args.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const ArgChar* const arg = args[i];
-    if (std::basic_string_view<ArgChar>(arg).starts_with(log_prefix))
-    {
-      if (!Log::ParseOption(arg, log_config))
-      {
+    if (std::basic_string_view<ArgChar>(arg).starts_with(log_prefix)) {
+      if (!Log::ParseOption(arg, log_config)) {
         Usage(args.front());
         return 1;
       }
       continue;
     }
-    if (target_arg != nullptr)
-    {
+    if (target_arg != nullptr) {
       Usage(args.front());
       return 1;
     }
     target_arg = arg;
   }
 
-  if (target_arg == nullptr)
-  {
+  if (target_arg == nullptr) {
     Usage(args.front());
     return 1;
   }
 
-  if (!Log::Configure(log_config))
-  {
+  if (!Log::Configure(log_config)) {
     PrintErr("Cannot open log file {}\n", NativeText(log_config.file_path));
   }
 
   const std::filesystem::path target(target_arg);
   std::error_code error_code;
-  if (!std::filesystem::is_directory(target, error_code))
-  {
+  if (!std::filesystem::is_directory(target, error_code)) {
     PrintErr("{} is not a directory\n", NativeText(target_arg));
     return 1;
   }
@@ -137,8 +127,7 @@ int Run(int argc, ArgChar** argv)
   // changed in between (eg. AccessTimeUtc) would show up as a false
   // MISMATCH.
   const std::optional<VolumeHandles> volume = OpenVolumeFor(target);
-  if (!volume)
-  {
+  if (!volume) {
     PrintErr(
         "Cannot open the underlying NTFS volume: the comparison "
         "needs the three NtfsBrowser-based listings as its "
@@ -153,15 +142,13 @@ int Run(int argc, ArgChar** argv)
       ResolveDirectoryRecord(*volume->full_cache, volume->relative_path);
   const std::optional<ULONGLONG> no_cache_record =
       ResolveDirectoryRecord(*volume->no_cache, volume->relative_path);
-  if (!full_cache_record || !no_cache_record)
-  {
+  if (!full_cache_record || !no_cache_record) {
     PrintErr("Cannot resolve {} within its NTFS volume\n",
              NativeText(target_arg));
     return 1;
   }
 
-  PrintErr("Listing {} via NtfsVolume<FullCache>...\n",
-           NativeText(target_arg));
+  PrintErr("Listing {} via NtfsVolume<FullCache>...\n", NativeText(target_arg));
   const Listing full_cache_listing =
       WalkLibraryIndex(*volume->full_cache, *full_cache_record);
 
@@ -173,11 +160,9 @@ int Run(int argc, ArgChar** argv)
       "Scanning the whole $MFT for MftTree (this can take a "
       "while on a large volume)...\n");
   MftScanOptions scan_options;
-  scan_options.progress = [](ULONGLONG done, ULONGLONG total)
-  {
+  scan_options.progress = [](ULONGLONG done, ULONGLONG total) {
     PrintErr("\r$MFT: {} / {}", done, total);
-    if (done == total)
-    {
+    if (done == total) {
       PrintErr("\n");
     }
     return true;
@@ -206,14 +191,10 @@ int Run(int argc, ArgChar** argv)
 // Keeps any exception from escaping main(). PrintErr itself could throw only
 // on a broken stderr, which nothing can report.
 // NOLINTNEXTLINE(bugprone-exception-escape)
-int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[])
-{
-  try
-  {
+int NTFSCOMPARE_MAIN(int argc, ArgChar* argv[]) {
+  try {
     return Run(argc, argv);
-  }
-  catch (...)
-  {
+  } catch (...) {
     PrintErr("Unhandled exception\n");
     return 1;
   }

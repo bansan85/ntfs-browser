@@ -5,7 +5,6 @@
 TEST_CASE(
     "MftSegmentReference is 8 bytes, matching the real on-disk base file "
     "reference field",
-    "[attr-list][regression]")
-{
+    "[attr-list][regression]") {
   CHECK(sizeof(NtfsBrowser::Attr::MftSegmentReference) == 8);
 }

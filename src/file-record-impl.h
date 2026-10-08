@@ -20,11 +20,11 @@
 #include "attr-slot.h"
 #include "data/file-record-header.h"
 
-namespace NtfsBrowser
-{
-namespace Efs
-{
+namespace NtfsBrowser {
+namespace Efs {
+
 struct WrappedFek;
+
 }  // namespace Efs
 
 template <Strategy S>
@@ -36,8 +36,7 @@ class IndexEntryView;
 // private methods that work on them. Friends of FileRecord<S> (AttrList,
 // NtfsVolume) reach it through FileRecord<S>::impl_.
 template <Strategy S>
-class FileRecord<S>::Impl
-{
+class FileRecord<S>::Impl {
  public:
   Impl(FileRecord<S>& self, const NtfsVolume<S>& volume) noexcept;
 

@@ -10,8 +10,7 @@
 #include "../internal-export.h"
 #include "efs/fek.h"
 
-namespace NtfsBrowser::Efs
-{
+namespace NtfsBrowser::Efs {
 
 // EFS encrypts each 512-byte sector on its own, whatever the sector size of
 // the volume is.
@@ -30,29 +29,26 @@ inline constexpr unsigned bits_per_byte = 8;
 // the sum of one of these constants and the byte offset of the sector in the
 // stream. Read off a real AES-256 file. The second matches the constant
 // published for EFS.
-inline constexpr ULONGLONG iv_word0 = 0x5816657be9161312ULL;
-inline constexpr ULONGLONG iv_word1 = 0x1989adbe44918961ULL;
+inline constexpr ULONGLONG iv_word0 = 0x5816657BE9161312ULL;
+inline constexpr ULONGLONG iv_word1 = 0x1989ADBE44918961ULL;
 
 // The 8-byte CBC IV of a DES, 3DES or DESX sector is one little-endian word,
 // again plus the sector's byte offset. It is not the first AES word. The
 // value is the one ntfs-3g uses (ntfsprogs/ntfsdecrypt.c).
-inline constexpr ULONGLONG des_iv_word = 0x169119629891ad13ULL;
+inline constexpr ULONGLONG des_iv_word = 0x169119629891AD13ULL;
 
 // Builds the CBC IV of the sector that starts at byte offset "offset" of the
 // stream. "blockSize" is the cipher block size: des_block_size picks the DES
 // word, anything else the two AES words. Only the first blockSize bytes are
 // meaningful to the caller.
 [[nodiscard]] inline std::array<BYTE, max_block_size>
-    MakeSectorIv(ULONGLONG offset, size_t block_size) noexcept
-{
+    MakeSectorIv(ULONGLONG offset, size_t block_size) noexcept {
   std::array<BYTE, max_block_size> initialization_vector{};
   const std::array<ULONGLONG, 2> words{
       (block_size == des_block_size ? des_iv_word : iv_word0) + offset,
       iv_word1 + offset};
-  for (size_t word_index = 0; word_index < words.size(); ++word_index)
-  {
-    for (size_t byte_index = 0; byte_index < sizeof(ULONGLONG); ++byte_index)
-    {
+  for (size_t word_index = 0; word_index < words.size(); ++word_index) {
+    for (size_t byte_index = 0; byte_index < sizeof(ULONGLONG); ++byte_index) {
       // w < 2 and b < 8, so the index stays below 16 = iv.size().
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       initialization_vector[(word_index * sizeof(ULONGLONG)) + byte_index] =
@@ -65,14 +61,13 @@ inline constexpr ULONGLONG des_iv_word = 0x169119629891ad13ULL;
 }
 
 // Decrypts EFS data one sector at a time. One instance holds one key.
-class SectorDecryptor
-{
+class SectorDecryptor {
  public:
   SectorDecryptor() = default;
   SectorDecryptor(SectorDecryptor&& other) noexcept = delete;
-  SectorDecryptor(SectorDecryptor const& other) = delete;
+  SectorDecryptor(const SectorDecryptor& other) = delete;
   SectorDecryptor& operator=(SectorDecryptor&& other) noexcept = delete;
-  SectorDecryptor& operator=(SectorDecryptor const& other) = delete;
+  SectorDecryptor& operator=(const SectorDecryptor& other) = delete;
   virtual ~SectorDecryptor() = default;
 
   // Decrypts, in place, the sector_size bytes of one sector. "offset" is the

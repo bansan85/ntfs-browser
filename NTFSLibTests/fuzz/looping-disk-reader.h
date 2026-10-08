@@ -11,15 +11,13 @@
 
 #include <ntfs-browser/disk-reader.h>
 
-namespace NtfsFuzz
-{
+namespace NtfsFuzz {
 
 // A fake IDiskReader backed by a whole file in memory (the AFL testcase).
 // ReadInto() wraps back to the start of the buffer past the end, instead
 // of failing, so parsing can go arbitrarily deep off a small input.
 // It borrows the buffer, which MUST outlive the reader.
-class LoopingDiskReader : public NtfsBrowser::IDiskReader
-{
+class LoopingDiskReader : public NtfsBrowser::IDiskReader {
  public:
   // Empty on a zero-length or unreadable file.
   [[nodiscard]] static std::optional<std::vector<BYTE>>

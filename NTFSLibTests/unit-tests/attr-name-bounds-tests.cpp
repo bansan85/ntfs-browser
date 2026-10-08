@@ -26,12 +26,11 @@ TEMPLATE_TEST_CASE_SIG(
     "GetAttrName rejects a name whose offset/length exceed the attribute's "
     "total_size, when recovering",
     "[attr-base][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize());
 
-  NtfsVolume<S> const volume(std::move(reader),
+  const NtfsVolume<S> volume(std::move(reader),
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
@@ -52,12 +51,11 @@ TEMPLATE_TEST_CASE_SIG(
     "A masked-in attribute name exceeding total_size rejects the whole "
     "record by default",
     "[attr-base][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);

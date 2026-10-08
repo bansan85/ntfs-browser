@@ -8,21 +8,19 @@
 
 #include "partition-disk-reader.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 class IDiskReader;
+
 }  // namespace NtfsBrowser
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // Bits in a DWORD: where a FILETIME's high half starts.
 constexpr unsigned dword_bits = 32;
 
-void RequireCorpusImage(const std::filesystem::path& image)
-{
-  if (std::filesystem::exists(image))
-  {
+void RequireCorpusImage(const std::filesystem::path& image) {
+  if (std::filesystem::exists(image)) {
     return;
   }
 #ifdef NTFS_TEST_REQUIRE_DATA
@@ -33,21 +31,19 @@ void RequireCorpusImage(const std::filesystem::path& image)
 }
 
 std::unique_ptr<NtfsBrowser::IDiskReader>
-    OpenBareVolumeImage(const std::filesystem::path& image_path)
-{
+    OpenBareVolumeImage(const std::filesystem::path& image_path) {
   auto reader = std::make_unique<PartitionDiskReader>(0);
   REQUIRE(reader->Open(image_path.wstring()));
   return reader;
 }
 
-ULONGLONG FileTimeToTicks(const FILETIME& file_time) noexcept
-{
+ULONGLONG FileTimeToTicks(const FILETIME& file_time) noexcept {
   return (static_cast<ULONGLONG>(file_time.dwHighDateTime) << dword_bits) |
          file_time.dwLowDateTime;
 }
 
-std::tuple<WORD, WORD, WORD> FileTimeToDate(const FILETIME& file_time) noexcept
-{
+std::tuple<WORD, WORD, WORD>
+    FileTimeToDate(const FILETIME& file_time) noexcept {
   // 100 ns ticks per second, and the number of days FILETIME's 1601-01-01
   // epoch precedes civil_from_days()'s 1970-01-01 one (also the seconds
   // Win32 FILETIME<->time_t conversions use: 11644473600 / 86400 = 134774).

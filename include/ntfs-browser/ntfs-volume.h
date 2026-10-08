@@ -20,15 +20,13 @@
   #include <tchar.h>
 #endif
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 template <Strategy S>
 class FileRecord;
 
 template <Strategy S>
-class NTFS_BROWSER_EXPORT NtfsVolume
-{
+class NTFS_BROWSER_EXPORT NtfsVolume {
  public:
 #ifdef _WIN32
   // Opens a real disk/device by drive letter, or an arbitrary device/image
@@ -45,9 +43,9 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   explicit NtfsVolume(std::unique_ptr<IDiskReader> reader,
                       const VolumeOptions& options = {});
   NtfsVolume(NtfsVolume&& other) noexcept = delete;
-  NtfsVolume(NtfsVolume const& other) = delete;
+  NtfsVolume(const NtfsVolume& other) = delete;
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
-  NtfsVolume& operator=(NtfsVolume const& other) = delete;
+  NtfsVolume& operator=(const NtfsVolume& other) = delete;
   virtual ~NtfsVolume();
 
   friend class FileRecord<S>;
@@ -107,4 +105,5 @@ class NTFS_BROWSER_EXPORT NtfsVolume
   // backend the build compiled in; CryptoPp if both are.
   [[nodiscard]] Efs::CipherBackend GetEfsCipherBackend() const noexcept;
 };  // NtfsVolume
+
 }  // namespace NtfsBrowser

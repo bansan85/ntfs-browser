@@ -11,20 +11,18 @@
 #include "attr/filename.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 template <Strategy S>
 class FileRecord;
 
 template <typename Resident, Strategy S>
 AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
                                         const FileRecord<S>& file_record)
-    : Resident(ahc, file_record)
-{
+    : Resident(ahc, file_record) {
   LogTrace("Attribute: File Name");
 
-  if (this->GetDataSize() < offsetof(Attr::Filename, name))
-  {
+  if (this->GetDataSize() < offsetof(Attr::Filename, name)) {
     throw std::runtime_error("File Name attribute smaller than expected.\n");
   }
 
@@ -33,8 +31,7 @@ AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
   // Attribute size MUST cover fixed header and name data.
   if (this->GetDataSize() <
       offsetof(Attr::Filename, name) +
-          (static_cast<ULONGLONG>(filename.name_length) * sizeof(WORD)))
-  {
+          (static_cast<ULONGLONG>(filename.name_length) * sizeof(WORD))) {
     throw std::runtime_error(
         "File Name attribute name exceeds attribute bounds.\n");
   }
@@ -43,8 +40,7 @@ AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
 }
 
 template <typename Resident, Strategy S>
-AttrFileName<Resident, S>::~AttrFileName()
-{
+AttrFileName<Resident, S>::~AttrFileName() {
   LogTrace("AttrFileName deleted");
 }
 

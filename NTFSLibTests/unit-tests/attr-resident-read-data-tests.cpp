@@ -26,8 +26,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // Fills the read buffer so untouched bytes stay recognizable.
 constexpr BYTE sentinel_byte = 0xCC;
@@ -36,12 +35,11 @@ constexpr BYTE sentinel_byte = 0xCC;
 constexpr size_t buffer_size_value = 8;
 
 template <Strategy S>
-void CheckReadDataReturnsActualByteCount()
-{
+void CheckReadDataReturnsActualByteCount() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSmallResidentData());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -68,8 +66,7 @@ void CheckReadDataReturnsActualByteCount()
 
   // Bytes past the attribute's real size must remain untouched sentinels.
   for (size_t i = NtfsBrowserTests::small_resident_data_content.size();
-       i < buffer.size(); i++)
-  {
+       i < buffer.size(); i++) {
     // i < buffer.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(buffer[i] == sentinel_byte);
@@ -82,7 +79,6 @@ TEMPLATE_TEST_CASE_SIG(
     "AttrResident::ReadData returns the actual bytes copied, not the "
     "requested buffer size",
     "[attr-resident][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckReadDataReturnsActualByteCount<S>();
 }

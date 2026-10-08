@@ -19,10 +19,11 @@
 #include "memory-disk-reader.h"
 #include "named-stream-probe.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 template <Strategy S>
 class AttrBase;
+
 }  // namespace NtfsBrowser
 
 using NtfsBrowser::AttrBase;
@@ -31,16 +32,14 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 template <Strategy S>
-void CheckFindStreamReturnsNamedStream()
-{
+void CheckFindStreamReturnsNamedStream() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithNamedDataStream());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -74,7 +73,6 @@ void CheckFindStreamReturnsNamedStream()
 
 TEMPLATE_TEST_CASE_SIG("FindStream returns a named stream (ADS) by name",
                        "[file-record][regression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache)
-{
+                       Strategy::NoCache, Strategy::FullCache) {
   CheckFindStreamReturnsNamedStream<S>();
 }

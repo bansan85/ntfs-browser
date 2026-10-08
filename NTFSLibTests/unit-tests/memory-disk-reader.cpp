@@ -9,19 +9,14 @@
 #include <span>
 #include <utility>
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 MemoryDiskReader::MemoryDiskReader(std::vector<BYTE> data)
-    : data_(std::move(data))
-{
-}
+    : data_(std::move(data)) {}
 
-bool MemoryDiskReader::Open(std::wstring_view path)
-{
+bool MemoryDiskReader::Open(std::wstring_view path) {
   std::ifstream input(std::filesystem::path(path), std::ios::binary);
-  if (!input)
-  {
+  if (!input) {
     return false;
   }
 
@@ -30,11 +25,10 @@ bool MemoryDiskReader::Open(std::wstring_view path)
   return true;
 }
 
-bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const
-{
+bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr,
+                                std::span<BYTE> dest) const {
   if (addr.QuadPart < 0 ||
-      static_cast<ULONGLONG>(addr.QuadPart) + dest.size() > data_.size())
-  {
+      static_cast<ULONGLONG>(addr.QuadPart) + dest.size() > data_.size()) {
     return false;
   }
 

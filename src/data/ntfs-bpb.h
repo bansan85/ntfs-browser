@@ -4,8 +4,7 @@
 
 #include <string_view>
 
-namespace NtfsBrowser::Data
-{
+namespace NtfsBrowser::Data {
 
 // NTFS Boot Sector BPB
 
@@ -23,8 +22,8 @@ inline constexpr size_t bpb_volume_serial_size = 8;
 inline constexpr size_t bpb_boot_code_size = 430;
 
 #pragma pack(1)
-struct NtfsBpb
-{
+
+struct NtfsBpb {
   // jump instruction
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE jmp[3];
@@ -59,10 +58,11 @@ struct NtfsBpb
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE code[bpb_boot_code_size];
 
-  //0xAA55
+  // 0xAA55
   BYTE x_aa;
   BYTE x_55;
 };
+
 #pragma pack()
 
 };  // namespace NtfsBrowser::Data

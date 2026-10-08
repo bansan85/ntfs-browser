@@ -7,15 +7,13 @@
 
 #include <ntfs-browser/disk-reader.h>
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // A real IDiskReader over a whole-disk image file (MBR plus one NTFS
 // partition), offsetting every read by partitionOffset. NtfsVolume's own
 // path-based constructor expects addr 0 to already be the volume's boot
 // sector, which a whole-disk image's byte 0 (the MBR) is not.
-class PartitionDiskReader : public NtfsBrowser::IDiskReader
-{
+class PartitionDiskReader : public NtfsBrowser::IDiskReader {
  public:
   explicit PartitionDiskReader(ULONGLONG partition_offset);
 

@@ -26,18 +26,16 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // FindSubEntry()/TraverseSubEntries() must not reach a leaf reachable only
 // by descending past the recursion depth limit.
 template <Strategy S>
-void RunIndexBlockChainDepthIsBounded()
-{
+void RunIndexBlockChainDepthIsBounded() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithDeepIndexBlockChain());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -46,18 +44,19 @@ void RunIndexBlockChainDepthIsBounded()
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(root.ParseAttrs());
 
-  SECTION("FindSubEntry")
-  {
+  SECTION("FindSubEntry") {
     const std::optional<IndexEntry> found =
         root.FindSubEntry(NtfsBrowserTests::index_block_chain_leaf_name);
     CHECK_FALSE(found.has_value());
   }
 
-  SECTION("TraverseSubEntries")
-  {
+  SECTION("TraverseSubEntries") {
     int visited = 0;
-    root.TraverseSubEntries([](const IndexEntryView&, void* context)
-                            { ++(*static_cast<int*>(context)); }, &visited);
+    root.TraverseSubEntries(
+        [](const IndexEntryView&, void* context) {
+          ++(*static_cast<int*>(context));
+        },
+        &visited);
     CHECK(visited == 0);
   }
 }
@@ -68,7 +67,6 @@ TEMPLATE_TEST_CASE_SIG(
     "A chained $INDEX_ALLOCATION deeper than the recursion depth limit is "
     "not fully descended",
     "[file-record][index-block][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunIndexBlockChainDepthIsBounded<S>();
 }

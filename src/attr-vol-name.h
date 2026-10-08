@@ -5,21 +5,20 @@
 
 #include <ntfs-browser/strategy.h>  // IWYU pragma: keep
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
 template <typename Resident, Strategy S>
-class AttrVolName : public Resident
-{
+class AttrVolName : public Resident {
  public:
   AttrVolName(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrVolName(AttrVolName&& other) noexcept = delete;
-  AttrVolName(AttrVolName const& other) = delete;
+  AttrVolName(const AttrVolName& other) = delete;
   AttrVolName& operator=(AttrVolName&& other) noexcept = delete;
-  AttrVolName& operator=(AttrVolName const& other) = delete;
+  AttrVolName& operator=(const AttrVolName& other) = delete;
   ~AttrVolName() override = default;
 
   template <Strategy>

@@ -8,12 +8,10 @@
 
 #include "../internal-export.h"
 
-namespace NtfsBrowser::Efs
-{
+namespace NtfsBrowser::Efs {
 
 // One user's copy of the FEK, as the $EFS stream stores it.
-struct WrappedFek
-{
+struct WrappedFek {
   std::vector<BYTE> thumbprint;   // SHA-1 hash of the user's certificate
   std::vector<BYTE> wrapped_fek;  // the FEK, RSA-encrypted, little-endian
 };

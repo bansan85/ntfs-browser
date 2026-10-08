@@ -6,11 +6,10 @@
 
 #include "ntfs-common.h"
 
-namespace NtfsBrowser::Efs
-{
+namespace NtfsBrowser::Efs {
 
-namespace
-{
+namespace {
+
 // Offsets of the DDF and DRF offset fields in the $EFS header. Zero means
 // the field is absent.
 constexpr size_t ddf_offset_field = 0x40;
@@ -51,17 +50,14 @@ constexpr size_t max_wrapped_fek_size = 1024;
 
 // Bounds-checked reads over the stream. Every accessor fails on an offset or
 // length that leaves the stream, whatever the arithmetic would wrap to.
-class Reader
-{
+class Reader {
  public:
   explicit Reader(std::span<const BYTE> bytes) noexcept : bytes_(bytes) {}
 
-  [[nodiscard]] std::optional<DWORD> Dword(ULONGLONG offset) const noexcept
-  {
+  [[nodiscard]] std::optional<DWORD> Dword(ULONGLONG offset) const noexcept {
     const std::optional<std::span<const BYTE>> slice =
         Slice(offset, sizeof(DWORD));
-    if (!slice)
-    {
+    if (!slice) {
       return std::nullopt;
     }
     DWORD value = 0;
@@ -70,10 +66,8 @@ class Reader
   }
 
   [[nodiscard]] std::optional<std::span<const BYTE>>
-      Slice(ULONGLONG offset, ULONGLONG length) const noexcept
-  {
-    if (offset > bytes_.size() || length > bytes_.size() - offset)
-    {
+      Slice(ULONGLONG offset, ULONGLONG length) const noexcept {
+    if (offset > bytes_.size() || length > bytes_.size() - offset) {
       return std::nullopt;
     }
     return bytes_.subspan(static_cast<size_t>(offset),
@@ -88,10 +82,9 @@ class Reader
 
 // Parses the entry that starts at "entryOffset". Returns its length, so the
 // caller can step to the next one, and appends its FEK copy to "out".
-[[nodiscard]] std::optional<ULONGLONG> ParseEntry(const Reader& reader,
-                                                  ULONGLONG entry_offset,
-                                                  std::vector<WrappedFek>& out)
-{
+[[nodiscard]] std::optional<ULONGLONG>
+    ParseEntry(const Reader& reader, ULONGLONG entry_offset,
+               std::vector<WrappedFek>& out) {
   const std::optional<DWORD> length =
       reader.Dword(entry_offset + entry_length_field);
   const std::optional<DWORD> credential =
@@ -102,22 +95,19 @@ class Reader
       reader.Dword(entry_offset + entry_fek_offset_field);
   // The entry header is readable, and the entry fits in the stream.
   if (!length || !credential || !fek_length || !fek_offset ||
-      *length < entry_min_size || !reader.Slice(entry_offset, *length))
-  {
+      *length < entry_min_size || !reader.Slice(entry_offset, *length)) {
     return std::nullopt;
   }
 
   const ULONGLONG credential_start = entry_offset + *credential;
   const std::optional<DWORD> hash_offset =
       reader.Dword(credential_start + credential_hash_field);
-  if (!hash_offset)
-  {
+  if (!hash_offset) {
     return std::nullopt;
   }
 
   const ULONGLONG hash_start = credential_start + *hash_offset;
-  if (!reader.Slice(hash_start, hash_record_min_size))
-  {
+  if (!reader.Slice(hash_start, hash_record_min_size)) {
     return std::nullopt;
   }
   const std::optional<DWORD> thumbprint_offset =
@@ -128,16 +118,14 @@ class Reader
   // FEK has a plausible size.
   if (!thumbprint_offset || !thumbprint_size ||
       *thumbprint_size != thumbprint_size_value || *fek_length == 0 ||
-      *fek_length > max_wrapped_fek_size)
-  {
+      *fek_length > max_wrapped_fek_size) {
     return std::nullopt;
   }
 
   const auto thumbprint =
       reader.Slice(hash_start + *thumbprint_offset, thumbprint_size_value);
   const auto fek = reader.Slice(entry_offset + *fek_offset, *fek_length);
-  if (!thumbprint || !fek)
-  {
+  if (!thumbprint || !fek) {
     return std::nullopt;
   }
 
@@ -148,48 +136,41 @@ class Reader
 
 // Parses the field that starts at "fieldOffset", if the header names one.
 [[nodiscard]] bool ParseField(const Reader& reader, size_t offset_field_pos,
-                              std::vector<WrappedFek>& out)
-{
+                              std::vector<WrappedFek>& out) {
   const std::optional<DWORD> field_offset = reader.Dword(offset_field_pos);
-  if (!field_offset)
-  {
+  if (!field_offset) {
     return false;
   }
-  if (*field_offset == 0)
-  {
+  if (*field_offset == 0) {
     return true;
   }
 
   const std::optional<DWORD> count = reader.Dword(*field_offset);
-  if (!count || *count > max_entries)
-  {
+  if (!count || *count > max_entries) {
     return false;
   }
 
   ULONGLONG entry_offset = static_cast<ULONGLONG>(*field_offset) + count_size;
-  for (DWORD i = 0; i < *count; ++i)
-  {
+  for (DWORD i = 0; i < *count; ++i) {
     const std::optional<ULONGLONG> length =
         ParseEntry(reader, entry_offset, out);
-    if (!length)
-    {
+    if (!length) {
       return false;
     }
     entry_offset += *length;
   }
   return true;
 }
+
 }  // namespace
 
 std::optional<std::vector<WrappedFek>>
-    ParseEfsStream(std::span<const BYTE> stream)
-{
+    ParseEfsStream(std::span<const BYTE> stream) {
   const Reader reader(stream);
   std::vector<WrappedFek> entries;
   if (reader.Size() < header_size ||
       !ParseField(reader, ddf_offset_field, entries) ||
-      !ParseField(reader, drf_offset_field, entries))
-  {
+      !ParseField(reader, drf_offset_field, entries)) {
     LogWarn("Malformed $EFS stream.");
     return std::nullopt;
   }

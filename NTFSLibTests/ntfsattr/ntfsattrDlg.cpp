@@ -25,15 +25,11 @@ using namespace NtfsBrowser;
 static char THIS_FILE[] = __FILE__;
 #endif
 
-class CAboutDlg : public CDialog
-{
+class CAboutDlg : public CDialog {
  public:
   CAboutDlg();
 
-  enum
-  {
-    IDD = IDD_ABOUTBOX
-  };
+  enum { IDD = IDD_ABOUTBOX };
 
  protected:
   void DoDataExchange(CDataExchange* pDX) override;
@@ -44,8 +40,7 @@ class CAboutDlg : public CDialog
 
 CAboutDlg::CAboutDlg() : CDialog(CAboutDlg::IDD) {}
 
-void CAboutDlg::DoDataExchange(CDataExchange* pDX)
-{
+void CAboutDlg::DoDataExchange(CDataExchange* pDX) {
   CDialog::DoDataExchange(pDX);
 }
 
@@ -58,12 +53,9 @@ CNtfsattrDlg::CNtfsattrDlg(CWnd* pParent /*=nullptr*/)
       m_dump(_T("")),
       m_dir(FALSE),
       // Note that LoadIcon does not require a subsequent DestroyIcon in Win32
-      m_hIcon(AfxGetApp()->LoadIcon(IDR_MAINFRAME))
-{
-}
+      m_hIcon(AfxGetApp()->LoadIcon(IDR_MAINFRAME)) {}
 
-void CNtfsattrDlg::DoDataExchange(CDataExchange* pDX)
-{
+void CNtfsattrDlg::DoDataExchange(CDataExchange* pDX) {
   CDialog::DoDataExchange(pDX);
   DDX_Text(pDX, IDC_FILENAME, m_filename);
   DDX_Text(pDX, IDE_DUMP, m_dump);
@@ -76,8 +68,7 @@ ON_WM_PAINT()
 ON_WM_QUERYDRAGICON()
 END_MESSAGE_MAP()
 
-BOOL CNtfsattrDlg::OnInitDialog()
-{
+BOOL CNtfsattrDlg::OnInitDialog() {
   CDialog::OnInitDialog();
 
   // Add "About..." menu item to system menu.
@@ -87,12 +78,10 @@ BOOL CNtfsattrDlg::OnInitDialog()
   ASSERT(IDM_ABOUTBOX < 0xF000);
 
   CMenu* pSysMenu = GetSystemMenu(FALSE);
-  if (pSysMenu != nullptr)
-  {
+  if (pSysMenu != nullptr) {
     CString strAboutMenu;
     strAboutMenu.LoadString(IDS_ABOUTBOX);
-    if (!strAboutMenu.IsEmpty())
-    {
+    if (!strAboutMenu.IsEmpty()) {
       pSysMenu->AppendMenu(MF_SEPARATOR);
       pSysMenu->AppendMenu(MF_STRING, IDM_ABOUTBOX, strAboutMenu);
     }
@@ -106,15 +95,11 @@ BOOL CNtfsattrDlg::OnInitDialog()
   return TRUE;  // return TRUE  unless you set the focus to a control
 }
 
-void CNtfsattrDlg::OnSysCommand(UINT nID, LPARAM lParam)
-{
-  if ((nID & 0xFFF0U) == IDM_ABOUTBOX)
-  {
+void CNtfsattrDlg::OnSysCommand(UINT nID, LPARAM lParam) {
+  if ((nID & 0xFFF0U) == IDM_ABOUTBOX) {
     CAboutDlg dlgAbout;
     dlgAbout.DoModal();
-  }
-  else
-  {
+  } else {
     CDialog::OnSysCommand(nID, lParam);
   }
 }
@@ -123,10 +108,8 @@ void CNtfsattrDlg::OnSysCommand(UINT nID, LPARAM lParam)
 //  to draw the icon.  For MFC applications using the document/view model,
 //  this is automatically done for you by the framework.
 
-void CNtfsattrDlg::OnPaint()
-{
-  if (IsIconic() != 0)
-  {
+void CNtfsattrDlg::OnPaint() {
+  if (IsIconic() != 0) {
     CPaintDC dc(this);  // device context for painting
 
     SendMessage(WM_ICONERASEBKGND, reinterpret_cast<WPARAM>(dc.GetSafeHdc()),
@@ -142,17 +125,14 @@ void CNtfsattrDlg::OnPaint()
 
     // Draw the icon
     dc.DrawIcon(x, y, m_hIcon);
-  }
-  else
-  {
+  } else {
     CDialog::OnPaint();
   }
 }
 
 // The system calls this to obtain the cursor to display while the user drags
 //  the minimized window.
-HCURSOR CNtfsattrDlg::OnQueryDragIcon()
-{
+HCURSOR CNtfsattrDlg::OnQueryDragIcon() {
   return static_cast<HCURSOR>(m_hIcon);
 }
 
@@ -179,16 +159,14 @@ const std::array<const _TCHAR*, kAttrNameCount> AttrNames = {
     _T("LOGGED_UTILITY_STREAM")};
 
 // ugly but work !
-void AppendData(CString& lines, const BYTE* data, DWORD datalen)
-{
+void AppendData(CString& lines, const BYTE* data, DWORD datalen) {
   // "01 02 03 04 05 06 07 08 - 09 0A 0B 0C 0D 0E 0F   123456789ABCDEF";
 
   CString line;
   DWORD i;
 
   std::array<BYTE, 16> p;
-  for (i = 0; i < ((datalen - 1U) >> 4); i++)
-  {
+  for (i = 0; i < ((datalen - 1U) >> 4); i++) {
     memcpy(p.data(), data + static_cast<size_t>(i) * 16, 16);
 
     line.Format(
@@ -196,10 +174,8 @@ void AppendData(CString& lines, const BYTE* data, DWORD datalen)
         _T("%02X %02X %02X %02X   "),
         p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10],
         p[11], p[12], p[13], p[14], p[15]);
-    for (int j = 0; j < 16; j++)
-    {
-      if (p[j] < 0x20)
-      {
+    for (int j = 0; j < 16; j++) {
+      if (p[j] < 0x20) {
         p[j] = '.';
       }
     }
@@ -221,10 +197,8 @@ void AppendData(CString& lines, const BYTE* data, DWORD datalen)
       q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11],
       q[12], q[13], q[14], q[15]);
 
-  for (int j = 0; j < 16; j++)
-  {
-    if (q[j] < 0x20)
-    {
+  for (int j = 0; j < 16; j++) {
+    if (q[j] < 0x20) {
       q[j] = '.';
     }
   }
@@ -237,16 +211,14 @@ void AppendData(CString& lines, const BYTE* data, DWORD datalen)
 }
 
 template <Strategy S>
-void PrintAttr(const AttrBase<S>& attr, void* context, bool* /* stop*/)
-{
+void PrintAttr(const AttrBase<S>& attr, void* context, bool* /* stop*/) {
   CString* dump = static_cast<CString*>(context);
 
   CString line = _T("\r\n");
   line += AttrNames[(static_cast<DWORD>(attr.GetAttrType()) >> 4U) - 1];
 
   std::wstring_view attrname = attr.GetAttrName();
-  if (!attrname.empty())
-  {
+  if (!attrname.empty()) {
     line += '(';
     line += CString(attrname.data(), gsl::narrow<int>(attrname.size()));
     line += ')';
@@ -259,19 +231,16 @@ void PrintAttr(const AttrBase<S>& attr, void* context, bool* /* stop*/)
   *dump += line;
 }
 
-void CNtfsattrDlg::OnOK()
-{
+void CNtfsattrDlg::OnOK() {
   CFileDialog fd(TRUE);
 
-  if (fd.DoModal() != IDOK)
-  {
+  if (fd.DoModal() != IDOK) {
     return;
   }
 
   UpdateData(TRUE);
   m_filename = fd.GetPathName();
-  if (m_dir == TRUE)
-  {
+  if (m_dir == TRUE) {
     m_filename = m_filename.Left(m_filename.ReverseFind(_T('\\')));
   }
   UpdateData(FALSE);
@@ -283,8 +252,7 @@ void CNtfsattrDlg::OnOK()
   const _TCHAR volname = m_filename.GetAt(0);
 
   NtfsVolume<Strategy::FullCache> volume(volname);
-  if (!volume.IsVolumeOK())
-  {
+  if (!volume.IsVolumeOK()) {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
     return;
   }
@@ -296,14 +264,12 @@ void CNtfsattrDlg::OnOK()
   // don't waste time and ram to parse unwanted attributes
   fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root)))
-  {
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
     MessageBox(_T("Cannot read root directory of volume"));
     return;
   }
 
-  if (!fr.ParseAttrs())
-  {
+  if (!fr.ParseAttrs()) {
     MessageBox(_T("Cannot parse attributes"));
     return;
   }
@@ -312,26 +278,22 @@ void CNtfsattrDlg::OnOK()
 
   int dirs = m_filename.Find(_T('\\'), 0);
   int dire = m_filename.Find(_T('\\'), dirs + 1);
-  while (dire != -1)
-  {
+  while (dire != -1) {
     CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
 
     std::optional<IndexEntry> ie =
         fr.FindSubEntry(static_cast<const _TCHAR*>(pathname));
-    if (!ie)
-    {
+    if (!ie) {
       MessageBox(_T("File not found\n"));
       return;
     }
 
-    if (!fr.ParseFileRecord(ie->GetFileReference()))
-    {
+    if (!fr.ParseFileRecord(ie->GetFileReference())) {
       MessageBox(_T("Cannot read root directory of volume"));
       return;
     }
 
-    if (!fr.ParseAttrs())
-    {
+    if (!fr.ParseAttrs()) {
       MessageBox(_T("Cannot parse directory attributes"));
       return;
     }
@@ -345,29 +307,25 @@ void CNtfsattrDlg::OnOK()
   CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
 
   // root directory
-  if (filename.GetLength() == 2 && (filename.Find(_T(':'), 0) != -1))
-  {
+  if (filename.GetLength() == 2 && (filename.Find(_T(':'), 0) != -1)) {
     filename = _T('.');
   }
 
   std::optional<IndexEntry> ie =
       fr.FindSubEntry(static_cast<const _TCHAR*>(filename));
-  if (!ie)
-  {
+  if (!ie) {
     MessageBox(_T("File not found\n"));
     return;
   }
 
-  if (!fr.ParseFileRecord(ie->GetFileReference()))
-  {
+  if (!fr.ParseFileRecord(ie->GetFileReference())) {
     MessageBox(_T("Cannot read file"));
     return;
   }
 
   // parse all attributes
   fr.SetAttrMask(Mask::All);
-  if (!fr.ParseAttrs())
-  {
+  if (!fr.ParseAttrs()) {
     MessageBox(_T("Cannot parse file attributes"));
     return;
   }

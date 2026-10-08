@@ -2,11 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Flag
-{
+namespace NtfsBrowser::Flag {
 
-enum class Filename : DWORD
-{
+enum class Filename : DWORD {
   None = 0x00000000,
   ReadOnly = 0x00000001,
   Hidden = 0x00000002,
@@ -25,7 +23,7 @@ enum class Filename : DWORD
   IndexView = 0x20000000
 };
 
-//NOLINTNEXTLINE
+// NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Flag::Filename)
 
 }  // namespace NtfsBrowser::Flag

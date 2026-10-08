@@ -42,8 +42,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // The "ntfs-samples" forensic test image corpus, documented in that repo's
 // ReadMe.md. Each image is checked in there as a gzip/rar archive, too large
@@ -86,8 +85,7 @@ constexpr ULONGLONG large_image_partition_offset = 1048576;
 // partition's own boot sector at addr 0 instead of the image's MBR.
 std::unique_ptr<NtfsBrowser::IDiskReader>
     OpenWholeDiskImage(const std::filesystem::path& image_path,
-                       ULONGLONG partition_offset)
-{
+                       ULONGLONG partition_offset) {
   auto reader =
       std::make_unique<NtfsBrowserTests::PartitionDiskReader>(partition_offset);
   REQUIRE(reader->Open(image_path.wstring()));
@@ -96,8 +94,7 @@ std::unique_ptr<NtfsBrowser::IDiskReader>
 
 // Parses dir's own file record as the volume's root directory, ready for
 // FindSubEntry(). dir must already be constructed on that volume.
-void OpenRootDir(FileRecord<Strategy::NoCache>& dir)
-{
+void OpenRootDir(FileRecord<Strategy::NoCache>& dir) {
   dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
   REQUIRE(dir.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(dir.ParseAttrs());
@@ -105,8 +102,7 @@ void OpenRootDir(FileRecord<Strategy::NoCache>& dir)
 
 // Looks up name under dir's current directory and reparses dir in place as
 // that subdirectory.
-void OpenSubDir(FileRecord<Strategy::NoCache>& dir, std::wstring_view name)
-{
+void OpenSubDir(FileRecord<Strategy::NoCache>& dir, std::wstring_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(name);
   REQUIRE(entry.has_value());
   dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
@@ -118,11 +114,9 @@ void OpenSubDir(FileRecord<Strategy::NoCache>& dir, std::wstring_view name)
 // Navigates dir down a directory path, one component at a time, from the
 // volume root.
 void OpenDirPath(FileRecord<Strategy::NoCache>& dir,
-                 std::initializer_list<std::wstring_view> parts)
-{
+                 std::initializer_list<std::wstring_view> parts) {
   OpenRootDir(dir);
-  for (std::wstring_view const part : parts)
-  {
+  for (const std::wstring_view part : parts) {
     OpenSubDir(dir, part);
   }
 }
@@ -130,29 +124,24 @@ void OpenDirPath(FileRecord<Strategy::NoCache>& dir,
 // True if data is entirely the repeating 4-byte "PTRN" pattern these corpus
 // images were filled with before formatting, starting at whatever phase of
 // the pattern data[0] happens to land on.
-bool MatchesPtrnPattern(std::span<const BYTE> data)
-{
+bool MatchesPtrnPattern(std::span<const BYTE> data) {
   constexpr std::string_view pattern_value = "PTRN";
-  if (data.empty())
-  {
+  if (data.empty()) {
     return false;
   }
 
   // data is not empty: checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const size_t phase = pattern_value.find(static_cast<char>(data[0]));
-  if (phase == std::string_view::npos)
-  {
+  if (phase == std::string_view::npos) {
     return false;
   }
 
-  for (size_t i = 0; i < data.size(); i++)
-  {
+  for (size_t i = 0; i < data.size(); i++) {
     // i < data.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (data[i] !=
-        gsl::narrow<BYTE>(pattern_value[(phase + i) % pattern_value.size()]))
-    {
+        gsl::narrow<BYTE>(pattern_value[(phase + i) % pattern_value.size()])) {
       return false;
     }
   }
@@ -162,38 +151,32 @@ bool MatchesPtrnPattern(std::span<const BYTE> data)
 // True if data contains an uninterrupted run of at least minRunLength bytes
 // cycling through the "PTRN" pattern, starting at whatever phase that run
 // happens to land on.
-bool ContainsPtrnRun(std::span<const BYTE> data, size_t min_run_length)
-{
+bool ContainsPtrnRun(std::span<const BYTE> data, size_t min_run_length) {
   constexpr std::string_view pattern_value = "PTRN";
   size_t position = 0;
-  while (position < data.size())
-  {
+  while (position < data.size()) {
     // i < data.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const size_t phase = pattern_value.find(static_cast<char>(data[position]));
-    if (phase == std::string_view::npos)
-    {
+    if (phase == std::string_view::npos) {
       position++;
       continue;
     }
 
     size_t run_end = position;
-    while (run_end < data.size())
-    {
+    while (run_end < data.size()) {
       const auto expected = gsl::narrow<BYTE>(
           // The index is reduced modulo pattern.size().
           // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
           pattern_value[(phase + (run_end - position)) % pattern_value.size()]);
       // j < data.size() by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      if (data[run_end] != expected)
-      {
+      if (data[run_end] != expected) {
         break;
       }
       run_end++;
     }
-    if (run_end - position >= min_run_length)
-    {
+    if (run_end - position >= min_run_length) {
       return true;
     }
     position = run_end > position ? run_end : position + 1;
@@ -207,8 +190,7 @@ bool ContainsPtrnRun(std::span<const BYTE> data, size_t min_run_length)
 // Shared by ntfs-ptrn.raw, ntfs-ramslack.raw and ntfs-lastaccess.raw, all
 // filled with that pattern before formatting.
 void CheckRepairStreamsHoldPtrnPattern(
-    const NtfsVolume<Strategy::NoCache>& volume)
-{
+    const NtfsVolume<Strategy::NoCache>& volume) {
   FileRecord<Strategy::NoCache> dir(volume);
   OpenDirPath(dir, {L"$Extend", L"$RmMetadata"});
 
@@ -221,8 +203,7 @@ void CheckRepairStreamsHoldPtrnPattern(
       file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
-  for (std::wstring_view const stream_name : {L"$Corrupt", L"$Verify"})
-  {
+  for (const std::wstring_view stream_name : {L"$Corrupt", L"$Verify"}) {
     const AttrBase<Strategy::NoCache>* stream = file.FindStream(stream_name);
     REQUIRE(stream != nullptr);
 
@@ -239,8 +220,7 @@ void CheckRepairStreamsHoldPtrnPattern(
 // UTC-to-local conversion (AttrStdInfo::UTC2Local), which depends on the
 // test machine's own timezone and would otherwise make an exact wall-clock
 // comparison flaky.
-ULONGLONG TickDelta(const FILETIME& first, const FILETIME& second)
-{
+ULONGLONG TickDelta(const FILETIME& first, const FILETIME& second) {
   const ULONGLONG first_ticks = NtfsBrowserTests::FileTimeToTicks(first);
   const ULONGLONG second_ticks = NtfsBrowserTests::FileTimeToTicks(second);
   return first_ticks > second_ticks ? first_ticks - second_ticks
@@ -250,37 +230,34 @@ ULONGLONG TickDelta(const FILETIME& first, const FILETIME& second)
 // ReadMe.md documents each timestamp only to the whole second, so each one's
 // true sub-second remainder is unknown; the true delta can therefore land
 // anywhere in the open, one-second-wide margin around expectedSeconds.
-void CheckDeltaMatchesSeconds(ULONGLONG delta_ticks, ULONGLONG expected_seconds)
-{
+void CheckDeltaMatchesSeconds(ULONGLONG delta_ticks,
+                              ULONGLONG expected_seconds) {
   CHECK(delta_ticks > (expected_seconds - 1) * ticks_per_second);
   CHECK(delta_ticks < (expected_seconds + 1) * ticks_per_second);
 }
 
 // Year/month/day of ft, converted from its (local-time) FILETIME.
-std::tuple<WORD, WORD, WORD> ToDate(const FILETIME& file_time)
-{
+std::tuple<WORD, WORD, WORD> ToDate(const FILETIME& file_time) {
   return NtfsBrowserTests::FileTimeToDate(file_time);
 }
 
 }  // namespace
 
 TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
-          "[ntfs-samples][integration]")
-{
+          "[ntfs-samples][integration]") {
   NtfsBrowserTests::RequireCorpusImage(k2m_image);
 
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       OpenWholeDiskImage(k2m_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
-  CHECK(volume.GetClusterSize() == 2'097'152);
+  CHECK(volume.GetClusterSize() == 2097152);
 
   FileRecord<Strategy::NoCache> root(volume);
   OpenRootDir(root);
 
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
-      [](const IndexEntryView& index_entry, void* context)
-      {
+      [](const IndexEntryView& index_entry, void* context) {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             index_entry.GetFilename());
       },
@@ -289,11 +266,10 @@ TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
 }
 
 TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
-          "[ntfs-samples][integration][slack]")
-{
+          "[ntfs-samples][integration][slack]") {
   NtfsBrowserTests::RequireCorpusImage(ptrn_image);
 
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       OpenWholeDiskImage(ptrn_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -312,11 +288,10 @@ TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
 
 TEST_CASE(
     "Finds the RAM slack and cluster slack PTRN pattern (ntfs-ramslack.raw)",
-    "[ntfs-samples][integration][slack]")
-{
+    "[ntfs-samples][integration][slack]") {
   NtfsBrowserTests::RequireCorpusImage(ramslack_image);
 
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       OpenWholeDiskImage(ramslack_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -346,11 +321,10 @@ TEST_CASE(
 TEST_CASE(
     "STANDARD_INFORMATION and $I30 FILE_NAME disagree on /test/1.txt's last "
     "access time (ntfs-lastaccess.raw)",
-    "[ntfs-samples][integration][timestamps]")
-{
+    "[ntfs-samples][integration][timestamps]") {
   NtfsBrowserTests::RequireCorpusImage(lastaccess_image);
 
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       OpenWholeDiskImage(lastaccess_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -382,11 +356,10 @@ TEST_CASE(
 TEST_CASE(
     "STANDARD_INFORMATION, FILE_NAME and $I30 FILE_NAME each carry a "
     "different creation date for /test/test.txt (ntfs-si-vs-fn.raw)",
-    "[ntfs-samples][integration][timestamps]")
-{
+    "[ntfs-samples][integration][timestamps]") {
   NtfsBrowserTests::RequireCorpusImage(si_vs_fn_image);
 
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       OpenWholeDiskImage(si_vs_fn_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -432,10 +405,8 @@ TEST_CASE(
 TEST_CASE(
     "STANDARD_INFORMATION and $I30 FILE_NAME disagree on two files' last "
     "access time (ntfs.raw)",
-    "[ntfs-samples][integration][timestamps]")
-{
-  if (!std::filesystem::exists(ntfs_image))
-  {
+    "[ntfs-samples][integration][timestamps]") {
+  if (!std::filesystem::exists(ntfs_image)) {
     SKIP("ntfs.raw not present: " << ntfs_image.string());
   }
 
@@ -448,29 +419,28 @@ TEST_CASE(
       OpenWholeDiskImage(ntfs_image, large_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  auto const check_access_time_mismatch =
+  const auto check_access_time_mismatch =
       [&volume](std::wstring_view dir_name, std::wstring_view file_name,
-                ULONGLONG expected_delta_seconds)
-  {
-    FileRecord<Strategy::NoCache> dir(volume);
-    OpenDirPath(dir, {dir_name});
-    const std::optional<IndexEntry> entry = dir.FindSubEntry(file_name);
-    REQUIRE(entry.has_value());
+                ULONGLONG expected_delta_seconds) {
+        FileRecord<Strategy::NoCache> dir(volume);
+        OpenDirPath(dir, {dir_name});
+        const std::optional<IndexEntry> entry = dir.FindSubEntry(file_name);
+        REQUIRE(entry.has_value());
 
-    FILETIME index_access{};
-    entry->GetFileTime(nullptr, nullptr, &index_access);
+        FILETIME index_access{};
+        entry->GetFileTime(nullptr, nullptr, &index_access);
 
-    FileRecord<Strategy::NoCache> file(volume);
-    file.SetAttrMask(Mask::StandardInformation);
-    REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
-    REQUIRE(file.ParseAttrs());
+        FileRecord<Strategy::NoCache> file(volume);
+        file.SetAttrMask(Mask::StandardInformation);
+        REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
+        REQUIRE(file.ParseAttrs());
 
-    FILETIME std_info_access{};
-    file.GetFileTime(nullptr, nullptr, &std_info_access);
+        FILETIME std_info_access{};
+        file.GetFileTime(nullptr, nullptr, &std_info_access);
 
-    CheckDeltaMatchesSeconds(TickDelta(std_info_access, index_access),
-                             expected_delta_seconds);
-  };
+        CheckDeltaMatchesSeconds(TickDelta(std_info_access, index_access),
+                                 expected_delta_seconds);
+      };
 
   // ReadMe.md: 2020-07-25 12:49:21 vs. 12:35:48 - 13 min 33 s apart.
   check_access_time_mismatch(L"test_dir_2", L"file_2_1.txt",
@@ -483,15 +453,13 @@ TEST_CASE(
 TEST_CASE(
     "Resolves every file record of an extremely fragmented $MFT "
     "(ntfs_extremely_fragmented_mft.raw)",
-    "[ntfs-samples][integration][fragmented-mft]")
-{
+    "[ntfs-samples][integration][fragmented-mft]") {
   const std::filesystem::path& image = NtfsBrowserTests::FragmentedMftImage();
-  if (!std::filesystem::exists(image))
-  {
+  if (!std::filesystem::exists(image)) {
     SKIP("ntfs_extremely_fragmented_mft.raw not present: " << image.string());
   }
 
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       OpenWholeDiskImage(image, large_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
@@ -501,8 +469,7 @@ TEST_CASE(
   // run list, through NtfsVolume::ReadMftData()/mft_extents_.
   for (const ULONGLONG record_num :
        {0ULL, 15ULL, 16ULL, 17ULL, 18ULL, 19ULL, 20ULL, 21ULL, 22ULL,
-        34799617ULL, 34799618ULL, 34799619ULL})
-  {
+        34'799'617ULL, 34'799'618ULL, 34'799'619ULL}) {
     INFO("record " << record_num);
     FileRecord<Strategy::NoCache> record(volume);
     REQUIRE(record.ParseFileRecord(record_num));

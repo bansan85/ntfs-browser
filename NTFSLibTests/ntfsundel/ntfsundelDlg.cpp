@@ -26,14 +26,12 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 CNtfsundelDlg::CNtfsundelDlg(CWnd* pParent)
-    : CDialog(CNtfsundelDlg::IDD, pParent)
-{
+    : CDialog(CNtfsundelDlg::IDD, pParent) {
   m_filter = _T(".*");
   m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
 
-void CNtfsundelDlg::DoDataExchange(CDataExchange* pDX)
-{
+void CNtfsundelDlg::DoDataExchange(CDataExchange* pDX) {
   CDialog::DoDataExchange(pDX);
   DDX_Control(pDX, IDL_FILES, m_files);
   DDX_Control(pDX, IDC_DRIVER, m_driver);
@@ -49,8 +47,7 @@ ON_BN_CLICKED(IDB_RECOVER, &CNtfsundelDlg::OnRecover)
 ON_CBN_SELCHANGE(IDC_DRIVER, &CNtfsundelDlg::OnSelchangeDriver)
 END_MESSAGE_MAP()
 
-BOOL CNtfsundelDlg::OnInitDialog()
-{
+BOOL CNtfsundelDlg::OnInitDialog() {
   CDialog::OnInitDialog();
 
   SetIcon(m_hIcon, TRUE);   // Set big icon
@@ -66,13 +63,10 @@ BOOL CNtfsundelDlg::OnInitDialog()
 
   DWORD bm = 1;                             // bit mask
   const DWORD drives = GetLogicalDrives();  // available drives bitmap
-  for (size_t i = 0; i < sizeof(drives) * 8; i++)
-  {
-    if ((drives & bm) != 0)
-    {
+  for (size_t i = 0; i < sizeof(drives) * 8; i++) {
+    if ((drives & bm) != 0) {
       UINT dt = GetDriveType(&drvname[0]);
-      if (dt == DRIVE_FIXED || dt == DRIVE_REMOVABLE)
-      {
+      if (dt == DRIVE_FIXED || dt == DRIVE_REMOVABLE) {
         drvname[2] = _T('\0');
         m_driver.InsertString(-1, &drvname[0]);
         drvname[2] = _T('\\');
@@ -83,18 +77,15 @@ BOOL CNtfsundelDlg::OnInitDialog()
     bm <<= 1U;
   }
 
-  if (m_driver.GetCount() > 0)
-  {
+  if (m_driver.GetCount() > 0) {
     m_driver.SetCurSel(0);
   }
 
   return TRUE;  // return TRUE  unless you set the focus to a control
 }
 
-void CNtfsundelDlg::OnPaint()
-{
-  if (IsIconic() == TRUE)
-  {
+void CNtfsundelDlg::OnPaint() {
+  if (IsIconic() == TRUE) {
     CPaintDC dc(this);  // device context for painting
 
     SendMessage(WM_ICONERASEBKGND, reinterpret_cast<WPARAM>(dc.GetSafeHdc()),
@@ -110,27 +101,21 @@ void CNtfsundelDlg::OnPaint()
 
     // Draw the icon
     dc.DrawIcon(x, y, m_hIcon);
-  }
-  else
-  {
+  } else {
     CDialog::OnPaint();
   }
 }
 
 // The system calls this to obtain the cursor to display while the user drags
 //  the minimized window.
-HCURSOR CNtfsundelDlg::OnQueryDragIcon()
-{
+HCURSOR CNtfsundelDlg::OnQueryDragIcon() {
   return static_cast<HCURSOR>(m_hIcon);
 }
 
-bool PeekAndPump()
-{
+bool PeekAndPump() {
   MSG msg;
-  while (PeekMessage(&msg, nullptr, 0, 0, PM_NOREMOVE))
-  {
-    if (AfxGetApp()->PumpMessage() == FALSE)
-    {
+  while (PeekMessage(&msg, nullptr, 0, 0, PM_NOREMOVE)) {
+    if (AfxGetApp()->PumpMessage() == FALSE) {
       PostQuitMessage(0);
       return false;
     }
@@ -139,15 +124,13 @@ bool PeekAndPump()
   return true;
 }
 
-void CNtfsundelDlg::OnSearch()
-{
+void CNtfsundelDlg::OnSearch() {
   // Give user a chance to stop the searching loop
   static std::atomic<bool> stop = false;
 
   CString btntext;
   GetDlgItem(IDB_SEARCH)->GetWindowText(btntext);
-  if (btntext == _T("Stop"))
-  {
+  if (btntext == _T("Stop")) {
     stop = true;
     return;
   }
@@ -161,9 +144,7 @@ void CNtfsundelDlg::OnSearch()
   // default to find all deleted files
   {
     m_filter = _T(".*");
-  }
-  else
-  {
+  } else {
     m_filter.TrimLeft();
     m_filter.TrimRight();
   }
@@ -171,12 +152,10 @@ void CNtfsundelDlg::OnSearch()
   // Volume information
   CString vns;
   const int sel = m_driver.GetCurSel();
-  if (sel >= 0)
-  {
+  if (sel >= 0) {
     m_driver.GetLBText(sel, vns);
   }
-  if (vns.IsEmpty())
-  {
+  if (vns.IsEmpty()) {
     MessageBox(_T("Select a disk drive"));
     m_driver.SetFocus();
     return;
@@ -187,8 +166,7 @@ void CNtfsundelDlg::OnSearch()
   // A deleted-file finder needs to see freed records: without this, every
   // one of them would be invisible from the moment it's parsed.
   NtfsVolume<Strategy::FullCache> volume(volname, {.include_deleted = true});
-  if (!volume.IsVolumeOK())
-  {
+  if (!volume.IsVolumeOK()) {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
     return;
   }
@@ -211,12 +189,9 @@ void CNtfsundelDlg::OnSearch()
   std::set<ULONGLONG> files;
 
   std::wregex regx;
-  try
-  {
+  try {
     regx = std::wregex(static_cast<const _TCHAR*>(m_filter));
-  }
-  catch (const std::regex_error&)
-  {
+  } catch (const std::regex_error&) {
     MessageBox(_T("Invalid filter expression"));
     GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Search"));
     GetDlgItem(IDB_RECOVER)->EnableWindow(TRUE);
@@ -229,11 +204,11 @@ void CNtfsundelDlg::OnSearch()
       std::chrono::steady_clock::now();
   std::chrono::steady_clock::time_point last_pump = begin;
   for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::Mft);
-       i < volume.GetRecordsCount(); i++)
-  {
-    if (i == 500000) break;
-    if (stop)
-    {
+       i < volume.GetRecordsCount(); i++) {
+    if (i == 500000) {
+      break;
+    }
+    if (stop) {
       break;
     }
 
@@ -241,14 +216,11 @@ void CNtfsundelDlg::OnSearch()
     static constexpr ULONGLONG kPeekAndPumpCountInterval = 5000;
     // Bounds worst-case Stop-button latency.
     static constexpr std::chrono::milliseconds kPeekAndPumpTimeInterval(100);
-    if (i % kPeekAndPumpCountInterval == 0)
-    {
+    if (i % kPeekAndPumpCountInterval == 0) {
       const auto now = std::chrono::steady_clock::now();
-      if (now - last_pump >= kPeekAndPumpTimeInterval)
-      {
+      if (now - last_pump >= kPeekAndPumpTimeInterval) {
         last_pump = now;
-        if (!PeekAndPump())
-        {
+        if (!PeekAndPump()) {
           break;
         }
       }
@@ -257,31 +229,25 @@ void CNtfsundelDlg::OnSearch()
     // Only parse Standard Information and File Name attributes
     // StdInfo will always be parsed
     fr.SetAttrMask(Mask::FileName | Mask::IndexRoot | Mask::IndexAllocation);
-    if (!fr.ParseFileRecord(i))
-    {
+    if (!fr.ParseFileRecord(i)) {
       continue;
     }
-    if (!fr.ParseAttrs())
-    {
+    if (!fr.ParseAttrs()) {
       continue;
     }
 
     // Check file name
     std::wstring_view fn = fr.GetFileName();
 
-    if (fn.empty())
-    {
+    if (fn.empty()) {
       continue;
     }
 
     // Walked for id_to_parent, though not itself a candidate below.
-    if (fr.IsDirectory())
-    {
+    if (fr.IsDirectory()) {
       fr.TraverseSubEntries(
-          [&fr, &id_to_parent](const IndexEntryView& ie, void* context)
-          {
-            if (ie.GetFileReference() == *fr.GetFileReference())
-            {
+          [&fr, &id_to_parent](const IndexEntryView& ie, void* context) {
+            if (ie.GetFileReference() == *fr.GetFileReference()) {
               return;
             }
             id_to_parent.insert(
@@ -291,8 +257,7 @@ void CNtfsundelDlg::OnSearch()
     }
 
     // Only deleted records are candidates for recovery
-    if (fr.IsDeleted())
-    {
+    if (fr.IsDeleted()) {
       files.insert(*fr.GetFileReference());
     }
   }
@@ -302,22 +267,18 @@ void CNtfsundelDlg::OnSearch()
       std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
           .count();
 
-  for (auto fri : files)
-  {
+  for (auto fri : files) {
     fr.SetAttrMask(Mask::FileName);
-    if (!fr.ParseFileRecord(fri))
-    {
+    if (!fr.ParseFileRecord(fri)) {
       continue;
     }
-    if (!fr.ParseAttrs())
-    {
+    if (!fr.ParseAttrs()) {
       continue;
     }
     std::wstring_view fn = fr.GetFileName();
 
     std::wstring sw = {fn.begin(), fn.end()};
-    if (std::regex_match(sw, regx))
-    {
+    if (std::regex_match(sw, regx)) {
       // Add to list
       CString s;
       s.Format(_T("%I64u"), fri);
@@ -330,15 +291,12 @@ void CNtfsundelDlg::OnSearch()
       // Full File name
       std::wstring full_file_name = sw;
       auto id = id_to_parent.find(fri);
-      while (id != id_to_parent.end())
-      {
+      while (id != id_to_parent.end()) {
         fr.SetAttrMask(Mask::FileName);
-        if (!fr.ParseFileRecord(id->second))
-        {
+        if (!fr.ParseFileRecord(id->second)) {
           break;
         }
-        if (!fr.ParseAttrs())
-        {
+        if (!fr.ParseAttrs()) {
           break;
         }
         std::wstring fn2 = std::wstring{fr.GetFileName()};
@@ -347,8 +305,7 @@ void CNtfsundelDlg::OnSearch()
       }
       m_files.SetItemText(itm, 1, full_file_name.c_str());
       SYSTEMTIME st;
-      if (FileTimeToSystemTime(&ft, &st) == FALSE)
-      {
+      if (FileTimeToSystemTime(&ft, &st) == FALSE) {
         memset(&st, 0, sizeof(SYSTEMTIME));
       }
       s.Format(_T("%04u-%02u-%02u  %02u:%02u"), st.wYear, st.wMonth, st.wDay,
@@ -358,8 +315,7 @@ void CNtfsundelDlg::OnSearch()
       // Prevent showing too many entries, 50,000 maxiam
       count++;
       static constexpr DWORD MAX_NUMBER_FILES = 5000;
-      if (count >= MAX_NUMBER_FILES)
-      {
+      if (count >= MAX_NUMBER_FILES) {
         MessageBox(
             _T("Too many files found, only the first 50,000 will be shown"));
         break;
@@ -378,11 +334,9 @@ void CNtfsundelDlg::OnSearch()
   SetWindowText(_T("ntfsundel"));
 }
 
-void CNtfsundelDlg::OnRecover()
-{
+void CNtfsundelDlg::OnRecover() {
   POSITION pos = m_files.GetFirstSelectedItemPosition();
-  if (pos == nullptr)
-  {
+  if (pos == nullptr) {
     return;
   }
 
@@ -403,23 +357,20 @@ void CNtfsundelDlg::OnRecover()
   NtfsVolume<Strategy::NoCache> volume(volname, {.include_deleted = true});
   FileRecord fr(volume);
 
-  if (!fr.ParseFileRecord(ref))
-  {
+  if (!fr.ParseFileRecord(ref)) {
     MessageBox(_T("File Record parse error"));
     return;
   }
 
   fr.SetAttrMask(Mask::Data);
-  if (!fr.ParseAttrs())
-  {
+  if (!fr.ParseAttrs()) {
     MessageBox(_T("File Record attribute parse error"));
     return;
   }
 
   // Save as
   CFileDialog savedlg(FALSE, nullptr, static_cast<const _TCHAR*>(fn));
-  if (savedlg.DoModal() != IDOK)
-  {
+  if (savedlg.DoModal() != IDOK) {
     return;
   }
 
@@ -428,8 +379,7 @@ void CNtfsundelDlg::OnRecover()
   if ((path.GetAt(0) == volname) &&
       (MessageBox(_T("You should choose a different drive, do you want to ")
                   _T("continue anyway ?"),
-                  nullptr, MB_OKCANCEL) == IDCANCEL))
-  {
+                  nullptr, MB_OKCANCEL) == IDCANCEL)) {
     return;
   }
 
@@ -439,8 +389,7 @@ void CNtfsundelDlg::OnRecover()
       CreateFile(static_cast<const _TCHAR*>(path), GENERIC_READ | GENERIC_WRITE,
                  0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
       &CloseHandle);
-  if (hf.get() == INVALID_HANDLE_VALUE)
-  {
+  if (hf.get() == INVALID_HANDLE_VALUE) {
     MessageBox(_T("File creation failed"));
     return;
   }
@@ -448,8 +397,7 @@ void CNtfsundelDlg::OnRecover()
   // Save to disk
   // Unnamed Data attribute contains the file data
   const AttrBase<Strategy::NoCache>* data = fr.FindStream({});
-  if (data == nullptr)
-  {
+  if (data == nullptr) {
     return;
   }
 
@@ -458,26 +406,22 @@ void CNtfsundelDlg::OnRecover()
 
   // Check files with huge size (maybe something is error)
   constexpr ULONGLONG SIZE_CHECK = 100 * 1024 * 1024U;
-  if (datalen > SIZE_CHECK)
-  {
+  if (datalen > SIZE_CHECK) {
     if (MessageBox(
             _T("File size exceeds 100M, do you want to continue anyway ?"),
-            nullptr, MB_OKCANCEL) == IDCANCEL)
-    {
+            nullptr, MB_OKCANCEL) == IDCANCEL) {
       return;
     }
   }
 
   // Read 64K once
   constexpr DWORD BUFSIZE = 64 * 1024U;
-  for (ULONGLONG i = 0; i < datalen; i += BUFSIZE)
-  {
+  for (ULONGLONG i = 0; i < datalen; i += BUFSIZE) {
     std::vector<BYTE> vec;
     vec.resize(BUFSIZE, '\0');
 
     std::optional<ULONGLONG> len = data->ReadData(i, {&vec[0], BUFSIZE});
-    if (!len || (*len != BUFSIZE && *len != remain))
-    {
+    if (!len || (*len != BUFSIZE && *len != remain)) {
       MessageBox(_T("Read data error"));
       return;
     }
@@ -487,8 +431,7 @@ void CNtfsundelDlg::OnRecover()
     // A failed or partial write must not be reported as success.
     if (WriteFile(hf.get(), &vec[0], gsl::narrow<DWORD>(*len), &l, nullptr) ==
             FALSE ||
-        l != *len)
-    {
+        l != *len) {
       MessageBox(_T("Write data error"));
       return;
     }

@@ -6,8 +6,7 @@
 
 #include <ntfs-browser/export.h>
 
-namespace NtfsBrowser::Log
-{
+namespace NtfsBrowser::Log {
 
 // Severity of a message, and, for a sink, the least severe message it
 // accepts. Ordered most to least severe. off never matches a message, so
@@ -15,15 +14,7 @@ namespace NtfsBrowser::Log
 // The names carry a k prefix because <windows.h> defines ERROR and MFC
 // defines TRACE as macros, which an ERROR or TRACE enumerator would hit.
 // One byte wide: it is only ever a small tag.
-enum class Level : std::uint8_t
-{
-  Off,
-  Error,
-  Warn,
-  Info,
-  Debug,
-  Trace
-};
+enum class Level : std::uint8_t { Off, Error, Warn, Info, Debug, Trace };
 
 // Prefix of the command-line argument ParseOption() accepts.
 inline constexpr std::string_view option_prefix = "--log=";
@@ -50,8 +41,7 @@ inline constexpr std::string_view logger_name = "ntfs-browser";
 // Runtime logging configuration, one level per target. The console target
 // is split by severity: error and warn go to stderr, info and below go
 // to stdout, so a message is printed to exactly one stream.
-struct Config
-{
+struct Config {
   Level console_level = Level::Warn;
   Level file_level = Level::Off;
   // A path, not a byte string: on Windows it holds the wide characters

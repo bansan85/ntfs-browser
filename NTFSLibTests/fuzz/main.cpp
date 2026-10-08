@@ -33,8 +33,7 @@ using namespace NtfsBrowser;
 using NtfsBrowserTests::MakeGeneratorProducer;
 using NtfsBrowserTests::SequentialDiskReader;
 
-namespace
-{
+namespace {
 
 volatile bool g_stop = false;
 
@@ -43,8 +42,7 @@ volatile bool g_stop = false;
 volatile bool g_crt_failure = false;
 
 // Requests a graceful stop instead of an immediate process kill.
-BOOL WINAPI OnConsoleEvent(DWORD /*eventType*/)
-{
+BOOL WINAPI OnConsoleEvent(DWORD /*eventType*/) {
   g_stop = true;
   return TRUE;
 }
@@ -52,8 +50,7 @@ BOOL WINAPI OnConsoleEvent(DWORD /*eventType*/)
 // Debug-CRT invalid-parameter handler: without one, the CRT calls abort()
 // directly, bypassing the SEH handler around FuzzOnce() with no diagnostic.
 void OnInvalidParameter(const wchar_t* expr, const wchar_t* function,
-                        const wchar_t* file, unsigned int line, uintptr_t)
-{
+                        const wchar_t* file, unsigned int line, uintptr_t) {
   fwprintf(stderr, L"\nCRT invalid parameter: %ls in %ls (%ls:%u)\n",
            expr ? expr : L"?", function ? function : L"?", file ? file : L"?",
            line);
@@ -62,16 +59,14 @@ void OnInvalidParameter(const wchar_t* expr, const wchar_t* function,
 }
 
 // Debug-CRT pure-call handler; same rationale as OnInvalidParameter.
-void OnPureCall()
-{
+void OnPureCall() {
   fprintf(stderr, "\nPure virtual function called\n");
   fflush(stderr);
   g_crt_failure = true;
 }
 
 // Logs before letting std::terminate()'s default abort() proceed.
-void OnTerminate()
-{
+void OnTerminate() {
   fprintf(stderr, "\nstd::terminate() called\n");
   fflush(stderr);
   std::abort();
@@ -88,18 +83,15 @@ constexpr size_t bpb_signature_len = 8;
 // into the first read 95% of the time, so most iterations reach real
 // MFT/attribute parsing instead of rejecting at ParseBootSector().
 SequentialDiskReader::Producer
-    MakeRandomProducer(std::mt19937_64::result_type seed)
-{
+    MakeRandomProducer(std::mt19937_64::result_type seed) {
   std::mt19937_64 rng(seed);
   const bool inject_signature =
       std::uniform_int_distribution<int>(1, 100)(rng) <= 95;
 
   return MakeGeneratorProducer(
-      [rng, inject_signature, nth_call = 0](std::span<BYTE> dest) mutable
-      {
+      [rng, inject_signature, nth_call = 0](std::span<BYTE> dest) mutable {
         size_t filled = 0;
-        while (filled < dest.size())
-        {
+        while (filled < dest.size()) {
           const uint64_t word = rng();
           const size_t chunk = std::min(sizeof(word), dest.size() - filled);
           std::memcpy(dest.data() + filled, &word, chunk);
@@ -107,8 +99,7 @@ SequentialDiskReader::Producer
         }
 
         if (nth_call == 0 && inject_signature &&
-            dest.size() >= bpb_signature_offset + bpb_signature_len)
-        {
+            dest.size() >= bpb_signature_offset + bpb_signature_len) {
           std::memcpy(dest.data() + bpb_signature_offset, bpb_signature.data(),
                       bpb_signature_len);
         }
@@ -127,30 +118,25 @@ constexpr std::array<VolumeOptions, 2> volume_option_modes{
 // real crash escapes, to the caller's SEH handler. Runs the same
 // deterministic byte stream (from seed) once per VolumeOptions mode, so
 // both the strict and recovering code paths are exercised.
-void FuzzOnce(unsigned seed)
-{
-  for (const VolumeOptions& options : volume_option_modes)
-  {
+void FuzzOnce(unsigned seed) {
+  for (const VolumeOptions& options : volume_option_modes) {
     NtfsVolume<Strategy::NoCache> volume(
         std::make_unique<SequentialDiskReader>(MakeRandomProducer(seed)),
         options);
-    if (!volume.IsVolumeOK())
-    {
+    if (!volume.IsVolumeOK()) {
       continue;
     }
 
     FileRecord fr(volume);
     fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
-    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root)))
-    {
+    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
       // file_record_ is guaranteed empty here, exercising IsDeleted()/
       // IsDirectory()'s guard against it.
       (void)fr.IsDeleted();
       (void)fr.IsDirectory();
       continue;
     }
-    if (!fr.ParseAttrs())
-    {
+    if (!fr.ParseAttrs()) {
       continue;
     }
 
@@ -161,36 +147,25 @@ void FuzzOnce(unsigned seed)
 // Swallows expected C++ exceptions; MSVC forbids mixing __try/__except
 // with try/catch in the same function, so this stays below the SEH
 // boundary in RunIteration().
-void FuzzOnceCaught(unsigned seed)
-{
-  try
-  {
+void FuzzOnceCaught(unsigned seed) {
+  try {
     FuzzOnce(seed);
-  }
-  catch (const std::exception&)
-  {
-  }
-  catch (...)
-  {
+  } catch (const std::exception&) {
+  } catch (...) {
   }
 }
 
 // Runs one seed under SEH and reports whether it crashed. Kept free of
 // C++ objects needing unwinding, since MSVC forbids __try alongside that.
-bool RunIteration(unsigned seed, DWORD& crash_code)
-{
+bool RunIteration(unsigned seed, DWORD& crash_code) {
   crash_code = 0;
   g_crt_failure = false;
 
-  __try
-  {
+  __try {
     FuzzOnceCaught(seed);
-  }
-  __except (EXCEPTION_EXECUTE_HANDLER)
-  {
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
     crash_code = GetExceptionCode();
-    if (crash_code == EXCEPTION_STACK_OVERFLOW)
-    {
+    if (crash_code == EXCEPTION_STACK_OVERFLOW) {
       // Otherwise the consumed guard page never detects a later overflow.
       _resetstkoflw();
     }
@@ -205,8 +180,7 @@ bool RunIteration(unsigned seed, DWORD& crash_code)
 // With no args, fuzzes forever until Ctrl+C. With one numeric arg, fuzzes
 // for that many iterations. With "--seed <seed>", replays one iteration.
 // NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
-int wmain(int argc, wchar_t* argv[])
-{
+int wmain(int argc, wchar_t* argv[]) {
   // Unbuffered, so an escaping CRT abort() can't strand output.
   setvbuf(stdout, nullptr, _IONBF, 0);
   _set_invalid_parameter_handler(OnInvalidParameter);
@@ -214,8 +188,7 @@ int wmain(int argc, wchar_t* argv[])
   std::set_terminate(OnTerminate);
 
   // Sends debug-heap/assert failures to stderr instead of a blocking dialog.
-  for (const int report_type : {_CRT_WARN, _CRT_ERROR, _CRT_ASSERT})
-  {
+  for (const int report_type : {_CRT_WARN, _CRT_ERROR, _CRT_ASSERT}) {
     _CrtSetReportMode(report_type, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(report_type, _CRTDBG_FILE_STDERR);
   }
@@ -224,12 +197,9 @@ int wmain(int argc, wchar_t* argv[])
   // positional argument checks below stay as they were.
   Log::Config log_config;
   std::vector<wchar_t*> args{argv[0]};
-  for (int i = 1; i < argc; i++)
-  {
-    if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w))
-    {
-      if (!Log::ParseOption(argv[i], log_config))
-      {
+  for (int i = 1; i < argc; i++) {
+    if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w)) {
+      if (!Log::ParseOption(argv[i], log_config)) {
         fprintf(stderr, "usage: %ls [--log=...] [iterations | --seed <seed>]\n",
                 argv[0]);
         fprintf(stderr, "  %s\n", std::string(Log::option_usage).c_str());
@@ -239,8 +209,7 @@ int wmain(int argc, wchar_t* argv[])
     }
     args.push_back(argv[i]);
   }
-  if (!Log::Configure(log_config))
-  {
+  if (!Log::Configure(log_config)) {
     fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
   }
 
@@ -248,16 +217,14 @@ int wmain(int argc, wchar_t* argv[])
 
   // argCount == 3 is tested first.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  if (arg_count == 3 && std::wcscmp(args[1], L"--seed") == 0)
-  {
+  if (arg_count == 3 && std::wcscmp(args[1], L"--seed") == 0) {
     const unsigned seed =
         // argCount == 3 was tested above.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         gsl::narrow<unsigned>(std::wcstoul(args[2], nullptr, 0));
     DWORD crash_code = 0;
     printf("Replaying seed=%u\n", seed);
-    if (!RunIteration(seed, crash_code))
-    {
+    if (!RunIteration(seed, crash_code)) {
       printf("CRASH (SEH 0x%08lX) seed=%u\n", crash_code, seed);
       return 1;
     }
@@ -266,8 +233,7 @@ int wmain(int argc, wchar_t* argv[])
   }
 
   std::optional<unsigned long long> max_iterations;
-  if (arg_count == 2)
-  {
+  if (arg_count == 2) {
     // argCount == 2 was tested above.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     max_iterations = std::wcstoull(args[1], nullptr, 0);
@@ -283,8 +249,7 @@ int wmain(int argc, wchar_t* argv[])
       "Fuzzing NtfsVolume with an endless random stream. Press Ctrl+C to "
       "stop.\n");
 
-  while (!g_stop && (!max_iterations || iterations < *max_iterations))
-  {
+  while (!g_stop && (!max_iterations || iterations < *max_iterations)) {
     const unsigned seed = rd();
     ++iterations;
 
@@ -292,8 +257,7 @@ int wmain(int argc, wchar_t* argv[])
     printf("seed=%u\r", seed);
 
     DWORD crash_code = 0;
-    if (!RunIteration(seed, crash_code))
-    {
+    if (!RunIteration(seed, crash_code)) {
       ++crashes;
       printf(
           "\nCRASH (SEH 0x%08lX) at iteration %llu, seed=%u -- repro with "
@@ -301,8 +265,7 @@ int wmain(int argc, wchar_t* argv[])
           crash_code, iterations, seed, seed);
     }
 
-    if (iterations % 10000 == 0)
-    {
+    if (iterations % 10000 == 0) {
       printf("iterations=%llu crashes=%llu\n", iterations, crashes);
       fflush(stdout);
     }

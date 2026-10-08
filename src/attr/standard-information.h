@@ -4,11 +4,9 @@
 
 #include "../flag/std-info-permission.h"
 
-namespace NtfsBrowser::Attr
-{
+namespace NtfsBrowser::Attr {
 
-struct StandardInformation
-{
+struct StandardInformation {
   ULONGLONG create_time;               // File creation time
   ULONGLONG alter_time;                // File altered time
   ULONGLONG mft_time;                  // MFT changed time

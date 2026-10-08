@@ -12,20 +12,16 @@
 #include "../internal-export.h"
 #include "../ntfs-common.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
-    : buffer_size(buffer.size())
-{
-  if (buffer.size() < min_file_record_header_size)
-  {
+    : buffer_size(buffer.size()) {
+  if (buffer.size() < min_file_record_header_size) {
     throw std::runtime_error(
         "Buffer size of FileRecordHeader is smaller than the minimum file "
         "record header size.");
   }
-  if (buffer.size() > max_file_record_size)
-  {
+  if (buffer.size() > max_file_record_size) {
     throw std::runtime_error(
         "Buffer size of FileRecordHeader exceeds the maximum supported file "
         "record size.");
@@ -33,22 +29,19 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
 
   const Data* data = reinterpret_cast<const Data*>(buffer.data());
 
-  if (data->magic != file_record_magic)
-  {
+  if (data->magic != file_record_magic) {
     us_number = 0;
     return;
   }
 
-  if (data->offset_of_us >= buffer.size())
-  {
+  if (data->offset_of_us >= buffer.size()) {
     throw std::runtime_error("Offset must be lower than 1024.");
   }
 
   // A forged offset_of_us can place the array past the buffer's end.
   const size_t sectors =
       UpdateSequenceBlockCount(buffer.size(), data->size_of_us);
-  if (data->offset_of_us + 2 * (1 + sectors) > buffer.size())
-  {
+  if (data->offset_of_us + 2 * (1 + sectors) > buffer.size()) {
     throw std::runtime_error(
         "Update Sequence Array does not fit within the file record "
         "buffer.");
@@ -60,8 +53,7 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::memcpy(&us_number, &buffer[data->offset_of_us], sizeof(us_number));
 
-  for (size_t i = 0; i < sectors; i++)
-  {
+  for (size_t i = 0; i < sectors; i++) {
     WORD value = 0;
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&value, &buffer[data->offset_of_us + (sizeof(WORD) * (1 + i))],
@@ -70,8 +62,7 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
   }
 }
 
-bool FileRecordHeader::PatchUS() noexcept
-{
+bool FileRecordHeader::PatchUS() noexcept {
   // The update sequence is patched in place, in the buffer the caller owns.
   // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
   const std::span<WORD> words(
@@ -79,20 +70,17 @@ bool FileRecordHeader::PatchUS() noexcept
       buffer_size / sizeof(WORD));
   // NOLINTEND(cppcoreguidelines-pro-type-const-cast)
   size_t pos = 0;
-  for (WORD const value : us_array)
-  {
+  for (WORD const value : us_array) {
     // The last word of each sector holds the USN.
     pos += (update_sequence_stride / sizeof(WORD)) - 1;
-    if (pos >= words.size())
-    {
+    if (pos >= words.size()) {
       return false;
     }
     // pos < words.size() was checked just above.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     WORD& sector = words[pos];
     // USN error. Ignore if already patched (FullCache)
-    if (sector != us_number && sector != value)
-    {
+    if (sector != us_number && sector != value) {
       return false;
     }
     // Write back correct data
@@ -102,11 +90,9 @@ bool FileRecordHeader::PatchUS() noexcept
   return true;
 }
 
-const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept
-{
+const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept {
   WORD const offset_of_attr = GetData()->offset_of_attr;
-  if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size)
-  {
+  if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size) {
     LogWarn("Offset of attr must be within the file record buffer");
     return nullptr;
   }
@@ -116,26 +102,21 @@ const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept
 
 FileRecordHeaderImpl<Strategy::NoCache>::FileRecordHeaderImpl(
     std::span<const BYTE> buffer)
-    : FileRecordHeader(buffer), data(buffer)
-{
-}
+    : FileRecordHeader(buffer), data(buffer) {}
 
 const FileRecordHeader::Data*
-    FileRecordHeaderImpl<Strategy::NoCache>::GetData() const
-{
+    FileRecordHeaderImpl<Strategy::NoCache>::GetData() const {
   return reinterpret_cast<const Data*>(data.data());
 }
 
 FileRecordHeaderImpl<Strategy::FullCache>::FileRecordHeaderImpl(
     std::span<const BYTE> buffer)
-    : FileRecordHeader(buffer)
-{
+    : FileRecordHeader(buffer) {
   memcpy(&data.raw[0], buffer.data(), buffer.size());
 }
 
 const FileRecordHeader::Data*
-    FileRecordHeaderImpl<Strategy::FullCache>::GetData() const
-{
+    FileRecordHeaderImpl<Strategy::FullCache>::GetData() const {
   return &data;
 }
 

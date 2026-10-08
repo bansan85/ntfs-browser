@@ -6,12 +6,10 @@
 
 #include "entry.h"
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
 // One discrepancy the comparison found, ready to print.
-struct Finding
-{
+struct Finding {
   // "LIB-MISMATCH", "LIB-MISSING", "LIB-EXTRA", "MISSING", "EXTRA" or
   // "MISMATCH".
   std::string kind;
@@ -24,8 +22,7 @@ struct Finding
   std::string actual;
 };
 
-struct MethodStats
-{
+struct MethodStats {
   std::string name;
   size_t compared_entries = 0;
   size_t missing = 0;
@@ -33,8 +30,7 @@ struct MethodStats
   size_t mismatched_fields = 0;
 };
 
-struct Report
-{
+struct Report {
   std::vector<Finding> findings;
   std::vector<MethodStats> stats;
 };

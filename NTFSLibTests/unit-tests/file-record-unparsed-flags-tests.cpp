@@ -21,15 +21,14 @@ TEMPLATE_TEST_CASE_SIG(
     "FileRecord::IsDeleted()/IsDirectory() must not dereference an empty "
     "file_record_ when called before any successful ParseFileRecord()",
     "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> const record(volume);
+  const FileRecord<S> record(volume);
 
   // A defect here can abort the whole process, not just fail this check.
   CHECK_FALSE(record.IsDeleted());

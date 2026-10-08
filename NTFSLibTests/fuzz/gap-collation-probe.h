@@ -2,8 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsFuzz
-{
+namespace NtfsFuzz {
 
 // Sorts smaller than the sub-node root entry's name only under NTFS' real
 // uppercase collation, not lowercase folding.

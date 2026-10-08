@@ -8,16 +8,14 @@
 
 #include "../internal-export.h"
 
-namespace NtfsBrowser::Efs
-{
+namespace NtfsBrowser::Efs {
 
 // Overwrites key material in a way the compiler cannot drop as a dead store.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void SecureZero(std::span<BYTE> bytes) noexcept;
 
 // The symmetric cipher of an EFS file. The values are the CryptoAPI ALG_IDs
 // that the FEK blob stores.
-enum class Algorithm : WORD
-{
+enum class Algorithm : WORD {
   _3Des = 0x6603,
   Desx = 0x6604,
   Aes128 = 0x660E,
@@ -27,8 +25,7 @@ enum class Algorithm : WORD
 
 // A File Encryption Key: a cipher and its key. Owns its bytes and wipes them
 // on destruction.
-class NTFS_BROWSER_EXPORT_TESTS_ONLY Fek
-{
+class NTFS_BROWSER_EXPORT_TESTS_ONLY Fek {
  public:
   Fek(const Fek& other) = delete;
   Fek& operator=(const Fek& other) = delete;

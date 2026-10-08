@@ -20,14 +20,15 @@ using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-namespace
-{
+namespace {
+
 static_assert(NtfsBrowserTests::fragmented_mft_invalid_record_idx ==
                   static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::User),
               "this fixture's whole point is to be reached through "
               "FileRecord<S>::ReadFileRecord()'s \"fragmented $MFT\" branch "
               "(fileRef >= Enum::MftIdx::USER), not the direct-allocation "
               "one - see fake-ntfs-image.h");
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -35,12 +36,11 @@ TEMPLATE_TEST_CASE_SIG(
     "fragmented-$MFT path when the forged record has an invalid "
     "offset_of_us",
     "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFragmentedMftInvalidRecord());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);

@@ -8,15 +8,13 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
 // What OpenVolumeFor() resolved: two independently-opened volumes (FullCache
 // and NoCache each own their own IDiskReader and state) plus the path of
 // the target directory relative to the volume's root, in this tool's own
 // "/"-joined convention (matching every Listing's own path keys).
-struct VolumeHandles
-{
+struct VolumeHandles {
   std::unique_ptr<NtfsBrowser::NtfsVolume<NtfsBrowser::Strategy::FullCache>>
       full_cache;
   std::unique_ptr<NtfsBrowser::NtfsVolume<NtfsBrowser::Strategy::NoCache>>

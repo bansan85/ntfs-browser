@@ -31,8 +31,7 @@ using NtfsBrowser::Data::IndexBlock;
 TEST_CASE(
     "IndexBlockUsOffsetInBounds rejects an offset_of_us that would run the "
     "Update Sequence Array past the index block buffer",
-    "[attr-index-alloc][regression]")
-{
+    "[attr-index-alloc][regression]") {
   constexpr DWORD index_block_size = NtfsBrowserTests::forged_index_block_size;
   constexpr DWORD sectors =
       index_block_size / NtfsBrowser::update_sequence_stride;
@@ -64,12 +63,11 @@ TEMPLATE_TEST_CASE_SIG(
     "FileRecord::TraverseSubEntries must not crash when an index block's "
     "offset_of_us is out of bounds",
     "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithForgedIndexBlock());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -77,9 +75,11 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(record.ParseAttrs());
 
   int callback_count = 0;
-  record.TraverseSubEntries([](const IndexEntryView&, void* context)
-                            { ++*static_cast<int*>(context); },
-                            &callback_count);
+  record.TraverseSubEntries(
+      [](const IndexEntryView&, void* context) {
+        ++*static_cast<int*>(context);
+      },
+      &callback_count);
 
   // Entries live behind the rejected block: the callback must never run.
   CHECK(callback_count == 0);
@@ -89,8 +89,7 @@ TEMPLATE_TEST_CASE_SIG(
     "FileRecord::TraverseSubEntries must reject an index block whose first "
     "512-byte block does not end with the update sequence number",
     "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   constexpr size_t us_block_size = 512;
   constexpr WORD torn_word = 0xDEAD;
 
@@ -101,12 +100,10 @@ TEMPLATE_TEST_CASE_SIG(
   // points at.
   size_t block_offset = 0;
   for (; block_offset + sizeof(DWORD) <= image.size();
-       block_offset += NtfsBrowserTests::fake_cluster_size)
-  {
+       block_offset += NtfsBrowserTests::fake_cluster_size) {
     DWORD magic = 0;
     std::memcpy(&magic, &image.at(block_offset), sizeof(magic));
-    if (magic == index_block_magic)
-    {
+    if (magic == index_block_magic) {
       break;
     }
   }
@@ -119,7 +116,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   auto reader =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -128,9 +125,11 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(record.ParseAttrs());
 
   int callback_count = 0;
-  record.TraverseSubEntries([](const IndexEntryView&, void* context)
-                            { ++*static_cast<int*>(context); },
-                            &callback_count);
+  record.TraverseSubEntries(
+      [](const IndexEntryView&, void* context) {
+        ++*static_cast<int*>(context);
+      },
+      &callback_count);
 
   CHECK(callback_count == 0);
 }

@@ -5,28 +5,28 @@
 #include <cstdint>
 #include <vector>
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 class IndexEntryView;
 enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace Attr
-{
+namespace Attr {
+
 struct IndexRoot;
+
 }  // namespace Attr
 
 template <typename Resident, Strategy S>
-class AttrIndexRoot : public Resident, public std::vector<IndexEntryView>
-{
+class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
  public:
   AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrIndexRoot(AttrIndexRoot&& other) noexcept = delete;
-  AttrIndexRoot(AttrIndexRoot const& other) = delete;
+  AttrIndexRoot(const AttrIndexRoot& other) = delete;
   AttrIndexRoot& operator=(AttrIndexRoot&& other) noexcept = delete;
-  AttrIndexRoot& operator=(AttrIndexRoot const& other) = delete;
+  AttrIndexRoot& operator=(const AttrIndexRoot& other) = delete;
   ~AttrIndexRoot() override;
 
   template <Strategy>

@@ -20,12 +20,11 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes an index block "
     "far smaller than Data::IndexBlock",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithTinyIndexBlock());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
 
   INFO("GetIndexBlockSize() = " << volume.GetIndexBlockSize());
   CHECK(volume.GetIndexBlockSize() == NtfsBrowserTests::tiny_index_block_size);

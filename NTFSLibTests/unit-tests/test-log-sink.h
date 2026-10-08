@@ -2,8 +2,7 @@
 
 #include <string>
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // Attaches the capturing sink to the library logger and opens every level
 // up, so trace-grade messages reach it. It is installed once before main()

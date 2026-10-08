@@ -17,15 +17,15 @@
 
 #include "optional-access.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 class IDiskReader;
 template <Strategy S>
 class NtfsVolume;
+
 }  // namespace NtfsBrowser
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
@@ -35,18 +35,15 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // All names in known_files and this corpus's directories are ASCII, so a
 // byte-for-byte widening is exact.
-std::wstring Widen(std::string_view narrow)
-{
+std::wstring Widen(std::string_view narrow) {
   return {narrow.begin(), narrow.end()};
 }
 
-void ParseDir(FileRecord<Strategy::NoCache>& dir, ULONGLONG file_ref)
-{
+void ParseDir(FileRecord<Strategy::NoCache>& dir, ULONGLONG file_ref) {
   dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
   REQUIRE(dir.ParseFileRecord(file_ref));
   REQUIRE(dir.ParseAttrs());
@@ -54,26 +51,22 @@ void ParseDir(FileRecord<Strategy::NoCache>& dir, ULONGLONG file_ref)
 
 }  // namespace
 
-std::unique_ptr<NtfsBrowser::IDiskReader> OpenNtfs1Image()
-{
+std::unique_ptr<NtfsBrowser::IDiskReader> OpenNtfs1Image() {
   return OpenBareVolumeImage(ntfs1_image);
 }
 
-void OpenRootDir(FileRecord<Strategy::NoCache>& dir)
-{
+void OpenRootDir(FileRecord<Strategy::NoCache>& dir) {
   ParseDir(dir, static_cast<ULONGLONG>(MftIdx::Root));
 }
 
-void OpenSubDir(FileRecord<Strategy::NoCache>& dir, std::string_view name)
-{
+void OpenSubDir(FileRecord<Strategy::NoCache>& dir, std::string_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
   ParseDir(dir, NtfsBrowserTests::Unwrap(entry).GetFileReference());
 }
 
 void OpenFile(FileRecord<Strategy::NoCache>& file,
-              const FileRecord<Strategy::NoCache>& dir, std::string_view name)
-{
+              const FileRecord<Strategy::NoCache>& dir, std::string_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
 
@@ -85,8 +78,7 @@ void OpenFile(FileRecord<Strategy::NoCache>& file,
 
 std::vector<BYTE> ReadFile(const NtfsVolume<Strategy::NoCache>& volume,
                            const FileRecord<Strategy::NoCache>& dir,
-                           std::string_view name)
-{
+                           std::string_view name) {
   FileRecord<Strategy::NoCache> file(volume);
   OpenFile(file, dir, name);
 

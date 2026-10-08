@@ -31,8 +31,7 @@ using NtfsBrowser::UpCaseTable;
 using NtfsBrowser::Enum::MftIdx;
 using NtfsBrowserTests::NonAsciiNameLayout;
 
-namespace
-{
+namespace {
 
 // Selects the low byte of an UpCase unit.
 constexpr size_t low_byte_mask = 0xFF;
@@ -45,13 +44,12 @@ constexpr BYTE mapped_unit_low = 0x41;
 // reference of the entry FindSubEntry() reports, if any.
 template <Strategy S>
 std::optional<ULONGLONG> FindInRoot(NonAsciiNameLayout layout,
-                                    bool with_up_case, std::wstring_view name)
-{
+                                    bool with_up_case, std::wstring_view name) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithNonAsciiNames(layout,
                                                             with_up_case));
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -61,8 +59,7 @@ std::optional<ULONGLONG> FindInRoot(NonAsciiNameLayout layout,
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> found = root.FindSubEntry(name);
-  if (!found)
-  {
+  if (!found) {
     return std::nullopt;
   }
   return found->GetFileReference();
@@ -70,25 +67,21 @@ std::optional<ULONGLONG> FindInRoot(NonAsciiNameLayout layout,
 
 // Runs check once per layout and per cache strategy.
 template <typename Check>
-void ForEachLayoutAndStrategy(Check check)
-{
+void ForEachLayoutAndStrategy(Check check) {
   for (const NonAsciiNameLayout layout :
-       {NonAsciiNameLayout::IndexRoot, NonAsciiNameLayout::IndexBlock})
-  {
+       {NonAsciiNameLayout::IndexRoot, NonAsciiNameLayout::IndexBlock}) {
     check.template operator()<Strategy::NoCache>(layout);
     check.template operator()<Strategy::FullCache>(layout);
   }
 }
 
 // A well-formed raw $UpCase: the identity map but for a-z.
-std::vector<BYTE> MakeMinimalUpCaseBytes()
-{
+std::vector<BYTE> MakeMinimalUpCaseBytes() {
   constexpr size_t case_distance = 0x20;
   constexpr unsigned bits_per_byte = 8;
 
   std::vector<BYTE> bytes(NtfsBrowser::up_case_byte_count);
-  for (size_t unit = 0; unit < NtfsBrowser::up_case_unit_count; unit++)
-  {
+  for (size_t unit = 0; unit < NtfsBrowser::up_case_unit_count; unit++) {
     const size_t upper =
         (unit >= L'a' && unit <= L'z') ? unit - case_distance : unit;
     // bytes holds 2 bytes for each unit below up_case_unit_count.
@@ -105,87 +98,69 @@ std::vector<BYTE> MakeMinimalUpCaseBytes()
 TEST_CASE(
     "FindSubEntry finds a non-ASCII name that sorts after another one "
     "without a $UpCase table",
-    "[file-record][filename][upcase][regression]")
-{
-  ForEachLayoutAndStrategy(
-      [&]<Strategy S>(NonAsciiNameLayout layout)
-      {
-        const std::optional<ULONGLONG> found = FindInRoot<S>(
-            layout, false, NtfsBrowserTests::non_ascii_diaeresis_name);
-        REQUIRE(found.has_value());
-        CHECK(*found == NtfsBrowserTests::non_ascii_diaeresis_mft_ref);
-      });
+    "[file-record][filename][upcase][regression]") {
+  ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+    const std::optional<ULONGLONG> found = FindInRoot<S>(
+        layout, false, NtfsBrowserTests::non_ascii_diaeresis_name);
+    REQUIRE(found.has_value());
+    CHECK(*found == NtfsBrowserTests::non_ascii_diaeresis_mft_ref);
+  });
 }
 
 TEST_CASE(
     "FindSubEntry finds a non-ASCII name that sorts after another one "
     "with a $UpCase table",
-    "[file-record][filename][upcase][regression]")
-{
-  ForEachLayoutAndStrategy(
-      [&]<Strategy S>(NonAsciiNameLayout layout)
-      {
-        const std::optional<ULONGLONG> found = FindInRoot<S>(
-            layout, true, NtfsBrowserTests::non_ascii_diaeresis_name);
-        REQUIRE(found.has_value());
-        CHECK(*found == NtfsBrowserTests::non_ascii_diaeresis_mft_ref);
-      });
+    "[file-record][filename][upcase][regression]") {
+  ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+    const std::optional<ULONGLONG> found =
+        FindInRoot<S>(layout, true, NtfsBrowserTests::non_ascii_diaeresis_name);
+    REQUIRE(found.has_value());
+    CHECK(*found == NtfsBrowserTests::non_ascii_diaeresis_mft_ref);
+  });
 }
 
 TEST_CASE("FindSubEntry matches a non-ASCII name case-insensitively",
-          "[file-record][filename][upcase][regression]")
-{
-  for (const bool with_up_case : {false, true})
-  {
-    ForEachLayoutAndStrategy(
-        [&]<Strategy S>(NonAsciiNameLayout layout)
-        {
-          const std::optional<ULONGLONG> found =
-              FindInRoot<S>(layout, with_up_case,
-                            NtfsBrowserTests::non_ascii_acute_upper_name);
-          REQUIRE(found.has_value());
-          CHECK(*found == NtfsBrowserTests::non_ascii_acute_mft_ref);
-        });
+          "[file-record][filename][upcase][regression]") {
+  for (const bool with_up_case : {false, true}) {
+    ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+      const std::optional<ULONGLONG> found = FindInRoot<S>(
+          layout, with_up_case, NtfsBrowserTests::non_ascii_acute_upper_name);
+      REQUIRE(found.has_value());
+      CHECK(*found == NtfsBrowserTests::non_ascii_acute_mft_ref);
+    });
   }
 }
 
 TEST_CASE("FindSubEntry follows the volume's own $UpCase table",
-          "[file-record][filename][upcase][regression]")
-{
-  ForEachLayoutAndStrategy(
-      [&]<Strategy S>(NonAsciiNameLayout layout)
-      {
-        const std::optional<ULONGLONG> dotless = FindInRoot<S>(
-            layout, true, NtfsBrowserTests::non_ascii_dotless_name);
-        REQUIRE(dotless.has_value());
-        CHECK(*dotless == NtfsBrowserTests::non_ascii_dotless_mft_ref);
+          "[file-record][filename][upcase][regression]") {
+  ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+    const std::optional<ULONGLONG> dotless =
+        FindInRoot<S>(layout, true, NtfsBrowserTests::non_ascii_dotless_name);
+    REQUIRE(dotless.has_value());
+    CHECK(*dotless == NtfsBrowserTests::non_ascii_dotless_mft_ref);
 
-        // The table leaves the dotless i unmapped: "I.txt" is another name.
-        CHECK_FALSE(FindInRoot<S>(layout, true,
-                                  NtfsBrowserTests::non_ascii_dotted_upper_name)
-                        .has_value());
-      });
+    // The table leaves the dotless i unmapped: "I.txt" is another name.
+    CHECK_FALSE(FindInRoot<S>(layout, true,
+                              NtfsBrowserTests::non_ascii_dotted_upper_name)
+                    .has_value());
+  });
 }
 
 TEST_CASE(
     "FindSubEntry scans every entry when the case mapping is only built in",
-    "[file-record][filename][upcase][regression]")
-{
-  ForEachLayoutAndStrategy(
-      [&]<Strategy S>(NonAsciiNameLayout layout)
-      {
-        // Without a $UpCase table, the built-in mapping folds the dotless i
-        // to I, so the ordered search stops before it. The scan finds it.
-        const std::optional<ULONGLONG> found = FindInRoot<S>(
-            layout, false, NtfsBrowserTests::non_ascii_dotless_name);
-        REQUIRE(found.has_value());
-        CHECK(*found == NtfsBrowserTests::non_ascii_dotless_mft_ref);
-      });
+    "[file-record][filename][upcase][regression]") {
+  ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+    // Without a $UpCase table, the built-in mapping folds the dotless i
+    // to I, so the ordered search stops before it. The scan finds it.
+    const std::optional<ULONGLONG> found =
+        FindInRoot<S>(layout, false, NtfsBrowserTests::non_ascii_dotless_name);
+    REQUIRE(found.has_value());
+    CHECK(*found == NtfsBrowserTests::non_ascii_dotless_mft_ref);
+  });
 }
 
 TEST_CASE("The built-in case mapping is the Unicode simple uppercase mapping",
-          "[filename][upcase][regression]")
-{
+          "[filename][upcase][regression]") {
   const UpCaseTable& table = UpCaseTable::BuiltIn();
   CHECK(table.IsBuiltIn());
 
@@ -205,15 +180,14 @@ TEST_CASE("The built-in case mapping is the Unicode simple uppercase mapping",
 }
 
 TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
-          "[filename][upcase][regression]")
-{
+          "[filename][upcase][regression]") {
   const std::vector<BYTE> good = MakeMinimalUpCaseBytes();
 
-  SECTION("a well-formed stream is used as it is")
-  {
+  SECTION("a well-formed stream is used as it is") {
     std::vector<BYTE> bytes = good;
     // Maps U+00E9 to U+0041.
-    // acute_e_unit is below up_case_unit_count, so both of its bytes are in bytes.
+    // acute_e_unit is below up_case_unit_count, so both of its bytes are in
+    // bytes.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[acute_e_unit * 2] = mapped_unit_low;
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -227,22 +201,19 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
     CHECK(NtfsBrowserTests::Unwrap(table).Map(u'\u00C9') == u'\u00C9');
   }
 
-  SECTION("a short stream is refused")
-  {
+  SECTION("a short stream is refused") {
     const std::vector<BYTE> bytes(good.begin(), good.end() - 2);
     CHECK_FALSE(UpCaseTable::FromBytes(bytes).has_value());
   }
 
-  SECTION("a wiped stream is refused")
-  {
+  SECTION("a wiped stream is refused") {
     const std::vector<BYTE> bytes(good.size(), 0);
     CHECK_FALSE(UpCaseTable::FromBytes(bytes).has_value());
   }
 }
 
 TEST_CASE("Case tables collate names unit by unit through their mapping",
-          "[filename][upcase][regression]")
-{
+          "[filename][upcase][regression]") {
   const UpCaseTable& table = UpCaseTable::BuiltIn();
 
   CHECK(table.Compare(L"abc", L"ABC") == 0);
@@ -256,8 +227,7 @@ TEST_CASE("Case tables collate names unit by unit through their mapping",
 }
 
 TEST_CASE("Case tables collate a supplementary code point as a surrogate pair",
-          "[filename][upcase][regression]")
-{
+          "[filename][upcase][regression]") {
   // U+1F600 is the pair D83D DE00 in UTF-16, which sorts before U+FFFD,
   // although the code point itself is the larger one.
   const UpCaseTable& table = UpCaseTable::BuiltIn();

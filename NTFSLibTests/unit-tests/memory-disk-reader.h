@@ -7,12 +7,10 @@
 
 #include <ntfs-browser/disk-reader.h>
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // A fake IDiskReader backed entirely by an in-memory buffer.
-class MemoryDiskReader : public NtfsBrowser::IDiskReader
-{
+class MemoryDiskReader : public NtfsBrowser::IDiskReader {
  public:
   // data is the whole fake volume/file content, ready to be read from.
   explicit MemoryDiskReader(std::vector<BYTE> data);

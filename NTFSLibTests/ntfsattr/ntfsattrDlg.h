@@ -13,8 +13,7 @@
 /////////////////////////////////////////////////////////////////////////////
 // CNtfsattrDlg dialog
 
-class CNtfsattrDlg : public CDialog
-{
+class CNtfsattrDlg : public CDialog {
   // Construction
 
  public:
@@ -22,10 +21,8 @@ class CNtfsattrDlg : public CDialog
 
   // Dialog Data
   //{{AFX_DATA(CNtfsattrDlg)
-  enum : std::uint8_t
-  {
-    IDD = IDD_NTFSATTR_DIALOG
-  };
+  enum : std::uint8_t { IDD = IDD_NTFSATTR_DIALOG };
+
   CString m_filename;
   CString m_dump;
   BOOL m_dir;
@@ -55,6 +52,7 @@ class CNtfsattrDlg : public CDialog
 };
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+// Microsoft Visual C++ will insert additional declarations immediately before
+// the previous line.
 
 #endif  // !defined(AFX_NTFSATTRDLG_H__0A2C5040_6755_450E_BB6E_4E00B0737621__INCLUDED_)

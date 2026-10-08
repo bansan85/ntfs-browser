@@ -5,8 +5,7 @@
   #include <string>
   #include <string_view>
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
 // Decodes a UTF-8 byte sequence (Linux filenames' usual encoding) into a
 // wide string of Unicode code points, so it can share this tool's wstring

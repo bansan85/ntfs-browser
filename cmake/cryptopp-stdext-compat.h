@@ -11,25 +11,23 @@
   #include <algorithm>
   #include <cstddef>
 
-namespace stdext
-{
+namespace stdext {
+
 template <class T>
-T* make_checked_array_iterator(T* ptr, std::size_t /*size*/)
-{
+T* make_checked_array_iterator(T* ptr, std::size_t /*size*/) {
   return ptr;
 }
 
 template <class T>
-T* make_unchecked_array_iterator(T* ptr)
-{
+T* make_unchecked_array_iterator(T* ptr) {
   return ptr;
 }
 
 template <class It1, class It2>
-auto unchecked_mismatch(It1 first1, It1 last1, It2 first2)
-{
+auto unchecked_mismatch(It1 first1, It1 last1, It2 first2) {
   return std::mismatch(first1, last1, first2);
 }
+
 }  // namespace stdext
 
 #endif

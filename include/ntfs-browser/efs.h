@@ -13,26 +13,20 @@
 
 #include <ntfs-browser/export.h>
 
-namespace NtfsBrowser::Efs
-{
+namespace NtfsBrowser::Efs {
 
 // Which library decrypts the file data once the key is known.
-enum class CipherBackend : std::uint8_t
-{
-  CryptoPp,
-  BCrypt
-};
+enum class CipherBackend : std::uint8_t { CryptoPp, BCrypt };
 
 // Unwraps the File Encryption Key (FEK) of an EFS file. A file carries one
 // RSA-wrapped copy of it per user allowed to read the file.
-class IEfsKeyProvider
-{
+class IEfsKeyProvider {
  public:
   IEfsKeyProvider() = default;
   IEfsKeyProvider(IEfsKeyProvider&& other) noexcept = delete;
-  IEfsKeyProvider(IEfsKeyProvider const& other) = delete;
+  IEfsKeyProvider(const IEfsKeyProvider& other) = delete;
   IEfsKeyProvider& operator=(IEfsKeyProvider&& other) noexcept = delete;
-  IEfsKeyProvider& operator=(IEfsKeyProvider const& other) = delete;
+  IEfsKeyProvider& operator=(const IEfsKeyProvider& other) = delete;
   virtual ~IEfsKeyProvider() = default;
 
   // RSA-decrypts wrappedFek with the private key of the certificate whose

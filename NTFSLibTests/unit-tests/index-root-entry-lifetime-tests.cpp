@@ -22,18 +22,16 @@ using NtfsBrowser::IndexEntry;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 
-namespace
-{
+namespace {
 
 // A FindSubEntry() result from $INDEX_ROOT must stay valid independent of
 // the FileRecord it came from, even after that object is reparsed in place.
 template <Strategy S>
-void RunFindSubEntryOutlivesReparseTest()
-{
+void RunFindSubEntryOutlivesReparseTest() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithIndexRootVariants());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
@@ -70,7 +68,6 @@ TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry's IndexEntry from $INDEX_ROOT stays correct across a "
     "reparse",
     "[index-entry][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   RunFindSubEntryOutlivesReparseTest<S>();
 }

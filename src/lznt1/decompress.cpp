@@ -7,11 +7,9 @@
 
 #include <gsl/narrow>
 
-namespace NtfsBrowser::Lznt1
-{
+namespace NtfsBrowser::Lznt1 {
 
-namespace
-{
+namespace {
 
 // Chunk header bits ([MS-XCA] 2.5.1.2): compressed flag, signature, size.
 constexpr WORD header_compressed = 0x8000;
@@ -35,8 +33,7 @@ constexpr unsigned min_displacement_bits = 4;
 constexpr unsigned max_displacement_bits = 12;
 constexpr size_t length_bias = 3;
 
-[[nodiscard]] WORD ReadLe16(std::span<const BYTE> src, size_t offset) noexcept
-{
+[[nodiscard]] WORD ReadLe16(std::span<const BYTE> src, size_t offset) noexcept {
   // Every caller has checked that two bytes remain at "offset".
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const auto low = static_cast<WORD>(src[offset]);
@@ -47,13 +44,10 @@ constexpr size_t length_bias = 3;
 
 // Returns the displacement-field width [MS-XCA] 2.5.1.4 prescribes for a
 // compressed word, given the bytes already produced in the current chunk.
-[[nodiscard]] unsigned DisplacementBits(size_t produced_in_chunk) noexcept
-{
+[[nodiscard]] unsigned DisplacementBits(size_t produced_in_chunk) noexcept {
   for (unsigned m_bits = max_displacement_bits; m_bits > min_displacement_bits;
-       m_bits--)
-  {
-    if ((static_cast<size_t>(1) << (m_bits - 1)) < produced_in_chunk)
-    {
+       m_bits--) {
+    if ((static_cast<size_t>(1) << (m_bits - 1)) < produced_in_chunk) {
       return m_bits;
     }
   }
@@ -63,11 +57,9 @@ constexpr size_t length_bias = 3;
 // Copies "length" bytes from "displacement" bytes back in "dest" to its
 // current end, one byte at a time so overlapping back-references resolve.
 void CopyBackReference(std::span<BYTE> dest, size_t& out, size_t displacement,
-                       size_t length) noexcept
-{
+                       size_t length) noexcept {
   size_t from = out - displacement;
-  for (size_t i = 0; i < length; i++)
-  {
+  for (size_t i = 0; i < length; i++) {
     // The caller checked displacement <= out and length <= dest.size() - out.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     dest[out] = dest[from];
@@ -80,10 +72,8 @@ void CopyBackReference(std::span<BYTE> dest, size_t& out, size_t displacement,
 // current chunk began at chunkOutStart. Advances inPos and out.
 void DecodeBackReference(std::span<const BYTE> src, std::span<BYTE> dest,
                          size_t& in_pos, size_t chunk_end,
-                         size_t chunk_out_start, size_t& out)
-{
-  if (chunk_end - in_pos < compressed_word_size)
-  {
+                         size_t chunk_out_start, size_t& out) {
+  if (chunk_end - in_pos < compressed_word_size) {
     throw std::runtime_error("LZNT1: truncated compressed word.\n");
   }
   const WORD word = ReadLe16(src, in_pos);
@@ -98,17 +88,14 @@ void DecodeBackReference(std::span<const BYTE> src, std::span<BYTE> dest,
   const size_t displacement = static_cast<size_t>(word >> length_bits) + 1;
 
   // A displacement before this chunk has no history to resolve.
-  if (displacement > produced)
-  {
+  if (displacement > produced) {
     throw std::runtime_error("LZNT1: back-reference before start of chunk.\n");
   }
-  if (length > chunk_size - produced)
-  {
+  if (length > chunk_size - produced) {
     throw std::runtime_error(
         "LZNT1: chunk decompresses to more than 4096 bytes.\n");
   }
-  if (length > dest.size() - out)
-  {
+  if (length > dest.size() - out) {
     throw std::runtime_error(
         "LZNT1: back-reference exceeds decompressed bounds.\n");
   }
@@ -119,31 +106,25 @@ void DecodeBackReference(std::span<const BYTE> src, std::span<BYTE> dest,
 // Decodes the elements of a compressed chunk: the bytes from inPos to chunkEnd.
 // Advances inPos and out.
 void DecompressChunk(std::span<const BYTE> src, std::span<BYTE> dest,
-                     size_t& in_pos, size_t chunk_end, size_t& out)
-{
+                     size_t& in_pos, size_t chunk_end, size_t& out) {
   // Declared chunk size, not flag bits, bounds the data ([MS-XCA] 2.5.3).
   const size_t chunk_out_start = out;
-  while (in_pos < chunk_end)
-  {
+  while (in_pos < chunk_end) {
     // The enclosing loop tests inPos < chunkEnd <= src.size().
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const BYTE flags = src[in_pos];
     in_pos++;
 
-    for (unsigned bit = 0; bit < flags_per_byte && in_pos < chunk_end; bit++)
-    {
+    for (unsigned bit = 0; bit < flags_per_byte && in_pos < chunk_end; bit++) {
       // A word can decode past chunk_size; nothing in the encoding caps it.
-      if (out - chunk_out_start >= chunk_size)
-      {
+      if (out - chunk_out_start >= chunk_size) {
         throw std::runtime_error(
             "LZNT1: chunk decompresses to more than 4096 bytes.\n");
       }
 
-      if ((flags & static_cast<BYTE>(1U << bit)) == 0)
-      {
+      if ((flags & static_cast<BYTE>(1U << bit)) == 0) {
         // Literal byte.
-        if (out == dest.size())
-        {
+        if (out == dest.size()) {
           throw std::runtime_error(
               "LZNT1: literal exceeds decompressed bounds.\n");
         }
@@ -162,24 +143,20 @@ void DecompressChunk(std::span<const BYTE> src, std::span<BYTE> dest,
 
 }  // namespace
 
-size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest)
-{
+size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest) {
   size_t in_pos = 0;
   size_t out = 0;
 
-  while (in_pos + header_size <= src.size())
-  {
+  while (in_pos + header_size <= src.size()) {
     const WORD header = ReadLe16(src, in_pos);
     in_pos += header_size;
 
     // header == 0 is the End_of_buffer terminal ([MS-XCA] 2.5.1.2).
-    if (header == 0)
-    {
+    if (header == 0) {
       break;
     }
 
-    if ((header & header_signature_mask) != header_signature)
-    {
+    if ((header & header_signature_mask) != header_signature) {
       throw std::runtime_error("LZNT1: invalid chunk header signature.\n");
     }
 
@@ -187,18 +164,15 @@ size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest)
     const size_t payload =
         (static_cast<size_t>(header & header_size_mask) + size_bias) -
         header_size;
-    if (payload > src.size() - in_pos)
-    {
+    if (payload > src.size() - in_pos) {
       throw std::runtime_error(
           "LZNT1: chunk exceeds compressed data bounds.\n");
     }
     const size_t chunk_end = in_pos + payload;
 
-    if ((header & header_compressed) == 0)
-    {
+    if ((header & header_compressed) == 0) {
       // Uncompressed chunk: literal bytes follow the header ([MS-XCA] 2.5.1.2).
-      if (payload > dest.size() - out)
-      {
+      if (payload > dest.size() - out) {
         throw std::runtime_error(
             "LZNT1: uncompressed chunk exceeds decompressed bounds.\n");
       }

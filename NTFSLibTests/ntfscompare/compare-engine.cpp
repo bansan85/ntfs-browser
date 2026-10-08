@@ -9,26 +9,23 @@
 
 #include "console.h"
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
-namespace
-{
+namespace {
 
 // First code point past ASCII: Narrow() keeps only below it.
 constexpr wchar_t ascii_limit = 128;
 
 std::string FormatValue(ULONGLONG value) { return std::to_string(value); }
+
 std::string FormatValue(bool value) { return value ? "true" : "false"; }
 
 // ASCII-safe narrowing for a report line. Names round-trip correctly through
 // the wide Listing key every method shares; this is display only.
-std::string Narrow(const std::wstring& wide)
-{
+std::string Narrow(const std::wstring& wide) {
   std::string out;
   out.reserve(wide.size());
-  for (wchar_t const character : wide)
-  {
+  for (const wchar_t character : wide) {
     out.push_back((character > 0 && character < ascii_limit)
                       ? static_cast<char>(character)
                       : '?');
@@ -38,8 +35,7 @@ std::string Narrow(const std::wstring& wide)
 
 // Calls visit(member pointer, report name) once per compared Entry field.
 template <typename Visitor>
-void ForEachComparedField(const Visitor& visit)
-{
+void ForEachComparedField(const Visitor& visit) {
   visit(&Entry::logical_size, "LogicalSize");
   visit(&Entry::physical_size, "PhysicalSize");
   visit(&Entry::creation_time_utc, "CreationTimeUtc");
@@ -58,28 +54,21 @@ template <typename T>
 std::optional<T> ReconcileField(const std::vector<const Entry*>& sources,
                                 const char* field, const std::wstring& path,
                                 std::optional<T> Entry::* member,
-                                Report& report)
-{
+                                Report& report) {
   std::optional<T> found;
   bool disagree = false;
-  for (const Entry* source : sources)
-  {
+  for (const Entry* source : sources) {
     const std::optional<T>& value = source->*member;
-    if (!value)
-    {
+    if (!value) {
       continue;
     }
-    if (!found)
-    {
+    if (!found) {
       found = value;
-    }
-    else if (*value != *found)
-    {
+    } else if (*value != *found) {
       disagree = true;
     }
   }
-  if (disagree)
-  {
+  if (disagree) {
     report.findings.push_back(
         {"LIB-MISMATCH", "library (full-cache/no-cache/mft-tree)", path, field,
          "(no single value)", "the three library methods disagree"});
@@ -92,60 +81,49 @@ std::optional<T> ReconcileField(const std::vector<const Entry*>& sources,
 
 Listing CompareLibraryMethods(const Listing& full_cache,
                               const Listing& no_cache, const Listing& mft_tree,
-                              Report& report)
-{
+                              Report& report) {
   Listing reference;
 
-  struct Source
-  {
+  struct Source {
     const char* name;
     const Listing* listing;
   };
+
   const std::array<Source, 3> sources{{{"full-cache", &full_cache},
                                        {"no-cache", &no_cache},
                                        {"mft-tree", &mft_tree}}};
 
   std::set<std::wstring> all_paths;
-  for (const Source& source : sources)
-  {
-    for (const auto& [path, entry] : *source.listing)
-    {
+  for (const Source& source : sources) {
+    for (const auto& [path, entry] : *source.listing) {
       all_paths.insert(path);
     }
   }
 
   MethodStats stats{.name = "library"};
 
-  for (const std::wstring& path : all_paths)
-  {
+  for (const std::wstring& path : all_paths) {
     std::vector<const Entry*> present;
-    for (const Source& source : sources)
-    {
+    for (const Source& source : sources) {
       const auto iterator = source.listing->find(path);
-      if (iterator == source.listing->end())
-      {
+      if (iterator == source.listing->end()) {
         report.findings.push_back({"LIB-MISSING", source.name, path, "", "",
                                    "present in the other library methods"});
         stats.missing++;
-      }
-      else
-      {
+      } else {
         present.push_back(&iterator->second);
       }
     }
 
-    if (present.empty())
-    {
+    if (present.empty()) {
       continue;  // Unreachable: path came from at least one listing.
     }
     stats.compared_entries++;
 
     Entry ref;
     ref.is_directory = present.front()->is_directory;
-    for (const Entry* entry : present)
-    {
-      if (entry->is_directory != ref.is_directory)
-      {
+    for (const Entry* entry : present) {
+      if (entry->is_directory != ref.is_directory) {
         report.findings.push_back({"LIB-MISMATCH",
                                    "library (full-cache/no-cache/mft-tree)",
                                    path, "Type", "(no single value)",
@@ -155,12 +133,9 @@ Listing CompareLibraryMethods(const Listing& full_cache,
       }
     }
 
-    ForEachComparedField(
-        [&](auto member, const char* field_name)
-        {
-          ref.*member =
-              ReconcileField(present, field_name, path, member, report);
-        });
+    ForEachComparedField([&](auto member, const char* field_name) {
+      ref.*member = ReconcileField(present, field_name, path, member, report);
+    });
 
     reference.emplace(path, ref);
   }
@@ -171,15 +146,12 @@ Listing CompareLibraryMethods(const Listing& full_cache,
 
 void CompareAgainstReference(const std::string& method_name,
                              const Listing& reference, const Listing& candidate,
-                             Report& report)
-{
+                             Report& report) {
   MethodStats stats{.name = method_name};
 
-  for (const auto& [path, ref_entry] : reference)
-  {
+  for (const auto& [path, ref_entry] : reference) {
     const auto iterator = candidate.find(path);
-    if (iterator == candidate.end())
-    {
+    if (iterator == candidate.end()) {
       report.findings.push_back({"MISSING", method_name, path, "", "", ""});
       stats.missing++;
       continue;
@@ -187,33 +159,27 @@ void CompareAgainstReference(const std::string& method_name,
     stats.compared_entries++;
     const Entry& cand = iterator->second;
 
-    if (cand.is_directory != ref_entry.is_directory)
-    {
+    if (cand.is_directory != ref_entry.is_directory) {
       report.findings.push_back({"MISMATCH", method_name, path, "Type",
                                  ref_entry.is_directory ? "DIR" : "FILE",
                                  cand.is_directory ? "DIR" : "FILE"});
       stats.mismatched_fields++;
     }
 
-    ForEachComparedField(
-        [&](auto member, const char* field_name)
-        {
-          const auto& ref_value = ref_entry.*member;
-          const auto& cand_value = cand.*member;
-          if (ref_value && cand_value && *ref_value != *cand_value)
-          {
-            report.findings.push_back({"MISMATCH", method_name, path,
-                                       field_name, FormatValue(*ref_value),
-                                       FormatValue(*cand_value)});
-            stats.mismatched_fields++;
-          }
-        });
+    ForEachComparedField([&](auto member, const char* field_name) {
+      const auto& ref_value = ref_entry.*member;
+      const auto& cand_value = cand.*member;
+      if (ref_value && cand_value && *ref_value != *cand_value) {
+        report.findings.push_back({"MISMATCH", method_name, path, field_name,
+                                   FormatValue(*ref_value),
+                                   FormatValue(*cand_value)});
+        stats.mismatched_fields++;
+      }
+    });
   }
 
-  for (const auto& [path, entry] : candidate)
-  {
-    if (!reference.contains(path))
-    {
+  for (const auto& [path, entry] : candidate) {
+    if (!reference.contains(path)) {
       report.findings.push_back({"EXTRA", method_name, path, "", "", ""});
       stats.extra++;
     }
@@ -222,22 +188,16 @@ void CompareAgainstReference(const std::string& method_name,
   report.stats.push_back(stats);
 }
 
-bool PrintReport(const Report& report)
-{
-  for (const Finding& finding : report.findings)
-  {
-    if (finding.field.empty())
-    {
+bool PrintReport(const Report& report) {
+  for (const Finding& finding : report.findings) {
+    if (finding.field.empty()) {
       PrintOut("[{}] {}: \"{}\"", finding.kind, finding.method,
                Narrow(finding.path));
-      if (!finding.actual.empty())
-      {
+      if (!finding.actual.empty()) {
         PrintOut(" ({})", finding.actual);
       }
       PrintOut("\n");
-    }
-    else
-    {
+    } else {
       PrintOut("[{}] {}: \"{}\" {}: expected={} actual={}\n", finding.kind,
                finding.method, Narrow(finding.path), finding.field,
                finding.expected, finding.actual);
@@ -245,8 +205,7 @@ bool PrintReport(const Report& report)
   }
 
   PrintOut("\n");
-  for (const MethodStats& method_stats : report.stats)
-  {
+  for (const MethodStats& method_stats : report.stats) {
     PrintOut("{:<12} compared={} missing={} extra={} mismatched_fields={}\n",
              method_stats.name, method_stats.compared_entries,
              method_stats.missing, method_stats.extra,

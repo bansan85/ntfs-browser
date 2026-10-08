@@ -19,8 +19,7 @@
 // See ntfsdump.cpp for the implementation of this class
 //
 
-class CNtfsdumpApp : public CWinApp
-{
+class CNtfsdumpApp : public CWinApp {
  public:
   CNtfsdumpApp();
 
@@ -44,6 +43,7 @@ class CNtfsdumpApp : public CWinApp
 /////////////////////////////////////////////////////////////////////////////
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+// Microsoft Visual C++ will insert additional declarations immediately before
+// the previous line.
 
 #endif  // !defined(AFX_NTFSDUMP_H__4E22D562_0E60_4D30_BB7D_67248FE43EA9__INCLUDED_)

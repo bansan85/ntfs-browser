@@ -4,13 +4,11 @@
 #include "ntfs-browser/win-types.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 IndexBlock::IndexBlock() noexcept { LogTrace("Index Block"); }
 
-std::span<BYTE> IndexBlock::AllocIndexBlock(DWORD size)
-{
+std::span<BYTE> IndexBlock::AllocIndexBlock(DWORD size) {
   clear();
 
   realigned_.clear();

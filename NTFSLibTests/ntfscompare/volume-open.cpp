@@ -14,16 +14,14 @@ using NtfsBrowser::Strategy;
 
 #ifdef _WIN32
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
-std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
-{
+std::optional<VolumeHandles>
+    OpenVolumeFor(const std::filesystem::path& target) {
   std::error_code ec;
   const std::filesystem::path canonical =
       std::filesystem::weakly_canonical(target, ec);
-  if (ec || canonical.root_name().empty())
-  {
+  if (ec || canonical.root_name().empty()) {
     PrintErr("Cannot determine a drive letter for {}\n", NativeText(target));
     return std::nullopt;
   }
@@ -34,8 +32,7 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       std::make_unique<NtfsVolume<Strategy::FullCache>>(drive_letter);
   handles.no_cache =
       std::make_unique<NtfsVolume<Strategy::NoCache>>(drive_letter);
-  if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK())
-  {
+  if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK()) {
     // A drive letter is always ASCII.
     PrintErr(
         "Cannot open {}: as an NTFS volume (running as "
@@ -57,11 +54,9 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
 
   #include "raw-device-disk-reader.h"
 
-namespace NtfsCompare
-{
+namespace NtfsCompare {
 
-namespace
-{
+namespace {
 
 // Capacity of the getmntent_r() line buffer: one page, which holds any
 // realistic /proc/mounts line.
@@ -70,17 +65,14 @@ constexpr size_t mount_line_buffer_size = 4096;
 // The mount point whose path is the longest prefix of target, and its
 // device/source. std::nullopt if /proc/mounts lists nothing target sits
 // under (should not happen for a real path).
-struct MountInfo
-{
+struct MountInfo {
   std::filesystem::path mount_point;
   std::string device;
 };
 
-std::optional<MountInfo> FindMount(const std::filesystem::path& target)
-{
+std::optional<MountInfo> FindMount(const std::filesystem::path& target) {
   FILE* mounts = setmntent("/proc/mounts", "r");
-  if (mounts == nullptr)
-  {
+  if (mounts == nullptr) {
     return std::nullopt;
   }
 
@@ -89,8 +81,7 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target)
   size_t best_length = 0;
   struct mntent entry = {};
   std::array<char, mount_line_buffer_size> buffer{};
-  while (getmntent_r(mounts, &entry, buffer.data(), buffer.size()) != nullptr)
-  {
+  while (getmntent_r(mounts, &entry, buffer.data(), buffer.size()) != nullptr) {
     const std::string mount_str = entry.mnt_dir;
     const bool is_prefix =
         target_str.starts_with(mount_str) &&
@@ -98,8 +89,7 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target)
          // The size test just above is false, so targetStr is longer.
          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
          target_str[mount_str.size()] == '/');
-    if (is_prefix && mount_str.size() >= best_length)
-    {
+    if (is_prefix && mount_str.size() >= best_length) {
       best_length = mount_str.size();
       best =
           MountInfo{.mount_point = entry.mnt_dir, .device = entry.mnt_fsname};
@@ -111,25 +101,22 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target)
 
 }  // namespace
 
-std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
-{
+std::optional<VolumeHandles>
+    OpenVolumeFor(const std::filesystem::path& target) {
   std::error_code error_code;
   const std::filesystem::path canonical =
       std::filesystem::weakly_canonical(target, error_code);
-  if (error_code)
-  {
+  if (error_code) {
     PrintErr("Cannot resolve {}\n", NativeText(target));
     return std::nullopt;
   }
 
   const std::optional<MountInfo> mount = FindMount(canonical);
-  if (!mount)
-  {
+  if (!mount) {
     PrintErr("Cannot find the mount point backing {}\n", NativeText(canonical));
     return std::nullopt;
   }
-  if (!mount->device.starts_with("/dev/"))
-  {
+  if (!mount->device.starts_with("/dev/")) {
     PrintErr(
         "{} is not backed by a real block device (mounted from "
         "\"{}\")\n",
@@ -142,8 +129,7 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
   auto no_cache_reader = std::make_unique<RawDeviceDiskReader>();
   const bool opened = full_cache_reader->Open(device_path) &&
                       no_cache_reader->Open(device_path);
-  if (!opened)
-  {
+  if (!opened) {
     PrintErr("Cannot open {} (root privileges may be required)\n",
              mount->device);
     return std::nullopt;
@@ -154,8 +140,7 @@ std::optional<VolumeHandles> OpenVolumeFor(const std::filesystem::path& target)
       std::move(full_cache_reader));
   handles.no_cache = std::make_unique<NtfsVolume<Strategy::NoCache>>(
       std::move(no_cache_reader));
-  if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK())
-  {
+  if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK()) {
     PrintErr("{} is not an NTFS volume\n", mount->device);
     return std::nullopt;
   }

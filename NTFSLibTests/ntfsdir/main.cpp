@@ -18,8 +18,7 @@
 
 using namespace NtfsBrowser;
 
-void Usage()
-{
+void Usage() {
   printf("Invalid parameter\n");
   printf("Usage: ntfsdir [--log=...] \"path\"\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
@@ -30,24 +29,18 @@ void Usage()
 
 // get volume name 'C', 'D', ...
 // *ppath -> "c:\program files\common files"
-wchar_t Getvolume(wchar_t** ppath)
-{
+wchar_t Getvolume(wchar_t** ppath) {
   wchar_t* p = *ppath;
 
   // skip leading blank and "
-  while (*p)
-  {
-    if (*p == L' ' || *p == L'"')
-    {
+  while (*p) {
+    if (*p == L' ' || *p == L'"') {
       p++;
-    }
-    else
-    {
+    } else {
       break;
     }
   }
-  if (*p == L'\0')
-  {
+  if (*p == L'\0') {
     return L'\0';
   }
 
@@ -55,48 +48,34 @@ wchar_t Getvolume(wchar_t** ppath)
   p++;
 
   // skip blank
-  while (*p)
-  {
-    if (*p == L' ')
-    {
+  while (*p) {
+    if (*p == L' ') {
       p++;
-    }
-    else
-    {
+    } else {
       break;
     }
   }
-  if (*p == L'\0')
-  {
+  if (*p == L'\0') {
     return L'\0';
   }
 
-  if (*p != L':')
-  {
+  if (*p != L':') {
     return L'\0';
   }
 
   // forward to '\' or string end
-  while (*p)
-  {
-    if (*p != L'\\')
-    {
+  while (*p) {
+    if (*p != L'\\') {
       p++;
-    }
-    else
-    {
+    } else {
       break;
     }
   }
   // forward to not '\' and not ", or string end
-  while (*p)
-  {
-    if (*p == L'\\' || *p == L'"')
-    {
+  while (*p) {
+    if (*p == L'\\' || *p == L'"') {
       p++;
-    }
-    else
-    {
+    } else {
       break;
     }
   }
@@ -107,34 +86,27 @@ wchar_t Getvolume(wchar_t** ppath)
 
 // get sub directory name
 // *ppath -> "program files\common files"
-std::wstring Getpathname(std::wstring& ppath)
-{
+std::wstring Getpathname(std::wstring& ppath) {
   std::wstring pathname;
   size_t len = 0;
   const wchar_t* p = ppath.c_str();
 
   // copy until '\' or " or string ends or buffer full
-  while (*p && len < ppath.length())
-  {
+  while (*p && len < ppath.length()) {
     pathname.append(1, *p);
     len++;
     p++;
 
-    if (*p == '\\' || *p == '\"')
-    {
+    if (*p == '\\' || *p == '\"') {
       break;
     }
   }
 
   // forward to not '\' and not ", or string end
-  while (*p)
-  {
-    if (*p == '\\' || *p == '\"')
-    {
+  while (*p) {
+    if (*p == '\\' || *p == '\"') {
       p++;
-    }
-    else
-    {
+    } else {
       break;
     }
   }
@@ -143,47 +115,38 @@ std::wstring Getpathname(std::wstring& ppath)
   return pathname;
 }
 
-struct Total
-{
+struct Total {
   int files = 0;
   int dirs = 0;
 };
 
-void Printfile(const IndexEntryView& ie, void* context)
-{
+void Printfile(const IndexEntryView& ie, void* context) {
   Total& total = *static_cast<Total*>(context);
   // Hide system metafiles
-  if (ie.GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::User))
-  {
+  if (ie.GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::User)) {
     return;
   }
 
   // Ignore DOS alias file names
-  if (!ie.IsWin32Name())
-  {
+  if (!ie.IsWin32Name()) {
     return;
   }
 
   FILETIME ft;
   std::wstring_view fn = ie.GetFilename();
-  if (fn.empty())
-  {
+  if (fn.empty()) {
     return;
   }
 
   ie.GetFileTime(&ft, nullptr, nullptr);
   SYSTEMTIME st;
-  if (FileTimeToSystemTime(&ft, &st) == TRUE)
-  {
+  if (FileTimeToSystemTime(&ft, &st) == TRUE) {
     printf("%u-%02u-%02u  %02u:%02u\t%s    ", st.wYear, st.wMonth, st.wDay,
            st.wHour, st.wMinute, ie.IsDirectory() ? "<DIR>" : "     ");
 
-    if (!ie.IsDirectory())
-    {
+    if (!ie.IsDirectory()) {
       printf("%I64u\t", ie.GetFileSize());
-    }
-    else
-    {
+    } else {
       printf("\t");
     }
 
@@ -192,63 +155,51 @@ void Printfile(const IndexEntryView& ie, void* context)
            gsl::narrow<int>(fn.size()), fn.data());
   }
 
-  if (ie.IsDirectory())
-  {
+  if (ie.IsDirectory()) {
     total.dirs++;
-  }
-  else
-  {
+  } else {
     total.files++;
   }
 }
 
 // NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
-int wmain(int argc, wchar_t* argv[])
-{
+int wmain(int argc, wchar_t* argv[]) {
   Log::Config log_config;
   wchar_t* path = nullptr;
 
-  for (int i = 1; i < argc; i++)
-  {
-    if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w))
-    {
-      if (!Log::ParseOption(argv[i], log_config))
-      {
+  for (int i = 1; i < argc; i++) {
+    if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w)) {
+      if (!Log::ParseOption(argv[i], log_config)) {
         Usage();
         return -1;
       }
       continue;
     }
     // Exactly one path argument, and it may come before or after --log=.
-    if (path != nullptr)
-    {
+    if (path != nullptr) {
       Usage();
       return -1;
     }
     path = argv[i];
   }
 
-  if (path == nullptr)
-  {
+  if (path == nullptr) {
     Usage();
     return -1;
   }
 
-  if (!Log::Configure(log_config))
-  {
+  if (!Log::Configure(log_config)) {
     fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
   }
 
   const wchar_t volname = Getvolume(&path);
-  if (volname == L'\0')
-  {
+  if (volname == L'\0') {
     Usage();
     return -1;
   }
 
   NtfsVolume<Strategy::FullCache> volume(volname);
-  if (!volume.IsVolumeOK())
-  {
+  if (!volume.IsVolumeOK()) {
     printf("Cannot get NTFS BPB from boot sector of volume %lc\n", volname);
     return -1;
   }
@@ -260,14 +211,12 @@ int wmain(int argc, wchar_t* argv[])
   // don't waste time and ram to parse unwanted attributes
   fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
 
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root)))
-  {
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
     printf("Cannot read root directory of volume %lc\n", volname);
     return -1;
   }
 
-  if (!fr.ParseAttrs())
-  {
+  if (!fr.ParseAttrs()) {
     printf("Cannot parse attributes\n");
     return -1;
   }
@@ -276,35 +225,29 @@ int wmain(int argc, wchar_t* argv[])
   std::wstring wpath(path);
   std::wstring pathname;
 
-  while (true)
-  {
+  while (true) {
     pathname = Getpathname(wpath);
     // no subdirectories
-    if (pathname.empty())
-    {
+    if (pathname.empty()) {
       break;
     }
 
     std::optional<IndexEntry> ie = fr.FindSubEntry(pathname.c_str());
-    if (!ie)
-    {
+    if (!ie) {
       printf("Cannot find directory %ls\n", pathname.c_str());
       return -1;
     }
 
-    if (!ie->IsDirectory())
-    {
+    if (!ie->IsDirectory()) {
       printf("%ls is not a directory\n", pathname.c_str());
       return -1;
     }
 
-    if (!fr.ParseFileRecord(ie->GetFileReference()))
-    {
+    if (!fr.ParseFileRecord(ie->GetFileReference())) {
       printf("Cannot read directory %ls\n", pathname.c_str());
       return -1;
     }
-    if (!fr.ParseAttrs())
-    {
+    if (!fr.ParseAttrs()) {
       printf("Cannot parse attributes\n");
       return -1;
     }

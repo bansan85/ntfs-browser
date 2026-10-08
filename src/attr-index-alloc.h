@@ -8,8 +8,8 @@
 #include "attr-non-resident.h"
 #include "internal-export.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 class IndexBlock;
 template <Strategy S>
 class FileRecord;
@@ -25,14 +25,13 @@ enum class Strategy : std::uint8_t;
                                DWORD index_block_size) noexcept;
 
 template <Strategy S>
-class AttrIndexAlloc : public AttrNonResident<S>
-{
+class AttrIndexAlloc : public AttrNonResident<S> {
  public:
   AttrIndexAlloc(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrIndexAlloc(AttrIndexAlloc&& other) noexcept = delete;
-  AttrIndexAlloc(AttrIndexAlloc const& other) = delete;
+  AttrIndexAlloc(const AttrIndexAlloc& other) = delete;
   AttrIndexAlloc& operator=(AttrIndexAlloc&& other) noexcept = delete;
-  AttrIndexAlloc& operator=(AttrIndexAlloc const& other) = delete;
+  AttrIndexAlloc& operator=(const AttrIndexAlloc& other) = delete;
   ~AttrIndexAlloc() override;
 
   friend class FileRecord<S>;

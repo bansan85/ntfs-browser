@@ -8,34 +8,32 @@
 
 #include <ntfs-browser/disk-reader.h>
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // Roots of the forensic image corpora, outside this repo. CMake sets each one
 // from its NTFS_BROWSER_TEST_* cache or environment variable, as a UTF-8 path.
 // .github/scripts/fetch-test-data.py builds the default layout.
 
 // DFTT (dftt.sourceforge.net): one subdirectory per unzipped test.
-inline const std::filesystem::path& DfttDir()
-{
+inline const std::filesystem::path& DfttDir() {
   static const std::filesystem::path path = u8"" NTFS_TEST_DFTT_DIR;
   return path;
 }
+
 // Digital Corpora nps-2009-ntfs1: ntfs1-gen2.raw, converted from its .E01.
-inline const std::filesystem::path& NpsNtfs1Dir()
-{
+inline const std::filesystem::path& NpsNtfs1Dir() {
   static const std::filesystem::path path = u8"" NTFS_TEST_NPS_NTFS1_DIR;
   return path;
 }
+
 // github.com/msuhanov/ntfs-samples, each *.raw.gz decompressed in place.
-inline const std::filesystem::path& NtfsSamplesDir()
-{
+inline const std::filesystem::path& NtfsSamplesDir() {
   static const std::filesystem::path path = u8"" NTFS_TEST_NTFS_SAMPLES_DIR;
   return path;
 }
+
 // ntfs_extremely_fragmented_mft.raw: 256 GiB, so it may live elsewhere.
-inline const std::filesystem::path& FragmentedMftImage()
-{
+inline const std::filesystem::path& FragmentedMftImage() {
   static const std::filesystem::path path = u8"" NTFS_TEST_FRAGMENTED_MFT_IMAGE;
   return path;
 }

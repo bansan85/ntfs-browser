@@ -25,8 +25,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // DFTT test #10 ("NTFS Autodetect", http://dftt.sourceforge.net): each
 // partition image holds a valid NTFS filesystem, plus a second, unrelated
@@ -38,12 +37,11 @@ const std::filesystem::path autodetect_dir =
 // Opens a DFTT autodetect partition image and confirms the library reads its
 // NTFS side correctly: the root directory's own ntfs.txt is found, and its
 // $DATA attribute reads back the size the index entry advertises.
-void CheckReadsPartitionImage(std::wstring_view image_name)
-{
+void CheckReadsPartitionImage(std::wstring_view image_name) {
   const std::filesystem::path image_path = autodetect_dir / image_name;
   NtfsBrowserTests::RequireCorpusImage(image_path);
 
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       NtfsBrowserTests::OpenBareVolumeImage(image_path));
   REQUIRE(volume.IsVolumeOK());
 
@@ -71,19 +69,16 @@ void CheckReadsPartitionImage(std::wstring_view image_name)
 }  // namespace
 
 TEST_CASE("Reads the NTFS side of DFTT test #10 partition 1 (NTFS+Ext2)",
-          "[dftt][integration]")
-{
+          "[dftt][integration]") {
   CheckReadsPartitionImage(L"10-ntfs-part1.dd");
 }
 
 TEST_CASE("Reads the NTFS side of DFTT test #10 partition 2 (NTFS+UFS2)",
-          "[dftt][integration]")
-{
+          "[dftt][integration]") {
   CheckReadsPartitionImage(L"10-ntfs-part2.dd");
 }
 
 TEST_CASE("Reads the NTFS side of DFTT test #10 partition 3 (NTFS+UFS1)",
-          "[dftt][integration]")
-{
+          "[dftt][integration]") {
   CheckReadsPartitionImage(L"10-ntfs-part3.dd");
 }

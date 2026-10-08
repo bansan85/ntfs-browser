@@ -9,22 +9,22 @@
 #include "internal-export.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 enum class Strategy : std::uint8_t;
 struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
 template <class Resident, Strategy S>
-class AttrBitmap : public Resident
-{
+class AttrBitmap : public Resident {
  public:
   AttrBitmap(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrBitmap(AttrBitmap&& other) noexcept = delete;
-  AttrBitmap(AttrBitmap const& other) = delete;
+  AttrBitmap(const AttrBitmap& other) = delete;
   AttrBitmap& operator=(AttrBitmap&& other) noexcept = delete;
-  AttrBitmap& operator=(AttrBitmap const& other) = delete;
+  AttrBitmap& operator=(const AttrBitmap& other) = delete;
+
   ~AttrBitmap() override { LogTrace("AttrBitmap deleted"); }
 
  private:

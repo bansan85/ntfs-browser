@@ -27,18 +27,16 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // FindSubEntry() must descend into a real sub-node when the search name
 // sorts past its parent entry only under NTFS' real collation order.
 template <Strategy S>
-void RunFindSubEntryDescendsIntoGapCollationSubNode()
-{
+void RunFindSubEntryDescendsIntoGapCollationSubNode() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithGapCollationSubNode());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
@@ -59,7 +57,6 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode()
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry descends into a real sub-node across the Z-a collation gap",
     "[file-record][filename][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   RunFindSubEntryDescendsIntoGapCollationSubNode<S>();
 }

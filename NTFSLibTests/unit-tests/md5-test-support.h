@@ -16,8 +16,7 @@
 
 #ifdef NTFS_TEST_HAS_MD5
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // Hex-encodes the MD5 of data, using whichever EFS crypto backend this build
 // already compiles in.

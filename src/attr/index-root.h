@@ -4,11 +4,9 @@
 
 #include <ntfs-browser/data/attr-type.h>
 
-namespace NtfsBrowser::Attr
-{
+namespace NtfsBrowser::Attr {
 
-struct IndexRoot
-{
+struct IndexRoot {
   // Index Root Header
   AttrType attr_type;  // Attribute type
   //(ATTR_TYPE_FILE_NAME: Directory, 0: Index View)

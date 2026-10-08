@@ -18,39 +18,31 @@
 #include "efs/sector-cipher.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser::Efs
-{
+namespace NtfsBrowser::Efs {
 
-namespace
-{
+namespace {
+
 // CBC over one Crypto++ block cipher, restarted with a fresh IV per sector.
 template <class BlockCipher>
-class CryptoPpDecryptor final : public SectorDecryptor
-{
+class CryptoPpDecryptor final : public SectorDecryptor {
  public:
-  explicit CryptoPpDecryptor(std::span<const BYTE> key)
-  {
+  explicit CryptoPpDecryptor(std::span<const BYTE> key) {
     cipher_.SetKey(key.data(), key.size());
   }
 
-  bool DecryptSector(ULONGLONG offset, std::span<BYTE> sector) const override
-  {
-    if (sector.size() != sector_size)
-    {
+  bool DecryptSector(ULONGLONG offset, std::span<BYTE> sector) const override {
+    if (sector.size() != sector_size) {
       return false;
     }
 
-    try
-    {
+    try {
       const std::array<BYTE, max_block_size> initialization_vector =
           MakeSectorIv(offset, BlockCipher::BLOCKSIZE);
       CryptoPP::CBC_Mode_ExternalCipher::Decryption cbc(
           cipher_, initialization_vector.data());
       cbc.ProcessData(sector.data(), sector.data(), sector.size());
       return true;
-    }
-    catch (const std::exception& e)
-    {
+    } catch (const std::exception& e) {
       LogException(e);
       return false;
     }
@@ -64,14 +56,10 @@ class CryptoPpDecryptor final : public SectorDecryptor
 
 template <class BlockCipher>
 [[nodiscard]] std::unique_ptr<SectorDecryptor>
-    MakeDecryptor(std::span<const BYTE> key)
-{
-  try
-  {
+    MakeDecryptor(std::span<const BYTE> key) {
+  try {
     return std::make_unique<CryptoPpDecryptor<BlockCipher>>(key);
-  }
-  catch (const std::exception& e)
-  {
+  } catch (const std::exception& e) {
     LogException(e);
     return nullptr;
   }
@@ -91,8 +79,7 @@ constexpr std::array<BYTE, 12> desx_salt2{'S', 'c', 'o', 't', 't', ' ',
 
 // MD5 of the 128-bit DESX FEK followed by "salt".
 [[nodiscard]] std::array<BYTE, CryptoPP::Weak::MD5::DIGESTSIZE>
-    DesxDigest(std::span<const BYTE> fek, std::span<const BYTE> salt)
-{
+    DesxDigest(std::span<const BYTE> fek, std::span<const BYTE> salt) {
   std::array<BYTE, CryptoPP::Weak::MD5::DIGESTSIZE> digest{};
   CryptoPP::Weak::MD5 hash;
   hash.Update(fek.data(), fek.size());
@@ -107,8 +94,7 @@ constexpr std::array<BYTE, 12> desx_salt2{'S', 'c', 'o', 't', 't', ' ',
 // decrypts as: block ^ key[16..24), DES, then ^ key[0..8). So the output
 // whitening goes last in the key, the input whitening first.
 [[nodiscard]] std::array<BYTE, desx_key_size>
-    ExpandDesxKey(std::span<const BYTE> fek)
-{
+    ExpandDesxKey(std::span<const BYTE> fek) {
   constexpr size_t half_value = 8;
   // The digests are folded in 32-bit words.
   constexpr size_t word_value = 4;
@@ -118,8 +104,7 @@ constexpr std::array<BYTE, 12> desx_salt2{'S', 'c', 'o', 't', 't', ' ',
   std::array<BYTE, desx_key_size> key{};
   const std::span<const BYTE> halves(digest2);
   std::ranges::copy(halves.subspan(half_value), key.begin());
-  for (size_t i = 0; i < word_value; ++i)
-  {
+  for (size_t i = 0; i < word_value; ++i) {
     // i < 4: the highest digest1 index is 15 of 16, the highest key index 15.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     key[half_value + i] = digest1[i] ^ digest1[word_value + i];
@@ -134,22 +119,19 @@ constexpr std::array<BYTE, 12> desx_salt2{'S', 'c', 'o', 't', 't', ' ',
   SecureZero(digest2);
   return key;
 }
+
 }  // namespace
 
-std::unique_ptr<SectorDecryptor> MakeCryptoPpDecryptor(const Fek& fek)
-{
-  switch (fek.GetAlgorithm())
-  {
+std::unique_ptr<SectorDecryptor> MakeCryptoPpDecryptor(const Fek& fek) {
+  switch (fek.GetAlgorithm()) {
     case Algorithm::Aes128:
     case Algorithm::Aes192:
     case Algorithm::Aes256:
       return MakeDecryptor<CryptoPP::AES>(fek.GetKey());
     case Algorithm::_3Des:
       return MakeDecryptor<CryptoPP::DES_EDE3>(fek.GetKey());
-    case Algorithm::Desx:
-    {
-      if (fek.GetKey().size() != desx_fek_size)
-      {
+    case Algorithm::Desx: {
+      if (fek.GetKey().size() != desx_fek_size) {
         return nullptr;
       }
       auto key = ExpandDesxKey(fek.GetKey());

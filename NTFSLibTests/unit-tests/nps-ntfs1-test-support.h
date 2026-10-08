@@ -13,16 +13,16 @@
 
 #include "corpus-test-support.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
+
 template <Strategy S>
 class FileRecord;
 template <Strategy S>
 class NtfsVolume;
+
 }  // namespace NtfsBrowser
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // The NPS Test Disk Image "nps-2009-ntfs1" (Digital Corpora), generation 2: a
 // real NTFS volume with RAW, Compressed, and Encrypted directories, each
@@ -38,8 +38,7 @@ inline const std::filesystem::path ntfs1_image =
 // already matches this (fiwalk decompresses NTFS compression when hashing);
 // Encrypted's does not, since fiwalk never decrypted EFS - this is the
 // RAW/decrypted hash in both cases.
-struct KnownFile
-{
+struct KnownFile {
   std::string_view name;
   ULONGLONG size;
   std::string_view md5;
@@ -52,7 +51,7 @@ inline constexpr std::array<KnownFile, 5> known_files{{
     {"report02-3.pdf", 1421998, "dede94f84fb2d00dc93ed00fda272a18"},
     // Written one line at a time, interleaved with its two copies in the
     // other directories: naturally, heavily fragmented.
-    {"logfile1.txt", 21888890, "be2828dda150f19edf9a0fc87e3ab640"},
+    {"logfile1.txt", 21'888'890, "be2828dda150f19edf9a0fc87e3ab640"},
 }};
 
 // Opens ntfs1_image through a PartitionDiskReader, so NtfsVolume's own

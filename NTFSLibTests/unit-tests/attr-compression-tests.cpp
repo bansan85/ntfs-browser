@@ -56,8 +56,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // Sentinel fill so untouched bytes are distinguishable from valid (zero) data.
 constexpr BYTE sentinel_byte = 0xCC;
@@ -74,15 +73,13 @@ constexpr size_t tiny_dest_size = 10;
 // because the record's attributes reference both (the volume for reads, the
 // record buffer for their own header bytes).
 template <Strategy S>
-struct ParsedRoot
-{
+struct ParsedRoot {
   std::unique_ptr<NtfsVolume<S>> volume;
   std::unique_ptr<FileRecord<S>> record;
 };
 
 template <Strategy S>
-ParsedRoot<S> ParseRoot(std::vector<BYTE> image)
-{
+ParsedRoot<S> ParseRoot(std::vector<BYTE> image) {
   ParsedRoot<S> parsed;
   parsed.volume = std::make_unique<NtfsVolume<S>>(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
@@ -97,8 +94,7 @@ ParsedRoot<S> ParseRoot(std::vector<BYTE> image)
 // attribute, truncated to what ReadData() actually produced; empty on failure.
 template <Strategy S>
 std::optional<std::vector<BYTE>> ReadRootData(const FileRecord<S>& record,
-                                              ULONGLONG offset, size_t size)
-{
+                                              ULONGLONG offset, size_t size) {
   const auto& data_attrs = record.GetAttr(AttrType::Data);
   REQUIRE(data_attrs.size() == 1);
 
@@ -106,8 +102,7 @@ std::optional<std::vector<BYTE>> ReadRootData(const FileRecord<S>& record,
   // The REQUIRE above checks the size of dataAttrs.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const std::optional<ULONGLONG> read = data_attrs[0]->ReadData(offset, buffer);
-  if (!read)
-  {
+  if (!read) {
     return {};
   }
 
@@ -119,8 +114,7 @@ std::optional<std::vector<BYTE>> ReadRootData(const FileRecord<S>& record,
 // externally visible signal that a cached decompression was reused. The
 // library logger is already pinned to a trace-level capturing sink; see
 // test-log-sink.h.
-std::string CaptureTrace(const std::function<void()>& body)
-{
+std::string CaptureTrace(const std::function<void()>& body) {
   (void)NtfsBrowserTests::TakeCapturedLog();
   body();
   return NtfsBrowserTests::TakeCapturedLog();
@@ -133,8 +127,7 @@ std::string CaptureTrace(const std::function<void()>& body)
 ////////////////////////////////////////////////////////////////////////////
 
 TEST_CASE("LZNT1 decompresses the [MS-XCA] section 3.3 worked example",
-          "[lznt1][compression]")
-{
+          "[lznt1][compression]") {
   std::vector<BYTE> out(NtfsBrowser::Lznt1::chunk_size, sentinel_byte);
 
   const size_t produced = NtfsBrowser::Lznt1::Decompress(
@@ -147,8 +140,7 @@ TEST_CASE("LZNT1 decompresses the [MS-XCA] section 3.3 worked example",
 }
 
 TEST_CASE("LZNT1 passes an uncompressed chunk through unchanged",
-          "[lznt1][compression]")
-{
+          "[lznt1][compression]") {
   const std::vector<BYTE> payload =
       NtfsBrowserTests::CompressionFixturePattern(1234);
   const std::vector<BYTE> chunk =
@@ -163,8 +155,7 @@ TEST_CASE("LZNT1 passes an uncompressed chunk through unchanged",
 }
 
 TEST_CASE("LZNT1 concatenates chunks and stops at End_of_buffer",
-          "[lznt1][compression]")
-{
+          "[lznt1][compression]") {
   const std::vector<BYTE> first =
       NtfsBrowserTests::CompressionFixturePattern(oversized_chunk_size);
   const std::vector<BYTE> second =
@@ -187,48 +178,42 @@ TEST_CASE("LZNT1 concatenates chunks and stops at End_of_buffer",
 }
 
 TEST_CASE("LZNT1 rejects malformed input instead of reading out of bounds",
-          "[lznt1][compression]")
-{
+          "[lznt1][compression]") {
   std::vector<BYTE> out(NtfsBrowser::Lznt1::chunk_size, sentinel_byte);
 
-  SECTION("chunk header with a wrong signature")
-  {
+  SECTION("chunk header with a wrong signature") {
     // Bits 14-12 must always be 3; here they are 0.
     const std::vector<BYTE> src{0x02, 0x80, 0x01, 0x00, 0x00};
     CHECK_THROWS_AS(NtfsBrowser::Lznt1::Decompress(src, out),
                     std::runtime_error);
   }
 
-  SECTION("chunk declaring more data than the buffer holds")
-  {
+  SECTION("chunk declaring more data than the buffer holds") {
     // Declared chunk size 0x0FFF + 3 == 4098 bytes, but only 4 are here.
     const std::vector<BYTE> src{0xFF, 0xBF, 0x00, 0x00};
     CHECK_THROWS_AS(NtfsBrowser::Lznt1::Decompress(src, out),
                     std::runtime_error);
   }
 
-  SECTION("compressed word truncated by the chunk's own declared size")
-  {
+  SECTION("compressed word truncated by the chunk's own declared size") {
     // Declared size 4 bytes = 2 payload bytes: a compressed-word flag, then
     // only 1 of its 2 bytes.
-    const std::vector<BYTE> src{0x01, 0xb0, 0x01, 0x00};
+    const std::vector<BYTE> src{0x01, 0xB0, 0x01, 0x00};
     CHECK_THROWS_AS(NtfsBrowser::Lznt1::Decompress(src, out),
                     std::runtime_error);
   }
 
-  SECTION("back-reference pointing before the start of the chunk")
-  {
+  SECTION("back-reference pointing before the start of the chunk") {
     // Same bytes BuildFakeNtfsImageWithCorruptCompressedUnit() writes:
     // displacement 1, nothing decompressed yet.
-    const std::vector<BYTE> src{0x02, 0xb0, 0x01, 0x00, 0x00};
+    const std::vector<BYTE> src{0x02, 0xB0, 0x01, 0x00, 0x00};
     CHECK_THROWS_AS(NtfsBrowser::Lznt1::Decompress(src, out),
                     std::runtime_error);
   }
 
-  SECTION("chunk decompressing to more than 4096 bytes")
-  {
+  SECTION("chunk decompressing to more than 4096 bytes") {
     // Decodes to 4099 bytes: 1 over the 4096 per-chunk limit ([MS-XCA] 2.5.3).
-    const std::vector<BYTE> src{0x03, 0xb0, 0x02, 0x41, 0xff, 0x0f};
+    const std::vector<BYTE> src{0x03, 0xB0, 0x02, 0x41, 0xFF, 0x0F};
     // Roomy dest (2 chunks) so the per-chunk 4096 limit rejects this, not
     // the buffer bound.
     std::vector<BYTE> roomy(2 * NtfsBrowser::Lznt1::chunk_size, sentinel_byte);
@@ -236,8 +221,7 @@ TEST_CASE("LZNT1 rejects malformed input instead of reading out of bounds",
                     std::runtime_error);
   }
 
-  SECTION("output overrunning the destination buffer")
-  {
+  SECTION("output overrunning the destination buffer") {
     // Well-formed 100-byte chunk into a 10-byte dest: a real unit never
     // exceeds its own size, so this is malformed.
     const std::vector<BYTE> src = NtfsBrowserTests::MakeUncompressedLznt1Chunk(
@@ -252,14 +236,12 @@ TEST_CASE("LZNT1 rejects malformed input instead of reading out of bounds",
 // End-to-end: AttrNonResident<S>::ReadData() over compressed attributes
 ////////////////////////////////////////////////////////////////////////////
 
-namespace
-{
+namespace {
 
 // I/O matrix row "Compressed unit": one real run of [MS-XCA] section 3.3
 // LZNT1 bytes, then a sparse run padding out the full cluster count.
 template <Strategy S>
-void CheckCompressedFileReadsBackDecompressed()
-{
+void CheckCompressedFileReadsBackDecompressed() {
   ParsedRoot<S> root =
       ParseRoot<S>(NtfsBrowserTests::BuildFakeNtfsImageWithCompressedFile());
 
@@ -287,8 +269,7 @@ void CheckCompressedFileReadsBackDecompressed()
 // I/O matrix row "Stored (incompressible) unit": real runs fill the whole
 // unit with no sparse pad, so the bytes must pass through undecompressed.
 template <Strategy S>
-void CheckStoredCompressionUnitReadsBackVerbatim()
-{
+void CheckStoredCompressionUnitReadsBackVerbatim() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithStoredCompressionUnit());
   REQUIRE(root.record->ParseAttrs());
@@ -308,8 +289,7 @@ void CheckStoredCompressionUnitReadsBackVerbatim()
 // I/O matrix row "Fully sparse unit": no real cluster at all, so it must
 // read back zero-filled, same as the pre-existing uncompressed sparse path.
 template <Strategy S>
-void CheckSparseCompressionUnitReadsBackZeroed()
-{
+void CheckSparseCompressionUnitReadsBackZeroed() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSparseCompressionUnit());
   REQUIRE(root.record->ParseAttrs());
@@ -321,10 +301,8 @@ void CheckSparseCompressionUnitReadsBackZeroed()
           NtfsBrowserTests::compression_unit_size);
 
   size_t non_zero = 0;
-  for (const BYTE byte_value : NtfsBrowserTests::Unwrap(data))
-  {
-    if (byte_value != 0)
-    {
+  for (const BYTE byte_value : NtfsBrowserTests::Unwrap(data)) {
+    if (byte_value != 0) {
       non_zero++;
     }
   }
@@ -334,8 +312,7 @@ void CheckSparseCompressionUnitReadsBackZeroed()
 // A unit whose compressed bytes span TWO non-contiguous data runs, which the
 // read path must stitch together before decompressing.
 template <Strategy S>
-void CheckFragmentedCompressedFileReadsBackDecompressed()
-{
+void CheckFragmentedCompressedFileReadsBackDecompressed() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFragmentedCompressedFile());
   REQUIRE(root.record->ParseAttrs());
@@ -356,8 +333,7 @@ void CheckFragmentedCompressedFileReadsBackDecompressed()
 // of the compression unit size, so the trailing unit's real extent comes
 // from a PARTIAL run. Reads must return exactly real_size bytes.
 template <Strategy S>
-void CheckTrailingPartialCompressionUnit()
-{
+void CheckTrailingPartialCompressionUnit() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithTrailingPartialCompressionUnit());
   REQUIRE(root.record->ParseAttrs());
@@ -396,20 +372,16 @@ void CheckTrailingPartialCompressionUnit()
 // I/O matrix row "Corrupt/truncated LZNT1 chunk": ReadData() must fail
 // through its std::optional error channel, not crash or return garbage.
 template <Strategy S>
-void CheckCorruptCompressedUnitIsRejected()
-{
+void CheckCorruptCompressedUnitIsRejected() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCorruptCompressedUnit());
   REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> data;
-  const std::string trace = CaptureTrace(
-      [&]
-      {
-        data = ReadRootData<S>(
-            *root.record, 0,
-            NtfsBrowserTests::xca_lznt1_example_decompressed_size);
-      });
+  const std::string trace = CaptureTrace([&] {
+    data = ReadRootData<S>(
+        *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+  });
 
   CHECK_FALSE(data.has_value());
   CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
@@ -421,8 +393,7 @@ void CheckCorruptCompressedUnitIsRejected()
 // A unit no data run maps at all must make ReadData() fail, not hand back
 // fabricated zeroes as if it were a hole.
 template <Strategy S>
-void CheckUnmappedCompressionUnitIsRejected()
-{
+void CheckUnmappedCompressionUnitIsRejected() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithUnmappedCompressionUnit());
   REQUIRE(root.record->ParseAttrs());
@@ -441,12 +412,10 @@ void CheckUnmappedCompressionUnitIsRejected()
 
   // Reading into unit 1 must not be answered with zeroes.
   std::optional<std::vector<BYTE>> unmapped;
-  const std::string trace = CaptureTrace(
-      [&]
-      {
-        unmapped = ReadRootData<S>(*root.record, 0,
-                                   2 * NtfsBrowserTests::compression_unit_size);
-      });
+  const std::string trace = CaptureTrace([&] {
+    unmapped = ReadRootData<S>(*root.record, 0,
+                               2 * NtfsBrowserTests::compression_unit_size);
+  });
 
   CHECK_FALSE(unmapped.has_value());
   CHECK_THAT(trace, Catch::Matchers::ContainsSubstring("is not fully mapped"));
@@ -455,19 +424,16 @@ void CheckUnmappedCompressionUnitIsRejected()
 // A real run after a hole inside one unit is not an encoding this code
 // understands: a compressed unit's sparse padding is always its tail.
 template <Strategy S>
-void CheckRealClustersAfterHoleIsRejected()
-{
+void CheckRealClustersAfterHoleIsRejected() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithRealClustersAfterHole());
   REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> data;
-  const std::string trace = CaptureTrace(
-      [&]
-      {
-        data = ReadRootData<S>(*root.record, 0,
-                               NtfsBrowserTests::compression_unit_size);
-      });
+  const std::string trace = CaptureTrace([&] {
+    data = ReadRootData<S>(*root.record, 0,
+                           NtfsBrowserTests::compression_unit_size);
+  });
 
   CHECK_FALSE(data.has_value());
   CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
@@ -477,19 +443,16 @@ void CheckRealClustersAfterHoleIsRejected()
 // An interior unit whose LZNT1 stream ends early must not be zero-padded
 // and returned as valid data (unlike a legitimate trailing partial unit).
 template <Strategy S>
-void CheckShortDecompressedInteriorUnitIsRejected()
-{
+void CheckShortDecompressedInteriorUnitIsRejected() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithShortDecompressedUnit());
   REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> data;
-  const std::string trace = CaptureTrace(
-      [&]
-      {
-        data = ReadRootData<S>(*root.record, 0,
-                               NtfsBrowserTests::compression_unit_size);
-      });
+  const std::string trace = CaptureTrace([&] {
+    data = ReadRootData<S>(*root.record, 0,
+                           NtfsBrowserTests::compression_unit_size);
+  });
 
   CHECK_FALSE(data.has_value());
   CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
@@ -500,23 +463,20 @@ void CheckShortDecompressedInteriorUnitIsRejected()
 
 TEMPLATE_TEST_CASE_SIG("A compressed file's data reads back decompressed",
                        "[attr-non-resident][compression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache)
-{
+                       Strategy::NoCache, Strategy::FullCache) {
   CheckCompressedFileReadsBackDecompressed<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A stored (incompressible) compression unit reads back verbatim",
     "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckStoredCompressionUnitReadsBackVerbatim<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("A fully sparse compression unit reads back zero-filled",
                        "[attr-non-resident][compression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache)
-{
+                       Strategy::NoCache, Strategy::FullCache) {
   CheckSparseCompressionUnitReadsBackZeroed<S>();
 }
 
@@ -524,48 +484,42 @@ TEMPLATE_TEST_CASE_SIG(
     "A compression unit whose compressed bytes span several data runs is "
     "stitched back together before decompressing",
     "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckFragmentedCompressedFileReadsBackDecompressed<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A trailing partial compression unit returns exactly real_size bytes",
     "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckTrailingPartialCompressionUnit<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A corrupt LZNT1 compression unit is rejected, not crashed on",
     "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckCorruptCompressedUnitIsRejected<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A compression unit no data run maps is rejected, not read as a hole",
     "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckUnmappedCompressionUnitIsRejected<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A compression unit with real clusters after a hole is rejected",
     "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckRealClustersAfterHoleIsRejected<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "An interior compression unit that decompresses short is rejected",
     "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckShortDecompressedInteriorUnitIsRejected<S>();
 }
 
@@ -576,33 +530,26 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE(
     "FullCache serves a repeated read of the same compression unit from "
     "the decompressed-unit cache",
-    "[attr-non-resident][compression]")
-{
+    "[attr-non-resident][compression]") {
   ParsedRoot<Strategy::FullCache> root = ParseRoot<Strategy::FullCache>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCompressedFile());
   REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> first;
-  const std::string first_trace = CaptureTrace(
-      [&]
-      {
-        first = ReadRootData<Strategy::FullCache>(
-            *root.record, 0,
-            NtfsBrowserTests::xca_lznt1_example_decompressed_size);
-      });
+  const std::string first_trace = CaptureTrace([&] {
+    first = ReadRootData<Strategy::FullCache>(
+        *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+  });
   REQUIRE(first.has_value());
   CHECK_THAT(first_trace,
              Catch::Matchers::ContainsSubstring(
                  "Decompressed compression unit 0 into 142 bytes"));
 
   std::optional<std::vector<BYTE>> second;
-  const std::string second_trace = CaptureTrace(
-      [&]
-      {
-        second = ReadRootData<Strategy::FullCache>(
-            *root.record, 0,
-            NtfsBrowserTests::xca_lznt1_example_decompressed_size);
-      });
+  const std::string second_trace = CaptureTrace([&] {
+    second = ReadRootData<Strategy::FullCache>(
+        *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+  });
 
   // Same bytes...
   REQUIRE(second.has_value());
@@ -616,14 +563,12 @@ TEST_CASE(
 
 TEST_CASE(
     "NoCache keeps no decompressed compression unit across ReadData calls",
-    "[attr-non-resident][compression]")
-{
+    "[attr-non-resident][compression]") {
   ParsedRoot<Strategy::NoCache> root = ParseRoot<Strategy::NoCache>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCompressedFile());
   REQUIRE(root.record->ParseAttrs());
 
-  const auto read = [&]
-  {
+  const auto read = [&] {
     return ReadRootData<Strategy::NoCache>(
         *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
   };
@@ -648,14 +593,12 @@ TEST_CASE(
 // What must NOT have changed
 ////////////////////////////////////////////////////////////////////////////
 
-namespace
-{
+namespace {
 
 // Acceptance criterion: the existing 64-byte minimum total_size must still
 // be accepted; the conditional CompressedSize field must not have grown it.
 template <Strategy S>
-void CheckMinimalNonResidentAttributeStillAccepted()
-{
+void CheckMinimalNonResidentAttributeStillAccepted() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMinimalNonResidentData());
 
@@ -676,8 +619,7 @@ void CheckMinimalNonResidentAttributeStillAccepted()
 // was rejected naming "message".
 template <Strategy S>
 void CheckCompressedHeaderRejected(std::vector<BYTE> image,
-                                   const std::string& message)
-{
+                                   const std::string& message) {
   ParsedRoot<S> root = ParseRoot<S>(std::move(image));
 
   bool parsed = true;
@@ -694,8 +636,7 @@ void CheckCompressedHeaderRejected(std::vector<BYTE> image,
 TEMPLATE_TEST_CASE_SIG(
     "A minimum-size uncompressed non-resident attribute is still accepted",
     "[file-record][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckMinimalNonResidentAttributeStillAccepted<S>();
 }
 
@@ -703,8 +644,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A compressed non-resident attribute too small for its CompressedSize "
     "field is rejected",
     "[file-record][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize(),
@@ -714,8 +654,7 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG("An out-of-range comp_unit_size is rejected",
                        "[attr-non-resident][compression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache)
-{
+                       Strategy::NoCache, Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCompUnitSizeOutOfRange(),
       "Compression unit size is out of range.");
@@ -724,8 +663,7 @@ TEMPLATE_TEST_CASE_SIG("An out-of-range comp_unit_size is rejected",
 TEMPLATE_TEST_CASE_SIG(
     "A compression unit larger than the supported maximum is rejected",
     "[attr-non-resident][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedCompressionUnit(),
       "Compression unit size is implausibly large.");
@@ -733,8 +671,7 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG("A misaligned compressed start_vcn is rejected",
                        "[attr-non-resident][compression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache)
-{
+                       Strategy::NoCache, Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMisalignedCompressedStartVcn(),
       "Compressed attribute start VCN is not compression unit aligned.");
@@ -744,14 +681,12 @@ TEMPLATE_TEST_CASE_SIG("A misaligned compressed start_vcn is rejected",
 // A compressed $INDEX_ALLOCATION (the shape the fuzz corpus entries use)
 ////////////////////////////////////////////////////////////////////////////
 
-namespace
-{
+namespace {
 
 // Same fixture as NTFSLibTests/fuzz/data/compressed_index_allocation, but
 // checked here on the actual traversal result, not just exit code/trace.
 template <Strategy S>
-void CheckCompressedIndexAllocationTraverses()
-{
+void CheckCompressedIndexAllocationTraverses() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCompressedIndexAllocation());
   REQUIRE(root.record->ParseAttrs());
@@ -760,8 +695,7 @@ void CheckCompressedIndexAllocationTraverses()
 
   std::vector<std::wstring> names;
   root.record->TraverseSubEntries(
-      [](const IndexEntryView& index_entry, void* context)
-      {
+      [](const IndexEntryView& index_entry, void* context) {
         static_cast<std::vector<std::wstring>*>(context)->emplace_back(
             index_entry.GetFilename());
       },
@@ -782,21 +716,20 @@ void CheckCompressedIndexAllocationTraverses()
 // Malformed counterpart of the fixture above: corrupted LZNT1 bytes must
 // yield an empty traversal and a trace, not a crash.
 template <Strategy S>
-void CheckCorruptCompressedIndexAllocationIsRejected()
-{
+void CheckCorruptCompressedIndexAllocationIsRejected() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithCorruptCompressedIndexAllocation());
   REQUIRE(root.record->ParseAttrs());
 
   size_t visited = 0;
-  const std::string trace = CaptureTrace(
-      [&]
-      {
-        root.record->TraverseSubEntries([](const IndexEntryView&, void* context)
-                                        { (*static_cast<size_t*>(context))++; },
-                                        &visited);
-      });
+  const std::string trace = CaptureTrace([&] {
+    root.record->TraverseSubEntries(
+        [](const IndexEntryView&, void* context) {
+          (*static_cast<size_t*>(context))++;
+        },
+        &visited);
+  });
 
   CHECK(visited == 0);
   CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
@@ -808,25 +741,21 @@ void CheckCorruptCompressedIndexAllocationIsRejected()
 TEMPLATE_TEST_CASE_SIG(
     "A compressed $INDEX_ALLOCATION is decompressed and traversed",
     "[attr-index-alloc][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckCompressedIndexAllocationTraverses<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A corrupt compressed $INDEX_ALLOCATION yields no sub entries",
     "[attr-index-alloc][compression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   CheckCorruptCompressedIndexAllocationIsRejected<S>();
 }
 
-namespace
-{
+namespace {
 
 // One entry as a traversal reports it.
-struct SeenEntry
-{
+struct SeenEntry {
   std::wstring name;
   ULONGLONG mft_ref;
   bool directory;
@@ -837,8 +766,7 @@ struct SeenEntry
 // Every name must survive as its own UTF-16 units and be found again by a
 // lookup, which walks from the root into the compressed block.
 template <Strategy S>
-void CheckSurrogatePairNamesTraverse()
-{
+void CheckSurrogatePairNamesTraverse() {
   ParsedRoot<S> root = ParseRoot<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSurrogatePairNames());
   REQUIRE(root.record->ParseAttrs());
@@ -846,8 +774,7 @@ void CheckSurrogatePairNamesTraverse()
 
   std::vector<SeenEntry> seen;
   root.record->TraverseSubEntries(
-      [](const IndexEntryView& index_entry, void* context)
-      {
+      [](const IndexEntryView& index_entry, void* context) {
         static_cast<std::vector<SeenEntry>*>(context)->push_back(
             {std::wstring(index_entry.GetFilename()),
              index_entry.GetFileReference(), index_entry.IsDirectory()});
@@ -855,8 +782,7 @@ void CheckSurrogatePairNamesTraverse()
       &seen);
 
   REQUIRE(seen.size() == NtfsBrowserTests::surrogate_names.size());
-  for (size_t i = 0; i < seen.size(); i++)
-  {
+  for (size_t i = 0; i < seen.size(); i++) {
     INFO("entry " << i);
     // The REQUIRE above checks the size of seen.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -872,7 +798,8 @@ void CheckSurrogatePairNamesTraverse()
         NtfsBrowserTests::surrogate_name_is_directory[i]);
 
     const std::optional<IndexEntry> found =
-        // The REQUIRE above makes seen as long as surrogate_names, like the other tables.
+        // The REQUIRE above makes seen as long as surrogate_names, like the
+        // other tables.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         root.record->FindSubEntry(NtfsBrowserTests::surrogate_names[i]);
     REQUIRE(found.has_value());
@@ -888,7 +815,6 @@ void CheckSurrogatePairNamesTraverse()
 
 TEMPLATE_TEST_CASE_SIG("Names made of surrogate pairs are traversed and found",
                        "[attr-index-alloc][compression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache)
-{
+                       Strategy::NoCache, Strategy::FullCache) {
   CheckSurrogatePairNamesTraverse<S>();
 }

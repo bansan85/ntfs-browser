@@ -8,30 +8,25 @@
   #include "efs/sector-cipher.h"
   #include "ntfs-common.h"
 
-namespace NtfsBrowser::Efs
-{
+namespace NtfsBrowser::Efs {
 
-namespace
-{
+namespace {
+
 // BCrypt in CBC mode, restarted with a fresh IV per sector. Owns its
 // algorithm provider and key handles.
-class BCryptDecryptor final : public SectorDecryptor
-{
+class BCryptDecryptor final : public SectorDecryptor {
  public:
   BCryptDecryptor() = default;
   BCryptDecryptor(BCryptDecryptor&& other) noexcept = delete;
-  BCryptDecryptor(BCryptDecryptor const& other) = delete;
+  BCryptDecryptor(const BCryptDecryptor& other) = delete;
   BCryptDecryptor& operator=(BCryptDecryptor&& other) noexcept = delete;
-  BCryptDecryptor& operator=(BCryptDecryptor const& other) = delete;
+  BCryptDecryptor& operator=(const BCryptDecryptor& other) = delete;
 
-  ~BCryptDecryptor() override
-  {
-    if (key_ != nullptr)
-    {
+  ~BCryptDecryptor() override {
+    if (key_ != nullptr) {
       BCryptDestroyKey(key_);
     }
-    if (alg_ != nullptr)
-    {
+    if (alg_ != nullptr) {
       BCryptCloseAlgorithmProvider(alg_, 0);
     }
   }
@@ -39,12 +34,10 @@ class BCryptDecryptor final : public SectorDecryptor
   // Opens the algorithm in CBC mode and imports the key. Returns false if
   // BCrypt refuses either.
   [[nodiscard]] bool Init(LPCWSTR algorithm_id, std::span<const BYTE> key,
-                          size_t block_size)
-  {
+                          size_t block_size) {
     block_size_ = block_size;
     if (!BCRYPT_SUCCESS(
-            BCryptOpenAlgorithmProvider(&alg_, algorithm_id, nullptr, 0)))
-    {
+            BCryptOpenAlgorithmProvider(&alg_, algorithm_id, nullptr, 0))) {
       return false;
     }
 
@@ -53,8 +46,7 @@ class BCryptDecryptor final : public SectorDecryptor
     if (!BCRYPT_SUCCESS(BCryptSetProperty(
             alg_, BCRYPT_CHAINING_MODE,
             reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(cbc.data())),
-            static_cast<ULONG>((cbc.size() + 1) * sizeof(wchar_t)), 0)))
-    {
+            static_cast<ULONG>((cbc.size() + 1) * sizeof(wchar_t)), 0))) {
       return false;
     }
 
@@ -63,10 +55,8 @@ class BCryptDecryptor final : public SectorDecryptor
         gsl::narrow<ULONG>(key.size()), 0));
   }
 
-  bool DecryptSector(ULONGLONG offset, std::span<BYTE> sector) const override
-  {
-    if (sector.size() != sector_size)
-    {
+  bool DecryptSector(ULONGLONG offset, std::span<BYTE> sector) const override {
+    if (sector.size() != sector_size) {
       return false;
     }
 
@@ -88,14 +78,13 @@ class BCryptDecryptor final : public SectorDecryptor
 
 // The AES block size, in bytes.
 constexpr size_t aes_block_size = 16;
+
 }  // namespace
 
-std::unique_ptr<SectorDecryptor> MakeBCryptDecryptor(const Fek& fek)
-{
+std::unique_ptr<SectorDecryptor> MakeBCryptDecryptor(const Fek& fek) {
   LPCWSTR algorithm_id = nullptr;
   size_t block_size = 0;
-  switch (fek.GetAlgorithm())
-  {
+  switch (fek.GetAlgorithm()) {
     case Algorithm::Aes128:
     case Algorithm::Aes192:
     case Algorithm::Aes256:
@@ -111,8 +100,7 @@ std::unique_ptr<SectorDecryptor> MakeBCryptDecryptor(const Fek& fek)
   }
 
   auto decryptor = std::make_unique<BCryptDecryptor>();
-  if (!decryptor->Init(algorithm_id, fek.GetKey(), block_size))
-  {
+  if (!decryptor->Init(algorithm_id, fek.GetKey(), block_size)) {
     LogWarn("BCrypt cannot use this FEK.");
     return nullptr;
   }

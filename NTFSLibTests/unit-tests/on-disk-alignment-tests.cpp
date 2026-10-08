@@ -45,8 +45,7 @@ using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Enum::MftIdx;
 
-namespace
-{
+namespace {
 
 // Every image BuildFakeNtfsImage() makes puts $MFT in its second cluster.
 constexpr size_t mft_offset = NtfsBrowserTests::fake_cluster_size;
@@ -59,22 +58,19 @@ constexpr size_t first_attr_offset = 48;
 // is not a multiple of 4, so the attribute after it sits off any alignment.
 constexpr DWORD odd_attr_size = sizeof(NtfsBrowser::Attr::HeaderResident) + 1;
 
-size_t RecordOffset(ULONGLONG idx)
-{
+size_t RecordOffset(ULONGLONG idx) {
   return mft_offset + (NtfsBrowserTests::fake_file_record_size * idx);
 }
 
 // Copies value into image at offset. A plain store through a typed pointer
 // would itself be a misaligned access.
 template <class T>
-void Put(std::vector<BYTE>& image, size_t offset, T value)
-{
+void Put(std::vector<BYTE>& image, size_t offset, T value) {
   std::memcpy(&image.at(offset), &value, sizeof(value));
 }
 
 // Writes a resident attribute of type at offset, odd_attr_size bytes long.
-void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, AttrType type)
-{
+void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, AttrType type) {
   NtfsBrowser::Attr::HeaderResident header{};
   header.header.type = type;
   header.header.total_size = odd_attr_size;
@@ -84,8 +80,7 @@ void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, AttrType type)
 }
 
 template <Strategy S>
-void RunOddSizedAttributesAreParsedAligned()
-{
+void RunOddSizedAttributesAreParsedAligned() {
   std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImage();
   const size_t root_offset = RecordOffset(static_cast<ULONGLONG>(MftIdx::Root));
   size_t offset = root_offset + first_attr_offset;
@@ -95,7 +90,7 @@ void RunOddSizedAttributesAreParsedAligned()
   offset += odd_attr_size;
   Put(image, offset, static_cast<DWORD>(AttrType::All));
 
-  NtfsVolume<S> const volume(
+  const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
@@ -103,8 +98,7 @@ void RunOddSizedAttributesAreParsedAligned()
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  for (const AttrType type : {AttrType::Data, AttrType::ReparsePoint})
-  {
+  for (const AttrType type : {AttrType::Data, AttrType::ReparsePoint}) {
     const auto& attrs = record.GetAttr(type);
     REQUIRE(attrs.size() == 1);
     const auto address =
@@ -115,9 +109,8 @@ void RunOddSizedAttributesAreParsedAligned()
 }
 
 // Number of entries TraverseSubEntries() reports for the root directory.
-size_t CountRootEntries(std::vector<BYTE> image)
-{
-  NtfsVolume<Strategy::NoCache> const volume(
+size_t CountRootEntries(std::vector<BYTE> image) {
+  const NtfsVolume<Strategy::NoCache> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
@@ -126,8 +119,11 @@ size_t CountRootEntries(std::vector<BYTE> image)
   REQUIRE(record.ParseAttrs());
 
   size_t count = 0;
-  record.TraverseSubEntries([](const IndexEntryView&, void* context)
-                            { ++*static_cast<size_t*>(context); }, &count);
+  record.TraverseSubEntries(
+      [](const IndexEntryView&, void* context) {
+        ++*static_cast<size_t*>(context);
+      },
+      &count);
   return count;
 }
 
@@ -137,8 +133,7 @@ TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs binds every attribute at an aligned address, whatever the "
     "total_size of the attribute before it",
     "[file-record][alignment][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   RunOddSizedAttributesAreParsedAligned<S>();
 }
 
@@ -146,8 +141,7 @@ TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry reads an $INDEX_ROOT entry that starts off an 8-byte "
     "boundary",
     "[index-entry][alignment][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   constexpr BYTE shortened_name_length = 2;
   constexpr WORD shortened_stream_size =
       offsetof(NtfsBrowser::Attr::Filename, name) +
@@ -203,7 +197,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::memset(&image.at(attr_offset + total_size), 0, 2 * sizeof(DWORD));
   Put(image, attr_offset + total_size, static_cast<DWORD>(AttrType::All));
 
-  NtfsVolume<S> const volume(
+  const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
@@ -222,8 +216,7 @@ TEMPLATE_TEST_CASE_SIG(
     "FileRecordHeader reads an Update Sequence Array that starts at an odd "
     "offset",
     "[file-record-header][alignment][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache)
-{
+    Strategy::NoCache, Strategy::FullCache) {
   constexpr size_t record_size = 1024;
   constexpr WORD odd_offset_of_us = 49;
   constexpr WORD usn = 0x1234;
@@ -231,14 +224,12 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr WORD second_block_word = 0xBBBB;
 
   std::vector<BYTE> storage(record_size, 0);
-  NtfsBrowserTests::EditFileRecordHeader(storage,
-                                         [](FileRecordHeader::Data& header)
-                                         {
-                                           header.magic = file_record_magic;
-                                           header.offset_of_us =
-                                               odd_offset_of_us;
-                                           header.size_of_us = 3;
-                                         });
+  NtfsBrowserTests::EditFileRecordHeader(
+      storage, [](FileRecordHeader::Data& header) {
+        header.magic = file_record_magic;
+        header.offset_of_us = odd_offset_of_us;
+        header.size_of_us = 3;
+      });
   Put(storage, odd_offset_of_us, usn);
   Put(storage, odd_offset_of_us + sizeof(WORD), first_block_word);
   Put(storage, odd_offset_of_us + (2 * sizeof(WORD)), second_block_word);
@@ -257,8 +248,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE(
     "TraverseSubEntries reads an index block whose Update Sequence Array "
     "starts at an odd offset",
-    "[attr-index-alloc][alignment][regression]")
-{
+    "[attr-index-alloc][alignment][regression]") {
   constexpr WORD odd_offset_of_us = NtfsBrowserTests::fake_cluster_size - 7;
 
   std::vector<BYTE> image =
@@ -271,12 +261,10 @@ TEST_CASE(
   // value.
   size_t block_offset = 0;
   for (; block_offset + sizeof(DWORD) <= image.size();
-       block_offset += NtfsBrowserTests::fake_cluster_size)
-  {
+       block_offset += NtfsBrowserTests::fake_cluster_size) {
     DWORD magic = 0;
     std::memcpy(&magic, &image.at(block_offset), sizeof(magic));
-    if (magic == index_block_magic)
-    {
+    if (magic == index_block_magic) {
       break;
     }
   }

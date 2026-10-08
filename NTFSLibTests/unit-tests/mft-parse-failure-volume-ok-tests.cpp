@@ -20,12 +20,11 @@ TEMPLATE_TEST_CASE_SIG(
     "GetRecordsCount() dereference a null $MFT DATA attribute, when $MFT's "
     "own file record fails to parse",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCorruptMftRecord());
 
-  NtfsVolume<S> const volume(std::move(reader));
+  const NtfsVolume<S> volume(std::move(reader));
 
   CHECK_FALSE(volume.IsVolumeOK());
 

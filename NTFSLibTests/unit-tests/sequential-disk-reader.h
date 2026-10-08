@@ -10,12 +10,10 @@
 
 #include <ntfs-browser/disk-reader.h>
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // A fake IDiskReader that ignores addr and serves bytes from a Producer.
-class SequentialDiskReader : public NtfsBrowser::IDiskReader
-{
+class SequentialDiskReader : public NtfsBrowser::IDiskReader {
  public:
   // Fills dest, returns false once the source is exhausted.
   using Producer = std::function<bool(std::span<BYTE> dest)>;

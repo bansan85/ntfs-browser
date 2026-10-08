@@ -9,16 +9,15 @@
 #include <string_view>
 #include <vector>
 
-namespace NtfsBrowser::Flag
-{
+namespace NtfsBrowser::Flag {
+
 enum class IndexEntry : BYTE;
+
 }  // namespace NtfsBrowser::Flag
 
-namespace NtfsBrowser::Data
-{
+namespace NtfsBrowser::Data {
 
-struct IndexEntry
-{
+struct IndexEntry {
   // Low 6B : MFT record index
   ULONGLONG mft_index : 48;
   // High 2B: MFT record sequence number
@@ -34,12 +33,11 @@ struct IndexEntry
 
 }  // namespace NtfsBrowser::Data
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 // Copies out the fixed part of the entry at the start of `at`, whatever its
-// alignment. The caller MUST have checked that offsetof(Data::IndexEntry, stream) bytes
-// fit in `at`.
+// alignment. The caller MUST have checked that offsetof(Data::IndexEntry,
+// stream) bytes fit in `at`.
 [[nodiscard]] Data::IndexEntry
     ReadIndexEntryHeader(std::span<const BYTE> bytes) noexcept;
 

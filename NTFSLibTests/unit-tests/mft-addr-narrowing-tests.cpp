@@ -19,8 +19,7 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume construction must not let an exception escape when the BPB "
     "encodes an mft_addr_ too large for a LONGLONG",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache)
-{
+    Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithHugeMftLcn());
 

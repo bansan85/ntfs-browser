@@ -31,8 +31,7 @@
 
 #include "../internal-export.h"
 
-namespace NtfsBrowser::Lznt1
-{
+namespace NtfsBrowser::Lznt1 {
 
 // LZNT1 chunk size; [MS-XCA] 2.5.3 fixes streams at 4096-byte units.
 inline constexpr size_t chunk_size = 4096;

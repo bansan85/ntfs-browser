@@ -8,14 +8,12 @@
 #include "ntfs-common.h"
 #include "utf.h"
 
-namespace NtfsBrowser
-{
+namespace NtfsBrowser {
 
 template <typename Resident, Strategy S>
 AttrVolName<Resident, S>::AttrVolName(const AttrHeaderCommon& ahc,
                                       const FileRecord<S>& file_record)
-    : Resident(ahc, file_record)
-{
+    : Resident(ahc, file_record) {
   LogTrace("Attribute: Volume Name");
 
   // The volume name is raw on-disk UTF-16 (WORD, always 16 bits), not
@@ -31,8 +29,7 @@ AttrVolName<Resident, S>::AttrVolName(const AttrHeaderCommon& ahc,
 
 // Get NTFS Volume Unicode Name
 template <typename Resident, Strategy S>
-std::wstring_view AttrVolName<Resident, S>::GetName() const noexcept
-{
+std::wstring_view AttrVolName<Resident, S>::GetName() const noexcept {
   return name_;
 }
 

@@ -30,8 +30,7 @@ using NtfsBrowser::VolumeOptions;
 using NtfsBrowserTests::Md5Hex;
 #endif
 
-namespace
-{
+namespace {
 
 // DFTT test #7 ("NTFS Undelete", http://dftt.sf.net): a 6 MB NTFS file
 // system with eight deleted files, two deleted directories, and a deleted
@@ -43,8 +42,7 @@ const std::filesystem::path dftt_image =
 // instead of by path: index.html documents that dir3, the parent of
 // sing2.dat, has itself been deleted and its record reallocated (to
 // res1.dat), so a name-based lookup from the root down would not find it.
-struct DeletedFile
-{
+struct DeletedFile {
   ULONGLONG mft_record;
   std::wstring_view stream_name;  // {} for the unnamed $DATA stream
   ULONGLONG size;
@@ -80,8 +78,7 @@ constexpr DeletedFile in_reallocated_dir_file{
 // known size and MD5 (from index.html, skipped without NTFS_TEST_HAS_MD5),
 // plus the Feb 29, 2004 (leap year) creation date every file here shares.
 void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NoCache>& volume,
-                              const DeletedFile& file)
-{
+                              const DeletedFile& file) {
   FileRecord record(volume);
   record.SetAttrMask(Mask::Data | Mask::StandardInformation);
   REQUIRE(record.ParseFileRecord(file.mft_record));
@@ -110,13 +107,12 @@ void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NoCache>& volume,
 }  // namespace
 
 TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
-          "[dftt][integration]")
-{
+          "[dftt][integration]") {
   NtfsBrowserTests::RequireCorpusImage(dftt_image);
 
   VolumeOptions options;
   options.include_deleted = true;
-  NtfsVolume<Strategy::NoCache> const volume(
+  const NtfsVolume<Strategy::NoCache> volume(
       NtfsBrowserTests::OpenBareVolumeImage(dftt_image), options);
   REQUIRE(volume.IsVolumeOK());
 

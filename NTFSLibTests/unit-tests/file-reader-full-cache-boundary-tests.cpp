@@ -23,8 +23,7 @@
 using NtfsBrowser::FileReader;
 using NtfsBrowser::Strategy;
 
-namespace
-{
+namespace {
 
 // Size of one FullCache block.
 constexpr size_t cache_block_size = 65536;
@@ -58,13 +57,11 @@ constexpr size_t past_end_before = 256;
 TEST_CASE(
     "FileReader<FullCache>::Read must not abort/misbehave on a read "
     "crossing a 64KiB cache block boundary",
-    "[file-reader][regression]")
-{
+    "[file-reader][regression]") {
   // Each byte distinct from its offset, so returned data can be checked
   // exactly.
   std::vector<BYTE> backing(2 * cache_block_size);
-  for (size_t i = 0; i < backing.size(); i++)
-  {
+  for (size_t i = 0; i < backing.size(); i++) {
     // i < backing.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     backing[i] = static_cast<BYTE>(i);
@@ -72,7 +69,7 @@ TEST_CASE(
 
   auto reader_double =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing);
-  FileReader<Strategy::FullCache> const reader(std::move(reader_double));
+  const FileReader<Strategy::FullCache> reader(std::move(reader_double));
 
   // Straddles the boundary between the first and second 64KiB cache blocks.
   LARGE_INTEGER addr{.QuadPart = cache_block_size - straddle_before};
@@ -83,11 +80,9 @@ TEST_CASE(
   const std::optional<std::span<const BYTE>> result =
       reader.Read(addr, length_value);
 
-  if (result)
-  {
+  if (result) {
     CHECK(result->size() == length_value);
-    for (size_t i = 0; i < result->size(); i++)
-    {
+    for (size_t i = 0; i < result->size(); i++) {
       // i < result->size() by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       CHECK((*result)[i] == backing.at(cache_block_size - straddle_before + i));
@@ -98,29 +93,27 @@ TEST_CASE(
 TEST_CASE(
     "FileReader<FullCache>::Read reads a range inside the last partial "
     "64KiB block of the backing store like NoCache does",
-    "[file-reader][regression]")
-{
+    "[file-reader][regression]") {
   constexpr size_t block_value = cache_block_size;
   constexpr size_t tail = tail_size;
 
   std::vector<BYTE> backing(block_value + tail);
-  for (size_t i = 0; i < backing.size(); i++)
-  {
+  for (size_t i = 0; i < backing.size(); i++) {
     // i < backing.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     backing[i] = static_cast<BYTE>(i * pattern_step_a + (i >> bits_per_byte));
   }
 
-  FileReader<Strategy::FullCache> const full(
+  const FileReader<Strategy::FullCache> full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
-  FileReader<Strategy::NoCache> const exact(
+  const FileReader<Strategy::NoCache> exact(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
-  struct Range
-  {
+  struct Range {
     size_t offset;
     DWORD length;
   };
+
   // Inside the partial block, ending exactly at the end, and straddling into
   // it from the full block before.
   const auto ranges =
@@ -128,8 +121,7 @@ TEST_CASE(
                             {block_value + tail - inner_length, inner_length},
                             {block_value - straddle_before, straddle_length}});
 
-  for (const Range& range : ranges)
-  {
+  for (const Range& range : ranges) {
     LARGE_INTEGER addr_full{.QuadPart = gsl::narrow<LONGLONG>(range.offset)};
     LARGE_INTEGER addr_exact{.QuadPart = gsl::narrow<LONGLONG>(range.offset)};
 
@@ -167,17 +159,15 @@ TEST_CASE(
 TEST_CASE(
     "FileReader<FullCache>::Read reads from a backing store smaller than "
     "one 64KiB block",
-    "[file-reader][regression]")
-{
+    "[file-reader][regression]") {
   std::vector<BYTE> backing(tail_size);
-  for (size_t i = 0; i < backing.size(); i++)
-  {
+  for (size_t i = 0; i < backing.size(); i++) {
     // i < backing.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     backing[i] = static_cast<BYTE>(i * pattern_step_b);
   }
 
-  FileReader<Strategy::FullCache> const full(
+  const FileReader<Strategy::FullCache> full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   LARGE_INTEGER addr{.QuadPart = inner_length};
@@ -192,10 +182,9 @@ TEST_CASE(
 TEST_CASE(
     "FileReader<FullCache>::Read rejects a negative address instead of "
     "returning a view before its cache block",
-    "[file-reader][regression]")
-{
-  std::vector<BYTE> const backing(cache_block_size);
-  FileReader<Strategy::FullCache> const full(
+    "[file-reader][regression]") {
+  const std::vector<BYTE> backing(cache_block_size);
+  const FileReader<Strategy::FullCache> full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   LARGE_INTEGER addr{.QuadPart = -1};
@@ -205,10 +194,9 @@ TEST_CASE(
 TEST_CASE(
     "FileReader<FullCache>::Read rejects a range that runs past the largest "
     "signed address",
-    "[file-reader][regression]")
-{
-  std::vector<BYTE> const backing(cache_block_size);
-  FileReader<Strategy::FullCache> const full(
+    "[file-reader][regression]") {
+  const std::vector<BYTE> backing(cache_block_size);
+  const FileReader<Strategy::FullCache> full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   constexpr DWORD length_value = 100;
@@ -216,8 +204,7 @@ TEST_CASE(
       {std::numeric_limits<LONGLONG>::max(),
        std::numeric_limits<LONGLONG>::max() - 10,
        std::numeric_limits<LONGLONG>::max() - (length_value - 1)});
-  for (const LONGLONG address : addresses)
-  {
+  for (const LONGLONG address : addresses) {
     INFO("address " << address);
     LARGE_INTEGER addr{.QuadPart = address};
     CHECK_FALSE(full.Read(addr, length_value).has_value());

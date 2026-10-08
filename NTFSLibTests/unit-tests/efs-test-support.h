@@ -11,8 +11,7 @@
 
 #include "efs/fek.h"
 
-namespace NtfsBrowserTests
-{
+namespace NtfsBrowserTests {
 
 // Size of a certificate thumbprint: a SHA-1 digest.
 inline constexpr size_t thumbprint_size_value = 20;
@@ -45,8 +44,7 @@ inline constexpr std::array<Algorithm, 5> all_algorithms{
 [[nodiscard]] std::vector<BYTE> PlaintextPattern(size_t size);
 
 // One user's entry of a synthetic $EFS stream.
-struct TestEfsEntry
-{
+struct TestEfsEntry {
   std::array<BYTE, thumbprint_size_value> thumbprint{};
   std::vector<BYTE> wrapped_fek;
 };
@@ -62,8 +60,7 @@ struct TestEfsEntry
 
 // Hands out one FEK blob per known (thumbprint, wrapped FEK) pair. The tests
 // never go near the real certificate store.
-class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
-{
+class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider {
  public:
   void Add(const std::array<BYTE, thumbprint_size_value>& thumbprint,
            std::span<const BYTE> wrapped_fek, std::vector<BYTE> blob);
@@ -73,19 +70,18 @@ class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider
                 std::span<const BYTE> wrapped_fek) const override;
 
  private:
-  struct Known
-  {
+  struct Known {
     std::array<BYTE, thumbprint_size_value> thumbprint;
     std::vector<BYTE> wrapped_fek;
     std::vector<BYTE> blob;
   };
+
   std::vector<Known> known_;
 };
 
 // Whether this build compiled the backend in.
 [[nodiscard]] constexpr bool
-    BackendAvailable(NtfsBrowser::Efs::CipherBackend backend) noexcept
-{
+    BackendAvailable(NtfsBrowser::Efs::CipherBackend backend) noexcept {
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
   constexpr bool has_crypto_pp = true;
 #else
