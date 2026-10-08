@@ -7,7 +7,7 @@ jobs:
   # Downloads the forensic image corpora once, into a cache every Windows test
   # leg restores. On Linux: ewfexport (libewf) converts the NPS E01 to raw.
   test-data:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/cache@v5
@@ -70,12 +70,12 @@ jobs:
             preset: vs2026-x86
           - name: linux-gcc
             cxx: g++
-            os: ubuntu-latest
+            os: ubuntu-26.04
             build_type: Debug
             preset: efs-cryptopp-only
           - name: linux-clang
             cxx: clang++
-            os: ubuntu-latest
+            os: ubuntu-26.04
             build_type: Debug
             preset: efs-cryptopp-only
     steps:
