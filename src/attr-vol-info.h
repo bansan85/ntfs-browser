@@ -20,6 +20,8 @@ struct HeaderCommon;
 }  // namespace Attr
 template <Cache::Strategy S>
 class FileRecord;
+template <Cache::Strategy S>
+class NtfsVolume;
 
 namespace Data {
 
@@ -41,7 +43,7 @@ class AttrVolInfo : public Resident {
   ~AttrVolInfo() override;
 
   template <Cache::Strategy>
-  friend class NtfsVolume;
+  friend class NtfsBrowser::NtfsVolume;
 
  private:
   const Data::VolumeInformation& vol_info_;

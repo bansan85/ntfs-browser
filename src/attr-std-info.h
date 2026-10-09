@@ -45,7 +45,7 @@ class AttrStdInfo : public Resident {
   ~AttrStdInfo() override;
 
   template <Cache::Strategy>
-  friend class FileRecord;
+  friend class NtfsBrowser::FileRecord;
 
  private:
   const Data::StandardInformation& std_info_;

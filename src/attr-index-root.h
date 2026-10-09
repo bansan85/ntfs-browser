@@ -42,7 +42,7 @@ class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
   ~AttrIndexRoot() override;
 
   template <Cache::Strategy>
-  friend class FileRecord;
+  friend class NtfsBrowser::FileRecord;
 
  private:
   const Data::IndexRoot* index_root_;
