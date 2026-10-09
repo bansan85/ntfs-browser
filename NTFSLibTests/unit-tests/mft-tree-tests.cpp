@@ -27,14 +27,11 @@
 #include "memory-disk-reader.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowser::MftEntry;
-using NtfsBrowser::MftScanOptions;
-using NtfsBrowser::MftScanStats;
 using NtfsBrowser::MftTree;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
-using NtfsBrowser::Enum::MftIdx;
+namespace Mft = NtfsBrowser::Mft;
 using NtfsBrowserTests::attr_name_exceeds_total_size_record_idx;
 using NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
 using NtfsBrowserTests::BuildFakeNtfsImageWithHugeMftRealSize;
@@ -58,10 +55,10 @@ using NtfsBrowserTests::mft_tree_zeroed_idx;
 
 namespace {
 
-constexpr ULONGLONG root_value = static_cast<ULONGLONG>(MftIdx::Root);
+constexpr ULONGLONG root_value = static_cast<ULONGLONG>(Mft::Idx::Root);
 
 // Opens BuildFakeNtfsImageWithMftTree() as a volume.
-template <Strategy S>
+template <Cache::Strategy S>
 std::unique_ptr<NtfsVolume<S>>
     OpenMftTreeVolume(const VolumeOptions& options = {}) {
   auto volume = std::make_unique<NtfsVolume<S>>(
@@ -78,7 +75,7 @@ std::vector<ULONGLONG> ChildrenOf(const MftTree& tree, ULONGLONG dir) {
   return {children.begin(), children.end()};
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void RunMftTreeRebuildsPaths() {
   // The fixture's deleted records (old.tmp, OldDir, draft.doc, stale.txt)
   // must stay visible for the sections below to exercise them: include_deleted
@@ -88,11 +85,11 @@ void RunMftTreeRebuildsPaths() {
   const MftTree tree(*volume);
 
   CHECK(tree.GetPath(root_value) == L"\\");
-  CHECK(tree.GetPath(static_cast<ULONGLONG>(MftIdx::Mft)) == L"\\$MFT");
+  CHECK(tree.GetPath(static_cast<ULONGLONG>(Mft::Idx::Mft)) == L"\\$MFT");
   CHECK(tree.GetPath(mft_tree_docs_idx) == L"\\Docs");
 
   SECTION("A DOS alias stays out of the path and the size comes from $DATA") {
-    const MftEntry* report = tree.Find(mft_tree_report_idx);
+    const MftTree::Entry* report = tree.Find(mft_tree_report_idx);
     REQUIRE(report != nullptr);
     CHECK(tree.GetPath(mft_tree_report_idx) == L"\\Docs\\report.txt");
     REQUIRE(report->names.size() == 2);
@@ -125,7 +122,7 @@ void RunMftTreeRebuildsPaths() {
 
   SECTION("Children lists each record once, in record order") {
     CHECK(ChildrenOf(tree, root_value) ==
-          std::vector<ULONGLONG>{static_cast<ULONGLONG>(MftIdx::Mft),
+          std::vector<ULONGLONG>{static_cast<ULONGLONG>(Mft::Idx::Mft),
                                  mft_tree_docs_idx, mft_tree_hard_link_idx,
                                  mft_tree_reused_dir_idx});
     CHECK(ChildrenOf(tree, mft_tree_docs_idx) ==
@@ -137,7 +134,7 @@ void RunMftTreeRebuildsPaths() {
   }
 
   SECTION("A deleted subtree stays linked through the bumped sequence number") {
-    const MftEntry* deleted = tree.Find(mft_tree_deleted_file_idx);
+    const MftTree::Entry* deleted = tree.Find(mft_tree_deleted_file_idx);
     REQUIRE(deleted != nullptr);
     CHECK_FALSE(deleted->in_use);
     CHECK(tree.GetPath(mft_tree_deleted_file_idx) == L"\\Docs\\old.tmp");
@@ -159,7 +156,7 @@ void RunMftTreeRebuildsPaths() {
   }
 
   SECTION("Stats count every slot") {
-    const MftScanStats& stats = tree.Stats();
+    const MftTree::ScanStats& stats = tree.Stats();
     CHECK(stats.slots == mft_tree_record_count);
     // $MFT, $Volume, the root, Docs, report.txt, the hard link, NewDir.
     CHECK(stats.in_use == 7);
@@ -175,7 +172,7 @@ void RunMftTreeRebuildsPaths() {
   }
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void RunMftTreeWithoutDeleted() {
   // include_deleted defaults off, so the plain default volume already
   // excludes the fixture's freed records.
@@ -198,7 +195,7 @@ void RunMftTreeWithoutDeleted() {
 // total_size: a strict rejection FileRecord::ParseAttrs() itself already
 // covers (see attr-name-bounds-tests.cpp); this checks MftTree's own
 // drop-vs-keep response to that outcome.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunMftTreeDropsUnrecoveredRecord() {
   {
     const auto volume =
@@ -223,22 +220,22 @@ void RunMftTreeDropsUnrecoveredRecord() {
   }
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void RunMftTreeProgressStops() {
   const auto volume = OpenMftTreeVolume<S>();
   std::vector<ULONGLONG> calls;
-  const MftTree tree(*volume,
-                     MftScanOptions{.progress = [&](ULONGLONG done, ULONGLONG) {
-                       calls.push_back(done);
-                       return false;
-                     }});
+  const MftTree tree(
+      *volume, MftTree::ScanOptions{.progress = [&](ULONGLONG done, ULONGLONG) {
+        calls.push_back(done);
+        return false;
+      }});
 
   CHECK(calls == std::vector<ULONGLONG>{0});
   CHECK_FALSE(tree.Stats().complete);
   CHECK(tree.Entries().empty());
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void RunMftTreeSkipsMftExtensionRecord() {
   const auto volume =
       std::make_unique<NtfsVolume<S>>(std::make_unique<MemoryDiskReader>(
@@ -256,7 +253,7 @@ void RunMftTreeSkipsMftExtensionRecord() {
   CHECK(tree.Entries().size() == 7);
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void RunMftTreeClampsForgedRealSize() {
   // Aborts a runaway scan, so the test fails instead of spinning.
   constexpr ULONGLONG runaway_slots = 4096;
@@ -267,10 +264,10 @@ void RunMftTreeClampsForgedRealSize() {
   REQUIRE(volume->IsVolumeOK());
   CHECK(volume->GetRecordsCount() == mft_tree_record_count);
 
-  const MftTree tree(*volume,
-                     MftScanOptions{.progress = [&](ULONGLONG done, ULONGLONG) {
-                       return done < runaway_slots;
-                     }});
+  const MftTree tree(
+      *volume, MftTree::ScanOptions{.progress = [&](ULONGLONG done, ULONGLONG) {
+        return done < runaway_slots;
+      }});
 
   CHECK(tree.Stats().slots == mft_tree_record_count);
   CHECK(tree.Stats().complete);
@@ -279,45 +276,46 @@ void RunMftTreeClampsForgedRealSize() {
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG("MftTree bounds its scan by the clusters $MFT maps",
-                       "[mft-tree][regression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache) {
+                       "[mft-tree][regression]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunMftTreeClampsForgedRealSize<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree skips an extension record of $MFT",
-                       "[mft-tree][regression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache) {
+                       "[mft-tree][regression]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunMftTreeSkipsMftExtensionRecord<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "MftTree rebuilds paths from $FILE_NAME parent references", "[mft-tree]",
-    ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   RunMftTreeRebuildsPaths<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree drops freed records when asked", "[mft-tree]",
-                       ((Strategy S), S), Strategy::NoCache,
-                       Strategy::FullCache) {
+                       ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+                       Cache::Strategy::FullCache) {
   RunMftTreeWithoutDeleted<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "MftTree drops a record its FileRecord could not parse by default",
-    "[mft-tree][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[mft-tree][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunMftTreeDropsUnrecoveredRecord<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree stops when progress returns false",
-                       "[mft-tree]", ((Strategy S), S), Strategy::NoCache,
-                       Strategy::FullCache) {
+                       "[mft-tree]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunMftTreeProgressStops<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree logs no warning for never-used record slots",
-                       "[mft-tree]", ((Strategy S), S), Strategy::NoCache,
-                       Strategy::FullCache) {
+                       "[mft-tree]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::shared_ptr<spdlog::logger> logger =
       spdlog::get(std::string(NtfsBrowser::Log::logger_name));
   REQUIRE(logger);

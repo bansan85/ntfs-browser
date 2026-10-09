@@ -1,5 +1,3 @@
-#include "flag/file-record.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -48,6 +46,7 @@
 #include "attr-vol-info.h"  // IWYU pragma: keep
 #include "attr-vol-name.h"  // IWYU pragma: keep
 #include "attr/flags.h"
+#include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
@@ -64,7 +63,7 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrBase;
 
 namespace {
@@ -81,7 +80,7 @@ constexpr size_t max_orphan_scan_blocks = 65536;
 
 // Rejects an attribute of a type that is always resident on disk but claims
 // to be non-resident, before its bytes get reinterpreted as a resident one.
-void RequireResident(const AttrHeaderCommon& ahc, const char* message) {
+void RequireResident(const Attr::HeaderCommon& ahc, const char* message) {
   if (ahc.non_resident != 0) {
     throw std::runtime_error(message);
   }
@@ -90,7 +89,7 @@ void RequireResident(const AttrHeaderCommon& ahc, const char* message) {
 // How reading the next attribute header of a record's walk ended.
 enum class AttrWalk : BYTE {
   Next,       // head holds a header whose attribute fits in the record.
-  EndMarker,  // The terminating AttrType::ALL marker was reached.
+  EndMarker,  // The terminating Attr::Type::All marker was reached.
   RanOut,     // The record ended without a marker, or an attribute overran it.
   Abort       // The attribute is malformed.
 };
@@ -98,21 +97,21 @@ enum class AttrWalk : BYTE {
 // Reads the attribute header at the front of cur, and checks that it and its
 // attribute fit in a record of recordSize bytes, dataPtr bytes into it.
 AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD data_ptr,
-                        DWORD record_size, AttrHeaderCommon& head) {
-  // The on-disk end-of-attributes marker is a single AttrType::ALL value
+                        DWORD record_size, Attr::HeaderCommon& head) {
+  // The on-disk end-of-attributes marker is a single Attr::Type::All value
   // (4 bytes): check for it as soon as that much room remains, rather
   // than requiring a full attribute header to fit first.
-  if (static_cast<ULONGLONG>(data_ptr) + sizeof(AttrType) > record_size) {
+  if (static_cast<ULONGLONG>(data_ptr) + sizeof(Attr::Type) > record_size) {
     return AttrWalk::RanOut;
   }
-  AttrType type{};
+  Attr::Type type{};
   std::memcpy(&type, cur.data(), sizeof(type));
-  if (type == AttrType::All) {
+  if (type == Attr::Type::All) {
     return AttrWalk::EndMarker;
   }
   // From here on, the walk needs the whole header, and the whole
   // attribute, to fit.
-  if (static_cast<ULONGLONG>(data_ptr) + sizeof(AttrHeaderCommon) >
+  if (static_cast<ULONGLONG>(data_ptr) + sizeof(Attr::HeaderCommon) >
       record_size) {
     return AttrWalk::RanOut;
   }
@@ -145,31 +144,31 @@ AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD data_ptr,
 
 }  // namespace
 
-template <Strategy S>
+template <Cache::Strategy S>
 FileRecord<S>::Impl::Impl(FileRecord<S>& self,
                           const NtfsVolume<S>& volume) noexcept
     : self(&self), volume(&volume) {}
 
-template <Strategy S>
+template <Cache::Strategy S>
 FileRecord<S>::FileRecord(const NtfsVolume<S>& volume)
     : impl_(std::make_unique<Impl>(*this, volume)) {}
 
-template <Strategy S>
+template <Cache::Strategy S>
 FileRecord<S>::FileRecord(FileRecord&& other) noexcept
     : impl_(std::move(other.impl_)) {
   impl_->self = this;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 FileRecord<S>::~FileRecord() = default;
 
-template <Strategy S>
+template <Cache::Strategy S>
 const NtfsVolume<S>& FileRecord<S>::GetVolume() const noexcept {
   return *impl_->volume;
 }
 
 // Drops every parsed attribute, then the records and copies they point into.
-template <Strategy S>
+template <Cache::Strategy S>
 void FileRecord<S>::Impl::ClearAttrs() noexcept {
   for (std::vector<std::unique_ptr<AttrBase<S>>>& arr : attr_list) {
     arr.clear();
@@ -183,24 +182,24 @@ void FileRecord<S>::Impl::ClearAttrs() noexcept {
 // the end of the record: in place when it is aligned for the on-disk structs,
 // else in an aligned copy of `at`. The copy keeps every read the attribute
 // makes inside the record, as in place.
-template <Strategy S>
-const AttrHeaderCommon&
+template <Cache::Strategy S>
+const Attr::HeaderCommon&
     FileRecord<S>::Impl::AlignedAttrHeader(std::span<const BYTE> bytes) {
   if (reinterpret_cast<std::uintptr_t>(bytes.data()) %
           alignof(Data::HeaderNonResident) ==
       0) {
-    return *reinterpret_cast<const AttrHeaderCommon*>(bytes.data());
+    return *reinterpret_cast<const Attr::HeaderCommon*>(bytes.data());
   }
 
   auto& copy = realigned_attrs.emplace_back(bytes.size());
   std::memcpy(copy.data(), bytes.data(), bytes.size());
-  return *reinterpret_cast<const AttrHeaderCommon*>(copy.data());
+  return *reinterpret_cast<const Attr::HeaderCommon*>(copy.data());
 }
 
 // Call user defined Callback routines for an attribute
-template <Strategy S>
+template <Cache::Strategy S>
 void FileRecord<S>::Impl::UserCallBack(DWORD att_type,
-                                       const AttrHeaderCommon& ahc,
+                                       const Attr::HeaderCommon& ahc,
                                        bool& discard) {
   discard = false;
 
@@ -213,20 +212,20 @@ void FileRecord<S>::Impl::UserCallBack(DWORD att_type,
 
 // Wraps one raw attribute in the class that matches its type. unhandled is
 // set for a type this library has no wrapper for.
-template <Strategy S>
+template <Cache::Strategy S>
 template <typename Resident>
 std::unique_ptr<AttrBase<S>> FileRecord<S>::Impl::AllocAttr(
-    const AttrHeaderCommon& ahc, bool& unhandled,
+    const Attr::HeaderCommon& ahc, bool& unhandled,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   switch (ahc.type) {
     // These attribute types are always resident on disk; reject any
     // record claiming otherwise before its bytes get reinterpreted as one.
-    case AttrType::StandardInformation:
+    case Attr::Type::StandardInformation:
       RequireResident(ahc,
                       "Standard Information attribute must be resident.\n");
       return std::make_unique<Attr::AttrStdInfo<Resident, S>>(ahc, *self);
 
-    case AttrType::AttributeList:
+    case Attr::Type::AttributeList:
       if (!resolve_attr_list) {
         if (ahc.non_resident != 0) {
           return std::make_unique<Attr::AttrNonResident<S>>(ahc, *self);
@@ -240,39 +239,39 @@ std::unique_ptr<AttrBase<S>> FileRecord<S>::Impl::AllocAttr(
       return std::make_unique<Attr::AttrList<Resident, S>>(ahc, *self,
                                                            attr_list_chain);
 
-    case AttrType::FileName:
+    case Attr::Type::FileName:
       RequireResident(ahc, "File Name attribute must be resident.\n");
       return std::make_unique<Attr::AttrFileName<Resident, S>>(ahc, *self);
 
-    case AttrType::VolumeName:
+    case Attr::Type::VolumeName:
       RequireResident(ahc, "Volume Name attribute must be resident.\n");
       return std::make_unique<Attr::AttrVolName<Resident, S>>(ahc, *self);
 
-    case AttrType::VolumeInformation:
+    case Attr::Type::VolumeInformation:
       RequireResident(ahc, "Volume Information attribute must be resident.\n");
       return std::make_unique<Attr::AttrVolInfo<Resident, S>>(ahc, *self);
 
-    case AttrType::Data:
+    case Attr::Type::Data:
       if (ahc.non_resident != 0) {
         return std::make_unique<Attr::AttrData<Attr::AttrNonResident<S>, S>>(
             ahc, *self);
       }
       return std::make_unique<Attr::AttrData<Resident, S>>(ahc, *self);
 
-    case AttrType::IndexRoot:
+    case Attr::Type::IndexRoot:
       RequireResident(ahc, "Index Root attribute must be resident.\n");
       return std::make_unique<Attr::AttrIndexRoot<Resident, S>>(ahc, *self);
 
     // INDEX_ALLOCATION is always non-resident on disk; reject a record
     // claiming otherwise before its bytes get reinterpreted as one.
-    case AttrType::IndexAllocation:
+    case Attr::Type::IndexAllocation:
       if (ahc.non_resident == 0) {
         throw std::runtime_error(
             "Index Allocation attribute must be non-resident.\n");
       }
       return std::make_unique<Attr::AttrIndexAlloc<S>>(ahc, *self);
 
-    case AttrType::Bitmap:
+    case Attr::Type::Bitmap:
       if (ahc.non_resident != 0) {
         return std::make_unique<Attr::AttrBitmap<Attr::AttrNonResident<S>, S>>(
             ahc, *self);
@@ -284,7 +283,7 @@ std::unique_ptr<AttrBase<S>> FileRecord<S>::Impl::AllocAttr(
     // $EFS, the only one this library reads, is read through the generic
     // wrappers. Any other logged utility stream is not needed, but not
     // worth a warning either.
-    case AttrType::LoggedUtilityStream:
+    case Attr::Type::LoggedUtilityStream:
       if (ahc.non_resident != 0) {
         return std::make_unique<Attr::AttrNonResident<S>>(ahc, *self);
       }
@@ -302,9 +301,9 @@ std::unique_ptr<AttrBase<S>> FileRecord<S>::Impl::AllocAttr(
 
 // Parse a single Attribute
 // Return False on error
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::Impl::ParseAttr(
-    const AttrHeaderCommon& ahc,
+    const Attr::HeaderCommon& ahc,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   const DWORD attr_index = Attr::AttrIndex(ahc.type);
   if (attr_index >= Attr::attr_nums) {
@@ -325,7 +324,7 @@ bool FileRecord<S>::Impl::ParseAttr(
 
   std::unique_ptr<AttrBase<S>> attr;
   try {
-    if constexpr (S == Strategy::NoCache) {
+    if constexpr (S == Cache::Strategy::NoCache) {
       attr =
           AllocAttr<Attr::AttrResidentNoCache>(ahc, unhandled, attr_list_chain);
     } else {
@@ -354,14 +353,14 @@ bool FileRecord<S>::Impl::ParseAttr(
 // attribute is known) come straight from disk at a fixed offset; later
 // records go through $MFT's DATA attribute, since $MFT itself may be
 // fragmented across the disk.
-template <Strategy S>
+template <Cache::Strategy S>
 std::unique_ptr<Record::HeaderImpl<S>>
     FileRecord<S>::Impl::ReadFileRecord(ULONGLONG file_ref) {
   if (record_buffer.size() != volume->GetFileRecordSize()) {
     record_buffer.resize(volume->GetFileRecordSize());
   }
 
-  if (file_ref < static_cast<ULONGLONG>(Enum::MftIdx::User) ||
+  if (file_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
       volume->impl_->mft_data == nullptr) {
     // Take as continuous disk allocation
     LARGE_INTEGER fr_addr{};
@@ -409,7 +408,7 @@ std::unique_ptr<Record::HeaderImpl<S>>
 }
 
 // Read File Record, verify and patch the US (update sequence)
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
   // Clear previous data
   impl_->ClearAttrs();
@@ -448,7 +447,7 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
 }
 
 // Visit IndexBlocks recursivly to find a specific Filename
-template <Strategy S>
+template <Cache::Strategy S>
 // The depth limit and the visited-VCN set bound the recursion.
 // NOLINTNEXTLINE(misc-no-recursion)
 std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
@@ -466,7 +465,7 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
   }
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      self->GetAttr(AttrType::IndexAllocation);
+      self->GetAttr(Attr::Type::IndexAllocation);
   if (vec.empty()) {
     return {};
   }
@@ -519,7 +518,7 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
 // Call user defined callback routine once found an subentry
 // visitedVcns guards against a malformed/malicious B+ tree where a
 // subnode VCN is revisited, which would otherwise recurse without bound.
-template <Strategy S>
+template <Cache::Strategy S>
 // The depth limit and the visited-VCN set bound the recursion.
 // NOLINTNEXTLINE(misc-no-recursion)
 void FileRecord<S>::Impl::TraverseSubNode(
@@ -537,7 +536,7 @@ void FileRecord<S>::Impl::TraverseSubNode(
   }
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      self->GetAttr(AttrType::IndexAllocation);
+      self->GetAttr(Attr::Type::IndexAllocation);
   if (vec.empty()) {
     return;
   }
@@ -563,7 +562,7 @@ void FileRecord<S>::Impl::TraverseSubNode(
 
 // Parse all the attributes in a File Record
 // And insert them into a link list
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::ParseAttrs() {
   // A fresh chain, unrelated to any previous ParseFileRecord() on this object.
   std::unordered_set<ULONGLONG> attr_list_chain;
@@ -573,7 +572,7 @@ bool FileRecord<S>::ParseAttrs() {
 // attrListChain carries one $ATTRIBUTE_LIST resolution's already-visited
 // (record, attribute type) pairs into this record's own attribute parse,
 // instead of starting a fresh chain.
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::Impl::ParseAttrs(
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   assert(file_record);
@@ -610,7 +609,7 @@ bool FileRecord<S>::Impl::ParseAttrs(
   // Visit all attributes
 
   DWORD data_ptr = 0;  // guard if data exceeds file_record_size_ bounds
-  const AttrHeaderCommon* first = file_record->HeaderCommon();
+  const Attr::HeaderCommon* first = file_record->HeaderCommon();
 
   if (first == nullptr) {
     return false;
@@ -620,12 +619,12 @@ bool FileRecord<S>::Impl::ParseAttrs(
   bool found_end_marker = false;
 
   // An attribute's position comes from the disk, so it need not be aligned
-  // for AttrHeaderCommon. The walk reads each header through a copy.
+  // for Attr::HeaderCommon. The walk reads each header through a copy.
   std::span<const BYTE> cur(reinterpret_cast<const BYTE*>(first),
                             volume->GetFileRecordSize() - data_ptr);
 
   while (true) {
-    AttrHeaderCommon head{};
+    Attr::HeaderCommon head{};
     const AttrWalk step =
         ReadAttrHeader(cur, data_ptr, volume->GetFileRecordSize(), head);
     if (step == AttrWalk::EndMarker) {
@@ -663,9 +662,9 @@ bool FileRecord<S>::Impl::ParseAttrs(
 
 // Parses the attribute at the front of cur, if its type is wanted. Returns
 // false when it must end the walk.
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::Impl::VisitAttr(
-    std::span<const BYTE> cur, const AttrHeaderCommon& head,
+    std::span<const BYTE> cur, const Attr::HeaderCommon& head,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   // True only when the type is a real attribute slot and the caller's
   // mask requests that slot.
@@ -699,7 +698,7 @@ namespace {
 // Every non-resident instance's index into attrs, grouped by stream name: two
 // differently named streams of the same type (eg. two ADS) must never merge
 // into each other.
-template <Strategy S>
+template <Cache::Strategy S>
 std::unordered_map<std::wstring, std::vector<size_t>> GroupNonResidentByName(
     const std::vector<std::unique_ptr<AttrBase<S>>>& attrs) {
   std::unordered_map<std::wstring, std::vector<size_t>> by_name;
@@ -725,7 +724,7 @@ std::unordered_map<std::wstring, std::vector<size_t>> GroupNonResidentByName(
 // overlap, or a chain that doesn't start at VCN 0 means a damaged or
 // unsupported layout: every instance is then left exactly as parsed instead of
 // splicing a wrong or partial result together.
-template <Strategy S>
+template <Cache::Strategy S>
 void FileRecord<S>::Impl::MergeStreamChain(
     std::vector<std::unique_ptr<AttrBase<S>>>& attrs,
     std::vector<size_t>& indices, std::vector<size_t>& to_erase) {
@@ -769,7 +768,7 @@ void FileRecord<S>::Impl::MergeStreamChain(
 // Splices a non-resident attribute's own VCN-split instances (already all in
 // attr_list_ by now) back into one, so getAttr()/FindStream() see exactly
 // one complete attribute per stream instead of several partial ones.
-template <Strategy S>
+template <Cache::Strategy S>
 void FileRecord<S>::Impl::MergeAttributeContinuations() {
   for (std::vector<std::unique_ptr<AttrBase<S>>>& attrs : attr_list) {
     if (attrs.size() < 2) {
@@ -804,7 +803,7 @@ constexpr std::wstring_view efs_stream_name = L"$EFS";
 // Copies the key entries out of this record's $EFS stream. Returns none if the
 // stream is absent or malformed: the parse goes on, and the read that needs
 // the key fails, with the cause logged.
-template <Strategy S>
+template <Cache::Strategy S>
 std::vector<Efs::WrappedFek> FileRecord<S>::Impl::ReadEfsEntries() const {
 #if !(defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
       (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)))
@@ -812,7 +811,7 @@ std::vector<Efs::WrappedFek> FileRecord<S>::Impl::ReadEfsEntries() const {
   return {};
 #else
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       std::get<Attr::AttrIndex(AttrType::LoggedUtilityStream)>(attr_list)) {
+       std::get<Attr::AttrIndex(Attr::Type::LoggedUtilityStream)>(attr_list)) {
     if (attr->GetAttrName() != efs_stream_name) {
       continue;
     }
@@ -843,9 +842,9 @@ std::vector<Efs::WrappedFek> FileRecord<S>::Impl::ReadEfsEntries() const {
 // data inside the record. Returns false only when strict and one of the two
 // anomalies below is found: the caller then rejects the whole record instead
 // of reading the stream undecrypted.
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::Impl::AttachEfsContext() {
-  // AttrHeaderCommon::flags bit 0: the on-disk "compressed" flag. Real NTFS
+  // Attr::HeaderCommon::flags bit 0: the on-disk "compressed" flag. Real NTFS
   // never sets it alongside 0x4000 (compression and encryption are mutually
   // exclusive), but a forged record could. Decrypting a compressed stream's
   // bytes before LZNT1 decoding sees them would corrupt them for no gain, so
@@ -860,7 +859,7 @@ bool FileRecord<S>::Impl::AttachEfsContext() {
 #endif
 
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       std::get<Attr::AttrIndex(AttrType::Data)>(attr_list)) {
+       std::get<Attr::AttrIndex(Attr::Type::Data)>(attr_list)) {
     const WORD flags = attr->GetAttrFlags();
     if ((flags & Attr::flag_encrypted) == 0) {
       continue;
@@ -910,32 +909,32 @@ bool FileRecord<S>::Impl::AttachEfsContext() {
   return true;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG> FileRecord<S>::GetFileReference() const noexcept {
   return impl_->file_reference;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 WORD FileRecord<S>::GetSequenceNumber() const noexcept {
   return impl_->file_record ? impl_->file_record->GetData()->seq_no : 0;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG FileRecord<S>::GetBaseRecordReference() const noexcept {
   return impl_->file_record ? impl_->file_record->GetData()->ref_to_base &
                                   Mft::mft_record_number_mask
                             : 0;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsExtensionRecord() const noexcept {
   return impl_->file_record && impl_->file_record->GetData()->ref_to_base != 0;
 }
 
 // Install Attribute raw data CallBack routines for a single File Record
-template <Strategy S>
-bool FileRecord<S>::InstallAttrRawCB(AttrType attr_type,
-                                     AttrRawCallback callback) noexcept {
+template <Cache::Strategy S>
+bool FileRecord<S>::InstallAttrRawCB(Attr::Type attr_type,
+                                     Attr::RawCallback callback) noexcept {
   const DWORD at_idx = Attr::AttrIndex(attr_type);
   if (at_idx >= Attr::attr_nums) {
     return false;
@@ -948,28 +947,29 @@ bool FileRecord<S>::InstallAttrRawCB(AttrType attr_type,
 }
 
 // Clear all Attribute CallBack routines
-template <Strategy S>
+template <Cache::Strategy S>
 void FileRecord<S>::ClearAttrRawCB() noexcept {
-  for (AttrRawCallback& callback : impl_->attr_raw_call_back) {
+  for (Attr::RawCallback& callback : impl_->attr_raw_call_back) {
     callback = nullptr;
   }
 }
 
 // Choose attributes to handle, unwanted attributes will be discarded silently
-template <Strategy S>
-void FileRecord<S>::SetAttrMask(Mask mask) noexcept {
+template <Cache::Strategy S>
+void FileRecord<S>::SetAttrMask(Attr::Mask mask) noexcept {
   // Standard Information and Attribute List is needed always
-  impl_->attr_mask = mask | Mask::StandardInformation | Mask::AttributeList;
+  impl_->attr_mask =
+      mask | Attr::Mask::StandardInformation | Attr::Mask::AttributeList;
 
   // The $EFS stream holds the key of every encrypted $DATA.
-  if ((mask & Mask::Data) == Mask::Data) {
-    impl_->attr_mask |= Mask::LoggedUtilityStream;
+  if ((mask & Attr::Mask::Data) == Attr::Mask::Data) {
+    impl_->attr_mask |= Attr::Mask::LoggedUtilityStream;
   }
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine
-template <Strategy S>
-void FileRecord<S>::TraverseAttrs(const AttrsCallback<S>& attr_call_back,
+template <Cache::Strategy S>
+void FileRecord<S>::TraverseAttrs(const AttrsCallback& attr_call_back,
                                   void* context) {
   if (!attr_call_back) {
     Log::Warn("TraverseAttrs() called with an empty callback");
@@ -978,7 +978,8 @@ void FileRecord<S>::TraverseAttrs(const AttrsCallback<S>& attr_call_back,
 
   for (size_t i = 0; i < Attr::attr_nums; i++) {
     // skip masked attributes
-    if (static_cast<bool>(impl_->attr_mask & (static_cast<Mask>(1U << i)))) {
+    if (static_cast<bool>(impl_->attr_mask &
+                          (static_cast<Attr::Mask>(1U << i)))) {
       // i < attr_nums by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       for (const std::unique_ptr<AttrBase<S>>& attr_base :
@@ -994,9 +995,9 @@ void FileRecord<S>::TraverseAttrs(const AttrsCallback<S>& attr_call_back,
 }
 
 // Find Attributes
-template <Strategy S>
+template <Cache::Strategy S>
 const std::vector<std::unique_ptr<AttrBase<S>>>&
-    FileRecord<S>::GetAttr(AttrType attr_type) const noexcept {
+    FileRecord<S>::GetAttr(Attr::Type attr_type) const noexcept {
   static const std::vector<std::unique_ptr<AttrBase<S>>> dummy{};
   const DWORD attr_idx = Attr::AttrIndex(attr_type);
 
@@ -1009,9 +1010,9 @@ const std::vector<std::unique_ptr<AttrBase<S>>>&
   return impl_->attr_list[attr_idx];
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 std::vector<std::unique_ptr<AttrBase<S>>>&
-    FileRecord<S>::GetAttr(AttrType attr_type) noexcept {
+    FileRecord<S>::GetAttr(Attr::Type attr_type) noexcept {
   static std::vector<std::unique_ptr<AttrBase<S>>> dummy{};
   const DWORD attr_idx = Attr::AttrIndex(attr_type);
 
@@ -1025,16 +1026,15 @@ std::vector<std::unique_ptr<AttrBase<S>>>&
 }
 
 // Get File Name (First Win32 name)
-template <Strategy S>
+template <Cache::Strategy S>
 std::wstring_view FileRecord<S>::GetFileName() const {
   // A file may have several filenames
   // Return the first Win32 filename
   for (const std::unique_ptr<AttrBase<S>>& fn :
-       std::get<Attr::AttrIndex(AttrType::FileName)>(impl_->attr_list)) {
+       std::get<Attr::AttrIndex(Attr::Type::FileName)>(impl_->attr_list)) {
     const Filename* filename = nullptr;
-    filename = reinterpret_cast<
-        const Attr::AttrFileName<Attr::AttrResident<S>, Strategy::NoCache>*>(
-        fn.get());
+    filename = reinterpret_cast<const Attr::AttrFileName<
+        Attr::AttrResident<S>, Cache::Strategy::NoCache>*>(fn.get());
 
     if (filename->IsWin32Name() && !filename->GetFilename().empty()) {
       return filename->GetFilename();
@@ -1045,50 +1045,51 @@ std::wstring_view FileRecord<S>::GetFileName() const {
 }
 
 // Get File Size
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG FileRecord<S>::GetFileSize() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::FileName)>(impl_->attr_list);
+      std::get<Attr::AttrIndex(Attr::Type::FileName)>(impl_->attr_list);
   if (vec.empty()) {
     return 0;
   }
-  if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrFileName<Attr::AttrResidentNoCache,
-                                                     Strategy::NoCache>*>(
+  if constexpr (S == Cache::Strategy::NoCache) {
+    return reinterpret_cast<const Attr::AttrFileName<
+        Attr::AttrResidentNoCache, Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->GetFileSize();
-  } else if constexpr (S == Strategy::FullCache) {
+  } else if constexpr (S == Cache::Strategy::FullCache) {
     return reinterpret_cast<const Attr::AttrFileName<
-        Attr::AttrResidentFullCache, Strategy::FullCache>*>(vec.front().get())
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
+               vec.front().get())
         ->GetFileSize();
   }
   return 0;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG FileRecord<S>::GetAllocatedSize() const noexcept {
   const AttrBase<S>* data = FindStream({});
   return data != nullptr ? data->GetAllocatedSize() : 0;
 }
 
 // Get File Times
-template <Strategy S>
+template <Cache::Strategy S>
 void FileRecord<S>::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
                                 FILETIME* access_tm,
                                 FILETIME* change_tm) const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   // Standard Information attribute hold the most updated file time
   if (!vec.empty()) {
-    if constexpr (S == Strategy::NoCache) {
+    if constexpr (S == Cache::Strategy::NoCache) {
       reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                               Strategy::NoCache>*>(
+                                               Cache::Strategy::NoCache>*>(
           vec.front().get())
           ->GetFileTime(write_tm, create_tm, access_tm, change_tm);
-    } else if constexpr (S == Strategy::FullCache) {
+    } else if constexpr (S == Cache::Strategy::FullCache) {
       reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                               Strategy::FullCache>*>(
+                                               Cache::Strategy::FullCache>*>(
           vec.front().get())
           ->GetFileTime(write_tm, create_tm, access_tm, change_tm);
     }
@@ -1115,7 +1116,7 @@ void FileRecord<S>::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
 
 // Traverse all sub directories and files contained
 // Call user defined callback routine once found an entry
-template <Strategy S>
+template <Cache::Strategy S>
 void FileRecord<S>::TraverseSubEntries(const SubentryCallback& se_call_back,
                                        void* context) const {
   assert(se_call_back);
@@ -1125,7 +1126,7 @@ void FileRecord<S>::TraverseSubEntries(const SubentryCallback& se_call_back,
   // Start traversing from IndexRoot (B+ tree root node)
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      GetAttr(AttrType::IndexRoot);
+      GetAttr(Attr::Type::IndexRoot);
   if (vec.empty()) {
     // No IndexRoot at all to start the normal walk from, but $INDEX_ALLOCATION
     // blocks may still exist and hold every entry.
@@ -1138,17 +1139,20 @@ void FileRecord<S>::TraverseSubEntries(const SubentryCallback& se_call_back,
 
   const std::vector<IndexEntryView>* all_ie = nullptr;
 
-  if constexpr (S == Strategy::NoCache) {
-    const auto* index_root = reinterpret_cast<const Attr::AttrIndexRoot<
-        Attr::AttrResidentNoCache, Strategy::NoCache>*>(vec.front().get());
+  if constexpr (S == Cache::Strategy::NoCache) {
+    const auto* index_root =
+        reinterpret_cast<const Attr::AttrIndexRoot<Attr::AttrResidentNoCache,
+                                                   Cache::Strategy::NoCache>*>(
+            vec.front().get());
 
     if (!index_root->IsFileName()) {
       return;
     }
     all_ie = index_root;
-  } else if constexpr (S == Strategy::FullCache) {
+  } else if constexpr (S == Cache::Strategy::FullCache) {
     const auto* index_root = reinterpret_cast<const Attr::AttrIndexRoot<
-        Attr::AttrResidentFullCache, Strategy::FullCache>*>(vec.front().get());
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
+        vec.front().get());
 
     if (!index_root->IsFileName()) {
       return;
@@ -1196,7 +1200,7 @@ ULONGLONG MappedIndexBlocks(ULONGLONG mapped_clusters, DWORD cluster_size,
 // Decides whether an entry found in an orphaned block is reported. It MUST be
 // filed under this very directory (selfRef, when known). With a volume given,
 // the record it names MUST also still be in use under the same sequence.
-template <Strategy S>
+template <Cache::Strategy S>
 bool IsOrphanEntryReportable(const IndexEntryView& entry,
                              std::optional<ULONGLONG> self_ref,
                              WORD self_sequence, bool self_in_use,
@@ -1229,12 +1233,12 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
 // them. Since every name appears exactly once in the B+ tree, scanning every
 // block the normal walk missed finds them without relying on any pointer at
 // all - unlike the normal walk, in VCN order rather than collation order.
-template <Strategy S>
+template <Cache::Strategy S>
 void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
     const SubentryCallback& se_call_back, void* context,
     std::unordered_set<ULONGLONG>& visited_vcns) const {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      self->GetAttr(AttrType::IndexAllocation);
+      self->GetAttr(Attr::Type::IndexAllocation);
   if (vec.empty()) {
     return;
   }
@@ -1311,7 +1315,7 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
 }
 
 // Find a specific Filename from InexRoot described B+ tree
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<IndexEntry>
     FileRecord<S>::FindSubEntry(std::wstring_view file_name) const {
   std::optional<IndexEntry> found = impl_->FindSubEntryInOrder(file_name);
@@ -1337,17 +1341,16 @@ std::optional<IndexEntry>
 
 // The entries of a file-name $INDEX_ROOT, or null for any other kind of index
 // or for a strategy this library does not know.
-template <Strategy S>
+template <Cache::Strategy S>
 const std::vector<IndexEntryView>*
     FileRecord<S>::Impl::FileNameIndexRootEntries(const AttrBase<S>& attr) {
-  if constexpr (S == Strategy::NoCache) {
-    const auto* index_root =
-        reinterpret_cast<const Attr::AttrIndexRoot<Attr::AttrResidentNoCache,
-                                                   Strategy::NoCache>*>(&attr);
-    return index_root->IsFileName() ? index_root : nullptr;
-  } else if constexpr (S == Strategy::FullCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     const auto* index_root = reinterpret_cast<const Attr::AttrIndexRoot<
-        Attr::AttrResidentFullCache, Strategy::FullCache>*>(&attr);
+        Attr::AttrResidentNoCache, Cache::Strategy::NoCache>*>(&attr);
+    return index_root->IsFileName() ? index_root : nullptr;
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    const auto* index_root = reinterpret_cast<const Attr::AttrIndexRoot<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(&attr);
     return index_root->IsFileName() ? index_root : nullptr;
   } else {
     return nullptr;
@@ -1357,12 +1360,12 @@ const std::vector<IndexEntryView>*
 // FindSubEntry()'s walk down the B+ tree, trusting the entries to be sorted
 // by the volume's collation order. A name that sorts before a leaf entry is
 // reported absent.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<IndexEntry> FileRecord<S>::Impl::FindSubEntryInOrder(
     std::wstring_view file_name) const {
   // Start searching from IndexRoot (B+ tree root node)
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      self->GetAttr(AttrType::IndexRoot);
+      self->GetAttr(Attr::Type::IndexRoot);
   if (vec.empty()) {
     return {};
   }
@@ -1411,10 +1414,10 @@ std::optional<IndexEntry> FileRecord<S>::Impl::FindSubEntryInOrder(
 }
 
 // Find Data attribute class of
-template <Strategy S>
+template <Cache::Strategy S>
 const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name) const {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      GetAttr(AttrType::Data);
+      GetAttr(Attr::Type::Data);
   for (const std::unique_ptr<AttrBase<S>>& data : vec) {
     // Unnamed stream
     if (data->IsUnNamed() && name.empty()) {
@@ -1435,7 +1438,7 @@ const AttrBase<S>* FileRecord<S>::FindStream(std::wstring_view name) const {
 }
 
 // Check if it's deleted or in use
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsDeleted() const noexcept {
   if (!impl_->file_record) {
     Log::Warn("IsDeleted() called on a FileRecord with no parsed record");
@@ -1443,11 +1446,11 @@ bool FileRecord<S>::IsDeleted() const noexcept {
   }
 
   return !static_cast<bool>(impl_->file_record->GetData()->flags &
-                            Flag::FileRecord::InUse);
+                            Data::FileRecordFlag::InUse);
 }
 
 // Check if it's a directory
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsDirectory() const noexcept {
   if (!impl_->file_record) {
     Log::Warn("IsDirectory() called on a FileRecord with no parsed record");
@@ -1455,310 +1458,310 @@ bool FileRecord<S>::IsDirectory() const noexcept {
   }
 
   return static_cast<bool>(impl_->file_record->GetData()->flags &
-                           Flag::FileRecord::Dir);
+                           Data::FileRecordFlag::Dir);
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsReadOnly() const noexcept {
   // Standard Information attribute holds the most updated file time
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsReadOnly();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsReadOnly();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsHidden() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsHidden();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsHidden();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsSystem() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsSystem();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsSystem();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsArchive() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsArchive();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsArchive();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsDevice() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsDevice();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsDevice();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsNormal() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsNormal();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsNormal();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsTemporary() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsTemporary();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsTemporary();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsCompressed() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsCompressed();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsCompressed();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsOffline() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsOffline();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsOffline();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsNotContentIndexed() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsNotContentIndexed();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsNotContentIndexed();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsEncrypted() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsEncrypted();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsEncrypted();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsSparse() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsSparse();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsSparse();
   }
   return false;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileRecord<S>::IsReparsePoint() const noexcept {
   const std::vector<std::unique_ptr<AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(AttrType::StandardInformation)>(
+      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
           impl_->attr_list);
   if (vec.empty()) {
     return false;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Strategy::NoCache>*>(
+                                                    Cache::Strategy::NoCache>*>(
                vec.front().get())
         ->IsReparsePoint();
-  } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                                    Strategy::FullCache>*>(
+  } else if constexpr (S == Cache::Strategy::FullCache) {
+    return reinterpret_cast<const Attr::AttrStdInfo<
+        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
                vec.front().get())
         ->IsReparsePoint();
   }
   return false;
 }
 
-template class FileRecord<Strategy::NoCache>;
-template class FileRecord<Strategy::FullCache>;
+template class FileRecord<Cache::Strategy::NoCache>;
+template class FileRecord<Cache::Strategy::FullCache>;
 
 }  // namespace NtfsBrowser

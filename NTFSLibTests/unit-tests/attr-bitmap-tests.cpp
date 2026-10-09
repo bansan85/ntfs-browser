@@ -17,13 +17,13 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Attr::AttrBitmap;
 using NtfsBrowser::Attr::AttrNonResident;
-using NtfsBrowser::Enum::MftIdx;
+namespace Mft = NtfsBrowser::Mft;
 
 namespace {
 
@@ -32,7 +32,7 @@ namespace {
 constexpr ULONGLONG bits_per_bitmap_cluster =
     static_cast<ULONGLONG>(NtfsBrowserTests::fake_cluster_size) * 8;
 
-template <Strategy S>
+template <Cache::Strategy S>
 void CheckClusterFreeAnswersPastTheFirstBitmapCluster() {
   const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
@@ -40,10 +40,10 @@ void CheckClusterFreeAnswersPastTheFirstBitmapCluster() {
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  const auto& bitmap_attrs = record.GetAttr(AttrType::Bitmap);
+  const auto& bitmap_attrs = record.GetAttr(Attr::Type::Bitmap);
   REQUIRE(bitmap_attrs.size() == 1);
   auto& bitmap =
       // The REQUIRE above checks the size of bitmapAttrs.
@@ -70,7 +70,7 @@ void CheckClusterFreeAnswersPastTheFirstBitmapCluster() {
 
 TEMPLATE_TEST_CASE_SIG(
     "A non-resident bitmap answers for clusters past its first cluster",
-    "[attr-bitmap][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-bitmap][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckClusterFreeAnswersPastTheFirstBitmapCluster<S>();
 }

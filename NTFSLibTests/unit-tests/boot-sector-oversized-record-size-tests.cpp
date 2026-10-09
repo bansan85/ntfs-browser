@@ -14,13 +14,13 @@
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes an index block "
     "far larger than any plausible size",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedIndexBlock());
 
@@ -33,8 +33,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes a file record "
     "far larger than any plausible size",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOversizedFileRecord());
 
@@ -51,8 +51,8 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes a file record "
     "size that exceeds max_file_record_size via the positive "
     "clusters_per_file_record branch",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFileRecordSizeTooBig());
 

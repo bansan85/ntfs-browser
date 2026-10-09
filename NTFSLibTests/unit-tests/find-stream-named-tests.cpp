@@ -21,7 +21,7 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrBase;
 
 }  // namespace NtfsBrowser
@@ -29,12 +29,12 @@ class AttrBase;
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
-using NtfsBrowser::Enum::MftIdx;
+namespace Cache = NtfsBrowser::Cache;
+namespace Mft = NtfsBrowser::Mft;
 
 namespace {
 
-template <Strategy S>
+template <Cache::Strategy S>
 void CheckFindStreamReturnsNamedStream() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithNamedDataStream());
@@ -43,7 +43,7 @@ void CheckFindStreamReturnsNamedStream() {
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
   // The "not found" case must still correctly return nullptr: no stream
@@ -72,7 +72,7 @@ void CheckFindStreamReturnsNamedStream() {
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG("FindStream returns a named stream (ADS) by name",
-                       "[file-record][regression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache) {
+                       "[file-record][regression]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckFindStreamReturnsNamedStream<S>();
 }

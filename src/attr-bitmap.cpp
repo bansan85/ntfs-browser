@@ -14,8 +14,8 @@ constexpr unsigned bits_per_byte = 8;
 
 }  // namespace
 
-template <class Resident, Strategy S>
-AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
+template <class Resident, Cache::Strategy S>
+AttrBitmap<Resident, S>::AttrBitmap(const HeaderCommon& ahc,
                                     const FileRecord<S>& file_record)
     : Resident(ahc, file_record), bitmap_size_(this->GetDataSize()) {
   Log::Trace("Attribute: Bitmap ({}Resident)",
@@ -39,7 +39,7 @@ AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
   Log::Debug("{} bytes of resident Bitmap data read", bitmap_size_);
 }
 
-template <class Resident, Strategy S>
+template <class Resident, Cache::Strategy S>
 bool AttrBitmap<Resident, S>::IsClusterFree(ULONGLONG cluster) {
   if (bitmap_buf_.empty()) {
     return false;
@@ -80,11 +80,11 @@ bool AttrBitmap<Resident, S>::IsClusterFree(ULONGLONG cluster) {
   return (bitmap_buf_[idx] & static_cast<BYTE>(1U << fac)) == 0;
 }
 
-template class AttrBitmap<AttrNonResident<Strategy::FullCache>,
-                          Strategy::FullCache>;
-template class AttrBitmap<AttrNonResident<Strategy::NoCache>,
-                          Strategy::NoCache>;
-template class AttrBitmap<AttrResidentFullCache, Strategy::FullCache>;
-template class AttrBitmap<AttrResidentNoCache, Strategy::NoCache>;
+template class AttrBitmap<AttrNonResident<Cache::Strategy::FullCache>,
+                          Cache::Strategy::FullCache>;
+template class AttrBitmap<AttrNonResident<Cache::Strategy::NoCache>,
+                          Cache::Strategy::NoCache>;
+template class AttrBitmap<AttrResidentFullCache, Cache::Strategy::FullCache>;
+template class AttrBitmap<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
 }  // namespace NtfsBrowser::Attr

@@ -18,7 +18,7 @@ namespace NtfsBrowser {
 
 namespace Attr {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrNonResident;
 
 }  // namespace Attr
@@ -46,7 +46,7 @@ class Context final {
   Context(std::vector<WrappedFek> entries, KeyProviderSource provider_source,
           CipherBackend backend);
 
-  template <Strategy S>
+  template <Cache::Strategy S>
   friend class NtfsBrowser::Attr::AttrNonResident;
 
  private:

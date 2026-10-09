@@ -6,9 +6,18 @@
 
 namespace NtfsBrowser {
 
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
-struct AttrHeaderCommon;
-template <Strategy S>
+
+}  // namespace Cache
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+template <Cache::Strategy S>
 class FileRecord;
 
 namespace Data {
@@ -17,25 +26,25 @@ struct StandardInformation;
 
 }  // namespace Data
 
-namespace Flag {
+namespace Data {
 
 enum class StdInfoPermission : DWORD;
 
-}  // namespace Flag
+}  // namespace Data
 
 namespace Attr {
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 class AttrStdInfo : public Resident {
  public:
-  AttrStdInfo(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
+  AttrStdInfo(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrStdInfo(AttrStdInfo&& other) noexcept = delete;
   AttrStdInfo(const AttrStdInfo& other) = delete;
   AttrStdInfo& operator=(AttrStdInfo&& other) noexcept = delete;
   AttrStdInfo& operator=(const AttrStdInfo& other) = delete;
   ~AttrStdInfo() override;
 
-  template <Strategy>
+  template <Cache::Strategy>
   friend class FileRecord;
 
  private:
@@ -43,7 +52,7 @@ class AttrStdInfo : public Resident {
 
   void GetFileTime(FILETIME* write_tm, FILETIME* create_tm, FILETIME* access_tm,
                    FILETIME* change_tm = nullptr) const noexcept;
-  [[nodiscard]] Flag::StdInfoPermission GetFilePermission() const noexcept;
+  [[nodiscard]] Data::StdInfoPermission GetFilePermission() const noexcept;
   [[nodiscard]] bool IsReadOnly() const noexcept;
   [[nodiscard]] bool IsHidden() const noexcept;
   [[nodiscard]] bool IsSystem() const noexcept;

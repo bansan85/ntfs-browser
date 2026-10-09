@@ -9,22 +9,18 @@
 #include <string_view>
 #include <vector>
 
-namespace NtfsBrowser::Flag {
-
-enum class IndexEntry : BYTE;
-
-}  // namespace NtfsBrowser::Flag
-
 namespace NtfsBrowser::Data {
+
+enum class IndexEntryFlag : BYTE;
 
 struct IndexEntry {
   // Low 6B : MFT record index
   ULONGLONG mft_index : 48;
   // High 2B: MFT record sequence number
   ULONGLONG mft_sn : 16;
-  WORD size;               // Length of the index entry
-  WORD stream_size;        // Length of the stream
-  Flag::IndexEntry flags;  // Flags
+  WORD size;                   // Length of the index entry
+  WORD stream_size;            // Length of the stream
+  Data::IndexEntryFlag flags;  // Flags
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE padding[3];  // Padding
   BYTE stream;      // Stream

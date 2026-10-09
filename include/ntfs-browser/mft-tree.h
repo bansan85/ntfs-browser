@@ -14,77 +14,8 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class NtfsVolume;
-
-// One $FILE_NAME of an MFT record. A record has one per hard link, plus a
-// DOS 8.3 alias when its long name needs one.
-struct MftName {
-  std::wstring name;
-  ULONGLONG parent_record{0};
-  WORD parent_sequence{0};
-  // A pure DOS 8.3 alias. Never used to build a path.
-  bool dos_only{false};
-  // The parent reference names a directory the scan found, under a matching
-  // sequence number. See MftTree for the exact rules.
-  bool parent_valid{false};
-};
-
-// What one MFT base record says about its file, copied out of the record.
-struct MftEntry {
-  ULONGLONG record{0};
-  WORD sequence{0};
-  bool in_use{false};
-  bool directory{false};
-  std::vector<MftName> names;
-  // Real size of the unnamed $DATA stream. Without one, the $FILE_NAME size,
-  // which NTFS only refreshes on a rename.
-  ULONGLONG size{0};
-  // Allocated size of the unnamed $DATA stream; 0 without one.
-  ULONGLONG allocated_size{0};
-  // From $STANDARD_INFORMATION, in local time.
-  FILETIME create_time{};
-  FILETIME write_time{};
-  // Last MFT (metadata) change time, distinct from write_time's content
-  // modification time.
-  FILETIME change_time{};
-  FILETIME access_time{};
-  bool read_only{false};
-  bool hidden{false};
-  bool system{false};
-  bool archive{false};
-  bool compressed{false};
-  bool encrypted{false};
-  bool sparse{false};
-};
-
-struct MftScanOptions {
-  // Called every few thousand records, and once at the end. Returning false
-  // stops the scan: the tree then holds the records scanned so far.
-  std::function<bool(ULONGLONG done, ULONGLONG total)> progress;
-};
-
-struct MftScanStats {
-  // Record slots $MFT has room for.
-  ULONGLONG slots{0};
-  // Base records in use.
-  ULONGLONG in_use{0};
-  // Base records NTFS freed, kept or not depending on the volume's
-  // include_deleted.
-  ULONGLONG deleted{0};
-  // Extension records. Their attributes are read through their base record.
-  ULONGLONG extensions{0};
-  // Slots with no FILE magic (never used), a bad fixup, or a read error.
-  ULONGLONG unreadable{0};
-  // Records with an attribute that failed to parse, counted either way.
-  // Dropped unless the volume's recover_errors is on, which keeps what
-  // parsed before the failure.
-  ULONGLONG damaged{0};
-  // Kept records that no chain of valid parent references links to the root.
-  ULONGLONG unreachable{0};
-  // False when progress() stopped the scan early.
-  bool complete{true};
-};
 
 // Every file of a volume, rebuilt from the parent reference in each MFT
 // record's own $FILE_NAME, not from directory indexes. It survives the loss
@@ -102,11 +33,80 @@ struct MftScanStats {
 // $MFT in memory.
 class NTFS_BROWSER_EXPORT MftTree {
  public:
+  // One $FILE_NAME of an MFT record. A record has one per hard link, plus a
+  // DOS 8.3 alias when its long name needs one.
+  struct Name {
+    std::wstring name;
+    ULONGLONG parent_record{0};
+    WORD parent_sequence{0};
+    // A pure DOS 8.3 alias. Never used to build a path.
+    bool dos_only{false};
+    // The parent reference names a directory the scan found, under a matching
+    // sequence number. See MftTree for the exact rules.
+    bool parent_valid{false};
+  };
+
+  // What one MFT base record says about its file, copied out of the record.
+  struct Entry {
+    ULONGLONG record{0};
+    WORD sequence{0};
+    bool in_use{false};
+    bool directory{false};
+    std::vector<Name> names;
+    // Real size of the unnamed $DATA stream. Without one, the $FILE_NAME size,
+    // which NTFS only refreshes on a rename.
+    ULONGLONG size{0};
+    // Allocated size of the unnamed $DATA stream; 0 without one.
+    ULONGLONG allocated_size{0};
+    // From $STANDARD_INFORMATION, in local time.
+    FILETIME create_time{};
+    FILETIME write_time{};
+    // Last MFT (metadata) change time, distinct from write_time's content
+    // modification time.
+    FILETIME change_time{};
+    FILETIME access_time{};
+    bool read_only{false};
+    bool hidden{false};
+    bool system{false};
+    bool archive{false};
+    bool compressed{false};
+    bool encrypted{false};
+    bool sparse{false};
+  };
+
+  struct ScanOptions {
+    // Called every few thousand records, and once at the end. Returning false
+    // stops the scan: the tree then holds the records scanned so far.
+    std::function<bool(ULONGLONG done, ULONGLONG total)> progress;
+  };
+
+  struct ScanStats {
+    // Record slots $MFT has room for.
+    ULONGLONG slots{0};
+    // Base records in use.
+    ULONGLONG in_use{0};
+    // Base records NTFS freed, kept or not depending on the volume's
+    // include_deleted.
+    ULONGLONG deleted{0};
+    // Extension records. Their attributes are read through their base record.
+    ULONGLONG extensions{0};
+    // Slots with no FILE magic (never used), a bad fixup, or a read error.
+    ULONGLONG unreadable{0};
+    // Records with an attribute that failed to parse, counted either way.
+    // Dropped unless the volume's recover_errors is on, which keeps what
+    // parsed before the failure.
+    ULONGLONG damaged{0};
+    // Kept records that no chain of valid parent references links to the root.
+    ULONGLONG unreachable{0};
+    // False when progress() stopped the scan early.
+    bool complete{true};
+  };
+
   // Scans every record of volume's $MFT.
-  explicit MftTree(const NtfsVolume<Strategy::NoCache>& volume,
-                   const MftScanOptions& options = {});
-  explicit MftTree(const NtfsVolume<Strategy::FullCache>& volume,
-                   const MftScanOptions& options = {});
+  explicit MftTree(const NtfsVolume<Cache::Strategy::NoCache>& volume,
+                   const ScanOptions& options = {});
+  explicit MftTree(const NtfsVolume<Cache::Strategy::FullCache>& volume,
+                   const ScanOptions& options = {});
   MftTree(const MftTree& other);
   MftTree(MftTree&& other) noexcept;
   MftTree& operator=(const MftTree& other);
@@ -114,9 +114,9 @@ class NTFS_BROWSER_EXPORT MftTree {
   ~MftTree();
 
   // Every kept record, in record number order.
-  [[nodiscard]] const std::vector<MftEntry>& Entries() const noexcept;
+  [[nodiscard]] const std::vector<Entry>& Entries() const noexcept;
   // nullptr when the scan did not keep that record.
-  [[nodiscard]] const MftEntry* Find(ULONGLONG record) const;
+  [[nodiscard]] const Entry* Find(ULONGLONG record) const;
   // Records filed under dirRecord through a valid parent reference, once
   // each, even when several of their names sit in it.
   [[nodiscard]] std::span<const ULONGLONG> Children(ULONGLONG dir_record) const;
@@ -134,7 +134,7 @@ class NTFS_BROWSER_EXPORT MftTree {
       GetPath(ULONGLONG record, size_t name_index,
               std::optional<ULONGLONG>* lost_ancestor = nullptr) const;
   // What the scan met, record slot by record slot.
-  [[nodiscard]] const MftScanStats& Stats() const noexcept;
+  [[nodiscard]] const ScanStats& Stats() const noexcept;
 
  private:
   class Impl;

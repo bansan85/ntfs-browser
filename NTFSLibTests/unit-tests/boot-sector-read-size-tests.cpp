@@ -16,7 +16,7 @@
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 
 namespace {
 
@@ -58,8 +58,8 @@ bool Always(size_t /*length*/) { return true; }
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume reads the boot sector in a whole 4Kn sector, so an unbuffered "
     "device accepts it",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &NotMultipleOf4Kn);
 
@@ -70,8 +70,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume still opens a medium too short to serve a whole 4Kn sector",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &AtLeast4Kn);
 
@@ -82,8 +82,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a volume whose boot sector cannot be read at all",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
       NtfsBrowserTests::BuildFakeNtfsImage(), &Always);
 

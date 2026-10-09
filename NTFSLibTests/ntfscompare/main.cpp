@@ -34,7 +34,6 @@
 #include "std-filesystem-walk.h"
 #include "volume-open.h"
 
-using NtfsBrowser::MftScanOptions;
 using NtfsBrowser::MftTree;
 using NtfsCompare::Listing;
 using NtfsCompare::NativeText;
@@ -159,7 +158,7 @@ int Run(int argc, ArgChar** argv) {
   PrintErr(
       "Scanning the whole $MFT for MftTree (this can take a "
       "while on a large volume)...\n");
-  MftScanOptions scan_options;
+  MftTree::ScanOptions scan_options;
   scan_options.progress = [](ULONGLONG done, ULONGLONG total) {
     PrintErr("\r$MFT: {} / {}", done, total);
     if (done == total) {

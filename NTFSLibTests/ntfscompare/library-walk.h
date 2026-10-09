@@ -20,8 +20,13 @@
 namespace NtfsBrowser {
 
 class MftTree;
+
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
-template <Strategy S>
+
+}  // namespace Cache
+template <Cache::Strategy S>
 class NtfsVolume;
 
 }  // namespace NtfsBrowser
@@ -33,23 +38,23 @@ namespace NtfsCompare {
 // number of the directory it names, walking FindSubEntry() one component at
 // a time from the root. FullCache, NoCache and MftTree each start their own
 // walk from this same record, so all three compare the very same subtree.
-template <NtfsBrowser::Strategy S>
+template <NtfsBrowser::Cache::Strategy S>
 [[nodiscard]] std::optional<ULONGLONG>
     ResolveDirectoryRecord(NtfsBrowser::NtfsVolume<S>& volume,
                            std::wstring_view relative_path) {
   using NtfsBrowser::FileRecord;
   using NtfsBrowser::IndexEntry;
-  using NtfsBrowser::Mask;
 
   FileRecord<S> current(volume);
-  current.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  current.SetAttrMask(NtfsBrowser::Attr::Mask::IndexRoot |
+                      NtfsBrowser::Attr::Mask::IndexAllocation);
   if (!current.ParseFileRecord(
-          static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::Root)) ||
+          static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root)) ||
       !current.ParseAttrs()) {
     return std::nullopt;
   }
 
-  auto record = static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::Root);
+  auto record = static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root);
   size_t pos = 0;
   while (pos < relative_path.size()) {
     const size_t next = relative_path.find(L'/', pos);
@@ -78,12 +83,11 @@ template <NtfsBrowser::Strategy S>
 // Methods 4/5: recursively lists startRecord's subtree through
 // FileRecord::TraverseSubEntries(), reading each entry's own $FILE_NAME
 // (Filename/IndexEntry) for its fields.
-template <NtfsBrowser::Strategy S>
+template <NtfsBrowser::Cache::Strategy S>
 [[nodiscard]] Listing WalkLibraryIndex(NtfsBrowser::NtfsVolume<S>& volume,
                                        ULONGLONG start_record) {
   using NtfsBrowser::FileRecord;
   using NtfsBrowser::IndexEntryView;
-  using NtfsBrowser::Mask;
 
   Listing result;
 
@@ -106,7 +110,8 @@ template <NtfsBrowser::Strategy S>
     stack.pop_back();
 
     FileRecord<S> dir(volume);
-    dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+    dir.SetAttrMask(NtfsBrowser::Attr::Mask::IndexRoot |
+                    NtfsBrowser::Attr::Mask::IndexAllocation);
     if (!dir.ParseFileRecord(frame.record) || !dir.ParseAttrs()) {
       continue;
     }
@@ -121,7 +126,7 @@ template <NtfsBrowser::Strategy S>
           // Skip system metafiles and the DOS 8.3 alias: the Win32 name is
           // this tool's path key everywhere.
           if (index_entry.GetFileReference() <
-                  static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::User) ||
+                  static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::User) ||
               !index_entry.IsWin32Name()) {
             return;
           }
@@ -173,7 +178,7 @@ template <NtfsBrowser::Strategy S>
 }
 
 // Method 6: recursively lists startRecord's subtree through
-// MftTree::Children(), reading each entry's MftEntry for its fields.
+// MftTree::Children(), reading each entry's MftTree::Entry for its fields.
 [[nodiscard]] Listing WalkMftTree(const NtfsBrowser::MftTree& tree,
                                   ULONGLONG start_record);
 

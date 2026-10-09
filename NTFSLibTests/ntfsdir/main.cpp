@@ -123,7 +123,7 @@ struct Total {
 void Printfile(const IndexEntryView& ie, void* context) {
   Total& total = *static_cast<Total*>(context);
   // Hide system metafiles
-  if (ie.GetFileReference() < static_cast<ULONGLONG>(Enum::MftIdx::User)) {
+  if (ie.GetFileReference() < static_cast<ULONGLONG>(Mft::Idx::User)) {
     return;
   }
 
@@ -198,7 +198,7 @@ int wmain(int argc, wchar_t* argv[]) {
     return -1;
   }
 
-  NtfsVolume<Strategy::FullCache> volume(volname);
+  NtfsVolume<Cache::Strategy::FullCache> volume(volname);
   if (!volume.IsVolumeOK()) {
     printf("Cannot get NTFS BPB from boot sector of volume %lc\n", volname);
     return -1;
@@ -209,9 +209,9 @@ int wmain(int argc, wchar_t* argv[]) {
 
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
     printf("Cannot read root directory of volume %lc\n", volname);
     return -1;
   }

@@ -20,7 +20,7 @@
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 
 namespace {
@@ -30,9 +30,10 @@ namespace {
 // bytes and Compressed's LZNT1-decompressed ones are expected to match it
 // directly: Encrypted needs a decryption step first, covered separately in
 // nps-ntfs1-efs-tests.cpp.
-void CheckDirMatchesGroundTruth(const NtfsVolume<Strategy::NoCache>& volume,
-                                std::string_view dir_name) {
-  FileRecord<Strategy::NoCache> dir(volume);
+void CheckDirMatchesGroundTruth(
+    const NtfsVolume<Cache::Strategy::NoCache>& volume,
+    std::string_view dir_name) {
+  FileRecord<Cache::Strategy::NoCache> dir(volume);
   NtfsBrowserTests::OpenRootDir(dir);
   NtfsBrowserTests::OpenSubDir(dir, dir_name);
 
@@ -54,8 +55,8 @@ TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
           "[nps][integration]") {
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
-  const NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),
-                                             VolumeOptions{});
+  const NtfsVolume<Cache::Strategy::NoCache> volume(
+      NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   CheckDirMatchesGroundTruth(volume, "RAW");
@@ -67,8 +68,8 @@ TEST_CASE(
     "[nps][integration]") {
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
-  const NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),
-                                             VolumeOptions{});
+  const NtfsVolume<Cache::Strategy::NoCache> volume(
+      NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   CheckDirMatchesGroundTruth(volume, "Compressed");

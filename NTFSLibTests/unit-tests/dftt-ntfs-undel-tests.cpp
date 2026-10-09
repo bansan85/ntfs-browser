@@ -22,9 +22,9 @@
 
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
-using NtfsBrowser::Mask;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 #ifdef NTFS_TEST_HAS_MD5
 using NtfsBrowserTests::Md5Hex;
@@ -77,10 +77,11 @@ constexpr DeletedFile in_reallocated_dir_file{
 // Recovers one deleted file by MFT record number and checks it against its
 // known size and MD5 (from index.html, skipped without NTFS_TEST_HAS_MD5),
 // plus the Feb 29, 2004 (leap year) creation date every file here shares.
-void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NoCache>& volume,
-                              const DeletedFile& file) {
+void CheckRecoversDeletedFile(
+    const NtfsVolume<Cache::Strategy::NoCache>& volume,
+    const DeletedFile& file) {
   FileRecord record(volume);
-  record.SetAttrMask(Mask::Data | Mask::StandardInformation);
+  record.SetAttrMask(Attr::Mask::Data | Attr::Mask::StandardInformation);
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted());
   REQUIRE(record.ParseAttrs());
@@ -92,7 +93,7 @@ void CheckRecoversDeletedFile(const NtfsVolume<Strategy::NoCache>& volume,
   CHECK(month == 2);
   CHECK(day == 29);
 
-  const AttrBase<Strategy::NoCache>* stream =
+  const AttrBase<Cache::Strategy::NoCache>* stream =
       record.FindStream(file.stream_name);
   REQUIRE(stream != nullptr);
   REQUIRE(stream->GetDataSize() == file.size);
@@ -112,7 +113,7 @@ TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
 
   VolumeOptions options;
   options.include_deleted = true;
-  const NtfsVolume<Strategy::NoCache> volume(
+  const NtfsVolume<Cache::Strategy::NoCache> volume(
       NtfsBrowserTests::OpenBareVolumeImage(dftt_image), options);
   REQUIRE(volume.IsVolumeOK());
 

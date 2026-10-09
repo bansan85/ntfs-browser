@@ -210,7 +210,7 @@ void AppendData(CString& lines, const BYTE* data, DWORD datalen) {
   lines += line;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void PrintAttr(const AttrBase<S>& attr, void* context, bool* /* stop*/) {
   CString* dump = static_cast<CString*>(context);
 
@@ -251,7 +251,7 @@ void CNtfsattrDlg::OnOK() {
 
   const _TCHAR volname = m_filename.GetAt(0);
 
-  NtfsVolume<Strategy::FullCache> volume(volname);
+  NtfsVolume<Cache::Strategy::FullCache> volume(volname);
   if (!volume.IsVolumeOK()) {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
     return;
@@ -262,9 +262,9 @@ void CNtfsattrDlg::OnOK() {
   FileRecord fr(volume);
   // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
     MessageBox(_T("Cannot read root directory of volume"));
     return;
   }
@@ -324,12 +324,12 @@ void CNtfsattrDlg::OnOK() {
   }
 
   // parse all attributes
-  fr.SetAttrMask(Mask::All);
+  fr.SetAttrMask(Attr::Mask::All);
   if (!fr.ParseAttrs()) {
     MessageBox(_T("Cannot parse file attributes"));
     return;
   }
 
-  fr.TraverseAttrs(PrintAttr<Strategy::FullCache>, &m_dump);
+  fr.TraverseAttrs(PrintAttr<Cache::Strategy::FullCache>, &m_dump);
   UpdateData(FALSE);
 }

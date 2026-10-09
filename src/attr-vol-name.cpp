@@ -10,8 +10,8 @@
 
 namespace NtfsBrowser::Attr {
 
-template <typename Resident, Strategy S>
-AttrVolName<Resident, S>::AttrVolName(const AttrHeaderCommon& ahc,
+template <typename Resident, Cache::Strategy S>
+AttrVolName<Resident, S>::AttrVolName(const HeaderCommon& ahc,
                                       const FileRecord<S>& file_record)
     : Resident(ahc, file_record) {
   Log::Trace("Attribute: Volume Name");
@@ -28,12 +28,12 @@ AttrVolName<Resident, S>::AttrVolName(const AttrHeaderCommon& ahc,
 }
 
 // Get NTFS Volume Unicode Name
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 std::wstring_view AttrVolName<Resident, S>::GetName() const noexcept {
   return name_;
 }
 
-template class AttrVolName<AttrResidentFullCache, Strategy::FullCache>;
-template class AttrVolName<AttrResidentNoCache, Strategy::NoCache>;
+template class AttrVolName<AttrResidentFullCache, Cache::Strategy::FullCache>;
+template class AttrVolName<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
 }  // namespace NtfsBrowser::Attr

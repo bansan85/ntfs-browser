@@ -13,13 +13,13 @@
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume construction must not let an exception escape when the BPB "
     "encodes an mft_addr_ too large for a LONGLONG",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithHugeMftLcn());
 

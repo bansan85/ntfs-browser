@@ -30,7 +30,7 @@ namespace NtfsBrowser {
 // Caches reads from the volume's backing IDiskReader.
 namespace Io {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class FileReader;
 
 }  // namespace Io
@@ -45,7 +45,7 @@ class Table;
 // Everything NtfsVolume<S> keeps out of its public header: the members, and the
 // private methods that work on them. FileRecord<S>, a friend of NtfsVolume<S>,
 // reaches it through NtfsVolume<S>::impl_.
-template <Strategy S>
+template <Cache::Strategy S>
 class NtfsVolume<S>::Impl {
  public:
   Impl(NtfsVolume<S>& self, const VolumeOptions& options);
@@ -86,7 +86,7 @@ class NtfsVolume<S>::Impl {
 
   mutable std::vector<BYTE> cluster_buffer;
 
-  std::array<AttrRawCallback, Attr::attr_nums> attr_raw_call_back{};
+  std::array<Attr::RawCallback, Attr::attr_nums> attr_raw_call_back{};
   DWORD cluster_size{0};
   DWORD file_record_size{0};
   DWORD index_block_size{0};
@@ -143,7 +143,7 @@ class NtfsVolume<S>::Impl {
   [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
   [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
   [[nodiscard]] std::unique_ptr<const UpCase::Table> LoadUpCaseTable() const;
-  void AttrRawCallBack(DWORD att_type, const AttrHeaderCommon& ahc,
+  void AttrRawCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                        bool& discard) const;
 };
 

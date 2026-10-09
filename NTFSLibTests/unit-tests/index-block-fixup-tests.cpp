@@ -24,7 +24,7 @@
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Data::index_block_magic;
 using NtfsBrowser::Data::IndexBlock;
 using NtfsBrowser::Data::IndexBlockUsOffsetInBounds;
@@ -64,8 +64,8 @@ TEST_CASE(
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord::TraverseSubEntries must not crash when an index block's "
     "offset_of_us is out of bounds",
-    "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-index-alloc][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithForgedIndexBlock());
 
@@ -90,8 +90,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord::TraverseSubEntries must reject an index block whose first "
     "512-byte block does not end with the update sequence number",
-    "[attr-index-alloc][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-index-alloc][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr size_t us_block_size = 512;
   constexpr WORD torn_word = 0xDEAD;
 
@@ -123,7 +123,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::Root)));
+      static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
   int callback_count = 0;

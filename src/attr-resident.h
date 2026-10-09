@@ -11,16 +11,20 @@
 
 namespace NtfsBrowser {
 
-struct AttrHeaderCommon;
-template <Strategy S>
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+template <Cache::Strategy S>
 class FileRecord;
 
 namespace Attr {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrResident : public AttrBase<S> {
  public:
-  AttrResident(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
+  AttrResident(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrResident(AttrResident&& other) noexcept = delete;
   AttrResident(const AttrResident& other) = delete;
   AttrResident& operator=(AttrResident&& other) noexcept = delete;
@@ -32,10 +36,10 @@ class AttrResident : public AttrBase<S> {
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrResident
 
-class AttrResidentNoCache : public AttrResident<Strategy::NoCache> {
+class AttrResidentNoCache : public AttrResident<Cache::Strategy::NoCache> {
  public:
-  AttrResidentNoCache(const AttrHeaderCommon& ahc,
-                      const FileRecord<Strategy::NoCache>& file_record);
+  AttrResidentNoCache(const HeaderCommon& ahc,
+                      const FileRecord<Cache::Strategy::NoCache>& file_record);
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
 
@@ -43,10 +47,11 @@ class AttrResidentNoCache : public AttrResident<Strategy::NoCache> {
   std::span<const BYTE> body_;
 };
 
-class AttrResidentFullCache : public AttrResident<Strategy::FullCache> {
+class AttrResidentFullCache : public AttrResident<Cache::Strategy::FullCache> {
  public:
-  AttrResidentFullCache(const AttrHeaderCommon& ahc,
-                        const FileRecord<Strategy::FullCache>& file_record);
+  AttrResidentFullCache(
+      const HeaderCommon& ahc,
+      const FileRecord<Cache::Strategy::FullCache>& file_record);
   [[nodiscard]] const BYTE* GetData() const noexcept override;
   [[nodiscard]] ULONGLONG GetDataSize() const noexcept override;
 

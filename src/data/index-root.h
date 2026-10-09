@@ -8,7 +8,7 @@ namespace NtfsBrowser::Data {
 
 struct IndexRoot {
   // Index Root Header
-  AttrType attr_type;  // Attribute type
+  Attr::Type attr_type;  // Attribute type
   //(ATTR_TYPE_FILE_NAME: Directory, 0: Index View)
   DWORD coll_rule;       // Collation rule
   DWORD ib_size;         // Size of index block

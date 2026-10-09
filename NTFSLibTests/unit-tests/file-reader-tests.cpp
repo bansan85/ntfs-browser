@@ -48,7 +48,7 @@ constexpr DWORD second_read_size = 2048;
 
 // Opens path through a PartitionDiskReader (offset 0) instead of
 // FileReader's own Open(), which only exists on Windows (Win32DiskReader).
-template <NtfsBrowser::Strategy S>
+template <NtfsBrowser::Cache::Strategy S>
 NtfsBrowser::Io::FileReader<S> OpenOnDisk(const std::filesystem::path& path) {
   auto reader = std::make_unique<NtfsBrowserTests::PartitionDiskReader>(0);
   REQUIRE(reader->Open(path.wstring()));
@@ -88,8 +88,9 @@ struct TempFile final {
 
 TEMPLATE_TEST_CASE_SIG(
     "FileReader::ReadInto reads into the caller-provided buffer",
-    "[file-reader]", ((NtfsBrowser::Strategy S), S),
-    NtfsBrowser::Strategy::NoCache, NtfsBrowser::Strategy::FullCache) {
+    "[file-reader]", ((NtfsBrowser::Cache::Strategy S), S),
+    NtfsBrowser::Cache::Strategy::NoCache,
+    NtfsBrowser::Cache::Strategy::FullCache) {
   std::vector<BYTE> content(content_size);
   for (size_t i = 0; i < content.size(); i++) {
     // i < content.size() by the loop condition.
@@ -112,9 +113,9 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
-                       "[file-reader]", ((NtfsBrowser::Strategy S), S),
-                       NtfsBrowser::Strategy::NoCache,
-                       NtfsBrowser::Strategy::FullCache) {
+                       "[file-reader]", ((NtfsBrowser::Cache::Strategy S), S),
+                       NtfsBrowser::Cache::Strategy::NoCache,
+                       NtfsBrowser::Cache::Strategy::FullCache) {
   std::vector<BYTE> content(tiny_file_size, tiny_file_fill);
   const TempFile file(content);
 
@@ -134,8 +135,8 @@ TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
     content[i] = static_cast<BYTE>(i * pattern_step);
   }
 
-  const NtfsBrowser::Io::FileReader<NtfsBrowser::Strategy::NoCache> reader(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
+  const NtfsBrowser::Io::FileReader<NtfsBrowser::Cache::Strategy::NoCache>
+      reader(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
 
   LARGE_INTEGER first_addr{.QuadPart = 0};
   const auto first = reader.Read(first_addr, first_read_size);
@@ -157,8 +158,9 @@ TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
 #ifdef _WIN32
 TEMPLATE_TEST_CASE_SIG(
     "FileReader::Open honours the length of a non NUL-terminated view",
-    "[file-reader]", ((NtfsBrowser::Strategy S), S),
-    NtfsBrowser::Strategy::NoCache, NtfsBrowser::Strategy::FullCache) {
+    "[file-reader]", ((NtfsBrowser::Cache::Strategy S), S),
+    NtfsBrowser::Cache::Strategy::NoCache,
+    NtfsBrowser::Cache::Strategy::FullCache) {
   const std::vector<BYTE> content(64, 0x5A);
   TempFile file(content);
 

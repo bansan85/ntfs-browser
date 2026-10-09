@@ -20,11 +20,11 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
-using NtfsBrowser::Enum::MftIdx;
+namespace Cache = NtfsBrowser::Cache;
+namespace Mft = NtfsBrowser::Mft;
 
 namespace {
 
@@ -34,7 +34,7 @@ constexpr BYTE sentinel_byte = 0xCC;
 // Bigger than small_resident_data_content, like a real caller's fixed buffer.
 constexpr size_t buffer_size_value = 8;
 
-template <Strategy S>
+template <Cache::Strategy S>
 void CheckReadDataReturnsActualByteCount() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSmallResidentData());
@@ -43,10 +43,10 @@ void CheckReadDataReturnsActualByteCount() {
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  const auto& data_attrs = record.GetAttr(AttrType::Data);
+  const auto& data_attrs = record.GetAttr(Attr::Type::Data);
   REQUIRE(data_attrs.size() == 1);
 
   std::array<BYTE, buffer_size_value> buffer{};
@@ -78,7 +78,7 @@ void CheckReadDataReturnsActualByteCount() {
 TEMPLATE_TEST_CASE_SIG(
     "AttrResident::ReadData returns the actual bytes copied, not the "
     "requested buffer size",
-    "[attr-resident][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-resident][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckReadDataReturnsActualByteCount<S>();
 }

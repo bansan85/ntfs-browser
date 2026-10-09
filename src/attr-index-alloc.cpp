@@ -16,16 +16,16 @@
 
 #include "data/file-record-header.h"
 #include "data/index-block.h"
+#include "data/index-entry-flag.h"
 #include "data/index-entry.h"
-#include "flag/index-entry.h"
 #include "index-block.h"
 #include "ntfs-browser/win-types.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser::Attr {
 
-template <Strategy S>
-AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
+template <Cache::Strategy S>
+AttrIndexAlloc<S>::AttrIndexAlloc(const HeaderCommon& ahc,
                                   const FileRecord<S>& file_record)
     : AttrNonResident<S>(ahc, file_record) {
   Log::Trace("Attribute: Index Allocation");
@@ -42,13 +42,13 @@ AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
   index_block_count_ = ib_total_size / this->GetIndexBlockSize();
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 AttrIndexAlloc<S>::~AttrIndexAlloc() {
   Log::Trace("AttrIndexAlloc deleted");
 }
 
 // Verify US and update sectors
-template <Strategy S>
+template <Cache::Strategy S>
 bool AttrIndexAlloc<S>::PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
                                 std::span<const WORD> usarray) {
   if (usarray.size() < sectors) {
@@ -77,7 +77,7 @@ bool AttrIndexAlloc<S>::PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
   return true;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG AttrIndexAlloc<S>::GetIndexBlockCount() const noexcept {
   return index_block_count_;
 }
@@ -85,7 +85,7 @@ ULONGLONG AttrIndexAlloc<S>::GetIndexBlockCount() const noexcept {
 // Parse a single Index Block
 // vcn = sub-node pointer read from an Index Entry, on-disk units (see below)
 // ibClass holds the parsed Index Entries
-template <Strategy S>
+template <Cache::Strategy S>
 bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
                                         IndexBlock& ib_class) {
   // On disk, a sub-node VCN is in clusters when an index block spans a whole
@@ -130,7 +130,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 
 // Checks the block's magic and update sequence array, then writes each
 // sector's saved last word back over its USN.
-template <Strategy S>
+template <Cache::Strategy S>
 bool AttrIndexAlloc<S>::FixupIndexBlock(std::span<BYTE> block) {
   const auto* ib_buf = reinterpret_cast<const Data::IndexBlock*>(block.data());
   if (ib_buf->magic != Data::index_block_magic) {
@@ -187,7 +187,7 @@ bool RejectBlockOnDefect(bool recover, std::string_view defect,
 
 // Walks the entries of a block that FixupIndexBlock() accepted. They become
 // views into ibClass, which owns the block's buffer.
-template <Strategy S>
+template <Cache::Strategy S>
 bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
                                           IndexBlock& ib_class) {
   const auto* ib_buf = reinterpret_cast<const Data::IndexBlock*>(block.data());
@@ -237,7 +237,8 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
 
     ib_class.emplace_back(aligned_index_entry);
 
-    if ((head.flags & Flag::IndexEntry::Last) == Flag::IndexEntry::Last) {
+    if ((head.flags & Data::IndexEntryFlag::Last) ==
+        Data::IndexEntryFlag::Last) {
       Log::Trace("Last Index Entry");
       return true;
     }
@@ -246,7 +247,7 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
   }
 }
 
-template class AttrIndexAlloc<Strategy::FullCache>;
-template class AttrIndexAlloc<Strategy::NoCache>;
+template class AttrIndexAlloc<Cache::Strategy::FullCache>;
+template class AttrIndexAlloc<Cache::Strategy::NoCache>;
 
 }  // namespace NtfsBrowser::Attr

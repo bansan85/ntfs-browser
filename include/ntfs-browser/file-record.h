@@ -17,36 +17,35 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class NtfsVolume;
 class IndexEntry;
 class IndexEntryView;
 
 namespace Attr {
 
-template <class Resident, Strategy S>
+template <class Resident, Cache::Strategy S>
 class AttrList;
 
 }  // namespace Attr
 
-// User defined Callback routine to handle Directory traversing
-// Will be called by FileRecord::TraverseSubEntries for each sub entry. The
-// view is only valid during the call: build an IndexEntry from it to keep it.
-using SubentryCallback =
-    std::function<void(const IndexEntryView& index_entry, void* context)>;
-
-// User defined Callback routine to handle FileRecord parsed attributes
-// Will be called by FileRecord::TraverseAttrs() for each attribute
-// attrClass is the according attribute's wrapping class, CAttr_xxx
-// Set stop to true if don't want to continue
-// Set stop to false to continue processing
-template <Strategy S>
-using AttrsCallback =
-    std::function<void(const AttrBase<S>& attr, void* context, bool* stop)>;
-
-template <Strategy S>
+template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT FileRecord {
  public:
+  // User defined Callback routine to handle Directory traversing
+  // Will be called by FileRecord::TraverseSubEntries for each sub entry. The
+  // view is only valid during the call: build an IndexEntry from it to keep it.
+  using SubentryCallback =
+      std::function<void(const IndexEntryView& index_entry, void* context)>;
+
+  // User defined Callback routine to handle FileRecord parsed attributes
+  // Will be called by FileRecord::TraverseAttrs() for each attribute
+  // attrClass is the according attribute's wrapping class, CAttr_xxx
+  // Set stop to true if don't want to continue
+  // Set stop to false to continue processing
+  using AttrsCallback =
+      std::function<void(const AttrBase<S>& attr, void* context, bool* stop)>;
+
   explicit FileRecord(const NtfsVolume<S>& volume);
   // Defined out of line, so the move needs Impl complete only in
   // file-record.cpp, not in every other TU that includes this header.
@@ -58,7 +57,7 @@ class NTFS_BROWSER_EXPORT FileRecord {
   virtual ~FileRecord();
   friend class AttrBase<S>;
   friend class NtfsVolume<S>;
-  template <class Resident, Strategy>
+  template <class Resident, Cache::Strategy>
   friend class Attr::AttrList;
 
  private:
@@ -80,16 +79,16 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // True if the parsed record is an extension record: its base file reference
   // is not 0, sequence number included. False when no record is parsed.
   [[nodiscard]] bool IsExtensionRecord() const noexcept;
-  [[nodiscard]] bool InstallAttrRawCB(AttrType attr_type,
-                                      AttrRawCallback callback) noexcept;
+  [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
+                                      Attr::RawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;
 
-  void SetAttrMask(Mask mask) noexcept;
-  void TraverseAttrs(const AttrsCallback<S>& attr_call_back, void* context);
+  void SetAttrMask(Attr::Mask mask) noexcept;
+  void TraverseAttrs(const AttrsCallback& attr_call_back, void* context);
   [[nodiscard]] const std::vector<std::unique_ptr<AttrBase<S>>>&
-      GetAttr(AttrType attr_type) const noexcept;
+      GetAttr(Attr::Type attr_type) const noexcept;
   [[nodiscard]] std::vector<std::unique_ptr<AttrBase<S>>>&
-      GetAttr(AttrType attr_type) noexcept;
+      GetAttr(Attr::Type attr_type) noexcept;
 
   [[nodiscard]] std::wstring_view GetFileName() const;
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;

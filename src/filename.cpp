@@ -11,8 +11,8 @@
 
 #include "attr-resident.h"
 #include "attr-std-info.h"
-#include "flag/filename-namespace.h"
-#include "flag/filename.h"
+#include "data/filename-flag.h"
+#include "data/filename-namespace.h"
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
 #include "upcase.h"
@@ -68,55 +68,56 @@ WORD Filename::GetParentSequenceNumber() const noexcept {
                               : 0;
 }
 
-Flag::Filename Filename::GetFilePermission() const noexcept {
-  return filename_ != nullptr ? filename_->flags : Flag::Filename::None;
+Data::FilenameFlag Filename::GetFilePermission() const noexcept {
+  return filename_ != nullptr ? filename_->flags : Data::FilenameFlag::None;
 }
 
 bool Filename::IsReadOnly() const noexcept {
-  return filename_ != nullptr
-             ? static_cast<bool>(filename_->flags & Flag::Filename::ReadOnly)
-             : false;
+  return filename_ != nullptr ? static_cast<bool>(filename_->flags &
+                                                  Data::FilenameFlag::ReadOnly)
+                              : false;
 }
 
 bool Filename::IsHidden() const noexcept {
   return filename_ != nullptr
-             ? static_cast<bool>(filename_->flags & Flag::Filename::Hidden)
+             ? static_cast<bool>(filename_->flags & Data::FilenameFlag::Hidden)
              : false;
 }
 
 bool Filename::IsSystem() const noexcept {
   return filename_ != nullptr
-             ? static_cast<bool>(filename_->flags & Flag::Filename::System)
+             ? static_cast<bool>(filename_->flags & Data::FilenameFlag::System)
              : false;
 }
 
 bool Filename::IsArchive() const noexcept {
   return filename_ != nullptr
-             ? static_cast<bool>(filename_->flags & Flag::Filename::Archive)
+             ? static_cast<bool>(filename_->flags & Data::FilenameFlag::Archive)
              : false;
 }
 
 bool Filename::IsDirectory() const noexcept {
-  return filename_ != nullptr
-             ? static_cast<bool>(filename_->flags & Flag::Filename::Directory)
-             : false;
+  return filename_ != nullptr ? static_cast<bool>(filename_->flags &
+                                                  Data::FilenameFlag::Directory)
+                              : false;
 }
 
 bool Filename::IsCompressed() const noexcept {
   return filename_ != nullptr
-             ? static_cast<bool>(filename_->flags & Flag::Filename::Compressed)
+             ? static_cast<bool>(filename_->flags &
+                                 Data::FilenameFlag::Compressed)
              : false;
 }
 
 bool Filename::IsEncrypted() const noexcept {
-  return filename_ != nullptr
-             ? static_cast<bool>(filename_->flags & Flag::Filename::Encrypted)
-             : false;
+  return filename_ != nullptr ? static_cast<bool>(filename_->flags &
+                                                  Data::FilenameFlag::Encrypted)
+                              : false;
 }
 
 bool Filename::IsSparse() const noexcept {
   return filename_ != nullptr
-             ? static_cast<bool>(filename_->flags & Flag::Filename::Sparse)
+             ? static_cast<bool>(filename_->flags & Data::FilenameFlag::Sparse)
              : false;
 }
 
@@ -155,7 +156,7 @@ bool Filename::IsWin32Name() const noexcept {
   }
 
   // POSIX, WIN32, WIN32_DOS
-  return filename_->name_space != Flag::FilenameNamespace::Dos;
+  return filename_->name_space != Data::FilenameNamespace::Dos;
 }
 
 // Change from UTC time to local time
@@ -163,30 +164,24 @@ void Filename::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
                            FILETIME* access_tm,
                            FILETIME* change_tm) const noexcept {
   if (write_tm != nullptr) {
-    Attr::AttrStdInfo<Attr::AttrResidentFullCache, Strategy::FullCache>::
+    Attr::AttrStdInfo<Attr::AttrResidentFullCache, Cache::Strategy::FullCache>::
         UTC2Local(filename_ != nullptr ? filename_->alter_time : 0, *write_tm);
   }
 
   if (create_tm != nullptr) {
-    Attr::AttrStdInfo<Attr::AttrResidentFullCache, Strategy::FullCache>::
+    Attr::AttrStdInfo<Attr::AttrResidentFullCache, Cache::Strategy::FullCache>::
         UTC2Local(filename_ != nullptr ? filename_->create_time : 0,
                   *create_tm);
   }
 
   if (access_tm != nullptr) {
-    Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                      Strategy::FullCache>::UTC2Local(filename_ != nullptr
-                                                          ? filename_->read_time
-                                                          : 0,
-                                                      *access_tm);
+    Attr::AttrStdInfo<Attr::AttrResidentFullCache, Cache::Strategy::FullCache>::
+        UTC2Local(filename_ != nullptr ? filename_->read_time : 0, *access_tm);
   }
 
   if (change_tm != nullptr) {
-    Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                      Strategy::FullCache>::UTC2Local(filename_ != nullptr
-                                                          ? filename_->mft_time
-                                                          : 0,
-                                                      *change_tm);
+    Attr::AttrStdInfo<Attr::AttrResidentFullCache, Cache::Strategy::FullCache>::
+        UTC2Local(filename_ != nullptr ? filename_->mft_time : 0, *change_tm);
   }
 }
 

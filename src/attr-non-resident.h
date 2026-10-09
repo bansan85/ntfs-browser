@@ -15,11 +15,20 @@
 
 namespace NtfsBrowser {
 
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
-struct AttrHeaderCommon;
-template <Strategy S>
+
+}  // namespace Cache
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+template <Cache::Strategy S>
 class FileRecord;
-template <Strategy S>
+template <Cache::Strategy S>
 class NtfsVolume;
 
 namespace Data {
@@ -39,11 +48,10 @@ class Context;
 ////////////////////////////////
 namespace Attr {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrNonResident : public AttrBase<S> {
  public:
-  AttrNonResident(const AttrHeaderCommon& ahc,
-                  const FileRecord<S>& file_record);
+  AttrNonResident(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrNonResident(AttrNonResident&& other) noexcept = delete;
   AttrNonResident(const AttrNonResident& other) = delete;
   AttrNonResident& operator=(AttrNonResident&& other) noexcept = delete;

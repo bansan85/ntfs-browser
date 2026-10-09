@@ -120,7 +120,7 @@ constexpr std::array<VolumeOptions, 2> volume_option_modes{
 // both the strict and recovering code paths are exercised.
 void FuzzOnce(unsigned seed) {
   for (const VolumeOptions& options : volume_option_modes) {
-    NtfsVolume<Strategy::NoCache> volume(
+    NtfsVolume<Cache::Strategy::NoCache> volume(
         std::make_unique<SequentialDiskReader>(MakeRandomProducer(seed)),
         options);
     if (!volume.IsVolumeOK()) {
@@ -128,8 +128,8 @@ void FuzzOnce(unsigned seed) {
     }
 
     FileRecord fr(volume);
-    fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
-    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
+    fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
       // file_record_ is guaranteed empty here, exercising IsDeleted()/
       // IsDirectory()'s guard against it.
       (void)fr.IsDeleted();

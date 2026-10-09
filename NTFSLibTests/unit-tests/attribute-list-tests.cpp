@@ -31,19 +31,18 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
-using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
-using NtfsBrowser::Enum::MftIdx;
+namespace Mft = NtfsBrowser::Mft;
 
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());
 
@@ -51,12 +50,12 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   REQUIRE(dir.ParseAttrs());
 
-  CHECK_FALSE(dir.GetAttr(AttrType::IndexRoot).empty());
+  CHECK_FALSE(dir.GetAttr(Attr::Type::IndexRoot).empty());
 
   const std::optional<IndexEntry> found = dir.FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
@@ -66,8 +65,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "AttrList merges every attribute type relocated into the same "
     "extension record",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithMultiTypeAttributeListDirectory());
@@ -76,22 +75,22 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attr_list_multi_type_dir_idx));
   REQUIRE(dir.ParseAttrs());
 
-  CHECK_FALSE(dir.GetAttr(AttrType::IndexRoot).empty());
+  CHECK_FALSE(dir.GetAttr(Attr::Type::IndexRoot).empty());
 
   // Both entries name the same extension record, but different types.
-  CHECK_FALSE(dir.GetAttr(AttrType::IndexAllocation).empty());
+  CHECK_FALSE(dir.GetAttr(Attr::Type::IndexAllocation).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "AttrList chain state does not leak across FileRecord::ParseFileRecord "
     "calls on a reused FileRecord",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory());
 
@@ -99,23 +98,23 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   REQUIRE(dir.ParseAttrs());
-  CHECK_FALSE(dir.GetAttr(AttrType::IndexRoot).empty());
+  CHECK_FALSE(dir.GetAttr(Attr::Type::IndexRoot).empty());
 
   // Same FileRecord, same directory: it relocates to the same record again.
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   REQUIRE(dir.ParseAttrs());
-  CHECK_FALSE(dir.GetAttr(AttrType::IndexRoot).empty());
+  CHECK_FALSE(dir.GetAttr(Attr::Type::IndexRoot).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "AttrList's FileRecord vector growth does not invalidate "
     "already-resolved extension records' attributes",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithFragmentedAttributeListDirectory());
@@ -124,12 +123,12 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexAllocation);
+  dir.SetAttrMask(Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::uaf_attr_list_dir_idx));
   REQUIRE(dir.ParseAttrs());
 
-  const auto& alloc_attrs = dir.GetAttr(AttrType::IndexAllocation);
+  const auto& alloc_attrs = dir.GetAttr(Attr::Type::IndexAllocation);
   REQUIRE(alloc_attrs.size() ==
           NtfsBrowserTests::uaf_real_size_sentinels.size());
 
@@ -150,8 +149,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "AttrList stops cleanly on a resident $ATTRIBUTE_LIST whose size isn't "
     "a multiple of the entry size, when recovering",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
 
@@ -160,15 +159,15 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK(record.ParseAttrs());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A resident $ATTRIBUTE_LIST whose size isn't a multiple of the entry "
     "size rejects the record by default",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead());
 
@@ -176,15 +175,15 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK_FALSE(record.ParseAttrs());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "AttrList stops cleanly on an entry whose record_size is smaller than "
     "the entry header, when recovering",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall());
@@ -194,17 +193,17 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexRoot);
+  dir.SetAttrMask(Attr::Mask::IndexRoot);
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   CHECK(dir.ParseAttrs());
-  CHECK_FALSE(dir.GetAttr(AttrType::IndexRoot).empty());
+  CHECK_FALSE(dir.GetAttr(Attr::Type::IndexRoot).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "An $ATTRIBUTE_LIST entry whose record_size is smaller than the entry "
     "header rejects the record by default",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall());
@@ -213,7 +212,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexRoot);
+  dir.SetAttrMask(Attr::Mask::IndexRoot);
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   CHECK_FALSE(dir.ParseAttrs());
 }
@@ -221,8 +220,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "AttrList stops cleanly when an entry's record_size overshoots the "
     "attribute's declared size, when recovering",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch());
 
@@ -231,17 +230,17 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexRoot);
+  dir.SetAttrMask(Attr::Mask::IndexRoot);
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   CHECK(dir.ParseAttrs());
-  CHECK_FALSE(dir.GetAttr(AttrType::IndexRoot).empty());
+  CHECK_FALSE(dir.GetAttr(Attr::Type::IndexRoot).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "An $ATTRIBUTE_LIST entry whose record_size overshoots the attribute's "
     "declared size rejects the record by default",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch());
 
@@ -249,7 +248,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexRoot);
+  dir.SetAttrMask(Attr::Mask::IndexRoot);
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   CHECK_FALSE(dir.ParseAttrs());
 }
@@ -257,8 +256,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "AttrList's cycle guard stops a two-record $ATTRIBUTE_LIST resolution "
     "cycle instead of recursing without bound",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListCycle());
 
@@ -266,7 +265,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK(record.ParseAttrs());
 }
 
@@ -274,8 +273,8 @@ TEMPLATE_TEST_CASE_SIG(
     "AttrList resolves every entry in a densely-packed (real 26-byte "
     "stride) $ATTRIBUTE_LIST, not just those a multiple of "
     "sizeof(Data::AttributeList) apart",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory());
@@ -284,7 +283,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> dir(volume);
-  dir.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attr_list_tight_pack_dir_idx));
   REQUIRE(dir.ParseAttrs());
@@ -293,7 +292,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(found.has_value());
   CHECK(NtfsBrowserTests::Unwrap(found).GetFileReference() == 20);
 
-  const auto& alloc_attrs = dir.GetAttr(AttrType::IndexAllocation);
+  const auto& alloc_attrs = dir.GetAttr(Attr::Type::IndexAllocation);
   REQUIRE(alloc_attrs.size() == 1);
   // The REQUIRE above checks the size of allocAttrs.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -304,8 +303,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "ReadFileRecord() resolves a record through $MFT's own DATA "
     "continuation, reached via $MFT's own $ATTRIBUTE_LIST",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList());
@@ -322,8 +321,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "ReadFileRecord() resolves a two-hop $MFT DATA continuation chain, "
     "where an earlier $ATTRIBUTE_LIST entry depends on a later one",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataExtentChain());
 
@@ -338,8 +337,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A permanently unresolvable $MFT DATA continuation does not take down "
     "an earlier, resolvable one in the same $ATTRIBUTE_LIST",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
 
@@ -358,7 +357,7 @@ namespace {
 constexpr BYTE unread_fill = 0xCC;
 
 // Reads the first "size" bytes of "attr"; empty when the read fails.
-template <Strategy S>
+template <Cache::Strategy S>
 std::vector<BYTE> ReadFirstBytes(const NtfsBrowser::AttrBase<S>& attr,
                                  size_t size) {
   std::vector<BYTE> buffer(size, unread_fill);
@@ -402,8 +401,8 @@ const std::vector<BYTE> expected_lifetime_content(
 TEMPLATE_TEST_CASE_SIG(
     "An $ATTRIBUTE_LIST that fails after importing an attribute leaves it "
     "readable, when recovering",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize());
@@ -419,9 +418,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   const auto scribbled = ScribbleOverFreedMemory();
   // The imported attribute's bytes live in the extension record.
-  const auto& data = record.GetAttr(AttrType::Data);
+  const auto& data = record.GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
-  CHECK(data.front()->GetAttrType() == AttrType::Data);
+  CHECK(data.front()->GetAttrType() == Attr::Type::Data);
   CHECK(ReadFirstBytes<S>(*data.front(), expected_lifetime_content.size()) ==
         expected_lifetime_content);
 }
@@ -429,8 +428,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "Two $ATTRIBUTE_LIST attributes with contiguous VCNs leave the imported "
     "attribute readable",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSplitAttributeListAttribute());
 
@@ -444,9 +443,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   const auto scribbled = ScribbleOverFreedMemory();
   // The imported attribute's bytes live in the extension record.
-  const auto& data = record.GetAttr(AttrType::Data);
+  const auto& data = record.GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
-  CHECK(data.front()->GetAttrType() == AttrType::Data);
+  CHECK(data.front()->GetAttrType() == Attr::Type::Data);
   CHECK(ReadFirstBytes<S>(*data.front(), expected_lifetime_content.size()) ==
         expected_lifetime_content);
 }
@@ -454,8 +453,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A recovering parse that stops on a malformed attribute still merges "
     "a split attribute",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto defect =
       GENERATE(NtfsBrowserTests::FakeTrailingDefect::UndersizedHeader,
                NtfsBrowserTests::FakeTrailingDefect::UndersizedCompressedField,
@@ -475,7 +474,7 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK_FALSE(record.ParseAttrs());
 
   // One stream, not its VCN 0 and VCN 1 halves.
-  const auto& data = record.GetAttr(AttrType::Data);
+  const auto& data = record.GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
   CHECK(data.front()->GetDataSize() == NtfsBrowserTests::fake_cluster_size);
 }
@@ -489,7 +488,7 @@ constexpr std::chrono::seconds open_timeout{10};
 // Opens a volume over image on a worker thread. Returns false if that did not
 // finish within open_timeout. The worker is then detached: it keeps spinning
 // until the process exits, since a hung constructor cannot be cancelled.
-template <Strategy S>
+template <Cache::Strategy S>
 bool OpensWithinTimeout(std::vector<BYTE> image) {
   const auto done = std::make_shared<std::promise<void>>();
   std::future<void> finished = done->get_future();
@@ -519,8 +518,8 @@ bool OpensWithinTimeout(std::vector<BYTE> image) {
 TEMPLATE_TEST_CASE_SIG(
     "A $MFT DATA extent whose last VCN overflows a byte offset does not hang "
     "the volume constructor",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CHECK(OpensWithinTimeout<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataLastVcnOverflow()));
 }
@@ -544,8 +543,8 @@ constexpr auto foreign_links =
 TEMPLATE_TEST_CASE_SIG(
     "An $ATTRIBUTE_LIST entry naming another file's record rejects the "
     "record by default",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NtfsBrowserTests::FakeExtensionLink link =
       foreign_links.at(GENERATE(size_t{0}, size_t{1}, size_t{2}));
 
@@ -559,14 +558,14 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   CHECK_FALSE(record.ParseAttrs());
-  CHECK(record.GetAttr(AttrType::Data).empty());
+  CHECK(record.GetAttr(Attr::Type::Data).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "An $ATTRIBUTE_LIST entry naming another file's record is skipped when "
     "recovering",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NtfsBrowserTests::FakeExtensionLink link =
       foreign_links.at(GENERATE(size_t{0}, size_t{1}, size_t{2}));
 
@@ -581,14 +580,14 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   CHECK(record.ParseAttrs());
-  CHECK(record.GetAttr(AttrType::Data).empty());
+  CHECK(record.GetAttr(Attr::Type::Data).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "An $ATTRIBUTE_LIST entry naming a genuine extension record still "
     "imports its attribute, sequence numbers included",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(
           NtfsBrowserTests::genuine_extension_link));
@@ -601,7 +600,7 @@ TEMPLATE_TEST_CASE_SIG(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   REQUIRE(record.ParseAttrs());
 
-  const auto& data = record.GetAttr(AttrType::Data);
+  const auto& data = record.GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
   CHECK(ReadFirstBytes<S>(*data.front(), expected_lifetime_content.size()) ==
         expected_lifetime_content);
@@ -610,8 +609,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A raw attribute callback installed on a record can discard an "
     "attribute imported from an extension record",
-    "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithExtensionLink(
           NtfsBrowserTests::genuine_extension_link));
@@ -620,21 +619,21 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.InstallAttrRawCB(AttrType::Data,
-                                  [](const NtfsBrowser::AttrHeaderCommon&,
+  REQUIRE(record.InstallAttrRawCB(Attr::Type::Data,
+                                  [](const NtfsBrowser::Attr::HeaderCommon&,
                                      bool& discard) { discard = true; }));
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   REQUIRE(record.ParseAttrs());
 
-  CHECK(record.GetAttr(AttrType::Data).empty());
+  CHECK(record.GetAttr(Attr::Type::Data).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "$MFT's own DATA continuation is ignored when its extension record was "
     "reused under another sequence number",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataSplitLink(
           {.entry_sequence = 3, .record_sequence = 4}));
@@ -650,8 +649,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "$MFT's own DATA continuation is followed when its extension record "
     "carries the sequence number its list entry names",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataSplitLink(
           {.entry_sequence = 3, .record_sequence = 3}));
@@ -665,8 +664,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "Two $MFT DATA extents held by one extension record are both mapped",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord());
 

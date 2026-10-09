@@ -22,16 +22,16 @@
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
-using NtfsBrowser::Mask;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
-using NtfsBrowser::Enum::MftIdx;
+namespace Cache = NtfsBrowser::Cache;
+namespace Mft = NtfsBrowser::Mft;
 
 namespace {
 
 // FindSubEntry() must descend into a real sub-node when the search name
 // sorts past its parent entry only under NTFS' real collation order.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunFindSubEntryDescendsIntoGapCollationSubNode() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithGapCollationSubNode());
@@ -40,9 +40,9 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode() {
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> found =
@@ -56,7 +56,7 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode() {
 
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry descends into a real sub-node across the Z-a collation gap",
-    "[file-record][filename][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record][filename][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunFindSubEntryDescendsIntoGapCollationSubNode<S>();
 }

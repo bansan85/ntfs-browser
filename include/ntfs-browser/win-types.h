@@ -35,8 +35,8 @@ struct FILETIME {
 };
 
 // Reproduces <winnt.h>'s bitwise operators for a scoped enum, since
-// Mask/Flag::* enums are used as OR/AND-able bitmasks throughout the library.
-// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+// Attr::Mask and the Data::*Flag enums are used as OR/AND-able bitmasks
+// throughout the library. NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
   #define DEFINE_ENUM_FLAG_OPERATORS(ENUMTYPE)                             \
     inline constexpr ENUMTYPE operator|(ENUMTYPE a, ENUMTYPE b) noexcept { \
       return static_cast<ENUMTYPE>(                                        \

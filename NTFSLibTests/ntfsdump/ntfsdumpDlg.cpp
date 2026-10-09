@@ -192,7 +192,7 @@ void CNtfsdumpDlg::OnOK() {
 
   const _TCHAR volname = m_filename.GetAt(0);
 
-  NtfsVolume<Strategy::NoCache> volume(volname);
+  NtfsVolume<Cache::Strategy::NoCache> volume(volname);
   if (!volume.IsVolumeOK()) {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
     return;
@@ -203,9 +203,9 @@ void CNtfsdumpDlg::OnOK() {
   FileRecord fr(volume);
   // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
     MessageBox(_T("Cannot read root directory of volume"));
     return;
   }
@@ -259,7 +259,7 @@ void CNtfsdumpDlg::OnOK() {
   }
 
   // We only need DATA attribute and StdInfo
-  fr.SetAttrMask(Mask::Data);
+  fr.SetAttrMask(Attr::Mask::Data);
   if (!fr.ParseAttrs()) {
     MessageBox(_T("Cannot parse file attributes"));
     return;
@@ -270,7 +270,7 @@ void CNtfsdumpDlg::OnOK() {
   filebuf.resize(BUFFER_SIZE);
 
   // only pick the unnamed stream (file data)
-  const AttrBase<Strategy::NoCache>* data = fr.FindStream({});
+  const AttrBase<Cache::Strategy::NoCache>* data = fr.FindStream({});
   if (data != nullptr) {
     // show only the first 16K
     const ULONGLONG datalen = min(data->GetDataSize(), BUFFER_SIZE);

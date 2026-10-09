@@ -26,24 +26,24 @@ namespace NtfsBrowser::Attr {
 
 namespace {
 
-// Width of the AttrType field in a chain key. Every AttrType fits 16 bits.
+// Width of the Attr::Type field in a chain key. Every Attr::Type fits 16 bits.
 constexpr unsigned chain_key_type_bits = 16;
 
-// Selects the AttrType bits of a chain key.
+// Selects the Attr::Type bits of a chain key.
 constexpr ULONGLONG chain_key_type_mask = 0xFFFFU;
 
 // Packs (record_ref, attr_type) into one key. record_ref fits the high 48
-// bits (MftSegmentReference::segment_number is 48-bit); every AttrType
+// bits (MftSegmentReference::segment_number is 48-bit); every Attr::Type
 // fits the low 16 bits.
-ULONGLONG MakeChainKey(ULONGLONG record_ref, AttrType attr_type) noexcept {
+ULONGLONG MakeChainKey(ULONGLONG record_ref, Type attr_type) noexcept {
   return (record_ref << chain_key_type_bits) |
          (static_cast<ULONGLONG>(attr_type) & chain_key_type_mask);
 }
 
 }  // namespace
 
-template <typename Resident, Strategy S>
-AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
+template <typename Resident, Cache::Strategy S>
+AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
                                 FileRecord<S>& file_record,
                                 std::unordered_set<ULONGLONG>& attr_list_chain)
     : Resident(ahc, file_record) {
@@ -59,8 +59,8 @@ AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
   bool truncated = false;
 
   // Marks this record's own chain key first, so a cycle back to it is caught.
-  attr_list_chain.insert(MakeChainKey(*file_record.impl_->file_reference,
-                                      AttrType::AttributeList));
+  attr_list_chain.insert(
+      MakeChainKey(*file_record.impl_->file_reference, Type::AttributeList));
 
   while ((
       len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
@@ -128,7 +128,7 @@ AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
 
 // Moves the attributes entry names, from the extension record that holds them,
 // into file_record. A contained or unwanted attribute is skipped.
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 void AttrList<Resident, S>::ResolveEntry(
     const Data::AttributeList& entry, FileRecord<S>& file_record,
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
@@ -197,15 +197,16 @@ void AttrList<Resident, S>::ResolveEntry(
   vec.clear();
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 AttrList<Resident, S>::~AttrList() {
   Log::Trace("AttrList deleted");
 }
 
-template class AttrList<AttrNonResident<Strategy::FullCache>,
-                        Strategy::FullCache>;
-template class AttrList<AttrNonResident<Strategy::NoCache>, Strategy::NoCache>;
-template class AttrList<AttrResidentFullCache, Strategy::FullCache>;
-template class AttrList<AttrResidentNoCache, Strategy::NoCache>;
+template class AttrList<AttrNonResident<Cache::Strategy::FullCache>,
+                        Cache::Strategy::FullCache>;
+template class AttrList<AttrNonResident<Cache::Strategy::NoCache>,
+                        Cache::Strategy::NoCache>;
+template class AttrList<AttrResidentFullCache, Cache::Strategy::FullCache>;
+template class AttrList<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
 }  // namespace NtfsBrowser::Attr

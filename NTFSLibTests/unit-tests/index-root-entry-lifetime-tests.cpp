@@ -20,13 +20,13 @@
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 
 namespace {
 
 // A FindSubEntry() result from $INDEX_ROOT must stay valid independent of
 // the FileRecord it came from, even after that object is reparsed in place.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunFindSubEntryOutlivesReparseTest() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithIndexRootVariants());
@@ -67,7 +67,7 @@ void RunFindSubEntryOutlivesReparseTest() {
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry's IndexEntry from $INDEX_ROOT stays correct across a "
     "reparse",
-    "[index-entry][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[index-entry][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunFindSubEntryOutlivesReparseTest<S>();
 }

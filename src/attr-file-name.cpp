@@ -13,8 +13,8 @@
 
 namespace NtfsBrowser::Attr {
 
-template <typename Resident, Strategy S>
-AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
+template <typename Resident, Cache::Strategy S>
+AttrFileName<Resident, S>::AttrFileName(const HeaderCommon& ahc,
                                         const FileRecord<S>& file_record)
     : Resident(ahc, file_record) {
   Log::Trace("Attribute: File Name");
@@ -36,12 +36,12 @@ AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
   SetFilename(filename);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 AttrFileName<Resident, S>::~AttrFileName() {
   Log::Trace("AttrFileName deleted");
 }
 
-template class AttrFileName<AttrResidentFullCache, Strategy::FullCache>;
-template class AttrFileName<AttrResidentNoCache, Strategy::NoCache>;
+template class AttrFileName<AttrResidentFullCache, Cache::Strategy::FullCache>;
+template class AttrFileName<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
 }  // namespace NtfsBrowser::Attr

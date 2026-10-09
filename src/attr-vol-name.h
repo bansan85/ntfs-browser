@@ -7,23 +7,27 @@
 
 namespace NtfsBrowser {
 
-struct AttrHeaderCommon;
-template <Strategy S>
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+template <Cache::Strategy S>
 class FileRecord;
 
 namespace Attr {
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 class AttrVolName : public Resident {
  public:
-  AttrVolName(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
+  AttrVolName(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrVolName(AttrVolName&& other) noexcept = delete;
   AttrVolName(const AttrVolName& other) = delete;
   AttrVolName& operator=(AttrVolName&& other) noexcept = delete;
   AttrVolName& operator=(const AttrVolName& other) = delete;
   ~AttrVolName() override = default;
 
-  template <Strategy>
+  template <Cache::Strategy>
   friend class NtfsVolume;
 
  private:

@@ -24,11 +24,11 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
-using NtfsBrowser::Enum::MftIdx;
+namespace Cache = NtfsBrowser::Cache;
+namespace Mft = NtfsBrowser::Mft;
 
 namespace {
 
@@ -58,7 +58,7 @@ std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length) {
   return expected;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void CheckReadsBeyondTheInitializedSizeAreZero() {
   const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
@@ -66,10 +66,10 @@ void CheckReadsBeyondTheInitializedSizeAreZero() {
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  const auto& data_attrs = record.GetAttr(AttrType::Data);
+  const auto& data_attrs = record.GetAttr(Attr::Type::Data);
   REQUIRE(data_attrs.size() == 1);
 
   struct Range {
@@ -109,7 +109,7 @@ void CheckReadsBeyondTheInitializedSizeAreZero() {
 
 TEMPLATE_TEST_CASE_SIG(
     "A non-resident stream reads as zeros beyond its initialized size",
-    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-non-resident][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckReadsBeyondTheInitializedSizeAreZero<S>();
 }

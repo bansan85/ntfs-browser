@@ -167,9 +167,9 @@ TEST_CASE("An oversized PFX is refused by its size, before any read",
 }
 
 TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
-                       "[efs][pfx]", ((NtfsBrowser::Strategy S), S),
-                       NtfsBrowser::Strategy::NoCache,
-                       NtfsBrowser::Strategy::FullCache) {
+                       "[efs][pfx]", ((NtfsBrowser::Cache::Strategy S), S),
+                       NtfsBrowser::Cache::Strategy::NoCache,
+                       NtfsBrowser::Cache::Strategy::FullCache) {
   for (const TestPfx& pfx : {cng_value, capi_value}) {
     INFO("certificate " << pfx.name);
     const std::vector<BYTE> blob = ExpectedFek();
@@ -198,10 +198,10 @@ TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
 
     NtfsBrowser::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(
-        static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::Root)));
+        static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root)));
     REQUIRE(record.ParseAttrs());
 
-    const auto& data = record.GetAttr(NtfsBrowser::AttrType::Data);
+    const auto& data = record.GetAttr(NtfsBrowser::Attr::Type::Data);
     REQUIRE(data.size() == 1);
     std::vector<BYTE> buffer(plaintext.size());
     const auto read = data.front()->ReadData(0, buffer);

@@ -15,36 +15,36 @@ namespace NtfsBrowser::Attr {
 constexpr size_t attr_nums = 16;
 
 // Attribute Type to Index, eg. 0x10->0, 0x30->2
-[[nodiscard]] constexpr DWORD AttrIndex(AttrType type) noexcept {
+[[nodiscard]] constexpr DWORD AttrIndex(Type type) noexcept {
   return (static_cast<DWORD>(type) >> 4U) - 1;
 }
 
 // Attribute Bit Mask, as a plain integer.
-[[nodiscard]] constexpr DWORD AttrMaskBits(AttrType type) noexcept {
+[[nodiscard]] constexpr DWORD AttrMaskBits(Type type) noexcept {
   return 1U << AttrIndex(type);
 }
 
 // Attribute Bit Mask
-[[nodiscard]] constexpr Mask AttrMask(AttrType type) noexcept {
+[[nodiscard]] constexpr Mask AttrMask(Type type) noexcept {
   return static_cast<Mask>(AttrMaskBits(type));
 }
 
 static_assert(static_cast<DWORD>(Mask::StandardInformation) ==
-              AttrMaskBits(AttrType::StandardInformation));
-static_assert(static_cast<DWORD>(Mask::Data) == AttrMaskBits(AttrType::Data));
+              AttrMaskBits(Type::StandardInformation));
+static_assert(static_cast<DWORD>(Mask::Data) == AttrMaskBits(Type::Data));
 static_assert(static_cast<DWORD>(Mask::LoggedUtilityStream) ==
-              AttrMaskBits(AttrType::LoggedUtilityStream));
+              AttrMaskBits(Type::LoggedUtilityStream));
 
-// Every AttrType value is a multiple of 16: its low nibble is always zero.
+// Every Attr::Type value is a multiple of 16: its low nibble is always zero.
 inline constexpr DWORD attr_type_low_nibble_mask = 0xFU;
 
-// True only if "at" is a real AttrType value, not on-disk data that could
+// True only if "at" is a real Attr::Type value, not on-disk data that could
 // alias another type's AttrIndex/AttrMask slot. Callers MUST check this
 // before passing a value read from disk to AttrIndex or AttrMask.
-[[nodiscard]] constexpr bool IsValidAttrType(AttrType attr_type) noexcept {
+[[nodiscard]] constexpr bool IsValidAttrType(Type attr_type) noexcept {
   const auto raw = static_cast<DWORD>(attr_type);
   return raw != 0 && (raw & attr_type_low_nibble_mask) == 0 &&
-         raw <= static_cast<DWORD>(AttrType::LoggedUtilityStream);
+         raw <= static_cast<DWORD>(Type::LoggedUtilityStream);
 }
 
 }  // namespace NtfsBrowser::Attr

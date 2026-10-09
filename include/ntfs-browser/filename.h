@@ -13,11 +13,11 @@ struct Filename;
 
 }  // namespace Data
 
-namespace Flag {
+namespace Data {
 
-enum class Filename : DWORD;
+enum class FilenameFlag : DWORD;
 
-}  // namespace Flag
+}  // namespace Data
 
 // The case mapping NTFS orders names by. An implementation detail: consumers
 // only ever meet it through NtfsVolume, which owns the volume's table.
@@ -72,7 +72,7 @@ class NTFS_BROWSER_EXPORT Filename {
   // Sequence number the parent record had when this name was filed. It tells
   // a live parent from a deleted one whose record was since reused.
   [[nodiscard]] WORD GetParentSequenceNumber() const noexcept;
-  [[nodiscard]] virtual Flag::Filename GetFilePermission() const noexcept;
+  [[nodiscard]] virtual Data::FilenameFlag GetFilePermission() const noexcept;
   [[nodiscard]] virtual bool IsReadOnly() const noexcept;
   [[nodiscard]] virtual bool IsHidden() const noexcept;
   [[nodiscard]] virtual bool IsSystem() const noexcept;

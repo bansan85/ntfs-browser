@@ -16,17 +16,17 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 
 TEMPLATE_TEST_CASE_SIG(
     "GetAttrName rejects a name whose offset/length exceed the attribute's "
     "total_size, when recovering",
-    "[attr-base][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-base][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize());
 
@@ -39,7 +39,7 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::attr_name_exceeds_total_size_record_idx));
   REQUIRE(record.ParseAttrs());
 
-  const auto& data_attrs = record.GetAttr(AttrType::Data);
+  const auto& data_attrs = record.GetAttr(Attr::Type::Data);
   REQUIRE(data_attrs.size() == 1);
 
   // The REQUIRE above checks the size of dataAttrs.
@@ -50,8 +50,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A masked-in attribute name exceeding total_size rejects the whole "
     "record by default",
-    "[attr-base][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-base][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize());
 
@@ -62,5 +62,5 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(record.ParseFileRecord(
       NtfsBrowserTests::attr_name_exceeds_total_size_record_idx));
   CHECK_FALSE(record.ParseAttrs());
-  CHECK(record.GetAttr(AttrType::Data).empty());
+  CHECK(record.GetAttr(Attr::Type::Data).empty());
 }

@@ -16,9 +16,9 @@
 #include <ntfs-browser/strategy.h>
 
 #include "attr-resident.h"
+#include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
-#include "flag/index-entry.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser::Attr {
@@ -39,8 +39,8 @@ bool RejectRootOnDefect(bool recover, std::string_view defect,
 
 }  // namespace
 
-template <typename Resident, Strategy S>
-AttrIndexRoot<Resident, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
+template <typename Resident, Cache::Strategy S>
+AttrIndexRoot<Resident, S>::AttrIndexRoot(const HeaderCommon& ahc,
                                           const FileRecord<S>& file_record)
     : Resident(ahc, file_record),
       index_root_(reinterpret_cast<const Data::IndexRoot*>(this->GetData())) {
@@ -61,7 +61,7 @@ AttrIndexRoot<Resident, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
   }
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 AttrIndexRoot<Resident, S>::~AttrIndexRoot() {
   Log::Trace("AttrIndexRoot deleted");
 }
@@ -70,7 +70,7 @@ AttrIndexRoot<Resident, S>::~AttrIndexRoot() {
 // attribute's own size. The entries are views into index_data_, a copy
 // independent of the record's buffer. An IndexEntry made from one owns its
 // bytes, independent of this object's lifetime.
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
   const bool recover = this->volume_.GetOptions().recover_errors;
   const ULONGLONG data_size = this->GetDataSize();
@@ -127,7 +127,8 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
 
     emplace_back(aligned_index_entry);
 
-    if ((head.flags & Flag::IndexEntry::Last) == Flag::IndexEntry::Last) {
+    if ((head.flags & Data::IndexEntryFlag::Last) ==
+        Data::IndexEntryFlag::Last) {
       Log::Trace("Last Index Entry");
       return true;
     }
@@ -137,12 +138,12 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
 }
 
 // Check if this IndexRoot contains Filename or IndexView
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrIndexRoot<Resident, S>::IsFileName() const noexcept {
-  return index_root_->attr_type == AttrType::FileName;
+  return index_root_->attr_type == Type::FileName;
 }
 
-template class AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>;
-template class AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>;
+template class AttrIndexRoot<AttrResidentFullCache, Cache::Strategy::FullCache>;
+template class AttrIndexRoot<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
 }  // namespace NtfsBrowser::Attr

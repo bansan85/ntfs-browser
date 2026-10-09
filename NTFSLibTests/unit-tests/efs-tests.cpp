@@ -43,23 +43,22 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrBase;
 
 }  // namespace NtfsBrowser
 
 using NtfsBrowser::AttrBase;
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Efs::CipherBackend;
 using NtfsBrowser::Efs::Fek;
 using NtfsBrowser::Efs::IEfsKeyProvider;
-using NtfsBrowser::Enum::MftIdx;
+namespace Mft = NtfsBrowser::Mft;
 using NtfsBrowserTests::Algorithm;
 using NtfsBrowserTests::TestEfsEntry;
 using NtfsBrowserTests::TestKeyProvider;
@@ -171,7 +170,7 @@ Fixture MakeFixture(Algorithm algorithm, size_t size = default_file_size) {
   return fixture;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 struct Opened {
   std::unique_ptr<NtfsVolume<S>> volume;
   std::unique_ptr<FileRecord<S>> record;
@@ -183,10 +182,10 @@ struct Opened {
 // same SetAttrMask() a caller narrowing to Mask::DATA would use. "options"
 // defaults to strict; a test of a salvageable condition passes recover_errors.
 // "backend" is nullopt for the volume's default.
-template <Strategy S>
+template <Cache::Strategy S>
 Opened<S> Open(std::vector<BYTE> image,
                std::shared_ptr<IEfsKeyProvider> provider,
-               std::optional<Mask> mask = std::nullopt,
+               std::optional<Attr::Mask> mask = std::nullopt,
                const VolumeOptions& options = {},
                std::optional<CipherBackend> backend = std::nullopt) {
   Opened<S> opened;
@@ -203,13 +202,14 @@ Opened<S> Open(std::vector<BYTE> image,
   if (mask) {
     opened.record->SetAttrMask(*mask);
   }
-  REQUIRE(opened.record->ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(
+      opened.record->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(opened.record->ParseAttrs());
   return opened;
 }
 
 // Reads up to "size" bytes at "offset". Nullopt if ReadData() failed.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<std::vector<BYTE>> ReadAt(const AttrBase<S>& attr,
                                         ULONGLONG offset, size_t size) {
   std::vector<BYTE> buffer(size, unread_fill);
@@ -221,9 +221,9 @@ std::optional<std::vector<BYTE>> ReadAt(const AttrBase<S>& attr,
   return buffer;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 const AttrBase<S>& OnlyData(const FileRecord<S>& record) {
-  const auto& data = record.GetAttr(AttrType::Data);
+  const auto& data = record.GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
   return *data.front();
 }
@@ -258,7 +258,8 @@ constexpr size_t thumbprint_size_value = 0xA8;
 
 TEMPLATE_TEST_CASE_SIG(
     "An encrypted stream reads back as its plaintext, whatever the cipher",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   for (const Algorithm algorithm : NtfsBrowserTests::all_algorithms) {
     for (const CipherBackend backend :
          {CipherBackend::CryptoPp, CipherBackend::BCrypt}) {
@@ -296,7 +297,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "An unaligned read of an encrypted stream returns the plaintext slice",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const Fixture fixture = MakeFixture(Algorithm::Aes256);
   const Opened<S> opened = Open<S>(fixture.image, fixture.provider);
   const AttrBase<S>& data = OnlyData<S>(*opened.record);
@@ -315,7 +317,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "A hole inside an encrypted stream reads as zeros, not as decrypted data",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   const auto provider = std::make_shared<TestKeyProvider>();
@@ -356,7 +359,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "Every $DATA stream flagged encrypted shares the record's key, named or "
     "not",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   const auto provider = std::make_shared<TestKeyProvider>();
@@ -402,7 +406,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "A stream nobody holds a key for reads as nullopt, and the parse survives",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const Fixture fixture = MakeFixture(Algorithm::Aes256);
 
   SECTION("no provider is installed") {
@@ -464,8 +469,8 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
-                       "[efs]", ((Strategy S), S), Strategy::NoCache,
-                       Strategy::FullCache) {
+                       "[efs]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::Aes128);
   const std::vector<BYTE> plaintext = NtfsBrowserTests::PlaintextPattern(900);
 
@@ -513,8 +518,8 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
 }
 
 TEMPLATE_TEST_CASE_SIG("A resident $EFS stream works like a non-resident one",
-                       "[efs]", ((Strategy S), S), Strategy::NoCache,
-                       Strategy::FullCache) {
+                       "[efs]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::Aes256);
   const std::vector<BYTE> plaintext = NtfsBrowserTests::PlaintextPattern(900);
   const TestEfsEntry user = TestUser();
@@ -536,10 +541,12 @@ TEMPLATE_TEST_CASE_SIG("A resident $EFS stream works like a non-resident one",
 
 TEMPLATE_TEST_CASE_SIG(
     "SetAttrMask(Mask::DATA) still pulls in the $EFS stream it needs", "[efs]",
-    ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   // The exact mask ntfsdump/ntfsundel narrow to before reading file data.
   Fixture fixture = MakeFixture(Algorithm::Aes256);
-  const Opened<S> opened = Open<S>(fixture.image, fixture.provider, Mask::Data);
+  const Opened<S> opened =
+      Open<S>(fixture.image, fixture.provider, Attr::Mask::Data);
   CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, fixture.plaintext.size()) ==
         fixture.plaintext);
 }
@@ -547,7 +554,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A $DATA stream flagged both compressed and encrypted is left "
     "undecrypted when recovering",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const TestEfsEntry user = TestUser();
   const auto provider = std::make_shared<TestKeyProvider>();
   provider->Add(
@@ -581,7 +589,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A $DATA stream flagged both compressed and encrypted rejects the "
     "record by default",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const TestEfsEntry user = TestUser();
   const auto provider = std::make_shared<TestKeyProvider>();
   provider->Add(
@@ -606,15 +615,16 @@ TEMPLATE_TEST_CASE_SIG(
   volume->SetEfsKeyProvider(provider);
 
   FileRecord<S> record(*volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK_FALSE(record.ParseAttrs());
-  CHECK(record.GetAttr(AttrType::Data).empty());
+  CHECK(record.GetAttr(Attr::Type::Data).empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A recovering parse that stops on a malformed attribute still decrypts "
     "the stream",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   // Less than one 1024-byte cluster: one encrypted sector run.
   constexpr size_t size_value = 1000;
   const std::vector<BYTE> plaintext =
@@ -641,7 +651,7 @@ TEMPLATE_TEST_CASE_SIG(
   volume.SetEfsKeyProvider(provider);
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK_FALSE(record.ParseAttrs());
 
   CHECK(ReadAt<S>(OnlyData<S>(record), 0, size_value) == plaintext);
@@ -650,7 +660,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A recovering parse that rejects the $EFS stream does not read the "
     "ciphertext back as data",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   // Less than one 1024-byte cluster: one encrypted sector run.
   constexpr size_t size_value = 1000;
   const std::vector<BYTE> plaintext =
@@ -678,7 +689,7 @@ TEMPLATE_TEST_CASE_SIG(
   volume.SetEfsKeyProvider(provider);
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK_FALSE(record.ParseAttrs());
 
   // Without its keys the stream cannot be read: it must fail, not hand back
@@ -687,8 +698,8 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
-                       "[efs]", ((Strategy S), S), Strategy::NoCache,
-                       Strategy::FullCache) {
+                       "[efs]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   Opened<S> opened = Open<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedDirectory(), nullptr);
   CHECK(opened.record->IsEncrypted());
@@ -718,7 +729,8 @@ TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
 // the same way attr-compression-tests.cpp is excluded outright.
 TEMPLATE_TEST_CASE_SIG(
     "A compressed $INDEX_ALLOCATION still lists under an encrypted directory",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   Opened<S> opened = Open<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCompressedEncryptedDirectory(),
       nullptr);
@@ -745,7 +757,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "A hostile $EFS stream never crashes the parse and never yields a key",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const TestEfsEntry user = TestUser();
   const std::vector<BYTE> valid =
       NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
@@ -919,9 +932,9 @@ TEST_CASE("Secure zero wipes what it is given", "[efs]") {
 TEST_CASE("The cipher backend is selectable per volume, Crypto++ by default",
           "[efs]") {
   const Fixture fixture = MakeFixture(Algorithm::Aes256);
-  const Opened<Strategy::NoCache> opened =
-      Open<Strategy::NoCache>(fixture.image, fixture.provider);
-  NtfsVolume<Strategy::NoCache>& volume = *opened.volume;
+  const Opened<Cache::Strategy::NoCache> opened =
+      Open<Cache::Strategy::NoCache>(fixture.image, fixture.provider);
+  NtfsVolume<Cache::Strategy::NoCache>& volume = *opened.volume;
 
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
   CHECK(volume.GetEfsCipherBackend() == CipherBackend::CryptoPp);
@@ -1057,8 +1070,8 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
 
 TEMPLATE_TEST_CASE_SIG(
     "An encrypted stream reads as zeros beyond its initialized size",
-    "[efs][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[efs][regression]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const std::vector<BYTE> key = NtfsBrowserTests::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   const auto provider = std::make_shared<TestKeyProvider>();

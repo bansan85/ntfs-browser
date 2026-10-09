@@ -32,24 +32,23 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrBase;
 
 }  // namespace NtfsBrowser
 
 using Catch::Matchers::ContainsSubstring;
 using NtfsBrowser::AttrBase;
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Attr::AttrIndexRoot;
 using NtfsBrowser::Attr::AttrResidentFullCache;
 using NtfsBrowser::Attr::AttrResidentNoCache;
-using NtfsBrowser::Enum::MftIdx;
+namespace Mft = NtfsBrowser::Mft;
 using NtfsBrowserTests::attr_name_exceeds_total_size_record_idx;
 using NtfsBrowserTests::bad_index_block_first_name;
 using NtfsBrowserTests::bad_index_block_good_name;
@@ -76,7 +75,7 @@ using NtfsBrowserTests::TakeCapturedLog;
 namespace {
 
 // VolumeOptions{} default-constructed: both flags off.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunDefaultsAreBothOff() {
   const NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(BuildFakeNtfsImage()));
@@ -86,7 +85,7 @@ void RunDefaultsAreBothOff() {
 }
 
 // GetOptions() reflects exactly what the constructor was given.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunGetOptionsReflectsConstructorArgument() {
   const NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(BuildFakeNtfsImage()),
@@ -99,7 +98,7 @@ void RunGetOptionsReflectsConstructorArgument() {
 // Decision 1: include_deleted off also gates a freed record's content.
 // ParseFileRecord() still reads its header (IsDeleted() works), but
 // ParseAttrs() exposes nothing unless include_deleted is on.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunDeletedRecordContentGating() {
   {
     const NtfsVolume<S> volume(
@@ -110,7 +109,7 @@ void RunDeletedRecordContentGating() {
     REQUIRE(record.ParseFileRecord(mft_tree_deleted_file_idx));
     CHECK(record.IsDeleted());
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.GetAttr(AttrType::FileName).empty());
+    CHECK(record.GetAttr(Attr::Type::FileName).empty());
   }
   {
     const NtfsVolume<S> volume(
@@ -122,14 +121,14 @@ void RunDeletedRecordContentGating() {
     REQUIRE(record.ParseFileRecord(mft_tree_deleted_file_idx));
     CHECK(record.IsDeleted());
     CHECK(record.ParseAttrs());
-    CHECK_FALSE(record.GetAttr(AttrType::FileName).empty());
+    CHECK_FALSE(record.GetAttr(Attr::Type::FileName).empty());
   }
 }
 
 // A salvageable condition (here, a masked-in attribute's name exceeding its
 // own total_size) logs at Warn when strict and Info when recovering, with
 // the same text either way.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunSalvageableConditionLogLevel() {
   const std::shared_ptr<spdlog::logger> logger =
       spdlog::get(std::string(NtfsBrowser::Log::logger_name));
@@ -173,7 +172,7 @@ void RunSalvageableConditionLogLevel() {
 // instead of the attribute's own (attacker-controlled) declared block count,
 // and logs once when the cap binds. The 3 real blocks stay reachable either
 // way.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunOrphanScanCapsDeclaredBlockCount() {
   auto reader = std::make_unique<MemoryDiskReader>(
       BuildFakeNtfsImageWithHugeOrphanScanBlockCount());
@@ -183,8 +182,8 @@ void RunOrphanScanCapsDeclaredBlockCount() {
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
   (void)TakeCapturedLog();
@@ -210,7 +209,7 @@ void RunOrphanScanCapsDeclaredBlockCount() {
 // fixture uses clustersPerBlock == 1, so this multiplication is otherwise
 // never exercised - block 1 only resolves if its VCN is computed as 2
 // (1 * clustersPerBlock), not 1.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunMultiClusterOrphanScanConvertsBlockIndexToVcn() {
   const NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(
@@ -219,8 +218,8 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn() {
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
   std::vector<std::wstring> names;
@@ -245,7 +244,7 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn() {
 // and it exposes no $DATA attribute at all. Recovering: today's partial run
 // list is kept - the attribute still parses, holding only the run decoded
 // before the error.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunBadDataRunRejectsOrKeepsPartial() {
   {
     const NtfsVolume<S> volume(
@@ -253,9 +252,9 @@ void RunBadDataRunRejectsOrKeepsPartial() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.GetAttr(AttrType::Data).empty());
+    CHECK(record.GetAttr(Attr::Type::Data).empty());
   }
   {
     const NtfsVolume<S> volume(
@@ -264,9 +263,9 @@ void RunBadDataRunRejectsOrKeepsPartial() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK(record.ParseAttrs());
-    CHECK(record.GetAttr(AttrType::Data).size() == 1);
+    CHECK(record.GetAttr(Attr::Type::Data).size() == 1);
   }
 }
 
@@ -276,7 +275,7 @@ void RunBadDataRunRejectsOrKeepsPartial() {
 // non-resident), but a forged record could. Strict: the whole record is
 // rejected. Recovering: the attribute is kept, read as is - it never gets
 // an EFS context attached, so it is never decrypted.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunResidentEncryptedDataRejectsOrKeepsAsIs() {
   {
     const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
@@ -284,9 +283,9 @@ void RunResidentEncryptedDataRejectsOrKeepsAsIs() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.GetAttr(AttrType::Data).empty());
+    CHECK(record.GetAttr(Attr::Type::Data).empty());
   }
   {
     const NtfsVolume<S> volume(
@@ -296,17 +295,17 @@ void RunResidentEncryptedDataRejectsOrKeepsAsIs() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK(record.ParseAttrs());
-    CHECK(record.GetAttr(AttrType::Data).size() == 1);
+    CHECK(record.GetAttr(Attr::Type::Data).size() == 1);
   }
 }
 
 // Matrix row "No end marker": the attribute walk runs out of record before
-// ever finding a terminating AttrType::ALL marker. Strict: the whole record
+// ever finding a terminating Attr::Type::All marker. Strict: the whole record
 // is rejected. Recovering: the attribute(s) already parsed before the walk
 // ran out of room stay exposed.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunNoEndMarkerRejectsOrKeepsParsed() {
   {
     const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
@@ -314,11 +313,11 @@ void RunNoEndMarkerRejectsOrKeepsParsed() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
     (void)TakeCapturedLog();
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.GetAttr(AttrType::Data).empty());
+    CHECK(record.GetAttr(Attr::Type::Data).empty());
     CHECK_THAT(TakeCapturedLog(),
                ContainsSubstring(
                    "Attribute walk ended without a terminating end marker."));
@@ -330,11 +329,11 @@ void RunNoEndMarkerRejectsOrKeepsParsed() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
     (void)TakeCapturedLog();
     CHECK(record.ParseAttrs());
-    CHECK(record.GetAttr(AttrType::Data).size() == 1);
+    CHECK(record.GetAttr(Attr::Type::Data).size() == 1);
     CHECK_THAT(TakeCapturedLog(),
                ContainsSubstring(
                    "Attribute walk ended without a terminating end marker."));
@@ -346,7 +345,7 @@ void RunNoEndMarkerRejectsOrKeepsParsed() {
 // rejected whole, but the normal B+ tree walk still surfaces the
 // unaffected sibling block ("Good"). Recovering: entries parsed before the
 // bad one in the damaged block are reported too ("First", then "Good").
-template <Strategy S>
+template <Cache::Strategy S>
 void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
   const auto traverse = [](FileRecord<S>& root) {
     std::vector<std::wstring> names;
@@ -365,8 +364,8 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
 
     const std::vector<std::wstring> names = traverse(root);
@@ -382,8 +381,8 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
 
     const std::vector<std::wstring> names = traverse(root);
@@ -399,14 +398,15 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
 // The entries of an $INDEX_ROOT attribute, cast down from its type-erased
 // AttrBase<S> to the concrete AttrIndexRoot<RESIDENT, S> - itself a
 // std::vector<IndexEntry> - the way FileRecord<S>'s own code does.
-template <Strategy S>
+template <Cache::Strategy S>
 const std::vector<IndexEntryView>& RootEntries(const AttrBase<S>& attr) {
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     return static_cast<
-        const AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>&>(attr);
+        const AttrIndexRoot<AttrResidentNoCache, Cache::Strategy::NoCache>&>(
+        attr);
   } else {
-    return static_cast<
-        const AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>&>(attr);
+    return static_cast<const AttrIndexRoot<AttrResidentFullCache,
+                                           Cache::Strategy::FullCache>&>(attr);
   }
 }
 
@@ -415,7 +415,7 @@ const std::vector<IndexEntryView>& RootEntries(const AttrBase<S>& attr) {
 // $INDEX_ROOT is rejected outright (AttrIndexRoot's constructor throws).
 // Recovering: the entry is still kept, but nameless (GetFilename() empty),
 // exactly as today.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunMalformedIndexEntryRejectsOrKeepsNameless() {
   {
     const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
@@ -423,10 +423,10 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::IndexRoot);
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    root.SetAttrMask(Attr::Mask::IndexRoot);
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(root.ParseAttrs());
-    CHECK(root.GetAttr(AttrType::IndexRoot).empty());
+    CHECK(root.GetAttr(Attr::Type::IndexRoot).empty());
   }
   {
     const NtfsVolume<S> volume(
@@ -436,11 +436,11 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless() {
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> root(volume);
-    root.SetAttrMask(Mask::IndexRoot);
-    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    root.SetAttrMask(Attr::Mask::IndexRoot);
+    REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
 
-    const auto& root_attrs = root.GetAttr(AttrType::IndexRoot);
+    const auto& root_attrs = root.GetAttr(Attr::Type::IndexRoot);
     REQUIRE(root_attrs.size() == 1);
     const std::vector<IndexEntryView>& entries =
         RootEntries<S>(*root_attrs.front());
@@ -457,7 +457,7 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless() {
 // $Volume FileRecord even when that record is freed, under default
 // VolumeOptions (include_deleted off) - unlike an ordinary file record,
 // which the deleted gate would empty out.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunDeletedVolumeRecordStillOpens() {
   const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
       BuildFakeNtfsImageWithDeletedVolumeRecord()));
@@ -468,89 +468,89 @@ void RunDeletedVolumeRecordStillOpens() {
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG("VolumeOptions default to both flags off",
-                       "[volume-options]", ((Strategy S), S), Strategy::NoCache,
-                       Strategy::FullCache) {
+                       "[volume-options]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunDefaultsAreBothOff<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume::GetOptions reflects the constructor argument",
-    "[volume-options]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[volume-options]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   RunGetOptionsReflectsConstructorArgument<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("include_deleted gates a freed record's attributes",
-                       "[volume-options][regression]", ((Strategy S), S),
-                       Strategy::NoCache, Strategy::FullCache) {
+                       "[volume-options][regression]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunDeletedRecordContentGating<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A salvageable condition logs Warn when strict and Info when recovering",
-    "[volume-options][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[volume-options][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunSalvageableConditionLogLevel<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "The orphan scan caps a forged $INDEX_ALLOCATION block count",
-    "[volume-options][file-record][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[volume-options][file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunOrphanScanCapsDeclaredBlockCount<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "The orphan scan converts a multi-cluster index block's index to a VCN",
-    "[volume-options][file-record][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[volume-options][file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunMultiClusterOrphanScanConvertsBlockIndexToVcn<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A bad data run rejects the record by default, keeps a partial run "
     "list when recovering",
-    "[volume-options][attr-non-resident][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[volume-options][attr-non-resident][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunBadDataRunRejectsOrKeepsPartial<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A resident $DATA flagged encrypted rejects the record by default, "
     "keeps it read as is when recovering",
-    "[volume-options][file-record][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[volume-options][file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunResidentEncryptedDataRejectsOrKeepsAsIs<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A missing end-of-attributes marker rejects the record by default, "
     "keeps what parsed when recovering",
-    "[volume-options][file-record][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[volume-options][file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunNoEndMarkerRejectsOrKeepsParsed<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A bad entry in an index block skips that block by default, keeps its "
     "prefix when recovering, and never affects the sibling block",
-    "[volume-options][attr-index-alloc][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[volume-options][attr-index-alloc][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A malformed index entry rejects $INDEX_ROOT by default, keeps it "
     "nameless when recovering",
-    "[volume-options][index-entry][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[volume-options][index-entry][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunMalformedIndexEntryRejectsOrKeepsNameless<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A freed $Volume record still opens the volume under default "
     "VolumeOptions",
-    "[volume-options][ntfs-volume][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[volume-options][ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunDeletedVolumeRecordStillOpens<S>();
 }

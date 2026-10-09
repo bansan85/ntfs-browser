@@ -8,9 +8,19 @@
 namespace NtfsBrowser {
 
 class IndexEntryView;
+
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
-struct AttrHeaderCommon;
-template <Strategy S>
+
+}  // namespace Cache
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+template <Cache::Strategy S>
 class FileRecord;
 
 namespace Data {
@@ -21,17 +31,17 @@ struct IndexRoot;
 
 namespace Attr {
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
  public:
-  AttrIndexRoot(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
+  AttrIndexRoot(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrIndexRoot(AttrIndexRoot&& other) noexcept = delete;
   AttrIndexRoot(const AttrIndexRoot& other) = delete;
   AttrIndexRoot& operator=(AttrIndexRoot&& other) noexcept = delete;
   AttrIndexRoot& operator=(const AttrIndexRoot& other) = delete;
   ~AttrIndexRoot() override;
 
-  template <Strategy>
+  template <Cache::Strategy>
   friend class FileRecord;
 
  private:

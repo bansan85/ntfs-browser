@@ -9,7 +9,7 @@
 
 #include "attr-resident.h"
 #include "data/standard-information.h"
-#include "flag/std-info-permission.h"
+#include "data/std-info-permission.h"
 #include "ntfs-common.h"
 
 namespace NtfsBrowser::Attr {
@@ -36,20 +36,20 @@ const Data::StandardInformation& CheckedStdInfo(const Resident& attr) {
 
 }  // namespace
 
-template <typename Resident, Strategy S>
-AttrStdInfo<Resident, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
+template <typename Resident, Cache::Strategy S>
+AttrStdInfo<Resident, S>::AttrStdInfo(const HeaderCommon& ahc,
                                       const FileRecord<S>& file_record)
     : Resident(ahc, file_record), std_info_(CheckedStdInfo<Resident>(*this)) {
   Log::Trace("Attribute: Standard Information");
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 AttrStdInfo<Resident, S>::~AttrStdInfo() {
   Log::Trace("AttrStdInfo deleted");
 }
 
 // Change from UTC time to local time
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 void AttrStdInfo<Resident, S>::GetFileTime(FILETIME* write_tm,
                                            FILETIME* create_tm,
                                            FILETIME* access_tm,
@@ -71,91 +71,91 @@ void AttrStdInfo<Resident, S>::GetFileTime(FILETIME* write_tm,
   }
 }
 
-template <typename Resident, Strategy S>
-Flag::StdInfoPermission
+template <typename Resident, Cache::Strategy S>
+Data::StdInfoPermission
     AttrStdInfo<Resident, S>::GetFilePermission() const noexcept {
   return std_info_.permission;
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsReadOnly() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::ReadOnly);
+                           Data::StdInfoPermission::ReadOnly);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsHidden() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Hidden);
+                           Data::StdInfoPermission::Hidden);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsSystem() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::System);
+                           Data::StdInfoPermission::System);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsArchive() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Archive);
+                           Data::StdInfoPermission::Archive);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsDevice() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Device);
+                           Data::StdInfoPermission::Device);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsNormal() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Normal);
+                           Data::StdInfoPermission::Normal);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsTemporary() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Temp);
+                           Data::StdInfoPermission::Temp);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsCompressed() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Compressed);
+                           Data::StdInfoPermission::Compressed);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsOffline() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Offline);
+                           Data::StdInfoPermission::Offline);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsNotContentIndexed() const noexcept {
-  return static_cast<bool>(std_info_.permission & Flag::StdInfoPermission::Nci);
+  return static_cast<bool>(std_info_.permission & Data::StdInfoPermission::Nci);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsEncrypted() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Encrypted);
+                           Data::StdInfoPermission::Encrypted);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsSparse() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Sparse);
+                           Data::StdInfoPermission::Sparse);
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsReparsePoint() const noexcept {
   return static_cast<bool>(std_info_.permission &
-                           Flag::StdInfoPermission::Reparse);
+                           Data::StdInfoPermission::Reparse);
 }
 
 // UTC filetime to Local filetime
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 void AttrStdInfo<Resident, S>::UTC2Local(const ULONGLONG& ultm,
                                          FILETIME& lftm) noexcept {
 #ifdef _WIN32
@@ -172,7 +172,7 @@ void AttrStdInfo<Resident, S>::UTC2Local(const ULONGLONG& ultm,
 #endif
 }
 
-template class AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>;
-template class AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>;
+template class AttrStdInfo<AttrResidentFullCache, Cache::Strategy::FullCache>;
+template class AttrStdInfo<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
 }  // namespace NtfsBrowser::Attr

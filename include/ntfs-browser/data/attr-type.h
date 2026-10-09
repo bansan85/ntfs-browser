@@ -2,9 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Attr {
 
-enum class AttrType : DWORD {
+enum class Type : DWORD {
   // Zero-initialised value, never found on disk
   None = 0,
 
@@ -29,4 +29,4 @@ enum class AttrType : DWORD {
   All = static_cast<DWORD>(-1)
 };
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

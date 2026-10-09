@@ -19,7 +19,7 @@
 #include "file-record-header-edit.h"
 #include "record/header.h"
 
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Data::FileRecordHeader;
 using NtfsBrowser::Record::HeaderImpl;
 
@@ -50,8 +50,8 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t buffer_size,
 TEMPLATE_TEST_CASE_SIG(
     "Record::Header must accept a well-formed 4096-byte buffer "
     "(4Kn volumes)",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record-header][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr size_t buffer_size_value = 4096;
 
   const std::vector<BYTE> storage = MakeWellFormedBuffer(buffer_size_value, 64);
@@ -66,8 +66,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "Record::Header must reject a buffer larger than max_file_record_size "
     "with a clear, specific message",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record-header][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr size_t too_big = 8192;
 
   const std::vector<BYTE> storage = MakeWellFormedBuffer(too_big, 64);
@@ -82,8 +82,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "Record::Header::HeaderCommon must bound offset_of_attr against this "
     "instance's own buffer size, not raw[]'s static capacity",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record-header][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr size_t declared_buffer_size = 2048;
   // Past this instance's buffer, but within raw[]'s static capacity.
   constexpr WORD offset_past_own_size = 3000;

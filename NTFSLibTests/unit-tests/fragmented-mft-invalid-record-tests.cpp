@@ -18,15 +18,15 @@
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 
 namespace {
 
 static_assert(NtfsBrowserTests::fragmented_mft_invalid_record_idx ==
-                  static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::User),
+                  static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::User),
               "this fixture's whole point is to be reached through "
               "FileRecord<S>::ReadFileRecord()'s \"fragmented $MFT\" branch "
-              "(fileRef >= Enum::MftIdx::USER), not the direct-allocation "
+              "(fileRef >= Mft::Idx::User), not the direct-allocation "
               "one - see fake-ntfs-image.h");
 
 }  // namespace
@@ -35,8 +35,8 @@ TEMPLATE_TEST_CASE_SIG(
     "FileRecord::ParseFileRecord() must not let an exception escape on the "
     "fragmented-$MFT path when the forged record has an invalid "
     "offset_of_us",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFragmentedMftInvalidRecord());
 

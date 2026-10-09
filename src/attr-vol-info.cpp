@@ -27,24 +27,24 @@ const Data::VolumeInformation& CheckedVolInfo(const Resident& attr) {
 
 }  // namespace
 
-template <typename Resident, Strategy S>
-AttrVolInfo<Resident, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
+template <typename Resident, Cache::Strategy S>
+AttrVolInfo<Resident, S>::AttrVolInfo(const HeaderCommon& ahc,
                                       const FileRecord<S>& file_record)
     : Resident(ahc, file_record), vol_info_(CheckedVolInfo<Resident>(*this)) {
   Log::Trace("Attribute: Volume Information");
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 AttrVolInfo<Resident, S>::~AttrVolInfo() {
   Log::Trace("AttrVolInfo deleted");
 }
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 std::pair<BYTE, BYTE> AttrVolInfo<Resident, S>::GetVersion() const noexcept {
   return {vol_info_.major_version, vol_info_.minor_version};
 }
 
-template class AttrVolInfo<AttrResidentFullCache, Strategy::FullCache>;
-template class AttrVolInfo<AttrResidentNoCache, Strategy::NoCache>;
+template class AttrVolInfo<AttrResidentFullCache, Cache::Strategy::FullCache>;
+template class AttrVolInfo<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
 }  // namespace NtfsBrowser::Attr

@@ -21,12 +21,12 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
-using NtfsBrowser::Enum::MftIdx;
+namespace Mft = NtfsBrowser::Mft;
 using NtfsBrowserTests::FakeRunHost;
 
 namespace {
@@ -39,8 +39,8 @@ constexpr BYTE sentinel_byte = 0xCC;
 TEMPLATE_TEST_CASE_SIG(
     "A cluster read whose byte address wraps past 2^64 fails instead of "
     "reading the wrapped address",
-    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-non-resident][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
       NtfsBrowserTests::BuildFakeNtfsImageWithWrappingLcn(FakeRunHost::Data);
 
@@ -50,10 +50,10 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  const auto& data_attrs = record.GetAttr(AttrType::Data);
+  const auto& data_attrs = record.GetAttr(Attr::Type::Data);
   REQUIRE(data_attrs.size() == 1);
 
   std::vector<BYTE> buffer(NtfsBrowserTests::fake_cluster_size, sentinel_byte);
@@ -72,8 +72,8 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "A data run list whose cumulative LCN overflows is rejected",
-    "[attr-non-resident][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[attr-non-resident][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("strict: the whole attribute is rejected") {
     const NtfsVolume<S> volume(
         std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
@@ -82,9 +82,9 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(record.ParseAttrs());
-    CHECK(record.GetAttr(AttrType::Data).empty());
+    CHECK(record.GetAttr(Attr::Type::Data).empty());
   }
 
   SECTION("recovering: the run decoded before the overflow is kept") {
@@ -96,10 +96,10 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK(record.ParseAttrs());
 
-    const auto& data_attrs = record.GetAttr(AttrType::Data);
+    const auto& data_attrs = record.GetAttr(Attr::Type::Data);
     REQUIRE(data_attrs.size() == 1);
 
     // Only the first run (VCN 0) was kept: the second cluster is unmapped.

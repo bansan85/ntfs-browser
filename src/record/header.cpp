@@ -90,29 +90,31 @@ bool Header::PatchUS() noexcept {
   return true;
 }
 
-const AttrHeaderCommon* Header::HeaderCommon() const noexcept {
+const Attr::HeaderCommon* Header::HeaderCommon() const noexcept {
   WORD const offset_of_attr = GetData()->offset_of_attr;
-  if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size) {
+  if (offset_of_attr + sizeof(Attr::HeaderCommon) >= buffer_size) {
     Log::Warn("Offset of attr must be within the file record buffer");
     return nullptr;
   }
-  return reinterpret_cast<const AttrHeaderCommon*>(
+  return reinterpret_cast<const Attr::HeaderCommon*>(
       &GetData()->raw[offset_of_attr]);
 }
 
-HeaderImpl<Strategy::NoCache>::HeaderImpl(std::span<const BYTE> buffer)
+HeaderImpl<Cache::Strategy::NoCache>::HeaderImpl(std::span<const BYTE> buffer)
     : Header(buffer), data(buffer) {}
 
-const Data::FileRecordHeader* HeaderImpl<Strategy::NoCache>::GetData() const {
+const Data::FileRecordHeader*
+    HeaderImpl<Cache::Strategy::NoCache>::GetData() const {
   return reinterpret_cast<const Data::FileRecordHeader*>(data.data());
 }
 
-HeaderImpl<Strategy::FullCache>::HeaderImpl(std::span<const BYTE> buffer)
+HeaderImpl<Cache::Strategy::FullCache>::HeaderImpl(std::span<const BYTE> buffer)
     : Header(buffer) {
   memcpy(&data.raw[0], buffer.data(), buffer.size());
 }
 
-const Data::FileRecordHeader* HeaderImpl<Strategy::FullCache>::GetData() const {
+const Data::FileRecordHeader*
+    HeaderImpl<Cache::Strategy::FullCache>::GetData() const {
   return &data;
 }
 

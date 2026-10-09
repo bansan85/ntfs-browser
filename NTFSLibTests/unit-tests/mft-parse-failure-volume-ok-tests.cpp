@@ -13,14 +13,14 @@
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not report IsVolumeOK() == true, nor let "
     "GetRecordsCount() dereference a null $MFT DATA attribute, when $MFT's "
     "own file record fails to parse",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCorruptMftRecord());
 

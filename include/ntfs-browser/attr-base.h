@@ -14,17 +14,27 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class FileRecord;
-template <Strategy S>
+template <Cache::Strategy S>
 class NtfsVolume;
-enum class Strategy : std::uint8_t;
-struct AttrHeaderCommon;
 
-template <Strategy S>
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+
+template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT AttrBase {
  public:
-  AttrBase(const AttrHeaderCommon& ahc,
+  AttrBase(const Attr::HeaderCommon& ahc,
            const FileRecord<S>& file_record) noexcept;
   AttrBase(AttrBase&& other) noexcept = delete;
   AttrBase(const AttrBase& other) = delete;
@@ -38,7 +48,7 @@ class NTFS_BROWSER_EXPORT AttrBase {
   // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes)
 
  private:
-  const AttrHeaderCommon& attr_header_;
+  const Attr::HeaderCommon& attr_header_;
   // GetAttrName()'s decoded name, cached since it is const. The on-disk
   // bytes are raw UTF-16 code units (WORD), which is not what wchar_t is
   // made of once it is wider than 16 bits, so this is an owned decode, not
@@ -47,8 +57,8 @@ class NTFS_BROWSER_EXPORT AttrBase {
   mutable std::wstring attr_name_cache_;
 
  public:
-  [[nodiscard]] const AttrHeaderCommon& GetAttrHeader() const noexcept;
-  [[nodiscard]] AttrType GetAttrType() const noexcept;
+  [[nodiscard]] const Attr::HeaderCommon& GetAttrHeader() const noexcept;
+  [[nodiscard]] Attr::Type GetAttrType() const noexcept;
   [[nodiscard]] DWORD GetAttrTotalSize() const noexcept;
   [[nodiscard]] bool IsNonResident() const noexcept;
   [[nodiscard]] WORD GetAttrFlags() const noexcept;

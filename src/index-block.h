@@ -10,11 +10,15 @@
 
 namespace NtfsBrowser {
 
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
 
 namespace Attr {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrIndexAlloc;
 
 // The entries are views into bytes_ and realigned_, which this object owns:
@@ -28,7 +32,7 @@ class IndexBlock : public std::vector<IndexEntryView> {
   IndexBlock& operator=(const IndexBlock& other) = delete;
   virtual ~IndexBlock() = default;
 
-  template <Strategy S>
+  template <Cache::Strategy S>
   friend class AttrIndexAlloc;
 
  private:

@@ -13,11 +13,15 @@
 
 namespace NtfsBrowser {
 
-struct AttrHeaderCommon;
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
 
 namespace Record {
 
-template <Strategy S>
+template <Cache::Strategy S>
 struct HeaderImpl;
 
 // Validates a file record's header and applies its update sequence fixups.
@@ -36,17 +40,17 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY Header {
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
   // Returns nullptr if offset_of_attr doesn't fit in the record buffer.
-  [[nodiscard]] const AttrHeaderCommon* HeaderCommon() const noexcept;
+  [[nodiscard]] const Attr::HeaderCommon* HeaderCommon() const noexcept;
 
   [[nodiscard]] virtual const Data::FileRecordHeader* GetData() const = 0;
 };
 
-template <Strategy S>
+template <Cache::Strategy S>
 struct HeaderImpl {};
 
 template <>
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY
-    HeaderImpl<Strategy::NoCache> : public Header {
+    HeaderImpl<Cache::Strategy::NoCache> : public Header {
   std::span<const BYTE> data;
 
   explicit HeaderImpl(std::span<const BYTE> buffer);
@@ -61,7 +65,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
 
 template <>
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY
-    HeaderImpl<Strategy::FullCache> : public Header {
+    HeaderImpl<Cache::Strategy::FullCache> : public Header {
   Data::FileRecordHeader data{};
 
   explicit HeaderImpl(std::span<const BYTE> buffer);

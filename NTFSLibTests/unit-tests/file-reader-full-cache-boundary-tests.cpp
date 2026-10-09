@@ -20,7 +20,7 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Io::FileReader;
 
 namespace {
@@ -69,7 +69,7 @@ TEST_CASE(
 
   auto reader_double =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing);
-  const FileReader<Strategy::FullCache> reader(std::move(reader_double));
+  const FileReader<Cache::Strategy::FullCache> reader(std::move(reader_double));
 
   // Straddles the boundary between the first and second 64KiB cache blocks.
   LARGE_INTEGER addr{.QuadPart = cache_block_size - straddle_before};
@@ -104,9 +104,9 @@ TEST_CASE(
     backing[i] = static_cast<BYTE>(i * pattern_step_a + (i >> bits_per_byte));
   }
 
-  const FileReader<Strategy::FullCache> full(
+  const FileReader<Cache::Strategy::FullCache> full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
-  const FileReader<Strategy::NoCache> exact(
+  const FileReader<Cache::Strategy::NoCache> exact(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   struct Range {
@@ -167,7 +167,7 @@ TEST_CASE(
     backing[i] = static_cast<BYTE>(i * pattern_step_b);
   }
 
-  const FileReader<Strategy::FullCache> full(
+  const FileReader<Cache::Strategy::FullCache> full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   LARGE_INTEGER addr{.QuadPart = inner_length};
@@ -184,7 +184,7 @@ TEST_CASE(
     "returning a view before its cache block",
     "[file-reader][regression]") {
   const std::vector<BYTE> backing(cache_block_size);
-  const FileReader<Strategy::FullCache> full(
+  const FileReader<Cache::Strategy::FullCache> full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   LARGE_INTEGER addr{.QuadPart = -1};
@@ -196,7 +196,7 @@ TEST_CASE(
     "signed address",
     "[file-reader][regression]") {
   const std::vector<BYTE> backing(cache_block_size);
-  const FileReader<Strategy::FullCache> full(
+  const FileReader<Cache::Strategy::FullCache> full(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
 
   constexpr DWORD length_value = 100;

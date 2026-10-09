@@ -186,7 +186,7 @@ inline constexpr ULONGLONG uaf_attr_list_dir_idx = 13;
 
 // MFT indices of the four extension records that directory's
 // $ATTRIBUTE_LIST relocates $INDEX_ALLOCATION to. Must stay below
-// Enum::MftIdx::USER (16); uaf_extension_idx2/3 reuse indices 1 and 2,
+// Mft::Idx::User (16); uaf_extension_idx2/3 reuse indices 1 and 2,
 // left unused by BuildFakeNtfsImage().
 inline constexpr ULONGLONG uaf_extension_idx0 = 14;
 inline constexpr ULONGLONG uaf_extension_idx1 = 15;
@@ -212,7 +212,7 @@ inline constexpr std::array<DWORD, 4> uaf_real_size_sentinels{1024, 2048, 3072,
 
 // MFT index of the record built by
 // BuildFakeNtfsImageWithAttrNameExceedsTotalSize(). Free below
-// Enum::MftIdx::USER (16).
+// Mft::Idx::User (16).
 inline constexpr ULONGLONG attr_name_exceeds_total_size_record_idx = 4;
 
 // name_offset/name_length BuildFakeNtfsImageWithAttrNameExceedsTotalSize()
@@ -316,7 +316,7 @@ inline constexpr DWORD fragmented_mft_data_run_lcn = 20;
     BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
 
 // MFT index of the extension record relocated via $ATTRIBUTE_LIST. Below
-// Enum::MftIdx::USER (16), so naively reachable.
+// Mft::Idx::User (16), so naively reachable.
 inline constexpr ULONGLONG mft_data_split_ext_idx = 6;
 
 // MFT index only reachable through that continuation instance.
@@ -332,7 +332,7 @@ inline constexpr DWORD mft_data_split_lcn = 40;
     BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
 
 // MFT index of the one extension record holding both of $MFT's DATA extents
-// below. Below Enum::MftIdx::USER (16), so naively reachable.
+// below. Below Mft::Idx::User (16), so naively reachable.
 inline constexpr ULONGLONG mft_two_extents_ext_idx = 6;
 
 // Start VCNs of the two extents. Far apart, so nothing merges them into one.
@@ -434,7 +434,7 @@ inline constexpr ULONGLONG mft_unresolvable_good_record = 205;
     BuildFakeNtfsImageWithUnresolvableMftDataExtent();
 
 // MFT index the $ATTRIBUTE_LIST entry of the overflow fixture names. At or
-// above Enum::MftIdx::USER, so resolving it consults the $MFT extents.
+// above Mft::Idx::User, so resolving it consults the $MFT extents.
 inline constexpr ULONGLONG mft_last_vcn_overflow_target_idx = 16;
 
 // Last VCN forged into $MFT's base DATA attribute: with fake clusters of
@@ -444,7 +444,7 @@ inline constexpr ULONGLONG mft_last_vcn_overflow_last_vcn =
 
 // Same volume as BuildFakeNtfsImage(), except $MFT's base DATA attribute
 // claims mft_last_vcn_overflow_last_vcn as its last VCN, and its
-// $ATTRIBUTE_LIST names a continuation record past Enum::MftIdx::USER.
+// $ATTRIBUTE_LIST names a continuation record past Mft::Idx::User.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftDataLastVcnOverflow();
 
 // Shared with NTFSLibTests/fuzz/named-stream-probe.h, so a fuzz corpus file
@@ -592,7 +592,7 @@ inline constexpr ULONGLONG huge_orphan_scan_declared_block_count = 70000;
 
 // MFT index BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch() gives
 // its one extra, real record: free (zero-filled) in BuildFakeNtfsImage(),
-// and below Enum::MftIdx::USER (16), so it is reachable however $MFT's own
+// and below Mft::Idx::User (16), so it is reachable however $MFT's own
 // DATA attribute is mapped.
 inline constexpr ULONGLONG orphaned_block_sequence_mismatch_target_idx = 2;
 
@@ -776,7 +776,7 @@ inline constexpr ULONGLONG legacy_standard_information_record_idx = 6;
 // Same volume as BuildFakeNtfsImage(), with the root directory record (#5)
 // replaced by a bare record whose only attribute is a resident
 // $STANDARD_INFORMATION shrunk to legacy_standard_information_size bytes, so
-// FuzzOnce() (which only ever parses MftIdx::ROOT) can reach it directly.
+// FuzzOnce() (which only ever parses Mft::Idx::Root) can reach it directly.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithLegacyStandardInformationOnRoot();
 
@@ -1251,7 +1251,7 @@ inline constexpr ULONGLONG malformed_index_entry_mft_ref = 113;
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by
 // one whose sole resident $DATA attribute's total_size reaches exactly to
-// the end of the file record, leaving no room for a trailing AttrType::ALL
+// the end of the file record, leaving no room for a trailing Attr::Type::All
 // end-of-attributes marker - the attribute walk runs out of record before
 // ever finding one.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithNoEndMarker();

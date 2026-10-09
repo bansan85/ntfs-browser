@@ -37,8 +37,8 @@ void ValidateResidentBounds(const Data::HeaderResident& header) {
 
 }  // namespace
 
-template <Strategy S>
-AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
+template <Cache::Strategy S>
+AttrResident<S>::AttrResident(const HeaderCommon& ahc,
                               const FileRecord<S>& file_record)
     : AttrBase<S>(ahc, file_record) {}
 
@@ -47,7 +47,7 @@ AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
 // record's own 8-byte alignment, which can exceed the real data size by a
 // few bytes. This is what Windows itself reports as a resident attribute's
 // allocation size, so match it instead of returning GetDataSize().
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG AttrResident<S>::GetAllocatedSize() const noexcept {
   const auto& header =
       reinterpret_cast<const Data::HeaderResident&>(this->GetAttrHeader());
@@ -56,7 +56,7 @@ ULONGLONG AttrResident<S>::GetAllocatedSize() const noexcept {
 
 // Read "bufLen" bytes from "offset" into "bufv"
 // Number of bytes acturally read is returned in "*actural"
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG>
     AttrResident<S>::ReadData(ULONGLONG offset,
                               const std::span<BYTE>& buffer) const {
@@ -86,8 +86,8 @@ std::optional<ULONGLONG>
 }
 
 AttrResidentNoCache::AttrResidentNoCache(
-    const AttrHeaderCommon& ahc,
-    const FileRecord<Strategy::NoCache>& file_record)
+    const HeaderCommon& ahc,
+    const FileRecord<Cache::Strategy::NoCache>& file_record)
     : AttrResident(ahc, file_record) {
   const auto& header = reinterpret_cast<const Data::HeaderResident&>(ahc);
   ValidateResidentBounds(header);
@@ -104,8 +104,8 @@ ULONGLONG AttrResidentNoCache::GetDataSize() const noexcept {
 }
 
 AttrResidentFullCache::AttrResidentFullCache(
-    const AttrHeaderCommon& ahc,
-    const FileRecord<Strategy::FullCache>& file_record)
+    const HeaderCommon& ahc,
+    const FileRecord<Cache::Strategy::FullCache>& file_record)
     : AttrResident(ahc, file_record) {
   const auto& header = reinterpret_cast<const Data::HeaderResident&>(ahc);
   ValidateResidentBounds(header);

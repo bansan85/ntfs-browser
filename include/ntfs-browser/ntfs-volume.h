@@ -22,10 +22,10 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class FileRecord;
 
-template <Strategy S>
+template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT NtfsVolume {
  public:
 #ifdef _WIN32
@@ -77,8 +77,8 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // Reads from addr into dest.
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
-  [[nodiscard]] bool InstallAttrRawCB(AttrType attr_type,
-                                      AttrRawCallback callback) noexcept;
+  [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
+                                      Attr::RawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;
 
   // Sets the source of the keys that decrypt EFS files. A null provider

@@ -10,8 +10,7 @@
 namespace NtfsCompare {
 
 Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG start_record) {
-  using NtfsBrowser::MftEntry;
-  using NtfsBrowser::MftName;
+  using NtfsBrowser::MftTree;
 
   Listing result;
 
@@ -28,15 +27,15 @@ Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG start_record) {
     stack.pop_back();
 
     for (const ULONGLONG child : tree.Children(frame.record)) {
-      if (child < static_cast<ULONGLONG>(NtfsBrowser::Enum::MftIdx::User)) {
+      if (child < static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::User)) {
         continue;
       }
-      const MftEntry* entry = tree.Find(child);
+      const MftTree::Entry* entry = tree.Find(child);
       if (entry == nullptr) {
         continue;
       }
 
-      for (const MftName& name : entry->names) {
+      for (const MftTree::Name& name : entry->names) {
         if (name.dos_only || !name.parent_valid ||
             name.parent_record != frame.record) {
           continue;

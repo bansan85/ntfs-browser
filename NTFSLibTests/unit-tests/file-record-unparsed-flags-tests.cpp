@@ -15,13 +15,13 @@
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord::IsDeleted()/IsDirectory() must not dereference an empty "
     "file_record_ when called before any successful ParseFileRecord()",
-    "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 

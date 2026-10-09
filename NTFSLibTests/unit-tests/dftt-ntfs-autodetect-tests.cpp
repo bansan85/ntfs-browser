@@ -20,10 +20,10 @@
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
-using NtfsBrowser::Mask;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
-using NtfsBrowser::Enum::MftIdx;
+namespace Cache = NtfsBrowser::Cache;
+namespace Mft = NtfsBrowser::Mft;
 
 namespace {
 
@@ -41,13 +41,13 @@ void CheckReadsPartitionImage(std::wstring_view image_name) {
   const std::filesystem::path image_path = autodetect_dir / image_name;
   NtfsBrowserTests::RequireCorpusImage(image_path);
 
-  const NtfsVolume<Strategy::NoCache> volume(
+  const NtfsVolume<Cache::Strategy::NoCache> volume(
       NtfsBrowserTests::OpenBareVolumeImage(image_path));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord root(volume);
-  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"ntfs.txt");
@@ -56,12 +56,12 @@ void CheckReadsPartitionImage(std::wstring_view image_name) {
   CHECK(NtfsBrowserTests::Unwrap(entry).GetFileSize() > 0);
 
   FileRecord file(volume);
-  file.SetAttrMask(Mask::Data);
+  file.SetAttrMask(Attr::Mask::Data);
   REQUIRE(
       file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
-  const AttrBase<Strategy::NoCache>* data = file.FindStream({});
+  const AttrBase<Cache::Strategy::NoCache>* data = file.FindStream({});
   REQUIRE(data != nullptr);
   CHECK(data->GetDataSize() == NtfsBrowserTests::Unwrap(entry).GetFileSize());
 }

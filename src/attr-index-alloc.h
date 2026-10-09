@@ -10,19 +10,29 @@
 
 namespace NtfsBrowser {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class FileRecord;
-struct AttrHeaderCommon;
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
 
 namespace Attr {
 
 class IndexBlock;
 
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrIndexAlloc : public AttrNonResident<S> {
  public:
-  AttrIndexAlloc(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
+  AttrIndexAlloc(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrIndexAlloc(AttrIndexAlloc&& other) noexcept = delete;
   AttrIndexAlloc(const AttrIndexAlloc& other) = delete;
   AttrIndexAlloc& operator=(AttrIndexAlloc&& other) noexcept = delete;

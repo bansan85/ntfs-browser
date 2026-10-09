@@ -51,8 +51,8 @@ constexpr ULONGLONG SpannedClusters(const Data::HeaderNonResident& header) {
 
 }  // namespace
 
-template <Strategy S>
-AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
+template <Cache::Strategy S>
+AttrNonResident<S>::AttrNonResident(const HeaderCommon& ahc,
                                     const FileRecord<S>& file_record)
     : AttrBase<S>(ahc, file_record),
       attr_header_nr_(reinterpret_cast<const Data::HeaderNonResident&>(ahc)),
@@ -98,7 +98,7 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
 // to the attribute (already validated against the record buffer by
 // FileRecord::ParseAttrs); data_run_offset and the run stream itself are
 // attacker-controlled and otherwise unbounded.
-template <Strategy S>
+template <Cache::Strategy S>
 bool AttrNonResident<S>::PickData(std::span<const BYTE>& data_run,
                                   ULONGLONG& length, LONGLONG& lcn_offset,
                                   bool recover) noexcept {
@@ -159,7 +159,7 @@ bool AttrNonResident<S>::PickData(std::span<const BYTE>& data_run,
 // stops at the first decode or bounds error, keeping entries parsed before
 // it; when strict, the same error instead throws, rejecting the attribute
 // outright.
-template <Strategy S>
+template <Cache::Strategy S>
 void AttrNonResident<S>::ParseDataRun() {
   Log::Trace("Parsing Non Resident DataRun");
   Log::Debug("Start VCN = {}, End VCN = {}", attr_header_nr_.start_vcn,
@@ -196,7 +196,7 @@ void AttrNonResident<S>::ParseDataRun() {
 // Applies one decoded run (its length and LCN delta) to the running lcn and
 // vcn, and appends it to the run list. Returns false on an error that recovery
 // tolerates; when strict, the same error throws.
-template <Strategy S>
+template <Cache::Strategy S>
 bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
                                        LONGLONG& lcn, ULONGLONG& vcn,
                                        bool recover) {
@@ -247,7 +247,7 @@ bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
 
 // Read clusters from disk, or sparse data
 // *actural = Clusters acturally read
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<std::span<const BYTE>>
     AttrNonResident<S>::ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                                      ULONGLONG offset) const {
@@ -288,14 +288,14 @@ std::optional<std::span<const BYTE>>
 
 // Number of virtual clusters this attribute describes, merged instances
 // included.
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::TotalClusters() const noexcept {
   return merged_clusters_;
 }
 
 // Clusters belonging to the compression unit starting at "unitFirstVcn":
 // a whole unit, except for a trailing partial unit at the attribute's end.
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG
     AttrNonResident<S>::UnitClusters(ULONGLONG unit_first_vcn) const noexcept {
   const ULONGLONG remaining = TotalClusters() - unit_first_vcn;
@@ -306,7 +306,7 @@ ULONGLONG
 // Returns an empty optional if the unit is not fully mapped, or if a real
 // run follows a hole within the unit - layouts a compression unit cannot
 // legally have.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
     ULONGLONG unit_first_vcn, ULONGLONG unit_clusters) const noexcept {
   const ULONGLONG unit_end = unit_first_vcn + unit_clusters;
@@ -358,7 +358,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
 // Reads the realClusters stored clusters of a compressed unit and LZNT1-decodes
 // them into unit, which holds the whole unit's size. Returns false on a read or
 // decompression failure.
-template <Strategy S>
+template <Cache::Strategy S>
 bool AttrNonResident<S>::DecompressUnit(ULONGLONG unit_index,
                                         ULONGLONG unit_first_vcn,
                                         ULONGLONG real_clusters,
@@ -419,7 +419,7 @@ bool AttrNonResident<S>::DecompressUnit(ULONGLONG unit_index,
 // returns it, or nullptr on a read/decompression failure. The returned unit
 // is retained in comp_unit_cache_, so it is never decompressed twice within
 // one ReadData() call, nor - under FullCache - across calls.
-template <Strategy S>
+template <Cache::Strategy S>
 const std::vector<BYTE>*
     AttrNonResident<S>::GetCompressionUnit(ULONGLONG unit_index) const {
   const auto cached = comp_unit_cache_.find(unit_index);
@@ -470,7 +470,7 @@ const std::vector<BYTE>*
     return nullptr;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     // Evicting here still holds "decompressed at most once per call": unit
     // indices only increase within a call.
     comp_unit_cache_.clear();
@@ -490,7 +490,7 @@ const std::vector<BYTE>*
 // Compressed counterpart of ReadVirtualClustersRaw() below: serves the
 // requested virtual clusters out of whole compression units instead of
 // straight off the data runs.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
     ULONGLONG vcn, ULONGLONG clusters, std::span<BYTE> buffer) const {
   assert(comp_unit_clusters_);
@@ -548,7 +548,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
 
 // Dispatches to the compressed read path for a compressed attribute
 // (comp_unit_size != 0), else the raw data-run walk.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG>
     AttrNonResident<S>::ReadVirtualClusters(ULONGLONG vcn, ULONGLONG clusters,
                                             std::span<BYTE> buffer) const {
@@ -563,7 +563,7 @@ std::optional<ULONGLONG>
 
 // Reads clustersToRead clusters of dataRun, starting at vcn, into the front of
 // out: off the disk, or zero-filled for a sparse run. Decrypts the copy in out.
-template <Strategy S>
+template <Cache::Strategy S>
 AttrNonResident<S>::RunRead AttrNonResident<S>::ReadRunClusters(
     const Data::RunEntry& data_run, ULONGLONG vcn, ULONGLONG clusters_to_read,
     std::span<BYTE> out) const {
@@ -593,7 +593,7 @@ AttrNonResident<S>::RunRead AttrNonResident<S>::ReadRunClusters(
 // Uncompressed read path: walk the data runs, reading real clusters off disk
 // and zero-filling sparse ones. Also the primitive the compressed path reads
 // a unit's real (LZNT1 or stored) clusters through.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
     ULONGLONG vcn, ULONGLONG clusters, std::span<BYTE> buffer) const {
   assert(clusters);
@@ -647,13 +647,13 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
   return actural;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void AttrNonResident<S>::SetEfsContext(
     std::shared_ptr<const Efs::Context> context) noexcept {
   efs_context_ = std::move(context);
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 const BYTE* AttrNonResident<S>::GetData() const noexcept {
   return reinterpret_cast<const BYTE*>(&attr_header_nr_);
 }
@@ -661,19 +661,19 @@ const BYTE* AttrNonResident<S>::GetData() const noexcept {
 // Return Actural Data Size
 // *allocSize = Allocated Size
 // not no except
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::GetDataSize() const noexcept {
   return attr_header_nr_.real_size;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::GetAllocatedSize() const noexcept {
   return attr_header_nr_.alloc_size;
 }
 
 // Read "bufLen" bytes from "offset" into "bufv", bounded by "limit" total
 // bytes. Number of bytes acturally read is returned in "*actural"
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
     ULONGLONG offset, const std::span<BYTE>& buffer, ULONGLONG limit) const {
   // Hard disks can only be accessed by sectors
@@ -686,7 +686,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   // the up-to-3 partial/aligned ReadVirtualClusters() calls below share one
   // decompression per unit they overlap. FullCache keeps its units for the
   // attribute's whole lifetime instead - see comp_unit_cache_'s declaration.
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     comp_unit_cache_.clear();
   }
 
@@ -778,7 +778,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
 // the clusters there hold whatever the disk held before, and are never read
 // (nor decrypted). real_size and ini_size are 0 on continuation instances;
 // only start_vcn == 0 sets them, and a merged attribute is this first one.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG>
     AttrNonResident<S>::ReadData(ULONGLONG offset,
                                  const std::span<BYTE>& buffer) const {
@@ -810,7 +810,7 @@ std::optional<ULONGLONG>
   return wanted;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG>
     AttrNonResident<S>::ReadExtentData(ULONGLONG offset,
                                        const std::span<BYTE>& buffer) const {
@@ -828,19 +828,19 @@ std::optional<ULONGLONG>
   return ReadDataBounded(offset, buffer, clusters * cluster_size);
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::GetStartVcn() const noexcept {
   return attr_header_nr_.start_vcn;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::GetLastVcn() const noexcept {
   return attr_header_nr_.last_vcn;
 }
 
 // Clusters from this instance's start VCN through its last run that maps real
 // clusters. A sparse tail maps nothing, and last_vcn is only a declared bound.
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::MappedClusters() const noexcept {
   ULONGLONG mapped = 0;
   for (const Data::RunEntry& data_run : data_run_list_) {
@@ -853,7 +853,7 @@ ULONGLONG AttrNonResident<S>::MappedClusters() const noexcept {
 
 // Rebases other's own runs onto merged_clusters_ (this instance's own VCN
 // count so far) and appends them, so the two read as one contiguous stream.
-template <Strategy S>
+template <Cache::Strategy S>
 void AttrNonResident<S>::AppendRuns(const AttrNonResident& other) {
   for (Data::RunEntry data_run : other.data_run_list_) {
     data_run.start_vcn += merged_clusters_;
@@ -863,7 +863,7 @@ void AttrNonResident<S>::AppendRuns(const AttrNonResident& other) {
   merged_clusters_ += other.merged_clusters_;
 }
 
-template class AttrNonResident<Strategy::NoCache>;
-template class AttrNonResident<Strategy::FullCache>;
+template class AttrNonResident<Cache::Strategy::NoCache>;
+template class AttrNonResident<Cache::Strategy::FullCache>;
 
 }  // namespace NtfsBrowser::Attr

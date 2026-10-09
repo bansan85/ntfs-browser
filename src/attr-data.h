@@ -9,10 +9,10 @@ namespace NtfsBrowser {
 
 namespace Attr {
 
-template <class Resident, Strategy S>
+template <class Resident, Cache::Strategy S>
 class AttrData : public Resident {
  public:
-  AttrData(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record)
+  AttrData(const HeaderCommon& ahc, const FileRecord<S>& file_record)
       : Resident(ahc, file_record) {
     Log::Trace("Attribute: Data ({}Resident)",
                this->IsNonResident() ? "Non" : "");

@@ -24,10 +24,10 @@
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
-using NtfsBrowser::Mask;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
-using NtfsBrowser::Enum::MftIdx;
+namespace Cache = NtfsBrowser::Cache;
+namespace Mft = NtfsBrowser::Mft;
 using NtfsBrowser::UpCase::Table;
 using NtfsBrowserTests::NonAsciiNameLayout;
 
@@ -42,7 +42,7 @@ constexpr BYTE mapped_unit_low = 0x41;
 
 // Looks name up in the fixture's root directory, and returns the MFT
 // reference of the entry FindSubEntry() reports, if any.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG> FindInRoot(NonAsciiNameLayout layout,
                                     bool with_up_case, std::wstring_view name) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
@@ -53,9 +53,9 @@ std::optional<ULONGLONG> FindInRoot(NonAsciiNameLayout layout,
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation);
+  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> found = root.FindSubEntry(name);
@@ -70,8 +70,8 @@ template <typename Check>
 void ForEachLayoutAndStrategy(Check check) {
   for (const NonAsciiNameLayout layout :
        {NonAsciiNameLayout::IndexRoot, NonAsciiNameLayout::IndexBlock}) {
-    check.template operator()<Strategy::NoCache>(layout);
-    check.template operator()<Strategy::FullCache>(layout);
+    check.template operator()<Cache::Strategy::NoCache>(layout);
+    check.template operator()<Cache::Strategy::FullCache>(layout);
   }
 }
 
@@ -99,7 +99,7 @@ TEST_CASE(
     "FindSubEntry finds a non-ASCII name that sorts after another one "
     "without a $UpCase table",
     "[file-record][filename][upcase][regression]") {
-  ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+  ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
     const std::optional<ULONGLONG> found = FindInRoot<S>(
         layout, false, NtfsBrowserTests::non_ascii_diaeresis_name);
     REQUIRE(found.has_value());
@@ -111,7 +111,7 @@ TEST_CASE(
     "FindSubEntry finds a non-ASCII name that sorts after another one "
     "with a $UpCase table",
     "[file-record][filename][upcase][regression]") {
-  ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+  ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
     const std::optional<ULONGLONG> found =
         FindInRoot<S>(layout, true, NtfsBrowserTests::non_ascii_diaeresis_name);
     REQUIRE(found.has_value());
@@ -122,7 +122,7 @@ TEST_CASE(
 TEST_CASE("FindSubEntry matches a non-ASCII name case-insensitively",
           "[file-record][filename][upcase][regression]") {
   for (const bool with_up_case : {false, true}) {
-    ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+    ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
       const std::optional<ULONGLONG> found = FindInRoot<S>(
           layout, with_up_case, NtfsBrowserTests::non_ascii_acute_upper_name);
       REQUIRE(found.has_value());
@@ -133,7 +133,7 @@ TEST_CASE("FindSubEntry matches a non-ASCII name case-insensitively",
 
 TEST_CASE("FindSubEntry follows the volume's own $UpCase table",
           "[file-record][filename][upcase][regression]") {
-  ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+  ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
     const std::optional<ULONGLONG> dotless =
         FindInRoot<S>(layout, true, NtfsBrowserTests::non_ascii_dotless_name);
     REQUIRE(dotless.has_value());
@@ -149,7 +149,7 @@ TEST_CASE("FindSubEntry follows the volume's own $UpCase table",
 TEST_CASE(
     "FindSubEntry scans every entry when the case mapping is only built in",
     "[file-record][filename][upcase][regression]") {
-  ForEachLayoutAndStrategy([&]<Strategy S>(NonAsciiNameLayout layout) {
+  ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
     // Without a $UpCase table, the built-in mapping folds the dotless i
     // to I, so the ordered search stops before it. The scan finds it.
     const std::optional<ULONGLONG> found =

@@ -19,11 +19,11 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::Filename;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Attr::AttrFileName;
 using NtfsBrowser::Attr::AttrResidentFullCache;
 using NtfsBrowser::Attr::AttrResidentNoCache;
@@ -33,7 +33,7 @@ namespace {
 
 // mft_tree_report_idx's $STANDARD_INFORMATION carries READONLY | ARCHIVE and,
 // per WriteStandardInformationAttr(), four distinct timestamps.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunFileRecordExposesExtendedMetadata() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
@@ -69,7 +69,7 @@ void RunFileRecordExposesExtendedMetadata() {
 // it internally (src/file-record.cpp, src/mft-tree.cpp): this record's
 // directories have no $INDEX_ROOT in this fixture, so FindSubEntry() isn't an
 // option here.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunFilenameExposesExtendedMetadata() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
@@ -81,17 +81,17 @@ void RunFilenameExposesExtendedMetadata() {
   REQUIRE(report.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 
-  const auto& file_name_attrs = report.GetAttr(AttrType::FileName);
+  const auto& file_name_attrs = report.GetAttr(Attr::Type::FileName);
   REQUIRE_FALSE(file_name_attrs.empty());
 
   const Filename* own_file_name = nullptr;
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     own_file_name = reinterpret_cast<
-        const AttrFileName<AttrResidentNoCache, Strategy::NoCache>*>(
+        const AttrFileName<AttrResidentNoCache, Cache::Strategy::NoCache>*>(
         file_name_attrs.front().get());
   } else {
     own_file_name = reinterpret_cast<
-        const AttrFileName<AttrResidentFullCache, Strategy::FullCache>*>(
+        const AttrFileName<AttrResidentFullCache, Cache::Strategy::FullCache>*>(
         file_name_attrs.front().get());
   }
 
@@ -107,15 +107,15 @@ void RunFilenameExposesExtendedMetadata() {
 TEMPLATE_TEST_CASE_SIG(
     "FileRecord exposes IsArchive(), GetAllocatedSize() and the "
     "change time through GetFileTime()",
-    "[file-record]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   RunFileRecordExposesExtendedMetadata<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "Filename exposes IsArchive() and GetAllocatedSize() from its own "
     "$FILE_NAME",
-    "[file-record]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   RunFilenameExposesExtendedMetadata<S>();
 }

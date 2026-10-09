@@ -11,17 +11,26 @@
 
 namespace NtfsBrowser {
 
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
-struct AttrHeaderCommon;
-template <Strategy S>
+
+}  // namespace Cache
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+template <Cache::Strategy S>
 class FileRecord;
 
 namespace Attr {
 
-template <class Resident, Strategy S>
+template <class Resident, Cache::Strategy S>
 class AttrBitmap : public Resident {
  public:
-  AttrBitmap(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
+  AttrBitmap(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrBitmap(AttrBitmap&& other) noexcept = delete;
   AttrBitmap(const AttrBitmap& other) = delete;
   AttrBitmap& operator=(AttrBitmap&& other) noexcept = delete;

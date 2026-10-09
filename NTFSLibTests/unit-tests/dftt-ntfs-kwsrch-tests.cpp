@@ -21,9 +21,9 @@
 
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
-using NtfsBrowser::Mask;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 
 namespace {
@@ -77,16 +77,16 @@ constexpr ULONGLONG slack_record = 36;
 // Parses one MFT record from `volume` and checks that the requested stream
 // has the size and deletion/directory state index.html documents, and that
 // its content contains the DFTT search term.
-void CheckReadsKeywordFile(const NtfsVolume<Strategy::NoCache>& volume,
+void CheckReadsKeywordFile(const NtfsVolume<Cache::Strategy::NoCache>& volume,
                            const KeywordFile& file) {
   FileRecord record(volume);
-  record.SetAttrMask(Mask::Data);
+  record.SetAttrMask(Attr::Mask::Data);
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted() == file.deleted);
   REQUIRE(record.ParseAttrs());
   CHECK(record.IsDirectory() == file.is_directory);
 
-  const AttrBase<Strategy::NoCache>* stream =
+  const AttrBase<Cache::Strategy::NoCache>* stream =
       record.FindStream(file.stream_name);
   REQUIRE(stream != nullptr);
   REQUIRE(stream->GetDataSize() == file.size);
@@ -105,7 +105,7 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
           "[dftt][integration]") {
   NtfsBrowserTests::RequireCorpusImage(dftt_image);
 
-  const NtfsVolume<Strategy::NoCache> volume(
+  const NtfsVolume<Cache::Strategy::NoCache> volume(
       NtfsBrowserTests::OpenBareVolumeImage(dftt_image));
   REQUIRE(volume.IsVolumeOK());
 
@@ -121,7 +121,7 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   // include_deleted on.
   VolumeOptions options;
   options.include_deleted = true;
-  const NtfsVolume<Strategy::NoCache> del_volume(
+  const NtfsVolume<Cache::Strategy::NoCache> del_volume(
       NtfsBrowserTests::OpenBareVolumeImage(dftt_image), options);
   REQUIRE(del_volume.IsVolumeOK());
   CheckReadsKeywordFile(del_volume, resident_unalloc);
@@ -130,10 +130,10 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   // file's slack space, past its logical size. ReadData()/GetDataSize()
   // expose only the file's own content, so the term MUST NOT be found there.
   FileRecord slack(volume);
-  slack.SetAttrMask(Mask::Data);
+  slack.SetAttrMask(Attr::Mask::Data);
   REQUIRE(slack.ParseFileRecord(slack_record));
   REQUIRE(slack.ParseAttrs());
-  const AttrBase<Strategy::NoCache>* slack_data = slack.FindStream({});
+  const AttrBase<Cache::Strategy::NoCache>* slack_data = slack.FindStream({});
   REQUIRE(slack_data != nullptr);
   REQUIRE(slack_data->GetDataSize() == non_resident_size);
   std::vector<BYTE> data(non_resident_size);

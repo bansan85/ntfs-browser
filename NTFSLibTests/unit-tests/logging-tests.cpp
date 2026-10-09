@@ -205,9 +205,9 @@ TEST_CASE("the default configuration logs warnings, not info", "[logging]") {
 }
 
 TEMPLATE_TEST_CASE_SIG("the volume name is logged without its terminator",
-                       "[logging]", ((NtfsBrowser::Strategy S), S),
-                       NtfsBrowser::Strategy::NoCache,
-                       NtfsBrowser::Strategy::FullCache) {
+                       "[logging]", ((NtfsBrowser::Cache::Strategy S), S),
+                       NtfsBrowser::Cache::Strategy::NoCache,
+                       NtfsBrowser::Cache::Strategy::FullCache) {
   (void)NtfsBrowserTests::TakeCapturedLog();
   const NtfsBrowser::NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(

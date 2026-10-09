@@ -38,15 +38,15 @@ constexpr size_t block_bytes_value = static_cast<size_t>(read_buffer_size);
 
 }  // namespace
 
-template <Strategy S>
+template <Cache::Strategy S>
 FileReader<S>::FileReader() = default;
 
-template <Strategy S>
+template <Cache::Strategy S>
 FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader)
     : reader_(std::move(reader)) {}
 
 #ifdef _WIN32
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileReader<S>::Open(std::wstring_view volume) {
   auto reader = std::make_unique<Win32DiskReader>();
   if (!reader->Open(volume)) {
@@ -58,17 +58,17 @@ bool FileReader<S>::Open(std::wstring_view volume) {
 }
 #endif
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {
   return reader_->ReadInto(addr, dest);
 }
 
-template <Strategy T>
-template <Strategy Q>
-std::enable_if_t<
-    std::is_same_v<std::integral_constant<Strategy, Q>,
-                   std::integral_constant<Strategy, Strategy::NoCache>>,
-    std::optional<std::span<const BYTE>>>
+template <Cache::Strategy T>
+template <Cache::Strategy Q>
+std::enable_if_t<std::is_same_v<std::integral_constant<Cache::Strategy, Q>,
+                                std::integral_constant<
+                                    Cache::Strategy, Cache::Strategy::NoCache>>,
+                 std::optional<std::span<const BYTE>>>
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const {
   if (buffer_.size() < length) {
     buffer_.resize(length);
@@ -85,7 +85,7 @@ std::enable_if_t<
 // Fetches (loading and caching on first access) the single 64KiB block
 // containing "blockAddr" - which must already be 64KiB-aligned - and
 // returns a pointer to its start, or nullptr on a read failure.
-template <Strategy S>
+template <Cache::Strategy S>
 BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER block_addr) const {
   const size_t index = block_addr.QuadPart / read_buffer_size;
   const auto iterator = map_buffer_.find(index);
@@ -109,7 +109,7 @@ BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER block_addr) const {
 // bypassing the block cache. FullCache falls back to it when a whole 64KiB
 // block cannot be read: the block may extend past the end of the medium. The
 // short block MUST NOT be cached as if it were complete.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<std::span<const BYTE>>
     FileReader<S>::ReadUncached(LARGE_INTEGER addr, DWORD length) const {
   std::vector<BYTE> exact(length);
@@ -123,11 +123,12 @@ std::optional<std::span<const BYTE>>
   return std::span<const BYTE>{data, length};
 }
 
-template <Strategy T>
-template <Strategy Q>
+template <Cache::Strategy T>
+template <Cache::Strategy Q>
 std::enable_if_t<
-    std::is_same_v<std::integral_constant<Strategy, Q>,
-                   std::integral_constant<Strategy, Strategy::FullCache>>,
+    std::is_same_v<
+        std::integral_constant<Cache::Strategy, Q>,
+        std::integral_constant<Cache::Strategy, Cache::Strategy::FullCache>>,
     std::optional<std::span<const BYTE>>>
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const {
   if (length == 0) {
@@ -193,7 +194,7 @@ std::enable_if_t<
   return std::span<const BYTE>{result, length};
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 BYTE* FileReader<S>::NextMemory() const {
   if (mem_alloc_.empty() ||
       last_alloc_ * read_buffer_size == memory_buffer_size) {
@@ -207,18 +208,18 @@ BYTE* FileReader<S>::NextMemory() const {
   return retval;
 }
 
-template class FileReader<Strategy::NoCache>;
-template class FileReader<Strategy::FullCache>;
+template class FileReader<Cache::Strategy::NoCache>;
+template class FileReader<Cache::Strategy::FullCache>;
 
 // Class-level NTFS_BROWSER_EXPORT_TESTS_ONLY (on FileReader) does not reach a
 // member function template's own explicit instantiations: each needs the
 // macro again here, or the unit tests cannot link against it on a shared
 // build.
 template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<std::span<const BYTE>>
-    FileReader<Strategy::NoCache>::Read<Strategy::NoCache>(LARGE_INTEGER& addr,
-                                                           DWORD length) const;
+    FileReader<Cache::Strategy::NoCache>::Read<Cache::Strategy::NoCache>(
+        LARGE_INTEGER& addr, DWORD length) const;
 template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<std::span<const BYTE>>
-    FileReader<Strategy::FullCache>::Read<Strategy::FullCache>(
+    FileReader<Cache::Strategy::FullCache>::Read<Cache::Strategy::FullCache>(
         LARGE_INTEGER& addr, DWORD length) const;
 
 }  // namespace NtfsBrowser::Io

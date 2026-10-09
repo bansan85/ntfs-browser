@@ -21,8 +21,8 @@
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
-using NtfsBrowser::Enum::MftIdx;
+namespace Cache = NtfsBrowser::Cache;
+namespace Mft = NtfsBrowser::Mft;
 
 namespace {
 
@@ -52,8 +52,8 @@ std::unique_ptr<NtfsBrowser::IDiskReader>
 
 TEMPLATE_TEST_CASE_SIG(
     "A second FileRecord's read does not corrupt $MFT's attribute",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const TempImage image;
 
   const NtfsVolume<S> volume(OpenOnDisk(image.path));
@@ -61,7 +61,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 
   FileRecord<S> root(volume);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
   CHECK(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 }
@@ -69,8 +69,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A second FileRecord's read does not corrupt $MFT's attribute "
     " (in-memory volume)",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImage());
 
@@ -79,7 +79,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 
   FileRecord<S> root(volume);
-  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
   CHECK(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 }

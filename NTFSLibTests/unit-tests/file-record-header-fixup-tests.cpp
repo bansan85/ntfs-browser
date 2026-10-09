@@ -15,7 +15,7 @@
 #include "file-record-header-edit.h"
 #include "record/header.h"
 
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Data::FileRecordHeader;
 using NtfsBrowser::Record::HeaderImpl;
 
@@ -46,8 +46,8 @@ WORD Sentinel(size_t index) { return gsl::narrow<WORD>(sentinel_base + index); }
 TEMPLATE_TEST_CASE_SIG(
     "Record::Header must not leak bytes past the declared buffer when "
     "offset_of_us leaves no room for the US array",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record-header][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // Bytes past declared_buffer_size are outside what Record::Header sees.
   std::vector<BYTE> storage(declared_buffer_size + array_words * sizeof(WORD),
                             0);
@@ -92,8 +92,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "Record::Header::PatchUS must restore the last word of every 512-byte "
     "block, whatever the volume's sector size (4Kn volumes)",
-    "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[file-record-header][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr size_t record_size = 4096;
   constexpr size_t block_size = 512;
   constexpr size_t blocks = record_size / block_size;

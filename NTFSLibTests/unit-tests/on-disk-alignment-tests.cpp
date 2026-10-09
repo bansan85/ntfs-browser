@@ -34,16 +34,15 @@
 #include "optional-access.h"
 #include "record/header.h"
 
-using NtfsBrowser::AttrHeaderCommon;
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Data::FileRecordHeader;
 using NtfsBrowser::Data::index_block_magic;
-using NtfsBrowser::Enum::MftIdx;
+namespace Mft = NtfsBrowser::Mft;
 using NtfsBrowser::Record::HeaderImpl;
 
 namespace {
@@ -71,7 +70,7 @@ void Put(std::vector<BYTE>& image, size_t offset, T value) {
 }
 
 // Writes a resident attribute of type at offset, odd_attr_size bytes long.
-void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, AttrType type) {
+void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, Attr::Type type) {
   NtfsBrowser::Data::HeaderResident header{};
   header.header.type = type;
   header.header.total_size = odd_attr_size;
@@ -80,26 +79,27 @@ void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, AttrType type) {
   Put(image, offset, header);
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void RunOddSizedAttributesAreParsedAligned() {
   std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImage();
-  const size_t root_offset = RecordOffset(static_cast<ULONGLONG>(MftIdx::Root));
+  const size_t root_offset =
+      RecordOffset(static_cast<ULONGLONG>(Mft::Idx::Root));
   size_t offset = root_offset + first_attr_offset;
-  PutOddSizedAttr(image, offset, AttrType::Data);
+  PutOddSizedAttr(image, offset, Attr::Type::Data);
   offset += odd_attr_size;
-  PutOddSizedAttr(image, offset, AttrType::ReparsePoint);
+  PutOddSizedAttr(image, offset, Attr::Type::ReparsePoint);
   offset += odd_attr_size;
-  Put(image, offset, static_cast<DWORD>(AttrType::All));
+  Put(image, offset, static_cast<DWORD>(Attr::Type::All));
 
   const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  for (const AttrType type : {AttrType::Data, AttrType::ReparsePoint}) {
+  for (const Attr::Type type : {Attr::Type::Data, Attr::Type::ReparsePoint}) {
     const auto& attrs = record.GetAttr(type);
     REQUIRE(attrs.size() == 1);
     const auto address =
@@ -111,12 +111,12 @@ void RunOddSizedAttributesAreParsedAligned() {
 
 // Number of entries TraverseSubEntries() reports for the root directory.
 size_t CountRootEntries(std::vector<BYTE> image) {
-  const NtfsVolume<Strategy::NoCache> volume(
+  const NtfsVolume<Cache::Strategy::NoCache> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NoCache> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  FileRecord<Cache::Strategy::NoCache> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
   size_t count = 0;
@@ -133,16 +133,16 @@ size_t CountRootEntries(std::vector<BYTE> image) {
 TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs binds every attribute at an aligned address, whatever the "
     "total_size of the attribute before it",
-    "[file-record][alignment][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[file-record][alignment][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunOddSizedAttributesAreParsedAligned<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry reads an $INDEX_ROOT entry that starts off an 8-byte "
     "boundary",
-    "[index-entry][alignment][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[index-entry][alignment][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr BYTE shortened_name_length = 2;
   constexpr WORD shortened_stream_size =
       offsetof(NtfsBrowser::Data::Filename, name) +
@@ -193,10 +193,11 @@ TEMPLATE_TEST_CASE_SIG(
       attr_size);
   const DWORD total_size =
       sizeof(NtfsBrowser::Data::HeaderResident) + attr_size;
-  Put(image, attr_offset + offsetof(NtfsBrowser::AttrHeaderCommon, total_size),
+  Put(image,
+      attr_offset + offsetof(NtfsBrowser::Attr::HeaderCommon, total_size),
       total_size);
   std::memset(&image.at(attr_offset + total_size), 0, 2 * sizeof(DWORD));
-  Put(image, attr_offset + total_size, static_cast<DWORD>(AttrType::All));
+  Put(image, attr_offset + total_size, static_cast<DWORD>(Attr::Type::All));
 
   const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
@@ -216,8 +217,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "Record::Header reads an Update Sequence Array that starts at an odd "
     "offset",
-    "[file-record-header][alignment][regression]", ((Strategy S), S),
-    Strategy::NoCache, Strategy::FullCache) {
+    "[file-record-header][alignment][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr size_t record_size = 1024;
   constexpr WORD odd_offset_of_us = 49;
   constexpr WORD usn = 0x1234;

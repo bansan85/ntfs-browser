@@ -15,14 +15,14 @@
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must accept a real-size (12-byte) VOLUME_INFORMATION "
     "attribute, not just whatever sizeof(Data::VolumeInformation) currently "
     "computes to",
-    "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
-    Strategy::FullCache) {
+    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithMinimalVolumeInformation());
 

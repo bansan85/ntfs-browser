@@ -28,7 +28,7 @@ struct WrappedFek;
 
 }  // namespace Efs
 
-template <Strategy S>
+template <Cache::Strategy S>
 class NtfsVolume;
 class IndexEntry;
 class IndexEntryView;
@@ -36,7 +36,7 @@ class IndexEntryView;
 // Everything FileRecord<S> keeps out of its public header: the members, and the
 // private methods that work on them. Friends of FileRecord<S> (AttrList,
 // NtfsVolume) reach it through FileRecord<S>::impl_.
-template <Strategy S>
+template <Cache::Strategy S>
 class FileRecord<S>::Impl {
  public:
   Impl(FileRecord<S>& self, const NtfsVolume<S>& volume) noexcept;
@@ -48,8 +48,8 @@ class FileRecord<S>::Impl {
   const NtfsVolume<S>* volume;
   std::unique_ptr<Record::HeaderImpl<S>> file_record;
   std::optional<ULONGLONG> file_reference;
-  std::array<AttrRawCallback, Attr::attr_nums> attr_raw_call_back{};
-  Mask attr_mask{Mask::All};
+  std::array<Attr::RawCallback, Attr::attr_nums> attr_raw_call_back{};
+  Attr::Mask attr_mask{Attr::Mask::All};
 
   // The extension records $ATTRIBUTE_LIST opened. An attribute imported from
   // one keeps a reference into its bytes, so they MUST outlive attr_list_:
@@ -78,17 +78,18 @@ class FileRecord<S>::Impl {
   std::vector<BYTE> record_buffer;
 
   void ClearAttrs() noexcept;
-  [[nodiscard]] const AttrHeaderCommon&
+  [[nodiscard]] const Attr::HeaderCommon&
       AlignedAttrHeader(std::span<const BYTE> bytes);
   void MergeAttributeContinuations();
   [[nodiscard]] bool AttachEfsContext();
   [[nodiscard]] std::vector<Efs::WrappedFek> ReadEfsEntries() const;
-  void UserCallBack(DWORD att_type, const AttrHeaderCommon& ahc, bool& discard);
+  void UserCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
+                    bool& discard);
   template <typename Resident>
   [[nodiscard]] std::unique_ptr<AttrBase<S>>
-      AllocAttr(const AttrHeaderCommon& ahc, bool& unhandled,
+      AllocAttr(const Attr::HeaderCommon& ahc, bool& unhandled,
                 std::unordered_set<ULONGLONG>& attr_list_chain);
-  [[nodiscard]] bool ParseAttr(const AttrHeaderCommon& ahc,
+  [[nodiscard]] bool ParseAttr(const Attr::HeaderCommon& ahc,
                                std::unordered_set<ULONGLONG>& attr_list_chain);
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
   static void MergeStreamChain(std::vector<std::unique_ptr<AttrBase<S>>>& attrs,
@@ -97,7 +98,7 @@ class FileRecord<S>::Impl {
   [[nodiscard]] static const std::vector<IndexEntryView>*
       FileNameIndexRootEntries(const AttrBase<S>& attr);
   [[nodiscard]] bool VisitAttr(std::span<const BYTE> cur,
-                               const AttrHeaderCommon& head,
+                               const Attr::HeaderCommon& head,
                                std::unordered_set<ULONGLONG>& attr_list_chain);
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref);

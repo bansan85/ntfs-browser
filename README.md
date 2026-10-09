@@ -15,8 +15,8 @@ This project improves the historical software by:
   - fixing minor bugs,
   - rewriting it with C++20 coding style,
   - caching disk reads (the original's `ReadFile` in
-    `CAttrNonResident::ReadClusters`), now in `FileReader` under
-    `Strategy::FullCache`,
+    `CAttrNonResident::ReadClusters`), now in `Io::FileReader` under
+    `Cache::Strategy::FullCache`,
   - reading LZNT1-compressed files and directories
     (`FILE_ATTRIBUTE_COMPRESSED`), which the original skipped entirely:
     compression units are decompressed transparently, so `ReadData()` keeps

@@ -30,7 +30,7 @@
 using NtfsBrowser::AttrBase;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Efs::MakePfxKeyProvider;
 
@@ -78,14 +78,14 @@ TEST_CASE(
     "[nps][integration][efs]") {
   NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
 
-  NtfsVolume<Strategy::NoCache> volume(NtfsBrowserTests::OpenNtfs1Image(),
-                                       VolumeOptions{});
+  NtfsVolume<Cache::Strategy::NoCache> volume(
+      NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Strategy::NoCache> root(volume);
+  FileRecord<Cache::Strategy::NoCache> root(volume);
   NtfsBrowserTests::OpenRootDir(root);
 
-  FileRecord<Strategy::NoCache> encrypted_dir(volume);
+  FileRecord<Cache::Strategy::NoCache> encrypted_dir(volume);
   NtfsBrowserTests::OpenRootDir(encrypted_dir);
   NtfsBrowserTests::OpenSubDir(encrypted_dir, "Encrypted");
 
@@ -108,9 +108,10 @@ TEST_CASE(
          NtfsBrowserTests::known_files) {
       INFO("file " << file.name);
 
-      FileRecord<Strategy::NoCache> stream_owner(volume);
+      FileRecord<Cache::Strategy::NoCache> stream_owner(volume);
       NtfsBrowserTests::OpenFile(stream_owner, encrypted_dir, file.name);
-      const AttrBase<Strategy::NoCache>* stream = stream_owner.FindStream({});
+      const AttrBase<Cache::Strategy::NoCache>* stream =
+          stream_owner.FindStream({});
       REQUIRE(stream != nullptr);
       CHECK(stream->GetDataSize() == file.size);
 

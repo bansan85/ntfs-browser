@@ -51,9 +51,14 @@ namespace Efs {
 class IEfsKeyProvider;
 
 }  // namespace Efs
-struct AttrHeaderCommon;
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
 struct VolumeOptions;
-template <Strategy S>
+template <Cache::Strategy S>
 class AttrBase;
 
 namespace {
@@ -115,7 +120,7 @@ std::optional<DWORD> DecodeClusterSize(char spc, WORD sector_size) {
 
 }  // namespace
 
-template <Strategy S>
+template <Cache::Strategy S>
 NtfsVolume<S>::Impl::Impl(NtfsVolume<S>& self, const VolumeOptions& options)
     : self(&self),
       volume(std::make_unique<Io::FileReader<S>>()),
@@ -123,7 +128,7 @@ NtfsVolume<S>::Impl::Impl(NtfsVolume<S>& self, const VolumeOptions& options)
       options(options) {}
 
 #ifdef _WIN32
-template <Strategy S>
+template <Cache::Strategy S>
 NtfsVolume<S>::NtfsVolume(_TCHAR volume, const VolumeOptions& options)
     : impl_(std::make_unique<Impl>(*this, options)) {
   if (impl_->OpenVolume(volume)) {
@@ -131,7 +136,7 @@ NtfsVolume<S>::NtfsVolume(_TCHAR volume, const VolumeOptions& options)
   }
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 NtfsVolume<S>::NtfsVolume(std::wstring_view path, const VolumeOptions& options)
     : impl_(std::make_unique<Impl>(*this, options)) {
   if (impl_->OpenVolume(path)) {
@@ -140,7 +145,7 @@ NtfsVolume<S>::NtfsVolume(std::wstring_view path, const VolumeOptions& options)
 }
 #endif
 
-template <Strategy S>
+template <Cache::Strategy S>
 NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader,
                           const VolumeOptions& options)
     : impl_(std::make_unique<Impl>(*this, options)) {
@@ -149,11 +154,11 @@ NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader,
   }
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 NtfsVolume<S>::~NtfsVolume() = default;
 
 // Verify NTFS volume version (must >= 3.0) and locate $MFT's Data attribute
-template <Strategy S>
+template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::Init() {
   // The volume's own metadata reads always see their own content, whatever
   // include_deleted says: they are not the caller's traversal of the
@@ -163,29 +168,29 @@ void NtfsVolume<S>::Impl::Init() {
 
   FileRecord vol(*self);
   vol.impl_->bypass_deleted_gate = true;
-  vol.SetAttrMask(Mask::VolumeName | Mask::VolumeInformation);
-  if (!vol.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::Volume))) {
+  vol.SetAttrMask(Attr::Mask::VolumeName | Attr::Mask::VolumeInformation);
+  if (!vol.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Volume))) {
     return;
   }
 
   if (!vol.ParseAttrs()) {
     return;
   }
-  const auto& vec = vol.GetAttr(AttrType::VolumeInformation);
+  const auto& vec = vol.GetAttr(Attr::Type::VolumeInformation);
   if (vec.empty()) {
     return;
   }
 
-  if constexpr (S == Strategy::NoCache) {
+  if constexpr (S == Cache::Strategy::NoCache) {
     std::tie(version_major, version_minor) =
         reinterpret_cast<const Attr::AttrVolInfo<Attr::AttrResidentNoCache,
-                                                 Strategy::NoCache>*>(
+                                                 Cache::Strategy::NoCache>*>(
             vec.front().get())
             ->GetVersion();
   } else {
     std::tie(version_major, version_minor) =
         reinterpret_cast<const Attr::AttrVolInfo<Attr::AttrResidentFullCache,
-                                                 Strategy::FullCache>*>(
+                                                 Cache::Strategy::FullCache>*>(
             vec.front().get())
             ->GetVersion();
   }
@@ -195,20 +200,20 @@ void NtfsVolume<S>::Impl::Init() {
     return;
   }
 
-  const auto& vec2 = vol.GetAttr(AttrType::VolumeName);
+  const auto& vec2 = vol.GetAttr(Attr::Type::VolumeName);
   if (!vec2.empty()) {
-    if constexpr (S == Strategy::NoCache) {
+    if constexpr (S == Cache::Strategy::NoCache) {
       const std::wstring_view volname =
           reinterpret_cast<const Attr::AttrVolName<Attr::AttrResidentNoCache,
-                                                   Strategy::NoCache>*>(
+                                                   Cache::Strategy::NoCache>*>(
               vec2.front().get())
               ->GetName();
       Log::Info("NTFS volume name: {}",
                 Utf::WideToUtf8(TrimTrailingNuls(volname)));
     } else {
       const std::wstring_view volname =
-          reinterpret_cast<const Attr::AttrVolName<Attr::AttrResidentFullCache,
-                                                   Strategy::FullCache>*>(
+          reinterpret_cast<const Attr::AttrVolName<
+              Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
               vec2.front().get())
               ->GetName();
       Log::Info("NTFS volume name: {}",
@@ -217,15 +222,15 @@ void NtfsVolume<S>::Impl::Init() {
   }
 
   // Skips SetAttrMask()'s automatic ATTRIBUTE_LIST bit (resolved below).
-  mft_record.impl_->attr_mask = Mask::Data;
-  if (!mft_record.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::Mft)) ||
+  mft_record.impl_->attr_mask = Attr::Mask::Data;
+  if (!mft_record.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Mft)) ||
       !mft_record.ParseAttrs()) {
     return;
   }
 
   const AttrBase<S>* base_extent = nullptr;
   for (const std::unique_ptr<AttrBase<S>>& attr :
-       mft_record.GetAttr(AttrType::Data)) {
+       mft_record.GetAttr(Attr::Type::Data)) {
     // The base extent is the unnamed, non-resident DATA instance at VCN 0.
     if (attr->IsNonResident() && attr->IsUnNamed() &&
         static_cast<const Attr::AttrNonResident<S>*>(attr.get())
@@ -260,22 +265,22 @@ void NtfsVolume<S>::Impl::Init() {
 
 // Resolves $MFT's own DATA continuations named by its $ATTRIBUTE_LIST, as a
 // fixed point since one entry can depend on an extent only another reveals.
-template <Strategy S>
+template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
   // Isolated from mft_record_; resolve_attr_list_ = false skips AttrList.
   FileRecord<S> list_record(*self);
-  list_record.impl_->attr_mask = Mask::AttributeList;
+  list_record.impl_->attr_mask = Attr::Mask::AttributeList;
   list_record.impl_->resolve_attr_list = false;
   list_record.impl_->bypass_deleted_gate = true;
 
-  if (!list_record.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::Mft)) ||
+  if (!list_record.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Mft)) ||
       !list_record.ParseAttrs()) {
     Log::Debug("$MFT's own $ATTRIBUTE_LIST did not parse; assuming none");
     return;
   }
 
   const std::vector<std::unique_ptr<AttrBase<S>>>& list_attrs =
-      list_record.GetAttr(AttrType::AttributeList);
+      list_record.GetAttr(Attr::Type::AttributeList);
   if (list_attrs.empty()) {
     return;  // $MFT's DATA attribute fits in the base record alone.
   }
@@ -298,7 +303,7 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
 
     for (PendingMftExtension& item : pending) {
       const bool reachable =
-          item.record < static_cast<ULONGLONG>(Enum::MftIdx::User) ||
+          item.record < static_cast<ULONGLONG>(Mft::Idx::User) ||
           IsMftRangeMapped(item.record * file_record_size, file_record_size);
       if (!reachable) {
         still_pending.push_back(std::move(item));
@@ -325,7 +330,7 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
 // Collects each DATA entry of rawList, grouped per extension record, and
 // capped. One record can hold several extents, so it keeps every start VCN
 // listed.
-template <Strategy S>
+template <Cache::Strategy S>
 std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
     NtfsVolume<S>::Impl::CollectPendingMftExtensions(
         const AttrBase<S>& raw_list, ULONGLONG self_ref) {
@@ -347,7 +352,7 @@ std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
     }
 
     const ULONGLONG record_ref = entry.base_ref.segment_number;
-    if (entry.attr_type == AttrType::Data && entry.name_length == 0 &&
+    if (entry.attr_type == Attr::Type::Data && entry.name_length == 0 &&
         record_ref != self_ref) {
       listed_entries++;
       // A file reference packs the record number and its sequence number.
@@ -377,12 +382,12 @@ std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
 
 // Opens item's extension record and hands each of its DATA extents to
 // TryAddMftExtent(). The record is dropped again if it is not usable.
-template <Strategy S>
+template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
     const PendingMftExtension& item, ULONGLONG self_ref) {
   mft_extension_records.emplace_back(*self);
   FileRecord<S>& ext = mft_extension_records.back();
-  ext.impl_->attr_mask = Mask::Data;
+  ext.impl_->attr_mask = Attr::Mask::Data;
   ext.impl_->bypass_deleted_gate = true;
 
   const bool parsed = ext.ParseFileRecord(item.record);
@@ -406,7 +411,8 @@ void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
     return;
   }
 
-  for (const std::unique_ptr<AttrBase<S>>& attr : ext.GetAttr(AttrType::Data)) {
+  for (const std::unique_ptr<AttrBase<S>>& attr :
+       ext.GetAttr(Attr::Type::Data)) {
     if (attr->IsNonResident()) {
       // Any start VCN not listed is rejected by TryAddMftExtent().
       const ULONGLONG start_vcn =
@@ -422,7 +428,7 @@ void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
 // Rejects attr if named, VCN-inverted, too large for a byte offset, mismatched
 // with expectedStartVcn, or overlapping; otherwise inserts it into mft_extents_
 // in sorted order.
-template <Strategy S>
+template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::TryAddMftExtent(const AttrBase<S>& attr,
                                           ULONGLONG expected_start_vcn) {
   if (!attr.IsUnNamed()) {
@@ -473,7 +479,7 @@ void NtfsVolume<S>::Impl::TryAddMftExtent(const AttrBase<S>& attr,
 }
 
 // True if [byteOffset, byteOffset + length) is fully mapped; no I/O.
-template <Strategy S>
+template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::IsMftRangeMapped(ULONGLONG byte_offset,
                                            ULONGLONG length) const noexcept {
   if (cluster_size == 0 || length == 0) {
@@ -493,7 +499,7 @@ bool NtfsVolume<S>::Impl::IsMftRangeMapped(ULONGLONG byte_offset,
 }
 
 // Finds the accepted extent covering vcn, or nullptr if unresolved.
-template <Strategy S>
+template <Cache::Strategy S>
 const NtfsVolume<S>::Impl::MftExtent*
     NtfsVolume<S>::Impl::FindMftExtent(ULONGLONG vcn) const noexcept {
   const auto iterator =
@@ -510,7 +516,7 @@ const NtfsVolume<S>::Impl::MftExtent*
 
 // Reads $MFT's DATA attribute at a byte offset, following extent
 // boundaries transparently when it is split across extension records.
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<ULONGLONG>
     NtfsVolume<S>::Impl::ReadMftData(ULONGLONG offset,
                                      std::span<BYTE> buffer) const {
@@ -551,7 +557,7 @@ std::optional<ULONGLONG>
 
 #ifdef _WIN32
 // Open a volume ('a' - 'z', 'A' - 'Z'), get volume handle and BPB
-template <Strategy S>
+template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(_TCHAR volume) {
   // Verify parameter
   if (!_istalpha(volume)) {
@@ -568,7 +574,7 @@ bool NtfsVolume<S>::Impl::OpenVolume(_TCHAR volume) {
 }
 
 // Open an arbitrary device/image path, get volume handle and BPB
-template <Strategy S>
+template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
   if (!volume->Open(path)) {
     Log::Error("Cannnot open volume");
@@ -580,7 +586,7 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
 #endif
 
 // Use an already-open reader (eg. a test double), get BPB
-template <Strategy S>
+template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
   volume = std::make_unique<Io::FileReader<S>>(std::move(reader));
 
@@ -588,7 +594,7 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
 }
 
 // Read the first sector (boot sector) and derive volume geometry from it
-template <Strategy S>
+template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::ParseBootSector() {
   // Smallest sector size NTFS uses. It is also the size of the BPB read.
   constexpr DWORD min_sector_size = 512;
@@ -708,30 +714,30 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
 }
 
 // Check if Volume is successfully opened
-template <Strategy S>
+template <Cache::Strategy S>
 bool NtfsVolume<S>::IsVolumeOK() const noexcept {
   return impl_->volume_ok;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 const VolumeOptions& NtfsVolume<S>::GetOptions() const noexcept {
   return impl_->options;
 }
 
 // Get NTFS volume version
-template <Strategy S>
+template <Cache::Strategy S>
 std::pair<BYTE, BYTE> NtfsVolume<S>::GetVersion() const noexcept {
   return {impl_->version_major, impl_->version_minor};
 }
 
 // Get File Record count
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG NtfsVolume<S>::GetRecordsCount() const noexcept {
   return impl_->GetRecordsCount();
 }
 
 // The count behind NtfsVolume::GetRecordsCount().
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG NtfsVolume<S>::Impl::GetRecordsCount() const noexcept {
   // noexcept: must not crash if called before/without checking IsVolumeOK().
   if (mft_data == nullptr) {
@@ -740,7 +746,7 @@ ULONGLONG NtfsVolume<S>::Impl::GetRecordsCount() const noexcept {
 
   // Records below USER are read from a fixed address, mapped or not.
   ULONGLONG mapped_bytes =
-      static_cast<ULONGLONG>(Enum::MftIdx::User) * file_record_size;
+      static_cast<ULONGLONG>(Mft::Idx::User) * file_record_size;
   for (const MftExtent& extent : mft_extents) {
     // MappedClusters() never exceeds last_vcn + 1, which TryAddMftExtent()
     // already checked cannot overflow a byte offset.
@@ -756,52 +762,52 @@ ULONGLONG NtfsVolume<S>::Impl::GetRecordsCount() const noexcept {
 }
 
 // Get BPB information
-template <Strategy S>
+template <Cache::Strategy S>
 WORD NtfsVolume<S>::GetSectorSize() const noexcept {
   return impl_->sector_size;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 DWORD NtfsVolume<S>::GetClusterSize() const noexcept {
   return impl_->cluster_size;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 DWORD NtfsVolume<S>::GetFileRecordSize() const noexcept {
   return impl_->file_record_size;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 DWORD NtfsVolume<S>::GetIndexBlockSize() const noexcept {
   return impl_->index_block_size;
 }
 
 // Get MFT starting address
-template <Strategy S>
+template <Cache::Strategy S>
 ULONGLONG NtfsVolume<S>::GetMFTAddr() const noexcept {
   return impl_->mft_addr;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 std::span<BYTE> NtfsVolume<S>::GetClusterBuffer() const noexcept {
   return {impl_->cluster_buffer.data(), impl_->cluster_buffer.size()};
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 std::optional<std::span<const BYTE>> NtfsVolume<S>::Read(LARGE_INTEGER& addr,
                                                          DWORD length) const {
   return impl_->volume->Read(addr, length);
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool NtfsVolume<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {
   return impl_->volume->ReadInto(addr, dest);
 }
 
 // Install Attribute CallBack routines for the whole Volume
-template <Strategy S>
-bool NtfsVolume<S>::InstallAttrRawCB(AttrType attr_type,
-                                     AttrRawCallback callback) noexcept {
+template <Cache::Strategy S>
+bool NtfsVolume<S>::InstallAttrRawCB(Attr::Type attr_type,
+                                     Attr::RawCallback callback) noexcept {
   const DWORD at_idx = Attr::AttrIndex(attr_type);
   if (at_idx >= Attr::attr_nums) {
     return false;
@@ -814,13 +820,13 @@ bool NtfsVolume<S>::InstallAttrRawCB(AttrType attr_type,
 }
 
 // attType is an already-bounds-checked index into attr_raw_call_back_
-// (attr_nums), not a raw AttrType/DWORD value. Only FileRecord<S>, a friend,
+// (attr_nums), not a raw Attr::Type/DWORD value. Only FileRecord<S>, a friend,
 // calls it, from an index it already validated, which avoids exposing an
 // unbounded array index through the public API. See N11 in
 // docs/bug-reports/2026-09-03-full-repo.md.
-template <Strategy S>
+template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::AttrRawCallBack(DWORD att_type,
-                                          const AttrHeaderCommon& ahc,
+                                          const Attr::HeaderCommon& ahc,
                                           bool& discard) const {
   // The caller passes an index below attr_nums, as described above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -831,21 +837,21 @@ void NtfsVolume<S>::Impl::AttrRawCallBack(DWORD att_type,
 }
 
 // Clear all Attribute CallBack routines
-template <Strategy S>
+template <Cache::Strategy S>
 void NtfsVolume<S>::ClearAttrRawCB() noexcept {
-  for (AttrRawCallback& call_back : impl_->attr_raw_call_back) {
+  for (Attr::RawCallback& call_back : impl_->attr_raw_call_back) {
     call_back = nullptr;
   }
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 void NtfsVolume<S>::SetEfsKeyProvider(
     std::shared_ptr<Efs::IEfsKeyProvider> provider) noexcept {
   impl_->efs_provider = std::move(provider);
   impl_->efs_provider_set = true;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 std::shared_ptr<Efs::IEfsKeyProvider> NtfsVolume<S>::GetEfsKeyProvider() const {
   if (!impl_->efs_provider_set) {
     impl_->efs_provider_set = true;
@@ -856,7 +862,7 @@ std::shared_ptr<Efs::IEfsKeyProvider> NtfsVolume<S>::GetEfsKeyProvider() const {
   return impl_->efs_provider;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 bool NtfsVolume<S>::SetEfsCipherBackend(Efs::CipherBackend backend) noexcept {
   if (backend == Efs::CipherBackend::CryptoPp) {
 #ifndef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
@@ -871,16 +877,16 @@ bool NtfsVolume<S>::SetEfsCipherBackend(Efs::CipherBackend backend) noexcept {
   return true;
 }
 
-template <Strategy S>
+template <Cache::Strategy S>
 Efs::CipherBackend NtfsVolume<S>::GetEfsCipherBackend() const noexcept {
   return impl_->efs_backend;
 }
 
 // Reads $UpCase (MFT record 10). Null when it is missing or unusable.
-template <Strategy S>
+template <Cache::Strategy S>
 std::unique_ptr<const UpCase::Table>
     NtfsVolume<S>::Impl::LoadUpCaseTable() const {
-  const auto upcase_record = static_cast<ULONGLONG>(Enum::MftIdx::UpCase);
+  const auto upcase_record = static_cast<ULONGLONG>(Mft::Idx::UpCase);
   if (!volume_ok ||
       !IsMftRangeMapped(upcase_record * file_record_size, file_record_size)) {
     return {};
@@ -890,7 +896,7 @@ std::unique_ptr<const UpCase::Table>
   // include_deleted.
   FileRecord<S> record(*self);
   record.impl_->bypass_deleted_gate = true;
-  record.SetAttrMask(Mask::Data);
+  record.SetAttrMask(Attr::Mask::Data);
   if (!record.ParseFileRecord(upcase_record) || !record.ParseAttrs()) {
     return {};
   }
@@ -915,7 +921,7 @@ std::unique_ptr<const UpCase::Table>
 
 // Loads $UpCase on first use. A failure is cached: the built-in mapping
 // answers every later call.
-template <Strategy S>
+template <Cache::Strategy S>
 const UpCase::Table& NtfsVolume<S>::Impl::GetUpCaseTable() const {
   if (!upcase_loaded) {
     upcase_loaded = true;
@@ -927,7 +933,7 @@ const UpCase::Table& NtfsVolume<S>::Impl::GetUpCaseTable() const {
   return upcase ? *upcase : UpCase::Table::BuiltIn();
 }
 
-template class NtfsVolume<Strategy::NoCache>;
-template class NtfsVolume<Strategy::FullCache>;
+template class NtfsVolume<Cache::Strategy::NoCache>;
+template class NtfsVolume<Cache::Strategy::FullCache>;
 
 }  // namespace NtfsBrowser

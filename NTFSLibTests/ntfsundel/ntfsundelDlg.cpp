@@ -165,7 +165,8 @@ void CNtfsundelDlg::OnSearch() {
 
   // A deleted-file finder needs to see freed records: without this, every
   // one of them would be invisible from the moment it's parsed.
-  NtfsVolume<Strategy::FullCache> volume(volname, {.include_deleted = true});
+  NtfsVolume<Cache::Strategy::FullCache> volume(volname,
+                                                {.include_deleted = true});
   if (!volume.IsVolumeOK()) {
     MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
     return;
@@ -203,7 +204,7 @@ void CNtfsundelDlg::OnSearch() {
   std::chrono::steady_clock::time_point begin =
       std::chrono::steady_clock::now();
   std::chrono::steady_clock::time_point last_pump = begin;
-  for (auto i = static_cast<ULONGLONG>(Enum::MftIdx::Mft);
+  for (auto i = static_cast<ULONGLONG>(Mft::Idx::Mft);
        i < volume.GetRecordsCount(); i++) {
     if (i == 500000) {
       break;
@@ -228,7 +229,8 @@ void CNtfsundelDlg::OnSearch() {
 
     // Only parse Standard Information and File Name attributes
     // StdInfo will always be parsed
-    fr.SetAttrMask(Mask::FileName | Mask::IndexRoot | Mask::IndexAllocation);
+    fr.SetAttrMask(Attr::Mask::FileName | Attr::Mask::IndexRoot |
+                   Attr::Mask::IndexAllocation);
     if (!fr.ParseFileRecord(i)) {
       continue;
     }
@@ -268,7 +270,7 @@ void CNtfsundelDlg::OnSearch() {
           .count();
 
   for (auto fri : files) {
-    fr.SetAttrMask(Mask::FileName);
+    fr.SetAttrMask(Attr::Mask::FileName);
     if (!fr.ParseFileRecord(fri)) {
       continue;
     }
@@ -292,7 +294,7 @@ void CNtfsundelDlg::OnSearch() {
       std::wstring full_file_name = sw;
       auto id = id_to_parent.find(fri);
       while (id != id_to_parent.end()) {
-        fr.SetAttrMask(Mask::FileName);
+        fr.SetAttrMask(Attr::Mask::FileName);
         if (!fr.ParseFileRecord(id->second)) {
           break;
         }
@@ -354,7 +356,8 @@ void CNtfsundelDlg::OnRecover() {
 
   // The selected file came from OnSearch()'s deleted-inclusive listing: it
   // must still be visible here, or recovery could never find its record.
-  NtfsVolume<Strategy::NoCache> volume(volname, {.include_deleted = true});
+  NtfsVolume<Cache::Strategy::NoCache> volume(volname,
+                                              {.include_deleted = true});
   FileRecord fr(volume);
 
   if (!fr.ParseFileRecord(ref)) {
@@ -362,7 +365,7 @@ void CNtfsundelDlg::OnRecover() {
     return;
   }
 
-  fr.SetAttrMask(Mask::Data);
+  fr.SetAttrMask(Attr::Mask::Data);
   if (!fr.ParseAttrs()) {
     MessageBox(_T("File Record attribute parse error"));
     return;
@@ -396,7 +399,7 @@ void CNtfsundelDlg::OnRecover() {
 
   // Save to disk
   // Unnamed Data attribute contains the file data
-  const AttrBase<Strategy::NoCache>* data = fr.FindStream({});
+  const AttrBase<Cache::Strategy::NoCache>* data = fr.FindStream({});
   if (data == nullptr) {
     return;
   }

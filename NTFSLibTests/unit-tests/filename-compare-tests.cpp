@@ -12,10 +12,10 @@
 
 #include <ntfs-browser/index-entry.h>
 
+#include "data/filename-flag.h"
+#include "data/filename-namespace.h"
 #include "data/filename.h"
 #include "data/index-entry.h"
-#include "flag/filename-namespace.h"
-#include "flag/filename.h"
 
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
@@ -47,9 +47,9 @@ IndexEntry MakeSystemEntry() {
 
   auto& filename =
       *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
-  filename.flags = NtfsBrowser::Flag::Filename::Directory;
+  filename.flags = NtfsBrowser::Data::FilenameFlag::Directory;
   filename.name_length = name_len;
-  filename.name_space = NtfsBrowser::Flag::FilenameNamespace::Win32;
+  filename.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
   for (BYTE i = 0; i < name_len; i++) {
     // i is below name_len, the length of name.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -80,9 +80,9 @@ IndexEntry MakeNamedEntry(std::wstring_view name) {
 
   auto& filename =
       *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
-  filename.flags = NtfsBrowser::Flag::Filename::Directory;
+  filename.flags = NtfsBrowser::Data::FilenameFlag::Directory;
   filename.name_length = gsl::narrow<BYTE>(name.size());
-  filename.name_space = NtfsBrowser::Flag::FilenameNamespace::Win32;
+  filename.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
   for (size_t i = 0; i < name.size(); i++) {
     // i < name.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

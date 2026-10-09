@@ -63,7 +63,7 @@ std::string ToUtf8(std::wstring_view text) {
 }
 
 // The path of one name of entry, as shown in the listing.
-std::string DisplayPath(const MftTree& tree, const MftEntry& entry,
+std::string DisplayPath(const MftTree& tree, const MftTree::Entry& entry,
                         std::optional<size_t> name_index) {
   std::optional<ULONGLONG> lost;
   const std::wstring path = name_index
@@ -79,7 +79,7 @@ std::string DisplayPath(const MftTree& tree, const MftEntry& entry,
 }
 
 // Prints one listing line for entry, then one line per other hard link.
-void PrintEntry(const MftTree& tree, const MftEntry& entry) {
+void PrintEntry(const MftTree& tree, const MftTree::Entry& entry) {
   SYSTEMTIME st{};
   FileTimeToSystemTime(&entry.write_time, &st);
 
@@ -89,7 +89,7 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry) {
   }
 
   size_t links = 0;
-  for (const MftName& name : entry.names) {
+  for (const MftTree::Name& name : entry.names) {
     if (!name.dos_only) {
       links++;
     }
@@ -119,17 +119,18 @@ void PrintEntry(const MftTree& tree, const MftEntry& entry) {
 
 // Opens target as a drive letter ("c" or "c:"), or else as a device or
 // image path.
-std::unique_ptr<NtfsVolume<Strategy::NoCache>>
+std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
     OpenVolume(std::wstring_view target, const VolumeOptions& options) {
   // A lone letter, optionally followed by a colon, names a drive.
   const bool drive_letter =
       (target.size() == 1 || (target.size() == 2 && target.back() == L':')) &&
       iswalpha(target.front()) != 0;
   if (drive_letter) {
-    return std::make_unique<NtfsVolume<Strategy::NoCache>>(target.front(),
-                                                           options);
+    return std::make_unique<NtfsVolume<Cache::Strategy::NoCache>>(
+        target.front(), options);
   }
-  return std::make_unique<NtfsVolume<Strategy::NoCache>>(target, options);
+  return std::make_unique<NtfsVolume<Cache::Strategy::NoCache>>(target,
+                                                                options);
 }
 
 }  // namespace
@@ -138,7 +139,7 @@ std::unique_ptr<NtfsVolume<Strategy::NoCache>>
 int wmain(int argc, wchar_t* argv[]) {
   Log::Config log_config;
   VolumeOptions volume_options;
-  MftScanOptions scan_options;
+  MftTree::ScanOptions scan_options;
   const wchar_t* target = nullptr;
 
   for (int i = 1; i < argc; i++) {
@@ -176,7 +177,7 @@ int wmain(int argc, wchar_t* argv[]) {
 
   SetConsoleOutputCP(CP_UTF8);
 
-  const std::unique_ptr<NtfsVolume<Strategy::NoCache>> volume =
+  const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
       OpenVolume(target, volume_options);
   if (!volume->IsVolumeOK()) {
     fprintf(stderr, "Cannot open %ls as an NTFS volume\n", target);
@@ -195,11 +196,11 @@ int wmain(int argc, wchar_t* argv[]) {
 
   printf("%10s %5s %-3s %14s %-16s %-6s %2s %s\n", "Record", "Seq", "", "Size",
          "Last write", "Attrib", "Ln", "Path");
-  for (const MftEntry& entry : tree.Entries()) {
+  for (const MftTree::Entry& entry : tree.Entries()) {
     PrintEntry(tree, entry);
   }
 
-  const MftScanStats& stats = tree.Stats();
+  const MftTree::ScanStats& stats = tree.Stats();
   printf(
       "\nRecord slots: %llu, in use: %llu, deleted: %llu, extensions: %llu\n",
       stats.slots, stats.in_use, stats.deleted, stats.extensions);

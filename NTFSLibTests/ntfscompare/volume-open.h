@@ -15,9 +15,11 @@ namespace NtfsCompare {
 // the target directory relative to the volume's root, in this tool's own
 // "/"-joined convention (matching every Listing's own path keys).
 struct VolumeHandles {
-  std::unique_ptr<NtfsBrowser::NtfsVolume<NtfsBrowser::Strategy::FullCache>>
+  std::unique_ptr<
+      NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::FullCache>>
       full_cache;
-  std::unique_ptr<NtfsBrowser::NtfsVolume<NtfsBrowser::Strategy::NoCache>>
+  std::unique_ptr<
+      NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache>>
       no_cache;
   std::wstring relative_path;
 };

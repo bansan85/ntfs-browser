@@ -30,15 +30,15 @@
 
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::Mask;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
+namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 using NtfsFuzz::gap_collation_search_name;
 using NtfsFuzz::LoopingDiskReader;
 using NtfsFuzz::named_data_stream_name;
 
-namespace Enum = NtfsBrowser::Enum;
+namespace Mft = NtfsBrowser::Mft;
 namespace Log = NtfsBrowser::Log;
 
 // Windows gives a wmain() the command line as wide characters. A narrow
@@ -108,7 +108,7 @@ constexpr std::array<VolumeOptions, 2> volume_option_modes{
 //
 // failingRead makes that one ReadInto() call fail, exercising the
 // disk-read error paths a looping reader never reaches on its own.
-template <Strategy S>
+template <Cache::Strategy S>
 void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
               std::optional<size_t> failing_read = {}) {
   const NtfsVolume<S> volume(
@@ -121,10 +121,10 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
   // Without DATA here, FindStream() below never sees a named $DATA
   // attribute on ROOT to walk. BITMAP and OBJECT_ID reach AttrBitmap and
   // the unhandled-attribute path of ParseAttr().
-  file_record.SetAttrMask(Mask::IndexRoot | Mask::IndexAllocation | Mask::Data |
-                          Mask::Bitmap | Mask::ObjectId);
-  if (!file_record.ParseFileRecord(
-          static_cast<ULONGLONG>(Enum::MftIdx::Root))) {
+  file_record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation |
+                          Attr::Mask::Data | Attr::Mask::Bitmap |
+                          Attr::Mask::ObjectId);
+  if (!file_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
     // file_record_ is guaranteed empty here, exercising IsDeleted()/
     // IsDirectory()'s guard against it.
     (void)file_record.IsDeleted();
@@ -155,7 +155,7 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash
 // may escape.
-template <Strategy S>
+template <Cache::Strategy S>
 void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
                 std::optional<size_t> failing_read = {}) {
   try {
@@ -232,8 +232,8 @@ int Run(int argc, ArgChar** argv) {
   // Each strategy runs once per VolumeOptions mode, so both the strict
   // (reject-whole) and recovering (salvage) code paths are exercised.
   for (const VolumeOptions& options : volume_option_modes) {
-    RunGuarded<Strategy::NoCache>(*data, options);
-    RunGuarded<Strategy::FullCache>(*data, options);
+    RunGuarded<Cache::Strategy::NoCache>(*data, options);
+    RunGuarded<Cache::Strategy::FullCache>(*data, options);
   }
 
   if (!inject_failures) {
@@ -243,8 +243,8 @@ int Run(int argc, ArgChar** argv) {
   for (size_t failing_read = 0; failing_read < injected_failure_runs;
        ++failing_read) {
     for (const VolumeOptions& options : volume_option_modes) {
-      RunGuarded<Strategy::NoCache>(*data, options, failing_read);
-      RunGuarded<Strategy::FullCache>(*data, options, failing_read);
+      RunGuarded<Cache::Strategy::NoCache>(*data, options, failing_read);
+      RunGuarded<Cache::Strategy::FullCache>(*data, options, failing_read);
     }
   }
 

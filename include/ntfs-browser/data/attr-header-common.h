@@ -4,10 +4,10 @@
 
 #include <ntfs-browser/data/attr-type.h>
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Attr {
 
-struct AttrHeaderCommon {
-  AttrType type;      // Attribute Type
+struct HeaderCommon {
+  Type type;          // Attribute Type
   DWORD total_size;   // Length (including this header)
   BYTE non_resident;  // 0 - resident, 1 - non resident
   BYTE name_length;   // name length in words
@@ -16,4 +16,4 @@ struct AttrHeaderCommon {
   WORD id;            // Attribute Id
 };
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

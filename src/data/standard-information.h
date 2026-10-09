@@ -2,7 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include "../flag/std-info-permission.h"
+#include "../data/std-info-permission.h"
 
 namespace NtfsBrowser::Data {
 
@@ -11,7 +11,7 @@ struct StandardInformation {
   ULONGLONG alter_time;                // File altered time
   ULONGLONG mft_time;                  // MFT changed time
   ULONGLONG read_time;                 // File read time
-  Flag::StdInfoPermission permission;  // Dos file permission
+  Data::StdInfoPermission permission;  // Dos file permission
   DWORD max_version_no;                // Maxim number of file versions
   DWORD version_no;                    // File version number
   DWORD class_id;                      // Class Id

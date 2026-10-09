@@ -5,14 +5,9 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace NtfsBrowser {
-namespace Flag {
+namespace NtfsBrowser::Data {
 
-enum class FileRecord : std::uint8_t;
-
-}  // namespace Flag
-
-namespace Data {
+enum class FileRecordFlag : std::uint8_t;
 
 // The on-disk header of an MFT file record, followed by its attributes.
 struct FileRecordHeader {
@@ -44,20 +39,20 @@ struct FileRecordHeader {
 
   union {
     struct {
-      DWORD magic;          // "FILE"
-      WORD offset_of_us;    // Offset of Update Sequence
-      WORD size_of_us;      // Size in words of Update Sequence Number & Array
-      ULONGLONG lsn;        // $LogFile Sequence Number
-      WORD seq_no;          // Sequence number
-      WORD hardlinks;       // Hard link count
-      WORD offset_of_attr;  // Offset of the first Attribute
-      Flag::FileRecord flags;  // Flags
-      DWORD real_size;         // Real size of the FILE record
-      DWORD alloc_size;        // Allocated size of the FILE record
-      ULONGLONG ref_to_base;   // File reference to the base FILE record
-      WORD next_attr_id;       // Next Attribute Id
-      WORD align;              // Align to 4 byte boundary
-      DWORD record_no;         // Number of this MFT Record
+      DWORD magic;            // "FILE"
+      WORD offset_of_us;      // Offset of Update Sequence
+      WORD size_of_us;        // Size in words of Update Sequence Number & Array
+      ULONGLONG lsn;          // $LogFile Sequence Number
+      WORD seq_no;            // Sequence number
+      WORD hardlinks;         // Hard link count
+      WORD offset_of_attr;    // Offset of the first Attribute
+      FileRecordFlag flags;   // Flags
+      DWORD real_size;        // Real size of the FILE record
+      DWORD alloc_size;       // Allocated size of the FILE record
+      ULONGLONG ref_to_base;  // File reference to the base FILE record
+      WORD next_attr_id;      // Next Attribute Id
+      WORD align;             // Align to 4 byte boundary
+      DWORD record_no;        // Number of this MFT Record
     };
 
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
@@ -65,5 +60,4 @@ struct FileRecordHeader {
   };
 };
 
-}  // namespace Data
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Data

@@ -16,16 +16,17 @@
   #include "fake-ntfs-image.h"
   #include "memory-disk-reader.h"
 
-using NtfsBrowser::AttrType;
+namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Strategy;
-using NtfsBrowser::Enum::MftIdx;
+namespace Cache = NtfsBrowser::Cache;
+namespace Mft = NtfsBrowser::Mft;
 
 TEMPLATE_TEST_CASE_SIG(
     "An encrypted stream reads back as raw ciphertext when no EFS backend "
     "is compiled in",
-    "[efs]", ((Strategy S), S), Strategy::NoCache, Strategy::FullCache) {
+    "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const std::vector<BYTE> onDisk(NtfsBrowserTests::fake_cluster_size, 0x42);
 
   NtfsBrowserTests::FakeEncryptedFile file;
@@ -40,10 +41,10 @@ TEMPLATE_TEST_CASE_SIG(
   volume.SetEfsKeyProvider(nullptr);
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(MftIdx::Root)));
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  const auto& data = record.GetAttr(AttrType::Data);
+  const auto& data = record.GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
 
   std::vector<BYTE> buffer(onDisk.size(), 0xCC);

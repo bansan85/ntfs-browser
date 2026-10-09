@@ -2,7 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Attr {
 
 enum class Mask : DWORD {
   // Bit masks of Attributes: the bit for attribute type T is
@@ -27,6 +27,6 @@ enum class Mask : DWORD {
 };
 
 // NOLINTNEXTLINE
-DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Mask)
+DEFINE_ENUM_FLAG_OPERATORS(Mask)
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

@@ -7,9 +7,18 @@
 
 namespace NtfsBrowser {
 
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
-struct AttrHeaderCommon;
-template <Strategy S>
+
+}  // namespace Cache
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+template <Cache::Strategy S>
 class FileRecord;
 
 namespace Data {
@@ -20,10 +29,10 @@ struct VolumeInformation;
 
 namespace Attr {
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 class AttrVolInfo : public Resident {
  public:
-  AttrVolInfo(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
+  AttrVolInfo(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrVolInfo(AttrVolInfo&& other) noexcept = delete;
   AttrVolInfo(const AttrVolInfo& other) = delete;
   AttrVolInfo& operator=(AttrVolInfo&& other) noexcept = delete;
@@ -31,7 +40,7 @@ class AttrVolInfo : public Resident {
 
   ~AttrVolInfo() override;
 
-  template <Strategy>
+  template <Cache::Strategy>
   friend class NtfsVolume;
 
  private:

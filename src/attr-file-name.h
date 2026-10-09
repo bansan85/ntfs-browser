@@ -6,17 +6,26 @@
 
 namespace NtfsBrowser {
 
-struct AttrHeaderCommon;
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+
+namespace Cache {
+
 enum class Strategy : std::uint8_t;
-template <Strategy S>
+
+}  // namespace Cache
+template <Cache::Strategy S>
 class FileRecord;
 
 namespace Attr {
 
-template <typename Resident, Strategy S>
+template <typename Resident, Cache::Strategy S>
 class AttrFileName : public Resident, public NtfsBrowser::Filename {
  public:
-  AttrFileName(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
+  AttrFileName(const HeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrFileName(AttrFileName&& other) noexcept = delete;
   AttrFileName(const AttrFileName& other) = delete;
   AttrFileName& operator=(AttrFileName&& other) noexcept = delete;

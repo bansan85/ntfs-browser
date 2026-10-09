@@ -24,7 +24,7 @@ class IDiskReader;
 
 namespace Io {
 
-template <Strategy S>
+template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
  public:
   FileReader();
@@ -42,17 +42,19 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   // Reads from addr into dest.
   bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
-  template <Strategy S2 = S>
+  template <Cache::Strategy S2 = S>
   std::enable_if_t<
-      std::is_same_v<std::integral_constant<Strategy, S2>,
-                     std::integral_constant<Strategy, Strategy::NoCache>>,
+      std::is_same_v<
+          std::integral_constant<Cache::Strategy, S2>,
+          std::integral_constant<Cache::Strategy, Cache::Strategy::NoCache>>,
       std::optional<std::span<const BYTE>>>
       Read(LARGE_INTEGER& addr, DWORD length) const;
 
-  template <Strategy S2 = S>
+  template <Cache::Strategy S2 = S>
   std::enable_if_t<
-      std::is_same_v<std::integral_constant<Strategy, S2>,
-                     std::integral_constant<Strategy, Strategy::FullCache>>,
+      std::is_same_v<
+          std::integral_constant<Cache::Strategy, S2>,
+          std::integral_constant<Cache::Strategy, Cache::Strategy::FullCache>>,
       std::optional<std::span<const BYTE>>>
       Read(LARGE_INTEGER& addr, DWORD length) const;
 
@@ -66,10 +68,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
 
   std::unique_ptr<IDiskReader> reader_;
 
-  // Use only for Strategy::NoCache.
+  // Use only for Cache::Strategy::NoCache.
   mutable std::vector<BYTE> buffer_;
 
-  // Strategy::FullCache
+  // Cache::Strategy::FullCache
   mutable std::unordered_map<size_t, BYTE*> map_buffer_;
   mutable std::vector<std::vector<BYTE>> mem_alloc_;
   mutable size_t last_alloc_ = 0;
