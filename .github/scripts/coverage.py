@@ -3,11 +3,12 @@
 
 usage:
   coverage.py run   [--skip-build] [--skip-tests] [--require-data]
-                    [--llvm-dir DIR] [--cmake-arg ARG]...
+                    [--llvm-dir DIR] [--cmake-arg ARG]... [--env KEY=VALUE]...
   coverage.py merge
 
 run    builds NtfsBrowserTests and NtfsFuzzerAfl instrumented, runs the unit
-       tests twice (without, then only with the [regression] tag), and writes
+       tests twice (without, then only with the [fuzz] tag, that is the
+       NTFS_REGRESSION_TESTCASE replays), and writes
        lcov, HTML and a gaps report per phase: unit, regr, all.
 merge  unions the gaps of every platform found under build/coverage/ (a line
        compiled out on one OS is judged by the other OS only).
@@ -39,8 +40,9 @@ PLATFORM = "windows" if IS_WIN else "linux"
 COVERAGE_ROOT = REPO / "build" / "coverage"
 OUT = COVERAGE_ROOT / PLATFORM
 
-# Catch2 test specs. The corpus tests are in the first phase on purpose.
-PHASES = {"unit": "~[regression]", "regr": "[regression]"}
+# Catch2 test specs. Only the NtfsFuzzerAfl corpus replays carry [fuzz]: many
+# ordinary unit tests carry [regression] too, so that tag cannot split them.
+PHASES = {"unit": "~[fuzz]", "regr": "[fuzz]"}
 
 # 3rdparty, tests, generated files and system headers are not reported.
 IGNORE_REGEX = (
@@ -168,7 +170,7 @@ def find_binary(build, name):
     return found[0]
 
 
-def run_tests(tests_exe, work, env, require_data):
+def run_tests(tests_exe, work, env, require_data, extra_env):
     prof = work / "prof"
     if prof.exists():
         shutil.rmtree(prof)
@@ -179,6 +181,7 @@ def run_tests(tests_exe, work, env, require_data):
         # %m turns on merging: a recycled PID (frequent on Windows) adds to
         # the old profile instead of overwriting it.
         phase_env["LLVM_PROFILE_FILE"] = str(directory / "%p-%m.profraw")
+        phase_env.update(extra_env)
         if require_data:
             phase_env["NTFS_BROWSER_REQUIRE_TEST_DATA"] = "1"
         OUT.mkdir(parents=True, exist_ok=True)
@@ -328,6 +331,9 @@ def main():
     run_parser.add_argument("--require-data", action="store_true",
                             help="fail instead of skip when a corpus image is absent")
     run_parser.add_argument("--llvm-dir")
+    run_parser.add_argument("--env", action="append", default=[],
+                            help="environment variable for the test runs, e.g. "
+                                 "NTFS_BROWSER_TEST_DFTT_DIR=...")
     run_parser.add_argument("--cmake-arg", action="append", default=[],
                             help="extra cmake configure argument, e.g. "
                                  "-DNTFS_BROWSER_TEST_DFTT_DIR=...")
@@ -345,7 +351,8 @@ def main():
     tests_exe = find_binary(build, "NtfsBrowserTests")
     fuzzer_exe = find_binary(build, "NtfsFuzzerAfl")
     if not args.skip_tests:
-        run_tests(tests_exe, work, env, args.require_data)
+        extra_env = dict(item.split("=", 1) for item in args.env)
+        run_tests(tests_exe, work, env, args.require_data, extra_env)
     report(tools, work, tests_exe, fuzzer_exe)
 
 

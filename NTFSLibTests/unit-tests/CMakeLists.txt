@@ -65,6 +65,11 @@ set(
   "utf-tests.cpp"
   "upcase-collation-tests.cpp"
   "efs-disabled-tests.cpp"
+  "coverage-file-record-a-tests.cpp"
+  "coverage-file-record-b-tests.cpp"
+  "coverage-volume-tree-tests.cpp"
+  "coverage-nonresident-index-tests.cpp"
+  "coverage-attrs-tests.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/gap-collation-probe.h"
 )
@@ -86,6 +91,7 @@ if(NTFS_BROWSER_EFS_MASTER)
     "efs-test-support.cpp"
     "efs-pfx-tests.cpp"
     "efs-tests.cpp"
+    "coverage-efs-tests.cpp"
     "nps-ntfs1-efs-tests.cpp"
   )
 endif()
