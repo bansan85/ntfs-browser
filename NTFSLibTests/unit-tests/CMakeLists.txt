@@ -117,15 +117,12 @@ target_compile_definitions(
   PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
 )
 
-# Crypto++: efs-test-support.cpp's own reference cipher for building EFS test
-# fixtures, independent of NTFS_BROWSER_ENABLE_EFS_CRYPTOPP (the library's own
-# use of Crypto++) - not narrowed to it, unlike the library's link above, since
-# a BCrypt-only library configuration still needs this reference to test
-# against. It follows the same "EFS master" condition the root CMakeLists.txt
-# uses to decide whether Crypto++ is configured at all: that target does not
-# exist when the condition is false, and efs-test-support.cpp is excluded from
-# the source list above in that case too, so nothing here needs it then.
-if(NTFS_BROWSER_EFS_MASTER)
+# Crypto++: efs-test-support.cpp's reference cipher for building EFS test
+# fixtures, and md5-test-support.cpp's MD5. Without it, both fall back to
+# BCrypt (Windows only, linked below). The cryptopp::cryptopp target only
+# exists when the root CMakeLists.txt configured Crypto++, that is when
+# NTFS_BROWSER_ENABLE_EFS_CRYPTOPP is on.
+if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
   target_link_libraries(NtfsBrowserTests PRIVATE cryptopp::cryptopp)
 endif()
 

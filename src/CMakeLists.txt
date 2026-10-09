@@ -150,10 +150,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)
 # header.
 target_link_libraries(${PROJECT_NAME} PRIVATE frozen::frozen)
 # Private too: Crypto++ and the Windows crypto libraries stay out of the API.
-# Narrower than the root CMakeLists.txt "EFS master" gate that decides whether
-# Crypto++ is configured at all: the shipped library stays Crypto++-free
-# whenever it does not itself use that backend, even though the local build tree
-# still builds Crypto++ as the unit tests' own reference cipher.
+# The shipped library stays Crypto++-free whenever it does not itself use that
+# backend.
 if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
   target_link_libraries(${PROJECT_NAME} PRIVATE cryptopp::cryptopp)
 endif()

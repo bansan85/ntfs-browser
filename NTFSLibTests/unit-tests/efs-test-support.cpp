@@ -8,14 +8,34 @@
 #include <random>
 #include <utility>
 
-#include <cryptopp/aes.h>
-#include <cryptopp/des.h>
 #include <gsl/narrow>
-// Silences the weak-algorithm notice: MD5 is what the DESX key expansion uses.
-// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-#include <cryptopp/md5.h>
-#include <cryptopp/modes.h>
+
+// The reference cipher is Crypto++ when it is compiled in, BCrypt otherwise.
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
+
+  #include <cryptopp/aes.h>
+  #include <cryptopp/des.h>
+  // Silences the weak-algorithm notice: MD5 is what the DESX key expansion
+  // uses.
+  // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+  #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
+  #include <cryptopp/md5.h>
+  #include <cryptopp/modes.h>
+
+#elif defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
+
+  #include <array>
+  #include <cwchar>
+  #include <format>
+  #include <stdexcept>
+
+  #include <bcrypt.h>
+
+#else
+
+  #error "efs-test-support.cpp needs Crypto++ or, on Windows, BCrypt"
+
+#endif
 
 namespace NtfsBrowserTests {
 
@@ -100,13 +120,21 @@ std::vector<BYTE> SectorIv(ULONGLONG offset, size_t block_size) {
   return initialization_vector;
 }
 
+// Pads the plaintext with zeros up to a whole number of sectors.
+std::vector<BYTE> PadToSectors(std::span<const BYTE> plaintext) {
+  std::vector<BYTE> data(plaintext.begin(), plaintext.end());
+  data.resize(((data.size() + sector_value - 1) / sector_value) * sector_value,
+              0);
+  return data;
+}
+
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
+
 template <class BlockCipher>
 std::vector<BYTE> EncryptWith(std::span<const BYTE> key,
                               std::span<const BYTE> plaintext,
                               ULONGLONG stream_offset) {
-  std::vector<BYTE> data(plaintext.begin(), plaintext.end());
-  data.resize(((data.size() + sector_value - 1) / sector_value) * sector_value,
-              0);
+  std::vector<BYTE> data = PadToSectors(plaintext);
 
   typename BlockCipher::Encryption cipher;
   cipher.SetKey(key.data(), key.size());
@@ -123,6 +151,175 @@ std::vector<BYTE> EncryptWith(std::span<const BYTE> key,
   return data;
 }
 
+std::vector<BYTE> EncryptAes(std::span<const BYTE> key,
+                             std::span<const BYTE> plaintext,
+                             ULONGLONG stream_offset) {
+  return EncryptWith<CryptoPP::AES>(key, plaintext, stream_offset);
+}
+
+std::vector<BYTE> Encrypt3Des(std::span<const BYTE> key,
+                              std::span<const BYTE> plaintext,
+                              ULONGLONG stream_offset) {
+  return EncryptWith<CryptoPP::DES_EDE3>(key, plaintext, stream_offset);
+}
+
+// MD5 of "first" followed by "second".
+std::array<BYTE, md5_digest_size> Md5Of(std::span<const BYTE> first,
+                                        std::span<const BYTE> second) {
+  std::array<BYTE, md5_digest_size> digest{};
+  CryptoPP::Weak::MD5 hash;
+  hash.Update(first.data(), first.size());
+  hash.Update(second.data(), second.size());
+  hash.Final(digest.data());
+  return digest;
+}
+
+// Single-block DES in ECB mode: the core of the hand-written DESX.
+class DesBlockCipher {
+ public:
+  explicit DesBlockCipher(std::span<const BYTE> key) {
+    des_.SetKey(key.data(), key.size());
+  }
+
+  void ProcessBlock(BYTE* block) const { des_.ProcessBlock(block); }
+
+ private:
+  CryptoPP::DES::Encryption des_;
+};
+
+#else
+
+void CheckStatus(NTSTATUS status, const char* what) {
+  if (!BCRYPT_SUCCESS(status)) {
+    throw std::runtime_error(
+        std::format("{} failed: 0x{:08x}", what, static_cast<ULONG>(status)));
+  }
+}
+
+// An open BCrypt algorithm provider, set to one chaining mode.
+class BcryptAlgorithm {
+ public:
+  BcryptAlgorithm(LPCWSTR algorithm_id, LPCWSTR chaining_mode) {
+    CheckStatus(BCryptOpenAlgorithmProvider(&handle_, algorithm_id, nullptr, 0),
+                "BCryptOpenAlgorithmProvider");
+    // The property value is the mode name with its terminating NUL.
+    const size_t mode_bytes = (std::wcslen(chaining_mode) + 1) * sizeof(WCHAR);
+    CheckStatus(BCryptSetProperty(
+                    handle_, BCRYPT_CHAINING_MODE,
+                    reinterpret_cast<PUCHAR>(const_cast<LPWSTR>(chaining_mode)),
+                    gsl::narrow<ULONG>(mode_bytes), 0),
+                "BCryptSetProperty");
+  }
+
+  BcryptAlgorithm(const BcryptAlgorithm&) = delete;
+  BcryptAlgorithm& operator=(const BcryptAlgorithm&) = delete;
+
+  ~BcryptAlgorithm() { BCryptCloseAlgorithmProvider(handle_, 0); }
+
+  [[nodiscard]] BCRYPT_ALG_HANDLE Get() const noexcept { return handle_; }
+
+ private:
+  BCRYPT_ALG_HANDLE handle_ = nullptr;
+};
+
+// A BCrypt symmetric key. Encrypts without padding, so the data MUST be a
+// whole number of blocks.
+class BcryptKey {
+ public:
+  BcryptKey(const BcryptAlgorithm& algorithm, std::span<const BYTE> key) {
+    CheckStatus(BCryptGenerateSymmetricKey(algorithm.Get(), &handle_, nullptr,
+                                           0, const_cast<PUCHAR>(key.data()),
+                                           gsl::narrow<ULONG>(key.size()), 0),
+                "BCryptGenerateSymmetricKey");
+  }
+
+  BcryptKey(const BcryptKey&) = delete;
+  BcryptKey& operator=(const BcryptKey&) = delete;
+
+  ~BcryptKey() { BCryptDestroyKey(handle_); }
+
+  // Encrypts "data" in place. "iv" is consumed by the call: pass a copy.
+  void Encrypt(std::span<BYTE> data, std::span<BYTE> iv) const {
+    std::vector<BYTE> out(data.size());
+    ULONG written = 0;
+    CheckStatus(BCryptEncrypt(handle_, data.data(),
+                              gsl::narrow<ULONG>(data.size()), nullptr,
+                              iv.empty() ? nullptr : iv.data(),
+                              gsl::narrow<ULONG>(iv.size()), out.data(),
+                              gsl::narrow<ULONG>(out.size()), &written, 0),
+                "BCryptEncrypt");
+    std::ranges::copy(out, data.begin());
+  }
+
+ private:
+  BCRYPT_KEY_HANDLE handle_ = nullptr;
+};
+
+// AES or 3DES in CBC mode, one fresh IV per sector, as EFS does.
+std::vector<BYTE> EncryptCbc(LPCWSTR algorithm_id, size_t block_size,
+                             std::span<const BYTE> key,
+                             std::span<const BYTE> plaintext,
+                             ULONGLONG stream_offset) {
+  std::vector<BYTE> data = PadToSectors(plaintext);
+
+  const BcryptAlgorithm algorithm(algorithm_id, BCRYPT_CHAIN_MODE_CBC);
+  const BcryptKey cipher(algorithm, key);
+  for (size_t done = 0; done < data.size(); done += sector_value) {
+    std::vector<BYTE> initialization_vector =
+        SectorIv(stream_offset + done, block_size);
+    // done < data.size() by the loop condition, which is sector-aligned.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    cipher.Encrypt(std::span<BYTE>(&data[done], sector_value),
+                   initialization_vector);
+  }
+  return data;
+}
+
+std::vector<BYTE> EncryptAes(std::span<const BYTE> key,
+                             std::span<const BYTE> plaintext,
+                             ULONGLONG stream_offset) {
+  return EncryptCbc(BCRYPT_AES_ALGORITHM, aes_block_size, key, plaintext,
+                    stream_offset);
+}
+
+std::vector<BYTE> Encrypt3Des(std::span<const BYTE> key,
+                              std::span<const BYTE> plaintext,
+                              ULONGLONG stream_offset) {
+  return EncryptCbc(BCRYPT_3DES_ALGORITHM, des_block_size, key, plaintext,
+                    stream_offset);
+}
+
+// MD5 of "first" followed by "second".
+std::array<BYTE, md5_digest_size> Md5Of(std::span<const BYTE> first,
+                                        std::span<const BYTE> second) {
+  std::vector<BYTE> joined(first.begin(), first.end());
+  joined.insert(joined.end(), second.begin(), second.end());
+  std::array<BYTE, md5_digest_size> digest{};
+  CheckStatus(BCryptHash(BCRYPT_MD5_ALG_HANDLE, nullptr, 0, joined.data(),
+                         gsl::narrow<ULONG>(joined.size()), digest.data(),
+                         gsl::narrow<ULONG>(digest.size())),
+              "BCryptHash");
+  return digest;
+}
+
+// Single-block DES in ECB mode: the core of the hand-written DESX.
+class DesBlockCipher {
+ public:
+  explicit DesBlockCipher(std::span<const BYTE> key)
+      : algorithm_(BCRYPT_DES_ALGORITHM, BCRYPT_CHAIN_MODE_ECB),
+        key_(algorithm_, key) {}
+
+  void ProcessBlock(BYTE* block) const {
+    key_.Encrypt(std::span<BYTE>(block, des_block_size), {});
+  }
+
+ private:
+  BcryptAlgorithm algorithm_;
+  BcryptKey key_;
+};
+
+#endif
+
 // Encrypts as EFS does with DESX, written out by hand: a 128-bit FEK is
 // expanded with MD5 into a DES key and two whitening keys, and each block is
 // out_whitening ^ DES(block ^ prev ^ in_whitening), chained per sector.
@@ -134,12 +331,9 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
   constexpr std::array<char, desx_salt_size> salt2{"Scott Field"};
 
   const auto digest = [&key](const std::array<char, desx_salt_size>& salt) {
-    std::array<BYTE, md5_digest_size> digest{};
-    CryptoPP::Weak::MD5 hash;
-    hash.Update(key.data(), key.size());
-    hash.Update(reinterpret_cast<const BYTE*>(salt.data()), salt.size());
-    hash.Final(digest.data());
-    return digest;
+    return Md5Of(
+        key, std::span<const BYTE>(reinterpret_cast<const BYTE*>(salt.data()),
+                                   salt.size()));
   };
 
   const std::array<BYTE, md5_digest_size> md1 = digest(salt1);
@@ -162,12 +356,9 @@ std::vector<BYTE> EncryptDesx(std::span<const BYTE> key,
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::memcpy(&in_whitening, &md2[sizeof(out_whitening)], sizeof(in_whitening));
 
-  CryptoPP::DES::Encryption des;
-  des.SetKey(des_key.data(), des_key.size());
+  const DesBlockCipher des(des_key);
 
-  std::vector<BYTE> data(plaintext.begin(), plaintext.end());
-  data.resize(((data.size() + sector_value - 1) / sector_value) * sector_value,
-              0);
+  std::vector<BYTE> data = PadToSectors(plaintext);
   for (size_t done = 0; done < data.size(); done += sector_value) {
     const auto initialization_vector =
         SectorIv(stream_offset + done, des_block_size);
@@ -291,9 +482,9 @@ std::vector<BYTE> EfsEncrypt(Algorithm algorithm, std::span<const BYTE> key,
     case Algorithm::Aes128:
     case Algorithm::Aes192:
     case Algorithm::Aes256:
-      return EncryptWith<CryptoPP::AES>(key, plaintext, stream_offset);
+      return EncryptAes(key, plaintext, stream_offset);
     case Algorithm::_3Des:
-      return EncryptWith<CryptoPP::DES_EDE3>(key, plaintext, stream_offset);
+      return Encrypt3Des(key, plaintext, stream_offset);
     case Algorithm::Desx:
       return EncryptDesx(key, plaintext, stream_offset);
   }
