@@ -16,6 +16,8 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
+namespace Attr {
+
 template <class Resident, Strategy S>
 class AttrBitmap : public Resident {
  public:
@@ -38,5 +40,7 @@ class AttrBitmap : public Resident {
       IsClusterFree(ULONGLONG cluster);
 
 };  // AttrBitmap
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

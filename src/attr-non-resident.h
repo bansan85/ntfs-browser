@@ -22,11 +22,11 @@ class FileRecord;
 template <Strategy S>
 class NtfsVolume;
 
-namespace Attr {
+namespace Data {
 
 struct HeaderNonResident;
 
-}  // namespace Attr
+}  // namespace Data
 
 namespace Efs {
 
@@ -37,6 +37,8 @@ class Context;
 ////////////////////////////////
 // NonResident Attributes
 ////////////////////////////////
+namespace Attr {
+
 template <Strategy S>
 class AttrNonResident : public AttrBase<S> {
  public:
@@ -52,7 +54,7 @@ class AttrNonResident : public AttrBase<S> {
   friend class NtfsVolume<S>;
 
  private:
-  const Attr::HeaderNonResident& attr_header_nr_;
+  const Data::HeaderNonResident& attr_header_nr_;
   std::vector<Data::RunEntry> data_run_list_;
 
   // This instance's own VCN count; AppendRuns() extends it per merged instance.
@@ -138,5 +140,7 @@ class AttrNonResident : public AttrBase<S> {
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrNonResident
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

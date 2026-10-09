@@ -12,7 +12,7 @@
 
 #include <ntfs-browser/index-entry.h>
 
-#include "attr/filename.h"
+#include "data/filename.h"
 #include "flag/index-entry.h"
 #include "ntfs-common.h"
 
@@ -52,14 +52,14 @@ std::optional<std::string_view>
       return "Index Entry stream exceeds entry bounds";
     }
     const size_t available = index_entry.size - stream_offset;
-    if (available < offsetof(Attr::Filename, name)) {
+    if (available < offsetof(Data::Filename, name)) {
       return "Index Entry stream smaller than expected";
     }
 
     const auto& filename =
-        *reinterpret_cast<const Attr::Filename*>(&index_entry.stream);
+        *reinterpret_cast<const Data::Filename*>(&index_entry.stream);
     if (available <
-        offsetof(Attr::Filename, name) +
+        offsetof(Data::Filename, name) +
             (static_cast<size_t>(filename.name_length) * sizeof(WORD))) {
       return "Index Entry Filename name exceeds entry bounds";
     }
@@ -98,7 +98,7 @@ IndexEntryView::IndexEntryView(const Data::IndexEntry& index_entry)
     return;
   }
 
-  SetFilename(*reinterpret_cast<const Attr::Filename*>(&index_entry.stream));
+  SetFilename(*reinterpret_cast<const Data::Filename*>(&index_entry.stream));
 }
 
 void IndexEntryView::Rebind(const Data::IndexEntry& index_entry) {
@@ -108,7 +108,7 @@ void IndexEntryView::Rebind(const Data::IndexEntry& index_entry) {
   // rejected the name exactly as it did for the original.
   if (index_entry.stream_size != 0 && !ValidateIndexEntry(index_entry)) {
     CopyFilename(*this,
-                 *reinterpret_cast<const Attr::Filename*>(&index_entry.stream));
+                 *reinterpret_cast<const Data::Filename*>(&index_entry.stream));
   }
 }
 

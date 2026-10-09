@@ -22,7 +22,7 @@
 #include "ntfs-browser/win-types.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Attr {
 
 template <Strategy S>
 AttrIndexAlloc<S>::AttrIndexAlloc(const AttrHeaderCommon& ahc,
@@ -57,7 +57,8 @@ bool AttrIndexAlloc<S>::PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
   for (DWORD i = 0; i < sectors; i++) {
     // The last word of the i-th sector holds the USN.
     const size_t pos =
-        ((i + 1) * (FileRecordHeader::update_sequence_stride / sizeof(WORD))) -
+        ((i + 1) *
+         (Data::FileRecordHeader::update_sequence_stride / sizeof(WORD))) -
         1;
     // USN error
     if (pos >= block.size()) {
@@ -138,7 +139,7 @@ bool AttrIndexAlloc<S>::FixupIndexBlock(std::span<BYTE> block) {
   }
 
   const auto sectors =
-      gsl::narrow<DWORD>(FileRecordHeader::UpdateSequenceBlockCount(
+      gsl::narrow<DWORD>(Data::FileRecordHeader::UpdateSequenceBlockCount(
           this->GetIndexBlockSize(), ib_buf->size_of_us));
   if (!Data::IndexBlockUsOffsetInBounds(ib_buf->offset_of_us, sectors,
                                         this->GetIndexBlockSize())) {
@@ -248,4 +249,4 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
 template class AttrIndexAlloc<Strategy::FullCache>;
 template class AttrIndexAlloc<Strategy::NoCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

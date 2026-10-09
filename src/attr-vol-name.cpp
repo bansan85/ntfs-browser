@@ -8,7 +8,7 @@
 #include "ntfs-common.h"
 #include "utf.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Attr {
 
 template <typename Resident, Strategy S>
 AttrVolName<Resident, S>::AttrVolName(const AttrHeaderCommon& ahc,
@@ -36,4 +36,4 @@ std::wstring_view AttrVolName<Resident, S>::GetName() const noexcept {
 template class AttrVolName<AttrResidentFullCache, Strategy::FullCache>;
 template class AttrVolName<AttrResidentNoCache, Strategy::NoCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

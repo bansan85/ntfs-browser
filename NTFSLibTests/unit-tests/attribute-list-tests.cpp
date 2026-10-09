@@ -273,7 +273,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "AttrList resolves every entry in a densely-packed (real 26-byte "
     "stride) $ATTRIBUTE_LIST, not just those a multiple of "
-    "sizeof(Attr::AttributeList) apart",
+    "sizeof(Data::AttributeList) apart",
     "[attr-list][regression]", ((Strategy S), S), Strategy::NoCache,
     Strategy::FullCache) {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(

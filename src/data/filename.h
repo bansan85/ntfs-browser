@@ -9,7 +9,7 @@ enum class FilenameNamespace : BYTE;
 
 }  // namespace NtfsBrowser::Flag
 
-namespace NtfsBrowser::Attr {
+namespace NtfsBrowser::Data {
 
 struct Filename {
   ULONGLONG parent_ref;                // File reference to the parent directory
@@ -27,4 +27,4 @@ struct Filename {
   WORD name[1];  // Filename
 };
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NtfsBrowser::Data

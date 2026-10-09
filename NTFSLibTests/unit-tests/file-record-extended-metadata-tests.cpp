@@ -19,14 +19,14 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::AttrFileName;
-using NtfsBrowser::AttrResidentFullCache;
-using NtfsBrowser::AttrResidentNoCache;
 using NtfsBrowser::AttrType;
 using NtfsBrowser::Filename;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Attr::AttrFileName;
+using NtfsBrowser::Attr::AttrResidentFullCache;
+using NtfsBrowser::Attr::AttrResidentNoCache;
 using NtfsBrowserTests::FileTimeToTicks;
 
 namespace {

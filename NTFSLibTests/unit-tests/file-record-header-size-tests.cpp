@@ -17,10 +17,11 @@
 #include "catch2/matchers/catch_matchers.hpp"
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"
+#include "record/header.h"
 
-using NtfsBrowser::FileRecordHeader;
-using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Data::FileRecordHeader;
+using NtfsBrowser::Record::HeaderImpl;
 
 namespace {
 
@@ -34,7 +35,7 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t buffer_size,
   const WORD offset_of_us = gsl::narrow<WORD>(buffer_size - 2 * (1 + sectors));
 
   NtfsBrowserTests::EditFileRecordHeader(
-      storage, [&](FileRecordHeader::Data& header) {
+      storage, [&](FileRecordHeader& header) {
         header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = offset_of_us;
         header.size_of_us = gsl::narrow<WORD>(1 + sectors);
@@ -47,7 +48,7 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t buffer_size,
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
-    "FileRecordHeader must accept a well-formed 4096-byte buffer "
+    "Record::Header must accept a well-formed 4096-byte buffer "
     "(4Kn volumes)",
     "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
     Strategy::FullCache) {
@@ -58,12 +59,12 @@ TEMPLATE_TEST_CASE_SIG(
 
   // FullCache's ctor memcpy()s the whole buffer into a fixed-size Data
   // member; a too-small member here would overflow it.
-  const auto header = FileRecordHeaderImpl<S>(buffer);
+  const auto header = HeaderImpl<S>(buffer);
   CHECK(header.GetData()->magic == FileRecordHeader::file_record_magic);
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "FileRecordHeader must reject a buffer larger than max_file_record_size "
+    "Record::Header must reject a buffer larger than max_file_record_size "
     "with a clear, specific message",
     "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
     Strategy::FullCache) {
@@ -73,13 +74,13 @@ TEMPLATE_TEST_CASE_SIG(
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
   CHECK_THROWS_MATCHES(
-      (FileRecordHeaderImpl<S>(buffer)), std::runtime_error,
+      (HeaderImpl<S>(buffer)), std::runtime_error,
       Catch::Matchers::MessageMatches(
           Catch::Matchers::ContainsSubstring("exceeds the maximum")));
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "FileRecordHeader::HeaderCommon must bound offset_of_attr against this "
+    "Record::Header::HeaderCommon must bound offset_of_attr against this "
     "instance's own buffer size, not raw[]'s static capacity",
     "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
     Strategy::FullCache) {
@@ -91,7 +92,7 @@ TEMPLATE_TEST_CASE_SIG(
       MakeWellFormedBuffer(declared_buffer_size, offset_past_own_size);
   const std::span<const BYTE> buffer(storage.data(), storage.size());
 
-  const auto header = FileRecordHeaderImpl<S>(buffer);
+  const auto header = HeaderImpl<S>(buffer);
 
   // A larger offset_of_attr would build a pointer past the real,
   // 2048-byte allocation backing NoCache's span.

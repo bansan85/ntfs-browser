@@ -6,17 +6,13 @@
 #include "attr-resident.h"
 #include "ntfs-browser/win-types.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Attr {
 namespace {
 
 // Bits in one bitmap byte.
 constexpr unsigned bits_per_byte = 8;
 
 }  // namespace
-
-struct AttrHeaderCommon;
-template <Strategy S>
-class FileRecord;
 
 template <class Resident, Strategy S>
 AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
@@ -91,4 +87,4 @@ template class AttrBitmap<AttrNonResident<Strategy::NoCache>,
 template class AttrBitmap<AttrResidentFullCache, Strategy::FullCache>;
 template class AttrBitmap<AttrResidentNoCache, Strategy::NoCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

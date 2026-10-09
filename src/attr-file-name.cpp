@@ -8,13 +8,10 @@
 #include <ntfs-browser/strategy.h>
 
 #include "attr-resident.h"
-#include "attr/filename.h"
+#include "data/filename.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser {
-
-template <Strategy S>
-class FileRecord;
+namespace NtfsBrowser::Attr {
 
 template <typename Resident, Strategy S>
 AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
@@ -22,15 +19,15 @@ AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
     : Resident(ahc, file_record) {
   Log::Trace("Attribute: File Name");
 
-  if (this->GetDataSize() < offsetof(Attr::Filename, name)) {
+  if (this->GetDataSize() < offsetof(Data::Filename, name)) {
     throw std::runtime_error("File Name attribute smaller than expected.\n");
   }
 
   const auto& filename =
-      *reinterpret_cast<const Attr::Filename*>(this->GetData());
+      *reinterpret_cast<const Data::Filename*>(this->GetData());
   // Attribute size MUST cover fixed header and name data.
   if (this->GetDataSize() <
-      offsetof(Attr::Filename, name) +
+      offsetof(Data::Filename, name) +
           (static_cast<ULONGLONG>(filename.name_length) * sizeof(WORD))) {
     throw std::runtime_error(
         "File Name attribute name exceeds attribute bounds.\n");
@@ -47,4 +44,4 @@ AttrFileName<Resident, S>::~AttrFileName() {
 template class AttrFileName<AttrResidentFullCache, Strategy::FullCache>;
 template class AttrFileName<AttrResidentNoCache, Strategy::NoCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

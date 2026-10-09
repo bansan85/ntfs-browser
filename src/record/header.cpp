@@ -1,4 +1,4 @@
-#include "file-record-header.h"
+#include "record/header.h"
 
 #include <ntfs-browser/win-types.h>
 
@@ -9,27 +9,27 @@
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/strategy.h>
 
-#include "../internal-export.h"
-#include "../ntfs-common.h"
+#include "internal-export.h"
+#include "ntfs-common.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Record {
 
-FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
-    : buffer_size(buffer.size()) {
-  if (buffer.size() < min_file_record_header_size) {
+Header::Header(std::span<const BYTE> buffer) : buffer_size(buffer.size()) {
+  if (buffer.size() < Data::FileRecordHeader::min_file_record_header_size) {
     throw std::runtime_error(
-        "Buffer size of FileRecordHeader is smaller than the minimum file "
+        "Buffer size of Record::Header is smaller than the minimum file "
         "record header size.");
   }
-  if (buffer.size() > max_file_record_size) {
+  if (buffer.size() > Data::FileRecordHeader::max_file_record_size) {
     throw std::runtime_error(
-        "Buffer size of FileRecordHeader exceeds the maximum supported file "
+        "Buffer size of Record::Header exceeds the maximum supported file "
         "record size.");
   }
 
-  const Data* data = reinterpret_cast<const Data*>(buffer.data());
+  const auto* data =
+      reinterpret_cast<const Data::FileRecordHeader*>(buffer.data());
 
-  if (data->magic != file_record_magic) {
+  if (data->magic != Data::FileRecordHeader::file_record_magic) {
     us_number = 0;
     return;
   }
@@ -39,8 +39,8 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
   }
 
   // A forged offset_of_us can place the array past the buffer's end.
-  const size_t sectors =
-      UpdateSequenceBlockCount(buffer.size(), data->size_of_us);
+  const size_t sectors = Data::FileRecordHeader::UpdateSequenceBlockCount(
+      buffer.size(), data->size_of_us);
   if (data->offset_of_us + 2 * (1 + sectors) > buffer.size()) {
     throw std::runtime_error(
         "Update Sequence Array does not fit within the file record "
@@ -62,7 +62,7 @@ FileRecordHeader::FileRecordHeader(std::span<const BYTE> buffer)
   }
 }
 
-bool FileRecordHeader::PatchUS() noexcept {
+bool Header::PatchUS() noexcept {
   // The update sequence is patched in place, in the buffer the caller owns.
   // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
   const std::span<WORD> words(
@@ -72,7 +72,7 @@ bool FileRecordHeader::PatchUS() noexcept {
   size_t pos = 0;
   for (WORD const value : us_array) {
     // The last word of each sector holds the USN.
-    pos += (update_sequence_stride / sizeof(WORD)) - 1;
+    pos += (Data::FileRecordHeader::update_sequence_stride / sizeof(WORD)) - 1;
     if (pos >= words.size()) {
       return false;
     }
@@ -90,7 +90,7 @@ bool FileRecordHeader::PatchUS() noexcept {
   return true;
 }
 
-const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept {
+const AttrHeaderCommon* Header::HeaderCommon() const noexcept {
   WORD const offset_of_attr = GetData()->offset_of_attr;
   if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size) {
     Log::Warn("Offset of attr must be within the file record buffer");
@@ -100,24 +100,20 @@ const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept {
       &GetData()->raw[offset_of_attr]);
 }
 
-FileRecordHeaderImpl<Strategy::NoCache>::FileRecordHeaderImpl(
-    std::span<const BYTE> buffer)
-    : FileRecordHeader(buffer), data(buffer) {}
+HeaderImpl<Strategy::NoCache>::HeaderImpl(std::span<const BYTE> buffer)
+    : Header(buffer), data(buffer) {}
 
-const FileRecordHeader::Data*
-    FileRecordHeaderImpl<Strategy::NoCache>::GetData() const {
-  return reinterpret_cast<const Data*>(data.data());
+const Data::FileRecordHeader* HeaderImpl<Strategy::NoCache>::GetData() const {
+  return reinterpret_cast<const Data::FileRecordHeader*>(data.data());
 }
 
-FileRecordHeaderImpl<Strategy::FullCache>::FileRecordHeaderImpl(
-    std::span<const BYTE> buffer)
-    : FileRecordHeader(buffer) {
+HeaderImpl<Strategy::FullCache>::HeaderImpl(std::span<const BYTE> buffer)
+    : Header(buffer) {
   memcpy(&data.raw[0], buffer.data(), buffer.size());
 }
 
-const FileRecordHeader::Data*
-    FileRecordHeaderImpl<Strategy::FullCache>::GetData() const {
+const Data::FileRecordHeader* HeaderImpl<Strategy::FullCache>::GetData() const {
   return &data;
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Record

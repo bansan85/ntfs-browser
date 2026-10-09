@@ -16,7 +16,7 @@
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 #include <ntfs-browser/strategy.h>
 
-#include "attr/header-non-resident.h"
+#include "data/header-non-resident.h"
 #include "data/run-entry.h"
 #include "ntfs-browser/win-types.h"
 #include "ntfs-common.h"
@@ -29,10 +29,7 @@
   #include "lznt1/decompress.h"
 #endif
 
-namespace NtfsBrowser {
-
-template <Strategy S>
-class FileRecord;
+namespace NtfsBrowser::Attr {
 
 namespace {
 
@@ -47,7 +44,7 @@ constexpr ULONGLONG max_compression_unit_size = 1024ULL * 1024ULL;
 // Clusters an attribute header spans. last_vcn is inclusive, so an empty
 // attribute stores it as -1 (all ones) with start_vcn 0: that is 0 clusters,
 // not a count that wraps.
-constexpr ULONGLONG SpannedClusters(const Attr::HeaderNonResident& header) {
+constexpr ULONGLONG SpannedClusters(const Data::HeaderNonResident& header) {
   const ULONGLONG span = header.last_vcn - header.start_vcn;
   return span == std::numeric_limits<ULONGLONG>::max() ? 0 : span + 1;
 }
@@ -58,11 +55,11 @@ template <Strategy S>
 AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
                                     const FileRecord<S>& file_record)
     : AttrBase<S>(ahc, file_record),
-      attr_header_nr_(reinterpret_cast<const Attr::HeaderNonResident&>(ahc)),
+      attr_header_nr_(reinterpret_cast<const Data::HeaderNonResident&>(ahc)),
       merged_clusters_(SpannedClusters(attr_header_nr_)) {
   // total_size already covers this field (ParseAttrs()); start_vcn must be
   // unit-aligned or units decode against the wrong window.
-  if (Attr::HasCompressedSizeField(attr_header_nr_)) {
+  if (Data::HasCompressedSizeField(attr_header_nr_)) {
 #ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
     // Decompression is not compiled in: reject a compressed attribute
     // outright, exactly as before compression support existed.
@@ -90,7 +87,7 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
         "Compressed attribute: {} clusters ({} bytes) per compression unit",
         comp_unit_clusters_, unit_size);
     Log::Debug("Compressed size = {} bytes",
-               Attr::CompressedSize(attr_header_nr_));
+               Data::CompressedSize(attr_header_nr_));
 #endif
   }
 
@@ -869,4 +866,4 @@ void AttrNonResident<S>::AppendRuns(const AttrNonResident& other) {
 template class AttrNonResident<Strategy::NoCache>;
 template class AttrNonResident<Strategy::FullCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

@@ -4,7 +4,7 @@
 #include "ntfs-browser/win-types.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Attr {
 
 IndexBlock::IndexBlock() noexcept { Log::Trace("Index Block"); }
 
@@ -17,4 +17,4 @@ std::span<BYTE> IndexBlock::AllocIndexBlock(DWORD size) {
   return bytes_;
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

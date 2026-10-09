@@ -4,7 +4,7 @@
 
 #include <ntfs-browser/data/attr-type.h>
 
-namespace NtfsBrowser::Attr {
+namespace NtfsBrowser::Data {
 
 struct IndexRoot {
   // Index Root Header
@@ -25,4 +25,4 @@ struct IndexRoot {
   BYTE padding2[3];  // Padding
 };
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NtfsBrowser::Data

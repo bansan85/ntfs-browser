@@ -4,7 +4,7 @@
 
 #include <ntfs-browser/data/attr-header-common.h>
 
-namespace NtfsBrowser::Attr {
+namespace NtfsBrowser::Data {
 
 struct HeaderResident {
   AttrHeaderCommon header;  // Common data structure
@@ -14,4 +14,4 @@ struct HeaderResident {
   BYTE padding;             // Padding
 };
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NtfsBrowser::Data

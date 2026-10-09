@@ -22,6 +22,13 @@ class NtfsVolume;
 class IndexEntry;
 class IndexEntryView;
 
+namespace Attr {
+
+template <class Resident, Strategy S>
+class AttrList;
+
+}  // namespace Attr
+
 // User defined Callback routine to handle Directory traversing
 // Will be called by FileRecord::TraverseSubEntries for each sub entry. The
 // view is only valid during the call: build an IndexEntry from it to keep it.
@@ -52,7 +59,7 @@ class NTFS_BROWSER_EXPORT FileRecord {
   friend class AttrBase<S>;
   friend class NtfsVolume<S>;
   template <class Resident, Strategy>
-  friend class AttrList;
+  friend class Attr::AttrList;
 
  private:
   // Every member and private method, kept out of this header.

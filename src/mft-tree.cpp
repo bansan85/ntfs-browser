@@ -48,11 +48,11 @@ constexpr ULONGLONG progress_interval = 4096;
 template <Strategy S>
 const Filename& AsFilename(const AttrBase<S>& attr) {
   if constexpr (S == Strategy::NoCache) {
-    return static_cast<
-        const AttrFileName<AttrResidentNoCache, Strategy::NoCache>&>(attr);
+    return static_cast<const Attr::AttrFileName<Attr::AttrResidentNoCache,
+                                                Strategy::NoCache>&>(attr);
   } else {
-    return static_cast<
-        const AttrFileName<AttrResidentFullCache, Strategy::FullCache>&>(attr);
+    return static_cast<const Attr::AttrFileName<Attr::AttrResidentFullCache,
+                                                Strategy::FullCache>&>(attr);
   }
 }
 

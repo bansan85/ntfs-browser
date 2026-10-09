@@ -1,4 +1,4 @@
-#include "attr/filename.h"
+#include "data/filename.h"
 
 #include <ntfs-browser/win-types.h>
 
@@ -20,7 +20,7 @@
 
 namespace NtfsBrowser {
 
-void Filename::SetFilename(const Attr::Filename& filename) {
+void Filename::SetFilename(const Data::Filename& filename) {
   filename_ = &filename;
 
   GetFilenameWUC();
@@ -28,7 +28,7 @@ void Filename::SetFilename(const Attr::Filename& filename) {
 
 // Copy pointer buffers
 void Filename::CopyFilename(const Filename& filename,
-                            const Attr::Filename& afn) {
+                            const Data::Filename& afn) {
   Log::Trace("Filename Copied");
 
   filename_ = &afn;
@@ -39,12 +39,12 @@ void Filename::CopyFilename(const Filename& filename,
 void Filename::GetFilenameWUC() const { (void)GetFilename(); }
 
 int Filename::Compare(std::wstring_view file_name) const noexcept {
-  return Compare(file_name, UpCaseTable::BuiltIn());
+  return Compare(file_name, UpCase::Table::BuiltIn());
 }
 
 // Only the decoded name is compared: the on-disk one isn't null-terminated.
 int Filename::Compare(std::wstring_view file_name,
-                      const UpCaseTable& upcase) const noexcept {
+                      const UpCase::Table& upcase) const noexcept {
   return upcase.Compare(file_name, filename_wuc_);
 }
 
@@ -163,23 +163,30 @@ void Filename::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
                            FILETIME* access_tm,
                            FILETIME* change_tm) const noexcept {
   if (write_tm != nullptr) {
-    AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>::UTC2Local(
-        filename_ != nullptr ? filename_->alter_time : 0, *write_tm);
+    Attr::AttrStdInfo<Attr::AttrResidentFullCache, Strategy::FullCache>::
+        UTC2Local(filename_ != nullptr ? filename_->alter_time : 0, *write_tm);
   }
 
   if (create_tm != nullptr) {
-    AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>::UTC2Local(
-        filename_ != nullptr ? filename_->create_time : 0, *create_tm);
+    Attr::AttrStdInfo<Attr::AttrResidentFullCache, Strategy::FullCache>::
+        UTC2Local(filename_ != nullptr ? filename_->create_time : 0,
+                  *create_tm);
   }
 
   if (access_tm != nullptr) {
-    AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>::UTC2Local(
-        filename_ != nullptr ? filename_->read_time : 0, *access_tm);
+    Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                      Strategy::FullCache>::UTC2Local(filename_ != nullptr
+                                                          ? filename_->read_time
+                                                          : 0,
+                                                      *access_tm);
   }
 
   if (change_tm != nullptr) {
-    AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>::UTC2Local(
-        filename_ != nullptr ? filename_->mft_time : 0, *change_tm);
+    Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                      Strategy::FullCache>::UTC2Local(filename_ != nullptr
+                                                          ? filename_->mft_time
+                                                          : 0,
+                                                      *change_tm);
   }
 }
 

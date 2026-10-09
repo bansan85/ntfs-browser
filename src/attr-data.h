@@ -7,6 +7,8 @@
 
 namespace NtfsBrowser {
 
+namespace Attr {
+
 template <class Resident, Strategy S>
 class AttrData : public Resident {
  public:
@@ -23,5 +25,7 @@ class AttrData : public Resident {
 
   ~AttrData() override { Log::Trace("AttrData deleted"); }
 };  // AttrData
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

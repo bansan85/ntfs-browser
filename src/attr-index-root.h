@@ -13,11 +13,13 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace Attr {
+namespace Data {
 
 struct IndexRoot;
 
-}  // namespace Attr
+}  // namespace Data
+
+namespace Attr {
 
 template <typename Resident, Strategy S>
 class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
@@ -33,7 +35,7 @@ class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
   friend class FileRecord;
 
  private:
-  const Attr::IndexRoot* index_root_;
+  const Data::IndexRoot* index_root_;
   // A private copy of the resident data, which the entries are views into.
   std::vector<BYTE> index_data_;
   // Aligned copies of the entries that sit at a misaligned address in
@@ -43,5 +45,7 @@ class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
   [[nodiscard]] bool ParseIndexEntries();
   [[nodiscard]] bool IsFileName() const noexcept;
 };  // AttrIndexRoot
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

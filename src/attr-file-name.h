@@ -11,8 +11,10 @@ enum class Strategy : std::uint8_t;
 template <Strategy S>
 class FileRecord;
 
+namespace Attr {
+
 template <typename Resident, Strategy S>
-class AttrFileName : public Resident, public Filename {
+class AttrFileName : public Resident, public NtfsBrowser::Filename {
  public:
   AttrFileName(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record);
   AttrFileName(AttrFileName&& other) noexcept = delete;
@@ -21,5 +23,7 @@ class AttrFileName : public Resident, public Filename {
   AttrFileName& operator=(const AttrFileName& other) = delete;
   ~AttrFileName() override;
 };  // AttrFileName
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

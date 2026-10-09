@@ -22,18 +22,18 @@
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/mft-idx.h>
 
-#include "attr/attribute-list.h"
-#include "attr/filename.h"
 #include "attr/flags.h"
-#include "attr/header-non-resident.h"
-#include "attr/header-resident.h"
-#include "attr/index-root.h"
-#include "attr/standard-information.h"
-#include "attr/volume-information.h"
+#include "data/attribute-list.h"
 #include "data/file-record-header.h"
+#include "data/filename.h"
+#include "data/header-non-resident.h"
+#include "data/header-resident.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
+#include "data/index-root.h"
 #include "data/ntfs-bpb.h"
+#include "data/standard-information.h"
+#include "data/volume-information.h"
 #include "efs/efs-context.h"
 #include "file-record-header-edit.h"
 #include "flag/file-record.h"
@@ -48,7 +48,7 @@
 namespace NtfsBrowserTests {
 
 using NtfsBrowser::AttrType;
-using NtfsBrowser::FileRecordHeader;
+using NtfsBrowser::Data::FileRecordHeader;
 using NtfsBrowser::Data::index_block_magic;
 using NtfsBrowser::Enum::MftIdx;
 
@@ -61,7 +61,7 @@ constexpr BYTE sectors_per_cluster = fake_sectors_per_cluster;
 constexpr DWORD cluster_size = fake_cluster_size;
 // $MFT sits in the first cluster after the boot sector.
 constexpr ULONGLONG mft_lcn = 1;
-// Right after FileRecordHeader::Data's fixed header fields.
+// Right after Data::FileRecordHeader's fixed header fields.
 constexpr WORD attr_offset_value = 48;
 
 // Size of the fixup slot a block ends with: the USN, then one word per sector.
@@ -131,7 +131,7 @@ constexpr unsigned pattern_mul = 31U;
 constexpr unsigned pattern_add = 7U;
 constexpr unsigned pattern_mod = 251U;
 
-static_assert(attr_offset_value + sizeof(NtfsBrowser::Attr::HeaderNonResident) +
+static_assert(attr_offset_value + sizeof(NtfsBrowser::Data::HeaderNonResident) +
                       run_list_room <
                   offset_of_us_value,
               "attribute data must not reach into the fixup slot");
@@ -178,7 +178,7 @@ FakeRecord MakeRecordHeader(WORD offset_of_attr,
                             NtfsBrowser::Flag::FileRecord flags) {
   FakeRecord record{};
 
-  EditFileRecordHeader(record, [&](FileRecordHeader::Data& header) {
+  EditFileRecordHeader(record, [&](FileRecordHeader& header) {
     header.magic = FileRecordHeader::file_record_magic;
     header.offset_of_us = offset_of_us_value;
     header.size_of_us = 3;
@@ -192,7 +192,7 @@ FakeRecord MakeRecordHeader(WORD offset_of_attr,
 // Makes record an extension record: its own sequence number, and the file
 // reference of the base record it belongs to.
 void SetRecordLink(FakeRecord& record, WORD sequence, ULONGLONG base_ref) {
-  EditFileRecordHeader(record, [&](FileRecordHeader::Data& header) {
+  EditFileRecordHeader(record, [&](FileRecordHeader& header) {
     header.seq_no = sequence;
     header.ref_to_base = base_ref;
   });
@@ -267,7 +267,7 @@ FakeRecord MakeMftRecord() {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 1;
@@ -297,7 +297,7 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters) {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 1;
@@ -342,10 +342,10 @@ FakeRecord MakeMftRecordWithDataContinuations(
   DWORD offset = attr_offset_value;
 
   const auto entry_size =
-      AlignAttrSize(NtfsBrowser::Attr::attribute_list_entry_header_size);
+      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size);
 
   auto& list_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   list_attr.header.type = AttrType::AttributeList;
   list_attr.header.non_resident = 0;
   list_attr.header.name_length = 0;
@@ -357,7 +357,7 @@ FakeRecord MakeMftRecordWithDataContinuations(
       AlignAttrSize(sizeof(list_attr) + list_attr.attr_size);
 
   for (size_t i = 0; i < continuations.size(); i++) {
-    auto& al_entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+    auto& al_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
         &record.at(offset + list_attr.attr_offset + i * entry_size));
     al_entry.attr_type = AttrType::Data;
     al_entry.record_size = gsl::narrow<WORD>(entry_size);
@@ -373,7 +373,7 @@ FakeRecord MakeMftRecordWithDataContinuations(
 
   offset += list_attr.header.total_size;
 
-  auto& data_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& data_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   data_attr.header.type = AttrType::Data;
   data_attr.header.non_resident = 1;
@@ -408,7 +408,7 @@ FakeRecord MakeMftDataContinuationExtensionRecord(ULONGLONG start_vcn,
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
   SetRecordLink(record, sequence, static_cast<ULONGLONG>(MftIdx::Mft));
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 1;
@@ -441,11 +441,11 @@ FakeRecord MakeMftDataContinuationExtensionRecord(ULONGLONG start_vcn,
 }
 
 // Builds a record with valid magic but offset_of_us == fake_file_record_size,
-// which FileRecordHeader's ctor rejects outright.
+// which Record::Header's ctor rejects outright.
 FakeRecord MakeInvalidOffsetOfUsRecord() {
   FakeRecord record{};
 
-  EditFileRecordHeader(record, [](FileRecordHeader::Data& header) {
+  EditFileRecordHeader(record, [](FileRecordHeader& header) {
     header.magic = FileRecordHeader::file_record_magic;
     header.offset_of_us = fake_file_record_size;
     header.size_of_us = 3;
@@ -460,7 +460,7 @@ FakeRecord MakeVolumeRecordSized(WORD attr_size) {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::VolumeInformation;
   attr.header.non_resident = 0;
@@ -471,7 +471,7 @@ FakeRecord MakeVolumeRecordSized(WORD attr_size) {
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& vol_info = *reinterpret_cast<NtfsBrowser::Attr::VolumeInformation*>(
+  auto& vol_info = *reinterpret_cast<NtfsBrowser::Data::VolumeInformation*>(
       &record.at(attr_offset_value + attr.attr_offset));
   vol_info.major_version = 3;
   vol_info.minor_version = 1;
@@ -483,7 +483,7 @@ FakeRecord MakeVolumeRecordSized(WORD attr_size) {
 
 FakeRecord MakeVolumeRecord() {
   return MakeVolumeRecordSized(
-      static_cast<WORD>(sizeof(NtfsBrowser::Attr::VolumeInformation)));
+      static_cast<WORD>(sizeof(NtfsBrowser::Data::VolumeInformation)));
 }
 
 // Builds a fake $Volume record carrying both VOLUME_INFORMATION (so the
@@ -491,11 +491,11 @@ FakeRecord MakeVolumeRecord() {
 FakeRecord MakeVolumeRecordWithName(std::wstring_view name) {
   FakeRecord record = MakeVolumeRecord();
 
-  const auto& vol_info = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  const auto& vol_info = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   const DWORD name_offset = attr_offset_value + vol_info.header.total_size;
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(name_offset));
   attr.header.type = AttrType::VolumeName;
   attr.header.non_resident = 0;
@@ -520,7 +520,7 @@ FakeRecord MakeStandardInformationRecordSized(WORD attr_size) {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::StandardInformation;
   attr.header.non_resident = 0;
@@ -531,7 +531,7 @@ FakeRecord MakeStandardInformationRecordSized(WORD attr_size) {
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& std_info = *reinterpret_cast<NtfsBrowser::Attr::StandardInformation*>(
+  auto& std_info = *reinterpret_cast<NtfsBrowser::Data::StandardInformation*>(
       &record.at(attr_offset_value + attr.attr_offset));
   std_info.create_time = std_info_create_time;
   std_info.alter_time = std_info_alter_time;
@@ -563,7 +563,7 @@ FakeRecord MakeAttributeListOnlyDirRecord() {
                                        NtfsBrowser::Flag::FileRecord::InUse |
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
@@ -571,15 +571,15 @@ FakeRecord MakeAttributeListOnlyDirRecord() {
   attr.header.flags = 0;
   attr.header.id = 0;
   attr.attr_size =
-      static_cast<DWORD>(NtfsBrowser::Attr::attribute_list_entry_header_size);
+      static_cast<DWORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& al_entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+  auto& al_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
       &record.at(attr_offset_value + attr.attr_offset));
   al_entry.attr_type = AttrType::IndexRoot;
   al_entry.record_size =
-      static_cast<WORD>(NtfsBrowser::Attr::attribute_list_entry_header_size);
+      static_cast<WORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
   al_entry.name_length = 0;
   al_entry.name_offset = 0;
   al_entry.start_vcn = 0;
@@ -601,7 +601,7 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG base_idx = 0) {
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
   SetRecordLink(record, 0, base_idx);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::IndexRoot;
   attr.header.non_resident = 0;
@@ -612,23 +612,23 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG base_idx = 0) {
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = fake_file_record_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1: "Foo", a regular (non-directory) file, reference 20.
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = first_entry_record;
   first_entry.mft_sn = 1;
 
   auto& filename =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   filename.parent_ref = attribute_list_dir_idx;
   filename.flags = NtfsBrowser::Flag::Filename::None;
   filename.name_length = 3;
@@ -650,7 +650,7 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG base_idx = 0) {
   // Entry 2: the terminating entry - no name, no sub-node.
   auto& second_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
                                         first_entry.size)));
   second_entry.flags = NtfsBrowser::Flag::IndexEntry::Last;
   second_entry.stream_size = 0;
@@ -662,7 +662,7 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG base_idx = 0) {
   root.alloc_entry_size = root.total_entry_size;
   root.flags = 0;
 
-  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
                    first_entry.size + second_entry.size;
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
@@ -679,9 +679,9 @@ FakeRecord MakeAttributeListTwoTypesDirRecord() {
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
   constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Attr::attribute_list_entry_header_size));
+      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
@@ -696,7 +696,7 @@ FakeRecord MakeAttributeListTwoTypesDirRecord() {
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
 
   auto& first_entry =
-      *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(body.data());
+      *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(body.data());
   first_entry.attr_type = AttrType::IndexRoot;
   first_entry.record_size = entry_size_value;
   first_entry.name_length = 0;
@@ -706,7 +706,7 @@ FakeRecord MakeAttributeListTwoTypesDirRecord() {
   first_entry.base_ref.sequence_number = 0;
   first_entry.attr_id = 0;
 
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
       &gsl::at(body, entry_size_value));
   second_entry.attr_type = AttrType::IndexAllocation;
   second_entry.record_size = entry_size_value;
@@ -730,7 +730,7 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
   SetRecordLink(record, 0, base_idx);
 
-  auto& root_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& root_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
@@ -741,23 +741,23 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
 
   const std::span<BYTE> body = std::span<BYTE>(record).subspan(
       attr_offset_value + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = fake_file_record_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1: "Foo", a regular (non-directory) file, reference 20.
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = first_entry_record;
   first_entry.mft_sn = 1;
 
   auto& filename =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   filename.parent_ref = attr_list_multi_type_dir_idx;
   filename.flags = NtfsBrowser::Flag::Filename::None;
   filename.name_length = 3;
@@ -779,7 +779,7 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
   // Entry 2: the terminating entry - no name, no sub-node.
   auto& second_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
                                         first_entry.size)));
   second_entry.flags = NtfsBrowser::Flag::IndexEntry::Last;
   second_entry.stream_size = 0;
@@ -792,14 +792,14 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size + second_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
 
   const DWORD alloc_attr_offset =
       attr_offset_value + root_attr.header.total_size;
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(alloc_attr_offset));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -831,10 +831,10 @@ FakeRecord MakeUndersizedResidentAttrRecord() {
 
   constexpr DWORD undersized_total_size = 17;
   static_assert(undersized_total_size <
-                    sizeof(NtfsBrowser::Attr::HeaderResident),
+                    sizeof(NtfsBrowser::Data::HeaderResident),
                 "total_size must be smaller than a resident attribute header");
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::ReparsePoint;
   attr.header.non_resident = 0;
@@ -843,7 +843,7 @@ FakeRecord MakeUndersizedResidentAttrRecord() {
   attr.header.id = 0;
   attr.header.total_size = undersized_total_size;
 
-  record.at(attr_offset_value + sizeof(NtfsBrowser::Attr::HeaderResident)) =
+  record.at(attr_offset_value + sizeof(NtfsBrowser::Data::HeaderResident)) =
       forged_byte;
 
   return record;
@@ -867,7 +867,7 @@ FakeRecord MakeIndexAllocDirRecord() {
   DWORD offset = attr_offset_value;
 
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -877,18 +877,18 @@ FakeRecord MakeIndexAllocDirRecord() {
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = forged_index_block_size;
   root.clusters_per_ib =
       static_cast<BYTE>(forged_index_block_size / cluster_size);
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = 0;
   first_entry.mft_sn = 0;
   first_entry.stream_size = 0;
@@ -905,14 +905,14 @@ FakeRecord MakeIndexAllocDirRecord() {
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
 
   offset += root_attr.header.total_size;
 
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -958,7 +958,7 @@ FakeRecord MakeIndexAllocationOnlyExtensionRecord(DWORD real_size,
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
   SetRecordLink(record, 0, base_idx);
 
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(attr_offset_value));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -991,9 +991,9 @@ FakeRecord MakeFragmentedAttributeListDirRecord() {
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
   constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Attr::attribute_list_entry_header_size));
+      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
@@ -1011,7 +1011,7 @@ FakeRecord MakeFragmentedAttributeListDirRecord() {
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
   for (size_t i = 0; i < extension_idxs.size(); i++) {
-    auto& entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+    auto& entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
         &gsl::at(body, gsl::narrow<gsl::index>(i * entry_size_value)));
     entry.attr_type = AttrType::IndexAllocation;
     entry.record_size = entry_size_value;
@@ -1037,7 +1037,7 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord() {
 
   constexpr DWORD body_size = 4;
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 0;
@@ -1049,7 +1049,7 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord() {
 
   static_assert(static_cast<DWORD>(attr_name_bounds_name_offset) +
                         2 * static_cast<DWORD>(attr_name_bounds_name_length) >
-                    sizeof(NtfsBrowser::Attr::HeaderResident) + body_size,
+                    sizeof(NtfsBrowser::Data::HeaderResident) + body_size,
                 "name must exceed total_size");
   static_assert(attr_name_bounds_sentinel.size() ==
                     static_cast<size_t>(attr_name_bounds_name_length),
@@ -1075,7 +1075,7 @@ FakeRecord MakeSmallResidentDataRecord() {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 0;
@@ -1103,14 +1103,14 @@ FakeRecord MakeAttributeListShortReadRecord() {
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
   constexpr DWORD body_size =
-      static_cast<DWORD>(NtfsBrowser::Attr::attribute_list_entry_header_size) +
+      static_cast<DWORD>(NtfsBrowser::Data::attribute_list_entry_header_size) +
       10;
   static_assert(
-      body_size % NtfsBrowser::Attr::attribute_list_entry_header_size != 0,
+      body_size % NtfsBrowser::Data::attribute_list_entry_header_size != 0,
       "body size must not be an exact multiple of the entry size, "
       "to reproduce a short final ReadData()");
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
@@ -1121,11 +1121,11 @@ FakeRecord MakeAttributeListShortReadRecord() {
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
       &record.at(attr_offset_value + attr.attr_offset));
   first_entry.attr_type = AttrType::Data;
   first_entry.record_size =
-      static_cast<WORD>(NtfsBrowser::Attr::attribute_list_entry_header_size);
+      static_cast<WORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
   first_entry.name_length = 0;
   first_entry.name_offset = 0;
   first_entry.start_vcn = 0;
@@ -1149,11 +1149,11 @@ FakeRecord MakeAttributeListRecordSizeTooSmallDirRecord() {
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
   constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Attr::attribute_list_entry_header_size));
+      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
   // Nonzero, but smaller than entry_size - the exact condition under test.
   constexpr WORD too_small_record_size = 5;
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
@@ -1168,7 +1168,7 @@ FakeRecord MakeAttributeListRecordSizeTooSmallDirRecord() {
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
 
   auto& first_entry =
-      *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(body.data());
+      *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(body.data());
   first_entry.attr_type = AttrType::IndexRoot;
   first_entry.record_size = entry_size_value;
   first_entry.name_length = 0;
@@ -1180,7 +1180,7 @@ FakeRecord MakeAttributeListRecordSizeTooSmallDirRecord() {
 
   // Relocates nowhere - base_ref names this same directory record, so
   // AttrList skips it - only its record_size matters here.
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
       &gsl::at(body, entry_size_value));
   second_entry.attr_type = AttrType::Data;
   second_entry.record_size = too_small_record_size;
@@ -1207,13 +1207,13 @@ FakeRecord MakeAttributeListOffsetMismatchDirRecord() {
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
   constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Attr::attribute_list_entry_header_size));
+      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
   // Past entry_size, so the single entry's declared span overshoots the
   // attribute's own declared size below.
   constexpr WORD overshoot_record_size =
       static_cast<WORD>(entry_size_value + 4);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
@@ -1224,7 +1224,7 @@ FakeRecord MakeAttributeListOffsetMismatchDirRecord() {
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
       &record.at(attr_offset_value + attr.attr_offset));
   first_entry.attr_type = AttrType::IndexRoot;
   first_entry.record_size = overshoot_record_size;
@@ -1247,7 +1247,7 @@ FakeRecord MakeAttributeListCycleRecord(ULONGLONG target_idx) {
                                        NtfsBrowser::Flag::FileRecord::InUse |
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
@@ -1255,15 +1255,15 @@ FakeRecord MakeAttributeListCycleRecord(ULONGLONG target_idx) {
   attr.header.flags = 0;
   attr.header.id = 0;
   attr.attr_size =
-      static_cast<DWORD>(NtfsBrowser::Attr::attribute_list_entry_header_size);
+      static_cast<DWORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(
+  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
       &record.at(attr_offset_value + attr.attr_offset));
   first_entry.attr_type = AttrType::AttributeList;
   first_entry.record_size =
-      static_cast<WORD>(NtfsBrowser::Attr::attribute_list_entry_header_size);
+      static_cast<WORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
   first_entry.name_length = 0;
   first_entry.name_offset = 0;
   first_entry.start_vcn = 0;
@@ -1278,13 +1278,13 @@ FakeRecord MakeAttributeListCycleRecord(ULONGLONG target_idx) {
 
 // Builds a directory record whose resident $ATTRIBUTE_LIST packs two
 // entries at the real on-disk stride (attribute_list_real_entry_size), not
-// sizeof(Attr::AttributeList).
+// sizeof(Data::AttributeList).
 FakeRecord MakeAttributeListTightlyPackedDirRecord() {
   FakeRecord record = MakeRecordHeader(attr_offset_value,
                                        NtfsBrowser::Flag::FileRecord::InUse |
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
@@ -1302,7 +1302,7 @@ FakeRecord MakeAttributeListTightlyPackedDirRecord() {
   // to a struct reference: fill an aligned copy and copy the on-disk bytes.
   const auto write_entry = [](BYTE* dest, AttrType type, ULONGLONG record_idx,
                               WORD attr_id) {
-    NtfsBrowser::Attr::AttributeList entry{};
+    NtfsBrowser::Data::AttributeList entry{};
     entry.attr_type = type;
     entry.record_size = attribute_list_real_entry_size;
     entry.name_length = 0;
@@ -1330,7 +1330,7 @@ FakeRecord MakeNamedDataStreamRecord() {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 0;
@@ -1363,7 +1363,7 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
                                        NtfsBrowser::Flag::FileRecord::InUse |
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::IndexRoot;
   attr.header.non_resident = 0;
@@ -1374,23 +1374,23 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = fake_file_record_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1: the single real FILE_NAME entry this variant declares.
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = mft_index;
   first_entry.mft_sn = 1;
 
   auto& filename =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   filename.parent_ref = parent_ref;
   filename.flags = NtfsBrowser::Flag::Filename::None;
   filename.name_length = gsl::narrow<BYTE>(name.size());
@@ -1411,7 +1411,7 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
   // Entry 2: the terminating entry - no name, no sub-node.
   auto& second_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
                                         first_entry.size)));
   second_entry.flags = NtfsBrowser::Flag::IndexEntry::Last;
   second_entry.stream_size = 0;
@@ -1423,7 +1423,7 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
   root.alloc_entry_size = root.total_entry_size;
   root.flags = 0;
 
-  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
                    first_entry.size + second_entry.size;
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
@@ -1444,7 +1444,7 @@ FakeRecord MakeRootRecordWithGapCollationSubNode() {
 
   // $INDEX_ROOT
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -1454,24 +1454,24 @@ FakeRecord MakeRootRecordWithGapCollationSubNode() {
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = fake_file_record_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1 ("A_"): non-terminal, so it carries both a name and a sub-node
   // VCN right after it.
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = gap_collation_non_terminal_mft_ref;
   first_entry.mft_sn = 1;
 
   auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::Root);
   fn1.flags = NtfsBrowser::Flag::Filename::Directory;
   constexpr std::wstring_view non_terminal_name = L"A_";
@@ -1496,7 +1496,7 @@ FakeRecord MakeRootRecordWithGapCollationSubNode() {
   // Entry 2: the terminating entry - no name, no sub-node.
   auto& second_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
                                         first_entry.size)));
   second_entry.flags = NtfsBrowser::Flag::IndexEntry::Last;
   second_entry.stream_size = 0;
@@ -1509,7 +1509,7 @@ FakeRecord MakeRootRecordWithGapCollationSubNode() {
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size + second_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -1517,7 +1517,7 @@ FakeRecord MakeRootRecordWithGapCollationSubNode() {
   offset += root_attr.header.total_size;
 
   // $INDEX_ALLOCATION
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -1568,7 +1568,7 @@ FakeRecord MakeIndexBlockChainRootRecord() {
 
   // $INDEX_ROOT
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -1578,17 +1578,17 @@ FakeRecord MakeIndexBlockChainRootRecord() {
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = cluster_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = 0;
   first_entry.mft_sn = 0;
   first_entry.stream_size = 0;
@@ -1605,7 +1605,7 @@ FakeRecord MakeIndexBlockChainRootRecord() {
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -1614,7 +1614,7 @@ FakeRecord MakeIndexBlockChainRootRecord() {
 
   // $INDEX_ALLOCATION: one data run, index_block_chain_length clusters starting
   // at index_block_chain_lcn.
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -1672,7 +1672,7 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
                                        NtfsBrowser::Flag::FileRecord::InUse |
                                            NtfsBrowser::Flag::FileRecord::Dir);
   // The sequence its entries' parent references carry.
-  EditFileRecordHeader(record, [](FileRecordHeader::Data& header) {
+  EditFileRecordHeader(record, [](FileRecordHeader& header) {
     header.seq_no = root_sequence_number;
   });
 
@@ -1680,7 +1680,7 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
 
   // $INDEX_ROOT
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -1690,19 +1690,19 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = cluster_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Sole entry: nameless, terminal, pointing at VCN 0 - the only block a
   // normal B+ tree walk reaches in this fixture.
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = 0;
   first_entry.mft_sn = 0;
   first_entry.stream_size = 0;
@@ -1718,7 +1718,7 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -1727,7 +1727,7 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
 
   // $INDEX_ALLOCATION: orphaned_blocks_count contiguous blocks at
   // orphaned_blocks_lcn, only the first ever pointed at from $INDEX_ROOT.
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -1795,7 +1795,7 @@ void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
   first_entry.mft_sn = 1;
 
   auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   fn1.parent_ref = parent_ref;
   fn1.flags = NtfsBrowser::Flag::Filename::None;
   fn1.name_length = name_length;
@@ -1840,7 +1840,7 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord() {
                                        NtfsBrowser::Flag::FileRecord::InUse |
                                            NtfsBrowser::Flag::FileRecord::Dir);
   // The sequence its entries' parent references carry.
-  EditFileRecordHeader(record, [](FileRecordHeader::Data& header) {
+  EditFileRecordHeader(record, [](FileRecordHeader& header) {
     header.seq_no = root_sequence_number;
   });
 
@@ -1848,7 +1848,7 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord() {
 
   // $INDEX_ROOT: a single sub-node pointer at VCN 0 (block 0).
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -1858,17 +1858,17 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord() {
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = multi_cluster_orphan_index_block_size;
   root.clusters_per_ib = multi_cluster_orphan_clusters_per_block;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = 0;
   first_entry.mft_sn = 0;
   first_entry.stream_size = 0;
@@ -1884,7 +1884,7 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord() {
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -1893,7 +1893,7 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord() {
 
   // $INDEX_ALLOCATION: multi_cluster_orphan_block_count contiguous blocks at
   // multi_cluster_orphan_lcn, only block 0 ever pointed at from $INDEX_ROOT.
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -1974,7 +1974,7 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image,
   first_entry.mft_sn = 1;
 
   auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   fn1.parent_ref = parent_ref;
   fn1.flags = NtfsBrowser::Flag::Filename::None;
   fn1.name_length = name_length;
@@ -2015,14 +2015,14 @@ FakeRecord MakeDirectoryWithIndexAllocation(
   FakeRecord record = MakeRecordHeader(attr_offset_value,
                                        NtfsBrowser::Flag::FileRecord::InUse |
                                            NtfsBrowser::Flag::FileRecord::Dir);
-  EditFileRecordHeader(record, [](FileRecordHeader::Data& header) {
+  EditFileRecordHeader(record, [](FileRecordHeader& header) {
     header.seq_no = root_sequence_number;
   });
 
   DWORD offset = attr_offset_value;
 
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -2032,18 +2032,18 @@ FakeRecord MakeDirectoryWithIndexAllocation(
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = ib_size;
   root.clusters_per_ib =
       gsl::narrow<BYTE>(ib_size >= cluster_size ? ib_size / cluster_size : 1);
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = 0;
   first_entry.mft_sn = 0;
   first_entry.stream_size = 0;
@@ -2059,7 +2059,7 @@ FakeRecord MakeDirectoryWithIndexAllocation(
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -2068,7 +2068,7 @@ FakeRecord MakeDirectoryWithIndexAllocation(
 
   bool first = true;
   for (const FakeIndexAllocExtent& extent : extents) {
-    auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+    auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
         &record.at(offset));
     alloc_attr.header.type = AttrType::IndexAllocation;
     alloc_attr.header.non_resident = 1;
@@ -2132,7 +2132,7 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image, size_t block_offset,
   first_entry.mft_sn = 1;
 
   auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   fn1.parent_ref = parent_ref;
   fn1.flags = NtfsBrowser::Flag::Filename::None;
   fn1.name_length = gsl::narrow<BYTE>(name.size());
@@ -2201,18 +2201,18 @@ DWORD WriteStandardInformationAttr(
     FakeRecord& record, DWORD offset,
     NtfsBrowser::Flag::StdInfoPermission permission) {
   auto& attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   attr.header.type = AttrType::StandardInformation;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
   attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::StandardInformation));
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::StandardInformation));
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& std_info = *reinterpret_cast<NtfsBrowser::Attr::StandardInformation*>(
+  auto& std_info = *reinterpret_cast<NtfsBrowser::Data::StandardInformation*>(
       &record.at(offset + attr.attr_offset));
   std_info.create_time = std_info_create_time;
   std_info.alter_time = std_info_alter_time;
@@ -2251,7 +2251,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
                            WORD comp_unit_size, ULONGLONG real_size,
                            const std::vector<FakeDataRun>& runs,
                            const FakeNonResidentOverrides& overrides = {}) {
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   attr.header.type = type;
   attr.header.non_resident = 1;
@@ -2282,7 +2282,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
 
   const auto header_size = gsl::narrow<WORD>(
       sizeof(attr) + ((comp_unit_size != 0)
-                          ? NtfsBrowser::Attr::compressed_size_field_size
+                          ? NtfsBrowser::Data::compressed_size_field_size
                           : 0));
   const size_t name_bytes = encoded_name.size() * sizeof(WORD);
   if (name_bytes != 0) {
@@ -2351,7 +2351,7 @@ WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name) {
   entry.mft_sn = 1;
 
   auto& filename =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&entry.stream);
   filename.parent_ref = static_cast<ULONGLONG>(MftIdx::Root);
   filename.flags = name.directory ? NtfsBrowser::Flag::Filename::Directory
                                   : NtfsBrowser::Flag::Filename::None;
@@ -2389,7 +2389,7 @@ FakeRecord MakeIndexAllocationDirRecord(
 
   // $INDEX_ROOT
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -2399,17 +2399,17 @@ FakeRecord MakeIndexAllocationDirRecord(
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = fake_file_record_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   const std::span<BYTE> entries =
-      body.subspan(sizeof(NtfsBrowser::Attr::IndexRoot));
+      body.subspan(sizeof(NtfsBrowser::Data::IndexRoot));
   DWORD leaf_bytes = 0;
   for (const FakeIndexName& name : root_names) {
     leaf_bytes += WriteFilenameEntry(&gsl::at(entries, leaf_bytes), name);
@@ -2432,7 +2432,7 @@ FakeRecord MakeIndexAllocationDirRecord(
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) + leaf_bytes +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) + leaf_bytes +
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -2453,7 +2453,7 @@ FakeRecord
                                        NtfsBrowser::Flag::FileRecord::InUse |
                                            NtfsBrowser::Flag::FileRecord::Dir);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::IndexRoot;
   attr.header.non_resident = 0;
@@ -2464,17 +2464,17 @@ FakeRecord
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = fake_file_record_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   const std::span<BYTE> entries =
-      body.subspan(sizeof(NtfsBrowser::Attr::IndexRoot));
+      body.subspan(sizeof(NtfsBrowser::Data::IndexRoot));
   DWORD leaf_bytes = 0;
   for (const FakeIndexName& name : names) {
     leaf_bytes += WriteFilenameEntry(&gsl::at(entries, leaf_bytes), name);
@@ -2491,7 +2491,7 @@ FakeRecord
   root.alloc_entry_size = root.total_entry_size;
   root.flags = 0;
 
-  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
                    leaf_bytes + last.size;
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
@@ -2636,7 +2636,7 @@ struct FakeFileName {
 DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
                         const FakeFileName& name, bool directory) {
   auto& attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   attr.header.type = AttrType::FileName;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
@@ -2644,11 +2644,11 @@ DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
   attr.header.id = 0;
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.attr_size =
-      gsl::narrow<DWORD>(offsetof(NtfsBrowser::Attr::Filename, name) +
+      gsl::narrow<DWORD>(offsetof(NtfsBrowser::Data::Filename, name) +
                          name.name.size() * sizeof(WORD));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& filename = *reinterpret_cast<NtfsBrowser::Attr::Filename*>(
+  auto& filename = *reinterpret_cast<NtfsBrowser::Data::Filename*>(
       &record.at(offset + attr.attr_offset));
   filename.parent_ref = name.parent_ref;
   filename.real_size = name.real_size;
@@ -2671,7 +2671,7 @@ DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
 // and returns its total_size.
 DWORD WriteResidentDataAttr(FakeRecord& record, DWORD offset, DWORD size) {
   auto& attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
@@ -2693,7 +2693,7 @@ FakeRecord MakeMftTreeRecord(NtfsBrowser::Flag::FileRecord flags, WORD sequence,
                                  NtfsBrowser::Flag::StdInfoPermission::Normal,
                              ULONGLONG base_ref = 0) {
   FakeRecord record = MakeRecordHeader(attr_offset_value, flags);
-  EditFileRecordHeader(record, [&](FileRecordHeader::Data& header) {
+  EditFileRecordHeader(record, [&](FileRecordHeader& header) {
     header.seq_no = sequence;
     header.ref_to_base = base_ref;
   });
@@ -2799,7 +2799,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeletedVolumeRecord() {
   // INUSE flag cleared - a freed record. bypass_deleted_gate_ must still let
   // NtfsVolume::Init() read it.
   FakeRecord record = MakeVolumeRecord();
-  EditFileRecordHeader(record, [](FileRecordHeader::Data& header) {
+  EditFileRecordHeader(record, [](FileRecordHeader& header) {
     header.flags = NtfsBrowser::Flag::FileRecord{};
   });
 
@@ -3054,7 +3054,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds() {
                      static_cast<size_t>(MftIdx::Root);
   EditFileRecordHeader(
       std::span(image).subspan(root_offset, fake_file_record_size),
-      [](FileRecordHeader::Data& header) {
+      [](FileRecordHeader& header) {
         header.offset_of_attr = attr_offset_out_of_bounds;
       });
 
@@ -3419,7 +3419,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode() {
   first_entry.mft_sn = 1;
 
   auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::Root);
   fn1.flags = NtfsBrowser::Flag::Filename::None;
   fn1.name_length = gap_collation_search_name_length;
@@ -3471,8 +3471,9 @@ std::vector<BYTE> MakeNonAsciiUpCaseBytes() {
   constexpr WORD capital_y_diaeresis = 0x0178;
   constexpr WORD case_distance = 0x20;
 
-  std::vector<BYTE> bytes(NtfsBrowser::UpCaseTable::unit_count * sizeof(WORD));
-  for (size_t unit = 0; unit < NtfsBrowser::UpCaseTable::unit_count; unit++) {
+  std::vector<BYTE> bytes(NtfsBrowser::UpCase::Table::unit_count *
+                          sizeof(WORD));
+  for (size_t unit = 0; unit < NtfsBrowser::UpCase::Table::unit_count; unit++) {
     auto upper = gsl::narrow<WORD>(unit);
     if ((unit >= L'a' && unit <= L'z') ||
         (unit >= latin1_lower_first && unit <= latin1_lower_last &&
@@ -3610,7 +3611,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain() {
       first_entry.mft_sn = 1;
 
       auto& fn1 =
-          *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+          *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
       fn1.parent_ref = static_cast<ULONGLONG>(MftIdx::Root);
       fn1.flags = NtfsBrowser::Flag::Filename::None;
       fn1.name_length = index_block_chain_leaf_name_length;
@@ -3870,7 +3871,7 @@ std::vector<BYTE>
                                  static_cast<size_t>(MftIdx::Root);
   EditFileRecordHeader(
       std::span(image).subspan(root_offset, fake_file_record_size),
-      [&](FileRecordHeader::Data& header) {
+      [&](FileRecordHeader& header) {
         header.seq_no = link.record_sequence;
         header.flags = link.record_in_use
                            ? (NtfsBrowser::Flag::FileRecord::InUse |
@@ -3925,10 +3926,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTree() {
   // the first 16 read through it; plus the name real volumes give it.
   FakeRecord mft = MakeMftRecordWithRealDataRun(
       static_cast<DWORD>(mft_lcn), static_cast<DWORD>(mft_tree_record_count));
-  EditFileRecordHeader(
-      mft, [](FileRecordHeader::Data& header) { header.seq_no = 1; });
+  EditFileRecordHeader(mft,
+                       [](FileRecordHeader& header) { header.seq_no = 1; });
   DWORD offset = attr_offset_value +
-                 reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+                 reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
                      &mft.at(attr_offset_value))
                      ->header.total_size;
   offset += WriteFileNameAttr(mft, offset,
@@ -4016,7 +4017,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithHugeMftRealSize() {
   std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
 
   const size_t mft_offset = static_cast<size_t>(mft_lcn) * cluster_size;
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &image.at(mft_offset + attr_offset_value));
   attr.real_size = huge_mft_real_size;
   return image;
@@ -4314,7 +4315,7 @@ void WriteTrailingDefect(FakeRecord& record, DWORD offset,
 
   switch (defect) {
     case FakeTrailingDefect::UndersizedHeader: {
-      auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+      auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
           &record.at(offset));
       attr.header.type = AttrType::Bitmap;
       attr.header.non_resident = 0;
@@ -4322,21 +4323,21 @@ void WriteTrailingDefect(FakeRecord& record, DWORD offset,
       break;
     }
     case FakeTrailingDefect::UndersizedCompressedField: {
-      auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+      auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
           &record.at(offset));
       attr.header.type = AttrType::Bitmap;
       attr.header.non_resident = 1;
       attr.comp_unit_size = compression_unit_size_shift;
-      attr.header.total_size = NtfsBrowser::Attr::header_non_resident_base_size;
+      attr.header.total_size = NtfsBrowser::Data::header_non_resident_base_size;
       break;
     }
     case FakeTrailingDefect::RejectedAttribute: {
-      auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+      auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
           &record.at(offset));
       attr.header.type = AttrType::StandardInformation;
       attr.header.non_resident = 1;
       attr.header.total_size = AlignAttrSize(
-          NtfsBrowser::Attr::header_non_resident_base_size + run_list_room);
+          NtfsBrowser::Data::header_non_resident_base_size + run_list_room);
       break;
     }
   }
@@ -4352,7 +4353,7 @@ DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
   constexpr std::wstring_view name_value = L"$EFS";
   const std::vector<WORD> encoded_name = ToUtf16(name_value);
   auto& attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   attr.header.type = AttrType::LoggedUtilityStream;
   attr.header.non_resident = 0;
   attr.header.flags = 0;
@@ -4402,7 +4403,7 @@ std::vector<BYTE>
       if (file.efs_body_overruns) {
         // attr_offset + attr_size now reaches past total_size.
         constexpr DWORD overrun = 64;
-        reinterpret_cast<NtfsBrowser::Attr::HeaderResident&>(
+        reinterpret_cast<NtfsBrowser::Data::HeaderResident&>(
             record.at(efs_offset))
             .attr_size += overrun;
       }
@@ -4447,7 +4448,7 @@ FakeRecord MakeResidentEncryptedDataRecord() {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 0;
@@ -4529,7 +4530,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData() {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 1;
@@ -4547,8 +4548,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData() {
   // total_size FileRecord<S>::ParseAttrs() may accept for a non-resident
   // attribute - the whole point of this fixture.
   attr.data_run_offset =
-      static_cast<WORD>(NtfsBrowser::Attr::header_non_resident_base_size);
-  attr.header.total_size = NtfsBrowser::Attr::header_non_resident_base_size;
+      static_cast<WORD>(NtfsBrowser::Data::header_non_resident_base_size);
+  attr.header.total_size = NtfsBrowser::Data::header_non_resident_base_size;
 
   WriteEndOfAttributesMarker(record,
                              attr_offset_value + attr.header.total_size);
@@ -4775,7 +4776,7 @@ FakeRecord
   // $INDEX_ROOT - identical nameless SUBNODE-only entry as
   // MakeIndexAllocationDirRecord().
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -4785,17 +4786,17 @@ FakeRecord
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = fake_file_record_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = 0;
   first_entry.mft_sn = 0;
   first_entry.stream_size = 0;
@@ -4811,7 +4812,7 @@ FakeRecord
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -4820,7 +4821,7 @@ FakeRecord
 
   // $INDEX_ALLOCATION: compressed, comp_unit_size ==
   // compression_unit_size_shift.
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -4835,7 +4836,7 @@ FakeRecord
   alloc_attr.ini_size = alloc_attr.real_size;
 
   const auto header_size = static_cast<WORD>(
-      sizeof(alloc_attr) + NtfsBrowser::Attr::compressed_size_field_size);
+      sizeof(alloc_attr) + NtfsBrowser::Data::compressed_size_field_size);
   alloc_attr.data_run_offset = header_size;
 
   const ULONGLONG compressed_size =
@@ -5061,7 +5062,7 @@ FakeRecord MakeBadIndexBlockEntryRootRecord() {
 
   // $INDEX_ROOT
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -5071,19 +5072,19 @@ FakeRecord MakeBadIndexBlockEntryRootRecord() {
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = cluster_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   // Entry 1: nameless, non-terminal subnode pointer to VCN 0 (the damaged
   // block).
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = 0;
   first_entry.mft_sn = 0;
   first_entry.stream_size = 0;
@@ -5095,7 +5096,7 @@ FakeRecord MakeBadIndexBlockEntryRootRecord() {
   // Entry 2: nameless, terminal subnode pointer to VCN 1 (the good block).
   auto& second_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Attr::IndexRoot) +
+          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
                                         first_entry.size)));
   second_entry.mft_index = 0;
   second_entry.mft_sn = 0;
@@ -5111,7 +5112,7 @@ FakeRecord MakeBadIndexBlockEntryRootRecord() {
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       root.total_entry_size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -5119,7 +5120,7 @@ FakeRecord MakeBadIndexBlockEntryRootRecord() {
   offset += root_attr.header.total_size;
 
   // $INDEX_ALLOCATION: 2 contiguous blocks at bad_index_block_lcn.
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderNonResident*>(
+  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
@@ -5166,7 +5167,7 @@ WORD WriteBadIndexBlockLeafEntry(BYTE* entry_ptr, ULONGLONG mft_ref,
   index_entry.mft_sn = 1;
 
   auto& filename =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&index_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
   filename.parent_ref = parent_ref;
   filename.flags = NtfsBrowser::Flag::Filename::None;
   filename.name_length = name_length;
@@ -5314,7 +5315,7 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord() {
   DWORD offset = attr_offset_value;
 
   auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = AttrType::IndexRoot;
   root_attr.header.non_resident = 0;
   root_attr.header.name_length = 0;
@@ -5324,22 +5325,22 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord() {
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Attr::IndexRoot*>(body.data());
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = AttrType::FileName;
   root.coll_rule = 0;
   root.ib_size = cluster_size;
   root.clusters_per_ib = 1;
   root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot))) -
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
   auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Attr::IndexRoot)));
+      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
   first_entry.mft_index = malformed_index_entry_mft_ref;
   first_entry.mft_sn = 1;
 
   auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&first_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
   fn1.parent_ref = MakeFileReference(static_cast<ULONGLONG>(MftIdx::Root),
                                      root_sequence_number);
   fn1.flags = NtfsBrowser::Flag::Filename::None;
@@ -5370,7 +5371,7 @@ FakeRecord MakeMalformedIndexEntryFilenameRootRecord() {
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Attr::IndexRoot)) +
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
@@ -5404,7 +5405,7 @@ FakeRecord MakeNoEndMarkerRecord() {
   FakeRecord record =
       MakeRecordHeader(attr_offset_value, NtfsBrowser::Flag::FileRecord::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 0;
@@ -5456,7 +5457,7 @@ namespace {
 
 // Fixed on-disk size of a nameless $ATTRIBUTE_LIST entry.
 constexpr WORD list_entry_size = static_cast<WORD>(
-    AlignAttrSize(NtfsBrowser::Attr::attribute_list_entry_header_size));
+    AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
 
 // LCNs the lifetime fixtures use for cluster data: past the $MFT records
 // (LCN 1 onwards) and distinct, so no two streams share a cluster.
@@ -5469,7 +5470,7 @@ constexpr DWORD lifetime_list_lcn = 52;
 // to declare (0 is the forged value).
 void WriteListEntry(BYTE* dest, AttrType type, ULONGLONG record,
                     WORD record_size, WORD sequence = 0) {
-  auto& entry = *reinterpret_cast<NtfsBrowser::Attr::AttributeList*>(dest);
+  auto& entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(dest);
   entry.attr_type = type;
   entry.record_size = record_size;
   entry.name_length = 0;
@@ -5489,7 +5490,7 @@ DWORD WriteLifetimeResidentList(FakeRecord& record, DWORD offset,
                                 std::optional<size_t> zero_size_index = {},
                                 WORD entry_sequence = 0) {
   auto& attr =
-      *reinterpret_cast<NtfsBrowser::Attr::HeaderResident*>(&record.at(offset));
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   attr.header.type = AttrType::AttributeList;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
@@ -5526,7 +5527,7 @@ FakeRecord MakeLifetimeResidentDataExtensionRecord(
   offset += WriteResidentDataAttr(record, offset,
                                   attr_list_lifetime_data_content.size());
   std::memcpy(
-      &record.at(data_offset + sizeof(NtfsBrowser::Attr::HeaderResident)),
+      &record.at(data_offset + sizeof(NtfsBrowser::Data::HeaderResident)),
       attr_list_lifetime_data_content.data(),
       attr_list_lifetime_data_content.size());
 

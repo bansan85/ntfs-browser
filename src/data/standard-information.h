@@ -4,7 +4,7 @@
 
 #include "../flag/std-info-permission.h"
 
-namespace NtfsBrowser::Attr {
+namespace NtfsBrowser::Data {
 
 struct StandardInformation {
   ULONGLONG create_time;               // File creation time
@@ -21,4 +21,4 @@ struct StandardInformation {
   ULONGLONG usn;                       // USN Journel
 };
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NtfsBrowser::Data

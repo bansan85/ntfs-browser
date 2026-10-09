@@ -16,16 +16,12 @@
 #include <ntfs-browser/strategy.h>
 
 #include "attr-resident.h"
-#include "attr/index-root.h"
 #include "data/index-entry.h"
+#include "data/index-root.h"
 #include "flag/index-entry.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser {
-
-struct AttrHeaderCommon;
-template <Strategy S>
-class FileRecord;
+namespace NtfsBrowser::Attr {
 
 namespace {
 
@@ -47,8 +43,8 @@ template <typename Resident, Strategy S>
 AttrIndexRoot<Resident, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
                                           const FileRecord<S>& file_record)
     : Resident(ahc, file_record),
-      index_root_(reinterpret_cast<const Attr::IndexRoot*>(this->GetData())) {
-  if (this->GetDataSize() < sizeof(Attr::IndexRoot)) {
+      index_root_(reinterpret_cast<const Data::IndexRoot*>(this->GetData())) {
+  if (this->GetDataSize() < sizeof(Data::IndexRoot)) {
     throw std::runtime_error("Index Root attribute smaller than expected.\n");
   }
 
@@ -84,8 +80,8 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
 
   const std::span<const BYTE> data(index_data_.data(), data_size);
   const auto* const index_root_copy =
-      reinterpret_cast<const Attr::IndexRoot*>(index_data_.data());
-  constexpr size_t entry_offset_pos = offsetof(Attr::IndexRoot, entry_offset);
+      reinterpret_cast<const Data::IndexRoot*>(index_data_.data());
+  constexpr size_t entry_offset_pos = offsetof(Data::IndexRoot, entry_offset);
 
   if (data.size() < entry_offset_pos ||
       index_root_copy->entry_offset > data.size() - entry_offset_pos) {
@@ -149,4 +145,4 @@ bool AttrIndexRoot<Resident, S>::IsFileName() const noexcept {
 template class AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>;
 template class AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

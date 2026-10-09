@@ -17,12 +17,12 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::AttrBitmap;
-using NtfsBrowser::AttrNonResident;
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Attr::AttrBitmap;
+using NtfsBrowser::Attr::AttrNonResident;
 using NtfsBrowser::Enum::MftIdx;
 
 namespace {

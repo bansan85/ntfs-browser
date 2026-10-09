@@ -12,11 +12,13 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace Attr {
+namespace Data {
 
 struct VolumeInformation;
 
-}  // namespace Attr
+}  // namespace Data
+
+namespace Attr {
 
 template <typename Resident, Strategy S>
 class AttrVolInfo : public Resident {
@@ -33,10 +35,12 @@ class AttrVolInfo : public Resident {
   friend class NtfsVolume;
 
  private:
-  const Attr::VolumeInformation& vol_info_;
+  const Data::VolumeInformation& vol_info_;
 
   // Get NTFS Volume Version
   [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
 };  // AttrVolInfo
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

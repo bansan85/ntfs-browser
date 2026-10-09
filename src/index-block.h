@@ -12,6 +12,11 @@ namespace NtfsBrowser {
 
 enum class Strategy : std::uint8_t;
 
+namespace Attr {
+
+template <Strategy S>
+class AttrIndexAlloc;
+
 // The entries are views into bytes_ and realigned_, which this object owns:
 // they MUST NOT outlive it.
 class IndexBlock : public std::vector<IndexEntryView> {
@@ -35,5 +40,7 @@ class IndexBlock : public std::vector<IndexEntryView> {
   // Drops the previous content and returns a zeroed buffer of `size` bytes.
   [[nodiscard]] std::span<BYTE> AllocIndexBlock(DWORD size);
 };  // IndexBlock
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

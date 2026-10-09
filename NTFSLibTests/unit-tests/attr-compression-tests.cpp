@@ -1,6 +1,6 @@
 // Tests for classic NTFS attribute-level compression
 // (FILE_ATTRIBUTE_COMPRESSED plus a non-zero
-// Attr::HeaderNonResident::comp_unit_size, LZNT1-encoded compression units):
+// Data::HeaderNonResident::comp_unit_size, LZNT1-encoded compression units):
 // the LZNT1 chunk decoder on its own (src/lznt1/decompress.h), then the full
 // AttrNonResident<S>::ReadData() path over synthetic volumes, one case per
 // per-unit encoding a real compressed attribute can use.

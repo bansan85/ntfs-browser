@@ -7,7 +7,7 @@
 
 #include <ntfs-browser/data/attr-header-common.h>
 
-namespace NtfsBrowser::Attr {
+namespace NtfsBrowser::Data {
 
 struct HeaderNonResident {
   AttrHeaderCommon header;  // Common data structure
@@ -54,4 +54,4 @@ inline constexpr DWORD header_non_resident_base_size =
   return size;
 }
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NtfsBrowser::Data

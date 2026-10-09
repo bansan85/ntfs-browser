@@ -10,12 +10,12 @@
 
 #include "internal-export.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::UpCase {
 
 // The uppercase mapping NTFS collates file names by. A volume stores its own
 // in $UpCase (MFT record 10). The built-in one stands in when that record
 // cannot be read: it is fixed data, and never depends on the process locale.
-class NTFS_BROWSER_EXPORT_TESTS_ONLY UpCaseTable {
+class NTFS_BROWSER_EXPORT_TESTS_ONLY Table {
  public:
   // Number of UTF-16 code units $UpCase maps: every unit of the BMP.
   static constexpr size_t unit_count = 65536;
@@ -24,11 +24,11 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY UpCaseTable {
   static constexpr size_t byte_count = unit_count * sizeof(char16_t);
 
   // Unicode simple uppercase mapping of the BMP, as compiled into the library.
-  [[nodiscard]] static const UpCaseTable& BuiltIn();
+  [[nodiscard]] static const Table& BuiltIn();
 
   // Parses the raw $UpCase stream: little-endian 16-bit entries, one per
   // code unit. Empty when the stream is short or cannot be a case mapping.
-  [[nodiscard]] static std::optional<UpCaseTable>
+  [[nodiscard]] static std::optional<Table>
       FromBytes(std::span<const BYTE> bytes);
 
   // True for BuiltIn(): the mapping may then differ from the volume's own.
@@ -44,10 +44,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY UpCaseTable {
                             std::wstring_view second) const noexcept;
 
  private:
-  UpCaseTable(std::vector<char16_t> map, bool built_in);
+  Table(std::vector<char16_t> map, bool built_in);
 
   std::vector<char16_t> map_;
   bool built_in_;
 };
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::UpCase

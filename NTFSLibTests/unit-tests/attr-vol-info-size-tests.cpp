@@ -19,7 +19,7 @@ using NtfsBrowser::Strategy;
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must accept a real-size (12-byte) VOLUME_INFORMATION "
-    "attribute, not just whatever sizeof(Attr::VolumeInformation) currently "
+    "attribute, not just whatever sizeof(Data::VolumeInformation) currently "
     "computes to",
     "[ntfs-volume][regression]", ((Strategy S), S), Strategy::NoCache,
     Strategy::FullCache) {

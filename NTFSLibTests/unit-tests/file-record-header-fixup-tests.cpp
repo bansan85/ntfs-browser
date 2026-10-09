@@ -13,21 +13,22 @@
 
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"
+#include "record/header.h"
 
-using NtfsBrowser::FileRecordHeader;
-using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Data::FileRecordHeader;
+using NtfsBrowser::Record::HeaderImpl;
 
 namespace {
 
 // Matches the record buffer size FileRecord always allocates.
 constexpr size_t declared_buffer_size = 1024;
 
-// Number of WORDs FileRecordHeader reads into the US array: one per
+// Number of WORDs Record::Header reads into the US array: one per
 // 512-byte block.
 constexpr size_t array_words =
     declared_buffer_size /
-    NtfsBrowser::FileRecordHeader::update_sequence_stride;
+    NtfsBrowser::Data::FileRecordHeader::update_sequence_stride;
 
 // Places the US array's first word exactly at the buffer's declared end.
 constexpr WORD offset_of_us_value =
@@ -43,21 +44,20 @@ WORD Sentinel(size_t index) { return gsl::narrow<WORD>(sentinel_base + index); }
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
-    "FileRecordHeader must not leak bytes past the declared buffer when "
+    "Record::Header must not leak bytes past the declared buffer when "
     "offset_of_us leaves no room for the US array",
     "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
     Strategy::FullCache) {
-  // Bytes past declared_buffer_size are outside what FileRecordHeader sees.
+  // Bytes past declared_buffer_size are outside what Record::Header sees.
   std::vector<BYTE> storage(declared_buffer_size + array_words * sizeof(WORD),
                             0);
 
-  NtfsBrowserTests::EditFileRecordHeader(
-      storage, [](FileRecordHeader::Data& header) {
-        header.magic = FileRecordHeader::file_record_magic;
-        header.offset_of_us = offset_of_us_value;
-        // Correct value; it bounds how many array words the ctor reads.
-        header.size_of_us = static_cast<WORD>(array_words + 1);
-      });
+  NtfsBrowserTests::EditFileRecordHeader(storage, [](FileRecordHeader& header) {
+    header.magic = FileRecordHeader::file_record_magic;
+    header.offset_of_us = offset_of_us_value;
+    // Correct value; it bounds how many array words the ctor reads.
+    header.size_of_us = static_cast<WORD>(array_words + 1);
+  });
 
   for (size_t i = 0; i < array_words; i++) {
     const WORD sentinel = Sentinel(i);
@@ -69,7 +69,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   bool leaked_sentinel = false;
   try {
-    const auto header = FileRecordHeaderImpl<S>(buffer);
+    const auto header = HeaderImpl<S>(buffer);
 
     leaked_sentinel = header.us_array.size() == array_words && [&] {
       for (size_t i = 0; i < array_words; i++) {
@@ -90,7 +90,7 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "FileRecordHeader::PatchUS must restore the last word of every 512-byte "
+    "Record::Header::PatchUS must restore the last word of every 512-byte "
     "block, whatever the volume's sector size (4Kn volumes)",
     "[file-record-header][regression]", ((Strategy S), S), Strategy::NoCache,
     Strategy::FullCache) {
@@ -101,12 +101,11 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr WORD offset_of_us_array = 48;
 
   std::vector<BYTE> storage(record_size, 0);
-  NtfsBrowserTests::EditFileRecordHeader(
-      storage, [](FileRecordHeader::Data& header) {
-        header.magic = FileRecordHeader::file_record_magic;
-        header.offset_of_us = offset_of_us_array;
-        header.size_of_us = static_cast<WORD>(blocks + 1);
-      });
+  NtfsBrowserTests::EditFileRecordHeader(storage, [](FileRecordHeader& header) {
+    header.magic = FileRecordHeader::file_record_magic;
+    header.offset_of_us = offset_of_us_array;
+    header.size_of_us = static_cast<WORD>(blocks + 1);
+  });
 
   const auto put_word = [&](size_t offset, WORD value) {
     std::memcpy(&storage.at(offset), &value, sizeof(value));
@@ -122,7 +121,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   const std::span<const BYTE> buffer(storage.data(), storage.size());
-  auto header = FileRecordHeaderImpl<S>(buffer);
+  auto header = HeaderImpl<S>(buffer);
 
   REQUIRE(header.PatchUS());
 

@@ -19,6 +19,7 @@
 
 #include "attr-slot.h"
 #include "data/file-record-header.h"
+#include "record/header.h"
 
 namespace NtfsBrowser {
 namespace Efs {
@@ -45,7 +46,7 @@ class FileRecord<S>::Impl {
   // FileRecord's move constructor MUST repoint it.
   FileRecord<S>* self;
   const NtfsVolume<S>* volume;
-  std::unique_ptr<FileRecordHeaderImpl<S>> file_record;
+  std::unique_ptr<Record::HeaderImpl<S>> file_record;
   std::optional<ULONGLONG> file_reference;
   std::array<AttrRawCallback, Attr::attr_nums> attr_raw_call_back{};
   Mask attr_mask{Mask::All};
@@ -98,7 +99,7 @@ class FileRecord<S>::Impl {
   [[nodiscard]] bool VisitAttr(std::span<const BYTE> cur,
                                const AttrHeaderCommon& head,
                                std::unordered_set<ULONGLONG>& attr_list_chain);
-  [[nodiscard]] std::unique_ptr<FileRecordHeaderImpl<S>>
+  [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref);
   [[nodiscard]] std::optional<IndexEntry>
       VisitIndexBlock(ULONGLONG vcn, std::wstring_view file_name,

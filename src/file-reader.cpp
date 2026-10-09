@@ -22,7 +22,7 @@
   #include "win32-disk-reader.h"
 #endif
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Io {
 
 namespace {
 
@@ -221,4 +221,4 @@ template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<std::span<const BYTE>>
     FileReader<Strategy::FullCache>::Read<Strategy::FullCache>(
         LARGE_INTEGER& addr, DWORD length) const;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Io

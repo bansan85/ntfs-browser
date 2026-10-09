@@ -48,9 +48,9 @@
 #include "attr-vol-info.h"  // IWYU pragma: keep
 #include "attr-vol-name.h"  // IWYU pragma: keep
 #include "attr/flags.h"
-#include "attr/header-non-resident.h"
-#include "attr/header-resident.h"
 #include "data/file-record-header.h"
+#include "data/header-non-resident.h"
+#include "data/header-resident.h"
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
 #include "file-record-impl.h"
@@ -58,6 +58,7 @@
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
 #include "ntfs-volume-impl.h"
+#include "record/header.h"
 #include "upcase.h"
 #include "utf.h"
 
@@ -121,18 +122,18 @@ AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD data_ptr,
   }
 
   const DWORD min_total_size =
-      head.non_resident != 0 ? Attr::header_non_resident_base_size
-                             : static_cast<DWORD>(sizeof(Attr::HeaderResident));
+      head.non_resident != 0 ? Data::header_non_resident_base_size
+                             : static_cast<DWORD>(sizeof(Data::HeaderResident));
   if (head.total_size < min_total_size) {
     Log::Warn("Attribute total_size too small for its header.");
     return AttrWalk::Abort;
   }
 
   if (head.non_resident != 0) {
-    Attr::HeaderNonResident non_resident{};
+    Data::HeaderNonResident non_resident{};
     std::memcpy(&non_resident, cur.data(), sizeof(non_resident));
-    if (Attr::HasCompressedSizeField(non_resident) &&
-        head.total_size < min_total_size + Attr::compressed_size_field_size) {
+    if (Data::HasCompressedSizeField(non_resident) &&
+        head.total_size < min_total_size + Data::compressed_size_field_size) {
       Log::Warn(
           "Compressed attribute total_size too small for its compressed "
           "size field.");
@@ -186,7 +187,7 @@ template <Strategy S>
 const AttrHeaderCommon&
     FileRecord<S>::Impl::AlignedAttrHeader(std::span<const BYTE> bytes) {
   if (reinterpret_cast<std::uintptr_t>(bytes.data()) %
-          alignof(Attr::HeaderNonResident) ==
+          alignof(Data::HeaderNonResident) ==
       0) {
     return *reinterpret_cast<const AttrHeaderCommon*>(bytes.data());
   }
@@ -223,43 +224,44 @@ std::unique_ptr<AttrBase<S>> FileRecord<S>::Impl::AllocAttr(
     case AttrType::StandardInformation:
       RequireResident(ahc,
                       "Standard Information attribute must be resident.\n");
-      return std::make_unique<AttrStdInfo<Resident, S>>(ahc, *self);
+      return std::make_unique<Attr::AttrStdInfo<Resident, S>>(ahc, *self);
 
     case AttrType::AttributeList:
       if (!resolve_attr_list) {
         if (ahc.non_resident != 0) {
-          return std::make_unique<AttrNonResident<S>>(ahc, *self);
+          return std::make_unique<Attr::AttrNonResident<S>>(ahc, *self);
         }
         return std::make_unique<Resident>(ahc, *self);
       }
       if (ahc.non_resident != 0) {
-        return std::make_unique<AttrList<AttrNonResident<S>, S>>(
+        return std::make_unique<Attr::AttrList<Attr::AttrNonResident<S>, S>>(
             ahc, *self, attr_list_chain);
       }
-      return std::make_unique<AttrList<Resident, S>>(ahc, *self,
-                                                     attr_list_chain);
+      return std::make_unique<Attr::AttrList<Resident, S>>(ahc, *self,
+                                                           attr_list_chain);
 
     case AttrType::FileName:
       RequireResident(ahc, "File Name attribute must be resident.\n");
-      return std::make_unique<AttrFileName<Resident, S>>(ahc, *self);
+      return std::make_unique<Attr::AttrFileName<Resident, S>>(ahc, *self);
 
     case AttrType::VolumeName:
       RequireResident(ahc, "Volume Name attribute must be resident.\n");
-      return std::make_unique<AttrVolName<Resident, S>>(ahc, *self);
+      return std::make_unique<Attr::AttrVolName<Resident, S>>(ahc, *self);
 
     case AttrType::VolumeInformation:
       RequireResident(ahc, "Volume Information attribute must be resident.\n");
-      return std::make_unique<AttrVolInfo<Resident, S>>(ahc, *self);
+      return std::make_unique<Attr::AttrVolInfo<Resident, S>>(ahc, *self);
 
     case AttrType::Data:
       if (ahc.non_resident != 0) {
-        return std::make_unique<AttrData<AttrNonResident<S>, S>>(ahc, *self);
+        return std::make_unique<Attr::AttrData<Attr::AttrNonResident<S>, S>>(
+            ahc, *self);
       }
-      return std::make_unique<AttrData<Resident, S>>(ahc, *self);
+      return std::make_unique<Attr::AttrData<Resident, S>>(ahc, *self);
 
     case AttrType::IndexRoot:
       RequireResident(ahc, "Index Root attribute must be resident.\n");
-      return std::make_unique<AttrIndexRoot<Resident, S>>(ahc, *self);
+      return std::make_unique<Attr::AttrIndexRoot<Resident, S>>(ahc, *self);
 
     // INDEX_ALLOCATION is always non-resident on disk; reject a record
     // claiming otherwise before its bytes get reinterpreted as one.
@@ -268,22 +270,23 @@ std::unique_ptr<AttrBase<S>> FileRecord<S>::Impl::AllocAttr(
         throw std::runtime_error(
             "Index Allocation attribute must be non-resident.\n");
       }
-      return std::make_unique<AttrIndexAlloc<S>>(ahc, *self);
+      return std::make_unique<Attr::AttrIndexAlloc<S>>(ahc, *self);
 
     case AttrType::Bitmap:
       if (ahc.non_resident != 0) {
-        return std::make_unique<AttrBitmap<AttrNonResident<S>, S>>(ahc, *self);
+        return std::make_unique<Attr::AttrBitmap<Attr::AttrNonResident<S>, S>>(
+            ahc, *self);
       }
       // Resident Bitmap may exist in a directory's FileRecord
       // or in $MFT for a very small volume in theory
-      return std::make_unique<AttrBitmap<Resident, S>>(ahc, *self);
+      return std::make_unique<Attr::AttrBitmap<Resident, S>>(ahc, *self);
 
     // $EFS, the only one this library reads, is read through the generic
     // wrappers. Any other logged utility stream is not needed, but not
     // worth a warning either.
     case AttrType::LoggedUtilityStream:
       if (ahc.non_resident != 0) {
-        return std::make_unique<AttrNonResident<S>>(ahc, *self);
+        return std::make_unique<Attr::AttrNonResident<S>>(ahc, *self);
       }
       return std::make_unique<Resident>(ahc, *self);
 
@@ -291,7 +294,7 @@ std::unique_ptr<AttrBase<S>> FileRecord<S>::Impl::AllocAttr(
     default:
       unhandled = true;
       if (ahc.non_resident != 0) {
-        return std::make_unique<AttrNonResident<S>>(ahc, *self);
+        return std::make_unique<Attr::AttrNonResident<S>>(ahc, *self);
       }
       return std::make_unique<Resident>(ahc, *self);
   }
@@ -323,9 +326,11 @@ bool FileRecord<S>::Impl::ParseAttr(
   std::unique_ptr<AttrBase<S>> attr;
   try {
     if constexpr (S == Strategy::NoCache) {
-      attr = AllocAttr<AttrResidentNoCache>(ahc, unhandled, attr_list_chain);
+      attr =
+          AllocAttr<Attr::AttrResidentNoCache>(ahc, unhandled, attr_list_chain);
     } else {
-      attr = AllocAttr<AttrResidentFullCache>(ahc, unhandled, attr_list_chain);
+      attr = AllocAttr<Attr::AttrResidentFullCache>(ahc, unhandled,
+                                                    attr_list_chain);
     }
   } catch (const std::exception& e) {
     // gsl::narrow(), reachable through AllocAttr(), can throw a
@@ -350,7 +355,7 @@ bool FileRecord<S>::Impl::ParseAttr(
 // records go through $MFT's DATA attribute, since $MFT itself may be
 // fragmented across the disk.
 template <Strategy S>
-std::unique_ptr<FileRecordHeaderImpl<S>>
+std::unique_ptr<Record::HeaderImpl<S>>
     FileRecord<S>::Impl::ReadFileRecord(ULONGLONG file_ref) {
   if (record_buffer.size() != volume->GetFileRecordSize()) {
     record_buffer.resize(volume->GetFileRecordSize());
@@ -375,7 +380,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
     }
 
     try {
-      return std::make_unique<FileRecordHeaderImpl<S>>(record_buffer);
+      return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
     } catch (const std::exception& e) {
       Log::Exception(e);
       return {};
@@ -394,7 +399,7 @@ std::unique_ptr<FileRecordHeaderImpl<S>>
   }
 
   try {
-    return std::make_unique<FileRecordHeaderImpl<S>>(record_buffer);
+    return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
   } catch (const std::exception& e) {
     // Reachable through the same constructor call as the direct-allocation
     // path above.
@@ -412,7 +417,7 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
     impl_->file_record.reset();
   }
 
-  std::unique_ptr<FileRecordHeaderImpl<S>> header =
+  std::unique_ptr<Record::HeaderImpl<S>> header =
       impl_->ReadFileRecord(file_ref);
   if (!header) {
     Log::Error("Cannot read file record {}", file_ref);
@@ -426,7 +431,7 @@ bool FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
 
   // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
   // meets this on every such slot. A caller gets false either way.
-  if (header->GetData()->magic != FileRecordHeader::file_record_magic) {
+  if (header->GetData()->magic != Data::FileRecordHeader::file_record_magic) {
     Log::Debug("Invalid file record");
     return false;
   }
@@ -466,8 +471,8 @@ std::optional<IndexEntry> FileRecord<S>::Impl::VisitIndexBlock(
     return {};
   }
 
-  IndexBlock index_block;
-  if (!static_cast<AttrIndexAlloc<S>*>(vec.front().get())
+  Attr::IndexBlock index_block;
+  if (!static_cast<Attr::AttrIndexAlloc<S>*>(vec.front().get())
            ->ParseIndexBlock(vcn, index_block)) {
     return {};
   }
@@ -537,8 +542,8 @@ void FileRecord<S>::Impl::TraverseSubNode(
     return;
   }
 
-  IndexBlock index_block;
-  if (!static_cast<AttrIndexAlloc<S>*>(vec.front().get())
+  Attr::IndexBlock index_block;
+  if (!static_cast<Attr::AttrIndexAlloc<S>*>(vec.front().get())
            ->ParseIndexBlock(vcn, index_block)) {
     return;
   }
@@ -725,9 +730,9 @@ void FileRecord<S>::Impl::MergeStreamChain(
     std::vector<std::unique_ptr<AttrBase<S>>>& attrs,
     std::vector<size_t>& indices, std::vector<size_t>& to_erase) {
   // indices only holds indices below attrs.size().
-  const auto non_resident = [&attrs](size_t idx) -> AttrNonResident<S>& {
+  const auto non_resident = [&attrs](size_t idx) -> Attr::AttrNonResident<S>& {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    return static_cast<AttrNonResident<S>&>(*attrs[idx]);
+    return static_cast<Attr::AttrNonResident<S>&>(*attrs[idx]);
   };
 
   std::ranges::sort(
@@ -851,7 +856,7 @@ bool FileRecord<S>::Impl::AttachEfsContext() {
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
-  std::vector<AttrNonResident<S>*> encrypted;
+  std::vector<Attr::AttrNonResident<S>*> encrypted;
 #endif
 
   for (const std::unique_ptr<AttrBase<S>>& attr :
@@ -871,7 +876,7 @@ bool FileRecord<S>::Impl::AttachEfsContext() {
       continue;
     }
 
-    auto* non_resident = dynamic_cast<AttrNonResident<S>*>(attr.get());
+    auto* non_resident = dynamic_cast<Attr::AttrNonResident<S>*>(attr.get());
     if (non_resident == nullptr) {
       Log::Recoverable(recover,
                        "A resident $DATA is flagged encrypted. Read as is.");
@@ -898,7 +903,7 @@ bool FileRecord<S>::Impl::AttachEfsContext() {
       ReadEfsEntries(),
       [&volume = *volume] { return volume.GetEfsKeyProvider(); },
       volume->GetEfsCipherBackend());
-  for (AttrNonResident<S>* stream : encrypted) {
+  for (Attr::AttrNonResident<S>* stream : encrypted) {
     stream->SetEfsContext(context);
   }
 #endif
@@ -1028,7 +1033,8 @@ std::wstring_view FileRecord<S>::GetFileName() const {
        std::get<Attr::AttrIndex(AttrType::FileName)>(impl_->attr_list)) {
     const Filename* filename = nullptr;
     filename = reinterpret_cast<
-        const AttrFileName<AttrResident<S>, Strategy::NoCache>*>(fn.get());
+        const Attr::AttrFileName<Attr::AttrResident<S>, Strategy::NoCache>*>(
+        fn.get());
 
     if (filename->IsWin32Name() && !filename->GetFilename().empty()) {
       return filename->GetFilename();
@@ -1047,14 +1053,13 @@ ULONGLONG FileRecord<S>::GetFileSize() const noexcept {
     return 0;
   }
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrFileName<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrFileName<Attr::AttrResidentNoCache,
+                                                     Strategy::NoCache>*>(
                vec.front().get())
         ->GetFileSize();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrFileName<AttrResidentFullCache, Strategy::FullCache>*>(
-               vec.front().get())
+    return reinterpret_cast<const Attr::AttrFileName<
+        Attr::AttrResidentFullCache, Strategy::FullCache>*>(vec.front().get())
         ->GetFileSize();
   }
   return 0;
@@ -1077,13 +1082,13 @@ void FileRecord<S>::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
   // Standard Information attribute hold the most updated file time
   if (!vec.empty()) {
     if constexpr (S == Strategy::NoCache) {
-      reinterpret_cast<
-          const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+      reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                               Strategy::NoCache>*>(
           vec.front().get())
           ->GetFileTime(write_tm, create_tm, access_tm, change_tm);
     } else if constexpr (S == Strategy::FullCache) {
-      reinterpret_cast<
-          const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+      reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                               Strategy::FullCache>*>(
           vec.front().get())
           ->GetFileTime(write_tm, create_tm, access_tm, change_tm);
     }
@@ -1134,18 +1139,16 @@ void FileRecord<S>::TraverseSubEntries(const SubentryCallback& se_call_back,
   const std::vector<IndexEntryView>* all_ie = nullptr;
 
   if constexpr (S == Strategy::NoCache) {
-    const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>*>(
-        vec.front().get());
+    const auto* index_root = reinterpret_cast<const Attr::AttrIndexRoot<
+        Attr::AttrResidentNoCache, Strategy::NoCache>*>(vec.front().get());
 
     if (!index_root->IsFileName()) {
       return;
     }
     all_ie = index_root;
   } else if constexpr (S == Strategy::FullCache) {
-    const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>*>(
-        vec.front().get());
+    const auto* index_root = reinterpret_cast<const Attr::AttrIndexRoot<
+        Attr::AttrResidentFullCache, Strategy::FullCache>*>(vec.front().get());
 
     if (!index_root->IsFileName()) {
       return;
@@ -1236,7 +1239,7 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
     return;
   }
 
-  auto* alloc = static_cast<AttrIndexAlloc<S>*>(vec.front().get());
+  auto* alloc = static_cast<Attr::AttrIndexAlloc<S>*>(vec.front().get());
 
   // A sub-node VCN (what visitedVcns holds, and what ParseIndexBlock()
   // expects) is in clusters when a block spans a whole cluster or more, but
@@ -1287,7 +1290,7 @@ void FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
       continue;
     }
 
-    IndexBlock index_block;
+    Attr::IndexBlock index_block;
     if (!alloc->ParseIndexBlock(vcn, index_block)) {
       continue;
     }
@@ -1338,13 +1341,13 @@ template <Strategy S>
 const std::vector<IndexEntryView>*
     FileRecord<S>::Impl::FileNameIndexRootEntries(const AttrBase<S>& attr) {
   if constexpr (S == Strategy::NoCache) {
-    const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentNoCache, Strategy::NoCache>*>(&attr);
+    const auto* index_root =
+        reinterpret_cast<const Attr::AttrIndexRoot<Attr::AttrResidentNoCache,
+                                                   Strategy::NoCache>*>(&attr);
     return index_root->IsFileName() ? index_root : nullptr;
   } else if constexpr (S == Strategy::FullCache) {
-    const auto* index_root = reinterpret_cast<
-        const AttrIndexRoot<AttrResidentFullCache, Strategy::FullCache>*>(
-        &attr);
+    const auto* index_root = reinterpret_cast<const Attr::AttrIndexRoot<
+        Attr::AttrResidentFullCache, Strategy::FullCache>*>(&attr);
     return index_root->IsFileName() ? index_root : nullptr;
   } else {
     return nullptr;
@@ -1372,7 +1375,7 @@ std::optional<IndexEntry> FileRecord<S>::Impl::FindSubEntryInOrder(
 
   std::unordered_set<ULONGLONG> visited_vcns;
   // Loaded before the walk: reading $UpCase reuses the volume's buffers.
-  const UpCaseTable& upcase = volume->impl_->GetUpCaseTable();
+  const UpCase::Table& upcase = volume->impl_->GetUpCaseTable();
 
   for (const IndexEntryView& index_entry : *all_ie) {
     if (index_entry.HasName()) {
@@ -1466,13 +1469,13 @@ bool FileRecord<S>::IsReadOnly() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsReadOnly();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsReadOnly();
   }
@@ -1489,13 +1492,13 @@ bool FileRecord<S>::IsHidden() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsHidden();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsHidden();
   }
@@ -1512,13 +1515,13 @@ bool FileRecord<S>::IsSystem() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsSystem();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsSystem();
   }
@@ -1535,13 +1538,13 @@ bool FileRecord<S>::IsArchive() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsArchive();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsArchive();
   }
@@ -1558,13 +1561,13 @@ bool FileRecord<S>::IsDevice() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsDevice();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsDevice();
   }
@@ -1581,13 +1584,13 @@ bool FileRecord<S>::IsNormal() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsNormal();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsNormal();
   }
@@ -1604,13 +1607,13 @@ bool FileRecord<S>::IsTemporary() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsTemporary();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsTemporary();
   }
@@ -1627,13 +1630,13 @@ bool FileRecord<S>::IsCompressed() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsCompressed();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsCompressed();
   }
@@ -1650,13 +1653,13 @@ bool FileRecord<S>::IsOffline() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsOffline();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsOffline();
   }
@@ -1673,13 +1676,13 @@ bool FileRecord<S>::IsNotContentIndexed() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsNotContentIndexed();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsNotContentIndexed();
   }
@@ -1696,13 +1699,13 @@ bool FileRecord<S>::IsEncrypted() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsEncrypted();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsEncrypted();
   }
@@ -1719,13 +1722,13 @@ bool FileRecord<S>::IsSparse() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsSparse();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsSparse();
   }
@@ -1742,13 +1745,13 @@ bool FileRecord<S>::IsReparsePoint() const noexcept {
   }
 
   if constexpr (S == Strategy::NoCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
+                                                    Strategy::NoCache>*>(
                vec.front().get())
         ->IsReparsePoint();
   } else if constexpr (S == Strategy::FullCache) {
-    return reinterpret_cast<
-               const AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
+                                                    Strategy::FullCache>*>(
                vec.front().get())
         ->IsReparsePoint();
   }

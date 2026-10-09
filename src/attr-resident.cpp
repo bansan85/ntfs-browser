@@ -10,19 +10,16 @@
 #include <ntfs-browser/data/attr-header-common.h>
 #include <ntfs-browser/strategy.h>
 
-#include "attr/header-resident.h"
+#include "data/header-resident.h"
 #include "ntfs-browser/win-types.h"
 
-namespace NtfsBrowser {
-
-template <Strategy S>
-class FileRecord;
+namespace NtfsBrowser::Attr {
 
 namespace {
 
 // Returns the attribute body. ValidateResidentBounds() MUST have accepted
 // the header first.
-std::span<const BYTE> ResidentBody(const Attr::HeaderResident& header) {
+std::span<const BYTE> ResidentBody(const Data::HeaderResident& header) {
   return std::span<const BYTE>(reinterpret_cast<const BYTE*>(&header),
                                header.header.total_size)
       .subspan(header.attr_offset, header.attr_size);
@@ -30,7 +27,7 @@ std::span<const BYTE> ResidentBody(const Attr::HeaderResident& header) {
 
 // Rejects an attr_offset/attr_size pair reaching past the attribute's own
 // total_size, which is already bounds-checked against the record buffer.
-void ValidateResidentBounds(const Attr::HeaderResident& header) {
+void ValidateResidentBounds(const Data::HeaderResident& header) {
   if (static_cast<ULONGLONG>(header.attr_offset) + header.attr_size >
       header.header.total_size) {
     throw std::runtime_error(
@@ -53,7 +50,7 @@ AttrResident<S>::AttrResident(const AttrHeaderCommon& ahc,
 template <Strategy S>
 ULONGLONG AttrResident<S>::GetAllocatedSize() const noexcept {
   const auto& header =
-      reinterpret_cast<const Attr::HeaderResident&>(this->GetAttrHeader());
+      reinterpret_cast<const Data::HeaderResident&>(this->GetAttrHeader());
   return header.header.total_size - header.attr_offset;
 }
 
@@ -92,7 +89,7 @@ AttrResidentNoCache::AttrResidentNoCache(
     const AttrHeaderCommon& ahc,
     const FileRecord<Strategy::NoCache>& file_record)
     : AttrResident(ahc, file_record) {
-  const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
+  const auto& header = reinterpret_cast<const Data::HeaderResident&>(ahc);
   ValidateResidentBounds(header);
 
   body_ = ResidentBody(header);
@@ -110,7 +107,7 @@ AttrResidentFullCache::AttrResidentFullCache(
     const AttrHeaderCommon& ahc,
     const FileRecord<Strategy::FullCache>& file_record)
     : AttrResident(ahc, file_record) {
-  const auto& header = reinterpret_cast<const Attr::HeaderResident&>(ahc);
+  const auto& header = reinterpret_cast<const Data::HeaderResident&>(ahc);
   ValidateResidentBounds(header);
 
   body_.resize(header.attr_size);
@@ -128,4 +125,4 @@ ULONGLONG AttrResidentFullCache::GetDataSize() const noexcept {
   return body_.size();
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

@@ -8,15 +8,11 @@
 #include <ntfs-browser/strategy.h>
 
 #include "attr-resident.h"
-#include "attr/standard-information.h"
+#include "data/standard-information.h"
 #include "flag/std-info-permission.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser {
-
-struct AttrHeaderCommon;
-template <Strategy S>
-class FileRecord;
+namespace NtfsBrowser::Attr {
 
 namespace {
 
@@ -29,13 +25,13 @@ constexpr unsigned dword_bits = 32;
 // Checks the body size before a reference is bound to it: an empty body may
 // have a null data pointer, which a reference MUST NOT be bound to.
 template <typename Resident>
-const Attr::StandardInformation& CheckedStdInfo(const Resident& attr) {
-  if (attr.GetDataSize() < offsetof(Attr::StandardInformation, owner_id)) {
+const Data::StandardInformation& CheckedStdInfo(const Resident& attr) {
+  if (attr.GetDataSize() < offsetof(Data::StandardInformation, owner_id)) {
     throw std::runtime_error(
         "Standard Information attribute smaller than expected.\n");
   }
 
-  return *reinterpret_cast<const Attr::StandardInformation*>(attr.GetData());
+  return *reinterpret_cast<const Data::StandardInformation*>(attr.GetData());
 }
 
 }  // namespace
@@ -179,4 +175,4 @@ void AttrStdInfo<Resident, S>::UTC2Local(const ULONGLONG& ultm,
 template class AttrStdInfo<AttrResidentFullCache, Strategy::FullCache>;
 template class AttrStdInfo<AttrResidentNoCache, Strategy::NoCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

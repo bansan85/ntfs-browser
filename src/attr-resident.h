@@ -15,6 +15,8 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
+namespace Attr {
+
 template <Strategy S>
 class AttrResident : public AttrBase<S> {
  public:
@@ -51,5 +53,7 @@ class AttrResidentFullCache : public AttrResident<Strategy::FullCache> {
  private:
   std::vector<BYTE> body_;
 };
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

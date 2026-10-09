@@ -12,11 +12,13 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace Attr {
+namespace Data {
 
 struct AttributeList;
 
-}  // namespace Attr
+}  // namespace Data
+
+namespace Attr {
 
 template <typename Resident, Strategy S>
 class AttrList : public Resident {
@@ -33,10 +35,12 @@ class AttrList : public Resident {
   ~AttrList() override;
 
  private:
-  static void ResolveEntry(const Attr::AttributeList& entry,
+  static void ResolveEntry(const Data::AttributeList& entry,
                            FileRecord<S>& file_record,
                            std::unordered_set<ULONGLONG>& attr_list_chain,
                            bool recover);
 };  // AttrList
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

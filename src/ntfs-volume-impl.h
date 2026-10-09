@@ -28,11 +28,19 @@
 namespace NtfsBrowser {
 
 // Caches reads from the volume's backing IDiskReader.
+namespace Io {
+
 template <Strategy S>
 class FileReader;
 
+}  // namespace Io
+
 // The volume's $UpCase table.
-class UpCaseTable;
+namespace UpCase {
+
+class Table;
+
+}  // namespace UpCase
 
 // Everything NtfsVolume<S> keeps out of its public header: the members, and the
 // private methods that work on them. FileRecord<S>, a friend of NtfsVolume<S>,
@@ -45,7 +53,7 @@ class NtfsVolume<S>::Impl {
   // The NtfsVolume this belongs to. The FileRecords it owns are built over it.
   NtfsVolume<S>* self;
   ULONGLONG mft_addr{0};
-  std::unique_ptr<FileReader<S>> volume;
+  std::unique_ptr<Io::FileReader<S>> volume;
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
@@ -54,7 +62,7 @@ class NtfsVolume<S>::Impl {
   // The volume's own $UpCase, loaded on first use by GetUpCaseTable(). Stays
   // null when $UpCase cannot be read; upcase_loaded_ then keeps the failure
   // from being retried.
-  mutable std::unique_ptr<const UpCaseTable> upcase;
+  mutable std::unique_ptr<const UpCase::Table> upcase;
 
   FileRecord<S> mft_record;  // $MFT File Record
 
@@ -133,8 +141,8 @@ class NtfsVolume<S>::Impl {
   [[nodiscard]] std::optional<ULONGLONG>
       ReadMftData(ULONGLONG offset, std::span<BYTE> buffer) const;
   [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
-  [[nodiscard]] const UpCaseTable& GetUpCaseTable() const;
-  [[nodiscard]] std::unique_ptr<const UpCaseTable> LoadUpCaseTable() const;
+  [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
+  [[nodiscard]] std::unique_ptr<const UpCase::Table> LoadUpCaseTable() const;
   void AttrRawCallBack(DWORD att_type, const AttrHeaderCommon& ahc,
                        bool& discard) const;
 };

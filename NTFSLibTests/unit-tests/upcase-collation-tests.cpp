@@ -27,8 +27,8 @@ using NtfsBrowser::IndexEntry;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
-using NtfsBrowser::UpCaseTable;
 using NtfsBrowser::Enum::MftIdx;
+using NtfsBrowser::UpCase::Table;
 using NtfsBrowserTests::NonAsciiNameLayout;
 
 namespace {
@@ -80,8 +80,8 @@ std::vector<BYTE> MakeMinimalUpCaseBytes() {
   constexpr size_t case_distance = 0x20;
   constexpr unsigned bits_per_byte = 8;
 
-  std::vector<BYTE> bytes(NtfsBrowser::UpCaseTable::byte_count);
-  for (size_t unit = 0; unit < NtfsBrowser::UpCaseTable::unit_count; unit++) {
+  std::vector<BYTE> bytes(NtfsBrowser::UpCase::Table::byte_count);
+  for (size_t unit = 0; unit < NtfsBrowser::UpCase::Table::unit_count; unit++) {
     const size_t upper =
         (unit >= L'a' && unit <= L'z') ? unit - case_distance : unit;
     // bytes holds 2 bytes for each unit below UpCaseTable::unit_count.
@@ -161,7 +161,7 @@ TEST_CASE(
 
 TEST_CASE("The built-in case mapping is the Unicode simple uppercase mapping",
           "[filename][upcase][regression]") {
-  const UpCaseTable& table = UpCaseTable::BuiltIn();
+  const Table& table = Table::BuiltIn();
   CHECK(table.IsBuiltIn());
 
   CHECK(table.Map(u'a') == u'A');
@@ -193,7 +193,7 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[acute_e_unit * 2 + 1] = 0x00;
 
-    const std::optional<UpCaseTable> table = UpCaseTable::FromBytes(bytes);
+    const std::optional<Table> table = Table::FromBytes(bytes);
     REQUIRE(table.has_value());
     CHECK_FALSE(NtfsBrowserTests::Unwrap(table).IsBuiltIn());
     CHECK(NtfsBrowserTests::Unwrap(table).Map(u'a') == u'A');
@@ -203,18 +203,18 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
 
   SECTION("a short stream is refused") {
     const std::vector<BYTE> bytes(good.begin(), good.end() - 2);
-    CHECK_FALSE(UpCaseTable::FromBytes(bytes).has_value());
+    CHECK_FALSE(Table::FromBytes(bytes).has_value());
   }
 
   SECTION("a wiped stream is refused") {
     const std::vector<BYTE> bytes(good.size(), 0);
-    CHECK_FALSE(UpCaseTable::FromBytes(bytes).has_value());
+    CHECK_FALSE(Table::FromBytes(bytes).has_value());
   }
 }
 
 TEST_CASE("Case tables collate names unit by unit through their mapping",
           "[filename][upcase][regression]") {
-  const UpCaseTable& table = UpCaseTable::BuiltIn();
+  const Table& table = Table::BuiltIn();
 
   CHECK(table.Compare(L"abc", L"ABC") == 0);
   CHECK(table.Compare(L"\u00E9.txt", L"\u00C9.TXT") == 0);
@@ -230,7 +230,7 @@ TEST_CASE("Case tables collate a supplementary code point as a surrogate pair",
           "[filename][upcase][regression]") {
   // U+1F600 is the pair D83D DE00 in UTF-16, which sorts before U+FFFD,
   // although the code point itself is the larger one.
-  const UpCaseTable& table = UpCaseTable::BuiltIn();
+  const Table& table = Table::BuiltIn();
   CHECK(table.Compare(L"\U0001F600", L"\uFFFD") < 0);
   CHECK(table.Compare(L"\uFFFD", L"\U0001F600") > 0);
   CHECK(table.Compare(L"\U0001F600", L"\U0001F600") == 0);

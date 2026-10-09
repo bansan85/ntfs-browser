@@ -11,6 +11,8 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
+namespace Attr {
+
 template <typename Resident, Strategy S>
 class AttrVolName : public Resident {
  public:
@@ -30,5 +32,7 @@ class AttrVolName : public Resident {
   // Get NTFS Volume Unicode Name
   [[nodiscard]] std::wstring_view GetName() const noexcept;
 };  // AttrVolInfo
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

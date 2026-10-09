@@ -12,7 +12,7 @@
 
 #include <ntfs-browser/index-entry.h>
 
-#include "attr/filename.h"
+#include "data/filename.h"
 #include "data/index-entry.h"
 #include "flag/filename-namespace.h"
 #include "flag/filename.h"
@@ -46,7 +46,7 @@ IndexEntry MakeSystemEntry() {
   index_entry.mft_sn = 1;
 
   auto& filename =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&index_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
   filename.flags = NtfsBrowser::Flag::Filename::Directory;
   filename.name_length = name_len;
   filename.name_space = NtfsBrowser::Flag::FilenameNamespace::Win32;
@@ -79,7 +79,7 @@ IndexEntry MakeNamedEntry(std::wstring_view name) {
   index_entry.mft_sn = 1;
 
   auto& filename =
-      *reinterpret_cast<NtfsBrowser::Attr::Filename*>(&index_entry.stream);
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
   filename.flags = NtfsBrowser::Flag::Filename::Directory;
   filename.name_length = gsl::narrow<BYTE>(name.size());
   filename.name_space = NtfsBrowser::Flag::FilenameNamespace::Win32;

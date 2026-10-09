@@ -7,11 +7,11 @@
 #include <ntfs-browser/export.h>
 
 namespace NtfsBrowser {
-namespace Attr {
+namespace Data {
 
 struct Filename;
 
-}  // namespace Attr
+}  // namespace Data
 
 namespace Flag {
 
@@ -21,7 +21,11 @@ enum class Filename : DWORD;
 
 // The case mapping NTFS orders names by. An implementation detail: consumers
 // only ever meet it through NtfsVolume, which owns the volume's table.
-class UpCaseTable;
+namespace UpCase {
+
+class Table;
+
+}  // namespace UpCase
 
 class NTFS_BROWSER_EXPORT Filename {
  public:
@@ -33,12 +37,12 @@ class NTFS_BROWSER_EXPORT Filename {
   virtual ~Filename() = default;
 
  protected:
-  void SetFilename(const Attr::Filename& filename);
-  void CopyFilename(const Filename& filename, const Attr::Filename& afn);
+  void SetFilename(const Data::Filename& filename);
+  void CopyFilename(const Filename& filename, const Data::Filename& afn);
 
  private:
   // May be NULL for an IndexEntry
-  const Attr::Filename* filename_{nullptr};
+  const Data::Filename* filename_{nullptr};
   // The decoded file name, filled in by GetFilename() so Compare() and
   // repeat callers can reuse it without redecoding. Owned, not a view into
   // the on-disk bytes: those are raw UTF-16 code units (WORD), which is not
@@ -57,7 +61,7 @@ class NTFS_BROWSER_EXPORT Filename {
   // Same, folding case through upcase, the table of the volume this name
   // came from.
   [[nodiscard]] int Compare(std::wstring_view file_name,
-                            const UpCaseTable& upcase) const noexcept;
+                            const UpCase::Table& upcase) const noexcept;
 
   [[nodiscard]] ULONGLONG GetFileSize() const noexcept;
   // Allocated size of the file, as last mirrored into this $FILE_NAME (NTFS

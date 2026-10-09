@@ -4,12 +4,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <span>
-#include <vector>
-
-#include <ntfs-browser/strategy.h>
-
-#include "../internal-export.h"
 
 namespace NtfsBrowser {
 namespace Flag {
@@ -18,16 +12,15 @@ enum class FileRecord : std::uint8_t;
 
 }  // namespace Flag
 
-struct AttrHeaderCommon;
-template <Strategy S>
-struct FileRecordHeaderImpl;
+namespace Data {
 
-struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader {
+// The on-disk header of an MFT file record, followed by its attributes.
+struct FileRecordHeader {
   // The "FILE" signature that opens a file record, read as a little-endian
   // DWORD.
   static constexpr uint32_t file_record_magic = 'ELIF';
 
-  // Size of Data's named header fields, before the first attribute begins.
+  // Size of the named header fields, before the first attribute begins.
   static constexpr size_t min_file_record_header_size = 48;
 
   // Largest file record size a real NTFS volume can have (a 4Kn volume's).
@@ -49,7 +42,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader {
     return declared < blocks ? declared : blocks;
   }
 
-  union Data {
+  union {
     struct {
       DWORD magic;          // "FILE"
       WORD offset_of_us;    // Offset of Update Sequence
@@ -70,57 +63,7 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader {
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
     BYTE raw[max_file_record_size];
   };
-
-  WORD us_number{0};
-  std::vector<WORD> us_array;
-  // Actual buffer size this instance was constructed with.
-  size_t buffer_size;
-
-  explicit FileRecordHeader(std::span<const BYTE> buffer);
-  FileRecordHeader(const FileRecordHeader&) = delete;
-  FileRecordHeader& operator=(const FileRecordHeader&) = delete;
-  FileRecordHeader(FileRecordHeader&&) = delete;
-  FileRecordHeader& operator=(FileRecordHeader&&) = delete;
-  virtual ~FileRecordHeader() = default;
-  // Verify US and update sectors
-  [[nodiscard]] bool PatchUS() noexcept;
-  // Returns nullptr if offset_of_attr doesn't fit in the record buffer.
-  [[nodiscard]] const AttrHeaderCommon* HeaderCommon() const noexcept;
-
-  [[nodiscard]] virtual const FileRecordHeader::Data* GetData() const = 0;
 };
 
-template <Strategy S>
-struct FileRecordHeaderImpl {};
-
-template <>
-struct NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::NoCache> : public FileRecordHeader {
-  std::span<const BYTE> data;
-
-  explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
-  FileRecordHeaderImpl(const FileRecordHeaderImpl&) = delete;
-  FileRecordHeaderImpl& operator=(const FileRecordHeaderImpl&) = delete;
-  FileRecordHeaderImpl(FileRecordHeaderImpl&&) = delete;
-  FileRecordHeaderImpl& operator=(FileRecordHeaderImpl&&) = delete;
-  ~FileRecordHeaderImpl() override = default;
-
-  [[nodiscard]] const FileRecordHeader::Data* GetData() const override;
-};
-
-template <>
-struct NTFS_BROWSER_EXPORT_TESTS_ONLY
-    FileRecordHeaderImpl<Strategy::FullCache> : public FileRecordHeader {
-  FileRecordHeader::Data data{};
-
-  explicit FileRecordHeaderImpl(std::span<const BYTE> buffer);
-  FileRecordHeaderImpl(const FileRecordHeaderImpl&) = delete;
-  FileRecordHeaderImpl& operator=(const FileRecordHeaderImpl&) = delete;
-  FileRecordHeaderImpl(FileRecordHeaderImpl&&) = delete;
-  FileRecordHeaderImpl& operator=(FileRecordHeaderImpl&&) = delete;
-  ~FileRecordHeaderImpl() override = default;
-
-  [[nodiscard]] const FileRecordHeader::Data* GetData() const override;
-};
-
+}  // namespace Data
 }  // namespace NtfsBrowser

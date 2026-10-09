@@ -21,29 +21,30 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/strategy.h>
 
-#include "attr/filename.h"
-#include "attr/header-non-resident.h"
-#include "attr/header-resident.h"
-#include "attr/index-root.h"
 #include "data/file-record-header.h"
+#include "data/filename.h"
+#include "data/header-non-resident.h"
+#include "data/header-resident.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
+#include "data/index-root.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
+#include "record/header.h"
 
 using NtfsBrowser::AttrHeaderCommon;
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
-using NtfsBrowser::FileRecordHeader;
-using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Data::FileRecordHeader;
 using NtfsBrowser::Data::index_block_magic;
 using NtfsBrowser::Enum::MftIdx;
+using NtfsBrowser::Record::HeaderImpl;
 
 namespace {
 
@@ -56,7 +57,7 @@ constexpr size_t first_attr_offset = 48;
 
 // Size of the resident attributes below: their header and one body byte. It
 // is not a multiple of 4, so the attribute after it sits off any alignment.
-constexpr DWORD odd_attr_size = sizeof(NtfsBrowser::Attr::HeaderResident) + 1;
+constexpr DWORD odd_attr_size = sizeof(NtfsBrowser::Data::HeaderResident) + 1;
 
 size_t RecordOffset(ULONGLONG idx) {
   return mft_offset + (NtfsBrowserTests::fake_file_record_size * idx);
@@ -71,7 +72,7 @@ void Put(std::vector<BYTE>& image, size_t offset, T value) {
 
 // Writes a resident attribute of type at offset, odd_attr_size bytes long.
 void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, AttrType type) {
-  NtfsBrowser::Attr::HeaderResident header{};
+  NtfsBrowser::Data::HeaderResident header{};
   header.header.type = type;
   header.header.total_size = odd_attr_size;
   header.attr_size = 1;
@@ -103,7 +104,7 @@ void RunOddSizedAttributesAreParsedAligned() {
     REQUIRE(attrs.size() == 1);
     const auto address =
         reinterpret_cast<std::uintptr_t>(&attrs.front()->GetAttrHeader());
-    CHECK(address % alignof(NtfsBrowser::Attr::HeaderNonResident) == 0);
+    CHECK(address % alignof(NtfsBrowser::Data::HeaderNonResident) == 0);
     CHECK(attrs.front()->GetAttrTotalSize() == odd_attr_size);
   }
 }
@@ -144,7 +145,7 @@ TEMPLATE_TEST_CASE_SIG(
     Strategy::NoCache, Strategy::FullCache) {
   constexpr BYTE shortened_name_length = 2;
   constexpr WORD shortened_stream_size =
-      offsetof(NtfsBrowser::Attr::Filename, name) +
+      offsetof(NtfsBrowser::Data::Filename, name) +
       (size_t{2} * shortened_name_length);
   constexpr WORD shortened_entry_size =
       offsetof(NtfsBrowser::Data::IndexEntry, stream) + shortened_stream_size;
@@ -160,16 +161,16 @@ TEMPLATE_TEST_CASE_SIG(
       RecordOffset(NtfsBrowserTests::index_root_variant_a_dir_idx) +
       first_attr_offset;
   const size_t root_offset =
-      attr_offset + sizeof(NtfsBrowser::Attr::HeaderResident);
+      attr_offset + sizeof(NtfsBrowser::Data::HeaderResident);
   const size_t entry_offset =
-      root_offset + sizeof(NtfsBrowser::Attr::IndexRoot);
+      root_offset + sizeof(NtfsBrowser::Data::IndexRoot);
 
   // The fixture's one real entry is "AAA" (88 bytes), then the terminator.
   // Dropping a character moves the terminator 2 bytes down.
   constexpr size_t original_entry_size = 88;
   Put(image,
       entry_offset + offsetof(NtfsBrowser::Data::IndexEntry, stream) +
-          offsetof(NtfsBrowser::Attr::Filename, name_length),
+          offsetof(NtfsBrowser::Data::Filename, name_length),
       shortened_name_length);
   Put(image,
       entry_offset + offsetof(NtfsBrowser::Data::IndexEntry, stream_size),
@@ -181,17 +182,17 @@ TEMPLATE_TEST_CASE_SIG(
   std::memset(&image.at(entry_offset + entries_size), 0, 2);
 
   Put(image,
-      root_offset + offsetof(NtfsBrowser::Attr::IndexRoot, total_entry_size),
+      root_offset + offsetof(NtfsBrowser::Data::IndexRoot, total_entry_size),
       entries_size);
   Put(image,
-      root_offset + offsetof(NtfsBrowser::Attr::IndexRoot, alloc_entry_size),
+      root_offset + offsetof(NtfsBrowser::Data::IndexRoot, alloc_entry_size),
       entries_size);
-  const DWORD attr_size = sizeof(NtfsBrowser::Attr::IndexRoot) + entries_size;
+  const DWORD attr_size = sizeof(NtfsBrowser::Data::IndexRoot) + entries_size;
   Put(image,
-      attr_offset + offsetof(NtfsBrowser::Attr::HeaderResident, attr_size),
+      attr_offset + offsetof(NtfsBrowser::Data::HeaderResident, attr_size),
       attr_size);
   const DWORD total_size =
-      sizeof(NtfsBrowser::Attr::HeaderResident) + attr_size;
+      sizeof(NtfsBrowser::Data::HeaderResident) + attr_size;
   Put(image, attr_offset + offsetof(NtfsBrowser::AttrHeaderCommon, total_size),
       total_size);
   std::memset(&image.at(attr_offset + total_size), 0, 2 * sizeof(DWORD));
@@ -213,7 +214,7 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "FileRecordHeader reads an Update Sequence Array that starts at an odd "
+    "Record::Header reads an Update Sequence Array that starts at an odd "
     "offset",
     "[file-record-header][alignment][regression]", ((Strategy S), S),
     Strategy::NoCache, Strategy::FullCache) {
@@ -224,17 +225,16 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr WORD second_block_word = 0xBBBB;
 
   std::vector<BYTE> storage(record_size, 0);
-  NtfsBrowserTests::EditFileRecordHeader(
-      storage, [](FileRecordHeader::Data& header) {
-        header.magic = FileRecordHeader::file_record_magic;
-        header.offset_of_us = odd_offset_of_us;
-        header.size_of_us = 3;
-      });
+  NtfsBrowserTests::EditFileRecordHeader(storage, [](FileRecordHeader& header) {
+    header.magic = FileRecordHeader::file_record_magic;
+    header.offset_of_us = odd_offset_of_us;
+    header.size_of_us = 3;
+  });
   Put(storage, odd_offset_of_us, usn);
   Put(storage, odd_offset_of_us + sizeof(WORD), first_block_word);
   Put(storage, odd_offset_of_us + (2 * sizeof(WORD)), second_block_word);
 
-  const auto record = FileRecordHeaderImpl<S>(std::span<const BYTE>(storage));
+  const auto record = HeaderImpl<S>(std::span<const BYTE>(storage));
 
   CHECK(record.us_number == usn);
   REQUIRE(record.us_array.size() == 2);

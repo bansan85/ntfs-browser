@@ -13,7 +13,7 @@
 
 #include <gsl/narrow>
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::UpCase {
 namespace {
 
 // One run of the built-in mapping: every step-th unit from first to last
@@ -289,7 +289,7 @@ class Utf16Cursor {
 
 // Expands built_in_runs into a full table.
 std::vector<char16_t> MakeBuiltInMap() {
-  std::vector<char16_t> map(UpCaseTable::unit_count);
+  std::vector<char16_t> map(Table::unit_count);
   for (size_t unit = 0; unit < map.size(); unit++) {
     // unit < map.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -307,23 +307,23 @@ std::vector<char16_t> MakeBuiltInMap() {
 }  // namespace
 
 // Private: callers go through BuiltIn() or FromBytes().
-UpCaseTable::UpCaseTable(std::vector<char16_t> map, bool built_in)
+Table::Table(std::vector<char16_t> map, bool built_in)
     : map_(std::move(map)), built_in_(built_in) {}
 
-const UpCaseTable& UpCaseTable::BuiltIn() {
-  static const UpCaseTable table(MakeBuiltInMap(), true);
+const Table& Table::BuiltIn() {
+  static const Table table(MakeBuiltInMap(), true);
   return table;
 }
 
-std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes) {
-  if (bytes.size() < UpCaseTable::byte_count) {
+std::optional<Table> Table::FromBytes(std::span<const BYTE> bytes) {
+  if (bytes.size() < Table::byte_count) {
     return std::nullopt;
   }
 
-  std::vector<char16_t> map(UpCaseTable::unit_count);
+  std::vector<char16_t> map(Table::unit_count);
   for (size_t unit = 0; unit < map.size(); unit++) {
     const size_t offset = unit * sizeof(char16_t);
-    // bytes.size() >= UpCaseTable::byte_count = 2 * map.size(), so offset + 1
+    // bytes.size() >= Table::byte_count = 2 * map.size(), so offset + 1
     // is in range. unit < map.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto low = bytes[offset];
@@ -343,20 +343,20 @@ std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes) {
     }
   }
 
-  return UpCaseTable(std::move(map), false);
+  return Table(std::move(map), false);
 }
 
-bool UpCaseTable::IsBuiltIn() const noexcept { return built_in_; }
+bool Table::IsBuiltIn() const noexcept { return built_in_; }
 
-char16_t UpCaseTable::Map(char16_t unit) const noexcept {
-  // Both factories build UpCaseTable::unit_count entries, one per char16_t
+char16_t Table::Map(char16_t unit) const noexcept {
+  // Both factories build Table::unit_count entries, one per char16_t
   // value.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return map_[unit];
 }
 
-int UpCaseTable::Compare(std::wstring_view first,
-                         std::wstring_view second) const noexcept {
+int Table::Compare(std::wstring_view first,
+                   std::wstring_view second) const noexcept {
   Utf16Cursor left(first);
   Utf16Cursor right(second);
   while (!left.AtEnd() && !right.AtEnd()) {
@@ -372,4 +372,4 @@ int UpCaseTable::Compare(std::wstring_view first,
   return left.AtEnd() ? -1 : 1;
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::UpCase

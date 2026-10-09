@@ -9,7 +9,7 @@
 
 #include <ntfs-browser/disk-reader.h>
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Io {
 
 // Production IDiskReader: a real disk/device, or an ordinary file treated
 // the same way (CreateFileW handles both identically). Never used directly
@@ -30,4 +30,4 @@ class Win32DiskReader : public IDiskReader {
   HandlePtr handle_;
 };
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Io

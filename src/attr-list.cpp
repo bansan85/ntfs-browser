@@ -17,16 +17,12 @@
 #include "attr-non-resident.h"
 #include "attr-resident.h"
 #include "attr-slot.h"
-#include "attr/attribute-list.h"
+#include "data/attribute-list.h"
 #include "file-record-impl.h"
 #include "mft-file-reference.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser {
-
-struct AttrHeaderCommon;
-template <Strategy S>
-class AttrBase;
+namespace NtfsBrowser::Attr {
 
 namespace {
 
@@ -59,7 +55,7 @@ AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
   const bool recover = file_record.GetVolume().GetOptions().recover_errors;
   ULONGLONG offset = 0;
   std::optional<ULONGLONG> len = 0;
-  Attr::AttributeList al_record{};
+  Data::AttributeList al_record{};
   bool truncated = false;
 
   // Marks this record's own chain key first, so a cycle back to it is caught.
@@ -68,8 +64,8 @@ AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
 
   while ((
       len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
-                                    Attr::attribute_list_entry_header_size}))) {
-    if (*len != Attr::attribute_list_entry_header_size) {
+                                    Data::attribute_list_entry_header_size}))) {
+    if (*len != Data::attribute_list_entry_header_size) {
       // A resident list's normal end already exited the loop above (ReadData
       // returns nullopt at offset >= size); a non-resident list's normal end
       // is this exact zero-byte read, landing precisely on the declared
@@ -81,7 +77,7 @@ AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
             "Attribute List: ReadData returned {} bytes, "
             "expected {} - stopping",
             *len,
-            static_cast<ULONGLONG>(Attr::attribute_list_entry_header_size));
+            static_cast<ULONGLONG>(Data::attribute_list_entry_header_size));
       }
       break;
     }
@@ -97,14 +93,14 @@ AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
     ResolveEntry(al_record, file_record, attr_list_chain, recover);
 
     if (al_record.record_size != 0 &&
-        al_record.record_size < Attr::attribute_list_entry_header_size) {
+        al_record.record_size < Data::attribute_list_entry_header_size) {
       truncated = true;
       Log::Recoverable(
           recover,
           "Attribute List: record_size {} is smaller than the "
           "entry header {} - stopping",
           al_record.record_size,
-          static_cast<WORD>(Attr::attribute_list_entry_header_size));
+          static_cast<WORD>(Data::attribute_list_entry_header_size));
       break;
     }
     if (al_record.record_size == 0) {
@@ -134,7 +130,7 @@ AttrList<Resident, S>::AttrList(const AttrHeaderCommon& ahc,
 // into file_record. A contained or unwanted attribute is skipped.
 template <typename Resident, Strategy S>
 void AttrList<Resident, S>::ResolveEntry(
-    const Attr::AttributeList& entry, FileRecord<S>& file_record,
+    const Data::AttributeList& entry, FileRecord<S>& file_record,
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
   const ULONGLONG record_ref = entry.base_ref.segment_number;
   const Mask attr_mask = Attr::AttrMask(entry.attr_type);
@@ -212,4 +208,4 @@ template class AttrList<AttrNonResident<Strategy::NoCache>, Strategy::NoCache>;
 template class AttrList<AttrResidentFullCache, Strategy::FullCache>;
 template class AttrList<AttrResidentNoCache, Strategy::NoCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

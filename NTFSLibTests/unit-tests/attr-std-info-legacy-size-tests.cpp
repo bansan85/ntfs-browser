@@ -21,7 +21,7 @@ using NtfsBrowser::Strategy;
 
 TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs accepts a real-size (48-byte) NTFS 1.2 STANDARD_INFORMATION "
-    "attribute, not just whatever sizeof(Attr::StandardInformation) "
+    "attribute, not just whatever sizeof(Data::StandardInformation) "
     "currently computes to",
     "[file-record][regression]", ((Strategy S), S), Strategy::NoCache,
     Strategy::FullCache) {

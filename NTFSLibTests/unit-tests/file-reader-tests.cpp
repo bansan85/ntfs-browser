@@ -49,10 +49,10 @@ constexpr DWORD second_read_size = 2048;
 // Opens path through a PartitionDiskReader (offset 0) instead of
 // FileReader's own Open(), which only exists on Windows (Win32DiskReader).
 template <NtfsBrowser::Strategy S>
-NtfsBrowser::FileReader<S> OpenOnDisk(const std::filesystem::path& path) {
+NtfsBrowser::Io::FileReader<S> OpenOnDisk(const std::filesystem::path& path) {
   auto reader = std::make_unique<NtfsBrowserTests::PartitionDiskReader>(0);
   REQUIRE(reader->Open(path.wstring()));
-  return NtfsBrowser::FileReader<S>(std::move(reader));
+  return NtfsBrowser::Io::FileReader<S>(std::move(reader));
 }
 
 // Writes content to a new temp file and returns its path.
@@ -98,7 +98,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
   const TempFile file(content);
 
-  const NtfsBrowser::FileReader<S> reader = OpenOnDisk<S>(file.path);
+  const NtfsBrowser::Io::FileReader<S> reader = OpenOnDisk<S>(file.path);
 
   std::array<BYTE, read_into_size> dest{};
   LARGE_INTEGER addr{.QuadPart = read_into_offset};
@@ -118,7 +118,7 @@ TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
   std::vector<BYTE> content(tiny_file_size, tiny_file_fill);
   const TempFile file(content);
 
-  const NtfsBrowser::FileReader<S> reader = OpenOnDisk<S>(file.path);
+  const NtfsBrowser::Io::FileReader<S> reader = OpenOnDisk<S>(file.path);
 
   std::array<BYTE, read_into_size> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
@@ -134,7 +134,7 @@ TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
     content[i] = static_cast<BYTE>(i * pattern_step);
   }
 
-  const NtfsBrowser::FileReader<NtfsBrowser::Strategy::NoCache> reader(
+  const NtfsBrowser::Io::FileReader<NtfsBrowser::Strategy::NoCache> reader(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
 
   LARGE_INTEGER first_addr{.QuadPart = 0};
@@ -165,7 +165,7 @@ TEMPLATE_TEST_CASE_SIG(
   const std::wstring real_path = file.path.wstring();
   const std::wstring longer = real_path + L"xyz";
 
-  NtfsBrowser::FileReader<S> reader;
+  NtfsBrowser::Io::FileReader<S> reader;
   REQUIRE(reader.Open(std::wstring_view(longer.data(), real_path.size())));
 
   std::array<BYTE, tiny_file_size> dest{};

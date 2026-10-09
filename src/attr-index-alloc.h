@@ -10,11 +10,14 @@
 
 namespace NtfsBrowser {
 
-class IndexBlock;
 template <Strategy S>
 class FileRecord;
 struct AttrHeaderCommon;
 enum class Strategy : std::uint8_t;
+
+namespace Attr {
+
+class IndexBlock;
 
 template <Strategy S>
 class AttrIndexAlloc : public AttrNonResident<S> {
@@ -41,5 +44,7 @@ class AttrIndexAlloc : public AttrNonResident<S> {
   [[nodiscard]] bool ParseIndexEntries(std::span<BYTE> block,
                                        IndexBlock& ib_class);
 };  // AttrIndexAlloc
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser

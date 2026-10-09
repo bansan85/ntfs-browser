@@ -22,6 +22,8 @@ namespace NtfsBrowser {
 
 class IDiskReader;
 
+namespace Io {
+
 template <Strategy S>
 class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
  public:
@@ -76,5 +78,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   // this reader's lifetime.
   mutable std::vector<std::vector<BYTE>> crossing_reads_;
 };
+
+}  // namespace Io
 
 }  // namespace NtfsBrowser

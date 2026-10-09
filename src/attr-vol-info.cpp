@@ -5,28 +5,24 @@
 #include <ntfs-browser/strategy.h>
 
 #include "attr-resident.h"
-#include "attr/volume-information.h"
+#include "data/volume-information.h"
 #include "ntfs-browser/win-types.h"
 #include "ntfs-common.h"
 
-namespace NtfsBrowser {
-
-struct AttrHeaderCommon;
-template <Strategy S>
-class FileRecord;
+namespace NtfsBrowser::Attr {
 
 namespace {
 
 // Checks the body size before a reference is bound to it: an empty body may
 // have a null data pointer, which a reference MUST NOT be bound to.
 template <typename Resident>
-const Attr::VolumeInformation& CheckedVolInfo(const Resident& attr) {
-  if (attr.GetDataSize() < sizeof(Attr::VolumeInformation)) {
+const Data::VolumeInformation& CheckedVolInfo(const Resident& attr) {
+  if (attr.GetDataSize() < sizeof(Data::VolumeInformation)) {
     throw std::runtime_error(
         "Volume Information attribute smaller than expected.\n");
   }
 
-  return *reinterpret_cast<const Attr::VolumeInformation*>(attr.GetData());
+  return *reinterpret_cast<const Data::VolumeInformation*>(attr.GetData());
 }
 
 }  // namespace
@@ -51,4 +47,4 @@ std::pair<BYTE, BYTE> AttrVolInfo<Resident, S>::GetVersion() const noexcept {
 template class AttrVolInfo<AttrResidentFullCache, Strategy::FullCache>;
 template class AttrVolInfo<AttrResidentNoCache, Strategy::NoCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

@@ -35,7 +35,8 @@ TEST_CASE(
     "[attr-index-alloc][regression]") {
   constexpr DWORD index_block_size = NtfsBrowserTests::forged_index_block_size;
   constexpr DWORD sectors =
-      index_block_size / NtfsBrowser::FileRecordHeader::update_sequence_stride;
+      index_block_size /
+      NtfsBrowser::Data::FileRecordHeader::update_sequence_stride;
 
   CHECK_FALSE(IndexBlockUsOffsetInBounds(
       NtfsBrowserTests::forged_index_block_offset_of_us, sectors,

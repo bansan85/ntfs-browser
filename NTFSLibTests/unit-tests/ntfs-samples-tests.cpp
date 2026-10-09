@@ -31,8 +31,6 @@
 #include "partition-disk-reader.h"
 
 using NtfsBrowser::AttrBase;
-using NtfsBrowser::AttrFileName;
-using NtfsBrowser::AttrResidentNoCache;
 using NtfsBrowser::AttrType;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
@@ -40,6 +38,8 @@ using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::Mask;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Attr::AttrFileName;
+using NtfsBrowser::Attr::AttrResidentNoCache;
 using NtfsBrowser::Enum::MftIdx;
 
 namespace {

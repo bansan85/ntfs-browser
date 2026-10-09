@@ -20,8 +20,8 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-using NtfsBrowser::FileReader;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Io::FileReader;
 
 namespace {
 

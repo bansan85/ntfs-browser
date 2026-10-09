@@ -6,7 +6,7 @@
 
 #include "ntfs-common.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Io {
 
 Win32DiskReader::Win32DiskReader()
     : handle_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)) {}
@@ -42,4 +42,4 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr,
   return true;
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Io

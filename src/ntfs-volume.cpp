@@ -30,7 +30,7 @@
 #include "attr-slot.h"
 #include "attr-vol-info.h"
 #include "attr-vol-name.h"
-#include "attr/attribute-list.h"
+#include "data/attribute-list.h"
 #include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
@@ -118,7 +118,7 @@ std::optional<DWORD> DecodeClusterSize(char spc, WORD sector_size) {
 template <Strategy S>
 NtfsVolume<S>::Impl::Impl(NtfsVolume<S>& self, const VolumeOptions& options)
     : self(&self),
-      volume(std::make_unique<FileReader<S>>()),
+      volume(std::make_unique<Io::FileReader<S>>()),
       mft_record(self),
       options(options) {}
 
@@ -178,14 +178,14 @@ void NtfsVolume<S>::Impl::Init() {
 
   if constexpr (S == Strategy::NoCache) {
     std::tie(version_major, version_minor) =
-        reinterpret_cast<
-            const AttrVolInfo<AttrResidentNoCache, Strategy::NoCache>*>(
+        reinterpret_cast<const Attr::AttrVolInfo<Attr::AttrResidentNoCache,
+                                                 Strategy::NoCache>*>(
             vec.front().get())
             ->GetVersion();
   } else {
     std::tie(version_major, version_minor) =
-        reinterpret_cast<
-            const AttrVolInfo<AttrResidentFullCache, Strategy::FullCache>*>(
+        reinterpret_cast<const Attr::AttrVolInfo<Attr::AttrResidentFullCache,
+                                                 Strategy::FullCache>*>(
             vec.front().get())
             ->GetVersion();
   }
@@ -199,16 +199,16 @@ void NtfsVolume<S>::Impl::Init() {
   if (!vec2.empty()) {
     if constexpr (S == Strategy::NoCache) {
       const std::wstring_view volname =
-          reinterpret_cast<
-              const AttrVolName<AttrResidentNoCache, Strategy::NoCache>*>(
+          reinterpret_cast<const Attr::AttrVolName<Attr::AttrResidentNoCache,
+                                                   Strategy::NoCache>*>(
               vec2.front().get())
               ->GetName();
       Log::Info("NTFS volume name: {}",
                 Utf::WideToUtf8(TrimTrailingNuls(volname)));
     } else {
       const std::wstring_view volname =
-          reinterpret_cast<
-              const AttrVolName<AttrResidentFullCache, Strategy::FullCache>*>(
+          reinterpret_cast<const Attr::AttrVolName<Attr::AttrResidentFullCache,
+                                                   Strategy::FullCache>*>(
               vec2.front().get())
               ->GetName();
       Log::Info("NTFS volume name: {}",
@@ -228,8 +228,8 @@ void NtfsVolume<S>::Impl::Init() {
        mft_record.GetAttr(AttrType::Data)) {
     // The base extent is the unnamed, non-resident DATA instance at VCN 0.
     if (attr->IsNonResident() && attr->IsUnNamed() &&
-        static_cast<const AttrNonResident<S>*>(attr.get())->GetStartVcn() ==
-            0) {
+        static_cast<const Attr::AttrNonResident<S>*>(attr.get())
+                ->GetStartVcn() == 0) {
       base_extent = attr.get();
       break;
     }
@@ -333,15 +333,15 @@ std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
   std::unordered_map<ULONGLONG, size_t> index_by_ref;
   size_t listed_entries = 0;
   ULONGLONG offset = 0;
-  Attr::AttributeList entry{};
+  Data::AttributeList entry{};
   while (listed_entries < max_mft_attr_list_entries) {
     const std::optional<ULONGLONG> len =
         raw_list.ReadData(offset, {reinterpret_cast<BYTE*>(&entry),
-                                   Attr::attribute_list_entry_header_size});
+                                   Data::attribute_list_entry_header_size});
     if (!len) {
       break;
     }
-    if (*len != Attr::attribute_list_entry_header_size ||
+    if (*len != Data::attribute_list_entry_header_size ||
         !Attr::IsValidAttrType(entry.attr_type)) {
       break;
     }
@@ -410,7 +410,7 @@ void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
     if (attr->IsNonResident()) {
       // Any start VCN not listed is rejected by TryAddMftExtent().
       const ULONGLONG start_vcn =
-          static_cast<const AttrNonResident<S>&>(*attr).GetStartVcn();
+          static_cast<const Attr::AttrNonResident<S>&>(*attr).GetStartVcn();
       const auto listed = std::ranges::find(item.start_vcns, start_vcn);
       TryAddMftExtent(*attr, listed != item.start_vcns.end()
                                  ? *listed
@@ -430,7 +430,7 @@ void NtfsVolume<S>::Impl::TryAddMftExtent(const AttrBase<S>& attr,
     return;
   }
 
-  const auto& non_resident = static_cast<const AttrNonResident<S>&>(attr);
+  const auto& non_resident = static_cast<const Attr::AttrNonResident<S>&>(attr);
   const ULONGLONG start_vcn = non_resident.GetStartVcn();
   const ULONGLONG last_vcn = non_resident.GetLastVcn();
 
@@ -526,7 +526,7 @@ std::optional<ULONGLONG>
     }
 
     const auto* non_resident =
-        static_cast<const AttrNonResident<S>*>(extent->attr);
+        static_cast<const Attr::AttrNonResident<S>*>(extent->attr);
     const ULONGLONG extent_start_byte = extent->start_vcn * cluster_size;
     const ULONGLONG extent_end_byte = (extent->last_vcn + 1) * cluster_size;
     const ULONGLONG available_in_extent = extent_end_byte - current_offset;
@@ -582,7 +582,7 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
 // Use an already-open reader (eg. a test double), get BPB
 template <Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
-  volume = std::make_unique<FileReader<S>>(std::move(reader));
+  volume = std::make_unique<Io::FileReader<S>>(std::move(reader));
 
   return ParseBootSector();
 }
@@ -657,13 +657,13 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
 
   // Rejects a size too small for the header, or not a whole number of
   // sectors.
-  if (file_record_size < FileRecordHeader::min_file_record_header_size ||
+  if (file_record_size < Data::FileRecordHeader::min_file_record_header_size ||
       file_record_size % sector_size != 0) {
     Log::Error("FileRecord Size is invalid");
     return false;
   }
 
-  if (file_record_size > FileRecordHeader::max_file_record_size) {
+  if (file_record_size > Data::FileRecordHeader::max_file_record_size) {
     Log::Error(
         "FileRecord Size exceeds the maximum supported file record size");
     return false;
@@ -745,8 +745,9 @@ ULONGLONG NtfsVolume<S>::Impl::GetRecordsCount() const noexcept {
     // MappedClusters() never exceeds last_vcn + 1, which TryAddMftExtent()
     // already checked cannot overflow a byte offset.
     const ULONGLONG extent_end =
-        (extent.start_vcn + static_cast<const AttrNonResident<S>*>(extent.attr)
-                                ->MappedClusters()) *
+        (extent.start_vcn +
+         static_cast<const Attr::AttrNonResident<S>*>(extent.attr)
+             ->MappedClusters()) *
         cluster_size;
     mapped_bytes = (std::max)(mapped_bytes, extent_end);
   }
@@ -877,7 +878,7 @@ Efs::CipherBackend NtfsVolume<S>::GetEfsCipherBackend() const noexcept {
 
 // Reads $UpCase (MFT record 10). Null when it is missing or unusable.
 template <Strategy S>
-std::unique_ptr<const UpCaseTable>
+std::unique_ptr<const UpCase::Table>
     NtfsVolume<S>::Impl::LoadUpCaseTable() const {
   const auto upcase_record = static_cast<ULONGLONG>(Enum::MftIdx::UpCase);
   if (!volume_ok ||
@@ -895,27 +896,27 @@ std::unique_ptr<const UpCaseTable>
   }
 
   const AttrBase<S>* data = record.FindStream({});
-  if (data == nullptr || data->GetDataSize() < UpCaseTable::byte_count) {
+  if (data == nullptr || data->GetDataSize() < UpCase::Table::byte_count) {
     return {};
   }
 
-  std::vector<BYTE> bytes(UpCaseTable::byte_count);
+  std::vector<BYTE> bytes(UpCase::Table::byte_count);
   const std::optional<ULONGLONG> len = data->ReadData(0, bytes);
   if (!len || *len != bytes.size()) {
     return {};
   }
 
-  std::optional<UpCaseTable> table = UpCaseTable::FromBytes(bytes);
+  std::optional<UpCase::Table> table = UpCase::Table::FromBytes(bytes);
   if (!table) {
     return {};
   }
-  return std::make_unique<const UpCaseTable>(std::move(*table));
+  return std::make_unique<const UpCase::Table>(std::move(*table));
 }
 
 // Loads $UpCase on first use. A failure is cached: the built-in mapping
 // answers every later call.
 template <Strategy S>
-const UpCaseTable& NtfsVolume<S>::Impl::GetUpCaseTable() const {
+const UpCase::Table& NtfsVolume<S>::Impl::GetUpCaseTable() const {
   if (!upcase_loaded) {
     upcase_loaded = true;
     upcase = LoadUpCaseTable();
@@ -923,7 +924,7 @@ const UpCaseTable& NtfsVolume<S>::Impl::GetUpCaseTable() const {
       Log::Info("$UpCase is not usable: names collate by the built-in mapping");
     }
   }
-  return upcase ? *upcase : UpCaseTable::BuiltIn();
+  return upcase ? *upcase : UpCase::Table::BuiltIn();
 }
 
 template class NtfsVolume<Strategy::NoCache>;

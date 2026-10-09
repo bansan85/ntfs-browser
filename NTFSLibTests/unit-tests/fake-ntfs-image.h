@@ -21,7 +21,7 @@ namespace NtfsBrowserTests {
 // Fake record count $MFT reports; arbitrary, tests just check it survives.
 inline constexpr uint64_t sentinel_record_count = 5;
 
-// Every fake record's size; FileRecordHeader asserts on this size internally.
+// Every fake record's size; Record::Header asserts on this size internally.
 inline constexpr uint32_t fake_file_record_size = 1024;
 
 // Volume geometry every image built here declares in its BPB: 512-byte
@@ -76,7 +76,7 @@ inline constexpr ULONGLONG index_extension_idx = 7;
 
 // MFT index of the record built by
 // BuildFakeNtfsImageWithUndersizedAttribute(): its only attribute declares
-// total_size = 17, smaller than sizeof(Attr::HeaderResident) (24).
+// total_size = 17, smaller than sizeof(Data::HeaderResident) (24).
 inline constexpr ULONGLONG undersized_attr_record_idx = 8;
 
 // Same volume as BuildFakeNtfsImage(), plus a record
@@ -145,7 +145,8 @@ inline constexpr DWORD oversized_file_record_size = 0x80000000;
 // construction in tests.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOversizedFileRecord();
 
-// Yields a file_record_size_ twice FileRecordHeader::max_file_record_size.
+// Yields a file_record_size_ twice
+// Data::FileRecordHeader::max_file_record_size.
 inline constexpr BYTE file_record_size_too_big_clusters_per_file_record = 8;
 
 // file_record_size_ that file_record_size_too_big_clusters_per_file_record
@@ -153,7 +154,8 @@ inline constexpr BYTE file_record_size_too_big_clusters_per_file_record = 8;
 inline constexpr DWORD file_record_size_too_big = 8192;
 
 // Same volume as BuildFakeNtfsImage(), with clusters_per_file_record patched
-// so GetFileRecordSize() would exceed FileRecordHeader::max_file_record_size.
+// so GetFileRecordSize() would exceed
+// Data::FileRecordHeader::max_file_record_size.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFileRecordSizeTooBig();
 
 // lcn_mft patched in by BuildFakeNtfsImageWithHugeMftLcn(); with this

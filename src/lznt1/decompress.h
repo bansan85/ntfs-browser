@@ -2,7 +2,7 @@
 
 // LZNT1 decompression, the compression format classic NTFS attribute-level
 // compression (FILE_ATTRIBUTE_COMPRESSED plus a non-zero
-// Attr::HeaderNonResident::comp_unit_size) stores its compression units in.
+// Data::HeaderNonResident::comp_unit_size) stores its compression units in.
 //
 // Written from scratch against the public [MS-XCA] specification
 // (docs/[MS-XCA].pdf), section 2.5 "LZNT1 Algorithm Details" - Microsoft's

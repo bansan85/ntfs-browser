@@ -11,17 +11,19 @@ struct AttrHeaderCommon;
 template <Strategy S>
 class FileRecord;
 
-namespace Attr {
+namespace Data {
 
 struct StandardInformation;
 
-}  // namespace Attr
+}  // namespace Data
 
 namespace Flag {
 
 enum class StdInfoPermission : DWORD;
 
 }  // namespace Flag
+
+namespace Attr {
 
 template <typename Resident, Strategy S>
 class AttrStdInfo : public Resident {
@@ -37,7 +39,7 @@ class AttrStdInfo : public Resident {
   friend class FileRecord;
 
  private:
-  const Attr::StandardInformation& std_info_;
+  const Data::StandardInformation& std_info_;
 
   void GetFileTime(FILETIME* write_tm, FILETIME* create_tm, FILETIME* access_tm,
                    FILETIME* change_tm = nullptr) const noexcept;
@@ -60,5 +62,7 @@ class AttrStdInfo : public Resident {
   // Also used by Filename (src/filename.cpp) for $FILE_NAME timestamps.
   static void UTC2Local(const ULONGLONG& ultm, FILETIME& lftm) noexcept;
 };  // AttrStdInfo
+
+}  // namespace Attr
 
 }  // namespace NtfsBrowser
