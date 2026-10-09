@@ -125,3 +125,20 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK_FALSE(root.IsSparse());
   CHECK_FALSE(root.IsReparsePoint());
 }
+
+TEMPLATE_TEST_CASE_SIG(
+    "FileRecord returns the Win32 name of a record that also has a DOS alias",
+    "[cov-frb]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
+
+  const NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
+  REQUIRE(record.ParseAttrs());
+
+  CHECK(record.GetFileName() == L"report.txt");
+}

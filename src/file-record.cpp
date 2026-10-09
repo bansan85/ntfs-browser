@@ -1033,8 +1033,13 @@ std::wstring_view FileRecord<S>::GetFileName() const {
   for (const std::unique_ptr<AttrBase<S>>& fn :
        std::get<Attr::AttrIndex(Attr::Type::FileName)>(impl_->attr_list)) {
     const Filename* filename = nullptr;
-    filename = reinterpret_cast<const Attr::AttrFileName<
-        Attr::AttrResident<S>, Cache::Strategy::NoCache>*>(fn.get());
+    if constexpr (S == Cache::Strategy::NoCache) {
+      filename = static_cast<const Attr::AttrFileName<
+          Attr::AttrResidentNoCache, Cache::Strategy::NoCache>*>(fn.get());
+    } else {
+      filename = static_cast<const Attr::AttrFileName<
+          Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(fn.get());
+    }
 
     if (filename->IsWin32Name() && !filename->GetFilename().empty()) {
       return filename->GetFilename();
