@@ -51,14 +51,14 @@ WORD AttrBase<S>::GetAttrFlags() const noexcept {
 template <Strategy S>
 std::wstring_view AttrBase<S>::GetAttrName() const {
   if (attr_header_.name_length == 0) {
-    LogTrace("Attribute is unnamed");
+    Log::Trace("Attribute is unnamed");
     return {};
   }
 
   if (static_cast<ULONGLONG>(attr_header_.name_offset) +
           (static_cast<ULONGLONG>(attr_header_.name_length) * sizeof(WCHAR)) >
       attr_header_.total_size) {
-    LogWarn("Attribute name exceeds attribute bounds.");
+    Log::Warn("Attribute name exceeds attribute bounds.");
     return {};
   }
 
@@ -70,10 +70,10 @@ std::wstring_view AttrBase<S>::GetAttrName() const {
   // The bounds check above puts name_offset below total_size.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const auto* const name = &attr[attr_header_.name_offset];
-  attr_name_cache_ = Utf16ToWide(std::u16string_view(
+  attr_name_cache_ = Utf::Utf16ToWide(std::u16string_view(
       reinterpret_cast<const char16_t*>(name), attr_header_.name_length));
 
-  LogTrace("Unicode Attribute Name");
+  Log::Trace("Unicode Attribute Name");
   return attr_name_cache_;
 }
 

@@ -44,6 +44,6 @@ TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]") {
 
   for (const Case& test_case : cases) {
     INFO(test_case.name);
-    CHECK(NtfsBrowser::WideToUtf8(test_case.input) == test_case.expected);
+    CHECK(NtfsBrowser::Utf::WideToUtf8(test_case.input) == test_case.expected);
   }
 }

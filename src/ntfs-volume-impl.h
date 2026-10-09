@@ -78,7 +78,7 @@ class NtfsVolume<S>::Impl {
 
   mutable std::vector<BYTE> cluster_buffer;
 
-  std::array<AttrRawCallback, attr_nums> attr_raw_call_back{};
+  std::array<AttrRawCallback, Attr::attr_nums> attr_raw_call_back{};
   DWORD cluster_size{0};
   DWORD file_record_size{0};
   DWORD index_block_size{0};

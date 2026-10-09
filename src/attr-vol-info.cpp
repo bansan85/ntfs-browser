@@ -35,12 +35,12 @@ template <typename Resident, Strategy S>
 AttrVolInfo<Resident, S>::AttrVolInfo(const AttrHeaderCommon& ahc,
                                       const FileRecord<S>& file_record)
     : Resident(ahc, file_record), vol_info_(CheckedVolInfo<Resident>(*this)) {
-  LogTrace("Attribute: Volume Information");
+  Log::Trace("Attribute: Volume Information");
 }
 
 template <typename Resident, Strategy S>
 AttrVolInfo<Resident, S>::~AttrVolInfo() {
-  LogTrace("AttrVolInfo deleted");
+  Log::Trace("AttrVolInfo deleted");
 }
 
 template <typename Resident, Strategy S>

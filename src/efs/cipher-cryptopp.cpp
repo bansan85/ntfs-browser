@@ -17,6 +17,7 @@
 #include "efs/fek.h"
 #include "efs/sector-cipher.h"
 #include "ntfs-common.h"
+#include "util.h"
 
 namespace NtfsBrowser::Efs {
 
@@ -43,7 +44,7 @@ class CryptoPpDecryptor final : public SectorDecryptor {
       cbc.ProcessData(sector.data(), sector.data(), sector.size());
       return true;
     } catch (const std::exception& e) {
-      LogException(e);
+      Log::Exception(e);
       return false;
     }
   }
@@ -60,7 +61,7 @@ template <class BlockCipher>
   try {
     return std::make_unique<CryptoPpDecryptor<BlockCipher>>(key);
   } catch (const std::exception& e) {
-    LogException(e);
+    Log::Exception(e);
     return nullptr;
   }
 }
@@ -115,8 +116,8 @@ constexpr std::array<BYTE, 12> desx_salt2{'S', 'c', 'o', 't', 't', ' ',
   std::ranges::copy(halves.first(half_value),
                     std::span<BYTE>(key).subspan(2 * half_value).begin());
 
-  SecureZero(digest1);
-  SecureZero(digest2);
+  Util::SecureZero(digest1);
+  Util::SecureZero(digest2);
   return key;
 }
 
@@ -136,7 +137,7 @@ std::unique_ptr<SectorDecryptor> MakeCryptoPpDecryptor(const Fek& fek) {
       }
       auto key = ExpandDesxKey(fek.GetKey());
       auto decryptor = MakeDecryptor<CryptoPP::DES_XEX3>(key);
-      SecureZero(key);
+      Util::SecureZero(key);
       return decryptor;
     }
   }

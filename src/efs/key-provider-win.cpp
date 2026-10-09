@@ -14,6 +14,7 @@
 
   #include "efs/fek.h"
   #include "ntfs-common.h"
+  #include "util.h"
 
 namespace NtfsBrowser::Efs {
 
@@ -51,8 +52,8 @@ class PrivateKey final {
             nullptr, &handle_, &key_spec_, &must_free) != FALSE;
     must_free_ = must_free != FALSE;
     if (!valid_) {
-      LogDebug("CryptAcquireCertificatePrivateKey failed: 0x{:08X}.",
-               GetLastError());
+      Log::Debug("CryptAcquireCertificatePrivateKey failed: 0x{:08X}.",
+                 GetLastError());
     }
   }
 
@@ -128,7 +129,7 @@ class PrivateKey final {
     if (FAILED(NCryptDecrypt(
             key, input.data(), gsl::narrow<DWORD>(input.size()), nullptr,
             output.data(), size, &size, NCRYPT_PAD_PKCS1_FLAG))) {
-      SecureZero(output);
+      Util::SecureZero(output);
       return std::nullopt;
     }
     output.resize(size);
@@ -148,7 +149,7 @@ class PrivateKey final {
     const BOOL ok = CryptDecrypt(key, 0, TRUE, 0, buffer.data(), &size);
     CryptDestroyKey(key);
     if (ok == FALSE) {
-      SecureZero(buffer);
+      Util::SecureZero(buffer);
       return std::nullopt;
     }
     buffer.resize(size);
@@ -183,7 +184,7 @@ class StoreKeyProvider final : public IEfsKeyProvider {
 
     const PrivateKey key(*cert);
     if (!key.IsValid()) {
-      LogDebug("The certificate has no usable private key.");
+      Log::Debug("The certificate has no usable private key.");
       return std::nullopt;
     }
     return key.Decrypt(wrapped_fek);
@@ -199,7 +200,7 @@ std::shared_ptr<IEfsKeyProvider> MakeCertStoreKeyProvider() {
   HCERTSTORE store = CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0,
                                    CERT_SYSTEM_STORE_CURRENT_USER, L"My");
   if (store == nullptr) {
-    LogWarn("Cannot open the CurrentUser\\My certificate store.");
+    Log::Warn("Cannot open the CurrentUser\\My certificate store.");
     return nullptr;
   }
   return std::make_shared<StoreKeyProvider>(store);
@@ -212,7 +213,7 @@ std::shared_ptr<IEfsKeyProvider>
   const std::uintmax_t file_size =
       std::filesystem::file_size(pfx_path, size_error);
   if (!size_error && file_size > static_cast<std::uintmax_t>(max_pfx_size)) {
-    LogWarn("The PFX is too large to be a certificate bundle.");
+    Log::Warn("The PFX is too large to be a certificate bundle.");
     return nullptr;
   }
 
@@ -228,7 +229,7 @@ std::shared_ptr<IEfsKeyProvider>
     bytes.resize(gsl::narrow<size_t>(file.gcount()));
   }
   if (bytes.empty() || bytes.size() > static_cast<size_t>(max_pfx_size)) {
-    LogWarn("Cannot read a PFX from the given path.");
+    Log::Warn("Cannot read a PFX from the given path.");
     return nullptr;
   }
 
@@ -237,7 +238,7 @@ std::shared_ptr<IEfsKeyProvider>
   HCERTSTORE store =
       PFXImportCertStore(&blob, password_z.c_str(), PKCS12_NO_PERSIST_KEY);
   if (store == nullptr) {
-    LogWarn("Cannot import the PFX: wrong password, or not a PFX.");
+    Log::Warn("Cannot import the PFX: wrong password, or not a PFX.");
     return nullptr;
   }
   return std::make_shared<StoreKeyProvider>(store);

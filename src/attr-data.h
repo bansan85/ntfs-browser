@@ -12,8 +12,8 @@ class AttrData : public Resident {
  public:
   AttrData(const AttrHeaderCommon& ahc, const FileRecord<S>& file_record)
       : Resident(ahc, file_record) {
-    LogTrace("Attribute: Data ({}Resident)",
-             this->IsNonResident() ? "Non" : "");
+    Log::Trace("Attribute: Data ({}Resident)",
+               this->IsNonResident() ? "Non" : "");
   }
 
   AttrData(AttrData&& other) noexcept = delete;
@@ -21,7 +21,7 @@ class AttrData : public Resident {
   AttrData& operator=(AttrData&& other) noexcept = delete;
   AttrData& operator=(const AttrData& other) = delete;
 
-  ~AttrData() override { LogTrace("AttrData deleted"); }
+  ~AttrData() override { Log::Trace("AttrData deleted"); }
 };  // AttrData
 
 }  // namespace NtfsBrowser

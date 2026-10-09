@@ -35,7 +35,6 @@
 
 using NtfsBrowser::AttrHeaderCommon;
 using NtfsBrowser::AttrType;
-using NtfsBrowser::file_record_magic;
 using NtfsBrowser::FileRecord;
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::FileRecordHeaderImpl;
@@ -227,7 +226,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> storage(record_size, 0);
   NtfsBrowserTests::EditFileRecordHeader(
       storage, [](FileRecordHeader::Data& header) {
-        header.magic = file_record_magic;
+        header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = odd_offset_of_us;
         header.size_of_us = 3;
       });

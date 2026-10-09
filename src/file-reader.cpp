@@ -75,7 +75,7 @@ std::enable_if_t<
   }
 
   if (!reader_->ReadInto(addr, std::span<BYTE>{buffer_.data(), length})) {
-    LogError("Cannot read file at adress {}", addr.QuadPart);
+    Log::Error("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
 
@@ -114,7 +114,7 @@ std::optional<std::span<const BYTE>>
     FileReader<S>::ReadUncached(LARGE_INTEGER addr, DWORD length) const {
   std::vector<BYTE> exact(length);
   if (!reader_->ReadInto(addr, exact)) {
-    LogError("Cannot read file at adress {}", addr.QuadPart);
+    Log::Error("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
 
@@ -138,8 +138,8 @@ std::enable_if_t<
   // overflow the block arithmetic below.
   if (addr.QuadPart < 0 ||
       addr.QuadPart > std::numeric_limits<LONGLONG>::max() - length) {
-    LogError("Cannot read file at adress {}: range is out of bounds",
-             addr.QuadPart);
+    Log::Error("Cannot read file at adress {}: range is out of bounds",
+               addr.QuadPart);
     return {};
   }
 

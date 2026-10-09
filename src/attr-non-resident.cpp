@@ -86,11 +86,11 @@ AttrNonResident<S>::AttrNonResident(const AttrHeaderCommon& ahc,
           "aligned.\n");
     }
 
-    LogDebug(
+    Log::Debug(
         "Compressed attribute: {} clusters ({} bytes) per compression unit",
         comp_unit_clusters_, unit_size);
-    LogDebug("Compressed size = {} bytes",
-             Attr::CompressedSize(attr_header_nr_));
+    Log::Debug("Compressed size = {} bytes",
+               Attr::CompressedSize(attr_header_nr_));
 #endif
   }
 
@@ -123,14 +123,14 @@ bool AttrNonResident<S>::PickData(std::span<const BYTE>& data_run,
 
   if (size.length_bytes > sizeof(ULONGLONG) ||
       size.offset_bytes > sizeof(LONGLONG)) {
-    LogRecoverable(recover, "DataRun decode error 1: 0x{:02X}", size.size);
+    Log::Recoverable(recover, "DataRun decode error 1: 0x{:02X}", size.size);
     return false;
   }
 
   if (data_run.size() < static_cast<size_t>(size.length_bytes) +
                             static_cast<size_t>(size.offset_bytes)) {
-    LogRecoverable(recover,
-                   "DataRun decode error: run exceeds attribute bounds");
+    Log::Recoverable(recover,
+                     "DataRun decode error: run exceeds attribute bounds");
     return false;
   }
 
@@ -164,9 +164,9 @@ bool AttrNonResident<S>::PickData(std::span<const BYTE>& data_run,
 // outright.
 template <Strategy S>
 void AttrNonResident<S>::ParseDataRun() {
-  LogTrace("Parsing Non Resident DataRun");
-  LogDebug("Start VCN = {}, End VCN = {}", attr_header_nr_.start_vcn,
-           attr_header_nr_.last_vcn);
+  Log::Trace("Parsing Non Resident DataRun");
+  Log::Debug("Start VCN = {}, End VCN = {}", attr_header_nr_.start_vcn,
+             attr_header_nr_.last_vcn);
 
   const bool recover = this->volume_.GetOptions().recover_errors;
   const std::span<const BYTE> attr_bytes(
@@ -207,7 +207,7 @@ bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
   // sum. It MUST be caught before the addition: signed overflow is UB.
   if (lcn_offset > 0 &&
       lcn > std::numeric_limits<LONGLONG>::max() - lcn_offset) {
-    LogRecoverable(recover, "DataRun decode error: LCN overflows");
+    Log::Recoverable(recover, "DataRun decode error: LCN overflows");
     if (!recover) {
       throw std::runtime_error("Data run LCN overflows.\n");
     }
@@ -216,15 +216,15 @@ bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
 
   lcn += lcn_offset;
   if (lcn < 0) {
-    LogRecoverable(recover, "DataRun decode error 2");
+    Log::Recoverable(recover, "DataRun decode error 2");
     if (!recover) {
       throw std::runtime_error("Data run LCN underflows.\n");
     }
     return false;
   }
 
-  LogDebug("Data length = {} clusters, LCN = {}{}", length, lcn,
-           lcn_offset == 0 ? ", Sparse Data" : "");
+  Log::Debug("Data length = {} clusters, LCN = {}{}", length, lcn,
+             lcn_offset == 0 ? ", Sparse Data" : "");
 
   // Store LCN, Data size (clusters) into list
   Data::RunEntry data_run;
@@ -236,7 +236,7 @@ bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
 
   if (data_run.last_vcn >
       (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn)) {
-    LogRecoverable(recover, "DataRun decode error: VCN exceeds bound");
+    Log::Recoverable(recover, "DataRun decode error: VCN exceeds bound");
     if (!recover) {
       throw std::runtime_error(
           "Data run VCN exceeds the attribute's declared bound.\n");
@@ -261,8 +261,8 @@ std::optional<std::span<const BYTE>>
       static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) /
       this->GetClusterSize();
   if (start_lcn > max_lcn || offset > max_lcn - start_lcn) {
-    LogError("Cannot read cluster with LCN {} + {}: byte address overflows",
-             start_lcn, offset);
+    Log::Error("Cannot read cluster with LCN {} + {}: byte address overflows",
+               start_lcn, offset);
     return {};
   }
   const ULONGLONG lcn = start_lcn + offset;
@@ -275,17 +275,17 @@ std::optional<std::span<const BYTE>>
     buffer = this->volume_.Read(
         addr, gsl::narrow<DWORD>(clusters * this->GetClusterSize()));
   } catch (const std::exception& e) {
-    LogError("Cannot read cluster with LCN {}", lcn);
-    LogException(e);
+    Log::Error("Cannot read cluster with LCN {}", lcn);
+    Log::Exception(e);
     return {};
   }
 
   if (!buffer) {
-    LogError("Cannot read cluster with LCN {}", lcn);
+    Log::Error("Cannot read cluster with LCN {}", lcn);
     return {};
   }
 
-  LogTrace("Successfully read {} clusters from LCN {}", clusters, lcn);
+  Log::Trace("Successfully read {} clusters from LCN {}", clusters, lcn);
   return buffer;
 }
 
@@ -326,7 +326,8 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
       continue;
     }
     if (data_run.start_vcn > vcn) {
-      LogWarn("Compression unit at VCN {} is not fully mapped", unit_first_vcn);
+      Log::Warn("Compression unit at VCN {} is not fully mapped",
+                unit_first_vcn);
       return {};
     }
 
@@ -336,8 +337,8 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
 
     if (data_run.lcn) {
       if (saw_hole) {
-        LogWarn("Compression unit at VCN {} has real clusters after a hole",
-                unit_first_vcn);
+        Log::Warn("Compression unit at VCN {} has real clusters after a hole",
+                  unit_first_vcn);
         return {};
       }
       real_clusters += take;
@@ -350,7 +351,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
 
   if (vcn != unit_end) {
     // The run list ran out before the unit did.
-    LogWarn("Compression unit at VCN {} is not fully mapped", unit_first_vcn);
+    Log::Warn("Compression unit at VCN {} is not fully mapped", unit_first_vcn);
     return {};
   }
 
@@ -368,7 +369,7 @@ bool AttrNonResident<S>::DecompressUnit(ULONGLONG unit_index,
 #ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
   // Unreachable: the constructor already rejects a compressed attribute
   // when decompression is not compiled in. Kept so this still compiles.
-  LogError("Decompression is not compiled in.");
+  Log::Error("Decompression is not compiled in.");
   return false;
 #else
   std::vector<BYTE> compressed;
@@ -376,15 +377,15 @@ bool AttrNonResident<S>::DecompressUnit(ULONGLONG unit_index,
     compressed.assign(
         gsl::narrow<size_t>(real_clusters * this->GetClusterSize()), 0);
   } catch (const std::exception& e) {
-    LogError("Cannot allocate compressed data of unit {}", unit_index);
-    LogException(e);
+    Log::Error("Cannot allocate compressed data of unit {}", unit_index);
+    Log::Exception(e);
     return false;
   }
 
   const std::optional<ULONGLONG> len =
       ReadVirtualClustersRaw(unit_first_vcn, real_clusters, compressed);
   if (!len || *len != compressed.size()) {
-    LogError("Cannot read compressed compression unit {}", unit_index);
+    Log::Error("Cannot read compressed compression unit {}", unit_index);
     return false;
   }
 
@@ -399,18 +400,18 @@ bool AttrNonResident<S>::DecompressUnit(ULONGLONG unit_index,
 
   try {
     const size_t produced = Lznt1::Decompress(compressed, unit);
-    LogDebug("Decompressed compression unit {} into {} bytes", unit_index,
-             static_cast<ULONGLONG>(produced));
+    Log::Debug("Decompressed compression unit {} into {} bytes", unit_index,
+               static_cast<ULONGLONG>(produced));
     if (produced < required_size) {
-      LogWarn(
+      Log::Warn(
           "Compression unit {} decompressed to {} bytes, expected at "
           "least {}",
           unit_index, static_cast<ULONGLONG>(produced), required_size);
       return false;
     }
   } catch (const std::exception& e) {
-    LogError("Cannot decompress compression unit {}", unit_index);
-    LogException(e);
+    Log::Error("Cannot decompress compression unit {}", unit_index);
+    Log::Exception(e);
     return false;
   }
   return true;
@@ -426,13 +427,13 @@ const std::vector<BYTE>*
     AttrNonResident<S>::GetCompressionUnit(ULONGLONG unit_index) const {
   const auto cached = comp_unit_cache_.find(unit_index);
   if (cached != comp_unit_cache_.end()) {
-    LogDebug("Compression unit {} served from cache", unit_index);
+    Log::Debug("Compression unit {} served from cache", unit_index);
     return &cached->second;
   }
 
   const ULONGLONG unit_first_vcn = unit_index * comp_unit_clusters_;
   if (unit_first_vcn >= TotalClusters()) {
-    LogWarn("Compression unit {} exceeds DataRun bounds", unit_index);
+    Log::Warn("Compression unit {} exceeds DataRun bounds", unit_index);
     return nullptr;
   }
 
@@ -445,8 +446,8 @@ const std::vector<BYTE>*
   try {
     unit.assign(gsl::narrow<size_t>(unit_size), 0);
   } catch (const std::exception& e) {
-    LogError("Cannot allocate compression unit {}", unit_index);
-    LogException(e);
+    Log::Error("Cannot allocate compression unit {}", unit_index);
+    Log::Exception(e);
     return nullptr;
   }
 
@@ -459,13 +460,13 @@ const std::vector<BYTE>*
   const ULONGLONG real_clusters = *real_clusters_opt;
 
   if (real_clusters == 0) {
-    LogDebug("Compression unit {} is sparse", unit_index);
+    Log::Debug("Compression unit {} is sparse", unit_index);
   } else if (real_clusters == unit_clusters) {
     // Stored unit: raw, uncompressed bytes.
     const std::optional<ULONGLONG> len =
         ReadVirtualClustersRaw(unit_first_vcn, unit_clusters, unit);
     if (!len || *len != unit_size) {
-      LogError("Cannot read stored compression unit {}", unit_index);
+      Log::Error("Cannot read stored compression unit {}", unit_index);
       return nullptr;
     }
   } else if (!DecompressUnit(unit_index, unit_first_vcn, real_clusters, unit)) {
@@ -483,8 +484,8 @@ const std::vector<BYTE>*
   try {
     return &comp_unit_cache_.emplace(unit_index, std::move(unit)).first->second;
   } catch (const std::exception& e) {
-    LogError("Cannot cache compression unit {}", unit_index);
-    LogException(e);
+    Log::Error("Cannot cache compression unit {}", unit_index);
+    Log::Exception(e);
     return nullptr;
   }
 }
@@ -499,11 +500,11 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
 
   // Same two bounds checks as the raw path.
   if (vcn + clusters > TotalClusters()) {
-    LogWarn("Cluster exceeds DataRun bounds");
+    Log::Warn("Cluster exceeds DataRun bounds");
     return {};
   }
   if (buffer.size() != clusters * this->GetClusterSize()) {
-    LogWarn("Invalid buffer size");
+    Log::Warn("Invalid buffer size");
     return {};
   }
 
@@ -522,7 +523,7 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
     const ULONGLONG offset_in_unit = vcn - unit_first_vcn;
     const ULONGLONG unit_clusters = unit->size() / this->GetClusterSize();
     if (offset_in_unit >= unit_clusters) {
-      LogWarn("Compression unit {} is shorter than expected", unit_index);
+      Log::Warn("Compression unit {} is shorter than expected", unit_index);
       break;
     }
 
@@ -604,13 +605,13 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
 
   // Verify if clusters exceeds DataRun bounds
   if (vcn + clusters > TotalClusters()) {
-    LogWarn("Cluster exceeds DataRun bounds");
+    Log::Warn("Cluster exceeds DataRun bounds");
     return {};
   }
 
   // Verify if clusters exceeds DataRun bounds
   if (buffer.size() != clusters * this->GetClusterSize()) {
-    LogWarn("Invalid buffer size");
+    Log::Warn("Invalid buffer size");
     return {};
   }
 
@@ -822,8 +823,8 @@ std::optional<ULONGLONG>
   // clusters/clusterSize are untrusted; guard the multiply against overflow.
   if (cluster_size != 0 &&
       clusters > std::numeric_limits<ULONGLONG>::max() / cluster_size) {
-    LogError("Extent size overflows: {} clusters of {} bytes", clusters,
-             cluster_size);
+    Log::Error("Extent size overflows: {} clusters of {} bytes", clusters,
+               cluster_size);
     return {};
   }
 

@@ -2,7 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Mft {
 
 // Low 48 bits of an on-disk file reference: the MFT record number.
 inline constexpr ULONGLONG mft_record_number_mask = 0x0000FFFFFFFFFFFFULL;
@@ -42,4 +42,4 @@ constexpr bool
          (record_base_ref & mft_record_number_mask) == listing_record_number;
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Mft

@@ -44,12 +44,12 @@ template <typename Resident, Strategy S>
 AttrStdInfo<Resident, S>::AttrStdInfo(const AttrHeaderCommon& ahc,
                                       const FileRecord<S>& file_record)
     : Resident(ahc, file_record), std_info_(CheckedStdInfo<Resident>(*this)) {
-  LogTrace("Attribute: Standard Information");
+  Log::Trace("Attribute: Standard Information");
 }
 
 template <typename Resident, Strategy S>
 AttrStdInfo<Resident, S>::~AttrStdInfo() {
-  LogTrace("AttrStdInfo deleted");
+  Log::Trace("AttrStdInfo deleted");
 }
 
 // Change from UTC time to local time

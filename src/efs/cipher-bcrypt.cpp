@@ -101,7 +101,7 @@ std::unique_ptr<SectorDecryptor> MakeBCryptDecryptor(const Fek& fek) {
 
   auto decryptor = std::make_unique<BCryptDecryptor>();
   if (!decryptor->Init(algorithm_id, fek.GetKey(), block_size)) {
-    LogWarn("BCrypt cannot use this FEK.");
+    Log::Warn("BCrypt cannot use this FEK.");
     return nullptr;
   }
   return decryptor;

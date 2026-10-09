@@ -231,10 +231,10 @@ TEST_CASE("each sink keeps its own level", "[logging]") {
   config.file_path = log_file.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
-  NtfsBrowser::LogTrace("trace-only-line");
-  NtfsBrowser::LogInfo("info-only-line");
-  NtfsBrowser::LogWarn("warn-line");
-  NtfsBrowser::LogError("error-line");
+  NtfsBrowser::Log::Trace("trace-only-line");
+  NtfsBrowser::Log::Info("info-only-line");
+  NtfsBrowser::Log::Warn("warn-line");
+  NtfsBrowser::Log::Error("error-line");
 
   // Drops the file sink, which closes the file before it is read back.
   NtfsBrowserTests::InstallCaptureSink();
@@ -256,8 +256,8 @@ TEST_CASE("a file sink at trace records every level", "[logging]") {
   config.file_path = log_file.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
-  NtfsBrowser::LogTrace("recorded-trace");
-  NtfsBrowser::LogError("recorded-error");
+  NtfsBrowser::Log::Trace("recorded-trace");
+  NtfsBrowser::Log::Error("recorded-error");
 
   NtfsBrowserTests::InstallCaptureSink();
 
@@ -276,7 +276,7 @@ TEST_CASE("both targets off writes nothing at all", "[logging]") {
   config.file_path = log_file.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
-  NtfsBrowser::LogError("never-written");
+  NtfsBrowser::Log::Error("never-written");
 
   NtfsBrowserTests::InstallCaptureSink();
   CHECK_FALSE(Fs::exists(log_file.Path()));
@@ -293,9 +293,9 @@ TEST_CASE("a message carrying braces is not treated as a format string",
   config.file_path = log_file.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
-  // What LogException() relays: runtime text, never a format string.
+  // What Log::Exception() relays: runtime text, never a format string.
   const std::runtime_error thrown("relayed {0} {bad} text\n");
-  NtfsBrowser::LogException(thrown);
+  NtfsBrowser::Log::Exception(thrown);
 
   NtfsBrowserTests::InstallCaptureSink();
 
@@ -326,7 +326,7 @@ TEST_CASE("Configure() on an unwritable path fails without throwing",
   CHECK_FALSE(NtfsBrowser::Log::Configure(config));
 
   // The console target survives the file sink's failure.
-  NtfsBrowser::LogError("still-logging");
+  NtfsBrowser::Log::Error("still-logging");
 }
 
 #ifdef _WIN32
@@ -347,7 +347,7 @@ TEST_CASE("a log path outside the ANSI code page still opens", "[logging]") {
   config.console_level = Level::Off;
   REQUIRE(NtfsBrowser::Log::Configure(config));
 
-  NtfsBrowser::LogError("wide-path-line");
+  NtfsBrowser::Log::Error("wide-path-line");
 
   NtfsBrowserTests::InstallCaptureSink();
 
@@ -366,11 +366,11 @@ TEST_CASE("Configure() replaces the previous sinks wholesale", "[logging]") {
   config.file_level = Level::Trace;
   config.file_path = first.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
-  NtfsBrowser::LogError("into-first");
+  NtfsBrowser::Log::Error("into-first");
 
   config.file_path = second.Path();
   REQUIRE(NtfsBrowser::Log::Configure(config));
-  NtfsBrowser::LogError("into-second");
+  NtfsBrowser::Log::Error("into-second");
 
   NtfsBrowserTests::InstallCaptureSink();
 

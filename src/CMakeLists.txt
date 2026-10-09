@@ -23,6 +23,7 @@ set(
   "ntfs-volume.cpp"
   "upcase.cpp"
   "utf.cpp"
+  "util.cpp"
 )
 
 if(NTFS_BROWSER_ENABLE_DECOMPRESSION)
@@ -75,6 +76,7 @@ set(
   "../include/ntfs-browser/volume-options.h"
   "attr/attribute-list.h"
   "attr/filename.h"
+  "attr/flags.h"
   "attr/header-non-resident.h"
   "attr/header-resident.h"
   "attr/index-root.h"
@@ -116,6 +118,7 @@ set(
   "ntfs-volume-impl.h"
   "upcase.h"
   "utf.h"
+  "util.h"
   "win32-disk-reader.h"
 )
 

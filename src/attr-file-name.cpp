@@ -20,7 +20,7 @@ template <typename Resident, Strategy S>
 AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
                                         const FileRecord<S>& file_record)
     : Resident(ahc, file_record) {
-  LogTrace("Attribute: File Name");
+  Log::Trace("Attribute: File Name");
 
   if (this->GetDataSize() < offsetof(Attr::Filename, name)) {
     throw std::runtime_error("File Name attribute smaller than expected.\n");
@@ -41,7 +41,7 @@ AttrFileName<Resident, S>::AttrFileName(const AttrHeaderCommon& ahc,
 
 template <typename Resident, Strategy S>
 AttrFileName<Resident, S>::~AttrFileName() {
-  LogTrace("AttrFileName deleted");
+  Log::Trace("AttrFileName deleted");
 }
 
 template class AttrFileName<AttrResidentFullCache, Strategy::FullCache>;

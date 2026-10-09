@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "ntfs-common.h"
+#include "util.h"
 
 namespace NtfsBrowser::Efs {
 
@@ -54,22 +55,14 @@ constexpr size_t desx_fek_key_size = 16;
 
 }  // namespace
 
-void SecureZero(std::span<BYTE> bytes) noexcept {
-  // The volatile write keeps the compiler from eliding the wipe.
-  for (BYTE& byte : bytes)  // NOLINT(misc-const-correctness)
-  {
-    *static_cast<volatile BYTE*>(&byte) = 0;
-  }
-}
-
 Fek::Fek(Algorithm algorithm, std::span<const BYTE> key)
     : algorithm_(algorithm), key_(key.begin(), key.end()) {}
 
-Fek::~Fek() { SecureZero(key_); }
+Fek::~Fek() { Util::SecureZero(key_); }
 
 std::optional<Fek> Fek::Parse(std::span<const BYTE> blob) {
   if (blob.size() < fek_header_size) {
-    LogWarn("FEK blob is too short: {} bytes.", blob.size());
+    Log::Warn("FEK blob is too short: {} bytes.", blob.size());
     return std::nullopt;
   }
 
@@ -77,8 +70,8 @@ std::optional<Fek> Fek::Parse(std::span<const BYTE> blob) {
       static_cast<Algorithm>(LoadDword(blob, algorithm_offset));
   const std::optional<size_t> key_length = KeyLengthOf(algorithm);
   if (!key_length) {
-    LogWarn("Unsupported EFS algorithm: 0x{:04X}.",
-            static_cast<DWORD>(algorithm));
+    Log::Warn("Unsupported EFS algorithm: 0x{:04X}.",
+              static_cast<DWORD>(algorithm));
     return std::nullopt;
   }
 
@@ -86,8 +79,8 @@ std::optional<Fek> Fek::Parse(std::span<const BYTE> blob) {
   // must fit in the blob.
   if (LoadDword(blob, 0) != *key_length ||
       blob.size() - fek_header_size < *key_length) {
-    LogWarn("FEK key length does not match algorithm 0x{:04X}.",
-            static_cast<DWORD>(algorithm));
+    Log::Warn("FEK key length does not match algorithm 0x{:04X}.",
+              static_cast<DWORD>(algorithm));
     return std::nullopt;
   }
 

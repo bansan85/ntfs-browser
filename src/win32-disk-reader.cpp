@@ -28,14 +28,14 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr,
                              &addr.HighPart, FILE_BEGIN);
 
   if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR) {
-    LogError("Cannot set file pointer to {}", addr.QuadPart);
+    Log::Error("Cannot set file pointer to {}", addr.QuadPart);
     return false;
   }
 
   if (ReadFile(handle_.get(), dest.data(), gsl::narrow<DWORD>(dest.size()),
                &len, nullptr) == FALSE ||
       len != dest.size()) {
-    LogError("Cannot read file at adress {}", addr.QuadPart);
+    Log::Error("Cannot read file at adress {}", addr.QuadPart);
     return false;
   }
 

@@ -80,11 +80,11 @@ std::vector<BYTE> MakeMinimalUpCaseBytes() {
   constexpr size_t case_distance = 0x20;
   constexpr unsigned bits_per_byte = 8;
 
-  std::vector<BYTE> bytes(NtfsBrowser::up_case_byte_count);
-  for (size_t unit = 0; unit < NtfsBrowser::up_case_unit_count; unit++) {
+  std::vector<BYTE> bytes(NtfsBrowser::UpCaseTable::byte_count);
+  for (size_t unit = 0; unit < NtfsBrowser::UpCaseTable::unit_count; unit++) {
     const size_t upper =
         (unit >= L'a' && unit <= L'z') ? unit - case_distance : unit;
-    // bytes holds 2 bytes for each unit below up_case_unit_count.
+    // bytes holds 2 bytes for each unit below UpCaseTable::unit_count.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[unit * 2] = static_cast<BYTE>(upper & low_byte_mask);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -186,8 +186,8 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
   SECTION("a well-formed stream is used as it is") {
     std::vector<BYTE> bytes = good;
     // Maps U+00E9 to U+0041.
-    // acute_e_unit is below up_case_unit_count, so both of its bytes are in
-    // bytes.
+    // acute_e_unit is below UpCaseTable::unit_count, so both of its bytes are
+    // in bytes.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     bytes[acute_e_unit * 2] = mapped_unit_low;
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

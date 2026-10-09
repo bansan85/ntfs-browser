@@ -22,12 +22,12 @@
 #include "memory-disk-reader.h"
 
 using NtfsBrowser::FileRecord;
-using NtfsBrowser::IndexBlockUsOffsetInBounds;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
 using NtfsBrowser::Data::index_block_magic;
 using NtfsBrowser::Data::IndexBlock;
+using NtfsBrowser::Data::IndexBlockUsOffsetInBounds;
 
 TEST_CASE(
     "IndexBlockUsOffsetInBounds rejects an offset_of_us that would run the "
@@ -35,7 +35,7 @@ TEST_CASE(
     "[attr-index-alloc][regression]") {
   constexpr DWORD index_block_size = NtfsBrowserTests::forged_index_block_size;
   constexpr DWORD sectors =
-      index_block_size / NtfsBrowser::update_sequence_stride;
+      index_block_size / NtfsBrowser::FileRecordHeader::update_sequence_stride;
 
   CHECK_FALSE(IndexBlockUsOffsetInBounds(
       NtfsBrowserTests::forged_index_block_offset_of_us, sectors,

@@ -28,9 +28,6 @@ class Fek;
 
 namespace NtfsBrowser::Efs {
 
-// The bit of an attribute header's flags that marks its stream as encrypted.
-inline constexpr WORD attr_flag_encrypted = 0x4000;
-
 // Where a record's key provider comes from. It is called on the first
 // decryption only, so a volume creates its default provider lazily.
 using KeyProviderSource = std::function<std::shared_ptr<IEfsKeyProvider>()>;

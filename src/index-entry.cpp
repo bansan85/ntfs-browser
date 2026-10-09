@@ -18,15 +18,16 @@
 
 namespace NtfsBrowser {
 
-Data::IndexEntry ReadIndexEntryHeader(std::span<const BYTE> bytes) noexcept {
+namespace Data {
+
+IndexEntry ReadIndexEntryHeader(std::span<const BYTE> bytes) noexcept {
   Data::IndexEntry header{};
   std::memcpy(&header, bytes.data(), offsetof(Data::IndexEntry, stream));
   return header;
 }
 
-const Data::IndexEntry&
-    AlignIndexEntry(std::vector<std::vector<BYTE>>& realigned,
-                    std::span<const BYTE> bytes, size_t size) {
+const IndexEntry& AlignIndexEntry(std::vector<std::vector<BYTE>>& realigned,
+                                  std::span<const BYTE> bytes, size_t size) {
   if (reinterpret_cast<std::uintptr_t>(bytes.data()) %
           alignof(Data::IndexEntry) ==
       0) {
@@ -76,16 +77,18 @@ std::optional<std::string_view>
   return std::nullopt;
 }
 
+}  // namespace Data
+
 IndexEntryView::IndexEntryView(const Data::IndexEntry& index_entry)
     : index_entry_(&index_entry) {
-  LogTrace("Index Entry");
+  Log::Trace("Index Entry");
 
   if (IsSubNodePtr()) {
-    LogTrace("Points to sub-node");
+    Log::Trace("Points to sub-node");
   }
 
   if (index_entry.stream_size == 0) {
-    LogInfo("No Filename stream found");
+    Log::Info("No Filename stream found");
     return;
   }
 

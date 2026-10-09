@@ -289,7 +289,7 @@ class Utf16Cursor {
 
 // Expands built_in_runs into a full table.
 std::vector<char16_t> MakeBuiltInMap() {
-  std::vector<char16_t> map(up_case_unit_count);
+  std::vector<char16_t> map(UpCaseTable::unit_count);
   for (size_t unit = 0; unit < map.size(); unit++) {
     // unit < map.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -316,15 +316,15 @@ const UpCaseTable& UpCaseTable::BuiltIn() {
 }
 
 std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes) {
-  if (bytes.size() < up_case_byte_count) {
+  if (bytes.size() < UpCaseTable::byte_count) {
     return std::nullopt;
   }
 
-  std::vector<char16_t> map(up_case_unit_count);
+  std::vector<char16_t> map(UpCaseTable::unit_count);
   for (size_t unit = 0; unit < map.size(); unit++) {
     const size_t offset = unit * sizeof(char16_t);
-    // bytes.size() >= up_case_byte_count = 2 * map.size(), so offset + 1 is in
-    // range. unit < map.size() by the loop condition.
+    // bytes.size() >= UpCaseTable::byte_count = 2 * map.size(), so offset + 1
+    // is in range. unit < map.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto low = bytes[offset];
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -349,7 +349,8 @@ std::optional<UpCaseTable> UpCaseTable::FromBytes(std::span<const BYTE> bytes) {
 bool UpCaseTable::IsBuiltIn() const noexcept { return built_in_; }
 
 char16_t UpCaseTable::Map(char16_t unit) const noexcept {
-  // Both factories build up_case_unit_count entries, one per char16_t value.
+  // Both factories build UpCaseTable::unit_count entries, one per char16_t
+  // value.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return map_[unit];
 }

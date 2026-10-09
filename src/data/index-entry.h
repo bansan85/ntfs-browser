@@ -33,26 +33,26 @@ struct IndexEntry {
 
 }  // namespace NtfsBrowser::Data
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Data {
 
 // Copies out the fixed part of the entry at the start of `at`, whatever its
-// alignment. The caller MUST have checked that offsetof(Data::IndexEntry,
+// alignment. The caller MUST have checked that offsetof(IndexEntry,
 // stream) bytes fit in `at`.
-[[nodiscard]] Data::IndexEntry
+[[nodiscard]] IndexEntry
     ReadIndexEntryHeader(std::span<const BYTE> bytes) noexcept;
 
 // Returns the entry of `size` bytes at the start of `bytes`. An entry that is
-// not aligned for Data::IndexEntry moves to an aligned copy first, which is
+// not aligned for IndexEntry moves to an aligned copy first, which is
 // appended to `realigned`: that vector MUST outlive the returned reference.
 // The caller MUST have checked that `size` bytes fit in `bytes`.
-[[nodiscard]] const Data::IndexEntry&
+[[nodiscard]] const IndexEntry&
     AlignIndexEntry(std::vector<std::vector<BYTE>>& realigned,
                     std::span<const BYTE> bytes, size_t size);
 
 // Checks ie's on-disk bounds and sub-node size. Returns the defect message
 // if one is found, or none if ie is well-formed. Callers log it through
-// LogRecoverable, at whichever level (strict vs. recovering) applies there.
+// Log::Recoverable, at whichever level (strict vs. recovering) applies there.
 [[nodiscard]] std::optional<std::string_view>
-    ValidateIndexEntry(const Data::IndexEntry& index_entry) noexcept;
+    ValidateIndexEntry(const IndexEntry& index_entry) noexcept;
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Data

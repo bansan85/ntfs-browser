@@ -7,7 +7,7 @@
 #include <ntfs-browser/data/attr-type.h>
 #include <ntfs-browser/mask.h>
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Attr {
 
 // Number of attribute types, so the size of any per-type table. It is one
 // slot per multiple of 0x10 from 0x10 (STANDARD_INFORMATION) to 0x100
@@ -47,4 +47,4 @@ inline constexpr DWORD attr_type_low_nibble_mask = 0xFU;
          raw <= static_cast<DWORD>(AttrType::LoggedUtilityStream);
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Attr

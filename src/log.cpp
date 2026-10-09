@@ -230,7 +230,11 @@ bool ParseLevel(std::basic_string_view<CharT> text,
 
 }  // namespace
 
-void LogException(const std::exception& exception) noexcept {
+}  // namespace NtfsBrowser
+
+namespace NtfsBrowser::Log {
+
+void Exception(const std::exception& exception) noexcept {
   std::string_view message(exception.what());
   // Several throw sites end their message with a newline. spdlog adds its
   // own, so without this one exception would print a blank line after it.
@@ -239,12 +243,8 @@ void LogException(const std::exception& exception) noexcept {
     message.remove_suffix(1);
   }
 
-  Log::Detail::Emit(Log::Level::Error, message);
+  Detail::Emit(Level::Error, message);
 }
-
-}  // namespace NtfsBrowser
-
-namespace NtfsBrowser::Log {
 
 bool Configure(const Config& config) noexcept { return Apply(config); }
 

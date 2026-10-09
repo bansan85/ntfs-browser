@@ -10,9 +10,6 @@
 
 namespace NtfsBrowser::Efs {
 
-// Overwrites key material in a way the compiler cannot drop as a dead store.
-NTFS_BROWSER_EXPORT_TESTS_ONLY void SecureZero(std::span<BYTE> bytes) noexcept;
-
 // The symmetric cipher of an EFS file. The values are the CryptoAPI ALG_IDs
 // that the FEK blob stores.
 enum class Algorithm : WORD {

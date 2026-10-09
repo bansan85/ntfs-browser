@@ -33,7 +33,7 @@ namespace {
 // must be rejected whole: the entries parsed so far are then discarded too.
 bool RejectRootOnDefect(bool recover, std::string_view defect,
                         std::vector<IndexEntryView>& entries) {
-  LogRecoverable(recover, "{}", defect);
+  Log::Recoverable(recover, "{}", defect);
   if (recover) {
     return false;
   }
@@ -52,10 +52,10 @@ AttrIndexRoot<Resident, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
     throw std::runtime_error("Index Root attribute smaller than expected.\n");
   }
 
-  LogTrace("Attribute: Index Root");
+  Log::Trace("Attribute: Index Root");
 
   if (!IsFileName()) {
-    LogWarn("Index View not supported");
+    Log::Warn("Index View not supported");
     return;
   }
 
@@ -67,7 +67,7 @@ AttrIndexRoot<Resident, S>::AttrIndexRoot(const AttrHeaderCommon& ahc,
 
 template <typename Resident, Strategy S>
 AttrIndexRoot<Resident, S>::~AttrIndexRoot() {
-  LogTrace("AttrIndexRoot deleted");
+  Log::Trace("AttrIndexRoot deleted");
 }
 
 // Parses every index entry, bounding each step against the resident
@@ -80,7 +80,7 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
   const ULONGLONG data_size = this->GetDataSize();
   index_data_.resize(data_size);
   std::memcpy(index_data_.data(), this->GetData(), data_size);
-  LogDebug("Index Root: allocated independent copy of resident data");
+  Log::Debug("Index Root: allocated independent copy of resident data");
 
   const std::span<const BYTE> data(index_data_.data(), data_size);
   const auto* const index_root_copy =
@@ -89,8 +89,8 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
 
   if (data.size() < entry_offset_pos ||
       index_root_copy->entry_offset > data.size() - entry_offset_pos) {
-    LogRecoverable(recover,
-                   "Index Root: entry_offset exceeds attribute bounds");
+    Log::Recoverable(recover,
+                     "Index Root: entry_offset exceeds attribute bounds");
     return recover;
   }
 
@@ -106,7 +106,7 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
           recover, "Index Root: index entry header exceeds attribute bounds",
           *this);
     }
-    const Data::IndexEntry head = ReadIndexEntryHeader(cur);
+    const Data::IndexEntry head = Data::ReadIndexEntryHeader(cur);
     if (head.size == 0 || head.size > remaining) {
       return !RejectRootOnDefect(
           recover, "Index Root: index entry exceeds attribute bounds", *this);
@@ -122,9 +122,9 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
     }
 
     const Data::IndexEntry& aligned_index_entry =
-        AlignIndexEntry(realigned_, cur, head.size);
+        Data::AlignIndexEntry(realigned_, cur, head.size);
     if (const std::optional<std::string_view> defect =
-            ValidateIndexEntry(aligned_index_entry);
+            Data::ValidateIndexEntry(aligned_index_entry);
         defect && RejectRootOnDefect(recover, *defect, *this)) {
       return false;
     }
@@ -132,7 +132,7 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
     emplace_back(aligned_index_entry);
 
     if ((head.flags & Flag::IndexEntry::Last) == Flag::IndexEntry::Last) {
-      LogTrace("Last Index Entry");
+      Log::Trace("Last Index Entry");
       return true;
     }
 

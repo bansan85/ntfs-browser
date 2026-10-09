@@ -16,11 +16,14 @@ namespace NtfsBrowserTests {
 // copy and writes only the named header fields back.
 template <typename Edit>
 void EditFileRecordHeader(std::span<BYTE> buffer, const Edit& edit) {
-  assert(buffer.size() >= NtfsBrowser::min_file_record_header_size);
+  assert(buffer.size() >=
+         NtfsBrowser::FileRecordHeader::min_file_record_header_size);
   NtfsBrowser::FileRecordHeader::Data header{};
-  std::memcpy(&header, buffer.data(), NtfsBrowser::min_file_record_header_size);
+  std::memcpy(&header, buffer.data(),
+              NtfsBrowser::FileRecordHeader::min_file_record_header_size);
   edit(header);
-  std::memcpy(buffer.data(), &header, NtfsBrowser::min_file_record_header_size);
+  std::memcpy(buffer.data(), &header,
+              NtfsBrowser::FileRecordHeader::min_file_record_header_size);
 }
 
 }  // namespace NtfsBrowserTests

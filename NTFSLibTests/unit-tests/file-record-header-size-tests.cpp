@@ -18,11 +18,9 @@
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"
 
-using NtfsBrowser::file_record_magic;
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::Strategy;
-using NtfsBrowser::update_sequence_stride;
 
 namespace {
 
@@ -32,12 +30,12 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t buffer_size,
                                        WORD offset_of_attr) {
   std::vector<BYTE> storage(buffer_size, 0);
 
-  const size_t sectors = buffer_size / update_sequence_stride;
+  const size_t sectors = buffer_size / FileRecordHeader::update_sequence_stride;
   const WORD offset_of_us = gsl::narrow<WORD>(buffer_size - 2 * (1 + sectors));
 
   NtfsBrowserTests::EditFileRecordHeader(
       storage, [&](FileRecordHeader::Data& header) {
-        header.magic = file_record_magic;
+        header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = offset_of_us;
         header.size_of_us = gsl::narrow<WORD>(1 + sectors);
         header.offset_of_attr = offset_of_attr;
@@ -61,7 +59,7 @@ TEMPLATE_TEST_CASE_SIG(
   // FullCache's ctor memcpy()s the whole buffer into a fixed-size Data
   // member; a too-small member here would overflow it.
   const auto header = FileRecordHeaderImpl<S>(buffer);
-  CHECK(header.GetData()->magic == file_record_magic);
+  CHECK(header.GetData()->magic == FileRecordHeader::file_record_magic);
 }
 
 TEMPLATE_TEST_CASE_SIG(

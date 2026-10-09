@@ -22,8 +22,8 @@ template <class Resident, Strategy S>
 AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
                                     const FileRecord<S>& file_record)
     : Resident(ahc, file_record), bitmap_size_(this->GetDataSize()) {
-  LogTrace("Attribute: Bitmap ({}Resident)",
-           this->IsNonResident() ? "Non" : "");
+  Log::Trace("Attribute: Bitmap ({}Resident)",
+             this->IsNonResident() ? "Non" : "");
 
   if (this->IsNonResident()) {
     bitmap_buf_.resize(this->GetClusterSize(), 0);
@@ -36,11 +36,11 @@ AttrBitmap<Resident, S>::AttrBitmap(const AttrHeaderCommon& ahc,
       this->ReadData(0, {bitmap_buf_.data(), bitmap_buf_.size()});
   if (!len || *len != bitmap_size_) {
     bitmap_buf_.clear();
-    LogWarn("Read Resident Bitmap data failed");
+    Log::Warn("Read Resident Bitmap data failed");
     return;
   }
 
-  LogDebug("{} bytes of resident Bitmap data read", bitmap_size_);
+  Log::Debug("{} bytes of resident Bitmap data read", bitmap_size_);
 }
 
 template <class Resident, Strategy S>

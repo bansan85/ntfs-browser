@@ -39,6 +39,7 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 #include "test-log-sink.h"
+#include "util.h"
 
 namespace NtfsBrowser {
 
@@ -911,7 +912,7 @@ TEST_CASE("A DESX FEK carries a 16-byte key, not a 24-byte one", "[efs]") {
 
 TEST_CASE("Secure zero wipes what it is given", "[efs]") {
   std::vector<BYTE> secret(secret_size, secret_fill);
-  NtfsBrowser::Efs::SecureZero(secret);
+  NtfsBrowser::Util::SecureZero(secret);
   CHECK(std::ranges::all_of(secret, [](BYTE byte) { return byte == 0; }));
 }
 

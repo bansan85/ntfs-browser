@@ -14,7 +14,6 @@
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"
 
-using NtfsBrowser::file_record_magic;
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::FileRecordHeaderImpl;
 using NtfsBrowser::Strategy;
@@ -27,7 +26,8 @@ constexpr size_t declared_buffer_size = 1024;
 // Number of WORDs FileRecordHeader reads into the US array: one per
 // 512-byte block.
 constexpr size_t array_words =
-    declared_buffer_size / NtfsBrowser::update_sequence_stride;
+    declared_buffer_size /
+    NtfsBrowser::FileRecordHeader::update_sequence_stride;
 
 // Places the US array's first word exactly at the buffer's declared end.
 constexpr WORD offset_of_us_value =
@@ -53,7 +53,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   NtfsBrowserTests::EditFileRecordHeader(
       storage, [](FileRecordHeader::Data& header) {
-        header.magic = file_record_magic;
+        header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = offset_of_us_value;
         // Correct value; it bounds how many array words the ctor reads.
         header.size_of_us = static_cast<WORD>(array_words + 1);
@@ -103,7 +103,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> storage(record_size, 0);
   NtfsBrowserTests::EditFileRecordHeader(
       storage, [](FileRecordHeader::Data& header) {
-        header.magic = file_record_magic;
+        header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = offset_of_us_array;
         header.size_of_us = static_cast<WORD>(blocks + 1);
       });

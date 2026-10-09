@@ -93,7 +93,7 @@ bool FileRecordHeader::PatchUS() noexcept {
 const AttrHeaderCommon* FileRecordHeader::HeaderCommon() const noexcept {
   WORD const offset_of_attr = GetData()->offset_of_attr;
   if (offset_of_attr + sizeof(AttrHeaderCommon) >= buffer_size) {
-    LogWarn("Offset of attr must be within the file record buffer");
+    Log::Warn("Offset of attr must be within the file record buffer");
     return nullptr;
   }
   return reinterpret_cast<const AttrHeaderCommon*>(

@@ -18,35 +18,37 @@ enum class FileRecord : std::uint8_t;
 
 }  // namespace Flag
 
-constexpr uint32_t file_record_magic('ELIF');
-
-// Size of Data's named header fields, before the first attribute begins.
-constexpr size_t min_file_record_header_size = 48;
-
-// Largest file record size a real NTFS volume can have (a 4Kn volume's).
-constexpr size_t max_file_record_size = 4096;
-
-// NTFS protects every 512-byte block of a record or index block with one
-// update sequence word, whatever the volume's sector size (a 4Kn volume
-// included).
-constexpr size_t update_sequence_stride = 512;
-
-// Number of 512-byte blocks a buffer's update sequence array covers.
-// size_of_us counts the sequence number itself. It bounds the result, so a
-// forged value cannot make a caller read more array words than the header
-// declares. A shorter array only protects the blocks it covers.
-constexpr size_t UpdateSequenceBlockCount(size_t buffer_size,
-                                          WORD size_of_us) noexcept {
-  const size_t declared = size_of_us > 0 ? size_of_us - 1U : 0U;
-  const size_t blocks = buffer_size / update_sequence_stride;
-  return declared < blocks ? declared : blocks;
-}
-
 struct AttrHeaderCommon;
 template <Strategy S>
 struct FileRecordHeaderImpl;
 
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecordHeader {
+  // The "FILE" signature that opens a file record, read as a little-endian
+  // DWORD.
+  static constexpr uint32_t file_record_magic = 'ELIF';
+
+  // Size of Data's named header fields, before the first attribute begins.
+  static constexpr size_t min_file_record_header_size = 48;
+
+  // Largest file record size a real NTFS volume can have (a 4Kn volume's).
+  static constexpr size_t max_file_record_size = 4096;
+
+  // NTFS protects every 512-byte block of a record or index block with one
+  // update sequence word, whatever the volume's sector size (a 4Kn volume
+  // included).
+  static constexpr size_t update_sequence_stride = 512;
+
+  // Number of 512-byte blocks a buffer's update sequence array covers.
+  // size_of_us counts the sequence number itself. It bounds the result, so a
+  // forged value cannot make a caller read more array words than the header
+  // declares. A shorter array only protects the blocks it covers.
+  static constexpr size_t UpdateSequenceBlockCount(size_t buffer_size,
+                                                   WORD size_of_us) noexcept {
+    const size_t declared = size_of_us > 0 ? size_of_us - 1U : 0U;
+    const size_t blocks = buffer_size / update_sequence_stride;
+    return declared < blocks ? declared : blocks;
+  }
+
   union Data {
     struct {
       DWORD magic;          // "FILE"

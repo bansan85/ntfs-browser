@@ -171,7 +171,7 @@ std::optional<std::vector<WrappedFek>>
   if (reader.Size() < header_size ||
       !ParseField(reader, ddf_offset_field, entries) ||
       !ParseField(reader, drf_offset_field, entries)) {
-    LogWarn("Malformed $EFS stream.");
+    Log::Warn("Malformed $EFS stream.");
     return std::nullopt;
   }
   return entries;

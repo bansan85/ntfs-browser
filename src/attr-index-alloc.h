@@ -16,14 +16,6 @@ class FileRecord;
 struct AttrHeaderCommon;
 enum class Strategy : std::uint8_t;
 
-// Whether offset_of_us and the Update Sequence Array after it fit inside an
-// index_block_size-byte buffer without overlapping the block header.
-// Callers MUST reject the block instead of reading through it when this
-// returns false.
-[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY bool
-    IndexBlockUsOffsetInBounds(WORD offset_of_us, DWORD sectors,
-                               DWORD index_block_size) noexcept;
-
 template <Strategy S>
 class AttrIndexAlloc : public AttrNonResident<S> {
  public:

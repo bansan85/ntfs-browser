@@ -5,7 +5,7 @@
 
 #include "internal-export.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser::Utf {
 
 // Converts an on-disk name to UTF-8, for logging. An unpaired surrogate
 // becomes U+FFFD, so the result is always well-formed UTF-8.
@@ -22,4 +22,4 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY std::string WideToUtf8(std::wstring_view wide);
 NTFS_BROWSER_EXPORT_TESTS_ONLY std::wstring
     Utf16ToWide(std::u16string_view units);
 
-}  // namespace NtfsBrowser
+}  // namespace NtfsBrowser::Utf

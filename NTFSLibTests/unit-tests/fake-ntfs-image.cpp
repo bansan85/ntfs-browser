@@ -24,6 +24,7 @@
 
 #include "attr/attribute-list.h"
 #include "attr/filename.h"
+#include "attr/flags.h"
 #include "attr/header-non-resident.h"
 #include "attr/header-resident.h"
 #include "attr/index-root.h"
@@ -42,11 +43,11 @@
 #include "flag/std-info-permission.h"
 #include "lznt1/decompress.h"
 #include "mft-file-reference.h"
+#include "upcase.h"
 
 namespace NtfsBrowserTests {
 
 using NtfsBrowser::AttrType;
-using NtfsBrowser::file_record_magic;
 using NtfsBrowser::FileRecordHeader;
 using NtfsBrowser::Data::index_block_magic;
 using NtfsBrowser::Enum::MftIdx;
@@ -143,7 +144,8 @@ struct alignas(record_alignment) FakeRecord
 
 // Packs an on-disk file reference: record number low, sequence number high.
 constexpr ULONGLONG MakeFileReference(ULONGLONG record, WORD sequence) {
-  return (static_cast<ULONGLONG>(sequence) << NtfsBrowser::mft_sequence_shift) |
+  return (static_cast<ULONGLONG>(sequence)
+          << NtfsBrowser::Mft::mft_sequence_shift) |
          record;
 }
 
@@ -177,7 +179,7 @@ FakeRecord MakeRecordHeader(WORD offset_of_attr,
   FakeRecord record{};
 
   EditFileRecordHeader(record, [&](FileRecordHeader::Data& header) {
-    header.magic = file_record_magic;
+    header.magic = FileRecordHeader::file_record_magic;
     header.offset_of_us = offset_of_us_value;
     header.size_of_us = 3;
     header.offset_of_attr = offset_of_attr;
@@ -444,7 +446,7 @@ FakeRecord MakeInvalidOffsetOfUsRecord() {
   FakeRecord record{};
 
   EditFileRecordHeader(record, [](FileRecordHeader::Data& header) {
-    header.magic = file_record_magic;
+    header.magic = FileRecordHeader::file_record_magic;
     header.offset_of_us = fake_file_record_size;
     header.size_of_us = 3;
   });
@@ -2167,10 +2169,6 @@ constexpr DWORD split_extent_clusters = 2;
 // NTFS compression fixtures (see fake-ntfs-image.h for what each builds)
 ////////////////////////////////////////////////////////////////////////////
 
-// AttrHeaderCommon::flags bit 0 ("compressed"); unread by the library itself
-// but set here since a real compressed attribute always sets it too.
-constexpr WORD attr_flag_compressed = 0x0001;
-
 // Encodes "runs" into NTFS' real, delta-LCN run-list format at "dataRun"
 // (terminated by 0x00), and returns the byte count written.
 DWORD EncodeDataRuns(std::span<BYTE> data_run,
@@ -2261,7 +2259,8 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, AttrType type,
   assert(encoded_name.size() <= 255 && "on-disk name_length is one byte");
   attr.header.name_length = gsl::narrow<BYTE>(encoded_name.size());
   attr.header.flags = overrides.flags.value_or(
-      (comp_unit_size != 0) ? attr_flag_compressed : static_cast<WORD>(0));
+      (comp_unit_size != 0) ? NtfsBrowser::Attr::flag_compressed
+                            : static_cast<WORD>(0));
   attr.header.id = 0;
 
   ULONGLONG total_clusters = 0;
@@ -3455,9 +3454,6 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode() {
 
 namespace {
 
-// UTF-16 units in $UpCase: one entry per code unit of the BMP.
-constexpr size_t up_case_unit_count = 65536;
-
 // LCN of the $INDEX_ALLOCATION block the non-ASCII fixture files its names in.
 constexpr DWORD non_ascii_index_block_lcn = 20;
 
@@ -3475,8 +3471,8 @@ std::vector<BYTE> MakeNonAsciiUpCaseBytes() {
   constexpr WORD capital_y_diaeresis = 0x0178;
   constexpr WORD case_distance = 0x20;
 
-  std::vector<BYTE> bytes(up_case_unit_count * sizeof(WORD));
-  for (size_t unit = 0; unit < up_case_unit_count; unit++) {
+  std::vector<BYTE> bytes(NtfsBrowser::UpCaseTable::unit_count * sizeof(WORD));
+  for (size_t unit = 0; unit < NtfsBrowser::UpCaseTable::unit_count; unit++) {
     auto upper = gsl::narrow<WORD>(unit);
     if ((unit >= L'a' && unit <= L'z') ||
         (unit >= latin1_lower_first && unit <= latin1_lower_last &&
@@ -4388,11 +4384,10 @@ std::vector<BYTE>
           NtfsBrowser::Flag::StdInfoPermission::Encrypted);
 
   for (const FakeEncryptedStream& stream : file.streams) {
-    WORD flags = stream.flagged_encrypted
-                     ? NtfsBrowser::Efs::attr_flag_encrypted
-                     : static_cast<WORD>(0);
+    WORD flags = stream.flagged_encrypted ? NtfsBrowser::Attr::flag_encrypted
+                                          : static_cast<WORD>(0);
     if (stream.flagged_compressed) {
-      flags |= attr_flag_compressed;
+      flags |= NtfsBrowser::Attr::flag_compressed;
     }
     offset += WriteNonResidentAttr(
         record, offset, AttrType::Data, 0, stream.real_size, stream.runs,
@@ -4457,7 +4452,7 @@ FakeRecord MakeResidentEncryptedDataRecord() {
   attr.header.type = AttrType::Data;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
-  attr.header.flags = NtfsBrowser::Efs::attr_flag_encrypted;
+  attr.header.flags = NtfsBrowser::Attr::flag_encrypted;
   attr.header.id = 0;
   attr.attr_size = gsl::narrow<DWORD>(resident_encrypted_data_content.size());
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
@@ -4830,7 +4825,7 @@ FakeRecord
   alloc_attr.header.type = AttrType::IndexAllocation;
   alloc_attr.header.non_resident = 1;
   alloc_attr.header.name_length = 0;
-  alloc_attr.header.flags = attr_flag_compressed;
+  alloc_attr.header.flags = NtfsBrowser::Attr::flag_compressed;
   alloc_attr.header.id = 0;
   alloc_attr.start_vcn = 0;
   alloc_attr.last_vcn = compression_unit_clusters - 1;

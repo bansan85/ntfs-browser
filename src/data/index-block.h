@@ -25,4 +25,18 @@ struct IndexBlock {
   BYTE padding[3];  // Padding
 };
 
+// Whether offset_of_us and the Update Sequence Array after it fit inside an
+// index_block_size-byte buffer without overlapping the block header.
+// Callers MUST reject the block instead of reading through it when this
+// returns false.
+[[nodiscard]] inline bool
+    IndexBlockUsOffsetInBounds(WORD offset_of_us, DWORD sectors,
+                               DWORD index_block_size) noexcept {
+  // True only if offset_of_us starts past the header and the whole USN
+  // array still fits within the buffer.
+  return offset_of_us >= sizeof(IndexBlock) &&
+         static_cast<ULONGLONG>(offset_of_us) + 2ULL * (1ULL + sectors) <=
+             index_block_size;
+}
+
 }  // namespace NtfsBrowser::Data

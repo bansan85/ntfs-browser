@@ -25,7 +25,7 @@ class AttrBitmap : public Resident {
   AttrBitmap& operator=(AttrBitmap&& other) noexcept = delete;
   AttrBitmap& operator=(const AttrBitmap& other) = delete;
 
-  ~AttrBitmap() override { LogTrace("AttrBitmap deleted"); }
+  ~AttrBitmap() override { Log::Trace("AttrBitmap deleted"); }
 
  private:
   ULONGLONG bitmap_size_;         // Bitmap data size

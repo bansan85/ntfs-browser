@@ -47,7 +47,7 @@ class FileRecord<S>::Impl {
   const NtfsVolume<S>* volume;
   std::unique_ptr<FileRecordHeaderImpl<S>> file_record;
   std::optional<ULONGLONG> file_reference;
-  std::array<AttrRawCallback, attr_nums> attr_raw_call_back{};
+  std::array<AttrRawCallback, Attr::attr_nums> attr_raw_call_back{};
   Mask attr_mask{Mask::All};
 
   // The extension records $ATTRIBUTE_LIST opened. An attribute imported from
@@ -59,7 +59,8 @@ class FileRecord<S>::Impl {
   // record_buffer_. A parsed attribute keeps a reference into its copy, so
   // these MUST outlive attr_list_: declared before it, cleared after it.
   std::vector<std::vector<BYTE>> realigned_attrs;
-  std::array<std::vector<std::unique_ptr<AttrBase<S>>>, attr_nums> attr_list{};
+  std::array<std::vector<std::unique_ptr<AttrBase<S>>>, Attr::attr_nums>
+      attr_list{};
 
   // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.
   bool resolve_attr_list{true};

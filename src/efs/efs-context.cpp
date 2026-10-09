@@ -10,6 +10,7 @@
 
 #include "efs/fek.h"
 #include "ntfs-common.h"
+#include "util.h"
 
 namespace NtfsBrowser::Efs {
 
@@ -29,9 +30,9 @@ std::unique_ptr<SectorDecryptor> Context::MakeDecryptor(const Fek& fek) const {
       return decryptor;
     }
   #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-    LogDebug("BCrypt declined the FEK. Using Crypto++.");
+    Log::Debug("BCrypt declined the FEK. Using Crypto++.");
   #else
-    LogDebug("BCrypt declined the FEK. No Crypto++ fallback compiled in.");
+    Log::Debug("BCrypt declined the FEK. No Crypto++ fallback compiled in.");
   #endif
   }
 #endif
@@ -68,7 +69,7 @@ void Context::Resolve() const {
     }
 
     const std::optional<Fek> fek = Fek::Parse(*blob);
-    SecureZero(*blob);
+    Util::SecureZero(*blob);
     if (!fek) {
       failure_ = "the unwrapped FEK is unusable";
       continue;
@@ -89,12 +90,12 @@ bool Context::Decrypt(ULONGLONG stream_offset, std::span<BYTE> data) const {
   }
 
   if (!decryptor_) {
-    LogWarn("Cannot decrypt the stream: {}.", failure_);
+    Log::Warn("Cannot decrypt the stream: {}.", failure_);
     return false;
   }
 
   if (data.size() % sector_size != 0 || stream_offset % sector_size != 0) {
-    LogWarn("Encrypted read is not sector aligned.");
+    Log::Warn("Encrypted read is not sector aligned.");
     return false;
   }
 

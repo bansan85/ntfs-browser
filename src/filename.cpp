@@ -29,7 +29,7 @@ void Filename::SetFilename(const Attr::Filename& filename) {
 // Copy pointer buffers
 void Filename::CopyFilename(const Filename& filename,
                             const Attr::Filename& afn) {
-  LogTrace("Filename Copied");
+  Log::Trace("Filename Copied");
 
   filename_ = &afn;
   filename_wuc_ = filename.filename_wuc_;
@@ -57,14 +57,15 @@ ULONGLONG Filename::GetAllocatedSize() const noexcept {
 }
 
 ULONGLONG Filename::GetParentReference() const noexcept {
-  return filename_ != nullptr ? filename_->parent_ref & mft_record_number_mask
-                              : 0;
+  return filename_ != nullptr
+             ? filename_->parent_ref & Mft::mft_record_number_mask
+             : 0;
 }
 
 WORD Filename::GetParentSequenceNumber() const noexcept {
-  return filename_ != nullptr
-             ? static_cast<WORD>(filename_->parent_ref >> mft_sequence_shift)
-             : 0;
+  return filename_ != nullptr ? static_cast<WORD>(filename_->parent_ref >>
+                                                  Mft::mft_sequence_shift)
+                              : 0;
 }
 
 Flag::Filename Filename::GetFilePermission() const noexcept {
@@ -129,18 +130,18 @@ std::wstring_view Filename::GetFilename() const {
   // filename_->name is raw on-disk UTF-16 (WORD, always 16 bits), not
   // wchar_t (16 bits on Windows, but wider elsewhere): decode rather than
   // reinterpret_cast, so a name outside the BMP survives intact everywhere.
-  filename_wuc_ = Utf16ToWide(std::u16string_view(
+  filename_wuc_ = Utf::Utf16ToWide(std::u16string_view(
       reinterpret_cast<const char16_t*>(&filename_->name[0]),
       filename_->name_length));
   const std::wstring_view retval = filename_wuc_;
 
   // Guarded: this runs once per directory entry, and the UTF-8 conversion
   // below allocates whether or not anything would print it.
-  if (!retval.empty() && IsLogged(Log::Level::Debug)) {
-    LogDebug("File Name: {}", WideToUtf8(retval));
-    LogDebug("File Permission: {}\t{}{}{}",
-             IsDirectory() ? "Directory" : "File", IsReadOnly() ? 'R' : ' ',
-             IsHidden() ? 'H' : ' ', IsSystem() ? 'S' : ' ');
+  if (!retval.empty() && Log::IsLogged(Log::Level::Debug)) {
+    Log::Debug("File Name: {}", Utf::WideToUtf8(retval));
+    Log::Debug("File Permission: {}\t{}{}{}",
+               IsDirectory() ? "Directory" : "File", IsReadOnly() ? 'R' : ' ',
+               IsHidden() ? 'H' : ' ', IsSystem() ? 'S' : ' ');
   }
 
   return retval;

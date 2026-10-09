@@ -189,7 +189,7 @@ void NtfsVolume<S>::Impl::Init() {
             vec.front().get())
             ->GetVersion();
   }
-  LogInfo("NTFS volume version: {}.{}", version_major, version_minor);
+  Log::Info("NTFS volume version: {}.{}", version_major, version_minor);
   if (version_major < 3)  // NT4 ?
   {
     return;
@@ -203,14 +203,16 @@ void NtfsVolume<S>::Impl::Init() {
               const AttrVolName<AttrResidentNoCache, Strategy::NoCache>*>(
               vec2.front().get())
               ->GetName();
-      LogInfo("NTFS volume name: {}", WideToUtf8(TrimTrailingNuls(volname)));
+      Log::Info("NTFS volume name: {}",
+                Utf::WideToUtf8(TrimTrailingNuls(volname)));
     } else {
       const std::wstring_view volname =
           reinterpret_cast<
               const AttrVolName<AttrResidentFullCache, Strategy::FullCache>*>(
               vec2.front().get())
               ->GetName();
-      LogInfo("NTFS volume name: {}", WideToUtf8(TrimTrailingNuls(volname)));
+      Log::Info("NTFS volume name: {}",
+                Utf::WideToUtf8(TrimTrailingNuls(volname)));
     }
   }
 
@@ -245,7 +247,7 @@ void NtfsVolume<S>::Impl::Init() {
   ResolveMftDataExtents();
 
   if (GetRecordsCount() < base_extent->GetDataSize() / file_record_size) {
-    LogWarn(
+    Log::Warn(
         "$MFT claims {} bytes but maps fewer; counting {} records instead of "
         "{}",
         base_extent->GetDataSize(), GetRecordsCount(),
@@ -268,7 +270,7 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
 
   if (!list_record.ParseFileRecord(static_cast<DWORD>(Enum::MftIdx::Mft)) ||
       !list_record.ParseAttrs()) {
-    LogDebug("$MFT's own $ATTRIBUTE_LIST did not parse; assuming none");
+    Log::Debug("$MFT's own $ATTRIBUTE_LIST did not parse; assuming none");
     return;
   }
 
@@ -280,7 +282,8 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
   const AttrBase<S>& raw_list = *list_attrs.front();
   const std::optional<ULONGLONG> list_ref = list_record.GetFileReference();
   if (!list_ref.has_value()) {
-    LogDebug("$MFT's own $ATTRIBUTE_LIST has no file reference; assuming none");
+    Log::Debug(
+        "$MFT's own $ATTRIBUTE_LIST has no file reference; assuming none");
     return;
   }
   const ULONGLONG self_ref = *list_ref;
@@ -312,7 +315,7 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
   }
 
   if (!pending.empty()) {
-    LogWarn(
+    Log::Warn(
         "{} of $MFT's own DATA continuation(s) could not be resolved "
         "(unreachable)",
         pending.size());
@@ -339,7 +342,7 @@ std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
       break;
     }
     if (*len != Attr::attribute_list_entry_header_size ||
-        !IsValidAttrType(entry.attr_type)) {
+        !Attr::IsValidAttrType(entry.attr_type)) {
       break;
     }
 
@@ -350,7 +353,7 @@ std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
       // A file reference packs the record number and its sequence number.
       const ULONGLONG key =
           record_ref | (static_cast<ULONGLONG>(entry.base_ref.sequence_number)
-                        << mft_sequence_shift);
+                        << Mft::mft_sequence_shift);
       const auto [iterator, inserted] =
           index_by_ref.emplace(key, pending.size());
       if (inserted) {
@@ -386,11 +389,11 @@ void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
   // A record another file reused since the list was written is not
   // $MFT's extension: its $DATA would map foreign clusters.
   if (parsed &&
-      !IsGenuineExtensionRecord(item.sequence, ext.GetSequenceNumber(),
-                                ext.GetBaseRecordReference(),
-                                self_ref & mft_record_number_mask)) {
+      !Mft::IsGenuineExtensionRecord(item.sequence, ext.GetSequenceNumber(),
+                                     ext.GetBaseRecordReference(),
+                                     self_ref & Mft::mft_record_number_mask)) {
     mft_extension_records.pop_back();
-    LogWarn(
+    Log::Warn(
         "$MFT DATA continuation in record {} is not an extension of "
         "$MFT (reused or foreign); ignoring",
         item.record);
@@ -398,8 +401,8 @@ void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
   }
   if (!parsed || !ext.ParseAttrs()) {
     mft_extension_records.pop_back();
-    LogWarn("$MFT DATA continuation in record {} could not be resolved",
-            item.record);
+    Log::Warn("$MFT DATA continuation in record {} could not be resolved",
+              item.record);
     return;
   }
 
@@ -423,7 +426,7 @@ template <Strategy S>
 void NtfsVolume<S>::Impl::TryAddMftExtent(const AttrBase<S>& attr,
                                           ULONGLONG expected_start_vcn) {
   if (!attr.IsUnNamed()) {
-    LogWarn("$MFT DATA continuation is named; rejecting");
+    Log::Warn("$MFT DATA continuation is named; rejecting");
     return;
   }
 
@@ -432,19 +435,19 @@ void NtfsVolume<S>::Impl::TryAddMftExtent(const AttrBase<S>& attr,
   const ULONGLONG last_vcn = non_resident.GetLastVcn();
 
   if (start_vcn > last_vcn) {
-    LogWarn("$MFT DATA continuation has an empty/inverted VCN range");
+    Log::Warn("$MFT DATA continuation has an empty/inverted VCN range");
     return;
   }
 
   if (last_vcn >= std::numeric_limits<ULONGLONG>::max() / cluster_size) {
-    LogWarn("$MFT DATA continuation's last VCN ({}) overflows a byte offset",
-            last_vcn);
+    Log::Warn("$MFT DATA continuation's last VCN ({}) overflows a byte offset",
+              last_vcn);
     return;
   }
 
   if (expected_start_vcn != std::numeric_limits<ULONGLONG>::max() &&
       start_vcn != expected_start_vcn) {
-    LogWarn(
+    Log::Warn(
         "$MFT DATA continuation's start VCN ({}) doesn't match its "
         "$ATTRIBUTE_LIST entry ({})",
         start_vcn, expected_start_vcn);
@@ -462,7 +465,7 @@ void NtfsVolume<S>::Impl::TryAddMftExtent(const AttrBase<S>& attr,
   const bool overlaps_next =
       insert_pos != mft_extents.end() && insert_pos->start_vcn <= last_vcn;
   if (overlaps_previous || overlaps_next) {
-    LogWarn("$MFT DATA continuation overlaps an already-accepted extent");
+    Log::Warn("$MFT DATA continuation overlaps an already-accepted extent");
     return;
   }
 
@@ -552,7 +555,7 @@ template <Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(_TCHAR volume) {
   // Verify parameter
   if (!_istalpha(volume)) {
-    LogError("Volume name error, should be like 'C', 'D'");
+    Log::Error("Volume name error, should be like 'C', 'D'");
     return false;
   }
 
@@ -568,7 +571,7 @@ bool NtfsVolume<S>::Impl::OpenVolume(_TCHAR volume) {
 template <Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
   if (!volume->Open(path)) {
-    LogError("Cannnot open volume");
+    Log::Error("Cannnot open volume");
     return false;
   }
 
@@ -598,13 +601,13 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
       volume->Read(fr_addr, max_sector_size);
   if (!bpb_buffer) {
     // A backing file shorter than max_sector_size cannot serve that read.
-    LogWarn("Cannot read a {}-byte boot sector, retrying with {} bytes",
-            max_sector_size, min_sector_size);
+    Log::Warn("Cannot read a {}-byte boot sector, retrying with {} bytes",
+              max_sector_size, min_sector_size);
     fr_addr.QuadPart = 0;
     bpb_buffer = volume->Read(fr_addr, min_sector_size);
   }
   if (!bpb_buffer) {
-    LogError("Read boot sector error");
+    Log::Error("Read boot sector error");
     return false;
   }
   const auto* bpb = reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
@@ -613,32 +616,32 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
       reinterpret_cast<const char*>(&bpb->signature[0]),
       sizeof(bpb->signature));
   if (signature != Data::ntfs_signature) {
-    LogWarn("Volume file system is not NTFS");
+    Log::Warn("Volume file system is not NTFS");
     return false;
   }
 
   // Log important volume parameters
 
   sector_size = bpb->bytes_per_sector;
-  LogInfo("Sector Size = {} bytes", sector_size);
+  Log::Info("Sector Size = {} bytes", sector_size);
 
   // A sector smaller than one WORD cannot be a real BPB value.
   if (sector_size < sizeof(WORD)) {
-    LogError("Sector Size must be at least 2 bytes");
+    Log::Error("Sector Size must be at least 2 bytes");
     return false;
   }
 
   const std::optional<DWORD> decoded_cluster_size = DecodeClusterSize(
       static_cast<char>(bpb->sectors_per_cluster), sector_size);
   if (!decoded_cluster_size) {
-    LogError("sectors_per_cluster magnitude out of range");
+    Log::Error("sectors_per_cluster magnitude out of range");
     return false;
   }
   cluster_size = *decoded_cluster_size;
-  LogInfo("Cluster Size = {} bytes", cluster_size);
+  Log::Info("Cluster Size = {} bytes", cluster_size);
 
   if (cluster_size == 0) {
-    LogError("Cluster Size can't be null");
+    Log::Error("Cluster Size can't be null");
     return false;
   }
   cluster_buffer.resize(cluster_size);
@@ -646,39 +649,40 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
   const std::optional<DWORD> decoded_record_size = DecodeBpbSize(
       static_cast<char>(bpb->clusters_per_file_record), cluster_size);
   if (!decoded_record_size) {
-    LogError("clusters_per_file_record magnitude out of range");
+    Log::Error("clusters_per_file_record magnitude out of range");
     return false;
   }
   file_record_size = *decoded_record_size;
-  LogInfo("FileRecord Size = {} bytes", file_record_size);
+  Log::Info("FileRecord Size = {} bytes", file_record_size);
 
   // Rejects a size too small for the header, or not a whole number of
   // sectors.
-  if (file_record_size < min_file_record_header_size ||
+  if (file_record_size < FileRecordHeader::min_file_record_header_size ||
       file_record_size % sector_size != 0) {
-    LogError("FileRecord Size is invalid");
+    Log::Error("FileRecord Size is invalid");
     return false;
   }
 
-  if (file_record_size > max_file_record_size) {
-    LogError("FileRecord Size exceeds the maximum supported file record size");
+  if (file_record_size > FileRecordHeader::max_file_record_size) {
+    Log::Error(
+        "FileRecord Size exceeds the maximum supported file record size");
     return false;
   }
 
   const std::optional<DWORD> decoded_index_block_size = DecodeBpbSize(
       static_cast<char>(bpb->clusters_per_index_block), cluster_size);
   if (!decoded_index_block_size) {
-    LogError("clusters_per_index_block magnitude out of range");
+    Log::Error("clusters_per_index_block magnitude out of range");
     return false;
   }
   index_block_size = *decoded_index_block_size;
-  LogInfo("IndexBlock Size = {} bytes", index_block_size);
+  Log::Info("IndexBlock Size = {} bytes", index_block_size);
 
   // Rejects a size too small for the header, or not a whole number of
   // sectors.
   if (index_block_size < sizeof(Data::IndexBlock) ||
       index_block_size % sector_size != 0) {
-    LogError("IndexBlock Size is invalid");
+    Log::Error("IndexBlock Size is invalid");
     return false;
   }
 
@@ -688,7 +692,7 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
       bpb->lcn_mft > std::numeric_limits<ULONGLONG>::max() / cluster_size;
   mft_addr = mft_addr_overflows ? std::numeric_limits<ULONGLONG>::max()
                                 : bpb->lcn_mft * cluster_size;
-  LogInfo("MFT address = 0x{:016X}", mft_addr);
+  Log::Info("MFT address = 0x{:016X}", mft_addr);
 
   // Leaves headroom for the per-record byte offset added to mft_addr_
   // later, before it is narrowed to a LONGLONG.
@@ -696,7 +700,7 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
       std::numeric_limits<LONGLONG>::max() / 2;
 
   if (mft_addr_overflows || mft_addr > max_plausible_mft_addr) {
-    LogError("MFT address is invalid");
+    Log::Error("MFT address is invalid");
     return false;
   }
 
@@ -797,8 +801,8 @@ bool NtfsVolume<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {
 template <Strategy S>
 bool NtfsVolume<S>::InstallAttrRawCB(AttrType attr_type,
                                      AttrRawCallback callback) noexcept {
-  const DWORD at_idx = AttrIndex(attr_type);
-  if (at_idx >= attr_nums) {
+  const DWORD at_idx = Attr::AttrIndex(attr_type);
+  if (at_idx >= Attr::attr_nums) {
     return false;
   }
 
@@ -891,11 +895,11 @@ std::unique_ptr<const UpCaseTable>
   }
 
   const AttrBase<S>* data = record.FindStream({});
-  if (data == nullptr || data->GetDataSize() < up_case_byte_count) {
+  if (data == nullptr || data->GetDataSize() < UpCaseTable::byte_count) {
     return {};
   }
 
-  std::vector<BYTE> bytes(up_case_byte_count);
+  std::vector<BYTE> bytes(UpCaseTable::byte_count);
   const std::optional<ULONGLONG> len = data->ReadData(0, bytes);
   if (!len || *len != bytes.size()) {
     return {};
@@ -916,7 +920,7 @@ const UpCaseTable& NtfsVolume<S>::Impl::GetUpCaseTable() const {
     upcase_loaded = true;
     upcase = LoadUpCaseTable();
     if (!upcase) {
-      LogInfo("$UpCase is not usable: names collate by the built-in mapping");
+      Log::Info("$UpCase is not usable: names collate by the built-in mapping");
     }
   }
   return upcase ? *upcase : UpCaseTable::BuiltIn();

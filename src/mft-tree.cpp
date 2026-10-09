@@ -65,7 +65,7 @@ bool ReadEntry(FileRecord<S>& file_record, ULONGLONG record, MftEntry& entry) {
   try {
     parsed = file_record.ParseAttrs();
   } catch (const std::exception& e) {
-    LogException(e);
+    Log::Exception(e);
   }
 
   entry.record = record;
@@ -229,8 +229,8 @@ void MftTree::Impl::Scan(const NtfsVolume<S>& volume,
     options.progress(total, total);
   }
 
-  LogInfo("MFT scan: {} slots, {} in use, {} deleted, {} unreadable",
-          stats.slots, stats.in_use, stats.deleted, stats.unreadable);
+  Log::Info("MFT scan: {} slots, {} in use, {} deleted, {} unreadable",
+            stats.slots, stats.in_use, stats.deleted, stats.unreadable);
   Link();
 }
 
@@ -303,8 +303,8 @@ bool MftTree::Impl::IsValidParent(const MftEntry& child,
 
   // The parent is the same one the name was filed under: unchecked, still
   // the same generation, or the generation NTFS freed right after.
-  return IsSameRecordGeneration(name.parent_sequence, parent->sequence,
-                                parent->in_use);
+  return Mft::IsSameRecordGeneration(name.parent_sequence, parent->sequence,
+                                     parent->in_use);
 }
 
 // Joins name and its ancestors' primary names up to the root, or up to the

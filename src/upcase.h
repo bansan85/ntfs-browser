@@ -12,18 +12,17 @@
 
 namespace NtfsBrowser {
 
-// Number of UTF-16 code units $UpCase maps: every unit of the BMP.
-inline constexpr size_t up_case_unit_count = 65536;
-
-// Size of $UpCase's $DATA stream: one 16-bit entry per unit, so 128 KiB.
-inline constexpr size_t up_case_byte_count =
-    up_case_unit_count * sizeof(char16_t);
-
 // The uppercase mapping NTFS collates file names by. A volume stores its own
 // in $UpCase (MFT record 10). The built-in one stands in when that record
 // cannot be read: it is fixed data, and never depends on the process locale.
 class NTFS_BROWSER_EXPORT_TESTS_ONLY UpCaseTable {
  public:
+  // Number of UTF-16 code units $UpCase maps: every unit of the BMP.
+  static constexpr size_t unit_count = 65536;
+
+  // Size of $UpCase's $DATA stream: one 16-bit entry per unit, so 128 KiB.
+  static constexpr size_t byte_count = unit_count * sizeof(char16_t);
+
   // Unicode simple uppercase mapping of the BMP, as compiled into the library.
   [[nodiscard]] static const UpCaseTable& BuiltIn();
 
