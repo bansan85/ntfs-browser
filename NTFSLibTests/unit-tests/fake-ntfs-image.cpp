@@ -48,6 +48,7 @@ namespace NtfsBrowserTests {
 using NtfsBrowser::AttrType;
 using NtfsBrowser::file_record_magic;
 using NtfsBrowser::FileRecordHeader;
+using NtfsBrowser::Data::index_block_magic;
 using NtfsBrowser::Enum::MftIdx;
 
 namespace {

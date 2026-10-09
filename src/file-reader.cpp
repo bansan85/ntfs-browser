@@ -22,13 +22,21 @@
   #include "win32-disk-reader.h"
 #endif
 
-static constexpr LONGLONG read_buffer_size = LONGLONG{64} * 1024;
-static constexpr LONGLONG memory_buffer_size = 512 * read_buffer_size;
-// READ_BUFFER_SIZE as a size_t, to size a std::span over one cached block.
-static constexpr size_t block_bytes_value =
-    static_cast<size_t>(read_buffer_size);
-
 namespace NtfsBrowser {
+
+namespace {
+
+// Size of one block read from the disk and cached. 64 KiB amortises the cost
+// of a disk read without holding much more than a cluster run's worth of data.
+constexpr LONGLONG read_buffer_size = LONGLONG{64} * 1024;
+
+// Size of one allocation that backs many blocks: 512 blocks, so 32 MiB.
+constexpr LONGLONG memory_buffer_size = 512 * read_buffer_size;
+
+// read_buffer_size as a size_t, to size a std::span over one cached block.
+constexpr size_t block_bytes_value = static_cast<size_t>(read_buffer_size);
+
+}  // namespace
 
 template <Strategy S>
 FileReader<S>::FileReader() = default;

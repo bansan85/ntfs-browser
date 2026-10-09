@@ -2,9 +2,11 @@
 
 #include <ntfs-browser/win-types.h>
 
-static constexpr DWORD index_block_magic = 'XDNI';
-
 namespace NtfsBrowser::Data {
+
+// The "INDX" signature that opens an index block, read as a little-endian
+// DWORD.
+inline constexpr DWORD index_block_magic = 'XDNI';
 
 struct IndexBlock {
   // Index Block Header

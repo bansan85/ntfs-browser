@@ -138,7 +138,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
 template <Strategy S>
 bool AttrIndexAlloc<S>::FixupIndexBlock(std::span<BYTE> block) {
   const auto* ib_buf = reinterpret_cast<const Data::IndexBlock*>(block.data());
-  if (ib_buf->magic != index_block_magic) {
+  if (ib_buf->magic != Data::index_block_magic) {
     LogWarn("Index Block parse error: Magic mismatch");
     return false;
   }

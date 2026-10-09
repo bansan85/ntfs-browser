@@ -26,6 +26,7 @@ using NtfsBrowser::IndexBlockUsOffsetInBounds;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Strategy;
+using NtfsBrowser::Data::index_block_magic;
 using NtfsBrowser::Data::IndexBlock;
 
 TEST_CASE(
