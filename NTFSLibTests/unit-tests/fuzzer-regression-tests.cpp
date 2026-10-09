@@ -56,7 +56,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 145>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -375,6 +375,135 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 106>
          {true,
           {"$MFT DATA continuation's last VCN (18014398509481983) overflows a "
            "byte offset"}}},
+        {"efs_decrypt_desx_full_cache",
+         {true, {"Data length = 6 clusters, LCN = 30"}}},
+        {"efs_decrypt_aes128_no_cache",
+         {true, {"Data length = 6 clusters, LCN = 30"}}},
+        {"efs_decrypt_aes192_no_cache",
+         {true, {"Data length = 6 clusters, LCN = 30"}}},
+        {"efs_decrypt_aes256_no_cache",
+         {true, {"Data length = 6 clusters, LCN = 30"}}},
+        {"efs_decrypt_3des_no_cache",
+         {true, {"Data length = 6 clusters, LCN = 30"}}},
+        {"mft_tree_full_cache",
+         {true,
+          {"MFT scan: 26 slots, 7 in use, 4 deleted, 14 unreadable",
+           "File Name: REPORT~1.TXT"}}},
+        {"mft_tree_huge_real_size",
+         {true,
+          {"$MFT claims 18446744073709551615 bytes but maps fewer; counting 26 "
+           "records instead of 18014398509481983"}}},
+        {"index_allocation_split_runs",
+         {true,
+          {"File Name: SplitBlock0", "File Name: SplitBlock3",
+           "Data length = 2 clusters, LCN = 240"}}},
+        {"mft_data_extent_chain",
+         {true,
+          {"$MFT DATA continuation in record 120 could not be resolved",
+           "Attribute continuation VCNs are not contiguous from 0; leaving 3 "
+           "instance(s) unmerged"}}},
+        {"bitmap_multi_cluster",
+         {true,
+          {"Attribute: Bitmap (NonResident)",
+           "Data length = 3 clusters, LCN = 30"}}},
+        {"compressed_data_read",
+         {decompression_enabled,
+          {"Decompressed compression unit 0 into 142 bytes",
+           "Compression unit 0 served from cache"}}},
+        {"attribute_list_split_attribute",
+         {true,
+          {"Attribute List ended at offset 0 instead of its declared size 32.",
+           "Start VCN = 1, End VCN = 1"}}},
+        {"index_orphan_scan_huge_block_count",
+         {true,
+          {"TraverseSubEntries() recovery: orphan scan capped at 3 of 70000 "
+           "index blocks",
+           "File Name: Orphan"}}},
+        {"upcase_table_read_crosses_64k_blocks",
+         {true, {"Successfully read 128 clusters from LCN 301"}}},
+        {"mft_attribute_list_extension_defects",
+         {true,
+          {"$MFT DATA continuation is named; rejecting",
+           "is not an extension of $MFT (reused or foreign)",
+           "has an empty/inverted VCN range",
+           "overlaps an already-accepted extent",
+           "doesn't match its $ATTRIBUTE_LIST entry"}}},
+        {"efs_encrypted_read_unaligned_cluster",
+         {efs_enabled,
+          {"Encrypted read is not sector aligned.",
+           "FEK blob is too short: 8 bytes.",
+           "Unsupported EFS algorithm: 0x1234.",
+           "FEK key length does not match algorithm 0x660E."}}},
+        {"names_upcase_fold_surrogates_and_utf8",
+         {true,
+          {"File Name: ABC", "FindSubEntry() found entry in Index Root"}}},
+        {"efs_stream_malformed_fields",
+         {efs_enabled,
+          {"Malformed $EFS stream.",
+           "Cannot decrypt the stream: the record has no usable $EFS "
+           "stream."}}},
+        {"compressed_split_runs_leave_gap",
+         {decompression_enabled,
+          {"Compression unit at VCN 2 is not fully mapped"}}},
+        {"filerecord_filename_bad_lengths",
+         {true,
+          {"File Name attribute smaller than expected.",
+           "File Name attribute name exceeds attribute bounds."}}},
+        {"filerecord_index_nested_subnode_entry",
+         {true, {"VisitIndexBlock() found entry in sub-node"}}},
+        {"boot_sectors_per_cluster_shift_out_of_range",
+         {true, {"sectors_per_cluster magnitude out of range"}}},
+        {"compressed_overrun_and_lznt1_chunk_overflow",
+         {decompression_enabled,
+          {"LZNT1: chunk decompresses to more than 4096 bytes.",
+           "Cannot decompress compression unit 0",
+           "Compressed attribute: 4 clusters (4096 bytes) per compression "
+           "unit"}}},
+        {"filerecord_index_alloc_missing",
+         {true, {"Unhandled attribute: 0x00C0"}}},
+        {"filerecord_index_subnode_self_loop",
+         {true, {"Points to sub-node", "File Name: A_"}}},
+        {"filerecord_walk_runs_past_record_end",
+         {true, {"Attribute walk ended without a terminating end marker."}}},
+        {"mft_data_merged_span_overflow",
+         {true,
+          {"Extent size overflows: 18014398509482085 clusters of 1024 bytes"}}},
+        {"mft_tree_names_damaged_record_and_duplicate_link",
+         {true,
+          {"File Name attribute must be resident.",
+           "Attribute Parse error: 0x0030"}}},
+        {"names_index_block_subnode_vcn_too_small",
+         {true,
+          {"Index Entry is a sub-node pointer too small for its VCN field"}}},
+        {"upcase_run_lcn_at_address_space_limit",
+         {true,
+          {"Cannot read cluster with LCN 9007199254740991",
+           "range is out of bounds",
+           "$UpCase is not usable: names collate by the built-in mapping"}}},
+        {"bitmap_nonres_sparse_runs",
+         {true,
+          {"Data length = 2 clusters, LCN = 40, Sparse Data",
+           "Attribute: Bitmap (NonResident)"}}},
+        {"mft_huge_scan_stops_at_progress", {true, {"MFT scan: 4200 slots"}}},
+        {"volume_information_version_below_three",
+         {true, {"NTFS volume version: 2.1"}}},
+        {"attr_list_nonres_entry_past_end",
+         {true,
+          {"Attribute List ended at offset 64 instead of its declared size "
+           "48."}}},
+        {"efs_zero_size_stream",
+         {efs_enabled,
+          {"Cannot decrypt the stream: the record has no usable $EFS stream.",
+           "Malformed $EFS stream."}}},
+        {"filerecord_efs_stream_too_large",
+         {efs_enabled, {"$EFS stream is too large: 1048576 bytes."}}},
+        {"filerecord_index_nested_subnode_descent",
+         {true,
+          {"TraverseSubEntries() recovery: reporting orphaned index block 1",
+           "VisitIndexBlock() found entry in sub-node"}}},
+        {"mft_data_without_base_extent",
+         {true, {"Start VCN = 1, End VCN = 0"}}},
+        {"names_filename_zero_length_name", {true, {"Attribute: File Name"}}},
 };
 
 // Runs one saved regression testcase and, if expected_error_messages has an
@@ -431,6 +560,7 @@ NTFS_REGRESSION_TESTCASE("0724c913e1b2f0607bb5cd3ebfacb596db4458e9")
 NTFS_REGRESSION_TESTCASE("65b60629c20b4730c35650dd68b6f87fe57c07a3")
 NTFS_REGRESSION_TESTCASE("8fc085f7649f977b0ab5f67b5b9da055eebc56dd")
 NTFS_REGRESSION_TESTCASE("9d6b29a12783a8d0595bf861671e5401493570b5")
+NTFS_REGRESSION_TESTCASE("attr_list_nonres_entry_past_end")
 NTFS_REGRESSION_TESTCASE("attr_name_exceeds_total_size")
 NTFS_REGRESSION_TESTCASE("attr_offset_exceeds_record_size")
 NTFS_REGRESSION_TESTCASE("attr_type_slot_aliasing")
@@ -442,11 +572,16 @@ NTFS_REGRESSION_TESTCASE("attribute_list_multi_type_same_record")
 NTFS_REGRESSION_TESTCASE("attribute_list_offset_mismatch_on_root")
 NTFS_REGRESSION_TESTCASE("attribute_list_record_size_too_small_on_root")
 NTFS_REGRESSION_TESTCASE("attribute_list_short_read")
+NTFS_REGRESSION_TESTCASE("attribute_list_split_attribute")
 NTFS_REGRESSION_TESTCASE("attribute_list_zero_record_size")
 NTFS_REGRESSION_TESTCASE("attribute_walk_no_end_marker")
+NTFS_REGRESSION_TESTCASE("bitmap_multi_cluster")
+NTFS_REGRESSION_TESTCASE("bitmap_nonres_sparse_runs")
 NTFS_REGRESSION_TESTCASE("bitmap_resident_data_read")
 NTFS_REGRESSION_TESTCASE("boot_sector_read_failure")
+NTFS_REGRESSION_TESTCASE("boot_sectors_per_cluster_shift_out_of_range")
 NTFS_REGRESSION_TESTCASE("cluster_size_null")
+NTFS_REGRESSION_TESTCASE("compressed_data_read")
 NTFS_REGRESSION_TESTCASE("compressed_index_allocation")
 NTFS_REGRESSION_TESTCASE(
     "compressed_index_allocation_comp_unit_size_out_of_range")
@@ -472,6 +607,8 @@ NTFS_REGRESSION_TESTCASE("compressed_index_allocation_short_decompressed_unit")
 NTFS_REGRESSION_TESTCASE("compressed_index_allocation_sparse_unit")
 NTFS_REGRESSION_TESTCASE("compressed_index_allocation_stored_unit_bad_lcn")
 NTFS_REGRESSION_TESTCASE("compressed_index_allocation_unmapped_unit")
+NTFS_REGRESSION_TESTCASE("compressed_overrun_and_lznt1_chunk_overflow")
+NTFS_REGRESSION_TESTCASE("compressed_split_runs_leave_gap")
 NTFS_REGRESSION_TESTCASE("corrupt_compressed_index_allocation")
 NTFS_REGRESSION_TESTCASE("corrupt_mft_record_volume_ok")
 NTFS_REGRESSION_TESTCASE("data_flagged_compressed_and_encrypted")
@@ -481,9 +618,17 @@ NTFS_REGRESSION_TESTCASE("data_run_decode_error_size_byte")
 NTFS_REGRESSION_TESTCASE("data_run_lcn_product_wraps")
 NTFS_REGRESSION_TESTCASE("data_run_lcn_sum_overflows")
 NTFS_REGRESSION_TESTCASE("data_run_vcn_exceeds_bound")
+NTFS_REGRESSION_TESTCASE("efs_decrypt_3des_no_cache")
+NTFS_REGRESSION_TESTCASE("efs_decrypt_aes128_no_cache")
+NTFS_REGRESSION_TESTCASE("efs_decrypt_aes192_no_cache")
+NTFS_REGRESSION_TESTCASE("efs_decrypt_aes256_no_cache")
+NTFS_REGRESSION_TESTCASE("efs_decrypt_desx_full_cache")
+NTFS_REGRESSION_TESTCASE("efs_encrypted_read_unaligned_cluster")
 NTFS_REGRESSION_TESTCASE("efs_stream_malformed")
+NTFS_REGRESSION_TESTCASE("efs_stream_malformed_fields")
 NTFS_REGRESSION_TESTCASE("efs_stream_read_failure")
 NTFS_REGRESSION_TESTCASE("efs_stream_too_large")
+NTFS_REGRESSION_TESTCASE("efs_zero_size_stream")
 NTFS_REGRESSION_TESTCASE("f2a2482f50a933eeea4d1a506651884827c0952d")
 NTFS_REGRESSION_TESTCASE("file_reader_read_failure")
 NTFS_REGRESSION_TESTCASE("file_record_invalid_magic")
@@ -493,6 +638,13 @@ NTFS_REGRESSION_TESTCASE("file_record_size_shift_overflow")
 NTFS_REGRESSION_TESTCASE("file_record_size_too_big")
 NTFS_REGRESSION_TESTCASE("file_record_unhandled_attribute")
 NTFS_REGRESSION_TESTCASE("file_record_usn_mismatch")
+NTFS_REGRESSION_TESTCASE("filerecord_efs_stream_too_large")
+NTFS_REGRESSION_TESTCASE("filerecord_filename_bad_lengths")
+NTFS_REGRESSION_TESTCASE("filerecord_index_alloc_missing")
+NTFS_REGRESSION_TESTCASE("filerecord_index_nested_subnode_descent")
+NTFS_REGRESSION_TESTCASE("filerecord_index_nested_subnode_entry")
+NTFS_REGRESSION_TESTCASE("filerecord_index_subnode_self_loop")
+NTFS_REGRESSION_TESTCASE("filerecord_walk_runs_past_record_end")
 NTFS_REGRESSION_TESTCASE("find_stream_named_data")
 NTFS_REGRESSION_TESTCASE("fragmented_record_header_factory_throw")
 NTFS_REGRESSION_TESTCASE("full_cache_attribute_list_record_growth")
@@ -500,6 +652,7 @@ NTFS_REGRESSION_TESTCASE("full_cache_index_block_crosses_64kib_block")
 NTFS_REGRESSION_TESTCASE("gap_collation_subnode")
 NTFS_REGRESSION_TESTCASE("index_alloc_block_count_incalculable")
 NTFS_REGRESSION_TESTCASE("index_allocation_must_be_non_resident")
+NTFS_REGRESSION_TESTCASE("index_allocation_split_runs")
 NTFS_REGRESSION_TESTCASE("index_block_chain_depth_limit")
 NTFS_REGRESSION_TESTCASE("index_block_entry_exceeds_bounds")
 NTFS_REGRESSION_TESTCASE("index_block_entry_header_exceeds_bounds")
@@ -513,6 +666,7 @@ NTFS_REGRESSION_TESTCASE("index_block_usn_mismatch")
 NTFS_REGRESSION_TESTCASE("index_entry_no_filename_stream")
 NTFS_REGRESSION_TESTCASE("index_entry_stream_exceeds_bounds")
 NTFS_REGRESSION_TESTCASE("index_entry_stream_smaller_than_expected")
+NTFS_REGRESSION_TESTCASE("index_orphan_scan_huge_block_count")
 NTFS_REGRESSION_TESTCASE("index_root_entry_ab_match")
 NTFS_REGRESSION_TESTCASE("index_root_entry_header_exceeds_bounds")
 NTFS_REGRESSION_TESTCASE("index_root_entry_total_exceeds_declared_size")
@@ -522,8 +676,19 @@ NTFS_REGRESSION_TESTCASE("index_root_view_not_supported")
 NTFS_REGRESSION_TESTCASE("invalid_header_common")
 NTFS_REGRESSION_TESTCASE("invalid_offset_of_us")
 NTFS_REGRESSION_TESTCASE("mft_addr_narrowing_error")
+NTFS_REGRESSION_TESTCASE("mft_attribute_list_extension_defects")
+NTFS_REGRESSION_TESTCASE("mft_data_extent_chain")
 NTFS_REGRESSION_TESTCASE("mft_data_last_vcn_overflow")
+NTFS_REGRESSION_TESTCASE("mft_data_merged_span_overflow")
 NTFS_REGRESSION_TESTCASE("mft_data_run_cluster_lcn_narrowing_error")
+NTFS_REGRESSION_TESTCASE("mft_data_without_base_extent")
+NTFS_REGRESSION_TESTCASE("mft_huge_scan_stops_at_progress")
+NTFS_REGRESSION_TESTCASE("mft_tree_full_cache")
+NTFS_REGRESSION_TESTCASE("mft_tree_huge_real_size")
+NTFS_REGRESSION_TESTCASE("mft_tree_names_damaged_record_and_duplicate_link")
+NTFS_REGRESSION_TESTCASE("names_filename_zero_length_name")
+NTFS_REGRESSION_TESTCASE("names_index_block_subnode_vcn_too_small")
+NTFS_REGRESSION_TESTCASE("names_upcase_fold_surrogates_and_utf8")
 NTFS_REGRESSION_TESTCASE("resident_attr_body_exceeds_bounds")
 NTFS_REGRESSION_TESTCASE("resident_attr_body_out_of_bounds")
 NTFS_REGRESSION_TESTCASE("resident_data_flagged_encrypted")
@@ -534,9 +699,12 @@ NTFS_REGRESSION_TESTCASE("standard_information_minimal_size")
 NTFS_REGRESSION_TESTCASE("standard_information_must_be_resident")
 NTFS_REGRESSION_TESTCASE("surrogate_pair_names")
 NTFS_REGRESSION_TESTCASE("traverse_attrs_empty_callback")
+NTFS_REGRESSION_TESTCASE("upcase_run_lcn_at_address_space_limit")
+NTFS_REGRESSION_TESTCASE("upcase_table_read_crosses_64k_blocks")
 NTFS_REGRESSION_TESTCASE("usn_array_exceeds_record_buffer")
 NTFS_REGRESSION_TESTCASE("volume_information_minimal_size")
 NTFS_REGRESSION_TESTCASE("volume_information_must_be_resident")
+NTFS_REGRESSION_TESTCASE("volume_information_version_below_three")
 NTFS_REGRESSION_TESTCASE("volume_name_must_be_resident")
 NTFS_REGRESSION_TESTCASE("volume_name_resident_present")
 
