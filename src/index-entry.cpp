@@ -14,7 +14,7 @@
 
 #include "data/filename.h"
 #include "data/index-entry-flag.h"
-#include "ntfs-common.h"
+#include "log/ntfs-common.h"
 
 namespace NtfsBrowser {
 

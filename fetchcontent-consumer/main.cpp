@@ -1,7 +1,7 @@
 #include <cstdlib>
 
-#include <ntfs-browser/efs.h>
-#include <ntfs-browser/log.h>
+#include <ntfs-browser/efs/efs.h>
+#include <ntfs-browser/log/log.h>
 
 // Exercises exported symbols from across the public API, to prove the
 // library links correctly when consumed via FetchContent: DLL import/export

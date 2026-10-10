@@ -8,10 +8,10 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "ntfsattr.h"
@@ -211,7 +211,8 @@ void AppendData(CString& lines, const BYTE* data, DWORD datalen) {
 }
 
 template <Cache::Strategy S>
-void PrintAttr(const AttrBase<S>& attr, void* context, bool* /* stop*/) {
+void PrintAttr(const NtfsBrowser::Attr::AttrBase<S>& attr, void* context,
+               bool* /* stop*/) {
   CString* dump = static_cast<CString*>(context);
 
   CString line = _T("\r\n");
@@ -259,7 +260,7 @@ void CNtfsattrDlg::OnOK() {
 
   // parse root directory
 
-  FileRecord fr(volume);
+  NtfsBrowser::Io::FileRecord fr(volume);
   // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
   fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);

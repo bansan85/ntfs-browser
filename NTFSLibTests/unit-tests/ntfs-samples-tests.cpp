@@ -13,29 +13,29 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
-#include "attr-file-name.h"
-#include "attr-resident.h"
+#include "attr/file-name.h"
+#include "attr/resident.h"
 #include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "optional-access.h"
 #include "partition-disk-reader.h"
 
-using NtfsBrowser::AttrBase;
+using NtfsBrowser::Attr::AttrBase;
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Attr::AttrFileName;
 using NtfsBrowser::Attr::AttrResidentNoCache;
@@ -93,7 +93,7 @@ std::unique_ptr<NtfsBrowser::IDiskReader>
 
 // Parses dir's own file record as the volume's root directory, ready for
 // FindSubEntry(). dir must already be constructed on that volume.
-void OpenRootDir(FileRecord<Cache::Strategy::NoCache>& dir) {
+void OpenRootDir(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir) {
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(dir.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(dir.ParseAttrs());
@@ -101,7 +101,7 @@ void OpenRootDir(FileRecord<Cache::Strategy::NoCache>& dir) {
 
 // Looks up name under dir's current directory and reparses dir in place as
 // that subdirectory.
-void OpenSubDir(FileRecord<Cache::Strategy::NoCache>& dir,
+void OpenSubDir(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
                 std::wstring_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(name);
   REQUIRE(entry.has_value());
@@ -113,7 +113,7 @@ void OpenSubDir(FileRecord<Cache::Strategy::NoCache>& dir,
 
 // Navigates dir down a directory path, one component at a time, from the
 // volume root.
-void OpenDirPath(FileRecord<Cache::Strategy::NoCache>& dir,
+void OpenDirPath(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
                  std::initializer_list<std::wstring_view> parts) {
   OpenRootDir(dir);
   for (const std::wstring_view part : parts) {
@@ -191,20 +191,20 @@ bool ContainsPtrnRun(std::span<const BYTE> data, size_t min_run_length) {
 // filled with that pattern before formatting.
 void CheckRepairStreamsHoldPtrnPattern(
     const NtfsVolume<Cache::Strategy::NoCache>& volume) {
-  FileRecord<Cache::Strategy::NoCache> dir(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
   OpenDirPath(dir, {L"$Extend", L"$RmMetadata"});
 
   const std::optional<IndexEntry> entry = dir.FindSubEntry(L"$Repair");
   REQUIRE(entry.has_value());
 
-  FileRecord<Cache::Strategy::NoCache> file(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::Data);
   REQUIRE(
       file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   for (const std::wstring_view stream_name : {L"$Corrupt", L"$Verify"}) {
-    const AttrBase<Cache::Strategy::NoCache>* stream =
+    const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
         file.FindStream(stream_name);
     REQUIRE(stream != nullptr);
 
@@ -253,7 +253,7 @@ TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetClusterSize() == 2097152);
 
-  FileRecord<Cache::Strategy::NoCache> root(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   OpenRootDir(root);
 
   std::vector<std::wstring> names;
@@ -274,7 +274,7 @@ TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
       OpenWholeDiskImage(ptrn_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> root(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   OpenRootDir(root);
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"2.txt");
   REQUIRE(entry.has_value());
@@ -296,7 +296,7 @@ TEST_CASE(
       OpenWholeDiskImage(ramslack_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> root(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   OpenRootDir(root);
   REQUIRE(root.FindSubEntry(L"1.txt").has_value());
 
@@ -329,7 +329,7 @@ TEST_CASE(
       OpenWholeDiskImage(lastaccess_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> dir(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
   OpenDirPath(dir, {L"test"});
   const std::optional<IndexEntry> entry = dir.FindSubEntry(L"1.txt");
   REQUIRE(entry.has_value());
@@ -337,7 +337,7 @@ TEST_CASE(
   FILETIME index_access{};
   NtfsBrowserTests::Unwrap(entry).GetFileTime(nullptr, nullptr, &index_access);
 
-  FileRecord<Cache::Strategy::NoCache> file(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::StandardInformation);
   REQUIRE(
       file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
@@ -364,7 +364,7 @@ TEST_CASE(
       OpenWholeDiskImage(si_vs_fn_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> dir(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
   OpenDirPath(dir, {L"test"});
   const std::optional<IndexEntry> entry = dir.FindSubEntry(L"test.txt");
   REQUIRE(entry.has_value());
@@ -372,7 +372,7 @@ TEST_CASE(
   FILETIME index_create{};
   NtfsBrowserTests::Unwrap(entry).GetFileTime(nullptr, &index_create, nullptr);
 
-  FileRecord<Cache::Strategy::NoCache> file(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::StandardInformation | Attr::Mask::FileName);
   REQUIRE(
       file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
@@ -385,7 +385,7 @@ TEST_CASE(
   // $I30 copy above, but the (possibly stale) one alongside this file's own
   // $STANDARD_INFORMATION. AttrFileName<>::GetFileTime() is the same,
   // otherwise-unreachable Filename::GetFileTime() IndexEntry uses; matches
-  // FileRecord::GetFileTime()'s own internal cast (src/file-record.cpp).
+  // FileRecord::GetFileTime()'s own internal cast (src/io/file-record.cpp).
   const auto& file_name_attrs = file.GetAttr(Attr::Type::FileName);
   REQUIRE_FALSE(file_name_attrs.empty());
   const auto* own_file_name = reinterpret_cast<
@@ -423,7 +423,7 @@ TEST_CASE(
   const auto check_access_time_mismatch =
       [&volume](std::wstring_view dir_name, std::wstring_view file_name,
                 ULONGLONG expected_delta_seconds) {
-        FileRecord<Cache::Strategy::NoCache> dir(volume);
+        NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
         OpenDirPath(dir, {dir_name});
         const std::optional<IndexEntry> entry = dir.FindSubEntry(file_name);
         REQUIRE(entry.has_value());
@@ -431,7 +431,7 @@ TEST_CASE(
         FILETIME index_access{};
         entry->GetFileTime(nullptr, nullptr, &index_access);
 
-        FileRecord<Cache::Strategy::NoCache> file(volume);
+        NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
         file.SetAttrMask(Attr::Mask::StandardInformation);
         REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
         REQUIRE(file.ParseAttrs());
@@ -472,7 +472,7 @@ TEST_CASE(
        {0ULL, 15ULL, 16ULL, 17ULL, 18ULL, 19ULL, 20ULL, 21ULL, 22ULL,
         34'799'617ULL, 34'799'618ULL, 34'799'619ULL}) {
     INFO("record " << record_num);
-    FileRecord<Cache::Strategy::NoCache> record(volume);
+    NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> record(volume);
     REQUIRE(record.ParseFileRecord(record_num));
     CHECK(record.GetBaseRecordReference() == 0);
   }

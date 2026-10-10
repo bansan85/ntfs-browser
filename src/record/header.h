@@ -6,7 +6,7 @@
 #include <span>
 #include <vector>
 
-#include <ntfs-browser/strategy.h>
+#include <ntfs-browser/cache/strategy.h>
 
 #include "../internal-export.h"
 #include "data/file-record-header.h"

@@ -5,21 +5,21 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr-base.h>  // IWYU pragma: keep
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/attr/base.h>  // IWYU pragma: keep
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
-#include <ntfs-browser/strategy.h>
 
-#include "attr-bitmap.h"
-#include "attr-non-resident.h"
+#include "attr/bitmap.h"
+#include "attr/non-resident.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Attr::AttrBitmap;
 using NtfsBrowser::Attr::AttrNonResident;
@@ -39,7 +39,7 @@ void CheckClusterFreeAnswersPastTheFirstBitmapCluster() {
           NtfsBrowserTests::BuildFakeNtfsImageWithMultiClusterBitmap()));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 

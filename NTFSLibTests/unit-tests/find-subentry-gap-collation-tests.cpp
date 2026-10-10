@@ -8,20 +8,20 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "fake-ntfs-image.h"
 #include "gap-collation-probe.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
+using NtfsBrowser::Io::FileRecord;
 namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
 namespace Cache = NtfsBrowser::Cache;
@@ -39,7 +39,7 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode() {
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));

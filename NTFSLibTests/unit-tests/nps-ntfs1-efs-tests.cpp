@@ -1,5 +1,5 @@
 // MakePfxKeyProvider() - this whole file's subject - only exists on Windows
-// (PFX import goes through CryptoAPI/CNG): see include/ntfs-browser/efs.h.
+// (PFX import goes through CryptoAPI/CNG): see include/ntfs-browser/efs/efs.h.
 #ifdef _WIN32
 
   #include <ntfs-browser/win-types.h>
@@ -17,19 +17,19 @@
   #include <catch2/catch_test_macros.hpp>
   #include <gsl/narrow>
 
-  #include <ntfs-browser/attr-base.h>
-  #include <ntfs-browser/efs.h>
-  #include <ntfs-browser/file-record.h>
+  #include <ntfs-browser/attr/base.h>
+  #include <ntfs-browser/cache/strategy.h>
+  #include <ntfs-browser/efs/efs.h>
+  #include <ntfs-browser/io/file-record.h>
   #include <ntfs-browser/ntfs-volume.h>
-  #include <ntfs-browser/strategy.h>
   #include <ntfs-browser/volume-options.h>
 
   #include "md5-test-support.h"
   #include "nps-ntfs1-test-support.h"
 
-using NtfsBrowser::AttrBase;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Attr::AttrBase;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Efs::MakePfxKeyProvider;
@@ -82,10 +82,10 @@ TEST_CASE(
       NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> root(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   NtfsBrowserTests::OpenRootDir(root);
 
-  FileRecord<Cache::Strategy::NoCache> encrypted_dir(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> encrypted_dir(volume);
   NtfsBrowserTests::OpenRootDir(encrypted_dir);
   NtfsBrowserTests::OpenSubDir(encrypted_dir, "Encrypted");
 
@@ -108,9 +108,10 @@ TEST_CASE(
          NtfsBrowserTests::known_files) {
       INFO("file " << file.name);
 
-      FileRecord<Cache::Strategy::NoCache> stream_owner(volume);
+      NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> stream_owner(
+          volume);
       NtfsBrowserTests::OpenFile(stream_owner, encrypted_dir, file.name);
-      const AttrBase<Cache::Strategy::NoCache>* stream =
+      const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
           stream_owner.FindStream({});
       REQUIRE(stream != nullptr);
       CHECK(stream->GetDataSize() == file.size);

@@ -6,20 +6,20 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "corpus-test-support.h"
 #include "optional-access.h"
 
-using NtfsBrowser::AttrBase;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
+using NtfsBrowser::Attr::AttrBase;
+using NtfsBrowser::Io::FileRecord;
 namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
 namespace Cache = NtfsBrowser::Cache;
@@ -45,7 +45,7 @@ void CheckReadsPartitionImage(std::wstring_view image_name) {
       NtfsBrowserTests::OpenBareVolumeImage(image_path));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord root(volume);
+  NtfsBrowser::Io::FileRecord root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
@@ -55,13 +55,14 @@ void CheckReadsPartitionImage(std::wstring_view image_name) {
   CHECK_FALSE(NtfsBrowserTests::Unwrap(entry).IsDirectory());
   CHECK(NtfsBrowserTests::Unwrap(entry).GetFileSize() > 0);
 
-  FileRecord file(volume);
+  NtfsBrowser::Io::FileRecord file(volume);
   file.SetAttrMask(Attr::Mask::Data);
   REQUIRE(
       file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
-  const AttrBase<Cache::Strategy::NoCache>* data = file.FindStream({});
+  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* data =
+      file.FindStream({});
   REQUIRE(data != nullptr);
   CHECK(data->GetDataSize() == NtfsBrowserTests::Unwrap(entry).GetFileSize());
 }

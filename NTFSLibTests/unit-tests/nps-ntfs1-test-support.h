@@ -8,15 +8,20 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/strategy.h>
 
 #include "corpus-test-support.h"
 
 namespace NtfsBrowser {
 
+namespace Io {
+
 template <Cache::Strategy S>
 class FileRecord;
+
+}  // namespace Io
+
 template <Cache::Strategy S>
 class NtfsVolume;
 
@@ -62,27 +67,29 @@ inline constexpr std::array<KnownFile, 5> known_files{{
 // Parses dir's own file record as the volume's root directory, ready for
 // FindSubEntry(). dir must already be constructed on that volume.
 void OpenRootDir(
-    NtfsBrowser::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& dir);
+    NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& dir);
 
 // Looks up name under dir's current directory and reparses dir in place as
 // that subdirectory.
 void OpenSubDir(
-    NtfsBrowser::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& dir,
+    NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& dir,
     std::string_view name);
 
 // Looks up name under dir and parses file in place as it, ready for
 // FindStream(). file's storage is the caller's: it bounds the lifetime of
 // any attribute pointer FindStream() later returns on it.
 void OpenFile(
-    NtfsBrowser::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& file,
-    const NtfsBrowser::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& dir,
+    NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& file,
+    const NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>&
+        dir,
     std::string_view name);
 
 // Reads name's whole unnamed $DATA stream out of dir.
 [[nodiscard]] std::vector<BYTE> ReadFile(
     const NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache>&
         volume,
-    const NtfsBrowser::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& dir,
+    const NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>&
+        dir,
     std::string_view name);
 
 }  // namespace NtfsBrowserTests

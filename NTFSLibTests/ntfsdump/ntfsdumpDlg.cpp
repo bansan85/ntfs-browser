@@ -5,10 +5,10 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "ntfsdump.h"
@@ -200,7 +200,7 @@ void CNtfsdumpDlg::OnOK() {
 
   // parse root directory
 
-  FileRecord fr(volume);
+  NtfsBrowser::Io::FileRecord fr(volume);
   // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
   fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
@@ -270,7 +270,8 @@ void CNtfsdumpDlg::OnOK() {
   filebuf.resize(BUFFER_SIZE);
 
   // only pick the unnamed stream (file data)
-  const AttrBase<Cache::Strategy::NoCache>* data = fr.FindStream({});
+  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* data =
+      fr.FindStream({});
   if (data != nullptr) {
     // show only the first 16K
     const ULONGLONG datalen = min(data->GetDataSize(), BUFFER_SIZE);

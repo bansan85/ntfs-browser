@@ -9,11 +9,11 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/log.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/log/log.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 using namespace NtfsBrowser;
@@ -205,7 +205,7 @@ int wmain(int argc, wchar_t* argv[]) {
   }
 
   // get root directory info
-  FileRecord fr(volume);
+  NtfsBrowser::Io::FileRecord fr(volume);
 
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes

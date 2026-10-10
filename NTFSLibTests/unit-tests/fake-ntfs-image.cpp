@@ -18,9 +18,9 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/attr/header-common.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/mft/idx.h>
 
 #include "attr/flags.h"
 #include "data/attribute-list.h"
@@ -42,8 +42,8 @@
 #include "efs/efs-context.h"
 #include "file-record-header-edit.h"
 #include "lznt1/decompress.h"
-#include "mft-file-reference.h"
-#include "upcase.h"
+#include "mft/file-reference.h"
+#include "upcase/upcase.h"
 
 namespace NtfsBrowserTests {
 
@@ -1634,7 +1634,7 @@ FakeRecord MakeIndexBlockChainRootRecord() {
   DWORD run_len = 0;
   // Data run header byte: high nibble = LCN offset field size (4 bytes),
   // low nibble = length field size (1 byte) - standard NTFS run encoding
-  // (AttrNonResident::PickData, src/attr-non-resident.cpp).
+  // (AttrNonResident::PickData, src/attr/non-resident.cpp).
   gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
   gsl::at(data_run, run_len++) = static_cast<BYTE>(index_block_chain_length);
   {

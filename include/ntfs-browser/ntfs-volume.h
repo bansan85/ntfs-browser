@@ -8,12 +8,12 @@
 #include <string_view>
 #include <utility>
 
-#include <ntfs-browser/data/attr-defines.h>
-#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/attr/defines.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/efs.h>
+#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/export.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #ifdef _WIN32
@@ -22,8 +22,12 @@
 
 namespace NtfsBrowser {
 
+namespace Io {
+
 template <Cache::Strategy S>
 class FileRecord;
+
+}  // namespace Io
 
 template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT NtfsVolume {
@@ -48,7 +52,7 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   NtfsVolume& operator=(const NtfsVolume& other) = delete;
   virtual ~NtfsVolume();
 
-  friend class FileRecord<S>;
+  friend class Io::FileRecord<S>;
 
  private:
   // Every member and private method, kept out of this header.

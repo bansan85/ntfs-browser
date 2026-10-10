@@ -13,36 +13,31 @@
 #include <spdlog/sinks/ostream_sink.h>
 #include <spdlog/spdlog.h>
 
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/log.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/log/log.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "attr-index-root.h"
-#include "attr-resident.h"
+#include "attr/index-root.h"
+#include "attr/resident.h"
 #include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
 
-namespace NtfsBrowser {
-
-template <Cache::Strategy S>
-class AttrBase;
-
-}  // namespace NtfsBrowser
+namespace NtfsBrowser {}  // namespace NtfsBrowser
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowser::AttrBase;
+using NtfsBrowser::Attr::AttrBase;
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Attr::AttrIndexRoot;
@@ -105,7 +100,7 @@ void RunDeletedRecordContentGating() {
         std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithMftTree()));
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(mft_tree_deleted_file_idx));
     CHECK(record.IsDeleted());
     CHECK_FALSE(record.ParseAttrs());
@@ -117,7 +112,7 @@ void RunDeletedRecordContentGating() {
         VolumeOptions{.include_deleted = true});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(mft_tree_deleted_file_idx));
     CHECK(record.IsDeleted());
     CHECK(record.ParseAttrs());
@@ -145,7 +140,7 @@ void RunSalvageableConditionLogLevel() {
             BuildFakeNtfsImageWithAttrNameExceedsTotalSize()),
         options);
     REQUIRE(volume.IsVolumeOK());
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(attr_name_exceeds_total_size_record_idx));
     (void)record.ParseAttrs();
 
@@ -181,7 +176,7 @@ void RunOrphanScanCapsDeclaredBlockCount() {
       VolumeOptions{.include_deleted = true, .recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
@@ -217,7 +212,7 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn() {
       VolumeOptions{.include_deleted = true, .recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
@@ -251,7 +246,7 @@ void RunBadDataRunRejectsOrKeepsPartial() {
         std::make_unique<MemoryDiskReader>(BuildFakeNtfsImageWithBadDataRun()));
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(record.ParseAttrs());
     CHECK(record.GetAttr(Attr::Type::Data).empty());
@@ -262,7 +257,7 @@ void RunBadDataRunRejectsOrKeepsPartial() {
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK(record.ParseAttrs());
     CHECK(record.GetAttr(Attr::Type::Data).size() == 1);
@@ -282,7 +277,7 @@ void RunResidentEncryptedDataRejectsOrKeepsAsIs() {
         BuildFakeNtfsImageWithResidentEncryptedData()));
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(record.ParseAttrs());
     CHECK(record.GetAttr(Attr::Type::Data).empty());
@@ -294,7 +289,7 @@ void RunResidentEncryptedDataRejectsOrKeepsAsIs() {
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK(record.ParseAttrs());
     CHECK(record.GetAttr(Attr::Type::Data).size() == 1);
@@ -312,7 +307,7 @@ void RunNoEndMarkerRejectsOrKeepsParsed() {
         BuildFakeNtfsImageWithNoEndMarker()));
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
     (void)TakeCapturedLog();
@@ -328,7 +323,7 @@ void RunNoEndMarkerRejectsOrKeepsParsed() {
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
     (void)TakeCapturedLog();
@@ -347,7 +342,7 @@ void RunNoEndMarkerRejectsOrKeepsParsed() {
 // bad one in the damaged block are reported too ("First", then "Good").
 template <Cache::Strategy S>
 void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
-  const auto traverse = [](FileRecord<S>& root) {
+  const auto traverse = [](NtfsBrowser::Io::FileRecord<S>& root) {
     std::vector<std::wstring> names;
     root.TraverseSubEntries(
         [](const IndexEntryView& index_entry, void* context) {
@@ -363,7 +358,7 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
         BuildFakeNtfsImageWithBadIndexBlockEntry()));
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> root(volume);
+    NtfsBrowser::Io::FileRecord<S> root(volume);
     root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
@@ -380,7 +375,7 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
                                VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> root(volume);
+    NtfsBrowser::Io::FileRecord<S> root(volume);
     root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
@@ -399,7 +394,8 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
 // AttrBase<S> to the concrete AttrIndexRoot<RESIDENT, S> - itself a
 // std::vector<IndexEntry> - the way FileRecord<S>'s own code does.
 template <Cache::Strategy S>
-const std::vector<IndexEntryView>& RootEntries(const AttrBase<S>& attr) {
+const std::vector<IndexEntryView>&
+    RootEntries(const NtfsBrowser::Attr::AttrBase<S>& attr) {
   if constexpr (S == Cache::Strategy::NoCache) {
     return static_cast<
         const AttrIndexRoot<AttrResidentNoCache, Cache::Strategy::NoCache>&>(
@@ -422,7 +418,7 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless() {
         BuildFakeNtfsImageWithMalformedIndexEntryFilename()));
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> root(volume);
+    NtfsBrowser::Io::FileRecord<S> root(volume);
     root.SetAttrMask(Attr::Mask::IndexRoot);
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(root.ParseAttrs());
@@ -435,7 +431,7 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless() {
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> root(volume);
+    NtfsBrowser::Io::FileRecord<S> root(volume);
     root.SetAttrMask(Attr::Mask::IndexRoot);
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());

@@ -10,10 +10,10 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "data/file-record-header.h"
 #include "data/header-resident.h"
@@ -23,8 +23,8 @@
 #include "memory-disk-reader.h"
 
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Data::StdInfoPermission;
 
@@ -71,17 +71,21 @@ TEMPLATE_TEST_CASE_SIG(
     "permission bit",
     "[cov-frb]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  using Getter = bool (FileRecord<S>::*)() const noexcept;
+  using Getter = bool (NtfsBrowser::Io::FileRecord<S>::*)() const noexcept;
   const std::array<std::pair<Getter, StdInfoPermission>, 9> flags{{
-      {&FileRecord<S>::IsDevice, StdInfoPermission::Device},
-      {&FileRecord<S>::IsNormal, StdInfoPermission::Normal},
-      {&FileRecord<S>::IsTemporary, StdInfoPermission::Temp},
-      {&FileRecord<S>::IsCompressed, StdInfoPermission::Compressed},
-      {&FileRecord<S>::IsOffline, StdInfoPermission::Offline},
-      {&FileRecord<S>::IsNotContentIndexed, StdInfoPermission::Nci},
-      {&FileRecord<S>::IsEncrypted, StdInfoPermission::Encrypted},
-      {&FileRecord<S>::IsSparse, StdInfoPermission::Sparse},
-      {&FileRecord<S>::IsReparsePoint, StdInfoPermission::Reparse},
+      {&NtfsBrowser::Io::FileRecord<S>::IsDevice, StdInfoPermission::Device},
+      {&NtfsBrowser::Io::FileRecord<S>::IsNormal, StdInfoPermission::Normal},
+      {&NtfsBrowser::Io::FileRecord<S>::IsTemporary, StdInfoPermission::Temp},
+      {&NtfsBrowser::Io::FileRecord<S>::IsCompressed,
+       StdInfoPermission::Compressed},
+      {&NtfsBrowser::Io::FileRecord<S>::IsOffline, StdInfoPermission::Offline},
+      {&NtfsBrowser::Io::FileRecord<S>::IsNotContentIndexed,
+       StdInfoPermission::Nci},
+      {&NtfsBrowser::Io::FileRecord<S>::IsEncrypted,
+       StdInfoPermission::Encrypted},
+      {&NtfsBrowser::Io::FileRecord<S>::IsSparse, StdInfoPermission::Sparse},
+      {&NtfsBrowser::Io::FileRecord<S>::IsReparsePoint,
+       StdInfoPermission::Reparse},
   }};
 
   for (const auto& [getter, bit] : flags) {
@@ -93,7 +97,7 @@ TEMPLATE_TEST_CASE_SIG(
     const NtfsVolume<S> volume(std::move(reader));
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
     REQUIRE(record.ParseAttrs());
     CHECK((record.*getter)());
@@ -111,7 +115,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(root_dir_idx));
   REQUIRE(root.GetAttr(Attr::Type::StandardInformation).empty());
 
@@ -136,7 +140,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
   REQUIRE(record.ParseAttrs());
 

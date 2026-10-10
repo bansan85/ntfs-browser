@@ -10,18 +10,18 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/mask.h>
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "corpus-test-support.h"
 #include "md5-test-support.h"
 
-using NtfsBrowser::AttrBase;
-using NtfsBrowser::FileRecord;
+using NtfsBrowser::Attr::AttrBase;
+using NtfsBrowser::Io::FileRecord;
 namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
 namespace Cache = NtfsBrowser::Cache;
@@ -80,7 +80,7 @@ constexpr DeletedFile in_reallocated_dir_file{
 void CheckRecoversDeletedFile(
     const NtfsVolume<Cache::Strategy::NoCache>& volume,
     const DeletedFile& file) {
-  FileRecord record(volume);
+  NtfsBrowser::Io::FileRecord record(volume);
   record.SetAttrMask(Attr::Mask::Data | Attr::Mask::StandardInformation);
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted());
@@ -93,7 +93,7 @@ void CheckRecoversDeletedFile(
   CHECK(month == 2);
   CHECK(day == 29);
 
-  const AttrBase<Cache::Strategy::NoCache>* stream =
+  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
       record.FindStream(file.stream_name);
   REQUIRE(stream != nullptr);
   REQUIRE(stream->GetDataSize() == file.size);
@@ -128,12 +128,12 @@ TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
   CheckRecoversDeletedFile(volume, in_reallocated_dir_file);
 
   // The two deleted directories themselves.
-  FileRecord dir1(volume);
+  NtfsBrowser::Io::FileRecord dir1(volume);
   REQUIRE(dir1.ParseFileRecord(33));
   CHECK(dir1.IsDeleted());
   CHECK(dir1.IsDirectory());
 
-  FileRecord dir1_dir2(volume);
+  NtfsBrowser::Io::FileRecord dir1_dir2(volume);
   REQUIRE(dir1_dir2.ParseFileRecord(34));
   CHECK(dir1_dir2.IsDeleted());
   CHECK(dir1_dir2.IsDirectory());

@@ -23,8 +23,8 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/log.h>
-#include <ntfs-browser/mft-tree.h>
+#include <ntfs-browser/log/log.h>
+#include <ntfs-browser/mft/tree.h>
 
 #include "compare-engine.h"
 #include "console.h"
@@ -34,7 +34,7 @@
 #include "std-filesystem-walk.h"
 #include "volume-open.h"
 
-using NtfsBrowser::MftTree;
+using NtfsBrowser::Mft::MftTree;
 using NtfsCompare::Listing;
 using NtfsCompare::NativeText;
 using NtfsCompare::OpenVolumeFor;
@@ -158,7 +158,7 @@ int Run(int argc, ArgChar** argv) {
   PrintErr(
       "Scanning the whole $MFT for MftTree (this can take a "
       "while on a large volume)...\n");
-  MftTree::ScanOptions scan_options;
+  NtfsBrowser::Mft::MftTree::ScanOptions scan_options;
   scan_options.progress = [](ULONGLONG done, ULONGLONG total) {
     PrintErr("\r$MFT: {} / {}", done, total);
     if (done == total) {
@@ -166,7 +166,7 @@ int Run(int argc, ArgChar** argv) {
     }
     return true;
   };
-  const MftTree tree(*volume->no_cache, scan_options);
+  const NtfsBrowser::Mft::MftTree tree(*volume->no_cache, scan_options);
   const Listing mft_tree_listing = WalkMftTree(tree, *no_cache_record);
 
   Report report;

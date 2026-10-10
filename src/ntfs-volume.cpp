@@ -17,30 +17,30 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/data/attr-defines.h>
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/attr/defines.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
-#include "attr-non-resident.h"  // IWYU pragma: keep
-#include "attr-resident.h"
-#include "attr-slot.h"
-#include "attr-vol-info.h"
-#include "attr-vol-name.h"
+#include "attr/non-resident.h"  // IWYU pragma: keep
+#include "attr/resident.h"
+#include "attr/slot.h"
+#include "attr/vol-info.h"
+#include "attr/vol-name.h"
 #include "data/attribute-list.h"
 #include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
-#include "file-reader.h"  // IWYU pragma: keep
-#include "file-record-impl.h"
-#include "mft-file-reference.h"
-#include "ntfs-common.h"
+#include "io/file-reader.h"  // IWYU pragma: keep
+#include "io/file-record-impl.h"
+#include "log/ntfs-common.h"
+#include "mft/file-reference.h"
 #include "ntfs-volume-impl.h"
-#include "upcase.h"
-#include "utf.h"
+#include "upcase/upcase.h"
+#include "utf/utf.h"
 
 namespace NtfsBrowser {
 
@@ -58,8 +58,6 @@ struct HeaderCommon;
 
 }  // namespace Attr
 struct VolumeOptions;
-template <Cache::Strategy S>
-class AttrBase;
 
 namespace {
 
@@ -166,7 +164,7 @@ void NtfsVolume<S>::Impl::Init() {
   // volume unreadable.
   mft_record.impl_->bypass_deleted_gate = true;
 
-  FileRecord vol(*self);
+  Io::FileRecord vol(*self);
   vol.impl_->bypass_deleted_gate = true;
   vol.SetAttrMask(Attr::Mask::VolumeName | Attr::Mask::VolumeInformation);
   if (!vol.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Volume))) {
@@ -228,8 +226,8 @@ void NtfsVolume<S>::Impl::Init() {
     return;
   }
 
-  const AttrBase<S>* base_extent = nullptr;
-  for (const std::unique_ptr<AttrBase<S>>& attr :
+  const Attr::AttrBase<S>* base_extent = nullptr;
+  for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
        mft_record.GetAttr(Attr::Type::Data)) {
     // The base extent is the unnamed, non-resident DATA instance at VCN 0.
     if (attr->IsNonResident() && attr->IsUnNamed() &&
@@ -268,7 +266,7 @@ void NtfsVolume<S>::Impl::Init() {
 template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
   // Isolated from mft_record_; resolve_attr_list_ = false skips AttrList.
-  FileRecord<S> list_record(*self);
+  Io::FileRecord<S> list_record(*self);
   list_record.impl_->attr_mask = Attr::Mask::AttributeList;
   list_record.impl_->resolve_attr_list = false;
   list_record.impl_->bypass_deleted_gate = true;
@@ -279,12 +277,12 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
     return;
   }
 
-  const std::vector<std::unique_ptr<AttrBase<S>>>& list_attrs =
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& list_attrs =
       list_record.GetAttr(Attr::Type::AttributeList);
   if (list_attrs.empty()) {
     return;  // $MFT's DATA attribute fits in the base record alone.
   }
-  const AttrBase<S>& raw_list = *list_attrs.front();
+  const Attr::AttrBase<S>& raw_list = *list_attrs.front();
   const std::optional<ULONGLONG> list_ref = list_record.GetFileReference();
   if (!list_ref.has_value()) {
     Log::Debug(
@@ -333,7 +331,7 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
 template <Cache::Strategy S>
 std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
     NtfsVolume<S>::Impl::CollectPendingMftExtensions(
-        const AttrBase<S>& raw_list, ULONGLONG self_ref) {
+        const Attr::AttrBase<S>& raw_list, ULONGLONG self_ref) {
   std::vector<PendingMftExtension> pending;
   std::unordered_map<ULONGLONG, size_t> index_by_ref;
   size_t listed_entries = 0;
@@ -386,7 +384,7 @@ template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
     const PendingMftExtension& item, ULONGLONG self_ref) {
   mft_extension_records.emplace_back(*self);
-  FileRecord<S>& ext = mft_extension_records.back();
+  Io::FileRecord<S>& ext = mft_extension_records.back();
   ext.impl_->attr_mask = Attr::Mask::Data;
   ext.impl_->bypass_deleted_gate = true;
 
@@ -411,7 +409,7 @@ void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
     return;
   }
 
-  for (const std::unique_ptr<AttrBase<S>>& attr :
+  for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
        ext.GetAttr(Attr::Type::Data)) {
     if (attr->IsNonResident()) {
       // Any start VCN not listed is rejected by TryAddMftExtent().
@@ -429,7 +427,7 @@ void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
 // with expectedStartVcn, or overlapping; otherwise inserts it into mft_extents_
 // in sorted order.
 template <Cache::Strategy S>
-void NtfsVolume<S>::Impl::TryAddMftExtent(const AttrBase<S>& attr,
+void NtfsVolume<S>::Impl::TryAddMftExtent(const Attr::AttrBase<S>& attr,
                                           ULONGLONG expected_start_vcn) {
   if (!attr.IsUnNamed()) {
     Log::Warn("$MFT DATA continuation is named; rejecting");
@@ -894,14 +892,14 @@ std::unique_ptr<const UpCase::Table>
 
   // Like the volume's other metadata reads, it MUST NOT depend on
   // include_deleted.
-  FileRecord<S> record(*self);
+  Io::FileRecord<S> record(*self);
   record.impl_->bypass_deleted_gate = true;
   record.SetAttrMask(Attr::Mask::Data);
   if (!record.ParseFileRecord(upcase_record) || !record.ParseAttrs()) {
     return {};
   }
 
-  const AttrBase<S>* data = record.FindStream({});
+  const Attr::AttrBase<S>* data = record.FindStream({});
   if (data == nullptr || data->GetDataSize() < UpCase::Table::byte_count) {
     return {};
   }

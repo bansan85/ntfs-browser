@@ -7,7 +7,7 @@
 #include <span>
 #include <vector>
 
-#include <ntfs-browser/efs.h>
+#include <ntfs-browser/efs/efs.h>
 
 #include "efs/fek.h"
 

@@ -6,7 +6,7 @@
 // per-unit encoding a real compressed attribute can use.
 //
 // Before this support existed, FileRecord<S>::ParseAttrs()
-// (src/file-record.cpp) rejected any record whose STANDARD_INFORMATION/
+// (src/io/file-record.cpp) rejected any record whose STANDARD_INFORMATION/
 // FILE_NAME flags marked it FILE_ATTRIBUTE_COMPRESSED ("Compressed and
 // Encrypted file not supported yet !"), so every compressed file and
 // directory on a real volume was silently lost - and even with that lifted,
@@ -32,13 +32,13 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>  // IWYU pragma: keep
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/base.h>  // IWYU pragma: keep
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
-#include <ntfs-browser/strategy.h>
 
 #include "catch2/catch_message.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
@@ -49,10 +49,10 @@
 #include "test-log-sink.h"
 
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 namespace Mft = NtfsBrowser::Mft;
 
@@ -75,7 +75,7 @@ constexpr size_t tiny_dest_size = 10;
 template <Cache::Strategy S>
 struct ParsedRoot {
   std::unique_ptr<NtfsVolume<S>> volume;
-  std::unique_ptr<FileRecord<S>> record;
+  std::unique_ptr<NtfsBrowser::Io::FileRecord<S>> record;
 };
 
 template <Cache::Strategy S>
@@ -85,7 +85,8 @@ ParsedRoot<S> ParseRoot(std::vector<BYTE> image) {
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(parsed.volume->IsVolumeOK());
 
-  parsed.record = std::make_unique<FileRecord<S>>(*parsed.volume);
+  parsed.record =
+      std::make_unique<NtfsBrowser::Io::FileRecord<S>>(*parsed.volume);
   REQUIRE(
       parsed.record->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   return parsed;
@@ -94,8 +95,9 @@ ParsedRoot<S> ParseRoot(std::vector<BYTE> image) {
 // Reads "size" bytes at "offset" of the root record's single $DATA
 // attribute, truncated to what ReadData() actually produced; empty on failure.
 template <Cache::Strategy S>
-std::optional<std::vector<BYTE>> ReadRootData(const FileRecord<S>& record,
-                                              ULONGLONG offset, size_t size) {
+std::optional<std::vector<BYTE>>
+    ReadRootData(const NtfsBrowser::Io::FileRecord<S>& record, ULONGLONG offset,
+                 size_t size) {
   const auto& data_attrs = record.GetAttr(Attr::Type::Data);
   REQUIRE(data_attrs.size() == 1);
 

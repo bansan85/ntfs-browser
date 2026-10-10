@@ -8,9 +8,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "catch2/catch_message.hpp"
@@ -18,8 +18,8 @@
 #include "md5-test-support.h"
 #include "nps-ntfs1-test-support.h"
 
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 
@@ -33,7 +33,7 @@ namespace {
 void CheckDirMatchesGroundTruth(
     const NtfsVolume<Cache::Strategy::NoCache>& volume,
     std::string_view dir_name) {
-  FileRecord<Cache::Strategy::NoCache> dir(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
   NtfsBrowserTests::OpenRootDir(dir);
   NtfsBrowserTests::OpenSubDir(dir, dir_name);
 

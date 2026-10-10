@@ -6,11 +6,11 @@
 #include <span>
 #include <stdexcept>
 
-#include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/strategy.h>
+#include <ntfs-browser/attr/header-common.h>
+#include <ntfs-browser/cache/strategy.h>
 
 #include "internal-export.h"
-#include "ntfs-common.h"
+#include "log/ntfs-common.h"
 
 namespace NtfsBrowser::Record {
 

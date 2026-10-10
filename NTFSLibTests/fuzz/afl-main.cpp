@@ -15,26 +15,26 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/efs.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/index-entry.h>  // IWYU pragma: keep
-#include <ntfs-browser/log.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/mft-tree.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/log/log.h>
+#include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "gap-collation-probe.h"
 #include "looping-disk-reader.h"
 #include "named-stream-probe.h"
 
-using NtfsBrowser::AttrBase;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::MftTree;
+using NtfsBrowser::Attr::AttrBase;
+using NtfsBrowser::Io::FileRecord;
+using NtfsBrowser::Mft::MftTree;
 namespace Attr = NtfsBrowser::Attr;
 namespace Efs = NtfsBrowser::Efs;
 using NtfsBrowser::NtfsVolume;
@@ -111,7 +111,7 @@ constexpr std::array<VolumeOptions, 2> volume_option_modes{
 // graph and are otherwise invisible to this fuzzer.
 template <Cache::Strategy S>
 void FuzzRootRecord(const NtfsVolume<S>& volume) {
-  FileRecord file_record(volume);
+  NtfsBrowser::Io::FileRecord file_record(volume);
   // Without DATA here, FindStream() below never sees a named $DATA
   // attribute on ROOT to walk. BITMAP and OBJECT_ID reach AttrBitmap and
   // the unhandled-attribute path of ParseAttr().
@@ -177,7 +177,7 @@ constexpr std::array<Mft::Idx, 4> probed_records{
 
 // Reads the start, then the middle, then the end of one attribute's data.
 template <Cache::Strategy S>
-void ProbeAttrData(const AttrBase<S>& attr) {
+void ProbeAttrData(const NtfsBrowser::Attr::AttrBase<S>& attr) {
   (void)attr.GetAttrType();
   (void)attr.GetAttrFlags();
   (void)attr.IsNonResident();
@@ -202,7 +202,7 @@ void ProbeAttrData(const AttrBase<S>& attr) {
 // decompression and decryption happen.
 template <Cache::Strategy S>
 void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
-  FileRecord file_record(volume);
+  NtfsBrowser::Io::FileRecord file_record(volume);
   if (!file_record.ParseFileRecord(record) || !file_record.ParseAttrs()) {
     return;
   }
@@ -236,9 +236,9 @@ void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
   (void)file_record.IsSparse();
   (void)file_record.IsReparsePoint();
 
-  file_record.TraverseAttrs(
-      [](const AttrBase<S>& attr, void*, bool*) { ProbeAttrData(attr); },
-      nullptr);
+  file_record.TraverseAttrs([](const NtfsBrowser::Attr::AttrBase<S>& attr,
+                               void*, bool*) { ProbeAttrData(attr); },
+                            nullptr);
 }
 
 // Rebuilds the namespace from the $MFT. The progress callback lets the scan
@@ -246,14 +246,14 @@ void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
 // huge declared $MFT size cannot make the run long.
 template <Cache::Strategy S>
 void ProbeMftTree(const NtfsVolume<S>& volume) {
-  const MftTree tree(volume,
-                     {.progress = [](ULONGLONG done, ULONGLONG /*total*/) {
-                       return done == 0;
-                     }});
+  const NtfsBrowser::Mft::MftTree tree(
+      volume, {.progress = [](ULONGLONG done, ULONGLONG /*total*/) {
+        return done == 0;
+      }});
   (void)tree.Stats();
   (void)tree.Find(static_cast<ULONGLONG>(Mft::Idx::Root));
   (void)tree.Children(static_cast<ULONGLONG>(Mft::Idx::Root));
-  for (const MftTree::Entry& entry : tree.Entries()) {
+  for (const NtfsBrowser::Mft::MftTree::Entry& entry : tree.Entries()) {
     (void)tree.IsReachable(entry.record);
     (void)tree.GetPath(entry.record);
     for (size_t i = 0; i < entry.names.size(); ++i) {
@@ -294,7 +294,7 @@ void ProbeVolumeApi(NtfsVolume<S>& volume) {
   (void)volume.InstallAttrRawCB(unknown_attr_type, DiscardAttr);
   (void)volume.InstallAttrRawCB(Attr::Type::Data, DiscardAttr);
   (void)volume.InstallAttrRawCB(Attr::Type::IndexRoot, KeepAttr);
-  FileRecord file_record(volume);
+  NtfsBrowser::Io::FileRecord file_record(volume);
   (void)file_record.InstallAttrRawCB(unknown_attr_type, DiscardAttr);
   (void)file_record.InstallAttrRawCB(Attr::Type::StandardInformation,
                                      DiscardAttr);

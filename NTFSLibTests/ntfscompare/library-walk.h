@@ -9,17 +9,16 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/mft/tree.h>
 
 #include "entry.h"
 #include "time-convert.h"
 
 namespace NtfsBrowser {
-
-class MftTree;
 
 namespace Cache {
 
@@ -42,10 +41,10 @@ template <NtfsBrowser::Cache::Strategy S>
 [[nodiscard]] std::optional<ULONGLONG>
     ResolveDirectoryRecord(NtfsBrowser::NtfsVolume<S>& volume,
                            std::wstring_view relative_path) {
-  using NtfsBrowser::FileRecord;
   using NtfsBrowser::IndexEntry;
+  using NtfsBrowser::Io::FileRecord;
 
-  FileRecord<S> current(volume);
+  NtfsBrowser::Io::FileRecord<S> current(volume);
   current.SetAttrMask(NtfsBrowser::Attr::Mask::IndexRoot |
                       NtfsBrowser::Attr::Mask::IndexAllocation);
   if (!current.ParseFileRecord(
@@ -86,8 +85,8 @@ template <NtfsBrowser::Cache::Strategy S>
 template <NtfsBrowser::Cache::Strategy S>
 [[nodiscard]] Listing WalkLibraryIndex(NtfsBrowser::NtfsVolume<S>& volume,
                                        ULONGLONG start_record) {
-  using NtfsBrowser::FileRecord;
   using NtfsBrowser::IndexEntryView;
+  using NtfsBrowser::Io::FileRecord;
 
   Listing result;
 
@@ -109,7 +108,7 @@ template <NtfsBrowser::Cache::Strategy S>
     const Frame frame = std::move(stack.back());
     stack.pop_back();
 
-    FileRecord<S> dir(volume);
+    NtfsBrowser::Io::FileRecord<S> dir(volume);
     dir.SetAttrMask(NtfsBrowser::Attr::Mask::IndexRoot |
                     NtfsBrowser::Attr::Mask::IndexAllocation);
     if (!dir.ParseFileRecord(frame.record) || !dir.ParseAttrs()) {
@@ -179,7 +178,7 @@ template <NtfsBrowser::Cache::Strategy S>
 
 // Method 6: recursively lists startRecord's subtree through
 // MftTree::Children(), reading each entry's MftTree::Entry for its fields.
-[[nodiscard]] Listing WalkMftTree(const NtfsBrowser::MftTree& tree,
+[[nodiscard]] Listing WalkMftTree(const NtfsBrowser::Mft::MftTree& tree,
                                   ULONGLONG start_record);
 
 }  // namespace NtfsCompare

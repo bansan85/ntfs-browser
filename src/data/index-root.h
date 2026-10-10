@@ -2,7 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/attr/type.h>
 
 namespace NtfsBrowser::Data {
 

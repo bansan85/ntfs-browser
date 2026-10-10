@@ -5,18 +5,18 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 
 TEMPLATE_TEST_CASE_SIG(
@@ -31,7 +31,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
       NtfsBrowserTests::legacy_standard_information_record_idx));
 

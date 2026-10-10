@@ -12,14 +12,14 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/data/attr-header-common.h>
-#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/attr/header-common.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "data/file-record-header.h"
 #include "data/filename.h"
@@ -35,10 +35,10 @@
 #include "record/header.h"
 
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Data::FileRecordHeader;
 using NtfsBrowser::Data::index_block_magic;
@@ -95,7 +95,7 @@ void RunOddSizedAttributesAreParsedAligned() {
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
@@ -115,7 +115,7 @@ size_t CountRootEntries(std::vector<BYTE> image) {
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> record(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
@@ -203,7 +203,7 @@ TEMPLATE_TEST_CASE_SIG(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::index_root_variant_a_dir_idx));
   REQUIRE(record.ParseAttrs());

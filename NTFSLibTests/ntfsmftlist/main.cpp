@@ -11,8 +11,8 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/log.h>
-#include <ntfs-browser/mft-tree.h>
+#include <ntfs-browser/log/log.h>
+#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -63,7 +63,8 @@ std::string ToUtf8(std::wstring_view text) {
 }
 
 // The path of one name of entry, as shown in the listing.
-std::string DisplayPath(const MftTree& tree, const MftTree::Entry& entry,
+std::string DisplayPath(const NtfsBrowser::Mft::MftTree& tree,
+                        const NtfsBrowser::Mft::MftTree::Entry& entry,
                         std::optional<size_t> name_index) {
   std::optional<ULONGLONG> lost;
   const std::wstring path = name_index
@@ -79,7 +80,8 @@ std::string DisplayPath(const MftTree& tree, const MftTree::Entry& entry,
 }
 
 // Prints one listing line for entry, then one line per other hard link.
-void PrintEntry(const MftTree& tree, const MftTree::Entry& entry) {
+void PrintEntry(const NtfsBrowser::Mft::MftTree& tree,
+                const NtfsBrowser::Mft::MftTree::Entry& entry) {
   SYSTEMTIME st{};
   FileTimeToSystemTime(&entry.write_time, &st);
 
@@ -89,7 +91,7 @@ void PrintEntry(const MftTree& tree, const MftTree::Entry& entry) {
   }
 
   size_t links = 0;
-  for (const MftTree::Name& name : entry.names) {
+  for (const NtfsBrowser::Mft::MftTree::Name& name : entry.names) {
     if (!name.dos_only) {
       links++;
     }
@@ -139,7 +141,7 @@ std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
 int wmain(int argc, wchar_t* argv[]) {
   Log::Config log_config;
   VolumeOptions volume_options;
-  MftTree::ScanOptions scan_options;
+  NtfsBrowser::Mft::MftTree::ScanOptions scan_options;
   const wchar_t* target = nullptr;
 
   for (int i = 1; i < argc; i++) {
@@ -192,15 +194,15 @@ int wmain(int argc, wchar_t* argv[]) {
     return true;
   };
 
-  const MftTree tree(*volume, scan_options);
+  const NtfsBrowser::Mft::MftTree tree(*volume, scan_options);
 
   printf("%10s %5s %-3s %14s %-16s %-6s %2s %s\n", "Record", "Seq", "", "Size",
          "Last write", "Attrib", "Ln", "Path");
-  for (const MftTree::Entry& entry : tree.Entries()) {
+  for (const NtfsBrowser::Mft::MftTree::Entry& entry : tree.Entries()) {
     PrintEntry(tree, entry);
   }
 
-  const MftTree::ScanStats& stats = tree.Stats();
+  const NtfsBrowser::Mft::MftTree::ScanStats& stats = tree.Stats();
   printf(
       "\nRecord slots: %llu, in use: %llu, deleted: %llu, extensions: %llu\n",
       stats.slots, stats.in_use, stats.deleted, stats.extensions);

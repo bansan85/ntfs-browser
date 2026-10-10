@@ -10,17 +10,17 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/mask.h>
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "corpus-test-support.h"
 
-using NtfsBrowser::AttrBase;
-using NtfsBrowser::FileRecord;
+using NtfsBrowser::Attr::AttrBase;
+using NtfsBrowser::Io::FileRecord;
 namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
 namespace Cache = NtfsBrowser::Cache;
@@ -79,14 +79,14 @@ constexpr ULONGLONG slack_record = 36;
 // its content contains the DFTT search term.
 void CheckReadsKeywordFile(const NtfsVolume<Cache::Strategy::NoCache>& volume,
                            const KeywordFile& file) {
-  FileRecord record(volume);
+  NtfsBrowser::Io::FileRecord record(volume);
   record.SetAttrMask(Attr::Mask::Data);
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted() == file.deleted);
   REQUIRE(record.ParseAttrs());
   CHECK(record.IsDirectory() == file.is_directory);
 
-  const AttrBase<Cache::Strategy::NoCache>* stream =
+  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
       record.FindStream(file.stream_name);
   REQUIRE(stream != nullptr);
   REQUIRE(stream->GetDataSize() == file.size);
@@ -129,11 +129,12 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   // Non-resident allocated file: index.html places its search term in this
   // file's slack space, past its logical size. ReadData()/GetDataSize()
   // expose only the file's own content, so the term MUST NOT be found there.
-  FileRecord slack(volume);
+  NtfsBrowser::Io::FileRecord slack(volume);
   slack.SetAttrMask(Attr::Mask::Data);
   REQUIRE(slack.ParseFileRecord(slack_record));
   REQUIRE(slack.ParseAttrs());
-  const AttrBase<Cache::Strategy::NoCache>* slack_data = slack.FindStream({});
+  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* slack_data =
+      slack.FindStream({});
   REQUIRE(slack_data != nullptr);
   REQUIRE(slack_data->GetDataSize() == non_resident_size);
   std::vector<BYTE> data(non_resident_size);

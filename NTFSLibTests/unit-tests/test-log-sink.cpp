@@ -11,7 +11,7 @@
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/spdlog.h>
 
-#include <ntfs-browser/log.h>
+#include <ntfs-browser/log/log.h>
 
 namespace NtfsBrowserTests {
 namespace {

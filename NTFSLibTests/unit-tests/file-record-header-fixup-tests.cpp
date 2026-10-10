@@ -9,7 +9,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/strategy.h>
+#include <ntfs-browser/cache/strategy.h>
 
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"

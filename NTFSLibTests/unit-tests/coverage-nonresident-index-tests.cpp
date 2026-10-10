@@ -10,11 +10,11 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "data/header-non-resident.h"
@@ -30,11 +30,11 @@
 namespace Attr = NtfsBrowser::Attr;
 namespace Cache = NtfsBrowser::Cache;
 namespace Data = NtfsBrowser::Data;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::VolumeOptions;
+using NtfsBrowser::Io::FileRecord;
 
 namespace {
 
@@ -86,7 +86,7 @@ constexpr VolumeOptions recovering{.recover_errors = true};
 template <Cache::Strategy S>
 struct ParsedRecord {
   std::unique_ptr<NtfsVolume<S>> volume;
-  std::unique_ptr<FileRecord<S>> record;
+  std::unique_ptr<NtfsBrowser::Io::FileRecord<S>> record;
 };
 
 // Serves an image like MemoryDiskReader, but fails or throws on any read
@@ -142,7 +142,8 @@ ParsedRecord<S> OpenRecordFrom(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
   parsed.volume = std::make_unique<NtfsVolume<S>>(std::move(reader), options);
   REQUIRE(parsed.volume->IsVolumeOK());
 
-  parsed.record = std::make_unique<FileRecord<S>>(*parsed.volume);
+  parsed.record =
+      std::make_unique<NtfsBrowser::Io::FileRecord<S>>(*parsed.volume);
   REQUIRE(parsed.record->ParseFileRecord(idx));
   return parsed;
 }

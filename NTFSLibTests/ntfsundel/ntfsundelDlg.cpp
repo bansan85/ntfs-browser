@@ -8,10 +8,10 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "ntfsundel.h"
@@ -184,7 +184,7 @@ void CNtfsundelDlg::OnSearch() {
   // Find deleted files (directory excluded)
   stop = FALSE;
   int count = 0;
-  FileRecord fr(volume);
+  NtfsBrowser::Io::FileRecord fr(volume);
 
   std::map<ULONGLONG, ULONGLONG> id_to_parent;
   std::set<ULONGLONG> files;
@@ -358,7 +358,7 @@ void CNtfsundelDlg::OnRecover() {
   // must still be visible here, or recovery could never find its record.
   NtfsVolume<Cache::Strategy::NoCache> volume(volname,
                                               {.include_deleted = true});
-  FileRecord fr(volume);
+  NtfsBrowser::Io::FileRecord fr(volume);
 
   if (!fr.ParseFileRecord(ref)) {
     MessageBox(_T("File Record parse error"));
@@ -399,7 +399,8 @@ void CNtfsundelDlg::OnRecover() {
 
   // Save to disk
   // Unnamed Data attribute contains the file data
-  const AttrBase<Cache::Strategy::NoCache>* data = fr.FindStream({});
+  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* data =
+      fr.FindStream({});
   if (data == nullptr) {
     return;
   }

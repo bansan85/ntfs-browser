@@ -16,10 +16,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/strategy.h>
 
-#include "file-reader.h"
+#include "io/file-reader.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 #include "partition-disk-reader.h"

@@ -14,23 +14,23 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/data/attr-defines.h>
-#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/attr/defines.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/mft-tree.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::FileRecord;
-using NtfsBrowser::MftTree;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
+using NtfsBrowser::Mft::MftTree;
 namespace Attr = NtfsBrowser::Attr;
 namespace Cache = NtfsBrowser::Cache;
 namespace Mft = NtfsBrowser::Mft;
@@ -245,7 +245,7 @@ void CountRawAttr(const Attr::HeaderCommon& /*header*/, bool& /*discard*/) {
 // Parses $Volume's VolumeInformation attribute through volume.
 template <Cache::Strategy S>
 void ParseVolumeInformation(const NtfsVolume<S>& volume) {
-  FileRecord<S> volume_record(volume);
+  NtfsBrowser::Io::FileRecord<S> volume_record(volume);
   volume_record.SetAttrMask(Attr::Mask::VolumeInformation);
   REQUIRE(volume_record.ParseFileRecord(volume_idx));
   REQUIRE(volume_record.ParseAttrs());
@@ -493,7 +493,7 @@ TEST_CASE("NtfsVolume refuses a $MFT read that fails on disk", "[cov-vol]") {
           lcn_begin, lcn_end, refused));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> record(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> record(volume);
   CHECK_FALSE(record.ParseFileRecord(
       NtfsBrowserTests::fragmented_mft_invalid_record_idx));
   CHECK(*refused > 0);
@@ -602,7 +602,7 @@ TEMPLATE_TEST_CASE_SIG(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(root_idx));
   REQUIRE(root.ParseAttrs());
@@ -615,19 +615,19 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEST_CASE("MftTree copies and moves its scanned namespace", "[cov-vol]") {
   const auto volume = OpenMftTree();
-  const MftTree source(*volume);
+  const NtfsBrowser::Mft::MftTree source(*volume);
 
-  MftTree copied(source);
+  NtfsBrowser::Mft::MftTree copied(source);
   CHECK(copied.Entries().size() == source.Entries().size());
 
-  MftTree assigned(*volume);
+  NtfsBrowser::Mft::MftTree assigned(*volume);
   assigned = copied;
   CHECK(assigned.Entries().size() == source.Entries().size());
 
-  MftTree moved(std::move(copied));
+  NtfsBrowser::Mft::MftTree moved(std::move(copied));
   CHECK(moved.Entries().size() == source.Entries().size());
 
-  MftTree target(*volume);
+  NtfsBrowser::Mft::MftTree target(*volume);
   target = std::move(moved);
   CHECK(target.Find(NtfsBrowserTests::mft_tree_docs_idx) != nullptr);
 }
@@ -646,9 +646,9 @@ TEST_CASE("MftTree skips a file name with no characters", "[cov-vol]") {
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
-  const MftTree::Entry* entry =
+  const NtfsBrowser::Mft::MftTree::Entry* entry =
       tree.Find(NtfsBrowserTests::mft_tree_report_idx);
   REQUIRE(entry != nullptr);
   CHECK(entry->names.size() == 1);
@@ -667,7 +667,7 @@ TEST_CASE("MftTree keeps a record whose names are all DOS aliases",
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
   CHECK_FALSE(tree.GetPath(NtfsBrowserTests::mft_tree_report_idx).empty());
 }
@@ -685,7 +685,7 @@ TEST_CASE("MftTree reports a lost ancestor that has no usable name",
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
   std::optional<ULONGLONG> lost;
   static_cast<void>(tree.GetPath(NtfsBrowserTests::mft_tree_report_idx, &lost));
@@ -707,7 +707,7 @@ TEST_CASE("FindSubEntry falls back when a $UpCase read is refused",
           table_begin + NtfsBrowserTests::fake_cluster_size, refused));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> root(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(root_idx));
   REQUIRE(root.ParseAttrs());
@@ -728,12 +728,12 @@ TEST_CASE("MftTree marks a name invalid when its parent is not a directory",
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
-  const MftTree::Entry* entry =
+  const NtfsBrowser::Mft::MftTree::Entry* entry =
       tree.Find(NtfsBrowserTests::mft_tree_report_idx);
   REQUIRE(entry != nullptr);
-  for (const MftTree::Name& name : entry->names) {
+  for (const NtfsBrowser::Mft::MftTree::Name& name : entry->names) {
     CHECK_FALSE(name.parent_valid);
   }
   CHECK_FALSE(tree.IsReachable(NtfsBrowserTests::mft_tree_report_idx));
@@ -748,12 +748,12 @@ TEST_CASE("MftTree marks a name invalid when its parent is not in the scan",
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
-  const MftTree::Entry* entry =
+  const NtfsBrowser::Mft::MftTree::Entry* entry =
       tree.Find(NtfsBrowserTests::mft_tree_report_idx);
   REQUIRE(entry != nullptr);
-  for (const MftTree::Name& name : entry->names) {
+  for (const NtfsBrowser::Mft::MftTree::Name& name : entry->names) {
     CHECK_FALSE(name.parent_valid);
   }
   std::optional<ULONGLONG> lost;
@@ -773,7 +773,7 @@ TEST_CASE("MftTree files a record once when two of its names share a parent",
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
   const auto children = tree.Children(root_idx);
   CHECK(std::count(children.begin(), children.end(),
@@ -783,7 +783,7 @@ TEST_CASE("MftTree files a record once when two of its names share a parent",
 TEST_CASE("MftTree GetPath reports nothing for an unknown record or name",
           "[cov-vol]") {
   const auto volume = OpenMftTree();
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
   CHECK_FALSE(tree.IsReachable(999));
 

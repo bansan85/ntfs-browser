@@ -8,19 +8,19 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
+using NtfsBrowser::Io::FileRecord;
 namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
 namespace Cache = NtfsBrowser::Cache;
@@ -37,7 +37,8 @@ constexpr VolumeOptions recover_keep_deleted{.include_deleted = true,
 
 // Collects every name TraverseSubEntries() reports, in callback order.
 template <Cache::Strategy S>
-std::vector<std::wstring> CollectNames(const FileRecord<S>& root) {
+std::vector<std::wstring>
+    CollectNames(const NtfsBrowser::Io::FileRecord<S>& root) {
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
       [](const IndexEntryView& index_entry, void* context) {
@@ -58,7 +59,7 @@ void RunOrphanedBlocksNeedRecoveryFlag() {
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -85,7 +86,7 @@ void RunOrphanedBlocksFoundWithRecoveryFlag() {
   const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -116,7 +117,7 @@ void RunOrphanedBlocksDroppedWithoutIncludeDeleted() {
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -147,7 +148,7 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch() {
                                VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> root(volume);
+    NtfsBrowser::Io::FileRecord<S> root(volume);
     root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -167,7 +168,7 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch() {
     const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> root(volume);
+    NtfsBrowser::Io::FileRecord<S> root(volume);
     root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -193,7 +194,7 @@ void RunMissingIndexRootNeedsRecoveryFlag() {
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -212,7 +213,7 @@ void RunMissingIndexRootRecoveredWithFlag() {
   const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -237,7 +238,7 @@ std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image) {
   const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));

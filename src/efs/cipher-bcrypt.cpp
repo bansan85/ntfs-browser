@@ -6,7 +6,7 @@
   #include <gsl/narrow>
 
   #include "efs/sector-cipher.h"
-  #include "ntfs-common.h"
+  #include "log/ntfs-common.h"
 
 namespace NtfsBrowser::Efs {
 

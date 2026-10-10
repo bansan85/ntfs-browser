@@ -5,18 +5,18 @@
 #include <string>
 #include <string_view>
 
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
-#include <ntfs-browser/log.h>
-#include <ntfs-browser/strategy.h>
+#include <ntfs-browser/log/log.h>
 
-#include "attr-resident.h"
-#include "attr-std-info.h"
+#include "attr/resident.h"
+#include "attr/std-info.h"
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"
-#include "mft-file-reference.h"
-#include "ntfs-common.h"
-#include "upcase.h"
-#include "utf.h"
+#include "log/ntfs-common.h"
+#include "mft/file-reference.h"
+#include "upcase/upcase.h"
+#include "utf/utf.h"
 
 namespace NtfsBrowser {
 

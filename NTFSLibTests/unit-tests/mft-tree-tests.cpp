@@ -14,11 +14,11 @@
 #include <spdlog/sinks/ostream_sink.h>
 #include <spdlog/spdlog.h>
 
-#include <ntfs-browser/log.h>
-#include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/mft-tree.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/log/log.h>
+#include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "catch2/matchers/catch_matchers.hpp"
@@ -27,8 +27,8 @@
 #include "memory-disk-reader.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowser::MftTree;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Mft::MftTree;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 namespace Mft = NtfsBrowser::Mft;
@@ -70,7 +70,8 @@ std::unique_ptr<NtfsVolume<S>>
 }
 
 // Children() as a vector, so Catch2 prints it on a mismatch.
-std::vector<ULONGLONG> ChildrenOf(const MftTree& tree, ULONGLONG dir) {
+std::vector<ULONGLONG> ChildrenOf(const NtfsBrowser::Mft::MftTree& tree,
+                                  ULONGLONG dir) {
   const auto children = tree.Children(dir);
   return {children.begin(), children.end()};
 }
@@ -82,14 +83,15 @@ void RunMftTreeRebuildsPaths() {
   // is off by default now, so this test opts in explicitly.
   const auto volume =
       OpenMftTreeVolume<S>(VolumeOptions{.include_deleted = true});
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
   CHECK(tree.GetPath(root_value) == L"\\");
   CHECK(tree.GetPath(static_cast<ULONGLONG>(Mft::Idx::Mft)) == L"\\$MFT");
   CHECK(tree.GetPath(mft_tree_docs_idx) == L"\\Docs");
 
   SECTION("A DOS alias stays out of the path and the size comes from $DATA") {
-    const MftTree::Entry* report = tree.Find(mft_tree_report_idx);
+    const NtfsBrowser::Mft::MftTree::Entry* report =
+        tree.Find(mft_tree_report_idx);
     REQUIRE(report != nullptr);
     CHECK(tree.GetPath(mft_tree_report_idx) == L"\\Docs\\report.txt");
     REQUIRE(report->names.size() == 2);
@@ -134,7 +136,8 @@ void RunMftTreeRebuildsPaths() {
   }
 
   SECTION("A deleted subtree stays linked through the bumped sequence number") {
-    const MftTree::Entry* deleted = tree.Find(mft_tree_deleted_file_idx);
+    const NtfsBrowser::Mft::MftTree::Entry* deleted =
+        tree.Find(mft_tree_deleted_file_idx);
     REQUIRE(deleted != nullptr);
     CHECK_FALSE(deleted->in_use);
     CHECK(tree.GetPath(mft_tree_deleted_file_idx) == L"\\Docs\\old.tmp");
@@ -156,7 +159,7 @@ void RunMftTreeRebuildsPaths() {
   }
 
   SECTION("Stats count every slot") {
-    const MftTree::ScanStats& stats = tree.Stats();
+    const NtfsBrowser::Mft::MftTree::ScanStats& stats = tree.Stats();
     CHECK(stats.slots == mft_tree_record_count);
     // $MFT, $Volume, the root, Docs, report.txt, the hard link, NewDir.
     CHECK(stats.in_use == 7);
@@ -177,7 +180,7 @@ void RunMftTreeWithoutDeleted() {
   // include_deleted defaults off, so the plain default volume already
   // excludes the fixture's freed records.
   const auto volume = OpenMftTreeVolume<S>();
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
   CHECK(tree.Find(mft_tree_deleted_file_idx) == nullptr);
   CHECK(tree.Find(mft_tree_deleted_dir_idx) == nullptr);
@@ -203,7 +206,7 @@ void RunMftTreeDropsUnrecoveredRecord() {
             BuildFakeNtfsImageWithAttrNameExceedsTotalSize()));
     REQUIRE(volume->IsVolumeOK());
 
-    const MftTree tree(*volume);
+    const NtfsBrowser::Mft::MftTree tree(*volume);
     CHECK(tree.Stats().damaged == 1);
     CHECK(tree.Find(attr_name_exceeds_total_size_record_idx) == nullptr);
   }
@@ -214,7 +217,7 @@ void RunMftTreeDropsUnrecoveredRecord() {
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume->IsVolumeOK());
 
-    const MftTree tree(*volume);
+    const NtfsBrowser::Mft::MftTree tree(*volume);
     CHECK(tree.Stats().damaged == 0);
     CHECK(tree.Find(attr_name_exceeds_total_size_record_idx) != nullptr);
   }
@@ -224,7 +227,7 @@ template <Cache::Strategy S>
 void RunMftTreeProgressStops() {
   const auto volume = OpenMftTreeVolume<S>();
   std::vector<ULONGLONG> calls;
-  const MftTree tree(
+  const NtfsBrowser::Mft::MftTree tree(
       *volume, MftTree::ScanOptions{.progress = [&](ULONGLONG done, ULONGLONG) {
         calls.push_back(done);
         return false;
@@ -243,7 +246,7 @@ void RunMftTreeSkipsMftExtensionRecord() {
   REQUIRE(volume->IsVolumeOK());
   REQUIRE(volume->GetRecordsCount() == mft_tree_record_count);
 
-  const MftTree tree(*volume);
+  const NtfsBrowser::Mft::MftTree tree(*volume);
 
   CHECK(tree.Find(mft_tree_zeroed_idx) == nullptr);
   // Same counts as the plain fixture, with the extension counted as one.
@@ -264,7 +267,7 @@ void RunMftTreeClampsForgedRealSize() {
   REQUIRE(volume->IsVolumeOK());
   CHECK(volume->GetRecordsCount() == mft_tree_record_count);
 
-  const MftTree tree(
+  const NtfsBrowser::Mft::MftTree tree(
       *volume, MftTree::ScanOptions{.progress = [&](ULONGLONG done, ULONGLONG) {
         return done < runaway_slots;
       }});
@@ -326,7 +329,7 @@ TEMPLATE_TEST_CASE_SIG("MftTree logs no warning for never-used record slots",
   logger->sinks().push_back(sink);
   {
     const auto volume = OpenMftTreeVolume<S>();
-    const MftTree tree(*volume);
+    const NtfsBrowser::Mft::MftTree tree(*volume);
   }
   logger->sinks().pop_back();
 

@@ -8,18 +8,18 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 
 namespace {
@@ -34,7 +34,7 @@ void RunFindSubEntryOutlivesReparseTest() {
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::index_root_variant_a_dir_idx));
   REQUIRE(record.ParseAttrs());

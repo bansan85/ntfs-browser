@@ -1,4 +1,4 @@
-// Tests for the runtime logging configuration (include/ntfs-browser/log.h):
+// Tests for the runtime logging configuration (include/ntfs-browser/log/log.h):
 // the --log option parser, per-target levels, and the console target's
 // split between stdout and stderr.
 //
@@ -26,17 +26,17 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/log.h>
+#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "catch2/catch_message.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
 #include "child-process.h"
 #include "fake-ntfs-image.h"
+#include "log/ntfs-common.h"
 #include "memory-disk-reader.h"
-#include "ntfs-common.h"
 #include "test-log-sink.h"
 
 namespace Fs = std::filesystem;

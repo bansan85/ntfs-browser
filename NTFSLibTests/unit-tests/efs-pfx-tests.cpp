@@ -1,5 +1,5 @@
 // MakePfxKeyProvider() - this whole file's subject - only exists on Windows
-// (PFX import goes through CryptoAPI/CNG): see include/ntfs-browser/efs.h.
+// (PFX import goes through CryptoAPI/CNG): see include/ntfs-browser/efs/efs.h.
 #ifdef _WIN32
 
   #include <algorithm>
@@ -15,9 +15,9 @@
   #include <catch2/matchers/catch_matchers_string.hpp>
   #include <gsl/narrow>
 
-  #include <ntfs-browser/efs.h>
-  #include <ntfs-browser/file-record.h>
-  #include <ntfs-browser/mft-idx.h>
+  #include <ntfs-browser/efs/efs.h>
+  #include <ntfs-browser/io/file-record.h>
+  #include <ntfs-browser/mft/idx.h>
   #include <ntfs-browser/ntfs-volume.h>
 
   #include "efs-test-support.h"
@@ -196,7 +196,7 @@ TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
     volume.SetEfsKeyProvider(MakePfxKeyProvider(
         DataFile(std::string(pfx.name) + ".pfx"), password_value));
 
-    NtfsBrowser::FileRecord<S> record(volume);
+    NtfsBrowser::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(
         static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root)));
     REQUIRE(record.ParseAttrs());

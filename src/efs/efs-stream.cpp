@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-#include "ntfs-common.h"
+#include "log/ntfs-common.h"
 
 namespace NtfsBrowser::Efs {
 

@@ -19,14 +19,14 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/efs.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "catch2/catch_message.hpp"
@@ -39,20 +39,15 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 #include "test-log-sink.h"
-#include "util.h"
+#include "util/util.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser {}  // namespace NtfsBrowser
 
-template <Cache::Strategy S>
-class AttrBase;
-
-}  // namespace NtfsBrowser
-
-using NtfsBrowser::AttrBase;
+using NtfsBrowser::Attr::AttrBase;
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Efs::CipherBackend;
@@ -173,7 +168,7 @@ Fixture MakeFixture(Algorithm algorithm, size_t size = default_file_size) {
 template <Cache::Strategy S>
 struct Opened {
   std::unique_ptr<NtfsVolume<S>> volume;
-  std::unique_ptr<FileRecord<S>> record;
+  std::unique_ptr<NtfsBrowser::Io::FileRecord<S>> record;
 };
 
 // Opens the image and parses the root record. The provider is always set,
@@ -198,7 +193,8 @@ Opened<S> Open(std::vector<BYTE> image,
     REQUIRE(opened.volume->SetEfsCipherBackend(*backend));
   }
 
-  opened.record = std::make_unique<FileRecord<S>>(*opened.volume);
+  opened.record =
+      std::make_unique<NtfsBrowser::Io::FileRecord<S>>(*opened.volume);
   if (mask) {
     opened.record->SetAttrMask(*mask);
   }
@@ -210,8 +206,9 @@ Opened<S> Open(std::vector<BYTE> image,
 
 // Reads up to "size" bytes at "offset". Nullopt if ReadData() failed.
 template <Cache::Strategy S>
-std::optional<std::vector<BYTE>> ReadAt(const AttrBase<S>& attr,
-                                        ULONGLONG offset, size_t size) {
+std::optional<std::vector<BYTE>>
+    ReadAt(const NtfsBrowser::Attr::AttrBase<S>& attr, ULONGLONG offset,
+           size_t size) {
   std::vector<BYTE> buffer(size, unread_fill);
   const std::optional<ULONGLONG> read = attr.ReadData(offset, buffer);
   if (!read) {
@@ -222,7 +219,8 @@ std::optional<std::vector<BYTE>> ReadAt(const AttrBase<S>& attr,
 }
 
 template <Cache::Strategy S>
-const AttrBase<S>& OnlyData(const FileRecord<S>& record) {
+const NtfsBrowser::Attr::AttrBase<S>&
+    OnlyData(const NtfsBrowser::Io::FileRecord<S>& record) {
   const auto& data = record.GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
   return *data.front();
@@ -281,7 +279,7 @@ TEMPLATE_TEST_CASE_SIG(
       Fixture fixture = MakeFixture(algorithm);
       const Opened<S> opened =
           Open<S>(fixture.image, fixture.provider, std::nullopt, {}, backend);
-      const AttrBase<S>& data = OnlyData<S>(*opened.record);
+      const NtfsBrowser::Attr::AttrBase<S>& data = OnlyData<S>(*opened.record);
 
       const auto whole = ReadAt<S>(data, 0, fixture.plaintext.size());
       REQUIRE(whole.has_value());
@@ -301,7 +299,7 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const Fixture fixture = MakeFixture(Algorithm::Aes256);
   const Opened<S> opened = Open<S>(fixture.image, fixture.provider);
-  const AttrBase<S>& data = OnlyData<S>(*opened.record);
+  const NtfsBrowser::Attr::AttrBase<S>& data = OnlyData<S>(*opened.record);
 
   for (const size_t offset :
        {0, 1, 511, 512, 513, 1023, 1024, 1025, 2047, 2999}) {
@@ -415,7 +413,7 @@ TEMPLATE_TEST_CASE_SIG(
     Opened<S> opened = Open<S>(fixture.image, nullptr);
     CHECK(opened.record->IsEncrypted());
 
-    const AttrBase<S>& data = OnlyData<S>(*opened.record);
+    const NtfsBrowser::Attr::AttrBase<S>& data = OnlyData<S>(*opened.record);
     CHECK_FALSE(ReadAt<S>(data, 0, 100).has_value());
     CHECK_THAT(TakeLog(), Catch::Matchers::ContainsSubstring(
                               "Cannot decrypt the stream: no EFS key provider "
@@ -614,7 +612,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume->IsVolumeOK());
   volume->SetEfsKeyProvider(provider);
 
-  FileRecord<S> record(*volume);
+  NtfsBrowser::Io::FileRecord<S> record(*volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK_FALSE(record.ParseAttrs());
   CHECK(record.GetAttr(Attr::Type::Data).empty());
@@ -650,7 +648,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
   volume.SetEfsKeyProvider(provider);
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK_FALSE(record.ParseAttrs());
 
@@ -688,7 +686,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
   volume.SetEfsKeyProvider(provider);
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK_FALSE(record.ParseAttrs());
 

@@ -1,4 +1,4 @@
-// Tests for the UTF-16 to UTF-8 decoder (src/utf.h) the log call sites
+// Tests for the UTF-16 to UTF-8 decoder (src/utf/utf.h) the log call sites
 // run on-disk names through. Every name in the rest of the suite is
 // ASCII, so nothing else reaches the multi-byte or surrogate branches.
 
@@ -8,7 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2/catch_message.hpp"
-#include "utf.h"
+#include "utf/utf.h"
 
 namespace {
 

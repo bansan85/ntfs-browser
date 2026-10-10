@@ -7,22 +7,22 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
-#include "attr-file-name.h"
-#include "attr-resident.h"
+#include "attr/file-name.h"
+#include "attr/resident.h"
 #include "corpus-test-support.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
 namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::Filename;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Attr::AttrFileName;
 using NtfsBrowser::Attr::AttrResidentFullCache;
@@ -41,7 +41,7 @@ void RunFileRecordExposesExtendedMetadata() {
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> report(volume);
+  NtfsBrowser::Io::FileRecord<S> report(volume);
   REQUIRE(report.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 
@@ -66,7 +66,7 @@ void RunFileRecordExposesExtendedMetadata() {
 // mft_tree_report_idx's own $FILE_NAME now also carries READONLY | ARCHIVE
 // (WriteFileNameAttr()'s extra_flags), independently of $STANDARD_INFORMATION.
 // Reached the same way FileRecord::GetFileTime() and IndexEntry itself reach
-// it internally (src/file-record.cpp, src/mft-tree.cpp): this record's
+// it internally (src/io/file-record.cpp, src/mft/tree.cpp): this record's
 // directories have no $INDEX_ROOT in this fixture, so FindSubEntry() isn't an
 // option here.
 template <Cache::Strategy S>
@@ -77,7 +77,7 @@ void RunFilenameExposesExtendedMetadata() {
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> report(volume);
+  NtfsBrowser::Io::FileRecord<S> report(volume);
   REQUIRE(report.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 

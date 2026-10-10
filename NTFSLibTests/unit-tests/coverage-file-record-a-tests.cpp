@@ -15,12 +15,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "data/file-record-flag.h"
@@ -36,22 +36,17 @@
 #include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
 
-namespace NtfsBrowser {
-
-template <Cache::Strategy S>
-class AttrBase;
-
-}  // namespace NtfsBrowser
+namespace NtfsBrowser {}  // namespace NtfsBrowser
 
 namespace Attr = NtfsBrowser::Attr;
 namespace Cache = NtfsBrowser::Cache;
 namespace Data = NtfsBrowser::Data;
 namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowser::AttrBase;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::VolumeOptions;
+using NtfsBrowser::Attr::AttrBase;
+using NtfsBrowser::Io::FileRecord;
 using NtfsBrowserTests::MemoryDiskReader;
 
 namespace {
@@ -229,7 +224,7 @@ void CheckWalkEndsEarly(const RecordBytes& record,
                                VolumeOptions{.recover_errors = recover});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> file(volume);
+    NtfsBrowser::Io::FileRecord<S> file(volume);
     REQUIRE(file.ParseFileRecord(scratch_idx));
     // Strict drops the whole record. Recovery keeps the walk so far.
     CHECK(file.ParseAttrs() == recover);
@@ -248,10 +243,10 @@ TEMPLATE_TEST_CASE_SIG("FileRecord move constructor keeps the parsed record",
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
-  FileRecord<S> moved(std::move(record));
+  NtfsBrowser::Io::FileRecord<S> moved(std::move(record));
   CHECK(moved.GetFileReference() ==
         std::optional<ULONGLONG>(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK(moved.IsDirectory());
@@ -277,7 +272,7 @@ TEMPLATE_TEST_CASE_SIG(
     const NtfsVolume<S> volume(std::move(reader));
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> file(volume);
+    NtfsBrowser::Io::FileRecord<S> file(volume);
     CHECK_FALSE(file.ParseFileRecord(scratch_idx));
   }
 }
@@ -291,7 +286,7 @@ TEST_CASE("ParseFileRecord reports a record read that the disk refuses",
   REQUIRE(volume.IsVolumeOK());
 
   disk->fail = true;
-  FileRecord<Cache::Strategy::NoCache> file(volume);
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   CHECK_FALSE(file.ParseFileRecord(scratch_idx));
 }
 
@@ -333,7 +328,7 @@ TEMPLATE_TEST_CASE_SIG(
                                VolumeOptions{.recover_errors = recover});
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> file(volume);
+    NtfsBrowser::Io::FileRecord<S> file(volume);
     REQUIRE(file.ParseFileRecord(scratch_idx));
     CHECK_FALSE(file.ParseAttrs());
   }
@@ -359,7 +354,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> file(volume);
+  NtfsBrowser::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
@@ -384,15 +379,16 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> file(volume);
+  NtfsBrowser::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
-  const typename FileRecord<S>::AttrsCallback empty_callback;
+  const typename NtfsBrowser::Io::FileRecord<S>::AttrsCallback empty_callback;
   file.TraverseAttrs(empty_callback, nullptr);
 
-  const typename FileRecord<S>::AttrsCallback count_all =
-      [](const AttrBase<S>& /*attr*/, void* context, bool* stop) {
+  const typename NtfsBrowser::Io::FileRecord<S>::AttrsCallback count_all =
+      [](const NtfsBrowser::Attr::AttrBase<S>& /*attr*/, void* context,
+         bool* stop) {
         ++*static_cast<size_t*>(context);
         *stop = false;
       };
@@ -400,8 +396,9 @@ TEMPLATE_TEST_CASE_SIG(
   file.TraverseAttrs(count_all, &visits);
   CHECK(visits == 2);
 
-  const typename FileRecord<S>::AttrsCallback stop_first =
-      [](const AttrBase<S>& /*attr*/, void* context, bool* stop) {
+  const typename NtfsBrowser::Io::FileRecord<S>::AttrsCallback stop_first =
+      [](const NtfsBrowser::Attr::AttrBase<S>& /*attr*/, void* context,
+         bool* stop) {
         ++*static_cast<size_t*>(context);
         *stop = true;
       };
@@ -429,7 +426,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> file(volume);
+  NtfsBrowser::Io::FileRecord<S> file(volume);
   CHECK_FALSE(file.InstallAttrRawCB(unknown_attr_type,
                                     [](const Attr::HeaderCommon& /*head*/,
                                        bool& discard) { discard = true; }));
@@ -453,13 +450,13 @@ TEMPLATE_TEST_CASE_SIG("Unparsed and unknown-type accessors return defaults",
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> file(volume);
+  NtfsBrowser::Io::FileRecord<S> file(volume);
   CHECK(file.GetSequenceNumber() == 0);
   CHECK(file.GetBaseRecordReference() == 0);
   CHECK_FALSE(file.IsExtensionRecord());
   CHECK(file.GetAttr(unknown_attr_type).empty());
 
-  const FileRecord<S>& view = file;
+  const NtfsBrowser::Io::FileRecord<S>& view = file;
   CHECK(view.GetAttr(unknown_attr_type).empty());
 
   RecordBytes record = MakeScratchRecord(first_attr_offset);
@@ -473,7 +470,7 @@ TEMPLATE_TEST_CASE_SIG("Unparsed and unknown-type accessors return defaults",
   const NtfsVolume<S> scratch_volume(std::move(scratch_reader));
   REQUIRE(scratch_volume.IsVolumeOK());
 
-  FileRecord<S> extension(scratch_volume);
+  NtfsBrowser::Io::FileRecord<S> extension(scratch_volume);
   REQUIRE(extension.ParseFileRecord(scratch_idx));
   CHECK(extension.IsExtensionRecord());
   CHECK(extension.GetBaseRecordReference() == 6);
@@ -490,7 +487,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> file(volume);
+  NtfsBrowser::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
@@ -534,7 +531,7 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> file(volume);
+  NtfsBrowser::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
@@ -559,7 +556,7 @@ TEMPLATE_TEST_CASE_SIG("Traversal and lookup on a record with no index at all",
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> file(volume);
+  NtfsBrowser::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
@@ -599,7 +596,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -626,7 +623,7 @@ TEMPLATE_TEST_CASE_SIG("Orphan scan skips an index block it cannot parse",
     const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
     REQUIRE(volume.IsVolumeOK());
 
-    FileRecord<S> root(volume);
+    NtfsBrowser::Io::FileRecord<S> root(volume);
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
 
@@ -678,7 +675,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<MemoryDiskReader>(std::move(image));
   const NtfsVolume<S> volume(std::move(reader));
 
-  FileRecord<S> file(volume);
+  NtfsBrowser::Io::FileRecord<S> file(volume);
   // Above 2^53 records, the byte offset of the record overflows a LONGLONG.
   CHECK_FALSE(file.ParseFileRecord(ULONGLONG{1} << 53U));
 }
@@ -692,7 +689,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -728,7 +725,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -766,7 +763,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 

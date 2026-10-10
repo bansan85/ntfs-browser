@@ -4,13 +4,14 @@
 
 #include <span>
 
-#include <ntfs-browser/mft-idx.h>
-#include <ntfs-browser/mft-tree.h>
+#include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/mft/tree.h>
 
 namespace NtfsCompare {
 
-Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG start_record) {
-  using NtfsBrowser::MftTree;
+Listing WalkMftTree(const NtfsBrowser::Mft::MftTree& tree,
+                    ULONGLONG start_record) {
+  using NtfsBrowser::Mft::MftTree;
 
   Listing result;
 
@@ -30,12 +31,12 @@ Listing WalkMftTree(const NtfsBrowser::MftTree& tree, ULONGLONG start_record) {
       if (child < static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::User)) {
         continue;
       }
-      const MftTree::Entry* entry = tree.Find(child);
+      const NtfsBrowser::Mft::MftTree::Entry* entry = tree.Find(child);
       if (entry == nullptr) {
         continue;
       }
 
-      for (const MftTree::Name& name : entry->names) {
+      for (const NtfsBrowser::Mft::MftTree::Name& name : entry->names) {
         if (name.dos_only || !name.parent_valid ||
             name.parent_record != frame.record) {
           continue;

@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/efs.h>
-#include <ntfs-browser/strategy.h>  // IWYU pragma: keep
+#include <ntfs-browser/cache/strategy.h>  // IWYU pragma: keep
+#include <ntfs-browser/efs/efs.h>
 
 #include "efs/efs-stream.h"
 #include "efs/sector-cipher.h"

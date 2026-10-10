@@ -10,16 +10,16 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/data/attr-defines.h>
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/defines.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/efs.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/efs/efs.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "attr-slot.h"
+#include "attr/slot.h"
 
 #ifdef _WIN32
   #include <tchar.h>
@@ -57,14 +57,15 @@ class NtfsVolume<S>::Impl {
 
   // MFT file records ($MFT file itself) may be fragmented
   // Get $MFT Data attribute to translate FileRecord to correct disk offset
-  const AttrBase<S>* mft_data{nullptr};  // $MFT Data Attribute (base extent)
+  const Attr::AttrBase<S>* mft_data{
+      nullptr};  // $MFT Data Attribute (base extent)
 
   // The volume's own $UpCase, loaded on first use by GetUpCaseTable(). Stays
   // null when $UpCase cannot be read; upcase_loaded_ then keeps the failure
   // from being retried.
   mutable std::unique_ptr<const UpCase::Table> upcase;
 
-  FileRecord<S> mft_record;  // $MFT File Record
+  Io::FileRecord<S> mft_record;  // $MFT File Record
 
   // EFS key source. efs_provider_set_ tells "never chosen", which lets the
   // default provider be created on the first decryption, from "chosen to be
@@ -75,14 +76,14 @@ class NtfsVolume<S>::Impl {
   struct MftExtent {
     ULONGLONG start_vcn;
     ULONGLONG last_vcn;
-    const AttrBase<S>* attr;
+    const Attr::AttrBase<S>* attr;
   };
 
   // Sorted by start_vcn; binary-searched per file-record read.
   std::vector<MftExtent> mft_extents;
 
   // Owns extension FileRecords; std::list keeps FullCache pointers stable.
-  std::list<FileRecord<S>> mft_extension_records;
+  std::list<Io::FileRecord<S>> mft_extension_records;
 
   mutable std::vector<BYTE> cluster_buffer;
 
@@ -130,11 +131,12 @@ class NtfsVolume<S>::Impl {
   };
 
   [[nodiscard]] static std::vector<PendingMftExtension>
-      CollectPendingMftExtensions(const AttrBase<S>& raw_list,
+      CollectPendingMftExtensions(const Attr::AttrBase<S>& raw_list,
                                   ULONGLONG self_ref);
   void ResolvePendingMftExtension(const PendingMftExtension& item,
                                   ULONGLONG self_ref);
-  void TryAddMftExtent(const AttrBase<S>& attr, ULONGLONG expected_start_vcn);
+  void TryAddMftExtent(const Attr::AttrBase<S>& attr,
+                       ULONGLONG expected_start_vcn);
   [[nodiscard]] bool IsMftRangeMapped(ULONGLONG byte_offset,
                                       ULONGLONG length) const noexcept;
   [[nodiscard]] const MftExtent* FindMftExtent(ULONGLONG vcn) const noexcept;

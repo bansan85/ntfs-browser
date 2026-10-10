@@ -9,18 +9,18 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "partition-disk-reader.h"
 
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 namespace Mft = NtfsBrowser::Mft;
 
@@ -60,7 +60,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
   CHECK(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
@@ -78,7 +78,7 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
   REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
 
-  FileRecord<S> root(volume);
+  NtfsBrowser::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
   CHECK(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);

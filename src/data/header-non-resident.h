@@ -5,7 +5,7 @@
 #include <cstring>
 #include <span>
 
-#include <ntfs-browser/data/attr-header-common.h>
+#include <ntfs-browser/attr/header-common.h>
 
 namespace NtfsBrowser::Data {
 

@@ -10,25 +10,20 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/file-record.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "named-stream-probe.h"
 
-namespace NtfsBrowser {
+namespace NtfsBrowser {}  // namespace NtfsBrowser
 
-template <Cache::Strategy S>
-class AttrBase;
-
-}  // namespace NtfsBrowser
-
-using NtfsBrowser::AttrBase;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Attr::AttrBase;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 namespace Mft = NtfsBrowser::Mft;
 
@@ -42,7 +37,7 @@ void CheckFindStreamReturnsNamedStream() {
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
@@ -50,7 +45,7 @@ void CheckFindStreamReturnsNamedStream() {
   // (named or otherwise) in this fixture is named "nonexistent".
   CHECK(record.FindStream(L"nonexistent") == nullptr);
 
-  const AttrBase<S>* stream =
+  const NtfsBrowser::Attr::AttrBase<S>* stream =
       record.FindStream(NtfsBrowserTests::named_data_stream_name);
   REQUIRE(stream != nullptr);
 

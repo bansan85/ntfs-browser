@@ -12,7 +12,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/strategy.h>
+#include <ntfs-browser/cache/strategy.h>
 
 #include "catch2/matchers/catch_matchers.hpp"
 #include "data/file-record-header.h"

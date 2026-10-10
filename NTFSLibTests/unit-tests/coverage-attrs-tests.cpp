@@ -17,19 +17,19 @@
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/spdlog.h>
 
-#include <ntfs-browser/attr-base.h>  // IWYU pragma: keep
-#include <ntfs-browser/data/attr-type.h>
-#include <ntfs-browser/file-record.h>
+#include <ntfs-browser/attr/base.h>  // IWYU pragma: keep
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
-#include <ntfs-browser/log.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
-#include <ntfs-browser/strategy.h>
 
-#include "attr-bitmap.h"
-#include "attr-file-name.h"
-#include "attr-non-resident.h"
-#include "attr-resident.h"
-#include "attr-std-info.h"
+#include "attr/bitmap.h"
+#include "attr/file-name.h"
+#include "attr/non-resident.h"
+#include "attr/resident.h"
+#include "attr/std-info.h"
 #include "data/attribute-list.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
@@ -42,19 +42,19 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
+#include "log/ntfs-common.h"
 #include "memory-disk-reader.h"
-#include "ntfs-common.h"
 #include "record/header.h"
 #include "test-log-sink.h"
-#include "upcase.h"
+#include "upcase/upcase.h"
 
 namespace Attr = NtfsBrowser::Attr;
 namespace Cache = NtfsBrowser::Cache;
 namespace Data = NtfsBrowser::Data;
 namespace Log = NtfsBrowser::Log;
 using NtfsBrowser::Filename;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 
 namespace {
 
@@ -274,7 +274,8 @@ using ResidentFor =
 template <Cache::Strategy S>
 class SectorProbe final : public ResidentFor<S> {
  public:
-  SectorProbe(const Attr::HeaderCommon& ahc, const FileRecord<S>& record)
+  SectorProbe(const Attr::HeaderCommon& ahc,
+              const NtfsBrowser::Io::FileRecord<S>& record)
       : ResidentFor<S>(ahc, record) {}
 
   [[nodiscard]] WORD Sector() const noexcept { return this->GetSectorSize(); }
@@ -338,7 +339,7 @@ TEMPLATE_TEST_CASE_SIG(
           MakeRecord(NtfsBrowser::Data::FileRecordFlag::InUse, 1, 0, attr))));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   REQUIRE(record.ParseAttrs());
   const auto& bitmaps = record.GetAttr(Attr::Type::Bitmap);
@@ -363,7 +364,7 @@ TEMPLATE_TEST_CASE_SIG(
           MakeRecord(NtfsBrowser::Data::FileRecordFlag::InUse, 1, 0, attr))));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   REQUIRE(record.ParseAttrs());
   const auto& bitmaps = record.GetAttr(Attr::Type::Bitmap);
@@ -385,7 +386,7 @@ TEMPLATE_TEST_CASE_SIG(
           MakeRecord(NtfsBrowser::Data::FileRecordFlag::InUse, 1, 0, attr))));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   REQUIRE(record.ParseAttrs());
   const auto& bitmaps = record.GetAttr(Attr::Type::Bitmap);
@@ -413,7 +414,7 @@ TEMPLATE_TEST_CASE_SIG(
           MakeRecord(NtfsBrowser::Data::FileRecordFlag::InUse, 1, 0, attr))));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   REQUIRE(record.ParseAttrs());
 
@@ -452,7 +453,7 @@ TEMPLATE_TEST_CASE_SIG(
           MakeRecord(NtfsBrowser::Data::FileRecordFlag::InUse, 1, 0, attr))));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   REQUIRE(record.ParseAttrs());
   const auto& infos = record.GetAttr(Attr::Type::StandardInformation);
@@ -485,7 +486,7 @@ TEMPLATE_TEST_CASE_SIG(
           MakeRecord(NtfsBrowser::Data::FileRecordFlag::InUse, 1, 0, attr))));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   REQUIRE(record.ParseAttrs());
   const auto& names = record.GetAttr(Attr::Type::FileName);
@@ -547,7 +548,7 @@ TEMPLATE_TEST_CASE_SIG(
                                       1, 0, short_attr))));
   REQUIRE(short_volume.IsVolumeOK());
 
-  FileRecord<S> short_record(short_volume);
+  NtfsBrowser::Io::FileRecord<S> short_record(short_volume);
   REQUIRE(short_record.ParseFileRecord(test_record_idx));
   static_cast<void>(short_record.ParseAttrs());
   CHECK(short_record.GetAttr(Attr::Type::FileName).empty());
@@ -561,7 +562,7 @@ TEMPLATE_TEST_CASE_SIG(
                                       1, 0, long_attr))));
   REQUIRE(long_volume.IsVolumeOK());
 
-  FileRecord<S> long_record(long_volume);
+  NtfsBrowser::Io::FileRecord<S> long_record(long_volume);
   REQUIRE(long_record.ParseFileRecord(test_record_idx));
   static_cast<void>(long_record.ParseAttrs());
   CHECK(long_record.GetAttr(Attr::Type::FileName).empty());
@@ -582,7 +583,7 @@ TEMPLATE_TEST_CASE_SIG(
           MakeRecord(NtfsBrowser::Data::FileRecordFlag::InUse, 1, 0, attr))));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   CHECK_FALSE(record.ParseAttrs());
 }
@@ -600,7 +601,7 @@ TEMPLATE_TEST_CASE_SIG(
           MakeRecord(NtfsBrowser::Data::FileRecordFlag::InUse, 1, 0, attr))));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   CHECK_FALSE(record.ParseAttrs());
 }
@@ -627,7 +628,7 @@ TEMPLATE_TEST_CASE_SIG(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(test_record_idx));
   CHECK_FALSE(record.ParseAttrs());
 }

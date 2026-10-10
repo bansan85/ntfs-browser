@@ -10,11 +10,11 @@
   #include <ncrypt.h>
   #include <wincrypt.h>
 
-  #include <ntfs-browser/efs.h>
+  #include <ntfs-browser/efs/efs.h>
 
   #include "efs/fek.h"
-  #include "ntfs-common.h"
-  #include "util.h"
+  #include "log/ntfs-common.h"
+  #include "util/util.h"
 
 namespace NtfsBrowser::Efs {
 

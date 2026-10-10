@@ -16,15 +16,15 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr-base.h>
-#include <ntfs-browser/data/attr-type.h>
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/file-record.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mask.h>
-#include <ntfs-browser/mft-idx.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/strategy.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
@@ -32,9 +32,9 @@
 #include "optional-access.h"
 
 namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::FileRecord;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 namespace Mft = NtfsBrowser::Mft;
@@ -49,7 +49,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
@@ -74,7 +74,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attr_list_multi_type_dir_idx));
@@ -97,7 +97,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
@@ -122,7 +122,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::uaf_attr_list_dir_idx));
@@ -158,7 +158,7 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK(record.ParseAttrs());
 }
@@ -174,7 +174,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK_FALSE(record.ParseAttrs());
 }
@@ -192,7 +192,7 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexRoot);
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   CHECK(dir.ParseAttrs());
@@ -211,7 +211,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexRoot);
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   CHECK_FALSE(dir.ParseAttrs());
@@ -229,7 +229,7 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexRoot);
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   CHECK(dir.ParseAttrs());
@@ -247,7 +247,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexRoot);
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
   CHECK_FALSE(dir.ParseAttrs());
@@ -264,7 +264,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK(record.ParseAttrs());
 }
@@ -282,7 +282,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> dir(volume);
+  NtfsBrowser::Io::FileRecord<S> dir(volume);
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attr_list_tight_pack_dir_idx));
@@ -314,7 +314,7 @@ TEMPLATE_TEST_CASE_SIG(
   // mft_data_ must be the base extent, not whichever instance parsed first.
   CHECK(volume.GetRecordsCount() == 1);
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_data_split_target_idx));
 }
 
@@ -329,7 +329,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_chain_ext_a));
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_chain_ext_a_start_vcn));
 }
@@ -345,7 +345,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_unresolvable_good_record));
   CHECK_FALSE(
       record.ParseFileRecord(NtfsBrowserTests::mft_unresolvable_ext_idx));
@@ -358,7 +358,7 @@ constexpr BYTE unread_fill = 0xCC;
 
 // Reads the first "size" bytes of "attr"; empty when the read fails.
 template <Cache::Strategy S>
-std::vector<BYTE> ReadFirstBytes(const NtfsBrowser::AttrBase<S>& attr,
+std::vector<BYTE> ReadFirstBytes(const NtfsBrowser::Attr::AttrBase<S>& attr,
                                  size_t size) {
   std::vector<BYTE> buffer(size, unread_fill);
   const std::optional<ULONGLONG> read = attr.ReadData(0, buffer);
@@ -411,7 +411,7 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   CHECK_FALSE(record.ParseAttrs());
@@ -436,7 +436,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   REQUIRE(record.ParseAttrs());
@@ -468,7 +468,7 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   CHECK_FALSE(record.ParseAttrs());
@@ -554,7 +554,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   CHECK_FALSE(record.ParseAttrs());
@@ -576,7 +576,7 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   CHECK(record.ParseAttrs());
@@ -595,7 +595,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(
       record.ParseFileRecord(NtfsBrowserTests::attr_list_lifetime_base_idx));
   REQUIRE(record.ParseAttrs());
@@ -618,7 +618,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   REQUIRE(record.InstallAttrRawCB(Attr::Type::Data,
                                   [](const NtfsBrowser::Attr::HeaderCommon&,
                                      bool& discard) { discard = true; }));
@@ -641,7 +641,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   CHECK_FALSE(
       record.ParseFileRecord(NtfsBrowserTests::mft_data_split_target_idx));
 }
@@ -658,7 +658,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_data_split_target_idx));
 }
 
@@ -672,7 +672,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<S> record(volume);
+  NtfsBrowser::Io::FileRecord<S> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_two_extents_first_vcn));
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_two_extents_second_vcn));
 }
