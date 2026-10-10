@@ -10,6 +10,8 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 
+#include "internal-export.h"
+
 namespace NtfsBrowser {
 
 namespace Attr {
@@ -21,7 +23,7 @@ struct HeaderCommon;
 namespace Attr {
 
 template <Cache::Strategy S>
-class AttrResident : public Attr::AttrBase<S> {
+class NTFS_BROWSER_EXPORT_TESTS_ONLY AttrResident : public Attr::AttrBase<S> {
  public:
   AttrResident(const HeaderCommon& ahc, const Io::FileRecord<S>& file_record);
   AttrResident(AttrResident&& other) noexcept = delete;
@@ -35,7 +37,8 @@ class AttrResident : public Attr::AttrBase<S> {
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
 };  // AttrResident
 
-class AttrResidentNoCache : public AttrResident<Cache::Strategy::NoCache> {
+class NTFS_BROWSER_EXPORT_TESTS_ONLY AttrResidentNoCache
+    : public AttrResident<Cache::Strategy::NoCache> {
  public:
   AttrResidentNoCache(
       const HeaderCommon& ahc,
@@ -47,7 +50,8 @@ class AttrResidentNoCache : public AttrResident<Cache::Strategy::NoCache> {
   std::span<const BYTE> body_;
 };
 
-class AttrResidentFullCache : public AttrResident<Cache::Strategy::FullCache> {
+class NTFS_BROWSER_EXPORT_TESTS_ONLY AttrResidentFullCache
+    : public AttrResident<Cache::Strategy::FullCache> {
  public:
   AttrResidentFullCache(
       const HeaderCommon& ahc,

@@ -125,4 +125,7 @@ ULONGLONG AttrResidentFullCache::GetDataSize() const noexcept {
   return body_.size();
 }
 
+template class AttrResident<Cache::Strategy::NoCache>;
+template class AttrResident<Cache::Strategy::FullCache>;
+
 }  // namespace NtfsBrowser::Attr
