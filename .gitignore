@@ -14,3 +14,4 @@
 /test-data/
 /.vscode/settings.json
 /CMakeUserPresets.json
+__pycache__

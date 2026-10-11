@@ -3,13 +3,18 @@
 
 usage:
   metrics.py [--paths PATH...] [--out DIR] [--top N] [--exclude PATTERN]...
+             [--coverage GAPS_JSON]
 
 Writes to DIR (default build/metrics):
   functions.csv  one row per function, every per-function metric
   files.csv      one row per file: function count and worst values
   duplicates.csv one row per duplicated code snippet, grouped by block
-  summary.json   totals, averages, warning counts, duplication
+  summary.json   totals, averages, warning counts, duplication, coverage
   summary.md     the summary, then the top N functions per metric
+
+--coverage reads a gaps-all.json written by coverage.py (default: the
+merged CI result, build/coverage/merged/gaps-all.json). Without that file
+the coverage columns stay empty.
 
 lizard is pinned: python -m pip install lizard==1.24.1
 """
@@ -31,6 +36,11 @@ REPO = Path(__file__).resolve().parents[2]
 DEFAULT_PATHS = ["include", "src", "NTFSLibTests"]
 DEFAULT_OUT = REPO / "build" / "metrics"
 DEFAULT_EXCLUDES = ["*/3rdparty/*", "*/build/*"]
+# Merged CI coverage, all phases: the unit tests and the fuzz regression replays.
+DEFAULT_COVERAGE = REPO / "build" / "coverage" / "merged" / "gaps-all.json"
+
+# Functions above this CCN are the refactoring candidates in the coverage table.
+COVERAGE_RISK_CCN = 10
 
 # Extensions of the base analysis. None of them rewrites the CCN.
 BASE_EXTENSIONS = [
@@ -107,11 +117,15 @@ TOP_METRICS = ["ccn", "ccn_mccabe", "cognitive", "nesting_depth", "nd_mccabe",
 # duplicate_blocks and complex_tags after them.
 NUMERIC_METRICS = [(c, m) for c, _, m in FUNCTION_METRICS] + [
     (c, m) for _, metrics in VARIANTS for c, _, m in metrics
-] + [("duplicate_blocks", "duplicated blocks the function is part of")]
+] + [
+    ("duplicate_blocks", "duplicated blocks the function is part of"),
+    ("coverage_pct", "line coverage, percent"),
+    ("branch_gap_lines", "lines with a branch never taken"),
+]
 MEANINGS = dict(NUMERIC_METRICS)
 NUMERIC_COLUMNS = [column for column, _ in NUMERIC_METRICS]
 FUNCTION_COLUMNS = ["file", "function", "start_line", "end_line",
-                    *NUMERIC_COLUMNS, "complex_tags"]
+                    *NUMERIC_COLUMNS, "uncovered_lines", "complex_tags"]
 FILE_COLUMNS = ["file", "functions", "file_nloc", "sum_ccn", "max_ccn", "max_cognitive",
                 "max_nesting_depth", "max_length", "max_params"]
 
@@ -198,6 +212,41 @@ def count_duplicate_blocks(rows, blocks):
             row["duplicate_blocks"] += 1
 
 
+def load_coverage(path):
+    """Returns {repo-relative file: {"hit", "miss", "branch_miss"}} of line sets."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {name: {key: set(lines) for key, lines in entry.items()}
+            for name, entry in data.items()}
+
+
+def line_ranges(numbers):
+    out = []
+    for n in sorted(numbers):
+        if out and n == out[-1][1] + 1:
+            out[-1][1] = n
+        else:
+            out.append([n, n])
+    return ", ".join(str(a) if a == b else f"{a}-{b}" for a, b in out)
+
+
+def add_coverage(rows, coverage):
+    """Sets the coverage columns of each row from the lines inside its function."""
+    for row in rows:
+        entry = coverage.get(row["file"])
+        if entry is None:
+            # coverage.py has no data for this file: no line was built or run.
+            row.update(coverage_pct=None, branch_gap_lines=None, uncovered_lines="")
+            continue
+        low, high = row["start_line"], row["end_line"]
+        hit = {n for n in entry["hit"] if low <= n <= high}
+        miss = {n for n in entry["miss"] if low <= n <= high}
+        executable = hit | miss
+        row["coverage_pct"] = (number(100.0 * len(hit) / len(executable))
+                               if executable else None)
+        row["branch_gap_lines"] = sum(low <= n <= high for n in entry["branch_miss"])
+        row["uncovered_lines"] = line_ranges(miss)
+
+
 def write_csv(path, rows, columns):
     with open(path, "w", newline="", encoding="utf-8") as out:
         writer = csv.DictWriter(out, fieldnames=columns, restval="")
@@ -216,9 +265,14 @@ def present(rows, column):
     return [row[column] for row in rows if row.get(column) is not None]
 
 
-def summarize(rows, infos, blocks, duplicates, bools, unmatched):
+def summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source):
     return {
         "lizard": version("lizard"),
+        "coverage": {
+            "source": str(coverage_source) if coverage_source else None,
+            "functions_without_data": (sum(row["coverage_pct"] is None for row in rows)
+                                       if coverage_source else None),
+        },
         "files": len(infos),
         "functions": len(rows),
         "nloc_in_functions": sum(row["nloc"] for row in rows),
@@ -284,6 +338,18 @@ def write_markdown(path, summary, rows, top):
                   f"| {MEANINGS[column]} | Function | Location |", "|---|---|---|"]
         lines += [f"| {row[column]} | `{row['function']}` | "
                   f"{row['file']}:{row['start_line']} |" for row in ranked]
+    if summary["coverage"]["source"]:
+        risky = [row for row in rows
+                 if row["ccn"] > COVERAGE_RISK_CCN and row["coverage_pct"] is not None]
+        risky.sort(key=lambda r: (r["coverage_pct"], -r["ccn"]))
+        lines += ["", f"## Least covered functions with CCN > {COVERAGE_RISK_CCN}", "",
+                  f"Source: {summary['coverage']['source']}. Functions without coverage "
+                  f"data: {summary['coverage']['functions_without_data']}.", "",
+                  "| Coverage % | CCN | Uncovered lines | Function | Location |",
+                  "|---|---|---|---|---|"]
+        lines += [f"| {row['coverage_pct']} | {row['ccn']} | {row['uncovered_lines']} | "
+                  f"`{row['function']}` | {row['file']}:{row['start_line']} |"
+                  for row in risky[:top]]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -297,6 +363,8 @@ def main():
                         help="rows per top table in summary.md")
     parser.add_argument("--exclude", action="append",
                         help="lizard glob, repeatable (default: 3rdparty and build)")
+    parser.add_argument("--coverage", type=Path, default=DEFAULT_COVERAGE,
+                        help="coverage.py gaps-all.json (default: merged CI result)")
     args = parser.parse_args()
 
     paths = [str(REPO / p) for p in args.paths]
@@ -311,11 +379,18 @@ def main():
     bools = next(e for e in exts if hasattr(e, "total_bool"))
     count_duplicate_blocks(rows, blocks)
 
+    coverage_source = None
+    if args.coverage.is_file():
+        add_coverage(rows, load_coverage(args.coverage))
+        coverage_source = args.coverage
+    else:
+        print(f"no coverage file at {args.coverage}: coverage columns left empty")
+
     args.out.mkdir(parents=True, exist_ok=True)
     write_csv(args.out / "functions.csv", rows, FUNCTION_COLUMNS)
     write_csv(args.out / "files.csv", [file_row(info) for info in infos], FILE_COLUMNS)
     write_duplicates(args.out / "duplicates.csv", blocks)
-    summary = summarize(rows, infos, blocks, duplicates, bools, unmatched)
+    summary = summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source)
     (args.out / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8")
     write_markdown(args.out / "summary.md", summary, rows, args.top)

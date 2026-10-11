@@ -49,9 +49,9 @@ OUT = COVERAGE_ROOT / PLATFORM
 # ordinary unit tests carry [regression] too, so that tag cannot split them.
 PHASES = {"unit": "~[fuzz]", "regr": "[fuzz]"}
 
-# 3rdparty, tests, generated files and system headers are not reported.
+# 3rdparty, generated files and system headers are not reported.
 IGNORE_REGEX = (
-    r"[/\\](3rdparty|_deps|NTFSLibTests|build|obj)[/\\]"
+    r"[/\\](3rdparty|_deps|build|obj)[/\\]"
     r"|[Pp]rogram [Ff]iles|^/usr/|^/opt/"
 )
 
