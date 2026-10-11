@@ -11,7 +11,8 @@ Writes to DIR (default build/metrics):
   duplicates.csv one row per duplicated code snippet, grouped by block
   summary.json   totals, averages, warning counts, duplication, coverage
   includes.csv   one row per file: include and dependency counts, cycles
-  summary.md     the summary, then the top N functions per metric
+  classes.csv    one row per class: WMC, LCOM4, CBO (a text scan, see class_rows)
+  summary.md     the summary, then the top N functions and classes per metric
 
 --coverage reads a gaps-all.json written by coverage.py (default: the
 merged CI result, build/coverage/merged/gaps-all.json). Without that file
@@ -25,6 +26,7 @@ lizard is pinned: python -m pip install lizard==1.24.1
 """
 
 import argparse
+import bisect
 import csv
 import json
 import posixpath
@@ -74,6 +76,13 @@ BASE_EXTENSIONS = [
 WARN_CCN = 15
 WARN_LENGTH = 1000
 WARN_PARAMS = 100
+
+# Class limits. LCOM4 above 1 means the methods split into groups that share
+# no member and no call. WMC and CBO use common literature values; they are
+# not calibrated on this repository.
+WARN_LCOM4 = 1
+WARN_WMC = 47
+WARN_CBO = 14
 
 # Minimum token run that counts as duplicated code: lizard's default.
 DUPLICATE_MIN_TOKENS = 70
@@ -421,6 +430,324 @@ def coupling_rows(graph):
     return rows, cycles
 
 
+# Class scanning: text only. A class is a brace scope, its data members are the
+# declarations at its top level, and its methods come from lizard's names.
+COMMENT_OR_LITERAL = re.compile(
+    r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'', re.DOTALL)
+# A preprocessor line, blanked so that its braces and quotes do not count.
+PREPROCESSOR_LINE = re.compile(r"^[ \t]*#[^\n]*", re.MULTILINE)
+# A scope boundary: the characters that open, close or end a statement.
+BOUNDARY = re.compile(r"[{};]")
+# One innermost template argument list.
+TEMPLATE_ARGS = re.compile(r"<[^<>]*>")
+# A class, struct or union header at the brace. Upper-case words before the
+# name are export macros; the qualified name is group 1.
+CLASS_HEADER = re.compile(
+    r"\b(?:class|struct|union)\s+(?:[A-Z][A-Z0-9_]*\s+)*"
+    r"((?:[A-Za-z_]\w*(?:<[^<>{};()]*>)?::)*[A-Za-z_]\w*(?:<[^<>{};()]*>)?)"
+    r"\s*(?:final\s*)?(?::[^;{}]*)?$")
+# An access label such as "public:", removed before a declaration is read.
+ACCESS_LABEL = re.compile(r"\b(?:public|private|protected)\s*:(?!:)")
+# Declarations that never define a per-object data member.
+NOT_DATA_MEMBER = re.compile(
+    r"^(?:using|typedef|friend|static_assert|enum|class|struct|union|template|namespace)\b"
+    r"|\b(?:static|constexpr|operator)\b")
+# The export macro lizard prints in front of a class name, such as NTFS_BROWSER_EXPORT.
+EXPORT_PREFIX = re.compile(r"[A-Z][A-Z0-9_]*")
+# An identifier. The \b keeps the letters of a number such as 0x1F out.
+IDENT = re.compile(r"\b[A-Za-z_]\w*")
+# A call: a name followed by an opening parenthesis.
+CALL = re.compile(r"\s*\(")
+# The object of an arrow that is this class's own: this-> or impl_->.
+OWN_ARROW = re.compile(r"\b(?:this|impl_)\s*->$")
+CLASS_COLUMNS = ["file", "class", "start_line", "end_line", "methods", "wmc", "lcom4",
+                 "methods_without_members", "members", "cbo", "impl_merged"]
+
+
+def strip_code(text):
+    """Blanks comments, literals and preprocessor lines, keeping the line breaks."""
+    def blank(match):
+        return re.sub(r"[^\n]", " ", match.group())
+    return PREPROCESSOR_LINE.sub(blank, COMMENT_OR_LITERAL.sub(blank, text))
+
+
+def strip_templates(text):
+    """Removes template argument lists, from the innermost out."""
+    stripped = TEMPLATE_ARGS.sub("", text)
+    return strip_templates(stripped) if stripped != text else text
+
+
+def qualified(name):
+    """Splits a C++ name into its scopes, template arguments removed."""
+    scopes = strip_templates(name).split("::")
+    # lizard can print a scope twice, as in Io::Io::FileRecord: keep one.
+    # The last name stays as written: a constructor repeats its class name.
+    scope_list = [scope for index, scope in enumerate(scopes[:-1])
+                  if index == 0 or scope != scopes[index - 1]]
+    return scope_list + scopes[-1:]
+
+
+def class_key(scopes):
+    """Returns the full name of the class a scope list names. An Impl belongs to its outer class."""
+    if len(scopes) > 1 and scopes[-1] == "Impl":
+        scopes = scopes[:-1]
+    return "::".join(scopes) if scopes else None
+
+
+def is_impl(name):
+    """True for a class named Impl inside another class."""
+    scopes = qualified(name)
+    return len(scopes) > 1 and scopes[-1] == "Impl"
+
+
+def classify(header, parent):
+    """Returns (kind, class name) for the scope a '{' opens inside a scope of kind parent."""
+    if parent not in ("ns", "class"):
+        return "other", None
+    flat = " ".join(header.split())
+    if re.search(r"\benum\b", flat):
+        return "other", None
+    match = CLASS_HEADER.search(flat)
+    if match:
+        return "class", match.group(1)
+    namespace = re.search(r"\bnamespace\s+([\w:]+)", flat)
+    if namespace:
+        return "ns", namespace.group(1)
+    if re.search(r"\bextern\b", flat):
+        return "ns", None
+    # A '(' before the brace: a function body, or a constructor's initializer list.
+    if "(" in flat:
+        return "func", None
+    return "other", None
+
+
+def data_members(declaration):
+    """Returns (member names, declares an Impl) for a data member, else None."""
+    text = " ".join(ACCESS_LABEL.sub(" ", declaration).split())
+    if not text or NOT_DATA_MEMBER.search(text):
+        return None
+    declares_impl = re.search(r"\bImpl\b", text) is not None
+    # The initializer is cut first, so a '(' inside it does not make a function.
+    declarator = strip_templates(text.split("=", 1)[0]).replace("{}", "")
+    if "(" in declarator:
+        return None
+    names = []
+    for piece in declarator.split(","):
+        head = re.split(r"\[|\{|(?<!:):(?!:)", piece)[0]
+        found = IDENT.findall(head)
+        if found:
+            names.append(found[-1])
+    return (names, declares_impl) if names else None
+
+
+def scan_classes(file, code):
+    """Returns the classes declared in one stripped file, with their data members."""
+    newlines = [m.start() for m in re.finditer("\n", code)]
+    # "scope" is the list of namespace and class names around a scope.
+    frames = [{"kind": "ns", "text": "", "scope": []}]
+    classes = []
+    pos = 0
+    for boundary in BOUNDARY.finditer(code):
+        frame = frames[-1]
+        text = frame["text"] + code[pos:boundary.start()]
+        pos = boundary.end()
+        line = bisect.bisect_right(newlines, boundary.start()) + 1
+        char = boundary.group()
+        if char == ";":
+            member = data_members(text) if frame["kind"] == "class" else None
+            if member and not member[1]:
+                frame["members"].update(member[0])
+            frame["text"] = ""
+        elif char == "{":
+            kind, name = classify(text, frame["kind"])
+            lead = text[:len(text) - len(text.lstrip())].count("\n")
+            start = line - text.count("\n") + lead
+            frame["text"] = ""
+            scope = frame["scope"] + (qualified(name) if name and kind in ("ns", "class") else [])
+            frames.append({"kind": kind, "text": "", "prefix": text, "name": name,
+                           "scope": scope, "start": start, "members": set()})
+        elif len(frames) > 1:
+            child = frames.pop()
+            parent = frames[-1]
+            if child["kind"] == "class":
+                classes.append({"file": file, "name": child["name"],
+                                "key": class_key(child["scope"]),
+                                "is_impl": is_impl(child["name"]),
+                                "start": child["start"], "end": line,
+                                "members": child["members"]})
+                parent["text"] = ""
+            else:
+                parent["text"] = child["prefix"] + "{}" if child["kind"] == "other" else ""
+    return classes
+
+
+def merge_classes(classes):
+    """Groups classes by key, an Impl joining its outer class. Returns (groups, ambiguous keys)."""
+    groups = {}
+    for cls in classes:
+        group = groups.setdefault(cls["key"],
+                                  {"parts": [], "members": set(), "impl_merged": False})
+        group["parts"].append(cls)
+        group["members"] |= cls["members"]
+        group["impl_merged"] = group["impl_merged"] or cls["is_impl"]
+    # Two classes with one simple name cannot be told apart by lizard's names.
+    ambiguous = [key for key, group in groups.items()
+                 if sum(not part["is_impl"] for part in group["parts"]) > 1]
+    for key in ambiguous:
+        del groups[key]
+    return groups, ambiguous
+
+
+def resolve_key(key, known):
+    """Returns the known class a lizard scope names. lizard glues an export macro to the name."""
+    if key is None or key in known:
+        return key
+    head, _, last = key.rpartition("::")
+    for candidate in known:
+        cand_head, _, cand_last = candidate.rpartition("::")
+        if (cand_head == head and last != cand_last and last.endswith(cand_last)
+                and EXPORT_PREFIX.fullmatch(last[:-len(cand_last)])):
+            return candidate
+    return key
+
+
+def class_methods(funs, known):
+    """Returns {class key: methods} for the lizard functions whose name has a class scope."""
+    methods = defaultdict(list)
+    for fun in funs:
+        scopes = qualified(fun.name)
+        if len(scopes) > 1:
+            key = resolve_key(class_key(scopes[:-1]), known)
+            methods[key].append({
+                "name": scopes[-1], "ccn": fun.cyclomatic_complexity,
+                "file": rel(fun.filename), "start": fun.start_line, "end": fun.end_line})
+    return methods
+
+
+def is_constructor(name, key):
+    """True for a constructor, a destructor, or the constructor of an Impl."""
+    return name in (key.rpartition("::")[2], "Impl") or name.startswith("~")
+
+
+def body_lines(code_lines, span):
+    """Returns the stripped lines of a function or a class, from its file and line range."""
+    return code_lines.get(span["file"], [])[span["start"] - 1:span["end"]]
+
+
+def member_usage(body, members, method_names):
+    """Returns (members the body touches, methods it calls on its own object)."""
+    touched, called = set(), set()
+    for match in IDENT.finditer(body):
+        name = match.group()
+        before = body[max(0, match.start() - 32):match.start()].rstrip()
+        # Another object's member, or a name in another scope, is not this class's.
+        if before.endswith(("::", ".")):
+            continue
+        if before.endswith("->") and not OWN_ARROW.search(before):
+            continue
+        if name in members:
+            touched.add(name)
+        if name in method_names and CALL.match(body, match.end()):
+            called.add(name)
+    return touched, called
+
+
+def cohesion(key, owned, members, code_lines):
+    """Returns (LCOM4, methods touching no member) over the methods that are not constructors."""
+    nodes = [m for m in owned if not is_constructor(m["name"], key)]
+    by_name = defaultdict(list)
+    for index, method in enumerate(nodes):
+        by_name[method["name"]].append(index)
+    parent = {}
+
+    def find(node):
+        parent.setdefault(node, node)
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    lonely = 0
+    for index, method in enumerate(nodes):
+        touched, called = member_usage("\n".join(body_lines(code_lines, method)),
+                                       members, by_name)
+        if not touched:
+            lonely += 1
+        for name in touched:
+            parent[find(("m", index))] = find(("v", name))
+        for name in called:
+            for other in by_name[name]:
+                parent[find(("m", index))] = find(("m", other))
+    roots = {find(("m", index)) for index in range(len(nodes))}
+    return len(roots), lonely
+
+
+def class_rows(groups, methods, code_lines):
+    """Returns one row per class: WMC, LCOM4 and CBO. An Impl counts in its outer class."""
+    by_simple = defaultdict(set)
+    for key in groups:
+        by_simple[key.rpartition("::")[2]].add(key)
+    rows = []
+    for key in sorted(groups):
+        group = groups[key]
+        owned = methods.get(key, [])
+        primary = next((part for part in group["parts"] if not part["is_impl"]),
+                       group["parts"][0])
+        components, lonely = cohesion(key, owned, group["members"], code_lines)
+        # CBO: the classes whose simple name appears in the class text or its method bodies.
+        tokens = set()
+        for part in group["parts"]:
+            tokens.update(IDENT.findall("\n".join(body_lines(code_lines, part))))
+        for method in owned:
+            tokens.update(IDENT.findall("\n".join(body_lines(code_lines, method))))
+        coupled = set().union(*(by_simple.get(token, set()) for token in tokens)) - {key}
+        rows.append({
+            "file": primary["file"], "class": key,
+            "start_line": primary["start"], "end_line": primary["end"],
+            "methods": len(owned), "wmc": sum(m["ccn"] for m in owned),
+            "lcom4": components, "methods_without_members": lonely,
+            "members": len(group["members"]), "cbo": len(coupled),
+            "impl_merged": group["impl_merged"],
+        })
+    return rows
+
+
+def summarize_classes(rows, matched, ambiguous):
+    return {
+        "count": len(rows),
+        "impl_merged": sum(row["impl_merged"] for row in rows),
+        "ambiguous_skipped": ambiguous,
+        "methods_matched": matched,
+        "lcom4_above_limit": sum(row["lcom4"] > WARN_LCOM4 for row in rows),
+        "wmc_above_limit": sum(row["wmc"] > WARN_WMC for row in rows),
+        "cbo_above_limit": sum(row["cbo"] > WARN_CBO for row in rows),
+    }
+
+
+def class_section(info, rows, top):
+    """Returns the Classes part of summary.md."""
+    header = ["| LCOM4 | WMC | CBO | Methods | Members | Class | Location |",
+              "|---|---|---|---|---|---|---|"]
+
+    def table(title, ranked):
+        return ["", f"### {title}", "", *header,
+                *[f"| {r['lcom4']} | {r['wmc']} | {r['cbo']} | {r['methods']} | "
+                  f"{r['members']} | `{r['class']}` | {r['file']}:{r['start_line']} |"
+                  for r in ranked]]
+
+    by_cohesion = sorted(rows, key=lambda r: (r["lcom4"], r["wmc"]), reverse=True)[:top]
+    by_coupling = sorted(rows, key=lambda r: r["cbo"], reverse=True)[:top]
+    return ["", "## Classes", "",
+            f"{info['count']} classes, {info['impl_merged']} merged with their Impl. "
+            f"Ambiguous names skipped: {info['ambiguous_skipped']}. "
+            f"Functions matched to a class: {info['methods_matched']}.", "",
+            f"- LCOM4 above {WARN_LCOM4}: {info['lcom4_above_limit']}",
+            f"- WMC above {WARN_WMC}: {info['wmc_above_limit']}",
+            f"- CBO above {WARN_CBO}: {info['cbo_above_limit']}",
+            *table(f"Top {top} by LCOM4, then WMC", by_cohesion),
+            *table(f"Top {top} by CBO", by_coupling)]
+
+
 def write_csv(path, rows, columns):
     with open(path, "w", newline="", encoding="utf-8") as out:
         writer = csv.DictWriter(out, fieldnames=columns, restval="")
@@ -478,7 +805,7 @@ def summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source
     }
 
 
-def write_markdown(path, summary, rows, top, coupling):
+def write_markdown(path, summary, rows, top, coupling, class_table):
     lines = [
         "# ntfs-browser code metrics",
         "",
@@ -552,6 +879,7 @@ def write_markdown(path, summary, rows, top, coupling):
               "|---|---|---|---|---|"]
     lines += [f"| {r['dependents']} | {r['depends_on']} | {r['includes_in']} | "
               f"{r['instability']} | {r['file']} |" for r in ranked]
+    lines += class_section(summary["classes"], class_table, top)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -604,6 +932,16 @@ def main():
     coupling, cycles = coupling_rows(graph)
     write_csv(args.out / "includes.csv", coupling, INCLUDE_COLUMNS)
 
+    code_lines, classes = {}, []
+    for path in sources:
+        code = strip_code((REPO / path).read_text(encoding="utf-8", errors="replace"))
+        code_lines[path] = code.split("\n")
+        classes += scan_classes(path, code)
+    groups, ambiguous_classes = merge_classes(classes)
+    methods = class_methods([fun for info in infos for fun in info.function_list], set(groups))
+    class_table = class_rows(groups, methods, code_lines)
+    write_csv(args.out / "classes.csv", class_table, CLASS_COLUMNS)
+
     summary = summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source,
                         churn_on=not args.no_churn)
     summary["includes"] = {
@@ -612,9 +950,12 @@ def main():
         "ambiguous_includes": ambiguous,
         "cycles": cycles,
     }
+    summary["classes"] = summarize_classes(
+        class_table, sum(len(methods.get(row["class"], [])) for row in class_table),
+        len(ambiguous_classes))
     (args.out / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8")
-    write_markdown(args.out / "summary.md", summary, rows, args.top, coupling)
+    write_markdown(args.out / "summary.md", summary, rows, args.top, coupling, class_table)
     print(f"{summary['functions']} functions in {summary['files']} files, "
           f"{len(blocks)} duplicated blocks -> {args.out}")
 
