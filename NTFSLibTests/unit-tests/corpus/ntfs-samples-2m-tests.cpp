@@ -1,0 +1,42 @@
+#include <ntfs-browser/win-types.h>
+
+#include <string>
+#include <vector>
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/ntfs-volume.h>
+
+#include "corpus-test-support.h"
+#include "ntfs-samples-support.h"
+#include "partition-disk-reader.h"
+
+using NtfsBrowser::IndexEntryView;
+using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
+namespace Cache = NtfsBrowser::Cache;
+
+TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
+          "[ntfs-samples][integration]") {
+  NtfsBrowserTests::RequireCorpusImage(k2m_image);
+
+  const NtfsVolume<Cache::Strategy::NoCache> volume(
+      OpenWholeDiskImage(k2m_image, small_image_partition_offset));
+  REQUIRE(volume.IsVolumeOK());
+  CHECK(volume.GetClusterSize() == 2097152);
+
+  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
+  OpenRootDir(root);
+
+  std::vector<std::wstring> names;
+  root.TraverseSubEntries(
+      [](const IndexEntryView& index_entry, void* context) {
+        static_cast<std::vector<std::wstring>*>(context)->emplace_back(
+            index_entry.GetFilename());
+      },
+      &names);
+  CHECK_FALSE(names.empty());
+}

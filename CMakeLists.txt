@@ -93,8 +93,8 @@ option(
 
 # Whether EFS decryption is compiled in at all, in either backend. Mirrors the
 # gate src/CMakeLists.txt uses to decide whether efs-context.cpp et al. are
-# compiled, and NTFSLibTests/unit-tests/CMakeLists.txt uses to decide whether
-# efs-tests.cpp et al. are. NTFS_BROWSER_ENABLE_EFS_BCRYPT carries no platform
+# compiled, and NTFSLibTests/unit-tests/efs/CMakeLists.txt uses to decide
+# whether the EFS tests are. NTFS_BROWSER_ENABLE_EFS_BCRYPT carries no platform
 # scoping of its own (it defaults ON everywhere), so WIN32 must gate it here.
 set(NTFS_BROWSER_EFS_MASTER OFF)
 if(

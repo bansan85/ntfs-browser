@@ -1,0 +1,181 @@
+#pragma once
+
+#include <ntfs-browser/win-types.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <cstring>
+#include <ios>
+#include <memory>
+#include <optional>
+#include <span>
+#include <utility>
+#include <vector>
+
+#include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
+
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/efs/efs.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/volume-options.h>
+
+#include "efs-test-support.h"
+#include "efs/efs-stream.h"
+#include "efs/sector-cipher.h"
+#include "fake-ntfs-image.h"
+#include "memory-disk-reader.h"
+
+using NtfsBrowser::Attr::AttrBase;
+namespace Attr = NtfsBrowser::Attr;
+using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::Io::FileRecord;
+namespace Cache = NtfsBrowser::Cache;
+using NtfsBrowser::VolumeOptions;
+using NtfsBrowser::Efs::CipherBackend;
+using NtfsBrowser::Efs::IEfsKeyProvider;
+namespace Mft = NtfsBrowser::Mft;
+using NtfsBrowserTests::Algorithm;
+using NtfsBrowserTests::TestEfsEntry;
+using NtfsBrowserTests::TestKeyProvider;
+
+namespace {
+
+// The wrapped FEK the fixtures store. The test provider matches it byte for
+// byte, so its content only has to be recognisable.
+constexpr size_t wrapped_fek_size = 32;
+
+constexpr BYTE wrapped_fek_fill = 0xAB;
+
+const std::vector<BYTE> wrapped_fek(wrapped_fek_size, wrapped_fek_fill);
+
+// Plaintext size of a default fixture file: several sectors, not a multiple
+// of one.
+constexpr size_t default_file_size = 3000;
+
+// Fill that tells an unread byte from a read one.
+constexpr BYTE unread_fill = 0xCC;
+
+// Offset of the algorithm DWORD in a FEK blob, and an unsupported key length.
+constexpr size_t fek_algorithm_field = 8;
+
+// A cluster of ciphertext that is never decrypted, and the size it claims.
+constexpr size_t bogus_cluster_size = 1024;
+
+constexpr BYTE bogus_cluster_fill = 7;
+
+constexpr ULONGLONG bogus_real_size = 1000;
+
+// Where the first data stream of a fixture starts on disk, in clusters.
+constexpr DWORD first_stream_lcn = 30;
+
+// The user every fixture encrypts for.
+inline TestEfsEntry TestUser(BYTE seed = 1,
+                             std::vector<BYTE> wrapped = wrapped_fek) {
+  return {NtfsBrowserTests::TestThumbprint(seed), std::move(wrapped)};
+}
+
+inline DWORD ClustersFor(size_t bytes) {
+  return gsl::narrow<DWORD>((bytes + NtfsBrowserTests::fake_cluster_size - 1) /
+                            NtfsBrowserTests::fake_cluster_size);
+}
+
+// An encrypted file of one unnamed stream, its key provider, and the
+// plaintext the stream must read back as.
+struct Fixture {
+  std::vector<BYTE> plaintext;
+  std::vector<BYTE> image;
+  std::shared_ptr<TestKeyProvider> provider;
+};
+
+inline Fixture MakeFixture(Algorithm algorithm,
+                           size_t size = default_file_size) {
+  Fixture fixture;
+  fixture.plaintext = NtfsBrowserTests::PlaintextPattern(size);
+  const std::vector<BYTE> key = NtfsBrowserTests::TestKey(algorithm);
+
+  const TestEfsEntry user = TestUser();
+  fixture.provider = std::make_shared<TestKeyProvider>();
+  fixture.provider->Add(user.thumbprint, user.wrapped_fek,
+                        NtfsBrowserTests::MakeFekBlob(algorithm, key));
+
+  NtfsBrowserTests::FakeEncryptedFile file;
+  file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
+  file.streams.push_back({.runs = {{first_stream_lcn, ClustersFor(size)}},
+                          .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
+                              algorithm, key, fixture.plaintext),
+                          .real_size = size});
+  fixture.image = NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file);
+  return fixture;
+}
+
+template <Cache::Strategy S>
+struct Opened {
+  std::unique_ptr<NtfsVolume<S>> volume;
+  std::unique_ptr<NtfsBrowser::Io::FileRecord<S>> record;
+};
+
+// Opens the image and parses the root record. The provider is always set,
+// null included, so that no test ever reaches the real certificate store.
+// "mask" is nullopt for the default Mask::ALL; passing one exercises the
+// same SetAttrMask() a caller narrowing to Mask::DATA would use. "options"
+// defaults to strict; a test of a salvageable condition passes recover_errors.
+// "backend" is nullopt for the volume's default.
+template <Cache::Strategy S>
+Opened<S> Open(std::vector<BYTE> image,
+               std::shared_ptr<IEfsKeyProvider> provider,
+               std::optional<Attr::Mask> mask = std::nullopt,
+               const VolumeOptions& options = {},
+               std::optional<CipherBackend> backend = std::nullopt) {
+  Opened<S> opened;
+  opened.volume = std::make_unique<NtfsVolume<S>>(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      options);
+  REQUIRE(opened.volume->IsVolumeOK());
+  opened.volume->SetEfsKeyProvider(std::move(provider));
+  if (backend) {
+    REQUIRE(opened.volume->SetEfsCipherBackend(*backend));
+  }
+
+  opened.record =
+      std::make_unique<NtfsBrowser::Io::FileRecord<S>>(*opened.volume);
+  if (mask) {
+    opened.record->SetAttrMask(*mask);
+  }
+  REQUIRE(
+      opened.record->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+  REQUIRE(opened.record->ParseAttrs());
+  return opened;
+}
+
+// Reads up to "size" bytes at "offset". Nullopt if ReadData() failed.
+template <Cache::Strategy S>
+std::optional<std::vector<BYTE>>
+    ReadAt(const NtfsBrowser::Attr::AttrBase<S>& attr, ULONGLONG offset,
+           size_t size) {
+  std::vector<BYTE> buffer(size, unread_fill);
+  const std::optional<ULONGLONG> read = attr.ReadData(offset, buffer);
+  if (!read) {
+    return std::nullopt;
+  }
+  buffer.resize(gsl::narrow<size_t>(*read));
+  return buffer;
+}
+
+template <Cache::Strategy S>
+const NtfsBrowser::Attr::AttrBase<S>&
+    OnlyData(const NtfsBrowser::Io::FileRecord<S>& record) {
+  const auto& data = record.GetAttr(Attr::Type::Data);
+  REQUIRE(data.size() == 1);
+  return *data.front();
+}
+
+inline void Patch32(std::vector<BYTE>& bytes, size_t offset, DWORD value) {
+  std::memcpy(&bytes.at(offset), &value, sizeof(value));
+}
+
+}  // namespace

@@ -75,9 +75,9 @@ large for this repository:
 
 | Corpus | Source | Tests |
 | --- | --- | --- |
-| DFTT #3, #7, #10 | [dftt.sourceforge.net](https://dftt.sourceforge.net/): `3-kwsrch-ntfs.zip`, `7-undel-ntfs.zip`, `10b-ntfs-autodetect.zip` | `dftt-ntfs-*-tests.cpp` |
-| nps-2009-ntfs1, generation 2 | [Digital Corpora](https://downloads.digitalcorpora.org/corpora/drives/nps-2009-ntfs1/): `ntfs1-gen2.E01`, converted to raw | `nps-ntfs1-*tests.cpp` |
-| ntfs-samples | [msuhanov/ntfs-samples](https://github.com/msuhanov/ntfs-samples): each `*.raw.gz`, decompressed | `ntfs-samples-tests.cpp` |
+| DFTT #3, #7, #10 | [dftt.sourceforge.net](https://dftt.sourceforge.net/): `3-kwsrch-ntfs.zip`, `7-undel-ntfs.zip`, `10b-ntfs-autodetect.zip` | `corpus/dftt-ntfs-tests.cpp` |
+| nps-2009-ntfs1, generation 2 | [Digital Corpora](https://downloads.digitalcorpora.org/corpora/drives/nps-2009-ntfs1/): `ntfs1-gen2.E01`, converted to raw | `corpus/nps-ntfs1-*tests.cpp` |
+| ntfs-samples | [msuhanov/ntfs-samples](https://github.com/msuhanov/ntfs-samples): each `*.raw.gz`, decompressed | `corpus/ntfs-samples-*-tests.cpp` |
 
 A test whose image is missing is skipped. To fetch them all:
 

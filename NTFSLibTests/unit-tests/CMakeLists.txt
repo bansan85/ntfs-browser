@@ -1,93 +1,22 @@
-set(
-  NtfsBrowserTests_SRC
-  "child-process.h"
-  "child-process.cpp"
-  "optional-access.h"
-  "test-log-sink.h"
-  "test-log-sink.cpp"
-  "md5-test-support.h"
-  "md5-test-support.cpp"
-  "corpus-test-support.h"
-  "corpus-test-support.cpp"
-  "nps-ntfs1-test-support.h"
-  "nps-ntfs1-test-support.cpp"
-  "nps-ntfs1-tests.cpp"
-  "disk-reader-tests.cpp"
-  "file-reader-tests.cpp"
-  "file-reader-full-cache-boundary-tests.cpp"
-  "data-run-lcn-range-tests.cpp"
-  "no-cache-lifetime-tests.cpp"
-  "attribute-list-tests.cpp"
-  "filename-compare-tests.cpp"
-  "parse-attrs-total-size-tests.cpp"
-  "file-record-header-fixup-tests.cpp"
-  "file-record-header-size-tests.cpp"
-  "index-block-fixup-tests.cpp"
-  "boot-sector-index-block-size-tests.cpp"
-  "boot-sector-oversized-record-size-tests.cpp"
-  "boot-sector-read-size-tests.cpp"
-  "mft-addr-narrowing-tests.cpp"
-  "mft-parse-failure-volume-ok-tests.cpp"
-  "attr-name-bounds-tests.cpp"
-  "attr-resident-read-data-tests.cpp"
-  "attr-initialized-size-tests.cpp"
-  "attr-bitmap-tests.cpp"
-  "attr-vol-info-size-tests.cpp"
-  "attr-std-info-legacy-size-tests.cpp"
-  "attr-empty-body-tests.cpp"
-  "on-disk-struct-layout-tests.cpp"
-  "on-disk-alignment-tests.cpp"
-  "file-record-unparsed-flags-tests.cpp"
-  "file-record-extended-metadata-tests.cpp"
-  "fragmented-mft-invalid-record-tests.cpp"
-  "find-stream-named-tests.cpp"
-  "index-root-entry-lifetime-tests.cpp"
-  "find-subentry-gap-collation-tests.cpp"
-  "index-block-recursion-depth-tests.cpp"
-  "traverse-sub-entries-recovery-tests.cpp"
-  "mft-tree-tests.cpp"
-  "volume-options-tests.cpp"
-  "dftt-ntfs-autodetect-tests.cpp"
-  "dftt-ntfs-undel-tests.cpp"
-  "dftt-ntfs-kwsrch-tests.cpp"
-  "ntfs-samples-tests.cpp"
-  "fuzzer-regression-tests.cpp"
-  "logging-tests.cpp"
-  "utf-tests.cpp"
-  "upcase-collation-tests.cpp"
-  "efs-disabled-tests.cpp"
-  "coverage-file-record-a-tests.cpp"
-  "coverage-file-record-b-tests.cpp"
-  "coverage-volume-tree-tests.cpp"
-  "coverage-nonresident-index-tests.cpp"
-  "coverage-attrs-tests.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/named-stream-probe.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/gap-collation-probe.h"
-)
+# The sources live in one folder per library namespace. Each folder's
+# CMakeLists.txt adds its own files (and any feature gate they need) to this
+# one executable.
+add_executable(NtfsBrowserTests)
 
-# attr-compression-tests.cpp calls Lznt1::Decompress directly and drives
-# compressed reads end to end: nothing left to link against without it.
-if(NTFS_BROWSER_ENABLE_DECOMPRESSION)
-  list(APPEND NtfsBrowserTests_SRC "attr-compression-tests.cpp")
-endif()
-
-# Same "EFS master" condition (NTFS_BROWSER_EFS_MASTER, set in the root
-# CMakeLists.txt) as the library's own source-list gate: these files must build
-# only when the library they link against actually compiled efs-context.cpp et
-# al. in.
-if(NTFS_BROWSER_EFS_MASTER)
-  list(
-    APPEND NtfsBrowserTests_SRC
-    "efs-test-support.h"
-    "efs-test-support.cpp"
-    "efs-pfx-tests.cpp"
-    "efs-tests.cpp"
-    "coverage-efs-tests.cpp"
-    "nps-ntfs1-efs-tests.cpp"
-  )
-endif()
-
-add_executable(NtfsBrowserTests ${NtfsBrowserTests_SRC})
+add_subdirectory("attr")
+add_subdirectory("corpus")
+add_subdirectory("data")
+add_subdirectory("efs")
+add_subdirectory("fuzz-regression")
+add_subdirectory("io")
+add_subdirectory("log")
+add_subdirectory("lznt1")
+add_subdirectory("mft")
+add_subdirectory("record")
+add_subdirectory("support")
+add_subdirectory("upcase")
+add_subdirectory("utf")
+add_subdirectory("volume")
 
 # spdlog: the capturing sink the tests install on the library's logger is an
 # spdlog sink. The library keeps spdlog private, so the tests link it too.
@@ -117,8 +46,8 @@ target_compile_definitions(
   PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
 )
 
-# Crypto++: efs-test-support.cpp's reference cipher for building EFS test
-# fixtures, and md5-test-support.cpp's MD5. Without it, both fall back to
+# Crypto++: efs/efs-test-support.cpp's reference cipher for building EFS test
+# fixtures, and support/md5-test-support.cpp's MD5. Without it, both fall back to
 # BCrypt (Windows only, linked below). The cryptopp::cryptopp target only
 # exists when the root CMakeLists.txt configured Crypto++, that is when
 # NTFS_BROWSER_ENABLE_EFS_CRYPTOPP is on.
@@ -127,7 +56,7 @@ if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
 endif()
 
 # BCrypt: md5-test-support.cpp's fallback MD5 backend (used by
-# dftt-ntfs-undel-tests.cpp and nps-ntfs1-tests.cpp to check recovered file
+# dftt-ntfs-tests.cpp and nps-ntfs1-tests.cpp to check recovered file
 # content) when NTFS_BROWSER_ENABLE_EFS_CRYPTOPP is off. Mirrors that file's
 # own "#elif defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)" -
 # linked whenever that branch could be taken, whether or not Crypto++ is also
@@ -152,7 +81,7 @@ target_compile_definitions(
   PRIVATE
     NTFS_FUZZER_AFL_EXE="$<TARGET_FILE:NtfsFuzzerAfl>"
     NTFS_FUZZ_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data"
-    NTFS_EFS_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    NTFS_EFS_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/efs/data"
 )
 
 # Forensic image corpora (corpus-test-support.h), outside this repo.
@@ -230,7 +159,7 @@ target_compile_definitions(
     $<$<BOOL:${NTFS_BROWSER_REQUIRE_TEST_DATA}>:NTFS_TEST_REQUIRE_DATA>
 )
 
-# Mirrors the library's own compile definitions: efs-tests.cpp's #ifdefs live in
+# Mirrors the library's own compile definitions: the EFS tests' #ifdefs live in
 # this target, not the library's, so it needs the same three macros.
 target_compile_definitions(
   NtfsBrowserTests

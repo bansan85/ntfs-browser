@@ -1,0 +1,26 @@
+target_sources(
+  NtfsBrowserTests
+  PRIVATE
+    "coverage-file-record-a-tests.cpp"
+    "coverage-file-record-b-tests.cpp"
+    "file-record-extended-metadata-tests.cpp"
+    "file-record-header-coverage-tests.cpp"
+    "file-record-header-tests.cpp"
+    "file-record-unparsed-flags-tests.cpp"
+    "find-stream-named-tests.cpp"
+    "find-subentry-gap-collation-tests.cpp"
+    "find-subentry-upcase-tests.cpp"
+    "index-block-fixup-tests.cpp"
+    "index-block-recursion-depth-tests.cpp"
+    "index-root-entry-lifetime-tests.cpp"
+    "parse-attrs-total-size-tests.cpp"
+    "traverse-sub-entries-recovery-tests.cpp"
+    "volume-options-tests.cpp"
+    "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/named-stream-probe.h"
+    "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/gap-collation-probe.h"
+)
+
+target_include_directories(
+  NtfsBrowserTests
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+)
