@@ -3,7 +3,7 @@
 
 usage:
   metrics.py [--paths PATH...] [--out DIR] [--top N] [--exclude PATTERN]...
-             [--coverage GAPS_JSON]
+             [--coverage GAPS_JSON] [--no-churn]
 
 Writes to DIR (default build/metrics):
   functions.csv  one row per function, every per-function metric
@@ -16,12 +16,18 @@ Writes to DIR (default build/metrics):
 merged CI result, build/coverage/merged/gaps-all.json). Without that file
 the coverage columns stay empty.
 
+Churn comes from git history: one git log -L per function, one per file
+(about 3 minutes for the whole tree). It follows the lines of HEAD, so
+uncommitted edits shift the ranges. --no-churn skips it.
+
 lizard is pinned: python -m pip install lizard==1.24.1
 """
 
 import argparse
 import csv
 import json
+import re
+import subprocess
 import sys
 from collections import defaultdict
 from importlib.metadata import version
@@ -39,8 +45,15 @@ DEFAULT_EXCLUDES = ["*/3rdparty/*", "*/build/*"]
 # Merged CI coverage, all phases: the unit tests and the fuzz regression replays.
 DEFAULT_COVERAGE = REPO / "build" / "coverage" / "merged" / "gaps-all.json"
 
-# Functions above this CCN are the refactoring candidates in the coverage table.
+# Functions above this CCN are the refactoring candidates in the coverage and churn tables.
 COVERAGE_RISK_CCN = 10
+
+# Commit subjects that count as fixes: the Conventional Commits prefix, or the
+# older "Fix ..." style.
+FIX_SUBJECT = re.compile(r"^fix\b", re.IGNORECASE)
+
+# git log format: sha, author date, subject, separated by tabs.
+GIT_LOG_FORMAT = "--format=%H%x09%ad%x09%s"
 
 # Extensions of the base analysis. None of them rewrites the CCN.
 BASE_EXTENSIONS = [
@@ -121,13 +134,17 @@ NUMERIC_METRICS = [(c, m) for c, _, m in FUNCTION_METRICS] + [
     ("duplicate_blocks", "duplicated blocks the function is part of"),
     ("coverage_pct", "line coverage, percent"),
     ("branch_gap_lines", "lines with a branch never taken"),
+    ("churn_commits", "commits that changed the function"),
+    ("churn_fixes", "fix commits that changed the function"),
 ]
 MEANINGS = dict(NUMERIC_METRICS)
 NUMERIC_COLUMNS = [column for column, _ in NUMERIC_METRICS]
 FUNCTION_COLUMNS = ["file", "function", "start_line", "end_line",
-                    *NUMERIC_COLUMNS, "uncovered_lines", "complex_tags"]
+                    *NUMERIC_COLUMNS, "uncovered_lines", "churn_last_change",
+                    "complex_tags"]
 FILE_COLUMNS = ["file", "functions", "file_nloc", "sum_ccn", "max_ccn", "max_cognitive",
-                "max_nesting_depth", "max_length", "max_params"]
+                "max_nesting_depth", "max_length", "max_params",
+                "file_commits", "file_fixes", "file_last_change"]
 
 
 def rel(name):
@@ -247,6 +264,45 @@ def add_coverage(rows, coverage):
         row["uncovered_lines"] = line_ranges(miss)
 
 
+def git_log(*args):
+    """Returns (sha, date, subject) per commit, newest first. None if git fails."""
+    result = subprocess.run(
+        ["git", "-C", str(REPO), "log", GIT_LOG_FORMAT, "--date=short", *args],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        return None
+    commits = []
+    for line in result.stdout.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) == 3 and len(parts[0]) == 40:
+            commits.append(tuple(parts))
+    return commits
+
+
+def churn_values(commits):
+    """Returns (commit count, fix count, date of the newest commit)."""
+    if commits is None:
+        return None, None, ""
+    fixes = sum(bool(FIX_SUBJECT.match(subject)) for _, _, subject in commits)
+    return len(commits), fixes, commits[0][1] if commits else ""
+
+
+def add_function_churn(rows):
+    """Sets the churn columns from the history of each function's lines."""
+    for row in rows:
+        # -L follows the function's line range back through the history.
+        commits = git_log(f"-L{row['start_line']},{row['end_line']}:{row['file']}", "-s")
+        (row["churn_commits"], row["churn_fixes"],
+         row["churn_last_change"]) = churn_values(commits)
+
+
+def add_file_churn(file_rows):
+    """Sets the file churn columns, following renames."""
+    for row in file_rows:
+        (row["file_commits"], row["file_fixes"],
+         row["file_last_change"]) = churn_values(git_log("--follow", "--", row["file"]))
+
+
 def write_csv(path, rows, columns):
     with open(path, "w", newline="", encoding="utf-8") as out:
         writer = csv.DictWriter(out, fieldnames=columns, restval="")
@@ -265,13 +321,18 @@ def present(rows, column):
     return [row[column] for row in rows if row.get(column) is not None]
 
 
-def summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source):
+def summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source, churn_on):
     return {
         "lizard": version("lizard"),
         "coverage": {
             "source": str(coverage_source) if coverage_source else None,
             "functions_without_data": (sum(row["coverage_pct"] is None for row in rows)
                                        if coverage_source else None),
+        },
+        "churn": {
+            "enabled": churn_on,
+            "functions_without_history": (sum(row["churn_commits"] is None for row in rows)
+                                          if churn_on else None),
         },
         "files": len(infos),
         "functions": len(rows),
@@ -350,6 +411,17 @@ def write_markdown(path, summary, rows, top):
         lines += [f"| {row['coverage_pct']} | {row['ccn']} | {row['uncovered_lines']} | "
                   f"`{row['function']}` | {row['file']}:{row['start_line']} |"
                   for row in risky[:top]]
+    if summary["churn"]["enabled"]:
+        hot = [row for row in rows
+               if row["ccn"] > COVERAGE_RISK_CCN and row["churn_commits"] is not None]
+        hot.sort(key=lambda r: (-r["churn_commits"], -r["ccn"]))
+        lines += ["", f"## Hotspots: CCN > {COVERAGE_RISK_CCN}, most changed first", "",
+                  f"Functions without history: {summary['churn']['functions_without_history']}.",
+                  "", "| Commits | Fixes | CCN | Last change | Function | Location |",
+                  "|---|---|---|---|---|---|"]
+        lines += [f"| {row['churn_commits']} | {row['churn_fixes']} | {row['ccn']} | "
+                  f"{row['churn_last_change']} | `{row['function']}` | "
+                  f"{row['file']}:{row['start_line']} |" for row in hot[:top]]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -365,6 +437,8 @@ def main():
                         help="lizard glob, repeatable (default: 3rdparty and build)")
     parser.add_argument("--coverage", type=Path, default=DEFAULT_COVERAGE,
                         help="coverage.py gaps-all.json (default: merged CI result)")
+    parser.add_argument("--no-churn", action="store_true",
+                        help="skip the git history (about 3 minutes)")
     args = parser.parse_args()
 
     paths = [str(REPO / p) for p in args.paths]
@@ -386,11 +460,17 @@ def main():
     else:
         print(f"no coverage file at {args.coverage}: coverage columns left empty")
 
+    file_rows = [file_row(info) for info in infos]
+    if not args.no_churn:
+        add_function_churn(rows)
+        add_file_churn(file_rows)
+
     args.out.mkdir(parents=True, exist_ok=True)
     write_csv(args.out / "functions.csv", rows, FUNCTION_COLUMNS)
-    write_csv(args.out / "files.csv", [file_row(info) for info in infos], FILE_COLUMNS)
+    write_csv(args.out / "files.csv", file_rows, FILE_COLUMNS)
     write_duplicates(args.out / "duplicates.csv", blocks)
-    summary = summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source)
+    summary = summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source,
+                        churn_on=not args.no_churn)
     (args.out / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8")
     write_markdown(args.out / "summary.md", summary, rows, args.top)
