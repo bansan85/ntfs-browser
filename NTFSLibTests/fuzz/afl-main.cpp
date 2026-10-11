@@ -326,12 +326,18 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
 
   FuzzRootRecord(volume);
   // One pass per cipher backend this build has: an unavailable one is
-  // refused and skipped.
+  // refused and skipped. A build with none still parses the root once, so
+  // the same parse paths run in every configuration.
+  bool probed_root = false;
   for (const Efs::CipherBackend backend :
        {Efs::CipherBackend::CryptoPp, Efs::CipherBackend::BCrypt}) {
     if (volume.SetEfsCipherBackend(backend)) {
       ProbeRecord(volume, static_cast<ULONGLONG>(Mft::Idx::Root));
+      probed_root = true;
     }
+  }
+  if (!probed_root) {
+    ProbeRecord(volume, static_cast<ULONGLONG>(Mft::Idx::Root));
   }
   for (const Mft::Idx record : probed_records) {
     ProbeRecord(volume, static_cast<ULONGLONG>(record));
