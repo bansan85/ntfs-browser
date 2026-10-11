@@ -11,11 +11,15 @@ run    builds NtfsBrowserTests and NtfsFuzzerAfl instrumented, runs the unit
        NTFS_REGRESSION_TESTCASE replays), and writes
        lcov, HTML and a gaps report per phase: unit, regr, all.
 merge  unions the gaps of every platform found under build/coverage/ (a line
-       compiled out on one OS is judged by the other OS only).
+       compiled out on one OS is judged by the other OS only). It writes
+       merged/summary.md, and merged/coverage-{unit,regr}.html: every
+       executable line of the sources, coloured by the merged result.
 
 Run it once per OS:
   Windows (PowerShell):  python .github\\scripts\\coverage.py run
   WSL:                   python3 .github/scripts/coverage.py run
+
+CI runs both OSes and then merge: .github/workflows/coverage.yml (manual).
 
 Why both binaries are instrumented: each regression testcase spawns
 NtfsFuzzerAfl as a child process, so the library code those tests reach runs
@@ -32,6 +36,7 @@ import re
 import shutil
 import subprocess
 import sys
+from html import escape
 from pathlib import Path
 
 IS_WIN = os.name == "nt"
@@ -247,6 +252,16 @@ def write_gaps(files, directory, phase):
     write_gaps_text(files, directory / f"gaps-{phase}.txt")
 
 
+def totals(files):
+    """Returns (covered lines, executable lines) over every file."""
+    hit = sum(len(e["hit"]) for e in files.values())
+    return hit, hit + sum(len(e["miss"]) for e in files.values())
+
+
+def percent(hit, total):
+    return 100.0 * hit / total if total else 100.0
+
+
 def write_gaps_text(files, path):
     rows = []
     for name, entry in files.items():
@@ -254,9 +269,8 @@ def write_gaps_text(files, path):
         if total and (entry["miss"] or entry["branch_miss"]):
             rows.append((len(entry["miss"]), name, entry, total))
     rows.sort(key=lambda row: (-row[0], row[1]))
-    hit = sum(len(e["hit"]) for e in files.values())
-    total_lines = hit + sum(len(e["miss"]) for e in files.values())
-    pct = 100.0 * hit / total_lines if total_lines else 100.0
+    hit, total_lines = totals(files)
+    pct = percent(hit, total_lines)
     with open(path, "w", encoding="utf-8") as out:
         out.write(f"lines: {hit}/{total_lines} ({pct:.1f}%)\n\n")
         for missed, name, entry, total in rows:
@@ -292,32 +306,151 @@ def report(tools, work, tests_exe, fuzzer_exe):
         log(f"phase {phase}: {OUT / f'gaps-{phase}.txt'}")
 
 
+PHASE_TITLES = {"unit": "unit tests", "regr": "NTFS_REGRESSION_TESTCASE",
+                "all": "all tests"}
+
+
+def load_gaps(path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {name: {k: set(v) for k, v in entry.items()}
+            for name, entry in data.items()}
+
+
+def merge_files(sources):
+    """Unions the gaps of several platforms, file by file."""
+    by_name = {}
+    for data in sources:
+        for name, entry in data.items():
+            by_name.setdefault(name, []).append(entry)
+    merged = {}
+    for name, entries in by_name.items():
+        hit = set().union(*(e["hit"] for e in entries))
+        miss = set().union(*(e["miss"] for e in entries)) - hit
+        # A branch is missed overall only if every platform that runs its
+        # line misses it. A line compiled out on one OS is ignored there.
+        candidates = set().union(*(e["branch_miss"] for e in entries))
+        branch_miss = {
+            line for line in candidates
+            if all(line in e["branch_miss"] for e in entries
+                   if line in e["hit"] | e["miss"])
+        }
+        merged[name] = {"hit": hit, "miss": miss, "branch_miss": branch_miss}
+    return merged
+
+
+def write_html(files, phase, path):
+    """One page per phase: each executable line is coloured by its gaps."""
+    toc, sections = [], []
+    hit_all, total_all = totals(files)
+    for index, name in enumerate(sorted(files)):
+        entry = files[name]
+        source = REPO / name
+        hit, total = len(entry["hit"]), len(entry["hit"]) + len(entry["miss"])
+        if not total or not source.is_file():
+            continue
+        rows = []
+        for number, code in enumerate(
+                source.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            css = ""
+            if number in entry["miss"]:
+                css = "miss"
+            elif number in entry["hit"]:
+                css = "partial" if number in entry["branch_miss"] else "hit"
+            rows.append(f'<tr class="{css}"><td class="n">{number}</td>'
+                        f'<td class="c">{escape(code)}</td></tr>')
+        label = f"{escape(name)} <span>{hit}/{total} ({percent(hit, total):.1f}%)</span>"
+        open_attr = " open" if entry["miss"] or entry["branch_miss"] else ""
+        toc.append(f'<li><a href="#f{index}">{escape(name)}</a> '
+                   f'{hit}/{total} ({percent(hit, total):.1f}%)</li>')
+        table = "\n".join(rows)
+        sections.append(f'<details id="f{index}"{open_attr}><summary>{label}'
+                        f'</summary><table>\n{table}\n</table></details>')
+    title = PHASE_TITLES[phase]
+    page = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ntfs-browser coverage: {escape(title)}</title>
+<style>
+body {{ background: #fff; color: #1e1e1e; font-family: system-ui, sans-serif; margin: 16px; }}
+.legend span {{ padding: 2px 6px; margin-right: 8px; }}
+ol {{ font-size: 14px; }}
+details {{ margin: 8px 0; }}
+summary {{ cursor: pointer; font-weight: 600; }}
+summary span {{ font-weight: normal; color: #555; }}
+table {{ border-collapse: collapse; width: 100%; font: 13px Consolas, "Courier New", monospace; }}
+td {{ padding: 0 6px; vertical-align: top; }}
+td.n {{ color: #888; text-align: right; width: 1%; white-space: nowrap; user-select: none; }}
+td.c {{ white-space: pre; }}
+tr.hit {{ background: #d7f5dd; }}
+tr.miss {{ background: #fbd3d0; }}
+tr.partial {{ background: #fff1b8; }}
+.hit {{ background: #d7f5dd; }}
+.miss {{ background: #fbd3d0; }}
+.partial {{ background: #fff1b8; }}
+</style>
+</head>
+<body>
+<h1>ntfs-browser coverage: {escape(title)}</h1>
+<p>{hit_all}/{total_all} executable lines covered ({percent(hit_all, total_all):.1f}%),
+merged across platforms.</p>
+<p class="legend"><span class="hit">covered</span><span class="partial">covered, a branch never taken</span><span class="miss">not covered</span></p>
+<ol>{"".join(toc)}</ol>
+{"".join(sections)}
+</body>
+</html>
+"""
+    path.write_text(page, encoding="utf-8")
+
+
+def write_summary(rows, path):
+    """Markdown table of covered lines per phase, platform and merged."""
+    platforms = sorted({p for cols in rows.values() for p in cols if p != "merged"})
+    head = ["Phase", *platforms, "merged"]
+    lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+    for phase, cols in rows.items():
+        cells = []
+        for column in head[1:]:
+            if column in cols:
+                hit, total = cols[column]
+                cells.append(f"{percent(hit, total):.1f}% ({hit}/{total})")
+            else:
+                cells.append("-")
+        lines.append(f"| {PHASE_TITLES[phase]} | " + " | ".join(cells) + " |")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    for line in lines:
+        log(line)
+
+
 def merge_platforms():
+    directory = COVERAGE_ROOT / "merged"
+    rows = {}
+    html_phases = {}
     for phase in list(PHASES) + ["all"]:
-        merged = {}
-        sources = sorted(COVERAGE_ROOT.glob(f"*/gaps-{phase}.json"))
-        sources = [s for s in sources if s.parent.name != "merged"]
-        for source in sources:
-            data = json.loads(source.read_text(encoding="utf-8"))
-            for name, entry in data.items():
-                slot = merged.setdefault(name, {"hit": set(), "miss": set(),
-                                                "branch_miss": None})
-                slot["hit"] |= set(entry["hit"])
-                slot["miss"] |= set(entry["miss"])
-                # A branch is missed overall only if every OS that has it misses it.
-                if entry["branch_miss"] or slot["branch_miss"] is None:
-                    mine = set(entry["branch_miss"])
-                    slot["branch_miss"] = (mine if slot["branch_miss"] is None
-                                           else slot["branch_miss"] & mine)
-        for entry in merged.values():
-            entry["miss"] -= entry["hit"]
-            entry["branch_miss"] = entry["branch_miss"] or set()
-        if sources:
-            directory = COVERAGE_ROOT / "merged"
-            directory.mkdir(parents=True, exist_ok=True)
-            write_gaps(merged, directory, phase)
-            log(f"{phase}: {len(sources)} platform(s) -> "
-                f"{directory / f'gaps-{phase}.txt'}")
+        sources = {
+            path.parent.name.removeprefix("coverage-"): load_gaps(path)
+            for path in sorted(COVERAGE_ROOT.glob(f"*/gaps-{phase}.json"))
+            if path.parent.name != "merged"
+        }
+        if not sources:
+            continue
+        merged = merge_files(sources.values())
+        directory.mkdir(parents=True, exist_ok=True)
+        write_gaps(merged, directory, phase)
+        rows[phase] = {name: totals(files) for name, files in sources.items()}
+        rows[phase]["merged"] = totals(merged)
+        html_phases[phase] = merged
+        log(f"{phase}: {len(sources)} platform(s) -> "
+            f"{directory / f'gaps-{phase}.txt'}")
+    if not rows:
+        sys.exit("no gaps-*.json under build/coverage: run coverage.py first")
+    for phase in ("unit", "regr"):
+        if phase in html_phases:
+            write_html(html_phases[phase], phase,
+                       directory / f"coverage-{phase}.html")
+            log(f"{phase}: {directory / f'coverage-{phase}.html'}")
+    write_summary(rows, directory / "summary.md")
 
 
 def main():

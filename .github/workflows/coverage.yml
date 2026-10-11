@@ -1,0 +1,129 @@
+---
+name: coverage
+on:
+  workflow_dispatch:
+jobs:
+  # Same corpus cache as cmake.yml. The corpus tests are unit tests, so they
+  # count toward coverage: Windows and Linux both restore it.
+  test-data:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v5
+        id: cache
+        with:
+          path: test-data
+          key: test-data-${{ hashFiles('.github/scripts/fetch-test-data.py') }}
+          enableCrossOsArchive: true
+      - name: Download test data
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -yq ewf-tools
+          python3 .github/scripts/fetch-test-data.py download
+  coverage-windows:
+    needs: test-data
+    runs-on: windows-latest
+    env:
+      LLVM_DIR: C:\Program Files\LLVM\bin
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Install LLVM 23 (clang-cl, llvm-cov, llvm-profdata)
+        shell: pwsh
+        run: |
+          $msi = Join-Path $env:RUNNER_TEMP "LLVM-23.1.1-win64.msi"
+          Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.1/LLVM-23.1.1-win64.msi" -OutFile $msi
+          $install = Start-Process msiexec.exe -ArgumentList "/i", "`"$msi`"", "/qn", "/norestart" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { exit $install.ExitCode }
+      - name: Install Ninja
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja -y --no-progress
+          }
+      - name: Restore test data
+        uses: actions/cache/restore@v5
+        with:
+          path: test-data
+          key: test-data-${{ hashFiles('.github/scripts/fetch-test-data.py') }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - name: Decompress test data
+        run: python .github/scripts/fetch-test-data.py decompress
+      - name: Coverage (unit tests and NTFS_REGRESSION_TESTCASE)
+        run: python .github/scripts/coverage.py run --require-data
+      - name: Upload Windows results
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-windows
+          path: |
+            build/coverage/windows/gaps-*.json
+            build/coverage/windows/gaps-*.txt
+            build/coverage/windows/tests-*.log
+            build/coverage/windows/html-*/**
+          if-no-files-found: error
+  coverage-linux:
+    needs: test-data
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Add the apt.llvm.org clang 23 repo
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key |
+            sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/llvm-toolchain-noble-23.sources
+          Enabled: yes
+          Types: deb deb-src
+          URIs: http://apt.llvm.org/noble/
+          Suites: llvm-toolchain-noble-23
+          Components: main
+          Signed-By: /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          EOF
+          sudo apt-get update
+      - name: Install clang 23 and build tools
+        run: sudo apt-get install -yq clang-23 llvm-23 ninja-build
+      - name: Restore test data
+        uses: actions/cache/restore@v5
+        with:
+          path: test-data
+          key: test-data-${{ hashFiles('.github/scripts/fetch-test-data.py') }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - name: Decompress test data
+        run: python3 .github/scripts/fetch-test-data.py decompress
+      - name: Coverage (unit tests and NTFS_REGRESSION_TESTCASE)
+        run: python3 .github/scripts/coverage.py run --require-data
+      - name: Upload Linux results
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-linux
+          path: |
+            build/coverage/linux/gaps-*.json
+            build/coverage/linux/gaps-*.txt
+            build/coverage/linux/tests-*.log
+            build/coverage/linux/html-*/**
+          if-no-files-found: error
+  merge:
+    needs: [coverage-windows, coverage-linux]
+    runs-on: ubuntu-24.04
+    steps:
+      # The merge reads the sources to colour the HTML pages.
+      - uses: actions/checkout@v7
+      - name: Download both platforms
+        uses: actions/download-artifact@v5
+        with:
+          pattern: coverage-*
+          path: build/coverage
+      - name: Merge
+        run: python3 .github/scripts/coverage.py merge
+      - name: Summary
+        run: cat build/coverage/merged/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload merged results
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-merged
+          path: build/coverage/merged/
+          if-no-files-found: error
