@@ -1,0 +1,7 @@
+if(WIN32)
+  add_subdirectory("ntfsdir")
+  add_subdirectory("ntfsattr")
+  add_subdirectory("ntfsdump")
+  add_subdirectory("ntfsmftlist")
+  add_subdirectory("ntfsundel")
+endif()

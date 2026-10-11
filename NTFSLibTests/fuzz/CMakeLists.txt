@@ -1,18 +1,8 @@
 if(WIN32)
-  add_executable(
-    NtfsFuzzer
-    "main.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../unit-tests/sequential-disk-reader.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../unit-tests/sequential-disk-reader.cpp"
-  )
+  add_executable(NtfsFuzzer "main.cpp")
 
-  target_link_libraries(NtfsFuzzer PRIVATE ${PROJECT_NAME})
-
-  # Reuses the unit tests' sequential fake reader instead of duplicating it.
-  target_include_directories(
-    NtfsFuzzer
-    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../unit-tests"
-  )
+  # Reuses the sequential fake reader instead of duplicating it.
+  target_link_libraries(NtfsFuzzer PRIVATE ${PROJECT_NAME} NtfsTestDiskReaders)
 
   if(BUILD_SHARED_LIBS)
     add_custom_command(

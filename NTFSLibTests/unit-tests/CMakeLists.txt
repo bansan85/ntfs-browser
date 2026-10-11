@@ -2,15 +2,6 @@ set(
   NtfsBrowserTests_SRC
   "child-process.h"
   "child-process.cpp"
-  "fake-ntfs-image.h"
-  "fake-ntfs-image.cpp"
-  "file-record-header-edit.h"
-  "memory-disk-reader.h"
-  "memory-disk-reader.cpp"
-  "sequential-disk-reader.h"
-  "sequential-disk-reader.cpp"
-  "partition-disk-reader.h"
-  "partition-disk-reader.cpp"
   "optional-access.h"
   "test-log-sink.h"
   "test-log-sink.cpp"
@@ -104,7 +95,13 @@ add_executable(NtfsBrowserTests ${NtfsBrowserTests_SRC})
 # with it, independent of the library's own (private) use of frozen.
 target_link_libraries(
   NtfsBrowserTests
-  PRIVATE ${PROJECT_NAME} Catch2::Catch2WithMain spdlog::spdlog frozen::frozen
+  PRIVATE
+    ${PROJECT_NAME}
+    NtfsFakeImage
+    NtfsTestDiskReaders
+    Catch2::Catch2WithMain
+    spdlog::spdlog
+    frozen::frozen
 )
 
 # These tests reach several internal (non-public) NtfsBrowser symbols directly,
@@ -113,11 +110,8 @@ target_link_libraries(
 # them. NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS (src/internal-export.h) is what
 # makes that conditional, so it must be defined identically on both the library
 # and this target - a normal build of NtfsBrowser never defines it, keeping
-# those symbols out of its export table.
-target_compile_definitions(
-  ${PROJECT_NAME}
-  PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
-)
+# those symbols out of its export table. The library's own define lives in
+# tools/fake-image/CMakeLists.txt.
 target_compile_definitions(
   NtfsBrowserTests
   PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
@@ -142,8 +136,8 @@ if(WIN32 AND NTFS_BROWSER_ENABLE_EFS_BCRYPT)
   target_link_libraries(NtfsBrowserTests PRIVATE bcrypt)
 endif()
 
-# The fuzz/ include lets fake-ntfs-image.h reuse named-stream-probe.h's name
-# instead of duplicating it.
+# The fuzz/ include lets the find-stream-named and find-subentry-gap-collation
+# tests reuse the fuzzer's probe headers instead of duplicating them.
 target_include_directories(
   NtfsBrowserTests
   PRIVATE
