@@ -14,12 +14,13 @@ merge  unions the gaps of every platform found under build/coverage/ (a line
        compiled out on one OS is judged by the other OS only). It writes
        merged/summary.md, and merged/coverage-{unit,regr}.html: every
        executable line of the sources, coloured by the merged result.
+       summary.md has two tables: all the files, and the library alone.
 
 Run it once per OS:
   Windows (PowerShell):  python .github\\scripts\\coverage.py run
   WSL:                   python3 .github/scripts/coverage.py run
 
-CI runs both OSes and then merge: .github/workflows/coverage.yml (manual).
+CI runs both OSes and then merge: .github/workflows/quality.yml (manual).
 
 Why both binaries are instrumented: each regression testcase spawns
 NtfsFuzzerAfl as a child process, so the library code those tests reach runs
@@ -141,7 +142,8 @@ def build_environment(tools):
         runtime = Path(resource) / "lib" / "windows" / "clang_rt.profile-x86_64.lib"
         if not runtime.exists():
             sys.exit(f"{runtime} not found")
-        link = str(runtime)
+        # CMake splits LDFLAGS at spaces: the quotes keep a path under Program Files whole.
+        link = f'"{runtime}"'
     env["LDFLAGS"] = link
     return env
 
@@ -309,6 +311,9 @@ def report(tools, work, tests_exe, fuzzer_exe):
 PHASE_TITLES = {"unit": "unit tests", "regr": "NTFS_REGRESSION_TESTCASE",
                 "all": "all tests"}
 
+# The library alone. The test sources (NTFSLibTests) and the tools are left out.
+LIBRARY_PREFIXES = ("src/", "include/")
+
 
 def load_gaps(path):
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -404,7 +409,12 @@ merged across platforms.</p>
     path.write_text(page, encoding="utf-8")
 
 
-def write_summary(rows, path):
+def library_only(files):
+    return {name: entry for name, entry in files.items()
+            if name.startswith(LIBRARY_PREFIXES)}
+
+
+def table_lines(rows):
     """Markdown table of covered lines per phase, platform and merged."""
     platforms = sorted({p for cols in rows.values() for p in cols if p != "merged"})
     head = ["Phase", *platforms, "merged"]
@@ -418,14 +428,24 @@ def write_summary(rows, path):
             else:
                 cells.append("-")
         lines.append(f"| {PHASE_TITLES[phase]} | " + " | ".join(cells) + " |")
+    return lines
+
+
+def write_summary(tables, path):
+    """Writes one titled table per (heading, rows) pair."""
+    lines = []
+    for heading, rows in tables:
+        lines += [f"### {heading}", "", *table_lines(rows), ""]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     for line in lines:
-        log(line)
+        if line:
+            log(line)
 
 
 def merge_platforms():
     directory = COVERAGE_ROOT / "merged"
     rows = {}
+    lib_rows = {}
     html_phases = {}
     for phase in list(PHASES) + ["all"]:
         sources = {
@@ -440,6 +460,9 @@ def merge_platforms():
         write_gaps(merged, directory, phase)
         rows[phase] = {name: totals(files) for name, files in sources.items()}
         rows[phase]["merged"] = totals(merged)
+        lib_rows[phase] = {name: totals(library_only(files))
+                           for name, files in sources.items()}
+        lib_rows[phase]["merged"] = totals(library_only(merged))
         html_phases[phase] = merged
         log(f"{phase}: {len(sources)} platform(s) -> "
             f"{directory / f'gaps-{phase}.txt'}")
@@ -450,7 +473,9 @@ def merge_platforms():
             write_html(html_phases[phase], phase,
                        directory / f"coverage-{phase}.html")
             log(f"{phase}: {directory / f'coverage-{phase}.html'}")
-    write_summary(rows, directory / "summary.md")
+    write_summary([("Tests included (NTFSLibTests)", rows),
+                   ("Library only (src/, include/)", lib_rows)],
+                  directory / "summary.md")
 
 
 def main():
