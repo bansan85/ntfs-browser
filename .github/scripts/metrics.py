@@ -10,6 +10,7 @@ Writes to DIR (default build/metrics):
   files.csv      one row per file: function count and worst values
   duplicates.csv one row per duplicated code snippet, grouped by block
   summary.json   totals, averages, warning counts, duplication, coverage
+  includes.csv   one row per file: include and dependency counts, cycles
   summary.md     the summary, then the top N functions per metric
 
 --coverage reads a gaps-all.json written by coverage.py (default: the
@@ -26,6 +27,7 @@ lizard is pinned: python -m pip install lizard==1.24.1
 import argparse
 import csv
 import json
+import posixpath
 import re
 import subprocess
 import sys
@@ -54,6 +56,12 @@ FIX_SUBJECT = re.compile(r"^fix\b", re.IGNORECASE)
 
 # git log format: sha, author date, subject, separated by tabs.
 GIT_LOG_FORMAT = "--format=%H%x09%ad%x09%s"
+
+# An #include directive, with its name in group 1: <...> or "...".
+INCLUDE_LINE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
+
+# Files whose #include lines form the coupling graph.
+SOURCE_SUFFIXES = (".h", ".hpp", ".cpp", ".cc", ".c")
 
 # Extensions of the base analysis. None of them rewrites the CCN.
 BASE_EXTENSIONS = [
@@ -142,6 +150,8 @@ NUMERIC_COLUMNS = [column for column, _ in NUMERIC_METRICS]
 FUNCTION_COLUMNS = ["file", "function", "start_line", "end_line",
                     *NUMERIC_COLUMNS, "uncovered_lines", "churn_last_change",
                     "complex_tags"]
+INCLUDE_COLUMNS = ["file", "includes_out", "includes_in", "depends_on", "dependents",
+                   "instability", "cycle"]
 FILE_COLUMNS = ["file", "functions", "file_nloc", "sum_ccn", "max_ccn", "max_cognitive",
                 "max_nesting_depth", "max_length", "max_params",
                 "file_commits", "file_fixes", "file_last_change"]
@@ -303,6 +313,114 @@ def add_file_churn(file_rows):
          row["file_last_change"]) = churn_values(git_log("--follow", "--", row["file"]))
 
 
+def tracked_sources(paths):
+    """Returns the tracked C and C++ files under the given paths, as posix paths."""
+    result = subprocess.run(
+        ["git", "-C", str(REPO), "ls-files", "--", *paths],
+        capture_output=True, text=True, encoding="utf-8", check=True)
+    return [line for line in result.stdout.splitlines() if line.endswith(SOURCE_SUFFIXES)]
+
+
+def resolve_include(owner, name, known, by_suffix):
+    """Returns (target file or None, whether the name was ambiguous)."""
+    # A quoted include is looked up next to the including file first.
+    local = posixpath.normpath(posixpath.join(posixpath.dirname(owner), name))
+    if local in known:
+        return local, False
+    matches = by_suffix.get(name, [])
+    if len(matches) == 1:
+        return matches[0], False
+    return None, len(matches) > 1
+
+
+def include_graph(files):
+    """Returns ({file: files it includes}, ambiguous include count)."""
+    known = set(files)
+    by_suffix = defaultdict(list)
+    for path in files:
+        parts = path.split("/")
+        for start in range(len(parts)):
+            by_suffix["/".join(parts[start:])].append(path)
+    graph = {path: set() for path in files}
+    ambiguous = 0
+    for path in files:
+        text = (REPO / path).read_text(encoding="utf-8", errors="replace")
+        for name in INCLUDE_LINE.findall(text):
+            target, is_ambiguous = resolve_include(path, name, known, by_suffix)
+            ambiguous += is_ambiguous
+            # Includes of system and third-party headers resolve to no file here.
+            if target is not None and target != path:
+                graph[path].add(target)
+    return graph, ambiguous
+
+
+def reachable(start, edges):
+    """Returns the files reached from start by following edges, start excluded."""
+    seen, stack = set(), list(edges[start])
+    while stack:
+        node = stack.pop()
+        if node != start and node not in seen:
+            seen.add(node)
+            stack.extend(edges[node])
+    return seen
+
+
+def include_cycles(graph):
+    """Returns the groups of two or more files that include each other, directly or not."""
+    # Tarjan's algorithm: one strongly connected component per cycle group.
+    index, low, on_stack, stack, groups = {}, {}, set(), [], []
+
+    def visit(node):
+        index[node] = low[node] = len(index)
+        stack.append(node)
+        on_stack.add(node)
+        for target in graph[node]:
+            if target not in index:
+                visit(target)
+                low[node] = min(low[node], low[target])
+            elif target in on_stack:
+                low[node] = min(low[node], index[target])
+        if low[node] == index[node]:
+            group = []
+            while True:
+                member = stack.pop()
+                on_stack.discard(member)
+                group.append(member)
+                if member == node:
+                    break
+            if len(group) > 1:
+                groups.append(sorted(group))
+
+    for node in graph:
+        if node not in index:
+            visit(node)
+    return groups
+
+
+def coupling_rows(graph):
+    """Returns one row per file with its include and dependency counts."""
+    reverse = {path: set() for path in graph}
+    for path, targets in graph.items():
+        for target in targets:
+            reverse[target].add(path)
+    cycles = include_cycles(graph)
+    cycle_of = {member: number for number, group in enumerate(cycles, 1) for member in group}
+    rows = []
+    for path in sorted(graph):
+        out, back = len(graph[path]), len(reverse[path])
+        rows.append({
+            "file": path,
+            "includes_out": out,
+            "includes_in": back,
+            "depends_on": len(reachable(path, graph)),
+            "dependents": len(reachable(path, reverse)),
+            # Martin's instability: 1 means it only depends on others.
+            "instability": number(out / (out + back)) if out + back else None,
+            "cycle": cycle_of.get(path, ""),
+        })
+    return rows, cycles
+
+
 def write_csv(path, rows, columns):
     with open(path, "w", newline="", encoding="utf-8") as out:
         writer = csv.DictWriter(out, fieldnames=columns, restval="")
@@ -360,7 +478,7 @@ def summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source
     }
 
 
-def write_markdown(path, summary, rows, top):
+def write_markdown(path, summary, rows, top, coupling):
     lines = [
         "# ntfs-browser code metrics",
         "",
@@ -422,6 +540,18 @@ def write_markdown(path, summary, rows, top):
         lines += [f"| {row['churn_commits']} | {row['churn_fixes']} | {row['ccn']} | "
                   f"{row['churn_last_change']} | `{row['function']}` | "
                   f"{row['file']}:{row['start_line']} |" for row in hot[:top]]
+    inc = summary["includes"]
+    lines += ["", "## Include coupling", "",
+              f"{inc['files']} files, {inc['edges']} include edges between them. "
+              f"Ambiguous includes skipped: {inc['ambiguous_includes']}.", "",
+              f"### Include cycles: {len(inc['cycles'])}", ""]
+    lines += [f"- {', '.join(group)}" for group in inc["cycles"]] or ["None."]
+    ranked = sorted(coupling, key=lambda r: -r["dependents"])[:top]
+    lines += ["", f"### Top {top} by transitive dependents", "",
+              "| Dependents | Depends on | Included by | Instability | File |",
+              "|---|---|---|---|---|"]
+    lines += [f"| {r['dependents']} | {r['depends_on']} | {r['includes_in']} | "
+              f"{r['instability']} | {r['file']} |" for r in ranked]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -469,11 +599,22 @@ def main():
     write_csv(args.out / "functions.csv", rows, FUNCTION_COLUMNS)
     write_csv(args.out / "files.csv", file_rows, FILE_COLUMNS)
     write_duplicates(args.out / "duplicates.csv", blocks)
+    sources = tracked_sources(args.paths)
+    graph, ambiguous = include_graph(sources)
+    coupling, cycles = coupling_rows(graph)
+    write_csv(args.out / "includes.csv", coupling, INCLUDE_COLUMNS)
+
     summary = summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source,
                         churn_on=not args.no_churn)
+    summary["includes"] = {
+        "files": len(sources),
+        "edges": sum(len(targets) for targets in graph.values()),
+        "ambiguous_includes": ambiguous,
+        "cycles": cycles,
+    }
     (args.out / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8")
-    write_markdown(args.out / "summary.md", summary, rows, args.top)
+    write_markdown(args.out / "summary.md", summary, rows, args.top, coupling)
     print(f"{summary['functions']} functions in {summary['files']} files, "
           f"{len(blocks)} duplicated blocks -> {args.out}")
 
