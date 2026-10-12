@@ -54,7 +54,7 @@ jobs:
       - name: Coverage (unit tests and NTFS_REGRESSION_TESTCASE)
         run: python .github/scripts/coverage.py run --require-data
       - name: Upload Windows results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-windows
           path: |
@@ -97,7 +97,7 @@ jobs:
       - name: Coverage (unit tests and NTFS_REGRESSION_TESTCASE)
         run: python3 .github/scripts/coverage.py run --require-data
       - name: Upload Linux results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-linux
           path: |
@@ -122,7 +122,7 @@ jobs:
       - name: Summary
         run: cat build/coverage/merged/summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload merged results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-merged
           path: build/coverage/merged/
@@ -150,7 +150,7 @@ jobs:
       - name: Summary
         run: cat build/metrics/summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload metrics
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: metrics
           path: build/metrics/
