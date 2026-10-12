@@ -670,45 +670,71 @@ bool Io::FileRecord<S>::Impl::ParseAttrs(
 
   const bool recover = volume->GetOptions().recover_errors;
 
-  // Ends the walk early with failure. Strict drops everything parsed so far.
-  // Recovering keeps it, and that partial result must still be usable: its
-  // VCN continuations merged, its encrypted streams given their context.
-  const auto abort_walk = [this, recover] {
-    if (!recover) {
-      ClearAttrs();
-      return false;
-    }
-    MergeAttributeContinuations();
+  // Visit all attributes
+  const Attr::HeaderCommon* first = FirstAttrToWalk();
+  if (first == nullptr) {
+    return false;
+  }
+
+  const WalkEnd end = WalkAttrHeaders(*first, attr_list_chain);
+  if (end == WalkEnd::RanOut) {
+    Log::Recoverable(recover,
+                     "Attribute walk ended without a terminating end marker.");
+  }
+
+  // The walk aborted, or ran out before its end marker. Strict drops everything
+  // parsed so far. Recovering keeps it, and that partial result must still be
+  // usable: its VCN continuations merged, its encrypted streams given their
+  // context.
+  if (!recover && end != WalkEnd::EndMarker) {
+    ClearAttrs();
+    return false;
+  }
+
+  MergeAttributeContinuations();
+
+  if (end == WalkEnd::Aborted) {
     // Only a strict parse can fail here.
     static_cast<void>(AttachEfsContext());
     return false;
-  };
+  }
 
+  if (!AttachEfsContext()) {
+    ClearAttrs();
+    return false;
+  }
+  return true;
+}
+
+// Returns the header of the first attribute to walk, or nullptr when this
+// record must not be parsed: it is freed and not opted in, or has no header.
+template <Cache::Strategy S>
+const Attr::HeaderCommon* Io::FileRecord<S>::Impl::FirstAttrToWalk() {
   // A freed record still parsed its header (IsDeleted() works), but not its
   // attributes: this record exposes no content unless include_deleted opted
   // in, or this is one of the volume's own metadata reads.
   if (!bypass_deleted_gate && self->IsDeleted() &&
       !volume->GetOptions().include_deleted) {
     Log::Debug("ParseAttrs() skipped: file record {} is deleted",
-               file_reference ? *file_reference : 0);
-    return false;
+               file_reference.value_or(0));
+    return nullptr;
   }
+  return file_record->HeaderCommon();
+}
 
-  // Visit all attributes
-
-  DWORD data_ptr = 0;  // guard if data exceeds file_record_size_ bounds
-  const Attr::HeaderCommon* first = file_record->HeaderCommon();
-
-  if (first == nullptr) {
-    return false;
-  }
-
-  data_ptr += file_record->GetData()->offset_of_attr;
-  bool found_end_marker = false;
+// Walks the attribute headers from first to the end marker, parsing each
+// wanted attribute. Stops early at a malformed header, or where VisitAttr
+// fails.
+template <Cache::Strategy S>
+Io::WalkEnd Io::FileRecord<S>::Impl::WalkAttrHeaders(
+    const Attr::HeaderCommon& first,
+    std::unordered_set<ULONGLONG>& attr_list_chain) {
+  // guard if data exceeds file_record_size_ bounds
+  DWORD data_ptr = file_record->GetData()->offset_of_attr;
 
   // An attribute's position comes from the disk, so it need not be aligned
   // for Attr::HeaderCommon. The walk reads each header through a copy.
-  std::span<const BYTE> cur(reinterpret_cast<const BYTE*>(first),
+  std::span<const BYTE> cur(reinterpret_cast<const BYTE*>(&first),
                             volume->GetFileRecordSize() - data_ptr);
 
   while (true) {
@@ -716,36 +742,18 @@ bool Io::FileRecord<S>::Impl::ParseAttrs(
     const AttrWalk step =
         ReadAttrHeader(cur, data_ptr, volume->GetFileRecordSize(), head);
     if (step == AttrWalk::EndMarker) {
-      found_end_marker = true;
-      break;
+      return WalkEnd::EndMarker;
     }
     if (step == AttrWalk::RanOut) {
-      break;
+      return WalkEnd::RanOut;
     }
     if (step == AttrWalk::Abort || !VisitAttr(cur, head, attr_list_chain)) {
-      return abort_walk();
+      return WalkEnd::Aborted;
     }
 
     data_ptr += head.total_size;
     cur = cur.subspan(head.total_size);  // next attribute
   }
-
-  if (!found_end_marker) {
-    Log::Recoverable(recover,
-                     "Attribute walk ended without a terminating end marker.");
-    if (!recover) {
-      ClearAttrs();
-      return false;
-    }
-  }
-
-  MergeAttributeContinuations();
-
-  if (!AttachEfsContext()) {
-    ClearAttrs();
-    return false;
-  }
-  return true;
 }
 
 // Parses the attribute at the front of cur, if its type is wanted. Returns

@@ -58,6 +58,13 @@ struct IndexSearch {
   std::unordered_set<ULONGLONG> visited_vcns;
 };
 
+// How the walk over a record's attribute headers ended.
+enum class WalkEnd : BYTE {
+  EndMarker,  // The terminating Attr::Type::All marker was reached.
+  RanOut,     // The record ended without a marker, or an attribute overran it.
+  Aborted     // An attribute was malformed, or the visit stopped the walk.
+};
+
 // Everything FileRecord<S> keeps out of its public header: the members, and the
 // private methods that work on them. Friends of FileRecord<S> (AttrList,
 // NtfsVolume) reach it through FileRecord<S>::impl_.
@@ -117,6 +124,10 @@ class FileRecord<S>::Impl {
   [[nodiscard]] bool ParseAttr(const Attr::HeaderCommon& ahc,
                                std::unordered_set<ULONGLONG>& attr_list_chain);
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
+  [[nodiscard]] const Attr::HeaderCommon* FirstAttrToWalk();
+  [[nodiscard]] WalkEnd
+      WalkAttrHeaders(const Attr::HeaderCommon& first,
+                      std::unordered_set<ULONGLONG>& attr_list_chain);
   static void
       MergeStreamChain(std::vector<std::unique_ptr<Attr::AttrBase<S>>>& attrs,
                        std::vector<size_t>& indices,
