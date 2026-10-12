@@ -41,19 +41,9 @@ namespace NtfsBrowser::Io {
 
 namespace {
 
-// Returns the record's $STANDARD_INFORMATION wrapper, or nullptr if it has
-// none.
+// The $STANDARD_INFORMATION wrapper of strategy S.
 template <Cache::Strategy S>
-const Attr::AttrStdInfo<ResidentOf<S>, S>*
-    StdInfoOf(const FileRecord<S>& record) noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      record.GetAttr(Attr::Type::StandardInformation);
-  if (vec.empty()) {
-    return nullptr;
-  }
-  return static_cast<const Attr::AttrStdInfo<ResidentOf<S>, S>*>(
-      vec.front().get());
-}
+using StdInfoType = Attr::AttrStdInfo<ResidentOf<S>, S>;
 
 }  // namespace
 
@@ -61,6 +51,27 @@ template <Cache::Strategy S>
 Io::FileRecord<S>::Impl::Impl(Io::FileRecord<S>& self,
                               const NtfsVolume<S>& volume) noexcept
     : self(&self), volume(&volume) {}
+
+// Returns the record's $STANDARD_INFORMATION wrapper, or nullptr if it has
+// none.
+template <Cache::Strategy S>
+const StdInfoType<S>* Io::FileRecord<S>::Impl::StdInfo() const noexcept {
+  const Io::FileRecord<S>& record = *self;
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
+      record.GetAttr(Attr::Type::StandardInformation);
+  if (vec.empty()) {
+    return nullptr;
+  }
+  return static_cast<const StdInfoType<S>*>(vec.front().get());
+}
+
+// Reads one flag of $STANDARD_INFORMATION. False if the record has none.
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::Impl::StdInfoFlag(bool (StdInfoType<S>::*flag)()
+                                              const noexcept) const noexcept {
+  const StdInfoType<S>* std_info = StdInfo();
+  return std_info != nullptr && (std_info->*flag)();
+}
 
 template <Cache::Strategy S>
 Io::FileRecord<S>::FileRecord(const NtfsVolume<S>& volume)
@@ -342,15 +353,8 @@ std::wstring_view Io::FileRecord<S>::GetFileName() const {
   // Return the first Win32 filename
   for (const std::unique_ptr<Attr::AttrBase<S>>& fn :
        std::get<Attr::AttrIndex(Attr::Type::FileName)>(impl_->attr_list)) {
-    const Filename* filename = nullptr;
-    if constexpr (S == Cache::Strategy::NoCache) {
-      filename = static_cast<const Attr::AttrFileName<
-          Attr::AttrResidentNoCache, Cache::Strategy::NoCache>*>(fn.get());
-    } else {
-      filename = static_cast<const Attr::AttrFileName<
-          Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(fn.get());
-    }
-
+    const Filename* filename =
+        static_cast<const Attr::AttrFileName<ResidentOf<S>, S>*>(fn.get());
     if (filename->IsWin32Name() && !filename->GetFilename().empty()) {
       return filename->GetFilename();
     }
@@ -367,18 +371,9 @@ ULONGLONG Io::FileRecord<S>::GetFileSize() const noexcept {
   if (vec.empty()) {
     return 0;
   }
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrFileName<
-        Attr::AttrResidentNoCache, Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->GetFileSize();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrFileName<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->GetFileSize();
-  }
-  return 0;
+  return static_cast<const Attr::AttrFileName<ResidentOf<S>, S>*>(
+             vec.front().get())
+      ->GetFileSize();
 }
 
 template <Cache::Strategy S>
@@ -393,7 +388,7 @@ void Io::FileRecord<S>::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
                                     FILETIME* access_tm,
                                     FILETIME* change_tm) const noexcept {
   // Standard Information attribute hold the most updated file time
-  if (const auto* std_info = StdInfoOf(*this); std_info != nullptr) {
+  if (const auto* std_info = impl_->StdInfo(); std_info != nullptr) {
     std_info->GetFileTime(write_tm, create_tm, access_tm, change_tm);
     return;
   }
@@ -482,80 +477,67 @@ bool Io::FileRecord<S>::IsDirectory() const noexcept {
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsReadOnly() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsReadOnly();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsReadOnly);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsHidden() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsHidden();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsHidden);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsSystem() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsSystem();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsSystem);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsArchive() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsArchive();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsArchive);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsDevice() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsDevice();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsDevice);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsNormal() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsNormal();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsNormal);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsTemporary() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsTemporary();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsTemporary);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsCompressed() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsCompressed();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsCompressed);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsOffline() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsOffline();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsOffline);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsNotContentIndexed() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsNotContentIndexed();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsNotContentIndexed);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsEncrypted() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsEncrypted();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsEncrypted);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsSparse() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsSparse();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsSparse);
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsReparsePoint() const noexcept {
-  const auto* std_info = StdInfoOf(*this);
-  return std_info != nullptr && std_info->IsReparsePoint();
+  return impl_->StdInfoFlag(&StdInfoType<S>::IsReparsePoint);
 }
 
 template class FileRecord<Cache::Strategy::NoCache>;

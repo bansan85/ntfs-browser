@@ -16,7 +16,9 @@
 #include <ntfs-browser/io/file-record.h>
 
 #include "attr/slot.h"
+#include "attr/std-info.h"
 #include "data/file-record-header.h"
+#include "io/file-record-attrs.h"
 #include "record/header.h"
 
 namespace NtfsBrowser {
@@ -78,6 +80,11 @@ class FileRecord<S>::Impl {
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref);
+  [[nodiscard]] const Attr::AttrStdInfo<ResidentOf<S>, S>*
+      StdInfo() const noexcept;
+  [[nodiscard]] bool
+      StdInfoFlag(bool (Attr::AttrStdInfo<ResidentOf<S>, S>::*flag)()
+                      const noexcept) const noexcept;
 };
 
 }  // namespace Io
