@@ -84,6 +84,63 @@ void RequireResident(const Attr::HeaderCommon& ahc, const char* message) {
   }
 }
 
+// Wraps ahc in Wrapper<Base, S>. Args are passed on after the record.
+template <template <typename, Cache::Strategy> class Wrapper, typename Base,
+          Cache::Strategy S, typename... Args>
+std::unique_ptr<Attr::AttrBase<S>> MakeAttr(const Attr::HeaderCommon& ahc,
+                                            FileRecord<S>& record,
+                                            Args&&... args) {
+  return std::make_unique<Wrapper<Base, S>>(ahc, record,
+                                            std::forward<Args>(args)...);
+}
+
+// Wraps a type that is always resident on disk, after rejecting a
+// non-resident header with message.
+template <template <typename, Cache::Strategy> class Wrapper, typename Resident,
+          Cache::Strategy S>
+std::unique_ptr<Attr::AttrBase<S>>
+    MakeResidentOnly(const Attr::HeaderCommon& ahc, FileRecord<S>& record,
+                     const char* message) {
+  RequireResident(ahc, message);
+  return MakeAttr<Wrapper, Resident>(ahc, record);
+}
+
+// Wraps the non-resident form of a type when the header is non-resident,
+// else its resident form. Args are passed on after the record.
+template <template <typename, Cache::Strategy> class Wrapper, typename Resident,
+          Cache::Strategy S, typename... Args>
+std::unique_ptr<Attr::AttrBase<S>>
+    MakeByResidency(const Attr::HeaderCommon& ahc, FileRecord<S>& record,
+                    Args&&... args) {
+  if (ahc.non_resident != 0) {
+    return MakeAttr<Wrapper, Attr::AttrNonResident<S>>(
+        ahc, record, std::forward<Args>(args)...);
+  }
+  return MakeAttr<Wrapper, Resident>(ahc, record, std::forward<Args>(args)...);
+}
+
+// Wraps a type with no class of its own, as its non-resident or resident base.
+template <typename Resident, Cache::Strategy S>
+std::unique_ptr<Attr::AttrBase<S>> MakeGeneric(const Attr::HeaderCommon& ahc,
+                                               FileRecord<S>& record) {
+  if (ahc.non_resident != 0) {
+    return std::make_unique<Attr::AttrNonResident<S>>(ahc, record);
+  }
+  return std::make_unique<Resident>(ahc, record);
+}
+
+// Wraps INDEX_ALLOCATION, which is always non-resident on disk. Rejects a
+// resident header first, before its bytes get reinterpreted as one.
+template <Cache::Strategy S>
+std::unique_ptr<Attr::AttrBase<S>> MakeIndexAlloc(const Attr::HeaderCommon& ahc,
+                                                  FileRecord<S>& record) {
+  if (ahc.non_resident == 0) {
+    throw std::runtime_error(
+        "Index Allocation attribute must be non-resident.\n");
+  }
+  return std::make_unique<Attr::AttrIndexAlloc<S>>(ahc, record);
+}
+
 // How reading the next attribute header of a record's walk ended.
 enum class AttrWalk : BYTE {
   Next,       // head holds a header whose attribute fits in the record.
@@ -235,86 +292,78 @@ template <typename Resident>
 std::unique_ptr<Attr::AttrBase<S>> Io::FileRecord<S>::Impl::AllocAttr(
     const Attr::HeaderCommon& ahc, bool& unhandled,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
+  std::unique_ptr<Attr::AttrBase<S>> attr;
   switch (ahc.type) {
     // These attribute types are always resident on disk; reject any
     // record claiming otherwise before its bytes get reinterpreted as one.
-    case Attr::Type::StandardInformation:
-      RequireResident(ahc,
-                      "Standard Information attribute must be resident.\n");
-      return std::make_unique<Attr::AttrStdInfo<Resident, S>>(ahc, *self);
+    case Attr::Type::StandardInformation: {
+      attr = MakeResidentOnly<Attr::AttrStdInfo, Resident>(
+          ahc, *self, "Standard Information attribute must be resident.\n");
+      break;
+    }
 
-    case Attr::Type::AttributeList:
-      if (!resolve_attr_list) {
-        if (ahc.non_resident != 0) {
-          return std::make_unique<Attr::AttrNonResident<S>>(ahc, *self);
-        }
-        return std::make_unique<Resident>(ahc, *self);
-      }
-      if (ahc.non_resident != 0) {
-        return std::make_unique<Attr::AttrList<Attr::AttrNonResident<S>, S>>(
-            ahc, *self, attr_list_chain);
-      }
-      return std::make_unique<Attr::AttrList<Resident, S>>(ahc, *self,
-                                                           attr_list_chain);
+    // Unresolved, $ATTRIBUTE_LIST is wrapped generically, as the arm below.
+    case Attr::Type::AttributeList: {
+      attr = resolve_attr_list ? MakeByResidency<Attr::AttrList, Resident>(
+                                     ahc, *self, attr_list_chain)
+                               : MakeGeneric<Resident>(ahc, *self);
+      break;
+    }
 
-    case Attr::Type::FileName:
-      RequireResident(ahc, "File Name attribute must be resident.\n");
-      return std::make_unique<Attr::AttrFileName<Resident, S>>(ahc, *self);
+    case Attr::Type::FileName: {
+      attr = MakeResidentOnly<Attr::AttrFileName, Resident>(
+          ahc, *self, "File Name attribute must be resident.\n");
+      break;
+    }
 
-    case Attr::Type::VolumeName:
-      RequireResident(ahc, "Volume Name attribute must be resident.\n");
-      return std::make_unique<Attr::AttrVolName<Resident, S>>(ahc, *self);
+    case Attr::Type::VolumeName: {
+      attr = MakeResidentOnly<Attr::AttrVolName, Resident>(
+          ahc, *self, "Volume Name attribute must be resident.\n");
+      break;
+    }
 
-    case Attr::Type::VolumeInformation:
-      RequireResident(ahc, "Volume Information attribute must be resident.\n");
-      return std::make_unique<Attr::AttrVolInfo<Resident, S>>(ahc, *self);
+    case Attr::Type::VolumeInformation: {
+      attr = MakeResidentOnly<Attr::AttrVolInfo, Resident>(
+          ahc, *self, "Volume Information attribute must be resident.\n");
+      break;
+    }
 
-    case Attr::Type::Data:
-      if (ahc.non_resident != 0) {
-        return std::make_unique<Attr::AttrData<Attr::AttrNonResident<S>, S>>(
-            ahc, *self);
-      }
-      return std::make_unique<Attr::AttrData<Resident, S>>(ahc, *self);
+    case Attr::Type::Data: {
+      attr = MakeByResidency<Attr::AttrData, Resident>(ahc, *self);
+      break;
+    }
 
-    case Attr::Type::IndexRoot:
-      RequireResident(ahc, "Index Root attribute must be resident.\n");
-      return std::make_unique<Attr::AttrIndexRoot<Resident, S>>(ahc, *self);
+    case Attr::Type::IndexRoot: {
+      attr = MakeResidentOnly<Attr::AttrIndexRoot, Resident>(
+          ahc, *self, "Index Root attribute must be resident.\n");
+      break;
+    }
 
-    // INDEX_ALLOCATION is always non-resident on disk; reject a record
-    // claiming otherwise before its bytes get reinterpreted as one.
-    case Attr::Type::IndexAllocation:
-      if (ahc.non_resident == 0) {
-        throw std::runtime_error(
-            "Index Allocation attribute must be non-resident.\n");
-      }
-      return std::make_unique<Attr::AttrIndexAlloc<S>>(ahc, *self);
+    case Attr::Type::IndexAllocation: {
+      attr = MakeIndexAlloc(ahc, *self);
+      break;
+    }
 
-    case Attr::Type::Bitmap:
-      if (ahc.non_resident != 0) {
-        return std::make_unique<Attr::AttrBitmap<Attr::AttrNonResident<S>, S>>(
-            ahc, *self);
-      }
-      // Resident Bitmap may exist in a directory's FileRecord
-      // or in $MFT for a very small volume in theory
-      return std::make_unique<Attr::AttrBitmap<Resident, S>>(ahc, *self);
-
-    // $EFS, the only one this library reads, is read through the generic
-    // wrappers. Any other logged utility stream is not needed, but not
-    // worth a warning either.
-    case Attr::Type::LoggedUtilityStream:
-      if (ahc.non_resident != 0) {
-        return std::make_unique<Attr::AttrNonResident<S>>(ahc, *self);
-      }
-      return std::make_unique<Resident>(ahc, *self);
+    // Resident Bitmap may exist in a directory's FileRecord
+    // or in $MFT for a very small volume in theory
+    case Attr::Type::Bitmap: {
+      attr = MakeByResidency<Attr::AttrBitmap, Resident>(ahc, *self);
+      break;
+    }
 
     // Unhandled Attributes
     default:
       unhandled = true;
-      if (ahc.non_resident != 0) {
-        return std::make_unique<Attr::AttrNonResident<S>>(ahc, *self);
-      }
-      return std::make_unique<Resident>(ahc, *self);
+      [[fallthrough]];
+    // $EFS, the only one this library reads, is read through the generic
+    // wrappers. Any other logged utility stream is not needed, but not
+    // worth a warning either.
+    case Attr::Type::LoggedUtilityStream: {
+      attr = MakeGeneric<Resident>(ahc, *self);
+      break;
+    }
   }
+  return attr;
 }
 
 // Parse a single Attribute
