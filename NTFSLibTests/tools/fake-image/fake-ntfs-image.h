@@ -331,6 +331,12 @@ inline constexpr DWORD mft_data_split_lcn = 40;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
 
+// Same volume as BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList(),
+// except $MFT's $ATTRIBUTE_LIST is non-resident: its one entry sits in a
+// cluster of its own, which the list's data run maps.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithNonResidentMftAttributeList();
+
 // MFT index of the one extension record holding both of $MFT's DATA extents
 // below. Below Mft::Idx::User (16), so naively reachable.
 inline constexpr ULONGLONG mft_two_extents_ext_idx = 6;
@@ -611,6 +617,41 @@ inline constexpr WORD orphaned_block_sequence_mismatch_record_seq = 7;
 // (which BuildFakeNtfsImageWithOrphanedIndexBlocks() itself already models).
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch();
+
+// Sequence number BuildFakeNtfsImageWithOrphanedIndexBlocks() gives every leaf
+// entry (its mft_sn). A record filed under it matches the entry.
+inline constexpr WORD orphaned_block_leaf_sequence_number = 1;
+
+// State BuildFakeNtfsImageWithOrphanedEntryNamedRecord() gives the record the
+// "Orphan" entry names: in use under the entry's sequence number, or freed
+// under it.
+enum class FakeNamedRecordState : std::uint8_t { InUseSameSequence, Deleted };
+
+// Same as BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch(), except
+// the record the "Orphan" entry names carries
+// orphaned_block_leaf_sequence_number and is in use or freed, as state says.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithOrphanedEntryNamedRecord(FakeNamedRecordState state);
+
+// Shape of the root directory's $INDEX_ALLOCATION that
+// BuildFakeNtfsImageWithIndexAllocationShape() writes. The defaults match
+// BuildFakeNtfsImageWithOrphanedIndexBlocks(): three blocks, all backed.
+struct FakeIndexAllocShape {
+  // VCN the attribute's own range starts at.
+  ULONGLONG start_vcn = 0;
+  // Last VCN of that range. One less than start_vcn leaves it with no clusters.
+  ULONGLONG last_vcn = 2;
+  // Clusters the single data run maps, from VCN 0 on.
+  ULONGLONG mapped_clusters = 3;
+  // Blocks the attribute declares (real_size / index block size).
+  ULONGLONG declared_block_count = 3;
+};
+
+// Same as BuildFakeNtfsImageWithOrphanedIndexBlocks(), except the root's
+// $INDEX_ALLOCATION has the given shape. Only the first three blocks are
+// written, whatever the shape maps.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithIndexAllocationShape(FakeIndexAllocShape shape);
 
 // clusters_per_ib BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock()
 // declares (via the shared BPB's clusters_per_index_block): more than 1, so

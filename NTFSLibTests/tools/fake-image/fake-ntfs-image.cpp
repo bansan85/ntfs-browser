@@ -1659,15 +1659,18 @@ constexpr DWORD orphaned_blocks_lcn = 200;
 // Number of index blocks (VCN 0-2) the fixture's $INDEX_ALLOCATION covers.
 constexpr DWORD orphaned_blocks_count = 3;
 
+static_assert(FakeIndexAllocShape{}.mapped_clusters == orphaned_blocks_count);
+static_assert(FakeIndexAllocShape{}.last_vcn == orphaned_blocks_count - 1);
+static_assert(FakeIndexAllocShape{}.declared_block_count ==
+              orphaned_blocks_count);
+
 // Builds a root-directory replacement whose $INDEX_ROOT points only at
-// VCN 0, while its $INDEX_ALLOCATION stream is sized for
-// orphaned_blocks_count blocks - VCN 1 and 2 exist on "disk" but no pointer
-// in the tree reaches them. declaredBlockCount, when different from
-// orphaned_blocks_count, forges the attribute's own real_size (hence
-// GetIndexBlockCount()) without changing the data run: blocks beyond
-// orphaned_blocks_count are then declared but never actually backed.
-FakeRecord MakeOrphanedIndexBlocksRootRecord(
-    ULONGLONG declared_block_count = orphaned_blocks_count) {
+// VCN 0, while its $INDEX_ALLOCATION stream is shaped by shape. The default
+// shape maps orphaned_blocks_count blocks, so VCN 1 and 2 exist on "disk" but
+// no pointer in the tree reaches them. A declared count different from the
+// mapped one forges the attribute's own real_size (hence GetIndexBlockCount())
+// without changing the data run.
+FakeRecord MakeOrphanedIndexBlocksRootRecord(const FakeIndexAllocShape& shape) {
   FakeRecord record = MakeRecordHeader(
       attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
                              NtfsBrowser::Data::FileRecordFlag::Dir);
@@ -1734,20 +1737,26 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(
   alloc_attr.header.name_length = 0;
   alloc_attr.header.flags = 0;
   alloc_attr.header.id = 0;
-  alloc_attr.start_vcn = 0;
-  alloc_attr.last_vcn = orphaned_blocks_count - 1;
+  alloc_attr.start_vcn = shape.start_vcn;
+  alloc_attr.last_vcn = shape.last_vcn;
   alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
   alloc_attr.comp_unit_size = 0;
-  alloc_attr.real_size = declared_block_count * cluster_size;
+  alloc_attr.real_size = shape.declared_block_count * cluster_size;
   alloc_attr.alloc_size = alloc_attr.real_size;
   alloc_attr.ini_size = alloc_attr.real_size;
 
   const std::span<BYTE> data_run =
       std::span<BYTE>(record).subspan(offset + alloc_attr.data_run_offset);
   DWORD run_len = 0;
-  // High nibble = LCN offset field size, low nibble = length field size.
-  gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-  gsl::at(data_run, run_len++) = static_cast<BYTE>(orphaned_blocks_count);
+  // High nibble = LCN offset field size, low nibble = length field size. A
+  // one-byte length caps a run at 255 clusters, so a longer run takes three.
+  const BYTE length_bytes = shape.mapped_clusters <= 0xFF ? 1 : 3;
+  gsl::at(data_run, run_len++) =
+      static_cast<BYTE>(run_header4_lcn_bytes | length_bytes);
+  for (BYTE i = 0; i < length_bytes; i++) {
+    gsl::at(data_run, run_len++) =
+        static_cast<BYTE>(shape.mapped_clusters >> (8U * i));
+  }
   {
     const DWORD lcn = orphaned_blocks_lcn;
     std::memcpy(&gsl::at(data_run, run_len), &lcn, sizeof(lcn));
@@ -3245,6 +3254,98 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList() {
   return image;
 }
 
+namespace {
+
+// LCN the non-resident $ATTRIBUTE_LIST of
+// BuildFakeNtfsImageWithNonResidentMftAttributeList() maps its one cluster to.
+// Clear of every other $MFT fixture's LCNs.
+constexpr DWORD mft_list_lcn = 50;
+
+// $MFT's base record as MakeMftRecordWithDataContinuations() builds it for
+// mft_data_split_target_idx, except its $ATTRIBUTE_LIST is non-resident: one
+// cluster at mft_list_lcn, which holds the entries.
+FakeRecord MakeMftRecordWithNonResidentAttributeList() {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+  const DWORD entry_size =
+      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size);
+
+  DWORD offset = attr_offset_value;
+  auto& list_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
+      &record.at(offset));
+  list_attr.header.type = Attr::Type::AttributeList;
+  list_attr.header.non_resident = 1;
+  list_attr.header.name_length = 0;
+  list_attr.header.flags = 0;
+  list_attr.header.id = 0;
+  list_attr.start_vcn = 0;
+  list_attr.last_vcn = 0;
+  list_attr.data_run_offset = static_cast<WORD>(sizeof(list_attr));
+  list_attr.comp_unit_size = 0;
+  list_attr.real_size = entry_size;
+  list_attr.alloc_size = cluster_size;
+  list_attr.ini_size = entry_size;
+
+  const std::span<BYTE> list_run =
+      std::span<BYTE>(record).subspan(offset + list_attr.data_run_offset);
+  // High nibble = LCN offset field size, low nibble = length field size.
+  gsl::at(list_run, 0) = run_header4_lcn_bytes;
+  gsl::at(list_run, 1) = 1;
+  const DWORD lcn = mft_list_lcn;
+  std::memcpy(&gsl::at(list_run, 2), &lcn, sizeof(lcn));
+  gsl::at(list_run, 2 + sizeof(lcn)) = 0x00;  // terminate the run list
+  list_attr.header.total_size =
+      AlignAttrSize(sizeof(list_attr) + 2 + sizeof(lcn) + 1);
+  offset += list_attr.header.total_size;
+
+  auto& data_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
+      &record.at(offset));
+  data_attr.header.type = Attr::Type::Data;
+  data_attr.header.non_resident = 1;
+  data_attr.header.name_length = 0;
+  data_attr.header.flags = 0;
+  data_attr.header.id = 0;
+  data_attr.start_vcn = 0;
+  data_attr.last_vcn = 0;
+  data_attr.data_run_offset = static_cast<WORD>(sizeof(data_attr));
+  data_attr.comp_unit_size = 0;
+  data_attr.real_size = fake_file_record_size;
+  data_attr.alloc_size = data_attr.real_size;
+  data_attr.ini_size = data_attr.real_size;
+  data_attr.header.total_size =
+      AlignAttrSize(sizeof(data_attr) + run_list_room);
+  record.at(offset + sizeof(data_attr)) = 0x00;
+
+  WriteEndOfAttributesMarker(record, offset + data_attr.header.total_size);
+  return record;
+}
+
+}  // namespace
+
+std::vector<BYTE> BuildFakeNtfsImageWithNonResidentMftAttributeList() {
+  std::vector<BYTE> image =
+      BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+
+  // The one entry the resident list held, now stored in the list's cluster.
+  auto& entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
+      &image.at(static_cast<size_t>(mft_list_lcn) * cluster_size));
+  entry.attr_type = Attr::Type::Data;
+  entry.record_size = gsl::narrow<WORD>(
+      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
+  entry.name_length = 0;
+  entry.name_offset = 0;
+  entry.start_vcn = mft_data_split_target_idx;
+  entry.base_ref.segment_number = mft_data_split_ext_idx;
+  entry.base_ref.sequence_number = 0;
+  entry.attr_id = 0;
+
+  PutMftRecord(image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::Mft),
+               MakeMftRecordWithNonResidentAttributeList());
+
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithMftDataExtentChain() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
@@ -3649,7 +3750,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks() {
   const size_t root_offset =
       mft_addr + static_cast<size_t>(fake_file_record_size) *
                      static_cast<size_t>(Mft::Idx::Root);
-  const FakeRecord record = MakeOrphanedIndexBlocksRootRecord();
+  const FakeRecord record =
+      MakeOrphanedIndexBlocksRootRecord(FakeIndexAllocShape{});
   std::memcpy(&image.at(root_offset), record.data(), record.size());
 
   const size_t blocks_offset =
@@ -3698,7 +3800,24 @@ std::vector<BYTE> BuildFakeNtfsImageWithHugeOrphanScanBlockCount() {
       mft_addr + static_cast<size_t>(fake_file_record_size) *
                      static_cast<size_t>(Mft::Idx::Root);
   const FakeRecord record =
-      MakeOrphanedIndexBlocksRootRecord(huge_orphan_scan_declared_block_count);
+      MakeOrphanedIndexBlocksRootRecord(FakeIndexAllocShape{
+          .declared_block_count = huge_orphan_scan_declared_block_count});
+  std::memcpy(&image.at(root_offset), record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithIndexAllocationShape(FakeIndexAllocShape shape) {
+  std::vector<BYTE> image = BuildFakeNtfsImageWithOrphanedIndexBlocks();
+
+  // Only the root's $INDEX_ALLOCATION changes: the three real blocks, and
+  // $INDEX_ROOT's pointer to VCN 0, stay as the base fixture wrote them.
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const size_t root_offset =
+      mft_addr + static_cast<size_t>(fake_file_record_size) *
+                     static_cast<size_t>(Mft::Idx::Root);
+  const FakeRecord record = MakeOrphanedIndexBlocksRootRecord(shape);
   std::memcpy(&image.at(root_offset), record.data(), record.size());
 
   return image;
@@ -3724,6 +3843,26 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch() {
   auto& entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
       &image.at(vcn1_offset + sizeof(NtfsBrowser::Data::IndexBlock)));
   entry.mft_index = orphaned_block_sequence_mismatch_target_idx;
+
+  return image;
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithOrphanedEntryNamedRecord(FakeNamedRecordState state) {
+  std::vector<BYTE> image =
+      BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch();
+
+  // The "Orphan" entry already names
+  // orphaned_block_sequence_mismatch_target_idx. Rewrite that record under the
+  // entry's own sequence number, live or freed.
+  const NtfsBrowser::Data::FileRecordFlag flags =
+      state == FakeNamedRecordState::InUseSameSequence
+          ? NtfsBrowser::Data::FileRecordFlag::InUse
+          : NtfsBrowser::Data::FileRecordFlag{};
+  const FakeRecord record =
+      MakeMftTreeRecord(flags, orphaned_block_leaf_sequence_number, {});
+  PutMftRecord(image, static_cast<DWORD>(mft_lcn) * cluster_size,
+               orphaned_block_sequence_mismatch_target_idx, record);
 
   return image;
 }
