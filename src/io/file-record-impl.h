@@ -6,7 +6,6 @@
 #include <list>
 #include <memory>
 #include <optional>
-#include <span>
 #include <unordered_set>
 #include <vector>
 
@@ -24,16 +23,10 @@ namespace NtfsBrowser {
 
 namespace Io {
 
-// How the walk over a record's attribute headers ended.
-enum class WalkEnd : BYTE {
-  EndMarker,  // The terminating Attr::Type::All marker was reached.
-  RanOut,     // The record ended without a marker, or an attribute overran it.
-  Aborted     // An attribute was malformed, or the visit stopped the walk.
-};
-
 // Everything FileRecord<S> keeps out of its public header: the members, and the
 // private methods that work on them. Friends of FileRecord<S> (AttrList,
-// NtfsVolume) reach it through FileRecord<S>::impl_.
+// NtfsVolume) reach it through FileRecord<S>::impl_. AttrParser<S> fills the
+// attribute lists it holds.
 template <Cache::Strategy S>
 class FileRecord<S>::Impl {
  public:
@@ -61,7 +54,8 @@ class FileRecord<S>::Impl {
   std::array<std::vector<std::unique_ptr<Attr::AttrBase<S>>>, Attr::attr_nums>
       attr_list{};
 
-  // False makes AllocAttr() wrap $ATTRIBUTE_LIST generically, not via AttrList.
+  // False makes AttrParser::AllocAttr() wrap $ATTRIBUTE_LIST generically, not
+  // via AttrList.
   bool resolve_attr_list{true};
 
   // True bypasses the deleted-record gate in ParseAttrs(): set by
@@ -76,29 +70,12 @@ class FileRecord<S>::Impl {
   std::vector<BYTE> record_buffer;
 
   void ClearAttrs() noexcept;
-  [[nodiscard]] const Attr::HeaderCommon&
-      AlignedAttrHeader(std::span<const BYTE> bytes);
-  void MergeAttributeContinuations();
+  // Stays here: it reaches the volume's private Impl, which only
+  // FileRecord<S> may name. Attributes call it through this Impl.
   void UserCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                     bool& discard);
-  template <typename Resident>
-  [[nodiscard]] std::unique_ptr<Attr::AttrBase<S>>
-      AllocAttr(const Attr::HeaderCommon& ahc, bool& unhandled,
-                std::unordered_set<ULONGLONG>& attr_list_chain);
-  [[nodiscard]] bool ParseAttr(const Attr::HeaderCommon& ahc,
-                               std::unordered_set<ULONGLONG>& attr_list_chain);
+  // Parses the attributes of this record, see AttrParser<S>::Parse().
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
-  [[nodiscard]] const Attr::HeaderCommon* FirstAttrToWalk();
-  [[nodiscard]] WalkEnd
-      WalkAttrHeaders(const Attr::HeaderCommon& first,
-                      std::unordered_set<ULONGLONG>& attr_list_chain);
-  static void
-      MergeStreamChain(std::vector<std::unique_ptr<Attr::AttrBase<S>>>& attrs,
-                       std::vector<size_t>& indices,
-                       std::vector<size_t>& to_erase);
-  [[nodiscard]] bool VisitAttr(std::span<const BYTE> cur,
-                               const Attr::HeaderCommon& head,
-                               std::unordered_set<ULONGLONG>& attr_list_chain);
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref);
 };

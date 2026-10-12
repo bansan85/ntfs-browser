@@ -46,6 +46,9 @@ class Context;
 namespace Io {
 
 template <Cache::Strategy S>
+class AttrParser;
+
+template <Cache::Strategy S>
 class DirectoryIndex;
 
 }  // namespace Io
@@ -67,6 +70,7 @@ class AttrNonResident : public Attr::AttrBase<S> {
   ~AttrNonResident() override = default;
 
   friend class Io::FileRecord<S>;
+  friend class Io::AttrParser<S>;
   friend class Io::DirectoryIndex<S>;
   friend class NtfsVolume<S>;
   // Gives an encrypted stream its context, through SetEfsContext().
