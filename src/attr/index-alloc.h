@@ -24,6 +24,13 @@ enum class Strategy : std::uint8_t;
 
 }  // namespace Cache
 
+namespace Io {
+
+template <Cache::Strategy S>
+class DirectoryIndex;
+
+}  // namespace Io
+
 namespace Attr {
 
 class IndexBlock;
@@ -39,6 +46,7 @@ class AttrIndexAlloc : public AttrNonResident<S> {
   ~AttrIndexAlloc() override;
 
   friend class Io::FileRecord<S>;
+  friend class Io::DirectoryIndex<S>;
 
  private:
   ULONGLONG index_block_count_{0};

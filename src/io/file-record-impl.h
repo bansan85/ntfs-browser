@@ -7,7 +7,6 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -20,7 +19,6 @@
 #include "attr/slot.h"
 #include "data/file-record-header.h"
 #include "record/header.h"
-#include "upcase/upcase.h"
 
 namespace NtfsBrowser {
 namespace Efs {
@@ -29,34 +27,7 @@ struct WrappedFek;
 
 }  // namespace Efs
 
-namespace Attr {
-
-template <Cache::Strategy S>
-class AttrIndexAlloc;
-
-}  // namespace Attr
-
 namespace Io {
-
-// How the recovery scan walks one $INDEX_ALLOCATION attribute.
-struct OrphanScanPlan {
-  // VCN step from one index block to the next.
-  ULONGLONG clusters_per_block;
-  // Blocks the attribute declares.
-  ULONGLONG declared_blocks;
-  // Blocks the scan visits.
-  ULONGLONG scan_limit;
-  // True when the scan visits fewer blocks than declared.
-  bool capped;
-};
-
-// One name lookup down a B+ tree: the name, the volume's collation, and the
-// index block VCNs the walk has already visited.
-struct IndexSearch {
-  std::wstring_view file_name;
-  const UpCase::Table& upcase;
-  std::unordered_set<ULONGLONG> visited_vcns;
-};
 
 // How the walk over a record's attribute headers ended.
 enum class WalkEnd : BYTE {
@@ -132,33 +103,11 @@ class FileRecord<S>::Impl {
       MergeStreamChain(std::vector<std::unique_ptr<Attr::AttrBase<S>>>& attrs,
                        std::vector<size_t>& indices,
                        std::vector<size_t>& to_erase);
-  [[nodiscard]] static const std::vector<IndexEntryView>*
-      FileNameIndexRootEntries(const Attr::AttrBase<S>& attr);
   [[nodiscard]] bool VisitAttr(std::span<const BYTE> cur,
                                const Attr::HeaderCommon& head,
                                std::unordered_set<ULONGLONG>& attr_list_chain);
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref);
-  [[nodiscard]] std::optional<IndexEntry>
-      VisitIndexBlock(ULONGLONG vcn, IndexSearch& search, size_t depth) const;
-  [[nodiscard]] std::optional<IndexEntry>
-      SearchIndexEntries(const std::vector<IndexEntryView>& entries,
-                         IndexSearch& search, size_t child_depth,
-                         bool at_root) const;
-  [[nodiscard]] std::optional<IndexEntry>
-      FindSubEntryInOrder(std::wstring_view file_name) const;
-  void TraverseSubNode(ULONGLONG vcn, const SubentryCallback& se_call_back,
-                       void* context,
-                       std::unordered_set<ULONGLONG>& visited_vcns,
-                       size_t depth) const;
-  void ScanOrphanedIndexBlocks(
-      const SubentryCallback& se_call_back, void* context,
-      std::unordered_set<ULONGLONG>& visited_vcns) const;
-  [[nodiscard]] OrphanScanPlan
-      PlanOrphanScan(const Attr::AttrIndexAlloc<S>& alloc) const;
-  void ReportOrphanedBlock(Attr::AttrIndexAlloc<S>& alloc, ULONGLONG vcn,
-                           const SubentryCallback& se_call_back,
-                           void* context) const;
 };
 
 }  // namespace Io

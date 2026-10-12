@@ -42,6 +42,13 @@ class Context;
 
 }  // namespace Efs
 
+namespace Io {
+
+template <Cache::Strategy S>
+class DirectoryIndex;
+
+}  // namespace Io
+
 ////////////////////////////////
 // NonResident Attributes
 ////////////////////////////////
@@ -59,6 +66,7 @@ class AttrNonResident : public Attr::AttrBase<S> {
   ~AttrNonResident() override = default;
 
   friend class Io::FileRecord<S>;
+  friend class Io::DirectoryIndex<S>;
   friend class NtfsVolume<S>;
 
  private:

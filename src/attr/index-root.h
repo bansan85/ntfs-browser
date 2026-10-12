@@ -29,6 +29,13 @@ struct IndexRoot;
 
 }  // namespace Data
 
+namespace Io {
+
+template <Cache::Strategy S>
+class DirectoryIndex;
+
+}  // namespace Io
+
 namespace Attr {
 
 template <typename Resident, Cache::Strategy S>
@@ -43,6 +50,8 @@ class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
 
   template <Cache::Strategy>
   friend class NtfsBrowser::Io::FileRecord;
+  template <Cache::Strategy>
+  friend class NtfsBrowser::Io::DirectoryIndex;
 
  private:
   const Data::IndexRoot* index_root_;
