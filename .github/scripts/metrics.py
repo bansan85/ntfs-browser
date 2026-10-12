@@ -488,6 +488,8 @@ NOT_DATA_MEMBER = re.compile(
 EXPORT_PREFIX = re.compile(r"[A-Z][A-Z0-9_]*")
 # An identifier. The \b keeps the letters of a number such as 0x1F out.
 IDENT = re.compile(r"\b[A-Za-z_]\w*")
+# A name with the scopes written in front of it, such as Data::Filename.
+QUALIFIED_NAME = re.compile(r"\b(?:[A-Za-z_]\w*\s*::\s*)*[A-Za-z_]\w*")
 # A call: a name followed by an opening parenthesis.
 CALL = re.compile(r"\s*\(")
 # The object of an arrow that is this class's own: this-> or impl_->.
@@ -714,6 +716,38 @@ def cohesion(key, owned, members, code_lines):
     return len(roots), lonely
 
 
+def resolve_scopes(scopes, owner, by_simple):
+    """Returns the known classes a written scope chain can name, seen from the owner class."""
+    name = scopes[-1]
+    candidates = by_simple.get(name, set())
+    if len(scopes) > 1:
+        written = "::".join(scopes)
+        return {key for key in candidates if key == written or key.endswith("::" + written)}
+    owner_parts = owner.split("::")
+    # Innermost scope first: the owner class, its namespaces, then the global scope.
+    for depth in range(len(owner_parts), -1, -1):
+        scope = "::".join(owner_parts[:depth])
+        full = f"{scope}::{name}" if scope else name
+        if full in candidates:
+            return {full}
+    # A using-declaration, or a scope the scan does not track: any class of that name.
+    return set(candidates)
+
+
+def referenced_keys(text, owner, by_simple):
+    """Returns the known classes a stripped text names, resolved from the owner's scopes."""
+    found = set()
+    for match in QUALIFIED_NAME.finditer(text):
+        before = text[max(0, match.start() - 32):match.start()].rstrip()
+        # After "X<...>::" or a leading "::", the scope is one the scan cannot read.
+        if before.endswith("::"):
+            continue
+        scopes = [scope.strip() for scope in match.group().split("::")]
+        for end in range(1, len(scopes) + 1):
+            found |= resolve_scopes(scopes[:end], owner, by_simple)
+    return found
+
+
 def class_rows(groups, methods, code_lines):
     """Returns one row per class: WMC, LCOM4 and CBO. An Impl counts in its outer class."""
     by_simple = defaultdict(set)
@@ -726,13 +760,13 @@ def class_rows(groups, methods, code_lines):
         primary = next((part for part in group["parts"] if not part["is_impl"]),
                        group["parts"][0])
         components, lonely = cohesion(key, owned, group["members"], code_lines)
-        # CBO: the classes whose simple name appears in the class text or its method bodies.
-        tokens = set()
+        # CBO: the classes the text names, resolved as C++ resolves the written scopes.
+        coupled = set()
         for part in group["parts"]:
-            tokens.update(IDENT.findall("\n".join(body_lines(code_lines, part))))
+            coupled |= referenced_keys("\n".join(body_lines(code_lines, part)), key, by_simple)
         for method in owned:
-            tokens.update(IDENT.findall("\n".join(body_lines(code_lines, method))))
-        coupled = set().union(*(by_simple.get(token, set()) for token in tokens)) - {key}
+            coupled |= referenced_keys("\n".join(body_lines(code_lines, method)), key, by_simple)
+        coupled -= {key}
         rows.append({
             "file": primary["file"], "class": key,
             "start_line": primary["start"], "end_line": primary["end"],
