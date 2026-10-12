@@ -62,11 +62,13 @@ class FaultyDiskReader final : public NtfsBrowser::IDiskReader {
   bool armed_ = false;
 };
 
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
 // Fake images put their compressed or stored unit data at LCN 30 onwards.
 constexpr ULONGLONG compressed_fault_begin =
     30ULL * NtfsBrowserTests::fake_cluster_size;
 constexpr ULONGLONG compressed_fault_end =
     40ULL * NtfsBrowserTests::fake_cluster_size;
+#endif
 
 }  // namespace
 
@@ -111,6 +113,9 @@ TEST_CASE("A cluster read that fails or throws yields no data, not a crash",
   }
 }
 
+// Without decompression compiled in, ParseAttrs() rejects the compressed
+// $DATA stream before any unit is read.
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
 TEST_CASE("A compression unit whose clusters cannot be read yields no data",
           "[cov-nri]") {
   // A FullCache volume serves these clusters from its cache, so only NoCache
@@ -144,3 +149,4 @@ TEST_CASE("A compression unit whose clusters cannot be read yields no data",
         NtfsBrowserTests::BuildFakeNtfsImageWithStoredCompressionUnit());
   }
 }
+#endif

@@ -488,6 +488,9 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK_FALSE(alloc[0]->ReadData(7168, buffer).has_value());
   }
 
+  // Without decompression compiled in, ParseAttrs() rejects the compressed
+  // $DATA stream before any unit is read.
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
   SECTION("a compressed unit") {
     std::vector<BYTE> image =
         NtfsBrowserTests::BuildFakeNtfsImageWithCompressedFile();
@@ -516,4 +519,5 @@ TEMPLATE_TEST_CASE_SIG(
                        buffer)
             .has_value());
   }
+#endif
 }
