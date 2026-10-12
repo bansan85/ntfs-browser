@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -137,6 +138,26 @@ AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD data_ptr,
     }
   }
   return AttrWalk::Next;
+}
+
+// The resident base the attribute wrappers of strategy S are built over.
+template <Cache::Strategy S>
+using ResidentOf =
+    std::conditional_t<S == Cache::Strategy::NoCache, Attr::AttrResidentNoCache,
+                       Attr::AttrResidentFullCache>;
+
+// Returns the record's $STANDARD_INFORMATION wrapper, or nullptr if it has
+// none.
+template <Cache::Strategy S>
+const Attr::AttrStdInfo<ResidentOf<S>, S>*
+    StdInfoOf(const FileRecord<S>& record) noexcept {
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
+      record.GetAttr(Attr::Type::StandardInformation);
+  if (vec.empty()) {
+    return nullptr;
+  }
+  return static_cast<const Attr::AttrStdInfo<ResidentOf<S>, S>*>(
+      vec.front().get());
 }
 
 }  // namespace
@@ -1079,22 +1100,9 @@ template <Cache::Strategy S>
 void Io::FileRecord<S>::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
                                     FILETIME* access_tm,
                                     FILETIME* change_tm) const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
   // Standard Information attribute hold the most updated file time
-  if (!vec.empty()) {
-    if constexpr (S == Cache::Strategy::NoCache) {
-      reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                               Cache::Strategy::NoCache>*>(
-          vec.front().get())
-          ->GetFileTime(write_tm, create_tm, access_tm, change_tm);
-    } else if constexpr (S == Cache::Strategy::FullCache) {
-      reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentFullCache,
-                                               Cache::Strategy::FullCache>*>(
-          vec.front().get())
-          ->GetFileTime(write_tm, create_tm, access_tm, change_tm);
-    }
+  if (const auto* std_info = StdInfoOf(*this); std_info != nullptr) {
+    std_info->GetFileTime(write_tm, create_tm, access_tm, change_tm);
     return;
   }
 
@@ -1467,302 +1475,80 @@ bool Io::FileRecord<S>::IsDirectory() const noexcept {
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsReadOnly() const noexcept {
-  // Standard Information attribute holds the most updated file time
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsReadOnly();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsReadOnly();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsReadOnly();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsHidden() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsHidden();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsHidden();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsHidden();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsSystem() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsSystem();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsSystem();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsSystem();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsArchive() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsArchive();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsArchive();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsArchive();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsDevice() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsDevice();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsDevice();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsDevice();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsNormal() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsNormal();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsNormal();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsNormal();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsTemporary() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsTemporary();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsTemporary();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsTemporary();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsCompressed() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsCompressed();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsCompressed();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsCompressed();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsOffline() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsOffline();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsOffline();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsOffline();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsNotContentIndexed() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsNotContentIndexed();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsNotContentIndexed();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsNotContentIndexed();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsEncrypted() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsEncrypted();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsEncrypted();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsEncrypted();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsSparse() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsSparse();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsSparse();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsSparse();
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsReparsePoint() const noexcept {
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      std::get<Attr::AttrIndex(Attr::Type::StandardInformation)>(
-          impl_->attr_list);
-  if (vec.empty()) {
-    return false;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<Attr::AttrResidentNoCache,
-                                                    Cache::Strategy::NoCache>*>(
-               vec.front().get())
-        ->IsReparsePoint();
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    return reinterpret_cast<const Attr::AttrStdInfo<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-               vec.front().get())
-        ->IsReparsePoint();
-  }
-  return false;
+  const auto* std_info = StdInfoOf(*this);
+  return std_info != nullptr && std_info->IsReparsePoint();
 }
 
 template class FileRecord<Cache::Strategy::NoCache>;
