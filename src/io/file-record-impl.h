@@ -28,7 +28,26 @@ struct WrappedFek;
 
 }  // namespace Efs
 
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrIndexAlloc;
+
+}  // namespace Attr
+
 namespace Io {
+
+// How the recovery scan walks one $INDEX_ALLOCATION attribute.
+struct OrphanScanPlan {
+  // VCN step from one index block to the next.
+  ULONGLONG clusters_per_block;
+  // Blocks the attribute declares.
+  ULONGLONG declared_blocks;
+  // Blocks the scan visits.
+  ULONGLONG scan_limit;
+  // True when the scan visits fewer blocks than declared.
+  bool capped;
+};
 
 // Everything FileRecord<S> keeps out of its public header: the members, and the
 // private methods that work on them. Friends of FileRecord<S> (AttrList,
@@ -113,6 +132,11 @@ class FileRecord<S>::Impl {
   void ScanOrphanedIndexBlocks(
       const SubentryCallback& se_call_back, void* context,
       std::unordered_set<ULONGLONG>& visited_vcns) const;
+  [[nodiscard]] OrphanScanPlan
+      PlanOrphanScan(const Attr::AttrIndexAlloc<S>& alloc) const;
+  void ReportOrphanedBlock(Attr::AttrIndexAlloc<S>& alloc, ULONGLONG vcn,
+                           const SubentryCallback& se_call_back,
+                           void* context) const;
 };
 
 }  // namespace Io

@@ -1256,6 +1256,18 @@ ULONGLONG MappedIndexBlocks(ULONGLONG mapped_clusters, DWORD cluster_size,
   return mapped_bytes / index_block_size;
 }
 
+// Step, in VCN units, from one index block to the next. A sub-node VCN (what
+// visitedVcns holds, and what ParseIndexBlock() expects) is in clusters when a
+// block spans a whole cluster or more, but in index_block_size units when a
+// cluster is too big to hold one - the same conversion ParseIndexBlock() itself
+// applies.
+ULONGLONG ClustersPerIndexBlock(DWORD index_block_size,
+                                DWORD cluster_size) noexcept {
+  return (cluster_size != 0 && index_block_size >= cluster_size)
+             ? index_block_size / cluster_size
+             : 1;
+}
+
 // Decides whether an entry found in an orphaned block is reported. It MUST be
 // filed under this very directory (selfRef, when known). With a volume given,
 // the record it names MUST also still be in use under the same sequence.
@@ -1287,6 +1299,69 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
 
 }  // namespace
 
+// Works out how the orphan scan walks alloc: the VCN step per block, and how
+// many blocks it visits.
+template <Cache::Strategy S>
+OrphanScanPlan Io::FileRecord<S>::Impl::PlanOrphanScan(
+    const Attr::AttrIndexAlloc<S>& alloc) const {
+  const DWORD index_block_size = volume->GetIndexBlockSize();
+  const DWORD cluster_size = volume->GetClusterSize();
+  const ULONGLONG clusters_per_block =
+      ClustersPerIndexBlock(index_block_size, cluster_size);
+
+  // GetDataSize() (declared real_size) can be forged far past what the
+  // attribute's own data runs actually map; the mapped VCN range, every merged
+  // instance included, bounds the scan to what the run list claims to cover
+  // instead, so a forged size alone can't drive tens of thousands of doomed
+  // ParseIndexBlock() calls. A range of clusters counts in bytes, not in
+  // clusters, since a block can be smaller than one.
+  const ULONGLONG mapped_clusters =
+      (alloc.GetLastVcn() >= alloc.GetStartVcn()) ? alloc.TotalClusters() : 0;
+  const ULONGLONG mapped_block_count =
+      MappedIndexBlocks(mapped_clusters, cluster_size, index_block_size);
+
+  const ULONGLONG declared_block_count = alloc.GetIndexBlockCount();
+  const ULONGLONG block_count = (declared_block_count < mapped_block_count)
+                                    ? declared_block_count
+                                    : mapped_block_count;
+  const ULONGLONG scan_limit = (block_count < max_orphan_scan_blocks)
+                                   ? block_count
+                                   : max_orphan_scan_blocks;
+  // The scan stops short when the mapped range or the cap is below the count.
+  const bool capped = declared_block_count > max_orphan_scan_blocks ||
+                      declared_block_count > mapped_block_count;
+  return {clusters_per_block, declared_block_count, scan_limit, capped};
+}
+
+// Reports the entries of one orphaned index block that
+// IsOrphanEntryReportable() accepts. A block that fails to parse is skipped.
+template <Cache::Strategy S>
+void Io::FileRecord<S>::Impl::ReportOrphanedBlock(
+    Attr::AttrIndexAlloc<S>& alloc, ULONGLONG vcn,
+    const SubentryCallback& se_call_back, void* context) const {
+  Attr::IndexBlock index_block;
+  if (!alloc.ParseIndexBlock(vcn, index_block)) {
+    return;
+  }
+
+  Log::Info("TraverseSubEntries() recovery: reporting orphaned index block {}",
+            vcn);
+
+  const std::optional<ULONGLONG> self_ref = file_reference;
+  const WORD self_sequence = self->GetSequenceNumber();
+  const bool self_in_use = !self->IsDeleted();
+  const bool include_deleted = volume->GetOptions().include_deleted;
+
+  for (const IndexEntryView& index_entry : index_block) {
+    if (index_entry.HasName() &&
+        IsOrphanEntryReportable(index_entry, self_ref, self_sequence,
+                                self_in_use,
+                                include_deleted ? nullptr : volume)) {
+      se_call_back(index_entry, context);
+    }
+  }
+}
+
 // Recovery pass for TraverseSubEntries(): a corrupt $INDEX_ROOT or internal
 // node can leave real $INDEX_ALLOCATION blocks with no surviving pointer to
 // them. Since every name appears exactly once in the B+ tree, scanning every
@@ -1303,73 +1378,22 @@ void Io::FileRecord<S>::Impl::ScanOrphanedIndexBlocks(
   }
 
   auto* alloc = static_cast<Attr::AttrIndexAlloc<S>*>(vec.front().get());
-
-  // A sub-node VCN (what visitedVcns holds, and what ParseIndexBlock()
-  // expects) is in clusters when a block spans a whole cluster or more, but
-  // in index_block_size units when a cluster is too big to hold one - the
-  // same conversion ParseIndexBlock() itself applies.
-  const DWORD index_block_size = volume->GetIndexBlockSize();
-  const DWORD cluster_size = volume->GetClusterSize();
-  const ULONGLONG clusters_per_block =
-      (cluster_size != 0 && index_block_size >= cluster_size)
-          ? index_block_size / cluster_size
-          : 1;
-
-  // GetDataSize() (declared real_size) can be forged far past what the
-  // attribute's own data runs actually map; the mapped VCN range, every merged
-  // instance included, bounds the scan to what the run list claims to cover
-  // instead, so a forged size alone can't drive tens of thousands of doomed
-  // ParseIndexBlock() calls. A range of clusters counts in bytes, not in
-  // clusters, since a block can be smaller than one.
-  const ULONGLONG mapped_clusters =
-      (alloc->GetLastVcn() >= alloc->GetStartVcn()) ? alloc->TotalClusters()
-                                                    : 0;
-  const ULONGLONG mapped_block_count =
-      MappedIndexBlocks(mapped_clusters, cluster_size, index_block_size);
-
-  const ULONGLONG declared_block_count = alloc->GetIndexBlockCount();
-  const ULONGLONG block_count = (declared_block_count < mapped_block_count)
-                                    ? declared_block_count
-                                    : mapped_block_count;
-  const ULONGLONG scan_limit = (block_count < max_orphan_scan_blocks)
-                                   ? block_count
-                                   : max_orphan_scan_blocks;
-  if (declared_block_count > max_orphan_scan_blocks ||
-      declared_block_count > mapped_block_count) {
+  const OrphanScanPlan plan = PlanOrphanScan(*alloc);
+  if (plan.capped) {
     Log::Info(
         "TraverseSubEntries() recovery: orphan scan capped at {} of {} "
         "index blocks",
-        scan_limit, declared_block_count);
+        plan.scan_limit, plan.declared_blocks);
   }
 
-  const std::optional<ULONGLONG> self_ref = file_reference;
-  const WORD self_sequence = self->GetSequenceNumber();
-  const bool self_in_use = !self->IsDeleted();
-  const bool include_deleted = volume->GetOptions().include_deleted;
-
-  for (ULONGLONG block_index = 0; block_index < scan_limit; block_index++) {
-    const ULONGLONG vcn = block_index * clusters_per_block;
+  for (ULONGLONG block_index = 0; block_index < plan.scan_limit;
+       block_index++) {
+    const ULONGLONG vcn = block_index * plan.clusters_per_block;
     if (!visited_vcns.insert(vcn).second) {
       continue;
     }
 
-    Attr::IndexBlock index_block;
-    if (!alloc->ParseIndexBlock(vcn, index_block)) {
-      continue;
-    }
-
-    Log::Info(
-        "TraverseSubEntries() recovery: reporting orphaned index block {}",
-        vcn);
-
-    for (const IndexEntryView& index_entry : index_block) {
-      if (index_entry.HasName() &&
-          IsOrphanEntryReportable(index_entry, self_ref, self_sequence,
-                                  self_in_use,
-                                  include_deleted ? nullptr : volume)) {
-        se_call_back(index_entry, context);
-      }
-    }
+    ReportOrphanedBlock(*alloc, vcn, se_call_back, context);
   }
 }
 
