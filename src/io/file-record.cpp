@@ -217,6 +217,16 @@ const Attr::AttrStdInfo<ResidentOf<S>, S>*
       vec.front().get());
 }
 
+// Logs a name match found by SearchIndexEntries(). The root and the index
+// blocks log under different names.
+void LogIndexMatch(bool at_root) {
+  if (at_root) {
+    Log::Debug("FindSubEntry() found entry in Index Root");
+  } else {
+    Log::Debug("VisitIndexBlock() found entry in sub-node");
+  }
+}
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -517,9 +527,9 @@ bool Io::FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
 template <Cache::Strategy S>
 // The depth limit and the visited-VCN set bound the recursion.
 // NOLINTNEXTLINE(misc-no-recursion)
-std::optional<IndexEntry> Io::FileRecord<S>::Impl::VisitIndexBlock(
-    ULONGLONG vcn, std::wstring_view file_name,
-    std::unordered_set<ULONGLONG>& visited_vcns, size_t depth) const {
+std::optional<IndexEntry>
+    Io::FileRecord<S>::Impl::VisitIndexBlock(ULONGLONG vcn, IndexSearch& search,
+                                             size_t depth) const {
   if (depth >= max_index_block_depth) {
     Log::Warn("VisitIndexBlock() aborting: recursion depth limit exceeded");
     return {};
@@ -527,7 +537,7 @@ std::optional<IndexEntry> Io::FileRecord<S>::Impl::VisitIndexBlock(
 
   // A subnode VCN already on this walk means the on-disk B+ tree is
   // malformed (self-loop or cycle) - stop instead of recursing forever.
-  if (!visited_vcns.insert(vcn).second) {
+  if (!search.visited_vcns.insert(vcn).second) {
     return {};
   }
 
@@ -543,38 +553,49 @@ std::optional<IndexEntry> Io::FileRecord<S>::Impl::VisitIndexBlock(
     return {};
   }
 
-  for (const IndexEntryView& index_entry : index_block) {
+  // Block entries log their match as a sub-node match, never as a root one.
+  return SearchIndexEntries(index_block, search, depth + 1,
+                            /*at_root=*/false);
+}
+
+// Scans one node's entries in collation order: a match returns a copy, a
+// bigger name is skipped, and a smaller one descends into its sub-node.
+template <Cache::Strategy S>
+// The depth limit and the visited-VCN set bound the recursion.
+// NOLINTNEXTLINE(misc-no-recursion)
+std::optional<IndexEntry> Io::FileRecord<S>::Impl::SearchIndexEntries(
+    const std::vector<IndexEntryView>& entries, IndexSearch& search,
+    size_t child_depth, bool at_root) const {
+  for (const IndexEntryView& index_entry : entries) {
     if (index_entry.HasName()) {
       // Compare name
       const int comparison =
-          index_entry.Compare(file_name, volume->impl_->GetUpCaseTable());
+          index_entry.Compare(search.file_name, search.upcase);
       if (comparison == 0) {
-        // Must be a copy: the view dies with index_block, the IndexEntry
-        // keeps its own bytes.
-        Log::Debug("VisitIndexBlock() found entry in sub-node");
+        // Must be a copy: the view dies with its node (this FileRecord for
+        // the root), the IndexEntry keeps its own bytes.
+        LogIndexMatch(at_root);
         return IndexEntry(index_entry);
       }
-      if (comparison < 0)  // fileName is smaller than IndexEntry
-      {
-        // Visit SubNode
-        if (!index_entry.IsSubNodePtr()) {
-          return {};  // not found
-        }
-        // Search in SubNode (IndexBlock), recursive call
-        std::optional<IndexEntry> retval = VisitIndexBlock(
-            index_entry.GetSubNodeVCN(), file_name, visited_vcns, depth + 1);
-        if (retval) {
-          return retval;
-        }
-      }
       // Just step forward if fileName is bigger than IndexEntry
-    } else if (index_entry.IsSubNodePtr()) {
-      // Search in SubNode (IndexBlock), recursive call
-      std::optional<IndexEntry> retval = VisitIndexBlock(
-          index_entry.GetSubNodeVCN(), file_name, visited_vcns, depth + 1);
-      if (retval) {
-        return retval;
+      if (comparison > 0) {
+        continue;
       }
+      // fileName is smaller than a leaf entry: not found
+      if (!index_entry.IsSubNodePtr()) {
+        return {};
+      }
+    }
+
+    // Only a sub-node pointer is worth a visit from here on.
+    if (!index_entry.IsSubNodePtr()) {
+      continue;
+    }
+    // Search in SubNode (IndexBlock), recursive call
+    std::optional<IndexEntry> retval =
+        VisitIndexBlock(index_entry.GetSubNodeVCN(), search, child_depth);
+    if (retval) {
+      return retval;
     }
   }
 
@@ -1460,41 +1481,11 @@ std::optional<IndexEntry> Io::FileRecord<S>::Impl::FindSubEntryInOrder(
     return {};
   }
 
-  std::unordered_set<ULONGLONG> visited_vcns;
   // Loaded before the walk: reading $UpCase reuses the volume's buffers.
   const UpCase::Table& upcase = volume->impl_->GetUpCaseTable();
-
-  for (const IndexEntryView& index_entry : *all_ie) {
-    if (index_entry.HasName()) {
-      // Compare name
-      const int comparison = index_entry.Compare(file_name, upcase);
-      if (comparison == 0) {
-        // Must be a copy: the view dies with this FileRecord, the IndexEntry
-        // keeps its own bytes.
-        Log::Debug("FindSubEntry() found entry in Index Root");
-        return IndexEntry(index_entry);
-      }
-      // Just step forward if fileName is bigger than IndexEntry
-      if (comparison > 0) {
-        continue;
-      }
-      // fileName is smaller than a leaf entry: not found
-      if (!index_entry.IsSubNodePtr()) {
-        return {};
-      }
-    }
-
-    if (index_entry.IsSubNodePtr()) {
-      // Search in SubNode (IndexBlock)
-      std::optional<IndexEntry> retval = VisitIndexBlock(
-          index_entry.GetSubNodeVCN(), file_name, visited_vcns, 0);
-      if (retval) {
-        return retval;
-      }
-    }
-  }
-
-  return {};
+  IndexSearch search{file_name, upcase, {}};
+  return SearchIndexEntries(*all_ie, search, /*child_depth=*/0,
+                            /*at_root=*/true);
 }
 
 // Find Data attribute class of

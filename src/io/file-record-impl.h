@@ -20,6 +20,7 @@
 #include "attr/slot.h"
 #include "data/file-record-header.h"
 #include "record/header.h"
+#include "upcase/upcase.h"
 
 namespace NtfsBrowser {
 namespace Efs {
@@ -47,6 +48,14 @@ struct OrphanScanPlan {
   ULONGLONG scan_limit;
   // True when the scan visits fewer blocks than declared.
   bool capped;
+};
+
+// One name lookup down a B+ tree: the name, the volume's collation, and the
+// index block VCNs the walk has already visited.
+struct IndexSearch {
+  std::wstring_view file_name;
+  const UpCase::Table& upcase;
+  std::unordered_set<ULONGLONG> visited_vcns;
 };
 
 // Everything FileRecord<S> keeps out of its public header: the members, and the
@@ -120,9 +129,11 @@ class FileRecord<S>::Impl {
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref);
   [[nodiscard]] std::optional<IndexEntry>
-      VisitIndexBlock(ULONGLONG vcn, std::wstring_view file_name,
-                      std::unordered_set<ULONGLONG>& visited_vcns,
-                      size_t depth) const;
+      VisitIndexBlock(ULONGLONG vcn, IndexSearch& search, size_t depth) const;
+  [[nodiscard]] std::optional<IndexEntry>
+      SearchIndexEntries(const std::vector<IndexEntryView>& entries,
+                         IndexSearch& search, size_t child_depth,
+                         bool at_root) const;
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntryInOrder(std::wstring_view file_name) const;
   void TraverseSubNode(ULONGLONG vcn, const SubentryCallback& se_call_back,
