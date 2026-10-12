@@ -9,14 +9,18 @@ Writes to DIR (default build/metrics):
   functions.csv  one row per function, every per-function metric
   files.csv      one row per file: function count and worst values
   duplicates.csv one row per duplicated code snippet, grouped by block
-  summary.json   totals, averages, warning counts, duplication, coverage
+  summary.json   totals, averages, limit counts, duplication, coverage
   includes.csv   one row per file: include and dependency counts, cycles
   classes.csv    one row per class: WMC, LCOM4, CBO (a text scan, see class_rows)
-  summary.md     the summary, then the top N functions and classes per metric
+  summary.md     the summary, the limits, the breaches beyond them, then the top N
+                 functions and classes per metric
 
 --coverage reads a gaps-all.json written by coverage.py (default: the
 merged CI result, build/coverage/merged/gaps-all.json). Without that file
 the coverage columns stay empty.
+
+Limits have two tiers. A value above the alert asks for a look; a value above
+the limit asks for a refactoring. The exit code does not change.
 
 Churn comes from git history: one git log -L per function, one per file
 (about 3 minutes for the whole tree). It follows the lines of HEAD, so
@@ -49,9 +53,6 @@ DEFAULT_EXCLUDES = ["*/3rdparty/*", "*/build/*"]
 # Merged CI coverage, all phases: the unit tests and the fuzz regression replays.
 DEFAULT_COVERAGE = REPO / "build" / "coverage" / "merged" / "gaps-all.json"
 
-# Functions above this CCN are the refactoring candidates in the coverage and churn tables.
-COVERAGE_RISK_CCN = 10
-
 # Commit subjects that count as fixes: the Conventional Commits prefix, or the
 # older "Fix ..." style.
 FIX_SUBJECT = re.compile(r"^fix\b", re.IGNORECASE)
@@ -72,17 +73,48 @@ BASE_EXTENSIONS = [
     "boolcount", "duplicate", "complextags",
 ]
 
-# Warning limits: lizard's own CLI defaults (-C, -L, -a).
-WARN_CCN = 15
-WARN_LENGTH = 1000
-WARN_PARAMS = 100
-
-# Class limits. LCOM4 above 1 means the methods split into groups that share
-# no member and no call. WMC and CBO use common literature values; they are
-# not calibrated on this repository.
-WARN_LCOM4 = 1
-WARN_WMC = 47
-WARN_CBO = 14
+# Two tiers per indicator, each (alert, limit). A value strictly above the alert asks
+# for a look; strictly above the limit asks for a refactoring. Values calibrated on the
+# library's own distribution, p90 to p99, 2026-10. They never fail the run.
+# Per-function limits. The CCN variants share the CCN pair.
+FUNCTION_LIMITS = {
+    "ccn": (10, 15),
+    "ccn_mccabe": (10, 15),
+    "ccn_modified": (10, 15),
+    "ccn_no_logic": (10, 15),
+    "ccn_cpre": (10, 15),
+    "ccn_ignoreassert": (10, 15),
+    "cognitive": (15, 20),
+    "nloc": (40, 60),
+    "nesting_depth": (3, 4),
+    "params": (4, 5),
+    "fan_out": (10, 15),
+    "exits": (6, 8),
+}
+# Per-class limits. LCOM4 above 1 means the methods split into groups that share
+# no member and no call.
+CLASS_LIMITS = {"wmc": (50, 100), "cbo": (10, 20), "lcom4": (1, 2)}
+# Per-file limit on lines of code.
+FILE_LIMITS = {"file_nloc": (400, 800)}
+# Per-file limit on the files it includes directly.
+INCLUDE_LIMITS = {"includes_out": (15, 25)}
+# Table labels for the class, file and include columns, which MEANINGS does not hold.
+LIMIT_LABELS = {
+    "wmc": "weighted methods per class, WMC",
+    "cbo": "coupling between objects, CBO",
+    "lcom4": "lack of cohesion, LCOM4 components",
+    "file_nloc": "lines of code in the file",
+    "includes_out": "files the file includes directly",
+}
+# Include cycles allowed. Any cycle is beyond this limit.
+CYCLE_LIMIT = 0
+# A heavy function is above HEAVY_CCN in CCN or above HEAVY_NLOC in lines.
+# Both equal their alerts, so a heavy function is one already asked to be looked at.
+HEAVY_CCN = 10
+HEAVY_NLOC = 40
+# Coverage prerequisite for a heavy function. Agreed values, not derived from the data.
+MIN_COVERAGE_PCT = 90
+MAX_BRANCH_GAP_LINES = 2
 
 # Minimum token run that counts as duplicated code: lizard's default.
 DUPLICATE_MIN_TOKENS = 70
@@ -134,7 +166,7 @@ VARIANTS = [
     ]),
 ]
 
-# Columns that hold a CCN: each one gets a warning count in summary.md.
+# Columns that hold a CCN: each one is checked against the CCN limits.
 CCN_COLUMNS = ["ccn", "ccn_mccabe", "ccn_modified", "ccn_no_logic",
                "ccn_cpre", "ccn_ignoreassert"]
 
@@ -718,9 +750,6 @@ def summarize_classes(rows, matched, ambiguous):
         "impl_merged": sum(row["impl_merged"] for row in rows),
         "ambiguous_skipped": ambiguous,
         "methods_matched": matched,
-        "lcom4_above_limit": sum(row["lcom4"] > WARN_LCOM4 for row in rows),
-        "wmc_above_limit": sum(row["wmc"] > WARN_WMC for row in rows),
-        "cbo_above_limit": sum(row["cbo"] > WARN_CBO for row in rows),
     }
 
 
@@ -741,9 +770,6 @@ def class_section(info, rows, top):
             f"{info['count']} classes, {info['impl_merged']} merged with their Impl. "
             f"Ambiguous names skipped: {info['ambiguous_skipped']}. "
             f"Functions matched to a class: {info['methods_matched']}.", "",
-            f"- LCOM4 above {WARN_LCOM4}: {info['lcom4_above_limit']}",
-            f"- WMC above {WARN_WMC}: {info['wmc_above_limit']}",
-            f"- CBO above {WARN_CBO}: {info['cbo_above_limit']}",
             *table(f"Top {top} by LCOM4, then WMC", by_cohesion),
             *table(f"Top {top} by CBO", by_coupling)]
 
@@ -785,12 +811,6 @@ def summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source
         "nloc_in_files": sum(info.nloc for info in infos),
         "average": {c: number(mean(present(rows, c))) for c in NUMERIC_COLUMNS},
         "maximum": {c: number(max(present(rows, c), default=0)) for c in NUMERIC_COLUMNS},
-        "warnings": {
-            **{f"{c} > {WARN_CCN}": sum(v > WARN_CCN for v in present(rows, c))
-               for c in CCN_COLUMNS},
-            f"length > {WARN_LENGTH}": sum(v > WARN_LENGTH for v in present(rows, "length")),
-            f"params > {WARN_PARAMS}": sum(v > WARN_PARAMS for v in present(rows, "params")),
-        },
         "unmatched_variant_functions": unmatched,
         "duplication": {
             "blocks": len(blocks),
@@ -805,19 +825,101 @@ def summarize(rows, infos, blocks, duplicates, bools, unmatched, coverage_source
     }
 
 
-def write_markdown(path, summary, rows, top, coupling, class_table):
+def escape_cell(text):
+    """Escapes the pipes that would end a markdown table cell early."""
+    return str(text).replace("|", "\\|")
+
+
+def limit_label(column):
+    """Returns the table label of a limited column: its meaning, or its short label."""
+    return MEANINGS.get(column) or LIMIT_LABELS[column]
+
+
+def count_limits(limits, rows):
+    """Returns, per column, its alert and limit, and how many rows are above each."""
+    return {column: {"alert": alert, "limit": limit,
+                     "above_alert": sum(v > alert for v in present(rows, column)),
+                     "above_limit": sum(v > limit for v in present(rows, column))}
+            for column, (alert, limit) in limits.items()}
+
+
+def is_heavy(row):
+    """True for a function above the heavy line in CCN or in lines."""
+    return row["ccn"] > HEAVY_CCN or row["nloc"] > HEAVY_NLOC
+
+
+def coverage_breaches(row):
+    """Returns the ways a heavy function misses the coverage prerequisite. Empty without data."""
+    if not is_heavy(row) or row.get("coverage_pct") is None:
+        return []
+    breaches = []
+    if row["coverage_pct"] < MIN_COVERAGE_PCT:
+        breaches.append(f"coverage {row['coverage_pct']} < {MIN_COVERAGE_PCT}")
+    if row["branch_gap_lines"] > MAX_BRANCH_GAP_LINES:
+        breaches.append(f"branch gap {row['branch_gap_lines']} > {MAX_BRANCH_GAP_LINES}")
+    return breaches
+
+
+def coverage_limits(rows):
+    """Counts the heavy functions with coverage data, and those that miss the prerequisite."""
+    measured = [row for row in rows if is_heavy(row) and row.get("coverage_pct") is not None]
+    return {"heavy": len(measured),
+            "below_prerequisite": sum(bool(coverage_breaches(row)) for row in measured)}
+
+
+def limit_breaches(row, limits):
+    """Returns the values of a row above their limit, as 'column value > limit' texts."""
+    return [f"{column} {row[column]} > {limit}" for column, (_, limit) in limits.items()
+            if row.get(column) is not None and row[column] > limit]
+
+
+def breach_entries(hits):
+    """Keeps the (breaches, file, line, name) hits that have a breach, most breaches first."""
+    kept = [hit for hit in hits if hit[0]]
+    return sorted(kept, key=lambda hit: (-len(hit[0]), hit[1], hit[2]))
+
+
+def breach_row(hit):
+    """Formats a (breaches, file, line, name) hit as a table row."""
+    texts, file, line, name = hit
+    return f"| {', '.join(texts)} | {name} | {file}:{line} |"
+
+
+def beyond_block(title, header, body):
+    """Returns a '### title' block with its table, or 'None.' when the body is empty."""
+    if not body:
+        return ["", f"### {title}", "", "None."]
+    return ["", f"### {title}", "", header, "|" + "---|" * (header.count("|") - 1), *body]
+
+
+def write_markdown(path, summary, rows, files, top, coupling, class_table):
+    limits = summary["limits"]
+    cycles = summary["includes"]["cycles"]
+    coverage = limits["coverage"]
     lines = [
         "# ntfs-browser code metrics",
         "",
         f"lizard {summary['lizard']}: {summary['functions']} functions in "
         f"{summary['files']} files, {summary['nloc_in_functions']} lines in functions.",
         "",
-        "## Warnings",
+        "## Limits",
         "",
-        "| Limit | Functions |",
-        "|---|---|",
+        "| Indicator | Alert | Limit | Above alert | Above limit |",
+        "|---|---|---|---|---|",
     ]
-    lines += [f"| {limit} | {count} |" for limit, count in summary["warnings"].items()]
+    for group in ("functions", "classes", "files", "includes"):
+        lines += [f"| {escape_cell(limit_label(column))} | {count['alert']} | {count['limit']} | "
+                  f"{count['above_alert']} | {count['above_limit']} |"
+                  for column, count in limits[group].items()]
+    lines += [
+        "",
+        f"Include cycles: {len(cycles)}. The limit is {CYCLE_LIMIT}, so any cycle is beyond it.",
+        f"Heavy functions (CCN > {HEAVY_CCN} or NLOC > {HEAVY_NLOC}) need line coverage of "
+        f"at least {MIN_COVERAGE_PCT}% and at most {MAX_BRANCH_GAP_LINES} branch gap lines.",
+        (f"Coverage prerequisite: {coverage['below_prerequisite']} of {coverage['heavy']} "
+         "heavy functions with coverage data miss it." if coverage
+         else "Coverage prerequisite: no coverage data loaded."),
+    ]
     dup = summary["duplication"]
     bools = summary["boolean_operators"]
     lines += [
@@ -828,6 +930,39 @@ def write_markdown(path, summary, rows, top, coupling, class_table):
     for variant, count in summary["unmatched_variant_functions"].items():
         if count:
             lines.append(f"Variant {variant}: {count} functions not matched to the base run.")
+    lines += ["", "## Beyond the limit"]
+    base_limits = {column: pair for column, pair in FUNCTION_LIMITS.items()
+                   if column == "ccn" or column not in CCN_COLUMNS}
+    function_hits = breach_entries(
+        (limit_breaches(row, base_limits) + coverage_breaches(row), row["file"],
+         row["start_line"], f"`{escape_cell(row['function'])}`") for row in rows)
+    class_hits = breach_entries(
+        (limit_breaches(row, CLASS_LIMITS), row["file"], row["start_line"], f"`{row['class']}`")
+        for row in class_table)
+    file_breaches = defaultdict(list)
+    for row in files:
+        file_breaches[row["file"]] += limit_breaches(row, FILE_LIMITS)
+    for row in coupling:
+        file_breaches[row["file"]] += limit_breaches(row, INCLUDE_LIMITS)
+    file_hits = sorted(((texts, name) for name, texts in file_breaches.items() if texts),
+                       key=lambda hit: (-len(hit[0]), hit[1]))
+    lines += beyond_block("Functions", "| Breaches | Function | Location |",
+                          [breach_row(hit) for hit in function_hits])
+    lines += beyond_block("Classes", "| Breaches | Class | Location |",
+                          [breach_row(hit) for hit in class_hits])
+    lines += beyond_block("Files", "| Breaches | File |",
+                          [f"| {', '.join(texts)} | {name} |" for texts, name in file_hits])
+    lines += ["", "### Include cycles", ""]
+    lines += [f"- {', '.join(group)}" for group in cycles] or ["None."]
+    if coverage:
+        heavy = sorted((row for row in rows if coverage_breaches(row)),
+                       key=lambda row: (row["coverage_pct"], row["file"], row["start_line"]))
+        lines += beyond_block(
+            "Heavy functions below the coverage prerequisite",
+            "| Coverage % | Branch gap lines | CCN | NLOC | Function | Location |",
+            [f"| {row['coverage_pct']} | {row['branch_gap_lines']} | {row['ccn']} | "
+             f"{row['nloc']} | `{escape_cell(row['function'])}` | "
+             f"{row['file']}:{row['start_line']} |" for row in heavy])
     lines += [
         "",
         "## Averages and maxima per function",
@@ -835,37 +970,37 @@ def write_markdown(path, summary, rows, top, coupling, class_table):
         "| Metric | Average | Maximum |",
         "|---|---|---|",
     ]
-    lines += [f"| {MEANINGS[column]} | {summary['average'][column]} | "
+    lines += [f"| {escape_cell(MEANINGS[column])} | {summary['average'][column]} | "
               f"{summary['maximum'][column]} |" for column in NUMERIC_COLUMNS]
     for column in TOP_METRICS:
         ranked = sorted(rows, key=lambda r: r.get(column) if r.get(column) is not None else -1,
                         reverse=True)[:top]
         lines += ["", f"## Top {top}: {MEANINGS[column]}", "",
-                  f"| {MEANINGS[column]} | Function | Location |", "|---|---|---|"]
-        lines += [f"| {row[column]} | `{row['function']}` | "
+                  f"| {escape_cell(MEANINGS[column])} | Function | Location |", "|---|---|---|"]
+        lines += [f"| {row[column]} | `{escape_cell(row['function'])}` | "
                   f"{row['file']}:{row['start_line']} |" for row in ranked]
     if summary["coverage"]["source"]:
         risky = [row for row in rows
-                 if row["ccn"] > COVERAGE_RISK_CCN and row["coverage_pct"] is not None]
+                 if row["ccn"] > HEAVY_CCN and row["coverage_pct"] is not None]
         risky.sort(key=lambda r: (r["coverage_pct"], -r["ccn"]))
-        lines += ["", f"## Least covered functions with CCN > {COVERAGE_RISK_CCN}", "",
+        lines += ["", f"## Least covered functions with CCN > {HEAVY_CCN}", "",
                   f"Source: {summary['coverage']['source']}. Functions without coverage "
                   f"data: {summary['coverage']['functions_without_data']}.", "",
                   "| Coverage % | CCN | Uncovered lines | Function | Location |",
                   "|---|---|---|---|---|"]
         lines += [f"| {row['coverage_pct']} | {row['ccn']} | {row['uncovered_lines']} | "
-                  f"`{row['function']}` | {row['file']}:{row['start_line']} |"
+                  f"`{escape_cell(row['function'])}` | {row['file']}:{row['start_line']} |"
                   for row in risky[:top]]
     if summary["churn"]["enabled"]:
         hot = [row for row in rows
-               if row["ccn"] > COVERAGE_RISK_CCN and row["churn_commits"] is not None]
+               if row["ccn"] > HEAVY_CCN and row["churn_commits"] is not None]
         hot.sort(key=lambda r: (-r["churn_commits"], -r["ccn"]))
-        lines += ["", f"## Hotspots: CCN > {COVERAGE_RISK_CCN}, most changed first", "",
+        lines += ["", f"## Hotspots: CCN > {HEAVY_CCN}, most changed first", "",
                   f"Functions without history: {summary['churn']['functions_without_history']}.",
                   "", "| Commits | Fixes | CCN | Last change | Function | Location |",
                   "|---|---|---|---|---|---|"]
         lines += [f"| {row['churn_commits']} | {row['churn_fixes']} | {row['ccn']} | "
-                  f"{row['churn_last_change']} | `{row['function']}` | "
+                  f"{row['churn_last_change']} | `{escape_cell(row['function'])}` | "
                   f"{row['file']}:{row['start_line']} |" for row in hot[:top]]
     inc = summary["includes"]
     lines += ["", "## Include coupling", "",
@@ -953,9 +1088,17 @@ def main():
     summary["classes"] = summarize_classes(
         class_table, sum(len(methods.get(row["class"], [])) for row in class_table),
         len(ambiguous_classes))
+    summary["limits"] = {
+        "functions": count_limits(FUNCTION_LIMITS, rows),
+        "classes": count_limits(CLASS_LIMITS, class_table),
+        "files": count_limits(FILE_LIMITS, file_rows),
+        "includes": count_limits(INCLUDE_LIMITS, coupling),
+        "coverage": coverage_limits(rows) if coverage_source else None,
+    }
     (args.out / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8")
-    write_markdown(args.out / "summary.md", summary, rows, args.top, coupling, class_table)
+    write_markdown(args.out / "summary.md", summary, rows, file_rows, args.top, coupling,
+                   class_table)
     print(f"{summary['functions']} functions in {summary['files']} files, "
           f"{len(blocks)} duplicated blocks -> {args.out}")
 
