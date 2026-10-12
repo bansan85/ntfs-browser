@@ -21,11 +21,6 @@
 #include "record/header.h"
 
 namespace NtfsBrowser {
-namespace Efs {
-
-struct WrappedFek;
-
-}  // namespace Efs
 
 namespace Io {
 
@@ -84,8 +79,6 @@ class FileRecord<S>::Impl {
   [[nodiscard]] const Attr::HeaderCommon&
       AlignedAttrHeader(std::span<const BYTE> bytes);
   void MergeAttributeContinuations();
-  [[nodiscard]] bool AttachEfsContext();
-  [[nodiscard]] std::vector<Efs::WrappedFek> ReadEfsEntries() const;
   void UserCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                     bool& discard);
   template <typename Resident>

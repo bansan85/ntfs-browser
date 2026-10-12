@@ -13,6 +13,7 @@
 #include <ntfs-browser/io/file-record.h>
 
 #include "data/run-entry.h"
+#include "io/file-record-efs.h"
 
 namespace NtfsBrowser {
 
@@ -68,6 +69,9 @@ class AttrNonResident : public Attr::AttrBase<S> {
   friend class Io::FileRecord<S>;
   friend class Io::DirectoryIndex<S>;
   friend class NtfsVolume<S>;
+  // Gives an encrypted stream its context, through SetEfsContext().
+  template <Cache::Strategy T>
+  friend bool Io::AttachEfsContext(Io::FileRecord<T>& record);
 
  private:
   const Data::HeaderNonResident& attr_header_nr_;

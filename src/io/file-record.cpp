@@ -36,7 +36,6 @@
 #include "attr/bitmap.h"  // IWYU pragma: keep
 #include "attr/data.h"    // IWYU pragma: keep
 #include "attr/file-name.h"
-#include "attr/flags.h"
 #include "attr/index-alloc.h"  // IWYU pragma: keep
 #include "attr/index-root.h"
 #include "attr/list.h"          // IWYU pragma: keep
@@ -50,8 +49,7 @@
 #include "data/file-record-header.h"
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
-#include "efs/efs-context.h"
-#include "efs/efs-stream.h"
+#include "io/file-record-efs.h"
 #include "io/file-record-impl.h"
 #include "io/file-record-index.h"
 #include "log/ntfs-common.h"
@@ -549,11 +547,11 @@ bool Io::FileRecord<S>::Impl::ParseAttrs(
 
   if (end == WalkEnd::Aborted) {
     // Only a strict parse can fail here.
-    static_cast<void>(AttachEfsContext());
+    static_cast<void>(AttachEfsContext(*self));
     return false;
   }
 
-  if (!AttachEfsContext()) {
+  if (!AttachEfsContext(*self)) {
     ClearAttrs();
     return false;
   }
@@ -737,126 +735,6 @@ void Io::FileRecord<S>::Impl::MergeAttributeContinuations() {
       attrs.erase(attrs.begin() + gsl::narrow<ptrdiff_t>(index));
     }
   }
-}
-
-namespace {
-
-// The largest $EFS stream read. It holds a few key entries, a few KiB at
-// most. A forged size must not decide how much memory a parse allocates.
-constexpr ULONGLONG max_efs_stream_size = 64ULL * 1024;
-
-// Name of the $LOGGED_UTILITY_STREAM that holds the EFS keys.
-constexpr std::wstring_view efs_stream_name = L"$EFS";
-
-}  // namespace
-
-// Copies the key entries out of this record's $EFS stream. Returns none if the
-// stream is absent or malformed: the parse goes on, and the read that needs
-// the key fails, with the cause logged.
-template <Cache::Strategy S>
-std::vector<Efs::WrappedFek> Io::FileRecord<S>::Impl::ReadEfsEntries() const {
-#if !(defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
-      (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)))
-  // Neither backend is compiled in: there is no decryptor to feed keys to.
-  return {};
-#else
-  for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
-       std::get<Attr::AttrIndex(Attr::Type::LoggedUtilityStream)>(attr_list)) {
-    if (attr->GetAttrName() != efs_stream_name) {
-      continue;
-    }
-
-    const ULONGLONG size = attr->GetDataSize();
-    if (size > max_efs_stream_size) {
-      Log::Warn("$EFS stream is too large: {} bytes.", size);
-      return {};
-    }
-
-    // Owned copy: under NoCache the attribute's bytes are short-lived.
-    std::vector<BYTE> bytes(static_cast<size_t>(size));
-    const std::optional<ULONGLONG> read = attr->ReadData(0, bytes);
-    if (!read || *read != size) {
-      Log::Warn("Cannot read the $EFS stream.");
-      return {};
-    }
-
-    return Efs::ParseEfsStream(bytes).value_or(std::vector<Efs::WrappedFek>{});
-  }
-
-  return {};
-#endif
-}
-
-// Gives every encrypted $DATA stream of this record the context that
-// decrypts it. Only a non-resident stream is encrypted: EFS never leaves file
-// data inside the record. Returns false only when strict and one of the two
-// anomalies below is found: the caller then rejects the whole record instead
-// of reading the stream undecrypted.
-template <Cache::Strategy S>
-bool Io::FileRecord<S>::Impl::AttachEfsContext() {
-  // Attr::HeaderCommon::flags bit 0: the on-disk "compressed" flag. Real NTFS
-  // never sets it alongside 0x4000 (compression and encryption are mutually
-  // exclusive), but a forged record could. Decrypting a compressed stream's
-  // bytes before LZNT1 decoding sees them would corrupt them for no gain, so
-  // that combination is left undecrypted rather than misprocessed, when
-  // recovering. Checked with or without a decryption backend compiled in:
-  // the anomaly is in the flags, not in what can decrypt them.
-  const bool recover = volume->GetOptions().recover_errors;
-
-#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
-    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
-  std::vector<Attr::AttrNonResident<S>*> encrypted;
-#endif
-
-  for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
-       std::get<Attr::AttrIndex(Attr::Type::Data)>(attr_list)) {
-    const WORD flags = attr->GetAttrFlags();
-    if ((flags & Attr::flag_encrypted) == 0) {
-      continue;
-    }
-    if ((flags & Attr::flag_compressed) != 0) {
-      Log::Recoverable(recover,
-                       "A $DATA stream is flagged both compressed and "
-                       "encrypted; NTFS never combines them. Reading it "
-                       "undecrypted.");
-      if (!recover) {
-        return false;
-      }
-      continue;
-    }
-
-    auto* non_resident = dynamic_cast<Attr::AttrNonResident<S>*>(attr.get());
-    if (non_resident == nullptr) {
-      Log::Recoverable(recover,
-                       "A resident $DATA is flagged encrypted. Read as is.");
-      if (!recover) {
-        return false;
-      }
-      continue;
-    }
-
-#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
-    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
-    encrypted.push_back(non_resident);
-#endif
-  }
-
-#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
-    (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
-  if (encrypted.empty()) {
-    return true;
-  }
-
-  // One context for the record: its streams share one FEK, resolved once.
-  const auto context = std::make_shared<const Efs::Context>(
-      ReadEfsEntries(),
-      [&volume = *volume] { return volume.GetEfsKeyProvider(); },
-      volume->GetEfsCipherBackend());
-  for (Attr::AttrNonResident<S>* stream : encrypted) {
-    stream->SetEfsContext(context);
-  }
-#endif
-  return true;
 }
 
 template <Cache::Strategy S>
