@@ -268,6 +268,17 @@ inline constexpr std::array<BYTE, 4> small_resident_data_content{0xDE, 0xAD,
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithAttributeListOffsetMismatch();
 
+// Same volume as BuildFakeNtfsImage(), with the directory record at
+// attribute_list_dir_idx holding one $ATTRIBUTE_LIST entry whose type is not
+// a real Attr::Type. index_extension_idx holds a relocated $INDEX_ROOT.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttributeListInvalidType();
+
+// Same volume, with the directory record's $ATTRIBUTE_LIST naming the same
+// $INDEX_ROOT of index_extension_idx twice.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithAttributeListDuplicateEntry();
+
 // MFT index of the second record in a two-way $ATTRIBUTE_LIST cycle with #5.
 inline constexpr ULONGLONG attr_list_cycle_ext_idx = 6;
 

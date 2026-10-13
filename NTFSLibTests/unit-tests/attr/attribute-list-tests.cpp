@@ -7,6 +7,7 @@
 #include <future>
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -14,6 +15,7 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
 #include <ntfs-browser/attr/base.h>
@@ -30,6 +32,7 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
+#include "test-log-sink.h"
 
 namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::IndexEntry;
@@ -675,4 +678,198 @@ TEMPLATE_TEST_CASE_SIG(
   NtfsBrowser::Io::FileRecord<S> record(volume);
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_two_extents_first_vcn));
   CHECK(record.ParseFileRecord(NtfsBrowserTests::mft_two_extents_second_vcn));
+}
+
+namespace {
+
+// Parses the $ATTRIBUTE_LIST of record idx in image. Returns whether
+// ParseAttrs() succeeded, with the log it wrote.
+template <Cache::Strategy S>
+std::pair<bool, std::string> ParseListLog(std::vector<BYTE> image,
+                                          ULONGLONG idx, bool recover,
+                                          Attr::Mask mask) {
+  auto reader =
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
+  const NtfsVolume<S> volume(std::move(reader),
+                             VolumeOptions{.recover_errors = recover});
+  REQUIRE(volume.IsVolumeOK());
+
+  FileRecord<S> record(volume);
+  record.SetAttrMask(mask);
+  REQUIRE(record.ParseFileRecord(idx));
+  (void)NtfsBrowserTests::TakeCapturedLog();
+
+  const bool parsed = record.ParseAttrs();
+  return {parsed, NtfsBrowserTests::TakeCapturedLog()};
+}
+
+}  // namespace
+
+TEMPLATE_TEST_CASE_SIG(
+    "A truncated resident $ATTRIBUTE_LIST logs its short read, in both modes",
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const std::string short_read =
+      "Attribute List: ReadData returned 10 bytes, expected 26 - stopping";
+
+  SECTION("strict") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead(),
+        static_cast<ULONGLONG>(Mft::Idx::Root), false, Attr::Mask::All);
+    CHECK_FALSE(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(short_read));
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(
+                        "Attribute List is truncated."));
+  }
+
+  SECTION("recovering") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListShortRead(),
+        static_cast<ULONGLONG>(Mft::Idx::Root), true, Attr::Mask::All);
+    CHECK(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(short_read));
+    CHECK(log.find("Attribute List is truncated.") == std::string::npos);
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A $ATTRIBUTE_LIST entry with a record_size below the entry header logs "
+    "it, in both modes",
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const std::string too_small =
+      "Attribute List: record_size 5 is smaller than the entry header 26 - "
+      "stopping";
+
+  SECTION("strict") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::
+            BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
+        NtfsBrowserTests::attribute_list_dir_idx, false, Attr::Mask::IndexRoot);
+    CHECK_FALSE(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(too_small));
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(
+                        "Attribute List is truncated."));
+  }
+
+  SECTION("recovering") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::
+            BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
+        NtfsBrowserTests::attribute_list_dir_idx, true, Attr::Mask::IndexRoot);
+    CHECK(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(too_small));
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A $ATTRIBUTE_LIST whose walk ends past its declared size logs both "
+    "offsets, in both modes",
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const std::string overshoot =
+      "Attribute List ended at offset 36 instead of its declared size 32.";
+
+  SECTION("strict") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
+        NtfsBrowserTests::attribute_list_dir_idx, false, Attr::Mask::IndexRoot);
+    CHECK_FALSE(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(overshoot));
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(
+                        "Attribute List is truncated."));
+  }
+
+  SECTION("recovering") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
+        NtfsBrowserTests::attribute_list_dir_idx, true, Attr::Mask::IndexRoot);
+    CHECK(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(overshoot));
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "An $ATTRIBUTE_LIST entry of an invalid attribute type rejects the record "
+    "in both modes",
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const std::string message =
+      "Attribute List parse error (al_record.attr_type).";
+
+  SECTION("strict") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListInvalidType(),
+        NtfsBrowserTests::attribute_list_dir_idx, false, Attr::Mask::IndexRoot);
+    CHECK_FALSE(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(message));
+  }
+
+  SECTION("recovering") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListInvalidType(),
+        NtfsBrowserTests::attribute_list_dir_idx, true, Attr::Mask::IndexRoot);
+    CHECK_FALSE(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(message));
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A repeated $ATTRIBUTE_LIST entry for one record and type is resolved "
+    "once, in both modes",
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const std::string skipped = "already resolved in this chain, skipping";
+
+  SECTION("strict") {
+    auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+        NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDuplicateEntry());
+    const NtfsVolume<S> volume(std::move(reader));
+    REQUIRE(volume.IsVolumeOK());
+
+    FileRecord<S> dir(volume);
+    dir.SetAttrMask(Attr::Mask::IndexRoot);
+    REQUIRE(dir.ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
+    (void)NtfsBrowserTests::TakeCapturedLog();
+
+    CHECK(dir.ParseAttrs());
+    CHECK(dir.GetAttr(Attr::Type::IndexRoot).size() == 1);
+    CHECK_THAT(NtfsBrowserTests::TakeCapturedLog(),
+               Catch::Matchers::ContainsSubstring(skipped));
+  }
+
+  SECTION("recovering") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDuplicateEntry(),
+        NtfsBrowserTests::attribute_list_dir_idx, true, Attr::Mask::IndexRoot);
+    CHECK(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(skipped));
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "An $ATTRIBUTE_LIST entry with a zero record_size rejects the record in "
+    "both modes, with its endless-loop message",
+    "[attr-list][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const std::string message =
+      "Attribute List with zero record size has endless loop.";
+
+  SECTION("strict") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::
+            BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize(),
+        NtfsBrowserTests::attr_list_lifetime_base_idx, false, Attr::Mask::All);
+    CHECK_FALSE(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(message));
+  }
+
+  SECTION("recovering") {
+    const auto [parsed, log] = ParseListLog<S>(
+        NtfsBrowserTests::
+            BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize(),
+        NtfsBrowserTests::attr_list_lifetime_base_idx, true, Attr::Mask::All);
+    CHECK_FALSE(parsed);
+    CHECK_THAT(log, Catch::Matchers::ContainsSubstring(message));
+  }
 }

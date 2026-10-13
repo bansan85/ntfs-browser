@@ -44,6 +44,8 @@ class AttrList : public Resident {
   ~AttrList() override;
 
  private:
+  bool ReadEntryHeader(ULONGLONG offset, Data::AttributeList& entry,
+                       bool recover, bool& truncated);
   static void ResolveEntry(const Data::AttributeList& entry,
                            Io::FileRecord<S>& file_record,
                            std::unordered_set<ULONGLONG>& attr_list_chain,

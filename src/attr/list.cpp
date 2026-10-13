@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cassert>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -40,6 +41,25 @@ ULONGLONG MakeChainKey(ULONGLONG record_ref, Type attr_type) noexcept {
          (static_cast<ULONGLONG>(attr_type) & chain_key_type_mask);
 }
 
+// Checks an entry's record_size before the walk advances by it. Returns false,
+// and logs, when it is smaller than the entry header. Zero throws: the walk
+// would never advance.
+bool CheckRecordSize(const Data::AttributeList& entry, bool recover) {
+  if (entry.record_size == 0) {
+    throw std::runtime_error(
+        "Attribute List with zero record size has endless loop.\n");
+  }
+  if (entry.record_size < Data::attribute_list_entry_header_size) {
+    Log::Recoverable(recover,
+                     "Attribute List: record_size {} is smaller than the "
+                     "entry header {} - stopping",
+                     entry.record_size,
+                     static_cast<WORD>(Data::attribute_list_entry_header_size));
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 template <typename Resident, Cache::Strategy S>
@@ -48,13 +68,12 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
                                 std::unordered_set<ULONGLONG>& attr_list_chain)
     : Resident(ahc, file_record) {
   Log::Trace("Attribute: Attribute List");
-  if (!file_record.impl_->file_reference) {
-    throw std::runtime_error("Missing file reference\n");
-  }
+  // AttrParser::Parse() runs only on a record that ParseFileRecord() read,
+  // and that sets file_reference too.
+  assert(file_record.impl_->file_reference.has_value());
 
   const bool recover = file_record.GetVolume().GetOptions().recover_errors;
   ULONGLONG offset = 0;
-  std::optional<ULONGLONG> len = 0;
   Data::AttributeList al_record{};
   bool truncated = false;
 
@@ -62,26 +81,7 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   attr_list_chain.insert(
       MakeChainKey(*file_record.impl_->file_reference, Type::AttributeList));
 
-  while ((
-      len = this->ReadData(offset, {reinterpret_cast<BYTE*>(&al_record),
-                                    Data::attribute_list_entry_header_size}))) {
-    if (*len != Data::attribute_list_entry_header_size) {
-      // A resident list's normal end already exited the loop above (ReadData
-      // returns nullopt at offset >= size); a non-resident list's normal end
-      // is this exact zero-byte read, landing precisely on the declared
-      // size. Anything else here is a truncated entry.
-      if (*len != 0 || offset != this->GetDataSize()) {
-        truncated = true;
-        Log::Recoverable(
-            recover,
-            "Attribute List: ReadData returned {} bytes, "
-            "expected {} - stopping",
-            *len,
-            static_cast<ULONGLONG>(Data::attribute_list_entry_header_size));
-      }
-      break;
-    }
-
+  while (ReadEntryHeader(offset, al_record, recover, truncated)) {
     if (!Attr::IsValidAttrType(al_record.attr_type)) {
       throw std::runtime_error(
           "Attribute List parse error (al_record.attr_type).\n");
@@ -92,27 +92,16 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
 
     ResolveEntry(al_record, file_record, attr_list_chain, recover);
 
-    if (al_record.record_size != 0 &&
-        al_record.record_size < Data::attribute_list_entry_header_size) {
+    if (!CheckRecordSize(al_record, recover)) {
       truncated = true;
-      Log::Recoverable(
-          recover,
-          "Attribute List: record_size {} is smaller than the "
-          "entry header {} - stopping",
-          al_record.record_size,
-          static_cast<WORD>(Data::attribute_list_entry_header_size));
       break;
-    }
-    if (al_record.record_size == 0) {
-      throw std::runtime_error(
-          "Attribute List with zero record size has endless loop.\n");
     }
     offset += al_record.record_size;
   }
 
   // A resident list's normal end (ReadData returning nullopt) can still land
-  // past its own declared size, when the last entry's record_size
-  // overshoots it - not caught by either check above.
+  // past its own declared size, when the last entry's record_size overshoots
+  // it - not caught by either check above.
   if (!truncated && offset != this->GetDataSize()) {
     truncated = true;
     Log::Recoverable(recover,
@@ -126,6 +115,36 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   }
 }
 
+// Reads the header of the entry at offset. Returns false when the walk ends:
+// at a normal end, or at a truncated entry, which sets truncated and is logged.
+template <typename Resident, Cache::Strategy S>
+bool AttrList<Resident, S>::ReadEntryHeader(ULONGLONG offset,
+                                            Data::AttributeList& entry,
+                                            bool recover, bool& truncated) {
+  const std::optional<ULONGLONG> len =
+      this->ReadData(offset, {reinterpret_cast<BYTE*>(&entry),
+                              Data::attribute_list_entry_header_size});
+  if (!len) {
+    // A resident list's normal end: ReadData returns nullopt at offset >= size.
+    return false;
+  }
+  if (*len == Data::attribute_list_entry_header_size) {
+    return true;
+  }
+
+  // A non-resident list's normal end is this exact zero-byte read, landing
+  // precisely on the declared size. Anything else here is a truncated entry.
+  if (*len != 0 || offset != this->GetDataSize()) {
+    truncated = true;
+    Log::Recoverable(
+        recover,
+        "Attribute List: ReadData returned {} bytes, "
+        "expected {} - stopping",
+        *len, static_cast<ULONGLONG>(Data::attribute_list_entry_header_size));
+  }
+  return false;
+}
+
 // Moves the attributes entry names, from the extension record that holds them,
 // into file_record. A contained or unwanted attribute is skipped.
 template <typename Resident, Cache::Strategy S>
@@ -134,9 +153,6 @@ void AttrList<Resident, S>::ResolveEntry(
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
   const ULONGLONG record_ref = entry.base_ref.segment_number;
   const Mask attr_mask = Attr::AttrMask(entry.attr_type);
-  if (!file_record.impl_->file_reference) {
-    throw std::runtime_error("Missing file reference\n");
-  }
   const ULONGLONG self_ref = *file_record.impl_->file_reference;
   // Skip contained attributes
   // Skip unwanted attributes

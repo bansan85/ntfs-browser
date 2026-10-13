@@ -1240,6 +1240,47 @@ FakeRecord MakeAttributeListOffsetMismatchDirRecord() {
   return record;
 }
 
+// Builds a directory record whose resident $ATTRIBUTE_LIST holds one full
+// entry per (type, record) pair, each with a nominal record_size.
+FakeRecord MakeAttributeListEntriesDirRecord(
+    const std::vector<std::pair<Attr::Type, ULONGLONG>>& entries) {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
+                             NtfsBrowser::Data::FileRecordFlag::Dir);
+
+  constexpr WORD entry_size_value = static_cast<WORD>(
+      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
+
+  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+      &record.at(attr_offset_value));
+  attr.header.type = Attr::Type::AttributeList;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_size = gsl::narrow<DWORD>(entry_size_value * entries.size());
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
+
+  const size_t body_offset = attr_offset_value + attr.attr_offset;
+  for (size_t i = 0; i < entries.size(); i++) {
+    auto& entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
+        &record.at(body_offset + (i * entry_size_value)));
+    entry.attr_type = entries[i].first;
+    entry.record_size = entry_size_value;
+    entry.name_length = 0;
+    entry.name_offset = 0;
+    entry.start_vcn = 0;
+    entry.base_ref.segment_number = entries[i].second;
+    entry.base_ref.sequence_number = 0;
+    entry.attr_id = 0;
+  }
+
+  WriteEndOfAttributesMarker(record,
+                             attr_offset_value + attr.header.total_size);
+  return record;
+}
+
 // Builds a directory record whose resident $ATTRIBUTE_LIST, via a single
 // full entry, relocates to targetIdx.
 FakeRecord MakeAttributeListCycleRecord(ULONGLONG target_idx) {
@@ -3155,6 +3196,34 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttributeListCycle() {
       MakeAttributeListCycleRecord(static_cast<ULONGLONG>(Mft::Idx::Root));
   SetRecordLink(ext, 0, static_cast<ULONGLONG>(Mft::Idx::Root));
   put_record(attr_list_cycle_ext_idx, ext);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithAttributeListInvalidType() {
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+
+  // 0x0005 is not an Attr::Type: its low nibble is set.
+  PutMftRecord(image, mft_addr, attribute_list_dir_idx,
+               MakeAttributeListEntriesDirRecord(
+                   {{static_cast<Attr::Type>(0x0005), index_extension_idx}}));
+  PutMftRecord(image, mft_addr, index_extension_idx,
+               MakeIndexRootExtensionRecord(attribute_list_dir_idx));
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithAttributeListDuplicateEntry() {
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+
+  PutMftRecord(image, mft_addr, attribute_list_dir_idx,
+               MakeAttributeListEntriesDirRecord(
+                   {{Attr::Type::IndexRoot, index_extension_idx},
+                    {Attr::Type::IndexRoot, index_extension_idx}}));
+  PutMftRecord(image, mft_addr, index_extension_idx,
+               MakeIndexRootExtensionRecord(attribute_list_dir_idx));
 
   return image;
 }
