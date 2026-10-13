@@ -72,12 +72,6 @@ void AttrStdInfo<Resident, S>::GetFileTime(FILETIME* write_tm,
 }
 
 template <typename Resident, Cache::Strategy S>
-Data::StdInfoPermission
-    AttrStdInfo<Resident, S>::GetFilePermission() const noexcept {
-  return std_info_.permission;
-}
-
-template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsReadOnly() const noexcept {
   return static_cast<bool>(std_info_.permission &
                            Data::StdInfoPermission::ReadOnly);

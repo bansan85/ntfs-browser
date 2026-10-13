@@ -52,7 +52,6 @@ class AttrStdInfo : public Resident {
 
   void GetFileTime(FILETIME* write_tm, FILETIME* create_tm, FILETIME* access_tm,
                    FILETIME* change_tm = nullptr) const noexcept;
-  [[nodiscard]] Data::StdInfoPermission GetFilePermission() const noexcept;
   [[nodiscard]] bool IsReadOnly() const noexcept;
   [[nodiscard]] bool IsHidden() const noexcept;
   [[nodiscard]] bool IsSystem() const noexcept;

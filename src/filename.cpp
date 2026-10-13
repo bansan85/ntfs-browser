@@ -121,8 +121,7 @@ bool Filename::IsSparse() const noexcept {
              : false;
 }
 
-// Get Unicode File Name
-// Return 0: Unnamed, <0: buffer too small, -buffersize, >0 Name length
+// Returns the decoded file name, or an empty view when there is none.
 std::wstring_view Filename::GetFilename() const {
   if (filename_ == nullptr) {
     return {};

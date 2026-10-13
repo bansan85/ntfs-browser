@@ -1,5 +1,6 @@
 #include "attr/index-alloc.h"
 
+#include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -51,9 +52,8 @@ AttrIndexAlloc<S>::~AttrIndexAlloc() {
 template <Cache::Strategy S>
 bool AttrIndexAlloc<S>::PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
                                 std::span<const WORD> usarray) {
-  if (usarray.size() < sectors) {
-    return false;
-  }
+  // FixupIndexBlock() sizes usarray to exactly sectors entries.
+  assert(usarray.size() >= sectors);
   for (DWORD i = 0; i < sectors; i++) {
     // The last word of the i-th sector holds the USN.
     const size_t pos =

@@ -1,5 +1,7 @@
 #include "attr/bitmap.h"
 
+#include <cassert>
+
 #include <ntfs-browser/cache/strategy.h>
 
 #include "attr/non-resident.h"
@@ -28,13 +30,10 @@ AttrBitmap<Resident, S>::AttrBitmap(const HeaderCommon& ahc,
 
   bitmap_buf_.resize(bitmap_size_, 0);
 
-  std::optional<ULONGLONG> len =
+  // The span is the whole resident value, which AttrResident::ReadData() fills.
+  [[maybe_unused]] const std::optional<ULONGLONG> len =
       this->ReadData(0, {bitmap_buf_.data(), bitmap_buf_.size()});
-  if (!len || *len != bitmap_size_) {
-    bitmap_buf_.clear();
-    Log::Warn("Read Resident Bitmap data failed");
-    return;
-  }
+  assert(len && *len == bitmap_size_);
 
   Log::Debug("{} bytes of resident Bitmap data read", bitmap_size_);
 }
