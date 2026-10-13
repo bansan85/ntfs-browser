@@ -359,19 +359,19 @@ void NtfsVolume<S>::ClearAttrRawCB() noexcept {
 template <Cache::Strategy S>
 void NtfsVolume<S>::SetEfsKeyProvider(
     std::shared_ptr<Efs::IEfsKeyProvider> provider) noexcept {
-  impl_->efs_provider = std::move(provider);
-  impl_->efs_provider_set = true;
+  impl_->efs.provider = std::move(provider);
+  impl_->efs.provider_set = true;
 }
 
 template <Cache::Strategy S>
 std::shared_ptr<Efs::IEfsKeyProvider> NtfsVolume<S>::GetEfsKeyProvider() const {
-  if (!impl_->efs_provider_set) {
-    impl_->efs_provider_set = true;
+  if (!impl_->efs.provider_set) {
+    impl_->efs.provider_set = true;
 #ifdef _WIN32
-    impl_->efs_provider = Efs::MakeCertStoreKeyProvider();
+    impl_->efs.provider = Efs::MakeCertStoreKeyProvider();
 #endif
   }
-  return impl_->efs_provider;
+  return impl_->efs.provider;
 }
 
 template <Cache::Strategy S>
@@ -385,13 +385,13 @@ bool NtfsVolume<S>::SetEfsCipherBackend(Efs::CipherBackend backend) noexcept {
     return false;
 #endif
   }
-  impl_->efs_backend = backend;
+  impl_->efs.backend = backend;
   return true;
 }
 
 template <Cache::Strategy S>
 Efs::CipherBackend NtfsVolume<S>::GetEfsCipherBackend() const noexcept {
-  return impl_->efs_backend;
+  return impl_->efs.backend;
 }
 
 // Reads $UpCase (MFT record 10). Null when it is missing or unusable.

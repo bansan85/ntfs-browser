@@ -49,6 +49,23 @@ class Table;
 template <Cache::Strategy S>
 class NtfsVolume<S>::Impl {
  public:
+  // EFS key source and cipher backend. A provider that was never chosen is
+  // created on the first decryption, while a chosen null provider disables it.
+  struct EfsSettings {
+    std::shared_ptr<Efs::IEfsKeyProvider> provider;
+    // False until SetEfsKeyProvider() or the first GetEfsKeyProvider() call.
+    bool provider_set{false};
+
+    // Defaults to whichever backend is compiled in, Crypto++ first.
+#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
+    Efs::CipherBackend backend{Efs::CipherBackend::CryptoPp};
+#elif defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
+    Efs::CipherBackend backend{Efs::CipherBackend::BCrypt};
+#else
+    Efs::CipherBackend backend{Efs::CipherBackend::CryptoPp};
+#endif
+  };
+
   Impl(NtfsVolume<S>& self, const VolumeOptions& options);
 
   // The NtfsVolume this belongs to. The FileRecords it owns are built over it.
@@ -64,10 +81,8 @@ class NtfsVolume<S>::Impl {
   // from being retried.
   mutable std::unique_ptr<const UpCase::Table> upcase;
 
-  // EFS key source. efs_provider_set_ tells "never chosen", which lets the
-  // default provider be created on the first decryption, from "chosen to be
-  // none" (SetEfsKeyProvider(nullptr)), which disables decryption.
-  mutable std::shared_ptr<Efs::IEfsKeyProvider> efs_provider;
+  // The EFS key source and cipher backend the caller chose, or the defaults.
+  EfsSettings efs;
 
   mutable std::vector<BYTE> cluster_buffer;
 
@@ -79,17 +94,6 @@ class NtfsVolume<S>::Impl {
   bool volume_ok{false};
   BYTE version_major{0};
   BYTE version_minor{0};
-  mutable bool efs_provider_set{false};
-
-  // The selected EFS cipher backend. Defaults to whichever one is compiled
-  // in, Crypto++ first.
-#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-  Efs::CipherBackend efs_backend{Efs::CipherBackend::CryptoPp};
-#elif defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-  Efs::CipherBackend efs_backend{Efs::CipherBackend::BCrypt};
-#else
-  Efs::CipherBackend efs_backend{Efs::CipherBackend::CryptoPp};
-#endif
   mutable bool upcase_loaded{false};
 
   // Fixed for the volume's lifetime; set by the constructor, read back
