@@ -15,6 +15,7 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "test-log-sink.h"
 
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Io::FileRecord;
@@ -44,9 +45,12 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> record(volume);
+  (void)NtfsBrowserTests::TakeCapturedLog();
 
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(
                       NtfsBrowserTests::fragmented_mft_invalid_record_idx));
   CHECK_FALSE(parsed);
+  CHECK(NtfsBrowserTests::TakeCapturedLog().find(
+            "Offset must be lower than 1024.") != std::string::npos);
 }

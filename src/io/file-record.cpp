@@ -116,6 +116,25 @@ void Io::FileRecord<S>::Impl::UserCallBack(DWORD att_type,
   }
 }
 
+// Reads file record file_ref straight from disk, at a fixed offset from
+// mft_addr, into record_buffer. False if the read fails.
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::Impl::ReadDirectRecord(ULONGLONG file_ref) {
+  // Take as continuous disk allocation
+  LARGE_INTEGER fr_addr{};
+  try {
+    fr_addr.QuadPart = gsl::narrow<LONGLONG>(
+        volume->GetMFTAddr() + volume->GetFileRecordSize() * file_ref);
+  } catch (const std::exception& e) {
+    // fileRef is attacker-controlled and unbounded, so this sum can
+    // still overflow a LONGLONG even with mft_addr_ validated.
+    Log::Exception(e);
+    return false;
+  }
+
+  return volume->ReadInto(fr_addr, record_buffer);
+}
+
 // Reads file record fileRef into record_buffer_ and returns its parsed
 // header. Early records (and any record read before $MFT's own DATA
 // attribute is known) come straight from disk at a fixed offset; later
@@ -130,46 +149,26 @@ std::unique_ptr<Record::HeaderImpl<S>>
 
   if (file_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
       volume->impl_->mft_data == nullptr) {
-    // Take as continuous disk allocation
-    LARGE_INTEGER fr_addr{};
-    try {
-      fr_addr.QuadPart = gsl::narrow<LONGLONG>(
-          volume->GetMFTAddr() + volume->GetFileRecordSize() * file_ref);
-    } catch (const std::exception& e) {
-      // fileRef is attacker-controlled and unbounded, so this sum can
-      // still overflow a LONGLONG even with mft_addr_ validated.
-      Log::Exception(e);
+    if (!ReadDirectRecord(file_ref)) {
       return {};
     }
+  } else {
+    // May be fragmented $MFT, and its DATA attribute itself may be split
+    // across extension records - ReadMftData() picks whichever instance
+    // covers this offset.
+    const ULONGLONG fr_addr = volume->GetFileRecordSize() * file_ref;
 
-    if (!volume->ReadInto(fr_addr, record_buffer)) {
+    if (std::optional<ULONGLONG> len =
+            volume->impl_->ReadMftData(fr_addr, record_buffer);
+        !len || *len != volume->GetFileRecordSize()) {
       return {};
     }
-
-    try {
-      return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
-    } catch (const std::exception& e) {
-      Log::Exception(e);
-      return {};
-    }
-  }
-
-  // May be fragmented $MFT, and its DATA attribute itself may be split
-  // across extension records - ReadMftData() picks whichever instance
-  // covers this offset.
-  const ULONGLONG fr_addr = volume->GetFileRecordSize() * file_ref;
-
-  if (std::optional<ULONGLONG> len =
-          volume->impl_->ReadMftData(fr_addr, record_buffer);
-      !len || *len != volume->GetFileRecordSize()) {
-    return {};
   }
 
   try {
     return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
   } catch (const std::exception& e) {
-    // Reachable through the same constructor call as the direct-allocation
-    // path above.
+    // The header constructor rejects a forged record on either path.
     Log::Exception(e);
     return {};
   }

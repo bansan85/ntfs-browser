@@ -326,6 +326,15 @@ inline constexpr DWORD fragmented_mft_data_run_lcn = 20;
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithFragmentedMftInvalidRecord();
 
+// Direct-allocation MFT index (below Mft::Idx::User) that no fixture uses
+// otherwise.
+inline constexpr ULONGLONG forged_direct_record_idx = 12;
+
+// Same volume as BuildFakeNtfsImage(), except record
+// forged_direct_record_idx is forged with an invalid offset_of_us, read
+// through the direct-allocation path.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithForgedDirectRecord();
+
 // MFT index of the extension record relocated via $ATTRIBUTE_LIST. Below
 // Mft::Idx::User (16), so naively reachable.
 inline constexpr ULONGLONG mft_data_split_ext_idx = 6;

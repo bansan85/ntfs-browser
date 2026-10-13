@@ -78,6 +78,8 @@ class FileRecord<S>::Impl {
                     bool& discard);
   // Parses the attributes of this record, see AttrParser<S>::Parse().
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
+  // Reads file_ref at its fixed offset from mft_addr, see ReadFileRecord().
+  [[nodiscard]] bool ReadDirectRecord(ULONGLONG file_ref);
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref);
   [[nodiscard]] const Attr::AttrStdInfo<ResidentOf<S>, S>*

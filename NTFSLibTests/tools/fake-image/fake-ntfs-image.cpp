@@ -3293,6 +3293,14 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedMftInvalidRecord() {
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithForgedDirectRecord() {
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  PutMftRecord(image, mft_addr, forged_direct_record_idx,
+               MakeInvalidOffsetOfUsRecord());
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
