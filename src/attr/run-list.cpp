@@ -22,8 +22,7 @@ void RunList::Parse(std::span<const BYTE> run_bytes, ULONGLONG vcn_bound,
   std::span<const BYTE> data_run = run_bytes;
   ULONGLONG length = 0;
   LONGLONG lcn_offset = 0;
-  LONGLONG lcn = 0;
-  ULONGLONG vcn = 0;
+  DecodeCursor cursor{.vcn_bound = vcn_bound};
 
   while (!data_run.empty() && data_run.front() != 0) {
     if (!PickData(data_run, length, lcn_offset, recover)) {
@@ -34,7 +33,7 @@ void RunList::Parse(std::span<const BYTE> run_bytes, ULONGLONG vcn_bound,
       break;
     }
 
-    if (!AppendDataRun(length, lcn_offset, lcn, vcn, vcn_bound, recover)) {
+    if (!AppendDataRun(length, lcn_offset, cursor, recover)) {
       break;
     }
   }
@@ -187,16 +186,15 @@ bool RunList::PickData(std::span<const BYTE>& data_run, ULONGLONG& length,
   return true;
 }
 
-// Applies one decoded run (its length and LCN delta) to the running lcn and
+// Applies one decoded run (its length and LCN delta) to the cursor's lcn and
 // vcn, and appends it to the run list. Returns false on an error that recovery
 // tolerates; when strict, the same error throws.
 bool RunList::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
-                            LONGLONG& lcn, ULONGLONG& vcn, ULONGLONG vcn_bound,
-                            bool recover) {
+                            DecodeCursor& cursor, bool recover) {
   // lcn is never negative here, so only a positive offset can overflow the
   // sum. It MUST be caught before the addition: signed overflow is UB.
   if (lcn_offset > 0 &&
-      lcn > std::numeric_limits<LONGLONG>::max() - lcn_offset) {
+      cursor.lcn > std::numeric_limits<LONGLONG>::max() - lcn_offset) {
     Log::Recoverable(recover, "DataRun decode error: LCN overflows");
     if (!recover) {
       throw std::runtime_error("Data run LCN overflows.\n");
@@ -204,8 +202,8 @@ bool RunList::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
     return false;
   }
 
-  lcn += lcn_offset;
-  if (lcn < 0) {
+  cursor.lcn += lcn_offset;
+  if (cursor.lcn < 0) {
     Log::Recoverable(recover, "DataRun decode error 2");
     if (!recover) {
       throw std::runtime_error("Data run LCN underflows.\n");
@@ -213,18 +211,18 @@ bool RunList::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
     return false;
   }
 
-  Log::Debug("Data length = {} clusters, LCN = {}{}", length, lcn,
+  Log::Debug("Data length = {} clusters, LCN = {}{}", length, cursor.lcn,
              lcn_offset == 0 ? ", Sparse Data" : "");
 
   // Store LCN, Data size (clusters) into list
   Data::RunEntry data_run;
-  data_run.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : lcn;
+  data_run.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : cursor.lcn;
   data_run.clusters = length;
-  data_run.start_vcn = vcn;
-  vcn += length;
-  data_run.last_vcn = vcn - 1;
+  data_run.start_vcn = cursor.vcn;
+  cursor.vcn += length;
+  data_run.last_vcn = cursor.vcn - 1;
 
-  if (data_run.last_vcn > vcn_bound) {
+  if (data_run.last_vcn > cursor.vcn_bound) {
     Log::Recoverable(recover, "DataRun decode error: VCN exceeds bound");
     if (!recover) {
       throw std::runtime_error(

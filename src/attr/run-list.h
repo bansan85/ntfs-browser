@@ -47,6 +47,14 @@ class RunList {
                           ULONGLONG unit_clusters) const noexcept;
 
  private:
+  // Where one Parse() pass stands: the running LCN and VCN, and the VCN span
+  // every run must stay within.
+  struct DecodeCursor {
+    LONGLONG lcn = 0;
+    ULONGLONG vcn = 0;
+    ULONGLONG vcn_bound = 0;
+  };
+
   std::vector<Data::RunEntry> runs_;
 
   // VCN count this list covers. Starts at the header's span and grows on
@@ -57,8 +65,7 @@ class RunList {
                                      ULONGLONG& length, LONGLONG& lcn_offset,
                                      bool recover) noexcept;
   [[nodiscard]] bool AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
-                                   LONGLONG& lcn, ULONGLONG& vcn,
-                                   ULONGLONG vcn_bound, bool recover);
+                                   DecodeCursor& cursor, bool recover);
 };  // RunList
 
 }  // namespace NtfsBrowser::Attr
