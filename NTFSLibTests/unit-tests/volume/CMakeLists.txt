@@ -1,6 +1,7 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
+    "boot-sector-geometry-characterization-tests.cpp"
     "coverage-volume-tests.cpp"
     "filename-compare-tests.cpp"
     "init-exit-tests.cpp"
