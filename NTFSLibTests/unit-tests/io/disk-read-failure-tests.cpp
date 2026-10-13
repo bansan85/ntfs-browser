@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <cstring>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -10,6 +11,7 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -25,6 +27,7 @@
 
 namespace Attr = NtfsBrowser::Attr;
 namespace Cache = NtfsBrowser::Cache;
+using Catch::Matchers::ContainsSubstring;
 
 namespace {
 
@@ -265,4 +268,117 @@ TEMPLATE_TEST_CASE_SIG(
   const std::string log = NtfsBrowserTests::TakeCapturedLog();
   CHECK(log.find("Offset must be lower than 1024.") != std::string::npos);
   CHECK(log.find("Cannot read file record 12") != std::string::npos);
+}
+
+namespace {
+
+// Byte offset of the first sector's last word, where a record keeps its update
+// sequence number on disk.
+constexpr size_t first_sector_fixup_offset = 510;
+
+// Replaces the first sector's fixup word with one that matches neither the
+// update sequence number nor the original word.
+constexpr WORD unverified_fixup_word = 0xBEEF;
+
+// A $MFT slot below Mft::Idx::User that BuildFakeNtfsImage() leaves free.
+constexpr ULONGLONG free_direct_record_idx = 6;
+
+// 2^53 records of 1 KiB put the byte offset at 2^63, past a LONGLONG.
+constexpr ULONGLONG overflowing_direct_record_idx = 1ULL << 53U;
+
+void PutWord(std::vector<BYTE>& image, size_t offset, WORD value) {
+  std::memcpy(&image.at(offset), &value, sizeof(value));
+}
+
+}  // namespace
+
+TEMPLATE_TEST_CASE_SIG(
+    "A direct record whose byte offset overflows a LONGLONG yields no record "
+    "and logs the narrowing error",
+    "[file-record][disk-read][characterization]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  // A volume whose $MFT does not parse has no extent map, so every record
+  // takes the direct path.
+  const NtfsBrowser::NtfsVolume<S> volume(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          NtfsBrowserTests::BuildFakeNtfsImageWithCorruptMftRecord()));
+  REQUIRE_FALSE(volume.IsVolumeOK());
+
+  NtfsBrowser::Io::FileRecord<S> record(volume);
+  (void)NtfsBrowserTests::TakeCapturedLog();
+  bool parsed = true;
+  REQUIRE_NOTHROW(parsed =
+                      record.ParseFileRecord(overflowing_direct_record_idx));
+  CHECK_FALSE(parsed);
+  const std::string log = NtfsBrowserTests::TakeCapturedLog();
+  CHECK_THAT(log, ContainsSubstring("narrowing_error"));
+  CHECK_THAT(log,
+             ContainsSubstring("Cannot read file record 9007199254740992"));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A direct record without the file record signature is rejected as invalid, "
+    "without a warning",
+    "[file-record][disk-read][characterization]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const NtfsBrowser::NtfsVolume<S> volume(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          NtfsBrowserTests::BuildFakeNtfsImage()));
+  REQUIRE(volume.IsVolumeOK());
+
+  NtfsBrowser::Io::FileRecord<S> record(volume);
+  (void)NtfsBrowserTests::TakeCapturedLog();
+  bool parsed = true;
+  REQUIRE_NOTHROW(parsed = record.ParseFileRecord(free_direct_record_idx));
+  CHECK_FALSE(parsed);
+  const std::string log = NtfsBrowserTests::TakeCapturedLog();
+  CHECK_THAT(log, ContainsSubstring("Invalid file record"));
+  CHECK_THAT(log, !ContainsSubstring("Cannot read file record"));
+  CHECK_THAT(log, !ContainsSubstring("Update Sequence Number error"));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A direct record whose first sector fixup does not verify yields no record "
+    "and warns",
+    "[file-record][disk-read][characterization]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImage();
+  PutWord(image,
+          fake_mft_begin +
+              static_cast<size_t>(NtfsBrowser::Mft::Idx::Root) *
+                  NtfsBrowserTests::fake_file_record_size +
+              first_sector_fixup_offset,
+          unverified_fixup_word);
+  const NtfsBrowser::NtfsVolume<S> volume(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
+  REQUIRE(volume.IsVolumeOK());
+
+  NtfsBrowser::Io::FileRecord<S> record(volume);
+  (void)NtfsBrowserTests::TakeCapturedLog();
+  bool parsed = true;
+  REQUIRE_NOTHROW(parsed = record.ParseFileRecord(
+                      static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root)));
+  CHECK_FALSE(parsed);
+  const std::string log = NtfsBrowserTests::TakeCapturedLog();
+  CHECK_THAT(log, ContainsSubstring("Update Sequence Number error"));
+  CHECK_THAT(log, !ContainsSubstring("Cannot read file record"));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A direct record read that throws propagates the exception out of "
+    "ParseFileRecord()",
+    "[file-record][disk-read][characterization]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  auto reader = std::make_unique<FaultyDiskReader>(
+      NtfsBrowserTests::BuildFakeNtfsImage(), fake_mft_begin,
+      fake_mft_direct_end, FaultyDiskReader::Fault::Throw);
+  FaultyDiskReader* const faulty = reader.get();
+  const NtfsBrowser::NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+  faulty->Arm();
+
+  NtfsBrowser::Io::FileRecord<S> record(volume);
+  CHECK_THROWS_AS(static_cast<void>(record.ParseFileRecord(
+                      static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root))),
+                  std::runtime_error);
 }
