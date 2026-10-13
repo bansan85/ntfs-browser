@@ -34,6 +34,9 @@ static_assert(static_cast<DWORD>(Mask::StandardInformation) ==
 static_assert(static_cast<DWORD>(Mask::Data) == AttrMaskBits(Type::Data));
 static_assert(static_cast<DWORD>(Mask::LoggedUtilityStream) ==
               AttrMaskBits(Type::LoggedUtilityStream));
+// The highest real type gets the last slot, so IsValidAttrType() values never
+// index past attr_nums.
+static_assert(AttrIndex(Type::LoggedUtilityStream) + 1 == attr_nums);
 
 // Every Attr::Type value is a multiple of 16: its low nibble is always zero.
 inline constexpr DWORD attr_type_low_nibble_mask = 0xFU;

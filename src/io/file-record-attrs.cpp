@@ -1,3 +1,5 @@
+#include "io/file-record-attrs.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -39,7 +41,6 @@
 #include "attr/vol-name.h"  // IWYU pragma: keep
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
-#include "io/file-record-attrs.h"
 #include "io/file-record-efs.h"
 #include "io/file-record-impl.h"
 #include "log/ntfs-common.h"
@@ -350,64 +351,45 @@ std::unique_ptr<Attr::AttrBase<S>> Io::AttrParser<S>::AllocAttr(
     const Attr::HeaderCommon& ahc, bool& unhandled,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   FileRecord<S>& record = *impl_.self;
-  std::unique_ptr<Attr::AttrBase<S>> attr;
   switch (ahc.type) {
     // These attribute types are always resident on disk; reject any
     // record claiming otherwise before its bytes get reinterpreted as one.
-    case Attr::Type::StandardInformation: {
-      attr = MakeResidentOnly<Attr::AttrStdInfo>(
+    case Attr::Type::StandardInformation:
+      return MakeResidentOnly<Attr::AttrStdInfo>(
           ahc, record, "Standard Information attribute must be resident.\n");
-      break;
-    }
 
     // Unresolved, $ATTRIBUTE_LIST is wrapped generically, as the arm below.
-    case Attr::Type::AttributeList: {
-      attr = impl_.resolve_attr_list
+    case Attr::Type::AttributeList:
+      return impl_.resolve_attr_list
                  ? MakeByResidency<Attr::AttrList>(ahc, record, attr_list_chain)
                  : MakeGeneric(ahc, record);
-      break;
-    }
 
-    case Attr::Type::FileName: {
-      attr = MakeResidentOnly<Attr::AttrFileName>(
+    case Attr::Type::FileName:
+      return MakeResidentOnly<Attr::AttrFileName>(
           ahc, record, "File Name attribute must be resident.\n");
-      break;
-    }
 
-    case Attr::Type::VolumeName: {
-      attr = MakeResidentOnly<Attr::AttrVolName>(
+    case Attr::Type::VolumeName:
+      return MakeResidentOnly<Attr::AttrVolName>(
           ahc, record, "Volume Name attribute must be resident.\n");
-      break;
-    }
 
-    case Attr::Type::VolumeInformation: {
-      attr = MakeResidentOnly<Attr::AttrVolInfo>(
+    case Attr::Type::VolumeInformation:
+      return MakeResidentOnly<Attr::AttrVolInfo>(
           ahc, record, "Volume Information attribute must be resident.\n");
-      break;
-    }
 
-    case Attr::Type::Data: {
-      attr = MakeByResidency<Attr::AttrData>(ahc, record);
-      break;
-    }
+    case Attr::Type::Data:
+      return MakeByResidency<Attr::AttrData>(ahc, record);
 
-    case Attr::Type::IndexRoot: {
-      attr = MakeResidentOnly<Attr::AttrIndexRoot>(
+    case Attr::Type::IndexRoot:
+      return MakeResidentOnly<Attr::AttrIndexRoot>(
           ahc, record, "Index Root attribute must be resident.\n");
-      break;
-    }
 
-    case Attr::Type::IndexAllocation: {
-      attr = MakeIndexAlloc(ahc, record);
-      break;
-    }
+    case Attr::Type::IndexAllocation:
+      return MakeIndexAlloc(ahc, record);
 
     // Resident Bitmap may exist in a directory's FileRecord
     // or in $MFT for a very small volume in theory
-    case Attr::Type::Bitmap: {
-      attr = MakeByResidency<Attr::AttrBitmap>(ahc, record);
-      break;
-    }
+    case Attr::Type::Bitmap:
+      return MakeByResidency<Attr::AttrBitmap>(ahc, record);
 
     // Unhandled Attributes
     default:
@@ -416,12 +398,9 @@ std::unique_ptr<Attr::AttrBase<S>> Io::AttrParser<S>::AllocAttr(
     // $EFS, the only one this library reads, is read through the generic
     // wrappers. Any other logged utility stream is not needed, but not
     // worth a warning either.
-    case Attr::Type::LoggedUtilityStream: {
-      attr = MakeGeneric(ahc, record);
-      break;
-    }
+    case Attr::Type::LoggedUtilityStream:
+      return MakeGeneric(ahc, record);
   }
-  return attr;
 }
 
 // Parse a single Attribute
@@ -430,11 +409,10 @@ template <Cache::Strategy S>
 bool Io::AttrParser<S>::ParseAttr(
     const Attr::HeaderCommon& ahc,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
+  // VisitAttr() admits only a type IsValidAttrType() accepts. Every such type
+  // has an index below attr_nums (see slot.h), so the callback table is safe.
+  assert(Attr::IsValidAttrType(ahc.type));
   const DWORD attr_index = Attr::AttrIndex(ahc.type);
-  if (attr_index >= Attr::attr_nums) {
-    Log::Warn("Invalid Attribute Type: 0x{:04X}", static_cast<DWORD>(ahc.type));
-    return false;
-  }
 
   bool discard = false;
   impl_.UserCallBack(attr_index, ahc, discard);
@@ -461,7 +439,7 @@ bool Io::AttrParser<S>::ParseAttr(
   if (unhandled) {
     Log::Warn("Unhandled attribute: 0x{:04X}", static_cast<DWORD>(ahc.type));
   }
-  // attrIndex < attr_nums was checked above.
+  // attr_index < attr_nums: see the assert at the top.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   impl_.attr_list[attr_index].push_back(std::move(attr));
   return true;

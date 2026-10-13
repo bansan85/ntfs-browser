@@ -409,6 +409,38 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG(
+    "AllocAttr keeps an unhandled type and logs it, but not a logged utility "
+    "stream",
+    "[file-record][characterization]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const std::array<BYTE, 4> body{0xDE, 0xAD, 0xBE, 0xEF};
+  RecordBytes unhandled = MakeScratchRecord(first_attr_offset);
+  DWORD offset = first_attr_offset;
+  offset += PutResidentAttr(unhandled, offset, Attr::Type::ObjectId, body);
+  PutEndMarker(unhandled, offset);
+
+  (void)TakeCapturedLog();
+  const Parsed kept = ParseScratch<S>(unhandled, Attr::Type::ObjectId, false);
+  CHECK(kept.ok);
+  CHECK(kept.count == 1);
+  CHECK_THAT(TakeCapturedLog(),
+             ContainsSubstring("Unhandled attribute: 0x0040"));
+
+  RecordBytes utility = MakeScratchRecord(first_attr_offset);
+  offset = first_attr_offset;
+  offset +=
+      PutResidentAttr(utility, offset, Attr::Type::LoggedUtilityStream, body);
+  PutEndMarker(utility, offset);
+
+  (void)TakeCapturedLog();
+  const Parsed stored =
+      ParseScratch<S>(utility, Attr::Type::LoggedUtilityStream, false);
+  CHECK(stored.ok);
+  CHECK(stored.count == 1);
+  CHECK(TakeCapturedLog().find("Unhandled attribute") == std::string::npos);
+}
+
+TEMPLATE_TEST_CASE_SIG(
     "A non-resident $ATTRIBUTE_LIST in $MFT still resolves its DATA "
     "continuation, as a resident one does",
     "[file-record][characterization]", ((Cache::Strategy S), S),
