@@ -144,6 +144,11 @@ class AttrNonResident : public Attr::AttrBase<S> {
                                     ULONGLONG unit_first_vcn,
                                     ULONGLONG real_clusters,
                                     std::vector<BYTE>& unit) const;
+  [[nodiscard]] bool FillCompressionUnit(ULONGLONG unit_index,
+                                         ULONGLONG unit_first_vcn,
+                                         ULONGLONG unit_clusters,
+                                         ULONGLONG real_clusters,
+                                         std::vector<BYTE>& unit) const;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadVirtualClustersCompressed(ULONGLONG vcn, ULONGLONG clusters,
                                     std::span<BYTE> buffer) const;

@@ -233,6 +233,34 @@ bool AttrNonResident<S>::DecompressUnit(ULONGLONG unit_index,
 #endif
 }
 
+// Fills unit, sized to the whole unit, from its real_clusters stored clusters:
+// copied as is, LZNT1-decoded, or left zero when sparse. False on failure.
+template <Cache::Strategy S>
+bool AttrNonResident<S>::FillCompressionUnit(ULONGLONG unit_index,
+                                             ULONGLONG unit_first_vcn,
+                                             ULONGLONG unit_clusters,
+                                             ULONGLONG real_clusters,
+                                             std::vector<BYTE>& unit) const {
+  if (real_clusters == 0) {
+    Log::Debug("Compression unit {} is sparse", unit_index);
+    return true;
+  }
+
+  if (real_clusters == unit_clusters) {
+    // Stored unit: raw, uncompressed bytes.
+    const ULONGLONG unit_size = unit_clusters * this->GetClusterSize();
+    const std::optional<ULONGLONG> len =
+        ReadVirtualClustersRaw(unit_first_vcn, unit_clusters, unit);
+    if (!len || *len != unit_size) {
+      Log::Error("Cannot read stored compression unit {}", unit_index);
+      return false;
+    }
+    return true;
+  }
+
+  return DecompressUnit(unit_index, unit_first_vcn, real_clusters, unit);
+}
+
 // Materializes one whole compression unit - decompressing it if needed - and
 // returns it, or nullptr on a read/decompression failure. The returned unit
 // is retained in comp_unit_cache_, so it is never decompressed twice within
@@ -271,19 +299,8 @@ const std::vector<BYTE>*
     // LeadingRealClusters() already traced which layout it rejected.
     return nullptr;
   }
-  const ULONGLONG real_clusters = *real_clusters_opt;
-
-  if (real_clusters == 0) {
-    Log::Debug("Compression unit {} is sparse", unit_index);
-  } else if (real_clusters == unit_clusters) {
-    // Stored unit: raw, uncompressed bytes.
-    const std::optional<ULONGLONG> len =
-        ReadVirtualClustersRaw(unit_first_vcn, unit_clusters, unit);
-    if (!len || *len != unit_size) {
-      Log::Error("Cannot read stored compression unit {}", unit_index);
-      return nullptr;
-    }
-  } else if (!DecompressUnit(unit_index, unit_first_vcn, real_clusters, unit)) {
+  if (!FillCompressionUnit(unit_index, unit_first_vcn, unit_clusters,
+                           *real_clusters_opt, unit)) {
     return nullptr;
   }
 
