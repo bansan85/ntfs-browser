@@ -42,6 +42,13 @@ class Table;
 
 }  // namespace UpCase
 
+// The boot sector's BIOS parameter block.
+namespace Data {
+
+struct NtfsBpb;
+
+}  // namespace Data
+
 // Everything NtfsVolume<S> keeps out of its public header: the members, and the
 // private methods that work on them. FileRecord<S>, a friend of NtfsVolume<S>,
 // reaches it through NtfsVolume<S>::impl_.
@@ -119,6 +126,12 @@ class NtfsVolume<S>::Impl {
 #endif
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
+  [[nodiscard]] std::optional<std::span<const BYTE>> ReadBootSector() const;
+  [[nodiscard]] bool ParseSectorSize(const Data::NtfsBpb& bpb);
+  [[nodiscard]] bool ParseClusterSize(const Data::NtfsBpb& bpb);
+  [[nodiscard]] bool ParseFileRecordSize(const Data::NtfsBpb& bpb);
+  [[nodiscard]] bool ParseIndexBlockSize(const Data::NtfsBpb& bpb);
+  [[nodiscard]] bool ParseMftAddress(const Data::NtfsBpb& bpb);
   void Init();
   void ResolveMftDataExtents();
 

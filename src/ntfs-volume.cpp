@@ -594,6 +594,31 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
 // Read the first sector (boot sector) and derive volume geometry from it
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::ParseBootSector() {
+  const std::optional<std::span<const BYTE>> bpb_buffer = ReadBootSector();
+  if (!bpb_buffer) {
+    Log::Error("Read boot sector error");
+    return false;
+  }
+  const auto& bpb = *reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
+
+  const std::string_view signature(
+      reinterpret_cast<const char*>(&bpb.signature[0]), sizeof(bpb.signature));
+  if (signature != Data::ntfs_signature) {
+    Log::Warn("Volume file system is not NTFS");
+    return false;
+  }
+
+  // Each field is validated and logged in turn. The first failure stops the
+  // rest, so later fields are neither set nor logged.
+  return ParseSectorSize(bpb) && ParseClusterSize(bpb) &&
+         ParseFileRecordSize(bpb) && ParseIndexBlockSize(bpb) &&
+         ParseMftAddress(bpb);
+}
+
+// Read the boot sector, retrying with 512 bytes when the 4096-byte read fails.
+template <Cache::Strategy S>
+std::optional<std::span<const BYTE>>
+    NtfsVolume<S>::Impl::ReadBootSector() const {
   // Smallest sector size NTFS uses. It is also the size of the BPB read.
   constexpr DWORD min_sector_size = 512;
   // Largest sector size NTFS supports (4Kn). Windows opens a volume handle
@@ -610,23 +635,13 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     fr_addr.QuadPart = 0;
     bpb_buffer = volume->Read(fr_addr, min_sector_size);
   }
-  if (!bpb_buffer) {
-    Log::Error("Read boot sector error");
-    return false;
-  }
-  const auto* bpb = reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
+  return bpb_buffer;
+}
 
-  const std::string_view signature(
-      reinterpret_cast<const char*>(&bpb->signature[0]),
-      sizeof(bpb->signature));
-  if (signature != Data::ntfs_signature) {
-    Log::Warn("Volume file system is not NTFS");
-    return false;
-  }
-
-  // Log important volume parameters
-
-  sector_size = bpb->bytes_per_sector;
+// Set sector_size from the BPB. Reject a sector too small to be real.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::ParseSectorSize(const Data::NtfsBpb& bpb) {
+  sector_size = bpb.bytes_per_sector;
   Log::Info("Sector Size = {} bytes", sector_size);
 
   // A sector smaller than one WORD cannot be a real BPB value.
@@ -634,9 +649,14 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     Log::Error("Sector Size must be at least 2 bytes");
     return false;
   }
+  return true;
+}
 
+// Set cluster_size and cluster_buffer from the BPB. Reject a null cluster.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::ParseClusterSize(const Data::NtfsBpb& bpb) {
   const std::optional<DWORD> decoded_cluster_size = DecodeClusterSize(
-      static_cast<char>(bpb->sectors_per_cluster), sector_size);
+      static_cast<char>(bpb.sectors_per_cluster), sector_size);
   if (!decoded_cluster_size) {
     Log::Error("sectors_per_cluster magnitude out of range");
     return false;
@@ -649,9 +669,14 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     return false;
   }
   cluster_buffer.resize(cluster_size);
+  return true;
+}
 
+// Set file_record_size from the BPB. Reject a size that is not a usable record.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::ParseFileRecordSize(const Data::NtfsBpb& bpb) {
   const std::optional<DWORD> decoded_record_size = DecodeBpbSize(
-      static_cast<char>(bpb->clusters_per_file_record), cluster_size);
+      static_cast<char>(bpb.clusters_per_file_record), cluster_size);
   if (!decoded_record_size) {
     Log::Error("clusters_per_file_record magnitude out of range");
     return false;
@@ -672,9 +697,14 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
         "FileRecord Size exceeds the maximum supported file record size");
     return false;
   }
+  return true;
+}
 
+// Set index_block_size from the BPB. Reject a size that is not a usable block.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::ParseIndexBlockSize(const Data::NtfsBpb& bpb) {
   const std::optional<DWORD> decoded_index_block_size = DecodeBpbSize(
-      static_cast<char>(bpb->clusters_per_index_block), cluster_size);
+      static_cast<char>(bpb.clusters_per_index_block), cluster_size);
   if (!decoded_index_block_size) {
     Log::Error("clusters_per_index_block magnitude out of range");
     return false;
@@ -689,13 +719,18 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     Log::Error("IndexBlock Size is invalid");
     return false;
   }
+  return true;
+}
 
+// Set mft_addr from the BPB. Reject an address that overflows or is too high.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::ParseMftAddress(const Data::NtfsBpb& bpb) {
   // Multiplying two attacker-controlled values can overflow mft_addr_'s type.
   const bool mft_addr_overflows =
       cluster_size != 0 &&
-      bpb->lcn_mft > std::numeric_limits<ULONGLONG>::max() / cluster_size;
+      bpb.lcn_mft > std::numeric_limits<ULONGLONG>::max() / cluster_size;
   mft_addr = mft_addr_overflows ? std::numeric_limits<ULONGLONG>::max()
-                                : bpb->lcn_mft * cluster_size;
+                                : bpb.lcn_mft * cluster_size;
   Log::Info("MFT address = 0x{:016X}", mft_addr);
 
   // Leaves headroom for the per-record byte offset added to mft_addr_
@@ -707,7 +742,6 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     Log::Error("MFT address is invalid");
     return false;
   }
-
   return true;
 }
 
