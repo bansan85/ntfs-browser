@@ -4,6 +4,7 @@
 #include <optional>
 #include <span>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,8 @@
 #include <spdlog/sinks/ostream_sink.h>
 #include <spdlog/spdlog.h>
 
+#include <ntfs-browser/attr/defines.h>
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
@@ -29,6 +32,7 @@
 using Catch::Matchers::ContainsSubstring;
 using NtfsBrowser::NtfsVolume;
 using NtfsBrowser::Mft::MftTree;
+namespace Attr = NtfsBrowser::Attr;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::VolumeOptions;
 namespace Mft = NtfsBrowser::Mft;
@@ -223,6 +227,40 @@ void RunMftTreeDropsUnrecoveredRecord() {
   }
 }
 
+// A raw callback that throws, as a consumer's callback may. The throw escapes
+// FileRecord::ParseAttrs() and reaches MftTree.
+void ThrowFromRawCallback(const Attr::HeaderCommon& /*head*/,
+                          bool& /*discard*/) {
+  throw std::runtime_error("raw callback failed");
+}
+
+template <Cache::Strategy S>
+void RunMftTreeKeepsPartsParsedBeforeThrow() {
+  {
+    const auto volume =
+        OpenMftTreeVolume<S>(VolumeOptions{.include_deleted = true});
+    REQUIRE(volume->InstallAttrRawCB(Attr::Type::Data, ThrowFromRawCallback));
+
+    const NtfsBrowser::Mft::MftTree tree(*volume);
+    CHECK(tree.Stats().damaged == 2);
+    CHECK(tree.Find(mft_tree_report_idx) == nullptr);
+    CHECK(tree.Entries().size() == 9);
+  }
+  {
+    const auto volume = OpenMftTreeVolume<S>(
+        VolumeOptions{.include_deleted = true, .recover_errors = true});
+    REQUIRE(volume->InstallAttrRawCB(Attr::Type::Data, ThrowFromRawCallback));
+
+    const NtfsBrowser::Mft::MftTree tree(*volume);
+    CHECK(tree.Stats().damaged == 2);
+    const NtfsBrowser::Mft::MftTree::Entry* report =
+        tree.Find(mft_tree_report_idx);
+    REQUIRE(report != nullptr);
+    CHECK(report->in_use);
+    CHECK(report->names.size() == 2);
+  }
+}
+
 template <Cache::Strategy S>
 void RunMftTreeProgressStops() {
   const auto volume = OpenMftTreeVolume<S>();
@@ -308,6 +346,12 @@ TEMPLATE_TEST_CASE_SIG(
     "[mft-tree][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunMftTreeDropsUnrecoveredRecord<S>();
+}
+
+TEMPLATE_TEST_CASE_SIG("MftTree keeps the parts parsed before a throw",
+                       "[mft-tree][regression]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  RunMftTreeKeepsPartsParsedBeforeThrow<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree stops when progress returns false",

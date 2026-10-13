@@ -26,6 +26,7 @@
 
 #include "attr/file-name.h"
 #include "attr/resident.h"
+#include "io/file-record-attrs.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 
@@ -44,35 +45,26 @@ constexpr ULONGLONG progress_interval = 4096;
 // $FILE_NAME in the AttrFileName over the resident type that matches S.
 template <Cache::Strategy S>
 const Filename& AsFilename(const Attr::AttrBase<S>& attr) {
-  if constexpr (S == Cache::Strategy::NoCache) {
-    return static_cast<const Attr::AttrFileName<Attr::AttrResidentNoCache,
-                                                Cache::Strategy::NoCache>&>(
-        attr);
-  } else {
-    return static_cast<const Attr::AttrFileName<Attr::AttrResidentFullCache,
-                                                Cache::Strategy::FullCache>&>(
-        attr);
+  return static_cast<const Attr::AttrFileName<Io::ResidentOf<S>, S>&>(attr);
+}
+
+// Parses file_record's attributes. A raw callback may throw out of
+// ParseAttrs(); that is a failed parse, logged here and not rethrown.
+template <Cache::Strategy S>
+bool TryParseAttrs(Io::FileRecord<S>& file_record) {
+  try {
+    return file_record.ParseAttrs();
+  } catch (const std::exception& e) {
+    Log::Exception(e);
+    return false;
   }
 }
 
-// Copies what the record fr just parsed says about its file into entry.
-// Returns false when an attribute failed to parse: entry then holds what
-// parsed before the failure.
+// Appends each non-empty $FILE_NAME of file_record to entry.names, with its
+// parent reference, parent sequence and DOS-only flag.
 template <Cache::Strategy S>
-bool ReadEntry(Io::FileRecord<S>& file_record, ULONGLONG record,
-               Mft::MftTree::Entry& entry) {
-  bool parsed = false;
-  try {
-    parsed = file_record.ParseAttrs();
-  } catch (const std::exception& e) {
-    Log::Exception(e);
-  }
-
-  entry.record = record;
-  entry.sequence = file_record.GetSequenceNumber();
-  entry.in_use = !file_record.IsDeleted();
-  entry.directory = file_record.IsDirectory();
-
+void AddNames(const Io::FileRecord<S>& file_record,
+              Mft::MftTree::Entry& entry) {
   for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
        file_record.GetAttr(Attr::Type::FileName)) {
     const Filename& filename = AsFilename<S>(*attr);
@@ -87,6 +79,22 @@ bool ReadEntry(Io::FileRecord<S>& file_record, ULONGLONG record,
     added.parent_sequence = filename.GetParentSequenceNumber();
     added.dos_only = !filename.IsWin32Name();
   }
+}
+
+// Copies what file_record just parsed says about its file into entry.
+// Returns false when an attribute failed to parse: entry then holds what
+// parsed before the failure.
+template <Cache::Strategy S>
+bool ReadEntry(Io::FileRecord<S>& file_record, ULONGLONG record,
+               Mft::MftTree::Entry& entry) {
+  const bool parsed = TryParseAttrs(file_record);
+
+  entry.record = record;
+  entry.sequence = file_record.GetSequenceNumber();
+  entry.in_use = !file_record.IsDeleted();
+  entry.directory = file_record.IsDirectory();
+
+  AddNames(file_record, entry);
 
   const Attr::AttrBase<S>* data = file_record.FindStream({});
   entry.size =
@@ -104,6 +112,42 @@ bool ReadEntry(Io::FileRecord<S>& file_record, ULONGLONG record,
   entry.sparse = file_record.IsSparse();
 
   return parsed;
+}
+
+// Classifies one record slot and, when it is an entry to keep, reads it.
+// Counts the outcome in stats. Returns nullopt for a slot that is not kept:
+// unreadable, an extension, a freed record not asked for, or a damaged one
+// when strict.
+template <Cache::Strategy S>
+std::optional<Mft::MftTree::Entry>
+    ReadSlot(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
+             ULONGLONG record, Mft::MftTree::ScanStats& stats) {
+  if (!file_record.ParseFileRecord(record)) {
+    stats.unreadable++;
+    return std::nullopt;
+  }
+  if (file_record.IsExtensionRecord()) {
+    stats.extensions++;
+    return std::nullopt;
+  }
+  if (file_record.IsDeleted()) {
+    stats.deleted++;
+    if (!volume.GetOptions().include_deleted) {
+      return std::nullopt;
+    }
+  } else {
+    stats.in_use++;
+  }
+
+  Mft::MftTree::Entry entry;
+  if (!ReadEntry(file_record, record, entry)) {
+    stats.damaged++;
+    // Strict: a damaged record is dropped, not kept partial.
+    if (!volume.GetOptions().recover_errors) {
+      return std::nullopt;
+    }
+  }
+  return entry;
 }
 
 // The name a record's path goes through by default: the first non-DOS name
@@ -200,32 +244,13 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
       break;
     }
 
-    if (!file_record.ParseFileRecord(record)) {
-      stats.unreadable++;
+    std::optional<Mft::MftTree::Entry> entry =
+        ReadSlot(file_record, volume, record, stats);
+    if (!entry) {
       continue;
-    }
-    if (file_record.IsExtensionRecord()) {
-      stats.extensions++;
-      continue;
-    }
-    if (file_record.IsDeleted()) {
-      stats.deleted++;
-      if (!volume.GetOptions().include_deleted) {
-        continue;
-      }
-    } else {
-      stats.in_use++;
-    }
-
-    Mft::MftTree::Entry entry;
-    if (!ReadEntry(file_record, record, entry)) {
-      stats.damaged++;
-      if (!volume.GetOptions().recover_errors) {
-        continue;  // Strict: a damaged record is dropped, not kept partial.
-      }
     }
     by_record.emplace(record, entries.size());
-    entries.push_back(std::move(entry));
+    entries.push_back(std::move(*entry));
   }
 
   if (options.progress && stats.complete) {
