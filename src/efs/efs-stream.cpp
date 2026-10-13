@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cassert>
 #include <cstring>
 
 #include "log/ntfs-common.h"
@@ -80,11 +81,18 @@ class Reader {
   std::span<const BYTE> bytes_;
 };
 
-// Parses the entry that starts at "entryOffset". Returns its length, so the
-// caller can step to the next one, and appends its FEK copy to "out".
-[[nodiscard]] std::optional<ULONGLONG>
-    ParseEntry(const Reader& reader, ULONGLONG entry_offset,
-               std::vector<WrappedFek>& out) {
+// The fields of one entry header. Offsets are from the entry start.
+struct EntryHeader {
+  DWORD length;
+  DWORD credential;
+  DWORD fek_length;
+  DWORD fek_offset;
+};
+
+// Reads the header of the entry at "entry_offset". Fails if the header or the
+// whole entry leaves the stream, or the entry is shorter than its own header.
+[[nodiscard]] std::optional<EntryHeader>
+    ReadEntryHeader(const Reader& reader, ULONGLONG entry_offset) {
   const std::optional<DWORD> length =
       reader.Dword(entry_offset + entry_length_field);
   const std::optional<DWORD> credential =
@@ -98,8 +106,13 @@ class Reader {
       *length < entry_min_size || !reader.Slice(entry_offset, *length)) {
     return std::nullopt;
   }
+  return EntryHeader{*length, *credential, *fek_length, *fek_offset};
+}
 
-  const ULONGLONG credential_start = entry_offset + *credential;
+// Finds the SHA-1 thumbprint of the credential at "credential_start": the
+// credential names its certificate hash record, which holds the thumbprint.
+[[nodiscard]] std::optional<std::span<const BYTE>>
+    FindThumbprint(const Reader& reader, ULONGLONG credential_start) {
   const std::optional<DWORD> hash_offset =
       reader.Dword(credential_start + credential_hash_field);
   if (!hash_offset) {
@@ -114,33 +127,54 @@ class Reader {
       reader.Dword(hash_start + hash_thumbprint_offset_field);
   const std::optional<DWORD> thumbprint_size =
       reader.Dword(hash_start + hash_thumbprint_size_field);
-  // The hash record is readable, holds a SHA-1 thumbprint, and the wrapped
-  // FEK has a plausible size.
+  // The hash record is readable and holds a SHA-1 thumbprint.
   if (!thumbprint_offset || !thumbprint_size ||
-      *thumbprint_size != thumbprint_size_value || *fek_length == 0 ||
-      *fek_length > max_wrapped_fek_size) {
+      *thumbprint_size != thumbprint_size_value) {
     return std::nullopt;
   }
+  return reader.Slice(hash_start + *thumbprint_offset, thumbprint_size_value);
+}
 
-  const auto thumbprint =
-      reader.Slice(hash_start + *thumbprint_offset, thumbprint_size_value);
-  const auto fek = reader.Slice(entry_offset + *fek_offset, *fek_length);
+// Slices the wrapped FEK of the entry, if its length is plausible.
+[[nodiscard]] std::optional<std::span<const BYTE>>
+    SliceWrappedFek(const Reader& reader, ULONGLONG entry_offset,
+                    const EntryHeader& header) {
+  // Zero is never a wrapped FEK, and no FEK is wider than an RSA-8192 block.
+  if (header.fek_length == 0 || header.fek_length > max_wrapped_fek_size) {
+    return std::nullopt;
+  }
+  return reader.Slice(entry_offset + header.fek_offset, header.fek_length);
+}
+
+// Parses the entry that starts at "entryOffset". Returns its length, so the
+// caller can step to the next one, and appends its FEK copy to "out".
+[[nodiscard]] std::optional<ULONGLONG>
+    ParseEntry(const Reader& reader, ULONGLONG entry_offset,
+               std::vector<WrappedFek>& out) {
+  const std::optional<EntryHeader> header =
+      ReadEntryHeader(reader, entry_offset);
+  if (!header) {
+    return std::nullopt;
+  }
+  const std::optional<std::span<const BYTE>> thumbprint =
+      FindThumbprint(reader, entry_offset + header->credential);
+  const std::optional<std::span<const BYTE>> fek =
+      SliceWrappedFek(reader, entry_offset, *header);
   if (!thumbprint || !fek) {
     return std::nullopt;
   }
 
   out.push_back(
       {{thumbprint->begin(), thumbprint->end()}, {fek->begin(), fek->end()}});
-  return *length;
+  return header->length;
 }
 
 // Parses the field that starts at "fieldOffset", if the header names one.
 [[nodiscard]] bool ParseField(const Reader& reader, size_t offset_field_pos,
                               std::vector<WrappedFek>& out) {
   const std::optional<DWORD> field_offset = reader.Dword(offset_field_pos);
-  if (!field_offset) {
-    return false;
-  }
+  // ParseEfsStream() checks that the header covers both offset fields.
+  assert(field_offset);
   if (*field_offset == 0) {
     return true;
   }

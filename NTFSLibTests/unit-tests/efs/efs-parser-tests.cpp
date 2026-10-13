@@ -96,6 +96,24 @@ constexpr size_t thumbprint_offset = 0xA4;
 
 constexpr size_t thumbprint_size_value = 0xA8;
 
+// Entry lengths and field values that each break one check of the entry parser.
+constexpr DWORD short_entry_length = 0x13;
+
+constexpr DWORD undersized_thumbprint = 19;
+
+// Cuts the hash record short: it starts 4 bytes before the stream end, short
+// of its 8-byte header.
+constexpr DWORD hash_cut_offset = 0x7C;
+
+// Pushes the thumbprint's last bytes past the stream end.
+constexpr DWORD thumbprint_past_offset = 0x40;
+
+// Pushes the wrapped FEK's last bytes past the stream end.
+constexpr DWORD fek_past_offset = 0x90;
+
+// The largest wrapped FEK the parser keeps. Mirrors efs-stream.cpp.
+constexpr size_t largest_wrapped_fek = 1024;
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -216,6 +234,82 @@ TEST_CASE("The $EFS parser reads the users out of a well-formed stream",
   CHECK(NtfsBrowserTests::Unwrap(NtfsBrowser::Efs::ParseEfsStream(
                                      NtfsBrowserTests::MakeEfsStream({}, {})))
             .empty());
+}
+
+TEST_CASE("An $EFS entry keeps its thumbprint and its largest wrapped FEK",
+          "[efs]") {
+  const TestEfsEntry user{
+      NtfsBrowserTests::TestThumbprint(7),
+      NtfsBrowserTests::PlaintextPattern(largest_wrapped_fek)};
+  const auto parsed = NtfsBrowser::Efs::ParseEfsStream(
+      NtfsBrowserTests::MakeEfsStream(std::span(&user, 1)));
+  REQUIRE(parsed.has_value());
+  REQUIRE(NtfsBrowserTests::Unwrap(parsed).size() == 1);
+
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const NtfsBrowser::Efs::WrappedFek& kept =
+      NtfsBrowserTests::Unwrap(parsed)[0];
+  CHECK(kept.thumbprint ==
+        std::vector<BYTE>(user.thumbprint.begin(), user.thumbprint.end()));
+  CHECK(kept.wrapped_fek == user.wrapped_fek);
+}
+
+TEST_CASE("An $EFS entry with one bad field is rejected", "[efs]") {
+  const TestEfsEntry user = TestUser();
+  const std::vector<BYTE> valid =
+      NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
+  REQUIRE(NtfsBrowser::Efs::ParseEfsStream(valid).has_value());
+
+  const auto rejects = [](const std::vector<BYTE>& stream) {
+    CHECK_FALSE(NtfsBrowser::Efs::ParseEfsStream(stream).has_value());
+  };
+
+  SECTION("the entry header is cut off by the stream end") {
+    rejects(std::vector<BYTE>(valid.begin(),
+                              valid.begin() +
+                                  gsl::narrow<std::ptrdiff_t>(entry_length)));
+  }
+  SECTION("the entry is shorter than its header") {
+    std::vector<BYTE> stream = valid;
+    Patch32(stream, entry_length, short_entry_length);
+    rejects(stream);
+  }
+  SECTION("the entry runs past the stream end") {
+    std::vector<BYTE> stream = valid;
+    Patch32(stream, entry_length,
+            gsl::narrow<DWORD>(valid.size() - entry_length + 1));
+    rejects(stream);
+  }
+  SECTION("the credential starts past the stream end") {
+    std::vector<BYTE> stream = valid;
+    Patch32(stream, entry_credential, huge_credential_offset);
+    rejects(stream);
+  }
+  SECTION("the hash record is cut short by the stream end") {
+    std::vector<BYTE> stream = valid;
+    Patch32(stream, credential_hash_field, hash_cut_offset);
+    rejects(stream);
+  }
+  SECTION("the thumbprint is not 20 bytes") {
+    std::vector<BYTE> stream = valid;
+    Patch32(stream, thumbprint_size_value, undersized_thumbprint);
+    rejects(stream);
+  }
+  SECTION("the thumbprint runs past the stream end") {
+    std::vector<BYTE> stream = valid;
+    Patch32(stream, thumbprint_offset, thumbprint_past_offset);
+    rejects(stream);
+  }
+  SECTION("the wrapped FEK length is zero") {
+    std::vector<BYTE> stream = valid;
+    Patch32(stream, entry_fek_length, 0);
+    rejects(stream);
+  }
+  SECTION("the wrapped FEK runs past the stream end") {
+    std::vector<BYTE> stream = valid;
+    Patch32(stream, entry_fek_offset, fek_past_offset);
+    rejects(stream);
+  }
 }
 
 TEST_CASE("A FEK blob is checked against its algorithm", "[efs]") {
