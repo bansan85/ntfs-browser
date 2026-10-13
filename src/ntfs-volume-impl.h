@@ -3,7 +3,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <list>
 #include <memory>
 #include <optional>
 #include <span>
@@ -20,7 +19,7 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "attr/slot.h"
-#include "mft/extent-map.h"
+#include "mft/mft-bootstrap.h"
 
 #ifdef _WIN32
   #include <tchar.h>
@@ -63,25 +62,19 @@ class NtfsVolume<S>::Impl {
   ULONGLONG mft_addr{0};
   std::unique_ptr<Io::FileReader<S>> volume;
 
-  // MFT file records ($MFT file itself) may be fragmented
-  // Get $MFT Data attribute to translate FileRecord to correct disk offset.
-  // Built in Init(), once the boot sector has fixed the cluster geometry.
-  Mft::ExtentMap<S> mft_map{0, 0};
+  // $MFT's own record and the extents that map it. Set up by Init(), once the
+  // boot sector has fixed the cluster geometry.
+  Mft::MftBootstrap<S> mft;
 
   // The volume's own $UpCase, loaded on first use by GetUpCaseTable(). Stays
   // null when $UpCase cannot be read; upcase_loaded_ then keeps the failure
   // from being retried.
   mutable std::unique_ptr<const UpCase::Table> upcase;
 
-  Io::FileRecord<S> mft_record;  // $MFT File Record
-
   // EFS key source. efs_provider_set_ tells "never chosen", which lets the
   // default provider be created on the first decryption, from "chosen to be
   // none" (SetEfsKeyProvider(nullptr)), which disables decryption.
   mutable std::shared_ptr<Efs::IEfsKeyProvider> efs_provider;
-
-  // Owns extension FileRecords; std::list keeps FullCache pointers stable.
-  std::list<Io::FileRecord<S>> mft_extension_records;
 
   mutable std::vector<BYTE> cluster_buffer;
 
@@ -126,26 +119,7 @@ class NtfsVolume<S>::Impl {
   [[nodiscard]] bool ParseVolumeRecord(Io::FileRecord<S>& vol);
   [[nodiscard]] bool AcceptVolumeVersion(const Io::FileRecord<S>& vol);
   void LogVolumeName(const Io::FileRecord<S>& vol) const;
-  [[nodiscard]] bool ParseMftRecord();
-  [[nodiscard]] const Attr::AttrBase<S>* FindMftBaseExtent() const;
-  void
-      WarnIfMftClaimsMoreThanMapped(const Attr::AttrBase<S>& base_extent) const;
   void Init();
-  void ResolveMftDataExtents();
-
-  // One extension record $MFT's $ATTRIBUTE_LIST names for DATA, with the
-  // sequence number its entries claim and the start VCN of each entry.
-  struct PendingMftExtension {
-    ULONGLONG record{0};
-    WORD sequence{0};
-    std::vector<ULONGLONG> start_vcns;
-  };
-
-  [[nodiscard]] static std::vector<PendingMftExtension>
-      CollectPendingMftExtensions(const Attr::AttrBase<S>& raw_list,
-                                  ULONGLONG self_ref);
-  void ResolvePendingMftExtension(const PendingMftExtension& item,
-                                  ULONGLONG self_ref);
   [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
   [[nodiscard]] std::unique_ptr<const UpCase::Table> LoadUpCaseTable() const;
   void AttrRawCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,

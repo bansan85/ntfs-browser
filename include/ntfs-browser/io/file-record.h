@@ -29,6 +29,13 @@ class AttrList;
 
 }  // namespace Attr
 
+namespace Mft {
+
+template <Cache::Strategy S>
+class MftBootstrap;
+
+}  // namespace Mft
+
 namespace Io {
 
 template <Cache::Strategy S>
@@ -66,6 +73,8 @@ class NTFS_BROWSER_EXPORT FileRecord {
   friend class Attr::AttrList;
   template <Cache::Strategy>
   friend class AttrParser;
+  template <Cache::Strategy>
+  friend class Mft::MftBootstrap;
 
  private:
   // Every member and private method, kept out of this header.

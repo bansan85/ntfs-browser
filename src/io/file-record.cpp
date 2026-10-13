@@ -148,7 +148,7 @@ std::unique_ptr<Record::HeaderImpl<S>>
   }
 
   if (file_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
-      !volume->impl_->mft_map.HasBase()) {
+      !volume->impl_->mft.Map().HasBase()) {
     if (!ReadDirectRecord(file_ref)) {
       return {};
     }
@@ -159,7 +159,7 @@ std::unique_ptr<Record::HeaderImpl<S>>
     const ULONGLONG fr_addr = volume->GetFileRecordSize() * file_ref;
 
     if (std::optional<ULONGLONG> len =
-            volume->impl_->mft_map.ReadData(fr_addr, record_buffer);
+            volume->impl_->mft.Map().ReadData(fr_addr, record_buffer);
         !len || *len != volume->GetFileRecordSize()) {
       return {};
     }
