@@ -102,9 +102,8 @@ template <Cache::Strategy S>
 bool AttrNonResident<S>::PickData(std::span<const BYTE>& data_run,
                                   ULONGLONG& length, LONGLONG& lcn_offset,
                                   bool recover) noexcept {
-  if (data_run.empty()) {
-    return false;
-  }
+  // ParseDataRun() calls this only while the run list still has bytes.
+  assert(!data_run.empty());
 
   union Length {
     struct {
@@ -429,10 +428,9 @@ const std::vector<BYTE>*
   }
 
   const ULONGLONG unit_first_vcn = unit_index * comp_unit_clusters_;
-  if (unit_first_vcn >= TotalClusters()) {
-    Log::Warn("Compression unit {} exceeds DataRun bounds", unit_index);
-    return nullptr;
-  }
+  // ReadVirtualClustersCompressed() passes only VCNs below TotalClusters(),
+  // so UnitClusters() below never underflows.
+  assert(unit_first_vcn < TotalClusters());
 
   const ULONGLONG unit_clusters = UnitClusters(unit_first_vcn);
   const ULONGLONG unit_size = unit_clusters * this->GetClusterSize();
