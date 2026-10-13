@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -13,6 +14,8 @@
 
 using namespace NtfsBrowser;
 
+using DirectoryRecord = Io::FileRecord<Cache::Strategy::NoCache>;
+
 // Prints command-line usage help.
 void Usage() {
   printf("Invalid parameter\n");
@@ -23,53 +26,33 @@ void Usage() {
   printf("eg. ntfsdir \"c:\\program files\\common files\"\n");
 }
 
-// Strips a leading drive-letter prefix (eg. "c:") off *ppath and returns
-// the letter. Advances *ppath past the prefix; returns '\0' on no match.
+// Splits the drive letter off a path such as "c:\windows". Returns the
+// letter, or L'\0' if there is none. On success *ppath moves past the
+// letter and the separators after it.
 wchar_t Getvolume(wchar_t** ppath) {
   wchar_t* p = *ppath;
 
-  while (*p) {
-    if (*p == L' ' || *p == L'"') {
-      p++;
-    } else {
-      break;
-    }
+  while (*p == L' ' || *p == L'"') {
+    p++;
   }
   if (*p == L'\0') {
     return L'\0';
   }
+  const wchar_t volname = *p++;
 
-  const wchar_t volname = *p;
-  p++;
-
-  while (*p) {
-    if (*p == L' ') {
-      p++;
-    } else {
-      break;
-    }
+  while (*p == L' ') {
+    p++;
   }
-  if (*p == L'\0') {
-    return L'\0';
-  }
-
   if (*p != L':') {
     return L'\0';
   }
 
-  while (*p) {
-    if (*p != L'\\') {
-      p++;
-    } else {
-      break;
-    }
+  // Skips the colon and the first directory name, up to a backslash.
+  while (*p != L'\\' && *p != L'\0') {
+    p++;
   }
-  while (*p) {
-    if (*p == L'\\' || *p == L'"') {
-      p++;
-    } else {
-      break;
-    }
+  while (*p == L'\\' || *p == L'"') {
+    p++;
   }
 
   *ppath = p;
@@ -152,36 +135,85 @@ void Printfile(const IndexEntryView& ie, void* context) {
   }
 }
 
-// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
-int wmain(int argc, wchar_t* argv[]) {
+// The parsed command line: the --log settings and the one path argument.
+struct Arguments {
   Log::Config log_config;
   wchar_t* path = nullptr;
+};
 
+// Returns nullopt for a malformed --log option, or unless exactly one path
+// is given. The --log option may come before or after the path.
+std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
+  Arguments args;
   for (int i = 1; i < argc; i++) {
     if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w)) {
-      if (!Log::ParseOption(argv[i], log_config)) {
-        Usage();
-        return -1;
+      if (!Log::ParseOption(argv[i], args.log_config)) {
+        return std::nullopt;
       }
-      continue;
+    } else if (args.path == nullptr) {
+      args.path = argv[i];
+    } else {
+      return std::nullopt;
     }
-    // Exactly one path argument, and it may come before or after --log=.
-    if (path != nullptr) {
-      Usage();
-      return -1;
+  }
+
+  if (args.path == nullptr) {
+    return std::nullopt;
+  }
+  return args;
+}
+
+// Moves fr into the subdirectory named pathname. Returns false after
+// printing why it cannot.
+bool EnterSubdirectory(DirectoryRecord& fr, const std::wstring& pathname) {
+  std::optional<IndexEntry> ie = fr.FindSubEntry(pathname);
+  if (!ie) {
+    printf("Cannot find directory %ls\n", pathname.c_str());
+    return false;
+  }
+
+  if (!ie->IsDirectory()) {
+    printf("%ls is not a directory\n", pathname.c_str());
+    return false;
+  }
+
+  if (!fr.ParseFileRecord(ie->GetFileReference())) {
+    printf("Cannot read directory %ls\n", pathname.c_str());
+    return false;
+  }
+  if (!fr.ParseAttrs()) {
+    printf("Cannot parse attributes\n");
+    return false;
+  }
+  return true;
+}
+
+// Moves fr to the root directory, then to each directory path names in turn.
+// Returns false after printing why it cannot.
+bool EnterDirectories(DirectoryRecord& fr, wchar_t volname, std::wstring path) {
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
+    printf("Cannot read root directory of volume %lc\n", volname);
+    return false;
+  }
+  if (!fr.ParseAttrs()) {
+    printf("Cannot parse attributes\n");
+    return false;
+  }
+
+  while (true) {
+    const std::wstring pathname = Getpathname(path);
+    // An empty segment means the path is used up.
+    if (pathname.empty()) {
+      return true;
     }
-    path = argv[i];
+    if (!EnterSubdirectory(fr, pathname)) {
+      return false;
+    }
   }
+}
 
-  if (path == nullptr) {
-    Usage();
-    return -1;
-  }
-
-  if (!Log::Configure(log_config)) {
-    fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
-  }
-
+// Lists the directory that path names. Returns the exit code.
+int ListDirectory(wchar_t* path) {
   const wchar_t volname = Getvolume(&path);
   if (volname == L'\0') {
     Usage();
@@ -194,54 +226,30 @@ int wmain(int argc, wchar_t* argv[]) {
     return -1;
   }
 
-  NtfsBrowser::Io::FileRecord fr(volume);
-
+  DirectoryRecord fr(volume);
   fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
-    printf("Cannot read root directory of volume %lc\n", volname);
+  if (!EnterDirectories(fr, volname, path)) {
     return -1;
-  }
-
-  if (!fr.ParseAttrs()) {
-    printf("Cannot parse attributes\n");
-    return -1;
-  }
-
-  std::wstring wpath(path);
-  std::wstring pathname;
-
-  while (true) {
-    pathname = Getpathname(wpath);
-    if (pathname.empty()) {
-      break;
-    }
-
-    std::optional<IndexEntry> ie = fr.FindSubEntry(pathname.c_str());
-    if (!ie) {
-      printf("Cannot find directory %ls\n", pathname.c_str());
-      return -1;
-    }
-
-    if (!ie->IsDirectory()) {
-      printf("%ls is not a directory\n", pathname.c_str());
-      return -1;
-    }
-
-    if (!fr.ParseFileRecord(ie->GetFileReference())) {
-      printf("Cannot read directory %ls\n", pathname.c_str());
-      return -1;
-    }
-    if (!fr.ParseAttrs()) {
-      printf("Cannot parse attributes\n");
-      return -1;
-    }
   }
 
   Total total;
   fr.TraverseSubEntries(Printfile, &total);
-
   printf("Files: %d, Directories: %d\n", total.files, total.dirs);
-
   return 0;
+}
+
+// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
+int wmain(int argc, wchar_t* argv[]) {
+  const std::optional<Arguments> args = ParseArguments(argc, argv);
+  if (!args) {
+    Usage();
+    return -1;
+  }
+
+  if (!Log::Configure(args->log_config)) {
+    fprintf(stderr, "Cannot open log file %ls\n",
+            args->log_config.file_path.c_str());
+  }
+
+  return ListDirectory(args->path);
 }
