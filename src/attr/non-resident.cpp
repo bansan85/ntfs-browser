@@ -56,7 +56,7 @@ AttrNonResident<S>::AttrNonResident(const HeaderCommon& ahc,
                                     const Io::FileRecord<S>& file_record)
     : Attr::AttrBase<S>(ahc, file_record),
       attr_header_nr_(reinterpret_cast<const Data::HeaderNonResident&>(ahc)),
-      merged_clusters_(SpannedClusters(attr_header_nr_)) {
+      runs_(SpannedClusters(attr_header_nr_)) {
   // total_size already covers this field (ParseAttrs()); start_vcn must be
   // unit-aligned or units decode against the wrong window.
   if (Data::HasCompressedSizeField(attr_header_nr_)) {
@@ -94,66 +94,6 @@ AttrNonResident<S>::AttrNonResident(const HeaderCommon& ahc,
   ParseDataRun();
 }
 
-// Parse a single DataRun unit, and advance dataRun past it. dataRun is bounded
-// to the attribute (already validated against the record buffer by
-// FileRecord::ParseAttrs); data_run_offset and the run stream itself are
-// attacker-controlled and otherwise unbounded.
-template <Cache::Strategy S>
-bool AttrNonResident<S>::PickData(std::span<const BYTE>& data_run,
-                                  ULONGLONG& length, LONGLONG& lcn_offset,
-                                  bool recover) noexcept {
-  // ParseDataRun() calls this only while the run list still has bytes.
-  assert(!data_run.empty());
-
-  union Length {
-    struct {
-      BYTE length_bytes : 4;
-      BYTE offset_bytes : 4;
-    };
-
-    BYTE size;
-  };
-
-  const Length size{.size = data_run.front()};
-  data_run = data_run.subspan(1);
-
-  if (size.length_bytes > sizeof(ULONGLONG) ||
-      size.offset_bytes > sizeof(LONGLONG)) {
-    Log::Recoverable(recover, "DataRun decode error 1: 0x{:02X}", size.size);
-    return false;
-  }
-
-  if (data_run.size() < static_cast<size_t>(size.length_bytes) +
-                            static_cast<size_t>(size.offset_bytes)) {
-    Log::Recoverable(recover,
-                     "DataRun decode error: run exceeds attribute bounds");
-    return false;
-  }
-
-  length = 0;
-  memcpy(&length, data_run.data(), size.length_bytes);
-
-  data_run = data_run.subspan(size.length_bytes);
-  if (size.offset_bytes != 0)  // Not Sparse File
-  {
-    // The size check above leaves at least offsetBytes bytes in dataRun.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    if (static_cast<CHAR>(data_run[size.offset_bytes - 1U]) < 0) {
-      // Negative the number read.
-      lcn_offset = -1;
-    } else {
-      lcn_offset = 0;
-    }
-    memcpy(&lcn_offset, data_run.data(), size.offset_bytes);
-
-    data_run = data_run.subspan(size.offset_bytes);
-  } else {
-    lcn_offset = 0;
-  }
-
-  return true;
-}
-
 // Traverse DataRun and append entries to the run list. When recovering,
 // stops at the first decode or bounds error, keeping entries parsed before
 // it; when strict, the same error instead throws, rejecting the attribute
@@ -168,80 +108,12 @@ void AttrNonResident<S>::ParseDataRun() {
   const std::span<const BYTE> attr_bytes(
       reinterpret_cast<const BYTE*>(&attr_header_nr_),
       attr_header_nr_.header.total_size);
-  std::span<const BYTE> data_run =
+  const std::span<const BYTE> data_run =
       attr_header_nr_.data_run_offset < attr_bytes.size()
           ? attr_bytes.subspan(attr_header_nr_.data_run_offset)
           : std::span<const BYTE>{};
-  ULONGLONG length = 0;
-  LONGLONG lcn_offset = 0;
-  LONGLONG lcn = 0;
-  ULONGLONG vcn = 0;
-
-  while (!data_run.empty() && data_run.front() != 0) {
-    if (!PickData(data_run, length, lcn_offset, recover)) {
-      // PickData() already logged which check failed.
-      if (!recover) {
-        throw std::runtime_error("Data run is malformed.\n");
-      }
-      break;
-    }
-
-    if (!AppendDataRun(length, lcn_offset, lcn, vcn, recover)) {
-      break;
-    }
-  }
-}
-
-// Applies one decoded run (its length and LCN delta) to the running lcn and
-// vcn, and appends it to the run list. Returns false on an error that recovery
-// tolerates; when strict, the same error throws.
-template <Cache::Strategy S>
-bool AttrNonResident<S>::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
-                                       LONGLONG& lcn, ULONGLONG& vcn,
-                                       bool recover) {
-  // lcn is never negative here, so only a positive offset can overflow the
-  // sum. It MUST be caught before the addition: signed overflow is UB.
-  if (lcn_offset > 0 &&
-      lcn > std::numeric_limits<LONGLONG>::max() - lcn_offset) {
-    Log::Recoverable(recover, "DataRun decode error: LCN overflows");
-    if (!recover) {
-      throw std::runtime_error("Data run LCN overflows.\n");
-    }
-    return false;
-  }
-
-  lcn += lcn_offset;
-  if (lcn < 0) {
-    Log::Recoverable(recover, "DataRun decode error 2");
-    if (!recover) {
-      throw std::runtime_error("Data run LCN underflows.\n");
-    }
-    return false;
-  }
-
-  Log::Debug("Data length = {} clusters, LCN = {}{}", length, lcn,
-             lcn_offset == 0 ? ", Sparse Data" : "");
-
-  // Store LCN, Data size (clusters) into list
-  Data::RunEntry data_run;
-  data_run.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : lcn;
-  data_run.clusters = length;
-  data_run.start_vcn = vcn;
-  vcn += length;
-  data_run.last_vcn = vcn - 1;
-
-  if (data_run.last_vcn >
-      (attr_header_nr_.last_vcn - attr_header_nr_.start_vcn)) {
-    Log::Recoverable(recover, "DataRun decode error: VCN exceeds bound");
-    if (!recover) {
-      throw std::runtime_error(
-          "Data run VCN exceeds the attribute's declared bound.\n");
-    }
-    return false;
-  }
-
-  data_run_list_.push_back(data_run);
-  return true;
+  runs_.Parse(data_run, attr_header_nr_.last_vcn - attr_header_nr_.start_vcn,
+              recover);
 }
 
 // Read clusters from disk, or sparse data
@@ -289,7 +161,7 @@ std::optional<std::span<const BYTE>>
 // included.
 template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::TotalClusters() const noexcept {
-  return merged_clusters_;
+  return runs_.TotalClusters();
 }
 
 // Clusters belonging to the compression unit starting at "unitFirstVcn":
@@ -299,59 +171,6 @@ ULONGLONG
     AttrNonResident<S>::UnitClusters(ULONGLONG unit_first_vcn) const noexcept {
   const ULONGLONG remaining = TotalClusters() - unit_first_vcn;
   return (remaining < comp_unit_clusters_) ? remaining : comp_unit_clusters_;
-}
-
-// Counts the real (non-sparse) clusters at the start of a compression unit.
-// Returns an empty optional if the unit is not fully mapped, or if a real
-// run follows a hole within the unit - layouts a compression unit cannot
-// legally have.
-template <Cache::Strategy S>
-std::optional<ULONGLONG> AttrNonResident<S>::LeadingRealClusters(
-    ULONGLONG unit_first_vcn, ULONGLONG unit_clusters) const noexcept {
-  const ULONGLONG unit_end = unit_first_vcn + unit_clusters;
-  ULONGLONG vcn = unit_first_vcn;
-  ULONGLONG real_clusters = 0;
-  bool saw_hole = false;
-
-  for (const Data::RunEntry& data_run : data_run_list_) {
-    if (vcn >= unit_end) {
-      break;
-    }
-    if (data_run.last_vcn < vcn) {
-      // Entirely before the unit (or before what has been counted so far).
-      continue;
-    }
-    if (data_run.start_vcn > vcn) {
-      Log::Warn("Compression unit at VCN {} is not fully mapped",
-                unit_first_vcn);
-      return {};
-    }
-
-    const ULONGLONG in_run = data_run.last_vcn - vcn + 1;
-    const ULONGLONG left = unit_end - vcn;
-    const ULONGLONG take = (in_run < left) ? in_run : left;
-
-    if (data_run.lcn) {
-      if (saw_hole) {
-        Log::Warn("Compression unit at VCN {} has real clusters after a hole",
-                  unit_first_vcn);
-        return {};
-      }
-      real_clusters += take;
-    } else {
-      saw_hole = true;
-    }
-
-    vcn += take;
-  }
-
-  if (vcn != unit_end) {
-    // The run list ran out before the unit did.
-    Log::Warn("Compression unit at VCN {} is not fully mapped", unit_first_vcn);
-    return {};
-  }
-
-  return real_clusters;
 }
 
 // Reads the realClusters stored clusters of a compressed unit and LZNT1-decodes
@@ -447,7 +266,7 @@ const std::vector<BYTE>*
   }
 
   const std::optional<ULONGLONG> real_clusters_opt =
-      LeadingRealClusters(unit_first_vcn, unit_clusters);
+      runs_.LeadingRealClusters(unit_first_vcn, unit_clusters);
   if (!real_clusters_opt) {
     // LeadingRealClusters() already traced which layout it rejected.
     return nullptr;
@@ -613,32 +432,31 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
   std::span<BYTE> out = buffer;
 
   // Traverse the DataRun List to find the according LCN
-  for (const Data::RunEntry& data_run : data_run_list_) {
-    if (vcn >= data_run.start_vcn && vcn <= data_run.last_vcn) {
-      // Clusters from read pointer to the end
-      const ULONGLONG vcns = data_run.last_vcn - vcn + 1;
-      // Fragmented data, we must go on
-      const ULONGLONG clusters_to_read = clusters > vcns ? vcns : clusters;
-
-      const RunRead status =
-          ReadRunClusters(data_run, vcn, clusters_to_read, out);
-      if (status == RunRead::ShortRead) {
-        break;
-      }
-      if (status == RunRead::Failed) {
-        return {};
-      }
-
-      out = out.subspan(gsl::narrow<size_t>(
-          static_cast<ULONGLONG>(clusters_to_read) * this->GetClusterSize()));
-      clusters -= clusters_to_read;
-      actural += clusters_to_read;
-      vcn += clusters_to_read;
-
-      if (clusters == 0) {
-        break;
-      }
+  // Fragmented data: each pass reads the run holding the next VCN.
+  while (clusters != 0) {
+    const Data::RunEntry* data_run = runs_.Find(vcn);
+    if (data_run == nullptr) {
+      break;
     }
+    // Clusters from read pointer to the end
+    const ULONGLONG vcns = data_run->last_vcn - vcn + 1;
+    // Fragmented data, we must go on
+    const ULONGLONG clusters_to_read = clusters > vcns ? vcns : clusters;
+
+    const RunRead status =
+        ReadRunClusters(*data_run, vcn, clusters_to_read, out);
+    if (status == RunRead::ShortRead) {
+      break;
+    }
+    if (status == RunRead::Failed) {
+      return {};
+    }
+
+    out = out.subspan(gsl::narrow<size_t>(
+        static_cast<ULONGLONG>(clusters_to_read) * this->GetClusterSize()));
+    clusters -= clusters_to_read;
+    actural += clusters_to_read;
+    vcn += clusters_to_read;
   }
 
   actural *= this->GetClusterSize();
@@ -848,28 +666,17 @@ ULONGLONG AttrNonResident<S>::GetLastVcn() const noexcept {
 }
 
 // Clusters from this instance's start VCN through its last run that maps real
-// clusters. A sparse tail maps nothing, and last_vcn is only a declared bound.
+// clusters. See RunList::MappedClusters().
 template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::MappedClusters() const noexcept {
-  ULONGLONG mapped = 0;
-  for (const Data::RunEntry& data_run : data_run_list_) {
-    if (data_run.lcn.has_value()) {
-      mapped = data_run.last_vcn + 1;
-    }
-  }
-  return mapped;
+  return runs_.MappedClusters();
 }
 
-// Rebases other's own runs onto merged_clusters_ (this instance's own VCN
-// count so far) and appends them, so the two read as one contiguous stream.
+// Rebases other's own runs onto this instance's VCN count so far and appends
+// them, so the two read as one contiguous stream.
 template <Cache::Strategy S>
 void AttrNonResident<S>::AppendRuns(const AttrNonResident& other) {
-  for (Data::RunEntry data_run : other.data_run_list_) {
-    data_run.start_vcn += merged_clusters_;
-    data_run.last_vcn += merged_clusters_;
-    data_run_list_.push_back(data_run);
-  }
-  merged_clusters_ += other.merged_clusters_;
+  runs_.Append(other.runs_);
 }
 
 template class AttrNonResident<Cache::Strategy::NoCache>;

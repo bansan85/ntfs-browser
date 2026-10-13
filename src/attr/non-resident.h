@@ -12,6 +12,7 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/io/file-record.h>
 
+#include "attr/run-list.h"
 #include "data/run-entry.h"
 #include "internal-export.h"
 #include "io/file-record-efs.h"
@@ -80,10 +81,8 @@ class AttrNonResident : public Attr::AttrBase<S> {
 
  private:
   const Data::HeaderNonResident& attr_header_nr_;
-  std::vector<Data::RunEntry> data_run_list_;
-
-  // This instance's own VCN count; AppendRuns() extends it per merged instance.
-  ULONGLONG merged_clusters_{0};
+  // Decoded data runs, with this instance's own VCN count.
+  RunList runs_;
 
   // Clusters per compression unit (2^comp_unit_size); 0 means uncompressed.
   ULONGLONG comp_unit_clusters_{0};
@@ -96,12 +95,7 @@ class AttrNonResident : public Attr::AttrBase<S> {
   // streams, which hold the same key.
   std::shared_ptr<const Efs::Context> efs_context_;
 
-  [[nodiscard]] static bool PickData(std::span<const BYTE>& data_run,
-                                     ULONGLONG& length, LONGLONG& lcn_offset,
-                                     bool recover) noexcept;
   void ParseDataRun();
-  [[nodiscard]] bool AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
-                                   LONGLONG& lcn, ULONGLONG& vcn, bool recover);
   [[nodiscard]] std::optional<std::span<const BYTE>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;
@@ -125,9 +119,6 @@ class AttrNonResident : public Attr::AttrBase<S> {
   // layout these implement.
   [[nodiscard]] ULONGLONG TotalClusters() const noexcept;
   [[nodiscard]] ULONGLONG UnitClusters(ULONGLONG unit_first_vcn) const noexcept;
-  [[nodiscard]] std::optional<ULONGLONG>
-      LeadingRealClusters(ULONGLONG unit_first_vcn,
-                          ULONGLONG unit_clusters) const noexcept;
   [[nodiscard]] const std::vector<BYTE>*
       GetCompressionUnit(ULONGLONG unit_index) const;
   // How reading one data run's clusters ended.
