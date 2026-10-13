@@ -1,8 +1,5 @@
 #include <cstddef>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
-#include <random>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -10,11 +7,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include "child-process.h"
 #include "fake-ntfs-image.h"
+#include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowserTests::RunProcessToFiles;
+using NtfsBrowserTests::SampleRun;
 namespace Fs = std::filesystem;
 
 namespace {
@@ -63,45 +60,11 @@ constexpr std::string_view missing_volume_error =
     "Cannnot open volume\n"
     "Cannot open no-such-volume.img as an NTFS volume\n";
 
-// Exit code and text of one NtfsMftList run. The CRT writes CRLF on Windows,
-// so the text has its carriage returns removed.
-struct SampleRun {
-  int exit_code = 0;
-  std::string out;
-  std::string err;
-};
-
-// Reads a whole file as text, without its carriage returns.
-std::string ReadText(const Fs::path& path) {
-  std::ifstream input(path, std::ios::binary);
-  std::string text((std::istreambuf_iterator<char>(input)),
-                   std::istreambuf_iterator<char>());
-  std::erase(text, '\r');
-  return text;
-}
-
-// A fresh temp path for one of the run's redirected streams.
-Fs::path TempStreamPath(std::string_view tag) {
-  std::random_device random_device;
-  return Fs::temp_directory_path() /
-         ("ntfsmftlist-" + std::to_string(random_device()) + "-" +
-          std::string(tag) + ".txt");
-}
-
 // Runs NtfsMftList with args, its stdout and stderr captured apart.
 SampleRun RunSample(const std::vector<std::wstring>& args) {
   const Fs::path exe(NTFS_MFT_LIST_EXE);
   REQUIRE(Fs::exists(exe));
-
-  const Fs::path out_path = TempStreamPath("out");
-  const Fs::path err_path = TempStreamPath("err");
-  SampleRun run;
-  run.exit_code = RunProcessToFiles(exe, args, out_path, err_path);
-  run.out = ReadText(out_path);
-  run.err = ReadText(err_path);
-  std::filesystem::remove(out_path);
-  std::filesystem::remove(err_path);
-  return run;
+  return NtfsBrowserTests::RunSample(exe, args);
 }
 
 // Writes BuildFakeNtfsImageWithMftTree() to a temp file, removed on exit.

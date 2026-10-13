@@ -6,6 +6,8 @@ target_sources(
     "md5-test-support.cpp"
     "md5-test-support.h"
     "optional-access.h"
+    "sample-run.cpp"
+    "sample-run.h"
     "test-log-sink.cpp"
     "test-log-sink.h"
 )
