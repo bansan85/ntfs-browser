@@ -20,6 +20,7 @@
 
 #include "attr/slot.h"
 #include "mft/mft-bootstrap.h"
+#include "volume/volume-geometry.h"
 
 #ifdef _WIN32
   #include <tchar.h>
@@ -42,13 +43,6 @@ class Table;
 
 }  // namespace UpCase
 
-// The boot sector's BIOS parameter block.
-namespace Data {
-
-struct NtfsBpb;
-
-}  // namespace Data
-
 // Everything NtfsVolume<S> keeps out of its public header: the members, and the
 // private methods that work on them. FileRecord<S>, a friend of NtfsVolume<S>,
 // reaches it through NtfsVolume<S>::impl_.
@@ -59,7 +53,6 @@ class NtfsVolume<S>::Impl {
 
   // The NtfsVolume this belongs to. The FileRecords it owns are built over it.
   NtfsVolume<S>* self;
-  ULONGLONG mft_addr{0};
   std::unique_ptr<Io::FileReader<S>> volume;
 
   // $MFT's own record and the extents that map it. Set up by Init(), once the
@@ -78,11 +71,11 @@ class NtfsVolume<S>::Impl {
 
   mutable std::vector<BYTE> cluster_buffer;
 
+  // Boot-sector geometry, as ParseBootSector() decoded it. Read by the
+  // geometry getters, and by Init() and the $UpCase load.
+  Volume::Geometry geometry;
+
   std::array<Attr::RawCallback, Attr::attr_nums> attr_raw_call_back{};
-  DWORD cluster_size{0};
-  DWORD file_record_size{0};
-  DWORD index_block_size{0};
-  WORD sector_size{0};
   bool volume_ok{false};
   BYTE version_major{0};
   BYTE version_minor{0};
@@ -111,11 +104,6 @@ class NtfsVolume<S>::Impl {
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
   [[nodiscard]] std::optional<std::span<const BYTE>> ReadBootSector() const;
-  [[nodiscard]] bool ParseSectorSize(const Data::NtfsBpb& bpb);
-  [[nodiscard]] bool ParseClusterSize(const Data::NtfsBpb& bpb);
-  [[nodiscard]] bool ParseFileRecordSize(const Data::NtfsBpb& bpb);
-  [[nodiscard]] bool ParseIndexBlockSize(const Data::NtfsBpb& bpb);
-  [[nodiscard]] bool ParseMftAddress(const Data::NtfsBpb& bpb);
   [[nodiscard]] bool ParseVolumeRecord(Io::FileRecord<S>& vol);
   [[nodiscard]] bool AcceptVolumeVersion(const Io::FileRecord<S>& vol);
   void LogVolumeName(const Io::FileRecord<S>& vol) const;

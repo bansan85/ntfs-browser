@@ -4,7 +4,6 @@
 #include <array>
 #include <cassert>
 #include <cstring>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -31,9 +30,6 @@
 #include "attr/vol-info.h"
 #include "attr/vol-name.h"
 #include "data/attribute-list.h"
-#include "data/file-record-header.h"
-#include "data/index-block.h"
-#include "data/ntfs-bpb.h"
 #include "io/file-reader.h"  // IWYU pragma: keep
 #include "io/file-record-impl.h"
 #include "log/ntfs-common.h"
@@ -41,6 +37,7 @@
 #include "ntfs-volume-impl.h"
 #include "upcase/upcase.h"
 #include "utf/utf.h"
+#include "volume/volume-geometry.h"
 
 namespace NtfsBrowser {
 
@@ -73,45 +70,6 @@ std::wstring_view TrimTrailingNuls(std::wstring_view name) noexcept {
 
 // Length of a Win32 volume device path, NUL excluded: \\.\C:
 constexpr size_t volume_path_length = 6;
-
-// Largest -log2 of sectors per cluster the BPB encoding may carry: a cluster
-// of 2^12 sectors, far beyond any real volume.
-constexpr int max_sectors_per_cluster_shift = 12;
-
-// Largest -log2 of a file record or index block size, in bytes.
-constexpr int max_size_shift = 12;
-
-// Largest literal cluster count of a file record or index block.
-constexpr int max_size_in_clusters = 8;
-
-// Decodes a BPB size byte: a positive value counts clusters, a negative one is
-// -log2 of the size in bytes. Rejects a magnitude that would shift 1U by 32 or
-// more (undefined behaviour), or yield a size no real volume could have.
-std::optional<DWORD> DecodeBpbSize(char raw, DWORD cluster_size) {
-  if (raw < -max_size_shift || raw > max_size_in_clusters) {
-    return std::nullopt;
-  }
-  if (raw > 0) {
-    return cluster_size * raw;
-  }
-  return 1U << static_cast<unsigned char>(-raw);
-}
-
-// Computes the cluster size from the sectors-per-cluster BPB byte, or nullopt
-// when its magnitude is out of range.
-std::optional<DWORD> DecodeClusterSize(char spc, WORD sector_size) {
-  if (spc >= 0) {
-    return sector_size * static_cast<unsigned char>(spc);
-  }
-  // Windows 10 1903+ (build 18362) large-cluster encoding: a negative byte
-  // is -log2(sectors per cluster), not a literal sector count, letting a
-  // single BYTE field reach cluster sizes above 255 sectors (up to 2 MiB
-  // at the common 512-byte sector size).
-  if (spc < -max_sectors_per_cluster_shift) {
-    return std::nullopt;
-  }
-  return sector_size * (1U << static_cast<unsigned char>(-spc));
-}
 
 }  // namespace
 
@@ -209,7 +167,8 @@ void NtfsVolume<S>::Impl::Init() {
   }
 
   // The cluster geometry is known only now, after the boot sector parse.
-  mft.MapExtents(*base_extent, cluster_size, file_record_size);
+  mft.MapExtents(*base_extent, geometry.cluster_size,
+                 geometry.file_record_size);
 
   // Reported OK only once the base extent is actually set.
   volume_ok = true;
@@ -261,20 +220,11 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     Log::Error("Read boot sector error");
     return false;
   }
-  const auto& bpb = *reinterpret_cast<const Data::NtfsBpb*>(bpb_buffer->data());
-
-  const std::string_view signature(
-      reinterpret_cast<const char*>(&bpb.signature[0]), sizeof(bpb.signature));
-  if (signature != Data::ntfs_signature) {
-    Log::Warn("Volume file system is not NTFS");
-    return false;
-  }
-
-  // Each field is validated and logged in turn. The first failure stops the
-  // rest, so later fields are neither set nor logged.
-  return ParseSectorSize(bpb) && ParseClusterSize(bpb) &&
-         ParseFileRecordSize(bpb) && ParseIndexBlockSize(bpb) &&
-         ParseMftAddress(bpb);
+  const Volume::BootSectorParse parse = Volume::ParseBootSector(*bpb_buffer);
+  geometry = parse.geometry;
+  // Sized from the decoded cluster, even when a later field is rejected.
+  cluster_buffer.resize(geometry.cluster_size);
+  return parse.ok;
 }
 
 // Read the boot sector, retrying with 512 bytes when the 4096-byte read fails.
@@ -298,113 +248,6 @@ std::optional<std::span<const BYTE>>
     bpb_buffer = volume->Read(fr_addr, min_sector_size);
   }
   return bpb_buffer;
-}
-
-// Set sector_size from the BPB. Reject a sector too small to be real.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::ParseSectorSize(const Data::NtfsBpb& bpb) {
-  sector_size = bpb.bytes_per_sector;
-  Log::Info("Sector Size = {} bytes", sector_size);
-
-  // A sector smaller than one WORD cannot be a real BPB value.
-  if (sector_size < sizeof(WORD)) {
-    Log::Error("Sector Size must be at least 2 bytes");
-    return false;
-  }
-  return true;
-}
-
-// Set cluster_size and cluster_buffer from the BPB. Reject a null cluster.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::ParseClusterSize(const Data::NtfsBpb& bpb) {
-  const std::optional<DWORD> decoded_cluster_size = DecodeClusterSize(
-      static_cast<char>(bpb.sectors_per_cluster), sector_size);
-  if (!decoded_cluster_size) {
-    Log::Error("sectors_per_cluster magnitude out of range");
-    return false;
-  }
-  cluster_size = *decoded_cluster_size;
-  Log::Info("Cluster Size = {} bytes", cluster_size);
-
-  if (cluster_size == 0) {
-    Log::Error("Cluster Size can't be null");
-    return false;
-  }
-  cluster_buffer.resize(cluster_size);
-  return true;
-}
-
-// Set file_record_size from the BPB. Reject a size that is not a usable record.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::ParseFileRecordSize(const Data::NtfsBpb& bpb) {
-  const std::optional<DWORD> decoded_record_size = DecodeBpbSize(
-      static_cast<char>(bpb.clusters_per_file_record), cluster_size);
-  if (!decoded_record_size) {
-    Log::Error("clusters_per_file_record magnitude out of range");
-    return false;
-  }
-  file_record_size = *decoded_record_size;
-  Log::Info("FileRecord Size = {} bytes", file_record_size);
-
-  // Rejects a size too small for the header, or not a whole number of
-  // sectors.
-  if (file_record_size < Data::FileRecordHeader::min_file_record_header_size ||
-      file_record_size % sector_size != 0) {
-    Log::Error("FileRecord Size is invalid");
-    return false;
-  }
-
-  if (file_record_size > Data::FileRecordHeader::max_file_record_size) {
-    Log::Error(
-        "FileRecord Size exceeds the maximum supported file record size");
-    return false;
-  }
-  return true;
-}
-
-// Set index_block_size from the BPB. Reject a size that is not a usable block.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::ParseIndexBlockSize(const Data::NtfsBpb& bpb) {
-  const std::optional<DWORD> decoded_index_block_size = DecodeBpbSize(
-      static_cast<char>(bpb.clusters_per_index_block), cluster_size);
-  if (!decoded_index_block_size) {
-    Log::Error("clusters_per_index_block magnitude out of range");
-    return false;
-  }
-  index_block_size = *decoded_index_block_size;
-  Log::Info("IndexBlock Size = {} bytes", index_block_size);
-
-  // Rejects a size too small for the header, or not a whole number of
-  // sectors.
-  if (index_block_size < sizeof(Data::IndexBlock) ||
-      index_block_size % sector_size != 0) {
-    Log::Error("IndexBlock Size is invalid");
-    return false;
-  }
-  return true;
-}
-
-// Set mft_addr from the BPB. Reject an address that overflows or is too high.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::ParseMftAddress(const Data::NtfsBpb& bpb) {
-  // Multiplying two attacker-controlled values can overflow mft_addr_'s type.
-  const bool mft_addr_overflows =
-      cluster_size != 0 &&
-      bpb.lcn_mft > std::numeric_limits<ULONGLONG>::max() / cluster_size;
-  mft_addr = mft_addr_overflows ? std::numeric_limits<ULONGLONG>::max()
-                                : bpb.lcn_mft * cluster_size;
-  Log::Info("MFT address = 0x{:016X}", mft_addr);
-
-  // Leaves headroom for the per-record byte offset added to mft_addr_
-  // later, before it is narrowed to a LONGLONG.
-  constexpr ULONGLONG max_plausible_mft_addr =
-      std::numeric_limits<LONGLONG>::max() / 2;
-
-  if (mft_addr_overflows || mft_addr > max_plausible_mft_addr) {
-    Log::Error("MFT address is invalid");
-    return false;
-  }
-  return true;
 }
 
 // Check if Volume is successfully opened
@@ -433,28 +276,28 @@ ULONGLONG NtfsVolume<S>::GetRecordsCount() const noexcept {
 // Get BPB information
 template <Cache::Strategy S>
 WORD NtfsVolume<S>::GetSectorSize() const noexcept {
-  return impl_->sector_size;
+  return impl_->geometry.sector_size;
 }
 
 template <Cache::Strategy S>
 DWORD NtfsVolume<S>::GetClusterSize() const noexcept {
-  return impl_->cluster_size;
+  return impl_->geometry.cluster_size;
 }
 
 template <Cache::Strategy S>
 DWORD NtfsVolume<S>::GetFileRecordSize() const noexcept {
-  return impl_->file_record_size;
+  return impl_->geometry.file_record_size;
 }
 
 template <Cache::Strategy S>
 DWORD NtfsVolume<S>::GetIndexBlockSize() const noexcept {
-  return impl_->index_block_size;
+  return impl_->geometry.index_block_size;
 }
 
 // Get MFT starting address
 template <Cache::Strategy S>
 ULONGLONG NtfsVolume<S>::GetMFTAddr() const noexcept {
-  return impl_->mft_addr;
+  return impl_->geometry.mft_addr;
 }
 
 template <Cache::Strategy S>
@@ -556,8 +399,9 @@ template <Cache::Strategy S>
 std::unique_ptr<const UpCase::Table>
     NtfsVolume<S>::Impl::LoadUpCaseTable() const {
   const auto upcase_record = static_cast<ULONGLONG>(Mft::Idx::UpCase);
-  if (!volume_ok || !mft.Map().IsRangeMapped(upcase_record * file_record_size,
-                                             file_record_size)) {
+  const DWORD record_size = geometry.file_record_size;
+  if (!volume_ok ||
+      !mft.Map().IsRangeMapped(upcase_record * record_size, record_size)) {
     return {};
   }
 

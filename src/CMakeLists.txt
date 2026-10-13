@@ -30,6 +30,7 @@ set(
   "upcase/upcase.cpp"
   "utf/utf.cpp"
   "util/util.cpp"
+  "volume/volume-geometry.cpp"
 )
 
 if(NTFS_BROWSER_ENABLE_DECOMPRESSION)
@@ -45,11 +46,7 @@ endif()
 # needed, and only compiles, when at least one backend is compiled in.
 # NTFS_BROWSER_EFS_MASTER (set in the root CMakeLists.txt) is that condition.
 if(NTFS_BROWSER_EFS_MASTER)
-  list(
-    APPEND ${PROJECT_NAME}_SRC
-    "efs/efs-context.cpp"
-    "efs/efs-stream.cpp"
-  )
+  list(APPEND ${PROJECT_NAME}_SRC "efs/efs-context.cpp" "efs/efs-stream.cpp")
 endif()
 
 if(WIN32)
@@ -132,6 +129,7 @@ set(
   "upcase/upcase.h"
   "utf/utf.h"
   "util/util.h"
+  "volume/volume-geometry.h"
   "io/win32-disk-reader.h"
 )
 
