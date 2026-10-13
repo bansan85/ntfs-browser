@@ -951,6 +951,22 @@ inline constexpr DWORD multi_cluster_bitmap_clusters = 3;
 // hole (no real cluster); must read back as compression_unit_size zeroes.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnit();
 
+// Real size of BuildFakeNtfsImageWithSparseThenCompressedUnit(): one full hole
+// unit, then a compressed unit whose decoded bytes end the stream.
+inline constexpr ULONGLONG sparse_then_compressed_real_size =
+    compression_unit_size + xca_lznt1_example_decompressed_size;
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but two units long: unit 0
+// is a pure hole and unit 1 is the [MS-XCA] compressed unit, so a read across
+// the unit boundary must zero-fill the first and decode the second.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithSparseThenCompressedUnit();
+
+// Same as BuildFakeNtfsImageWithCompressedFile(), but the unit's runs are
+// [sparse][real][sparse]: a hole before a real cluster, the reverse of the
+// layout a compressed unit can take. ReadData() must reject it.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithHoleBeforeRealCluster();
+
 // Payload size needing two compressed clusters, still under one unit.
 inline constexpr size_t fragmented_compressed_payload_size = 2000;
 

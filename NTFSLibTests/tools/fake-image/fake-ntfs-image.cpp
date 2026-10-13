@@ -4357,6 +4357,37 @@ std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnit() {
   return BuildCompressionImage(record, runs, {});
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithSparseThenCompressedUnit() {
+  // Unit 0 (VCN 0..3) is a hole; unit 1 (VCN 4..7) holds one real cluster
+  // and a sparse pad, like BuildFakeNtfsImageWithCompressedFile().
+  const std::vector<FakeDataRun> runs{{{}, compression_unit_clusters},
+                                      {compressed_data_lcn, 1},
+                                      {{}, compression_unit_clusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Data::StdInfoPermission::Archive |
+          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      compression_unit_size_shift, sparse_then_compressed_real_size, runs);
+
+  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
+                                        xca_lznt1_example_compressed.end());
+  return BuildCompressionImage(record, runs, cluster_bytes);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithHoleBeforeRealCluster() {
+  const std::vector<FakeDataRun> runs{
+      {{}, 1}, {compressed_data_lcn, 1}, {{}, 2}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Data::StdInfoPermission::Archive |
+          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      compression_unit_size_shift, compression_unit_size, runs);
+
+  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
+                                        xca_lznt1_example_compressed.end());
+  return BuildCompressionImage(record, runs, cluster_bytes);
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithFragmentedCompressedFile() {
   // Two non-contiguous single-cluster real runs (so the compressed bytes
   // genuinely span two Data::RunEntrys) plus a 2-cluster sparse pad.

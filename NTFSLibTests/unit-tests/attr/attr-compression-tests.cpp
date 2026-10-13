@@ -15,6 +15,8 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -337,6 +339,88 @@ void CheckShortDecompressedInteriorUnitIsRejected() {
                         "decompressed to 100 bytes, expected at least 4096"));
 }
 
+// A hole unit followed by a compressed unit: the hole must read back as zeroes
+// and the compressed unit as its decoded bytes, also when one read straddles
+// the boundary between them.
+template <Cache::Strategy S>
+void CheckSparseUnitBeforeCompressedUnitReadsBack() {
+  ParsedRoot<S> root = ParseRoot<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithSparseThenCompressedUnit());
+  REQUIRE(root.record->ParseAttrs());
+  REQUIRE(root.record->GetAttr(Attr::Type::Data).size() == 1);
+  // The REQUIRE above checks that there is one DATA attribute.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  CHECK(root.record->GetAttr(Attr::Type::Data)[0]->GetDataSize() ==
+        NtfsBrowserTests::sparse_then_compressed_real_size);
+
+  constexpr size_t hole_size = NtfsBrowserTests::compression_unit_size;
+  constexpr size_t decoded_size =
+      NtfsBrowserTests::xca_lznt1_example_decompressed_size;
+
+  std::optional<std::vector<BYTE>> whole;
+  const std::string trace = CaptureTrace([&] {
+    whole = ReadRootData<S>(*root.record, 0,
+                            NtfsBrowserTests::sparse_then_compressed_real_size);
+  });
+  REQUIRE(whole.has_value());
+  REQUIRE(NtfsBrowserTests::Unwrap(whole).size() ==
+          NtfsBrowserTests::sparse_then_compressed_real_size);
+  const std::vector<BYTE>& bytes = NtfsBrowserTests::Unwrap(whole);
+  CHECK(std::all_of(bytes.begin(),
+                    bytes.begin() + static_cast<std::ptrdiff_t>(hole_size),
+                    [](BYTE value) { return value == 0; }));
+  CHECK(std::memcmp(&bytes.at(hole_size),
+                    NtfsBrowserTests::xca_lznt1_example_decompressed.data(),
+                    decoded_size) == 0);
+  CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
+                        "Compression unit 0 is sparse"));
+  CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
+                        "Decompressed compression unit 1 into 142 bytes"));
+
+  // Straddles the boundary: 100 zero bytes, then the decoded unit's first 100.
+  constexpr size_t straddle_before = 100;
+  constexpr size_t straddle_after = 100;
+  const std::optional<std::vector<BYTE>> straddle =
+      ReadRootData<S>(*root.record, hole_size - straddle_before,
+                      straddle_before + straddle_after);
+  REQUIRE(straddle.has_value());
+  REQUIRE(NtfsBrowserTests::Unwrap(straddle).size() ==
+          straddle_before + straddle_after);
+  const std::vector<BYTE>& straddled = NtfsBrowserTests::Unwrap(straddle);
+  CHECK(std::all_of(straddled.begin(),
+                    straddled.begin() +
+                        static_cast<std::ptrdiff_t>(straddle_before),
+                    [](BYTE value) { return value == 0; }));
+  CHECK(std::memcmp(&straddled.at(straddle_before),
+                    NtfsBrowserTests::xca_lznt1_example_decompressed.data(),
+                    straddle_after) == 0);
+
+  // Reading only the compressed unit truncates at real_size, not at the unit.
+  const std::optional<std::vector<BYTE>> decoded_only =
+      ReadRootData<S>(*root.record, hole_size, hole_size);
+  REQUIRE(decoded_only.has_value());
+  CHECK(NtfsBrowserTests::Unwrap(decoded_only).size() == decoded_size);
+}
+
+// A hole before a real cluster inside one unit is rejected, not read as a
+// compressed unit with its hole moved.
+template <Cache::Strategy S>
+void CheckHoleBeforeRealClusterIsRejected() {
+  ParsedRoot<S> root = ParseRoot<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithHoleBeforeRealCluster());
+  REQUIRE(root.record->ParseAttrs());
+
+  std::optional<std::vector<BYTE>> data;
+  const std::string trace = CaptureTrace([&] {
+    data = ReadRootData<S>(*root.record, 0,
+                           NtfsBrowserTests::compression_unit_size);
+  });
+
+  CHECK_FALSE(data.has_value());
+  CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
+                        "has real clusters after a hole"));
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG("A compressed file's data reads back decompressed",
@@ -401,6 +485,23 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][compression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckShortDecompressedInteriorUnitIsRejected<S>();
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A hole unit before a compressed unit reads zero-filled, and a read "
+    "straddling their boundary decodes the compressed side",
+    "[attr-non-resident][compression][characterization]",
+    ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  CheckSparseUnitBeforeCompressedUnitReadsBack<S>();
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A hole before a real cluster inside one compression unit is rejected",
+    "[attr-non-resident][compression][characterization]",
+    ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  CheckHoleBeforeRealClusterIsRejected<S>();
 }
 
 ////////////////////////////////////////////////////////////////////////////
