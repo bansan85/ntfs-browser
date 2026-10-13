@@ -5689,8 +5689,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithNoEndMarker() {
 }
 
 std::filesystem::path WriteFakeNtfsImage() {
-  const std::vector<BYTE> image = BuildFakeNtfsImage();
+  return WriteFakeNtfsImage(BuildFakeNtfsImage());
+}
 
+std::filesystem::path WriteFakeNtfsImage(const std::vector<BYTE>& image) {
   std::random_device random_device;
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /

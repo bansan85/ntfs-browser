@@ -40,6 +40,10 @@ inline constexpr DWORD fake_cluster_size =
 // Writes BuildFakeNtfsImage()'s image to a temp file and returns its path.
 [[nodiscard]] std::filesystem::path WriteFakeNtfsImage();
 
+// Writes image to a new temp file and returns its path. The caller removes it.
+[[nodiscard]] std::filesystem::path
+    WriteFakeNtfsImage(const std::vector<BYTE>& image);
+
 // True on-disk size of $VOLUME_INFORMATION: 12 bytes, with no padding.
 inline constexpr WORD minimal_volume_information_size = 12;
 

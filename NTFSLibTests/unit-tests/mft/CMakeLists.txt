@@ -12,3 +12,14 @@ target_include_directories(
   NtfsBrowserTests
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+
+# NtfsMftList is a Windows-only sample (examples/CMakeLists.txt), so its test
+# exists only where the sample builds.
+if(WIN32)
+  target_sources(NtfsBrowserTests PRIVATE "ntfsmftlist-sample-tests.cpp")
+  add_dependencies(NtfsBrowserTests NtfsMftList)
+  target_compile_definitions(
+    NtfsBrowserTests
+    PRIVATE NTFS_MFT_LIST_EXE="$<TARGET_FILE:NtfsMftList>"
+  )
+endif()
