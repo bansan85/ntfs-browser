@@ -79,33 +79,49 @@ std::string DisplayPath(const NtfsBrowser::Mft::MftTree& tree,
   return ToUtf8(path);
 }
 
-// Prints one listing line for entry, then one line per other hard link.
-void PrintEntry(const NtfsBrowser::Mft::MftTree& tree,
-                const NtfsBrowser::Mft::MftTree::Entry& entry) {
-  SYSTEMTIME st{};
-  FileTimeToSystemTime(&entry.write_time, &st);
+// The six attribute flags as letters, each shown when its flag is set.
+std::string AttributeColumn(const NtfsBrowser::Mft::MftTree::Entry& entry) {
+  return {entry.read_only ? 'R' : '-', entry.hidden ? 'H' : '-',
+          entry.system ? 'S' : '-',    entry.compressed ? 'C' : '-',
+          entry.encrypted ? 'E' : '-', entry.sparse ? 'P' : '-'};
+}
 
-  std::string size_column = "<DIR>";
-  if (!entry.directory) {
-    size_column = std::to_string(entry.size);
+// The size in bytes, or <DIR> for a directory.
+std::string SizeColumn(const NtfsBrowser::Mft::MftTree::Entry& entry) {
+  if (entry.directory) {
+    return "<DIR>";
   }
+  return std::to_string(entry.size);
+}
 
+// Counts the names that are hard links, leaving out DOS 8.3 aliases.
+size_t CountHardLinks(const NtfsBrowser::Mft::MftTree::Entry& entry) {
   size_t links = 0;
   for (const NtfsBrowser::Mft::MftTree::Name& name : entry.names) {
     if (!name.dos_only) {
       links++;
     }
   }
+  return links;
+}
 
-  const std::string path = DisplayPath(tree, entry, std::nullopt);
-  printf("%10llu %5u %-3s %14s %04u-%02u-%02u %02u:%02u %c%c%c%c%c%c %2zu %s\n",
+// Prints the columns of entry, then its path.
+void PrintMainLine(const NtfsBrowser::Mft::MftTree::Entry& entry,
+                   const std::string& path) {
+  SYSTEMTIME local_time{};
+  FileTimeToSystemTime(&entry.write_time, &local_time);
+
+  printf("%10llu %5u %-3s %14s %04u-%02u-%02u %02u:%02u %s %2zu %s\n",
          entry.record, entry.sequence, entry.in_use ? "" : "DEL",
-         size_column.c_str(), st.wYear, st.wMonth, st.wDay, st.wHour,
-         st.wMinute, entry.read_only ? 'R' : '-', entry.hidden ? 'H' : '-',
-         entry.system ? 'S' : '-', entry.compressed ? 'C' : '-',
-         entry.encrypted ? 'E' : '-', entry.sparse ? 'P' : '-', links,
-         path.c_str());
+         SizeColumn(entry).c_str(), local_time.wYear, local_time.wMonth,
+         local_time.wDay, local_time.wHour, local_time.wMinute,
+         AttributeColumn(entry).c_str(), CountHardLinks(entry), path.c_str());
+}
 
+// Prints one "=" line for each hard link whose path differs from path.
+void PrintOtherLinks(const NtfsBrowser::Mft::MftTree& tree,
+                     const NtfsBrowser::Mft::MftTree::Entry& entry,
+                     const std::string& path) {
   for (size_t i = 0; i < entry.names.size(); i++) {
     // i < entry.names.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -117,6 +133,14 @@ void PrintEntry(const NtfsBrowser::Mft::MftTree& tree,
       printf("%*s= %s\n", path_column, "", other.c_str());
     }
   }
+}
+
+// Prints one listing line for entry, then one line per other hard link.
+void PrintEntry(const NtfsBrowser::Mft::MftTree& tree,
+                const NtfsBrowser::Mft::MftTree::Entry& entry) {
+  const std::string path = DisplayPath(tree, entry, std::nullopt);
+  PrintMainLine(entry, path);
+  PrintOtherLinks(tree, entry, path);
 }
 
 // Opens target as a drive letter ("c" or "c:"), or else as a device or
@@ -135,65 +159,77 @@ std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
                                                                 options);
 }
 
-}  // namespace
-
-// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
-int wmain(int argc, wchar_t* argv[]) {
+// What the command line asks for.
+struct Arguments {
   Log::Config log_config;
   VolumeOptions volume_options;
-  NtfsBrowser::Mft::MftTree::ScanOptions scan_options;
+  // Stays null until the command line names a volume.
   const wchar_t* target = nullptr;
+};
 
+// Fills args from the command line. Returns false on an unknown or malformed
+// option, or unless exactly one volume is named.
+bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
   for (int i = 1; i < argc; i++) {
     const std::wstring_view arg(argv[i]);
     if (arg.starts_with(Log::option_prefix_w)) {
-      if (!Log::ParseOption(arg, log_config)) {
-        Usage();
-        return -1;
+      if (!Log::ParseOption(arg, args.log_config)) {
+        return false;
       }
       continue;
     }
     if (arg == deleted_option) {
-      volume_options.include_deleted = true;
+      args.volume_options.include_deleted = true;
       continue;
     }
     if (arg == recover_option) {
-      volume_options.recover_errors = true;
+      args.volume_options.recover_errors = true;
       continue;
     }
-    if (target != nullptr) {
-      Usage();
-      return -1;
+    if (args.target != nullptr) {
+      return false;
     }
-    target = argv[i];
+    args.target = argv[i];
   }
+  return args.target != nullptr;
+}
 
-  if (target == nullptr) {
-    Usage();
-    return -1;
+// Shows the $MFT scan's progress on stderr, and ends the line when it is done.
+bool ShowScanProgress(ULONGLONG done, ULONGLONG total) {
+  fprintf(stderr, "\rScanning $MFT: %llu / %llu", done, total);
+  if (done == total) {
+    fprintf(stderr, "\n");
   }
+  return true;
+}
 
-  if (!Log::Configure(log_config)) {
-    fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
+// Prints the scan totals that close the listing.
+void PrintStats(const NtfsBrowser::Mft::MftTree::ScanStats& stats) {
+  printf(
+      "\nRecord slots: %llu, in use: %llu, deleted: %llu, extensions: %llu\n",
+      stats.slots, stats.in_use, stats.deleted, stats.extensions);
+  printf("Unreadable: %llu, damaged: %llu, not linked to the root: %llu\n",
+         stats.unreadable, stats.damaged, stats.unreachable);
+}
+
+// Lists every $MFT record of the volume args names. Returns the exit code.
+int ListVolume(const Arguments& args) {
+  if (!Log::Configure(args.log_config)) {
+    fprintf(stderr, "Cannot open log file %ls\n",
+            args.log_config.file_path.c_str());
   }
 
   SetConsoleOutputCP(CP_UTF8);
 
   const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
-      OpenVolume(target, volume_options);
+      OpenVolume(args.target, args.volume_options);
   if (!volume->IsVolumeOK()) {
-    fprintf(stderr, "Cannot open %ls as an NTFS volume\n", target);
+    fprintf(stderr, "Cannot open %ls as an NTFS volume\n", args.target);
     return -1;
   }
 
-  scan_options.progress = [](ULONGLONG done, ULONGLONG total) {
-    fprintf(stderr, "\rScanning $MFT: %llu / %llu", done, total);
-    if (done == total) {
-      fprintf(stderr, "\n");
-    }
-    return true;
-  };
-
+  NtfsBrowser::Mft::MftTree::ScanOptions scan_options;
+  scan_options.progress = ShowScanProgress;
   const NtfsBrowser::Mft::MftTree tree(*volume, scan_options);
 
   printf("%10s %5s %-3s %14s %-16s %-6s %2s %s\n", "Record", "Seq", "", "Size",
@@ -201,13 +237,19 @@ int wmain(int argc, wchar_t* argv[]) {
   for (const NtfsBrowser::Mft::MftTree::Entry& entry : tree.Entries()) {
     PrintEntry(tree, entry);
   }
-
-  const NtfsBrowser::Mft::MftTree::ScanStats& stats = tree.Stats();
-  printf(
-      "\nRecord slots: %llu, in use: %llu, deleted: %llu, extensions: %llu\n",
-      stats.slots, stats.in_use, stats.deleted, stats.extensions);
-  printf("Unreadable: %llu, damaged: %llu, not linked to the root: %llu\n",
-         stats.unreadable, stats.damaged, stats.unreachable);
+  PrintStats(tree.Stats());
 
   return 0;
+}
+
+}  // namespace
+
+// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
+int wmain(int argc, wchar_t* argv[]) {
+  Arguments args;
+  if (!ParseArguments(argc, argv, args)) {
+    Usage();
+    return -1;
+  }
+  return ListVolume(args);
 }
