@@ -1226,17 +1226,6 @@ inline constexpr std::array<ULONGLONG, 4> surrogate_name_mft_refs{56, 57, 58,
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithShortDecompressedUnitIndexAllocation();
 
-// Same as BuildFakeNtfsImageWithCompressedIndexAllocation(), but unit 0's
-// one real run is at an LCN whose product with cluster_size overflows a
-// LONGLONG; the "stored" branch must report a read failure, not throw.
-[[nodiscard]] std::vector<BYTE>
-    BuildFakeNtfsImageWithStoredCompressionUnitBadLcn();
-
-// Same as the "stored" variant above, but only 1 of 4 clusters is real (same
-// overflowing LCN); exercises the "compressed" branch's read failure instead.
-[[nodiscard]] std::vector<BYTE>
-    BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn();
-
 ////////////////////////////////////////////////////////////////////////////
 // LZNT1 decompressor rejection-path corpus fixtures (src/lznt1/decompress.cpp):
 // each shaped like BuildFakeNtfsImageWithCorruptCompressedIndexAllocation(),
