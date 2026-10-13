@@ -671,6 +671,73 @@ ULONGLONG AttrNonResident<S>::GetAllocatedSize() const noexcept {
   return attr_header_nr_.alloc_size;
 }
 
+// Reads the cluster at "vcn" and copies out.size() of its bytes, from byte
+// "from", into "out". An empty "out" reads nothing and succeeds.
+template <Cache::Strategy S>
+bool AttrNonResident<S>::ReadClusterPart(ULONGLONG vcn, DWORD from,
+                                         std::span<BYTE> out) const {
+  if (out.empty()) {
+    return true;
+  }
+
+  const std::span<BYTE> cluster = this->volume_.GetClusterBuffer();
+  std::optional<ULONGLONG> lenc = ReadVirtualClusters(vcn, 1, cluster);
+  if (!lenc || *lenc != this->GetClusterSize()) {
+    return false;
+  }
+
+  // Callers keep from + out.size() within one cluster, so the copy stays in
+  // the cluster buffer.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const BYTE* const source = &cluster[from];
+  memcpy(out.data(), source, out.size());
+  return true;
+}
+
+// Copies the unaligned bytes at the start of the cluster that holds "offset".
+// Returns the count copied, which is zero when "offset" is cluster aligned.
+template <Cache::Strategy S>
+std::optional<ULONGLONG>
+    AttrNonResident<S>::ReadLeadingPart(ULONGLONG offset,
+                                        std::span<BYTE> out) const {
+  const DWORD cluster_size = this->GetClusterSize();
+  // Bytes into the first cluster; zero means the read starts on a boundary.
+  const auto in_cluster = gsl::narrow<DWORD>(offset % cluster_size);
+  if (in_cluster == 0) {
+    return ULONGLONG{0};
+  }
+
+  const ULONGLONG len =
+      std::min<ULONGLONG>(cluster_size - in_cluster, out.size());
+  if (!ReadClusterPart(offset / cluster_size, in_cluster,
+                       out.first(gsl::narrow<size_t>(len)))) {
+    return {};
+  }
+  return len;
+}
+
+// Reads out.size() bytes from the start of cluster "vcn": whole clusters first,
+// then the last partial cluster. An empty "out" reads nothing.
+template <Cache::Strategy S>
+bool AttrNonResident<S>::ReadFromClusterStart(ULONGLONG vcn,
+                                              std::span<BYTE> out) const {
+  const ULONGLONG cluster_size = this->GetClusterSize();
+  const ULONGLONG aligned_clusters = out.size() / cluster_size;
+  const ULONGLONG aligned_size = aligned_clusters * cluster_size;
+  if (aligned_clusters != 0) {
+    // Aligned clusters
+    const std::optional<ULONGLONG> lenc = ReadVirtualClusters(
+        vcn, aligned_clusters, out.first(gsl::narrow<size_t>(aligned_size)));
+    if (!lenc || *lenc != aligned_size) {
+      return false;
+    }
+  }
+
+  // Last cluster, Unaligned. Nothing is read when no bytes remain.
+  return ReadClusterPart(vcn + aligned_clusters, 0,
+                         out.subspan(gsl::narrow<size_t>(aligned_size)));
+}
+
 // Read "bufLen" bytes from "offset" into "bufv", bounded by "limit" total
 // bytes. Number of bytes acturally read is returned in "*actural"
 template <Cache::Strategy S>
@@ -683,95 +750,39 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   // NoCache keeps no state across calls (its raw cluster reads are redone
   // every time too), so any decompressed unit left over from a previous
   // ReadData() is dropped here. Within this call the cache still stands, so
-  // the up-to-3 partial/aligned ReadVirtualClusters() calls below share one
-  // decompression per unit they overlap. FullCache keeps its units for the
-  // attribute's whole lifetime instead - see comp_unit_cache_'s declaration.
+  // the up-to-3 partial/aligned ReadVirtualClusters() calls made by the
+  // helpers below share one decompression per unit they overlap. FullCache
+  // keeps its units for the attribute's whole lifetime instead - see
+  // comp_unit_cache_'s declaration.
   if constexpr (S == Cache::Strategy::NoCache) {
     comp_unit_cache_.clear();
   }
 
-  ULONGLONG buf_len = buffer.size();
-  std::span<BYTE> out = buffer;
-
-  ULONGLONG actural = 0;
-  if (buf_len == 0) {
-    return actural;
+  if (buffer.empty()) {
+    return ULONGLONG{0};
   }
 
   // Bounds check
   if (offset > limit) {
     return {};
   }
-  if (offset + buf_len > limit) {
-    buf_len = gsl::narrow<DWORD>(limit - offset);
+  std::span<BYTE> out = buffer;
+  if (offset + buffer.size() > limit) {
+    out = buffer.first(gsl::narrow<DWORD>(limit - offset));
   }
 
-  // First cluster Number
-  ULONGLONG start_vcn = offset / this->GetClusterSize();
-  // Bytes in first cluster
-  const auto start_bytes = gsl::narrow<DWORD>(
-      this->GetClusterSize() - (offset % this->GetClusterSize()));
-  // Read first cluster
-  if (start_bytes != this->GetClusterSize()) {
-    ULONGLONG len = 0;
-    // First cluster, Unaligned
-    const std::span<BYTE> unaligned_buf_first =
-        this->volume_.GetClusterBuffer();
-    std::optional<ULONGLONG> lenc =
-        ReadVirtualClusters(start_vcn, 1, unaligned_buf_first);
-    if (!lenc || *lenc != this->GetClusterSize()) {
-      return {};
-    }
-
-    len = (start_bytes < buf_len) ? start_bytes : buf_len;
-    // 0 < start_bytes < GetClusterSize() here, so the index is in the cluster.
-    const size_t source_offset = this->GetClusterSize() - start_bytes;
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    const BYTE* const source = &unaligned_buf_first[source_offset];
-    memcpy(out.data(), source, len);
-    out = out.subspan(gsl::narrow<size_t>(len));
-    buf_len -= len;
-    actural += len;
-    start_vcn++;
-  }
-  if (buf_len == 0) {
-    return actural;
-  }
-
-  const ULONGLONG aligned_clusters = buf_len / this->GetClusterSize();
-  if (aligned_clusters != 0) {
-    // Aligned clusters
-    ULONGLONG const aligned_size = aligned_clusters * this->GetClusterSize();
-
-    std::optional<ULONGLONG> lenc =
-        ReadVirtualClusters(start_vcn, aligned_clusters,
-                            out.first(gsl::narrow<size_t>(aligned_size)));
-    if (!lenc || *lenc != aligned_size) {
-      return {};
-    }
-
-    start_vcn += aligned_clusters;
-    out = out.subspan(gsl::narrow<size_t>(aligned_size));
-    buf_len %= this->GetClusterSize();
-    actural += *lenc;
-
-    if (buf_len == 0) {
-      return actural;
-    }
-  }
-
-  // Last cluster, Unaligned
-  const std::span<BYTE> unaligned_buf_last = this->volume_.GetClusterBuffer();
-  std::optional<ULONGLONG> lenc =
-      ReadVirtualClusters(start_vcn, 1, unaligned_buf_last);
-  if (!lenc || *lenc != this->GetClusterSize()) {
+  const std::optional<ULONGLONG> head = ReadLeadingPart(offset, out);
+  if (!head) {
     return {};
   }
-
-  memcpy(out.data(), unaligned_buf_last.data(), buf_len);
-  actural += buf_len;
-
-  return actural;
+  // The head ends on a cluster boundary, or it used up the read. Either way
+  // the rest starts at the beginning of a cluster.
+  const ULONGLONG rest_vcn = (offset + *head) / this->GetClusterSize();
+  if (!ReadFromClusterStart(rest_vcn,
+                            out.subspan(gsl::narrow<size_t>(*head)))) {
+    return {};
+  }
+  return static_cast<ULONGLONG>(out.size());
 }
 
 // Reads are bounded by real_size, and bytes from ini_size on read as zeros:

@@ -13,6 +13,7 @@
 #include <ntfs-browser/io/file-record.h>
 
 #include "data/run-entry.h"
+#include "internal-export.h"
 #include "io/file-record-efs.h"
 
 namespace NtfsBrowser {
@@ -104,6 +105,12 @@ class AttrNonResident : public Attr::AttrBase<S> {
   [[nodiscard]] std::optional<std::span<const BYTE>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;
+  [[nodiscard]] bool ReadClusterPart(ULONGLONG vcn, DWORD from,
+                                     std::span<BYTE> out) const;
+  [[nodiscard]] std::optional<ULONGLONG>
+      ReadLeadingPart(ULONGLONG offset, std::span<BYTE> out) const;
+  [[nodiscard]] bool ReadFromClusterStart(ULONGLONG vcn,
+                                          std::span<BYTE> out) const;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadDataBounded(ULONGLONG offset, const std::span<BYTE>& buffer,
                       ULONGLONG limit) const;
@@ -145,11 +152,6 @@ class AttrNonResident : public Attr::AttrBase<S> {
   // Makes ReadData() decrypt this stream with the given context.
   void SetEfsContext(std::shared_ptr<const Efs::Context> context) noexcept;
 
-  // Like ReadData(), but bounded by this instance's own VCN range instead
-  // of real_size, which continuation instances leave at 0.
-  [[nodiscard]] std::optional<ULONGLONG>
-      ReadExtentData(ULONGLONG offset, const std::span<BYTE>& buffer) const;
-
   [[nodiscard]] ULONGLONG GetStartVcn() const noexcept;
   [[nodiscard]] ULONGLONG GetLastVcn() const noexcept;
   [[nodiscard]] ULONGLONG MappedClusters() const noexcept;
@@ -163,6 +165,12 @@ class AttrNonResident : public Attr::AttrBase<S> {
   [[nodiscard]] ULONGLONG GetAllocatedSize() const noexcept override;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
+
+  // Like ReadData(), but bounded by this instance's own VCN range instead
+  // of real_size, which continuation instances leave at 0. Public only for
+  // the unit tests.
+  [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<ULONGLONG>
+      ReadExtentData(ULONGLONG offset, const std::span<BYTE>& buffer) const;
 };  // AttrNonResident
 
 }  // namespace Attr

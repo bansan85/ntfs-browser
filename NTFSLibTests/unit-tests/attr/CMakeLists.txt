@@ -5,6 +5,7 @@ target_sources(
     "attr-body-size-tests.cpp"
     "attr-initialized-size-tests.cpp"
     "attr-name-bounds-tests.cpp"
+    "attr-read-data-bounded-tests.cpp"
     "attr-resident-read-data-tests.cpp"
     "attribute-list-tests.cpp"
     "coverage-attrs-tests.cpp"
