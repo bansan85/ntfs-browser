@@ -148,18 +148,18 @@ std::unique_ptr<Record::HeaderImpl<S>>
   }
 
   if (file_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
-      volume->impl_->mft_data == nullptr) {
+      !volume->impl_->mft_map.HasBase()) {
     if (!ReadDirectRecord(file_ref)) {
       return {};
     }
   } else {
     // May be fragmented $MFT, and its DATA attribute itself may be split
-    // across extension records - ReadMftData() picks whichever instance
+    // across extension records - ReadData() picks whichever instance
     // covers this offset.
     const ULONGLONG fr_addr = volume->GetFileRecordSize() * file_ref;
 
     if (std::optional<ULONGLONG> len =
-            volume->impl_->ReadMftData(fr_addr, record_buffer);
+            volume->impl_->mft_map.ReadData(fr_addr, record_buffer);
         !len || *len != volume->GetFileRecordSize()) {
       return {};
     }

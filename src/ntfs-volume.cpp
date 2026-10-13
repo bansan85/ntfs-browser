@@ -4,7 +4,6 @@
 #include <array>
 #include <cassert>
 #include <cstring>
-#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -225,11 +224,11 @@ const Attr::AttrBase<S>* NtfsVolume<S>::Impl::FindMftBaseExtent() const {
 template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::WarnIfMftClaimsMoreThanMapped(
     const Attr::AttrBase<S>& base_extent) const {
-  if (GetRecordsCount() < base_extent.GetDataSize() / file_record_size) {
+  if (mft_map.RecordCount() < base_extent.GetDataSize() / file_record_size) {
     Log::Warn(
         "$MFT claims {} bytes but maps fewer; counting {} records instead of "
         "{}",
-        base_extent.GetDataSize(), GetRecordsCount(),
+        base_extent.GetDataSize(), mft_map.RecordCount(),
         base_extent.GetDataSize() / file_record_size);
   }
 }
@@ -257,17 +256,16 @@ void NtfsVolume<S>::Impl::Init() {
     return;
   }
 
-  mft_data = base_extent;
+  // The cluster geometry is known only now, after the boot sector parse.
+  mft_map = Mft::ExtentMap<S>(cluster_size, file_record_size);
+  mft_map.SetBase(*base_extent);
 
-  // Sentinel: base extent has no $ATTRIBUTE_LIST entry to check against.
-  TryAddMftExtent(*base_extent, std::numeric_limits<ULONGLONG>::max());
-
-  // Must run after mft_data_/mft_extents_ are set, so it can use them.
+  // Must run after mft_map has its base extent, so it can use the map.
   ResolveMftDataExtents();
 
   WarnIfMftClaimsMoreThanMapped(*base_extent);
 
-  // Reported OK only once mft_data_ is actually assigned.
+  // Reported OK only once the base extent is actually set.
   volume_ok = true;
 }
 
@@ -309,7 +307,8 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
     for (PendingMftExtension& item : pending) {
       const bool reachable =
           item.record < static_cast<ULONGLONG>(Mft::Idx::User) ||
-          IsMftRangeMapped(item.record * file_record_size, file_record_size);
+          mft_map.IsRangeMapped(item.record * file_record_size,
+                                file_record_size);
       if (!reachable) {
         still_pending.push_back(std::move(item));
         continue;
@@ -386,7 +385,7 @@ std::vector<typename NtfsVolume<S>::Impl::PendingMftExtension>
 }
 
 // Opens item's extension record and hands each of its DATA extents to
-// TryAddMftExtent(). The record is dropped again if it is not usable.
+// mft_map.TryAdd(). The record is dropped again if it is not usable.
 template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
     const PendingMftExtension& item, ULONGLONG self_ref) {
@@ -419,145 +418,15 @@ void NtfsVolume<S>::Impl::ResolvePendingMftExtension(
   for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
        ext.GetAttr(Attr::Type::Data)) {
     if (attr->IsNonResident()) {
-      // Any start VCN not listed is rejected by TryAddMftExtent().
+      // Any start VCN not listed is rejected by mft_map.TryAdd().
       const ULONGLONG start_vcn =
           static_cast<const Attr::AttrNonResident<S>&>(*attr).GetStartVcn();
       const auto listed = std::ranges::find(item.start_vcns, start_vcn);
-      TryAddMftExtent(*attr, listed != item.start_vcns.end()
-                                 ? *listed
-                                 : item.start_vcns.front());
+      mft_map.TryAdd(*attr, listed != item.start_vcns.end()
+                                ? *listed
+                                : item.start_vcns.front());
     }
   }
-}
-
-// Rejects attr if named, VCN-inverted, too large for a byte offset, mismatched
-// with expectedStartVcn, or overlapping; otherwise inserts it into mft_extents_
-// in sorted order.
-template <Cache::Strategy S>
-void NtfsVolume<S>::Impl::TryAddMftExtent(const Attr::AttrBase<S>& attr,
-                                          ULONGLONG expected_start_vcn) {
-  if (!attr.IsUnNamed()) {
-    Log::Warn("$MFT DATA continuation is named; rejecting");
-    return;
-  }
-
-  const auto& non_resident = static_cast<const Attr::AttrNonResident<S>&>(attr);
-  const ULONGLONG start_vcn = non_resident.GetStartVcn();
-  const ULONGLONG last_vcn = non_resident.GetLastVcn();
-
-  if (start_vcn > last_vcn) {
-    Log::Warn("$MFT DATA continuation has an empty/inverted VCN range");
-    return;
-  }
-
-  if (last_vcn >= std::numeric_limits<ULONGLONG>::max() / cluster_size) {
-    Log::Warn("$MFT DATA continuation's last VCN ({}) overflows a byte offset",
-              last_vcn);
-    return;
-  }
-
-  if (expected_start_vcn != std::numeric_limits<ULONGLONG>::max() &&
-      start_vcn != expected_start_vcn) {
-    Log::Warn(
-        "$MFT DATA continuation's start VCN ({}) doesn't match its "
-        "$ATTRIBUTE_LIST entry ({})",
-        start_vcn, expected_start_vcn);
-    return;
-  }
-
-  const auto insert_pos =
-      std::upper_bound(mft_extents.begin(), mft_extents.end(), start_vcn,
-                       [](ULONGLONG vcn, const MftExtent& extent) {
-                         return vcn < extent.start_vcn;
-                       });
-
-  const bool overlaps_previous = insert_pos != mft_extents.begin() &&
-                                 std::prev(insert_pos)->last_vcn >= start_vcn;
-  const bool overlaps_next =
-      insert_pos != mft_extents.end() && insert_pos->start_vcn <= last_vcn;
-  if (overlaps_previous || overlaps_next) {
-    Log::Warn("$MFT DATA continuation overlaps an already-accepted extent");
-    return;
-  }
-
-  mft_extents.insert(insert_pos, MftExtent{start_vcn, last_vcn, &attr});
-}
-
-// True if [byteOffset, byteOffset + length) is fully mapped; no I/O.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::IsMftRangeMapped(ULONGLONG byte_offset,
-                                           ULONGLONG length) const noexcept {
-  // ParseBootSector() rejects a null cluster, and every caller passes the
-  // validated, non-zero file_record_size.
-  assert(cluster_size != 0 && length != 0);
-
-  ULONGLONG offset = byte_offset;
-  const ULONGLONG end = byte_offset + length;
-  while (offset < end) {
-    const MftExtent* extent = FindMftExtent(offset / cluster_size);
-    if (extent == nullptr) {
-      return false;
-    }
-    offset = (extent->last_vcn + 1) * cluster_size;
-  }
-  return true;
-}
-
-// Finds the accepted extent covering vcn, or nullptr if unresolved.
-template <Cache::Strategy S>
-const NtfsVolume<S>::Impl::MftExtent*
-    NtfsVolume<S>::Impl::FindMftExtent(ULONGLONG vcn) const noexcept {
-  const auto iterator =
-      std::upper_bound(mft_extents.begin(), mft_extents.end(), vcn,
-                       [](ULONGLONG value, const MftExtent& extent) {
-                         return value < extent.start_vcn;
-                       });
-  if (iterator == mft_extents.begin()) {
-    return nullptr;
-  }
-  const MftExtent& candidate = *std::prev(iterator);
-  return (candidate.last_vcn >= vcn) ? &candidate : nullptr;
-}
-
-// Reads $MFT's DATA attribute at a byte offset, following extent
-// boundaries transparently when it is split across extension records.
-template <Cache::Strategy S>
-std::optional<ULONGLONG>
-    NtfsVolume<S>::Impl::ReadMftData(ULONGLONG offset,
-                                     std::span<BYTE> buffer) const {
-  ULONGLONG total_read = 0;
-  std::span<BYTE> out = buffer;
-  ULONGLONG remaining = buffer.size();
-  ULONGLONG current_offset = offset;
-
-  while (remaining != 0) {
-    const MftExtent* extent = FindMftExtent(current_offset / cluster_size);
-    if (extent == nullptr) {
-      return {};
-    }
-
-    const auto* non_resident =
-        static_cast<const Attr::AttrNonResident<S>*>(extent->attr);
-    const ULONGLONG extent_start_byte = extent->start_vcn * cluster_size;
-    const ULONGLONG extent_end_byte = (extent->last_vcn + 1) * cluster_size;
-    const ULONGLONG available_in_extent = extent_end_byte - current_offset;
-    const ULONGLONG to_read =
-        (remaining < available_in_extent) ? remaining : available_in_extent;
-
-    const std::optional<ULONGLONG> len =
-        non_resident->ReadExtentData(current_offset - extent_start_byte,
-                                     out.first(gsl::narrow<size_t>(to_read)));
-    if (!len || *len != to_read) {
-      return {};
-    }
-
-    out = out.subspan(gsl::narrow<size_t>(to_read));
-    current_offset += to_read;
-    remaining -= to_read;
-    total_read += to_read;
-  }
-
-  return total_read;
 }
 
 #ifdef _WIN32
@@ -772,32 +641,7 @@ std::pair<BYTE, BYTE> NtfsVolume<S>::GetVersion() const noexcept {
 // Get File Record count
 template <Cache::Strategy S>
 ULONGLONG NtfsVolume<S>::GetRecordsCount() const noexcept {
-  return impl_->GetRecordsCount();
-}
-
-// The count behind NtfsVolume::GetRecordsCount().
-template <Cache::Strategy S>
-ULONGLONG NtfsVolume<S>::Impl::GetRecordsCount() const noexcept {
-  // noexcept: must not crash if called before/without checking IsVolumeOK().
-  if (mft_data == nullptr) {
-    return 0;
-  }
-
-  // Records below USER are read from a fixed address, mapped or not.
-  ULONGLONG mapped_bytes =
-      static_cast<ULONGLONG>(Mft::Idx::User) * file_record_size;
-  for (const MftExtent& extent : mft_extents) {
-    // MappedClusters() never exceeds last_vcn + 1, which TryAddMftExtent()
-    // already checked cannot overflow a byte offset.
-    const ULONGLONG extent_end =
-        (extent.start_vcn +
-         static_cast<const Attr::AttrNonResident<S>*>(extent.attr)
-             ->MappedClusters()) *
-        cluster_size;
-    mapped_bytes = (std::max)(mapped_bytes, extent_end);
-  }
-
-  return (std::min)(mft_data->GetDataSize(), mapped_bytes) / file_record_size;
+  return impl_->mft_map.RecordCount();
 }
 
 // Get BPB information
@@ -926,8 +770,8 @@ template <Cache::Strategy S>
 std::unique_ptr<const UpCase::Table>
     NtfsVolume<S>::Impl::LoadUpCaseTable() const {
   const auto upcase_record = static_cast<ULONGLONG>(Mft::Idx::UpCase);
-  if (!volume_ok ||
-      !IsMftRangeMapped(upcase_record * file_record_size, file_record_size)) {
+  if (!volume_ok || !mft_map.IsRangeMapped(upcase_record * file_record_size,
+                                           file_record_size)) {
     return {};
   }
 

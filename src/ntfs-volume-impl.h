@@ -20,6 +20,7 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "attr/slot.h"
+#include "mft/extent-map.h"
 
 #ifdef _WIN32
   #include <tchar.h>
@@ -63,9 +64,9 @@ class NtfsVolume<S>::Impl {
   std::unique_ptr<Io::FileReader<S>> volume;
 
   // MFT file records ($MFT file itself) may be fragmented
-  // Get $MFT Data attribute to translate FileRecord to correct disk offset
-  const Attr::AttrBase<S>* mft_data{
-      nullptr};  // $MFT Data Attribute (base extent)
+  // Get $MFT Data attribute to translate FileRecord to correct disk offset.
+  // Built in Init(), once the boot sector has fixed the cluster geometry.
+  Mft::ExtentMap<S> mft_map{0, 0};
 
   // The volume's own $UpCase, loaded on first use by GetUpCaseTable(). Stays
   // null when $UpCase cannot be read; upcase_loaded_ then keeps the failure
@@ -78,16 +79,6 @@ class NtfsVolume<S>::Impl {
   // default provider be created on the first decryption, from "chosen to be
   // none" (SetEfsKeyProvider(nullptr)), which disables decryption.
   mutable std::shared_ptr<Efs::IEfsKeyProvider> efs_provider;
-
-  // One VCN range $MFT's own DATA attribute maps: base extent or continuation.
-  struct MftExtent {
-    ULONGLONG start_vcn;
-    ULONGLONG last_vcn;
-    const Attr::AttrBase<S>* attr;
-  };
-
-  // Sorted by start_vcn; binary-searched per file-record read.
-  std::vector<MftExtent> mft_extents;
 
   // Owns extension FileRecords; std::list keeps FullCache pointers stable.
   std::list<Io::FileRecord<S>> mft_extension_records;
@@ -155,14 +146,6 @@ class NtfsVolume<S>::Impl {
                                   ULONGLONG self_ref);
   void ResolvePendingMftExtension(const PendingMftExtension& item,
                                   ULONGLONG self_ref);
-  void TryAddMftExtent(const Attr::AttrBase<S>& attr,
-                       ULONGLONG expected_start_vcn);
-  [[nodiscard]] bool IsMftRangeMapped(ULONGLONG byte_offset,
-                                      ULONGLONG length) const noexcept;
-  [[nodiscard]] const MftExtent* FindMftExtent(ULONGLONG vcn) const noexcept;
-  [[nodiscard]] std::optional<ULONGLONG>
-      ReadMftData(ULONGLONG offset, std::span<BYTE> buffer) const;
-  [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
   [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
   [[nodiscard]] std::unique_ptr<const UpCase::Table> LoadUpCaseTable() const;
   void AttrRawCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,

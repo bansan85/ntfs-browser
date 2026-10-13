@@ -45,6 +45,13 @@ class Context;
 
 }  // namespace Efs
 
+namespace Mft {
+
+template <Cache::Strategy S>
+class ExtentMap;
+
+}  // namespace Mft
+
 namespace Io {
 
 template <Cache::Strategy S>
@@ -75,6 +82,7 @@ class AttrNonResident : public Attr::AttrBase<S> {
   friend class Io::AttrParser<S>;
   friend class Io::DirectoryIndex<S>;
   friend class NtfsVolume<S>;
+  friend class Mft::ExtentMap<S>;
   // Gives an encrypted stream its context, through SetEfsContext().
   template <Cache::Strategy T>
   friend bool Io::AttachEfsContext(Io::FileRecord<T>& record);
