@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstring>
 #include <iterator>
 #include <limits>
@@ -155,6 +156,84 @@ NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader,
 template <Cache::Strategy S>
 NtfsVolume<S>::~NtfsVolume() = default;
 
+// Parses $Volume's VolumeInformation and VolumeName. False when the record does
+// not parse or has no VolumeInformation.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::ParseVolumeRecord(Io::FileRecord<S>& vol) {
+  vol.impl_->bypass_deleted_gate = true;
+  vol.SetAttrMask(Attr::Mask::VolumeName | Attr::Mask::VolumeInformation);
+  if (!vol.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Volume)) ||
+      !vol.ParseAttrs()) {
+    return false;
+  }
+  return !vol.GetAttr(Attr::Type::VolumeInformation).empty();
+}
+
+// Reads the NTFS version from $VOLUME_INFORMATION and logs it. False below 3.0,
+// the NT4 era. Needs ParseVolumeRecord() to have passed first.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::AcceptVolumeVersion(const Io::FileRecord<S>& vol) {
+  const auto* info =
+      reinterpret_cast<const Attr::AttrVolInfo<Io::ResidentOf<S>, S>*>(
+          vol.GetAttr(Attr::Type::VolumeInformation).front().get());
+  std::tie(version_major, version_minor) = info->GetVersion();
+  Log::Info("NTFS volume version: {}.{}", version_major, version_minor);
+  return version_major >= 3;
+}
+
+// Logs $Volume's name, if it has a VolumeName attribute.
+template <Cache::Strategy S>
+void NtfsVolume<S>::Impl::LogVolumeName(const Io::FileRecord<S>& vol) const {
+  const auto& names = vol.GetAttr(Attr::Type::VolumeName);
+  if (names.empty()) {
+    return;
+  }
+  const auto* name =
+      reinterpret_cast<const Attr::AttrVolName<Io::ResidentOf<S>, S>*>(
+          names.front().get());
+  Log::Info("NTFS volume name: {}",
+            Utf::WideToUtf8(TrimTrailingNuls(name->GetName())));
+}
+
+// Parses $MFT's base record for its DATA attribute. False when it does not
+// parse.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::ParseMftRecord() {
+  // Skips SetAttrMask()'s automatic ATTRIBUTE_LIST bit (resolved later).
+  mft_record.impl_->attr_mask = Attr::Mask::Data;
+  return mft_record.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Mft)) &&
+         mft_record.ParseAttrs();
+}
+
+// Finds $MFT's base DATA extent: the unnamed, non-resident instance at VCN 0.
+// Null when there is none.
+template <Cache::Strategy S>
+const Attr::AttrBase<S>* NtfsVolume<S>::Impl::FindMftBaseExtent() const {
+  for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
+       mft_record.GetAttr(Attr::Type::Data)) {
+    if (attr->IsNonResident() && attr->IsUnNamed() &&
+        static_cast<const Attr::AttrNonResident<S>*>(attr.get())
+                ->GetStartVcn() == 0) {
+      return attr.get();
+    }
+  }
+  return nullptr;
+}
+
+// Warns when $MFT's declared size covers more records than its extents map. The
+// record count then stops at the mapped ones.
+template <Cache::Strategy S>
+void NtfsVolume<S>::Impl::WarnIfMftClaimsMoreThanMapped(
+    const Attr::AttrBase<S>& base_extent) const {
+  if (GetRecordsCount() < base_extent.GetDataSize() / file_record_size) {
+    Log::Warn(
+        "$MFT claims {} bytes but maps fewer; counting {} records instead of "
+        "{}",
+        base_extent.GetDataSize(), GetRecordsCount(),
+        base_extent.GetDataSize() / file_record_size);
+  }
+}
+
 // Verify NTFS volume version (must >= 3.0) and locate $MFT's Data attribute
 template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::Init() {
@@ -164,79 +243,16 @@ void NtfsVolume<S>::Impl::Init() {
   // volume unreadable.
   mft_record.impl_->bypass_deleted_gate = true;
 
-  Io::FileRecord vol(*self);
-  vol.impl_->bypass_deleted_gate = true;
-  vol.SetAttrMask(Attr::Mask::VolumeName | Attr::Mask::VolumeInformation);
-  if (!vol.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Volume))) {
+  Io::FileRecord<S> vol(*self);
+  if (!ParseVolumeRecord(vol) || !AcceptVolumeVersion(vol)) {
     return;
   }
+  LogVolumeName(vol);
 
-  if (!vol.ParseAttrs()) {
+  if (!ParseMftRecord()) {
     return;
   }
-  const auto& vec = vol.GetAttr(Attr::Type::VolumeInformation);
-  if (vec.empty()) {
-    return;
-  }
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    std::tie(version_major, version_minor) =
-        reinterpret_cast<const Attr::AttrVolInfo<Attr::AttrResidentNoCache,
-                                                 Cache::Strategy::NoCache>*>(
-            vec.front().get())
-            ->GetVersion();
-  } else {
-    std::tie(version_major, version_minor) =
-        reinterpret_cast<const Attr::AttrVolInfo<Attr::AttrResidentFullCache,
-                                                 Cache::Strategy::FullCache>*>(
-            vec.front().get())
-            ->GetVersion();
-  }
-  Log::Info("NTFS volume version: {}.{}", version_major, version_minor);
-  if (version_major < 3)  // NT4 ?
-  {
-    return;
-  }
-
-  const auto& vec2 = vol.GetAttr(Attr::Type::VolumeName);
-  if (!vec2.empty()) {
-    if constexpr (S == Cache::Strategy::NoCache) {
-      const std::wstring_view volname =
-          reinterpret_cast<const Attr::AttrVolName<Attr::AttrResidentNoCache,
-                                                   Cache::Strategy::NoCache>*>(
-              vec2.front().get())
-              ->GetName();
-      Log::Info("NTFS volume name: {}",
-                Utf::WideToUtf8(TrimTrailingNuls(volname)));
-    } else {
-      const std::wstring_view volname =
-          reinterpret_cast<const Attr::AttrVolName<
-              Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-              vec2.front().get())
-              ->GetName();
-      Log::Info("NTFS volume name: {}",
-                Utf::WideToUtf8(TrimTrailingNuls(volname)));
-    }
-  }
-
-  // Skips SetAttrMask()'s automatic ATTRIBUTE_LIST bit (resolved below).
-  mft_record.impl_->attr_mask = Attr::Mask::Data;
-  if (!mft_record.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Mft)) ||
-      !mft_record.ParseAttrs()) {
-    return;
-  }
-
-  const Attr::AttrBase<S>* base_extent = nullptr;
-  for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
-       mft_record.GetAttr(Attr::Type::Data)) {
-    // The base extent is the unnamed, non-resident DATA instance at VCN 0.
-    if (attr->IsNonResident() && attr->IsUnNamed() &&
-        static_cast<const Attr::AttrNonResident<S>*>(attr.get())
-                ->GetStartVcn() == 0) {
-      base_extent = attr.get();
-      break;
-    }
-  }
+  const Attr::AttrBase<S>* base_extent = FindMftBaseExtent();
   if (base_extent == nullptr) {
     return;
   }
@@ -249,13 +265,7 @@ void NtfsVolume<S>::Impl::Init() {
   // Must run after mft_data_/mft_extents_ are set, so it can use them.
   ResolveMftDataExtents();
 
-  if (GetRecordsCount() < base_extent->GetDataSize() / file_record_size) {
-    Log::Warn(
-        "$MFT claims {} bytes but maps fewer; counting {} records instead of "
-        "{}",
-        base_extent->GetDataSize(), GetRecordsCount(),
-        base_extent->GetDataSize() / file_record_size);
-  }
+  WarnIfMftClaimsMoreThanMapped(*base_extent);
 
   // Reported OK only once mft_data_ is actually assigned.
   volume_ok = true;
@@ -283,12 +293,9 @@ void NtfsVolume<S>::Impl::ResolveMftDataExtents() {
     return;  // $MFT's DATA attribute fits in the base record alone.
   }
   const Attr::AttrBase<S>& raw_list = *list_attrs.front();
+  // Set whenever ParseFileRecord() above succeeded, so never empty here.
   const std::optional<ULONGLONG> list_ref = list_record.GetFileReference();
-  if (!list_ref.has_value()) {
-    Log::Debug(
-        "$MFT's own $ATTRIBUTE_LIST has no file reference; assuming none");
-    return;
-  }
+  assert(list_ref.has_value());
   const ULONGLONG self_ref = *list_ref;
 
   std::vector<PendingMftExtension> pending =
@@ -480,9 +487,9 @@ void NtfsVolume<S>::Impl::TryAddMftExtent(const Attr::AttrBase<S>& attr,
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::IsMftRangeMapped(ULONGLONG byte_offset,
                                            ULONGLONG length) const noexcept {
-  if (cluster_size == 0 || length == 0) {
-    return false;
-  }
+  // ParseBootSector() rejects a null cluster, and every caller passes the
+  // validated, non-zero file_record_size.
+  assert(cluster_size != 0 && length != 0);
 
   ULONGLONG offset = byte_offset;
   const ULONGLONG end = byte_offset + length;

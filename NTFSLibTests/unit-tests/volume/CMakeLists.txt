@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "coverage-volume-tests.cpp"
     "filename-compare-tests.cpp"
+    "init-exit-tests.cpp"
     "mft-parse-failure-volume-ok-tests.cpp"
     "no-cache-lifetime-tests.cpp"
     "volume-name-log-tests.cpp"

@@ -132,6 +132,13 @@ class NtfsVolume<S>::Impl {
   [[nodiscard]] bool ParseFileRecordSize(const Data::NtfsBpb& bpb);
   [[nodiscard]] bool ParseIndexBlockSize(const Data::NtfsBpb& bpb);
   [[nodiscard]] bool ParseMftAddress(const Data::NtfsBpb& bpb);
+  [[nodiscard]] bool ParseVolumeRecord(Io::FileRecord<S>& vol);
+  [[nodiscard]] bool AcceptVolumeVersion(const Io::FileRecord<S>& vol);
+  void LogVolumeName(const Io::FileRecord<S>& vol) const;
+  [[nodiscard]] bool ParseMftRecord();
+  [[nodiscard]] const Attr::AttrBase<S>* FindMftBaseExtent() const;
+  void
+      WarnIfMftClaimsMoreThanMapped(const Attr::AttrBase<S>& base_extent) const;
   void Init();
   void ResolveMftDataExtents();
 
