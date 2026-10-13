@@ -1415,4 +1415,10 @@ inline constexpr ULONGLONG wrapping_lcn =
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithOverflowingLcnSum(FakeRunHost host);
 
+// Same volume as BuildFakeNtfsImage(), with a 1-cluster stream, of the
+// given kind, whose only run has an LCN delta of -1. Starting from LCN 0,
+// the cumulative LCN goes negative.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithNegativeLcn(FakeRunHost host);
+
 }  // namespace NtfsBrowserTests

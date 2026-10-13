@@ -10,7 +10,10 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <ntfs-browser/attr/base.h>  // IWYU pragma: keep
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
@@ -89,9 +92,12 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   MakeSecondExtentSparse(image);
+  (void)NtfsBrowserTests::TakeCapturedLog();
   const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(image));
   REQUIRE(volume.IsVolumeOK());
+  CHECK_THAT(NtfsBrowserTests::TakeCapturedLog(),
+             Catch::Matchers::ContainsSubstring("Sparse Data"));
 
   FileRecord<S> first(volume);
   CHECK(first.ParseFileRecord(NtfsBrowserTests::mft_two_extents_first_vcn));
@@ -131,6 +137,10 @@ TEMPLATE_TEST_CASE_SIG(
     return NtfsBrowserTests::BuildFakeNtfsImageWithOverflowingLcnSum(
         FakeRunHost::Data);
   };
+  const auto negative = [] {
+    return NtfsBrowserTests::BuildFakeNtfsImageWithNegativeLcn(
+        FakeRunHost::Data);
+  };
   const auto bad_bound = [] {
     return NtfsBrowserTests::BuildFakeNtfsImageWithBadDataRun();
   };
@@ -157,6 +167,13 @@ TEMPLATE_TEST_CASE_SIG(
           std::string::npos);
   }
 
+  SECTION("an LCN underflow") {
+    CHECK_THAT(parse_log(negative(), {}),
+               Catch::Matchers::ContainsSubstring("DataRun decode error 2"));
+    CHECK_THAT(parse_log(negative(), {.recover_errors = true}),
+               Catch::Matchers::ContainsSubstring("DataRun decode error 2"));
+  }
+
   SECTION("a run past the declared VCN bound") {
     CHECK(parse_log(bad_bound(), {})
               .find("DataRun decode error: VCN exceeds bound") !=
@@ -164,5 +181,46 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK(parse_log(bad_bound(), {.recover_errors = true})
               .find("DataRun decode error: VCN exceeds bound") !=
           std::string::npos);
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A data run list whose LCN goes negative is rejected, or kept up to the "
+    "bad run",
+    "[attr-run-list][characterization]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  SECTION("strict: the whole attribute is rejected") {
+    const NtfsVolume<S> volume(
+        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+            NtfsBrowserTests::BuildFakeNtfsImageWithNegativeLcn(
+                FakeRunHost::Data)));
+    REQUIRE(volume.IsVolumeOK());
+
+    FileRecord<S> record(volume);
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+    CHECK_FALSE(record.ParseAttrs());
+    CHECK(record.GetAttr(Attr::Type::Data).empty());
+  }
+
+  SECTION("recovering: the attribute is kept, with no run mapped") {
+    const NtfsVolume<S> volume(
+        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+            NtfsBrowserTests::BuildFakeNtfsImageWithNegativeLcn(
+                FakeRunHost::Data)),
+        VolumeOptions{.recover_errors = true});
+    REQUIRE(volume.IsVolumeOK());
+
+    FileRecord<S> record(volume);
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+    CHECK(record.ParseAttrs());
+
+    const auto& data_attrs = record.GetAttr(Attr::Type::Data);
+    REQUIRE(data_attrs.size() == 1);
+
+    // The only run failed to decode, so cluster 0 is unmapped.
+    std::vector<BYTE> buffer(NtfsBrowserTests::fake_cluster_size);
+    // The REQUIRE above checks the size of dataAttrs.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    CHECK_FALSE(data_attrs[0]->ReadData(0, buffer).has_value());
   }
 }

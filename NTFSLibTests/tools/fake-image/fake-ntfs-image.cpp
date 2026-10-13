@@ -76,9 +76,10 @@ constexpr size_t run_list_room = 8;
 
 // Data run headers: the high nibble is the LCN offset field size, the low
 // nibble the length field size. A 4-byte offset and a 1-byte length, or an
-// 8-byte offset and a 1-byte length.
+// 8-byte offset and a 1-byte length, or a 1-byte offset and a 1-byte length.
 constexpr BYTE run_header4_lcn_bytes = 0x41;
 constexpr BYTE run_header8_lcn_bytes = 0x81;
+constexpr BYTE run_header1_lcn_bytes = 0x11;
 
 // Alignment the readers need to bind structs onto a record.
 constexpr size_t record_alignment = 8;
@@ -5988,6 +5989,13 @@ std::vector<BYTE> BuildFakeNtfsImageWithOverflowingLcnSum(FakeRunHost host) {
   AppendEightByteLcnRun(runs, std::numeric_limits<LONGLONG>::max());
   AppendEightByteLcnRun(runs, std::numeric_limits<LONGLONG>::max());
   return BuildImageWithRawRuns(host, std::move(runs), 2);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithNegativeLcn(FakeRunHost host) {
+  // Two's-complement encoding of the LCN delta -1, in one offset byte.
+  constexpr BYTE minus_one_byte = 0xFF;
+  std::vector<BYTE> runs{run_header1_lcn_bytes, 1, minus_one_byte};
+  return BuildImageWithRawRuns(host, std::move(runs), 1);
 }
 
 }  // namespace NtfsBrowserTests
