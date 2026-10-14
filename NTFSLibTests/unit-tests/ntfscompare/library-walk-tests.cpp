@@ -23,6 +23,7 @@
 #include "library-walk.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
+#include "volume-open.h"
 
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::NtfsVolume;
@@ -37,6 +38,7 @@ using NtfsBrowserTests::MemoryDiskReader;
 using NtfsBrowserTests::Unwrap;
 using NtfsCompare::CompareAgainstReference;
 using NtfsCompare::CompareLibraryMethods;
+using NtfsCompare::comparison_volume_options;
 using NtfsCompare::Entry;
 using NtfsCompare::Finding;
 using NtfsCompare::Listing;
@@ -49,8 +51,9 @@ namespace {
 
 // Opens a fake image as a volume with cache strategy S and the given options.
 template <Strategy S>
-std::unique_ptr<NtfsVolume<S>> OpenVolume(std::vector<BYTE> image,
-                                          const VolumeOptions& options = {}) {
+std::unique_ptr<NtfsVolume<S>>
+    OpenVolume(std::vector<BYTE> image,
+               const VolumeOptions& options = comparison_volume_options) {
   auto volume = std::make_unique<NtfsVolume<S>>(
       std::make_unique<MemoryDiskReader>(std::move(image)), options);
   REQUIRE(volume->IsVolumeOK());
@@ -62,8 +65,8 @@ std::unique_ptr<NtfsVolume<S>> OpenVolume(std::vector<BYTE> image,
 // indexes "Broken" (25), "OldDir" (20, freed), "old.tmp" (19, freed) and
 // "report.txt" (17).
 template <Strategy S>
-std::unique_ptr<NtfsVolume<S>>
-    OpenIndexedVolume(const VolumeOptions& options = {}) {
+std::unique_ptr<NtfsVolume<S>> OpenIndexedVolume(
+    const VolumeOptions& options = comparison_volume_options) {
   const std::vector<FakeDataRun> big_runs{
       {.lcn = NtfsBrowserTests::dump_big_file_lcn,
        .clusters = NtfsBrowserTests::dump_big_file_clusters}};

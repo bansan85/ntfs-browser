@@ -7,8 +7,19 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 namespace NtfsCompare {
+
+// Options for every volume this tool opens. They are the library defaults,
+// written out so the comparison does not depend on them. include_deleted
+// MUST stay off: the OS walks never list freed entries, so the reference
+// must not either. recover_errors stays off too, so a damaged entry is
+// hidden from every listing the same way.
+inline constexpr NtfsBrowser::VolumeOptions comparison_volume_options{
+    .include_deleted = false,
+    .recover_errors = false,
+};
 
 // What OpenVolumeFor() resolved: two independently-opened volumes (FullCache
 // and NoCache each own their own IDiskReader and state) plus the path of

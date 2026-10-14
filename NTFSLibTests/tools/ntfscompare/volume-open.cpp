@@ -28,10 +28,10 @@ std::optional<VolumeHandles>
   const wchar_t drive_letter = canonical.root_name().wstring().front();
 
   VolumeHandles handles;
-  handles.full_cache =
-      std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(drive_letter);
-  handles.no_cache =
-      std::make_unique<NtfsVolume<Cache::Strategy::NoCache>>(drive_letter);
+  handles.full_cache = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
+      drive_letter, comparison_volume_options);
+  handles.no_cache = std::make_unique<NtfsVolume<Cache::Strategy::NoCache>>(
+      drive_letter, comparison_volume_options);
   if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK()) {
     // A drive letter is always ASCII.
     PrintErr(
@@ -137,9 +137,9 @@ std::optional<VolumeHandles>
 
   VolumeHandles handles;
   handles.full_cache = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
-      std::move(full_cache_reader));
+      std::move(full_cache_reader), comparison_volume_options);
   handles.no_cache = std::make_unique<NtfsVolume<Cache::Strategy::NoCache>>(
-      std::move(no_cache_reader));
+      std::move(no_cache_reader), comparison_volume_options);
   if (!handles.full_cache->IsVolumeOK() || !handles.no_cache->IsVolumeOK()) {
     PrintErr("{} is not an NTFS volume\n", mount->device);
     return std::nullopt;

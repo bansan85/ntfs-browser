@@ -6,6 +6,7 @@ target_sources(
     "compare-engine-tests.cpp"
     "library-walk-tests.cpp"
     "os-api-walk-tests.cpp"
+    "volume-open-tests.cpp"
 )
 
 target_link_libraries(NtfsBrowserTests PRIVATE NtfsCompareCore)
