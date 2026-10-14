@@ -31,7 +31,7 @@ eg. ntfsdir "c:\program files\common files"
 )";
 
 // Stderr of both samples when the volume cannot be opened: the library's line.
-constexpr std::string_view volume_open_error = "Cannnot open volume\n";
+constexpr std::string_view volume_open_error = "Cannot open volume\n";
 
 // A drive letter with no drive mapped to it. Skips the test when D: to Z:
 // are all taken, so that no test ever opens a real volume.
@@ -195,7 +195,7 @@ TEST_CASE("NtfsDir and NtfsDir2 --log=file keeps the library line in the file",
   std::ifstream input(log_path);
   const std::string log_text((std::istreambuf_iterator<char>(input)),
                              std::istreambuf_iterator<char>());
-  CHECK_THAT(log_text, ContainsSubstring("[error] Cannnot open volume"));
+  CHECK_THAT(log_text, ContainsSubstring("[error] Cannot open volume"));
   std::error_code ignored;
   Fs::remove(log_path, ignored);
 }

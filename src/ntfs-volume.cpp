@@ -196,7 +196,7 @@ bool NtfsVolume<S>::Impl::OpenVolume(_TCHAR volume) {
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
   if (!volume->Open(path)) {
-    Log::Error("Cannnot open volume");
+    Log::Error("Cannot open volume");
     return false;
   }
 

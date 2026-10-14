@@ -98,7 +98,7 @@ Unreadable: 14, damaged: 0, not linked to the root: 2
 // Stderr of NtfsMftList on a file that is not a volume: the library's own
 // error line, then the sample's.
 constexpr std::string_view missing_volume_error =
-    "Cannnot open volume\n"
+    "Cannot open volume\n"
     "Cannot open no-such-volume.img as an NTFS volume\n";
 
 // Runs NtfsMftList with args, its stdout and stderr captured apart.
