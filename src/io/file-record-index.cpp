@@ -201,8 +201,7 @@ std::optional<IndexEntry>
   return found;
 }
 
-// The entries of a file-name $INDEX_ROOT, or null for any other kind of index
-// or for a strategy this library does not know.
+// The entries of a file-name $INDEX_ROOT, or null for any other kind of index.
 template <Cache::Strategy S>
 const std::vector<IndexEntryView>*
     Io::DirectoryIndex<S>::FileNameIndexRootEntries(
@@ -216,7 +215,8 @@ const std::vector<IndexEntryView>*
         Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(&attr);
     return index_root->IsFileName() ? index_root : nullptr;
   } else {
-    return nullptr;
+    static_assert(S == Cache::Strategy::FullCache,
+                  "FileNameIndexRootEntries() has no arm for this strategy");
   }
 }
 
