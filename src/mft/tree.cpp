@@ -81,6 +81,40 @@ void AddNames(const Io::FileRecord<S>& file_record,
   }
 }
 
+// Copies record's number, sequence number, liveness and kind into entry.
+template <Cache::Strategy S>
+void ReadIdentity(const Io::FileRecord<S>& file_record, ULONGLONG record,
+                  Mft::MftTree::Entry& entry) {
+  entry.record = record;
+  entry.sequence = file_record.GetSequenceNumber();
+  entry.in_use = !file_record.IsDeleted();
+  entry.directory = file_record.IsDirectory();
+}
+
+// Copies the unnamed $DATA sizes into entry. Without that stream, the size is
+// the $FILE_NAME size and nothing is allocated.
+template <Cache::Strategy S>
+void ReadStreamSizes(const Io::FileRecord<S>& file_record,
+                     Mft::MftTree::Entry& entry) {
+  const Attr::AttrBase<S>* data = file_record.FindStream({});
+  entry.size =
+      data != nullptr ? data->GetDataSize() : file_record.GetFileSize();
+  entry.allocated_size = data != nullptr ? data->GetAllocatedSize() : 0;
+}
+
+// Copies the DOS permission bits of $STANDARD_INFORMATION into entry.
+template <Cache::Strategy S>
+void ReadPermissions(const Io::FileRecord<S>& file_record,
+                     Mft::MftTree::Entry& entry) {
+  entry.read_only = file_record.IsReadOnly();
+  entry.hidden = file_record.IsHidden();
+  entry.system = file_record.IsSystem();
+  entry.archive = file_record.IsArchive();
+  entry.compressed = file_record.IsCompressed();
+  entry.encrypted = file_record.IsEncrypted();
+  entry.sparse = file_record.IsSparse();
+}
+
 // Copies what file_record just parsed says about its file into entry.
 // Returns false when an attribute failed to parse: entry then holds what
 // parsed before the failure.
@@ -89,27 +123,12 @@ bool ReadEntry(Io::FileRecord<S>& file_record, ULONGLONG record,
                Mft::MftTree::Entry& entry) {
   const bool parsed = TryParseAttrs(file_record);
 
-  entry.record = record;
-  entry.sequence = file_record.GetSequenceNumber();
-  entry.in_use = !file_record.IsDeleted();
-  entry.directory = file_record.IsDirectory();
-
+  ReadIdentity(file_record, record, entry);
   AddNames(file_record, entry);
-
-  const Attr::AttrBase<S>* data = file_record.FindStream({});
-  entry.size =
-      data != nullptr ? data->GetDataSize() : file_record.GetFileSize();
-  entry.allocated_size = data != nullptr ? data->GetAllocatedSize() : 0;
-
+  ReadStreamSizes(file_record, entry);
   file_record.GetFileTime(&entry.write_time, &entry.create_time,
                           &entry.access_time, &entry.change_time);
-  entry.read_only = file_record.IsReadOnly();
-  entry.hidden = file_record.IsHidden();
-  entry.system = file_record.IsSystem();
-  entry.archive = file_record.IsArchive();
-  entry.compressed = file_record.IsCompressed();
-  entry.encrypted = file_record.IsEncrypted();
-  entry.sparse = file_record.IsSparse();
+  ReadPermissions(file_record, entry);
 
   return parsed;
 }
