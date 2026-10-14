@@ -186,6 +186,15 @@ std::string LogWhenOpened(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
   return NtfsBrowserTests::TakeCapturedLog();
 }
 
+// Opens the fake image with edit applied to its boot sector BPB, and returns
+// the log the open wrote.
+template <Cache::Strategy S, typename Edit>
+std::string LogOfBpbEdit(Edit edit, bool& volume_ok) {
+  return LogWhenOpened<S>(
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(ImageWithBpb(edit)),
+      volume_ok);
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -228,10 +237,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = true;
-  const std::string log = LogWhenOpened<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          ImageWithBpb([](auto& bpb) { bpb.signature[0] = 'X'; })),
-      volume_ok);
+  const std::string log =
+      LogOfBpbEdit<S>([](auto& bpb) { bpb.signature[0] = 'X'; }, volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("Volume file system is not NTFS"));
@@ -244,9 +251,8 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume rejects a sector size below two bytes",
   for (const WORD sector_size : {WORD{0}, WORD{1}}) {
     INFO("bytes_per_sector = " << sector_size);
     bool volume_ok = true;
-    const std::string log = LogWhenOpened<S>(
-        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(ImageWithBpb(
-            [sector_size](auto& bpb) { bpb.bytes_per_sector = sector_size; })),
+    const std::string log = LogOfBpbEdit<S>(
+        [sector_size](auto& bpb) { bpb.bytes_per_sector = sector_size; },
         volume_ok);
 
     CHECK_FALSE(volume_ok);
@@ -260,9 +266,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = true;
-  const std::string log = LogWhenOpened<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(ImageWithBpb(
-          [](auto& bpb) { bpb.sectors_per_cluster = static_cast<BYTE>(-13); })),
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) { bpb.sectors_per_cluster = static_cast<BYTE>(-13); },
       volume_ok);
 
   CHECK_FALSE(volume_ok);
@@ -276,10 +281,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = true;
-  const std::string log = LogWhenOpened<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          ImageWithBpb([](auto& bpb) { bpb.sectors_per_cluster = 0; })),
-      volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) { bpb.sectors_per_cluster = 0; }, volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("Cluster Size = 0 bytes"));
@@ -293,13 +296,11 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("-12 gives a 4096-byte file record") {
     bool volume_ok = false;
-    const std::string log =
-        LogWhenOpened<S>(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-                             ImageWithBpb([](auto& bpb) {
-                               bpb.clusters_per_file_record =
-                                   static_cast<DWORD>(-12);
-                             })),
-                         volume_ok);
+    const std::string log = LogOfBpbEdit<S>(
+        [](auto& bpb) {
+          bpb.clusters_per_file_record = static_cast<DWORD>(-12);
+        },
+        volume_ok);
 
     CHECK_THAT(log, ContainsSubstring("FileRecord Size = 4096 bytes"));
     CHECK_THAT(log, !ContainsSubstring("magnitude out of range"));
@@ -307,13 +308,11 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("-13 is out of range") {
     bool volume_ok = true;
-    const std::string log =
-        LogWhenOpened<S>(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-                             ImageWithBpb([](auto& bpb) {
-                               bpb.clusters_per_file_record =
-                                   static_cast<DWORD>(-13);
-                             })),
-                         volume_ok);
+    const std::string log = LogOfBpbEdit<S>(
+        [](auto& bpb) {
+          bpb.clusters_per_file_record = static_cast<DWORD>(-13);
+        },
+        volume_ok);
 
     CHECK_FALSE(volume_ok);
     CHECK_THAT(log, ContainsSubstring(
@@ -322,10 +321,8 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("9 clusters is out of range") {
     bool volume_ok = true;
-    const std::string log = LogWhenOpened<S>(
-        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-            ImageWithBpb([](auto& bpb) { bpb.clusters_per_file_record = 9; })),
-        volume_ok);
+    const std::string log = LogOfBpbEdit<S>(
+        [](auto& bpb) { bpb.clusters_per_file_record = 9; }, volume_ok);
 
     CHECK_FALSE(volume_ok);
     CHECK_THAT(log, ContainsSubstring(
@@ -340,15 +337,13 @@ TEMPLATE_TEST_CASE_SIG(
   // 2-byte sectors keep a 16-byte record a whole number of sectors, so only
   // the header-size check can reject it.
   bool volume_ok = true;
-  const std::string log =
-      LogWhenOpened<S>(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-                           ImageWithBpb([](auto& bpb) {
-                             bpb.bytes_per_sector = 2;
-                             bpb.sectors_per_cluster = 32;
-                             bpb.clusters_per_file_record =
-                                 static_cast<DWORD>(-4);
-                           })),
-                       volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) {
+        bpb.bytes_per_sector = 2;
+        bpb.sectors_per_cluster = 32;
+        bpb.clusters_per_file_record = static_cast<DWORD>(-4);
+      },
+      volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("FileRecord Size = 16 bytes"));
@@ -361,13 +356,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = true;
-  const std::string log =
-      LogWhenOpened<S>(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-                           ImageWithBpb([](auto& bpb) {
-                             bpb.clusters_per_file_record =
-                                 static_cast<DWORD>(-6);
-                           })),
-                       volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) { bpb.clusters_per_file_record = static_cast<DWORD>(-6); },
+      volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("FileRecord Size = 64 bytes"));
@@ -380,10 +371,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = true;
-  const std::string log = LogWhenOpened<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          ImageWithBpb([](auto& bpb) { bpb.clusters_per_file_record = 5; })),
-      volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) { bpb.clusters_per_file_record = 5; }, volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("FileRecord Size = 5120 bytes"));
@@ -400,10 +389,8 @@ TEMPLATE_TEST_CASE_SIG(
   for (const BYTE raw : {BYTE{0xF3}, BYTE{9}}) {
     INFO("clusters_per_index_block = " << static_cast<int>(raw));
     bool volume_ok = true;
-    const std::string log = LogWhenOpened<S>(
-        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(ImageWithBpb(
-            [raw](auto& bpb) { bpb.clusters_per_index_block = raw; })),
-        volume_ok);
+    const std::string log = LogOfBpbEdit<S>(
+        [raw](auto& bpb) { bpb.clusters_per_index_block = raw; }, volume_ok);
 
     CHECK_FALSE(volume_ok);
     CHECK_THAT(log, ContainsSubstring(
@@ -419,16 +406,14 @@ TEMPLATE_TEST_CASE_SIG(
   // 2-byte sectors keep a 2-byte index block a whole number of sectors, so
   // only the header-size check can reject it.
   bool volume_ok = true;
-  const std::string log =
-      LogWhenOpened<S>(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-                           ImageWithBpb([](auto& bpb) {
-                             bpb.bytes_per_sector = 2;
-                             bpb.sectors_per_cluster = 32;
-                             bpb.clusters_per_file_record = 1;
-                             bpb.clusters_per_index_block =
-                                 static_cast<DWORD>(-1);
-                           })),
-                       volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) {
+        bpb.bytes_per_sector = 2;
+        bpb.sectors_per_cluster = 32;
+        bpb.clusters_per_file_record = 1;
+        bpb.clusters_per_index_block = static_cast<DWORD>(-1);
+      },
+      volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("IndexBlock Size = 2 bytes"));
@@ -441,13 +426,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = true;
-  const std::string log =
-      LogWhenOpened<S>(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-                           ImageWithBpb([](auto& bpb) {
-                             bpb.clusters_per_index_block =
-                                 static_cast<DWORD>(-7);
-                           })),
-                       volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) { bpb.clusters_per_index_block = static_cast<DWORD>(-7); },
+      volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("IndexBlock Size = 128 bytes"));
@@ -460,13 +441,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = false;
-  const std::string log =
-      LogWhenOpened<S>(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-                           ImageWithBpb([](auto& bpb) {
-                             bpb.clusters_per_index_block =
-                                 static_cast<DWORD>(-9);
-                           })),
-                       volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) { bpb.clusters_per_index_block = static_cast<DWORD>(-9); },
+      volume_ok);
 
   CHECK_THAT(log, ContainsSubstring("IndexBlock Size = 512 bytes"));
   CHECK_THAT(log, !ContainsSubstring("IndexBlock Size is invalid"));
@@ -477,13 +454,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = true;
-  const std::string log =
-      LogWhenOpened<S>(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-                           ImageWithBpb([](auto& bpb) {
-                             bpb.lcn_mft =
-                                 std::numeric_limits<ULONGLONG>::max();
-                           })),
-                       volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) { bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max(); },
+      volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("MFT address = 0xFFFFFFFFFFFFFFFF"));
@@ -498,10 +471,8 @@ TEMPLATE_TEST_CASE_SIG(
   // 2^52 clusters of 1024 bytes is 2^62 bytes: just above LONGLONG_MAX / 2,
   // and still within a ULONGLONG.
   bool volume_ok = true;
-  const std::string log = LogWhenOpened<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          ImageWithBpb([](auto& bpb) { bpb.lcn_mft = 1ULL << 52U; })),
-      volume_ok);
+  const std::string log =
+      LogOfBpbEdit<S>([](auto& bpb) { bpb.lcn_mft = 1ULL << 52U; }, volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("MFT address = 0x4000000000000000"));
@@ -513,10 +484,8 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume accepts the largest plausible MFT address",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // (2^52 - 1) clusters of 1024 bytes: the last offset under LONGLONG_MAX / 2.
   bool volume_ok = true;
-  const std::string log = LogWhenOpened<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          ImageWithBpb([](auto& bpb) { bpb.lcn_mft = (1ULL << 52U) - 1; })),
-      volume_ok);
+  const std::string log = LogOfBpbEdit<S>(
+      [](auto& bpb) { bpb.lcn_mft = (1ULL << 52U) - 1; }, volume_ok);
 
   CHECK_THAT(log, ContainsSubstring("MFT address = 0x3FFFFFFFFFFFFC00"));
   CHECK_THAT(log, !ContainsSubstring("MFT address is invalid"));

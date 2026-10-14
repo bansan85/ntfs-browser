@@ -79,6 +79,14 @@ ParsedRoot<S> ParseRoot(std::vector<BYTE> image) {
   return parsed;
 }
 
+// ParseRoot() and then ParseAttrs() on the root record, which must succeed.
+template <Cache::Strategy S>
+ParsedRoot<S> ParseRootWithAttrs(std::vector<BYTE> image) {
+  ParsedRoot<S> parsed = ParseRoot<S>(std::move(image));
+  REQUIRE(parsed.record->ParseAttrs());
+  return parsed;
+}
+
 // Reads "size" bytes at "offset" of the root record's single $DATA
 // attribute, truncated to what ReadData() actually produced; empty on failure.
 template <Cache::Strategy S>
@@ -150,9 +158,8 @@ void CheckCompressedFileReadsBackDecompressed() {
 // unit with no sparse pad, so the bytes must pass through undecompressed.
 template <Cache::Strategy S>
 void CheckStoredCompressionUnitReadsBackVerbatim() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithStoredCompressionUnit());
-  REQUIRE(root.record->ParseAttrs());
 
   const std::vector<BYTE> expected =
       NtfsBrowserTests::CompressionFixturePattern(
@@ -170,9 +177,8 @@ void CheckStoredCompressionUnitReadsBackVerbatim() {
 // read back zero-filled, same as the pre-existing uncompressed sparse path.
 template <Cache::Strategy S>
 void CheckSparseCompressionUnitReadsBackZeroed() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSparseCompressionUnit());
-  REQUIRE(root.record->ParseAttrs());
 
   const std::optional<std::vector<BYTE>> data =
       ReadRootData<S>(*root.record, 0, NtfsBrowserTests::compression_unit_size);
@@ -193,9 +199,8 @@ void CheckSparseCompressionUnitReadsBackZeroed() {
 // read path must stitch together before decompressing.
 template <Cache::Strategy S>
 void CheckFragmentedCompressedFileReadsBackDecompressed() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithFragmentedCompressedFile());
-  REQUIRE(root.record->ParseAttrs());
 
   const std::vector<BYTE> expected =
       NtfsBrowserTests::CompressionFixturePattern(
@@ -214,9 +219,8 @@ void CheckFragmentedCompressedFileReadsBackDecompressed() {
 // from a PARTIAL run. Reads must return exactly real_size bytes.
 template <Cache::Strategy S>
 void CheckTrailingPartialCompressionUnit() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithTrailingPartialCompressionUnit());
-  REQUIRE(root.record->ParseAttrs());
 
   const std::vector<BYTE> head = NtfsBrowserTests::CompressionFixturePattern(
       NtfsBrowserTests::trailing_partial_unit_stored_size);
@@ -253,9 +257,8 @@ void CheckTrailingPartialCompressionUnit() {
 // through its std::optional error channel, not crash or return garbage.
 template <Cache::Strategy S>
 void CheckCorruptCompressedUnitIsRejected() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCorruptCompressedUnit());
-  REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
@@ -274,9 +277,8 @@ void CheckCorruptCompressedUnitIsRejected() {
 // fabricated zeroes as if it were a hole.
 template <Cache::Strategy S>
 void CheckUnmappedCompressionUnitIsRejected() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithUnmappedCompressionUnit());
-  REQUIRE(root.record->ParseAttrs());
 
   const std::vector<BYTE> expected =
       NtfsBrowserTests::CompressionFixturePattern(
@@ -305,9 +307,8 @@ void CheckUnmappedCompressionUnitIsRejected() {
 // understands: a compressed unit's sparse padding is always its tail.
 template <Cache::Strategy S>
 void CheckRealClustersAfterHoleIsRejected() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithRealClustersAfterHole());
-  REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
@@ -324,9 +325,8 @@ void CheckRealClustersAfterHoleIsRejected() {
 // and returned as valid data (unlike a legitimate trailing partial unit).
 template <Cache::Strategy S>
 void CheckShortDecompressedInteriorUnitIsRejected() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithShortDecompressedUnit());
-  REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
@@ -344,9 +344,8 @@ void CheckShortDecompressedInteriorUnitIsRejected() {
 // the boundary between them.
 template <Cache::Strategy S>
 void CheckSparseUnitBeforeCompressedUnitReadsBack() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSparseThenCompressedUnit());
-  REQUIRE(root.record->ParseAttrs());
   REQUIRE(root.record->GetAttr(Attr::Type::Data).size() == 1);
   // The REQUIRE above checks that there is one DATA attribute.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -406,9 +405,8 @@ void CheckSparseUnitBeforeCompressedUnitReadsBack() {
 // compressed unit with its hole moved.
 template <Cache::Strategy S>
 void CheckHoleBeforeRealClusterIsRejected() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithHoleBeforeRealCluster());
-  REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
@@ -672,9 +670,8 @@ namespace {
 // checked here on the actual traversal result, not just exit code/trace.
 template <Cache::Strategy S>
 void CheckCompressedIndexAllocationTraverses() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCompressedIndexAllocation());
-  REQUIRE(root.record->ParseAttrs());
   CHECK(root.record->IsCompressed());
   CHECK(root.record->IsDirectory());
 
@@ -702,10 +699,9 @@ void CheckCompressedIndexAllocationTraverses() {
 // yield an empty traversal and a trace, not a crash.
 template <Cache::Strategy S>
 void CheckCorruptCompressedIndexAllocationIsRejected() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithCorruptCompressedIndexAllocation());
-  REQUIRE(root.record->ParseAttrs());
 
   size_t visited = 0;
   const std::string trace = CaptureTrace([&] {
@@ -752,9 +748,8 @@ struct SeenEntry {
 // lookup, which walks from the root into the compressed block.
 template <Cache::Strategy S>
 void CheckSurrogatePairNamesTraverse() {
-  ParsedRoot<S> root = ParseRoot<S>(
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithSurrogatePairNames());
-  REQUIRE(root.record->ParseAttrs());
   CHECK(root.record->IsCompressed());
 
   std::vector<SeenEntry> seen;
