@@ -5,6 +5,7 @@
 #include <array>
 #include <optional>
 #include <set>
+#include <string_view>
 #include <utility>
 
 #include "console.h"
@@ -15,6 +16,13 @@ namespace {
 
 // First code point past ASCII: Narrow() keeps only below it.
 constexpr wchar_t ascii_limit = 128;
+
+// Method name of the merged library reference. Every other method is an OS
+// candidate.
+constexpr std::string_view library_method_name = "library";
+
+// Kind of the informative finding for a live file only MftTree reaches.
+constexpr std::string_view unindexed_kind = "UNINDEXED";
 
 std::string FormatValue(ULONGLONG value) { return std::to_string(value); }
 
@@ -137,19 +145,30 @@ Listing CompareLibraryMethods(const Listing& full_cache,
     }
   }
 
-  MethodStats stats{.name = "library"};
+  MethodStats stats{.name = std::string(library_method_name)};
 
   for (const std::wstring& path : all_paths) {
+    // NTFS names a file only through its directory's index, so a live file
+    // that only MftTree reaches is not a miss.
+    const bool indexed = full_cache.contains(path) || no_cache.contains(path);
     std::vector<const Entry*> present;
     for (const Source& source : sources) {
       const auto iterator = source.listing->find(path);
-      if (iterator == source.listing->end()) {
+      if (iterator != source.listing->end()) {
+        present.push_back(&iterator->second);
+      } else if (indexed) {
         report.findings.push_back({"LIB-MISSING", source.name, path, "", "",
                                    "present in the other library methods"});
         stats.missing++;
-      } else {
-        present.push_back(&iterator->second);
       }
+    }
+
+    if (!indexed) {
+      report.findings.push_back({std::string(unindexed_kind), "mft-tree", path,
+                                 "", "",
+                                 "not in the full-cache or no-cache index"});
+      report.unindexed_paths.insert(path);
+      stats.unindexed++;
     }
 
     if (present.empty()) {
@@ -187,6 +206,10 @@ void CompareAgainstReference(const std::string& method_name,
   MethodStats stats{.name = method_name};
 
   for (const auto& [path, ref_entry] : reference) {
+    if (report.unindexed_paths.contains(path)) {
+      stats.unindexed++;
+      continue;
+    }
     const auto iterator = candidate.find(path);
     if (iterator == candidate.end()) {
       report.findings.push_back({"MISSING", method_name, path, "", "", ""});
@@ -203,7 +226,9 @@ void CompareAgainstReference(const std::string& method_name,
 }
 
 bool PrintReport(const Report& report) {
+  bool has_failure = false;
   for (const Finding& finding : report.findings) {
+    has_failure = has_failure || finding.kind != unindexed_kind;
     if (finding.field.empty()) {
       PrintOut("[{}] {}: \"{}\"", finding.kind, finding.method,
                Narrow(finding.path));
@@ -220,13 +245,20 @@ bool PrintReport(const Report& report) {
 
   PrintOut("\n");
   for (const MethodStats& method_stats : report.stats) {
-    PrintOut("{:<12} compared={} missing={} extra={} mismatched_fields={}\n",
-             method_stats.name, method_stats.compared_entries,
-             method_stats.missing, method_stats.extra,
-             method_stats.mismatched_fields);
+    PrintOut(
+        "{:<12} compared={} missing={} extra={} mismatched_fields={} "
+        "unindexed={}\n",
+        method_stats.name, method_stats.compared_entries, method_stats.missing,
+        method_stats.extra, method_stats.mismatched_fields,
+        method_stats.unindexed);
+    if (method_stats.name != library_method_name &&
+        method_stats.unindexed > 0) {
+      PrintOut("{} unindexed entries excluded from the {} comparison\n",
+               method_stats.unindexed, method_stats.name);
+    }
   }
 
-  return !report.findings.empty();
+  return has_failure;
 }
 
 }  // namespace NtfsCompare

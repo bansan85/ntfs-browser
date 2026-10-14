@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,6 +17,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "compare-engine.h"
 #include "entry.h"
 #include "fake-ntfs-image.h"
 #include "library-walk.h"
@@ -32,8 +35,12 @@ using NtfsBrowserTests::BuildFakeNtfsImageWithMftTree;
 using NtfsBrowserTests::FakeDataRun;
 using NtfsBrowserTests::MemoryDiskReader;
 using NtfsBrowserTests::Unwrap;
+using NtfsCompare::CompareAgainstReference;
+using NtfsCompare::CompareLibraryMethods;
 using NtfsCompare::Entry;
+using NtfsCompare::Finding;
 using NtfsCompare::Listing;
+using NtfsCompare::Report;
 using NtfsCompare::ResolveDirectoryRecord;
 using NtfsCompare::WalkLibraryIndex;
 using NtfsCompare::WalkMftTree;
@@ -308,7 +315,8 @@ TEMPLATE_TEST_CASE_SIG(
   const Listing listing = WalkMftTree(tree, root_record);
 
   // The freed "old.tmp" and "OldDir" and the zero-filled "Broken" are left
-  // out, unlike in the index walk above.
+  // out. Unlike the index walk, this one also reaches "link-a", "NewDir" and
+  // "Docs/link-b", which no directory index names.
   CHECK(listing.size() == 5);
   for (const std::wstring_view key :
        {L"Docs", L"Docs/report.txt", L"Docs/link-b", L"link-a", L"NewDir"}) {
@@ -317,4 +325,55 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(listing.contains(L"Docs/report.txt"));
   CHECK(Unwrap(listing.at(L"Docs/report.txt").logical_size) ==
         NtfsBrowserTests::dump_report_content.size());
+}
+
+TEST_CASE(
+    "CompareLibraryMethods on the dump tree marks the live files no index "
+    "names",
+    "[ntfscompare][compare][characterization]") {
+  const auto full_cache = OpenIndexedVolume<Strategy::FullCache>();
+  const auto no_cache = OpenIndexedVolume<Strategy::NoCache>();
+  const MftTree tree(*no_cache);
+
+  const Listing full_listing = WalkLibraryIndex(*full_cache, root_record);
+  const Listing no_listing = WalkLibraryIndex(*no_cache, root_record);
+  const Listing tree_listing = WalkMftTree(tree, root_record);
+
+  Report report;
+  const Listing reference =
+      CompareLibraryMethods(full_listing, no_listing, tree_listing, report);
+
+  const auto count_kind = [&report](std::string_view kind) {
+    return std::ranges::count_if(
+        report.findings,
+        [kind](const Finding& finding) { return finding.kind == kind; });
+  };
+
+  CHECK(reference.size() == 5);
+  CHECK(report.unindexed_paths ==
+        std::set<std::wstring>{L"Docs/link-b", L"NewDir", L"link-a"});
+  CHECK(count_kind("UNINDEXED") == 3);
+  CHECK(count_kind("LIB-MISSING") == 0);
+
+  // Index entries and MftTree disagree on these fields, so the reference drops
+  // them. Docs/Broken is in no listing, so it is never counted.
+  std::set<std::wstring> mismatched_paths;
+  for (const Finding& finding : report.findings) {
+    if (finding.kind == "LIB-MISMATCH") {
+      mismatched_paths.insert(finding.path);
+    }
+  }
+  CHECK(count_kind("LIB-MISMATCH") == 4);
+  CHECK(mismatched_paths ==
+        std::set<std::wstring>{L"Docs", L"Docs/report.txt"});
+
+  CompareAgainstReference("std::filesystem", reference, full_listing, report);
+
+  REQUIRE(report.stats.size() == 2);
+  CHECK(report.stats.back().compared_entries == 2);
+  CHECK(report.stats.back().missing == 0);
+  CHECK(report.stats.back().extra == 0);
+  CHECK(report.stats.back().unindexed == 3);
+  CHECK(count_kind("MISSING") == 0);
+  CHECK(count_kind("EXTRA") == 0);
 }

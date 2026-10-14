@@ -1,3 +1,4 @@
+#include <set>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
@@ -6,9 +7,11 @@
 #include "entry.h"
 
 using NtfsCompare::CompareAgainstReference;
+using NtfsCompare::CompareLibraryMethods;
 using NtfsCompare::Entry;
 using NtfsCompare::Finding;
 using NtfsCompare::Listing;
+using NtfsCompare::PrintReport;
 using NtfsCompare::Report;
 
 namespace {
@@ -201,4 +204,81 @@ TEST_CASE("CompareAgainstReference keeps one stats entry per method",
   CHECK(report.stats[0].compared_entries == 1);
   CHECK(report.stats[1].name == "second");
   CHECK(report.stats[1].missing == 1);
+}
+
+TEST_CASE("CompareLibraryMethods reports an MftTree-only file as UNINDEXED",
+          "[ntfscompare][compare][characterization]") {
+  const Listing mft_tree{{L"link-a", FileEntry(5)}};
+  Report report;
+
+  const Listing reference =
+      CompareLibraryMethods(Listing{}, Listing{}, mft_tree, report);
+
+  REQUIRE(report.findings.size() == 1);
+  const Finding& finding = report.findings.front();
+  CHECK(finding.kind == "UNINDEXED");
+  CHECK(finding.method == "mft-tree");
+  CHECK(finding.path == L"link-a");
+  CHECK(reference.contains(L"link-a"));
+  CHECK(report.unindexed_paths == std::set<std::wstring>{L"link-a"});
+  REQUIRE(report.stats.size() == 1);
+  CHECK(report.stats.front().compared_entries == 1);
+  CHECK(report.stats.front().missing == 0);
+  CHECK(report.stats.front().unindexed == 1);
+}
+
+TEST_CASE(
+    "CompareLibraryMethods reports a file missing from one index as "
+    "LIB-MISSING",
+    "[ntfscompare][compare][characterization]") {
+  const Listing full_cache{{L"a.txt", FileEntry(5)}};
+  Report report;
+
+  const Listing reference =
+      CompareLibraryMethods(full_cache, Listing{}, Listing{}, report);
+
+  REQUIRE(report.findings.size() == 2);
+  CHECK(report.findings[0].kind == "LIB-MISSING");
+  CHECK(report.findings[0].method == "no-cache");
+  CHECK(report.findings[1].kind == "LIB-MISSING");
+  CHECK(report.findings[1].method == "mft-tree");
+  CHECK(report.unindexed_paths.empty());
+  REQUIRE(report.stats.size() == 1);
+  CHECK(report.stats.front().missing == 2);
+  CHECK(report.stats.front().unindexed == 0);
+  CHECK(reference.contains(L"a.txt"));
+}
+
+TEST_CASE(
+    "CompareAgainstReference leaves UNINDEXED paths out of the OS "
+    "comparison",
+    "[ntfscompare][compare][characterization]") {
+  const Listing indexed{{L"a.txt", FileEntry(5)}};
+  const Listing mft_tree{{L"a.txt", FileEntry(5)}, {L"link-a", FileEntry(5)}};
+  Report report;
+  const Listing reference =
+      CompareLibraryMethods(indexed, indexed, mft_tree, report);
+
+  CompareAgainstReference("std::filesystem", reference, indexed, report);
+
+  REQUIRE(report.findings.size() == 1);
+  CHECK(report.findings.front().kind == "UNINDEXED");
+  REQUIRE(report.stats.size() == 2);
+  const auto& os_stats = report.stats.back();
+  CHECK(os_stats.name == "std::filesystem");
+  CHECK(os_stats.compared_entries == 1);
+  CHECK(os_stats.missing == 0);
+  CHECK(os_stats.extra == 0);
+  CHECK(os_stats.unindexed == 1);
+}
+
+TEST_CASE("PrintReport does not fail on UNINDEXED alone",
+          "[ntfscompare][compare][characterization]") {
+  const Listing mft_tree{{L"link-a", FileEntry(5)}};
+  Report report;
+  const Listing reference =
+      CompareLibraryMethods(Listing{}, Listing{}, mft_tree, report);
+
+  CHECK(reference.contains(L"link-a"));
+  CHECK_FALSE(PrintReport(report));
 }
