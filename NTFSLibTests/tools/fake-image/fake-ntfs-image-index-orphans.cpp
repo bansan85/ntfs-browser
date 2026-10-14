@@ -383,6 +383,16 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
   block.alloc_entry_size = first_entry.size;
 }
 
+// Points the "Orphan" leaf entry (VCN 1) of an orphaned-blocks image at
+// mft_ref.
+void RedirectOrphanEntry(std::vector<BYTE>& image, ULONGLONG mft_ref) {
+  const size_t vcn1_offset =
+      (static_cast<size_t>(orphaned_blocks_lcn) + 1) * cluster_size;
+  auto& entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      &image.at(vcn1_offset + sizeof(NtfsBrowser::Data::IndexBlock)));
+  entry.mft_index = mft_ref;
+}
+
 // Clusters BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks()'s
 // $INDEX_ALLOCATION maps: two 512-byte blocks per 1024-byte cluster, so four
 // blocks in all.
@@ -491,11 +501,17 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch() {
   // orphaned_block_orphan_mft_ref, leaving its mft_sn exactly as
   // WriteOrphanedIndexLeafBlock() wrote it (1) - now a mismatch against the
   // record's own sequence number (orphaned_block_sequence_mismatch_record_seq).
-  const size_t vcn1_offset =
-      (static_cast<size_t>(orphaned_blocks_lcn) + 1) * cluster_size;
-  auto& entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &image.at(vcn1_offset + sizeof(NtfsBrowser::Data::IndexBlock)));
-  entry.mft_index = orphaned_block_sequence_mismatch_target_idx;
+  RedirectOrphanEntry(image, orphaned_block_sequence_mismatch_target_idx);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithOrphanedEntryZeroRecord() {
+  std::vector<BYTE> image = BuildFakeNtfsImageWithOrphanedIndexBlocks();
+
+  // Record 2 is zero-filled in BuildFakeNtfsImage(), so the redirected entry
+  // names a record that never parses.
+  RedirectOrphanEntry(image, orphaned_block_sequence_mismatch_target_idx);
 
   return image;
 }

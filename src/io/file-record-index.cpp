@@ -90,13 +90,11 @@ OrphanOwner OwnerOf(const FileRecord<S>& record) {
           !record.IsDeleted()};
 }
 
-// Decides whether an entry found in an orphaned block is reported. It MUST be
-// filed under owner's directory. With a volume given, the record it names
-// MUST also still be in use under the same sequence.
-template <Cache::Strategy S>
+// Decides whether an entry found in an orphaned block is authentic. It MUST be
+// filed under owner's directory. Visibility of the named record is left to
+// IsEntryHidden().
 bool IsOrphanEntryReportable(const IndexEntryView& entry,
-                             const OrphanOwner& owner,
-                             const NtfsVolume<S>* check_named_record_in) {
+                             const OrphanOwner& owner) {
   // An orphaned block may hold a stale entry left over from a file
   // already deleted from this directory, or from an earlier directory
   // that used this record - only report one still filed under this very
@@ -107,14 +105,6 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
        !Mft::IsSameRecordGeneration(entry.GetParentSequenceNumber(),
                                     owner.sequence, owner.in_use))) {
     return false;
-  }
-  // With include_deleted off, also drop an entry whose named record is
-  // itself freed, or was reused under a different sequence number.
-  if (check_named_record_in != nullptr) {
-    Io::FileRecord<S> named(*check_named_record_in);
-    return named.ParseFileRecord(entry.GetFileReference()) &&
-           !named.IsDeleted() &&
-           named.GetSequenceNumber() == entry.GetSequenceNumber();
   }
   return true;
 }
@@ -441,13 +431,11 @@ void Io::DirectoryIndex<S>::ReportOrphanedBlock(
             vcn);
 
   const OrphanOwner owner = OwnerOf(record_);
-  const bool include_deleted = record_.GetVolume().GetOptions().include_deleted;
+  const NtfsVolume<S>& volume = record_.GetVolume();
 
   for (const IndexEntryView& index_entry : index_block) {
-    if (index_entry.HasName() &&
-        IsOrphanEntryReportable(index_entry, owner,
-                                include_deleted ? nullptr
-                                                : &record_.GetVolume())) {
+    if (index_entry.HasName() && IsOrphanEntryReportable(index_entry, owner) &&
+        !IsEntryHidden(index_entry, volume)) {
       se_call_back(index_entry, context);
     }
   }

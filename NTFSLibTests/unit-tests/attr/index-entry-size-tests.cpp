@@ -4,6 +4,7 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -54,9 +55,10 @@ size_t FirstIndexBlockOffset(const std::vector<BYTE>& image) {
   return image.size();
 }
 
-// Counts the entries the root directory's walk reports.
+// Names the root directory's walk reports, in callback order.
 template <Cache::Strategy S>
-int CountRootEntries(std::vector<BYTE> image, const VolumeOptions& options) {
+std::vector<std::wstring> RootNames(std::vector<BYTE> image,
+                                    const VolumeOptions& options) {
   const NtfsVolume<S> volume(
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
       options);
@@ -67,13 +69,14 @@ int CountRootEntries(std::vector<BYTE> image, const VolumeOptions& options) {
       static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
-  int callback_count = 0;
+  std::vector<std::wstring> names;
   record.TraverseSubEntries(
-      [](const IndexEntryView&, void* context) {
-        ++*static_cast<int*>(context);
+      [](const IndexEntryView& index_entry, void* context) {
+        static_cast<std::vector<std::wstring>*>(context)->emplace_back(
+            index_entry.GetFilename());
       },
-      &callback_count);
-  return callback_count;
+      &names);
+  return names;
 }
 
 // Gives the block's first entry a size of zero, which no entry can have.
@@ -99,15 +102,16 @@ TEMPLATE_TEST_CASE_SIG(
     "An index block whose first entry has a zero size is rejected whole",
     "[attr-index-alloc]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const int intact = CountRootEntries<S>(
+  const std::vector<std::wstring> intact = RootNames<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks(), {});
-  REQUIRE(intact > 0);
+  REQUIRE(!intact.empty());
 
   (void)NtfsBrowserTests::TakeCapturedLog();
-  const int strict = CountRootEntries<S>(WithZeroSizedFirstEntry(), {});
+  const std::vector<std::wstring> strict =
+      RootNames<S>(WithZeroSizedFirstEntry(), {});
   const std::string strict_log = NtfsBrowserTests::TakeCapturedLog();
 
-  CHECK(strict < intact);
+  CHECK(strict.size() < intact.size());
   CHECK_THAT(strict_log, ContainsSubstring(
                              "Index Block: index entry exceeds block bounds"));
 }
@@ -116,15 +120,19 @@ TEMPLATE_TEST_CASE_SIG(
     "A zero-sized index entry is logged as recoverable when recovery is on",
     "[attr-index-alloc]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const int strict = CountRootEntries<S>(WithZeroSizedFirstEntry(), {});
+  const std::vector<std::wstring> strict =
+      RootNames<S>(WithZeroSizedFirstEntry(), {});
 
   (void)NtfsBrowserTests::TakeCapturedLog();
-  const int recovered = CountRootEntries<S>(
+  const std::vector<std::wstring> recovered = RootNames<S>(
       WithZeroSizedFirstEntry(), VolumeOptions{.recover_errors = true});
   const std::string recovered_log = NtfsBrowserTests::TakeCapturedLog();
 
   // The block still yields nothing: its entries stop at the zero-sized one.
-  CHECK(recovered == strict);
+  // Only the VCN 1 orphan comes back, from the orphan scan.
+  CHECK(strict.empty());
+  CHECK(recovered == std::vector<std::wstring>{std::wstring(
+                         NtfsBrowserTests::orphaned_block_orphan_name)});
   CHECK_THAT(
       recovered_log,
       ContainsSubstring("Index Block: index entry exceeds block bounds"));

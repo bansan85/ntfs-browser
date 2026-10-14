@@ -637,8 +637,8 @@ inline constexpr WORD orphaned_block_sequence_mismatch_record_seq = 7;
 // orphaned_block_sequence_mismatch_target_idx instead of
 // orphaned_block_orphan_mft_ref: a record that actually exists and is in use,
 // but under a sequence number that does not match the entry's own mft_sn.
-// Decision 4's other drop condition, alongside "the record doesn't exist"
-// (which BuildFakeNtfsImageWithOrphanedIndexBlocks() itself already models).
+// The named record is in use under another sequence number, so the entry is
+// hidden when include_deleted is off.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch();
 
@@ -656,6 +656,11 @@ enum class FakeNamedRecordState : std::uint8_t { InUseSameSequence, Deleted };
 // orphaned_block_leaf_sequence_number and is in use or freed, as state says.
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithOrphanedEntryNamedRecord(FakeNamedRecordState state);
+
+// Same as BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch(), except
+// the record the "Orphan" entry names is left zero-filled, as
+// BuildFakeNtfsImage() leaves it. That record never parses.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOrphanedEntryZeroRecord();
 
 // Shape of the root directory's $INDEX_ALLOCATION that
 // BuildFakeNtfsImageWithIndexAllocationShape() writes. The defaults match

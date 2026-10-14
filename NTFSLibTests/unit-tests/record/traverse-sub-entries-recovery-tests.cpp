@@ -29,9 +29,8 @@ namespace Mft = NtfsBrowser::Mft;
 
 namespace {
 
-// Both flags on: the recovery scan runs, and Decision 4's include_deleted
-// filter is bypassed, so only the pre-existing parent-reference check
-// applies.
+// Both flags on: the recovery scan runs, and the visibility filter is
+// bypassed, so only the parent-reference check applies.
 constexpr VolumeOptions recover_keep_deleted{.include_deleted = true,
                                              .recover_errors = true};
 
@@ -74,10 +73,9 @@ void RunOrphanedBlocksNeedRecoveryFlag() {
 
 // With recover_errors on and include_deleted on, every $INDEX_ALLOCATION
 // block the tree walk missed is scanned too, but an entry filed under a
-// different parent is rejected. include_deleted is on here because none of
-// this fixture's leaf entries name a record that actually exists: with it
-// off, Decision 4's filter drops every one of them instead (see
-// RunOrphanedBlocksDroppedWithoutIncludeDeleted below).
+// different parent is rejected. include_deleted is on here, so the named
+// record is not checked at all (see
+// RunOrphanedBlocksReportedWithoutIncludeDeleted below for the default).
 template <Cache::Strategy S>
 void RunOrphanedBlocksFoundWithRecoveryFlag() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
@@ -101,15 +99,12 @@ void RunOrphanedBlocksFoundWithRecoveryFlag() {
   CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
 }
 
-// With include_deleted off (the default), Decision 4 additionally requires
-// an orphan-scan entry's named record to actually exist, be in use, and
-// carry a matching sequence number. Neither orphaned leaf entry (Orphan,
-// Stale) names a record that exists in this fixture's tiny $MFT, so the
-// orphan scan itself contributes nothing - unlike with include_deleted on
-// above. Decision 4 only governs the orphan scan though: Reachable comes
-// from the normal B+ tree walk and is unaffected, so it still appears.
+// With include_deleted off (the default) and recover_errors on, the orphan
+// scan reports Orphan even though its named record (102) does not parse: a
+// record that cannot be read is not a freed one, so the visibility filter
+// lets it through. Stale is still rejected, by its parent reference.
 template <Cache::Strategy S>
-void RunOrphanedBlocksDroppedWithoutIncludeDeleted() {
+void RunOrphanedBlocksReportedWithoutIncludeDeleted() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
@@ -124,18 +119,19 @@ void RunOrphanedBlocksDroppedWithoutIncludeDeleted() {
   REQUIRE(root.ParseAttrs());
 
   const std::vector<std::wstring> recovered = CollectNames(root);
-  REQUIRE(recovered.size() == 1);
+  REQUIRE(recovered.size() == 2);
   // The REQUIRE above checks the size of recovered.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
 }
 
-// Decision 4's other drop condition: with include_deleted off, an
-// orphan-scan entry naming a record that DOES exist and IS in use, but
-// under a sequence number that does not match the entry's own, is dropped
-// exactly like one naming a record that doesn't exist at all (see
-// RunOrphanedBlocksDroppedWithoutIncludeDeleted above). With include_deleted
-// on, Decision 4 is bypassed entirely and the entry is kept, confirming the
+// With include_deleted off, an orphan-scan entry naming a record that IS in
+// use, but under a sequence number that does not match the entry's own, is
+// hidden. A record that does not parse is not hidden (see
+// RunOrphanedBlocksReportedWithoutIncludeDeleted above). With include_deleted
+// on, the visibility filter is bypassed and the entry is kept, confirming the
 // drop above is specifically about the sequence mismatch.
 template <Cache::Strategy S>
 void RunOrphanedBlocksDroppedOnSequenceMismatch() {
@@ -228,14 +224,17 @@ void RunMissingIndexRootRecoveredWithFlag() {
   CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
 }
 
-// Names TraverseSubEntries() reports on the root record of "image", with both
-// recovery flags on, in callback order.
+// Names TraverseSubEntries() reports on the root record of "image", with the
+// recovery flag on and the given options (both flags on by default), in
+// callback order.
 template <Cache::Strategy S>
-std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image) {
+std::vector<std::wstring>
+    RecoverRootNames(std::vector<BYTE> image,
+                     VolumeOptions options = recover_keep_deleted) {
   auto reader =
       std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
 
-  const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
+  const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> root(volume);
@@ -245,6 +244,22 @@ std::vector<std::wstring> RecoverRootNames(std::vector<BYTE> image) {
   REQUIRE(root.ParseAttrs());
 
   return CollectNames(root);
+}
+
+// Same as above, but the named record is zero-filled instead of out of range.
+// It still does not parse, so Orphan is reported under recover_errors alone.
+template <Cache::Strategy S>
+void RunOrphanedEntryZeroRecordReported() {
+  const std::vector<std::wstring> recovered = RecoverRootNames<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedEntryZeroRecord(),
+      VolumeOptions{.recover_errors = true});
+
+  REQUIRE(recovered.size() == 2);
+  // The REQUIRE above checks the size of recovered.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
 }
 
 // The scan's block count is what the mapped clusters hold, in blocks: with
@@ -397,11 +412,19 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "TraverseSubEntries recovery scan finds nothing when include_deleted is "
-    "off and no named record exists",
+    "TraverseSubEntries recovery scan reports an entry whose named record "
+    "does not parse, when include_deleted is off",
     "[file-record][index-block][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  RunOrphanedBlocksDroppedWithoutIncludeDeleted<S>();
+  RunOrphanedBlocksReportedWithoutIncludeDeleted<S>();
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "TraverseSubEntries recovery scan reports an entry whose named record is "
+    "zero-filled, when include_deleted is off",
+    "[file-record][index-block][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  RunOrphanedEntryZeroRecordReported<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG(
