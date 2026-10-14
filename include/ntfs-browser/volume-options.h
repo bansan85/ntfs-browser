@@ -8,17 +8,24 @@ namespace NtfsBrowser {
 // taking its own copy or a per-call override.
 struct VolumeOptions {
   // Off: a freed file record's header still parses (IsDeleted() works), but
-  // ParseAttrs() exposes none of its content. On: a freed record's
-  // attributes parse normally, as does an extension record reached through
-  // one's own $ATTRIBUTE_LIST. Either way, the volume's own metadata reads
-  // ($Volume, $MFT, its extension records) bypass this gate, so a freed one
-  // doesn't take the whole volume down.
+  // ParseAttrs() exposes none of its content. Directory entries that name a
+  // freed record, or one reused under another sequence number, are hidden
+  // from listings, name lookups and walks. On: a freed record's attributes
+  // parse normally, as does an extension record reached through one's own
+  // $ATTRIBUTE_LIST, and those entries show. Either way, the volume's own
+  // metadata reads ($Volume, $MFT, its extension records) bypass this gate,
+  // so a freed one doesn't take the whole volume down.
   bool include_deleted{false};
 
-  // Off: a damaged item (a file record, an index block, a data run, an
+  // Off: a damaged item (a file record, an index block, a cluster run, an
   // $ATTRIBUTE_LIST) is rejected whole, and the enclosing scan or walk moves
   // on to the next item - no partial content is exposed. On: today's salvage
-  // behaviour runs, keeping whatever parsed before the damage.
+  // behaviour runs, keeping whatever parsed before the damage. A record that
+  // an index entry names, but that does not parse, is a damaged item too:
+  // hidden when off, returned when on, with its metadata taken from that
+  // entry. On, a walk also reads the $INDEX_ALLOCATION blocks no index
+  // pointer reaches, up to max_orphan_scan_blocks; an entry found that way is
+  // kept only if its parent matches.
   bool recover_errors{false};
 };
 
