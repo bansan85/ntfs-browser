@@ -80,6 +80,40 @@ TEST_CASE("A Crypto++ sector decryptor takes exactly one sector",
 
 #endif
 
+#if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
+
+TEST_CASE("A BCrypt sector decryptor takes exactly one sector",
+          "[cov-efs][efs]") {
+  // BCrypt has no DESX, so its decryptor covers the other four algorithms.
+  for (const Algorithm algorithm : {Algorithm::Aes128, Algorithm::Aes192,
+                                    Algorithm::Aes256, Algorithm::_3Des}) {
+    INFO("algorithm 0x" << std::hex << static_cast<int>(algorithm));
+    const std::vector<BYTE> key = NtfsBrowserTests::TestKey(algorithm);
+    const std::optional<Fek> fek =
+        Fek::Parse(NtfsBrowserTests::MakeFekBlob(algorithm, key));
+    REQUIRE(fek.has_value());
+    const auto decryptor = NtfsBrowser::Efs::MakeBCryptDecryptor(*fek);
+    REQUIRE(decryptor != nullptr);
+
+    for (const size_t size : wrong_span_sizes) {
+      INFO("span size " << size);
+      std::vector<BYTE> span_bytes(size, refused_fill);
+      CHECK_FALSE(decryptor->DecryptSector(sector_offset, span_bytes));
+      CHECK(std::ranges::all_of(
+          span_bytes, [](BYTE byte) { return byte == refused_fill; }));
+    }
+
+    const std::vector<BYTE> plaintext =
+        NtfsBrowserTests::PlaintextPattern(sector_size);
+    std::vector<BYTE> sector =
+        NtfsBrowserTests::EfsEncrypt(algorithm, key, plaintext, sector_offset);
+    REQUIRE(decryptor->DecryptSector(sector_offset, sector));
+    CHECK(sector == plaintext);
+  }
+}
+
+#endif
+
 TEST_CASE("An $EFS entry with no FEK bytes, or an oversized one, is rejected",
           "[cov-efs][efs]") {
   const TestEfsEntry oversized_fek{
