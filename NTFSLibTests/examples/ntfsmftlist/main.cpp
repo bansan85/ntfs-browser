@@ -79,11 +79,14 @@ std::string DisplayPath(const NtfsBrowser::Mft::MftTree& tree,
   return ToUtf8(path);
 }
 
+// The letter of one attribute flag when it is set, '-' when it is not.
+char FlagLetter(bool set, char letter) { return set ? letter : '-'; }
+
 // The six attribute flags as letters, each shown when its flag is set.
 std::string AttributeColumn(const NtfsBrowser::Mft::MftTree::Entry& entry) {
-  return {entry.read_only ? 'R' : '-', entry.hidden ? 'H' : '-',
-          entry.system ? 'S' : '-',    entry.compressed ? 'C' : '-',
-          entry.encrypted ? 'E' : '-', entry.sparse ? 'P' : '-'};
+  return {FlagLetter(entry.read_only, 'R'), FlagLetter(entry.hidden, 'H'),
+          FlagLetter(entry.system, 'S'),    FlagLetter(entry.compressed, 'C'),
+          FlagLetter(entry.encrypted, 'E'), FlagLetter(entry.sparse, 'P')};
 }
 
 // The size in bytes, or <DIR> for a directory.
