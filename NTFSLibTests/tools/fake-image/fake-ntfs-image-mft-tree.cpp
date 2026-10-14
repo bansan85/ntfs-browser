@@ -208,8 +208,9 @@ FakeRecord
                         {.name = L"stale.txt",
                          .parent_ref = MakeFileReference(mft_tree_docs_idx, 1)},
                         false);
-  offset += WriteNonResidentAttr(record, offset, Attr::Type::Data, 0, real_size,
-                                 runs);
+  offset += WriteNonResidentAttr(
+      record, offset, Attr::Type::Data,
+      {.comp_unit_size = 0, .real_size = real_size, .runs = runs});
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }
@@ -331,8 +332,9 @@ FakeRecord MakeNonResidentFileRecord(WORD sequence, const FakeFileName& name,
   offset += WriteStandardInformationAttr(
       record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
   offset += WriteFileNameAttr(record, offset, name, false);
-  offset += WriteNonResidentAttr(record, offset, Attr::Type::Data, 0, real_size,
-                                 runs);
+  offset += WriteNonResidentAttr(
+      record, offset, Attr::Type::Data,
+      {.comp_unit_size = 0, .real_size = real_size, .runs = runs});
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }

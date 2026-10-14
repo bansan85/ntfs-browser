@@ -446,8 +446,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout layout,
     const std::vector<FakeDataRun> runs{{non_ascii_index_block_lcn, 1}};
     put_record(Mft::Idx::Root,
                MakeIndexAllocationDirRecord(
-                   NtfsBrowser::Data::StdInfoPermission::Archive, 0,
-                   fake_file_record_size, runs));
+                   NtfsBrowser::Data::StdInfoPermission::Archive,
+                   {.comp_unit_size = 0,
+                    .real_size = fake_file_record_size,
+                    .runs = runs}));
     LayRunBytes(image, runs, MakeIndexBlockContent(names));
   }
 
@@ -465,7 +467,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout layout,
     FakeRecord upcase = MakeRecordHeader(
         attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
     const DWORD attr_size = WriteNonResidentAttr(
-        upcase, attr_offset_value, Attr::Type::Data, 0, table.size(), runs);
+        upcase, attr_offset_value, Attr::Type::Data,
+        {.comp_unit_size = 0, .real_size = table.size(), .runs = runs});
     WriteEndOfAttributesMarker(upcase, attr_offset_value + attr_size);
     put_record(Mft::Idx::UpCase, upcase);
 
@@ -493,7 +496,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithSurrogatePairNames() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs, {}, root_names);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs},
+      root_names);
 
   return BuildCompressionImage(
       record, runs,

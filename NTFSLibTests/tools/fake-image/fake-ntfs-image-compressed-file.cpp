@@ -82,9 +82,11 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterBitmap() {
   offset += WriteStandardInformationAttr(
       record, offset, NtfsBrowser::Data::StdInfoPermission::Archive);
   offset += WriteNonResidentAttr(
-      record, offset, Attr::Type::Bitmap, 0,
-      static_cast<ULONGLONG>(multi_cluster_bitmap_clusters) * cluster_size,
-      runs);
+      record, offset, Attr::Type::Bitmap,
+      {.comp_unit_size = 0,
+       .real_size =
+           static_cast<ULONGLONG>(multi_cluster_bitmap_clusters) * cluster_size,
+       .runs = runs});
   WriteEndOfAttributesMarker(record, offset);
 
   std::vector<BYTE> bitmap(

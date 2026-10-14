@@ -477,34 +477,44 @@ FakeRecord MakeBadIndexBlockEntryRootRecord() {
   return record;
 }
 
-// Writes one real (named, non-subnode) leaf entry at entryPtr and returns
-// its size.
-WORD WriteBadIndexBlockLeafEntry(BYTE* entry_ptr, ULONGLONG mft_ref,
-                                 ULONGLONG parent_ref, std::wstring_view name,
-                                 bool last) {
-  const auto name_length = gsl::narrow<BYTE>(name.size());
+// One real (named, non-subnode) leaf entry, as WriteBadIndexBlockLeafEntry()
+// writes it.
+struct FakeBadLeafEntry {
+  // MFT record the entry points to.
+  ULONGLONG mft_ref;
+  // Parent directory reference the entry's $FILE_NAME carries.
+  ULONGLONG parent_ref;
+  std::wstring_view name;
+  // Whether the entry carries the Last flag, which ends its block.
+  bool last;
+};
+
+// Writes one real leaf entry at entry_ptr and returns its size.
+WORD WriteBadIndexBlockLeafEntry(BYTE* entry_ptr,
+                                 const FakeBadLeafEntry& spec) {
+  const auto name_length = gsl::narrow<BYTE>(spec.name.size());
   auto& index_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entry_ptr);
-  index_entry.mft_index = mft_ref;
+  index_entry.mft_index = spec.mft_ref;
   index_entry.mft_sn = 1;
 
   auto& filename =
       *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
-  filename.parent_ref = parent_ref;
+  filename.parent_ref = spec.parent_ref;
   filename.flags = NtfsBrowser::Data::FilenameFlag::None;
   filename.name_length = name_length;
   filename.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
   for (BYTE i = 0; i < name_length; i++) {
     // nameLength is name.size(), so i < name.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    filename.name[i] = gsl::narrow<WORD>(name[i]);
+    filename.name[i] = gsl::narrow<WORD>(spec.name[i]);
   }
 
   index_entry.stream_size =
       gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[name_length]) -
                         reinterpret_cast<BYTE*>(&filename));
-  index_entry.flags = last ? NtfsBrowser::Data::IndexEntryFlag::Last
-                           : NtfsBrowser::Data::IndexEntryFlag{};
+  index_entry.flags = spec.last ? NtfsBrowser::Data::IndexEntryFlag::Last
+                                : NtfsBrowser::Data::IndexEntryFlag{};
   index_entry.size = gsl::narrow<WORD>(AlignAttrSize(
       &index_entry.stream - reinterpret_cast<BYTE*>(&index_entry) +
       index_entry.stream_size));
@@ -555,8 +565,10 @@ void WriteBadIndexBlockDamagedBlock(std::vector<BYTE>& image,
   const std::span<BYTE> body = BadIndexBlockBody(image, 0);
 
   const WORD size_a = WriteBadIndexBlockLeafEntry(
-      body.data(), bad_index_block_first_mft_ref, parent_ref,
-      bad_index_block_first_name, /*last=*/false);
+      body.data(), {.mft_ref = bad_index_block_first_mft_ref,
+                    .parent_ref = parent_ref,
+                    .name = bad_index_block_first_name,
+                    .last = false});
 
   auto& entry_b =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(body, size_a));
@@ -579,10 +591,11 @@ void WriteBadIndexBlockGoodBlock(std::vector<BYTE>& image,
   NtfsBrowser::Data::IndexBlock& block = WriteBadIndexBlockHeader(image, 1);
   const std::span<BYTE> body = BadIndexBlockBody(image, 1);
 
-  const WORD size_good =
-      WriteBadIndexBlockLeafEntry(body.data(), bad_index_block_good_mft_ref,
-                                  parent_ref, bad_index_block_good_name,
-                                  /*last=*/true);
+  const WORD size_good = WriteBadIndexBlockLeafEntry(
+      body.data(), {.mft_ref = bad_index_block_good_mft_ref,
+                    .parent_ref = parent_ref,
+                    .name = bad_index_block_good_name,
+                    .last = true});
 
   block.total_entry_size = size_good;
   block.alloc_entry_size = size_good;

@@ -48,13 +48,9 @@ DWORD EncodeDataRuns(std::span<BYTE> data_run,
 
 }  // namespace
 
-// Writes one non-resident attribute at record[offset] and returns its
-// declared total_size. compUnitSize == 0 is ordinary; non-zero adds the
-// trailing 8-byte CompressedSize field.
 DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
-                           WORD comp_unit_size, ULONGLONG real_size,
-                           const std::vector<FakeDataRun>& runs,
-                           const FakeNonResidentOverrides& overrides) {
+                           const FakeNonResidentAttr& layout) {
+  const FakeNonResidentOverrides& overrides = layout.overrides;
   auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   attr.header.type = type;
@@ -63,13 +59,13 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
   assert(encoded_name.size() <= 255 && "on-disk name_length is one byte");
   attr.header.name_length = gsl::narrow<BYTE>(encoded_name.size());
   attr.header.flags = overrides.flags.value_or(
-      (comp_unit_size != 0) ? NtfsBrowser::Attr::flag_compressed
-                            : static_cast<WORD>(0));
+      (layout.comp_unit_size != 0) ? NtfsBrowser::Attr::flag_compressed
+                                   : static_cast<WORD>(0));
   attr.header.id = 0;
 
   ULONGLONG total_clusters = 0;
   ULONGLONG real_clusters = 0;
-  for (const FakeDataRun& run : runs) {
+  for (const FakeDataRun& run : layout.runs) {
     total_clusters += run.clusters;
     if (run.lcn) {
       real_clusters += run.clusters;
@@ -79,13 +75,13 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
   attr.start_vcn = overrides.start_vcn;
   attr.last_vcn = overrides.last_vcn.value_or(
       overrides.start_vcn + ((total_clusters == 0) ? 0 : total_clusters - 1));
-  attr.comp_unit_size = comp_unit_size;
+  attr.comp_unit_size = layout.comp_unit_size;
   attr.alloc_size = total_clusters * cluster_size;
-  attr.real_size = real_size;
-  attr.ini_size = overrides.ini_size.value_or(real_size);
+  attr.real_size = layout.real_size;
+  attr.ini_size = overrides.ini_size.value_or(layout.real_size);
 
   const auto header_size = gsl::narrow<WORD>(
-      sizeof(attr) + ((comp_unit_size != 0)
+      sizeof(attr) + ((layout.comp_unit_size != 0)
                           ? NtfsBrowser::Data::compressed_size_field_size
                           : 0));
   const size_t name_bytes = encoded_name.size() * sizeof(WORD);
@@ -97,7 +93,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
   const auto run_offset = gsl::narrow<WORD>(header_size + name_bytes);
   attr.data_run_offset = run_offset;
 
-  if (comp_unit_size != 0) {
+  if (layout.comp_unit_size != 0) {
     // CompressedSize: total allocated size of the attribute's compressed
     // clusters, i.e. everything actually on disk (the sparse padding of each
     // compressed unit excluded).
@@ -109,7 +105,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
   DWORD run_len = 0;
   if (overrides.raw_runs.empty()) {
     run_len = EncodeDataRuns(
-        std::span<BYTE>(record).subspan(offset + run_offset), runs);
+        std::span<BYTE>(record).subspan(offset + run_offset), layout.runs);
   } else {
     run_len = gsl::narrow<DWORD>(overrides.raw_runs.size());
     std::memcpy(&record.at(offset + run_offset), overrides.raw_runs.data(),
@@ -133,7 +129,10 @@ FakeRecord
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(record, offset, permission);
   offset += WriteNonResidentAttr(record, offset, Attr::Type::Data,
-                                 comp_unit_size, real_size, runs, overrides);
+                                 {.comp_unit_size = comp_unit_size,
+                                  .real_size = real_size,
+                                  .runs = runs,
+                                  .overrides = overrides});
 
   WriteEndOfAttributesMarker(record, offset);
   return record;
@@ -228,9 +227,8 @@ DWORD WriteIndexRootAttr(FakeRecord& record, DWORD offset,
 // fixtures target an attribute FuzzOnce() actually ReadData()s, unlike plain
 // $DATA.
 FakeRecord MakeIndexAllocationDirRecord(
-    NtfsBrowser::Data::StdInfoPermission permission, WORD comp_unit_size,
-    ULONGLONG real_size, const std::vector<FakeDataRun>& runs,
-    const FakeNonResidentOverrides& overrides,
+    NtfsBrowser::Data::StdInfoPermission permission,
+    const FakeNonResidentAttr& index_alloc,
     std::span<const FakeIndexName> root_names) {
   FakeRecord record = MakeRecordHeader(
       attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
@@ -241,7 +239,7 @@ FakeRecord MakeIndexAllocationDirRecord(
 
   offset += WriteIndexRootAttr(record, offset, root_names);
   offset += WriteNonResidentAttr(record, offset, Attr::Type::IndexAllocation,
-                                 comp_unit_size, real_size, runs, overrides);
+                                 index_alloc);
 
   WriteEndOfAttributesMarker(record, offset);
   return record;

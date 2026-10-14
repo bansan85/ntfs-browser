@@ -469,12 +469,18 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord() {
                                     NtfsBrowser::Data::FileRecordFlag::InUse);
   SetRecordLink(ext, 0, static_cast<ULONGLONG>(Mft::Idx::Mft));
   DWORD ext_offset = attr_offset_value;
-  ext_offset += WriteNonResidentAttr(ext, ext_offset, Attr::Type::Data, 0,
-                                     fake_file_record_size, first_runs,
-                                     {.start_vcn = mft_two_extents_first_vcn});
-  ext_offset += WriteNonResidentAttr(ext, ext_offset, Attr::Type::Data, 0,
-                                     fake_file_record_size, second_runs,
-                                     {.start_vcn = mft_two_extents_second_vcn});
+  ext_offset += WriteNonResidentAttr(
+      ext, ext_offset, Attr::Type::Data,
+      {.comp_unit_size = 0,
+       .real_size = fake_file_record_size,
+       .runs = first_runs,
+       .overrides = {.start_vcn = mft_two_extents_first_vcn}});
+  ext_offset += WriteNonResidentAttr(
+      ext, ext_offset, Attr::Type::Data,
+      {.comp_unit_size = 0,
+       .real_size = fake_file_record_size,
+       .runs = second_runs,
+       .overrides = {.start_vcn = mft_two_extents_second_vcn}});
   WriteEndOfAttributesMarker(ext, ext_offset);
   PutMftRecord(image, mft_addr, mft_two_extents_ext_idx, ext);
 

@@ -202,13 +202,23 @@ struct FakeNonResidentOverrides {
   std::vector<BYTE> raw_runs;
 };
 
-// Writes one non-resident attribute at record[offset] and returns its
-// declared total_size. compUnitSize == 0 is ordinary; non-zero adds the
-// trailing 8-byte CompressedSize field.
+// Layout of one non-resident attribute, without its type.
+struct FakeNonResidentAttr {
+  // Compression unit shift the header declares. Zero is an ordinary attribute.
+  WORD comp_unit_size = 0;
+  // Size of the stream the attribute holds, in bytes.
+  ULONGLONG real_size = 0;
+  // Clusters the attribute maps, sparse holes included.
+  std::vector<FakeDataRun> runs;
+  // Malformed header fields a well-formed builder never derives.
+  FakeNonResidentOverrides overrides;
+};
+
+// Writes one non-resident attribute of type at record[offset] and returns its
+// declared total_size. A non-zero comp_unit_size adds the trailing 8-byte
+// CompressedSize field.
 DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
-                           WORD comp_unit_size, ULONGLONG real_size,
-                           const std::vector<FakeDataRun>& runs,
-                           const FakeNonResidentOverrides& overrides = {});
+                           const FakeNonResidentAttr& attr);
 
 // File record (root, #5): resident $STANDARD_INFORMATION("permission") plus
 // one non-resident $DATA attribute described by compUnitSize/realSize/runs.
@@ -237,13 +247,12 @@ DWORD WriteIndexRootAttr(FakeRecord& record, DWORD offset,
 
 // Directory record (root, #5): resident $STANDARD_INFORMATION("permission"),
 // a resident $INDEX_ROOT holding "rootNames" as leaf entries followed by a
-// nameless SUBNODE-only entry, and a non-resident $INDEX_ALLOCATION - lets
-// fixtures target an attribute FuzzOnce() actually ReadData()s, unlike plain
-// $DATA.
+// nameless SUBNODE-only entry, and a non-resident $INDEX_ALLOCATION described
+// by index_alloc - lets fixtures target an attribute FuzzOnce() actually
+// ReadData()s, unlike plain $DATA.
 FakeRecord MakeIndexAllocationDirRecord(
-    NtfsBrowser::Data::StdInfoPermission permission, WORD comp_unit_size,
-    ULONGLONG real_size, const std::vector<FakeDataRun>& runs,
-    const FakeNonResidentOverrides& overrides = {},
+    NtfsBrowser::Data::StdInfoPermission permission,
+    const FakeNonResidentAttr& index_alloc,
     std::span<const FakeIndexName> root_names = {});
 
 // Lays "clusterBytes" down over the real runs of "runs", in run order, growing

@@ -53,9 +53,14 @@ std::vector<BYTE>
     if (stream.flagged_compressed) {
       flags |= NtfsBrowser::Attr::flag_compressed;
     }
-    offset += WriteNonResidentAttr(
-        record, offset, Attr::Type::Data, 0, stream.real_size, stream.runs,
-        {.name = stream.name, .flags = flags, .ini_size = stream.ini_size});
+    offset +=
+        WriteNonResidentAttr(record, offset, Attr::Type::Data,
+                             {.comp_unit_size = 0,
+                              .real_size = stream.real_size,
+                              .runs = stream.runs,
+                              .overrides = {.name = stream.name,
+                                            .flags = flags,
+                                            .ini_size = stream.ini_size}});
   }
 
   std::vector<FakeDataRun> efs_runs;
@@ -75,9 +80,12 @@ std::vector<BYTE>
           {fake_efs_stream_lcn,
            gsl::narrow<DWORD>((file.efs_stream.size() + cluster_size - 1) /
                               cluster_size)});
-      offset += WriteNonResidentAttr(
-          record, offset, Attr::Type::LoggedUtilityStream, 0,
-          file.efs_stream.size(), efs_runs, {.name = L"$EFS"});
+      offset +=
+          WriteNonResidentAttr(record, offset, Attr::Type::LoggedUtilityStream,
+                               {.comp_unit_size = 0,
+                                .real_size = file.efs_stream.size(),
+                                .runs = efs_runs,
+                                .overrides = {.name = L"$EFS"}});
     }
   }
   if (file.trailing_undersized_attribute) {
@@ -159,7 +167,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithEncryptedDirectory() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Encrypted,
-      0, fake_file_record_size, runs, {}, root_names);
+      {.comp_unit_size = 0, .real_size = fake_file_record_size, .runs = runs},
+      root_names);
 
   return BuildCompressionImage(record, runs,
                                MakeIndexBlockContent(block_names));
@@ -180,7 +189,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithCompressedEncryptedDirectory() {
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed |
           NtfsBrowser::Data::StdInfoPermission::Encrypted,
-      compression_unit_size_shift, fake_file_record_size, runs, {}, root_names);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs},
+      root_names);
 
   return BuildCompressionImage(
       record, runs,

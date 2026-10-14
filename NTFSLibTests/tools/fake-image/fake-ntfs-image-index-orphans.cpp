@@ -481,11 +481,31 @@ FakeRecord MakeDirectoryWithIndexAllocation(
   return record;
 }
 
-// Writes an index block of blockSize bytes at byte offset blockOffset, holding
-// one real leaf entry named "name", filed under parentRef.
-void WriteIndexLeafBlockAt(std::vector<BYTE>& image, size_t block_offset,
-                           DWORD block_size, ULONGLONG vcn, ULONGLONG mft_ref,
-                           ULONGLONG parent_ref, std::wstring_view name) {
+// Where an index block WriteIndexLeafBlockAt() writes sits, and what it holds.
+struct FakeIndexLeafBlock {
+  // Byte offset of the block in the image.
+  size_t offset;
+  // Size of the block in bytes.
+  DWORD size;
+  // VCN the block header declares.
+  ULONGLONG vcn;
+  // MFT record the block's single leaf entry points to.
+  ULONGLONG mft_ref;
+  // Parent directory reference that entry carries.
+  ULONGLONG parent_ref;
+  // Name of that entry.
+  std::wstring_view name;
+};
+
+// Writes an index block holding one real leaf entry, as spec describes.
+void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
+                           const FakeIndexLeafBlock& spec) {
+  const size_t block_offset = spec.offset;
+  const DWORD block_size = spec.size;
+  const ULONGLONG vcn = spec.vcn;
+  const ULONGLONG mft_ref = spec.mft_ref;
+  const ULONGLONG parent_ref = spec.parent_ref;
+  const std::wstring_view name = spec.name;
   const std::span<BYTE> block_start =
       std::span<BYTE>(image).subspan(block_offset);
   auto& block =
@@ -733,10 +753,13 @@ std::vector<BYTE> BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks() {
   const ULONGLONG root_ref = MakeFileReference(
       static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
   for (size_t i = 0; i < sub_cluster_block_names.size(); i++) {
-    WriteIndexLeafBlockAt(image, blocks_offset + i * index_block_size,
-                          index_block_size, i,
-                          sub_cluster_block_record_base + i, root_ref,
-                          sub_cluster_block_names.at(i));
+    WriteIndexLeafBlockAt(image,
+                          {.offset = blocks_offset + i * index_block_size,
+                           .size = index_block_size,
+                           .vcn = i,
+                           .mft_ref = sub_cluster_block_record_base + i,
+                           .parent_ref = root_ref,
+                           .name = sub_cluster_block_names.at(i)});
   }
 
   return image;
@@ -780,9 +803,12 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitIndexAllocation() {
     const size_t lcn = (i < split_extent_clusters)
                            ? first_lcn + i
                            : second_lcn + (i - split_extent_clusters);
-    WriteIndexLeafBlockAt(image, lcn * cluster_size, cluster_size, i,
-                          split_block_record_base + i, root_ref,
-                          split_block_names.at(i));
+    WriteIndexLeafBlockAt(image, {.offset = lcn * cluster_size,
+                                  .size = cluster_size,
+                                  .vcn = i,
+                                  .mft_ref = split_block_record_base + i,
+                                  .parent_ref = root_ref,
+                                  .name = split_block_names.at(i)});
   }
 
   return image;

@@ -37,7 +37,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithCompressedIndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   return BuildCompressionImage(
       record, runs,
@@ -51,7 +53,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithCorruptCompressedIndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   return BuildCompressionImage(record, runs, MakeCorruptLznt1Chunk());
 }
@@ -69,7 +73,9 @@ std::vector<BYTE>
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      comp_unit_size_out_of_range_shift, fake_file_record_size, runs);
+      {.comp_unit_size = comp_unit_size_out_of_range_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   return BuildCompressionImage(
       record, runs,
@@ -84,7 +90,9 @@ std::vector<BYTE>
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      oversized_comp_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = oversized_comp_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   return BuildCompressionImage(
       record, runs,
@@ -98,8 +106,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithMisalignedStartVcnIndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs,
-      {.start_vcn = misaligned_compressed_start_vcn});
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs,
+       .overrides = {.start_vcn = misaligned_compressed_start_vcn}});
 
   return BuildCompressionImage(
       record, runs,
@@ -113,8 +123,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithMissingCompressedSizeIndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs,
-      {.total_size = compressed_attr_truncated_total_size});
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs,
+       .overrides = {.total_size = compressed_attr_truncated_total_size}});
 
   return BuildCompressionImage(
       record, runs,
@@ -132,8 +144,10 @@ std::vector<BYTE>
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs,
-      {.last_vcn = 2});
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs,
+       .overrides = {.last_vcn = 2}});
 
   return BuildCompressionImage(
       record, runs, CompressionFixturePattern(compression_unit_size));
@@ -150,7 +164,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithRealClustersAfterHoleIndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, compression_unit_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = compression_unit_size,
+       .runs = runs});
 
   // Content is irrelevant - the layout is rejected before anything is
   // decompressed - but real LZNT1-looking bytes keep the fixture honest
@@ -170,7 +186,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnitIndexAllocation() {
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed |
           NtfsBrowser::Data::StdInfoPermission::Sparse,
-      compression_unit_size_shift, compression_unit_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = compression_unit_size,
+       .runs = runs});
 
   return BuildCompressionImage(record, runs, {});
 }
@@ -182,7 +200,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnitIndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, compression_unit_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = compression_unit_size,
+       .runs = runs});
 
   return BuildCompressionImage(
       record, runs,
@@ -203,7 +223,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithLznt1InvalidSignatureIndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   // Chunk header 0x1002: bit 15 clear (not the end-of-buffer 0x0000 marker),
   // bits 14-12 == 1 != the mandatory signature 3.
@@ -219,7 +241,9 @@ std::vector<BYTE>
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   // Chunk header 0xBFFF: valid, declares a 4096-byte payload - far more than
   // the ~1022 bytes actually available in the one real cluster.
@@ -235,7 +259,9 @@ std::vector<BYTE>
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   // Chunk 1 decompresses to just short of the 4096-byte unit; chunk 2
   // (uncompressed, declared payload 10) has too little dest buffer left.
@@ -251,7 +277,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithLznt1ChunkOver4096IndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   // Output reaches exactly 4096 bytes, then one more trailing byte forces a
   // 3rd data element whose own bounds check must reject it.
@@ -268,7 +296,9 @@ std::vector<BYTE>
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   // Chunk 1 fills the dest buffer to exactly 4096 bytes; chunk 2's first
   // element is a literal, rejected for writing past a buffer already full.
@@ -284,7 +314,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithLznt1TruncatedWordIndexAllocation() {
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fake_file_record_size, runs);
+      {.comp_unit_size = compression_unit_size_shift,
+       .real_size = fake_file_record_size,
+       .runs = runs});
 
   // Chunk header 0xB001 (payload 2): a flag byte (0x01 - a compressed word)
   // followed by only ONE more byte, not the two a compressed word needs.
@@ -302,7 +334,7 @@ std::vector<BYTE>
   const FakeRecord record = MakeIndexAllocationDirRecord(
       NtfsBrowser::Data::StdInfoPermission::Archive |
           NtfsBrowser::Data::StdInfoPermission::Compressed,
-      1, fake_file_record_size, runs);
+      {.comp_unit_size = 1, .real_size = fake_file_record_size, .runs = runs});
 
   // Back-reference (length 2048) fits the per-chunk cap but exceeds this
   // unit's own 2048-byte dest buffer.

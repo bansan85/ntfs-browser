@@ -284,19 +284,28 @@ constexpr DWORD lifetime_ext_data_lcn = 51;
 
 constexpr DWORD lifetime_list_lcn = 52;
 
-// Writes one nameless $ATTRIBUTE_LIST entry at dest: type, the record it
-// points to (with the sequence number it claims for it), and the record_size
-// to declare (0 is the forged value).
-void WriteListEntry(BYTE* dest, Attr::Type type, ULONGLONG record,
-                    WORD record_size, WORD sequence = 0) {
+// One nameless $ATTRIBUTE_LIST entry, as WriteListEntry() writes it.
+struct FakeListEntry {
+  // Attribute type the entry names.
+  Attr::Type type;
+  // Record the entry points to.
+  ULONGLONG record;
+  // record_size to declare. Zero is the forged value.
+  WORD record_size;
+  // Sequence number the entry claims for record.
+  WORD sequence = 0;
+};
+
+// Writes one nameless $ATTRIBUTE_LIST entry at dest.
+void WriteListEntry(BYTE* dest, const FakeListEntry& spec) {
   auto& entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(dest);
-  entry.attr_type = type;
-  entry.record_size = record_size;
+  entry.attr_type = spec.type;
+  entry.record_size = spec.record_size;
   entry.name_length = 0;
   entry.name_offset = 0;
   entry.start_vcn = 0;
-  entry.base_ref.segment_number = record;
-  entry.base_ref.sequence_number = sequence;
+  entry.base_ref.segment_number = spec.record;
+  entry.base_ref.sequence_number = spec.sequence;
   entry.attr_id = 0;
 }
 
@@ -322,9 +331,11 @@ DWORD WriteLifetimeResidentList(FakeRecord& record, DWORD offset,
   for (size_t i = 0; i < entry_count; i++) {
     WriteListEntry(
         &record.at(offset + attr.attr_offset + (i * list_entry_size)),
-        Attr::Type::Data, attr_list_lifetime_ext_idx,
-        zero_size_index == i ? static_cast<WORD>(0) : list_entry_size,
-        entry_sequence);
+        {.type = Attr::Type::Data,
+         .record = attr_list_lifetime_ext_idx,
+         .record_size =
+             (zero_size_index == i) ? static_cast<WORD>(0) : list_entry_size,
+         .sequence = entry_sequence});
   }
   return attr.header.total_size;
 }
@@ -382,11 +393,15 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitAttributeListAttribute() {
   DWORD offset = attr_offset_value;
   // VCN 0-0: empty.
   offset +=
-      WriteNonResidentAttr(base, offset, Attr::Type::AttributeList, 0, 0, {});
+      WriteNonResidentAttr(base, offset, Attr::Type::AttributeList,
+                           {.comp_unit_size = 0, .real_size = 0, .runs = {}});
   // VCN 1-1: one entry, stored in its own cluster.
   const std::vector<FakeDataRun> runs{{lifetime_list_lcn, 1}};
-  offset += WriteNonResidentAttr(base, offset, Attr::Type::AttributeList, 0,
-                                 list_entry_size, runs, {.start_vcn = 1});
+  offset += WriteNonResidentAttr(base, offset, Attr::Type::AttributeList,
+                                 {.comp_unit_size = 0,
+                                  .real_size = list_entry_size,
+                                  .runs = runs,
+                                  .overrides = {.start_vcn = 1}});
   WriteEndOfAttributesMarker(base, offset);
 
   PutMftRecord(image, mft_addr, attr_list_lifetime_base_idx, base);
@@ -394,8 +409,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitAttributeListAttribute() {
                MakeLifetimeResidentDataExtensionRecord());
 
   std::vector<BYTE> entry(list_entry_size, 0);
-  WriteListEntry(entry.data(), Attr::Type::Data, attr_list_lifetime_ext_idx,
-                 list_entry_size);
+  WriteListEntry(entry.data(), {.type = Attr::Type::Data,
+                                .record = attr_list_lifetime_ext_idx,
+                                .record_size = list_entry_size});
   LayRunBytes(image, runs, entry);
   return image;
 }
@@ -412,16 +428,20 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitDataAndTrailingDefect(
                                      NtfsBrowser::Data::FileRecordFlag::InUse);
   DWORD offset = attr_offset_value;
   offset += WriteLifetimeResidentList(base, offset, 1);
-  offset += WriteNonResidentAttr(base, offset, Attr::Type::Data, 0,
-                                 cluster_size, base_runs);
+  offset += WriteNonResidentAttr(
+      base, offset, Attr::Type::Data,
+      {.comp_unit_size = 0, .real_size = cluster_size, .runs = base_runs});
   WriteTrailingDefect(base, offset, defect);
 
   FakeRecord ext = MakeRecordHeader(attr_offset_value,
                                     NtfsBrowser::Data::FileRecordFlag::InUse);
   SetRecordLink(ext, 0, attr_list_lifetime_base_idx);
   DWORD ext_offset = attr_offset_value;
-  ext_offset += WriteNonResidentAttr(ext, ext_offset, Attr::Type::Data, 0, 0,
-                                     ext_runs, {.start_vcn = 1});
+  ext_offset += WriteNonResidentAttr(ext, ext_offset, Attr::Type::Data,
+                                     {.comp_unit_size = 0,
+                                      .real_size = 0,
+                                      .runs = ext_runs,
+                                      .overrides = {.start_vcn = 1}});
   WriteEndOfAttributesMarker(ext, ext_offset);
 
   PutMftRecord(image, mft_addr, attr_list_lifetime_base_idx, base);
@@ -477,8 +497,10 @@ std::vector<BYTE> BuildImageWithRawRuns(FakeRunHost host,
       (host == FakeRunHost::Data)
           ? MakeNonResidentDataRecord(permission, 0, real_size, placeholder,
                                       overrides)
-          : MakeIndexAllocationDirRecord(permission, 0, real_size, placeholder,
-                                         overrides);
+          : MakeIndexAllocationDirRecord(permission, {.comp_unit_size = 0,
+                                                      .real_size = real_size,
+                                                      .runs = placeholder,
+                                                      .overrides = overrides});
   return BuildCompressionImage(record, {}, {});
 }
 
