@@ -32,8 +32,12 @@ if(WIN32)
   )
   target_link_libraries(NtfsBrowserTests PRIVATE NtfsUndelCore)
 
-  # NtfsDump's dump logic (examples/ntfsdump/ntfsdump-core.h) is Windows-only,
-  # like its dialog, and links the same way.
-  target_sources(NtfsBrowserTests PRIVATE "ntfsdump-core-tests.cpp")
-  target_link_libraries(NtfsBrowserTests PRIVATE NtfsDumpCore)
+  # NtfsDump's and NtfsAttr's dump logic (examples/ntfsdump/ntfsdump-core.h,
+  # examples/ntfsattr/ntfsattr-core.h) are Windows-only, like their dialogs,
+  # and link the same way.
+  target_sources(
+    NtfsBrowserTests
+    PRIVATE "ntfsdump-core-tests.cpp" "ntfsattr-core-tests.cpp"
+  )
+  target_link_libraries(NtfsBrowserTests PRIVATE NtfsDumpCore NtfsAttrCore)
 endif()

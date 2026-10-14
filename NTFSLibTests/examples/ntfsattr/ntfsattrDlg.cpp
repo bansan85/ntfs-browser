@@ -3,17 +3,9 @@
 
 #include "StdAfx.h"
 
-#include <array>
-#include <string_view>
-
-#include <gsl/narrow>
-
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "ntfsattr-core.h"
 #include "ntfsattr.h"
 #include "ntfsattrDlg.h"
 
@@ -136,102 +128,6 @@ HCURSOR CNtfsattrDlg::OnQueryDragIcon() {
   return static_cast<HCURSOR>(m_hIcon);
 }
 
-// One name per attribute type: 0x10 (STANDARD_INFORMATION) to 0x100
-// (LOGGED_UTILITY_STREAM), in steps of 0x10.
-constexpr size_t kAttrNameCount = 16;
-
-const std::array<const _TCHAR*, kAttrNameCount> AttrNames = {
-    _T("STANDARD_INFORMATION"),
-    _T("ATTRIBUTE_LIST"),
-    _T("FILE_NAME"),
-    _T("OBJECT_ID"),
-    _T("SECURITY_DESCRIPTOR"),
-    _T("VOLUME_NAME"),
-    _T("VOLUME_INFORMATION"),
-    _T("DATA"),
-    _T("INDEX_ROOT"),
-    _T("INDEX_ALLOCATION"),
-    _T("BITMAP"),
-    _T("REPARSE_POINT"),
-    _T("EA_INFORMATION"),
-    _T("EA"),
-    _T("NULL"),
-    _T("LOGGED_UTILITY_STREAM")};
-
-// ugly but work !
-void AppendData(CString& lines, const BYTE* data, DWORD datalen) {
-  // "01 02 03 04 05 06 07 08 - 09 0A 0B 0C 0D 0E 0F   123456789ABCDEF";
-
-  CString line;
-  DWORD i;
-
-  std::array<BYTE, 16> p;
-  for (i = 0; i < ((datalen - 1U) >> 4); i++) {
-    memcpy(p.data(), data + static_cast<size_t>(i) * 16, 16);
-
-    line.Format(
-        _T("%02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X %02X ")
-        _T("%02X %02X %02X %02X   "),
-        p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10],
-        p[11], p[12], p[13], p[14], p[15]);
-    for (int j = 0; j < 16; j++) {
-      if (p[j] < 0x20) {
-        p[j] = '.';
-      }
-    }
-    line.AppendFormat(_T("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), p[0], p[1],
-                      p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10],
-                      p[11], p[12], p[13], p[14], p[15]);
-
-    lines += line;
-  }
-
-  // last line
-  memcpy(p.data(), data + static_cast<size_t>(i) * 16, datalen - i * 16);
-  BYTE q[16];
-  memset(&q[0], 0xFF, 16);
-  memcpy(&q[0], p.data(), datalen - i * 16);
-  line.Format(
-      _T("%02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X %02X ")
-      _T("%02X %02X %02X %02X   "),
-      q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11],
-      q[12], q[13], q[14], q[15]);
-
-  for (int j = 0; j < 16; j++) {
-    if (q[j] < 0x20) {
-      q[j] = '.';
-    }
-  }
-
-  line.AppendFormat(_T("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), q[0], q[1],
-                    q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10],
-                    q[11], q[12], q[13], q[14], q[15]);
-
-  lines += line;
-}
-
-template <Cache::Strategy S>
-void PrintAttr(const NtfsBrowser::Attr::AttrBase<S>& attr, void* context,
-               bool* /* stop*/) {
-  CString* dump = static_cast<CString*>(context);
-
-  CString line = _T("\r\n");
-  line += AttrNames[(static_cast<DWORD>(attr.GetAttrType()) >> 4U) - 1];
-
-  std::wstring_view attrname = attr.GetAttrName();
-  if (!attrname.empty()) {
-    line += '(';
-    line += CString(attrname.data(), gsl::narrow<int>(attrname.size()));
-    line += ')';
-  }
-  line += _T("\r\n");
-
-  AppendData(line, reinterpret_cast<const BYTE*>(&attr.GetAttrHeader()),
-             attr.GetAttrTotalSize());
-
-  *dump += line;
-}
-
 void CNtfsattrDlg::OnOK() {
   CFileDialog fd(TRUE);
 
@@ -240,97 +136,23 @@ void CNtfsattrDlg::OnOK() {
   }
 
   UpdateData(TRUE);
-  m_filename = fd.GetPathName();
-  if (m_dir == TRUE) {
-    m_filename = m_filename.Left(m_filename.ReverseFind(_T('\\')));
-  }
+  m_filename =
+      NtfsAttrDump::TargetPath(fd.GetPathName().GetString(), m_dir == TRUE)
+          .c_str();
   UpdateData(FALSE);
 
   m_dump.Empty();
 
-  // parse volume
-
-  const _TCHAR volname = m_filename.GetAt(0);
-
-  NtfsVolume<Cache::Strategy::FullCache> volume(volname);
-  if (!volume.IsVolumeOK()) {
-    MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
+  // The drive letter of the path names the volume to open.
+  NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::FullCache> volume(
+      m_filename.GetAt(0));
+  const NtfsAttrDump::DumpResult result =
+      NtfsAttrDump::DumpAttributes(volume, m_filename.GetString());
+  if (!result.message.empty()) {
+    MessageBox(result.message.c_str());
     return;
   }
 
-  // parse root directory
-
-  NtfsBrowser::Io::FileRecord fr(volume);
-  // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
-  // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
-    MessageBox(_T("Cannot read root directory of volume"));
-    return;
-  }
-
-  if (!fr.ParseAttrs()) {
-    MessageBox(_T("Cannot parse attributes"));
-    return;
-  }
-
-  // find subdirectory
-
-  int dirs = m_filename.Find(_T('\\'), 0);
-  int dire = m_filename.Find(_T('\\'), dirs + 1);
-  while (dire != -1) {
-    CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
-
-    std::optional<IndexEntry> ie =
-        fr.FindSubEntry(static_cast<const _TCHAR*>(pathname));
-    if (!ie) {
-      MessageBox(_T("File not found\n"));
-      return;
-    }
-
-    if (!fr.ParseFileRecord(ie->GetFileReference())) {
-      MessageBox(_T("Cannot read root directory of volume"));
-      return;
-    }
-
-    if (!fr.ParseAttrs()) {
-      MessageBox(_T("Cannot parse directory attributes"));
-      return;
-    }
-
-    dirs = dire;
-    dire = m_filename.Find(_T('\\'), dirs + 1);
-  }
-
-  // dump it !
-
-  CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
-
-  // root directory
-  if (filename.GetLength() == 2 && (filename.Find(_T(':'), 0) != -1)) {
-    filename = _T('.');
-  }
-
-  std::optional<IndexEntry> ie =
-      fr.FindSubEntry(static_cast<const _TCHAR*>(filename));
-  if (!ie) {
-    MessageBox(_T("File not found\n"));
-    return;
-  }
-
-  if (!fr.ParseFileRecord(ie->GetFileReference())) {
-    MessageBox(_T("Cannot read file"));
-    return;
-  }
-
-  // parse all attributes
-  fr.SetAttrMask(Attr::Mask::All);
-  if (!fr.ParseAttrs()) {
-    MessageBox(_T("Cannot parse file attributes"));
-    return;
-  }
-
-  fr.TraverseAttrs(PrintAttr<Cache::Strategy::FullCache>, &m_dump);
+  m_dump = result.dump.c_str();
   UpdateData(FALSE);
 }

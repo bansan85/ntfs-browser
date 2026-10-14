@@ -1,3 +1,9 @@
+# The attribute dump logic, with no MFC in it, so the unit tests can link it
+# too (unit-tests/io/ntfsattr-core-tests.cpp).
+add_library(NtfsAttrCore STATIC "ntfsattr-core.cpp")
+target_include_directories(NtfsAttrCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(NtfsAttrCore PUBLIC ${PROJECT_NAME})
+
 add_executable(
   NtfsAttr
   WIN32
@@ -9,7 +15,7 @@ add_executable(
   "${CMAKE_CURRENT_SOURCE_DIR}/res/ntfsattr.rc2"
 )
 target_compile_definitions(NtfsAttr PRIVATE _AFXDLL)
-target_link_libraries(NtfsAttr PRIVATE ${PROJECT_NAME})
+target_link_libraries(NtfsAttr PRIVATE ${PROJECT_NAME} NtfsAttrCore)
 set_target_properties(NtfsAttr PROPERTIES WIN32_EXECUTABLE 1)
 target_link_options(NtfsAttr PRIVATE "/entry:wWinMainCRTStartup")
 if(WIN32 AND BUILD_SHARED_LIBS)
