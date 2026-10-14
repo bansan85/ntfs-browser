@@ -3,12 +3,12 @@
 #include <array>
 #include <atomic>
 #include <memory>
-#include <vector>
+#include <optional>
+#include <span>
+#include <type_traits>
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "ntfsundel-core.h"
@@ -122,6 +122,63 @@ bool PeekAndPump() {
   return true;
 }
 
+namespace {
+
+using HandlePtr = std::unique_ptr<std::remove_pointer<HANDLE>::type,
+                                  decltype(&::CloseHandle)>;
+
+// Creates the file a recovery writes into, replacing any older one.
+HandlePtr CreateOutputFile(const CString& path) {
+  return HandlePtr(CreateFile(static_cast<const _TCHAR*>(path),
+                              GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
+                   &CloseHandle);
+}
+
+// Writes all of chunk. A failed or partial write is not a success.
+bool WriteChunk(HANDLE file, std::span<const BYTE> chunk) {
+  DWORD written = 0;
+  return WriteFile(file, chunk.data(), gsl::narrow<DWORD>(chunk.size()),
+                   &written, nullptr) != FALSE &&
+         written == chunk.size();
+}
+
+}  // namespace
+
+// Enables or disables the controls that a running search must lock.
+void CNtfsundelDlg::SetSearching(bool searching) {
+  SetWindowText(searching ? _T("ntfsundel - Searching ...") : _T("ntfsundel"));
+  GetDlgItem(IDB_SEARCH)->SetWindowText(searching ? _T("Stop") : _T("Search"));
+  GetDlgItem(IDB_RECOVER)->EnableWindow(!searching);
+  GetDlgItem(IDC_DRIVER)->EnableWindow(!searching);
+  GetDlgItem(IDE_FILTER)->EnableWindow(!searching);
+}
+
+// Drive letter of the selected drive, or NUL when none is selected.
+_TCHAR CNtfsundelDlg::SelectedDriveLetter() {
+  CString vns;
+  const int sel = m_driver.GetCurSel();
+  if (sel >= 0) {
+    m_driver.GetLBText(sel, vns);
+  }
+  return vns.IsEmpty() ? _T('\0') : vns.GetAt(0);
+}
+
+// Reference and name of the first selected row. False when no row is
+// selected.
+bool CNtfsundelDlg::SelectedFile(ULONGLONG& ref, CString& name) {
+  POSITION pos = m_files.GetFirstSelectedItemPosition();
+  if (pos == nullptr) {
+    return false;
+  }
+
+  const int itm = m_files.GetNextSelectedItem(pos);
+  const CString refs = m_files.GetItemText(itm, 0);
+  ref = _ttoi64(static_cast<const _TCHAR*>(refs));
+  name = m_files.GetItemText(itm, 1);
+  return true;
+}
+
 void CNtfsundelDlg::OnSearch() {
   // Give user a chance to stop the searching loop
   static std::atomic<bool> stop = false;
@@ -137,19 +194,12 @@ void CNtfsundelDlg::OnSearch() {
 
   UpdateData(TRUE);
 
-  // Volume information
-  CString vns;
-  const int sel = m_driver.GetCurSel();
-  if (sel >= 0) {
-    m_driver.GetLBText(sel, vns);
-  }
-  if (vns.IsEmpty()) {
+  const _TCHAR volname = SelectedDriveLetter();
+  if (volname == _T('\0')) {
     MessageBox(_T("Select a disk drive"));
     m_driver.SetFocus();
     return;
   }
-
-  const _TCHAR volname = vns.GetAt(0);
 
   // A deleted-file finder needs to see freed records: without this, every
   // one of them would be invisible from the moment it's parsed.
@@ -162,12 +212,7 @@ void CNtfsundelDlg::OnSearch() {
 
   TRACE1("%I64u File Records total\n", volume.GetRecordsCount());
 
-  // Begin searching
-  SetWindowText(_T("ntfsundel - Searching ..."));
-  GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Stop"));
-  GetDlgItem(IDB_RECOVER)->EnableWindow(FALSE);
-  GetDlgItem(IDC_DRIVER)->EnableWindow(FALSE);
-  GetDlgItem(IDE_FILTER)->EnableWindow(FALSE);
+  SetSearching(true);
 
   stop = FALSE;
   const NtfsUndel::SearchControl control{
@@ -178,60 +223,72 @@ void CNtfsundelDlg::OnSearch() {
       NtfsUndel::SearchDeletedFiles(volume, filter, control);
   if (!result) {
     MessageBox(_T("Invalid filter expression"));
-    GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Search"));
-    GetDlgItem(IDB_RECOVER)->EnableWindow(TRUE);
-    GetDlgItem(IDC_DRIVER)->EnableWindow(TRUE);
-    GetDlgItem(IDE_FILTER)->EnableWindow(TRUE);
-    SetWindowText(_T("ntfsundel"));
+    SetSearching(false);
     return;
   }
 
-  for (const NtfsUndel::DeletedFile& file : result->files) {
-    CString s;
-    s.Format(_T("%I64u"), file.reference);
-    const int itm = m_files.InsertItem(m_files.GetItemCount(), s);
-    m_files.SetItemText(itm, 1, file.full_path.c_str());
-    m_files.SetItemText(itm, 2,
-                        NtfsUndel::FormatWriteTime(file.write_time).c_str());
-  }
-  if (result->truncated) {
-    MessageBox(_T("Too many files found, only the first 50,000 will be shown"));
-  }
+  ShowSearchResults(*result);
 
   CString totals;
   totals.Format(_T("%lldus"), result->scan_us);
   MessageBox(totals);
 
-  GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Search"));
-  GetDlgItem(IDB_RECOVER)->EnableWindow(TRUE);
-  GetDlgItem(IDC_DRIVER)->EnableWindow(TRUE);
-  GetDlgItem(IDE_FILTER)->EnableWindow(TRUE);
-  SetWindowText(_T("ntfsundel"));
+  SetSearching(false);
+}
+
+// Lists the search result rows, and warns when the list was cut short.
+void CNtfsundelDlg::ShowSearchResults(const NtfsUndel::SearchResult& result) {
+  for (const NtfsUndel::DeletedFile& file : result.files) {
+    AddResultRow(file);
+  }
+  if (result.truncated) {
+    MessageBox(_T("Too many files found, only the first 50,000 will be shown"));
+  }
+}
+
+// Appends one row: reference, full path and write time.
+void CNtfsundelDlg::AddResultRow(const NtfsUndel::DeletedFile& file) {
+  CString reference;
+  reference.Format(_T("%I64u"), file.reference);
+  const int itm = m_files.InsertItem(m_files.GetItemCount(), reference);
+  m_files.SetItemText(itm, 1, file.full_path.c_str());
+  m_files.SetItemText(itm, 2,
+                      NtfsUndel::FormatWriteTime(file.write_time).c_str());
+}
+
+// Asks where to save the file. False when the user cancels, or keeps the
+// volume the file came from after the warning.
+bool CNtfsundelDlg::ChooseRecoveryPath(const CString& name, _TCHAR volname,
+                                       CString& path) {
+  // Save as
+  CFileDialog savedlg(FALSE, nullptr, static_cast<const _TCHAR*>(name));
+  if (savedlg.DoModal() != IDOK) {
+    return false;
+  }
+
+  path = savedlg.GetPathName();
+  return !(
+      (path.GetAt(0) == volname) &&
+      (MessageBox(_T("You should choose a different drive, do you want to ")
+                  _T("continue anyway ?"),
+                  nullptr, MB_OKCANCEL) == IDCANCEL));
 }
 
 void CNtfsundelDlg::OnRecover() {
-  POSITION pos = m_files.GetFirstSelectedItemPosition();
-  if (pos == nullptr) {
+  ULONGLONG ref = 0;
+  CString fn;
+  if (!SelectedFile(ref, fn)) {
     return;
   }
 
-  const int itm = m_files.GetNextSelectedItem(pos);
-
-  CString refs = m_files.GetItemText(itm, 0);
-  ULONGLONG ref = _ttoi64(static_cast<const _TCHAR*>(refs));
-
-  CString fn = m_files.GetItemText(itm, 1);
-
-  CString vns;
-  m_driver.GetLBText(m_driver.GetCurSel(), vns);
-
-  const _TCHAR volname = vns.GetAt(0);
+  const _TCHAR volname = SelectedDriveLetter();
 
   // The selected file came from OnSearch()'s deleted-inclusive listing: it
   // must still be visible here, or recovery could never find its record.
   NtfsVolume<Cache::Strategy::NoCache> volume(volname,
                                               {.include_deleted = true});
-  NtfsUndel::OpenedRecord opened = NtfsUndel::OpenDeletedFile(volume, ref);
+  const NtfsUndel::OpenedRecord opened =
+      NtfsUndel::OpenDeletedFile(volume, ref);
   if (opened.error == NtfsUndel::RecoverError::RecordParse) {
     MessageBox(_T("File Record parse error"));
     return;
@@ -241,27 +298,12 @@ void CNtfsundelDlg::OnRecover() {
     return;
   }
 
-  // Save as
-  CFileDialog savedlg(FALSE, nullptr, static_cast<const _TCHAR*>(fn));
-  if (savedlg.DoModal() != IDOK) {
+  CString path;
+  if (!ChooseRecoveryPath(fn, volname, path)) {
     return;
   }
 
-  CString path = savedlg.GetPathName();
-
-  if ((path.GetAt(0) == volname) &&
-      (MessageBox(_T("You should choose a different drive, do you want to ")
-                  _T("continue anyway ?"),
-                  nullptr, MB_OKCANCEL) == IDCANCEL)) {
-    return;
-  }
-
-  using HandlePtr = std::unique_ptr<std::remove_pointer<HANDLE>::type,
-                                    decltype(&::CloseHandle)>;
-  HandlePtr hf = HandlePtr(
-      CreateFile(static_cast<const _TCHAR*>(path), GENERIC_READ | GENERIC_WRITE,
-                 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
-      &CloseHandle);
+  HandlePtr hf = CreateOutputFile(path);
   if (hf.get() == INVALID_HANDLE_VALUE) {
     MessageBox(_T("File creation failed"));
     return;
@@ -276,13 +318,14 @@ void CNtfsundelDlg::OnRecover() {
                    nullptr, MB_OKCANCEL) != IDCANCEL;
       },
       [&hf](std::span<const BYTE> chunk) {
-        // A failed or partial write must not be reported as success.
-        DWORD written = 0;
-        return WriteFile(hf.get(), chunk.data(),
-                         gsl::narrow<DWORD>(chunk.size()), &written,
-                         nullptr) != FALSE &&
-               written == chunk.size();
+        return WriteChunk(hf.get(), chunk);
       });
+  ReportCopy(copied);
+}
+
+// Tells the user how a copy ended. A file with no data, or a declined large
+// file, ends without a message.
+void CNtfsundelDlg::ReportCopy(const NtfsUndel::CopyResult& copied) {
   switch (copied.error) {
     case NtfsUndel::RecoverError::NoDataStream:
     case NtfsUndel::RecoverError::Declined:

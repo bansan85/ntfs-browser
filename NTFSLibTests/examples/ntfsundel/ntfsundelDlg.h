@@ -14,6 +14,14 @@
 /////////////////////////////////////////////////////////////////////////////
 // CNtfsundelDlg dialog
 
+namespace NtfsUndel {
+
+struct CopyResult;
+struct DeletedFile;
+struct SearchResult;
+
+}  // namespace NtfsUndel
+
 class CNtfsundelDlg : public CDialog {
   // Construction
 
@@ -50,6 +58,15 @@ class CNtfsundelDlg : public CDialog {
   afx_msg void OnRecover();
   afx_msg void OnSelchangeDriver();
   //}}AFX_MSG
+
+  // Helpers for the search and recovery handlers above.
+  void SetSearching(bool searching);
+  _TCHAR SelectedDriveLetter();
+  bool SelectedFile(ULONGLONG& ref, CString& name);
+  void ShowSearchResults(const NtfsUndel::SearchResult& result);
+  void AddResultRow(const NtfsUndel::DeletedFile& file);
+  bool ChooseRecoveryPath(const CString& name, _TCHAR volname, CString& path);
+  void ReportCopy(const NtfsUndel::CopyResult& copied);
   DECLARE_MESSAGE_MAP()
 };
 

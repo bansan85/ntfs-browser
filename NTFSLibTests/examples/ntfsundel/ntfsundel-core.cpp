@@ -53,132 +53,176 @@ std::uint64_t ToTicks(const FILETIME& ft) {
          ft.dwLowDateTime;
 }
 
-}  // namespace
+// Record handle the search parses into, one per pass.
+using FullRecord = Io::FileRecord<Cache::Strategy::FullCache>;
 
-std::optional<SearchResult>
-    SearchDeletedFiles(NtfsVolume<Cache::Strategy::FullCache>& volume,
-                       std::wstring_view filter, const SearchControl& control) {
-  const std::wstring pattern = NormalizeFilter(filter);
-  std::wregex regx;
-  try {
-    regx = std::wregex(pattern);
-  } catch (const std::regex_error&) {
-    return std::nullopt;
+// Parent record number of every directory entry the scan saw, by child.
+using ParentMap = std::map<ULONGLONG, ULONGLONG>;
+
+// What the record pass collected for the listing pass.
+struct ScanResult {
+  ParentMap id_to_parent;
+  std::set<ULONGLONG> freed;
+};
+
+// Parses record ref with only the attributes in mask. False if either step
+// fails.
+bool ParseWithMask(FullRecord& fr, ULONGLONG ref, Attr::Mask mask) {
+  fr.SetAttrMask(mask);
+  return fr.ParseFileRecord(ref) && fr.ParseAttrs();
+}
+
+// True once the record pass has reached its record limit or a stop request.
+bool ScanMustEnd(const SearchControl& control, ULONGLONG record) {
+  return record == control.max_records ||
+         (control.stop_requested && control.stop_requested());
+}
+
+// True when the pass should pump messages now: on a record interval, and at
+// most once per kPumpTimeInterval. Records the pump time when it returns true.
+bool PumpDue(ULONGLONG record,
+             std::chrono::steady_clock::time_point& last_pump) {
+  if (record % kPumpRecordInterval != 0) {
+    return false;
   }
+  const auto now = std::chrono::steady_clock::now();
+  if (now - last_pump < kPumpTimeInterval) {
+    return false;
+  }
+  last_pump = now;
+  return true;
+}
 
-  SearchResult result;
-  const auto begin = std::chrono::steady_clock::now();
+// Records the parent of each entry fr's index lists, skipping its own
+// self entry.
+void RecordChildren(const FullRecord& fr, ParentMap& id_to_parent) {
+  fr.TraverseSubEntries(
+      [&fr, &id_to_parent](const IndexEntryView& ie, void* context) {
+        if (ie.GetFileReference() == *fr.GetFileReference()) {
+          return;
+        }
+        id_to_parent.insert({ie.GetFileReference(), *fr.GetFileReference()});
+      },
+      nullptr);
+}
+
+// Walks every record from the first user-visible one, and collects the
+// directory parents and the freed records.
+ScanResult ScanRecords(NtfsVolume<Cache::Strategy::FullCache>& volume,
+                       const SearchControl& control,
+                       std::chrono::steady_clock::time_point begin) {
+  ScanResult scan;
+  FullRecord fr(volume);
   auto last_pump = begin;
 
   // Only parse Standard Information and File Name attributes
   // StdInfo will always be parsed
-  Io::FileRecord fr(volume);
-
-  std::map<ULONGLONG, ULONGLONG> id_to_parent;
-  std::set<ULONGLONG> files;
+  const Attr::Mask scan_mask = Attr::Mask::FileName | Attr::Mask::IndexRoot |
+                               Attr::Mask::IndexAllocation;
 
   for (auto i = static_cast<ULONGLONG>(Mft::Idx::Mft);
        i < volume.GetRecordsCount(); i++) {
-    if (i == control.max_records) {
+    if (ScanMustEnd(control, i)) {
       break;
     }
-    if (control.stop_requested && control.stop_requested()) {
+    if (PumpDue(i, last_pump) && control.pump_messages &&
+        !control.pump_messages()) {
       break;
     }
-
-    if (i % kPumpRecordInterval == 0) {
-      const auto now = std::chrono::steady_clock::now();
-      if (now - last_pump >= kPumpTimeInterval) {
-        last_pump = now;
-        if (control.pump_messages && !control.pump_messages()) {
-          break;
-        }
-      }
-    }
-
-    fr.SetAttrMask(Attr::Mask::FileName | Attr::Mask::IndexRoot |
-                   Attr::Mask::IndexAllocation);
-    if (!fr.ParseFileRecord(i)) {
-      continue;
-    }
-    if (!fr.ParseAttrs()) {
-      continue;
-    }
-
-    // Check file name
-    const std::wstring_view fn = fr.GetFileName();
-    if (fn.empty()) {
+    if (!ParseWithMask(fr, i, scan_mask) || fr.GetFileName().empty()) {
       continue;
     }
 
     // Walked for id_to_parent, though not itself a candidate below.
     if (fr.IsDirectory()) {
-      fr.TraverseSubEntries(
-          [&fr, &id_to_parent](const IndexEntryView& ie, void* context) {
-            if (ie.GetFileReference() == *fr.GetFileReference()) {
-              return;
-            }
-            id_to_parent.insert(
-                {ie.GetFileReference(), *fr.GetFileReference()});
-          },
-          nullptr);
+      RecordChildren(fr, scan.id_to_parent);
     }
 
     // Only deleted records are candidates for recovery
     if (fr.IsDeleted()) {
-      files.insert(*fr.GetFileReference());
+      scan.freed.insert(*fr.GetFileReference());
     }
   }
+  return scan;
+}
 
+// Path of record ref: its name at the end, each directory the scan linked
+// above it before that. Stops at the first parent that does not parse.
+std::wstring BuildFullPath(FullRecord& fr, const ParentMap& id_to_parent,
+                           ULONGLONG ref, std::wstring name) {
+  auto id = id_to_parent.find(ref);
+  while (id != id_to_parent.end()) {
+    if (!ParseWithMask(fr, id->second, Attr::Mask::FileName)) {
+      break;
+    }
+    name = std::wstring{fr.GetFileName()} + L"\\" + name;
+    id = id_to_parent.find(id->second);
+  }
+  return name;
+}
+
+// The listing row of freed record ref, or nullopt when it does not parse or
+// its name does not match pattern.
+std::optional<DeletedFile> MatchDeleted(FullRecord& fr, ULONGLONG ref,
+                                        const std::wregex& pattern,
+                                        const ParentMap& id_to_parent) {
+  if (!ParseWithMask(fr, ref, Attr::Mask::FileName)) {
+    return std::nullopt;
+  }
+  const std::wstring name{fr.GetFileName()};
+  if (!std::regex_match(name, pattern)) {
+    return std::nullopt;
+  }
+
+  FILETIME ft{};
+  fr.GetFileTime(&ft, nullptr, nullptr);
+  return DeletedFile{.reference = ref,
+                     .name = name,
+                     .full_path = BuildFullPath(fr, id_to_parent, ref, name),
+                     .write_time = ToTicks(ft)};
+}
+
+// The filter as a regex, or nullopt when it does not compile.
+std::optional<std::wregex> CompileFilter(const std::wstring& pattern) {
+  try {
+    return std::wregex(pattern);
+  } catch (const std::regex_error&) {
+    return std::nullopt;
+  }
+}
+
+}  // namespace
+
+std::optional<SearchResult>
+    SearchDeletedFiles(NtfsVolume<Cache::Strategy::FullCache>& volume,
+                       std::wstring_view filter, const SearchControl& control) {
+  const std::optional<std::wregex> pattern =
+      CompileFilter(NormalizeFilter(filter));
+  if (!pattern) {
+    return std::nullopt;
+  }
+
+  SearchResult result;
+  const auto begin = std::chrono::steady_clock::now();
+  const ScanResult scan = ScanRecords(volume, control, begin);
   const auto end = std::chrono::steady_clock::now();
   result.scan_us =
       std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
           .count();
 
-  for (auto fri : files) {
-    fr.SetAttrMask(Attr::Mask::FileName);
-    if (!fr.ParseFileRecord(fri)) {
+  FullRecord fr(volume);
+  for (const ULONGLONG ref : scan.freed) {
+    std::optional<DeletedFile> match =
+        MatchDeleted(fr, ref, *pattern, scan.id_to_parent);
+    if (!match) {
       continue;
     }
-    if (!fr.ParseAttrs()) {
-      continue;
-    }
-    const std::wstring_view fn = fr.GetFileName();
-
-    const std::wstring sw = {fn.begin(), fn.end()};
-    if (!std::regex_match(sw, regx)) {
-      continue;
-    }
-
-    FILETIME ft{};
-    fr.GetFileTime(&ft, nullptr, nullptr);
-
-    // Full File name
-    std::wstring full_file_name = sw;
-    auto id = id_to_parent.find(fri);
-    while (id != id_to_parent.end()) {
-      fr.SetAttrMask(Attr::Mask::FileName);
-      if (!fr.ParseFileRecord(id->second)) {
-        break;
-      }
-      if (!fr.ParseAttrs()) {
-        break;
-      }
-      std::wstring fn2 = std::wstring{fr.GetFileName()};
-      full_file_name = fn2 + L"\\" + full_file_name;
-      id = id_to_parent.find(id->second);
-    }
-
-    result.files.push_back({.reference = fri,
-                            .name = sw,
-                            .full_path = full_file_name,
-                            .write_time = ToTicks(ft)});
+    result.files.push_back(*std::move(match));
     if (result.files.size() >= control.max_listed) {
       result.truncated = true;
       break;
     }
   }
-
   return result;
 }
 
