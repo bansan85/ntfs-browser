@@ -23,16 +23,13 @@ constexpr BYTE overlong_name_length = 200;
 // LCN for the forged index block, placed past every record's cluster range.
 constexpr DWORD forged_index_block_lcn = 20;
 
-// Builds a directory record whose $INDEX_ALLOCATION references a single
-// forged index block, reached through TraverseSubNode() without real
-// B+-tree comparisons.
-FakeRecord MakeIndexAllocDirRecord() {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+}  // namespace
 
-  DWORD offset = attr_offset_value;
-
+// Writes a resident $INDEX_ROOT at offset whose only entry is a sub-node
+// pointer, with index blocks of ib_size bytes spanning clusters_per_ib
+// clusters each. Returns the attribute's total_size.
+DWORD WriteSubNodeIndexRootAttr(FakeRecord& record, DWORD offset, DWORD ib_size,
+                                BYTE clusters_per_ib) {
   auto& root_attr =
       *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = Attr::Type::IndexRoot;
@@ -47,106 +44,8 @@ FakeRecord MakeIndexAllocDirRecord() {
   auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = Attr::Type::FileName;
   root.coll_rule = 0;
-  root.ib_size = forged_index_block_size;
-  root.clusters_per_ib =
-      static_cast<BYTE>(forged_index_block_size / cluster_size);
-  root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
-      reinterpret_cast<BYTE*>(&root.entry_offset));
-
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
-  first_entry.mft_index = 0;
-  first_entry.mft_sn = 0;
-  first_entry.stream_size = 0;
-  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode |
-                      NtfsBrowser::Data::IndexEntryFlag::Last;
-  // Size covers the header up to stream, plus the 8-byte subnode VCN.
-  first_entry.size = static_cast<WORD>(AlignAttrSize(
-      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
-  auto& sub_node_vcn = SubNodeVcnSlot(first_entry);
-  sub_node_vcn = 0;
-
-  root.total_entry_size = first_entry.size;
-  root.alloc_entry_size = first_entry.size;
-  root.flags = 0;
-
-  root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
-      first_entry.size;
-  root_attr.header.total_size =
-      AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
-
-  offset += root_attr.header.total_size;
-
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(offset));
-  alloc_attr.header.type = Attr::Type::IndexAllocation;
-  alloc_attr.header.non_resident = 1;
-  alloc_attr.header.name_length = 0;
-  alloc_attr.header.flags = 0;
-  alloc_attr.header.id = 0;
-  alloc_attr.start_vcn = 0;
-  alloc_attr.last_vcn =
-      static_cast<ULONGLONG>(forged_index_block_size / cluster_size) - 1;
-  alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
-  alloc_attr.comp_unit_size = 0;
-  alloc_attr.real_size = forged_index_block_size;
-  alloc_attr.alloc_size = forged_index_block_size;
-  alloc_attr.ini_size = forged_index_block_size;
-
-  const std::span<BYTE> data_run =
-      std::span<BYTE>(record).subspan(offset + alloc_attr.data_run_offset);
-  DWORD run_len = 0;
-  // High nibble = 4-byte LCN offset field; low nibble = 1-byte run length.
-  gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-  gsl::at(data_run, run_len++) =
-      static_cast<BYTE>(forged_index_block_size / cluster_size);
-  {
-    const DWORD lcn = forged_index_block_lcn;
-    std::memcpy(&gsl::at(data_run, run_len), &lcn, sizeof(lcn));
-    run_len += sizeof(lcn);
-  }
-  gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
-
-  alloc_attr.header.total_size = AlignAttrSize(sizeof(alloc_attr) + run_len);
-
-  offset += alloc_attr.header.total_size;
-
-  WriteEndOfAttributesMarker(record, offset);
-  return record;
-}
-
-// LCN where BuildFakeNtfsImageWithDeepIndexBlockChain() writes its chained
-// index blocks, kept clear of every other fixture's placement in this file.
-constexpr DWORD index_block_chain_lcn = 100;
-
-// Builds a root-directory replacement whose $INDEX_ROOT sub-node pointer
-// leads into a index_block_chain_length-block chained $INDEX_ALLOCATION.
-FakeRecord MakeIndexBlockChainRootRecord() {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
-
-  DWORD offset = attr_offset_value;
-
-  // $INDEX_ROOT
-  auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
-  root_attr.header.type = Attr::Type::IndexRoot;
-  root_attr.header.non_resident = 0;
-  root_attr.header.name_length = 0;
-  root_attr.header.flags = 0;
-  root_attr.header.id = 0;
-  root_attr.attr_offset = static_cast<WORD>(sizeof(root_attr));
-
-  const std::span<BYTE> body =
-      std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
-  root.attr_type = Attr::Type::FileName;
-  root.coll_rule = 0;
-  root.ib_size = cluster_size;
-  root.clusters_per_ib = 1;
+  root.ib_size = ib_size;
+  root.clusters_per_ib = clusters_per_ib;
   root.entry_offset = gsl::narrow<DWORD>(
       (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
@@ -173,11 +72,15 @@ FakeRecord MakeIndexBlockChainRootRecord() {
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
+  return root_attr.header.total_size;
+}
 
-  offset += root_attr.header.total_size;
-
-  // $INDEX_ALLOCATION: one data run, index_block_chain_length clusters starting
-  // at index_block_chain_lcn.
+// Writes a non-resident $INDEX_ALLOCATION at offset with one data run, as
+// extent describes. It holds real_size bytes of index data. Returns the
+// attribute's total_size.
+DWORD WriteSingleRunIndexAllocAttr(FakeRecord& record, DWORD offset,
+                                   const FakeIndexAllocExtent& extent,
+                                   ULONGLONG real_size) {
   auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = Attr::Type::IndexAllocation;
@@ -185,13 +88,13 @@ FakeRecord MakeIndexBlockChainRootRecord() {
   alloc_attr.header.name_length = 0;
   alloc_attr.header.flags = 0;
   alloc_attr.header.id = 0;
-  alloc_attr.start_vcn = 0;
-  alloc_attr.last_vcn = index_block_chain_length - 1;
+  alloc_attr.start_vcn = extent.start_vcn;
+  alloc_attr.last_vcn = extent.start_vcn + extent.clusters - 1;
   alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
   alloc_attr.comp_unit_size = 0;
-  alloc_attr.real_size = ULONGLONG{index_block_chain_length} * cluster_size;
-  alloc_attr.alloc_size = alloc_attr.real_size;
-  alloc_attr.ini_size = alloc_attr.real_size;
+  alloc_attr.real_size = real_size;
+  alloc_attr.alloc_size = real_size;
+  alloc_attr.ini_size = real_size;
 
   const std::span<BYTE> data_run =
       std::span<BYTE>(record).subspan(offset + alloc_attr.data_run_offset);
@@ -200,17 +103,61 @@ FakeRecord MakeIndexBlockChainRootRecord() {
   // low nibble = length field size (1 byte) - standard NTFS run encoding
   // (AttrNonResident::PickData, src/attr/non-resident.cpp).
   gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-  gsl::at(data_run, run_len++) = static_cast<BYTE>(index_block_chain_length);
-  {
-    const DWORD lcn = index_block_chain_lcn;
-    std::memcpy(&gsl::at(data_run, run_len), &lcn, sizeof(lcn));
-    run_len += sizeof(lcn);
-  }
+  gsl::at(data_run, run_len++) = gsl::narrow<BYTE>(extent.clusters);
+  std::memcpy(&gsl::at(data_run, run_len), &extent.lcn, sizeof(extent.lcn));
+  run_len += sizeof(extent.lcn);
   gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
 
   alloc_attr.header.total_size = AlignAttrSize(sizeof(alloc_attr) + run_len);
+  return alloc_attr.header.total_size;
+}
 
-  offset += alloc_attr.header.total_size;
+namespace {
+
+// Builds a directory record whose $INDEX_ALLOCATION references a single
+// forged index block, reached through TraverseSubNode() without real
+// B+-tree comparisons.
+FakeRecord MakeIndexAllocDirRecord() {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
+                             NtfsBrowser::Data::FileRecordFlag::Dir);
+
+  DWORD offset = attr_offset_value;
+  offset += WriteSubNodeIndexRootAttr(
+      record, offset, forged_index_block_size,
+      static_cast<BYTE>(forged_index_block_size / cluster_size));
+  offset += WriteSingleRunIndexAllocAttr(
+      record, offset,
+      {.start_vcn = 0,
+       .clusters = forged_index_block_size / cluster_size,
+       .lcn = forged_index_block_lcn},
+      forged_index_block_size);
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// LCN where BuildFakeNtfsImageWithDeepIndexBlockChain() writes its chained
+// index blocks, kept clear of every other fixture's placement in this file.
+constexpr DWORD index_block_chain_lcn = 100;
+
+// Builds a root-directory replacement whose $INDEX_ROOT sub-node pointer
+// leads into a index_block_chain_length-block chained $INDEX_ALLOCATION.
+FakeRecord MakeIndexBlockChainRootRecord() {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
+                             NtfsBrowser::Data::FileRecordFlag::Dir);
+
+  DWORD offset = attr_offset_value;
+  offset += WriteSubNodeIndexRootAttr(record, offset, cluster_size, 1);
+  // $INDEX_ALLOCATION: one data run, index_block_chain_length clusters starting
+  // at index_block_chain_lcn.
+  offset += WriteSingleRunIndexAllocAttr(record, offset,
+                                         {.start_vcn = 0,
+                                          .clusters = index_block_chain_length,
+                                          .lcn = index_block_chain_lcn},
+                                         ULONGLONG{index_block_chain_length} *
+                                             cluster_size);
 
   WriteEndOfAttributesMarker(record, offset);
   return record;
@@ -277,6 +224,87 @@ std::vector<BYTE> BuildFakeNtfsImageWithOversizedIndexBlock() {
   return image;
 }
 
+namespace {
+
+// Grows image so it extends past end, to the next whole 64KiB block.
+// FullCache always reads a whole 64KiB-aligned block, so a short image fails
+// its last read outright.
+void PadToFullCacheRead(std::vector<BYTE>& image, size_t end) {
+  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
+  const size_t aligned_end =
+      ((end + full_cache_read_block_size - 1) / full_cache_read_block_size) *
+      full_cache_read_block_size;
+  if (image.size() < aligned_end) {
+    image.resize(aligned_end, 0);
+  }
+}
+
+// Writes the header of chain block vcn at block_start, and returns it.
+NtfsBrowser::Data::IndexBlock&
+    WriteChainBlockHeader(std::span<BYTE> block_start, DWORD vcn) {
+  auto& block =
+      *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(block_start.data());
+  std::memset(&block, 0, sizeof(block));
+  block.magic = index_block_magic;
+  // Points offset_of_us at the fixup slot itself, valid for every block.
+  block.offset_of_us = static_cast<WORD>(cluster_size - us_slot_size);
+  block.size_of_us = 3;
+  block.vcn = vcn;
+  block.entry_offset = gsl::narrow<DWORD>(
+      (&gsl::at(block_start, sizeof(NtfsBrowser::Data::IndexBlock))) -
+      reinterpret_cast<BYTE*>(&block.entry_offset));
+  return block;
+}
+
+// Writes the lone, nameless entry of an intermediate chain block, pointing at
+// next_vcn. Returns its size.
+WORD WriteChainSubNodeEntry(std::span<BYTE> body, ULONGLONG next_vcn) {
+  auto& first_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body.data());
+  first_entry.mft_index = 0;
+  first_entry.mft_sn = 0;
+  first_entry.stream_size = 0;
+  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode |
+                      NtfsBrowser::Data::IndexEntryFlag::Last;
+  first_entry.size = static_cast<WORD>(AlignAttrSize(
+      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
+  auto& sub_node_vcn = SubNodeVcnSlot(first_entry);
+  sub_node_vcn = next_vcn;
+  return first_entry.size;
+}
+
+// Writes the real, named leaf entry of the deepest chain block. Returns its
+// size.
+WORD WriteChainLeafEntry(std::span<BYTE> body) {
+  auto& first_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body.data());
+  first_entry.mft_index = index_block_chain_leaf_mft_ref;
+  first_entry.mft_sn = 1;
+
+  auto& fn1 =
+      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
+  fn1.parent_ref = static_cast<ULONGLONG>(Mft::Idx::Root);
+  fn1.flags = NtfsBrowser::Data::FilenameFlag::None;
+  fn1.name_length = index_block_chain_leaf_name_length;
+  fn1.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
+  for (BYTE i = 0; i < fn1.name_length; i++) {
+    // i is below name_length, the length of the name.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    fn1.name[i] = gsl::narrow<WORD>(index_block_chain_leaf_name[i]);
+  }
+
+  first_entry.stream_size =
+      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
+                        reinterpret_cast<BYTE*>(&fn1));
+  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
+  first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
+      &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
+      first_entry.stream_size));
+  return first_entry.size;
+}
+
+}  // namespace
+
 std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
@@ -294,80 +322,22 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeepIndexBlockChain() {
       static_cast<size_t>(index_block_chain_lcn) * cluster_size;
   const size_t chain_bytes =
       static_cast<size_t>(index_block_chain_length) * cluster_size;
-  // FullCache always reads a whole 64KiB-aligned block, so the image must
-  // extend past the chain's real end or its last read fails outright.
-  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
-  const size_t chain_end = chain_offset + chain_bytes;
-  const size_t aligned_chain_end =
-      ((chain_end + full_cache_read_block_size - 1) /
-       full_cache_read_block_size) *
-      full_cache_read_block_size;
-  if (image.size() < aligned_chain_end) {
-    image.resize(aligned_chain_end, 0);
-  }
+  PadToFullCacheRead(image, chain_offset + chain_bytes);
 
   for (DWORD vcn = 0; vcn < index_block_chain_length; vcn++) {
     const std::span<BYTE> block_start = std::span<BYTE>(image).subspan(
         chain_offset + static_cast<size_t>(vcn) * cluster_size);
-    auto& block =
-        *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(block_start.data());
-    std::memset(&block, 0, sizeof(block));
-    block.magic = index_block_magic;
-    // Points offset_of_us at the fixup slot itself, valid for every block.
-    block.offset_of_us = static_cast<WORD>(cluster_size - us_slot_size);
-    block.size_of_us = 3;
-    block.vcn = vcn;
-    block.entry_offset = gsl::narrow<DWORD>(
-        (&gsl::at(block_start, sizeof(NtfsBrowser::Data::IndexBlock))) -
-        reinterpret_cast<BYTE*>(&block.entry_offset));
-
+    NtfsBrowser::Data::IndexBlock& block =
+        WriteChainBlockHeader(block_start, vcn);
     const std::span<BYTE> body =
         block_start.subspan(sizeof(NtfsBrowser::Data::IndexBlock));
-    auto& first_entry =
-        *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body.data());
 
     const bool is_leaf = (vcn == index_block_chain_length - 1);
-    if (!is_leaf) {
-      // Intermediate block: a lone, nameless entry pointing at the next VCN.
-      block.not_leaf = 1;
-      first_entry.mft_index = 0;
-      first_entry.mft_sn = 0;
-      first_entry.stream_size = 0;
-      first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode |
-                          NtfsBrowser::Data::IndexEntryFlag::Last;
-      first_entry.size = static_cast<WORD>(AlignAttrSize(
-          offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
-      auto& sub_node_vcn = SubNodeVcnSlot(first_entry);
-      sub_node_vcn = vcn + 1;
-    } else {
-      // Deepest block: the real, named leaf entry, reached by depth alone.
-      block.not_leaf = 0;
-      first_entry.mft_index = index_block_chain_leaf_mft_ref;
-      first_entry.mft_sn = 1;
-
-      auto& fn1 =
-          *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
-      fn1.parent_ref = static_cast<ULONGLONG>(Mft::Idx::Root);
-      fn1.flags = NtfsBrowser::Data::FilenameFlag::None;
-      fn1.name_length = index_block_chain_leaf_name_length;
-      fn1.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
-      for (BYTE i = 0; i < fn1.name_length; i++) {
-        // i is below name_length, the length of the name.
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        fn1.name[i] = gsl::narrow<WORD>(index_block_chain_leaf_name[i]);
-      }
-
-      first_entry.stream_size = gsl::narrow<WORD>(
-          reinterpret_cast<BYTE*>(&fn1.name[fn1.name_length]) -
-          reinterpret_cast<BYTE*>(&fn1));
-      first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
-      first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
-          &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
-          first_entry.stream_size));
-    }
-
-    block.total_entry_size = first_entry.size;
-    block.alloc_entry_size = first_entry.size;
+    const WORD entry_size = is_leaf ? WriteChainLeafEntry(body)
+                                    : WriteChainSubNodeEntry(body, vcn + 1);
+    block.not_leaf = is_leaf ? 0 : 1;
+    block.total_entry_size = entry_size;
+    block.alloc_entry_size = entry_size;
   }
 
   return image;
@@ -380,17 +350,38 @@ namespace {
 // placement in this file.
 constexpr DWORD bad_index_block_lcn = 220;
 
-// Builds a root-directory replacement whose $INDEX_ROOT holds two real
-// subnode-pointer entries (VCN 0, VCN 1): both are true B+ tree children,
-// reached by the normal walk with no recovery needed.
-FakeRecord MakeBadIndexBlockEntryRootRecord() {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+// Writes the two nameless sub-node entries of a root record: a non-terminal
+// one pointing at VCN 0, the damaged block, then a terminal one pointing at
+// VCN 1, the good block. Returns their combined size.
+WORD WriteTwoSubNodeEntries(std::span<BYTE> entries) {
+  auto& first_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entries.data());
+  first_entry.mft_index = 0;
+  first_entry.mft_sn = 0;
+  first_entry.stream_size = 0;
+  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode;
+  first_entry.size = static_cast<WORD>(AlignAttrSize(
+      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
+  SubNodeVcnSlot(first_entry) = 0;
 
-  DWORD offset = attr_offset_value;
+  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      entries.subspan(first_entry.size).data());
+  second_entry.mft_index = 0;
+  second_entry.mft_sn = 0;
+  second_entry.stream_size = 0;
+  second_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode |
+                       NtfsBrowser::Data::IndexEntryFlag::Last;
+  second_entry.size = static_cast<WORD>(AlignAttrSize(
+      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
+  SubNodeVcnSlot(second_entry) = 1;
 
-  // $INDEX_ROOT
+  return static_cast<WORD>(first_entry.size + second_entry.size);
+}
+
+// Writes a resident $INDEX_ROOT at offset holding the two sub-node entries of
+// WriteTwoSubNodeEntries(), with one-cluster index blocks. Returns the
+// attribute's total_size.
+DWORD WriteTwoSubNodeIndexRootAttr(FakeRecord& record, DWORD offset) {
   auto& root_attr =
       *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   root_attr.header.type = Attr::Type::IndexRoot;
@@ -411,33 +402,9 @@ FakeRecord MakeBadIndexBlockEntryRootRecord() {
       (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
-  // Entry 1: nameless, non-terminal subnode pointer to VCN 0 (the damaged
-  // block).
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
-  first_entry.mft_index = 0;
-  first_entry.mft_sn = 0;
-  first_entry.stream_size = 0;
-  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode;
-  first_entry.size = static_cast<WORD>(AlignAttrSize(
-      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
-  SubNodeVcnSlot(first_entry) = 0;
-
-  // Entry 2: nameless, terminal subnode pointer to VCN 1 (the good block).
-  auto& second_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
-                                        first_entry.size)));
-  second_entry.mft_index = 0;
-  second_entry.mft_sn = 0;
-  second_entry.stream_size = 0;
-  second_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode |
-                       NtfsBrowser::Data::IndexEntryFlag::Last;
-  second_entry.size = static_cast<WORD>(AlignAttrSize(
-      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
-  SubNodeVcnSlot(second_entry) = 1;
-
-  root.total_entry_size = first_entry.size + second_entry.size;
+  const WORD entries_size = WriteTwoSubNodeEntries(
+      body.subspan(sizeof(NtfsBrowser::Data::IndexRoot)));
+  root.total_entry_size = entries_size;
   root.alloc_entry_size = root.total_entry_size;
   root.flags = 0;
 
@@ -446,40 +413,24 @@ FakeRecord MakeBadIndexBlockEntryRootRecord() {
       root.total_entry_size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
+  return root_attr.header.total_size;
+}
 
-  offset += root_attr.header.total_size;
+// Builds a root-directory replacement whose $INDEX_ROOT holds two real
+// subnode-pointer entries (VCN 0, VCN 1): both are true B+ tree children,
+// reached by the normal walk with no recovery needed.
+FakeRecord MakeBadIndexBlockEntryRootRecord() {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
+                             NtfsBrowser::Data::FileRecordFlag::Dir);
 
+  DWORD offset = attr_offset_value;
+  offset += WriteTwoSubNodeIndexRootAttr(record, offset);
   // $INDEX_ALLOCATION: 2 contiguous blocks at bad_index_block_lcn.
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(offset));
-  alloc_attr.header.type = Attr::Type::IndexAllocation;
-  alloc_attr.header.non_resident = 1;
-  alloc_attr.header.name_length = 0;
-  alloc_attr.header.flags = 0;
-  alloc_attr.header.id = 0;
-  alloc_attr.start_vcn = 0;
-  alloc_attr.last_vcn = 1;
-  alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
-  alloc_attr.comp_unit_size = 0;
-  alloc_attr.real_size = 2ULL * cluster_size;
-  alloc_attr.alloc_size = alloc_attr.real_size;
-  alloc_attr.ini_size = alloc_attr.real_size;
-
-  const std::span<BYTE> data_run =
-      std::span<BYTE>(record).subspan(offset + alloc_attr.data_run_offset);
-  DWORD run_len = 0;
-  // High nibble = LCN offset field size, low nibble = length field size.
-  gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-  gsl::at(data_run, run_len++) = 2;  // 2 clusters
-  {
-    const DWORD lcn = bad_index_block_lcn;
-    std::memcpy(&gsl::at(data_run, run_len), &lcn, sizeof(lcn));
-    run_len += sizeof(lcn);
-  }
-  gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
-
-  alloc_attr.header.total_size = AlignAttrSize(sizeof(alloc_attr) + run_len);
-  offset += alloc_attr.header.total_size;
+  offset += WriteSingleRunIndexAllocAttr(
+      record, offset,
+      {.start_vcn = 0, .clusters = 2, .lcn = bad_index_block_lcn},
+      2ULL * cluster_size);
 
   WriteEndOfAttributesMarker(record, offset);
   return record;

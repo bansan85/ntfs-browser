@@ -40,6 +40,40 @@ DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
 
 }  // namespace
 
+namespace {
+
+// Writes one $DATA stream of an encrypted file at offset, with the encrypted
+// header flag, and the compressed flag too when the stream asks for it.
+// Returns its total_size.
+DWORD WriteEncryptedStreamAttr(FakeRecord& record, DWORD offset,
+                               const FakeEncryptedStream& stream) {
+  WORD flags = stream.flagged_encrypted ? NtfsBrowser::Attr::flag_encrypted
+                                        : static_cast<WORD>(0);
+  if (stream.flagged_compressed) {
+    flags |= NtfsBrowser::Attr::flag_compressed;
+  }
+  return WriteNonResidentAttr(record, offset, Attr::Type::Data,
+                              {.comp_unit_size = 0,
+                               .real_size = stream.real_size,
+                               .runs = stream.runs,
+                               .overrides = {.name = stream.name,
+                                             .flags = flags,
+                                             .ini_size = stream.ini_size}});
+}
+
+// Writes the non-resident $EFS stream at offset: size bytes laid over runs.
+// Returns its total_size.
+DWORD WriteNonResidentEfsAttr(FakeRecord& record, DWORD offset, size_t size,
+                              const std::vector<FakeDataRun>& runs) {
+  return WriteNonResidentAttr(record, offset, Attr::Type::LoggedUtilityStream,
+                              {.comp_unit_size = 0,
+                               .real_size = size,
+                               .runs = runs,
+                               .overrides = {.name = L"$EFS"}});
+}
+
+}  // namespace
+
 std::vector<BYTE>
     BuildFakeNtfsImageWithEncryptedFile(const FakeEncryptedFile& file) {
   FakeRecord record = MakeRecordHeader(
@@ -52,19 +86,7 @@ std::vector<BYTE>
           NtfsBrowser::Data::StdInfoPermission::Encrypted);
 
   for (const FakeEncryptedStream& stream : file.streams) {
-    WORD flags = stream.flagged_encrypted ? NtfsBrowser::Attr::flag_encrypted
-                                          : static_cast<WORD>(0);
-    if (stream.flagged_compressed) {
-      flags |= NtfsBrowser::Attr::flag_compressed;
-    }
-    offset +=
-        WriteNonResidentAttr(record, offset, Attr::Type::Data,
-                             {.comp_unit_size = 0,
-                              .real_size = stream.real_size,
-                              .runs = stream.runs,
-                              .overrides = {.name = stream.name,
-                                            .flags = flags,
-                                            .ini_size = stream.ini_size}});
+    offset += WriteEncryptedStreamAttr(record, offset, stream);
   }
 
   std::vector<FakeDataRun> efs_runs;
@@ -84,12 +106,8 @@ std::vector<BYTE>
           {fake_efs_stream_lcn,
            gsl::narrow<DWORD>((file.efs_stream.size() + cluster_size - 1) /
                               cluster_size)});
-      offset +=
-          WriteNonResidentAttr(record, offset, Attr::Type::LoggedUtilityStream,
-                               {.comp_unit_size = 0,
-                                .real_size = file.efs_stream.size(),
-                                .runs = efs_runs,
-                                .overrides = {.name = L"$EFS"}});
+      offset += WriteNonResidentEfsAttr(record, offset, file.efs_stream.size(),
+                                        efs_runs);
     }
   }
   if (file.trailing_undersized_attribute) {

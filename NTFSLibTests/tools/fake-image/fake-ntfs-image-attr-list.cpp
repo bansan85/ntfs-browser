@@ -67,73 +67,10 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG base_idx) {
       attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
   SetRecordLink(record, 0, base_idx);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
-      &record.at(attr_offset_value));
-  attr.header.type = Attr::Type::IndexRoot;
-  attr.header.non_resident = 0;
-  attr.header.name_length = 0;
-  attr.header.flags = 0;
-  attr.header.id = 0;
-  attr.attr_offset = static_cast<WORD>(sizeof(attr));
-
-  const std::span<BYTE> body =
-      std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
-  root.attr_type = Attr::Type::FileName;
-  root.coll_rule = 0;
-  root.ib_size = fake_file_record_size;
-  root.clusters_per_ib = 1;
-  root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
-      reinterpret_cast<BYTE*>(&root.entry_offset));
-
-  // Entry 1: "Foo", a regular (non-directory) file, reference 20.
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
-  first_entry.mft_index = first_entry_record;
-  first_entry.mft_sn = 1;
-
-  auto& filename =
-      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
-  filename.parent_ref = attribute_list_dir_idx;
-  filename.flags = NtfsBrowser::Data::FilenameFlag::None;
-  filename.name_length = 3;
-  filename.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
-  constexpr std::wstring_view foo_name = L"Foo";
-  for (BYTE i = 0; i < filename.name_length; i++) {
-    // i is below name_length, the length of the name.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    filename.name[i] = gsl::narrow<WORD>(foo_name[i]);
-  }
-
-  first_entry.stream_size =
-      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[3]) -
-                        reinterpret_cast<BYTE*>(&filename));
-  first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
-      &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
-      first_entry.stream_size));
-
-  // Entry 2: the terminating entry - no name, no sub-node.
-  auto& second_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
-                                        first_entry.size)));
-  second_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
-  second_entry.stream_size = 0;
-  second_entry.size = gsl::narrow<WORD>(AlignAttrSize(
-      &second_entry.stream - reinterpret_cast<BYTE*>(&second_entry)));
-
-  root.total_entry_size =
-      static_cast<DWORD>(first_entry.size) + second_entry.size;
-  root.alloc_entry_size = root.total_entry_size;
-  root.flags = 0;
-
-  attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
-                   first_entry.size + second_entry.size;
-  attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
-
-  WriteEndOfAttributesMarker(record,
-                             attr_offset_value + attr.header.total_size);
+  const DWORD root_total =
+      WriteFileNameIndexRootAttr(record, attr_offset_value, L"Foo",
+                                 first_entry_record, attribute_list_dir_idx);
+  WriteEndOfAttributesMarker(record, attr_offset_value + root_total);
   return record;
 }
 
@@ -190,85 +127,11 @@ FakeRecord MakeAttributeListTwoTypesDirRecord() {
   return record;
 }
 
-// Extension record holding both a resident $INDEX_ROOT (the same single
-// "Foo" entry as MakeIndexRootExtensionRecord()) and a minimal
-// non-resident $INDEX_ALLOCATION right after it. It extends record baseIdx.
-FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
-  SetRecordLink(record, 0, base_idx);
-
-  auto& root_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
-      &record.at(attr_offset_value));
-  root_attr.header.type = Attr::Type::IndexRoot;
-  root_attr.header.non_resident = 0;
-  root_attr.header.name_length = 0;
-  root_attr.header.flags = 0;
-  root_attr.header.id = 0;
-  root_attr.attr_offset = static_cast<WORD>(sizeof(root_attr));
-
-  const std::span<BYTE> body = std::span<BYTE>(record).subspan(
-      attr_offset_value + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
-  root.attr_type = Attr::Type::FileName;
-  root.coll_rule = 0;
-  root.ib_size = fake_file_record_size;
-  root.clusters_per_ib = 1;
-  root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
-      reinterpret_cast<BYTE*>(&root.entry_offset));
-
-  // Entry 1: "Foo", a regular (non-directory) file, reference 20.
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
-  first_entry.mft_index = first_entry_record;
-  first_entry.mft_sn = 1;
-
-  auto& filename =
-      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
-  filename.parent_ref = attr_list_multi_type_dir_idx;
-  filename.flags = NtfsBrowser::Data::FilenameFlag::None;
-  filename.name_length = 3;
-  filename.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
-  constexpr std::wstring_view foo_name = L"Foo";
-  for (BYTE i = 0; i < filename.name_length; i++) {
-    // i is below name_length, the length of the name.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    filename.name[i] = gsl::narrow<WORD>(foo_name[i]);
-  }
-
-  first_entry.stream_size =
-      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&filename.name[3]) -
-                        reinterpret_cast<BYTE*>(&filename));
-  first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
-      &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
-      first_entry.stream_size));
-
-  // Entry 2: the terminating entry - no name, no sub-node.
-  auto& second_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
-                                        first_entry.size)));
-  second_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
-  second_entry.stream_size = 0;
-  second_entry.size = gsl::narrow<WORD>(AlignAttrSize(
-      &second_entry.stream - reinterpret_cast<BYTE*>(&second_entry)));
-
-  root.total_entry_size =
-      static_cast<DWORD>(first_entry.size) + second_entry.size;
-  root.alloc_entry_size = root.total_entry_size;
-  root.flags = 0;
-
-  root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
-      first_entry.size + second_entry.size;
-  root_attr.header.total_size =
-      AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
-
-  const DWORD alloc_attr_offset =
-      attr_offset_value + root_attr.header.total_size;
+// Writes an empty non-resident $INDEX_ALLOCATION at offset, its run list
+// holding no runs. Returns its total_size.
+DWORD WriteEmptyIndexAllocAttr(FakeRecord& record, DWORD offset) {
   auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(alloc_attr_offset));
+      &record.at(offset));
   alloc_attr.header.type = Attr::Type::IndexAllocation;
   alloc_attr.header.non_resident = 1;
   alloc_attr.header.name_length = 0;
@@ -286,10 +149,24 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
 
   // Data run: a single 0x00 byte terminates the run list immediately -
   // nothing reads through it in this fixture.
-  record.at(alloc_attr_offset + sizeof(alloc_attr)) = 0x00;
+  record.at(offset + sizeof(alloc_attr)) = 0x00;
+  return alloc_attr.header.total_size;
+}
 
-  WriteEndOfAttributesMarker(record,
-                             alloc_attr_offset + alloc_attr.header.total_size);
+// Extension record holding both a resident $INDEX_ROOT (the same single
+// "Foo" entry as MakeIndexRootExtensionRecord()) and a minimal
+// non-resident $INDEX_ALLOCATION right after it. It extends record baseIdx.
+FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+  SetRecordLink(record, 0, base_idx);
+
+  const DWORD root_total = WriteFileNameIndexRootAttr(
+      record, attr_offset_value, L"Foo", first_entry_record,
+      attr_list_multi_type_dir_idx);
+  const DWORD alloc_attr_offset = attr_offset_value + root_total;
+  const DWORD alloc_total = WriteEmptyIndexAllocAttr(record, alloc_attr_offset);
+  WriteEndOfAttributesMarker(record, alloc_attr_offset + alloc_total);
   return record;
 }
 

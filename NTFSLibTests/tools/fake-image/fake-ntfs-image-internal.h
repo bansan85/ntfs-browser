@@ -198,6 +198,37 @@ struct FakeNonResidentAttr {
   FakeNonResidentOverrides overrides;
 };
 
+// One $INDEX_ALLOCATION instance: "clusters" clusters at "lcn", from virtual
+// cluster "start_vcn" on.
+struct FakeIndexAllocExtent {
+  // VCN the instance starts at.
+  ULONGLONG start_vcn;
+  // Clusters the instance maps.
+  DWORD clusters;
+  // LCN of the instance's first cluster.
+  DWORD lcn;
+};
+
+// Writes a resident $INDEX_ROOT at offset whose only entry is a sub-node
+// pointer to VCN 0, with index blocks of ib_size bytes spanning
+// clusters_per_ib clusters each. Returns the attribute's total_size.
+DWORD WriteSubNodeIndexRootAttr(FakeRecord& record, DWORD offset, DWORD ib_size,
+                                BYTE clusters_per_ib);
+
+// Writes a non-resident $INDEX_ALLOCATION at offset with one data run, as
+// extent describes. It holds real_size bytes of index data. Returns the
+// attribute's total_size.
+DWORD WriteSingleRunIndexAllocAttr(FakeRecord& record, DWORD offset,
+                                   const FakeIndexAllocExtent& extent,
+                                   ULONGLONG real_size);
+
+// Writes a resident $INDEX_ROOT at offset holding one FILE_NAME entry named
+// name, filed under parent_ref, then the terminating entry. The entry's MFT
+// record is mft_index. Returns the attribute's total_size.
+DWORD WriteFileNameIndexRootAttr(FakeRecord& record, DWORD offset,
+                                 std::wstring_view name, ULONGLONG mft_index,
+                                 ULONGLONG parent_ref);
+
 // Writes one non-resident attribute of type at record[offset] and returns its
 // declared total_size. A non-zero comp_unit_size adds the trailing 8-byte
 // CompressedSize field.

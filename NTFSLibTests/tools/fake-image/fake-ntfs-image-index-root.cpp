@@ -22,16 +22,16 @@ namespace {
 // index block, past every record's cluster range.
 constexpr DWORD gap_collation_index_block_lcn = 20;
 
-// Builds a directory record whose resident $INDEX_ROOT holds one real
-// FILE_NAME entry (name, mftIndex, parentRef) plus the terminating entry.
-FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
-                                  ULONGLONG parent_ref) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+}  // namespace
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
-      &record.at(attr_offset_value));
+// Writes a resident $INDEX_ROOT at offset holding one FILE_NAME entry named
+// name, filed under parent_ref, then the terminating entry. The entry's MFT
+// record is mft_index. Returns the attribute's total_size.
+DWORD WriteFileNameIndexRootAttr(FakeRecord& record, DWORD offset,
+                                 std::wstring_view name, ULONGLONG mft_index,
+                                 ULONGLONG parent_ref) {
+  auto& attr =
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
   attr.header.type = Attr::Type::IndexRoot;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
@@ -40,7 +40,7 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
 
   const std::span<BYTE> body =
-      std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
+      std::span<BYTE>(record).subspan(offset + attr.attr_offset);
   auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
   root.attr_type = Attr::Type::FileName;
   root.coll_rule = 0;
@@ -50,9 +50,11 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
       (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
       reinterpret_cast<BYTE*>(&root.entry_offset));
 
+  const std::span<BYTE> entries =
+      body.subspan(sizeof(NtfsBrowser::Data::IndexRoot));
   // Entry 1: the single real FILE_NAME entry this variant declares.
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
+  auto& first_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entries.data());
   first_entry.mft_index = mft_index;
   first_entry.mft_sn = 1;
 
@@ -76,10 +78,8 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
       first_entry.stream_size));
 
   // Entry 2: the terminating entry - no name, no sub-node.
-  auto& second_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
-                                        first_entry.size)));
+  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
+      entries.subspan(first_entry.size).data());
   second_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
   second_entry.stream_size = 0;
   second_entry.size = gsl::narrow<WORD>(AlignAttrSize(
@@ -93,47 +93,29 @@ FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
   attr.attr_size = static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
                    first_entry.size + second_entry.size;
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
-
-  WriteEndOfAttributesMarker(record,
-                             attr_offset_value + attr.header.total_size);
-  return record;
+  return attr.header.total_size;
 }
 
-// Builds a root-directory replacement whose own $INDEX_ROOT holds one
-// real, non-terminal FILE_NAME entry that is also a sub-node pointer into
-// a real $INDEX_ALLOCATION index block.
-FakeRecord MakeRootRecordWithGapCollationSubNode() {
+namespace {
+
+// Builds a directory record whose resident $INDEX_ROOT holds one real
+// FILE_NAME entry (name, mftIndex, parentRef) plus the terminating entry.
+FakeRecord MakeIndexRootDirRecord(std::wstring_view name, ULONGLONG mft_index,
+                                  ULONGLONG parent_ref) {
   FakeRecord record = MakeRecordHeader(
       attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
                              NtfsBrowser::Data::FileRecordFlag::Dir);
+  const DWORD root_total = WriteFileNameIndexRootAttr(
+      record, attr_offset_value, name, mft_index, parent_ref);
+  WriteEndOfAttributesMarker(record, attr_offset_value + root_total);
+  return record;
+}
 
-  DWORD offset = attr_offset_value;
-
-  // $INDEX_ROOT
-  auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
-  root_attr.header.type = Attr::Type::IndexRoot;
-  root_attr.header.non_resident = 0;
-  root_attr.header.name_length = 0;
-  root_attr.header.flags = 0;
-  root_attr.header.id = 0;
-  root_attr.attr_offset = static_cast<WORD>(sizeof(root_attr));
-
-  const std::span<BYTE> body =
-      std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
-  root.attr_type = Attr::Type::FileName;
-  root.coll_rule = 0;
-  root.ib_size = fake_file_record_size;
-  root.clusters_per_ib = 1;
-  root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
-      reinterpret_cast<BYTE*>(&root.entry_offset));
-
-  // Entry 1 ("A_"): non-terminal, so it carries both a name and a sub-node
-  // VCN right after it.
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
+// Writes the non-terminal "A_" entry of the gap-collation root: a directory
+// that is also a sub-node pointer to VCN 0. Returns its size.
+WORD WriteGapNonTerminalEntry(std::span<BYTE> entry) {
+  auto& first_entry =
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entry.data());
   first_entry.mft_index = gap_collation_non_terminal_mft_ref;
   first_entry.mft_sn = 1;
 
@@ -159,62 +141,78 @@ FakeRecord MakeRootRecordWithGapCollationSubNode() {
       first_entry.stream_size + sizeof(ULONGLONG)));
   auto& sub_node_vcn = SubNodeVcnSlot(first_entry);
   sub_node_vcn = 0;
+  return first_entry.size;
+}
 
-  // Entry 2: the terminating entry - no name, no sub-node.
+// Writes the terminating entry of the gap-collation root: no name, no
+// sub-node. Returns its size.
+WORD WriteGapTerminatingEntry(std::span<BYTE> entry) {
   auto& second_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(&gsl::at(
-          body, gsl::narrow<gsl::index>(sizeof(NtfsBrowser::Data::IndexRoot) +
-                                        first_entry.size)));
+      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entry.data());
   second_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
   second_entry.stream_size = 0;
   second_entry.size = gsl::narrow<WORD>(AlignAttrSize(
       &second_entry.stream - reinterpret_cast<BYTE*>(&second_entry)));
+  return second_entry.size;
+}
 
-  root.total_entry_size =
-      static_cast<DWORD>(first_entry.size) + second_entry.size;
+// Writes the resident $INDEX_ROOT of the gap-collation root at offset: the
+// "A_" entry, then the terminating entry. Returns the attribute's total_size.
+DWORD WriteGapCollationIndexRootAttr(FakeRecord& record, DWORD offset) {
+  auto& root_attr =
+      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
+  root_attr.header.type = Attr::Type::IndexRoot;
+  root_attr.header.non_resident = 0;
+  root_attr.header.name_length = 0;
+  root_attr.header.flags = 0;
+  root_attr.header.id = 0;
+  root_attr.attr_offset = static_cast<WORD>(sizeof(root_attr));
+
+  const std::span<BYTE> body =
+      std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
+  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
+  root.attr_type = Attr::Type::FileName;
+  root.coll_rule = 0;
+  root.ib_size = fake_file_record_size;
+  root.clusters_per_ib = 1;
+  root.entry_offset = gsl::narrow<DWORD>(
+      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
+      reinterpret_cast<BYTE*>(&root.entry_offset));
+
+  // Non-terminal, so it carries both a name and a sub-node VCN right after it.
+  const std::span<BYTE> entries =
+      body.subspan(sizeof(NtfsBrowser::Data::IndexRoot));
+  const WORD first_size = WriteGapNonTerminalEntry(entries);
+  const WORD second_size =
+      WriteGapTerminatingEntry(entries.subspan(first_size));
+
+  root.total_entry_size = static_cast<DWORD>(first_size) + second_size;
   root.alloc_entry_size = root.total_entry_size;
   root.flags = 0;
 
   root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
-      first_entry.size + second_entry.size;
+      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) + first_size +
+      second_size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
+  return root_attr.header.total_size;
+}
 
-  offset += root_attr.header.total_size;
+// Builds a root-directory replacement whose own $INDEX_ROOT holds one
+// real, non-terminal FILE_NAME entry that is also a sub-node pointer into
+// a real $INDEX_ALLOCATION index block.
+FakeRecord MakeRootRecordWithGapCollationSubNode() {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
+                             NtfsBrowser::Data::FileRecordFlag::Dir);
 
-  // $INDEX_ALLOCATION
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(offset));
-  alloc_attr.header.type = Attr::Type::IndexAllocation;
-  alloc_attr.header.non_resident = 1;
-  alloc_attr.header.name_length = 0;
-  alloc_attr.header.flags = 0;
-  alloc_attr.header.id = 0;
-  alloc_attr.start_vcn = 0;
-  alloc_attr.last_vcn = 0;  // single cluster -> VCN 0 only
-  alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
-  alloc_attr.comp_unit_size = 0;
-  alloc_attr.real_size = cluster_size;
-  alloc_attr.alloc_size = cluster_size;
-  alloc_attr.ini_size = cluster_size;
-
-  const std::span<BYTE> data_run =
-      std::span<BYTE>(record).subspan(offset + alloc_attr.data_run_offset);
-  DWORD run_len = 0;
-  // High nibble = LCN offset field size, low nibble = length field size.
-  gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-  gsl::at(data_run, run_len++) = 1;  // 1 cluster
-  {
-    const DWORD lcn = gap_collation_index_block_lcn;
-    std::memcpy(&gsl::at(data_run, run_len), &lcn, sizeof(lcn));
-    run_len += sizeof(lcn);
-  }
-  gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
-
-  alloc_attr.header.total_size = AlignAttrSize(sizeof(alloc_attr) + run_len);
-
-  offset += alloc_attr.header.total_size;
+  DWORD offset = attr_offset_value;
+  offset += WriteGapCollationIndexRootAttr(record, offset);
+  // $INDEX_ALLOCATION: one cluster, which is VCN 0 only.
+  offset += WriteSingleRunIndexAllocAttr(
+      record, offset,
+      {.start_vcn = 0, .clusters = 1, .lcn = gap_collation_index_block_lcn},
+      cluster_size);
 
   WriteEndOfAttributesMarker(record, offset);
   return record;

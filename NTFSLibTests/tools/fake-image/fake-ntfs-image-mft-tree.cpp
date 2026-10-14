@@ -36,38 +36,17 @@ std::vector<BYTE>
   return image;
 }
 
-std::vector<BYTE> BuildFakeNtfsImageWithMftTree() {
-  using NtfsBrowser::Data::FilenameNamespace;
-  using NtfsBrowser::Data::StdInfoPermission;
-  using RecordFlag = NtfsBrowser::Data::FileRecordFlag;
+namespace {
 
-  // Sequence numbers the records below carry, where another record's
-  // parent reference names them.
-  constexpr WORD docs_sequence = 1;
-  constexpr WORD old_dir_sequence = 3;
-  constexpr WORD report_sequence = 3;
-  constexpr WORD new_dir_sequence = 7;
-
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
-    const size_t offset =
-        mft_addr +
-        static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
-    std::memcpy(&image.at(offset), record.data(), record.size());
-  };
-
-  const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
-  const ULONGLONG docs = MakeFileReference(mft_tree_docs_idx, docs_sequence);
-
-  // $MFT: a data run over every slot, written in place, so the records past
-  // the first 16 read through it; plus the name real volumes give it.
+// The $MFT record of BuildFakeNtfsImageWithMftTree(): a data run over every
+// record slot, and the name real volumes give it.
+FakeRecord MakeMftTreeMftRecord() {
   FakeRecord mft = MakeMftRecordWithRealDataRun(
       static_cast<DWORD>(mft_lcn), static_cast<DWORD>(mft_tree_record_count));
   EditFileRecordHeader(mft,
                        [](FileRecordHeader& header) { header.seq_no = 1; });
+  const ULONGLONG root = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
   DWORD offset = attr_offset_value +
                  reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
                      &mft.at(attr_offset_value))
@@ -75,22 +54,45 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTree() {
   offset += WriteFileNameAttr(mft, offset,
                               {.name = L"$MFT", .parent_ref = root}, false);
   WriteEndOfAttributesMarker(mft, offset);
-  put_record(static_cast<ULONGLONG>(Mft::Idx::Mft), mft);
+  return mft;
+}
+
+// Sequence numbers the tree's records carry, where another record's parent
+// reference names them.
+constexpr WORD tree_docs_sequence = 1;
+constexpr WORD tree_old_dir_sequence = 3;
+constexpr WORD tree_report_sequence = 3;
+constexpr WORD tree_new_dir_sequence = 7;
+
+// Writes the root, the live directories and files, and the hard-linked file
+// of BuildFakeNtfsImageWithMftTree() into image.
+void PutMftTreeLiveRecords(std::vector<BYTE>& image) {
+  using NtfsBrowser::Data::FilenameNamespace;
+  using NtfsBrowser::Data::StdInfoPermission;
+  using RecordFlag = NtfsBrowser::Data::FileRecordFlag;
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
+    PutMftRecord(image, mft_addr, idx, record);
+  };
+
+  const ULONGLONG root = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG docs =
+      MakeFileReference(mft_tree_docs_idx, tree_docs_sequence);
 
   const RecordFlag file = RecordFlag::InUse;
   const RecordFlag dir = RecordFlag::InUse | RecordFlag::Dir;
-  const RecordFlag deleted_file{};
-  const RecordFlag deleted_dir = RecordFlag::Dir;
 
   put_record(static_cast<ULONGLONG>(Mft::Idx::Root),
              MakeMftTreeRecord(dir, root_sequence_number,
                                {{.name = L".", .parent_ref = root}}));
   put_record(mft_tree_docs_idx,
-             MakeMftTreeRecord(dir, docs_sequence,
+             MakeMftTreeRecord(dir, tree_docs_sequence,
                                {{.name = L"Docs", .parent_ref = root}}));
   put_record(mft_tree_report_idx,
              MakeMftTreeRecord(
-                 file, report_sequence,
+                 file, tree_report_sequence,
                  {{.name = L"report.txt",
                    .parent_ref = docs,
                    .real_size = mft_tree_report_stale_size,
@@ -105,34 +107,67 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTree() {
              MakeMftTreeRecord(file, 1,
                                {{.name = L"link-a", .parent_ref = root},
                                 {.name = L"link-b", .parent_ref = docs}}));
+}
+
+// Writes the freed, stale and reused directory records, and the extension
+// record, of BuildFakeNtfsImageWithMftTree() into image.
+void PutMftTreeFreedRecords(std::vector<BYTE>& image) {
+  using NtfsBrowser::Data::StdInfoPermission;
+  using RecordFlag = NtfsBrowser::Data::FileRecordFlag;
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
+    PutMftRecord(image, mft_addr, idx, record);
+  };
+
+  const ULONGLONG root = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG docs =
+      MakeFileReference(mft_tree_docs_idx, tree_docs_sequence);
+
+  const RecordFlag file = RecordFlag::InUse;
+  const RecordFlag dir = RecordFlag::InUse | RecordFlag::Dir;
+  const RecordFlag deleted_file{};
+  const RecordFlag deleted_dir = RecordFlag::Dir;
+
   // NTFS bumps a record's sequence number when it frees the record.
   put_record(mft_tree_deleted_file_idx,
              MakeMftTreeRecord(deleted_file, 2,
                                {{.name = L"old.tmp", .parent_ref = docs}}));
   put_record(mft_tree_deleted_dir_idx,
-             MakeMftTreeRecord(deleted_dir, old_dir_sequence + 1,
+             MakeMftTreeRecord(deleted_dir, tree_old_dir_sequence + 1,
                                {{.name = L"OldDir", .parent_ref = docs}}));
-  put_record(
-      mft_tree_deleted_child_idx,
-      MakeMftTreeRecord(deleted_file, 2,
-                        {{.name = L"draft.doc",
-                          .parent_ref = MakeFileReference(
-                              mft_tree_deleted_dir_idx, old_dir_sequence)}}));
+  put_record(mft_tree_deleted_child_idx,
+             MakeMftTreeRecord(
+                 deleted_file, 2,
+                 {{.name = L"draft.doc",
+                   .parent_ref = MakeFileReference(mft_tree_deleted_dir_idx,
+                                                   tree_old_dir_sequence)}}));
   put_record(mft_tree_stale_child_idx,
              MakeMftTreeRecord(
                  deleted_file, 2,
                  {{.name = L"stale.txt",
-                   .parent_ref = MakeFileReference(mft_tree_reused_dir_idx,
-                                                   new_dir_sequence - 1)}}));
+                   .parent_ref = MakeFileReference(
+                       mft_tree_reused_dir_idx, tree_new_dir_sequence - 1)}}));
   put_record(mft_tree_reused_dir_idx,
-             MakeMftTreeRecord(dir, new_dir_sequence,
+             MakeMftTreeRecord(dir, tree_new_dir_sequence,
                                {{.name = L"NewDir", .parent_ref = root}}));
   put_record(mft_tree_extension_idx,
              MakeMftTreeRecord(
                  file, 1, {{.name = L"ext", .parent_ref = docs}}, {},
                  StdInfoPermission::Normal,
-                 MakeFileReference(mft_tree_report_idx, report_sequence)));
+                 MakeFileReference(mft_tree_report_idx, tree_report_sequence)));
+}
 
+}  // namespace
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftTree() {
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  // $MFT goes in first, then the tree under it.
+  PutMftRecord(image, static_cast<DWORD>(mft_lcn) * cluster_size,
+               static_cast<ULONGLONG>(Mft::Idx::Mft), MakeMftTreeMftRecord());
+  PutMftTreeLiveRecords(image);
+  PutMftTreeFreedRecords(image);
   return image;
 }
 

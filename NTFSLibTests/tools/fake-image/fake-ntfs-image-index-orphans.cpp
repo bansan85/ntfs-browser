@@ -43,72 +43,13 @@ static_assert(FakeIndexAllocShape{}.last_vcn == orphaned_blocks_count - 1);
 static_assert(FakeIndexAllocShape{}.declared_block_count ==
               orphaned_blocks_count);
 
-// Builds a root-directory replacement whose $INDEX_ROOT points only at
-// VCN 0, while its $INDEX_ALLOCATION stream is shaped by shape. The default
-// shape maps orphaned_blocks_count blocks, so VCN 1 and 2 exist on "disk" but
-// no pointer in the tree reaches them. A declared count different from the
-// mapped one forges the attribute's own real_size (hence GetIndexBlockCount())
-// without changing the data run.
-FakeRecord MakeOrphanedIndexBlocksRootRecord(const FakeIndexAllocShape& shape) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
-  // The sequence its entries' parent references carry.
-  EditFileRecordHeader(record, [](FileRecordHeader& header) {
-    header.seq_no = root_sequence_number;
-  });
-
-  DWORD offset = attr_offset_value;
-
-  // $INDEX_ROOT
-  auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
-  root_attr.header.type = Attr::Type::IndexRoot;
-  root_attr.header.non_resident = 0;
-  root_attr.header.name_length = 0;
-  root_attr.header.flags = 0;
-  root_attr.header.id = 0;
-  root_attr.attr_offset = static_cast<WORD>(sizeof(root_attr));
-
-  const std::span<BYTE> body =
-      std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
-  root.attr_type = Attr::Type::FileName;
-  root.coll_rule = 0;
-  root.ib_size = cluster_size;
-  root.clusters_per_ib = 1;
-  root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
-      reinterpret_cast<BYTE*>(&root.entry_offset));
-
-  // Sole entry: nameless, terminal, pointing at VCN 0 - the only block a
-  // normal B+ tree walk reaches in this fixture.
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
-  first_entry.mft_index = 0;
-  first_entry.mft_sn = 0;
-  first_entry.stream_size = 0;
-  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode |
-                      NtfsBrowser::Data::IndexEntryFlag::Last;
-  first_entry.size = static_cast<WORD>(AlignAttrSize(
-      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
-  auto& sub_node_vcn = SubNodeVcnSlot(first_entry);
-  sub_node_vcn = 0;
-
-  root.total_entry_size = first_entry.size;
-  root.alloc_entry_size = first_entry.size;
-  root.flags = 0;
-
-  root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
-      first_entry.size;
-  root_attr.header.total_size =
-      AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
-
-  offset += root_attr.header.total_size;
-
-  // $INDEX_ALLOCATION: orphaned_blocks_count contiguous blocks at
-  // orphaned_blocks_lcn, only the first ever pointed at from $INDEX_ROOT.
+// Writes the $INDEX_ALLOCATION a shaped root carries at offset. Its VCN range
+// and declared size come from shape. Its single data run maps
+// shape.mapped_clusters clusters at orphaned_blocks_lcn, with a three-byte
+// length field when that count does not fit in one byte. Returns the
+// attribute's total_size.
+DWORD WriteShapedIndexAllocAttr(FakeRecord& record, DWORD offset,
+                                const FakeIndexAllocShape& shape) {
   auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
       &record.at(offset));
   alloc_attr.header.type = Attr::Type::IndexAllocation;
@@ -144,8 +85,29 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(const FakeIndexAllocShape& shape) {
   gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
 
   alloc_attr.header.total_size = AlignAttrSize(sizeof(alloc_attr) + run_len);
+  return alloc_attr.header.total_size;
+}
 
-  offset += alloc_attr.header.total_size;
+// Builds a root-directory replacement whose $INDEX_ROOT points only at
+// VCN 0, while its $INDEX_ALLOCATION stream is shaped by shape. The default
+// shape maps orphaned_blocks_count blocks, so VCN 1 and 2 exist on "disk" but
+// no pointer in the tree reaches them. A declared count different from the
+// mapped one forges the attribute's own real_size (hence GetIndexBlockCount())
+// without changing the data run.
+FakeRecord MakeOrphanedIndexBlocksRootRecord(const FakeIndexAllocShape& shape) {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
+                             NtfsBrowser::Data::FileRecordFlag::Dir);
+  // The sequence its entries' parent references carry.
+  EditFileRecordHeader(record, [](FileRecordHeader& header) {
+    header.seq_no = root_sequence_number;
+  });
+
+  DWORD offset = attr_offset_value;
+  // Sole entry: nameless, terminal, pointing at VCN 0 - the only block a
+  // normal B+ tree walk reaches in this fixture.
+  offset += WriteSubNodeIndexRootAttr(record, offset, cluster_size, 1);
+  offset += WriteShapedIndexAllocAttr(record, offset, shape);
 
   WriteEndOfAttributesMarker(record, offset);
   return record;
@@ -233,90 +195,23 @@ FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord() {
   });
 
   DWORD offset = attr_offset_value;
-
   // $INDEX_ROOT: a single sub-node pointer at VCN 0 (block 0).
-  auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
-  root_attr.header.type = Attr::Type::IndexRoot;
-  root_attr.header.non_resident = 0;
-  root_attr.header.name_length = 0;
-  root_attr.header.flags = 0;
-  root_attr.header.id = 0;
-  root_attr.attr_offset = static_cast<WORD>(sizeof(root_attr));
-
-  const std::span<BYTE> body =
-      std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
-  root.attr_type = Attr::Type::FileName;
-  root.coll_rule = 0;
-  root.ib_size = multi_cluster_orphan_index_block_size;
-  root.clusters_per_ib = multi_cluster_orphan_clusters_per_block;
-  root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
-      reinterpret_cast<BYTE*>(&root.entry_offset));
-
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
-  first_entry.mft_index = 0;
-  first_entry.mft_sn = 0;
-  first_entry.stream_size = 0;
-  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode |
-                      NtfsBrowser::Data::IndexEntryFlag::Last;
-  first_entry.size = static_cast<WORD>(AlignAttrSize(
-      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
-  auto& sub_node_vcn = SubNodeVcnSlot(first_entry);
-  sub_node_vcn = 0;  // block 0
-
-  root.total_entry_size = first_entry.size;
-  root.alloc_entry_size = first_entry.size;
-  root.flags = 0;
-
-  root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
-      first_entry.size;
-  root_attr.header.total_size =
-      AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
-
-  offset += root_attr.header.total_size;
+  offset += WriteSubNodeIndexRootAttr(record, offset,
+                                      multi_cluster_orphan_index_block_size,
+                                      multi_cluster_orphan_clusters_per_block);
 
   // $INDEX_ALLOCATION: multi_cluster_orphan_block_count contiguous blocks at
   // multi_cluster_orphan_lcn, only block 0 ever pointed at from $INDEX_ROOT.
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(offset));
-  alloc_attr.header.type = Attr::Type::IndexAllocation;
-  alloc_attr.header.non_resident = 1;
-  alloc_attr.header.name_length = 0;
-  alloc_attr.header.flags = 0;
-  alloc_attr.header.id = 0;
-  alloc_attr.start_vcn = 0;
   const DWORD total_clusters =
       static_cast<DWORD>(multi_cluster_orphan_block_count) *
       multi_cluster_orphan_clusters_per_block;
-  alloc_attr.last_vcn = total_clusters - 1;
-  alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
-  alloc_attr.comp_unit_size = 0;
-  alloc_attr.real_size =
+  offset += WriteSingleRunIndexAllocAttr(
+      record, offset,
+      {.start_vcn = 0,
+       .clusters = total_clusters,
+       .lcn = multi_cluster_orphan_lcn},
       static_cast<ULONGLONG>(multi_cluster_orphan_block_count) *
-      multi_cluster_orphan_index_block_size;
-  alloc_attr.alloc_size = alloc_attr.real_size;
-  alloc_attr.ini_size = alloc_attr.real_size;
-
-  const std::span<BYTE> data_run =
-      std::span<BYTE>(record).subspan(offset + alloc_attr.data_run_offset);
-  DWORD run_len = 0;
-  // High nibble = LCN offset field size, low nibble = length field size.
-  gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-  gsl::at(data_run, run_len++) = gsl::narrow<BYTE>(total_clusters);
-  {
-    const DWORD lcn = multi_cluster_orphan_lcn;
-    std::memcpy(&gsl::at(data_run, run_len), &lcn, sizeof(lcn));
-    run_len += sizeof(lcn);
-  }
-  gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
-
-  alloc_attr.header.total_size = AlignAttrSize(sizeof(alloc_attr) + run_len);
-
-  offset += alloc_attr.header.total_size;
+          multi_cluster_orphan_index_block_size);
 
   WriteEndOfAttributesMarker(record, offset);
   return record;
@@ -385,14 +280,6 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image,
   block.alloc_entry_size = first_entry.size;
 }
 
-// One $INDEX_ALLOCATION instance built by MakeDirectoryWithIndexAllocation():
-// "clusters" clusters at "lcn", from virtual cluster "start_vcn" on.
-struct FakeIndexAllocExtent {
-  ULONGLONG start_vcn;
-  DWORD clusters;
-  DWORD lcn;
-};
-
 // Builds a root-directory replacement, sequence root_sequence_number, whose
 // $INDEX_ROOT points only at block 0. Its $INDEX_ALLOCATION has one instance
 // per extent. The first declares declaredBlockCount blocks of ibSize bytes.
@@ -408,82 +295,15 @@ FakeRecord MakeDirectoryWithIndexAllocation(
   });
 
   DWORD offset = attr_offset_value;
-
-  auto& root_attr =
-      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
-  root_attr.header.type = Attr::Type::IndexRoot;
-  root_attr.header.non_resident = 0;
-  root_attr.header.name_length = 0;
-  root_attr.header.flags = 0;
-  root_attr.header.id = 0;
-  root_attr.attr_offset = static_cast<WORD>(sizeof(root_attr));
-
-  const std::span<BYTE> body =
-      std::span<BYTE>(record).subspan(offset + root_attr.attr_offset);
-  auto& root = *reinterpret_cast<NtfsBrowser::Data::IndexRoot*>(body.data());
-  root.attr_type = Attr::Type::FileName;
-  root.coll_rule = 0;
-  root.ib_size = ib_size;
-  root.clusters_per_ib =
-      gsl::narrow<BYTE>(ib_size >= cluster_size ? ib_size / cluster_size : 1);
-  root.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot))) -
-      reinterpret_cast<BYTE*>(&root.entry_offset));
-
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &gsl::at(body, sizeof(NtfsBrowser::Data::IndexRoot)));
-  first_entry.mft_index = 0;
-  first_entry.mft_sn = 0;
-  first_entry.stream_size = 0;
-  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::SubNode |
-                      NtfsBrowser::Data::IndexEntryFlag::Last;
-  first_entry.size = static_cast<WORD>(AlignAttrSize(
-      offsetof(NtfsBrowser::Data::IndexEntry, stream) + sizeof(ULONGLONG)));
-  auto& sub_node_vcn = SubNodeVcnSlot(first_entry);
-  sub_node_vcn = 0;  // block 0
-
-  root.total_entry_size = first_entry.size;
-  root.alloc_entry_size = first_entry.size;
-  root.flags = 0;
-
-  root_attr.attr_size =
-      static_cast<DWORD>(sizeof(NtfsBrowser::Data::IndexRoot)) +
-      first_entry.size;
-  root_attr.header.total_size =
-      AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
-
-  offset += root_attr.header.total_size;
+  offset += WriteSubNodeIndexRootAttr(
+      record, offset, ib_size,
+      gsl::narrow<BYTE>(ib_size >= cluster_size ? ib_size / cluster_size : 1));
 
   bool first = true;
   for (const FakeIndexAllocExtent& extent : extents) {
-    auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-        &record.at(offset));
-    alloc_attr.header.type = Attr::Type::IndexAllocation;
-    alloc_attr.header.non_resident = 1;
-    alloc_attr.header.name_length = 0;
-    alloc_attr.header.flags = 0;
-    alloc_attr.header.id = 0;
-    alloc_attr.start_vcn = extent.start_vcn;
-    alloc_attr.last_vcn = extent.start_vcn + extent.clusters - 1;
-    alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
-    alloc_attr.comp_unit_size = 0;
-    alloc_attr.real_size = first ? declared_block_count * ib_size : 0;
-    alloc_attr.alloc_size = alloc_attr.real_size;
-    alloc_attr.ini_size = alloc_attr.real_size;
+    offset += WriteSingleRunIndexAllocAttr(
+        record, offset, extent, first ? declared_block_count * ib_size : 0);
     first = false;
-
-    const std::span<BYTE> data_run =
-        std::span<BYTE>(record).subspan(offset + alloc_attr.data_run_offset);
-    DWORD run_len = 0;
-    // High nibble = LCN offset field size, low nibble = length field size.
-    gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-    gsl::at(data_run, run_len++) = gsl::narrow<BYTE>(extent.clusters);
-    std::memcpy(&gsl::at(data_run, run_len), &extent.lcn, sizeof(extent.lcn));
-    run_len += sizeof(extent.lcn);
-    gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
-
-    alloc_attr.header.total_size = AlignAttrSize(sizeof(alloc_attr) + run_len);
-    offset += alloc_attr.header.total_size;
   }
 
   WriteEndOfAttributesMarker(record, offset);
