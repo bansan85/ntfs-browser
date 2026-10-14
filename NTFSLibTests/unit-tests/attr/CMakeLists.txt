@@ -13,6 +13,7 @@ target_sources(
     "attribute-list-tests.cpp"
     "coverage-attrs-tests.cpp"
     "coverage-nonresident-index-tests.cpp"
+    "index-entry-size-tests.cpp"
     "nonresident-index-support.h"
 )
 
