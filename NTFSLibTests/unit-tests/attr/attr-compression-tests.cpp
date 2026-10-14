@@ -799,3 +799,44 @@ TEMPLATE_TEST_CASE_SIG("Names made of surrogate pairs are traversed and found",
                        Cache::Strategy::FullCache) {
   CheckSurrogatePairNamesTraverse<S>();
 }
+
+namespace {
+
+// Reads one whole compression unit from the root's $DATA, whose run starts
+// at an LCN that overflows. The read must fail without throwing, and the
+// log must say why.
+template <Cache::Strategy S>
+void CheckOverflowingLcnUnitReadFails(std::vector<BYTE> image) {
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(std::move(image));
+
+  std::optional<std::vector<BYTE>> read;
+  const std::string trace = CaptureTrace([&] {
+    REQUIRE_NOTHROW(read =
+                        ReadRootData(*root.record, 0,
+                                     NtfsBrowserTests::compression_unit_size));
+  });
+
+  CHECK_FALSE(read.has_value());
+  CHECK_THAT(trace,
+             Catch::Matchers::ContainsSubstring("byte address overflows"));
+}
+
+}  // namespace
+
+TEMPLATE_TEST_CASE_SIG(
+    "A stored compression unit whose LCN overflows a LONGLONG yields no data",
+    "[attr-non-resident][compression][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  CheckOverflowingLcnUnitReadFails<S>(
+      NtfsBrowserTests::BuildFakeNtfsImageWithStoredCompressionUnitBadLcn());
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A compressed compression unit whose LCN overflows a LONGLONG yields no "
+    "data",
+    "[attr-non-resident][compression][regression]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  CheckOverflowingLcnUnitReadFails<S>(
+      NtfsBrowserTests::
+          BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn());
+}

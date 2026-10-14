@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstring>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <ntfs-browser/mft/idx.h>
@@ -34,16 +35,27 @@ constexpr BYTE corrupt_chunk_header_high = 0xB0;
 DWORD EncodeDataRuns(std::span<BYTE> data_run,
                      const std::vector<FakeDataRun>& runs) {
   DWORD run_len = 0;
-  DWORD previous_lcn = 0;
+  ULONGLONG previous_lcn = 0;
 
   for (const FakeDataRun& run : runs) {
     if (run.lcn) {
-      gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-      gsl::at(data_run, run_len++) = gsl::narrow<BYTE>(run.clusters);
-      const LONG delta =
-          gsl::narrow<LONG>(*run.lcn) - gsl::narrow<LONG>(previous_lcn);
-      std::memcpy(&gsl::at(data_run, run_len), &delta, sizeof(delta));
-      run_len += sizeof(delta);
+      // A delta that fits a LONG keeps the 4-byte LCN field; a wider one
+      // takes the 8-byte field, so an LCN past 2^32 stays representable.
+      const LONGLONG delta =
+          gsl::narrow<LONGLONG>(*run.lcn) - gsl::narrow<LONGLONG>(previous_lcn);
+      if (std::in_range<LONG>(delta)) {
+        gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
+        gsl::at(data_run, run_len++) = gsl::narrow<BYTE>(run.clusters);
+        const LONG narrow_delta = gsl::narrow<LONG>(delta);
+        std::memcpy(&gsl::at(data_run, run_len), &narrow_delta,
+                    sizeof(narrow_delta));
+        run_len += sizeof(narrow_delta);
+      } else {
+        gsl::at(data_run, run_len++) = run_header8_lcn_bytes;
+        gsl::at(data_run, run_len++) = gsl::narrow<BYTE>(run.clusters);
+        std::memcpy(&gsl::at(data_run, run_len), &delta, sizeof(delta));
+        run_len += sizeof(delta);
+      }
       previous_lcn = *run.lcn;
     } else {
       gsl::at(data_run, run_len++) = 0x01;

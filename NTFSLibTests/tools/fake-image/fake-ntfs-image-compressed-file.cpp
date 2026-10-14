@@ -1,5 +1,8 @@
 #include <algorithm>
+#include <cstring>
 #include <vector>
+
+#include <ntfs-browser/mft/idx.h>
 
 #include "fake-ntfs-image-internal.h"
 
@@ -305,6 +308,38 @@ std::vector<BYTE> BuildFakeNtfsImageWithMisalignedCompressedStartVcn() {
   const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
                                         xca_lznt1_example_compressed.end());
   return BuildCompressionImage(record, runs, cluster_bytes);
+}
+
+namespace {
+
+// Root image whose compressed $DATA maps "runs". Only the record is written:
+// the runs sit at overflowing_lcn, so their clusters have nowhere to go.
+std::vector<BYTE>
+    BuildRootWithCompressedDataRuns(const std::vector<FakeDataRun>& runs) {
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NtfsBrowser::Data::StdInfoPermission::Archive |
+          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      compression_unit_size_shift, compression_unit_size, runs);
+
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const size_t root_offset =
+      mft_addr + static_cast<size_t>(fake_file_record_size) *
+                     static_cast<size_t>(Mft::Idx::Root);
+  std::memcpy(&image.at(root_offset), record.data(), record.size());
+  return image;
+}
+
+}  // namespace
+
+std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnitBadLcn() {
+  return BuildRootWithCompressedDataRuns(
+      {{overflowing_lcn, compression_unit_clusters}});
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn() {
+  return BuildRootWithCompressedDataRuns(
+      {{overflowing_lcn, 1}, {{}, compression_unit_clusters - 1}});
 }
 
 }  // namespace NtfsBrowserTests

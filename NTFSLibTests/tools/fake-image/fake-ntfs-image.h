@@ -864,7 +864,7 @@ inline constexpr ULONGLONG legacy_standard_information_record_idx = 6;
 // "lcn" is empty. Encodes into NTFS' real run-list format, so fixtures can
 // describe fragmented/sparse layouts. "clusters" must fit one length byte.
 struct FakeDataRun {
-  std::optional<DWORD> lcn;
+  std::optional<ULONGLONG> lcn;
   DWORD clusters = 0;
 };
 
@@ -1074,6 +1074,22 @@ inline constexpr size_t short_decompressed_unit_size = 100;
 // first (interior) unit's LZNT1 stream stops early; ReadData() must reject
 // it instead of zero-padding, unlike a legitimately short trailing unit.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnit();
+
+// LCN whose byte address, times the cluster size, overflows a LONGLONG. A
+// run starting here must fail its read, not wrap to a valid address.
+inline constexpr ULONGLONG overflowing_lcn = 1ULL << 53U;
+
+// Same as BuildFakeNtfsImageWithSparseCompressionUnit(), but the root's
+// compressed $DATA has all four clusters real, at overflowing_lcn: the
+// "stored" branch must report a read failure, not throw.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithStoredCompressionUnitBadLcn();
+
+// Same as the "stored" variant above, but only one of the four clusters is
+// real (at overflowing_lcn) and three are sparse: the "compressed" branch
+// must report the read failure instead.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn();
 
 // One byte short of the base header plus the CompressedSize field.
 inline constexpr DWORD compressed_attr_truncated_total_size = 71;
