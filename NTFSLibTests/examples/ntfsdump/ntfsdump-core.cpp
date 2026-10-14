@@ -23,6 +23,9 @@ namespace {
 // Bytes one dump shows. Longer files are cut here.
 constexpr std::uint64_t kBufferSize = 16U * 1024U;
 
+// Record handle the walk parses into.
+using Record = Io::FileRecord<Cache::Strategy::NoCache>;
+
 // Formats one 16-byte row: address, hex, then the text column. Bytes under
 // 0x20 show as '.'.
 std::wstring FormatRow(std::uint32_t address, const std::array<BYTE, 16>& row) {
@@ -65,110 +68,135 @@ void ShowData(std::wstring& dump, const BYTE* data, std::uint32_t datalen) {
   dump += FormatRow(i * 16, row);
 }
 
-// Finds the next path separator at or after from. Returns -1 when none is
-// left, as CString::Find does.
-int FindSeparator(std::wstring_view path, std::size_t from) {
-  const std::size_t pos = path.find(L'\\', from);
-  return pos == std::wstring_view::npos ? -1 : static_cast<int>(pos);
+// The directory names on path, in order. The drive and the last component are
+// left out.
+std::vector<std::wstring_view> DirectoryNames(std::wstring_view path) {
+  std::vector<std::wstring_view> names;
+  std::size_t dirs = path.find(L'\\');
+  if (dirs == std::wstring_view::npos) {
+    return names;
+  }
+
+  std::size_t dire = path.find(L'\\', dirs + 1);
+  while (dire != std::wstring_view::npos) {
+    names.push_back(path.substr(dirs + 1, dire - dirs - 1));
+    dirs = dire;
+    dire = path.find(L'\\', dirs + 1);
+  }
+  return names;
+}
+
+// The last component of path, which names the file to dump.
+std::wstring_view LastComponent(std::wstring_view path) {
+  const std::size_t last = path.rfind(L'\\');
+  return last == std::wstring_view::npos ? path : path.substr(last + 1);
+}
+
+// Message of a failed step, or nullopt when the step went through.
+using Failure = std::optional<std::wstring>;
+
+// Parses the root directory, with only the index attributes a walk needs.
+Failure OpenRoot(Record& fr) {
+  // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
+  // don't waste time and ram to parse unwanted attributes
+  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
+    return L"Cannot read root directory of volume";
+  }
+  if (!fr.ParseAttrs()) {
+    return L"Cannot parse attributes";
+  }
+  return std::nullopt;
+}
+
+// Steps from the directory fr holds into its child name, and parses the
+// child's attributes. The root wording on a failed read is the one the sample
+// has always shown here.
+Failure EnterDirectory(Record& fr, std::wstring_view name) {
+  const std::optional<IndexEntry> ie = fr.FindSubEntry(name);
+  if (!ie) {
+    return L"File not found\n";
+  }
+  if (!fr.ParseFileRecord(ie->GetFileReference())) {
+    return L"Cannot read root directory of volume";
+  }
+  if (!fr.ParseAttrs()) {
+    return L"Cannot parse directory attributes";
+  }
+  return std::nullopt;
+}
+
+// Parses the file name of the directory fr holds, with only its unnamed DATA
+// attribute.
+Failure OpenFile(Record& fr, std::wstring_view name) {
+  const std::optional<IndexEntry> ie = fr.FindSubEntry(name);
+  if (!ie) {
+    return L"File not found\n";
+  }
+  if (!fr.ParseFileRecord(ie->GetFileReference())) {
+    return L"Cannot read file";
+  }
+  fr.SetAttrMask(Attr::Mask::Data);
+  if (!fr.ParseAttrs()) {
+    return L"Cannot parse file attributes";
+  }
+  return std::nullopt;
+}
+
+// Appends the first kBufferSize bytes of the unnamed stream of the parsed file
+// to dump. A file with no unnamed stream adds nothing.
+Failure DumpStart(const Record& fr, std::wstring& dump) {
+  // only pick the unnamed stream (file data)
+  const Attr::AttrBase<Cache::Strategy::NoCache>* data = fr.FindStream({});
+  if (data == nullptr) {
+    return std::nullopt;
+  }
+
+  std::vector<BYTE> filebuf(kBufferSize);
+  // show only the first 16K
+  const ULONGLONG datalen = std::min(data->GetDataSize(), kBufferSize);
+  const std::optional<ULONGLONG> len =
+      data->ReadData(0, {filebuf.data(), static_cast<std::size_t>(datalen)});
+  if (!len || *len != datalen) {
+    return L"Read data error";
+  }
+
+  ShowData(dump, filebuf.data(), static_cast<std::uint32_t>(datalen));
+  return std::nullopt;
+}
+
+// A result that carries only the message to show.
+DumpResult Failed(std::wstring_view message) {
+  return DumpResult{.message = std::wstring(message)};
 }
 
 }  // namespace
 
 DumpResult DumpFile(NtfsVolume<Cache::Strategy::NoCache>& volume,
                     std::wstring_view path) {
-  DumpResult result;
-
   if (!volume.IsVolumeOK()) {
-    result.message = L"Not a valid NTFS volume or NTFS version < 3.0";
-    return result;
+    return Failed(L"Not a valid NTFS volume or NTFS version < 3.0");
   }
 
-  // parse root directory
-
-  Io::FileRecord<Cache::Strategy::NoCache> fr(volume);
-  // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
-  // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
-    result.message = L"Cannot read root directory of volume";
-    return result;
+  Record fr(volume);
+  if (const Failure error = OpenRoot(fr)) {
+    return Failed(*error);
   }
 
-  if (!fr.ParseAttrs()) {
-    result.message = L"Cannot parse attributes";
-    return result;
-  }
-
-  // find subdirectory
-
-  int dirs = FindSeparator(path, 0);
-  int dire = FindSeparator(path, static_cast<std::size_t>(dirs + 1));
-  while (dire != -1) {
-    const std::wstring pathname(
-        path.substr(static_cast<std::size_t>(dirs + 1),
-                    static_cast<std::size_t>(dire - dirs - 1)));
-
-    std::optional<IndexEntry> ie = fr.FindSubEntry(pathname);
-    if (!ie) {
-      result.message = L"File not found\n";
-      return result;
+  for (const std::wstring_view name : DirectoryNames(path)) {
+    if (const Failure error = EnterDirectory(fr, name)) {
+      return Failed(*error);
     }
-
-    if (!fr.ParseFileRecord(ie->GetFileReference())) {
-      result.message = L"Cannot read root directory of volume";
-      return result;
-    }
-
-    if (!fr.ParseAttrs()) {
-      result.message = L"Cannot parse directory attributes";
-      return result;
-    }
-
-    dirs = dire;
-    dire = FindSeparator(path, static_cast<std::size_t>(dirs + 1));
   }
 
-  // dump it !
-
-  const std::wstring filename(path.substr(static_cast<std::size_t>(dirs + 1)));
-  std::optional<IndexEntry> ie = fr.FindSubEntry(filename);
-  if (!ie) {
-    result.message = L"File not found\n";
-    return result;
+  if (const Failure error = OpenFile(fr, LastComponent(path))) {
+    return Failed(*error);
   }
 
-  if (!fr.ParseFileRecord(ie->GetFileReference())) {
-    result.message = L"Cannot read file";
-    return result;
+  DumpResult result;
+  if (const Failure error = DumpStart(fr, result.dump)) {
+    return Failed(*error);
   }
-
-  // We only need DATA attribute and StdInfo
-  fr.SetAttrMask(Attr::Mask::Data);
-  if (!fr.ParseAttrs()) {
-    result.message = L"Cannot parse file attributes";
-    return result;
-  }
-
-  std::vector<BYTE> filebuf;
-  filebuf.resize(kBufferSize);
-
-  // only pick the unnamed stream (file data)
-  const Attr::AttrBase<Cache::Strategy::NoCache>* data = fr.FindStream({});
-  if (data != nullptr) {
-    // show only the first 16K
-    const ULONGLONG datalen = std::min(data->GetDataSize(), kBufferSize);
-
-    std::optional<ULONGLONG> len =
-        data->ReadData(0, {filebuf.data(), static_cast<std::size_t>(datalen)});
-    if (!len || *len != datalen) {
-      result.message = L"Read data error";
-      return result;
-    }
-
-    ShowData(result.dump, filebuf.data(), static_cast<std::uint32_t>(datalen));
-  }
-
   return result;
 }
 
