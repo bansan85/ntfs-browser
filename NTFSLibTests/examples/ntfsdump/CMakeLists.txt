@@ -1,3 +1,9 @@
+# The dump logic, with no MFC in it, so the unit tests can link it too
+# (unit-tests/io/ntfsdump-core-tests.cpp).
+add_library(NtfsDumpCore STATIC "ntfsdump-core.cpp")
+target_include_directories(NtfsDumpCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(NtfsDumpCore PUBLIC ${PROJECT_NAME})
+
 add_executable(
   NtfsDump
   WIN32
@@ -9,7 +15,7 @@ add_executable(
   "${CMAKE_CURRENT_SOURCE_DIR}/res/ntfsdump.rc2"
 )
 target_compile_definitions(NtfsDump PRIVATE _AFXDLL)
-target_link_libraries(NtfsDump PRIVATE ${PROJECT_NAME})
+target_link_libraries(NtfsDump PRIVATE ${PROJECT_NAME} NtfsDumpCore)
 set_target_properties(NtfsDump PROPERTIES WIN32_EXECUTABLE 1)
 target_link_options(NtfsDump PRIVATE "/entry:wWinMainCRTStartup")
 if(WIN32 AND BUILD_SHARED_LIBS)

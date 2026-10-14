@@ -879,6 +879,33 @@ inline constexpr std::string_view freed_file_content = "Recovered text.\n";
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFreedNonResidentFile(
     ULONGLONG real_size, const std::vector<FakeDataRun>& runs);
 
+// MFT indices of the two in-use files BuildFakeNtfsImageWithDumpTree() adds to
+// the root directory. The file in Docs is mft_tree_report_idx.
+inline constexpr ULONGLONG dump_big_file_idx = 6;
+inline constexpr ULONGLONG dump_empty_file_idx = 7;
+
+// Resident $DATA of the in-use "report.txt" in Docs. Mixes printable bytes
+// with control and high bytes, so a dump shows both columns.
+inline constexpr std::string_view dump_report_content =
+    "NTFS dump test\x01\x7F\xE9\r\n";
+
+// Size and single run of the big file BuildFakeNtfsImageWithDumpTree() takes
+// by default: 20 clusters at LCN 40, past the 16 KiB a dump shows.
+inline constexpr ULONGLONG dump_big_file_size = 20000;
+inline constexpr DWORD dump_big_file_lcn = 40;
+inline constexpr DWORD dump_big_file_clusters = 20;
+
+// Same volume as BuildFakeNtfsImageWithFreedFileTree(), plus the in-use files
+// a dump walks to. The root (#5) indexes "big.bin" (dump_big_file_idx, a
+// non-resident $DATA of big_real_size bytes over big_runs), "Docs" (16) and
+// "empty.txt" (dump_empty_file_idx, a zero-byte resident $DATA). Docs indexes
+// "Broken" (25, a zero-filled record), "old.tmp" (19, freed), "OldDir" (20,
+// freed) and "report.txt" (17, in use, holding dump_report_content). A run
+// whose clusters the base image lacks is left unbacked, so its read fails.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithDumpTree(ULONGLONG big_real_size,
+                                   const std::vector<FakeDataRun>& big_runs);
+
 // Compression unit exponent every fixture uses: 4 clusters, one chunk.
 inline constexpr WORD compression_unit_size_shift = 2;
 

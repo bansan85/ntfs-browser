@@ -1,7 +1,9 @@
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "fake-ntfs-image-internal.h"
@@ -265,6 +267,145 @@ std::vector<BYTE> BuildFakeNtfsImageWithFreedNonResidentFile(
       mft_addr + static_cast<size_t>(fake_file_record_size) *
                      gsl::narrow<size_t>(mft_tree_stale_child_idx);
   std::memcpy(&image.at(offset), record.data(), record.size());
+  return image;
+}
+
+namespace {
+
+// In-use file record of sequence sequence, whose unnamed $DATA is resident and
+// holds content.
+FakeRecord MakeResidentFileRecord(WORD sequence, const FakeFileName& name,
+                                  std::string_view content) {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+  EditFileRecordHeader(record, [sequence](FileRecordHeader& header) {
+    header.seq_no = sequence;
+  });
+
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+  offset += WriteFileNameAttr(record, offset, name, false);
+  const DWORD data_offset = offset;
+  offset +=
+      WriteResidentDataAttr(record, offset, static_cast<DWORD>(content.size()));
+  std::memcpy(
+      &record.at(data_offset + sizeof(NtfsBrowser::Data::HeaderResident)),
+      content.data(), content.size());
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// In-use file record of sequence sequence, whose unnamed $DATA is non-resident
+// over runs.
+FakeRecord MakeNonResidentFileRecord(WORD sequence, const FakeFileName& name,
+                                     ULONGLONG real_size,
+                                     const std::vector<FakeDataRun>& runs) {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+  EditFileRecordHeader(record, [sequence](FileRecordHeader& header) {
+    header.seq_no = sequence;
+  });
+
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+  offset += WriteFileNameAttr(record, offset, name, false);
+  offset += WriteNonResidentAttr(record, offset, Attr::Type::Data, 0, real_size,
+                                 runs);
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// True when every real run of runs lies inside the clusters image holds.
+bool RunsInsideImage(const std::vector<BYTE>& image,
+                     const std::vector<FakeDataRun>& runs) {
+  const ULONGLONG image_clusters = image.size() / cluster_size;
+  return std::ranges::all_of(runs, [image_clusters](const FakeDataRun& run) {
+    return !run.lcn || *run.lcn + run.clusters <= image_clusters;
+  });
+}
+
+}  // namespace
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithDumpTree(ULONGLONG big_real_size,
+                                   const std::vector<FakeDataRun>& big_runs) {
+  // Sequence numbers the records below carry, where another record names them.
+  constexpr WORD docs_sequence = 1;
+  constexpr WORD report_sequence = 3;
+  constexpr WORD file_sequence = 1;
+
+  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
+    const size_t offset =
+        mft_addr +
+        static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
+    std::memcpy(&image.at(offset), record.data(), record.size());
+  };
+
+  const ULONGLONG root_ref = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG docs_ref =
+      MakeFileReference(mft_tree_docs_idx, docs_sequence);
+
+  // Index entries stay in collation order, as the lookups expect. The root
+  // lists itself as "." too, as a real volume's does.
+  const std::array<FakeIndexName, 4> root_names{
+      {{L".", static_cast<ULONGLONG>(Mft::Idx::Root), true},
+       {L"big.bin", dump_big_file_idx, false},
+       {L"Docs", mft_tree_docs_idx, true},
+       {L"empty.txt", dump_empty_file_idx, false}}};
+  put_record(
+      static_cast<ULONGLONG>(Mft::Idx::Root),
+      MakeIndexedDirRecord(root_sequence_number,
+                           FakeFileName{.name = L".", .parent_ref = root_ref},
+                           root_names));
+
+  const std::array<FakeIndexName, 4> docs_names{
+      {{L"Broken", mft_tree_zeroed_idx, false},
+       {L"old.tmp", mft_tree_deleted_file_idx, false},
+       {L"OldDir", mft_tree_deleted_dir_idx, true},
+       {L"report.txt", mft_tree_report_idx, false}}};
+  put_record(mft_tree_docs_idx,
+             MakeIndexedDirRecord(
+                 docs_sequence,
+                 FakeFileName{.name = L"Docs", .parent_ref = root_ref},
+                 docs_names));
+
+  put_record(
+      mft_tree_report_idx,
+      MakeResidentFileRecord(report_sequence,
+                             {.name = L"report.txt", .parent_ref = docs_ref},
+                             dump_report_content));
+  put_record(dump_big_file_idx,
+             MakeNonResidentFileRecord(
+                 file_sequence, {.name = L"big.bin", .parent_ref = root_ref},
+                 big_real_size, big_runs));
+  put_record(dump_empty_file_idx,
+             MakeResidentFileRecord(
+                 file_sequence, {.name = L"empty.txt", .parent_ref = root_ref},
+                 std::string_view{}));
+
+  // Counting bytes over the big file's clusters, so a dump shows the file
+  // offset of every byte. Written only when every run is backed, so a run past
+  // the base image stays unbacked.
+  if (RunsInsideImage(image, big_runs)) {
+    std::size_t backed_bytes = 0;
+    for (const FakeDataRun& run : big_runs) {
+      if (run.lcn) {
+        backed_bytes += static_cast<std::size_t>(run.clusters) * cluster_size;
+      }
+    }
+    std::vector<BYTE> pattern(backed_bytes);
+    for (std::size_t i = 0; i < pattern.size(); ++i) {
+      pattern[i] = static_cast<BYTE>(i & 0xFFU);
+    }
+    LayRunBytes(image, big_runs, pattern);
+  }
+
   return image;
 }
 

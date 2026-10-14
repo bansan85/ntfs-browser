@@ -1,16 +1,8 @@
 #include "StdAfx.h"
 
-#include <algorithm>
-#include <cstdint>
-
-#include <gsl/narrow>
-
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "ntfsdump-core.h"
 #include "ntfsdump.h"
 #include "ntfsdumpDlg.h"
 
@@ -124,59 +116,6 @@ void CNtfsdumpDlg::OnPaint() {
 //  the minimized window.
 HCURSOR CNtfsdumpDlg::OnQueryDragIcon() { return (HCURSOR)m_hIcon; }
 
-// ugly but work !
-void ShowData(CString& m_dump, BYTE* data, DWORD datalen) {
-  // "0000    01 02 03 04 05 06 07 08 - 09 0A 0B 0C 0D 0E 0F   123456789ABCDEF";
-
-  if (datalen == 0) {
-    return;
-  }
-
-  CString line;
-  BYTE* p;
-  DWORD i;
-
-  for (i = 0; i < ((datalen - 1) >> 4U); i++) {
-    p = data + static_cast<size_t>(i) * 16;
-
-    line.Format(
-        _T("%04X    %02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X ")
-        _T("%02X %02X %02X %02X %02X   "),
-        i * 16, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9],
-        p[10], p[11], p[12], p[13], p[14], p[15]);
-    for (int j = 0; j < 16; j++) {
-      if (p[j] < 0x20) {
-        p[j] = '.';
-      }
-    }
-    line.AppendFormat(_T("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\r\n"), p[0], p[1],
-                      p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10],
-                      p[11], p[12], p[13], p[14], p[15]);
-
-    m_dump += line;
-  }
-
-  // last line
-  p = data + static_cast<size_t>(i) * 16;
-  BYTE q[16];
-  memset(q, 0xFF, 16);
-  memcpy(q, p, datalen - i * 16);
-  line.Format(
-      _T("%04X    %02X %02X %02X %02X %02X %02X %02X %02X - %02X %02X %02X ")
-      _T("%02X %02X %02X %02X %02X   "),
-      i * 16, q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10],
-      q[11], q[12], q[13], q[14], q[15]);
-  for (int j = 0; j < 16; j++) {
-    if (q[j] < 0x20) {
-      q[j] = '.';
-    }
-  }
-  line.AppendFormat(_T("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c"), q[0], q[1], q[2],
-                    q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11],
-                    q[12], q[13], q[14], q[15]);
-  m_dump += line;
-}
-
 void CNtfsdumpDlg::OnOK() {
   CFileDialog fd(TRUE);
 
@@ -188,102 +127,16 @@ void CNtfsdumpDlg::OnOK() {
   m_dump.Empty();
   UpdateData(FALSE);
 
-  // parse volume
-
-  const _TCHAR volname = m_filename.GetAt(0);
-
-  NtfsVolume<Cache::Strategy::NoCache> volume(volname);
-  if (!volume.IsVolumeOK()) {
-    MessageBox(_T("Not a valid NTFS volume or NTFS version < 3.0"));
+  // The drive letter of the path names the volume to open.
+  NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache> volume(
+      m_filename.GetAt(0));
+  const NtfsDump::DumpResult result =
+      NtfsDump::DumpFile(volume, m_filename.GetString());
+  if (!result.message.empty()) {
+    MessageBox(result.message.c_str());
     return;
   }
 
-  // parse root directory
-
-  NtfsBrowser::Io::FileRecord fr(volume);
-  // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
-  // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
-    MessageBox(_T("Cannot read root directory of volume"));
-    return;
-  }
-
-  if (!fr.ParseAttrs()) {
-    MessageBox(_T("Cannot parse attributes"));
-    return;
-  }
-
-  // find subdirectory
-
-  int dirs = m_filename.Find(_T('\\'), 0);
-  int dire = m_filename.Find(_T('\\'), dirs + 1);
-  while (dire != -1) {
-    CString pathname = m_filename.Mid(dirs + 1, dire - dirs - 1);
-
-    std::optional<IndexEntry> ie =
-        fr.FindSubEntry(static_cast<const _TCHAR*>(pathname));
-    if (!ie) {
-      MessageBox(_T("File not found\n"));
-      return;
-    }
-
-    if (!fr.ParseFileRecord(ie->GetFileReference())) {
-      MessageBox(_T("Cannot read root directory of volume"));
-      return;
-    }
-
-    if (!fr.ParseAttrs()) {
-      MessageBox(_T("Cannot parse directory attributes"));
-      return;
-    }
-
-    dirs = dire;
-    dire = m_filename.Find(_T('\\'), dirs + 1);
-  }
-
-  // dump it !
-
-  CString filename = m_filename.Right(m_filename.GetLength() - dirs - 1);
-  std::optional<IndexEntry> ie =
-      fr.FindSubEntry(static_cast<const _TCHAR*>(filename));
-  if (!ie) {
-    MessageBox(_T("File not found\n"));
-    return;
-  }
-
-  if (!fr.ParseFileRecord(ie->GetFileReference())) {
-    MessageBox(_T("Cannot read file"));
-    return;
-  }
-
-  // We only need DATA attribute and StdInfo
-  fr.SetAttrMask(Attr::Mask::Data);
-  if (!fr.ParseAttrs()) {
-    MessageBox(_T("Cannot parse file attributes"));
-    return;
-  }
-
-  constexpr ULONGLONG BUFFER_SIZE = 16U * 1024U;
-  std::vector<BYTE> filebuf;
-  filebuf.resize(BUFFER_SIZE);
-
-  // only pick the unnamed stream (file data)
-  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* data =
-      fr.FindStream({});
-  if (data != nullptr) {
-    // show only the first 16K
-    const ULONGLONG datalen = min(data->GetDataSize(), BUFFER_SIZE);
-
-    std::optional<ULONGLONG> len =
-        data->ReadData(0, {filebuf.data(), gsl::narrow<size_t>(datalen)});
-    if (!len || *len != datalen) {
-      MessageBox(_T("Read data error"));
-      return;
-    }
-
-    ShowData(m_dump, filebuf.data(), gsl::narrow<DWORD>(datalen));
-    UpdateData(FALSE);
-  }
+  m_dump = result.dump.c_str();
+  UpdateData(FALSE);
 }

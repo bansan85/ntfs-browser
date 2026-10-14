@@ -31,4 +31,9 @@ if(WIN32)
     PRIVATE "ntfsundel-recover-tests.cpp" "ntfsundel-search-tests.cpp"
   )
   target_link_libraries(NtfsBrowserTests PRIVATE NtfsUndelCore)
+
+  # NtfsDump's dump logic (examples/ntfsdump/ntfsdump-core.h) is Windows-only,
+  # like its dialog, and links the same way.
+  target_sources(NtfsBrowserTests PRIVATE "ntfsdump-core-tests.cpp")
+  target_link_libraries(NtfsBrowserTests PRIVATE NtfsDumpCore)
 endif()
