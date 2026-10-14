@@ -3,6 +3,14 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/mft/idx.h>
+
+#include "data/filename.h"
+#include "data/header-non-resident.h"
+#include "data/header-resident.h"
+#include "data/index-entry-flag.h"
+#include "data/index-root.h"
+#include "data/ntfs-bpb.h"
 #include "fake-ntfs-image-internal.h"
 
 namespace NtfsBrowserTests {

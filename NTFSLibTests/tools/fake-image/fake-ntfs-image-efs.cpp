@@ -4,6 +4,10 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/mft/idx.h>
+
+#include "attr/flags.h"
+#include "data/header-resident.h"
 #include "fake-ntfs-image-internal.h"
 
 namespace NtfsBrowserTests {

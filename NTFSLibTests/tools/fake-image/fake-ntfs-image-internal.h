@@ -10,33 +10,17 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/mft/idx.h>
 
-#include "attr/flags.h"
-#include "data/attribute-list.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"
-#include "data/filename.h"
-#include "data/header-non-resident.h"
-#include "data/header-resident.h"
 #include "data/index-block.h"
-#include "data/index-entry-flag.h"
 #include "data/index-entry.h"
-#include "data/index-root.h"
-#include "data/ntfs-bpb.h"
-#include "data/standard-information.h"
 #include "data/std-info-permission.h"
-#include "data/volume-information.h"
-#include "efs/efs-context.h"
 #include "fake-ntfs-image.h"
-#include "file-record-header-edit.h"
-#include "lznt1/decompress.h"
 #include "mft/file-reference.h"
-#include "upcase/upcase.h"
 
 namespace NtfsBrowserTests {
 

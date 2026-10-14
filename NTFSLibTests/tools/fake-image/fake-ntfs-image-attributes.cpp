@@ -3,6 +3,15 @@
 #include <span>
 #include <vector>
 
+#include <ntfs-browser/mft/idx.h>
+
+#include "attr/flags.h"
+#include "data/filename.h"
+#include "data/header-non-resident.h"
+#include "data/header-resident.h"
+#include "data/index-entry-flag.h"
+#include "data/index-root.h"
+#include "data/standard-information.h"
 #include "fake-ntfs-image-internal.h"
 
 namespace NtfsBrowserTests {

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "fake-ntfs-image-internal.h"
+#include "lznt1/decompress.h"
 
 namespace NtfsBrowserTests {
 

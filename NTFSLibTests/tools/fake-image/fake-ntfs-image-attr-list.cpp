@@ -5,6 +5,14 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/mft/idx.h>
+
+#include "data/attribute-list.h"
+#include "data/filename.h"
+#include "data/header-non-resident.h"
+#include "data/header-resident.h"
+#include "data/index-entry-flag.h"
+#include "data/index-root.h"
 #include "fake-ntfs-image-internal.h"
 
 namespace NtfsBrowserTests {

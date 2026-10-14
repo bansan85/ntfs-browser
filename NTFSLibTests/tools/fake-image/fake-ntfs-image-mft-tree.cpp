@@ -6,7 +6,13 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/mft/idx.h>
+
+#include "data/header-non-resident.h"
+#include "data/header-resident.h"
+#include "data/standard-information.h"
 #include "fake-ntfs-image-internal.h"
+#include "file-record-header-edit.h"
 
 namespace NtfsBrowserTests {
 
