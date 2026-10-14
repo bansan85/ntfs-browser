@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "boot-sector-geometry-characterization-tests.cpp"
     "coverage-volume-tests.cpp"
+    "drive-letter-tests.cpp"
     "filename-compare-tests.cpp"
     "init-exit-tests.cpp"
     "mft-list-entry-characterization-tests.cpp"
