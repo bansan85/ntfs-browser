@@ -683,3 +683,89 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK_FALSE(freed.IsDirectory());
   }
 }
+
+TEMPLATE_TEST_CASE_SIG(
+    "AllocAttr rejects a header of the wrong residency with the message of its "
+    "type, in both modes",
+    "[file-record][characterization]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  // A type, the residency form its header must not take, the code ParseAttr
+  // logs for it, and the message AllocAttr throws.
+  struct Rejected {
+    Attr::Type type;
+    bool resident_form;
+    std::string_view code;
+    std::string_view message;
+  };
+
+  const std::array<Rejected, 6> cases{{
+      {Attr::Type::StandardInformation, false, "0x0010",
+       "Standard Information attribute must be resident."},
+      {Attr::Type::FileName, false, "0x0030",
+       "File Name attribute must be resident."},
+      {Attr::Type::VolumeName, false, "0x0060",
+       "Volume Name attribute must be resident."},
+      {Attr::Type::VolumeInformation, false, "0x0070",
+       "Volume Information attribute must be resident."},
+      {Attr::Type::IndexRoot, false, "0x0090",
+       "Index Root attribute must be resident."},
+      {Attr::Type::IndexAllocation, true, "0x00A0",
+       "Index Allocation attribute must be non-resident."},
+  }};
+
+  for (const Rejected& rejected : cases) {
+    RecordBytes record = MakeScratchRecord(first_attr_offset);
+    DWORD offset = first_attr_offset;
+    if (rejected.resident_form) {
+      offset += PutResidentAttr(record, offset, rejected.type,
+                                std::span<const BYTE>{});
+    } else {
+      offset += PutNonResidentAttr(record, offset, rejected.type);
+    }
+    PutEndMarker(record, offset);
+
+    for (const bool recover : {false, true}) {
+      (void)TakeCapturedLog();
+      const Parsed parsed = ParseScratch<S>(record, rejected.type, recover);
+      CHECK_FALSE(parsed.ok);
+      CHECK(parsed.count == 0);
+      const std::string captured = TakeCapturedLog();
+      CHECK_THAT(captured, ContainsSubstring(std::string(rejected.message)));
+      CHECK_THAT(captured, ContainsSubstring("Attribute Parse error: " +
+                                             std::string(rejected.code)));
+    }
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "AllocAttr keeps a non-resident unhandled type with a warning, and a "
+    "non-resident logged utility stream without one",
+    "[file-record][characterization]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  RecordBytes unhandled = MakeScratchRecord(first_attr_offset);
+  DWORD offset = first_attr_offset;
+  offset += PutNonResidentAttr(unhandled, offset, Attr::Type::ObjectId);
+  PutEndMarker(unhandled, offset);
+
+  (void)TakeCapturedLog();
+  const Parsed kept = ParseScratch<S>(unhandled, Attr::Type::ObjectId, false);
+  CHECK(kept.ok);
+  CHECK(kept.count == 1);
+  CHECK(kept.non_resident);
+  CHECK_THAT(TakeCapturedLog(),
+             ContainsSubstring("Unhandled attribute: 0x0040"));
+
+  RecordBytes utility = MakeScratchRecord(first_attr_offset);
+  offset = first_attr_offset;
+  offset +=
+      PutNonResidentAttr(utility, offset, Attr::Type::LoggedUtilityStream);
+  PutEndMarker(utility, offset);
+
+  (void)TakeCapturedLog();
+  const Parsed stored =
+      ParseScratch<S>(utility, Attr::Type::LoggedUtilityStream, false);
+  CHECK(stored.ok);
+  CHECK(stored.count == 1);
+  CHECK(stored.non_resident);
+  CHECK(TakeCapturedLog().find("Unhandled attribute") == std::string::npos);
+}
