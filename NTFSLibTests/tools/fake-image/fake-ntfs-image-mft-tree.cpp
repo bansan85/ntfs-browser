@@ -351,6 +351,75 @@ std::vector<BYTE> BuildFakeNtfsImageWithNamedRoot(std::wstring_view root_name) {
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithIndexCycle() {
+  using NtfsBrowser::Data::FileRecordFlag;
+
+  // Sequence numbers the records below carry, where another record names them.
+  constexpr WORD docs_sequence = 1;
+  constexpr WORD new_dir_sequence = 7;
+  constexpr WORD self_sequence = 1;
+
+  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
+    const size_t offset =
+        mft_addr +
+        static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
+    std::memcpy(&image.at(offset), record.data(), record.size());
+  };
+
+  const ULONGLONG root_ref = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG docs_ref =
+      MakeFileReference(mft_tree_docs_idx, docs_sequence);
+  const ULONGLONG self_ref =
+      MakeFileReference(mft_tree_zeroed_idx, self_sequence);
+
+  // Docs is left out of the root, so Docs has no parent but NewDir.
+  const std::array<FakeIndexName, 2> root_names{
+      {{L".", static_cast<ULONGLONG>(Mft::Idx::Root), true},
+       {L"Self", mft_tree_zeroed_idx, true}}};
+  put_record(
+      static_cast<ULONGLONG>(Mft::Idx::Root),
+      MakeIndexedDirRecord(root_sequence_number,
+                           FakeFileName{.name = L".", .parent_ref = root_ref},
+                           root_names));
+
+  const std::array<FakeIndexName, 2> docs_names{
+      {{L"NewDir", mft_tree_reused_dir_idx, true},
+       {L"old.tmp", mft_tree_deleted_file_idx, false}}};
+  put_record(mft_tree_docs_idx,
+             MakeIndexedDirRecord(
+                 docs_sequence,
+                 FakeFileName{.name = L"Docs", .parent_ref = root_ref},
+                 docs_names));
+
+  const std::array<FakeIndexName, 1> new_dir_names{
+      {{L"Docs", mft_tree_docs_idx, true}}};
+  put_record(mft_tree_reused_dir_idx,
+             MakeIndexedDirRecord(
+                 new_dir_sequence,
+                 FakeFileName{.name = L"NewDir", .parent_ref = docs_ref},
+                 new_dir_names));
+
+  // "." names Self itself, which the search must not treat as a parent.
+  const std::array<FakeIndexName, 2> self_names{
+      {{L".", mft_tree_zeroed_idx, true},
+       {L"self.tmp", mft_tree_extension_idx, false}}};
+  put_record(mft_tree_zeroed_idx,
+             MakeIndexedDirRecord(
+                 self_sequence,
+                 FakeFileName{.name = L"Self", .parent_ref = root_ref},
+                 self_names));
+
+  put_record(
+      mft_tree_extension_idx,
+      MakeMftTreeRecord(FileRecordFlag{}, self_sequence,
+                        {{.name = L"self.tmp", .parent_ref = self_ref}}));
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithFreedNonResidentFile(
     ULONGLONG real_size, const std::vector<FakeDataRun>& runs) {
   std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();

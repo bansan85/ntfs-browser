@@ -883,6 +883,14 @@ inline constexpr std::string_view freed_file_content = "Recovered text.\n";
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithNamedRoot(std::wstring_view root_name);
 
+// Same volume as BuildFakeNtfsImageWithFreedFileTree(), with directory entries
+// that loop. Docs (16) indexes "NewDir" (mft_tree_reused_dir_idx) and the
+// freed "old.tmp" (19). NewDir indexes Docs back, so each names the other as
+// parent, and neither reaches the root. The root (#5) indexes only "." and
+// "Self" (mft_tree_zeroed_idx). Self indexes itself as "." and the freed
+// "self.tmp" (mft_tree_extension_idx), so Self's own entry names it as parent.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexCycle();
+
 // Same volume as BuildFakeNtfsImageWithFreedFileTree(), with the freed
 // "stale.txt" (22) replaced by one whose unnamed $DATA is non-resident:
 // real_size

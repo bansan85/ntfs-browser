@@ -137,6 +137,32 @@ TEST_CASE("NtfsUndel search paths do not take the root's name from its record",
   CheckNamedRootPaths(*volume);
 }
 
+TEST_CASE("NtfsUndel search stops a path at a loop of directory entries",
+          "[undel][search]") {
+  const auto volume =
+      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithIndexCycle());
+
+  const SearchResult result = Search(*volume, L"old\\.tmp");
+
+  REQUIRE(result.files.size() == 1);
+  // Docs and NewDir name each other as parent. The walk stops where the loop
+  // closes, at the record it re-enters, as MftTree paths do.
+  CHECK(result.files[0].full_path == L"NewDir\\Docs\\old.tmp");
+}
+
+TEST_CASE("NtfsUndel search does not loop on a directory indexing itself",
+          "[undel][search]") {
+  const auto volume =
+      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithIndexCycle());
+
+  const SearchResult result = Search(*volume, L"self\\.tmp");
+
+  REQUIRE(result.files.size() == 1);
+  // Self's "." entry names Self itself and is skipped. The root lists Self, so
+  // the root is its parent.
+  CHECK(result.files[0].full_path == L"\\Self\\self.tmp");
+}
+
 TEST_CASE("NtfsUndel search reports the write time of each freed record",
           "[undel][search][characterization]") {
   const auto volume =
