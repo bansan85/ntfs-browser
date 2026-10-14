@@ -79,6 +79,24 @@ template <NtfsBrowser::Cache::Strategy S>
   return record;
 }
 
+// A directory still to list: its record number, and the key its entries are
+// listed under.
+struct WalkFrame {
+  ULONGLONG record = 0;
+  std::wstring prefix;
+};
+
+// The fields of one directory index entry, with every timestamp in UTC.
+[[nodiscard]] Entry
+    EntryFromIndexEntry(const NtfsBrowser::IndexEntryView& index_entry);
+
+// Adds index_entry, found in the directory keyed prefix, to result. A
+// directory is queued on stack to be listed in turn. System metafiles and DOS
+// alias names are skipped.
+void AddIndexEntry(const NtfsBrowser::IndexEntryView& index_entry,
+                   const std::wstring& prefix, Listing& result,
+                   std::vector<WalkFrame>& stack);
+
 // Methods 4/5: recursively lists startRecord's subtree through
 // FileRecord::TraverseSubEntries(), reading each entry's own $FILE_NAME
 // (Filename/IndexEntry) for its fields.
@@ -90,22 +108,17 @@ template <NtfsBrowser::Cache::Strategy S>
 
   Listing result;
 
-  struct Frame {
-    ULONGLONG record = 0;
-    std::wstring prefix;
-  };
-
   struct CallbackContext {
     Listing* result;
-    std::vector<Frame>* stack;
+    std::vector<WalkFrame>* stack;
     const std::wstring* prefix;
   };
 
-  std::vector<Frame> stack;
+  std::vector<WalkFrame> stack;
   stack.push_back({.record = start_record, .prefix = L""});
 
   while (!stack.empty()) {
-    const Frame frame = std::move(stack.back());
+    const WalkFrame frame = std::move(stack.back());
     stack.pop_back();
 
     NtfsBrowser::Io::FileRecord<S> dir(volume);
@@ -121,54 +134,8 @@ template <NtfsBrowser::Cache::Strategy S>
     dir.TraverseSubEntries(
         [](const IndexEntryView& index_entry, void* context) {
           const auto* callback_context = static_cast<CallbackContext*>(context);
-
-          // Skip system metafiles and the DOS 8.3 alias: the Win32 name is
-          // this tool's path key everywhere.
-          if (index_entry.GetFileReference() <
-                  static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::User) ||
-              !index_entry.IsWin32Name()) {
-            return;
-          }
-          const std::wstring_view name = index_entry.GetFilename();
-          if (name.empty()) {
-            return;
-          }
-
-          Entry entry;
-          entry.is_directory = index_entry.IsDirectory();
-          entry.logical_size = index_entry.GetFileSize();
-          entry.physical_size = index_entry.GetAllocatedSize();
-          entry.read_only = index_entry.IsReadOnly();
-          entry.hidden = index_entry.IsHidden();
-          entry.system = index_entry.IsSystem();
-          entry.archive = index_entry.IsArchive();
-          entry.compressed = index_entry.IsCompressed();
-          entry.encrypted = index_entry.IsEncrypted();
-          entry.sparse = index_entry.IsSparse();
-
-          FILETIME write_tm{};
-          FILETIME create_tm{};
-          FILETIME access_tm{};
-          FILETIME change_tm{};
-          index_entry.GetFileTime(&write_tm, &create_tm, &access_tm,
-                                  &change_tm);
-          entry.modification_time_utc = LibraryFiletimeToUtcTicks(write_tm);
-          entry.creation_time_utc = LibraryFiletimeToUtcTicks(create_tm);
-          entry.access_time_utc = LibraryFiletimeToUtcTicks(access_tm);
-          entry.change_time_utc = LibraryFiletimeToUtcTicks(change_tm);
-
-          const std::wstring path =
-              callback_context->prefix->empty()
-                  ? std::wstring(name)
-                  : *callback_context->prefix + L"/" + std::wstring(name);
-          const bool is_directory = entry.is_directory;
-          const ULONGLONG child_record = index_entry.GetFileReference();
-          callback_context->result->emplace(path, std::move(entry));
-
-          if (is_directory) {
-            callback_context->stack->push_back(
-                {.record = child_record, .prefix = path});
-          }
+          AddIndexEntry(index_entry, *callback_context->prefix,
+                        *callback_context->result, *callback_context->stack);
         },
         &ctx);
   }

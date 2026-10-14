@@ -77,6 +77,43 @@ std::optional<T> ReconcileField(const std::vector<const Entry*>& sources,
   return found;
 }
 
+// Compares one candidate entry with the reference entry at path, reporting
+// each field that both sides provide and that differs.
+void CompareCandidateEntry(const std::string& method_name,
+                           const std::wstring& path, const Entry& ref_entry,
+                           const Entry& cand, Report& report,
+                           MethodStats& stats) {
+  if (cand.is_directory != ref_entry.is_directory) {
+    report.findings.push_back({"MISMATCH", method_name, path, "Type",
+                               ref_entry.is_directory ? "DIR" : "FILE",
+                               cand.is_directory ? "DIR" : "FILE"});
+    stats.mismatched_fields++;
+  }
+
+  ForEachComparedField([&](auto member, const char* field_name) {
+    const auto& ref_value = ref_entry.*member;
+    const auto& cand_value = cand.*member;
+    if (ref_value && cand_value && *ref_value != *cand_value) {
+      report.findings.push_back({"MISMATCH", method_name, path, field_name,
+                                 FormatValue(*ref_value),
+                                 FormatValue(*cand_value)});
+      stats.mismatched_fields++;
+    }
+  });
+}
+
+// Reports each candidate path that the reference does not have.
+void ReportExtras(const std::string& method_name, const Listing& reference,
+                  const Listing& candidate, Report& report,
+                  MethodStats& stats) {
+  for (const auto& [path, entry] : candidate) {
+    if (!reference.contains(path)) {
+      report.findings.push_back({"EXTRA", method_name, path, "", "", ""});
+      stats.extra++;
+    }
+  }
+}
+
 }  // namespace
 
 Listing CompareLibraryMethods(const Listing& full_cache,
@@ -157,34 +194,11 @@ void CompareAgainstReference(const std::string& method_name,
       continue;
     }
     stats.compared_entries++;
-    const Entry& cand = iterator->second;
-
-    if (cand.is_directory != ref_entry.is_directory) {
-      report.findings.push_back({"MISMATCH", method_name, path, "Type",
-                                 ref_entry.is_directory ? "DIR" : "FILE",
-                                 cand.is_directory ? "DIR" : "FILE"});
-      stats.mismatched_fields++;
-    }
-
-    ForEachComparedField([&](auto member, const char* field_name) {
-      const auto& ref_value = ref_entry.*member;
-      const auto& cand_value = cand.*member;
-      if (ref_value && cand_value && *ref_value != *cand_value) {
-        report.findings.push_back({"MISMATCH", method_name, path, field_name,
-                                   FormatValue(*ref_value),
-                                   FormatValue(*cand_value)});
-        stats.mismatched_fields++;
-      }
-    });
+    CompareCandidateEntry(method_name, path, ref_entry, iterator->second,
+                          report, stats);
   }
 
-  for (const auto& [path, entry] : candidate) {
-    if (!reference.contains(path)) {
-      report.findings.push_back({"EXTRA", method_name, path, "", "", ""});
-      stats.extra++;
-    }
-  }
-
+  ReportExtras(method_name, reference, candidate, report, stats);
   report.stats.push_back(stats);
 }
 
