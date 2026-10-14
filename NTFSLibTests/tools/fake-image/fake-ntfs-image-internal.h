@@ -230,6 +230,11 @@ struct FakeIndexName {
 // bytes. Entries are packed with no padding, like every other fixture here.
 WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name);
 
+// Writes one resident $INDEX_ROOT at record[offset]: root_names as leaf
+// entries, then a nameless SUBNODE-only entry. Returns its total_size.
+DWORD WriteIndexRootAttr(FakeRecord& record, DWORD offset,
+                         std::span<const FakeIndexName> root_names);
+
 // Directory record (root, #5): resident $STANDARD_INFORMATION("permission"),
 // a resident $INDEX_ROOT holding "rootNames" as leaf entries followed by a
 // nameless SUBNODE-only entry, and a non-resident $INDEX_ALLOCATION - lets

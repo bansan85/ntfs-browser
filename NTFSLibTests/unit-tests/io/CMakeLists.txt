@@ -22,4 +22,13 @@ if(WIN32)
       NTFS_DIR_EXE="$<TARGET_FILE:NtfsDir>"
       NTFS_DIR2_EXE="$<TARGET_FILE:NtfsDir2>"
   )
+
+  # NtfsUndel's search and recovery logic (examples/ntfsundel/ntfsundel-core.h)
+  # is Windows-only, like its dialog. The tests link it directly, so the
+  # dialog's MFC never enters the test binary.
+  target_sources(
+    NtfsBrowserTests
+    PRIVATE "ntfsundel-recover-tests.cpp" "ntfsundel-search-tests.cpp"
+  )
+  target_link_libraries(NtfsBrowserTests PRIVATE NtfsUndelCore)
 endif()

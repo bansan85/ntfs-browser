@@ -1,19 +1,17 @@
 #include "StdAfx.h"
 
 #include <array>
-#include <chrono>
-#include <map>
-#include <regex>
-#include <set>
+#include <atomic>
+#include <memory>
+#include <vector>
 
 #include <gsl/narrow>
 
 #include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "ntfsundel-core.h"
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
 
@@ -139,16 +137,6 @@ void CNtfsundelDlg::OnSearch() {
 
   UpdateData(TRUE);
 
-  // Remove leading and trailing space
-  if (m_filter.IsEmpty())
-  // default to find all deleted files
-  {
-    m_filter = _T(".*");
-  } else {
-    m_filter.TrimLeft();
-    m_filter.TrimRight();
-  }
-
   // Volume information
   CString vns;
   const int sel = m_driver.GetCurSel();
@@ -181,18 +169,14 @@ void CNtfsundelDlg::OnSearch() {
   GetDlgItem(IDC_DRIVER)->EnableWindow(FALSE);
   GetDlgItem(IDE_FILTER)->EnableWindow(FALSE);
 
-  // Find deleted files (directory excluded)
   stop = FALSE;
-  int count = 0;
-  NtfsBrowser::Io::FileRecord fr(volume);
-
-  std::map<ULONGLONG, ULONGLONG> id_to_parent;
-  std::set<ULONGLONG> files;
-
-  std::wregex regx;
-  try {
-    regx = std::wregex(static_cast<const _TCHAR*>(m_filter));
-  } catch (const std::regex_error&) {
+  const NtfsUndel::SearchControl control{
+      .stop_requested = [] { return static_cast<bool>(stop); },
+      .pump_messages = [] { return PeekAndPump(); }};
+  const std::wstring filter = static_cast<const _TCHAR*>(m_filter);
+  const std::optional<NtfsUndel::SearchResult> result =
+      NtfsUndel::SearchDeletedFiles(volume, filter, control);
+  if (!result) {
     MessageBox(_T("Invalid filter expression"));
     GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Search"));
     GetDlgItem(IDB_RECOVER)->EnableWindow(TRUE);
@@ -201,132 +185,21 @@ void CNtfsundelDlg::OnSearch() {
     SetWindowText(_T("ntfsundel"));
     return;
   }
-  std::chrono::steady_clock::time_point begin =
-      std::chrono::steady_clock::now();
-  std::chrono::steady_clock::time_point last_pump = begin;
-  for (auto i = static_cast<ULONGLONG>(Mft::Idx::Mft);
-       i < volume.GetRecordsCount(); i++) {
-    if (i == 500000) {
-      break;
-    }
-    if (stop) {
-      break;
-    }
 
-    // Limits clock-read overhead over hundreds of thousands of iterations.
-    static constexpr ULONGLONG kPeekAndPumpCountInterval = 5000;
-    // Bounds worst-case Stop-button latency.
-    static constexpr std::chrono::milliseconds kPeekAndPumpTimeInterval(100);
-    if (i % kPeekAndPumpCountInterval == 0) {
-      const auto now = std::chrono::steady_clock::now();
-      if (now - last_pump >= kPeekAndPumpTimeInterval) {
-        last_pump = now;
-        if (!PeekAndPump()) {
-          break;
-        }
-      }
-    }
-
-    // Only parse Standard Information and File Name attributes
-    // StdInfo will always be parsed
-    fr.SetAttrMask(Attr::Mask::FileName | Attr::Mask::IndexRoot |
-                   Attr::Mask::IndexAllocation);
-    if (!fr.ParseFileRecord(i)) {
-      continue;
-    }
-    if (!fr.ParseAttrs()) {
-      continue;
-    }
-
-    // Check file name
-    std::wstring_view fn = fr.GetFileName();
-
-    if (fn.empty()) {
-      continue;
-    }
-
-    // Walked for id_to_parent, though not itself a candidate below.
-    if (fr.IsDirectory()) {
-      fr.TraverseSubEntries(
-          [&fr, &id_to_parent](const IndexEntryView& ie, void* context) {
-            if (ie.GetFileReference() == *fr.GetFileReference()) {
-              return;
-            }
-            id_to_parent.insert(
-                {ie.GetFileReference(), *fr.GetFileReference()});
-          },
-          nullptr);
-    }
-
-    // Only deleted records are candidates for recovery
-    if (fr.IsDeleted()) {
-      files.insert(*fr.GetFileReference());
-    }
+  for (const NtfsUndel::DeletedFile& file : result->files) {
+    CString s;
+    s.Format(_T("%I64u"), file.reference);
+    const int itm = m_files.InsertItem(m_files.GetItemCount(), s);
+    m_files.SetItemText(itm, 1, file.full_path.c_str());
+    m_files.SetItemText(itm, 2,
+                        NtfsUndel::FormatWriteTime(file.write_time).c_str());
   }
-
-  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-  long long duration =
-      std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
-          .count();
-
-  for (auto fri : files) {
-    fr.SetAttrMask(Attr::Mask::FileName);
-    if (!fr.ParseFileRecord(fri)) {
-      continue;
-    }
-    if (!fr.ParseAttrs()) {
-      continue;
-    }
-    std::wstring_view fn = fr.GetFileName();
-
-    std::wstring sw = {fn.begin(), fn.end()};
-    if (std::regex_match(sw, regx)) {
-      // Add to list
-      CString s;
-      s.Format(_T("%I64u"), fri);
-
-      // Time
-      FILETIME ft;
-      fr.GetFileTime(&ft, nullptr, nullptr);
-
-      const int itm = m_files.InsertItem(count, s);
-      // Full File name
-      std::wstring full_file_name = sw;
-      auto id = id_to_parent.find(fri);
-      while (id != id_to_parent.end()) {
-        fr.SetAttrMask(Attr::Mask::FileName);
-        if (!fr.ParseFileRecord(id->second)) {
-          break;
-        }
-        if (!fr.ParseAttrs()) {
-          break;
-        }
-        std::wstring fn2 = std::wstring{fr.GetFileName()};
-        full_file_name = fn2 + L"\\" + full_file_name;
-        id = id_to_parent.find(id->second);
-      }
-      m_files.SetItemText(itm, 1, full_file_name.c_str());
-      SYSTEMTIME st;
-      if (FileTimeToSystemTime(&ft, &st) == FALSE) {
-        memset(&st, 0, sizeof(SYSTEMTIME));
-      }
-      s.Format(_T("%04u-%02u-%02u  %02u:%02u"), st.wYear, st.wMonth, st.wDay,
-               st.wHour, st.wMinute);
-      m_files.SetItemText(itm, 2, s);
-
-      // Prevent showing too many entries, 50,000 maxiam
-      count++;
-      static constexpr DWORD MAX_NUMBER_FILES = 5000;
-      if (count >= MAX_NUMBER_FILES) {
-        MessageBox(
-            _T("Too many files found, only the first 50,000 will be shown"));
-        break;
-      }
-    }
+  if (result->truncated) {
+    MessageBox(_T("Too many files found, only the first 50,000 will be shown"));
   }
 
   CString totals;
-  totals.Format(_T("%lldus"), duration);
+  totals.Format(_T("%lldus"), result->scan_us);
   MessageBox(totals);
 
   GetDlgItem(IDB_SEARCH)->SetWindowText(_T("Search"));
@@ -358,15 +231,12 @@ void CNtfsundelDlg::OnRecover() {
   // must still be visible here, or recovery could never find its record.
   NtfsVolume<Cache::Strategy::NoCache> volume(volname,
                                               {.include_deleted = true});
-  NtfsBrowser::Io::FileRecord fr(volume);
-
-  if (!fr.ParseFileRecord(ref)) {
+  NtfsUndel::OpenedRecord opened = NtfsUndel::OpenDeletedFile(volume, ref);
+  if (opened.error == NtfsUndel::RecoverError::RecordParse) {
     MessageBox(_T("File Record parse error"));
     return;
   }
-
-  fr.SetAttrMask(Attr::Mask::Data);
-  if (!fr.ParseAttrs()) {
+  if (opened.error == NtfsUndel::RecoverError::AttributeParse) {
     MessageBox(_T("File Record attribute parse error"));
     return;
   }
@@ -397,53 +267,38 @@ void CNtfsundelDlg::OnRecover() {
     return;
   }
 
-  // Save to disk
-  // Unnamed Data attribute contains the file data
-  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* data =
-      fr.FindStream({});
-  if (data == nullptr) {
-    return;
-  }
-
-  const ULONGLONG datalen = data->GetDataSize();
-  ULONGLONG remain = datalen;
-
-  // Check files with huge size (maybe something is error)
-  constexpr ULONGLONG SIZE_CHECK = 100 * 1024 * 1024U;
-  if (datalen > SIZE_CHECK) {
-    if (MessageBox(
-            _T("File size exceeds 100M, do you want to continue anyway ?"),
-            nullptr, MB_OKCANCEL) == IDCANCEL) {
+  const NtfsUndel::CopyResult copied = NtfsUndel::CopyUnnamedData(
+      *opened.record,
+      [this](std::uint64_t) {
+        return MessageBox(
+                   _T("File size exceeds 100M, do you want to continue anyway ")
+                   _T("?"),
+                   nullptr, MB_OKCANCEL) != IDCANCEL;
+      },
+      [&hf](std::span<const BYTE> chunk) {
+        // A failed or partial write must not be reported as success.
+        DWORD written = 0;
+        return WriteFile(hf.get(), chunk.data(),
+                         gsl::narrow<DWORD>(chunk.size()), &written,
+                         nullptr) != FALSE &&
+               written == chunk.size();
+      });
+  switch (copied.error) {
+    case NtfsUndel::RecoverError::NoDataStream:
+    case NtfsUndel::RecoverError::Declined:
       return;
-    }
-  }
-
-  // Read 64K once
-  constexpr DWORD BUFSIZE = 64 * 1024U;
-  for (ULONGLONG i = 0; i < datalen; i += BUFSIZE) {
-    std::vector<BYTE> vec;
-    vec.resize(BUFSIZE, '\0');
-
-    std::optional<ULONGLONG> len = data->ReadData(i, {&vec[0], BUFSIZE});
-    if (!len || (*len != BUFSIZE && *len != remain)) {
+    case NtfsUndel::RecoverError::Read:
       MessageBox(_T("Read data error"));
       return;
-    }
-
-    // Save data
-    DWORD l = 0;
-    // A failed or partial write must not be reported as success.
-    if (WriteFile(hf.get(), &vec[0], gsl::narrow<DWORD>(*len), &l, nullptr) ==
-            FALSE ||
-        l != *len) {
+    case NtfsUndel::RecoverError::Write:
       MessageBox(_T("Write data error"));
       return;
-    }
-    remain -= *len;
+    default:
+      break;
   }
 
   CString s;
-  s.Format(_T("%I64u bytes recovered"), datalen);
+  s.Format(_T("%I64u bytes recovered"), copied.bytes);
   MessageBox(s);
 }
 

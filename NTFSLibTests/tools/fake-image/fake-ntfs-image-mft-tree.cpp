@@ -1,4 +1,7 @@
+#include <array>
 #include <cstring>
+#include <optional>
+#include <span>
 #include <vector>
 
 #include "fake-ntfs-image-internal.h"
@@ -138,6 +141,129 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord() {
   const size_t offset = static_cast<size_t>(mft_lcn) * cluster_size +
                         static_cast<size_t>(fake_file_record_size) *
                             static_cast<size_t>(mft_tree_zeroed_idx);
+  std::memcpy(&image.at(offset), record.data(), record.size());
+  return image;
+}
+
+namespace {
+
+// Directory record: $STANDARD_INFORMATION, a $FILE_NAME when name is set, and
+// a resident $INDEX_ROOT listing names.
+FakeRecord MakeIndexedDirRecord(WORD sequence,
+                                const std::optional<FakeFileName>& name,
+                                std::span<const FakeIndexName> names) {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
+                             NtfsBrowser::Data::FileRecordFlag::Dir);
+  EditFileRecordHeader(record, [sequence](FileRecordHeader& header) {
+    header.seq_no = sequence;
+  });
+
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+  if (name) {
+    offset += WriteFileNameAttr(record, offset, *name, true);
+  }
+  offset += WriteIndexRootAttr(record, offset, names);
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// Freed file record of sequence 2, its unnamed $DATA non-resident over runs.
+FakeRecord
+    MakeFreedNonResidentFileRecord(ULONGLONG real_size,
+                                   const std::vector<FakeDataRun>& runs) {
+  FakeRecord record = MakeRecordHeader(attr_offset_value, {});
+  EditFileRecordHeader(record,
+                       [](FileRecordHeader& header) { header.seq_no = 2; });
+
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+  offset +=
+      WriteFileNameAttr(record, offset,
+                        {.name = L"stale.txt",
+                         .parent_ref = MakeFileReference(mft_tree_docs_idx, 1)},
+                        false);
+  offset += WriteNonResidentAttr(record, offset, Attr::Type::Data, 0, real_size,
+                                 runs);
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+}  // namespace
+
+std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
+  using NtfsBrowser::Data::FileRecordFlag;
+
+  // Sequence numbers the records below carry, where another record names them.
+  constexpr WORD docs_sequence = 1;
+
+  std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
+    const size_t offset =
+        mft_addr +
+        static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
+    std::memcpy(&image.at(offset), record.data(), record.size());
+  };
+
+  const ULONGLONG root_ref = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+
+  const std::array<FakeIndexName, 1> root_names{
+      {{L"Docs", mft_tree_docs_idx, true}}};
+  put_record(
+      static_cast<ULONGLONG>(Mft::Idx::Root),
+      MakeIndexedDirRecord(root_sequence_number,
+                           FakeFileName{.name = L".", .parent_ref = root_ref},
+                           root_names));
+
+  const std::array<FakeIndexName, 2> docs_names{
+      {{L"old.tmp", mft_tree_deleted_file_idx, false},
+       {L"OldDir", mft_tree_deleted_dir_idx, true}}};
+  put_record(mft_tree_docs_idx,
+             MakeIndexedDirRecord(
+                 docs_sequence,
+                 FakeFileName{.name = L"Docs", .parent_ref = root_ref},
+                 docs_names));
+
+  // The freed "old.tmp": resident $DATA, written by hand so its content lands
+  // in the record.
+  FakeRecord old_tmp = MakeRecordHeader(attr_offset_value, FileRecordFlag{});
+  EditFileRecordHeader(old_tmp,
+                       [](FileRecordHeader& header) { header.seq_no = 2; });
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      old_tmp, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+  offset += WriteFileNameAttr(
+      old_tmp, offset,
+      {.name = L"old.tmp",
+       .parent_ref = MakeFileReference(mft_tree_docs_idx, docs_sequence)},
+      false);
+  const DWORD data_offset = offset;
+  offset += WriteResidentDataAttr(
+      old_tmp, offset, static_cast<DWORD>(freed_file_content.size()));
+  std::memcpy(
+      &old_tmp.at(data_offset + sizeof(NtfsBrowser::Data::HeaderResident)),
+      freed_file_content.data(), freed_file_content.size());
+  WriteEndOfAttributesMarker(old_tmp, offset);
+  put_record(mft_tree_deleted_file_idx, old_tmp);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithFreedNonResidentFile(
+    ULONGLONG real_size, const std::vector<FakeDataRun>& runs) {
+  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const FakeRecord record = MakeFreedNonResidentFileRecord(real_size, runs);
+  const size_t offset =
+      mft_addr + static_cast<size_t>(fake_file_record_size) *
+                     gsl::narrow<size_t>(mft_tree_stale_child_idx);
   std::memcpy(&image.at(offset), record.data(), record.size());
   return image;
 }

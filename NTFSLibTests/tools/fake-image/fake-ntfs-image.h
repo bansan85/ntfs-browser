@@ -863,6 +863,22 @@ struct FakeDataRun {
   DWORD clusters = 0;
 };
 
+// Resident $DATA of the freed "old.tmp" in BuildFakeNtfsImageWithFreedFileTree.
+inline constexpr std::string_view freed_file_content = "Recovered text.\n";
+
+// Same volume as BuildFakeNtfsImageWithMftTree(), with a directory tree that
+// names its freed records: the root (#5) indexes "Docs" (16), and Docs indexes
+// "old.tmp" (19, freed, resident $DATA holding freed_file_content) and
+// "OldDir" (20, freed directory). Every other record is as that fixture has it.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree();
+
+// Same volume as BuildFakeNtfsImageWithFreedFileTree(), with the freed
+// "stale.txt" (22) replaced by one whose unnamed $DATA is non-resident:
+// real_size
+// bytes over runs, where sparse runs read as zeros.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFreedNonResidentFile(
+    ULONGLONG real_size, const std::vector<FakeDataRun>& runs);
+
 // Compression unit exponent every fixture uses: 4 clusters, one chunk.
 inline constexpr WORD compression_unit_size_shift = 2;
 

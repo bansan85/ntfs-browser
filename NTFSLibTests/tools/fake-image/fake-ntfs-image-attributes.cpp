@@ -166,23 +166,10 @@ WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name) {
   return entry.size;
 }
 
-// Directory record (root, #5): resident $STANDARD_INFORMATION("permission"),
-// a resident $INDEX_ROOT holding "rootNames" as leaf entries followed by a
-// nameless SUBNODE-only entry, and a non-resident $INDEX_ALLOCATION - lets
-// fixtures target an attribute FuzzOnce() actually ReadData()s, unlike plain
-// $DATA.
-FakeRecord MakeIndexAllocationDirRecord(
-    NtfsBrowser::Data::StdInfoPermission permission, WORD comp_unit_size,
-    ULONGLONG real_size, const std::vector<FakeDataRun>& runs,
-    const FakeNonResidentOverrides& overrides,
-    std::span<const FakeIndexName> root_names) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
-
-  DWORD offset = attr_offset_value;
-  offset += WriteStandardInformationAttr(record, offset, permission);
-
+// Writes one resident $INDEX_ROOT at record[offset]: root_names as leaf
+// entries, then a nameless SUBNODE-only entry. Returns its total_size.
+DWORD WriteIndexRootAttr(FakeRecord& record, DWORD offset,
+                         std::span<const FakeIndexName> root_names) {
   // $INDEX_ROOT
   auto& root_attr =
       *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
@@ -232,8 +219,27 @@ FakeRecord MakeIndexAllocationDirRecord(
       first_entry.size;
   root_attr.header.total_size =
       AlignAttrSize(sizeof(root_attr) + root_attr.attr_size);
+  return root_attr.header.total_size;
+}
 
-  offset += root_attr.header.total_size;
+// Directory record (root, #5): resident $STANDARD_INFORMATION("permission"),
+// a resident $INDEX_ROOT holding "rootNames" as leaf entries followed by a
+// nameless SUBNODE-only entry, and a non-resident $INDEX_ALLOCATION - lets
+// fixtures target an attribute FuzzOnce() actually ReadData()s, unlike plain
+// $DATA.
+FakeRecord MakeIndexAllocationDirRecord(
+    NtfsBrowser::Data::StdInfoPermission permission, WORD comp_unit_size,
+    ULONGLONG real_size, const std::vector<FakeDataRun>& runs,
+    const FakeNonResidentOverrides& overrides,
+    std::span<const FakeIndexName> root_names) {
+  FakeRecord record = MakeRecordHeader(
+      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
+                             NtfsBrowser::Data::FileRecordFlag::Dir);
+
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(record, offset, permission);
+
+  offset += WriteIndexRootAttr(record, offset, root_names);
   offset += WriteNonResidentAttr(record, offset, Attr::Type::IndexAllocation,
                                  comp_unit_size, real_size, runs, overrides);
 

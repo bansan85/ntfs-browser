@@ -1,3 +1,9 @@
+# The search and recovery logic, with no MFC in it, so the unit tests can
+# link it too (unit-tests/io/ntfsundel-*-tests.cpp).
+add_library(NtfsUndelCore STATIC "ntfsundel-core.cpp")
+target_include_directories(NtfsUndelCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(NtfsUndelCore PUBLIC ${PROJECT_NAME})
+
 add_executable(
   NtfsUndel
   WIN32
@@ -9,7 +15,7 @@ add_executable(
   "${CMAKE_CURRENT_SOURCE_DIR}/res/ntfsundel.rc2"
 )
 target_compile_definitions(NtfsUndel PRIVATE _AFXDLL)
-target_link_libraries(NtfsUndel PRIVATE ${PROJECT_NAME})
+target_link_libraries(NtfsUndel PRIVATE ${PROJECT_NAME} NtfsUndelCore)
 set_target_properties(NtfsUndel PROPERTIES WIN32_EXECUTABLE 1)
 target_link_options(NtfsUndel PRIVATE "/entry:wWinMainCRTStartup")
 if(WIN32 AND BUILD_SHARED_LIBS)
