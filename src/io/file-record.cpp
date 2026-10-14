@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -45,14 +46,32 @@ namespace {
 template <Cache::Strategy S>
 using StdInfoType = Attr::AttrStdInfo<ResidentOf<S>, S>;
 
+// Byte offset of record file_ref within $MFT's data. Empty when the offset
+// does not fit a LONGLONG. The check runs before the multiplication: a
+// wrapped product would alias an earlier record.
+std::optional<ULONGLONG> RecordOffset(DWORD record_size, ULONGLONG file_ref) {
+  // Largest offset a LONGLONG can hold, so every later sum stays in range.
+  constexpr ULONGLONG max_offset = std::numeric_limits<LONGLONG>::max();
+  if (file_ref > max_offset / record_size) {
+    Log::Warn("File record {} lies past the end of $MFT", file_ref);
+    return std::nullopt;
+  }
+  return record_size * file_ref;
+}
+
 // Byte offset of record file_ref when $MFT is taken as one continuous disk
 // run. Empty when the offset does not fit a LONGLONG.
 template <Cache::Strategy S>
 std::optional<LONGLONG> DirectRecordAddress(const NtfsVolume<S>& volume,
                                             ULONGLONG file_ref) {
+  const std::optional<ULONGLONG> offset =
+      RecordOffset(volume.GetFileRecordSize(), file_ref);
+  if (!offset) {
+    return std::nullopt;
+  }
+
   try {
-    return gsl::narrow<LONGLONG>(volume.GetMFTAddr() +
-                                 volume.GetFileRecordSize() * file_ref);
+    return gsl::narrow<LONGLONG>(volume.GetMFTAddr() + *offset);
   } catch (const std::exception& e) {
     // fileRef is attacker-controlled and unbounded, so this sum can
     // still overflow a LONGLONG even with mft_addr_ validated.
@@ -167,10 +186,14 @@ std::unique_ptr<Record::HeaderImpl<S>>
     // May be fragmented $MFT, and its DATA attribute itself may be split
     // across extension records - ReadData() picks whichever instance
     // covers this offset.
-    const ULONGLONG fr_addr = volume->GetFileRecordSize() * file_ref;
+    const std::optional<ULONGLONG> fr_addr =
+        RecordOffset(volume->GetFileRecordSize(), file_ref);
+    if (!fr_addr) {
+      return {};
+    }
 
     if (std::optional<ULONGLONG> len =
-            volume->impl_->mft.Map().ReadData(fr_addr, record_buffer);
+            volume->impl_->mft.Map().ReadData(*fr_addr, record_buffer);
         !len || *len != volume->GetFileRecordSize()) {
       return {};
     }

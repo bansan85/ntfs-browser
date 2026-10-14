@@ -311,7 +311,7 @@ TEMPLATE_TEST_CASE_SIG(
                       record.ParseFileRecord(overflowing_direct_record_idx));
   CHECK_FALSE(parsed);
   const std::string log = NtfsBrowserTests::TakeCapturedLog();
-  CHECK_THAT(log, ContainsSubstring("narrowing_error"));
+  CHECK_THAT(log, ContainsSubstring("past the end of $MFT"));
   CHECK_THAT(log,
              ContainsSubstring("Cannot read file record 9007199254740992"));
 }
