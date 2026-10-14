@@ -470,7 +470,7 @@ inline constexpr ULONGLONG mft_last_vcn_overflow_target_idx = 16;
 // Last VCN forged into $MFT's base DATA attribute: with fake clusters of
 // 1024 bytes, (last VCN + 1) * cluster size is exactly 2^64 and wraps to 0.
 inline constexpr ULONGLONG mft_last_vcn_overflow_last_vcn =
-    std::numeric_limits<ULONGLONG>::max() / fake_cluster_size;
+    (std::numeric_limits<ULONGLONG>::max)() / fake_cluster_size;
 
 // Same volume as BuildFakeNtfsImage(), except $MFT's base DATA attribute
 // claims mft_last_vcn_overflow_last_vcn as its last VCN, and its

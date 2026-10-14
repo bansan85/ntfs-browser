@@ -6,12 +6,13 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <windows.h>
 
+#include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "sample-run.h"
-
-#include <windows.h>
 
 using Catch::Matchers::ContainsSubstring;
 using NtfsBrowserTests::SampleRun;
@@ -107,12 +108,16 @@ SampleRun RunSample(const std::vector<std::wstring>& args) {
   return NtfsBrowserTests::RunSample(exe, args);
 }
 
-// Writes BuildFakeNtfsImageWithMftTree() to a temp file, removed on exit.
+// Writes an MFT tree image to a temp file, removed on exit. The default is
+// BuildFakeNtfsImageWithMftTree().
 struct TempTreeImage final {
-  Fs::path path = NtfsBrowserTests::WriteFakeNtfsImage(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
+  Fs::path path;
 
-  TempTreeImage() = default;
+  TempTreeImage()
+      : TempTreeImage(NtfsBrowserTests::BuildFakeNtfsImageWithMftTree()) {}
+
+  explicit TempTreeImage(const std::vector<BYTE>& image)
+      : path(NtfsBrowserTests::WriteFakeNtfsImage(image)) {}
 
   ~TempTreeImage() {
     std::error_code ignored;
@@ -188,4 +193,28 @@ TEST_CASE("NtfsMftList reports a target that is not an NTFS volume",
   CHECK(run.exit_code == -1);
   CHECK(run.out.empty());
   CHECK(run.err == missing_volume_error);
+}
+
+TEST_CASE("NtfsMftList shows one letter per DOS permission flag",
+          "[mft][sample][characterization]") {
+  const auto [permission, attributes] =
+      GENERATE(table<NtfsBrowser::Data::StdInfoPermission, std::string_view>({
+          {NtfsBrowser::Data::StdInfoPermission::ReadOnly, "R-----"},
+          {NtfsBrowser::Data::StdInfoPermission::Hidden, "-H----"},
+          {NtfsBrowser::Data::StdInfoPermission::System, "--S---"},
+          {NtfsBrowser::Data::StdInfoPermission::Compressed, "---C--"},
+          {NtfsBrowser::Data::StdInfoPermission::Encrypted, "----E-"},
+          {NtfsBrowser::Data::StdInfoPermission::Sparse, "-----P"},
+      }));
+  INFO(std::string(attributes));
+  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
+  NtfsBrowserTests::SetStdInfoPermission(image,
+                                         NtfsBrowserTests::mft_tree_report_idx,
+                                         static_cast<DWORD>(permission));
+  const TempTreeImage tree_image(image);
+  const SampleRun run = RunSample({tree_image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK_THAT(run.out, ContainsSubstring(" " + std::string(attributes) +
+                                        "  1 \\Docs\\report.txt\n"));
 }
