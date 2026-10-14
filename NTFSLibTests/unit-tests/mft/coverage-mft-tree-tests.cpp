@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -235,4 +236,32 @@ TEST_CASE("MftTree GetPath reports nothing for an unknown record or name",
   lost = root_idx;
   CHECK(tree.GetPath(NtfsBrowserTests::mft_tree_docs_idx, 99, &lost).empty());
   CHECK_FALSE(lost.has_value());
+}
+
+TEST_CASE("MftTree stops a path at a loop of parent references", "[cov-vol]") {
+  // Sequence numbers the fixture gives Docs and NewDir.
+  constexpr WORD docs_sequence = 1;
+  constexpr WORD new_dir_sequence = 7;
+
+  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
+  // Docs and NewDir each name the other as parent, so neither reaches the root.
+  RedirectFileNames(
+      image, NtfsBrowserTests::mft_tree_docs_idx, root_idx,
+      MakeRef(NtfsBrowserTests::mft_tree_reused_dir_idx, new_dir_sequence));
+  RedirectFileNames(
+      image, NtfsBrowserTests::mft_tree_reused_dir_idx, root_idx,
+      MakeRef(NtfsBrowserTests::mft_tree_docs_idx, docs_sequence));
+  const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
+      std::make_unique<MemoryDiskReader>(std::move(image)));
+  REQUIRE(volume->IsVolumeOK());
+
+  const NtfsBrowser::Mft::MftTree tree(*volume);
+
+  std::optional<ULONGLONG> lost;
+  const std::wstring path =
+      tree.GetPath(NtfsBrowserTests::mft_tree_docs_idx, &lost);
+  // The walk stops where the loop closes, at the record it re-enters.
+  CHECK(lost == NtfsBrowserTests::mft_tree_docs_idx);
+  CHECK(path == L"NewDir\\Docs");
+  CHECK_FALSE(tree.IsReachable(NtfsBrowserTests::mft_tree_docs_idx));
 }
