@@ -32,16 +32,24 @@ struct ParsedRecord {
   std::unique_ptr<NtfsBrowser::Io::FileRecord<S>> record;
 };
 
-// Opens record idx through a volume over reader, not yet attribute-parsed.
+// Opens a volume over reader, and a record of it that is not parsed yet.
 template <Cache::Strategy S>
-ParsedRecord<S> OpenRecordFrom(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
-                               ULONGLONG idx, VolumeOptions options = {}) {
+ParsedRecord<S> OpenVolumeFrom(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
+                               VolumeOptions options = {}) {
   ParsedRecord<S> parsed;
   parsed.volume = std::make_unique<NtfsVolume<S>>(std::move(reader), options);
   REQUIRE(parsed.volume->IsVolumeOK());
 
   parsed.record =
       std::make_unique<NtfsBrowser::Io::FileRecord<S>>(*parsed.volume);
+  return parsed;
+}
+
+// Opens record idx through a volume over reader, not yet attribute-parsed.
+template <Cache::Strategy S>
+ParsedRecord<S> OpenRecordFrom(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
+                               ULONGLONG idx, VolumeOptions options = {}) {
+  ParsedRecord<S> parsed = OpenVolumeFrom<S>(std::move(reader), options);
   REQUIRE(parsed.record->ParseFileRecord(idx));
   return parsed;
 }

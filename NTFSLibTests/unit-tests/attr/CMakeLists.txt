@@ -8,6 +8,8 @@ target_sources(
     "attr-read-data-bounded-tests.cpp"
     "attr-resident-read-data-tests.cpp"
     "attr-run-list-tests.cpp"
+    "attribute-list-entries-tests.cpp"
+    "attribute-list-support.h"
     "attribute-list-tests.cpp"
     "coverage-attrs-tests.cpp"
     "coverage-nonresident-index-tests.cpp"
