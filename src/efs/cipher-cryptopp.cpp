@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <exception>
 #include <memory>
 #include <span>
@@ -68,7 +69,7 @@ template <class BlockCipher>
 
 // Size of a DESX FEK, in bytes, and of the key Crypto++'s DES_XEX3 takes:
 // two 8-byte whitening keys around an 8-byte DES key.
-constexpr size_t desx_fek_size = 16;
+[[maybe_unused]] constexpr size_t desx_fek_size = 16;
 constexpr size_t desx_key_size = 24;
 
 // The MD5 salts of the DESX key expansion. Each is 11 characters plus the
@@ -121,13 +122,12 @@ constexpr std::array<BYTE, 12> desx_salt2{'S', 'c', 'o', 't', 't', ' ',
   return key;
 }
 
-// Builds the DESX decryptor for fek, or nullptr when its key is not the
-// 16-byte DESX FEK. The expanded key is wiped once the cipher has copied it.
+// Builds the DESX decryptor for fek, or nullptr if Crypto++ refuses the key.
+// The expanded key is wiped once the cipher has copied it.
 [[nodiscard]] std::unique_ptr<SectorDecryptor>
     MakeDesxDecryptor(const Fek& fek) {
-  if (fek.GetKey().size() != desx_fek_size) {
-    return nullptr;
-  }
+  // Fek::Parse sizes the key by algorithm, so a DESX key is always 16 bytes.
+  assert(fek.GetKey().size() == desx_fek_size);
   auto key = ExpandDesxKey(fek.GetKey());
   auto decryptor = MakeDecryptor<CryptoPP::DES_XEX3>(key);
   Util::SecureZero(key);
@@ -147,6 +147,9 @@ std::unique_ptr<SectorDecryptor> MakeCryptoPpDecryptor(const Fek& fek) {
     case Algorithm::Desx:
       return MakeDesxDecryptor(fek);
   }
+  // Fek::Parse admits no other algorithm. The return keeps the non-void
+  // function well formed in Release, where the assert is compiled out.
+  assert(false);
   return nullptr;
 }
 
