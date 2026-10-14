@@ -329,15 +329,13 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersCompressed(
     ULONGLONG vcn, ULONGLONG clusters, std::span<BYTE> buffer) const {
   assert(comp_unit_clusters_);
 
-  // Same two bounds checks as the raw path.
+  // Same bounds check as the raw path.
   if (vcn + clusters > TotalClusters()) {
     Log::Warn("Cluster exceeds DataRun bounds");
     return {};
   }
-  if (buffer.size() != clusters * this->GetClusterSize()) {
-    Log::Warn("Invalid buffer size");
-    return {};
-  }
+  // Every caller passes a buffer of exactly clusters clusters.
+  assert(buffer.size() == clusters * this->GetClusterSize());
 
   std::span<BYTE> out = buffer;
   ULONGLONG actural = 0;
@@ -440,11 +438,8 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadVirtualClustersRaw(
     return {};
   }
 
-  // Verify if clusters exceeds DataRun bounds
-  if (buffer.size() != clusters * this->GetClusterSize()) {
-    Log::Warn("Invalid buffer size");
-    return {};
-  }
+  // Every caller passes a buffer of exactly clusters clusters.
+  assert(buffer.size() == clusters * this->GetClusterSize());
 
   std::span<BYTE> out = buffer;
 
