@@ -69,3 +69,12 @@ TEST_CASE(
   CHECK(config.console_level == Log::Level::Warn);
   CHECK(config.file_level == Log::Level::Off);
 }
+
+TEST_CASE("ParseOption refuses an argument shorter than its prefix",
+          "[cov-attrs]") {
+  Log::Config config;
+
+  CHECK_FALSE(Log::ParseOption("--lo", config));
+  CHECK_FALSE(Log::ParseOption("", config));
+  CHECK(config.console_level == Log::Level::Warn);
+}
