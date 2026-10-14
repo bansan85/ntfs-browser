@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cassert>
 #include <cstring>
 #include <span>
 #include <stdexcept>
@@ -73,10 +74,8 @@ bool Header::PatchUS() noexcept {
   for (WORD const value : us_array) {
     // The last word of each sector holds the USN.
     pos += (Data::FileRecordHeader::update_sequence_stride / sizeof(WORD)) - 1;
-    if (pos >= words.size()) {
-      return false;
-    }
-    // pos < words.size() was checked just above.
+    // The constructor caps us_array at buffer size / 512, keeping pos in range.
+    assert(pos < words.size());
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     WORD& sector = words[pos];
     // USN error. Ignore if already patched (FullCache)
