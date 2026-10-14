@@ -78,7 +78,7 @@ std::wstring FormatRow(const std::array<BYTE, 16>& row) {
 std::wstring
     AttrHeading(const Attr::AttrBase<Cache::Strategy::FullCache>& attr) {
   std::wstring heading = L"\r\n";
-  heading += AttrNames[(static_cast<DWORD>(attr.GetAttrType()) >> 4U) - 1];
+  heading += AttrTypeName(attr.GetAttrType());
 
   const std::wstring_view attrname = attr.GetAttrName();
   if (!attrname.empty()) {
@@ -204,6 +204,18 @@ void AppendData(std::wstring& lines, const BYTE* data, std::uint32_t datalen) {
   std::memcpy(row.data(), data + static_cast<std::size_t>(i) * 16,
               datalen - i * 16);
   lines += FormatRow(row) + L"\r\n";
+}
+
+std::wstring AttrTypeName(NtfsBrowser::Attr::Type type) {
+  const auto raw = static_cast<DWORD>(type);
+  // Only the multiples of 0x10 in the named range index AttrNames. Any other
+  // value, 0 included, is shown in hex.
+  if (raw < static_cast<DWORD>(Attr::Type::StandardInformation) ||
+      raw > static_cast<DWORD>(Attr::Type::LoggedUtilityStream) ||
+      (raw & 0xFU) != 0) {
+    return std::format(L"0x{:04X}", raw);
+  }
+  return std::wstring(AttrNames[(raw >> 4U) - 1]);
 }
 
 std::wstring TargetPath(std::wstring_view picked, bool directory) {

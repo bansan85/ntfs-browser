@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/ntfs-volume.h>
 
@@ -17,6 +18,10 @@ namespace NtfsAttrDump {
 // Appends a hex dump of datalen bytes at data to lines, 16 bytes a row. Every
 // row ends in CRLF. Zero bytes append nothing, and data is not read.
 void AppendData(std::wstring& lines, const BYTE* data, std::uint32_t datalen);
+
+// Name of an attribute type, such as DATA. A type with no name shows its value
+// in hex, such as 0x1000.
+std::wstring AttrTypeName(NtfsBrowser::Attr::Type type);
 
 // The path a dump works on for the picked file. With directory set, that is
 // the folder holding it. Empty when picked has no separator.

@@ -1,3 +1,4 @@
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -235,4 +236,49 @@ TEST_CASE("NtfsAttr dump rows split at 16 bytes, last row padded with FF",
               std::wstring(
                   L"42 FF FF FF FF FF FF FF - FF FF FF FF FF FF FF FF   B") +
               std::wstring(15, L'\u00FF') + L"\r\n");
+}
+
+TEST_CASE("NtfsAttr names each known attribute type",
+          "[ntfsattr][characterization]") {
+  using NtfsBrowser::Attr::Type;
+  const std::array<std::pair<Type, std::wstring_view>, 16> names = {{
+      {Type::StandardInformation, L"STANDARD_INFORMATION"},
+      {Type::AttributeList, L"ATTRIBUTE_LIST"},
+      {Type::FileName, L"FILE_NAME"},
+      {Type::ObjectId, L"OBJECT_ID"},
+      {Type::SecurityDescriptor, L"SECURITY_DESCRIPTOR"},
+      {Type::VolumeName, L"VOLUME_NAME"},
+      {Type::VolumeInformation, L"VOLUME_INFORMATION"},
+      {Type::Data, L"DATA"},
+      {Type::IndexRoot, L"INDEX_ROOT"},
+      {Type::IndexAllocation, L"INDEX_ALLOCATION"},
+      {Type::Bitmap, L"BITMAP"},
+      {Type::ReparsePoint, L"REPARSE_POINT"},
+      {Type::EaInformation, L"EA_INFORMATION"},
+      {Type::Ea, L"EA"},
+      {Type::PropertySet, L"NULL"},
+      {Type::LoggedUtilityStream, L"LOGGED_UTILITY_STREAM"},
+  }};
+
+  for (const auto& [type, name] : names) {
+    REQUIRE(NtfsAttrDump::AttrTypeName(type) == name);
+  }
+}
+
+TEST_CASE("NtfsAttr names a type with no name by its value",
+          "[ntfsattr][characterization]") {
+  using NtfsBrowser::Attr::Type;
+  // 0 and 0x8 sit below the named range, 0x110 and 0x1000 above it. 0xFFFFFFFF
+  // is the end marker value.
+  const std::array<std::pair<DWORD, std::wstring_view>, 5> unnamed = {{
+      {0x0U, L"0x0000"},
+      {0x8U, L"0x0008"},
+      {0x110U, L"0x0110"},
+      {0x1000U, L"0x1000"},
+      {0xFFFFFFFFU, L"0xFFFFFFFF"},
+  }};
+
+  for (const auto& [raw, label] : unnamed) {
+    REQUIRE(NtfsAttrDump::AttrTypeName(static_cast<Type>(raw)) == label);
+  }
 }
