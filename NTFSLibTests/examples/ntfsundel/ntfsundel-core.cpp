@@ -21,8 +21,8 @@ namespace NtfsUndel {
 
 namespace {
 
-// Pump the message queue once per this many records. Keeps the Stop button
-// responsive without a clock read per record.
+// Records between two pump checks. Keeps the modulo test the only per-record
+// cost. kPumpTimeInterval caps how often the pump actually runs.
 constexpr std::uint64_t kPumpRecordInterval = 5000;
 
 // Minimum time between two pumps. Bounds worst-case Stop latency on a slow
@@ -133,7 +133,7 @@ ScanResult ScanRecords(NtfsVolume<Cache::Strategy::FullCache>& volume,
       continue;
     }
 
-    // Walked for id_to_parent, though not itself a candidate below.
+    // Directories also feed id_to_parent; a freed one stays a candidate.
     if (fr.IsDirectory()) {
       RecordChildren(fr, scan.id_to_parent);
     }
@@ -230,6 +230,11 @@ std::optional<SearchResult>
     }
   }
   return result;
+}
+
+std::wstring TooManyFilesMessage() {
+  return std::format(L"Too many files found, only the first {} will be shown",
+                     kMaxListedFiles);
 }
 
 std::wstring FormatWriteTime(std::uint64_t ticks) {

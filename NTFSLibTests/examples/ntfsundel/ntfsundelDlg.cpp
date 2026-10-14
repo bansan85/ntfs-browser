@@ -242,7 +242,7 @@ void CNtfsundelDlg::ShowSearchResults(const NtfsUndel::SearchResult& result) {
     AddResultRow(file);
   }
   if (result.truncated) {
-    MessageBox(_T("Too many files found, only the first 50,000 will be shown"));
+    MessageBox(NtfsUndel::TooManyFilesMessage().c_str());
   }
 }
 

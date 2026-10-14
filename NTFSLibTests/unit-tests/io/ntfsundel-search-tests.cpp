@@ -238,6 +238,17 @@ TEST_CASE("NtfsUndel search flags truncation when the list fills exactly",
   CHECK(result.truncated);
 }
 
+TEST_CASE("NtfsUndel too-many-files message names the row limit",
+          "[undel][search]") {
+  CHECK(NtfsUndel::TooManyFilesMessage().find(
+            std::to_wstring(NtfsUndel::kMaxListedFiles)) != std::wstring::npos);
+}
+
+TEST_CASE("NtfsUndel search lists kMaxListedFiles rows by default",
+          "[undel][search]") {
+  CHECK(SearchControl{}.max_listed == NtfsUndel::kMaxListedFiles);
+}
+
 TEST_CASE("NtfsUndel search lists nothing without include_deleted",
           "[undel][search][characterization]") {
   const auto volume =

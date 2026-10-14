@@ -21,7 +21,8 @@
 
 namespace NtfsUndel {
 
-// Most rows one search lists. The scan stops once this many have matched.
+// Most rows one search lists. The scan stops once this many have matched. A UI
+// bound, not an NTFS limit, so one search stays bounded on a busy volume.
 inline constexpr std::size_t kMaxListedFiles = 5000;
 
 // Bytes per read and write while recovering a file. Keeps memory bounded for
@@ -74,6 +75,10 @@ struct SearchResult {
 std::optional<SearchResult> SearchDeletedFiles(
     NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::FullCache>& volume,
     std::wstring_view filter, const SearchControl& control);
+
+// Warning the dialog shows when a search stops at kMaxListedFiles. Built from
+// that constant, so the number shown is the limit the scan enforces.
+std::wstring TooManyFilesMessage();
 
 // Formats FILETIME ticks as "YYYY-MM-DD  HH:MM", with no zone conversion.
 // Zeros when the time is out of the SYSTEMTIME range.
