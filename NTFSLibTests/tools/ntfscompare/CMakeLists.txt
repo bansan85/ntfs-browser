@@ -1,14 +1,17 @@
 # Portable C++, no Win32-only headers outside their own #ifdef _WIN32 blocks,
 # so it builds on Linux and Windows alike (see os-api-walk.cpp/volume-open.cpp
 # for the per-platform halves).
-add_executable(
-  NtfsCompare
-  "main.cpp"
+#
+# The walkers and the comparison, everything but main(), sit in a static
+# library so the unit tests can link them (unit-tests/ntfscompare/).
+add_library(
+  NtfsCompareCore
+  STATIC
+  "compare-engine.h"
+  "compare-engine.cpp"
   "console.h"
   "entry.h"
   "time-convert.h"
-  "compare-engine.h"
-  "compare-engine.cpp"
   "std-filesystem-walk.h"
   "std-filesystem-walk.cpp"
   "library-walk.h"
@@ -22,8 +25,11 @@ add_executable(
   "linux-utf8.h"
   "linux-utf8.cpp"
 )
+target_include_directories(NtfsCompareCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(NtfsCompareCore PUBLIC ${PROJECT_NAME})
 
-target_link_libraries(NtfsCompare PRIVATE ${PROJECT_NAME})
+add_executable(NtfsCompare "main.cpp")
+target_link_libraries(NtfsCompare PRIVATE ${PROJECT_NAME} NtfsCompareCore)
 
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
