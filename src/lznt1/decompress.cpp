@@ -68,18 +68,27 @@ void CopyBackReference(std::span<BYTE> dest, size_t& out, size_t displacement,
   }
 }
 
-// Decodes one compressed word - a back-reference - at inPos into dest, whose
-// current chunk began at chunkOutStart. Advances inPos and out.
-void DecodeBackReference(std::span<const BYTE> src, std::span<BYTE> dest,
-                         size_t& in_pos, size_t chunk_end,
-                         size_t chunk_out_start, size_t& out) {
-  if (chunk_end - in_pos < compressed_word_size) {
+// Where decoding stands: the input and output cursors, the end of the chunk
+// being decoded in the input, and the output offset that chunk began at.
+struct Cursor {
+  std::span<const BYTE> src;
+  std::span<BYTE> dest;
+  size_t in_pos = 0;
+  size_t out = 0;
+  size_t chunk_end = 0;
+  size_t chunk_out_start = 0;
+};
+
+// Decodes one compressed word - a back-reference - at cur.in_pos into the
+// output. Advances in_pos and out.
+void DecodeBackReference(Cursor& cur) {
+  if (cur.chunk_end - cur.in_pos < compressed_word_size) {
     throw std::runtime_error("LZNT1: truncated compressed word.\n");
   }
-  const WORD word = ReadLe16(src, in_pos);
-  in_pos += compressed_word_size;
+  const WORD word = ReadLe16(cur.src, cur.in_pos);
+  cur.in_pos += compressed_word_size;
 
-  const size_t produced = out - chunk_out_start;
+  const size_t produced = cur.out - cur.chunk_out_start;
   const unsigned displacement_bits = DisplacementBits(produced);
   const unsigned length_bits = word_bits - displacement_bits;
   const auto length_mask = gsl::narrow<WORD>((1U << length_bits) - 1U);
@@ -95,48 +104,50 @@ void DecodeBackReference(std::span<const BYTE> src, std::span<BYTE> dest,
     throw std::runtime_error(
         "LZNT1: chunk decompresses to more than 4096 bytes.\n");
   }
-  if (length > dest.size() - out) {
+  if (length > cur.dest.size() - cur.out) {
     throw std::runtime_error(
         "LZNT1: back-reference exceeds decompressed bounds.\n");
   }
 
-  CopyBackReference(dest, out, displacement, length);
+  CopyBackReference(cur.dest, cur.out, displacement, length);
 }
 
-// Decodes the elements of a compressed chunk: the bytes from inPos to chunkEnd.
-// Advances inPos and out.
-void DecompressChunk(std::span<const BYTE> src, std::span<BYTE> dest,
-                     size_t& in_pos, size_t chunk_end, size_t& out) {
+// Copies the literal byte at cur.in_pos to the output. Advances in_pos and out.
+void CopyLiteral(Cursor& cur) {
+  if (cur.out == cur.dest.size()) {
+    throw std::runtime_error("LZNT1: literal exceeds decompressed bounds.\n");
+  }
+  // out < dest.size() just above; inPos < chunkEnd <= src.size().
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  cur.dest[cur.out] = cur.src[cur.in_pos];
+  cur.out++;
+  cur.in_pos++;
+}
+
+// Decodes the elements of the compressed chunk that ends at cur.chunk_end.
+// Advances in_pos and out.
+void DecompressChunk(Cursor& cur) {
   // Declared chunk size, not flag bits, bounds the data ([MS-XCA] 2.5.3).
-  const size_t chunk_out_start = out;
-  while (in_pos < chunk_end) {
+  cur.chunk_out_start = cur.out;
+  while (cur.in_pos < cur.chunk_end) {
     // The enclosing loop tests inPos < chunkEnd <= src.size().
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    const BYTE flags = src[in_pos];
-    in_pos++;
+    const BYTE flags = cur.src[cur.in_pos];
+    cur.in_pos++;
 
-    for (unsigned bit = 0; bit < flags_per_byte && in_pos < chunk_end; bit++) {
+    for (unsigned bit = 0; bit < flags_per_byte && cur.in_pos < cur.chunk_end;
+         bit++) {
       // A word can decode past chunk_size; nothing in the encoding caps it.
-      if (out - chunk_out_start >= chunk_size) {
+      if (cur.out - cur.chunk_out_start >= chunk_size) {
         throw std::runtime_error(
             "LZNT1: chunk decompresses to more than 4096 bytes.\n");
       }
 
       if ((flags & static_cast<BYTE>(1U << bit)) == 0) {
-        // Literal byte.
-        if (out == dest.size()) {
-          throw std::runtime_error(
-              "LZNT1: literal exceeds decompressed bounds.\n");
-        }
-        // out < dest.size() just above; inPos < chunkEnd <= src.size().
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        dest[out] = src[in_pos];
-        out++;
-        in_pos++;
-        continue;
+        CopyLiteral(cur);
+      } else {
+        DecodeBackReference(cur);
       }
-
-      DecodeBackReference(src, dest, in_pos, chunk_end, chunk_out_start, out);
     }
   }
 }
@@ -144,12 +155,11 @@ void DecompressChunk(std::span<const BYTE> src, std::span<BYTE> dest,
 }  // namespace
 
 size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest) {
-  size_t in_pos = 0;
-  size_t out = 0;
+  Cursor cur{.src = src, .dest = dest};
 
-  while (in_pos + header_size <= src.size()) {
-    const WORD header = ReadLe16(src, in_pos);
-    in_pos += header_size;
+  while (cur.in_pos + header_size <= src.size()) {
+    const WORD header = ReadLe16(src, cur.in_pos);
+    cur.in_pos += header_size;
 
     // header == 0 is the End_of_buffer terminal ([MS-XCA] 2.5.1.2).
     if (header == 0) {
@@ -164,33 +174,33 @@ size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest) {
     const size_t payload =
         (static_cast<size_t>(header & header_size_mask) + size_bias) -
         header_size;
-    if (payload > src.size() - in_pos) {
+    if (payload > src.size() - cur.in_pos) {
       throw std::runtime_error(
           "LZNT1: chunk exceeds compressed data bounds.\n");
     }
-    const size_t chunk_end = in_pos + payload;
+    cur.chunk_end = cur.in_pos + payload;
 
     if ((header & header_compressed) == 0) {
       // Uncompressed chunk: literal bytes follow the header ([MS-XCA] 2.5.1.2).
-      if (payload > dest.size() - out) {
+      if (payload > dest.size() - cur.out) {
         throw std::runtime_error(
             "LZNT1: uncompressed chunk exceeds decompressed bounds.\n");
       }
       // payload was checked against both src and dest above, so both are in
       // range.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      std::memcpy(&dest[out], &src[in_pos], payload);
-      out += payload;
-      in_pos = chunk_end;
+      std::memcpy(&dest[cur.out], &src[cur.in_pos], payload);
+      cur.out += payload;
+      cur.in_pos = cur.chunk_end;
       continue;
     }
 
-    DecompressChunk(src, dest, in_pos, chunk_end, out);
+    DecompressChunk(cur);
 
-    in_pos = chunk_end;
+    cur.in_pos = cur.chunk_end;
   }
 
-  return out;
+  return cur.out;
 }
 
 }  // namespace NtfsBrowser::Lznt1
