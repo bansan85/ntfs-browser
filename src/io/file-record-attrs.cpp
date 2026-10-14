@@ -114,6 +114,33 @@ std::unique_ptr<Attr::AttrBase<S>> MakeIndexAlloc(const Attr::HeaderCommon& ahc,
   return std::make_unique<Attr::AttrIndexAlloc<S>>(ahc, record);
 }
 
+// Wraps a type that is always resident on disk, or returns nullptr for any
+// other type. Each such type rejects a non-resident header with its own
+// message, before its bytes get reinterpreted as a resident one.
+template <Cache::Strategy S>
+std::unique_ptr<Attr::AttrBase<S>>
+    AllocResidentOnly(const Attr::HeaderCommon& ahc, FileRecord<S>& record) {
+  switch (ahc.type) {
+    case Attr::Type::StandardInformation:
+      return MakeResidentOnly<Attr::AttrStdInfo>(
+          ahc, record, "Standard Information attribute must be resident.\n");
+    case Attr::Type::FileName:
+      return MakeResidentOnly<Attr::AttrFileName>(
+          ahc, record, "File Name attribute must be resident.\n");
+    case Attr::Type::VolumeName:
+      return MakeResidentOnly<Attr::AttrVolName>(
+          ahc, record, "Volume Name attribute must be resident.\n");
+    case Attr::Type::VolumeInformation:
+      return MakeResidentOnly<Attr::AttrVolInfo>(
+          ahc, record, "Volume Information attribute must be resident.\n");
+    case Attr::Type::IndexRoot:
+      return MakeResidentOnly<Attr::AttrIndexRoot>(
+          ahc, record, "Index Root attribute must be resident.\n");
+    default:
+      return nullptr;
+  }
+}
+
 // How reading the next attribute header of a record's walk ended.
 enum class AttrWalk : BYTE {
   Next,       // head holds a header whose attribute fits in the record.
@@ -351,37 +378,21 @@ std::unique_ptr<Attr::AttrBase<S>> Io::AttrParser<S>::AllocAttr(
     const Attr::HeaderCommon& ahc, bool& unhandled,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   FileRecord<S>& record = *impl_.self;
-  switch (ahc.type) {
-    // These attribute types are always resident on disk; reject any
-    // record claiming otherwise before its bytes get reinterpreted as one.
-    case Attr::Type::StandardInformation:
-      return MakeResidentOnly<Attr::AttrStdInfo>(
-          ahc, record, "Standard Information attribute must be resident.\n");
+  std::unique_ptr<Attr::AttrBase<S>> resident_only =
+      AllocResidentOnly<S>(ahc, record);
+  if (resident_only) {
+    return resident_only;
+  }
 
+  switch (ahc.type) {
     // Unresolved, $ATTRIBUTE_LIST is wrapped generically, as the arm below.
     case Attr::Type::AttributeList:
       return impl_.resolve_attr_list
                  ? MakeByResidency<Attr::AttrList>(ahc, record, attr_list_chain)
                  : MakeGeneric(ahc, record);
 
-    case Attr::Type::FileName:
-      return MakeResidentOnly<Attr::AttrFileName>(
-          ahc, record, "File Name attribute must be resident.\n");
-
-    case Attr::Type::VolumeName:
-      return MakeResidentOnly<Attr::AttrVolName>(
-          ahc, record, "Volume Name attribute must be resident.\n");
-
-    case Attr::Type::VolumeInformation:
-      return MakeResidentOnly<Attr::AttrVolInfo>(
-          ahc, record, "Volume Information attribute must be resident.\n");
-
     case Attr::Type::Data:
       return MakeByResidency<Attr::AttrData>(ahc, record);
-
-    case Attr::Type::IndexRoot:
-      return MakeResidentOnly<Attr::AttrIndexRoot>(
-          ahc, record, "Index Root attribute must be resident.\n");
 
     case Attr::Type::IndexAllocation:
       return MakeIndexAlloc(ahc, record);
