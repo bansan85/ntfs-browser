@@ -60,11 +60,9 @@ bool AttrIndexAlloc<S>::PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
         ((i + 1) *
          (Data::FileRecordHeader::update_sequence_stride / sizeof(WORD))) -
         1;
-    // USN error
-    if (pos >= block.size()) {
-      return false;
-    }
-    // pos < block.size() above; i < sectors <= usarray.size().
+    // FixupIndexBlock() caps sectors at block size / 512, keeping pos in range.
+    assert(pos < block.size());
+    // i < sectors <= usarray.size().
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (block[pos] != usn) {
       return false;
@@ -193,8 +191,9 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
   const auto* ib_buf = reinterpret_cast<const Data::IndexBlock*>(block.data());
   constexpr size_t entry_offset_pos = offsetof(Data::IndexBlock, entry_offset);
 
-  if (block.size() < entry_offset_pos ||
-      ib_buf->entry_offset > block.size() - entry_offset_pos) {
+  // FixupIndexBlock() accepted this block, so it spans the whole header.
+  assert(block.size() >= entry_offset_pos);
+  if (ib_buf->entry_offset > block.size() - entry_offset_pos) {
     Log::Warn("Index Block: entry_offset exceeds block bounds");
     return false;
   }
