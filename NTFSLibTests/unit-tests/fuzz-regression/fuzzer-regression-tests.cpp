@@ -709,3 +709,46 @@ NTFS_REGRESSION_TESTCASE("volume_name_must_be_resident")
 NTFS_REGRESSION_TESTCASE("volume_name_resident_present")
 
 #undef NTFS_REGRESSION_TESTCASE
+
+TEST_CASE("NtfsFuzzerAfl command line", "[fuzz][options]") {
+  const Fs::path exe(NTFS_FUZZER_AFL_EXE);
+  REQUIRE(Fs::exists(exe));
+  const Fs::path testcase = Fs::path(NTFS_FUZZ_DATA_DIR) / "cluster_size_null";
+  REQUIRE(Fs::exists(testcase));
+
+  SECTION("no input file prints usage and fails") {
+    const ProcessOutput result = RunProcessCapturingOutput(exe, {});
+    CHECK(result.exit_code == 1);
+    CHECK_THAT(result.output, Catch::Matchers::ContainsSubstring("usage:"));
+  }
+
+  SECTION("a second input file prints usage and fails") {
+    const ProcessOutput result = RunProcessCapturingOutput(
+        exe, {testcase.wstring(), testcase.wstring()});
+    CHECK(result.exit_code == 1);
+    CHECK_THAT(result.output, Catch::Matchers::ContainsSubstring("usage:"));
+  }
+
+  SECTION("an input that cannot be read is not an error") {
+    const ProcessOutput result =
+        RunProcessCapturingOutput(exe, {L"ntfsbrowser-no-such-testcase.bin"});
+    CHECK(result.exit_code == 0);
+  }
+
+  SECTION("an input path with a space stays one argument") {
+    const ProcessOutput result =
+        RunProcessCapturingOutput(exe, {L"no such testcase.bin"});
+    CHECK(result.exit_code == 0);
+  }
+
+  SECTION(
+      "a log file that cannot be created is reported, and the run goes on") {
+    // The testcase is a file, so no directory can be created under it.
+    const Fs::path log = testcase / "fuzzer.log";
+    const ProcessOutput result = RunProcessCapturingOutput(
+        exe, {testcase.wstring(), L"--log=file:debug:" + log.wstring()});
+    CHECK(result.exit_code == 0);
+    CHECK_THAT(result.output,
+               Catch::Matchers::ContainsSubstring("Cannot open log file"));
+  }
+}

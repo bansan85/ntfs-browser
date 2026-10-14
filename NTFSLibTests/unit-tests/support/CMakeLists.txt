@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "child-process.cpp"
     "child-process.h"
+    "child-process-tests.cpp"
     "md5-test-support.cpp"
     "md5-test-support.h"
     "optional-access.h"
