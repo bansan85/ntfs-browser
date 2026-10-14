@@ -291,6 +291,25 @@ TEST_CASE("ParseFileRecord reports a record read that the disk refuses",
 }
 
 TEMPLATE_TEST_CASE_SIG(
+    "ParseFileRecord reads a system record straight from disk and reports a "
+    "refused read",
+    "[cov-fra]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  auto reader = std::make_unique<SwitchableReader>(
+      NtfsBrowserTests::BuildFakeNtfsImage());
+  SwitchableReader* disk = reader.get();
+  const NtfsVolume<S> volume(std::move(reader));
+  REQUIRE(volume.IsVolumeOK());
+
+  NtfsBrowser::Io::FileRecord<S> root(volume);
+  REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+
+  disk->fail = true;
+  CHECK_FALSE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+  CHECK_FALSE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Mft)));
+}
+
+TEMPLATE_TEST_CASE_SIG(
     "Attribute walk ends early when a header does not fit in the record",
     "[cov-fra]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
