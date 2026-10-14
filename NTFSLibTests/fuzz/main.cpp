@@ -175,13 +175,9 @@ bool RunIteration(unsigned seed, DWORD& crash_code) {
   return !g_crt_failure;
 }
 
-}  // namespace
-
-// With no args, fuzzes forever until Ctrl+C. With one numeric arg, fuzzes
-// for that many iterations. With "--seed <seed>", replays one iteration.
-// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
-int wmain(int argc, wchar_t* argv[]) {
-  // Unbuffered, so an escaping CRT abort() can't strand output.
+// Routes CRT and terminate failures to the handlers above, and makes stdout
+// unbuffered, so an escaping CRT abort() can't strand output.
+void InstallFailureHandlers() {
   setvbuf(stdout, nullptr, _IONBF, 0);
   _set_invalid_parameter_handler(OnInvalidParameter);
   _set_purecall_handler(OnPureCall);
@@ -192,53 +188,48 @@ int wmain(int argc, wchar_t* argv[]) {
     _CrtSetReportMode(report_type, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(report_type, _CRTDBG_FILE_STDERR);
   }
+}
 
-  // --log= options are consumed here; args holds everything else, so the
-  // positional argument checks below stay as they were.
+// The parsed command line: the --log settings, and the operands that remain
+// once those are removed. argv[0] is not an operand.
+struct Arguments {
   Log::Config log_config;
-  std::vector<wchar_t*> args{argv[0]};
+  std::vector<wchar_t*> operands;
+};
+
+// Returns nullopt after printing usage for a malformed --log option.
+std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
+  Arguments args;
   for (int i = 1; i < argc; i++) {
     if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w)) {
-      if (!Log::ParseOption(argv[i], log_config)) {
+      if (!Log::ParseOption(argv[i], args.log_config)) {
         fprintf(stderr, "usage: %ls [--log=...] [iterations | --seed <seed>]\n",
                 argv[0]);
         fprintf(stderr, "  %s\n", std::string(Log::option_usage).c_str());
-        return 1;
+        return std::nullopt;
       }
       continue;
     }
-    args.push_back(argv[i]);
+    args.operands.push_back(argv[i]);
   }
-  if (!Log::Configure(log_config)) {
-    fprintf(stderr, "Cannot open log file %ls\n", log_config.file_path.c_str());
+  return args;
+}
+
+// Replays one seed, printing whether it crashes. Returns the exit code.
+int ReplaySeed(unsigned seed) {
+  DWORD crash_code = 0;
+  printf("Replaying seed=%u\n", seed);
+  if (!RunIteration(seed, crash_code)) {
+    printf("CRASH (SEH 0x%08lX) seed=%u\n", crash_code, seed);
+    return 1;
   }
+  printf("No crash.\n");
+  return 0;
+}
 
-  const size_t arg_count = args.size();
-
-  // argCount == 3 is tested first.
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  if (arg_count == 3 && std::wcscmp(args[1], L"--seed") == 0) {
-    const unsigned seed =
-        // argCount == 3 was tested above.
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        gsl::narrow<unsigned>(std::wcstoul(args[2], nullptr, 0));
-    DWORD crash_code = 0;
-    printf("Replaying seed=%u\n", seed);
-    if (!RunIteration(seed, crash_code)) {
-      printf("CRASH (SEH 0x%08lX) seed=%u\n", crash_code, seed);
-      return 1;
-    }
-    printf("No crash.\n");
-    return 0;
-  }
-
-  std::optional<unsigned long long> max_iterations;
-  if (arg_count == 2) {
-    // argCount == 2 was tested above.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    max_iterations = std::wcstoull(args[1], nullptr, 0);
-  }
-
+// Fuzzes fresh random seeds until Ctrl+C, or for max_iterations seeds when
+// one is given. Returns the exit code: 1 if any seed crashed.
+int FuzzLoop(std::optional<unsigned long long> max_iterations) {
   SetConsoleCtrlHandler(OnConsoleEvent, TRUE);
 
   std::random_device rd;
@@ -274,4 +265,40 @@ int wmain(int argc, wchar_t* argv[]) {
   printf("Stopped after %llu iterations, %llu crash(es)\n", iterations,
          crashes);
   return crashes == 0 ? 0 : 1;
+}
+
+}  // namespace
+
+// With no args, fuzzes forever until Ctrl+C. With one numeric arg, fuzzes
+// for that many iterations. With "--seed <seed>", replays one iteration.
+// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
+int wmain(int argc, wchar_t* argv[]) {
+  InstallFailureHandlers();
+
+  const std::optional<Arguments> args = ParseArguments(argc, argv);
+  if (!args) {
+    return 1;
+  }
+  if (!Log::Configure(args->log_config)) {
+    fprintf(stderr, "Cannot open log file %ls\n",
+            args->log_config.file_path.c_str());
+  }
+
+  const std::vector<wchar_t*>& operands = args->operands;
+  // operands.size() == 2 is tested first.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  if (operands.size() == 2 && std::wcscmp(operands[0], L"--seed") == 0) {
+    return ReplaySeed(gsl::narrow<unsigned>(
+        // operands.size() == 2 was tested above.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        std::wcstoul(operands[1], nullptr, 0)));
+  }
+
+  std::optional<unsigned long long> max_iterations;
+  if (operands.size() == 1) {
+    // operands.size() == 1 was tested above.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    max_iterations = std::wcstoull(operands[0], nullptr, 0);
+  }
+  return FuzzLoop(max_iterations);
 }
