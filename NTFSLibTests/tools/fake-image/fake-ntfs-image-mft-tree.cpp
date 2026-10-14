@@ -319,6 +319,38 @@ std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithNamedRoot(std::wstring_view root_name) {
+  using NtfsBrowser::Data::FileRecordFlag;
+
+  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
+    const size_t offset =
+        mft_addr +
+        static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
+    std::memcpy(&image.at(offset), record.data(), record.size());
+  };
+
+  const ULONGLONG root_ref = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const std::array<FakeIndexName, 2> root_names{
+      {{L"Docs", mft_tree_docs_idx, true},
+       {L"draft.doc", mft_tree_deleted_child_idx, false}}};
+  put_record(static_cast<ULONGLONG>(Mft::Idx::Root),
+             MakeIndexedDirRecord(
+                 root_sequence_number,
+                 FakeFileName{.name = root_name, .parent_ref = root_ref},
+                 root_names));
+
+  // The freed draft.doc keeps its sequence number, and now hangs off the root.
+  put_record(
+      mft_tree_deleted_child_idx,
+      MakeMftTreeRecord(FileRecordFlag{}, 2,
+                        {{.name = L"draft.doc", .parent_ref = root_ref}}));
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithFreedNonResidentFile(
     ULONGLONG real_size, const std::vector<FakeDataRun>& runs) {
   std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();

@@ -37,7 +37,8 @@ struct DeletedFile {
   std::uint64_t reference = 0;
   // Name the record carries.
   std::wstring name;
-  // Path from the volume root, built from the directory entries the scan saw.
+  // Path from the volume root, such as \Docs\old.tmp, built from the directory
+  // entries the scan saw. Only the name when no entry links it to the root.
   std::wstring full_path;
   // Last write time in local time, as FILETIME ticks: 100 ns since 1601.
   std::uint64_t write_time = 0;

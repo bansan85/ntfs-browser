@@ -877,6 +877,12 @@ inline constexpr std::string_view freed_file_content = "Recovered text.\n";
 // "OldDir" (20, freed directory). Every other record is as that fixture has it.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree();
 
+// Same volume as BuildFakeNtfsImageWithFreedFileTree(), except that the root
+// (#5) is named root_name and indexes "draft.doc" (21) beside "Docs". draft.doc
+// now names the root as its parent.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithNamedRoot(std::wstring_view root_name);
+
 // Same volume as BuildFakeNtfsImageWithFreedFileTree(), with the freed
 // "stale.txt" (22) replaced by one whose unnamed $DATA is non-resident:
 // real_size

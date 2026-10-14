@@ -147,11 +147,17 @@ ScanResult ScanRecords(NtfsVolume<Cache::Strategy::FullCache>& volume,
 }
 
 // Path of record ref: its name at the end, each directory the scan linked
-// above it before that. Stops at the first parent that does not parse.
+// above it before that. A walk that reaches the root starts with a separator.
+// A name no directory entry links stays bare. Stops at the first parent that
+// does not parse.
 std::wstring BuildFullPath(FullRecord& fr, const ParentMap& id_to_parent,
                            ULONGLONG ref, std::wstring name) {
   auto id = id_to_parent.find(ref);
   while (id != id_to_parent.end()) {
+    // The root's own name is not a component. On a real volume it is ".".
+    if (id->second == static_cast<ULONGLONG>(Mft::Idx::Root)) {
+      return L"\\" + name;
+    }
     if (!ParseWithMask(fr, id->second, Attr::Mask::FileName)) {
       break;
     }

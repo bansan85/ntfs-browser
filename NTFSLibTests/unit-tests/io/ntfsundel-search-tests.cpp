@@ -76,6 +76,18 @@ std::vector<std::wstring> Names(const SearchResult& result) {
   return names;
 }
 
+// Checks the paths a search lists over BuildFakeNtfsImageWithNamedRoot().
+void CheckNamedRootPaths(FullVolume& volume) {
+  const SearchResult result = Search(volume, L".*");
+
+  REQUIRE(result.files.size() == 4);
+  CHECK(result.files[0].full_path == L"\\Docs\\old.tmp");
+  CHECK(result.files[1].full_path == L"\\Docs\\OldDir");
+  // The root indexes draft.doc, so it sits directly under the root.
+  CHECK(result.files[2].full_path == L"\\draft.doc");
+  CHECK(result.files[3].full_path == L"stale.txt");
+}
+
 }  // namespace
 
 TEST_CASE("NtfsUndel search lists freed records in record number order",
@@ -101,13 +113,28 @@ TEST_CASE("NtfsUndel search builds each path from the directory entries",
   const SearchResult result = Search(*volume, L".*");
 
   REQUIRE(result.files.size() == 4);
-  // The root is named "." on a real volume, and the walk takes that name as
-  // the first component. Its index names Docs, so the path is "." then Docs.
-  CHECK(result.files[0].full_path == L".\\Docs\\old.tmp");
-  CHECK(result.files[1].full_path == L".\\Docs\\OldDir");
+  // The root's own name is not a component: the path starts at the root.
+  CHECK(result.files[0].full_path == L"\\Docs\\old.tmp");
+  CHECK(result.files[1].full_path == L"\\Docs\\OldDir");
   // No directory index names draft.doc or stale.txt: each keeps its own name.
   CHECK(result.files[2].full_path == L"draft.doc");
   CHECK(result.files[3].full_path == L"stale.txt");
+}
+
+TEST_CASE("NtfsUndel search paths start at the root when it is named .",
+          "[undel][search][characterization]") {
+  const auto volume =
+      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithNamedRoot(L"."));
+
+  CheckNamedRootPaths(*volume);
+}
+
+TEST_CASE("NtfsUndel search paths do not take the root's name from its record",
+          "[undel][search][characterization]") {
+  const auto volume =
+      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithNamedRoot(L"Volume"));
+
+  CheckNamedRootPaths(*volume);
 }
 
 TEST_CASE("NtfsUndel search reports the write time of each freed record",
