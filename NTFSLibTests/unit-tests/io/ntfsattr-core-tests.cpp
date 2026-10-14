@@ -209,3 +209,30 @@ TEST_CASE("NtfsAttr folder mode dumps the folder holding the picked file",
   REQUIRE(by_folder.message.empty());
   REQUIRE(by_folder.dump == by_folder_name.dump);
 }
+
+TEST_CASE("NtfsAttr dump of zero bytes has no rows",
+          "[ntfsattr][characterization]") {
+  const std::vector<BYTE> bytes(16, 0xAA);
+  std::wstring lines;
+
+  NtfsAttrDump::AppendData(lines, bytes.data(), 0);
+
+  REQUIRE(lines.empty());
+}
+
+TEST_CASE("NtfsAttr dump rows split at 16 bytes, last row padded with FF",
+          "[ntfsattr][characterization]") {
+  std::vector<BYTE> bytes(17, 0x41);
+  bytes[16] = 0x42;
+  std::wstring lines;
+
+  NtfsAttrDump::AppendData(lines, bytes.data(), 17);
+
+  // The padding bytes are 0xFF, which the text column shows as U+00FF.
+  REQUIRE(lines ==
+          L"41 41 41 41 41 41 41 41 - 41 41 41 41 41 41 41 41   "
+          L"AAAAAAAAAAAAAAAA\r\n" +
+              std::wstring(
+                  L"42 FF FF FF FF FF FF FF - FF FF FF FF FF FF FF FF   B") +
+              std::wstring(15, L'\u00FF') + L"\r\n");
+}

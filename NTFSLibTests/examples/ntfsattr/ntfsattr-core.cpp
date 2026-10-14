@@ -73,23 +73,6 @@ std::wstring FormatRow(const std::array<BYTE, 16>& row) {
   return line;
 }
 
-// Appends the dump of datalen bytes at data to lines. Every row ends in CRLF.
-void AppendData(std::wstring& lines, const BYTE* data, std::uint32_t datalen) {
-  std::uint32_t i = 0;
-  for (i = 0; i < ((datalen - 1U) >> 4); i++) {
-    std::array<BYTE, 16> row{};
-    std::memcpy(row.data(), data + static_cast<std::size_t>(i) * 16, 16);
-    lines += FormatRow(row) + L"\r\n";
-  }
-
-  // The last row may be short. The missing bytes print as 0xFF.
-  std::array<BYTE, 16> row{};
-  row.fill(0xFF);
-  std::memcpy(row.data(), data + static_cast<std::size_t>(i) * 16,
-              datalen - i * 16);
-  lines += FormatRow(row) + L"\r\n";
-}
-
 // The heading of an attribute: its type name, then its stream name in
 // parentheses when it has one. Each line ends in CRLF.
 std::wstring
@@ -201,6 +184,27 @@ DumpResult Failed(std::wstring_view message) {
 }
 
 }  // namespace
+
+void AppendData(std::wstring& lines, const BYTE* data, std::uint32_t datalen) {
+  // Zero bytes: datalen - 1 would wrap and the row loop would read past data.
+  if (datalen == 0) {
+    return;
+  }
+
+  std::uint32_t i = 0;
+  for (i = 0; i < ((datalen - 1U) >> 4); i++) {
+    std::array<BYTE, 16> row{};
+    std::memcpy(row.data(), data + static_cast<std::size_t>(i) * 16, 16);
+    lines += FormatRow(row) + L"\r\n";
+  }
+
+  // The last row may be short. The missing bytes print as 0xFF.
+  std::array<BYTE, 16> row{};
+  row.fill(0xFF);
+  std::memcpy(row.data(), data + static_cast<std::size_t>(i) * 16,
+              datalen - i * 16);
+  lines += FormatRow(row) + L"\r\n";
+}
 
 std::wstring TargetPath(std::wstring_view picked, bool directory) {
   if (!directory) {
