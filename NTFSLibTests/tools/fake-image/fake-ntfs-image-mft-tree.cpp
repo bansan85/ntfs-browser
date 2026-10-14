@@ -530,7 +530,12 @@ std::vector<BYTE>
                            root_names));
 
   const std::array<FakeIndexName, 4> docs_names{
-      {{L"Broken", mft_tree_zeroed_idx, false},
+      {{.name = L"Broken",
+        .mft_ref = mft_tree_zeroed_idx,
+        .directory = false,
+        .real_size = dump_broken_real_size,
+        .alloc_size = dump_broken_alloc_size,
+        .alter_time = dump_broken_alter_time},
        {L"old.tmp", mft_tree_deleted_file_idx, false},
        {L"OldDir", mft_tree_deleted_dir_idx, true},
        {L"report.txt", mft_tree_report_idx, false, report_sequence}}};

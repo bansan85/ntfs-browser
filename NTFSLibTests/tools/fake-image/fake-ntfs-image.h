@@ -919,6 +919,14 @@ inline constexpr ULONGLONG dump_big_file_size = 20000;
 inline constexpr DWORD dump_big_file_lcn = 40;
 inline constexpr DWORD dump_big_file_clusters = 20;
 
+// Metadata the "Broken" entry in Docs carries. Its record is zero-filled, so
+// only the index entry can supply these. The time is 2024-01-15 12:00:00 UTC,
+// in FILETIME ticks: far from any DST change, so a local-time round trip keeps
+// it exact.
+inline constexpr ULONGLONG dump_broken_real_size = 4321;
+inline constexpr ULONGLONG dump_broken_alloc_size = 8192;
+inline constexpr ULONGLONG dump_broken_alter_time = 133'497'936'000'000'000;
+
 // Same volume as BuildFakeNtfsImageWithFreedFileTree(), plus the in-use files
 // a dump walks to. The root (#5) indexes "big.bin" (dump_big_file_idx, a
 // non-resident $DATA of big_real_size bytes over big_runs), "Docs" (16) and

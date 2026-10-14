@@ -66,10 +66,12 @@ struct ParsedRoot {
 };
 
 template <Cache::Strategy S>
-ParsedRoot<S> ParseRoot(std::vector<BYTE> image) {
+ParsedRoot<S> ParseRoot(std::vector<BYTE> image,
+                        NtfsBrowser::VolumeOptions options = {}) {
   ParsedRoot<S> parsed;
   parsed.volume = std::make_unique<NtfsVolume<S>>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      options);
   REQUIRE(parsed.volume->IsVolumeOK());
 
   parsed.record =
@@ -81,8 +83,9 @@ ParsedRoot<S> ParseRoot(std::vector<BYTE> image) {
 
 // ParseRoot() and then ParseAttrs() on the root record, which must succeed.
 template <Cache::Strategy S>
-ParsedRoot<S> ParseRootWithAttrs(std::vector<BYTE> image) {
-  ParsedRoot<S> parsed = ParseRoot<S>(std::move(image));
+ParsedRoot<S> ParseRootWithAttrs(std::vector<BYTE> image,
+                                 NtfsBrowser::VolumeOptions options = {}) {
+  ParsedRoot<S> parsed = ParseRoot<S>(std::move(image), options);
   REQUIRE(parsed.record->ParseAttrs());
   return parsed;
 }
@@ -670,8 +673,10 @@ namespace {
 // checked here on the actual traversal result, not just exit code/trace.
 template <Cache::Strategy S>
 void CheckCompressedIndexAllocationTraverses() {
+  // The named record is not built: only recover_errors lists this entry.
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithCompressedIndexAllocation());
+      NtfsBrowserTests::BuildFakeNtfsImageWithCompressedIndexAllocation(),
+      {.recover_errors = true});
   CHECK(root.record->IsCompressed());
   CHECK(root.record->IsDirectory());
 
@@ -748,8 +753,10 @@ struct SeenEntry {
 // lookup, which walks from the root into the compressed block.
 template <Cache::Strategy S>
 void CheckSurrogatePairNamesTraverse() {
+  // The named records are not built: only recover_errors lists these entries.
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithSurrogatePairNames());
+      NtfsBrowserTests::BuildFakeNtfsImageWithSurrogatePairNames(),
+      {.recover_errors = true});
   CHECK(root.record->IsCompressed());
 
   std::vector<SeenEntry> seen;

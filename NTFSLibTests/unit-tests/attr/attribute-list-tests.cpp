@@ -39,7 +39,8 @@ TEMPLATE_TEST_CASE_SIG(
   const ParsedRecord<S> dir = OpenListRecord<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory(),
       NtfsBrowserTests::attribute_list_dir_idx,
-      Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+      Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
+      VolumeOptions{.recover_errors = true});
   REQUIRE(dir.record->ParseAttrs());
 
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
@@ -135,7 +136,8 @@ TEMPLATE_TEST_CASE_SIG(
       NtfsBrowserTests::
           BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory(),
       NtfsBrowserTests::attr_list_tight_pack_dir_idx,
-      Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+      Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
+      VolumeOptions{.recover_errors = true});
   REQUIRE(dir.record->ParseAttrs());
 
   const std::optional<IndexEntry> found = dir.record->FindSubEntry(L"Foo");

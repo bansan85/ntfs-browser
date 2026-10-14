@@ -64,11 +64,9 @@ void RunOrphanedBlocksNeedRecoveryFlag() {
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
-  const std::vector<std::wstring> normal = CollectNames(root);
-  REQUIRE(normal.size() == 1);
-  // The REQUIRE above checks the size of normal.
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(normal[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+  // The reachable entry names an unbuilt record, which strict mode hides.
+  // The orphan block is not scanned at all without recover_errors.
+  CHECK(CollectNames(root).empty());
 }
 
 // With recover_errors on and include_deleted on, every $INDEX_ALLOCATION

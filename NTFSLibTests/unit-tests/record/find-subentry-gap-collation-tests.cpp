@@ -14,6 +14,7 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "gap-collation-probe.h"
@@ -26,6 +27,7 @@ namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::NtfsVolume;
 namespace Cache = NtfsBrowser::Cache;
 namespace Mft = NtfsBrowser::Mft;
+using NtfsBrowser::VolumeOptions;
 
 namespace {
 
@@ -36,7 +38,9 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithGapCollationSubNode());
 
-  const NtfsVolume<S> volume(std::move(reader));
+  // The named records are not built, so only recover_errors shows the entries.
+  const NtfsVolume<S> volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> root(volume);

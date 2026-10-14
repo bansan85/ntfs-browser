@@ -12,6 +12,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
@@ -19,6 +20,7 @@
 
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 
@@ -31,7 +33,9 @@ void RunFindSubEntryOutlivesReparseTest() {
   auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithIndexRootVariants());
 
-  const NtfsVolume<S> volume(std::move(reader));
+  // The named records are not built, so only recover_errors shows the entries.
+  const NtfsVolume<S> volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> record(volume);

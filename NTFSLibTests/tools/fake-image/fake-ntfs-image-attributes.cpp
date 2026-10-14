@@ -169,6 +169,9 @@ WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name) {
   auto& filename =
       *reinterpret_cast<NtfsBrowser::Data::Filename*>(&entry.stream);
   filename.parent_ref = static_cast<ULONGLONG>(Mft::Idx::Root);
+  filename.alter_time = name.alter_time;
+  filename.alloc_size = name.alloc_size;
+  filename.real_size = name.real_size;
   filename.flags = name.directory ? NtfsBrowser::Data::FilenameFlag::Directory
                                   : NtfsBrowser::Data::FilenameFlag::None;
   const std::vector<WORD> encoded_name = ToUtf16(name.name);

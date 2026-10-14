@@ -109,17 +109,20 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
   return true;
 }
 
-// Decides whether a normal walk or name lookup skips entry. With
-// include_deleted off, an entry whose named record is freed, or reused under
-// another sequence number, is hidden. A named record that does not parse does
-// not hide it.
+// Decides whether a normal walk or name lookup skips entry. A named record that
+// does not parse is damaged, not freed: it is skipped unless recover_errors is
+// on, whatever include_deleted says. With include_deleted off, an entry whose
+// named record is freed, or reused under another sequence number, is hidden.
 template <Cache::Strategy S>
 bool IsEntryHidden(const IndexEntryView& entry, const NtfsVolume<S>& volume) {
-  if (volume.GetOptions().include_deleted) {
-    return false;
-  }
+  const bool recover = volume.GetOptions().recover_errors;
   Io::FileRecord<S> named(volume);
   if (!named.ParseFileRecord(entry.GetFileReference())) {
+    Log::Recoverable(recover, "Entry names record {} that does not parse",
+                     entry.GetFileReference());
+    return !recover;
+  }
+  if (volume.GetOptions().include_deleted) {
     return false;
   }
   return named.IsDeleted() ||

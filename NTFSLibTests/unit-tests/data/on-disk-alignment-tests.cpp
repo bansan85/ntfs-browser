@@ -20,6 +20,7 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "data/file-record-header.h"
 #include "data/filename.h"
@@ -38,6 +39,7 @@ namespace Attr = NtfsBrowser::Attr;
 using NtfsBrowser::IndexEntry;
 using NtfsBrowser::IndexEntryView;
 using NtfsBrowser::NtfsVolume;
+using NtfsBrowser::VolumeOptions;
 using NtfsBrowser::Io::FileRecord;
 namespace Cache = NtfsBrowser::Cache;
 using NtfsBrowser::Data::FileRecordHeader;
@@ -110,9 +112,10 @@ void RunOddSizedAttributesAreParsedAligned() {
 }
 
 // Number of entries TraverseSubEntries() reports for the root directory.
-size_t CountRootEntries(std::vector<BYTE> image) {
+size_t CountRootEntries(std::vector<BYTE> image, VolumeOptions options = {}) {
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      options);
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> record(volume);
@@ -199,8 +202,10 @@ TEMPLATE_TEST_CASE_SIG(
   std::memset(&image.at(attr_offset + total_size), 0, 2 * sizeof(DWORD));
   Put(image, attr_offset + total_size, static_cast<DWORD>(Attr::Type::All));
 
+  // The named record is not built: only recover_errors lists this entry.
   const NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> record(volume);
@@ -254,7 +259,8 @@ TEST_CASE(
 
   std::vector<BYTE> image =
       NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks();
-  const size_t expected = CountRootEntries(image);
+  const VolumeOptions recover{.recover_errors = true};
+  const size_t expected = CountRootEntries(image, recover);
   REQUIRE(expected > 0);
 
   // The first cluster-aligned index block is VCN 0, the one $INDEX_ROOT
@@ -274,6 +280,6 @@ TEST_CASE(
       block_offset + offsetof(NtfsBrowser::Data::IndexBlock, offset_of_us),
       odd_offset_of_us);
 
-  const size_t actual = CountRootEntries(std::move(image));
+  const size_t actual = CountRootEntries(std::move(image), recover);
   CHECK(actual == expected);
 }

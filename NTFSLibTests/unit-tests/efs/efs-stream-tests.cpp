@@ -528,8 +528,10 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
                        "[efs]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  Opened<S> opened = Open<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedDirectory(), nullptr);
+  // The named records are not built: only recover_errors lists these entries.
+  Opened<S> opened =
+      Open<S>(NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedDirectory(),
+              nullptr, std::nullopt, VolumeOptions{.recover_errors = true});
   CHECK(opened.record->IsEncrypted());
   CHECK(opened.record->IsDirectory());
 
@@ -561,7 +563,7 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   Opened<S> opened = Open<S>(
       NtfsBrowserTests::BuildFakeNtfsImageWithCompressedEncryptedDirectory(),
-      nullptr);
+      nullptr, std::nullopt, VolumeOptions{.recover_errors = true});
   CHECK(opened.record->IsEncrypted());
   CHECK(opened.record->IsCompressed());
   CHECK(opened.record->IsDirectory());

@@ -246,11 +246,16 @@ FakeRecord
 // One leaf $FILE_NAME index entry a fixture writes: a name, the MFT record
 // it points at, whether that record is a directory, and the sequence number
 // its reference carries. A live record needs the sequence it really has.
+// The size and time fields are what the entry itself reports, zero unless a
+// fixture needs them to tell the entry from the record it names.
 struct FakeIndexName {
   std::wstring_view name;
   ULONGLONG mft_ref;
   bool directory;
   WORD sequence = 1;
+  ULONGLONG real_size = 0;
+  ULONGLONG alloc_size = 0;
+  ULONGLONG alter_time = 0;
 };
 
 // Writes "name" as a leaf index entry at "dest" and returns its size in

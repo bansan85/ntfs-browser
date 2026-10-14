@@ -121,12 +121,12 @@ TEMPLATE_TEST_CASE_SIG(
 
   // big.bin and empty.txt are below the first user record, so both are left
   // out as system metafiles. OldDir and old.tmp are freed, so they are hidden.
-  // Broken stays: its record does not parse, which is handled later.
-  CHECK(listing.size() == 3);
-  for (const std::wstring_view key :
-       {L"Docs", L"Docs/Broken", L"Docs/report.txt"}) {
+  // Broken does not parse, which is damage: strict mode hides it too.
+  CHECK(listing.size() == 2);
+  for (const std::wstring_view key : {L"Docs", L"Docs/report.txt"}) {
     CHECK(listing.contains(std::wstring(key)));
   }
+  CHECK_FALSE(listing.contains(L"Docs/Broken"));
   CHECK_FALSE(listing.contains(L"Docs/OldDir"));
   CHECK_FALSE(listing.contains(L"Docs/old.tmp"));
   REQUIRE(listing.contains(L"Docs"));
@@ -145,11 +145,13 @@ TEMPLATE_TEST_CASE_SIG(
 
   const Listing listing = WalkLibraryIndex(*volume, root_record);
 
-  CHECK(listing.size() == 5);
-  for (const std::wstring_view key : {L"Docs", L"Docs/Broken", L"Docs/OldDir",
-                                      L"Docs/old.tmp", L"Docs/report.txt"}) {
+  // Broken is still damaged, so it stays hidden without recover_errors.
+  CHECK(listing.size() == 4);
+  for (const std::wstring_view key :
+       {L"Docs", L"Docs/OldDir", L"Docs/old.tmp", L"Docs/report.txt"}) {
     CHECK(listing.contains(std::wstring(key)));
   }
+  CHECK_FALSE(listing.contains(L"Docs/Broken"));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -162,12 +164,68 @@ TEMPLATE_TEST_CASE_SIG(
   const Listing listing =
       WalkLibraryIndex(*volume, NtfsBrowserTests::mft_tree_docs_idx);
 
-  CHECK(listing.size() == 2);
-  for (const std::wstring_view key : {L"Broken", L"report.txt"}) {
-    CHECK(listing.contains(std::wstring(key)));
-  }
+  CHECK(listing.size() == 1);
+  CHECK(listing.contains(L"report.txt"));
+  CHECK_FALSE(listing.contains(L"Broken"));
   CHECK_FALSE(listing.contains(L"OldDir"));
   CHECK_FALSE(listing.contains(L"old.tmp"));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "WalkLibraryIndex with recover_errors lists a damaged entry from its "
+    "index metadata",
+    "[ntfscompare][library-walk][characterization]", ((Strategy S), S),
+    Strategy::NoCache, Strategy::FullCache) {
+  const auto volume = OpenIndexedVolume<S>({.recover_errors = true});
+
+  const Listing listing = WalkLibraryIndex(*volume, root_record);
+
+  // Freed entries stay hidden: include_deleted is still off.
+  CHECK(listing.size() == 3);
+  CHECK_FALSE(listing.contains(L"Docs/OldDir"));
+  CHECK_FALSE(listing.contains(L"Docs/old.tmp"));
+  REQUIRE(listing.contains(L"Docs/Broken"));
+  const Entry& broken = listing.at(L"Docs/Broken");
+  CHECK_FALSE(broken.is_directory);
+  CHECK(Unwrap(broken.logical_size) == NtfsBrowserTests::dump_broken_real_size);
+  CHECK(Unwrap(broken.physical_size) ==
+        NtfsBrowserTests::dump_broken_alloc_size);
+  CHECK(Unwrap(broken.modification_time_utc) ==
+        NtfsBrowserTests::dump_broken_alter_time);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "WalkLibraryIndex from a directory lists a damaged entry only with "
+    "recover_errors",
+    "[ntfscompare][library-walk][characterization]", ((Strategy S), S),
+    Strategy::NoCache, Strategy::FullCache) {
+  const auto volume = OpenIndexedVolume<S>({.recover_errors = true});
+
+  const Listing listing =
+      WalkLibraryIndex(*volume, NtfsBrowserTests::mft_tree_docs_idx);
+
+  CHECK(listing.size() == 2);
+  CHECK(listing.contains(L"Broken"));
+  CHECK(listing.contains(L"report.txt"));
+  CHECK_FALSE(listing.contains(L"OldDir"));
+  CHECK_FALSE(listing.contains(L"old.tmp"));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "WalkLibraryIndex with include_deleted and recover_errors lists every "
+    "index entry",
+    "[ntfscompare][library-walk][characterization]", ((Strategy S), S),
+    Strategy::NoCache, Strategy::FullCache) {
+  const auto volume =
+      OpenIndexedVolume<S>({.include_deleted = true, .recover_errors = true});
+
+  const Listing listing = WalkLibraryIndex(*volume, root_record);
+
+  CHECK(listing.size() == 5);
+  for (const std::wstring_view key : {L"Docs", L"Docs/Broken", L"Docs/OldDir",
+                                      L"Docs/old.tmp", L"Docs/report.txt"}) {
+    CHECK(listing.contains(std::wstring(key)));
+  }
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -183,6 +241,24 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(found.has_value());
   CHECK(found->GetFileReference() ==
         NtfsBrowserTests::mft_tree_deleted_file_idx);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "FindSubEntry in Docs returns a damaged name only under recover_errors",
+    "[ntfscompare][library-walk][characterization]", ((Strategy S), S),
+    Strategy::NoCache, Strategy::FullCache) {
+  const auto strict = OpenIndexedVolume<S>();
+  CHECK_FALSE(FindInDocs(*strict, L"Broken").has_value());
+
+  // include_deleted does not show a damaged name: only recover_errors does.
+  const auto deleted_only = OpenIndexedVolume<S>({.include_deleted = true});
+  CHECK_FALSE(FindInDocs(*deleted_only, L"Broken").has_value());
+
+  const auto recovering = OpenIndexedVolume<S>({.recover_errors = true});
+  const std::optional<IndexEntry> found = FindInDocs(*recovering, L"Broken");
+  REQUIRE(found.has_value());
+  CHECK(found->GetFileReference() == NtfsBrowserTests::mft_tree_zeroed_idx);
+  CHECK(found->GetFileSize() == NtfsBrowserTests::dump_broken_real_size);
 }
 
 TEMPLATE_TEST_CASE_SIG("WalkMftTree lists the live tree below the root",

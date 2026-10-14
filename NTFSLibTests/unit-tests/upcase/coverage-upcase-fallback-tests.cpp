@@ -97,8 +97,10 @@ TEMPLATE_TEST_CASE_SIG(
                 NtfsBrowserTests::fake_cluster_size, BYTE{0});
   }
 
+  // The named record is not built: only recover_errors lists this entry.
   const NtfsVolume<S> volume(
-      std::make_unique<MemoryDiskReader>(std::move(image)));
+      std::make_unique<MemoryDiskReader>(std::move(image)),
+      NtfsBrowser::VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> root(volume);
@@ -124,7 +126,8 @@ TEST_CASE("FindSubEntry falls back when a $UpCase read is refused",
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       std::make_unique<RefusingDiskReader>(
           std::move(image), table_begin,
-          table_begin + NtfsBrowserTests::fake_cluster_size, refused));
+          table_begin + NtfsBrowserTests::fake_cluster_size, refused),
+      NtfsBrowser::VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);

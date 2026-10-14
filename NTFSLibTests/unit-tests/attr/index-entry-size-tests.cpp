@@ -103,7 +103,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-index-alloc]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const std::vector<std::wstring> intact = RootNames<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks(), {});
+      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
+      VolumeOptions{.recover_errors = true});
   REQUIRE(!intact.empty());
 
   (void)NtfsBrowserTests::TakeCapturedLog();

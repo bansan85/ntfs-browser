@@ -24,14 +24,19 @@ using NtfsBrowserTests::DumpTreeImage;
 using NtfsDump::DumpResult;
 
 // A volume over image, opened the way the dialog opens it.
-std::unique_ptr<NoCacheVolume> OpenVolume(std::vector<BYTE> image) {
+std::unique_ptr<NoCacheVolume>
+    OpenVolume(std::vector<BYTE> image,
+               NtfsBrowser::VolumeOptions options = {}) {
   return std::make_unique<NoCacheVolume>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
+      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      options);
 }
 
 // Dumps path from a fresh volume over image.
-DumpResult DumpPath(std::vector<BYTE> image, std::wstring_view path) {
-  const std::unique_ptr<NoCacheVolume> volume = OpenVolume(std::move(image));
+DumpResult DumpPath(std::vector<BYTE> image, std::wstring_view path,
+                    NtfsBrowser::VolumeOptions options = {}) {
+  const std::unique_ptr<NoCacheVolume> volume =
+      OpenVolume(std::move(image), options);
   return NtfsDump::DumpFile(*volume, path);
 }
 
@@ -100,12 +105,23 @@ TEST_CASE("NtfsDump reports a path entry that is not in its directory",
 
 TEST_CASE("NtfsDump reports a directory on the path that does not read",
           "[ntfsdump][characterization]") {
-  const DumpResult result =
-      DumpPath(DumpTreeImage(), L"C:\\Docs\\Broken\\report.txt");
+  SECTION("strict hides the damaged directory") {
+    const DumpResult result =
+        DumpPath(DumpTreeImage(), L"C:\\Docs\\Broken\\report.txt");
 
-  // The sample words this message as "root directory" here too.
-  REQUIRE(result.message == L"Cannot read root directory of volume");
-  REQUIRE(result.dump.empty());
+    REQUIRE(result.message == L"File not found\n");
+    REQUIRE(result.dump.empty());
+  }
+
+  SECTION("recovering reads the directory that does not read") {
+    // The sample words this message as "root directory" here too.
+    const DumpResult result =
+        DumpPath(DumpTreeImage(), L"C:\\Docs\\Broken\\report.txt",
+                 {.recover_errors = true});
+
+    REQUIRE(result.message == L"Cannot read root directory of volume");
+    REQUIRE(result.dump.empty());
+  }
 }
 
 TEST_CASE("NtfsDump reports a freed directory on the path as not found",
@@ -120,10 +136,20 @@ TEST_CASE("NtfsDump reports a freed directory on the path as not found",
 
 TEST_CASE("NtfsDump reports a final entry that does not read",
           "[ntfsdump][characterization]") {
-  const DumpResult result = DumpPath(DumpTreeImage(), L"C:\\Docs\\Broken");
+  SECTION("strict hides the damaged entry") {
+    const DumpResult result = DumpPath(DumpTreeImage(), L"C:\\Docs\\Broken");
 
-  REQUIRE(result.message == L"Cannot read file");
-  REQUIRE(result.dump.empty());
+    REQUIRE(result.message == L"File not found\n");
+    REQUIRE(result.dump.empty());
+  }
+
+  SECTION("recovering reads the entry that does not read") {
+    const DumpResult result = DumpPath(DumpTreeImage(), L"C:\\Docs\\Broken",
+                                       {.recover_errors = true});
+
+    REQUIRE(result.message == L"Cannot read file");
+    REQUIRE(result.dump.empty());
+  }
 }
 
 TEST_CASE("NtfsDump reports a freed final file as not found",

@@ -612,7 +612,9 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   auto reader = std::make_unique<MemoryDiskReader>(std::move(image));
-  const NtfsVolume<S> volume(std::move(reader));
+  // Named records are not built: only recover_errors lists these entries.
+  const NtfsVolume<S> volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> root(volume);
@@ -705,7 +707,9 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   auto reader = std::make_unique<MemoryDiskReader>(
       NtfsBrowserTests::BuildFakeNtfsImageWithRootIndexRootEntry());
-  const NtfsVolume<S> volume(std::move(reader));
+  // Named records are not built: only recover_errors lists these entries.
+  const NtfsVolume<S> volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> root(volume);
@@ -779,7 +783,9 @@ TEMPLATE_TEST_CASE_SIG(
   std::memcpy(&image.at(vcn_slot), &leaf_vcn, sizeof(leaf_vcn));
 
   auto reader = std::make_unique<MemoryDiskReader>(std::move(image));
-  const NtfsVolume<S> volume(std::move(reader));
+  // Named records are not built: only recover_errors lists these entries.
+  const NtfsVolume<S> volume(std::move(reader),
+                             VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NtfsBrowser::Io::FileRecord<S> root(volume);

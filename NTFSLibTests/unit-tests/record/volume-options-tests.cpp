@@ -262,9 +262,9 @@ void RunNoEndMarkerRejectsOrKeepsParsed() {
 
 // Matrix row "Bad entry in index block": an entry exceeds its
 // $INDEX_ALLOCATION block's bounds mid-block. Strict: that one block is
-// rejected whole, but the normal B+ tree walk still surfaces the
-// unaffected sibling block ("Good"). Recovering: entries parsed before the
-// bad one in the damaged block are reported too ("First", then "Good").
+// rejected whole. Recovering: entries parsed before the bad one in the damaged
+// block are reported too ("First", then "Good"). The test checks isolation:
+// the damaged block must not drop its sibling ("Good") in either mode.
 template <Cache::Strategy S>
 void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
   const auto traverse = [](NtfsBrowser::Io::FileRecord<S>& root) {
@@ -421,8 +421,8 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "A bad entry in an index block skips that block by default, keeps its "
-    "prefix when recovering, and never affects the sibling block",
+    "A bad entry in an index block skips that block by default, and keeps "
+    "its prefix and the sibling block when recovering",
     "[volume-options][attr-index-alloc][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix<S>();

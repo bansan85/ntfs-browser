@@ -350,6 +350,11 @@ namespace {
 // placement in this file.
 constexpr DWORD bad_index_block_lcn = 220;
 
+// $MFT clusters the bad-index-block image maps: one per file record here, so
+// the run reaches the "Good" record's slot.
+constexpr DWORD bad_index_block_mft_clusters =
+    static_cast<DWORD>(bad_index_block_good_mft_ref) + 1;
+
 // Writes the two nameless sub-node entries of a root record: a non-terminal
 // one pointing at VCN 0, the damaged block, then a terminal one pointing at
 // VCN 1, the good block. Returns their combined size.
@@ -448,6 +453,10 @@ struct FakeBadLeafEntry {
   bool last;
 };
 
+// Sequence number every leaf entry of this fixture carries in its reference.
+// The "Good" record is built under the same number, so the entry finds it live.
+constexpr WORD bad_index_block_leaf_sequence = 1;
+
 // Writes one real leaf entry at entry_ptr and returns its size.
 WORD WriteBadIndexBlockLeafEntry(BYTE* entry_ptr,
                                  const FakeBadLeafEntry& spec) {
@@ -455,7 +464,7 @@ WORD WriteBadIndexBlockLeafEntry(BYTE* entry_ptr,
   auto& index_entry =
       *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(entry_ptr);
   index_entry.mft_index = spec.mft_ref;
-  index_entry.mft_sn = 1;
+  index_entry.mft_sn = bad_index_block_leaf_sequence;
 
   auto& filename =
       *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
@@ -589,6 +598,17 @@ std::vector<BYTE> BuildFakeNtfsImageWithBadIndexBlockEntry() {
 
   const ULONGLONG root_ref = MakeFileReference(
       static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+
+  // Only "Good" gets a record: "First" stays unbuilt, so only recovery reports
+  // it. A live record keeps "Good" in strict mode too. The base $MFT maps only
+  // the first few records, so its run is widened to reach "Good"'s slot.
+  PutMftRecord(image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::Mft),
+               MakeMftRecordWithRealDataRun(static_cast<DWORD>(mft_lcn),
+                                            bad_index_block_mft_clusters));
+  const FakeRecord good_record = MakeMftTreeRecord(
+      NtfsBrowser::Data::FileRecordFlag::InUse, bad_index_block_leaf_sequence,
+      {{.name = bad_index_block_good_name, .parent_ref = root_ref}});
+  PutMftRecord(image, mft_addr, bad_index_block_good_mft_ref, good_record);
 
   WriteBadIndexBlockDamagedBlock(image, root_ref);
   WriteBadIndexBlockGoodBlock(image, root_ref);
