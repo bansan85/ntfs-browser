@@ -1,6 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <exception>
 #include <functional>
@@ -383,8 +384,10 @@ std::wstring Mft::MftTree::Impl::PathThrough(
       break;
     }
 
+    // parent_valid comes from IsValidParent(), which finds parent in the scan.
     const Mft::MftTree::Entry* parent_entry = Find(parent);
-    current = parent_entry != nullptr ? PrimaryName(*parent_entry) : nullptr;
+    assert(parent_entry != nullptr);
+    current = PrimaryName(*parent_entry);
     if (current == nullptr) {
       lost = parent;
       break;
