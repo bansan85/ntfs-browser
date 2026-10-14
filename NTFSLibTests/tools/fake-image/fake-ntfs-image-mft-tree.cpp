@@ -518,7 +518,8 @@ std::vector<BYTE>
   // Index entries stay in collation order, as the lookups expect. The root
   // lists itself as "." too, as a real volume's does.
   const std::array<FakeIndexName, 4> root_names{
-      {{L".", static_cast<ULONGLONG>(Mft::Idx::Root), true},
+      {{L".", static_cast<ULONGLONG>(Mft::Idx::Root), true,
+        root_sequence_number},
        {L"big.bin", dump_big_file_idx, false},
        {L"Docs", mft_tree_docs_idx, true},
        {L"empty.txt", dump_empty_file_idx, false}}};
@@ -532,7 +533,7 @@ std::vector<BYTE>
       {{L"Broken", mft_tree_zeroed_idx, false},
        {L"old.tmp", mft_tree_deleted_file_idx, false},
        {L"OldDir", mft_tree_deleted_dir_idx, true},
-       {L"report.txt", mft_tree_report_idx, false}}};
+       {L"report.txt", mft_tree_report_idx, false, report_sequence}}};
   put_record(mft_tree_docs_idx,
              MakeIndexedDirRecord(
                  docs_sequence,

@@ -164,7 +164,7 @@ FakeRecord
 WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name) {
   auto& entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(dest);
   entry.mft_index = name.mft_ref;
-  entry.mft_sn = 1;
+  entry.mft_sn = name.sequence;
 
   auto& filename =
       *reinterpret_cast<NtfsBrowser::Data::Filename*>(&entry.stream);

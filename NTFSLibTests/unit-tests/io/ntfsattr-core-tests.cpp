@@ -126,15 +126,13 @@ TEST_CASE("NtfsAttr reports a directory on the path that does not read",
   REQUIRE(result.dump.empty());
 }
 
-TEST_CASE(
-    "NtfsAttr reports a directory on the path whose attributes do not "
-    "parse",
-    "[ntfsattr][characterization]") {
-  // OldDir is freed, and a dump does not read freed records.
+TEST_CASE("NtfsAttr reports a freed directory on the path as not found",
+          "[ntfsattr][characterization]") {
+  // OldDir is freed, and a default lookup hides freed names.
   const DumpResult result =
       DumpPath(DumpTreeImage(), L"C:\\Docs\\OldDir\\draft.doc");
 
-  REQUIRE(result.message == L"Cannot parse directory attributes");
+  REQUIRE(result.message == L"File not found\n");
   REQUIRE(result.dump.empty());
 }
 
@@ -146,12 +144,12 @@ TEST_CASE("NtfsAttr reports a final entry that does not read",
   REQUIRE(result.dump.empty());
 }
 
-TEST_CASE("NtfsAttr reports a final file whose attributes do not parse",
+TEST_CASE("NtfsAttr reports a freed final file as not found",
           "[ntfsattr][characterization]") {
-  // old.tmp is freed, so its attributes stay unread.
+  // old.tmp is freed, so a default lookup hides it.
   const DumpResult result = DumpPath(DumpTreeImage(), L"C:\\Docs\\old.tmp");
 
-  REQUIRE(result.message == L"Cannot parse file attributes");
+  REQUIRE(result.message == L"File not found\n");
   REQUIRE(result.dump.empty());
 }
 

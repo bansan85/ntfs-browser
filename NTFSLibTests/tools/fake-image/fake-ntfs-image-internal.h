@@ -244,11 +244,13 @@ FakeRecord
                               const FakeNonResidentOverrides& overrides = {});
 
 // One leaf $FILE_NAME index entry a fixture writes: a name, the MFT record
-// it points at, and whether that record is a directory.
+// it points at, whether that record is a directory, and the sequence number
+// its reference carries. A live record needs the sequence it really has.
 struct FakeIndexName {
   std::wstring_view name;
   ULONGLONG mft_ref;
   bool directory;
+  WORD sequence = 1;
 };
 
 // Writes "name" as a leaf index entry at "dest" and returns its size in

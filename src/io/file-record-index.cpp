@@ -119,6 +119,23 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
   return true;
 }
 
+// Decides whether a normal walk or name lookup skips entry. With
+// include_deleted off, an entry whose named record is freed, or reused under
+// another sequence number, is hidden. A named record that does not parse does
+// not hide it.
+template <Cache::Strategy S>
+bool IsEntryHidden(const IndexEntryView& entry, const NtfsVolume<S>& volume) {
+  if (volume.GetOptions().include_deleted) {
+    return false;
+  }
+  Io::FileRecord<S> named(volume);
+  if (!named.ParseFileRecord(entry.GetFileReference())) {
+    return false;
+  }
+  return named.IsDeleted() ||
+         named.GetSequenceNumber() != entry.GetSequenceNumber();
+}
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -132,7 +149,8 @@ void Io::DirectoryIndex<S>::Traverse(const SubentryCallback& se_call_back,
                                      void* context) const {
   assert(se_call_back);
 
-  const bool recover = record_.GetVolume().GetOptions().recover_errors;
+  const NtfsVolume<S>& volume = record_.GetVolume();
+  const bool recover = volume.GetOptions().recover_errors;
 
   // Start traversing from IndexRoot (B+ tree root node)
 
@@ -166,7 +184,7 @@ void Io::DirectoryIndex<S>::Traverse(const SubentryCallback& se_call_back,
                       visited_vcns, 0);
     }
 
-    if (index_entry.HasName()) {
+    if (index_entry.HasName() && !IsEntryHidden(index_entry, volume)) {
       se_call_back(index_entry, context);
     }
   }
@@ -293,6 +311,10 @@ std::optional<IndexEntry> Io::DirectoryIndex<S>::SearchIndexEntries(
       const int comparison =
           index_entry.Compare(search.file_name, search.upcase);
       if (comparison == 0) {
+        // Names are unique in a directory, so a hidden match ends the search.
+        if (IsEntryHidden(index_entry, record_.GetVolume())) {
+          return {};
+        }
         // Must be a copy: the view dies with its node (this FileRecord for
         // the root), the IndexEntry keeps its own bytes.
         LogIndexMatch(at_root);
@@ -363,7 +385,8 @@ void Io::DirectoryIndex<S>::TraverseSubNode(
                       visited_vcns, depth + 1);
     }
 
-    if (index_entry.HasName()) {
+    if (index_entry.HasName() &&
+        !IsEntryHidden(index_entry, record_.GetVolume())) {
       se_call_back(index_entry, context);
     }
   }
