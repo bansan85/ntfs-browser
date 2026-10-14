@@ -147,6 +147,26 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord() {
   return image;
 }
 
+void SetStdInfoPermission(std::vector<BYTE>& image, ULONGLONG idx,
+                          DWORD permission) {
+  const size_t record_offset =
+      static_cast<size_t>(mft_lcn) * cluster_size +
+      static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
+
+  NtfsBrowser::Data::FileRecordHeader header{};
+  std::memcpy(&header, &image.at(record_offset),
+              NtfsBrowser::Data::FileRecordHeader::min_file_record_header_size);
+  const size_t attr_offset = record_offset + header.offset_of_attr;
+  const auto& attr =
+      *reinterpret_cast<const NtfsBrowser::Data::HeaderResident*>(
+          &image.at(attr_offset));
+
+  const size_t permission_offset =
+      attr_offset + attr.attr_offset +
+      offsetof(NtfsBrowser::Data::StandardInformation, permission);
+  std::memcpy(&image.at(permission_offset), &permission, sizeof(permission));
+}
+
 namespace {
 
 // Directory record: $STANDARD_INFORMATION, a $FILE_NAME when name is set, and

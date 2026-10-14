@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <span>
@@ -26,6 +27,7 @@
 
 #include "catch2/matchers/catch_matchers.hpp"
 #include "corpus-test-support.h"
+#include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
@@ -56,6 +58,7 @@ using NtfsBrowserTests::mft_tree_report_idx;
 using NtfsBrowserTests::mft_tree_reused_dir_idx;
 using NtfsBrowserTests::mft_tree_stale_child_idx;
 using NtfsBrowserTests::mft_tree_zeroed_idx;
+using NtfsBrowserTests::SetStdInfoPermission;
 
 namespace {
 
@@ -277,6 +280,49 @@ void RunMftTreeProgressStops() {
 }
 
 template <Cache::Strategy S>
+void RunMftTreeCopiesStdInfoFlags() {
+  using NtfsBrowser::Data::StdInfoPermission;
+
+  struct FlagCase {
+    bool NtfsBrowser::Mft::MftTree::Entry::* flag;
+    StdInfoPermission bit;
+  };
+
+  const std::array<FlagCase, 7> flags{{
+      {&MftTree::Entry::read_only, StdInfoPermission::ReadOnly},
+      {&MftTree::Entry::hidden, StdInfoPermission::Hidden},
+      {&MftTree::Entry::system, StdInfoPermission::System},
+      {&MftTree::Entry::archive, StdInfoPermission::Archive},
+      {&MftTree::Entry::compressed, StdInfoPermission::Compressed},
+      {&MftTree::Entry::encrypted, StdInfoPermission::Encrypted},
+      {&MftTree::Entry::sparse, StdInfoPermission::Sparse},
+  }};
+
+  for (const FlagCase& set : flags) {
+    std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
+    SetStdInfoPermission(image, mft_tree_report_idx,
+                         static_cast<DWORD>(set.bit));
+    const auto volume = std::make_unique<NtfsVolume<S>>(
+        std::make_unique<MemoryDiskReader>(std::move(image)));
+    REQUIRE(volume->IsVolumeOK());
+
+    const MftTree tree(*volume);
+    const MftTree::Entry* report = tree.Find(mft_tree_report_idx);
+    REQUIRE(report != nullptr);
+    for (const FlagCase& flag : flags) {
+      CHECK(report->*flag.flag == (flag.bit == set.bit));
+    }
+  }
+
+  const auto volume = OpenMftTreeVolume<S>();
+  const MftTree tree(*volume);
+  const MftTree::Entry* docs = tree.Find(mft_tree_docs_idx);
+  REQUIRE(docs != nullptr);
+  CHECK(docs->directory);
+  CHECK(docs->allocated_size == 0);
+}
+
+template <Cache::Strategy S>
 void RunMftTreeSkipsMftExtensionRecord() {
   const auto volume =
       std::make_unique<NtfsVolume<S>>(std::make_unique<MemoryDiskReader>(
@@ -320,6 +366,12 @@ TEMPLATE_TEST_CASE_SIG("MftTree bounds its scan by the clusters $MFT maps",
                        "[mft-tree][regression]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   RunMftTreeClampsForgedRealSize<S>();
+}
+
+TEMPLATE_TEST_CASE_SIG("MftTree copies each DOS permission bit into its entry",
+                       "[mft-tree]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  RunMftTreeCopiesStdInfoFlags<S>();
 }
 
 TEMPLATE_TEST_CASE_SIG("MftTree skips an extension record of $MFT",

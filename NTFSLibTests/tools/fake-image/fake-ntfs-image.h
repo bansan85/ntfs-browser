@@ -823,6 +823,11 @@ inline constexpr ULONGLONG huge_mft_real_size = ~0ULL;
 // mft_tree_record_count clusters.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithHugeMftRealSize();
 
+// Replaces the DOS permission bits of record idx's resident
+// $STANDARD_INFORMATION with permission, a StdInfoPermission value.
+void SetStdInfoPermission(std::vector<BYTE>& image, ULONGLONG idx,
+                          DWORD permission);
+
 // Real on-disk minimum size of a legacy NTFS 1.2 $STANDARD_INFORMATION
 // attribute, before the Windows-2000-era owner_id/security_id/quota/usn
 // extension appended four more fields.
