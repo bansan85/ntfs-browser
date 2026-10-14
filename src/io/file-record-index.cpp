@@ -21,6 +21,7 @@
 #include "attr/index-block.h"
 #include "attr/index-root.h"
 #include "attr/resident.h"
+#include "io/file-record-attrs.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 #include "upcase/upcase.h"
@@ -74,22 +75,37 @@ ULONGLONG ClustersPerIndexBlock(DWORD index_block_size,
              : 1;
 }
 
+// The directory an orphan scan reports entries for: its file reference when
+// known, and the sequence number and liveness it has now.
+struct OrphanOwner {
+  std::optional<ULONGLONG> file_ref;
+  WORD sequence;
+  bool in_use;
+};
+
+// Reads the orphan scan's directory identity from record.
+template <Cache::Strategy S>
+OrphanOwner OwnerOf(const FileRecord<S>& record) {
+  return {record.GetFileReference(), record.GetSequenceNumber(),
+          !record.IsDeleted()};
+}
+
 // Decides whether an entry found in an orphaned block is reported. It MUST be
-// filed under this very directory (selfRef, when known). With a volume given,
-// the record it names MUST also still be in use under the same sequence.
+// filed under owner's directory. With a volume given, the record it names
+// MUST also still be in use under the same sequence.
 template <Cache::Strategy S>
 bool IsOrphanEntryReportable(const IndexEntryView& entry,
-                             std::optional<ULONGLONG> self_ref,
-                             WORD self_sequence, bool self_in_use,
+                             const OrphanOwner& owner,
                              const NtfsVolume<S>* check_named_record_in) {
   // An orphaned block may hold a stale entry left over from a file
   // already deleted from this directory, or from an earlier directory
   // that used this record - only report one still filed under this very
   // directory. Same rule as MftTree: a freed directory keeps the entries
   // filed under its sequence from before NTFS bumped it.
-  if (self_ref && (entry.GetParentReference() != *self_ref ||
-                   !Mft::IsSameRecordGeneration(entry.GetParentSequenceNumber(),
-                                                self_sequence, self_in_use))) {
+  if (owner.file_ref &&
+      (entry.GetParentReference() != *owner.file_ref ||
+       !Mft::IsSameRecordGeneration(entry.GetParentSequenceNumber(),
+                                    owner.sequence, owner.in_use))) {
     return false;
   }
   // With include_deleted off, also drop an entry whose named record is
@@ -132,35 +148,18 @@ void Io::DirectoryIndex<S>::Traverse(const SubentryCallback& se_call_back,
     return;
   }
 
-  const std::vector<IndexEntryView>* all_ie = nullptr;
-
-  if constexpr (S == Cache::Strategy::NoCache) {
-    const auto* index_root =
-        reinterpret_cast<const Attr::AttrIndexRoot<Attr::AttrResidentNoCache,
-                                                   Cache::Strategy::NoCache>*>(
-            vec.front().get());
-
-    if (!index_root->IsFileName()) {
-      return;
-    }
-    all_ie = index_root;
-  } else if constexpr (S == Cache::Strategy::FullCache) {
-    const auto* index_root = reinterpret_cast<const Attr::AttrIndexRoot<
-        Attr::AttrResidentFullCache, Cache::Strategy::FullCache>*>(
-        vec.front().get());
-
-    if (!index_root->IsFileName()) {
-      return;
-    }
-    all_ie = index_root;
-  } else {
-    assert(false);
+  // Only a $INDEX_ROOT that indexes file names is walked.
+  const auto* index_root =
+      reinterpret_cast<const Attr::AttrIndexRoot<ResidentOf<S>, S>*>(
+          vec.front().get());
+  if (!index_root->IsFileName()) {
     return;
   }
+  const std::vector<IndexEntryView>& all_ie = *index_root;
 
   std::unordered_set<ULONGLONG> visited_vcns;
 
-  for (const IndexEntryView& index_entry : *all_ie) {
+  for (const IndexEntryView& index_entry : all_ie) {
     // Visit subnode first
     if (index_entry.IsSubNodePtr()) {
       TraverseSubNode(index_entry.GetSubNodeVCN(), se_call_back, context,
@@ -418,16 +417,14 @@ void Io::DirectoryIndex<S>::ReportOrphanedBlock(
   Log::Info("TraverseSubEntries() recovery: reporting orphaned index block {}",
             vcn);
 
-  const std::optional<ULONGLONG> self_ref = record_.GetFileReference();
-  const WORD self_sequence = record_.GetSequenceNumber();
-  const bool self_in_use = !record_.IsDeleted();
+  const OrphanOwner owner = OwnerOf(record_);
   const bool include_deleted = record_.GetVolume().GetOptions().include_deleted;
 
   for (const IndexEntryView& index_entry : index_block) {
     if (index_entry.HasName() &&
-        IsOrphanEntryReportable(
-            index_entry, self_ref, self_sequence, self_in_use,
-            include_deleted ? nullptr : &record_.GetVolume())) {
+        IsOrphanEntryReportable(index_entry, owner,
+                                include_deleted ? nullptr
+                                                : &record_.GetVolume())) {
       se_call_back(index_entry, context);
     }
   }

@@ -45,6 +45,22 @@ namespace {
 template <Cache::Strategy S>
 using StdInfoType = Attr::AttrStdInfo<ResidentOf<S>, S>;
 
+// Byte offset of record file_ref when $MFT is taken as one continuous disk
+// run. Empty when the offset does not fit a LONGLONG.
+template <Cache::Strategy S>
+std::optional<LONGLONG> DirectRecordAddress(const NtfsVolume<S>& volume,
+                                            ULONGLONG file_ref) {
+  try {
+    return gsl::narrow<LONGLONG>(volume.GetMFTAddr() +
+                                 volume.GetFileRecordSize() * file_ref);
+  } catch (const std::exception& e) {
+    // fileRef is attacker-controlled and unbounded, so this sum can
+    // still overflow a LONGLONG even with mft_addr_ validated.
+    Log::Exception(e);
+    return std::nullopt;
+  }
+}
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -120,18 +136,13 @@ void Io::FileRecord<S>::Impl::UserCallBack(DWORD att_type,
 // mft_addr, into record_buffer. False if the read fails.
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::Impl::ReadDirectRecord(ULONGLONG file_ref) {
-  // Take as continuous disk allocation
-  LARGE_INTEGER fr_addr{};
-  try {
-    fr_addr.QuadPart = gsl::narrow<LONGLONG>(
-        volume->GetMFTAddr() + volume->GetFileRecordSize() * file_ref);
-  } catch (const std::exception& e) {
-    // fileRef is attacker-controlled and unbounded, so this sum can
-    // still overflow a LONGLONG even with mft_addr_ validated.
-    Log::Exception(e);
+  const std::optional<LONGLONG> addr = DirectRecordAddress(*volume, file_ref);
+  if (!addr) {
     return false;
   }
 
+  LARGE_INTEGER fr_addr{};
+  fr_addr.QuadPart = *addr;
   return volume->ReadInto(fr_addr, record_buffer);
 }
 
