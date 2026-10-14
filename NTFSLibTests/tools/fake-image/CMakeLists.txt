@@ -3,7 +3,20 @@ add_library(
   NtfsFakeImage
   STATIC
   "fake-ntfs-image.h"
+  "fake-ntfs-image-internal.h"
   "fake-ntfs-image.cpp"
+  "fake-ntfs-image-records.cpp"
+  "fake-ntfs-image-attributes.cpp"
+  "fake-ntfs-image-mft.cpp"
+  "fake-ntfs-image-mft-tree.cpp"
+  "fake-ntfs-image-attr-list.cpp"
+  "fake-ntfs-image-attr-data.cpp"
+  "fake-ntfs-image-index-blocks.cpp"
+  "fake-ntfs-image-index-orphans.cpp"
+  "fake-ntfs-image-index-root.cpp"
+  "fake-ntfs-image-compressed-file.cpp"
+  "fake-ntfs-image-compressed-index.cpp"
+  "fake-ntfs-image-efs.cpp"
   "file-record-header-edit.h"
 )
 
