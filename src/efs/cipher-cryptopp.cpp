@@ -121,6 +121,19 @@ constexpr std::array<BYTE, 12> desx_salt2{'S', 'c', 'o', 't', 't', ' ',
   return key;
 }
 
+// Builds the DESX decryptor for fek, or nullptr when its key is not the
+// 16-byte DESX FEK. The expanded key is wiped once the cipher has copied it.
+[[nodiscard]] std::unique_ptr<SectorDecryptor>
+    MakeDesxDecryptor(const Fek& fek) {
+  if (fek.GetKey().size() != desx_fek_size) {
+    return nullptr;
+  }
+  auto key = ExpandDesxKey(fek.GetKey());
+  auto decryptor = MakeDecryptor<CryptoPP::DES_XEX3>(key);
+  Util::SecureZero(key);
+  return decryptor;
+}
+
 }  // namespace
 
 std::unique_ptr<SectorDecryptor> MakeCryptoPpDecryptor(const Fek& fek) {
@@ -131,15 +144,8 @@ std::unique_ptr<SectorDecryptor> MakeCryptoPpDecryptor(const Fek& fek) {
       return MakeDecryptor<CryptoPP::AES>(fek.GetKey());
     case Algorithm::_3Des:
       return MakeDecryptor<CryptoPP::DES_EDE3>(fek.GetKey());
-    case Algorithm::Desx: {
-      if (fek.GetKey().size() != desx_fek_size) {
-        return nullptr;
-      }
-      auto key = ExpandDesxKey(fek.GetKey());
-      auto decryptor = MakeDecryptor<CryptoPP::DES_XEX3>(key);
-      Util::SecureZero(key);
-      return decryptor;
-    }
+    case Algorithm::Desx:
+      return MakeDesxDecryptor(fek);
   }
   return nullptr;
 }
