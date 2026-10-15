@@ -20,7 +20,7 @@ Run it once per OS:
   Windows (PowerShell):  python .github\\scripts\\coverage.py run
   WSL:                   python3 .github/scripts/coverage.py run
 
-CI runs both OSes and then merge: .github/workflows/quality.yml (manual).
+CI runs both OSes and then merge: .github/workflows/coverage.yml (manual).
 
 Why both binaries are instrumented: each regression testcase spawns
 NtfsFuzzerAfl as a child process, so the library code those tests reach runs

@@ -1,0 +1,27 @@
+---
+name: metrics
+on:
+  workflow_dispatch:
+jobs:
+  # The checkout keeps the whole history: churn follows every function through
+  # git log -L.
+  metrics:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+      - name: Metrics (lizard, churn, coupling, classes)
+        run: uv run --no-project --with lizard==1.24.1 python3 .github/scripts/metrics.py --out build/metrics
+      - name: Summary
+        run: cat build/metrics/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload metrics
+        uses: actions/upload-artifact@v7
+        with:
+          name: metrics
+          path: build/metrics/
+          if-no-files-found: error
