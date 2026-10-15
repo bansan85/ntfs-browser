@@ -92,7 +92,7 @@ uv run bash ./.github/scripts/format.sh
 ```
 Markdown (`*.md`) and JSON (`*.json`) files have no formatter: no `.editorconfig`, prettier or pre-commit configuration applies to them.
 
-`.clang-tidy` enables nearly all checks (`Checks: '*'`, minus a short exclusion list), with `WarningsAsErrors: '*'`. CI ([.github/workflows/clang-tidy.yml](.github/workflows/clang-tidy.yml)) runs it on Ubuntu, only when triggered manually (`workflow_dispatch`), over the Linux configuration's `compile_commands.json`. `#ifdef _WIN32` code and the Windows-only targets are therefore never linted in CI. A local run needs a `compile_commands.json`, which the Visual Studio generator does not write: configure a preset with `-G Ninja` from an MSVC developer environment, then `clang-tidy -p build/static <file>`.
+`.clang-tidy` enables nearly all checks (`Checks: '*'`, minus a short exclusion list), with `WarningsAsErrors: '*'`. CI ([.github/workflows/clang-tidy.yml](.github/workflows/clang-tidy.yml)) runs it on Ubuntu and on Windows (clang-cl, LLVM 23), only when triggered manually (`workflow_dispatch`), over each configuration's `compile_commands.json`. The Windows job lints the `_WIN32` code too. cppcheck 2.22 runs in its own workflow, [.github/workflows/cppcheck.yml](.github/workflows/cppcheck.yml), on Linux and Windows, both linkages, with every analysis option on (driver: [.github/scripts/cppcheck.py](.github/scripts/cppcheck.py)). Its reports go to an artifact. cppcheck has no automatic fix. A local run needs a `compile_commands.json`, which the Visual Studio generator does not write: configure a preset with `-G Ninja` from an MSVC developer environment, then `clang-tidy -p build/static <file>`.
 
 ## Commits
 

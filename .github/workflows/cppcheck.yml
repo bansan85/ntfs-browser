@@ -1,0 +1,84 @@
+---
+name: cppcheck
+on:
+  workflow_dispatch:
+# Both platforms, both linkages. Every feature option is on and the tests
+# are built, so the analysis sees the whole source tree. The reports go to
+# an artifact. cppcheck has no automatic fix, so no diff is made.
+jobs:
+  cppcheck-linux:
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [static, shared]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Install Ninja and clang
+        run: sudo apt-get update && sudo apt-get install -yq ninja-build clang
+      - name: Build cppcheck 2.22.0
+        run: |
+          git clone --depth 1 --branch 2.22.0 https://github.com/cppcheck-opensource/cppcheck.git "$RUNNER_TEMP/cppcheck-src"
+          cmake -S "$RUNNER_TEMP/cppcheck-src" -B "$RUNNER_TEMP/cppcheck-build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/cppcheck" -DBUILD_TESTS=OFF
+          cmake --build "$RUNNER_TEMP/cppcheck-build" --parallel
+          cmake --install "$RUNNER_TEMP/cppcheck-build"
+          echo "$RUNNER_TEMP/cppcheck/bin" >> "$GITHUB_PATH"
+      - name: Configure
+        run: |
+          cmake --preset ${{ matrix.preset }} -G Ninja -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON -DNTFS_BROWSER_ENABLE_TESTING=ON
+      - name: cppcheck
+        run: |
+          python3 .github/scripts/cppcheck.py run --project build/${{ matrix.preset }}/compile_commands.json --platform unix64 --library posix --library gnu --clang clang --jobs "$(nproc)" --out build/cppcheck-linux-${{ matrix.preset }}
+      - name: Summary
+        if: always()
+        run: cat build/cppcheck-linux-${{ matrix.preset }}/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload cppcheck results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cppcheck-linux-${{ matrix.preset }}
+          path: build/cppcheck-linux-${{ matrix.preset }}/
+          if-no-files-found: error
+  cppcheck-windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [static, shared]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Install cppcheck 2.22.0
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP "cppcheck-2.22.0-x64-Setup.msi"
+          Invoke-WebRequest -Uri "https://github.com/cppcheck-opensource/cppcheck/releases/download/2.22.0/cppcheck-2.22.0-x64-Setup.msi" -OutFile $installer
+          $install = Start-Process msiexec.exe -ArgumentList "/i", "`"$installer`"", "/qn", "/norestart" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { exit $install.ExitCode }
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Cppcheck"
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake --preset ${{ matrix.preset }} -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON -DNTFS_BROWSER_ENABLE_TESTING=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: cppcheck
+        shell: pwsh
+        run: |
+          python .github/scripts/cppcheck.py run --project build/${{ matrix.preset }}/NtfsBrowser.sln --project-configuration "Debug|x64" --platform win64 --library windows --jobs 16 --out build/cppcheck-windows-${{ matrix.preset }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: Get-Content build/cppcheck-windows-${{ matrix.preset }}/summary.md | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+      - name: Upload cppcheck results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cppcheck-windows-${{ matrix.preset }}
+          path: build/cppcheck-windows-${{ matrix.preset }}/
+          if-no-files-found: error

@@ -3,7 +3,7 @@ name: clang-tidy
 on:
   workflow_dispatch:
 jobs:
-  clang-tidy:
+  clang-tidy-linux:
     runs-on: ubuntu-26.04
     steps:
       - name: Checkout
@@ -16,10 +16,72 @@ jobs:
           sudo apt-get install -yq clang-tidy jq
       - name: Configure
         run: |
-          cmake -S . -B build-linux -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          cmake -S . -B build-linux -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON \
+            -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON \
+            -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON \
+            -DNTFS_BROWSER_ENABLE_TESTING=ON
       - name: clang-tidy
         shell: bash
         run: |
           jq -r '.[].file' build-linux/compile_commands.json |
             grep -v '/3rdparty/' | sort -u >files.txt
           xargs -a files.txt -P "$(nproc)" -I{} clang-tidy -p build-linux {}
+  # clang-cl and clang-tidy from LLVM 23, the same toolchain as the
+  # Windows coverage job in quality.yml. Ninja gives the compile database
+  # that the Visual Studio generator does not write. The MSVC environment
+  # comes from vcvars64.bat, so the SDK headers resolve for clang-cl.
+  clang-tidy-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Install LLVM 23 (clang-cl, clang-tidy)
+        shell: pwsh
+        run: |
+          $msi = Join-Path $env:RUNNER_TEMP "LLVM-23.1.1-win64.msi"
+          Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.1/LLVM-23.1.1-win64.msi" -OutFile $msi
+          $install = Start-Process msiexec.exe -ArgumentList "/i", "`"$msi`"", "/qn", "/norestart" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { exit $install.ExitCode }
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\LLVM\bin"
+      - name: Install Ninja
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja -y --no-progress
+          }
+      - name: Configure and clang-tidy
+        shell: pwsh
+        run: |
+          # Load the MSVC environment into this step. vcvars64.bat has no
+          # effect on its own parent shell, so the variables come from its set output.
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
+          cmd /c "`"$vcvars`" >nul && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') { Set-Item -Path "env:$($Matches[1])" -Value $Matches[2] }
+          }
+          $env:PATH = "C:\Program Files\LLVM\bin;" + $env:PATH
+
+          $clang = "C:/Program Files/LLVM/bin/clang-cl.exe"
+          cmake -S . -B build-windows -G Ninja "-DCMAKE_C_COMPILER=$clang" "-DCMAKE_CXX_COMPILER=$clang" `
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
+            -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON `
+            -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON `
+            -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON `
+            -DNTFS_BROWSER_ENABLE_TESTING=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Same file set as the Linux job: every compile entry outside 3rdparty.
+          $files = (Get-Content build-windows/compile_commands.json -Raw | ConvertFrom-Json).file |
+            Where-Object { $_ -notmatch '[\\/]3rdparty[\\/]' } | Sort-Object -Unique
+          $failed = $files | ForEach-Object -ThrottleLimit ([Environment]::ProcessorCount) -Parallel {
+            clang-tidy -p build-windows $_
+            if ($LASTEXITCODE -ne 0) { $_ }
+          }
+          if ($failed) {
+            $failed | ForEach-Object { "clang-tidy failed: $_" }
+            exit 1
+          }
