@@ -456,9 +456,13 @@ FakeRecord MakeResidentFileRecord(WORD sequence, const FakeFileName& name,
   const DWORD data_offset = offset;
   offset +=
       WriteResidentDataAttr(record, offset, static_cast<DWORD>(content.size()));
-  std::memcpy(&record.at(data_offset +
-                         sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident)),
-              content.data(), content.size());
+  // An empty view may carry a null data(); memcpy forbids that even at size 0.
+  if (!content.empty()) {
+    std::memcpy(
+        &record.at(data_offset +
+                   sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident)),
+        content.data(), content.size());
+  }
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }
