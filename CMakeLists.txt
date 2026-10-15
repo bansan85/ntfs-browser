@@ -91,6 +91,23 @@ option(
   ON
 )
 
+# Root C++ namespace of the library. src/CMakeLists.txt writes it into the
+# generated <ntfs-browser/namespace.h>, so consumers need no definition of their
+# own. It must be a plain identifier: it is spliced into `namespace X {`.
+set(
+  NTFS_BROWSER_NAMESPACE
+  "NtfsBrowser"
+  CACHE STRING
+  "Root C++ namespace of the library"
+)
+if(NOT NTFS_BROWSER_NAMESPACE MATCHES "^[A-Za-z_][A-Za-z0-9_]*$")
+  message(
+    FATAL_ERROR
+    "NTFS_BROWSER_NAMESPACE must be a C++ identifier, got "
+    "'${NTFS_BROWSER_NAMESPACE}'"
+  )
+endif()
+
 # Whether EFS decryption is compiled in at all, in either backend. Mirrors the
 # gate src/CMakeLists.txt uses to decide whether efs-context.cpp et al. are
 # compiled, and NTFSLibTests/unit-tests/efs/CMakeLists.txt uses to decide

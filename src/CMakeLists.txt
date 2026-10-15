@@ -68,6 +68,7 @@ set(
   "../include/ntfs-browser/attr/base.h"
   "../include/ntfs-browser/disk-reader.h"
   "../include/ntfs-browser/efs/efs.h"
+  "../include/ntfs-browser/namespace.h.in"
   "../include/ntfs-browser/io/file-record.h"
   "../include/ntfs-browser/index-entry.h"
   "../include/ntfs-browser/log/log.h"
@@ -151,6 +152,15 @@ generate_export_header(
   ${PROJECT_NAME}
   BASE_NAME NTFS_BROWSER
   EXPORT_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/include/ntfs-browser/export.h"
+)
+
+# The root namespace name is baked into the generated header rather than passed
+# as a compile definition, so every consumer reads the same value from the
+# installed header and none has to repeat the CMake variable.
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/../include/ntfs-browser/namespace.h.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/ntfs-browser/namespace.h"
+  @ONLY
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)

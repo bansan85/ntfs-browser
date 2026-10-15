@@ -1,0 +1,5 @@
+#pragma once
+
+// Root C++ namespace of the library. Set at configure time by the
+// NTFS_BROWSER_NAMESPACE CMake variable.
+#define NTFS_BROWSER_NAMESPACE @NTFS_BROWSER_NAMESPACE@
