@@ -44,6 +44,9 @@ SUPPRESS = "*:*3rdparty*"
 # Defining it here lets cppcheck read the MFC demo apps.
 DEFINES = ["-D__AFXWIN_H__"]
 
+# The VS generator writes .slnx from VS 2026 on, .sln before.
+SOLUTION_SUFFIXES = (".sln", ".slnx")
+
 # Every analysis switch of cppcheck 2.22, bar the ones that change the output
 # shape rather than the findings: --dump, -E, --errorlist. --rule-file is
 # left out: the project has no rules file.
@@ -68,7 +71,7 @@ ANALYSIS = [
 
 
 def project_args(args):
-    if args.project.suffix == ".sln":
+    if args.project.suffix in SOLUTION_SUFFIXES:
         return [f"--project={args.project}", f"--project-configuration={args.project_configuration}"]
     return [f"--project={args.project}"]
 
@@ -217,7 +220,7 @@ def main():
     run_parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
 
-    if args.project.suffix == ".sln" and not args.project_configuration:
+    if args.project.suffix in SOLUTION_SUFFIXES and not args.project_configuration:
         parser.error("a Visual Studio solution needs --project-configuration")
     sys.exit(run(args))
 
