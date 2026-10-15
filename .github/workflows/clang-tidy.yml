@@ -71,7 +71,8 @@ jobs:
             -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON `
             -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON `
             -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON `
-            -DNTFS_BROWSER_ENABLE_TESTING=ON
+            -DNTFS_BROWSER_ENABLE_TESTING=ON `
+            -DNTFS_BROWSER_BUILD_MFC_APPS=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           # Same file set as the Linux job: every compile entry outside 3rdparty.

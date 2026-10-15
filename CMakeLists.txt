@@ -180,6 +180,11 @@ endif()
 
 add_subdirectory("src")
 
+# The MFC dialog apps under NTFSLibTests/examples (Windows only). clang-cl
+# cannot build MFC: turn this OFF to build the rest of the tree with it. The
+# dump and search cores build either way: the unit tests link them.
+option(NTFS_BROWSER_BUILD_MFC_APPS "Build the Windows MFC demo apps" ON)
+
 option(NTFS_BROWSER_ENABLE_TESTING "Enable testing" ${PROJECT_IS_TOP_LEVEL})
 
 if(NTFS_BROWSER_ENABLE_TESTING)
