@@ -77,7 +77,7 @@ TEST_CASE("a log call survives a sink and an error handler that both throw",
              ContainsSubstring("line before the failing sink"));
 }
 
-TEST_CASE("Level::Off reads as logged, even with no sink configured",
+TEST_CASE("Level::Off never reads as logged, with or without a sink",
           "[logging]") {
   const RestoreCaptureSink restore;
 
@@ -85,9 +85,11 @@ TEST_CASE("Level::Off reads as logged, even with no sink configured",
   config.console_level = Log::Level::Off;
   config.file_level = Log::Level::Off;
   REQUIRE(Log::Configure(config));
-
-  // Off ranks above every message level, so the logger's own level test
-  // passes it. A message level that no sink takes reads as not logged.
   CHECK_FALSE(Log::IsLogged(Log::Level::Info));
-  CHECK(Log::IsLogged(Log::Level::Off));
+  CHECK_FALSE(Log::IsLogged(Log::Level::Off));
+
+  config.console_level = Log::Level::Info;
+  REQUIRE(Log::Configure(config));
+  CHECK(Log::IsLogged(Log::Level::Info));
+  CHECK_FALSE(Log::IsLogged(Log::Level::Off));
 }

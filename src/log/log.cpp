@@ -329,6 +329,11 @@ bool ParseOption(std::wstring_view arg, Config& config) noexcept {
 namespace NTFS_BROWSER_NAMESPACE::Log::Detail {
 
 bool IsEnabled(Level level) noexcept {
+  // Off is a threshold, not a message level: no message is written at it.
+  if (level == Level::Off) {
+    return false;
+  }
+
   try {
     const spdlog::logger* const logger = EnsureLogger();
     return logger != nullptr && logger->should_log(ToSpdlog(level));
