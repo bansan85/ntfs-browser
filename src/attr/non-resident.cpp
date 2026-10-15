@@ -42,11 +42,22 @@ constexpr WORD max_comp_unit_size_shift = 16;
 // comp_unit_size from over-allocating.
 constexpr ULONGLONG max_compression_unit_size = 1024ULL * 1024ULL;
 
-// Clusters an attribute header spans. last_vcn is inclusive, so an empty
-// attribute stores it as -1 (all ones) with start_vcn 0: that is 0 clusters,
-// not a count that wraps.
+// last_vcn minus start_vcn, as an unsigned count. last_vcn is inclusive, so
+// an empty attribute stores it as -1 (all ones) with start_vcn 0: that is
+// the maximum here. An inverted range wraps mod 2^64, as it always has, and
+// is computed here without unsigned overflow.
+constexpr ULONGLONG VcnSpan(const Data::HeaderNonResident& header) {
+  constexpr ULONGLONG max = std::numeric_limits<ULONGLONG>::max();
+  if (header.last_vcn >= header.start_vcn) {
+    return header.last_vcn - header.start_vcn;
+  }
+  return max - (header.start_vcn - header.last_vcn) + 1;
+}
+
+// Clusters an attribute header spans. The maximum span is the empty
+// attribute, so it counts as 0 clusters, not a wrapped count.
 constexpr ULONGLONG SpannedClusters(const Data::HeaderNonResident& header) {
-  const ULONGLONG span = header.last_vcn - header.start_vcn;
+  const ULONGLONG span = VcnSpan(header);
   return span == std::numeric_limits<ULONGLONG>::max() ? 0 : span + 1;
 }
 
@@ -113,8 +124,7 @@ void AttrNonResident<S>::ParseDataRun() {
       attr_header_nr_.data_run_offset < attr_bytes.size()
           ? attr_bytes.subspan(attr_header_nr_.data_run_offset)
           : std::span<const BYTE>{};
-  runs_.Parse(data_run, attr_header_nr_.last_vcn - attr_header_nr_.start_vcn,
-              recover);
+  runs_.Parse(data_run, VcnSpan(attr_header_nr_), recover);
 }
 
 // Read clusters from disk, or sparse data
