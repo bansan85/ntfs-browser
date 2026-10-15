@@ -158,8 +158,7 @@ std::tuple<WORD, WORD, WORD>
   const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
   const unsigned month_prime = (5 * doy + 2) / 153;
   const unsigned day = doy - (153 * month_prime + 2) / 5 + 1;
-  const unsigned month =
-      month_prime + (month_prime < 10 ? 3 : static_cast<unsigned>(-9));
+  const unsigned month = month_prime < 10 ? month_prime + 3 : month_prime - 9;
 
   return {static_cast<WORD>(shifted_year + (month <= 2 ? 1 : 0)),
           static_cast<WORD>(month), static_cast<WORD>(day)};
