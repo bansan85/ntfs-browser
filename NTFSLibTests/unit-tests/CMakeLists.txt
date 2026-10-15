@@ -28,6 +28,7 @@ target_link_libraries(
   PRIVATE
     ${PROJECT_NAME}
     NtfsFakeImage
+    NtfsFuzzCore
     NtfsTestDiskReaders
     Catch2::Catch2WithMain
     spdlog::spdlog

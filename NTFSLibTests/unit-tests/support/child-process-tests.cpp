@@ -34,13 +34,6 @@ std::string ReadWholeFile(const Fs::path& path) {
 
 }  // namespace
 
-TEST_CASE("RunProcessCapturingOutput throws when the executable is missing",
-          "[child-process]") {
-  CHECK_THROWS_AS(NTFS_BROWSER_NAMESPACE::Tests::RunProcessCapturingOutput(
-                      MissingExecutable(), {}),
-                  std::runtime_error);
-}
-
 TEST_CASE("RunProcessToFiles throws when the executable is missing",
           "[child-process]") {
   const Fs::path out =
@@ -56,15 +49,6 @@ TEST_CASE("RunProcessToFiles throws when a redirect file cannot be created",
                       NTFS_FUZZER_AFL_EXE, {}, UncreatableRedirect(),
                       UncreatableRedirect()),
                   std::runtime_error);
-}
-
-TEST_CASE("RunProcessCapturingOutput returns the exit code and the output",
-          "[child-process]") {
-  const NTFS_BROWSER_NAMESPACE::Tests::ProcessOutput result =
-      NTFS_BROWSER_NAMESPACE::Tests::RunProcessCapturingOutput(
-          NTFS_FUZZER_AFL_EXE, {});
-  CHECK(result.exit_code == 1);
-  CHECK_THAT(result.output, Catch::Matchers::ContainsSubstring("usage:"));
 }
 
 TEST_CASE(

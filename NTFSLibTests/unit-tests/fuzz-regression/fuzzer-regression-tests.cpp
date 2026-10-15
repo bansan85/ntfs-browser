@@ -2,6 +2,8 @@
 #include <array>
 #include <cstddef>
 #include <filesystem>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,12 +17,17 @@
 
 #include "catch2/catch_message.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
-#include "child-process.h"
+#include "fuzz-core.h"
+#include "looping-disk-reader.h"
+#include "test-log-sink.h"
 
-using NTFS_BROWSER_NAMESPACE::Tests::ProcessOutput;
-using NTFS_BROWSER_NAMESPACE::Tests::RunProcessCapturingOutput;
+using NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink;
+using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;
 
 namespace Fs = std::filesystem;
+
+// The argv string type of this platform, as RunCommandLine() takes it.
+using Arg = std::basic_string<NtfsFuzz::ArgChar>;
 
 namespace {
 
@@ -508,30 +515,38 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 145>
         {"names_filename_zero_length_name", {true, {"Attribute: File Name"}}},
 };
 
-// Runs one saved regression testcase and, if expected_error_messages has an
-// entry for it, checks its output against that entry's expected messages.
+// Runs one saved regression testcase in-process and, if
+// expected_error_messages has an entry for it, checks the messages it logged
+// against that entry's expected messages.
 void RunRegressionTestcase(std::string_view name) {
-  const Fs::path exe(NTFS_FUZZER_AFL_EXE);
-  REQUIRE(Fs::exists(exe));
-
   const Fs::path file = Fs::path(NTFS_FUZZ_DATA_DIR) / name;
   REQUIRE(Fs::exists(file));
 
-  const ProcessOutput result = RunProcessCapturingOutput(
-      exe, {L"--inject-read-failures", file.wstring()});
-  CHECK(result.exit_code == 0);
+  // Same as NtfsFuzzerAfl: an empty or unreadable testcase runs nothing.
+  std::optional<std::vector<BYTE>> data =
+      NtfsFuzz::LoopingDiskReader::LoadFile(file);
+  if (!data) {
+    return;
+  }
+
+  // Drops anything logged by an earlier case before this one runs.
+  (void)TakeCapturedLog();
+  // A library exception escaping FuzzTestcase() is a failure here, as a
+  // crash would be in the old subprocess run.
+  CHECK_NOTHROW(NtfsFuzz::FuzzTestcase(*data, true));
+  const std::string output = TakeCapturedLog();
 
   const auto* const iterator = expected_error_messages.find(name);
   if (iterator != expected_error_messages.end() &&
       iterator->second.check_expected_messages) {
-    INFO("captured output:\n" << result.output);
+    INFO("captured log:\n" << output);
     for (const std::string_view message : iterator->second.messages) {
       // Trailing array slots past this testcase's own messages are
       // empty padding; stop there instead of matching real content.
       if (message.empty()) {
         break;
       }
-      CHECK_THAT(result.output,
+      CHECK_THAT(output,
                  Catch::Matchers::ContainsSubstring(std::string(message)));
     }
   }
@@ -712,34 +727,53 @@ NTFS_REGRESSION_TESTCASE("volume_name_resident_present")
 
 #undef NTFS_REGRESSION_TESTCASE
 
+// An argument of this platform's argv type, from ASCII text.
+Arg ArgOf(std::string_view text) { return Fs::path(text).native(); }
+
+// What RunFuzzerInProcess() returned and wrote to its error stream.
+struct CommandLineResult {
+  int exit_code = 0;
+  std::string err;
+};
+
+// Runs the command line in this process. Log::Configure() replaces the
+// logger's sinks, so the capture sink is installed again afterwards.
+CommandLineResult RunFuzzerInProcess(const std::vector<Arg>& args) {
+  std::ostringstream err;
+  CommandLineResult result;
+  result.exit_code = NtfsFuzz::RunCommandLine(args, err);
+  InstallCaptureSink();
+  result.err = err.str();
+  return result;
+}
+
 TEST_CASE("NtfsFuzzerAfl command line", "[fuzz][options]") {
-  const Fs::path exe(NTFS_FUZZER_AFL_EXE);
-  REQUIRE(Fs::exists(exe));
   const Fs::path testcase = Fs::path(NTFS_FUZZ_DATA_DIR) / "cluster_size_null";
   REQUIRE(Fs::exists(testcase));
+  const Arg program = ArgOf("NtfsFuzzerAfl");
 
   SECTION("no input file prints usage and fails") {
-    const ProcessOutput result = RunProcessCapturingOutput(exe, {});
+    const CommandLineResult result = RunFuzzerInProcess({program});
     CHECK(result.exit_code == 1);
-    CHECK_THAT(result.output, Catch::Matchers::ContainsSubstring("usage:"));
+    CHECK_THAT(result.err, Catch::Matchers::ContainsSubstring("usage:"));
   }
 
   SECTION("a second input file prints usage and fails") {
-    const ProcessOutput result = RunProcessCapturingOutput(
-        exe, {testcase.wstring(), testcase.wstring()});
+    const CommandLineResult result =
+        RunFuzzerInProcess({program, testcase.native(), testcase.native()});
     CHECK(result.exit_code == 1);
-    CHECK_THAT(result.output, Catch::Matchers::ContainsSubstring("usage:"));
+    CHECK_THAT(result.err, Catch::Matchers::ContainsSubstring("usage:"));
   }
 
   SECTION("an input that cannot be read is not an error") {
-    const ProcessOutput result =
-        RunProcessCapturingOutput(exe, {L"ntfsbrowser-no-such-testcase.bin"});
+    const CommandLineResult result = RunFuzzerInProcess(
+        {program, ArgOf("ntfsbrowser-no-such-testcase.bin")});
     CHECK(result.exit_code == 0);
   }
 
   SECTION("an input path with a space stays one argument") {
-    const ProcessOutput result =
-        RunProcessCapturingOutput(exe, {L"no such testcase.bin"});
+    const CommandLineResult result =
+        RunFuzzerInProcess({program, ArgOf("no such testcase.bin")});
     CHECK(result.exit_code == 0);
   }
 
@@ -747,10 +781,12 @@ TEST_CASE("NtfsFuzzerAfl command line", "[fuzz][options]") {
       "a log file that cannot be created is reported, and the run goes on") {
     // The testcase is a file, so no directory can be created under it.
     const Fs::path log = testcase / "fuzzer.log";
-    const ProcessOutput result = RunProcessCapturingOutput(
-        exe, {testcase.wstring(), L"--log=file:debug:" + log.wstring()});
+    // The console is silenced, so the run's messages stay out of the output.
+    const CommandLineResult result = RunFuzzerInProcess(
+        {program, testcase.native(), ArgOf("--log=console:off"),
+         ArgOf("--log=file:debug:") + log.native()});
     CHECK(result.exit_code == 0);
-    CHECK_THAT(result.output,
+    CHECK_THAT(result.err,
                Catch::Matchers::ContainsSubstring("Cannot open log file"));
   }
 }

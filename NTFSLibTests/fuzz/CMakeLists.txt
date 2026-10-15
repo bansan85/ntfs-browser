@@ -16,17 +16,25 @@ if(WIN32)
   endif()
 endif()
 
+# The AFL fuzzing logic, also driven in-process by the regression tests.
 # Portable C++, no Win32 API, so it builds on Linux and Windows alike.
-add_executable(
-  NtfsFuzzerAfl
-  "afl-main.cpp"
+add_library(
+  NtfsFuzzCore
+  STATIC
+  "fuzz-core.h"
+  "fuzz-core.cpp"
   "looping-disk-reader.h"
   "looping-disk-reader.cpp"
   "named-stream-probe.h"
   "gap-collation-probe.h"
 )
 
-target_link_libraries(NtfsFuzzerAfl PRIVATE ${PROJECT_NAME})
+target_link_libraries(NtfsFuzzCore PUBLIC ${PROJECT_NAME})
+
+# Portable C++, no Win32 API, so it builds on Linux and Windows alike.
+add_executable(NtfsFuzzerAfl "afl-main.cpp")
+
+target_link_libraries(NtfsFuzzerAfl PRIVATE NtfsFuzzCore)
 
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(

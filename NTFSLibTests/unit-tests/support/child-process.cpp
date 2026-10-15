@@ -1,6 +1,5 @@
 #include "child-process.h"
 
-#include <array>
 #include <cstdlib>
 #include <stdexcept>
 
@@ -10,8 +9,6 @@
 
 #ifdef _WIN32
   #include <ntfs-browser/win-types.h>
-
-  #include <gsl/narrow>
 #else
   #include <cstring>
 
@@ -32,9 +29,6 @@ namespace Fs = std::filesystem;
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
-
-// Bytes read from a child's pipe per read() call.
-constexpr size_t pipe_chunk_size = 4096;
 
 // Permissions of a redirect file the child's output is created with: rw-r--r--.
 constexpr unsigned redirect_file_mode = 0644;
@@ -82,25 +76,6 @@ std::wstring BuildCommandLine(const Fs::path& exe,
     AppendQuotedArg(cmd, arg);
   }
   return cmd;
-}
-
-// Reads a child process' pipe while waiting for it to exit. The write end
-// must already be closed in this process -- otherwise ReadFile() blocks
-// forever waiting for an EOF that can only come once every write handle
-// (including this process' own copy) is gone.
-std::string ReadAllAndClose(HANDLE read_pipe) {
-  std::string output;
-  std::array<char, pipe_chunk_size> chunk{};
-  DWORD bytes_read = 0;
-
-  while (ReadFile(read_pipe, chunk.data(), gsl::narrow<DWORD>(chunk.size()),
-                  &bytes_read, nullptr) &&
-         bytes_read > 0) {
-    output.append(chunk.data(), bytes_read);
-  }
-
-  CloseHandle(read_pipe);
-  return output;
 }
 
 // Startup info that hands the child out and err as its standard output and
@@ -170,18 +145,6 @@ int StartChild(const Fs::path& exe, const std::vector<std::wstring>& args,
                      environ);
 }
 
-// Reads fd until end of file, and closes it.
-std::string ReadAllAndClose(int fd) {
-  std::string output;
-  std::array<char, pipe_chunk_size> chunk{};
-  ssize_t bytes_read = 0;
-  while ((bytes_read = read(fd, chunk.data(), chunk.size())) > 0) {
-    output.append(chunk.data(), static_cast<std::size_t>(bytes_read));
-  }
-  close(fd);
-  return output;
-}
-
 // Waits for the child to exit, and returns its exit code, or -1 if a signal
 // ended it instead.
 int WaitForChild(pid_t pid) {
@@ -199,72 +162,6 @@ int WaitForChild(pid_t pid) {
 #endif
 
 }  // namespace
-
-ProcessOutput RunProcessCapturingOutput(const Fs::path& exe,
-                                        const std::vector<std::wstring>& args) {
-#ifdef _WIN32
-
-  SECURITY_ATTRIBUTES pipe_attr{};
-  pipe_attr.nLength = sizeof(pipe_attr);
-  pipe_attr.bInheritHandle = TRUE;
-
-  HANDLE read_pipe = nullptr;
-  HANDLE write_pipe = nullptr;
-  if (!CreatePipe(&read_pipe, &write_pipe, &pipe_attr, 0)) {
-    throw std::runtime_error("CreatePipe failed");
-  }
-  // Without this, the child would inherit the read end too, and could
-  // deadlock ReadAllAndClose() below by keeping the write end open.
-  if (!SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0)) {
-    throw std::runtime_error("SetHandleInformation failed");
-  }
-
-  STARTUPINFOW si = MakeStdioStartupInfo(write_pipe, write_pipe);
-  PROCESS_INFORMATION pi{};
-  const bool created = StartChild(exe, args, si, pi);
-  // Must close this process' copy now regardless of success, or
-  // ReadAllAndClose() below hangs.
-  CloseHandle(write_pipe);
-  if (!created) {
-    CloseHandle(read_pipe);
-    throw std::runtime_error("CreateProcessW failed");
-  }
-
-  const std::string output = ReadAllAndClose(read_pipe);
-  return {WaitForChild(pi), output};
-
-#else
-
-  std::array<int, 2> pipe_fds{-1, -1};
-  if (pipe(pipe_fds.data()) != 0) {
-    throw std::runtime_error("pipe failed");
-  }
-
-  posix_spawn_file_actions_t actions;
-  posix_spawn_file_actions_init(&actions);
-  posix_spawn_file_actions_adddup2(&actions, std::get<1>(pipe_fds),
-                                   STDOUT_FILENO);
-  posix_spawn_file_actions_adddup2(&actions, std::get<1>(pipe_fds),
-                                   STDERR_FILENO);
-  posix_spawn_file_actions_addclose(&actions, std::get<0>(pipe_fds));
-  posix_spawn_file_actions_addclose(&actions, std::get<1>(pipe_fds));
-
-  pid_t pid = 0;
-  const int spawned = StartChild(exe, args, actions, pid);
-  posix_spawn_file_actions_destroy(&actions);
-  // Must close this process' copy now regardless of success, or the read
-  // loop below never sees EOF.
-  close(std::get<1>(pipe_fds));
-  if (spawned != 0) {
-    close(std::get<0>(pipe_fds));
-    ThrowSpawnFailed(spawned);
-  }
-
-  const std::string output = ReadAllAndClose(std::get<0>(pipe_fds));
-  return {WaitForChild(pid), output};
-
-#endif
-}
 
 int RunProcessToFiles(const Fs::path& exe,
                       const std::vector<std::wstring>& args,
