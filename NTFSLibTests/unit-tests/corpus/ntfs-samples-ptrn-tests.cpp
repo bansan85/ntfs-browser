@@ -14,7 +14,6 @@
 #include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
 #include "optional-access.h"
-#include "partition-disk-reader.h"
 
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -23,10 +22,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
           "[ntfs-samples][integration][slack]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(ptrn_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(ptrn_image, "ntfs-ptrn");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      OpenWholeDiskImage(ptrn_image, small_image_partition_offset));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          ptrn_image, small_image_partition_offset, "ntfs-ptrn"));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
@@ -45,10 +45,12 @@ TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
 TEST_CASE(
     "Finds the RAM slack and cluster slack PTRN pattern (ntfs-ramslack.raw)",
     "[ntfs-samples][integration][slack]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(ramslack_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(ramslack_image,
+                                                    "ntfs-ramslack");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      OpenWholeDiskImage(ramslack_image, small_image_partition_offset));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          ramslack_image, small_image_partition_offset, "ntfs-ramslack"));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);

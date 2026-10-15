@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+          lfs: true
       - name: Install LLVM 23 (clang-cl, llvm-cov, llvm-profdata)
         shell: pwsh
         run: |
@@ -70,6 +71,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+          lfs: true
       - name: Add the apt.llvm.org clang 23 repo
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key |

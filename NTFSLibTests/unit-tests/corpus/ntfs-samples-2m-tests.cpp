@@ -13,7 +13,6 @@
 
 #include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
-#include "partition-disk-reader.h"
 
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -22,10 +21,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
           "[ntfs-samples][integration]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(k2m_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(k2m_image, "ntfs-2m");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      OpenWholeDiskImage(k2m_image, small_image_partition_offset));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          k2m_image, small_image_partition_offset, "ntfs-2m"));
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetClusterSize() == 2097152);
 

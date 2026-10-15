@@ -55,10 +55,12 @@ void CheckDirMatchesGroundTruth(
 TEST_CASE("RAW files recover byte-for-byte from the NPS ntfs1 corpus (gen2)",
           "[nps][integration]") {
   NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(
-      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image);
+      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image, "nps-ntfs1-raw");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenNtfs1Image(), VolumeOptions{});
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image, 0, "nps-ntfs1-raw"),
+      VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   CheckDirMatchesGroundTruth(volume, "RAW");
@@ -69,10 +71,13 @@ TEST_CASE(
     "Compressed files decompress to the RAW ground truth (NPS ntfs1, gen2)",
     "[nps][integration]") {
   NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(
-      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image);
+      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image, "nps-ntfs1-compressed");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenNtfs1Image(), VolumeOptions{});
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image, 0,
+          "nps-ntfs1-compressed"),
+      VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   CheckDirMatchesGroundTruth(volume, "Compressed");

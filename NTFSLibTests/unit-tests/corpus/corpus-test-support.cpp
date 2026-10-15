@@ -2,24 +2,96 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
+#include <cstdlib>
 #include <string>
+#include <string_view>
+#include <utility>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
 #include "partition-disk-reader.h"
-
-namespace NTFS_BROWSER_NAMESPACE {
-
-class IDiskReader;
-
-}  // namespace NTFS_BROWSER_NAMESPACE
+#include "recording-disk-reader.h"
+#include "sequential-disk-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Bits in a DWORD: where a FILETIME's high half starts.
 constexpr unsigned dword_bits = 32;
+
+namespace {
+
+// True when the environment variable name is set to a non-empty value.
+bool EnvIsSet(const char* name) {
+#ifdef _WIN32
+  // getenv() is deprecated on MSVC.
+  char* value = nullptr;
+  std::size_t size = 0;
+  const bool is_set =
+      _dupenv_s(&value, &size, name) == 0 && value != nullptr && *value != '\0';
+  std::free(value);
+  return is_set;
+#else
+  // NOLINTNEXTLINE(concurrency-mt-unsafe): only read, on the test thread.
+  const char* value = std::getenv(name);
+  return value != nullptr && *value != '\0';
+#endif
+}
+
+// Where a test gets its bytes from.
+enum class Source : unsigned char {
+  Image,      // Reads the image as is.
+  Recording,  // Reads the image, and records a trace of it.
+  Trace       // Replays a trace.
+};
+
+Source SourceOf(const std::filesystem::path& image) {
+  if (EnvIsSet("NTFS_BROWSER_FORCE_TRACES")) {
+    return Source::Trace;
+  }
+  if (!std::filesystem::exists(image)) {
+    return Source::Trace;
+  }
+  return EnvIsSet("NTFS_BROWSER_RECORD_TRACES") ? Source::Recording
+                                                : Source::Image;
+}
+
+std::filesystem::path TracePath(std::string_view trace_name) {
+  return TraceDir() / (std::string(trace_name) + ".trace");
+}
+
+// SKIPs the running test when the source it would use does not exist.
+void RequireSource(const std::filesystem::path& image,
+                   std::string_view trace_name) {
+  if (SourceOf(image) != Source::Trace ||
+      std::filesystem::exists(TracePath(trace_name))) {
+    return;
+  }
+  SKIP("neither test image " << image.string() << " nor trace "
+                             << TracePath(trace_name).string()
+                             << " is present");
+}
+
+}  // namespace
+
+void RequireCorpusImage(const std::filesystem::path& image,
+                        std::string_view trace_name) {
+#ifdef NTFS_TEST_REQUIRE_DATA
+  if (!EnvIsSet("NTFS_BROWSER_FORCE_TRACES") &&
+      !std::filesystem::exists(image)) {
+    FAIL("test image not present: " << image.string());
+  }
+#endif
+  RequireSource(image, trace_name);
+}
+
+void RequireUnfetchedCorpusImage(const std::filesystem::path& image,
+                                 std::string_view trace_name) {
+  RequireSource(image, trace_name);
+}
 
 void RequireCorpusImage(const std::filesystem::path& image) {
   if (std::filesystem::exists(image)) {
@@ -30,6 +102,24 @@ void RequireCorpusImage(const std::filesystem::path& image) {
 #else
   SKIP("test image not present: " << image.string());
 #endif
+}
+
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
+    OpenCorpusImage(const std::filesystem::path& image,
+                    ULONGLONG partition_offset, std::string_view trace_name) {
+  const Source source = SourceOf(image);
+  if (source == Source::Trace) {
+    return std::make_unique<SequentialDiskReader>(
+        MakeFileStreamProducer(TracePath(trace_name)));
+  }
+
+  auto reader = std::make_unique<PartitionDiskReader>(partition_offset);
+  REQUIRE(reader->Open(image.wstring()));
+  if (source == Source::Recording) {
+    return std::make_unique<RecordingDiskReader>(std::move(reader),
+                                                 TracePath(trace_name));
+  }
+  return reader;
 }
 
 std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>

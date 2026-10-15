@@ -100,13 +100,17 @@ test-data/
   ntfs-samples/ntfs-{2m,lastaccess,ptrn,ramslack,si-vs-fn}.raw
 ```
 
-Two ntfs-samples images are left out, and their tests skip:
+Two ntfs-samples images are left out:
 
   - `ntfs.raw` needs 64 GiB once `ntfs.tgz` is extracted. Extract it into the
-    ntfs-samples directory by hand to run its test.
+    ntfs-samples directory by hand to run its test on the real image.
   - `ntfs_extremely_fragmented_mft.raw` needs 256 GiB. Its RAR archive is not
     in the repository: its `ReadMe.md` links to it. Point
-    `NTFS_BROWSER_TEST_FRAGMENTED_MFT_IMAGE` at the extracted image.
+    `NTFS_BROWSER_TEST_FRAGMENTED_MFT_IMAGE` at the extracted image to run its
+    test on the real image.
+
+Without its image, a corpus test does not skip: it replays a recorded trace
+(see below).
 
 These CMake cache variables locate the images:
 
@@ -140,8 +144,27 @@ Code, set it in `cmake.configureEnvironment`, in your own
 CMake reads the environment only when it configures. After changing a value,
 configure again.
 
-`-DNTFS_BROWSER_REQUIRE_TEST_DATA=ON` fails, instead of skipping, a test whose
-image the script provides. CI sets it.
+`-DNTFS_BROWSER_REQUIRE_TEST_DATA=ON` fails, instead of replaying a trace, a
+test whose image the script provides. CI sets it on the Windows legs.
+
+### Recorded traces
+
+[NTFSLibTests/fuzz/data/corpus-traces/](NTFSLibTests/fuzz/data/corpus-traces/)
+holds, for each corpus test, the bytes it read from its image: one read after
+the other, without their address. That is what `SequentialDiskReader` serves,
+so a test runs without the image. A test whose image is missing replays its
+trace, and the Linux legs of CI do so. 
+A trace only fits the read order of the library that recorded it. After a
+change to the read path, a trace test fails. Record the traces again with the
+images present:
+
+```
+NTFS_BROWSER_RECORD_TRACES=1 build/static/NTFSLibTests/unit-tests/Debug/NtfsBrowserTests.exe "[integration]"
+```
+
+`NTFS_BROWSER_FORCE_TRACES=1` replays the traces even when the images are
+present, to check them without removing the images. The Windows-only EFS test
+of the NPS corpus has no trace: it still needs the image.
 
 ### CI
 

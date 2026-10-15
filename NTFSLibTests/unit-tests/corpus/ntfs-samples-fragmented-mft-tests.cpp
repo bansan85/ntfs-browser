@@ -12,7 +12,6 @@
 #include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
-#include "partition-disk-reader.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
@@ -24,12 +23,12 @@ TEST_CASE(
     "[ntfs-samples][integration][fragmented-mft]") {
   const std::filesystem::path& image =
       NTFS_BROWSER_NAMESPACE::Tests::FragmentedMftImage();
-  if (!std::filesystem::exists(image)) {
-    SKIP("ntfs_extremely_fragmented_mft.raw not present: " << image.string());
-  }
+  NTFS_BROWSER_NAMESPACE::Tests::RequireUnfetchedCorpusImage(
+      image, "ntfs-fragmented-mft");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      OpenWholeDiskImage(image, large_image_partition_offset));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          image, large_image_partition_offset, "ntfs-fragmented-mft"));
   REQUIRE(volume.IsVolumeOK());
 
   // ReadMe.md: these are the file records ($MFT's own base record, plus its

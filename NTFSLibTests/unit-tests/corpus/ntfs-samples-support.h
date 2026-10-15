@@ -4,7 +4,6 @@
 
 #include <cstddef>
 #include <filesystem>
-#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -17,7 +16,6 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
@@ -26,7 +24,6 @@
 
 #include "corpus-test-support.h"
 #include "optional-access.h"
-#include "partition-disk-reader.h"
 
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
@@ -85,18 +82,6 @@ constexpr ULONGLONG long_mismatch_seconds = 813;
 constexpr ULONGLONG short_mismatch_seconds = 120;
 
 constexpr ULONGLONG large_image_partition_offset = 1048576;
-
-// Opens imagePath through a PartitionDiskReader, so NtfsVolume sees the NTFS
-// partition's own boot sector at addr 0 instead of the image's MBR.
-inline std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
-    OpenWholeDiskImage(const std::filesystem::path& image_path,
-                       ULONGLONG partition_offset) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::PartitionDiskReader>(
-          partition_offset);
-  REQUIRE(reader->Open(image_path.wstring()));
-  return reader;
-}
 
 // Parses dir's own file record as the volume's root directory, ready for
 // FindSubEntry(). dir must already be constructed on that volume.

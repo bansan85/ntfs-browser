@@ -8,6 +8,8 @@ add_library(
   "sequential-disk-reader.cpp"
   "partition-disk-reader.h"
   "partition-disk-reader.cpp"
+  "recording-disk-reader.h"
+  "recording-disk-reader.cpp"
 )
 
 target_include_directories(

@@ -45,12 +45,14 @@ const std::filesystem::path autodetect_dir =
 // Opens a DFTT autodetect partition image and confirms the library reads its
 // NTFS side correctly: the root directory's own ntfs.txt is found, and its
 // $DATA attribute reads back the size the index entry advertises.
-void CheckReadsPartitionImage(std::wstring_view image_name) {
+void CheckReadsPartitionImage(std::wstring_view image_name,
+                              std::string_view trace_name) {
   const std::filesystem::path image_path = autodetect_dir / image_name;
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(image_path);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(image_path, trace_name);
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenBareVolumeImage(image_path));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(image_path, 0,
+                                                     trace_name));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord root(volume);
@@ -80,17 +82,17 @@ void CheckReadsPartitionImage(std::wstring_view image_name) {
 
 TEST_CASE("Reads the NTFS side of DFTT test #10 partition 1 (NTFS+Ext2)",
           "[dftt][integration]") {
-  CheckReadsPartitionImage(L"10-ntfs-part1.dd");
+  CheckReadsPartitionImage(L"10-ntfs-part1.dd", "dftt-autodetect-part1");
 }
 
 TEST_CASE("Reads the NTFS side of DFTT test #10 partition 2 (NTFS+UFS2)",
           "[dftt][integration]") {
-  CheckReadsPartitionImage(L"10-ntfs-part2.dd");
+  CheckReadsPartitionImage(L"10-ntfs-part2.dd", "dftt-autodetect-part2");
 }
 
 TEST_CASE("Reads the NTFS side of DFTT test #10 partition 3 (NTFS+UFS1)",
           "[dftt][integration]") {
-  CheckReadsPartitionImage(L"10-ntfs-part3.dd");
+  CheckReadsPartitionImage(L"10-ntfs-part3.dd", "dftt-autodetect-part3");
 }
 
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -173,10 +175,12 @@ void CheckReadsKeywordFile(const NtfsVolume<Cache::Strategy::NoCache>& volume,
 
 TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
           "[dftt][integration]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(dftt_kwsrch_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(dftt_kwsrch_image,
+                                                    "dftt-kwsrch");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenBareVolumeImage(dftt_kwsrch_image));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(dftt_kwsrch_image, 0,
+                                                     "dftt-kwsrch"));
   REQUIRE(volume.IsVolumeOK());
 
   CheckReadsKeywordFile(volume, resident_alloc);
@@ -192,7 +196,8 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   VolumeOptions options;
   options.include_deleted = true;
   const NtfsVolume<Cache::Strategy::NoCache> del_volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenBareVolumeImage(dftt_kwsrch_image),
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(dftt_kwsrch_image, 0,
+                                                     "dftt-kwsrch-deleted"),
       options);
   REQUIRE(del_volume.IsVolumeOK());
   CheckReadsKeywordFile(del_volume, resident_unalloc);
@@ -301,12 +306,14 @@ void CheckRecoversDeletedFile(
 
 TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
           "[dftt][integration]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(dftt_undel_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(dftt_undel_image,
+                                                    "dftt-undel");
 
   VolumeOptions options;
   options.include_deleted = true;
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenBareVolumeImage(dftt_undel_image),
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(dftt_undel_image, 0,
+                                                     "dftt-undel"),
       options);
   REQUIRE(volume.IsVolumeOK());
 

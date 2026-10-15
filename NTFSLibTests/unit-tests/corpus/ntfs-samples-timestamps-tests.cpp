@@ -1,6 +1,5 @@
 #include <ntfs-browser/win-types.h>
 
-#include <filesystem>
 #include <optional>
 #include <string_view>
 #include <tuple>
@@ -22,7 +21,6 @@
 #include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
 #include "optional-access.h"
-#include "partition-disk-reader.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
@@ -36,10 +34,12 @@ TEST_CASE(
     "STANDARD_INFORMATION and $I30 FILE_NAME disagree on /test/1.txt's last "
     "access time (ntfs-lastaccess.raw)",
     "[ntfs-samples][integration][timestamps]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(lastaccess_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(lastaccess_image,
+                                                    "ntfs-lastaccess");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      OpenWholeDiskImage(lastaccess_image, small_image_partition_offset));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          lastaccess_image, small_image_partition_offset, "ntfs-lastaccess"));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
@@ -72,10 +72,12 @@ TEST_CASE(
     "STANDARD_INFORMATION, FILE_NAME and $I30 FILE_NAME each carry a "
     "different creation date for /test/test.txt (ntfs-si-vs-fn.raw)",
     "[ntfs-samples][integration][timestamps]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(si_vs_fn_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(si_vs_fn_image,
+                                                    "ntfs-si-vs-fn");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      OpenWholeDiskImage(si_vs_fn_image, small_image_partition_offset));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          si_vs_fn_image, small_image_partition_offset, "ntfs-si-vs-fn"));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
@@ -122,9 +124,8 @@ TEST_CASE(
     "STANDARD_INFORMATION and $I30 FILE_NAME disagree on two files' last "
     "access time (ntfs.raw)",
     "[ntfs-samples][integration][timestamps]") {
-  if (!std::filesystem::exists(ntfs_image)) {
-    SKIP("ntfs.raw not present: " << ntfs_image.string());
-  }
+  NTFS_BROWSER_NAMESPACE::Tests::RequireUnfetchedCorpusImage(ntfs_image,
+                                                             "ntfs");
 
   // This image also documents two VSS shadow copies (one hidden from
   // "vssadmin list shadows") and a stray $I30 entry surviving in $MFT record
@@ -132,7 +133,8 @@ TEST_CASE(
   // and ParseFileRecord()/ParseAttrs() only ever read a record's real,
   // in-use attribute area, never its unused slack bytes.
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      OpenWholeDiskImage(ntfs_image, large_image_partition_offset));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+          ntfs_image, large_image_partition_offset, "ntfs"));
   REQUIRE(volume.IsVolumeOK());
 
   const auto check_access_time_mismatch =

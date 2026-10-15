@@ -83,6 +83,7 @@ target_compile_definitions(
   PRIVATE
     NTFS_FUZZER_AFL_EXE="$<TARGET_FILE:NtfsFuzzerAfl>"
     NTFS_FUZZ_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data"
+    NTFS_TEST_TRACE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data/corpus-traces"
     NTFS_EFS_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/efs/data"
 )
 
