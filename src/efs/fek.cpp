@@ -4,10 +4,12 @@
 
 #include <cstring>
 
+#include <ntfs-browser/namespace.h>
+
 #include "log/ntfs-common.h"
 #include "util/util.h"
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 namespace {
 
@@ -91,4 +93,4 @@ Algorithm Fek::GetAlgorithm() const noexcept { return algorithm_; }
 
 std::span<const BYTE> Fek::GetKey() const noexcept { return key_; }
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs

@@ -1,5 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
+#include <ntfs-browser/namespace.h>
+
 #ifdef _WIN32
 
   #include <catch2/catch_test_macros.hpp>
@@ -14,13 +16,14 @@
 using Catch::Matchers::ContainsSubstring;
 
 TEST_CASE("a drive argument that is not a letter opens no volume", "[volume]") {
-  static_cast<void>(NtfsBrowserTests::TakeCapturedLog());
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog());
 
-  const NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache> volume(
-      _T('1'));
+  const NTFS_BROWSER_NAMESPACE::NtfsVolume<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>
+      volume(_T('1'));
 
   CHECK_FALSE(volume.IsVolumeOK());
-  CHECK_THAT(NtfsBrowserTests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
              ContainsSubstring("Volume name error"));
 }
 

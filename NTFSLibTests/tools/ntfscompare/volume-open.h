@@ -6,6 +6,7 @@
 #include <string>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -16,9 +17,10 @@ namespace NtfsCompare {
 // MUST stay off: the OS walks never list freed entries, so the reference
 // must not either. recover_errors stays off too, so a damaged entry is
 // hidden from every listing the same way.
-inline constexpr NtfsBrowser::VolumeOptions comparison_volume_options{
-    .include_deleted = false,
-    .recover_errors = false,
+inline constexpr NTFS_BROWSER_NAMESPACE::VolumeOptions
+    comparison_volume_options{
+        .include_deleted = false,
+        .recover_errors = false,
 };
 
 // What OpenVolumeFor() resolved: two independently-opened volumes (FullCache
@@ -26,11 +28,11 @@ inline constexpr NtfsBrowser::VolumeOptions comparison_volume_options{
 // the target directory relative to the volume's root, in this tool's own
 // "/"-joined convention (matching every Listing's own path keys).
 struct VolumeHandles {
-  std::unique_ptr<
-      NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::FullCache>>
+  std::unique_ptr<NTFS_BROWSER_NAMESPACE::NtfsVolume<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>>
       full_cache;
-  std::unique_ptr<
-      NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache>>
+  std::unique_ptr<NTFS_BROWSER_NAMESPACE::NtfsVolume<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>>
       no_cache;
   std::wstring relative_path;
 };

@@ -6,15 +6,17 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
+
 #include "partition-disk-reader.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IDiskReader;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Bits in a DWORD: where a FILETIME's high half starts.
 constexpr unsigned dword_bits = 32;
@@ -30,7 +32,7 @@ void RequireCorpusImage(const std::filesystem::path& image) {
 #endif
 }
 
-std::unique_ptr<NtfsBrowser::IDiskReader>
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
     OpenBareVolumeImage(const std::filesystem::path& image_path) {
   auto reader = std::make_unique<PartitionDiskReader>(0);
   REQUIRE(reader->Open(image_path.wstring()));
@@ -73,4 +75,4 @@ std::tuple<WORD, WORD, WORD>
           static_cast<WORD>(month), static_cast<WORD>(day)};
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

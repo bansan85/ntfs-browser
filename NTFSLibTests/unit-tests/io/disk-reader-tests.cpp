@@ -13,14 +13,16 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
+#include <ntfs-browser/namespace.h>
+
 #include "memory-disk-reader.h"
 #include "sequential-disk-reader.h"
 
-using NtfsBrowserTests::MakeFileStreamProducer;
-using NtfsBrowserTests::MakeGeneratorProducer;
-using NtfsBrowserTests::MakeMemoryProducer;
-using NtfsBrowserTests::MemoryDiskReader;
-using NtfsBrowserTests::SequentialDiskReader;
+using NTFS_BROWSER_NAMESPACE::Tests::MakeFileStreamProducer;
+using NTFS_BROWSER_NAMESPACE::Tests::MakeGeneratorProducer;
+using NTFS_BROWSER_NAMESPACE::Tests::MakeMemoryProducer;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Tests::SequentialDiskReader;
 
 namespace {
 

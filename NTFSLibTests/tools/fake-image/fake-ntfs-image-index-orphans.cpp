@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/filename.h"
 #include "data/header-non-resident.h"
@@ -15,7 +16,7 @@
 #include "fake-ntfs-image-internal.h"
 #include "file-record-header-edit.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
@@ -50,8 +51,9 @@ static_assert(FakeIndexAllocShape{}.declared_block_count ==
 // attribute's total_size.
 DWORD WriteShapedIndexAllocAttr(FakeRecord& record, DWORD offset,
                                 const FakeIndexAllocShape& shape) {
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(offset));
+  auto& alloc_attr =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
+          &record.at(offset));
   alloc_attr.header.type = Attr::Type::IndexAllocation;
   alloc_attr.header.non_resident = 1;
   alloc_attr.header.name_length = 0;
@@ -96,8 +98,8 @@ DWORD WriteShapedIndexAllocAttr(FakeRecord& record, DWORD offset,
 // without changing the data run.
 FakeRecord MakeOrphanedIndexBlocksRootRecord(const FakeIndexAllocShape& shape) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
   // The sequence its entries' parent references carry.
   EditFileRecordHeader(record, [](FileRecordHeader& header) {
     header.seq_no = root_sequence_number;
@@ -123,8 +125,8 @@ void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
       static_cast<size_t>(orphaned_blocks_lcn) * cluster_size;
   const std::span<BYTE> block_start = std::span<BYTE>(image).subspan(
       blocks_offset + static_cast<size_t>(vcn) * cluster_size);
-  auto& block =
-      *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(block_start.data());
+  auto& block = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexBlock*>(
+      block_start.data());
   std::memset(&block, 0, sizeof(block));
   block.magic = index_block_magic;
   // Points at the block's own last 6 bytes, so PatchUS() succeeds trivially
@@ -133,23 +135,24 @@ void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
   block.size_of_us = 3;
   block.vcn = vcn;
   block.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(block_start, sizeof(NtfsBrowser::Data::IndexBlock))) -
+      (&gsl::at(block_start,
+                sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock))) -
       reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
   const std::span<BYTE> body =
-      block_start.subspan(sizeof(NtfsBrowser::Data::IndexBlock));
+      block_start.subspan(sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock));
   auto& first_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body.data());
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(body.data());
   first_entry.mft_index = mft_ref;
   first_entry.mft_sn = 1;
 
-  auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
+  auto& fn1 = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
+      &first_entry.stream);
   fn1.parent_ref = parent_ref;
-  fn1.flags = NtfsBrowser::Data::FilenameFlag::None;
+  fn1.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
   fn1.name_length = name_length;
-  fn1.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
+  fn1.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
   for (BYTE i = 0; i < name_length; i++) {
     // nameLength is name.size(), so i < name.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -159,7 +162,7 @@ void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
   first_entry.stream_size =
       gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name_length]) -
                         reinterpret_cast<BYTE*>(&fn1));
-  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
+  first_entry.flags = NTFS_BROWSER_NAMESPACE::Data::IndexEntryFlag::Last;
   first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
       &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
       first_entry.stream_size));
@@ -187,8 +190,8 @@ constexpr DWORD multi_cluster_orphan_block_count = 2;
 // blocks of multi_cluster_orphan_clusters_per_block clusters each.
 FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
   // The sequence its entries' parent references carry.
   EditFileRecordHeader(record, [](FileRecordHeader& header) {
     header.seq_no = root_sequence_number;
@@ -230,8 +233,8 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image,
       static_cast<size_t>(multi_cluster_orphan_lcn) * cluster_size;
   const std::span<BYTE> block_start = std::span<BYTE>(image).subspan(
       blocks_offset + gsl::narrow<size_t>(vcn) * cluster_size);
-  auto& block =
-      *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(block_start.data());
+  auto& block = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexBlock*>(
+      block_start.data());
   std::memset(&block, 0, sizeof(block));
   block.magic = index_block_magic;
   // Points the USA at the block's own last (1 + sectors) words, so every
@@ -245,23 +248,24 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image,
   block.size_of_us = gsl::narrow<WORD>(1 + sectors);
   block.vcn = vcn;
   block.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(block_start, sizeof(NtfsBrowser::Data::IndexBlock))) -
+      (&gsl::at(block_start,
+                sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock))) -
       reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
   const std::span<BYTE> body =
-      block_start.subspan(sizeof(NtfsBrowser::Data::IndexBlock));
+      block_start.subspan(sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock));
   auto& first_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body.data());
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(body.data());
   first_entry.mft_index = mft_ref;
   first_entry.mft_sn = 1;
 
-  auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
+  auto& fn1 = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
+      &first_entry.stream);
   fn1.parent_ref = parent_ref;
-  fn1.flags = NtfsBrowser::Data::FilenameFlag::None;
+  fn1.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
   fn1.name_length = name_length;
-  fn1.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
+  fn1.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
   for (BYTE i = 0; i < name_length; i++) {
     // nameLength is name.size(), so i < name.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -271,7 +275,7 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image,
   first_entry.stream_size =
       gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name_length]) -
                         reinterpret_cast<BYTE*>(&fn1));
-  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
+  first_entry.flags = NTFS_BROWSER_NAMESPACE::Data::IndexEntryFlag::Last;
   first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
       &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
       first_entry.stream_size));
@@ -288,8 +292,8 @@ FakeRecord MakeDirectoryWithIndexAllocation(
     DWORD ib_size, std::span<const FakeIndexAllocExtent> extents,
     ULONGLONG declared_block_count) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
   EditFileRecordHeader(record, [](FileRecordHeader& header) {
     header.seq_no = root_sequence_number;
   });
@@ -337,8 +341,8 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
   const std::wstring_view name = spec.name;
   const std::span<BYTE> block_start =
       std::span<BYTE>(image).subspan(block_offset);
-  auto& block =
-      *reinterpret_cast<NtfsBrowser::Data::IndexBlock*>(block_start.data());
+  auto& block = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexBlock*>(
+      block_start.data());
   std::memset(&block, 0, sizeof(block));
   block.magic = index_block_magic;
   // Points the USA at the block's own last (1 + sectors) words, so PatchUS()
@@ -348,23 +352,24 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
   block.size_of_us = gsl::narrow<WORD>(1 + sectors);
   block.vcn = vcn;
   block.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(block_start, sizeof(NtfsBrowser::Data::IndexBlock))) -
+      (&gsl::at(block_start,
+                sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock))) -
       reinterpret_cast<BYTE*>(&block.entry_offset));
   block.not_leaf = 0;
 
   const std::span<BYTE> body =
-      block_start.subspan(sizeof(NtfsBrowser::Data::IndexBlock));
+      block_start.subspan(sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock));
   auto& first_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(body.data());
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(body.data());
   first_entry.mft_index = mft_ref;
   first_entry.mft_sn = 1;
 
-  auto& fn1 =
-      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&first_entry.stream);
+  auto& fn1 = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
+      &first_entry.stream);
   fn1.parent_ref = parent_ref;
-  fn1.flags = NtfsBrowser::Data::FilenameFlag::None;
+  fn1.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
   fn1.name_length = gsl::narrow<BYTE>(name.size());
-  fn1.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
+  fn1.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
   for (size_t i = 0; i < name.size(); i++) {
     // nameLength is name.size(), so i < name.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -374,7 +379,7 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
   first_entry.stream_size =
       gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name.size()]) -
                         reinterpret_cast<BYTE*>(&fn1));
-  first_entry.flags = NtfsBrowser::Data::IndexEntryFlag::Last;
+  first_entry.flags = NTFS_BROWSER_NAMESPACE::Data::IndexEntryFlag::Last;
   first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
       &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
       first_entry.stream_size));
@@ -388,8 +393,9 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
 void RedirectOrphanEntry(std::vector<BYTE>& image, ULONGLONG mft_ref) {
   const size_t vcn1_offset =
       (static_cast<size_t>(orphaned_blocks_lcn) + 1) * cluster_size;
-  auto& entry = *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(
-      &image.at(vcn1_offset + sizeof(NtfsBrowser::Data::IndexBlock)));
+  auto& entry =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(&image.at(
+          vcn1_offset + sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock)));
   entry.mft_index = mft_ref;
 }
 
@@ -492,7 +498,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch() {
   // Give orphaned_block_sequence_mismatch_target_idx a real, in-use record on
   // disk, under orphaned_block_sequence_mismatch_record_seq.
   const FakeRecord record =
-      MakeMftTreeRecord(NtfsBrowser::Data::FileRecordFlag::InUse,
+      MakeMftTreeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse,
                         orphaned_block_sequence_mismatch_record_seq, {});
   PutMftRecord(image, static_cast<DWORD>(mft_lcn) * cluster_size,
                orphaned_block_sequence_mismatch_target_idx, record);
@@ -522,7 +528,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock() {
   // Only this fixture's directory needs an index block bigger than 1
   // cluster - patch the shared BPB in place, the same trick
   // BuildFakeNtfsImageWithForgedIndexBlock() uses.
-  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  auto& bpb =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data());
   bpb.clusters_per_index_block =
       static_cast<DWORD>(multi_cluster_orphan_clusters_per_block);
 
@@ -565,7 +572,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
   // Patch the shared BPB: index blocks of 2^9 bytes, half a cluster.
-  auto& bpb = *reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data());
+  auto& bpb =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data());
   bpb.clusters_per_index_block = sub_cluster_index_block_encoding;
 
   constexpr DWORD index_block_size = 512;
@@ -670,10 +678,11 @@ std::vector<BYTE>
       std::span(image).subspan(root_offset, fake_file_record_size),
       [&](FileRecordHeader& header) {
         header.seq_no = link.record_sequence;
-        header.flags = link.record_in_use
-                           ? (NtfsBrowser::Data::FileRecordFlag::InUse |
-                              NtfsBrowser::Data::FileRecordFlag::Dir)
-                           : NtfsBrowser::Data::FileRecordFlag::Dir;
+        header.flags =
+            link.record_in_use
+                ? (NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                   NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir)
+                : NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir;
       });
 
   // VCN 1's entry names the directory unchecked (sequence 0), so it is
@@ -693,4 +702,4 @@ std::vector<BYTE>
   return image;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

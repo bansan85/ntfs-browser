@@ -14,8 +14,9 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
-using namespace NtfsBrowser;
+using namespace NTFS_BROWSER_NAMESPACE;
 
 namespace NtfsUndel {
 

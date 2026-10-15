@@ -2,8 +2,10 @@
 
 #include <cstdint>
 
-namespace NtfsBrowser::Cache {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Cache {
 
 enum class Strategy : std::uint8_t { NoCache, FullCache };
 
-}  // namespace NtfsBrowser::Cache
+}  // namespace NTFS_BROWSER_NAMESPACE::Cache

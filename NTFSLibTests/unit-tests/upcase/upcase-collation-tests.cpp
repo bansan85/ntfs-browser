@@ -7,11 +7,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
+#include <ntfs-browser/namespace.h>
+
 #include "fake-ntfs-image.h"
 #include "optional-access.h"
 #include "upcase/upcase.h"
 
-using NtfsBrowser::UpCase::Table;
+using NTFS_BROWSER_NAMESPACE::UpCase::Table;
 
 namespace {
 
@@ -27,8 +29,9 @@ std::vector<BYTE> MakeMinimalUpCaseBytes() {
   constexpr size_t case_distance = 0x20;
   constexpr unsigned bits_per_byte = 8;
 
-  std::vector<BYTE> bytes(NtfsBrowser::UpCase::Table::byte_count);
-  for (size_t unit = 0; unit < NtfsBrowser::UpCase::Table::unit_count; unit++) {
+  std::vector<BYTE> bytes(NTFS_BROWSER_NAMESPACE::UpCase::Table::byte_count);
+  for (size_t unit = 0;
+       unit < NTFS_BROWSER_NAMESPACE::UpCase::Table::unit_count; unit++) {
     const size_t upper =
         (unit >= L'a' && unit <= L'z') ? unit - case_distance : unit;
     // bytes holds 2 bytes for each unit below UpCaseTable::unit_count.
@@ -78,10 +81,11 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
 
     const std::optional<Table> table = Table::FromBytes(bytes);
     REQUIRE(table.has_value());
-    CHECK_FALSE(NtfsBrowserTests::Unwrap(table).IsBuiltIn());
-    CHECK(NtfsBrowserTests::Unwrap(table).Map(u'a') == u'A');
-    CHECK(NtfsBrowserTests::Unwrap(table).Map(u'\u00E9') == u'A');
-    CHECK(NtfsBrowserTests::Unwrap(table).Map(u'\u00C9') == u'\u00C9');
+    CHECK_FALSE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(table).IsBuiltIn());
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(table).Map(u'a') == u'A');
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(table).Map(u'\u00E9') == u'A');
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(table).Map(u'\u00C9') ==
+          u'\u00C9');
   }
 
   SECTION("a short stream is refused") {

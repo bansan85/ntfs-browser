@@ -10,11 +10,12 @@
 
 #include <ntfs-browser/cache/strategy.h>  // IWYU pragma: keep
 #include <ntfs-browser/efs/efs.h>
+#include <ntfs-browser/namespace.h>
 
 #include "efs/efs-stream.h"
 #include "efs/sector-cipher.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
 
@@ -28,9 +29,9 @@ namespace Efs {
 class Fek;
 
 }  // namespace Efs
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 // Where a record's key provider comes from. It is called on the first
 // decryption only, so a volume creates its default provider lazily.
@@ -47,7 +48,7 @@ class Context final {
           CipherBackend backend);
 
   template <Cache::Strategy S>
-  friend class NtfsBrowser::Attr::AttrNonResident;
+  friend class NTFS_BROWSER_NAMESPACE::Attr::AttrNonResident;
 
  private:
   std::vector<WrappedFek> entries_;
@@ -70,4 +71,4 @@ class Context final {
       MakeDecryptor(const Fek& fek) const;
 };
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs

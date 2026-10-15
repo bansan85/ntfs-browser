@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -12,10 +13,10 @@
 #include "memory-disk-reader.h"
 #include "volume-open.h"
 
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Cache::Strategy;
-using NtfsBrowserTests::BuildFakeNtfsImageWithMftTree;
-using NtfsBrowserTests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Cache::Strategy;
+using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 using NtfsCompare::comparison_volume_options;
 
 TEST_CASE("The comparison volume options are the library defaults",

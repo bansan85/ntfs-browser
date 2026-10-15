@@ -36,6 +36,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "catch2/catch_message.hpp"
@@ -46,13 +47,13 @@
 #include "optional-access.h"
 #include "test-log-sink.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::IndexEntryView;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
@@ -62,20 +63,21 @@ namespace {
 template <Cache::Strategy S>
 struct ParsedRoot {
   std::unique_ptr<NtfsVolume<S>> volume;
-  std::unique_ptr<NtfsBrowser::Io::FileRecord<S>> record;
+  std::unique_ptr<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>> record;
 };
 
 template <Cache::Strategy S>
 ParsedRoot<S> ParseRoot(std::vector<BYTE> image,
-                        NtfsBrowser::VolumeOptions options = {}) {
+                        NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   ParsedRoot<S> parsed;
   parsed.volume = std::make_unique<NtfsVolume<S>>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)),
       options);
   REQUIRE(parsed.volume->IsVolumeOK());
 
-  parsed.record =
-      std::make_unique<NtfsBrowser::Io::FileRecord<S>>(*parsed.volume);
+  parsed.record = std::make_unique<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>>(
+      *parsed.volume);
   REQUIRE(
       parsed.record->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   return parsed;
@@ -83,8 +85,9 @@ ParsedRoot<S> ParseRoot(std::vector<BYTE> image,
 
 // ParseRoot() and then ParseAttrs() on the root record, which must succeed.
 template <Cache::Strategy S>
-ParsedRoot<S> ParseRootWithAttrs(std::vector<BYTE> image,
-                                 NtfsBrowser::VolumeOptions options = {}) {
+ParsedRoot<S>
+    ParseRootWithAttrs(std::vector<BYTE> image,
+                       NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   ParsedRoot<S> parsed = ParseRoot<S>(std::move(image), options);
   REQUIRE(parsed.record->ParseAttrs());
   return parsed;
@@ -94,8 +97,8 @@ ParsedRoot<S> ParseRootWithAttrs(std::vector<BYTE> image,
 // attribute, truncated to what ReadData() actually produced; empty on failure.
 template <Cache::Strategy S>
 std::optional<std::vector<BYTE>>
-    ReadRootData(const NtfsBrowser::Io::FileRecord<S>& record, ULONGLONG offset,
-                 size_t size) {
+    ReadRootData(const NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& record,
+                 ULONGLONG offset, size_t size) {
   const auto& data_attrs = record.GetAttr(Attr::Type::Data);
   REQUIRE(data_attrs.size() == 1);
 
@@ -116,9 +119,9 @@ std::optional<std::vector<BYTE>>
 // library logger is already pinned to a trace-level capturing sink; see
 // test-log-sink.h.
 std::string CaptureTrace(const std::function<void()>& body) {
-  (void)NtfsBrowserTests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   body();
-  return NtfsBrowserTests::TakeCapturedLog();
+  return NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
 }
 
 }  // namespace
@@ -133,8 +136,8 @@ namespace {
 // LZNT1 bytes, then a sparse run padding out the full cluster count.
 template <Cache::Strategy S>
 void CheckCompressedFileReadsBackDecompressed() {
-  ParsedRoot<S> root =
-      ParseRoot<S>(NtfsBrowserTests::BuildFakeNtfsImageWithCompressedFile());
+  ParsedRoot<S> root = ParseRoot<S>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCompressedFile());
 
   // Acceptance criterion: a compressed record is no longer skipped.
   REQUIRE(root.record->ParseAttrs());
@@ -145,52 +148,58 @@ void CheckCompressedFileReadsBackDecompressed() {
   // The REQUIRE above checks that there is one DATA attribute.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(root.record->GetAttr(Attr::Type::Data)[0]->GetDataSize() ==
-        NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+        NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size);
 
   const std::optional<std::vector<BYTE>> data = ReadRootData<S>(
-      *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+      *root.record, 0,
+      NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size);
   REQUIRE(data.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(data).size() ==
-          NtfsBrowserTests::xca_lznt1_example_decompressed_size);
-  CHECK(std::memcmp(NtfsBrowserTests::Unwrap(data).data(),
-                    NtfsBrowserTests::xca_lznt1_example_decompressed.data(),
-                    NtfsBrowserTests::Unwrap(data).size()) == 0);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data).size() ==
+          NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size);
+  CHECK(
+      std::memcmp(
+          NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data).data(),
+          NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed.data(),
+          NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data).size()) == 0);
 }
 
 // I/O matrix row "Stored (incompressible) unit": real runs fill the whole
 // unit with no sparse pad, so the bytes must pass through undecompressed.
 template <Cache::Strategy S>
 void CheckStoredCompressionUnitReadsBackVerbatim() {
-  ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithStoredCompressionUnit());
+  ParsedRoot<S> root =
+      ParseRootWithAttrs<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                                BuildFakeNtfsImageWithStoredCompressionUnit());
 
   const std::vector<BYTE> expected =
-      NtfsBrowserTests::CompressionFixturePattern(
-          NtfsBrowserTests::compression_unit_size);
+      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
+          NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
 
   const std::optional<std::vector<BYTE>> data =
       ReadRootData<S>(*root.record, 0, expected.size());
   REQUIRE(data.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(data).size() == expected.size());
-  CHECK(std::memcmp(NtfsBrowserTests::Unwrap(data).data(), expected.data(),
-                    expected.size()) == 0);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data).size() ==
+          expected.size());
+  CHECK(std::memcmp(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data).data(),
+                    expected.data(), expected.size()) == 0);
 }
 
 // I/O matrix row "Fully sparse unit": no real cluster at all, so it must
 // read back zero-filled, same as the pre-existing uncompressed sparse path.
 template <Cache::Strategy S>
 void CheckSparseCompressionUnitReadsBackZeroed() {
-  ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithSparseCompressionUnit());
+  ParsedRoot<S> root =
+      ParseRootWithAttrs<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                                BuildFakeNtfsImageWithSparseCompressionUnit());
 
-  const std::optional<std::vector<BYTE>> data =
-      ReadRootData<S>(*root.record, 0, NtfsBrowserTests::compression_unit_size);
+  const std::optional<std::vector<BYTE>> data = ReadRootData<S>(
+      *root.record, 0, NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
   REQUIRE(data.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(data).size() ==
-          NtfsBrowserTests::compression_unit_size);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data).size() ==
+          NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
 
   size_t non_zero = 0;
-  for (const BYTE byte_value : NtfsBrowserTests::Unwrap(data)) {
+  for (const BYTE byte_value : NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data)) {
     if (byte_value != 0) {
       non_zero++;
     }
@@ -203,18 +212,20 @@ void CheckSparseCompressionUnitReadsBackZeroed() {
 template <Cache::Strategy S>
 void CheckFragmentedCompressedFileReadsBackDecompressed() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithFragmentedCompressedFile());
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithFragmentedCompressedFile());
 
   const std::vector<BYTE> expected =
-      NtfsBrowserTests::CompressionFixturePattern(
-          NtfsBrowserTests::fragmented_compressed_payload_size);
+      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
+          NTFS_BROWSER_NAMESPACE::Tests::fragmented_compressed_payload_size);
 
   const std::optional<std::vector<BYTE>> data =
       ReadRootData<S>(*root.record, 0, expected.size());
   REQUIRE(data.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(data).size() == expected.size());
-  CHECK(std::memcmp(NtfsBrowserTests::Unwrap(data).data(), expected.data(),
-                    expected.size()) == 0);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data).size() ==
+          expected.size());
+  CHECK(std::memcmp(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(data).data(),
+                    expected.data(), expected.size()) == 0);
 }
 
 // I/O matrix row "Trailing partial unit at EOF": real_size is not a multiple
@@ -223,12 +234,15 @@ void CheckFragmentedCompressedFileReadsBackDecompressed() {
 template <Cache::Strategy S>
 void CheckTrailingPartialCompressionUnit() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithTrailingPartialCompressionUnit());
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithTrailingPartialCompressionUnit());
 
-  const std::vector<BYTE> head = NtfsBrowserTests::CompressionFixturePattern(
-      NtfsBrowserTests::trailing_partial_unit_stored_size);
-  const std::vector<BYTE> tail = NtfsBrowserTests::CompressionFixturePattern(
-      NtfsBrowserTests::trailing_partial_unit_tail_size);
+  const std::vector<BYTE> head =
+      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
+          NTFS_BROWSER_NAMESPACE::Tests::trailing_partial_unit_stored_size);
+  const std::vector<BYTE> tail =
+      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
+          NTFS_BROWSER_NAMESPACE::Tests::trailing_partial_unit_tail_size);
   const size_t total = head.size() + tail.size();
 
   REQUIRE(root.record->GetAttr(Attr::Type::Data).size() == 1);
@@ -240,33 +254,37 @@ void CheckTrailingPartialCompressionUnit() {
   const std::optional<std::vector<BYTE>> whole =
       ReadRootData<S>(*root.record, 0, total);
   REQUIRE(whole.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(whole).size() == total);
-  CHECK(std::memcmp(NtfsBrowserTests::Unwrap(whole).data(), head.data(),
-                    head.size()) == 0);
-  CHECK(std::memcmp(&NtfsBrowserTests::Unwrap(whole).at(head.size()),
-                    tail.data(), tail.size()) == 0);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(whole).size() == total);
+  CHECK(std::memcmp(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(whole).data(),
+                    head.data(), head.size()) == 0);
+  CHECK(
+      std::memcmp(&NTFS_BROWSER_NAMESPACE::Tests::Unwrap(whole).at(head.size()),
+                  tail.data(), tail.size()) == 0);
 
   // Oversized read past EOF must truncate to the real count, not invent
   // bytes from sparse padding.
-  const std::optional<std::vector<BYTE>> beyond = ReadRootData<S>(
-      *root.record, head.size(), NtfsBrowserTests::compression_unit_size);
+  const std::optional<std::vector<BYTE>> beyond =
+      ReadRootData<S>(*root.record, head.size(),
+                      NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
   REQUIRE(beyond.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(beyond).size() == tail.size());
-  CHECK(std::memcmp(NtfsBrowserTests::Unwrap(beyond).data(), tail.data(),
-                    tail.size()) == 0);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(beyond).size() == tail.size());
+  CHECK(std::memcmp(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(beyond).data(),
+                    tail.data(), tail.size()) == 0);
 }
 
 // I/O matrix row "Corrupt/truncated LZNT1 chunk": ReadData() must fail
 // through its std::optional error channel, not crash or return garbage.
 template <Cache::Strategy S>
 void CheckCorruptCompressedUnitIsRejected() {
-  ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithCorruptCompressedUnit());
+  ParsedRoot<S> root =
+      ParseRootWithAttrs<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                                BuildFakeNtfsImageWithCorruptCompressedUnit());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
     data = ReadRootData<S>(
-        *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+        *root.record, 0,
+        NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size);
   });
 
   CHECK_FALSE(data.has_value());
@@ -281,25 +299,28 @@ void CheckCorruptCompressedUnitIsRejected() {
 template <Cache::Strategy S>
 void CheckUnmappedCompressionUnitIsRejected() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithUnmappedCompressionUnit());
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithUnmappedCompressionUnit());
 
   const std::vector<BYTE> expected =
-      NtfsBrowserTests::CompressionFixturePattern(
-          NtfsBrowserTests::compression_unit_size);
+      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
+          NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
 
   // Unit 0 is well-formed and must still read back.
   const std::optional<std::vector<BYTE>> mapped =
       ReadRootData<S>(*root.record, 0, expected.size());
   REQUIRE(mapped.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(mapped).size() == expected.size());
-  CHECK(std::memcmp(NtfsBrowserTests::Unwrap(mapped).data(), expected.data(),
-                    expected.size()) == 0);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(mapped).size() ==
+          expected.size());
+  CHECK(std::memcmp(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(mapped).data(),
+                    expected.data(), expected.size()) == 0);
 
   // Reading into unit 1 must not be answered with zeroes.
   std::optional<std::vector<BYTE>> unmapped;
   const std::string trace = CaptureTrace([&] {
-    unmapped = ReadRootData<S>(*root.record, 0,
-                               2 * NtfsBrowserTests::compression_unit_size);
+    unmapped = ReadRootData<S>(
+        *root.record, 0,
+        2 * NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
   });
 
   CHECK_FALSE(unmapped.has_value());
@@ -310,13 +331,14 @@ void CheckUnmappedCompressionUnitIsRejected() {
 // understands: a compressed unit's sparse padding is always its tail.
 template <Cache::Strategy S>
 void CheckRealClustersAfterHoleIsRejected() {
-  ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithRealClustersAfterHole());
+  ParsedRoot<S> root =
+      ParseRootWithAttrs<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                                BuildFakeNtfsImageWithRealClustersAfterHole());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
-    data = ReadRootData<S>(*root.record, 0,
-                           NtfsBrowserTests::compression_unit_size);
+    data = ReadRootData<S>(
+        *root.record, 0, NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
   });
 
   CHECK_FALSE(data.has_value());
@@ -328,13 +350,14 @@ void CheckRealClustersAfterHoleIsRejected() {
 // and returned as valid data (unlike a legitimate trailing partial unit).
 template <Cache::Strategy S>
 void CheckShortDecompressedInteriorUnitIsRejected() {
-  ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithShortDecompressedUnit());
+  ParsedRoot<S> root =
+      ParseRootWithAttrs<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                                BuildFakeNtfsImageWithShortDecompressedUnit());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
-    data = ReadRootData<S>(*root.record, 0,
-                           NtfsBrowserTests::compression_unit_size);
+    data = ReadRootData<S>(
+        *root.record, 0, NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
   });
 
   CHECK_FALSE(data.has_value());
@@ -348,32 +371,37 @@ void CheckShortDecompressedInteriorUnitIsRejected() {
 template <Cache::Strategy S>
 void CheckSparseUnitBeforeCompressedUnitReadsBack() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithSparseThenCompressedUnit());
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithSparseThenCompressedUnit());
   REQUIRE(root.record->GetAttr(Attr::Type::Data).size() == 1);
   // The REQUIRE above checks that there is one DATA attribute.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(root.record->GetAttr(Attr::Type::Data)[0]->GetDataSize() ==
-        NtfsBrowserTests::sparse_then_compressed_real_size);
+        NTFS_BROWSER_NAMESPACE::Tests::sparse_then_compressed_real_size);
 
-  constexpr size_t hole_size = NtfsBrowserTests::compression_unit_size;
+  constexpr size_t hole_size =
+      NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size;
   constexpr size_t decoded_size =
-      NtfsBrowserTests::xca_lznt1_example_decompressed_size;
+      NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size;
 
   std::optional<std::vector<BYTE>> whole;
   const std::string trace = CaptureTrace([&] {
-    whole = ReadRootData<S>(*root.record, 0,
-                            NtfsBrowserTests::sparse_then_compressed_real_size);
+    whole = ReadRootData<S>(
+        *root.record, 0,
+        NTFS_BROWSER_NAMESPACE::Tests::sparse_then_compressed_real_size);
   });
   REQUIRE(whole.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(whole).size() ==
-          NtfsBrowserTests::sparse_then_compressed_real_size);
-  const std::vector<BYTE>& bytes = NtfsBrowserTests::Unwrap(whole);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(whole).size() ==
+          NTFS_BROWSER_NAMESPACE::Tests::sparse_then_compressed_real_size);
+  const std::vector<BYTE>& bytes = NTFS_BROWSER_NAMESPACE::Tests::Unwrap(whole);
   CHECK(std::all_of(bytes.begin(),
                     bytes.begin() + static_cast<std::ptrdiff_t>(hole_size),
                     [](BYTE value) { return value == 0; }));
-  CHECK(std::memcmp(&bytes.at(hole_size),
-                    NtfsBrowserTests::xca_lznt1_example_decompressed.data(),
-                    decoded_size) == 0);
+  CHECK(
+      std::memcmp(
+          &bytes.at(hole_size),
+          NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed.data(),
+          decoded_size) == 0);
   CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
                         "Compression unit 0 is sparse"));
   CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
@@ -386,35 +414,40 @@ void CheckSparseUnitBeforeCompressedUnitReadsBack() {
       ReadRootData<S>(*root.record, hole_size - straddle_before,
                       straddle_before + straddle_after);
   REQUIRE(straddle.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(straddle).size() ==
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(straddle).size() ==
           straddle_before + straddle_after);
-  const std::vector<BYTE>& straddled = NtfsBrowserTests::Unwrap(straddle);
+  const std::vector<BYTE>& straddled =
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(straddle);
   CHECK(std::all_of(straddled.begin(),
                     straddled.begin() +
                         static_cast<std::ptrdiff_t>(straddle_before),
                     [](BYTE value) { return value == 0; }));
-  CHECK(std::memcmp(&straddled.at(straddle_before),
-                    NtfsBrowserTests::xca_lznt1_example_decompressed.data(),
-                    straddle_after) == 0);
+  CHECK(
+      std::memcmp(
+          &straddled.at(straddle_before),
+          NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed.data(),
+          straddle_after) == 0);
 
   // Reading only the compressed unit truncates at real_size, not at the unit.
   const std::optional<std::vector<BYTE>> decoded_only =
       ReadRootData<S>(*root.record, hole_size, hole_size);
   REQUIRE(decoded_only.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(decoded_only).size() == decoded_size);
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(decoded_only).size() ==
+        decoded_size);
 }
 
 // A hole before a real cluster inside one unit is rejected, not read as a
 // compressed unit with its hole moved.
 template <Cache::Strategy S>
 void CheckHoleBeforeRealClusterIsRejected() {
-  ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithHoleBeforeRealCluster());
+  ParsedRoot<S> root =
+      ParseRootWithAttrs<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                                BuildFakeNtfsImageWithHoleBeforeRealCluster());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
-    data = ReadRootData<S>(*root.record, 0,
-                           NtfsBrowserTests::compression_unit_size);
+    data = ReadRootData<S>(
+        *root.record, 0, NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
   });
 
   CHECK_FALSE(data.has_value());
@@ -513,15 +546,16 @@ TEST_CASE(
     "FullCache serves a repeated read of the same compression unit from "
     "the decompressed-unit cache",
     "[attr-non-resident][compression]") {
-  ParsedRoot<Cache::Strategy::FullCache> root =
-      ParseRoot<Cache::Strategy::FullCache>(
-          NtfsBrowserTests::BuildFakeNtfsImageWithCompressedFile());
+  ParsedRoot<Cache::Strategy::FullCache> root = ParseRoot<
+      Cache::Strategy::FullCache>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCompressedFile());
   REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> first;
   const std::string first_trace = CaptureTrace([&] {
     first = ReadRootData<Cache::Strategy::FullCache>(
-        *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+        *root.record, 0,
+        NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size);
   });
   REQUIRE(first.has_value());
   CHECK_THAT(first_trace,
@@ -531,12 +565,14 @@ TEST_CASE(
   std::optional<std::vector<BYTE>> second;
   const std::string second_trace = CaptureTrace([&] {
     second = ReadRootData<Cache::Strategy::FullCache>(
-        *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+        *root.record, 0,
+        NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size);
   });
 
   // Same bytes...
   REQUIRE(second.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(second) == NtfsBrowserTests::Unwrap(first));
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second) ==
+        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(first));
   // ...but served from the cache rather than decompressed again.
   CHECK_THAT(second_trace, Catch::Matchers::ContainsSubstring(
                                "Compression unit 0 served from cache"));
@@ -547,14 +583,15 @@ TEST_CASE(
 TEST_CASE(
     "NoCache keeps no decompressed compression unit across ReadData calls",
     "[attr-non-resident][compression]") {
-  ParsedRoot<Cache::Strategy::NoCache> root =
-      ParseRoot<Cache::Strategy::NoCache>(
-          NtfsBrowserTests::BuildFakeNtfsImageWithCompressedFile());
+  ParsedRoot<Cache::Strategy::NoCache> root = ParseRoot<
+      Cache::Strategy::NoCache>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCompressedFile());
   REQUIRE(root.record->ParseAttrs());
 
   const auto read = [&] {
     return ReadRootData<Cache::Strategy::NoCache>(
-        *root.record, 0, NtfsBrowserTests::xca_lznt1_example_decompressed_size);
+        *root.record, 0,
+        NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size);
   };
 
   std::optional<std::vector<BYTE>> first;
@@ -564,7 +601,8 @@ TEST_CASE(
 
   REQUIRE(first.has_value());
   REQUIRE(second.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(second) == NtfsBrowserTests::Unwrap(first));
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second) ==
+        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(first));
   CHECK_THAT(first_trace,
              Catch::Matchers::ContainsSubstring(
                  "Decompressed compression unit 0 into 142 bytes"));
@@ -583,8 +621,9 @@ namespace {
 // be accepted; the conditional CompressedSize field must not have grown it.
 template <Cache::Strategy S>
 void CheckMinimalNonResidentAttributeStillAccepted() {
-  ParsedRoot<S> root = ParseRoot<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMinimalNonResidentData());
+  ParsedRoot<S> root =
+      ParseRoot<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                       BuildFakeNtfsImageWithMinimalNonResidentData());
 
   std::string trace;
   bool parsed = false;
@@ -630,7 +669,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][compression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
-      NtfsBrowserTests::
+      NTFS_BROWSER_NAMESPACE::Tests::
           BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize(),
       "Compressed attribute total_size too small for its compressed size "
       "field.");
@@ -641,7 +680,8 @@ TEMPLATE_TEST_CASE_SIG("An out-of-range comp_unit_size is rejected",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithCompUnitSizeOutOfRange(),
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithCompUnitSizeOutOfRange(),
       "Compression unit size is out of range.");
 }
 
@@ -650,7 +690,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][compression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOversizedCompressionUnit(),
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithOversizedCompressionUnit(),
       "Compression unit size is implausibly large.");
 }
 
@@ -659,7 +700,8 @@ TEMPLATE_TEST_CASE_SIG("A misaligned compressed start_vcn is rejected",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMisalignedCompressedStartVcn(),
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithMisalignedCompressedStartVcn(),
       "Compressed attribute start VCN is not compression unit aligned.");
 }
 
@@ -675,7 +717,8 @@ template <Cache::Strategy S>
 void CheckCompressedIndexAllocationTraverses() {
   // The named record is not built: only recover_errors lists this entry.
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithCompressedIndexAllocation(),
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithCompressedIndexAllocation(),
       {.recover_errors = true});
   CHECK(root.record->IsCompressed());
   CHECK(root.record->IsDirectory());
@@ -691,13 +734,13 @@ void CheckCompressedIndexAllocationTraverses() {
   REQUIRE(names.size() == 1);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == NtfsBrowserTests::compressed_index_entry_name);
+  CHECK(names[0] == NTFS_BROWSER_NAMESPACE::Tests::compressed_index_entry_name);
 
-  const std::optional<IndexEntry> found =
-      root.record->FindSubEntry(NtfsBrowserTests::compressed_index_entry_name);
+  const std::optional<IndexEntry> found = root.record->FindSubEntry(
+      NTFS_BROWSER_NAMESPACE::Tests::compressed_index_entry_name);
   REQUIRE(found.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(found).GetFileReference() ==
-        NtfsBrowserTests::compressed_index_entry_mft_ref);
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(found).GetFileReference() ==
+        NTFS_BROWSER_NAMESPACE::Tests::compressed_index_entry_mft_ref);
 }
 
 // Malformed counterpart of the fixture above: corrupted LZNT1 bytes must
@@ -705,7 +748,7 @@ void CheckCompressedIndexAllocationTraverses() {
 template <Cache::Strategy S>
 void CheckCorruptCompressedIndexAllocationIsRejected() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::
+      NTFS_BROWSER_NAMESPACE::Tests::
           BuildFakeNtfsImageWithCorruptCompressedIndexAllocation());
 
   size_t visited = 0;
@@ -755,7 +798,7 @@ template <Cache::Strategy S>
 void CheckSurrogatePairNamesTraverse() {
   // The named records are not built: only recover_errors lists these entries.
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithSurrogatePairNames(),
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithSurrogatePairNames(),
       {.recover_errors = true});
   CHECK(root.record->IsCompressed());
 
@@ -768,33 +811,35 @@ void CheckSurrogatePairNamesTraverse() {
       },
       &seen);
 
-  REQUIRE(seen.size() == NtfsBrowserTests::surrogate_names.size());
+  REQUIRE(seen.size() == NTFS_BROWSER_NAMESPACE::Tests::surrogate_names.size());
   for (size_t i = 0; i < seen.size(); i++) {
     INFO("entry " << i);
     // The REQUIRE above checks the size of seen.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(seen[i].name == NtfsBrowserTests::surrogate_names[i]);
+    CHECK(seen[i].name == NTFS_BROWSER_NAMESPACE::Tests::surrogate_names[i]);
     // The surrogate* tables hold as many entries as surrogate_names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(seen[i].mft_ref == NtfsBrowserTests::surrogate_name_mft_refs[i]);
+    CHECK(seen[i].mft_ref ==
+          NTFS_BROWSER_NAMESPACE::Tests::surrogate_name_mft_refs[i]);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(
         seen[i].directory ==
         // The surrogate* tables hold as many entries as surrogate_names.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        NtfsBrowserTests::surrogate_name_is_directory[i]);
+        NTFS_BROWSER_NAMESPACE::Tests::surrogate_name_is_directory[i]);
 
     const std::optional<IndexEntry> found =
         // The REQUIRE above makes seen as long as surrogate_names, like the
         // other tables.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        root.record->FindSubEntry(NtfsBrowserTests::surrogate_names[i]);
+        root.record->FindSubEntry(
+            NTFS_BROWSER_NAMESPACE::Tests::surrogate_names[i]);
     REQUIRE(found.has_value());
     CHECK(
-        NtfsBrowserTests::Unwrap(found).GetFileReference() ==
+        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(found).GetFileReference() ==
         // The surrogate* tables hold as many entries as surrogate_names.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        NtfsBrowserTests::surrogate_name_mft_refs[i]);
+        NTFS_BROWSER_NAMESPACE::Tests::surrogate_name_mft_refs[i]);
   }
 }
 
@@ -818,9 +863,9 @@ void CheckOverflowingLcnUnitReadFails(std::vector<BYTE> image) {
 
   std::optional<std::vector<BYTE>> read;
   const std::string trace = CaptureTrace([&] {
-    REQUIRE_NOTHROW(read =
-                        ReadRootData(*root.record, 0,
-                                     NtfsBrowserTests::compression_unit_size));
+    REQUIRE_NOTHROW(read = ReadRootData(
+                        *root.record, 0,
+                        NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size));
   });
 
   CHECK_FALSE(read.has_value());
@@ -835,7 +880,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][compression][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckOverflowingLcnUnitReadFails<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithStoredCompressionUnitBadLcn());
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithStoredCompressionUnitBadLcn());
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -844,6 +890,6 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][compression][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckOverflowingLcnUnitReadFails<S>(
-      NtfsBrowserTests::
+      NTFS_BROWSER_NAMESPACE::Tests::
           BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn());
 }

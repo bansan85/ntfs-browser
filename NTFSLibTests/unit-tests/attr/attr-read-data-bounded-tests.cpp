@@ -13,14 +13,15 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/non-resident.h"
 #include "fake-ntfs-image.h"
 #include "nonresident-index-support.h"
 #include "optional-access.h"
 
-namespace Attr = NtfsBrowser::Attr;
-namespace Cache = NtfsBrowser::Cache;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 namespace {
 
@@ -32,7 +33,7 @@ constexpr size_t tail_slack = 8;
 
 template <Cache::Strategy S>
 const Attr::AttrNonResident<S>*
-    ForgedAllocation(const NtfsBrowser::Io::FileRecord<S>& record) {
+    ForgedAllocation(const NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& record) {
   const auto& attrs = record.GetAttr(Attr::Type::IndexAllocation);
   REQUIRE(attrs.size() == 1);
   return dynamic_cast<const Attr::AttrNonResident<S>*>(attrs.front().get());
@@ -47,7 +48,7 @@ void CheckReadMatchesReference(const Attr::AttrNonResident<S>& attr,
   REQUIRE(offset + length <= reference.size());
   std::vector<BYTE> out(length + tail_slack, sentinel_byte);
 
-  CHECK(NtfsBrowserTests::Unwrap(attr.ReadExtentData(
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(attr.ReadExtentData(
             offset, std::span<BYTE>(out).first(length))) == length);
   CHECK(std::memcmp(out.data(), reference.data() + static_cast<size_t>(offset),
                     length) == 0);
@@ -61,27 +62,29 @@ TEMPLATE_TEST_CASE_SIG("ReadExtentData bounds reads by the extent",
                        "[read-bounded][characterization]",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
-  auto image = NtfsBrowserTests::BuildFakeNtfsImageWithForgedIndexBlock();
-  auto parsed = OpenRecord<S>(image, NtfsBrowserTests::index_alloc_dir_idx);
+  auto image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock();
+  auto parsed =
+      OpenRecord<S>(image, NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx);
   REQUIRE(parsed.record->ParseAttrs());
   const auto* alloc = ForgedAllocation<S>(*parsed.record);
   REQUIRE(alloc != nullptr);
 
   const ULONGLONG extent_bytes = alloc->GetAllocatedSize();
-  REQUIRE(extent_bytes % NtfsBrowserTests::fake_cluster_size == 0);
-  REQUIRE(extent_bytes >= 5 * NtfsBrowserTests::fake_cluster_size);
+  REQUIRE(extent_bytes % NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size == 0);
+  REQUIRE(extent_bytes >= 5 * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
 
   // One aligned read of the whole extent is the reference for every check.
   std::vector<BYTE> reference(static_cast<size_t>(extent_bytes), sentinel_byte);
-  REQUIRE(NtfsBrowserTests::Unwrap(alloc->ReadExtentData(
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(alloc->ReadExtentData(
               0, std::span<BYTE>(reference))) == extent_bytes);
   REQUIRE(std::any_of(reference.begin(), reference.end(),
                       [](BYTE b) { return b != 0; }));
 
   SECTION("an empty buffer reads zero bytes") {
-    CHECK(NtfsBrowserTests::Unwrap(
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
               alloc->ReadExtentData(0, std::span<BYTE>{})) == 0);
-    CHECK(NtfsBrowserTests::Unwrap(
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
               alloc->ReadExtentData(extent_bytes + 1, std::span<BYTE>{})) == 0);
   }
 
@@ -92,8 +95,8 @@ TEMPLATE_TEST_CASE_SIG("ReadExtentData bounds reads by the extent",
 
   SECTION("an offset at the extent end reads zero bytes") {
     std::vector<BYTE> out(16, sentinel_byte);
-    CHECK(NtfsBrowserTests::Unwrap(alloc->ReadExtentData(extent_bytes, out)) ==
-          0);
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
+              alloc->ReadExtentData(extent_bytes, out)) == 0);
   }
 
   SECTION("a read straddling the extent end is clamped to the extent") {
@@ -101,7 +104,8 @@ TEMPLATE_TEST_CASE_SIG("ReadExtentData bounds reads by the extent",
     const ULONGLONG offset = extent_bytes - tail;
     std::vector<BYTE> out(300, sentinel_byte);
 
-    CHECK(NtfsBrowserTests::Unwrap(alloc->ReadExtentData(offset, out)) == tail);
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
+              alloc->ReadExtentData(offset, out)) == tail);
     CHECK(std::memcmp(out.data(),
                       reference.data() + static_cast<size_t>(offset),
                       tail) == 0);

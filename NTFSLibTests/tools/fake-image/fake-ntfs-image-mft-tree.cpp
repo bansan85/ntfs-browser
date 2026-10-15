@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
@@ -14,7 +15,7 @@
 #include "fake-ntfs-image-internal.h"
 #include "file-record-header-edit.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 std::vector<BYTE>
     BuildFakeNtfsImageWithOrphanedEntryNamedRecord(FakeNamedRecordState state) {
@@ -24,10 +25,10 @@ std::vector<BYTE>
   // The "Orphan" entry already names
   // orphaned_block_sequence_mismatch_target_idx. Rewrite that record under the
   // entry's own sequence number, live or freed.
-  const NtfsBrowser::Data::FileRecordFlag flags =
+  const NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags =
       state == FakeNamedRecordState::InUseSameSequence
-          ? NtfsBrowser::Data::FileRecordFlag::InUse
-          : NtfsBrowser::Data::FileRecordFlag{};
+          ? NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse
+          : NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag{};
   const FakeRecord record =
       MakeMftTreeRecord(flags, orphaned_block_leaf_sequence_number, {});
   PutMftRecord(image, static_cast<DWORD>(mft_lcn) * cluster_size,
@@ -47,10 +48,11 @@ FakeRecord MakeMftTreeMftRecord() {
                        [](FileRecordHeader& header) { header.seq_no = 1; });
   const ULONGLONG root = MakeFileReference(
       static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
-  DWORD offset = attr_offset_value +
-                 reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-                     &mft.at(attr_offset_value))
-                     ->header.total_size;
+  DWORD offset =
+      attr_offset_value +
+      reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
+          &mft.at(attr_offset_value))
+          ->header.total_size;
   offset += WriteFileNameAttr(mft, offset,
                               {.name = L"$MFT", .parent_ref = root}, false);
   WriteEndOfAttributesMarker(mft, offset);
@@ -67,9 +69,9 @@ constexpr WORD tree_new_dir_sequence = 7;
 // Writes the root, the live directories and files, and the hard-linked file
 // of BuildFakeNtfsImageWithMftTree() into image.
 void PutMftTreeLiveRecords(std::vector<BYTE>& image) {
-  using NtfsBrowser::Data::FilenameNamespace;
-  using NtfsBrowser::Data::StdInfoPermission;
-  using RecordFlag = NtfsBrowser::Data::FileRecordFlag;
+  using NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace;
+  using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
+  using RecordFlag = NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
 
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
   const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
@@ -96,8 +98,9 @@ void PutMftTreeLiveRecords(std::vector<BYTE>& image) {
                  {{.name = L"report.txt",
                    .parent_ref = docs,
                    .real_size = mft_tree_report_stale_size,
-                   .extra_flags = NtfsBrowser::Data::FilenameFlag::ReadOnly |
-                                  NtfsBrowser::Data::FilenameFlag::Archive},
+                   .extra_flags =
+                       NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::ReadOnly |
+                       NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::Archive},
                   {.name = L"REPORT~1.TXT",
                    .parent_ref = docs,
                    .name_space = FilenameNamespace::Dos}},
@@ -112,8 +115,8 @@ void PutMftTreeLiveRecords(std::vector<BYTE>& image) {
 // Writes the freed, stale and reused directory records, and the extension
 // record, of BuildFakeNtfsImageWithMftTree() into image.
 void PutMftTreeFreedRecords(std::vector<BYTE>& image) {
-  using NtfsBrowser::Data::StdInfoPermission;
-  using RecordFlag = NtfsBrowser::Data::FileRecordFlag;
+  using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
+  using RecordFlag = NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
 
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
   const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
@@ -177,8 +180,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord() {
   // $MFT's sequence number, which BuildFakeNtfsImageWithMftTree() sets to 1.
   constexpr WORD mft_sequence = 1;
   const FakeRecord record = MakeMftTreeRecord(
-      NtfsBrowser::Data::FileRecordFlag::InUse, mft_sequence, {}, {},
-      NtfsBrowser::Data::StdInfoPermission::Normal,
+      NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, mft_sequence, {}, {},
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal,
       MakeFileReference(static_cast<ULONGLONG>(Mft::Idx::Mft), mft_sequence));
 
   const size_t offset = static_cast<size_t>(mft_lcn) * cluster_size +
@@ -194,17 +197,18 @@ void SetStdInfoPermission(std::vector<BYTE>& image, ULONGLONG idx,
       static_cast<size_t>(mft_lcn) * cluster_size +
       static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
 
-  NtfsBrowser::Data::FileRecordHeader header{};
+  NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader header{};
   std::memcpy(&header, &image.at(record_offset),
-              NtfsBrowser::Data::FileRecordHeader::min_file_record_header_size);
+              NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                  min_file_record_header_size);
   const size_t attr_offset = record_offset + header.offset_of_attr;
   const auto& attr =
-      *reinterpret_cast<const NtfsBrowser::Data::HeaderResident*>(
+      *reinterpret_cast<const NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
           &image.at(attr_offset));
 
   const size_t permission_offset =
       attr_offset + attr.attr_offset +
-      offsetof(NtfsBrowser::Data::StandardInformation, permission);
+      offsetof(NTFS_BROWSER_NAMESPACE::Data::StandardInformation, permission);
   std::memcpy(&image.at(permission_offset), &permission, sizeof(permission));
 }
 
@@ -216,15 +220,15 @@ FakeRecord MakeIndexedDirRecord(WORD sequence,
                                 const std::optional<FakeFileName>& name,
                                 std::span<const FakeIndexName> names) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
   EditFileRecordHeader(record, [sequence](FileRecordHeader& header) {
     header.seq_no = sequence;
   });
 
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
-      record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+      record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   if (name) {
     offset += WriteFileNameAttr(record, offset, *name, true);
   }
@@ -243,7 +247,7 @@ FakeRecord
 
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
-      record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+      record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   offset +=
       WriteFileNameAttr(record, offset,
                         {.name = L"stale.txt",
@@ -259,7 +263,7 @@ FakeRecord
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
-  using NtfsBrowser::Data::FileRecordFlag;
+  using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
 
   // Sequence numbers the records below carry, where another record names them.
   constexpr WORD docs_sequence = 1;
@@ -301,7 +305,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
                        [](FileRecordHeader& header) { header.seq_no = 2; });
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
-      old_tmp, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+      old_tmp, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   offset += WriteFileNameAttr(
       old_tmp, offset,
       {.name = L"old.tmp",
@@ -310,9 +314,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
   const DWORD data_offset = offset;
   offset += WriteResidentDataAttr(
       old_tmp, offset, static_cast<DWORD>(freed_file_content.size()));
-  std::memcpy(
-      &old_tmp.at(data_offset + sizeof(NtfsBrowser::Data::HeaderResident)),
-      freed_file_content.data(), freed_file_content.size());
+  std::memcpy(&old_tmp.at(data_offset +
+                          sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident)),
+              freed_file_content.data(), freed_file_content.size());
   WriteEndOfAttributesMarker(old_tmp, offset);
   put_record(mft_tree_deleted_file_idx, old_tmp);
 
@@ -320,7 +324,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithNamedRoot(std::wstring_view root_name) {
-  using NtfsBrowser::Data::FileRecordFlag;
+  using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
 
   std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
 
@@ -352,7 +356,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithNamedRoot(std::wstring_view root_name) {
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithIndexCycle() {
-  using NtfsBrowser::Data::FileRecordFlag;
+  using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
 
   // Sequence numbers the records below carry, where another record names them.
   constexpr WORD docs_sequence = 1;
@@ -440,21 +444,21 @@ namespace {
 FakeRecord MakeResidentFileRecord(WORD sequence, const FakeFileName& name,
                                   std::string_view content) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   EditFileRecordHeader(record, [sequence](FileRecordHeader& header) {
     header.seq_no = sequence;
   });
 
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
-      record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+      record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   offset += WriteFileNameAttr(record, offset, name, false);
   const DWORD data_offset = offset;
   offset +=
       WriteResidentDataAttr(record, offset, static_cast<DWORD>(content.size()));
-  std::memcpy(
-      &record.at(data_offset + sizeof(NtfsBrowser::Data::HeaderResident)),
-      content.data(), content.size());
+  std::memcpy(&record.at(data_offset +
+                         sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident)),
+              content.data(), content.size());
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }
@@ -465,14 +469,14 @@ FakeRecord MakeNonResidentFileRecord(WORD sequence, const FakeFileName& name,
                                      ULONGLONG real_size,
                                      const std::vector<FakeDataRun>& runs) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   EditFileRecordHeader(record, [sequence](FileRecordHeader& header) {
     header.seq_no = sequence;
   });
 
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
-      record, offset, NtfsBrowser::Data::StdInfoPermission::Normal);
+      record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   offset += WriteFileNameAttr(record, offset, name, false);
   offset += WriteNonResidentAttr(
       record, offset, Attr::Type::Data,
@@ -579,4 +583,4 @@ std::vector<BYTE>
   return image;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

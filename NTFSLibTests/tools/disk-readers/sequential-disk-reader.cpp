@@ -9,7 +9,9 @@
 
 #include <gsl/narrow>
 
-namespace NtfsBrowserTests {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 SequentialDiskReader::SequentialDiskReader(Producer producer)
     : producer_(std::move(producer)) {}
@@ -55,4 +57,4 @@ SequentialDiskReader::Producer
   };
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

@@ -15,6 +15,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -26,7 +27,7 @@
   #include <tchar.h>
 #endif
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Caches reads from the volume's backing IDiskReader.
 namespace Io {
@@ -118,4 +119,4 @@ class NtfsVolume<S>::Impl {
                        bool& discard) const;
 };
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

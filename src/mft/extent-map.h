@@ -8,8 +8,9 @@
 
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser::Mft {
+namespace NTFS_BROWSER_NAMESPACE::Mft {
 
 // Where $MFT's own unnamed DATA attribute lives on disk: the base extent at
 // VCN 0, and the continuations that map the rest. Records past the base record
@@ -67,4 +68,4 @@ class ExtentMap {
   std::vector<Extent> extents_;
 };
 
-}  // namespace NtfsBrowser::Mft
+}  // namespace NTFS_BROWSER_NAMESPACE::Mft

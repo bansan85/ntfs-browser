@@ -12,14 +12,15 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "memory-disk-reader.h"
 
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::VolumeOptions;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
 namespace {
 
@@ -29,26 +30,28 @@ constexpr size_t index_block_lcn = 20;
 template <Cache::Strategy S>
 struct ParsedRecord {
   std::unique_ptr<NtfsVolume<S>> volume;
-  std::unique_ptr<NtfsBrowser::Io::FileRecord<S>> record;
+  std::unique_ptr<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>> record;
 };
 
 // Opens a volume over reader, and a record of it that is not parsed yet.
 template <Cache::Strategy S>
-ParsedRecord<S> OpenVolumeFrom(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
-                               VolumeOptions options = {}) {
+ParsedRecord<S>
+    OpenVolumeFrom(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+                   VolumeOptions options = {}) {
   ParsedRecord<S> parsed;
   parsed.volume = std::make_unique<NtfsVolume<S>>(std::move(reader), options);
   REQUIRE(parsed.volume->IsVolumeOK());
 
-  parsed.record =
-      std::make_unique<NtfsBrowser::Io::FileRecord<S>>(*parsed.volume);
+  parsed.record = std::make_unique<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>>(
+      *parsed.volume);
   return parsed;
 }
 
 // Opens record idx through a volume over reader, not yet attribute-parsed.
 template <Cache::Strategy S>
-ParsedRecord<S> OpenRecordFrom(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
-                               ULONGLONG idx, VolumeOptions options = {}) {
+ParsedRecord<S>
+    OpenRecordFrom(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+                   ULONGLONG idx, VolumeOptions options = {}) {
   ParsedRecord<S> parsed = OpenVolumeFrom<S>(std::move(reader), options);
   REQUIRE(parsed.record->ParseFileRecord(idx));
   return parsed;
@@ -59,7 +62,8 @@ template <Cache::Strategy S>
 ParsedRecord<S> OpenRecord(std::vector<BYTE> image, ULONGLONG idx,
                            VolumeOptions options = {}) {
   return OpenRecordFrom<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)),
       idx, options);
 }
 

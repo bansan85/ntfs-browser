@@ -5,6 +5,8 @@
 #include <span>
 #include <string>
 
+#include <ntfs-browser/namespace.h>
+
 // Set exactly when a build config makes Md5Hex() below available: mirrors
 // src/efs/efs.cpp's own backend choice (Crypto++ over BCrypt over neither).
 // MD5 here is only a fixture checksum, not library functionality.
@@ -16,12 +18,12 @@
 
 #ifdef NTFS_TEST_HAS_MD5
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Hex-encodes the MD5 of data, using whichever EFS crypto backend this build
 // already compiles in.
 std::string Md5Hex(std::span<const BYTE> data);
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests
 
 #endif  // NTFS_TEST_HAS_MD5

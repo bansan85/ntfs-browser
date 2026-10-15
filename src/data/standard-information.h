@@ -2,9 +2,11 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <ntfs-browser/namespace.h>
+
 #include "../data/std-info-permission.h"
 
-namespace NtfsBrowser::Data {
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 struct StandardInformation {
   ULONGLONG create_time;               // File creation time
@@ -21,4 +23,4 @@ struct StandardInformation {
   ULONGLONG usn;                       // USN Journel
 };
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

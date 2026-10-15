@@ -20,6 +20,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -36,18 +37,18 @@
 #include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
 
-namespace NtfsBrowser {}  // namespace NtfsBrowser
+namespace NTFS_BROWSER_NAMESPACE {}  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace Attr = NtfsBrowser::Attr;
-namespace Cache = NtfsBrowser::Cache;
-namespace Data = NtfsBrowser::Data;
-namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::VolumeOptions;
-using NtfsBrowser::Attr::AttrBase;
-using NtfsBrowser::Io::FileRecord;
-using NtfsBrowserTests::MemoryDiskReader;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Data = NTFS_BROWSER_NAMESPACE::Data;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::IndexEntryView;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 
 namespace {
 
@@ -105,7 +106,7 @@ using RecordBytes = std::array<BYTE, record_bytes>;
 // Zeroed in-use record, its first attribute at offset_of_attr.
 RecordBytes MakeScratchRecord(WORD offset_of_attr) {
   RecordBytes record{};
-  NtfsBrowserTests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
       record, [&](Data::FileRecordHeader& header) {
         header.magic = Data::FileRecordHeader::file_record_magic;
         header.offset_of_us = usa_offset;
@@ -163,7 +164,7 @@ void PutEndMarker(RecordBytes& record, DWORD offset) {
 
 // BuildFakeNtfsImage() with record in its scratch slot.
 std::vector<BYTE> ImageWithScratch(const RecordBytes& record) {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImage();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
   std::memcpy(&image.at(scratch_offset), record.data(), record.size());
   return image;
 }
@@ -224,7 +225,7 @@ void CheckWalkEndsEarly(const RecordBytes& record,
                                VolumeOptions{.recover_errors = recover});
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> file(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
     REQUIRE(file.ParseFileRecord(scratch_idx));
     // Strict drops the whole record. Recovery keeps the walk so far.
     CHECK(file.ParseAttrs() == recover);
@@ -239,14 +240,14 @@ TEMPLATE_TEST_CASE_SIG("FileRecord move constructor keeps the parsed record",
                        "[cov-fra]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage());
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
-  NtfsBrowser::Io::FileRecord<S> moved(std::move(record));
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> moved(std::move(record));
   CHECK(moved.GetFileReference() ==
         std::optional<ULONGLONG>(static_cast<ULONGLONG>(Mft::Idx::Root)));
   CHECK(moved.IsDirectory());
@@ -263,7 +264,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   RecordBytes bad_header = MakeScratchRecord(first_attr_offset);
   PutEndMarker(bad_header, first_attr_offset);
-  NtfsBrowserTests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
       bad_header,
       [](Data::FileRecordHeader& header) { header.offset_of_us = 0xFFFF; });
 
@@ -272,7 +273,7 @@ TEMPLATE_TEST_CASE_SIG(
     const NtfsVolume<S> volume(std::move(reader));
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> file(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
     CHECK_FALSE(file.ParseFileRecord(scratch_idx));
   }
 }
@@ -280,13 +281,13 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("ParseFileRecord reports a record read that the disk refuses",
           "[cov-fra]") {
   auto reader = std::make_unique<SwitchableReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage());
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
   SwitchableReader* disk = reader.get();
   const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   disk->fail = true;
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   CHECK_FALSE(file.ParseFileRecord(scratch_idx));
 }
 
@@ -296,12 +297,12 @@ TEMPLATE_TEST_CASE_SIG(
     "[cov-fra]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   auto reader = std::make_unique<SwitchableReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage());
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
   SwitchableReader* disk = reader.get();
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
   disk->fail = true;
@@ -347,7 +348,7 @@ TEMPLATE_TEST_CASE_SIG(
                                VolumeOptions{.recover_errors = recover});
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> file(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
     REQUIRE(file.ParseFileRecord(scratch_idx));
     CHECK_FALSE(file.ParseAttrs());
   }
@@ -373,7 +374,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
@@ -398,16 +399,17 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
-  const typename NtfsBrowser::Io::FileRecord<S>::AttrsCallback empty_callback;
+  const typename NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::AttrsCallback
+      empty_callback;
   file.TraverseAttrs(empty_callback, nullptr);
 
-  const typename NtfsBrowser::Io::FileRecord<S>::AttrsCallback count_all =
-      [](const NtfsBrowser::Attr::AttrBase<S>& /*attr*/, void* context,
-         bool* stop) {
+  const typename NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::AttrsCallback
+      count_all = [](const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& /*attr*/,
+                     void* context, bool* stop) {
         ++*static_cast<size_t*>(context);
         *stop = false;
       };
@@ -415,9 +417,9 @@ TEMPLATE_TEST_CASE_SIG(
   file.TraverseAttrs(count_all, &visits);
   CHECK(visits == 2);
 
-  const typename NtfsBrowser::Io::FileRecord<S>::AttrsCallback stop_first =
-      [](const NtfsBrowser::Attr::AttrBase<S>& /*attr*/, void* context,
-         bool* stop) {
+  const typename NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::AttrsCallback
+      stop_first = [](const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& /*attr*/,
+                      void* context, bool* stop) {
         ++*static_cast<size_t*>(context);
         *stop = true;
       };
@@ -445,7 +447,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
   CHECK_FALSE(file.InstallAttrRawCB(unknown_attr_type,
                                     [](const Attr::HeaderCommon& /*head*/,
                                        bool& discard) { discard = true; }));
@@ -465,21 +467,21 @@ TEMPLATE_TEST_CASE_SIG("Unparsed and unknown-type accessors return defaults",
                        "[cov-fra]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage());
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
   CHECK(file.GetSequenceNumber() == 0);
   CHECK(file.GetBaseRecordReference() == 0);
   CHECK_FALSE(file.IsExtensionRecord());
   CHECK(file.GetAttr(unknown_attr_type).empty());
 
-  const NtfsBrowser::Io::FileRecord<S>& view = file;
+  const NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& view = file;
   CHECK(view.GetAttr(unknown_attr_type).empty());
 
   RecordBytes record = MakeScratchRecord(first_attr_offset);
-  NtfsBrowserTests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
       record, [](Data::FileRecordHeader& header) {
         header.ref_to_base = extension_base_ref;
       });
@@ -489,7 +491,7 @@ TEMPLATE_TEST_CASE_SIG("Unparsed and unknown-type accessors return defaults",
   const NtfsVolume<S> scratch_volume(std::move(scratch_reader));
   REQUIRE(scratch_volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> extension(scratch_volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> extension(scratch_volume);
   REQUIRE(extension.ParseFileRecord(scratch_idx));
   CHECK(extension.IsExtensionRecord());
   CHECK(extension.GetBaseRecordReference() == 6);
@@ -506,7 +508,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
@@ -550,7 +552,7 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
@@ -575,7 +577,7 @@ TEMPLATE_TEST_CASE_SIG("Traversal and lookup on a record with no index at all",
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
 
@@ -593,8 +595,8 @@ TEMPLATE_TEST_CASE_SIG(
     "Sub-node walks stop at a missing or unreadable $INDEX_ALLOCATION",
     "[cov-fra]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithGapCollationSubNode();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+      BuildFakeNtfsImageWithGapCollationSubNode();
 
   SECTION("the allocation attribute is absent") {
     const std::optional<size_t> alloc_offset =
@@ -617,11 +619,12 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
-  CHECK_FALSE(root.FindSubEntry(NtfsBrowserTests::gap_collation_search_name)
+  CHECK_FALSE(root.FindSubEntry(
+                      NTFS_BROWSER_NAMESPACE::Tests::gap_collation_search_name)
                   .has_value());
 
   size_t entries = 0;
@@ -644,7 +647,7 @@ TEMPLATE_TEST_CASE_SIG("Orphan scan skips an index block it cannot parse",
     const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> root(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
 
@@ -659,26 +662,31 @@ TEMPLATE_TEST_CASE_SIG("Orphan scan skips an index block it cannot parse",
   };
 
   const std::vector<std::wstring> intact =
-      collect(NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
-  CHECK(
-      std::ranges::find(
-          intact, std::wstring(NtfsBrowserTests::orphaned_block_orphan_name)) !=
-      intact.end());
+      collect(NTFS_BROWSER_NAMESPACE::Tests::
+                  BuildFakeNtfsImageWithOrphanedIndexBlocks());
+  CHECK(std::ranges::find(
+            intact,
+            std::wstring(
+                NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name)) !=
+        intact.end());
 
-  std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+      BuildFakeNtfsImageWithOrphanedIndexBlocks();
   const DWORD bad_signature = zero_signature;
   std::memcpy(&image.at((orphaned_blocks_first_lcn + 1) * index_block_bytes),
               &bad_signature, sizeof(bad_signature));
   const std::vector<std::wstring> damaged = collect(std::move(image));
   CHECK(std::ranges::find(
             damaged,
-            std::wstring(NtfsBrowserTests::orphaned_block_orphan_name)) ==
+            std::wstring(
+                NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name)) ==
         damaged.end());
-  CHECK(std::ranges::find(
-            damaged,
-            std::wstring(NtfsBrowserTests::orphaned_block_reachable_name)) !=
-        damaged.end());
+  CHECK(
+      std::ranges::find(
+          damaged,
+          std::wstring(
+              NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name)) !=
+      damaged.end());
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -688,7 +696,7 @@ TEMPLATE_TEST_CASE_SIG(
   // Record 0 without a $DATA attribute leaves the volume with no MFT data.
   RecordBytes mft = MakeScratchRecord(first_attr_offset);
   PutEndMarker(mft, first_attr_offset);
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImage();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
   // Record 0 of the MFT: its LCN is 1, so it sits one cluster in.
   constexpr size_t mft_record_offset = 1024;
   std::memcpy(&image.at(mft_record_offset), mft.data(), mft.size());
@@ -696,7 +704,7 @@ TEMPLATE_TEST_CASE_SIG(
   auto reader = std::make_unique<MemoryDiskReader>(std::move(image));
   const NtfsVolume<S> volume(std::move(reader));
 
-  NtfsBrowser::Io::FileRecord<S> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
   // Above 2^53 records, the byte offset of the record overflows a LONGLONG.
   CHECK_FALSE(file.ParseFileRecord(ULONGLONG{1} << 53U));
 }
@@ -706,13 +714,14 @@ TEMPLATE_TEST_CASE_SIG(
     "[cov-fra]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   auto reader = std::make_unique<MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithRootIndexRootEntry());
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithRootIndexRootEntry());
   // Named records are not built: only recover_errors lists these entries.
   const NtfsVolume<S> volume(std::move(reader),
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -729,8 +738,8 @@ TEMPLATE_TEST_CASE_SIG(
     "Index block that points back to an earlier block ends the walk",
     "[cov-fra]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithDeepIndexBlockChain();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+      BuildFakeNtfsImageWithDeepIndexBlockChain();
 
   // LCN of the chain's first block, one cluster per block.
   constexpr size_t chain_first_lcn = 100;
@@ -748,7 +757,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -759,8 +768,10 @@ TEMPLATE_TEST_CASE_SIG(
       },
       &entries);
   CHECK(entries == 0);
-  CHECK_FALSE(root.FindSubEntry(NtfsBrowserTests::index_block_chain_leaf_name)
-                  .has_value());
+  CHECK_FALSE(
+      root.FindSubEntry(
+              NTFS_BROWSER_NAMESPACE::Tests::index_block_chain_leaf_name)
+          .has_value());
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -768,8 +779,8 @@ TEMPLATE_TEST_CASE_SIG(
     "index",
     "[cov-fra]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithDeepIndexBlockChain();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+      BuildFakeNtfsImageWithDeepIndexBlockChain();
 
   // LCN of the chain's first block, one cluster per block.
   constexpr size_t chain_first_lcn = 100;
@@ -779,7 +790,8 @@ TEMPLATE_TEST_CASE_SIG(
   std::memcpy(&entry, &image.at(entry_at), sizeof(entry));
   // Last 8 bytes of block 0's only entry hold its sub-node VCN.
   const size_t vcn_slot = entry_at + entry.size - sizeof(ULONGLONG);
-  const ULONGLONG leaf_vcn = NtfsBrowserTests::index_block_chain_length - 1;
+  const ULONGLONG leaf_vcn =
+      NTFS_BROWSER_NAMESPACE::Tests::index_block_chain_length - 1;
   std::memcpy(&image.at(vcn_slot), &leaf_vcn, sizeof(leaf_vcn));
 
   auto reader = std::make_unique<MemoryDiskReader>(std::move(image));
@@ -788,13 +800,14 @@ TEMPLATE_TEST_CASE_SIG(
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
-  const std::optional<NtfsBrowser::IndexEntry> found =
-      root.FindSubEntry(NtfsBrowserTests::index_block_chain_leaf_name);
+  const std::optional<NTFS_BROWSER_NAMESPACE::IndexEntry> found =
+      root.FindSubEntry(
+          NTFS_BROWSER_NAMESPACE::Tests::index_block_chain_leaf_name);
   REQUIRE(found.has_value());
   CHECK(found->GetFileReference() ==
-        NtfsBrowserTests::index_block_chain_leaf_mft_ref);
+        NTFS_BROWSER_NAMESPACE::Tests::index_block_chain_leaf_mft_ref);
 }

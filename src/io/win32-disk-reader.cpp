@@ -4,9 +4,11 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/namespace.h>
+
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Io {
+namespace NTFS_BROWSER_NAMESPACE::Io {
 
 Win32DiskReader::Win32DiskReader()
     : handle_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)) {}
@@ -42,4 +44,4 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr,
   return true;
 }
 
-}  // namespace NtfsBrowser::Io
+}  // namespace NTFS_BROWSER_NAMESPACE::Io

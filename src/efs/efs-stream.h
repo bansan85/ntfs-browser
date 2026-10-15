@@ -6,9 +6,11 @@
 #include <span>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
+
 #include "../internal-export.h"
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 // One user's copy of the FEK, as the $EFS stream stores it.
 struct WrappedFek {
@@ -24,4 +26,4 @@ struct WrappedFek {
     std::optional<std::vector<WrappedFek>>
     ParseEfsStream(std::span<const BYTE> stream);
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs

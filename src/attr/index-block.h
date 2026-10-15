@@ -7,8 +7,9 @@
 #include <vector>
 
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Cache {
 
@@ -47,4 +48,4 @@ class IndexBlock : public std::vector<IndexEntryView> {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

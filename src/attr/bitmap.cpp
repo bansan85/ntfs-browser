@@ -3,12 +3,13 @@
 #include <cassert>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/non-resident.h"
 #include "attr/resident.h"
 #include "ntfs-browser/win-types.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 namespace {
 
 // Bits in one bitmap byte.
@@ -86,4 +87,4 @@ template class AttrBitmap<AttrNonResident<Cache::Strategy::NoCache>,
 template class AttrBitmap<AttrResidentFullCache, Cache::Strategy::FullCache>;
 template class AttrBitmap<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

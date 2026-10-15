@@ -11,8 +11,9 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/export.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 template <Cache::Strategy S>
 class NtfsVolume;
@@ -87,4 +88,4 @@ class NTFS_BROWSER_EXPORT AttrBase {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

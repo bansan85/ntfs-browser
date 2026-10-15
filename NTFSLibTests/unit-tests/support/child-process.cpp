@@ -6,6 +6,8 @@
 
 #include <sys/types.h>
 
+#include <ntfs-browser/namespace.h>
+
 #ifdef _WIN32
   #include <ntfs-browser/win-types.h>
 
@@ -27,7 +29,7 @@ extern char** environ;
 
 namespace Fs = std::filesystem;
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
@@ -319,4 +321,4 @@ int RunProcessToFiles(const Fs::path& exe,
 #endif
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

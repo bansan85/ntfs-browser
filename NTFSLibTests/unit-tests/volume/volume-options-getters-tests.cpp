@@ -8,19 +8,20 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::VolumeOptions;
-using NtfsBrowserTests::BuildFakeNtfsImage;
-using NtfsBrowserTests::BuildFakeNtfsImageWithDeletedVolumeRecord;
-using NtfsBrowserTests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage;
+using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithDeletedVolumeRecord;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 
 namespace {
 

@@ -8,15 +8,16 @@
 #include <vector>
 
 #include <ntfs-browser/efs/efs.h>
+#include <ntfs-browser/namespace.h>
 
 #include "efs/fek.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Size of a certificate thumbprint: a SHA-1 digest.
 inline constexpr size_t thumbprint_size_value = 20;
 
-using NtfsBrowser::Efs::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Efs::Algorithm;
 
 // Every algorithm EFS can use, for the tests that loop over them.
 inline constexpr std::array<Algorithm, 5> all_algorithms{
@@ -60,7 +61,8 @@ struct TestEfsEntry {
 
 // Hands out one FEK blob per known (thumbprint, wrapped FEK) pair. The tests
 // never go near the real certificate store.
-class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider {
+class TestKeyProvider final
+    : public NTFS_BROWSER_NAMESPACE::Efs::IEfsKeyProvider {
  public:
   void Add(const std::array<BYTE, thumbprint_size_value>& thumbprint,
            std::span<const BYTE> wrapped_fek, std::vector<BYTE> blob);
@@ -80,8 +82,8 @@ class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider {
 };
 
 // Whether this build compiled the backend in.
-[[nodiscard]] constexpr bool
-    BackendAvailable(NtfsBrowser::Efs::CipherBackend backend) noexcept {
+[[nodiscard]] constexpr bool BackendAvailable(
+    NTFS_BROWSER_NAMESPACE::Efs::CipherBackend backend) noexcept {
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
   constexpr bool has_crypto_pp = true;
 #else
@@ -92,8 +94,9 @@ class TestKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider {
 #else
   constexpr bool has_b_crypt = false;
 #endif
-  return backend == NtfsBrowser::Efs::CipherBackend::CryptoPp ? has_crypto_pp
-                                                              : has_b_crypt;
+  return backend == NTFS_BROWSER_NAMESPACE::Efs::CipherBackend::CryptoPp
+             ? has_crypto_pp
+             : has_b_crypt;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

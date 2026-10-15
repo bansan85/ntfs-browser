@@ -5,10 +5,12 @@
   #include <bcrypt.h>
   #include <gsl/narrow>
 
+  #include <ntfs-browser/namespace.h>
+
   #include "efs/sector-cipher.h"
   #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 namespace {
 
@@ -107,6 +109,6 @@ std::unique_ptr<SectorDecryptor> MakeBCryptDecryptor(const Fek& fek) {
   return decryptor;
 }
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs
 
 #endif  // _WIN32

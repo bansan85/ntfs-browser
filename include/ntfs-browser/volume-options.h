@@ -1,6 +1,8 @@
 #pragma once
 
-namespace NtfsBrowser {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Volume-wide tolerance flags. Fixed for a NtfsVolume's lifetime (an
 // optional constructor argument), read back through GetOptions(). Every
@@ -29,4 +31,4 @@ struct VolumeOptions {
   bool recover_errors{false};
 };
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

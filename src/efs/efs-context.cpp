@@ -7,12 +7,13 @@
 #include <utility>
 
 #include <ntfs-browser/efs/efs.h>
+#include <ntfs-browser/namespace.h>
 
 #include "efs/fek.h"
 #include "log/ntfs-common.h"
 #include "util/util.h"
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 Context::Context(std::vector<WrappedFek> entries,
                  KeyProviderSource provider_source, CipherBackend backend)
@@ -108,4 +109,4 @@ bool Context::Decrypt(ULONGLONG stream_offset, std::span<BYTE> data) const {
   return true;
 }
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs

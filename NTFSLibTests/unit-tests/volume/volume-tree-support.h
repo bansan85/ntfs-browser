@@ -16,13 +16,14 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-namespace Attr = NtfsBrowser::Attr;
-namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowserTests::MemoryDiskReader;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 
 namespace {
 
@@ -42,7 +43,8 @@ constexpr size_t attr_value_offset_field = 20;
 constexpr DWORD end_of_attrs_marker = 0xFFFFFFFF;
 
 // Bytes of a file record: the fixture's record size.
-constexpr size_t record_bytes = NtfsBrowserTests::fake_file_record_size;
+constexpr size_t record_bytes =
+    NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
 
 // Record number of the root directory.
 constexpr ULONGLONG root_idx = static_cast<ULONGLONG>(Mft::Idx::Root);
@@ -106,7 +108,7 @@ inline void ZeroRecord(std::vector<BYTE>& image, ULONGLONG idx) {
 }
 
 // Serves a fake image, refusing every read that overlaps [begin, end).
-class RefusingDiskReader : public NtfsBrowser::IDiskReader {
+class RefusingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
  public:
   RefusingDiskReader(std::vector<BYTE> image, ULONGLONG begin, ULONGLONG end,
                      std::shared_ptr<size_t> refused)

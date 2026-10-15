@@ -21,6 +21,7 @@
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 #include <ntfs-browser/volume-options.h>
 
@@ -30,18 +31,18 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::Attr::AttrBase;
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::VolumeOptions;
-using NtfsBrowser::Efs::CipherBackend;
-using NtfsBrowser::Efs::IEfsKeyProvider;
-namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowserTests::Algorithm;
-using NtfsBrowserTests::TestEfsEntry;
-using NtfsBrowserTests::TestKeyProvider;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Efs::CipherBackend;
+using NTFS_BROWSER_NAMESPACE::Efs::IEfsKeyProvider;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
+using NTFS_BROWSER_NAMESPACE::Tests::TestKeyProvider;
 
 namespace {
 
@@ -76,12 +77,14 @@ constexpr DWORD first_stream_lcn = 30;
 // The user every fixture encrypts for.
 inline TestEfsEntry TestUser(BYTE seed = 1,
                              std::vector<BYTE> wrapped = wrapped_fek) {
-  return {NtfsBrowserTests::TestThumbprint(seed), std::move(wrapped)};
+  return {NTFS_BROWSER_NAMESPACE::Tests::TestThumbprint(seed),
+          std::move(wrapped)};
 }
 
 inline DWORD ClustersFor(size_t bytes) {
-  return gsl::narrow<DWORD>((bytes + NtfsBrowserTests::fake_cluster_size - 1) /
-                            NtfsBrowserTests::fake_cluster_size);
+  return gsl::narrow<DWORD>(
+      (bytes + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size - 1) /
+      NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
 }
 
 // An encrypted file of one unnamed stream, its key provider, and the
@@ -95,28 +98,33 @@ struct Fixture {
 inline Fixture MakeFixture(Algorithm algorithm,
                            size_t size = default_file_size) {
   Fixture fixture;
-  fixture.plaintext = NtfsBrowserTests::PlaintextPattern(size);
-  const std::vector<BYTE> key = NtfsBrowserTests::TestKey(algorithm);
+  fixture.plaintext = NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(size);
+  const std::vector<BYTE> key =
+      NTFS_BROWSER_NAMESPACE::Tests::TestKey(algorithm);
 
   const TestEfsEntry user = TestUser();
   fixture.provider = std::make_shared<TestKeyProvider>();
-  fixture.provider->Add(user.thumbprint, user.wrapped_fek,
-                        NtfsBrowserTests::MakeFekBlob(algorithm, key));
+  fixture.provider->Add(
+      user.thumbprint, user.wrapped_fek,
+      NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(algorithm, key));
 
-  NtfsBrowserTests::FakeEncryptedFile file;
-  file.efs_stream = NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
-  file.streams.push_back({.runs = {{first_stream_lcn, ClustersFor(size)}},
-                          .cluster_bytes = NtfsBrowserTests::EfsEncrypt(
-                              algorithm, key, fixture.plaintext),
-                          .real_size = size});
-  fixture.image = NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file);
+  NTFS_BROWSER_NAMESPACE::Tests::FakeEncryptedFile file;
+  file.efs_stream =
+      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
+  file.streams.push_back(
+      {.runs = {{first_stream_lcn, ClustersFor(size)}},
+       .cluster_bytes = NTFS_BROWSER_NAMESPACE::Tests::EfsEncrypt(
+           algorithm, key, fixture.plaintext),
+       .real_size = size});
+  fixture.image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithEncryptedFile(file);
   return fixture;
 }
 
 template <Cache::Strategy S>
 struct Opened {
   std::unique_ptr<NtfsVolume<S>> volume;
-  std::unique_ptr<NtfsBrowser::Io::FileRecord<S>> record;
+  std::unique_ptr<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>> record;
 };
 
 // Opens the image and parses the root record. The provider is always set,
@@ -133,7 +141,8 @@ Opened<S> Open(std::vector<BYTE> image,
                std::optional<CipherBackend> backend = std::nullopt) {
   Opened<S> opened;
   opened.volume = std::make_unique<NtfsVolume<S>>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)),
       options);
   REQUIRE(opened.volume->IsVolumeOK());
   opened.volume->SetEfsKeyProvider(std::move(provider));
@@ -141,8 +150,8 @@ Opened<S> Open(std::vector<BYTE> image,
     REQUIRE(opened.volume->SetEfsCipherBackend(*backend));
   }
 
-  opened.record =
-      std::make_unique<NtfsBrowser::Io::FileRecord<S>>(*opened.volume);
+  opened.record = std::make_unique<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>>(
+      *opened.volume);
   if (mask) {
     opened.record->SetAttrMask(*mask);
   }
@@ -155,8 +164,8 @@ Opened<S> Open(std::vector<BYTE> image,
 // Reads up to "size" bytes at "offset". Nullopt if ReadData() failed.
 template <Cache::Strategy S>
 std::optional<std::vector<BYTE>>
-    ReadAt(const NtfsBrowser::Attr::AttrBase<S>& attr, ULONGLONG offset,
-           size_t size) {
+    ReadAt(const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& attr,
+           ULONGLONG offset, size_t size) {
   std::vector<BYTE> buffer(size, unread_fill);
   const std::optional<ULONGLONG> read = attr.ReadData(offset, buffer);
   if (!read) {
@@ -167,8 +176,8 @@ std::optional<std::vector<BYTE>>
 }
 
 template <Cache::Strategy S>
-const NtfsBrowser::Attr::AttrBase<S>&
-    OnlyData(const NtfsBrowser::Io::FileRecord<S>& record) {
+const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>&
+    OnlyData(const NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& record) {
   const auto& data = record.GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
   return *data.front();

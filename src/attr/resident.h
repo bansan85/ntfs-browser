@@ -9,10 +9,11 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
 
@@ -65,4 +66,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY AttrResidentFullCache
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

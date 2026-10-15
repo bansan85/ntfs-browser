@@ -16,19 +16,20 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "volume-tree-support.h"
 
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Attr = NtfsBrowser::Attr;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowserTests::MemoryDiskReader;
-using NtfsBrowserTests::NonAsciiNameLayout;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Tests::NonAsciiNameLayout;
 
 namespace {
 
@@ -70,7 +71,7 @@ TEMPLATE_TEST_CASE_SIG(
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithNonAsciiNames(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNonAsciiNames(
           NonAsciiNameLayout::IndexRoot, true);
 
   SECTION("$UpCase record does not parse") { ZeroRecord(image, upcase_idx); }
@@ -91,53 +92,56 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("$UpCase table does not map a to A") {
     const size_t attr = FirstAttr(image, upcase_idx, Attr::Type::Data);
-    const auto table_offset =
-        FirstRunLcn(image, attr) * NtfsBrowserTests::fake_cluster_size;
+    const auto table_offset = FirstRunLcn(image, attr) *
+                              NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
     std::fill_n(image.begin() + static_cast<std::ptrdiff_t>(table_offset),
-                NtfsBrowserTests::fake_cluster_size, BYTE{0});
+                NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size, BYTE{0});
   }
 
   // The named record is not built: only recover_errors lists this entry.
   const NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(std::move(image)),
-      NtfsBrowser::VolumeOptions{.recover_errors = true});
+      NTFS_BROWSER_NAMESPACE::VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(root_idx));
   REQUIRE(root.ParseAttrs());
 
-  const std::optional<NtfsBrowser::IndexEntry> found =
-      root.FindSubEntry(NtfsBrowserTests::non_ascii_acute_name);
+  const std::optional<NTFS_BROWSER_NAMESPACE::IndexEntry> found =
+      root.FindSubEntry(NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_name);
   REQUIRE(found.has_value());
-  CHECK(found->GetFileReference() == NtfsBrowserTests::non_ascii_acute_mft_ref);
+  CHECK(found->GetFileReference() ==
+        NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_mft_ref);
 }
 
 TEST_CASE("FindSubEntry falls back when a $UpCase read is refused",
           "[cov-vol]") {
   std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithNonAsciiNames(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNonAsciiNames(
           NonAsciiNameLayout::IndexRoot, true);
   const ULONGLONG table_begin =
       FirstRunLcn(image, FirstAttr(image, upcase_idx, Attr::Type::Data)) *
-      NtfsBrowserTests::fake_cluster_size;
+      NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
   auto refused = std::make_shared<size_t>(0);
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       std::make_unique<RefusingDiskReader>(
           std::move(image), table_begin,
-          table_begin + NtfsBrowserTests::fake_cluster_size, refused),
-      NtfsBrowser::VolumeOptions{.recover_errors = true});
+          table_begin + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size,
+          refused),
+      NTFS_BROWSER_NAMESPACE::VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(root_idx));
   REQUIRE(root.ParseAttrs());
 
-  const std::optional<NtfsBrowser::IndexEntry> found =
-      root.FindSubEntry(NtfsBrowserTests::non_ascii_acute_name);
+  const std::optional<NTFS_BROWSER_NAMESPACE::IndexEntry> found =
+      root.FindSubEntry(NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_name);
   REQUIRE(found.has_value());
-  CHECK(found->GetFileReference() == NtfsBrowserTests::non_ascii_acute_mft_ref);
+  CHECK(found->GetFileReference() ==
+        NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_mft_ref);
   CHECK(*refused > 0);
 }

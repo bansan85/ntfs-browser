@@ -10,6 +10,8 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/namespace.h>
+
 // The reference cipher is Crypto++ when it is compiled in, BCrypt otherwise.
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
 
@@ -37,7 +39,7 @@
 
 #endif
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
@@ -549,4 +551,4 @@ std::optional<std::vector<BYTE>>
   return std::nullopt;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

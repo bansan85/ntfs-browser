@@ -13,19 +13,20 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::Io::FileRecord;
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::VolumeOptions;
-namespace Mft = NtfsBrowser::Mft;
+using NTFS_BROWSER_NAMESPACE::IndexEntryView;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
@@ -37,7 +38,7 @@ constexpr VolumeOptions recover_keep_deleted{.include_deleted = true,
 // Collects every name TraverseSubEntries() reports, in callback order.
 template <Cache::Strategy S>
 std::vector<std::wstring>
-    CollectNames(const NtfsBrowser::Io::FileRecord<S>& root) {
+    CollectNames(const NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& root) {
   std::vector<std::wstring> names;
   root.TraverseSubEntries(
       [](const IndexEntryView& index_entry, void* context) {
@@ -52,13 +53,15 @@ std::vector<std::wstring>
 // so an index block no pointer reaches stays invisible.
 template <Cache::Strategy S>
 void RunOrphanedBlocksNeedRecoveryFlag() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -76,13 +79,15 @@ void RunOrphanedBlocksNeedRecoveryFlag() {
 // RunOrphanedBlocksReportedWithoutIncludeDeleted below for the default).
 template <Cache::Strategy S>
 void RunOrphanedBlocksFoundWithRecoveryFlag() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
   const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -92,9 +97,11 @@ void RunOrphanedBlocksFoundWithRecoveryFlag() {
   REQUIRE(recovered.size() == 2);
   // The REQUIRE above checks the size of recovered.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+  CHECK(recovered[0] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
+  CHECK(recovered[1] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name);
 }
 
 // With include_deleted off (the default) and recover_errors on, the orphan
@@ -103,14 +110,16 @@ void RunOrphanedBlocksFoundWithRecoveryFlag() {
 // lets it through. Stale is still rejected, by its parent reference.
 template <Cache::Strategy S>
 void RunOrphanedBlocksReportedWithoutIncludeDeleted() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
   const NtfsVolume<S> volume(std::move(reader),
                              VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -120,9 +129,11 @@ void RunOrphanedBlocksReportedWithoutIncludeDeleted() {
   REQUIRE(recovered.size() == 2);
   // The REQUIRE above checks the size of recovered.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+  CHECK(recovered[0] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
+  CHECK(recovered[1] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name);
 }
 
 // With include_deleted off, an orphan-scan entry naming a record that IS in
@@ -134,15 +145,16 @@ void RunOrphanedBlocksReportedWithoutIncludeDeleted() {
 template <Cache::Strategy S>
 void RunOrphanedBlocksDroppedOnSequenceMismatch() {
   {
-    auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-        NtfsBrowserTests::
-            BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
+    auto reader =
+        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+            NTFS_BROWSER_NAMESPACE::Tests::
+                BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
 
     const NtfsVolume<S> volume(std::move(reader),
                                VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> root(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
     root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -152,17 +164,19 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch() {
     REQUIRE(recovered.size() == 1);
     // The REQUIRE above checks the size of recovered.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+    CHECK(recovered[0] ==
+          NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name);
   }
   {
-    auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-        NtfsBrowserTests::
-            BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
+    auto reader =
+        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+            NTFS_BROWSER_NAMESPACE::Tests::
+                BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch());
 
     const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> root(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
     root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -172,9 +186,11 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch() {
     REQUIRE(recovered.size() == 2);
     // The REQUIRE above checks the size of recovered.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+    CHECK(recovered[0] ==
+          NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
+    CHECK(recovered[1] ==
+          NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name);
   }
 }
 
@@ -182,13 +198,15 @@ void RunOrphanedBlocksDroppedOnSequenceMismatch() {
 // without the recovery flag TraverseSubEntries() reports nothing.
 template <Cache::Strategy S>
 void RunMissingIndexRootNeedsRecoveryFlag() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -201,13 +219,15 @@ void RunMissingIndexRootNeedsRecoveryFlag() {
 // every entry reachable through $INDEX_ALLOCATION alone.
 template <Cache::Strategy S>
 void RunMissingIndexRootRecoveredWithFlag() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithOrphanedIndexBlocks());
 
   const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -217,9 +237,11 @@ void RunMissingIndexRootRecoveredWithFlag() {
   REQUIRE(recovered.size() == 2);
   // The REQUIRE above checks the size of recovered.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+  CHECK(recovered[0] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
+  CHECK(recovered[1] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name);
 }
 
 // Names TraverseSubEntries() reports on the root record of "image", with the
@@ -230,12 +252,13 @@ std::vector<std::wstring>
     RecoverRootNames(std::vector<BYTE> image,
                      VolumeOptions options = recover_keep_deleted) {
   auto reader =
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image));
 
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -248,16 +271,19 @@ std::vector<std::wstring>
 // It still does not parse, so Orphan is reported under recover_errors alone.
 template <Cache::Strategy S>
 void RunOrphanedEntryZeroRecordReported() {
-  const std::vector<std::wstring> recovered = RecoverRootNames<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedEntryZeroRecord(),
-      VolumeOptions{.recover_errors = true});
+  const std::vector<std::wstring> recovered =
+      RecoverRootNames<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                              BuildFakeNtfsImageWithOrphanedEntryZeroRecord(),
+                          VolumeOptions{.recover_errors = true});
 
   REQUIRE(recovered.size() == 2);
   // The REQUIRE above checks the size of recovered.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+  CHECK(recovered[0] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(recovered[1] == NtfsBrowserTests::orphaned_block_orphan_name);
+  CHECK(recovered[1] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name);
 }
 
 // The scan's block count is what the mapped clusters hold, in blocks: with
@@ -265,13 +291,16 @@ void RunOrphanedEntryZeroRecordReported() {
 template <Cache::Strategy S>
 void RunSubClusterBlocksAllScanned() {
   const std::vector<std::wstring> names = RecoverRootNames<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks());
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks());
 
-  REQUIRE(names.size() == NtfsBrowserTests::sub_cluster_block_names.size());
+  REQUIRE(names.size() ==
+          NTFS_BROWSER_NAMESPACE::Tests::sub_cluster_block_names.size());
   for (size_t i = 0; i < names.size(); i++) {
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[i] == NtfsBrowserTests::sub_cluster_block_names[i]);
+    CHECK(names[i] ==
+          NTFS_BROWSER_NAMESPACE::Tests::sub_cluster_block_names[i]);
   }
 }
 
@@ -279,14 +308,16 @@ void RunSubClusterBlocksAllScanned() {
 // one whose header the merged attribute keeps.
 template <Cache::Strategy S>
 void RunSplitAllocationAllScanned() {
-  const std::vector<std::wstring> names = RecoverRootNames<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithSplitIndexAllocation());
+  const std::vector<std::wstring> names =
+      RecoverRootNames<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                              BuildFakeNtfsImageWithSplitIndexAllocation());
 
-  REQUIRE(names.size() == NtfsBrowserTests::split_block_names.size());
+  REQUIRE(names.size() ==
+          NTFS_BROWSER_NAMESPACE::Tests::split_block_names.size());
   for (size_t i = 0; i < names.size(); i++) {
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[i] == NtfsBrowserTests::split_block_names[i]);
+    CHECK(names[i] == NTFS_BROWSER_NAMESPACE::Tests::split_block_names[i]);
   }
 }
 
@@ -294,24 +325,27 @@ void RunSplitAllocationAllScanned() {
 // generation "link" describes, is reported next to the fixture's two other
 // orphan-scan entries.
 template <Cache::Strategy S>
-bool ParentLinkEntryReported(NtfsBrowserTests::FakeParentLink link) {
+bool ParentLinkEntryReported(
+    NTFS_BROWSER_NAMESPACE::Tests::FakeParentLink link) {
   const std::vector<std::wstring> names = RecoverRootNames<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(
-          link));
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(link));
 
   REQUIRE(names.size() >= 2);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == NtfsBrowserTests::orphaned_block_reachable_name);
+  CHECK(names[0] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[1] == NtfsBrowserTests::orphaned_block_orphan_name);
+  CHECK(names[1] == NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name);
   if (names.size() == 2) {
     return false;
   }
   REQUIRE(names.size() == 3);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[2] == NtfsBrowserTests::orphaned_block_generation_name);
+  CHECK(names[2] ==
+        NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_generation_name);
   return true;
 }
 

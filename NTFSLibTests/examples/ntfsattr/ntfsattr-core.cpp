@@ -14,8 +14,9 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
-using namespace NtfsBrowser;
+using namespace NTFS_BROWSER_NAMESPACE;
 
 namespace NtfsAttrDump {
 
@@ -206,7 +207,7 @@ void AppendData(std::wstring& lines, const BYTE* data, std::uint32_t datalen) {
   lines += FormatRow(row) + L"\r\n";
 }
 
-std::wstring AttrTypeName(NtfsBrowser::Attr::Type type) {
+std::wstring AttrTypeName(NTFS_BROWSER_NAMESPACE::Attr::Type type) {
   const auto raw = static_cast<DWORD>(type);
   // Only the multiples of 0x10 in the named range index AttrNames. Any other
   // value, 0 included, is shown in hex.

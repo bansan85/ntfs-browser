@@ -6,10 +6,11 @@
 #include <utility>
 
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
 
-namespace NtfsBrowser::Log::Detail {
+namespace NTFS_BROWSER_NAMESPACE::Log::Detail {
 
 // True while at least one configured sink accepts this level. Call sites
 // test it before formatting, so a disabled level costs one out-of-line
@@ -39,9 +40,9 @@ void Write(Level level, std::format_string<Args...> fmt,
   }
 }
 
-}  // namespace NtfsBrowser::Log::Detail
+}  // namespace NTFS_BROWSER_NAMESPACE::Log::Detail
 
-namespace NtfsBrowser::Log {
+namespace NTFS_BROWSER_NAMESPACE::Log {
 
 // The library's logging entry points. Every diagnostic goes through one of
 // them, which keeps the logging backend out of every other translation
@@ -94,4 +95,4 @@ inline bool IsLogged(Level level) noexcept { return Detail::IsEnabled(level); }
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
     Exception(const std::exception& exception) noexcept;
 
-}  // namespace NtfsBrowser::Log
+}  // namespace NTFS_BROWSER_NAMESPACE::Log

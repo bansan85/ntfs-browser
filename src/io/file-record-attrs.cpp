@@ -26,6 +26,7 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/bitmap.h"  // IWYU pragma: keep
@@ -45,7 +46,7 @@
 #include "io/file-record-impl.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Io {
+namespace NTFS_BROWSER_NAMESPACE::Io {
 
 namespace {
 
@@ -530,4 +531,4 @@ void Io::AttrParser<S>::MergeAttributeContinuations() {
 template class AttrParser<Cache::Strategy::NoCache>;
 template class AttrParser<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser::Io
+}  // namespace NTFS_BROWSER_NAMESPACE::Io

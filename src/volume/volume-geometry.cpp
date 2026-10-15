@@ -7,12 +7,14 @@
 #include <span>
 #include <string_view>
 
+#include <ntfs-browser/namespace.h>
+
 #include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Volume {
+namespace NTFS_BROWSER_NAMESPACE::Volume {
 
 namespace {
 
@@ -182,4 +184,4 @@ BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector) {
   return parse;
 }
 
-}  // namespace NtfsBrowser::Volume
+}  // namespace NTFS_BROWSER_NAMESPACE::Volume

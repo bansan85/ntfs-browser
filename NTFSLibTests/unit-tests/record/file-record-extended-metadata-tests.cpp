@@ -11,6 +11,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/file-name.h"
@@ -19,15 +20,15 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::Filename;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::Attr::AttrFileName;
-using NtfsBrowser::Attr::AttrResidentFullCache;
-using NtfsBrowser::Attr::AttrResidentNoCache;
-using NtfsBrowserTests::FileTimeToTicks;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::Filename;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrFileName;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrResidentFullCache;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrResidentNoCache;
+using NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks;
 
 namespace {
 
@@ -35,14 +36,16 @@ namespace {
 // per WriteStandardInformationAttr(), four distinct timestamps.
 template <Cache::Strategy S>
 void RunFileRecordExposesExtendedMetadata() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> report(volume);
-  REQUIRE(report.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> report(volume);
+  REQUIRE(report.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 
   CHECK(report.IsReadOnly());
@@ -51,7 +54,7 @@ void RunFileRecordExposesExtendedMetadata() {
   // The unnamed $DATA's own padded allocation, not $FILE_NAME's stale
   // mft_tree_report_stale_size.
   CHECK(report.GetAllocatedSize() ==
-        NtfsBrowserTests::mft_tree_report_allocated_size);
+        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_allocated_size);
 
   FILETIME write_tm{};
   FILETIME create_tm{};
@@ -71,14 +74,16 @@ void RunFileRecordExposesExtendedMetadata() {
 // option here.
 template <Cache::Strategy S>
 void RunFilenameExposesExtendedMetadata() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> report(volume);
-  REQUIRE(report.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> report(volume);
+  REQUIRE(report.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 
   const auto& file_name_attrs = report.GetAttr(Attr::Type::FileName);

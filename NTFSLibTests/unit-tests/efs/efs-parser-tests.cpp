@@ -17,6 +17,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/efs/efs.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "catch2/catch_message.hpp"
@@ -29,12 +30,12 @@
 #include "optional-access.h"
 #include "util/util.h"
 
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::Efs::CipherBackend;
-using NtfsBrowser::Efs::Fek;
-using NtfsBrowserTests::Algorithm;
-using NtfsBrowserTests::TestEfsEntry;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Efs::CipherBackend;
+using NTFS_BROWSER_NAMESPACE::Efs::Fek;
+using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
 
 namespace {
 
@@ -122,8 +123,8 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const TestEfsEntry user = TestUser();
   const std::vector<BYTE> valid =
-      NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
-  REQUIRE(NtfsBrowser::Efs::ParseEfsStream(valid).has_value());
+      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(valid).has_value());
 
   std::vector<std::vector<BYTE>> hostile;
   const auto forge = [&](size_t offset, DWORD value) {
@@ -159,9 +160,10 @@ TEMPLATE_TEST_CASE_SIG(
   const Fixture fixture = MakeFixture(Algorithm::Aes256, bogus_real_size);
   for (const std::vector<BYTE>& stream : hostile) {
     INFO("stream of " << stream.size() << " bytes");
-    CHECK_FALSE(NtfsBrowser::Efs::ParseEfsStream(stream).has_value());
+    CHECK_FALSE(
+        NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(stream).has_value());
 
-    NtfsBrowserTests::FakeEncryptedFile file;
+    NTFS_BROWSER_NAMESPACE::Tests::FakeEncryptedFile file;
     file.efs_stream = stream;
     file.streams.push_back({.runs = {{first_stream_lcn, 1}},
                             .cluster_bytes = std::vector<BYTE>(
@@ -170,9 +172,10 @@ TEMPLATE_TEST_CASE_SIG(
     if (stream.empty()) {
       continue;
     }
-    const Opened<S> opened =
-        Open<S>(NtfsBrowserTests::BuildFakeNtfsImageWithEncryptedFile(file),
-                fixture.provider);
+    const Opened<S> opened = Open<S>(
+        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithEncryptedFile(
+            file),
+        fixture.provider);
     CHECK_FALSE(ReadAt<S>(OnlyData<S>(*opened.record), 0, 100).has_value());
   }
 }
@@ -180,7 +183,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("A $EFS stream with random damage never crashes the parser",
           "[efs]") {
   const std::array<TestEfsEntry, 2> users{TestUser(1), TestUser(2)};
-  const std::vector<BYTE> valid = NtfsBrowserTests::MakeEfsStream(users, users);
+  const std::vector<BYTE> valid =
+      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(users, users);
 
   // A fixed seed keeps the damage reproducible.
   // NOLINTNEXTLINE(bugprone-random-generator-seed,cert-msc32-c,cert-msc51-cpp)
@@ -196,7 +200,7 @@ TEST_CASE("A $EFS stream with random damage never crashes the parser",
     if ((random() % 4) == 0) {
       damaged.resize(random() % damaged.size());
     }
-    (void)NtfsBrowser::Efs::ParseEfsStream(damaged);
+    (void)NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(damaged);
   }
   SUCCEED();
 }
@@ -208,47 +212,48 @@ TEST_CASE("The $EFS parser reads the users out of a well-formed stream",
   const std::array<TestEfsEntry, 1> recovery{
       TestUser(3, std::vector<BYTE>(10, 3))};
 
-  const auto parsed = NtfsBrowser::Efs::ParseEfsStream(
-      NtfsBrowserTests::MakeEfsStream(users, recovery));
+  const auto parsed = NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
+      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(users, recovery));
   REQUIRE(parsed.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(parsed).size() == 3);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed).size() == 3);
 
   for (size_t i = 0; i < 2; ++i) {
     // i < 2 = users.size(), and the REQUIRE above checks that parsed holds 3.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(std::equal(
-        NtfsBrowserTests::Unwrap(parsed)[i].thumbprint.begin(),
+        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[i].thumbprint.begin(),
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        NtfsBrowserTests::Unwrap(parsed)[i].thumbprint.end(),
+        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[i].thumbprint.end(),
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         users[i].thumbprint.begin()));
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(NtfsBrowserTests::Unwrap(parsed)[i].wrapped_fek ==
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[i].wrapped_fek ==
           users[i].wrapped_fek);
   }
   // The REQUIRE above checks that parsed holds 3; recovery holds 1.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(NtfsBrowserTests::Unwrap(parsed)[2].wrapped_fek ==
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[2].wrapped_fek ==
         recovery[0].wrapped_fek);
 
-  CHECK(NtfsBrowserTests::Unwrap(NtfsBrowser::Efs::ParseEfsStream(
-                                     NtfsBrowserTests::MakeEfsStream({}, {})))
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
+            NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
+                NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream({}, {})))
             .empty());
 }
 
 TEST_CASE("An $EFS entry keeps its thumbprint and its largest wrapped FEK",
           "[efs]") {
   const TestEfsEntry user{
-      NtfsBrowserTests::TestThumbprint(7),
-      NtfsBrowserTests::PlaintextPattern(largest_wrapped_fek)};
-  const auto parsed = NtfsBrowser::Efs::ParseEfsStream(
-      NtfsBrowserTests::MakeEfsStream(std::span(&user, 1)));
+      NTFS_BROWSER_NAMESPACE::Tests::TestThumbprint(7),
+      NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(largest_wrapped_fek)};
+  const auto parsed = NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
+      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1)));
   REQUIRE(parsed.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(parsed).size() == 1);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed).size() == 1);
 
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  const NtfsBrowser::Efs::WrappedFek& kept =
-      NtfsBrowserTests::Unwrap(parsed)[0];
+  const NTFS_BROWSER_NAMESPACE::Efs::WrappedFek& kept =
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[0];
   CHECK(kept.thumbprint ==
         std::vector<BYTE>(user.thumbprint.begin(), user.thumbprint.end()));
   CHECK(kept.wrapped_fek == user.wrapped_fek);
@@ -257,11 +262,12 @@ TEST_CASE("An $EFS entry keeps its thumbprint and its largest wrapped FEK",
 TEST_CASE("An $EFS entry with one bad field is rejected", "[efs]") {
   const TestEfsEntry user = TestUser();
   const std::vector<BYTE> valid =
-      NtfsBrowserTests::MakeEfsStream(std::span(&user, 1));
-  REQUIRE(NtfsBrowser::Efs::ParseEfsStream(valid).has_value());
+      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(valid).has_value());
 
   const auto rejects = [](const std::vector<BYTE>& stream) {
-    CHECK_FALSE(NtfsBrowser::Efs::ParseEfsStream(stream).has_value());
+    CHECK_FALSE(
+        NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(stream).has_value());
   };
 
   SECTION("the entry header is cut off by the stream end") {
@@ -313,21 +319,26 @@ TEST_CASE("An $EFS entry with one bad field is rejected", "[efs]") {
 }
 
 TEST_CASE("A FEK blob is checked against its algorithm", "[efs]") {
-  for (const Algorithm algorithm : NtfsBrowserTests::all_algorithms) {
-    const std::vector<BYTE> key = NtfsBrowserTests::TestKey(algorithm);
+  for (const Algorithm algorithm :
+       NTFS_BROWSER_NAMESPACE::Tests::all_algorithms) {
+    const std::vector<BYTE> key =
+        NTFS_BROWSER_NAMESPACE::Tests::TestKey(algorithm);
     const std::vector<BYTE> blob =
-        NtfsBrowserTests::MakeFekBlob(algorithm, key);
+        NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(algorithm, key);
 
     const std::optional<Fek> fek = Fek::Parse(blob);
     REQUIRE(fek.has_value());
-    CHECK(NtfsBrowserTests::Unwrap(fek).GetAlgorithm() == algorithm);
-    CHECK(std::equal(NtfsBrowserTests::Unwrap(fek).GetKey().begin(),
-                     NtfsBrowserTests::Unwrap(fek).GetKey().end(), key.begin(),
-                     key.end()));
+    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek).GetAlgorithm() ==
+          algorithm);
+    CHECK(
+        std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek).GetKey().begin(),
+                   NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek).GetKey().end(),
+                   key.begin(), key.end()));
   }
 
-  const std::vector<BYTE> good = NtfsBrowserTests::MakeFekBlob(
-      Algorithm::Aes256, NtfsBrowserTests::TestKey(Algorithm::Aes256));
+  const std::vector<BYTE> good = NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
+      Algorithm::Aes256,
+      NTFS_BROWSER_NAMESPACE::Tests::TestKey(Algorithm::Aes256));
 
   CHECK_FALSE(Fek::Parse({}).has_value());
   CHECK_FALSE(Fek::Parse(std::span(good).first(15)).has_value());
@@ -350,19 +361,19 @@ TEST_CASE("A DESX FEK carries a 16-byte key, not a 24-byte one", "[efs]") {
   const std::vector<BYTE> sixteen(16, 0x42);
   const std::vector<BYTE> twenty_four(24, 0x42);
 
-  const std::optional<Fek> fek =
-      Fek::Parse(NtfsBrowserTests::MakeFekBlob(Algorithm::Desx, sixteen));
+  const std::optional<Fek> fek = Fek::Parse(
+      NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(Algorithm::Desx, sixteen));
   REQUIRE(fek.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(fek).GetKey().size() == 16);
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek).GetKey().size() == 16);
 
-  CHECK_FALSE(
-      Fek::Parse(NtfsBrowserTests::MakeFekBlob(Algorithm::Desx, twenty_four))
-          .has_value());
+  CHECK_FALSE(Fek::Parse(NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
+                             Algorithm::Desx, twenty_four))
+                  .has_value());
 }
 
 TEST_CASE("Secure zero wipes what it is given", "[efs]") {
   std::vector<BYTE> secret(secret_size, secret_fill);
-  NtfsBrowser::Util::SecureZero(secret);
+  NTFS_BROWSER_NAMESPACE::Util::SecureZero(secret);
   CHECK(std::ranges::all_of(secret, [](BYTE byte) { return byte == 0; }));
 }
 
@@ -385,9 +396,10 @@ TEST_CASE("The cipher backend is selectable per volume, Crypto++ by default",
        {CipherBackend::CryptoPp, CipherBackend::BCrypt}) {
     const CipherBackend before = volume.GetEfsCipherBackend();
     CHECK(volume.SetEfsCipherBackend(backend) ==
-          NtfsBrowserTests::BackendAvailable(backend));
+          NTFS_BROWSER_NAMESPACE::Tests::BackendAvailable(backend));
     CHECK(volume.GetEfsCipherBackend() ==
-          (NtfsBrowserTests::BackendAvailable(backend) ? backend : before));
+          (NTFS_BROWSER_NAMESPACE::Tests::BackendAvailable(backend) ? backend
+                                                                    : before));
   }
 }
 
@@ -465,7 +477,7 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
   for (const KnownAnswer& answer : answers) {
     for (const CipherBackend backend :
          {CipherBackend::CryptoPp, CipherBackend::BCrypt}) {
-      if (!NtfsBrowserTests::BackendAvailable(backend)) {
+      if (!NTFS_BROWSER_NAMESPACE::Tests::BackendAvailable(backend)) {
         continue;
       }
       INFO("algorithm 0x" << std::hex << static_cast<DWORD>(answer.algorithm)
@@ -473,25 +485,25 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
 
       // CBC: the first block decrypts to (block cipher output) xor IV. So a
       // ciphertext block that is the published one must give plaintext xor IV.
-      const std::vector<BYTE> blob =
-          NtfsBrowserTests::MakeFekBlob(answer.algorithm, answer.key);
+      const std::vector<BYTE> blob = NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
+          answer.algorithm, answer.key);
       const std::optional<Fek> fek = Fek::Parse(blob);
       REQUIRE(fek.has_value());
 
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-      auto decryptor = NtfsBrowser::Efs::MakeCryptoPpDecryptor(
-          NtfsBrowserTests::Unwrap(fek));
+      auto decryptor = NTFS_BROWSER_NAMESPACE::Efs::MakeCryptoPpDecryptor(
+          NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek));
 #else
-      std::unique_ptr<NtfsBrowser::Efs::SectorDecryptor> decryptor;
+      std::unique_ptr<NTFS_BROWSER_NAMESPACE::Efs::SectorDecryptor> decryptor;
 #endif
 #if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
       if (backend == CipherBackend::BCrypt) {
-        decryptor = NtfsBrowser::Efs::MakeBCryptDecryptor(*fek);
+        decryptor = NTFS_BROWSER_NAMESPACE::Efs::MakeBCryptDecryptor(*fek);
       }
 #endif
       REQUIRE(decryptor != nullptr);
 
-      std::vector<BYTE> sector(NtfsBrowser::Efs::sector_size, 0);
+      std::vector<BYTE> sector(NTFS_BROWSER_NAMESPACE::Efs::sector_size, 0);
       std::ranges::copy(answer.ciphertext_block, sector.begin());
       REQUIRE(decryptor->DecryptSector(0, sector));
 

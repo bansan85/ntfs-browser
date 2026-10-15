@@ -8,9 +8,11 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
+
 #include "internal-export.h"
 
-namespace NtfsBrowser::UpCase {
+namespace NTFS_BROWSER_NAMESPACE::UpCase {
 
 // The uppercase mapping NTFS collates file names by. A volume stores its own
 // in $UpCase (MFT record 10). The built-in one stands in when that record
@@ -50,4 +52,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY Table {
   bool built_in_;
 };
 
-}  // namespace NtfsBrowser::UpCase
+}  // namespace NTFS_BROWSER_NAMESPACE::UpCase

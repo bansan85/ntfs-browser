@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 namespace NtfsDump {
@@ -20,8 +21,9 @@ struct DumpResult {
 
 // Dumps the start of the unnamed $DATA stream of the file at path, a full path
 // such as C:\dir\file. A file with no unnamed stream dumps as empty text.
-DumpResult DumpFile(
-    NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache>& volume,
-    std::wstring_view path);
+DumpResult
+    DumpFile(NTFS_BROWSER_NAMESPACE::NtfsVolume<
+                 NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
+             std::wstring_view path);
 
 }  // namespace NtfsDump

@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "fake-ntfs-image.h"
@@ -19,23 +20,24 @@
 
 namespace {
 
-using FullCacheVolume =
-    NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::FullCache>;
+using FullCacheVolume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
+    NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>;
+using NTFS_BROWSER_NAMESPACE::Tests::DumpTreeImage;
 using NtfsAttrDump::DumpResult;
-using NtfsBrowserTests::DumpTreeImage;
 
 // A volume over image, opened the way the dialog opens it.
 std::unique_ptr<FullCacheVolume>
     OpenVolume(std::vector<BYTE> image,
-               NtfsBrowser::VolumeOptions options = {}) {
+               NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   return std::make_unique<FullCacheVolume>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)),
       options);
 }
 
 // Dumps path from a fresh volume over image.
 DumpResult DumpPath(std::vector<BYTE> image, std::wstring_view path,
-                    NtfsBrowser::VolumeOptions options = {}) {
+                    NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   const std::unique_ptr<FullCacheVolume> volume =
       OpenVolume(std::move(image), options);
   return NtfsAttrDump::DumpAttributes(*volume, path);
@@ -87,7 +89,8 @@ TEST_CASE("NtfsAttr refuses a volume that is not NTFS",
 TEST_CASE("NtfsAttr reports a root directory record that does not read",
           "[ntfsattr][characterization]") {
   const DumpResult result = DumpPath(
-      NtfsBrowserTests::BuildFakeNtfsImageWithCorruptRootRecord(), report_path);
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCorruptRootRecord(),
+      report_path);
 
   REQUIRE(result.message == L"Cannot read root directory of volume");
   REQUIRE(result.dump.empty());
@@ -96,7 +99,8 @@ TEST_CASE("NtfsAttr reports a root directory record that does not read",
 TEST_CASE("NtfsAttr reports root attributes that do not parse",
           "[ntfsattr][characterization]") {
   const DumpResult result =
-      DumpPath(NtfsBrowserTests::BuildFakeNtfsImageWithAttrOffsetOutOfBounds(),
+      DumpPath(NTFS_BROWSER_NAMESPACE::Tests::
+                   BuildFakeNtfsImageWithAttrOffsetOutOfBounds(),
                report_path);
 
   REQUIRE(result.message == L"Cannot parse attributes");
@@ -264,7 +268,7 @@ TEST_CASE("NtfsAttr dump rows split at 16 bytes, last row padded with FF",
 
 TEST_CASE("NtfsAttr names each known attribute type",
           "[ntfsattr][characterization]") {
-  using NtfsBrowser::Attr::Type;
+  using NTFS_BROWSER_NAMESPACE::Attr::Type;
   const std::array<std::pair<Type, std::wstring_view>, 16> names = {{
       {Type::StandardInformation, L"STANDARD_INFORMATION"},
       {Type::AttributeList, L"ATTRIBUTE_LIST"},
@@ -291,7 +295,7 @@ TEST_CASE("NtfsAttr names each known attribute type",
 
 TEST_CASE("NtfsAttr names a type with no name by its value",
           "[ntfsattr][characterization]") {
-  using NtfsBrowser::Attr::Type;
+  using NTFS_BROWSER_NAMESPACE::Attr::Type;
   // 0 and 0x8 sit below the named range, 0x110 and 0x1000 above it. 0xFFFFFFFF
   // is the end marker value.
   const std::array<std::pair<DWORD, std::wstring_view>, 5> unnamed = {{

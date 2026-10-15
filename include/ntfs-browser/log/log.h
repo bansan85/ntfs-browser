@@ -5,8 +5,9 @@
 #include <string_view>
 
 #include <ntfs-browser/export.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser::Log {
+namespace NTFS_BROWSER_NAMESPACE::Log {
 
 // Severity of a message, and, for a sink, the least severe message it
 // accepts. Ordered most to least severe. off never matches a message, so
@@ -77,4 +78,4 @@ NTFS_BROWSER_EXPORT bool ParseOption(std::wstring_view arg,
                                      Config& config) noexcept;
 #endif
 
-}  // namespace NtfsBrowser::Log
+}  // namespace NTFS_BROWSER_NAMESPACE::Log

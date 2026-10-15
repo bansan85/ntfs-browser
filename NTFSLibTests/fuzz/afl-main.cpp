@@ -24,6 +24,7 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -31,21 +32,21 @@
 #include "looping-disk-reader.h"
 #include "named-stream-probe.h"
 
-using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::Attr::AttrBase;
-using NtfsBrowser::Io::FileRecord;
-using NtfsBrowser::Mft::MftTree;
-namespace Attr = NtfsBrowser::Attr;
-namespace Efs = NtfsBrowser::Efs;
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::IndexEntryView;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NtfsFuzz::gap_collation_search_name;
 using NtfsFuzz::LoopingDiskReader;
 using NtfsFuzz::named_data_stream_name;
 
-namespace Mft = NtfsBrowser::Mft;
-namespace Log = NtfsBrowser::Log;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 
 // Windows gives a wmain() the command line as wide characters. A narrow
 // main() only ever sees it through the active ANSI code page, which cannot
@@ -111,7 +112,7 @@ constexpr std::array<VolumeOptions, 2> volume_option_modes{
 // graph and are otherwise invisible to this fuzzer.
 template <Cache::Strategy S>
 void FuzzRootRecord(const NtfsVolume<S>& volume) {
-  NtfsBrowser::Io::FileRecord file_record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
   // Without DATA here, FindStream() below never sees a named $DATA
   // attribute on ROOT to walk. BITMAP and OBJECT_ID reach AttrBitmap and
   // the unhandled-attribute path of ParseAttr().
@@ -151,7 +152,8 @@ void FuzzRootRecord(const NtfsVolume<S>& volume) {
 // returned as if it were already decrypted. The input then picks the cipher
 // and the key itself. A thumbprint that starts with refused_thumbprint models
 // a key the provider does not hold.
-class PassthroughKeyProvider final : public NtfsBrowser::Efs::IEfsKeyProvider {
+class PassthroughKeyProvider final
+    : public NTFS_BROWSER_NAMESPACE::Efs::IEfsKeyProvider {
  public:
   [[nodiscard]] std::optional<std::vector<BYTE>>
       UnwrapFek(std::span<const BYTE> thumbprint,
@@ -177,7 +179,7 @@ constexpr std::array<Mft::Idx, 4> probed_records{
 
 // Reads the start, then the middle, then the end of one attribute's data.
 template <Cache::Strategy S>
-void ProbeAttrData(const NtfsBrowser::Attr::AttrBase<S>& attr) {
+void ProbeAttrData(const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& attr) {
   (void)attr.GetAttrType();
   (void)attr.GetAttrFlags();
   (void)attr.IsNonResident();
@@ -202,7 +204,7 @@ void ProbeAttrData(const NtfsBrowser::Attr::AttrBase<S>& attr) {
 // decompression and decryption happen.
 template <Cache::Strategy S>
 void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
-  NtfsBrowser::Io::FileRecord file_record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
   if (!file_record.ParseFileRecord(record) || !file_record.ParseAttrs()) {
     return;
   }
@@ -236,9 +238,11 @@ void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
   (void)file_record.IsSparse();
   (void)file_record.IsReparsePoint();
 
-  file_record.TraverseAttrs([](const NtfsBrowser::Attr::AttrBase<S>& attr,
-                               void*, bool*) { ProbeAttrData(attr); },
-                            nullptr);
+  file_record.TraverseAttrs(
+      [](const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& attr, void*, bool*) {
+        ProbeAttrData(attr);
+      },
+      nullptr);
 }
 
 // Rebuilds the namespace from the $MFT. The progress callback lets the scan
@@ -246,14 +250,15 @@ void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
 // huge declared $MFT size cannot make the run long.
 template <Cache::Strategy S>
 void ProbeMftTree(const NtfsVolume<S>& volume) {
-  const NtfsBrowser::Mft::MftTree tree(
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(
       volume, {.progress = [](ULONGLONG done, ULONGLONG /*total*/) {
         return done == 0;
       }});
   (void)tree.Stats();
   (void)tree.Find(static_cast<ULONGLONG>(Mft::Idx::Root));
   (void)tree.Children(static_cast<ULONGLONG>(Mft::Idx::Root));
-  for (const NtfsBrowser::Mft::MftTree::Entry& entry : tree.Entries()) {
+  for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry :
+       tree.Entries()) {
     (void)tree.IsReachable(entry.record);
     (void)tree.GetPath(entry.record);
     for (size_t i = 0; i < entry.names.size(); ++i) {
@@ -294,7 +299,7 @@ void ProbeVolumeApi(NtfsVolume<S>& volume) {
   (void)volume.InstallAttrRawCB(unknown_attr_type, DiscardAttr);
   (void)volume.InstallAttrRawCB(Attr::Type::Data, DiscardAttr);
   (void)volume.InstallAttrRawCB(Attr::Type::IndexRoot, KeepAttr);
-  NtfsBrowser::Io::FileRecord file_record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
   (void)file_record.InstallAttrRawCB(unknown_attr_type, DiscardAttr);
   (void)file_record.InstallAttrRawCB(Attr::Type::StandardInformation,
                                      DiscardAttr);

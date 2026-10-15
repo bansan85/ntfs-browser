@@ -29,9 +29,11 @@
 #include <cstddef>
 #include <span>
 
+#include <ntfs-browser/namespace.h>
+
 #include "../internal-export.h"
 
-namespace NtfsBrowser::Lznt1 {
+namespace NTFS_BROWSER_NAMESPACE::Lznt1 {
 
 // LZNT1 chunk size; [MS-XCA] 2.5.3 fixes streams at 4096-byte units.
 inline constexpr size_t chunk_size = 4096;
@@ -42,4 +44,4 @@ inline constexpr size_t chunk_size = 4096;
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t
     Decompress(std::span<const BYTE> src, std::span<BYTE> dest);
 
-}  // namespace NtfsBrowser::Lznt1
+}  // namespace NTFS_BROWSER_NAMESPACE::Lznt1

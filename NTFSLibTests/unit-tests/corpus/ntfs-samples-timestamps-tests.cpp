@@ -13,6 +13,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/file-name.h"
@@ -23,36 +24,37 @@
 #include "optional-access.h"
 #include "partition-disk-reader.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::Attr::AttrFileName;
-using NtfsBrowser::Attr::AttrResidentNoCache;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrFileName;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrResidentNoCache;
 
 TEST_CASE(
     "STANDARD_INFORMATION and $I30 FILE_NAME disagree on /test/1.txt's last "
     "access time (ntfs-lastaccess.raw)",
     "[ntfs-samples][integration][timestamps]") {
-  NtfsBrowserTests::RequireCorpusImage(lastaccess_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(lastaccess_image);
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       OpenWholeDiskImage(lastaccess_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
   OpenDirPath(dir, {L"test"});
   const std::optional<IndexEntry> entry = dir.FindSubEntry(L"1.txt");
   REQUIRE(entry.has_value());
 
   FILETIME index_access{};
-  NtfsBrowserTests::Unwrap(entry).GetFileTime(nullptr, nullptr, &index_access);
+  NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileTime(nullptr, nullptr,
+                                                           &index_access);
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::StandardInformation);
-  REQUIRE(
-      file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
+  REQUIRE(file.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   FILETIME std_info_access{};
@@ -70,24 +72,25 @@ TEST_CASE(
     "STANDARD_INFORMATION, FILE_NAME and $I30 FILE_NAME each carry a "
     "different creation date for /test/test.txt (ntfs-si-vs-fn.raw)",
     "[ntfs-samples][integration][timestamps]") {
-  NtfsBrowserTests::RequireCorpusImage(si_vs_fn_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(si_vs_fn_image);
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       OpenWholeDiskImage(si_vs_fn_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
   OpenDirPath(dir, {L"test"});
   const std::optional<IndexEntry> entry = dir.FindSubEntry(L"test.txt");
   REQUIRE(entry.has_value());
 
   FILETIME index_create{};
-  NtfsBrowserTests::Unwrap(entry).GetFileTime(nullptr, &index_create, nullptr);
+  NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileTime(
+      nullptr, &index_create, nullptr);
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::StandardInformation | Attr::Mask::FileName);
-  REQUIRE(
-      file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
+  REQUIRE(file.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   FILETIME std_info_create{};
@@ -135,7 +138,8 @@ TEST_CASE(
   const auto check_access_time_mismatch =
       [&volume](std::wstring_view dir_name, std::wstring_view file_name,
                 ULONGLONG expected_delta_seconds) {
-        NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
+        NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> dir(
+            volume);
         OpenDirPath(dir, {dir_name});
         const std::optional<IndexEntry> entry = dir.FindSubEntry(file_name);
         REQUIRE(entry.has_value());
@@ -143,7 +147,8 @@ TEST_CASE(
         FILETIME index_access{};
         entry->GetFileTime(nullptr, nullptr, &index_access);
 
-        NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
+        NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(
+            volume);
         file.SetAttrMask(Attr::Mask::StandardInformation);
         REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
         REQUIRE(file.ParseAttrs());

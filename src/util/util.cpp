@@ -4,7 +4,9 @@
 
 #include <span>
 
-namespace NtfsBrowser::Util {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Util {
 
 void SecureZero(std::span<BYTE> bytes) noexcept {
   // The volatile write keeps the compiler from eliding the wipe.
@@ -14,4 +16,4 @@ void SecureZero(std::span<BYTE> bytes) noexcept {
   }
 }
 
-}  // namespace NtfsBrowser::Util
+}  // namespace NTFS_BROWSER_NAMESPACE::Util

@@ -13,7 +13,8 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>  // IWYU pragma: keep
-#include <ntfs-browser/ntfs-volume.h>     // IWYU pragma: keep
+#include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/non-resident.h"
 #include "attr/resident.h"
@@ -23,7 +24,7 @@
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {
 
@@ -225,4 +226,4 @@ template class AttrList<AttrNonResident<Cache::Strategy::NoCache>,
 template class AttrList<AttrResidentFullCache, Cache::Strategy::FullCache>;
 template class AttrList<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

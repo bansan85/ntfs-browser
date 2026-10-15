@@ -23,6 +23,7 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/file-name.h"
@@ -31,7 +32,7 @@
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 
-namespace NtfsBrowser::Mft {
+namespace NTFS_BROWSER_NAMESPACE::Mft {
 
 namespace {
 
@@ -482,4 +483,4 @@ const Mft::MftTree::ScanStats& Mft::MftTree::Stats() const noexcept {
   return impl_->stats;
 }
 
-}  // namespace NtfsBrowser::Mft
+}  // namespace NTFS_BROWSER_NAMESPACE::Mft

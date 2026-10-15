@@ -5,12 +5,13 @@
 #include <utility>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "console.h"
 
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 #ifdef _WIN32
 

@@ -24,14 +24,15 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "sequential-disk-reader.h"
 
-using namespace NtfsBrowser;
-using NtfsBrowserTests::MakeGeneratorProducer;
-using NtfsBrowserTests::SequentialDiskReader;
+using namespace NTFS_BROWSER_NAMESPACE;
+using NTFS_BROWSER_NAMESPACE::Tests::MakeGeneratorProducer;
+using NTFS_BROWSER_NAMESPACE::Tests::SequentialDiskReader;
 
 namespace {
 
@@ -127,7 +128,7 @@ void FuzzOnce(unsigned seed) {
       continue;
     }
 
-    NtfsBrowser::Io::FileRecord fr(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord fr(volume);
     fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
     if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
       // file_record_ is guaranteed empty here, exercising IsDeleted()/

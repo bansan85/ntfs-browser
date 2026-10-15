@@ -15,6 +15,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "catch2/catch_message.hpp"
@@ -24,21 +25,23 @@
 #include "test-log-sink.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume must not accept a volume whose BPB describes an index block "
     "far smaller than Data::IndexBlock",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithTinyIndexBlock());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithTinyIndexBlock());
 
   const NtfsVolume<S> volume(std::move(reader));
 
   INFO("GetIndexBlockSize() = " << volume.GetIndexBlockSize());
-  CHECK(volume.GetIndexBlockSize() == NtfsBrowserTests::tiny_index_block_size);
+  CHECK(volume.GetIndexBlockSize() ==
+        NTFS_BROWSER_NAMESPACE::Tests::tiny_index_block_size);
 
   // tiny_index_block_size doesn't fit Data::IndexBlock's own header.
   CHECK_FALSE(volume.IsVolumeOK());
@@ -49,8 +52,10 @@ TEMPLATE_TEST_CASE_SIG(
     "far larger than any plausible size",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOversizedIndexBlock());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithOversizedIndexBlock());
 
   const NtfsVolume<S> volume(std::move(reader));
 
@@ -63,8 +68,10 @@ TEMPLATE_TEST_CASE_SIG(
     "far larger than any plausible size",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithOversizedFileRecord());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithOversizedFileRecord());
 
   const NtfsVolume<S> volume(std::move(reader));
 
@@ -72,7 +79,7 @@ TEMPLATE_TEST_CASE_SIG(
   // GetFileRecordSize() reflects the BPB value directly; IsVolumeOK() fails
   // regardless, from an unrelated $Volume read failure this size triggers.
   CHECK(volume.GetFileRecordSize() !=
-        NtfsBrowserTests::oversized_file_record_size);
+        NTFS_BROWSER_NAMESPACE::Tests::oversized_file_record_size);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -81,13 +88,15 @@ TEMPLATE_TEST_CASE_SIG(
     "clusters_per_file_record branch",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithFileRecordSizeTooBig());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithFileRecordSizeTooBig());
 
   const NtfsVolume<S> volume(std::move(reader));
 
   CHECK(volume.GetFileRecordSize() ==
-        NtfsBrowserTests::file_record_size_too_big);
+        NTFS_BROWSER_NAMESPACE::Tests::file_record_size_too_big);
   CHECK_FALSE(volume.IsVolumeOK());
 }
 
@@ -99,7 +108,7 @@ constexpr size_t sector4_kn = 4096;
 
 // Wraps an in-memory image and rejects a read at offset 0 whose length the
 // emulated medium would refuse. The boot sector is the only such read.
-class StrictBootReadReader : public NtfsBrowser::IDiskReader {
+class StrictBootReadReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
  public:
   // reject decides, from the read length, whether the read at 0 fails.
   StrictBootReadReader(std::vector<BYTE> image, bool (*reject)(size_t length))
@@ -116,7 +125,7 @@ class StrictBootReadReader : public NtfsBrowser::IDiskReader {
   }
 
  private:
-  NtfsBrowserTests::MemoryDiskReader inner_;
+  NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader inner_;
   bool (*reject_)(size_t length);
 };
 
@@ -134,7 +143,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage(), &NotMultipleOf4Kn);
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &NotMultipleOf4Kn);
 
   const NtfsVolume<S> volume(std::move(reader));
 
@@ -146,7 +155,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage(), &AtLeast4Kn);
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &AtLeast4Kn);
 
   const NtfsVolume<S> volume(std::move(reader));
 
@@ -158,7 +167,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<StrictBootReadReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage(), &Always);
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &Always);
 
   const NtfsVolume<S> volume(std::move(reader));
 
@@ -170,20 +179,21 @@ namespace {
 // BuildFakeNtfsImage() with edit applied to its boot sector BPB.
 template <typename Edit>
 std::vector<BYTE> ImageWithBpb(Edit edit) {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImage();
-  edit(*reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data()));
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  edit(*reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data()));
   return image;
 }
 
 // Opens reader, and reports whether the volume came up. Returns the log the
 // open wrote.
 template <Cache::Strategy S>
-std::string LogWhenOpened(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
-                          bool& volume_ok) {
-  (void)NtfsBrowserTests::TakeCapturedLog();
+std::string
+    LogWhenOpened(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+                  bool& volume_ok) {
+  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const NtfsVolume<S> volume(std::move(reader));
   volume_ok = volume.IsVolumeOK();
-  return NtfsBrowserTests::TakeCapturedLog();
+  return NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
 }
 
 // Opens the fake image with edit applied to its boot sector BPB, and returns
@@ -191,7 +201,8 @@ std::string LogWhenOpened(std::unique_ptr<NtfsBrowser::IDiskReader> reader,
 template <Cache::Strategy S, typename Edit>
 std::string LogOfBpbEdit(Edit edit, bool& volume_ok) {
   return LogWhenOpened<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(ImageWithBpb(edit)),
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          ImageWithBpb(edit)),
       volume_ok);
 }
 
@@ -203,10 +214,10 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = true;
-  const std::string log =
-      LogWhenOpened<S>(std::make_unique<StrictBootReadReader>(
-                           NtfsBrowserTests::BuildFakeNtfsImage(), &Always),
-                       volume_ok);
+  const std::string log = LogWhenOpened<S>(
+      std::make_unique<StrictBootReadReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &Always),
+      volume_ok);
 
   CHECK_FALSE(volume_ok);
   CHECK_THAT(log, ContainsSubstring("Cannot read a 4096-byte boot sector, "
@@ -221,10 +232,10 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   bool volume_ok = false;
-  const std::string log =
-      LogWhenOpened<S>(std::make_unique<StrictBootReadReader>(
-                           NtfsBrowserTests::BuildFakeNtfsImage(), &AtLeast4Kn),
-                       volume_ok);
+  const std::string log = LogWhenOpened<S>(
+      std::make_unique<StrictBootReadReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &AtLeast4Kn),
+      volume_ok);
 
   CHECK(volume_ok);
   CHECK_THAT(log, ContainsSubstring("Cannot read a 4096-byte boot sector, "
@@ -495,14 +506,16 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume logs the boot sector geometry in validation order",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  (void)NtfsBrowserTests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          NtfsBrowserTests::BuildFakeNtfsImage()));
-  const std::string log = NtfsBrowserTests::TakeCapturedLog();
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+  const std::string log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
 
-  CHECK(volume.GetSectorSize() == NtfsBrowserTests::fake_bytes_per_sector);
-  CHECK(volume.GetClusterSize() == NtfsBrowserTests::fake_cluster_size);
+  CHECK(volume.GetSectorSize() ==
+        NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
+  CHECK(volume.GetClusterSize() ==
+        NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
   CHECK(volume.GetFileRecordSize() == 1024);
   CHECK(volume.GetIndexBlockSize() == 1024);
 

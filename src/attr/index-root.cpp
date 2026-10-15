@@ -13,6 +13,7 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/resident.h"
@@ -21,7 +22,7 @@
 #include "data/index-root.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {
 
@@ -146,4 +147,4 @@ bool AttrIndexRoot<Resident, S>::IsFileName() const noexcept {
 template class AttrIndexRoot<AttrResidentFullCache, Cache::Strategy::FullCache>;
 template class AttrIndexRoot<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

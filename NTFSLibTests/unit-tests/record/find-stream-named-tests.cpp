@@ -13,31 +13,33 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "named-stream-probe.h"
 
-namespace NtfsBrowser {}  // namespace NtfsBrowser
+namespace NTFS_BROWSER_NAMESPACE {}  // namespace NTFS_BROWSER_NAMESPACE
 
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Attr::AttrBase;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
 template <Cache::Strategy S>
 void CheckFindStreamReturnsNamedStream() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithNamedDataStream());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNamedDataStream());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
@@ -45,19 +47,22 @@ void CheckFindStreamReturnsNamedStream() {
   // (named or otherwise) in this fixture is named "nonexistent".
   CHECK(record.FindStream(L"nonexistent") == nullptr);
 
-  const NtfsBrowser::Attr::AttrBase<S>* stream =
-      record.FindStream(NtfsBrowserTests::named_data_stream_name);
+  const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>* stream =
+      record.FindStream(NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_name);
   REQUIRE(stream != nullptr);
 
-  CHECK(stream->GetAttrName() == NtfsBrowserTests::named_data_stream_name);
+  CHECK(stream->GetAttrName() ==
+        NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_name);
 
   // Confirm it's genuinely the named stream's own data, not some other
   // attribute.
   REQUIRE(stream->GetDataSize() ==
-          NtfsBrowserTests::named_data_stream_content.size());
-  CHECK(std::memcmp(stream->GetData(),
-                    NtfsBrowserTests::named_data_stream_content.data(),
-                    NtfsBrowserTests::named_data_stream_content.size()) == 0);
+          NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_content.size());
+  CHECK(std::memcmp(
+            stream->GetData(),
+            NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_content.data(),
+            NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_content.size()) ==
+        0);
 
   // Requesting the unnamed stream must still correctly return nullptr: this
   // fixture's only $DATA attribute is named, not unnamed.

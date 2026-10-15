@@ -10,6 +10,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/bitmap.h"
@@ -17,29 +18,31 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::Attr::AttrBitmap;
-using NtfsBrowser::Attr::AttrNonResident;
-namespace Mft = NtfsBrowser::Mft;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBitmap;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrNonResident;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
 // Bitmap bits one fake cluster holds: what separates one bitmap cluster from
 // the next in a cluster index.
 constexpr ULONGLONG bits_per_bitmap_cluster =
-    static_cast<ULONGLONG>(NtfsBrowserTests::fake_cluster_size) * 8;
+    static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size) *
+    8;
 
 template <Cache::Strategy S>
 void CheckClusterFreeAnswersPastTheFirstBitmapCluster() {
   const NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          NtfsBrowserTests::BuildFakeNtfsImageWithMultiClusterBitmap()));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithMultiClusterBitmap()));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 

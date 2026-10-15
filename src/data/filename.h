@@ -2,7 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Data {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 enum class FilenameFlag : DWORD;
 enum class FilenameNamespace : BYTE;
@@ -23,4 +25,4 @@ struct Filename {
   WORD name[1];  // Filename
 };
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

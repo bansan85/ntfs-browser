@@ -13,10 +13,12 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
+
 #include "gap-collation-probe.h"
 #include "named-stream-probe.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Fake record count $MFT reports; arbitrary, tests just check it survives.
 inline constexpr uint64_t sentinel_record_count = 5;
@@ -1505,4 +1507,4 @@ inline constexpr ULONGLONG wrapping_lcn =
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithNegativeLcn(FakeRunHost host);
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

@@ -7,8 +7,9 @@
 #include <tuple>
 
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Roots of the forensic image corpora, outside this repo. CMake sets each one
 // from its NTFS_BROWSER_TEST_* cache or environment variable, as a UTF-8 path.
@@ -47,7 +48,7 @@ void RequireCorpusImage(const std::filesystem::path& image);
 // through a PartitionDiskReader, so NtfsVolume's own path-based constructor -
 // Windows-only, since it goes through Win32DiskReader - is never needed to
 // open a corpus image.
-[[nodiscard]] std::unique_ptr<NtfsBrowser::IDiskReader>
+[[nodiscard]] std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
     OpenBareVolumeImage(const std::filesystem::path& image_path);
 
 // Combines a FILETIME's two 32-bit halves into its 100 ns tick count since
@@ -59,4 +60,4 @@ void RequireCorpusImage(const std::filesystem::path& image);
 [[nodiscard]] std::tuple<WORD, WORD, WORD>
     FileTimeToDate(const FILETIME& file_time) noexcept;
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

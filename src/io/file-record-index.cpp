@@ -15,6 +15,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/index-alloc.h"
@@ -26,7 +27,7 @@
 #include "mft/file-reference.h"
 #include "upcase/upcase.h"
 
-namespace NtfsBrowser::Io {
+namespace NTFS_BROWSER_NAMESPACE::Io {
 
 namespace {
 
@@ -482,4 +483,4 @@ void Io::DirectoryIndex<S>::ScanOrphanedIndexBlocks(
 template class DirectoryIndex<Cache::Strategy::NoCache>;
 template class DirectoryIndex<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser::Io
+}  // namespace NTFS_BROWSER_NAMESPACE::Io

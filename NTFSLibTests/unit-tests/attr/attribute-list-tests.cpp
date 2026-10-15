@@ -19,6 +19,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attribute-list-support.h"
@@ -26,28 +27,29 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> dir = OpenListRecord<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory(),
-      NtfsBrowserTests::attribute_list_dir_idx,
-      Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
-      VolumeOptions{.recover_errors = true});
+  const ParsedRecord<S> dir =
+      OpenListRecord<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                            BuildFakeNtfsImageWithAttributeListDirectory(),
+                        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
+                        Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
+                        VolumeOptions{.recover_errors = true});
   REQUIRE(dir.record->ParseAttrs());
 
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
 
   const std::optional<IndexEntry> found = dir.record->FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(found).GetFileReference() == 20);
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(found).GetFileReference() == 20);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -56,8 +58,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMultiTypeAttributeListDirectory(),
-      NtfsBrowserTests::attr_list_multi_type_dir_idx,
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithMultiTypeAttributeListDirectory(),
+      NTFS_BROWSER_NAMESPACE::Tests::attr_list_multi_type_dir_idx,
       Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(dir.record->ParseAttrs());
 
@@ -72,16 +75,17 @@ TEMPLATE_TEST_CASE_SIG(
     "calls on a reused FileRecord",
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> dir = OpenListRecord<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListDirectory(),
-      NtfsBrowserTests::attribute_list_dir_idx,
-      Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  const ParsedRecord<S> dir =
+      OpenListRecord<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                            BuildFakeNtfsImageWithAttributeListDirectory(),
+                        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
+                        Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(dir.record->ParseAttrs());
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
 
   // Same FileRecord, same directory: it relocates to the same record again.
-  REQUIRE(
-      dir.record->ParseFileRecord(NtfsBrowserTests::attribute_list_dir_idx));
+  REQUIRE(dir.record->ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx));
   REQUIRE(dir.record->ParseAttrs());
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
 }
@@ -92,14 +96,15 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      NtfsBrowserTests::
+      NTFS_BROWSER_NAMESPACE::Tests::
           BuildFakeNtfsImageWithFragmentedAttributeListDirectory(),
-      NtfsBrowserTests::uaf_attr_list_dir_idx, Attr::Mask::IndexAllocation);
+      NTFS_BROWSER_NAMESPACE::Tests::uaf_attr_list_dir_idx,
+      Attr::Mask::IndexAllocation);
   REQUIRE(dir.record->ParseAttrs());
 
   const auto& alloc_attrs = dir.record->GetAttr(Attr::Type::IndexAllocation);
   REQUIRE(alloc_attrs.size() ==
-          NtfsBrowserTests::uaf_real_size_sentinels.size());
+          NTFS_BROWSER_NAMESPACE::Tests::uaf_real_size_sentinels.size());
 
   // Each GetDataSize() reads through a reference bound at that extension
   // record's construction time, so a moved FileRecord reads stale memory.
@@ -111,7 +116,7 @@ TEMPLATE_TEST_CASE_SIG(
         // The REQUIRE above makes allocAttrs as long as
         // uaf_real_size_sentinels.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        NtfsBrowserTests::uaf_real_size_sentinels[i]);
+        NTFS_BROWSER_NAMESPACE::Tests::uaf_real_size_sentinels[i]);
   }
 }
 
@@ -121,7 +126,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> record = OpenRecord<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithAttributeListCycle(),
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithAttributeListCycle(),
       static_cast<ULONGLONG>(Mft::Idx::Root));
   CHECK(record.record->ParseAttrs());
 }
@@ -133,23 +138,23 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      NtfsBrowserTests::
+      NTFS_BROWSER_NAMESPACE::Tests::
           BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory(),
-      NtfsBrowserTests::attr_list_tight_pack_dir_idx,
+      NTFS_BROWSER_NAMESPACE::Tests::attr_list_tight_pack_dir_idx,
       Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
       VolumeOptions{.recover_errors = true});
   REQUIRE(dir.record->ParseAttrs());
 
   const std::optional<IndexEntry> found = dir.record->FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(found).GetFileReference() == 20);
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(found).GetFileReference() == 20);
 
   const auto& alloc_attrs = dir.record->GetAttr(Attr::Type::IndexAllocation);
   REQUIRE(alloc_attrs.size() == 1);
   // The REQUIRE above checks the size of allocAttrs.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(alloc_attrs[0]->GetDataSize() ==
-        NtfsBrowserTests::attr_list_tight_pack_real_size);
+        NTFS_BROWSER_NAMESPACE::Tests::attr_list_tight_pack_real_size);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -158,13 +163,13 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> opened = OpenUnparsed<S>(
-      NtfsBrowserTests::
+      NTFS_BROWSER_NAMESPACE::Tests::
           BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList());
   // mft_data_ must be the base extent, not whichever instance parsed first.
   CHECK(opened.volume->GetRecordsCount() == 1);
 
   CHECK(opened.record->ParseFileRecord(
-      NtfsBrowserTests::mft_data_split_target_idx));
+      NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_target_idx));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -172,12 +177,14 @@ TEMPLATE_TEST_CASE_SIG(
     "where an earlier $ATTRIBUTE_LIST entry depends on a later one",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> opened = OpenUnparsed<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataExtentChain());
+  const ParsedRecord<S> opened =
+      OpenUnparsed<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                          BuildFakeNtfsImageWithMftDataExtentChain());
 
-  CHECK(opened.record->ParseFileRecord(NtfsBrowserTests::mft_chain_ext_a));
   CHECK(opened.record->ParseFileRecord(
-      NtfsBrowserTests::mft_chain_ext_a_start_vcn));
+      NTFS_BROWSER_NAMESPACE::Tests::mft_chain_ext_a));
+  CHECK(opened.record->ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::mft_chain_ext_a_start_vcn));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -185,13 +192,14 @@ TEMPLATE_TEST_CASE_SIG(
     "an earlier, resolvable one in the same $ATTRIBUTE_LIST",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> opened = OpenUnparsed<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
+  const ParsedRecord<S> opened =
+      OpenUnparsed<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                          BuildFakeNtfsImageWithUnresolvableMftDataExtent());
 
   CHECK(opened.record->ParseFileRecord(
-      NtfsBrowserTests::mft_unresolvable_good_record));
+      NTFS_BROWSER_NAMESPACE::Tests::mft_unresolvable_good_record));
   CHECK_FALSE(opened.record->ParseFileRecord(
-      NtfsBrowserTests::mft_unresolvable_ext_idx));
+      NTFS_BROWSER_NAMESPACE::Tests::mft_unresolvable_ext_idx));
 }
 
 namespace {
@@ -211,7 +219,7 @@ bool OpensWithinTimeout(std::vector<BYTE> image) {
   std::thread worker([done, image = std::move(image)]() mutable {
     try {
       const NtfsVolume<S> volume(
-          std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+          std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
               std::move(image)));
       done->set_value();
     } catch (...) {
@@ -236,7 +244,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CHECK(OpensWithinTimeout<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataLastVcnOverflow()));
+      NTFS_BROWSER_NAMESPACE::Tests::
+          BuildFakeNtfsImageWithMftDataLastVcnOverflow()));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -244,12 +253,12 @@ TEMPLATE_TEST_CASE_SIG(
     "reused under another sequence number",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> opened =
-      OpenUnparsed<S>(NtfsBrowserTests::BuildFakeNtfsImageWithMftDataSplitLink(
+  const ParsedRecord<S> opened = OpenUnparsed<S>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftDataSplitLink(
           {.entry_sequence = 3, .record_sequence = 4}));
 
   CHECK_FALSE(opened.record->ParseFileRecord(
-      NtfsBrowserTests::mft_data_split_target_idx));
+      NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_target_idx));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -257,23 +266,24 @@ TEMPLATE_TEST_CASE_SIG(
     "carries the sequence number its list entry names",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> opened =
-      OpenUnparsed<S>(NtfsBrowserTests::BuildFakeNtfsImageWithMftDataSplitLink(
+  const ParsedRecord<S> opened = OpenUnparsed<S>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftDataSplitLink(
           {.entry_sequence = 3, .record_sequence = 3}));
 
   CHECK(opened.record->ParseFileRecord(
-      NtfsBrowserTests::mft_data_split_target_idx));
+      NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_target_idx));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "Two $MFT DATA extents held by one extension record are both mapped",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> opened = OpenUnparsed<S>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord());
+  const ParsedRecord<S> opened =
+      OpenUnparsed<S>(NTFS_BROWSER_NAMESPACE::Tests::
+                          BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord());
 
   CHECK(opened.record->ParseFileRecord(
-      NtfsBrowserTests::mft_two_extents_first_vcn));
+      NTFS_BROWSER_NAMESPACE::Tests::mft_two_extents_first_vcn));
   CHECK(opened.record->ParseFileRecord(
-      NtfsBrowserTests::mft_two_extents_second_vcn));
+      NTFS_BROWSER_NAMESPACE::Tests::mft_two_extents_second_vcn));
 }

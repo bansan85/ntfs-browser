@@ -11,6 +11,7 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
@@ -22,12 +23,12 @@
 #include "fake-ntfs-image.h"
 #include "mft/file-reference.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::Data::FileRecordHeader;
-using NtfsBrowser::Data::index_block_magic;
-namespace Mft = NtfsBrowser::Mft;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader;
+using NTFS_BROWSER_NAMESPACE::Data::index_block_magic;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 // Reuses fake-ntfs-image.h's geometry, so fixture constants declared there
 // (eg. compression_unit_size) can be sized in real clusters.
@@ -96,7 +97,7 @@ struct alignas(record_alignment) FakeRecord
 // Packs an on-disk file reference: record number low, sequence number high.
 constexpr ULONGLONG MakeFileReference(ULONGLONG record, WORD sequence) {
   return (static_cast<ULONGLONG>(sequence)
-          << NtfsBrowser::Mft::mft_sequence_shift) |
+          << NTFS_BROWSER_NAMESPACE::Mft::mft_sequence_shift) |
          record;
 }
 
@@ -110,7 +111,8 @@ inline constexpr WORD root_sequence_number = 5;
 inline constexpr DWORD attr_alignment = 8;
 
 // Returns the sub-node VCN slot: the last 8 bytes of the index entry `e`.
-ULONGLONG& SubNodeVcnSlot(NtfsBrowser::Data::IndexEntry& index_entry);
+ULONGLONG&
+    SubNodeVcnSlot(NTFS_BROWSER_NAMESPACE::Data::IndexEntry& index_entry);
 
 // Rounds a size up to attr_alignment.
 constexpr DWORD AlignAttrSize(size_t size) {
@@ -121,7 +123,7 @@ constexpr DWORD AlignAttrSize(size_t size) {
 // Builds a bare file-record header with the given attribute offset and
 // flags.
 FakeRecord MakeRecordHeader(WORD offset_of_attr,
-                            NtfsBrowser::Data::FileRecordFlag flags);
+                            NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags);
 
 // Makes record an extension record: its own sequence number, and the file
 // reference of the base record it belongs to.
@@ -163,7 +165,7 @@ FakeRecord MakeIndexRootExtensionRecord(ULONGLONG base_idx = 0);
 // with the given DOS permission bits, and returns its total_size.
 DWORD WriteStandardInformationAttr(
     FakeRecord& record, DWORD offset,
-    NtfsBrowser::Data::StdInfoPermission permission);
+    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission);
 
 // Header fields the deliberately malformed compression fixtures forge -
 // values a well-formed builder never derives from its own run list.
@@ -237,11 +239,11 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
 
 // File record (root, #5): resident $STANDARD_INFORMATION("permission") plus
 // one non-resident $DATA attribute described by compUnitSize/realSize/runs.
-FakeRecord
-    MakeNonResidentDataRecord(NtfsBrowser::Data::StdInfoPermission permission,
-                              WORD comp_unit_size, ULONGLONG real_size,
-                              const std::vector<FakeDataRun>& runs,
-                              const FakeNonResidentOverrides& overrides = {});
+FakeRecord MakeNonResidentDataRecord(
+    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission,
+    WORD comp_unit_size, ULONGLONG real_size,
+    const std::vector<FakeDataRun>& runs,
+    const FakeNonResidentOverrides& overrides = {});
 
 // One leaf $FILE_NAME index entry a fixture writes: a name, the MFT record
 // it points at, whether that record is a directory, and the sequence number
@@ -273,7 +275,7 @@ DWORD WriteIndexRootAttr(FakeRecord& record, DWORD offset,
 // by index_alloc - lets fixtures target an attribute FuzzOnce() actually
 // ReadData()s, unlike plain $DATA.
 FakeRecord MakeIndexAllocationDirRecord(
-    NtfsBrowser::Data::StdInfoPermission permission,
+    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission,
     const FakeNonResidentAttr& index_alloc,
     std::span<const FakeIndexName> root_names = {});
 
@@ -308,14 +310,14 @@ std::vector<BYTE> MakeCompressedIndexBlockContent();
 struct FakeFileName {
   std::wstring_view name;
   ULONGLONG parent_ref;
-  NtfsBrowser::Data::FilenameNamespace name_space =
-      NtfsBrowser::Data::FilenameNamespace::Win32;
+  NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace name_space =
+      NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
   // The size NTFS only refreshes in $FILE_NAME on a rename.
   ULONGLONG real_size = 0;
   // ORed onto the DIRECTORY/NONE flag WriteFileNameAttr() derives on its own,
   // eg. for a permission bit $FILE_NAME mirrors from $STANDARD_INFORMATION.
-  NtfsBrowser::Data::FilenameFlag extra_flags =
-      NtfsBrowser::Data::FilenameFlag::None;
+  NTFS_BROWSER_NAMESPACE::Data::FilenameFlag extra_flags =
+      NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
 };
 
 // Writes one resident $FILE_NAME at record[offset] and returns its
@@ -330,16 +332,16 @@ DWORD WriteResidentDataAttr(FakeRecord& record, DWORD offset, DWORD size);
 // Builds one record of BuildFakeNtfsImageWithMftTree(): a header carrying
 // sequence and baseRef, a $STANDARD_INFORMATION, names, and, when dataSize is
 // set, a resident $DATA of that size.
-FakeRecord MakeMftTreeRecord(NtfsBrowser::Data::FileRecordFlag flags,
-                             WORD sequence,
-                             std::initializer_list<FakeFileName> names,
-                             std::optional<DWORD> data_size = {},
-                             NtfsBrowser::Data::StdInfoPermission permission =
-                                 NtfsBrowser::Data::StdInfoPermission::Normal,
-                             ULONGLONG base_ref = 0);
+FakeRecord MakeMftTreeRecord(
+    NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags, WORD sequence,
+    std::initializer_list<FakeFileName> names,
+    std::optional<DWORD> data_size = {},
+    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission =
+        NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal,
+    ULONGLONG base_ref = 0);
 
 // Writes a malformed attribute at record[offset], as defect describes it.
 void WriteTrailingDefect(FakeRecord& record, DWORD offset,
                          FakeTrailingDefect defect);
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

@@ -3,7 +3,9 @@
 #include <optional>
 #include <utility>
 
-namespace NtfsBrowserTests {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Reads an optional a test has already checked. Throws when it is empty:
 // Catch2 reports that as a failed test, and clang-tidy's
@@ -32,4 +34,4 @@ template <typename T>
   return *std::move(opt);
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

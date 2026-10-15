@@ -22,6 +22,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/file-name.h"
@@ -38,7 +39,7 @@
 #include "upcase/upcase.h"
 #include "utf/utf.h"
 
-namespace NtfsBrowser::Io {
+namespace NTFS_BROWSER_NAMESPACE::Io {
 
 namespace {
 
@@ -576,4 +577,4 @@ bool Io::FileRecord<S>::IsReparsePoint() const noexcept {
 template class FileRecord<Cache::Strategy::NoCache>;
 template class FileRecord<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser::Io
+}  // namespace NTFS_BROWSER_NAMESPACE::Io

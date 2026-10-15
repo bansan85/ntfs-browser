@@ -9,7 +9,9 @@
 #include <string_view>
 #include <vector>
 
-namespace NtfsBrowser::Data {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 enum class IndexEntryFlag : BYTE;
 
@@ -27,9 +29,9 @@ struct IndexEntry {
   // VCN of the sub node in Index Allocation, Offset = Size - 8
 };
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data
 
-namespace NtfsBrowser::Data {
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 // Copies out the fixed part of the entry at the start of `at`, whatever its
 // alignment. The caller MUST have checked that offsetof(IndexEntry,
@@ -51,4 +53,4 @@ namespace NtfsBrowser::Data {
 [[nodiscard]] std::optional<std::string_view>
     ValidateIndexEntry(const IndexEntry& index_entry) noexcept;
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

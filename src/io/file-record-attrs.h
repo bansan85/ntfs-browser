@@ -13,10 +13,11 @@
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Io {
 
@@ -77,4 +78,4 @@ class AttrParser {
 
 }  // namespace Io
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

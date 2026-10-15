@@ -11,12 +11,13 @@
 #include <vector>
 
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/filename.h"
 #include "data/index-entry-flag.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Data {
 
@@ -166,4 +167,4 @@ ULONGLONG IndexEntryView::GetSubNodeVCN() const noexcept {
   return vcn;
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

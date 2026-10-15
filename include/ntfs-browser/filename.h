@@ -5,8 +5,9 @@
 #include <string>
 
 #include <ntfs-browser/export.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Data {
 
 struct Filename;
@@ -93,4 +94,4 @@ class NTFS_BROWSER_EXPORT Filename {
                            FILETIME* change_tm = nullptr) const noexcept;
 };  // Filename
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

@@ -5,8 +5,9 @@
 #include <cstdint>
 
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Cache {
 
@@ -45,7 +46,7 @@ class AttrStdInfo : public Resident {
   ~AttrStdInfo() override;
 
   template <Cache::Strategy>
-  friend class NtfsBrowser::Io::FileRecord;
+  friend class NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 
  private:
   const Data::StandardInformation& std_info_;
@@ -73,4 +74,4 @@ class AttrStdInfo : public Resident {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

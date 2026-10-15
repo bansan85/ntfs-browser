@@ -10,6 +10,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 
 #include "catch2/catch_message.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
@@ -19,28 +20,30 @@
 
 namespace Fs = std::filesystem;
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowser::Log::Config;
-using NtfsBrowser::Log::Level;
+using NTFS_BROWSER_NAMESPACE::Log::Config;
+using NTFS_BROWSER_NAMESPACE::Log::Level;
 
 TEST_CASE("the --log option parses a target and a level", "[logging]") {
   Config config;
 
   SECTION("console level") {
-    REQUIRE(NtfsBrowser::Log::ParseOption("--log=console:debug", config));
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Log::ParseOption("--log=console:debug",
+                                                     config));
     CHECK(config.console_level == Level::Debug);
     CHECK(config.file_level == Level::Off);
   }
 
   SECTION("file level, default path") {
-    REQUIRE(NtfsBrowser::Log::ParseOption("--log=file:debug", config));
+    REQUIRE(
+        NTFS_BROWSER_NAMESPACE::Log::ParseOption("--log=file:debug", config));
     CHECK(config.file_level == Level::Debug);
-    CHECK(config.file_path == NtfsBrowser::Log::default_file_path);
+    CHECK(config.file_path == NTFS_BROWSER_NAMESPACE::Log::default_file_path);
     CHECK(config.console_level == Level::Warn);
   }
 
   SECTION("file level and path, drive letter kept") {
-    REQUIRE(NtfsBrowser::Log::ParseOption("--log=file:trace:C:\\tmp\\ntfs.log",
-                                          config));
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Log::ParseOption(
+        "--log=file:trace:C:\\tmp\\ntfs.log", config));
     CHECK(config.file_level == Level::Trace);
     CHECK(config.file_path == "C:\\tmp\\ntfs.log");
   }
@@ -49,7 +52,7 @@ TEST_CASE("the --log option parses a target and a level", "[logging]") {
   // The wide ParseOption() overload only exists for wmain()'s wide argv,
   // which only exists on Windows.
   SECTION("wide option, path kept as wide characters") {
-    REQUIRE(NtfsBrowser::Log::ParseOption(
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Log::ParseOption(
         L"--log=file:trace:C:\\tmp\\\u30ed.log", config));
     CHECK(config.file_level == Level::Trace);
     CHECK(config.file_path == Fs::path(L"C:\\tmp\\\u30ed.log"));
@@ -57,14 +60,17 @@ TEST_CASE("the --log option parses a target and a level", "[logging]") {
 #endif
 
   SECTION("repeated, once per target") {
-    REQUIRE(NtfsBrowser::Log::ParseOption("--log=console:error", config));
-    REQUIRE(NtfsBrowser::Log::ParseOption("--log=file:trace", config));
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Log::ParseOption("--log=console:error",
+                                                     config));
+    REQUIRE(
+        NTFS_BROWSER_NAMESPACE::Log::ParseOption("--log=file:trace", config));
     CHECK(config.console_level == Level::Error);
     CHECK(config.file_level == Level::Trace);
   }
 
   SECTION("either target may be off") {
-    REQUIRE(NtfsBrowser::Log::ParseOption("--log=console:off", config));
+    REQUIRE(
+        NTFS_BROWSER_NAMESPACE::Log::ParseOption("--log=console:off", config));
     CHECK(config.console_level == Level::Off);
   }
 }
@@ -78,10 +84,10 @@ TEST_CASE("the --log option rejects a malformed value and changes nothing",
   for (const char* option : rejected) {
     Config config;
     INFO("option: " << option);
-    CHECK_FALSE(NtfsBrowser::Log::ParseOption(option, config));
+    CHECK_FALSE(NTFS_BROWSER_NAMESPACE::Log::ParseOption(option, config));
     CHECK(config.console_level == Level::Warn);
     CHECK(config.file_level == Level::Off);
-    CHECK(config.file_path == NtfsBrowser::Log::default_file_path);
+    CHECK(config.file_path == NTFS_BROWSER_NAMESPACE::Log::default_file_path);
   }
 }
 
@@ -89,7 +95,7 @@ TEST_CASE("the default configuration logs warnings, not info", "[logging]") {
   const Config config;
   CHECK(config.console_level == Level::Warn);
   CHECK(config.file_level == Level::Off);
-  CHECK(config.file_path == NtfsBrowser::Log::default_file_path);
+  CHECK(config.file_path == NTFS_BROWSER_NAMESPACE::Log::default_file_path);
 }
 
 TEST_CASE("each sink keeps its own level", "[logging]") {
@@ -100,15 +106,15 @@ TEST_CASE("each sink keeps its own level", "[logging]") {
   config.console_level = Level::Off;
   config.file_level = Level::Warn;
   config.file_path = log_file.Path();
-  REQUIRE(NtfsBrowser::Log::Configure(config));
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
 
-  NtfsBrowser::Log::Trace("trace-only-line");
-  NtfsBrowser::Log::Info("info-only-line");
-  NtfsBrowser::Log::Warn("warn-line");
-  NtfsBrowser::Log::Error("error-line");
+  NTFS_BROWSER_NAMESPACE::Log::Trace("trace-only-line");
+  NTFS_BROWSER_NAMESPACE::Log::Info("info-only-line");
+  NTFS_BROWSER_NAMESPACE::Log::Warn("warn-line");
+  NTFS_BROWSER_NAMESPACE::Log::Error("error-line");
 
   // Drops the file sink, which closes the file before it is read back.
-  NtfsBrowserTests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
 
   const std::string contents = log_file.Read();
   CHECK_THAT(contents, ContainsSubstring("warn-line"));
@@ -125,12 +131,12 @@ TEST_CASE("a file sink at trace records every level", "[logging]") {
   config.console_level = Level::Off;
   config.file_level = Level::Trace;
   config.file_path = log_file.Path();
-  REQUIRE(NtfsBrowser::Log::Configure(config));
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
 
-  NtfsBrowser::Log::Trace("recorded-trace");
-  NtfsBrowser::Log::Error("recorded-error");
+  NTFS_BROWSER_NAMESPACE::Log::Trace("recorded-trace");
+  NTFS_BROWSER_NAMESPACE::Log::Error("recorded-error");
 
-  NtfsBrowserTests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
 
   const std::string contents = log_file.Read();
   CHECK_THAT(contents, ContainsSubstring("recorded-trace"));
@@ -145,11 +151,11 @@ TEST_CASE("both targets off writes nothing at all", "[logging]") {
   config.console_level = Level::Off;
   config.file_level = Level::Off;
   config.file_path = log_file.Path();
-  REQUIRE(NtfsBrowser::Log::Configure(config));
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
 
-  NtfsBrowser::Log::Error("never-written");
+  NTFS_BROWSER_NAMESPACE::Log::Error("never-written");
 
-  NtfsBrowserTests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
   CHECK_FALSE(Fs::exists(log_file.Path()));
 }
 
@@ -162,13 +168,13 @@ TEST_CASE("a message carrying braces is not treated as a format string",
   config.console_level = Level::Off;
   config.file_level = Level::Trace;
   config.file_path = log_file.Path();
-  REQUIRE(NtfsBrowser::Log::Configure(config));
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
 
   // What Log::Exception() relays: runtime text, never a format string.
   const std::runtime_error thrown("relayed {0} {bad} text\n");
-  NtfsBrowser::Log::Exception(thrown);
+  NTFS_BROWSER_NAMESPACE::Log::Exception(thrown);
 
-  NtfsBrowserTests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
 
   // Carriage returns go first: spdlog ends a line with \r\n here, which
   // would hide the thrower's own newline from the check below.
@@ -194,10 +200,10 @@ TEST_CASE("Configure() on an unwritable path fails without throwing",
   config.file_path = "/ntfs-browser-no-such-directory/log.txt";
 #endif
 
-  CHECK_FALSE(NtfsBrowser::Log::Configure(config));
+  CHECK_FALSE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
 
   // The console target survives the file sink's failure.
-  NtfsBrowser::Log::Error("still-logging");
+  NTFS_BROWSER_NAMESPACE::Log::Error("still-logging");
 }
 
 #ifdef _WIN32
@@ -211,16 +217,16 @@ TEST_CASE("a log path outside the ANSI code page still opens", "[logging]") {
   const TempFile log_file(L"\u30ed\u30b0");
 
   Config config;
-  REQUIRE(NtfsBrowser::Log::ParseOption(
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Log::ParseOption(
       std::wstring(L"--log=file:trace:") + log_file.Path().wstring(), config));
   CHECK(config.file_path == log_file.Path());
 
   config.console_level = Level::Off;
-  REQUIRE(NtfsBrowser::Log::Configure(config));
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
 
-  NtfsBrowser::Log::Error("wide-path-line");
+  NTFS_BROWSER_NAMESPACE::Log::Error("wide-path-line");
 
-  NtfsBrowserTests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
 
   CHECK(Fs::exists(log_file.Path()));
   CHECK_THAT(log_file.Read(), ContainsSubstring("wide-path-line"));
@@ -236,14 +242,14 @@ TEST_CASE("Configure() replaces the previous sinks wholesale", "[logging]") {
   config.console_level = Level::Off;
   config.file_level = Level::Trace;
   config.file_path = first.Path();
-  REQUIRE(NtfsBrowser::Log::Configure(config));
-  NtfsBrowser::Log::Error("into-first");
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
+  NTFS_BROWSER_NAMESPACE::Log::Error("into-first");
 
   config.file_path = second.Path();
-  REQUIRE(NtfsBrowser::Log::Configure(config));
-  NtfsBrowser::Log::Error("into-second");
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
+  NTFS_BROWSER_NAMESPACE::Log::Error("into-second");
 
-  NtfsBrowserTests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
 
   CHECK_THAT(first.Read(), ContainsSubstring("into-first"));
   CHECK_THAT(first.Read(), !ContainsSubstring("into-second"));

@@ -11,12 +11,14 @@
 #include <frozen/bits/elsa_std.h>
 #include <frozen/unordered_map.h>
 
+#include <ntfs-browser/namespace.h>
+
 #include "catch2/catch_message.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
 #include "child-process.h"
 
-using NtfsBrowserTests::ProcessOutput;
-using NtfsBrowserTests::RunProcessCapturingOutput;
+using NTFS_BROWSER_NAMESPACE::Tests::ProcessOutput;
+using NTFS_BROWSER_NAMESPACE::Tests::RunProcessCapturingOutput;
 
 namespace Fs = std::filesystem;
 

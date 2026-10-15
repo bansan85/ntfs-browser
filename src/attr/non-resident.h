@@ -11,13 +11,14 @@
 
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/run-list.h"
 #include "data/run-entry.h"
 #include "internal-export.h"
 #include "io/file-record-efs.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Cache {
 
@@ -183,4 +184,4 @@ class AttrNonResident : public Attr::AttrBase<S> {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

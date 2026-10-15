@@ -12,6 +12,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 
 // Prints command-line usage help.
 void Usage();
@@ -33,11 +34,11 @@ struct Total {
 
 // TraverseSubEntries callback: prints one directory entry and tallies it
 // into context, a Total*.
-void Printfile(const NtfsBrowser::IndexEntryView& ie, void* context);
+void Printfile(const NTFS_BROWSER_NAMESPACE::IndexEntryView& ie, void* context);
 
 // The parsed command line: the --log settings and the one path argument.
 struct Arguments {
-  NtfsBrowser::Log::Config log_config;
+  NTFS_BROWSER_NAMESPACE::Log::Config log_config;
   wchar_t* path = nullptr;
 };
 
@@ -47,5 +48,5 @@ std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]);
 
 // Lists the directory named on the command line, opening the volume with
 // cache strategy S. Returns the exit code.
-template <NtfsBrowser::Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 int RunNtfsDir(int argc, wchar_t* argv[]);

@@ -3,8 +3,9 @@
 #include <ntfs-browser/win-types.h>
 
 #include <ntfs-browser/attr/header-common.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser::Data {
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 struct HeaderResident {
   Attr::HeaderCommon header;  // Common data structure
@@ -14,4 +15,4 @@ struct HeaderResident {
   BYTE padding;               // Padding
 };
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

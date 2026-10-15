@@ -6,8 +6,9 @@
 #include <utility>
 
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Cache {
 
@@ -43,7 +44,7 @@ class AttrVolInfo : public Resident {
   ~AttrVolInfo() override;
 
   template <Cache::Strategy>
-  friend class NtfsBrowser::NtfsVolume;
+  friend class NTFS_BROWSER_NAMESPACE::NtfsVolume;
 
  private:
   const Data::VolumeInformation& vol_info_;
@@ -54,4 +55,4 @@ class AttrVolInfo : public Resident {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

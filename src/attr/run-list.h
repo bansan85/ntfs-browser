@@ -7,9 +7,11 @@
 #include <span>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
+
 #include "data/run-entry.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 ////////////////////////////////
 // Data runs of a non-resident attribute
@@ -68,4 +70,4 @@ class RunList {
                                    DecodeCursor& cursor, bool recover);
 };  // RunList
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

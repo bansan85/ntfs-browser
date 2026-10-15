@@ -2,6 +2,8 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <ntfs-browser/namespace.h>
+
 #ifdef NTFS_TEST_HAS_MD5
 
   #include <array>
@@ -21,7 +23,7 @@
 
   #endif
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
@@ -59,6 +61,6 @@ std::string Md5Hex(std::span<const BYTE> data) {
 
   #endif
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests
 
 #endif  // NTFS_TEST_HAS_MD5

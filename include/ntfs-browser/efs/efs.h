@@ -7,13 +7,15 @@
 #include <span>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
+
 #ifdef _WIN32
   #include <filesystem>
 #endif
 
 #include <ntfs-browser/export.h>
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 // Which library decrypts the file data once the key is known.
 enum class CipherBackend : std::uint8_t { CryptoPp, BCrypt };
@@ -53,4 +55,4 @@ class IEfsKeyProvider {
                        std::wstring_view password);
 #endif
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs

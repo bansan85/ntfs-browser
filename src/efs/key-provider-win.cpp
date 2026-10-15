@@ -11,12 +11,13 @@
   #include <wincrypt.h>
 
   #include <ntfs-browser/efs/efs.h>
+  #include <ntfs-browser/namespace.h>
 
   #include "efs/fek.h"
   #include "log/ntfs-common.h"
   #include "util/util.h"
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 namespace {
 
@@ -244,6 +245,6 @@ std::shared_ptr<IEfsKeyProvider>
   return std::make_shared<StoreKeyProvider>(store);
 }
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs
 
 #endif  // _WIN32

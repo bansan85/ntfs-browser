@@ -2,7 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Attr {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 enum class Mask : DWORD {
   // Bit masks of Attributes: the bit for attribute type T is
@@ -29,4 +31,4 @@ enum class Mask : DWORD {
 // NOLINTNEXTLINE
 DEFINE_ENUM_FLAG_OPERATORS(Mask)
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

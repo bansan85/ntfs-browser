@@ -15,6 +15,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/non-resident.h"  // IWYU pragma: keep
@@ -25,7 +26,7 @@
 #include "mft/extent-map.h"
 #include "mft/file-reference.h"
 
-namespace NtfsBrowser::Mft {
+namespace NTFS_BROWSER_NAMESPACE::Mft {
 
 namespace {
 
@@ -263,4 +264,4 @@ void MftBootstrap<S>::ResolvePendingMftExtension(
 template class MftBootstrap<Cache::Strategy::NoCache>;
 template class MftBootstrap<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser::Mft
+}  // namespace NTFS_BROWSER_NAMESPACE::Mft

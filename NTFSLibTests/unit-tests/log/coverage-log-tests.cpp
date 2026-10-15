@@ -9,20 +9,21 @@
 #include <spdlog/spdlog.h>
 
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
 #include "logging-test-support.h"
 #include "test-log-sink.h"
 
-namespace Log = NtfsBrowser::Log;
+namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 
 TEST_CASE("an exception message loses its trailing line breaks",
           "[cov-attrs]") {
-  static_cast<void>(NtfsBrowserTests::TakeCapturedLog());
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog());
 
   Log::Exception(std::runtime_error("parse failed\r\n"));
 
-  const std::string text = NtfsBrowserTests::TakeCapturedLog();
+  const std::string text = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const std::string_view message = "parse failed";
   const size_t message_start = text.find(message);
   REQUIRE(message_start != std::string::npos);
@@ -33,12 +34,12 @@ TEST_CASE("an exception message loses its trailing line breaks",
 
 TEST_CASE("a message that cannot be formatted is logged as such",
           "[cov-attrs]") {
-  static_cast<void>(NtfsBrowserTests::TakeCapturedLog());
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog());
 
   // A negative dynamic width makes std::format throw.
   Log::Info("width {:{}}", "x", -1);
 
-  const std::string text = NtfsBrowserTests::TakeCapturedLog();
+  const std::string text = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   CHECK(text.find("Log message could not be formatted") != std::string::npos);
 }
 

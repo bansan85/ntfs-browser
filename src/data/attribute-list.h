@@ -5,8 +5,9 @@
 #include <cstddef>
 
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser::Data {
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 // Both members are bitfields sharing one ULONGLONG allocation unit, so
 // this struct is exactly 8 bytes, the real on-disk base file reference size.
@@ -29,4 +30,4 @@ struct AttributeList {
 inline constexpr size_t attribute_list_entry_header_size =
     offsetof(AttributeList, attr_id) + sizeof(AttributeList::attr_id);
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

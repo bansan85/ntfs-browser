@@ -13,7 +13,9 @@
 
 #include <gsl/narrow>
 
-namespace NtfsBrowser::UpCase {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::UpCase {
 namespace {
 
 // One run of the built-in mapping: every step-th unit from first to last
@@ -372,4 +374,4 @@ int Table::Compare(std::wstring_view first,
   return left.AtEnd() ? -1 : 1;
 }
 
-}  // namespace NtfsBrowser::UpCase
+}  // namespace NTFS_BROWSER_NAMESPACE::UpCase

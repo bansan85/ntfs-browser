@@ -9,13 +9,14 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "ntfsundel-core.h"
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
 
-using namespace NtfsBrowser;
+using namespace NTFS_BROWSER_NAMESPACE;
 
 #ifdef _DEBUG
   #define new DEBUG_NEW

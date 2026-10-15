@@ -9,7 +9,9 @@
 #include <span>
 #include <utility>
 
-namespace NtfsBrowserTests {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 MemoryDiskReader::MemoryDiskReader(std::vector<BYTE> data)
     : data_(std::move(data)) {}
@@ -39,4 +41,4 @@ bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr,
   return true;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

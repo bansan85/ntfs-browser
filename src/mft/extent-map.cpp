@@ -16,11 +16,12 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "../attr/non-resident.h"
 #include "../log/ntfs-common.h"
 
-namespace NtfsBrowser::Mft {
+namespace NTFS_BROWSER_NAMESPACE::Mft {
 
 template <Cache::Strategy S>
 ExtentMap<S>::ExtentMap(DWORD cluster_size, DWORD file_record_size) noexcept
@@ -197,4 +198,4 @@ ULONGLONG ExtentMap<S>::RecordCount() const noexcept {
 template class ExtentMap<Cache::Strategy::NoCache>;
 template class ExtentMap<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser::Mft
+}  // namespace NTFS_BROWSER_NAMESPACE::Mft

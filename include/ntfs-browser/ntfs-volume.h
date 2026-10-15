@@ -14,13 +14,14 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/export.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
 #ifdef _WIN32
   #include <tchar.h>
 #endif
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Io {
 
@@ -110,4 +111,4 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   [[nodiscard]] Efs::CipherBackend GetEfsCipherBackend() const noexcept;
 };  // NtfsVolume
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

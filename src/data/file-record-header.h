@@ -5,7 +5,9 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace NtfsBrowser::Data {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 enum class FileRecordFlag : std::uint8_t;
 
@@ -60,4 +62,4 @@ struct FileRecordHeader {
   };
 };
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

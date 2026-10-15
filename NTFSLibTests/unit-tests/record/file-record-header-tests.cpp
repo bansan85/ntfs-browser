@@ -14,15 +14,16 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "catch2/matchers/catch_matchers.hpp"
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"
 #include "record/header.h"
 
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::Data::FileRecordHeader;
-using NtfsBrowser::Record::HeaderImpl;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader;
+using NTFS_BROWSER_NAMESPACE::Record::HeaderImpl;
 
 namespace {
 
@@ -33,7 +34,7 @@ constexpr size_t declared_buffer_size = 1024;
 // 512-byte block.
 constexpr size_t array_words =
     declared_buffer_size /
-    NtfsBrowser::Data::FileRecordHeader::update_sequence_stride;
+    NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::update_sequence_stride;
 
 // Places the US array's first word exactly at the buffer's declared end.
 constexpr WORD offset_of_us_value =
@@ -57,12 +58,13 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> storage(declared_buffer_size + array_words * sizeof(WORD),
                             0);
 
-  NtfsBrowserTests::EditFileRecordHeader(storage, [](FileRecordHeader& header) {
-    header.magic = FileRecordHeader::file_record_magic;
-    header.offset_of_us = offset_of_us_value;
-    // Correct value; it bounds how many array words the ctor reads.
-    header.size_of_us = static_cast<WORD>(array_words + 1);
-  });
+  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+      storage, [](FileRecordHeader& header) {
+        header.magic = FileRecordHeader::file_record_magic;
+        header.offset_of_us = offset_of_us_value;
+        // Correct value; it bounds how many array words the ctor reads.
+        header.size_of_us = static_cast<WORD>(array_words + 1);
+      });
 
   for (size_t i = 0; i < array_words; i++) {
     const WORD sentinel = Sentinel(i);
@@ -106,11 +108,12 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr WORD offset_of_us_array = 48;
 
   std::vector<BYTE> storage(record_size, 0);
-  NtfsBrowserTests::EditFileRecordHeader(storage, [](FileRecordHeader& header) {
-    header.magic = FileRecordHeader::file_record_magic;
-    header.offset_of_us = offset_of_us_array;
-    header.size_of_us = static_cast<WORD>(blocks + 1);
-  });
+  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+      storage, [](FileRecordHeader& header) {
+        header.magic = FileRecordHeader::file_record_magic;
+        header.offset_of_us = offset_of_us_array;
+        header.size_of_us = static_cast<WORD>(blocks + 1);
+      });
 
   const auto put_word = [&](size_t offset, WORD value) {
     std::memcpy(&storage.at(offset), &value, sizeof(value));
@@ -150,7 +153,7 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t buffer_size,
   const size_t sectors = buffer_size / FileRecordHeader::update_sequence_stride;
   const WORD offset_of_us = gsl::narrow<WORD>(buffer_size - 2 * (1 + sectors));
 
-  NtfsBrowserTests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
       storage, [&](FileRecordHeader& header) {
         header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = offset_of_us;

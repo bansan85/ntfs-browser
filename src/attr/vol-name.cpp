@@ -3,12 +3,13 @@
 #include <ntfs-browser/win-types.h>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
 #include "log/ntfs-common.h"
 #include "utf/utf.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 template <typename Resident, Cache::Strategy S>
 AttrVolName<Resident, S>::AttrVolName(const HeaderCommon& ahc,
@@ -36,4 +37,4 @@ std::wstring_view AttrVolName<Resident, S>::GetName() const noexcept {
 template class AttrVolName<AttrResidentFullCache, Cache::Strategy::FullCache>;
 template class AttrVolName<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 
-namespace NtfsBrowserTests {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Exit code plus everything a child process wrote, stdout and stderr
 // combined in the order it wrote them.
@@ -28,4 +30,4 @@ struct ProcessOutput {
                                     const std::filesystem::path& stdout_path,
                                     const std::filesystem::path& stderr_path);
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

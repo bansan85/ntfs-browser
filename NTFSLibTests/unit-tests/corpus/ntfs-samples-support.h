@@ -21,26 +21,28 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "corpus-test-support.h"
 #include "optional-access.h"
 #include "partition-disk-reader.h"
 
-using NtfsBrowser::Attr::AttrBase;
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
 // The "ntfs-samples" forensic test image corpus, documented in that repo's
 // ReadMe.md. Each image is checked in there as a gzip/rar archive, too large
 // to check into this one too.
-const std::filesystem::path& samples_dir = NtfsBrowserTests::NtfsSamplesDir();
+const std::filesystem::path& samples_dir =
+    NTFS_BROWSER_NAMESPACE::Tests::NtfsSamplesDir();
 
 const std::filesystem::path ptrn_image = samples_dir / "ntfs-ptrn.raw";
 
@@ -86,19 +88,20 @@ constexpr ULONGLONG large_image_partition_offset = 1048576;
 
 // Opens imagePath through a PartitionDiskReader, so NtfsVolume sees the NTFS
 // partition's own boot sector at addr 0 instead of the image's MBR.
-inline std::unique_ptr<NtfsBrowser::IDiskReader>
+inline std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
     OpenWholeDiskImage(const std::filesystem::path& image_path,
                        ULONGLONG partition_offset) {
   auto reader =
-      std::make_unique<NtfsBrowserTests::PartitionDiskReader>(partition_offset);
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::PartitionDiskReader>(
+          partition_offset);
   REQUIRE(reader->Open(image_path.wstring()));
   return reader;
 }
 
 // Parses dir's own file record as the volume's root directory, ready for
 // FindSubEntry(). dir must already be constructed on that volume.
-inline void
-    OpenRootDir(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir) {
+inline void OpenRootDir(
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir) {
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(dir.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(dir.ParseAttrs());
@@ -106,22 +109,22 @@ inline void
 
 // Looks up name under dir's current directory and reparses dir in place as
 // that subdirectory.
-inline void
-    OpenSubDir(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
-               std::wstring_view name) {
+inline void OpenSubDir(
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir,
+    std::wstring_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(name);
   REQUIRE(entry.has_value());
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  REQUIRE(
-      dir.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
+  REQUIRE(dir.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
   REQUIRE(dir.ParseAttrs());
 }
 
 // Navigates dir down a directory path, one component at a time, from the
 // volume root.
-inline void
-    OpenDirPath(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
-                std::initializer_list<std::wstring_view> parts) {
+inline void OpenDirPath(
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir,
+    std::initializer_list<std::wstring_view> parts) {
   OpenRootDir(dir);
   for (const std::wstring_view part : parts) {
     OpenSubDir(dir, part);
@@ -198,21 +201,21 @@ inline bool ContainsPtrnRun(std::span<const BYTE> data, size_t min_run_length) {
 // filled with that pattern before formatting.
 inline void CheckRepairStreamsHoldPtrnPattern(
     const NtfsVolume<Cache::Strategy::NoCache>& volume) {
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> dir(volume);
   OpenDirPath(dir, {L"$Extend", L"$RmMetadata"});
 
   const std::optional<IndexEntry> entry = dir.FindSubEntry(L"$Repair");
   REQUIRE(entry.has_value());
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::Data);
-  REQUIRE(
-      file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
+  REQUIRE(file.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   for (const std::wstring_view stream_name : {L"$Corrupt", L"$Verify"}) {
-    const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
-        file.FindStream(stream_name);
+    const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>*
+        stream = file.FindStream(stream_name);
     REQUIRE(stream != nullptr);
 
     std::vector<BYTE> data(stream->GetDataSize());
@@ -229,8 +232,10 @@ inline void CheckRepairStreamsHoldPtrnPattern(
 // test machine's own timezone and would otherwise make an exact wall-clock
 // comparison flaky.
 inline ULONGLONG TickDelta(const FILETIME& first, const FILETIME& second) {
-  const ULONGLONG first_ticks = NtfsBrowserTests::FileTimeToTicks(first);
-  const ULONGLONG second_ticks = NtfsBrowserTests::FileTimeToTicks(second);
+  const ULONGLONG first_ticks =
+      NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks(first);
+  const ULONGLONG second_ticks =
+      NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks(second);
   return first_ticks > second_ticks ? first_ticks - second_ticks
                                     : second_ticks - first_ticks;
 }
@@ -246,7 +251,7 @@ inline void CheckDeltaMatchesSeconds(ULONGLONG delta_ticks,
 
 // Year/month/day of ft, converted from its (local-time) FILETIME.
 inline std::tuple<WORD, WORD, WORD> ToDate(const FILETIME& file_time) {
-  return NtfsBrowserTests::FileTimeToDate(file_time);
+  return NTFS_BROWSER_NAMESPACE::Tests::FileTimeToDate(file_time);
 }
 
 }  // namespace

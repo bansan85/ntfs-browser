@@ -3,10 +3,11 @@
 #include <vector>
 
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "fake-ntfs-image-internal.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
@@ -36,8 +37,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithCompressedFile() {
                                       {{}, compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, xca_lznt1_example_decompressed_size, runs);
 
   const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
@@ -52,8 +53,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnit() {
       {compressed_data_lcn, compression_unit_clusters}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, compression_unit_size, runs);
 
   return BuildCompressionImage(
@@ -64,10 +65,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithUninitializedTail() {
   const std::vector<FakeDataRun> runs{
       {compressed_data_lcn, uninitialized_tail_clusters}};
 
-  const FakeRecord record =
-      MakeNonResidentDataRecord(NtfsBrowser::Data::StdInfoPermission::Archive,
-                                0, uninitialized_tail_real_size, runs,
-                                {.ini_size = uninitialized_tail_ini_size});
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive, 0,
+      uninitialized_tail_real_size, runs,
+      {.ini_size = uninitialized_tail_ini_size});
 
   return BuildCompressionImage(
       record, runs,
@@ -80,10 +81,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterBitmap() {
       {compressed_data_lcn, multi_cluster_bitmap_clusters}};
 
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
-      record, offset, NtfsBrowser::Data::StdInfoPermission::Archive);
+      record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive);
   offset += WriteNonResidentAttr(
       record, offset, Attr::Type::Bitmap,
       {.comp_unit_size = 0,
@@ -104,9 +105,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithSparseCompressionUnit() {
   const std::vector<FakeDataRun> runs{{{}, compression_unit_clusters}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed |
-          NtfsBrowser::Data::StdInfoPermission::Sparse,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Sparse,
       compression_unit_size_shift, compression_unit_size, runs);
 
   return BuildCompressionImage(record, runs, {});
@@ -120,8 +121,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithSparseThenCompressedUnit() {
                                       {{}, compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, sparse_then_compressed_real_size, runs);
 
   const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
@@ -134,8 +135,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithHoleBeforeRealCluster() {
       {{}, 1}, {compressed_data_lcn, 1}, {{}, 2}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, compression_unit_size, runs);
 
   const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
@@ -151,8 +152,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedCompressedFile() {
                                       {{}, compression_unit_clusters - 2}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, fragmented_compressed_payload_size, runs);
 
   const std::vector<BYTE> payload =
@@ -170,8 +171,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithTrailingPartialCompressionUnit() {
       {compressed_data_lcn, compression_unit_clusters + 1}, {{}, 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift,
       trailing_partial_unit_stored_size + trailing_partial_unit_tail_size,
       runs);
@@ -192,8 +193,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithCorruptCompressedUnit() {
                                       {{}, compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, xca_lznt1_example_decompressed_size, runs);
 
   return BuildCompressionImage(record, runs, MakeCorruptLznt1Chunk());
@@ -206,8 +207,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithUnmappedCompressionUnit() {
       {compressed_data_lcn, compression_unit_clusters}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, 2ULL * compression_unit_size, runs,
       {.last_vcn = 2ULL * compression_unit_clusters - 1});
 
@@ -220,8 +221,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithRealClustersAfterHole() {
       {compressed_data_lcn, 1}, {{}, 1}, {fragmented_compressed_data_lcn, 2}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, compression_unit_size, runs);
 
   // Content is irrelevant - the layout is rejected before anything is
@@ -240,8 +241,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnit() {
       {compressed_data_lcn, 1}, {{}, 2ULL * compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, 2ULL * compression_unit_size, runs);
 
   return BuildCompressionImage(
@@ -255,8 +256,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize() {
                                       {{}, compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, xca_lznt1_example_decompressed_size, runs,
       {.total_size = compressed_attr_truncated_total_size});
 
@@ -270,8 +271,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithCompUnitSizeOutOfRange() {
                                       {{}, compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       comp_unit_size_out_of_range_shift, xca_lznt1_example_decompressed_size,
       runs);
 
@@ -285,8 +286,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithOversizedCompressionUnit() {
                                       {{}, compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       oversized_comp_unit_size_shift, xca_lznt1_example_decompressed_size,
       runs);
 
@@ -300,8 +301,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithMisalignedCompressedStartVcn() {
                                       {{}, compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, xca_lznt1_example_decompressed_size, runs,
       {.start_vcn = misaligned_compressed_start_vcn});
 
@@ -317,8 +318,8 @@ namespace {
 std::vector<BYTE>
     BuildRootWithCompressedDataRuns(const std::vector<FakeDataRun>& runs) {
   const FakeRecord record = MakeNonResidentDataRecord(
-      NtfsBrowser::Data::StdInfoPermission::Archive |
-          NtfsBrowser::Data::StdInfoPermission::Compressed,
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
       compression_unit_size_shift, compression_unit_size, runs);
 
   std::vector<BYTE> image = BuildFakeNtfsImage();
@@ -342,4 +343,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn() {
       {{overflowing_lcn, 1}, {{}, compression_unit_clusters - 1}});
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

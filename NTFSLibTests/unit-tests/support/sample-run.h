@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 
-namespace NtfsBrowserTests {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Exit code and text of one sample run. The CRT writes CRLF on Windows, so
 // the text has its carriage returns removed.
@@ -18,4 +20,4 @@ struct SampleRun {
 [[nodiscard]] SampleRun RunSample(const std::filesystem::path& exe,
                                   const std::vector<std::wstring>& args);
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

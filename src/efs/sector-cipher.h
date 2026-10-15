@@ -7,10 +7,12 @@
 #include <memory>
 #include <span>
 
+#include <ntfs-browser/namespace.h>
+
 #include "../internal-export.h"
 #include "efs/fek.h"
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 // EFS encrypts each 512-byte sector on its own, whatever the sector size of
 // the volume is.
@@ -89,4 +91,4 @@ class SectorDecryptor {
     MakeBCryptDecryptor(const Fek& fek);
 #endif
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/attribute-list.h"
 #include "data/header-non-resident.h"
@@ -13,7 +14,7 @@
 #include "fake-ntfs-image-internal.h"
 #include "file-record-header-edit.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
@@ -22,14 +23,14 @@ constexpr BYTE forged_byte = 0xFF;
 
 FakeRecord MakeUndersizedResidentAttrRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
   constexpr DWORD undersized_total_size = 17;
   static_assert(undersized_total_size <
-                    sizeof(NtfsBrowser::Data::HeaderResident),
+                    sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident),
                 "total_size must be smaller than a resident attribute header");
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::ReparsePoint;
   attr.header.non_resident = 0;
@@ -38,8 +39,8 @@ FakeRecord MakeUndersizedResidentAttrRecord() {
   attr.header.id = 0;
   attr.header.total_size = undersized_total_size;
 
-  record.at(attr_offset_value + sizeof(NtfsBrowser::Data::HeaderResident)) =
-      forged_byte;
+  record.at(attr_offset_value +
+            sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident)) = forged_byte;
 
   return record;
 }
@@ -49,11 +50,11 @@ FakeRecord MakeUndersizedResidentAttrRecord() {
 // deterministic bytes inside the record buffer.
 FakeRecord MakeAttrNameExceedsTotalSizeRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
   constexpr DWORD body_size = 4;
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::Data;
   attr.header.non_resident = 0;
@@ -65,7 +66,8 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord() {
 
   static_assert(static_cast<DWORD>(attr_name_bounds_name_offset) +
                         2 * static_cast<DWORD>(attr_name_bounds_name_length) >
-                    sizeof(NtfsBrowser::Data::HeaderResident) + body_size,
+                    sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident) +
+                        body_size,
                 "name must exceed total_size");
   static_assert(attr_name_bounds_sentinel.size() ==
                     static_cast<size_t>(attr_name_bounds_name_length),
@@ -89,9 +91,9 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord() {
 // resident $DATA attribute whose body is exactly small_resident_data_content.
 FakeRecord MakeSmallResidentDataRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::Data;
   attr.header.non_resident = 0;
@@ -116,9 +118,9 @@ FakeRecord MakeSmallResidentDataRecord() {
 // named_data_stream_name.
 FakeRecord MakeNamedDataStreamRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::Data;
   attr.header.non_resident = 0;
@@ -221,10 +223,11 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(attr_offset_value));
+  auto& attr =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
+          &record.at(attr_offset_value));
   attr.header.type = Attr::Type::Data;
   attr.header.non_resident = 1;
   attr.header.name_length = 0;
@@ -240,9 +243,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData() {
   // base header, with no run-list bytes at all. Legal, and the smallest
   // total_size FileRecord<S>::ParseAttrs() may accept for a non-resident
   // attribute - the whole point of this fixture.
-  attr.data_run_offset =
-      static_cast<WORD>(NtfsBrowser::Data::header_non_resident_base_size);
-  attr.header.total_size = NtfsBrowser::Data::header_non_resident_base_size;
+  attr.data_run_offset = static_cast<WORD>(
+      NTFS_BROWSER_NAMESPACE::Data::header_non_resident_base_size);
+  attr.header.total_size =
+      NTFS_BROWSER_NAMESPACE::Data::header_non_resident_base_size;
 
   WriteEndOfAttributesMarker(record,
                              attr_offset_value + attr.header.total_size);
@@ -263,9 +267,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithBadDataRun() {
   const std::vector<FakeDataRun> runs{{bad_data_run_first_lcn, 1},
                                       {bad_data_run_second_lcn, 1}};
 
-  const FakeRecord record =
-      MakeNonResidentDataRecord(NtfsBrowser::Data::StdInfoPermission::Archive,
-                                0, cluster_size, runs, {.last_vcn = 0});
+  const FakeRecord record = MakeNonResidentDataRecord(
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive, 0, cluster_size,
+      runs, {.last_vcn = 0});
 
   std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
@@ -279,8 +283,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithBadDataRun() {
 namespace {
 
 // Fixed on-disk size of a nameless $ATTRIBUTE_LIST entry.
-constexpr WORD list_entry_size = static_cast<WORD>(
-    AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
+constexpr WORD list_entry_size = static_cast<WORD>(AlignAttrSize(
+    NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
 
 // LCNs the lifetime fixtures use for cluster data: past the $MFT records
 // (LCN 1 onwards) and distinct, so no two streams share a cluster.
@@ -304,7 +308,8 @@ struct FakeListEntry {
 
 // Writes one nameless $ATTRIBUTE_LIST entry at dest.
 void WriteListEntry(BYTE* dest, const FakeListEntry& spec) {
-  auto& entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(dest);
+  auto& entry =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(dest);
   entry.attr_type = spec.type;
   entry.record_size = spec.record_size;
   entry.name_length = 0;
@@ -323,8 +328,8 @@ DWORD WriteLifetimeResidentList(FakeRecord& record, DWORD offset,
                                 size_t entry_count,
                                 std::optional<size_t> zero_size_index = {},
                                 WORD entry_sequence = 0) {
-  auto& attr =
-      *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(&record.at(offset));
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
+      &record.at(offset));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
@@ -355,17 +360,17 @@ constexpr FakeExtensionLink ordinary_lifetime_link{
 FakeRecord MakeLifetimeResidentDataExtensionRecord(
     const FakeExtensionLink& link = ordinary_lifetime_link) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   SetRecordLink(record, link.record_sequence, link.base_ref);
 
   DWORD offset = attr_offset_value;
   const DWORD data_offset = offset;
   offset += WriteResidentDataAttr(record, offset,
                                   attr_list_lifetime_data_content.size());
-  std::memcpy(
-      &record.at(data_offset + sizeof(NtfsBrowser::Data::HeaderResident)),
-      attr_list_lifetime_data_content.data(),
-      attr_list_lifetime_data_content.size());
+  std::memcpy(&record.at(data_offset +
+                         sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident)),
+              attr_list_lifetime_data_content.data(),
+              attr_list_lifetime_data_content.size());
 
   WriteEndOfAttributesMarker(record, offset);
   return record;
@@ -378,8 +383,8 @@ std::vector<BYTE>
   std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
 
-  FakeRecord base = MakeRecordHeader(attr_offset_value,
-                                     NtfsBrowser::Data::FileRecordFlag::InUse);
+  FakeRecord base = MakeRecordHeader(
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   DWORD offset = attr_offset_value;
   offset += WriteLifetimeResidentList(base, offset, 2, 1);
   WriteEndOfAttributesMarker(base, offset);
@@ -394,8 +399,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitAttributeListAttribute() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
 
-  FakeRecord base = MakeRecordHeader(attr_offset_value,
-                                     NtfsBrowser::Data::FileRecordFlag::InUse);
+  FakeRecord base = MakeRecordHeader(
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   DWORD offset = attr_offset_value;
   // VCN 0-0: empty.
   offset +=
@@ -430,8 +435,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitDataAndTrailingDefect(
   const std::vector<FakeDataRun> base_runs{{lifetime_base_data_lcn, 1}};
   const std::vector<FakeDataRun> ext_runs{{lifetime_ext_data_lcn, 1}};
 
-  FakeRecord base = MakeRecordHeader(attr_offset_value,
-                                     NtfsBrowser::Data::FileRecordFlag::InUse);
+  FakeRecord base = MakeRecordHeader(
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   DWORD offset = attr_offset_value;
   offset += WriteLifetimeResidentList(base, offset, 1);
   offset += WriteNonResidentAttr(
@@ -439,8 +444,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitDataAndTrailingDefect(
       {.comp_unit_size = 0, .real_size = cluster_size, .runs = base_runs});
   WriteTrailingDefect(base, offset, defect);
 
-  FakeRecord ext = MakeRecordHeader(attr_offset_value,
-                                    NtfsBrowser::Data::FileRecordFlag::InUse);
+  FakeRecord ext = MakeRecordHeader(
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   SetRecordLink(ext, 0, attr_list_lifetime_base_idx);
   DWORD ext_offset = attr_offset_value;
   ext_offset += WriteNonResidentAttr(ext, ext_offset, Attr::Type::Data,
@@ -461,8 +466,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithExtensionLink(FakeExtensionLink link) {
   std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
 
-  FakeRecord base = MakeRecordHeader(attr_offset_value,
-                                     NtfsBrowser::Data::FileRecordFlag::InUse);
+  FakeRecord base = MakeRecordHeader(
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   DWORD offset = attr_offset_value;
   offset += WriteLifetimeResidentList(base, offset, 1, {}, link.entry_sequence);
   WriteEndOfAttributesMarker(base, offset);
@@ -497,7 +502,8 @@ std::vector<BYTE> BuildImageWithRawRuns(FakeRunHost host,
   const std::vector<FakeDataRun> placeholder{{{}, clusters}};
   const ULONGLONG real_size = static_cast<ULONGLONG>(clusters) * cluster_size;
   const FakeNonResidentOverrides overrides{.raw_runs = std::move(runs)};
-  const auto permission = NtfsBrowser::Data::StdInfoPermission::Archive;
+  const auto permission =
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive;
 
   const FakeRecord record =
       (host == FakeRunHost::Data)
@@ -532,4 +538,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithNegativeLcn(FakeRunHost host) {
   return BuildImageWithRawRuns(host, std::move(runs), 1);
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

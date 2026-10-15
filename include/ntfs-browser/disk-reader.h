@@ -5,7 +5,9 @@
 #include <span>
 #include <string_view>
 
-namespace NtfsBrowser {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Abstracts "get raw bytes from a backing store" so FileReader<S> doesn't
 // depend on a Win32 file/device handle directly. An implementation decides
@@ -27,4 +29,4 @@ class IDiskReader {
                                       std::span<BYTE> dest) const = 0;
 };
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

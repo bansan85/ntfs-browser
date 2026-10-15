@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 
 namespace NtfsFuzz {
 
@@ -17,7 +18,7 @@ namespace NtfsFuzz {
 // ReadInto() wraps back to the start of the buffer past the end, instead
 // of failing, so parsing can go arbitrarily deep off a small input.
 // It borrows the buffer, which MUST outlive the reader.
-class LoopingDiskReader : public NtfsBrowser::IDiskReader {
+class LoopingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
  public:
   // Empty on a zero-length or unreadable file.
   [[nodiscard]] static std::optional<std::vector<BYTE>>

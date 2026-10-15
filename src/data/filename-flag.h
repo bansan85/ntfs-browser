@@ -2,7 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Data {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 enum class FilenameFlag : DWORD {
   None = 0x00000000,
@@ -24,6 +26,6 @@ enum class FilenameFlag : DWORD {
 };
 
 // NOLINTNEXTLINE
-DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Data::FilenameFlag)
+DEFINE_ENUM_FLAG_OPERATORS(NTFS_BROWSER_NAMESPACE::Data::FilenameFlag)
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

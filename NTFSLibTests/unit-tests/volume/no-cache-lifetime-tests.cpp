@@ -13,21 +13,23 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "partition-disk-reader.h"
 
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
 struct TempImage final {
-  std::filesystem::path path = NtfsBrowserTests::WriteFakeNtfsImage();
+  std::filesystem::path path =
+      NTFS_BROWSER_NAMESPACE::Tests::WriteFakeNtfsImage();
   TempImage() = default;
 
   ~TempImage() { std::filesystem::remove(path); }
@@ -41,9 +43,10 @@ struct TempImage final {
 // Opens path through a PartitionDiskReader (offset 0), so this exercises a
 // real on-disk file read without depending on NtfsVolume's own path-based
 // constructor, which only exists on Windows (Win32DiskReader).
-std::unique_ptr<NtfsBrowser::IDiskReader>
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
     OpenOnDisk(const std::filesystem::path& path) {
-  auto reader = std::make_unique<NtfsBrowserTests::PartitionDiskReader>(0);
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::PartitionDiskReader>(0);
   REQUIRE(reader->Open(path.wstring()));
   return reader;
 }
@@ -58,12 +61,14 @@ TEMPLATE_TEST_CASE_SIG(
 
   const NtfsVolume<S> volume(OpenOnDisk(image.path));
   REQUIRE(volume.IsVolumeOK());
-  REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
+  REQUIRE(volume.GetRecordsCount() ==
+          NTFS_BROWSER_NAMESPACE::Tests::sentinel_record_count);
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
-  CHECK(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
+  CHECK(volume.GetRecordsCount() ==
+        NTFS_BROWSER_NAMESPACE::Tests::sentinel_record_count);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -71,15 +76,18 @@ TEMPLATE_TEST_CASE_SIG(
     " (in-memory volume)",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
-  REQUIRE(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
+  REQUIRE(volume.GetRecordsCount() ==
+          NTFS_BROWSER_NAMESPACE::Tests::sentinel_record_count);
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
 
-  CHECK(volume.GetRecordsCount() == NtfsBrowserTests::sentinel_record_count);
+  CHECK(volume.GetRecordsCount() ==
+        NTFS_BROWSER_NAMESPACE::Tests::sentinel_record_count);
 }

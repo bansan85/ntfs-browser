@@ -6,13 +6,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 
-namespace Data = NtfsBrowser::Data;
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::IndexEntryView;
+namespace Data = NTFS_BROWSER_NAMESPACE::Data;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 
 TEST_CASE("An index entry whose stream cannot fit its size has no name",
           "[cov-nri]") {

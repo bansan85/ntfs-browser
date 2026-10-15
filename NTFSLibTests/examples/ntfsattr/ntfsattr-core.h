@@ -11,6 +11,7 @@
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 namespace NtfsAttrDump {
@@ -21,7 +22,7 @@ void AppendData(std::wstring& lines, const BYTE* data, std::uint32_t datalen);
 
 // Name of an attribute type, such as DATA. A type with no name shows its value
 // in hex, such as 0x1000.
-std::wstring AttrTypeName(NtfsBrowser::Attr::Type type);
+std::wstring AttrTypeName(NTFS_BROWSER_NAMESPACE::Attr::Type type);
 
 // The path a dump works on for the picked file. With directory set, that is
 // the folder holding it. Empty when picked has no separator.
@@ -38,7 +39,8 @@ struct DumpResult {
 // full path such as C:\dir\file. A path ending in the drive, such as C:, dumps
 // the root directory.
 DumpResult DumpAttributes(
-    NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::FullCache>& volume,
+    NTFS_BROWSER_NAMESPACE::NtfsVolume<
+        NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>& volume,
     std::wstring_view path);
 
 }  // namespace NtfsAttrDump

@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
+
 #ifdef _WIN32
   #include <string_view>
 #endif
@@ -18,7 +20,7 @@
 
 #include "internal-export.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IDiskReader;
 
@@ -83,4 +85,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
 
 }  // namespace Io
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

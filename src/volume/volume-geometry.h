@@ -4,7 +4,9 @@
 
 #include <span>
 
-namespace NtfsBrowser::Volume {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Volume {
 
 // Sizes and addresses the boot sector's BPB declares, in bytes.
 struct Geometry {
@@ -27,4 +29,4 @@ struct BootSectorParse {
 [[nodiscard]] BootSectorParse
     ParseBootSector(std::span<const BYTE> boot_sector);
 
-}  // namespace NtfsBrowser::Volume
+}  // namespace NTFS_BROWSER_NAMESPACE::Volume

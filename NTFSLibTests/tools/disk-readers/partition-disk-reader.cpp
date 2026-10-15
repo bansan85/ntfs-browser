@@ -8,7 +8,9 @@
 
 #include <gsl/narrow>
 
-namespace NtfsBrowserTests {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 PartitionDiskReader::PartitionDiskReader(ULONGLONG partition_offset)
     : partition_offset_(partition_offset) {}
@@ -32,4 +34,4 @@ bool PartitionDiskReader::ReadInto(LARGE_INTEGER& addr,
   return gsl::narrow<size_t>(file_.gcount()) == dest.size();
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

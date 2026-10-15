@@ -2,7 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Data {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 // NOLINTNEXTLINE(performance-enum-size)
 enum class StdInfoPermission : DWORD {
@@ -22,6 +24,6 @@ enum class StdInfoPermission : DWORD {
 };
 
 // NOLINTNEXTLINE
-DEFINE_ENUM_FLAG_OPERATORS(NtfsBrowser::Data::StdInfoPermission)
+DEFINE_ENUM_FLAG_OPERATORS(NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission)
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

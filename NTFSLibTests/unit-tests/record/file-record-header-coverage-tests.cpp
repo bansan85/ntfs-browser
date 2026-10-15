@@ -8,14 +8,15 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/file-record-header.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 #include "record/header.h"
 
-namespace Cache = NtfsBrowser::Cache;
-namespace Data = NtfsBrowser::Data;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Data = NTFS_BROWSER_NAMESPACE::Data;
 
 namespace {
 
@@ -32,8 +33,9 @@ constexpr size_t first_sector_end = 510;
 // Record buffer whose update sequence array sits at us_offset, with the given
 // sector-end words.
 std::vector<BYTE> FixupBuffer(WORD first_end, WORD second_end) {
-  std::vector<BYTE> buffer(NtfsBrowserTests::fake_file_record_size, 0);
-  NtfsBrowserTests::EditFileRecordHeader(
+  std::vector<BYTE> buffer(NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size,
+                           0);
+  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
       buffer, [](Data::FileRecordHeader& header) {
         header.magic = Data::FileRecordHeader::file_record_magic;
         header.offset_of_us = fixup_us_offset;
@@ -56,8 +58,8 @@ std::vector<BYTE> FixupBuffer(WORD first_end, WORD second_end) {
 
 // Builds a Record::Header over a buffer too small for a file record header.
 void ConstructHeaderOver(std::span<const BYTE> buffer) {
-  const NtfsBrowser::Record::HeaderImpl<Cache::Strategy::NoCache> header(
-      buffer);
+  const NTFS_BROWSER_NAMESPACE::Record::HeaderImpl<Cache::Strategy::NoCache>
+      header(buffer);
   static_cast<void>(header.buffer_size);
 }
 
@@ -75,14 +77,16 @@ TEST_CASE(
   // Second sector end matches; the first carries neither the USN nor its
   // original.
   auto buffer = FixupBuffer(2, 1);
-  NtfsBrowser::Record::HeaderImpl<Cache::Strategy::NoCache> header(buffer);
+  NTFS_BROWSER_NAMESPACE::Record::HeaderImpl<Cache::Strategy::NoCache> header(
+      buffer);
   CHECK_FALSE(header.PatchUS());
 }
 
 TEST_CASE("a sector end that carries the update sequence is restored",
           "[cov-attrs]") {
   auto buffer = FixupBuffer(1, 1);
-  NtfsBrowser::Record::HeaderImpl<Cache::Strategy::NoCache> header(buffer);
+  NTFS_BROWSER_NAMESPACE::Record::HeaderImpl<Cache::Strategy::NoCache> header(
+      buffer);
   CHECK(header.PatchUS());
   CHECK(buffer[first_sector_end] == 5);
   CHECK(buffer[second_sector_end] == 6);

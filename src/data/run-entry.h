@@ -4,7 +4,9 @@
 
 #include <optional>
 
-namespace NtfsBrowser::Data {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 ////////////////////////////////
 // List to hold parsed DataRuns
@@ -18,4 +20,4 @@ struct RunEntry {
 
 // typedef class CSList<DataRun_Entry> CDataRunList;
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

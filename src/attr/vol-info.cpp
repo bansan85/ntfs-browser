@@ -3,13 +3,14 @@
 #include <stdexcept>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
 #include "data/volume-information.h"
 #include "log/ntfs-common.h"
 #include "ntfs-browser/win-types.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {
 
@@ -47,4 +48,4 @@ std::pair<BYTE, BYTE> AttrVolInfo<Resident, S>::GetVersion() const noexcept {
 template class AttrVolInfo<AttrResidentFullCache, Cache::Strategy::FullCache>;
 template class AttrVolInfo<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

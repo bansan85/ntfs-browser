@@ -11,6 +11,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
+
 #include "child-process.h"
 #include "test-log-sink.h"
 
@@ -36,7 +38,7 @@ class RestoreCaptureSink final {
   RestoreCaptureSink& operator=(RestoreCaptureSink&&) = delete;
   RestoreCaptureSink& operator=(const RestoreCaptureSink&) = delete;
 
-  ~RestoreCaptureSink() { NtfsBrowserTests::InstallCaptureSink(); }
+  ~RestoreCaptureSink() { NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink(); }
 };
 
 // A path in the temp directory that no other test uses, removed again by
@@ -96,7 +98,7 @@ inline ChildOutput RunFuzzer(const std::vector<std::wstring>& extra_args) {
   args.insert(args.end(), extra_args.begin(), extra_args.end());
 
   ChildOutput result;
-  result.exit_code = NtfsBrowserTests::RunProcessToFiles(
+  result.exit_code = NTFS_BROWSER_NAMESPACE::Tests::RunProcessToFiles(
       exe, args, out_file.Path(), err_file.Path());
   result.out = out_file.Read();
   result.err = err_file.Read();

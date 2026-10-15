@@ -9,6 +9,8 @@
 
 #include <cryptopp/aes.h>
 #include <cryptopp/des.h>
+
+#include <ntfs-browser/namespace.h>
 // Silences the weak-algorithm notice: MD5 is what the DESX key expansion uses.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
@@ -20,7 +22,7 @@
 #include "log/ntfs-common.h"
 #include "util/util.h"
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 namespace {
 
@@ -153,4 +155,4 @@ std::unique_ptr<SectorDecryptor> MakeCryptoPpDecryptor(const Fek& fek) {
   return nullptr;
 }
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs

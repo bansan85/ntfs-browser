@@ -21,6 +21,7 @@
 #include <spdlog/spdlog.h>
 
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
 
@@ -32,7 +33,7 @@ static_assert(
     "spdlog's filename type must match the platform's native path "
     "type; check SPDLOG_WCHAR_FILENAMES");
 
-namespace NtfsBrowser::Log {
+namespace NTFS_BROWSER_NAMESPACE::Log {
 namespace {
 
 // The console target reproduces the message and nothing else, so what a
@@ -323,9 +324,9 @@ bool ParseOption(std::wstring_view arg, Config& config) noexcept {
 }
 #endif
 
-}  // namespace NtfsBrowser::Log
+}  // namespace NTFS_BROWSER_NAMESPACE::Log
 
-namespace NtfsBrowser::Log::Detail {
+namespace NTFS_BROWSER_NAMESPACE::Log::Detail {
 
 bool IsEnabled(Level level) noexcept {
   try {
@@ -350,4 +351,4 @@ void Emit(Level level, std::string_view message) noexcept {
   }
 }
 
-}  // namespace NtfsBrowser::Log::Detail
+}  // namespace NTFS_BROWSER_NAMESPACE::Log::Detail

@@ -6,8 +6,9 @@
 #include <unordered_set>
 
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Cache {
 
@@ -54,4 +55,4 @@ class AttrList : public Resident {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

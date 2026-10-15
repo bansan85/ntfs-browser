@@ -7,11 +7,13 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
+
 #include "child-process.h"
 
 namespace Fs = std::filesystem;
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 namespace {
 
 // Reads a whole file as text, without its carriage returns.
@@ -46,4 +48,4 @@ SampleRun RunSample(const Fs::path& exe,
   return run;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

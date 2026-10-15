@@ -6,9 +6,11 @@
 #include <span>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
+
 #include "../internal-export.h"
 
-namespace NtfsBrowser::Efs {
+namespace NTFS_BROWSER_NAMESPACE::Efs {
 
 // The symmetric cipher of an EFS file. The values are the CryptoAPI ALG_IDs
 // that the FEK blob stores.
@@ -45,4 +47,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY Fek {
   std::vector<BYTE> key_;
 };
 
-}  // namespace NtfsBrowser::Efs
+}  // namespace NTFS_BROWSER_NAMESPACE::Efs

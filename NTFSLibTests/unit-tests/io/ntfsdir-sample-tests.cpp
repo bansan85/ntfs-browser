@@ -11,11 +11,13 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <windows.h>
 
+#include <ntfs-browser/namespace.h>
+
 #include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowserTests::RunSample;
-using NtfsBrowserTests::SampleRun;
+using NTFS_BROWSER_NAMESPACE::Tests::RunSample;
+using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
 namespace Fs = std::filesystem;
 
 namespace {

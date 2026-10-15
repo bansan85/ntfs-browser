@@ -8,6 +8,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
 #include "attr/std-info.h"
@@ -18,7 +19,7 @@
 #include "upcase/upcase.h"
 #include "utf/utf.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 void Filename::SetFilename(const Data::Filename& filename) {
   filename_ = &filename;
@@ -184,4 +185,4 @@ void Filename::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
   }
 }
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

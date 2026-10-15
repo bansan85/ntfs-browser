@@ -14,6 +14,7 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/slot.h"
 #include "attr/std-info.h"
@@ -21,7 +22,7 @@
 #include "io/file-record-attrs.h"
 #include "record/header.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Io {
 
@@ -91,4 +92,4 @@ class FileRecord<S>::Impl {
 
 }  // namespace Io
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

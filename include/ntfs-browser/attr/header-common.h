@@ -3,8 +3,9 @@
 #include <ntfs-browser/win-types.h>
 
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 struct HeaderCommon {
   Type type;          // Attribute Type
@@ -16,4 +17,4 @@ struct HeaderCommon {
   WORD id;            // Attribute Id
 };
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

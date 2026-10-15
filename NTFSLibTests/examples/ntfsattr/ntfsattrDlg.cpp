@@ -3,13 +3,14 @@
 
 #include "StdAfx.h"
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "ntfsattr-core.h"
 #include "ntfsattr.h"
 #include "ntfsattrDlg.h"
 
-using namespace NtfsBrowser;
+using namespace NTFS_BROWSER_NAMESPACE;
 
 #ifdef _DEBUG
   #define new DEBUG_NEW
@@ -144,8 +145,9 @@ void CNtfsattrDlg::OnOK() {
   m_dump.Empty();
 
   // The drive letter of the path names the volume to open.
-  NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::FullCache> volume(
-      m_filename.GetAt(0));
+  NTFS_BROWSER_NAMESPACE::NtfsVolume<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>
+      volume(m_filename.GetAt(0));
   const NtfsAttrDump::DumpResult result =
       NtfsAttrDump::DumpAttributes(volume, m_filename.GetString());
   if (!result.message.empty()) {

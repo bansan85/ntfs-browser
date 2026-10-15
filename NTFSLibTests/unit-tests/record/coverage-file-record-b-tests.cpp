@@ -13,6 +13,7 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "data/file-record-header.h"
@@ -22,17 +23,18 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::Data::StdInfoPermission;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 
 namespace {
 
 // $MFT starts at cluster 1 in every fake image, so record 0 sits one cluster
 // in.
-inline constexpr size_t fake_mft_offset = NtfsBrowserTests::fake_cluster_size;
+inline constexpr size_t fake_mft_offset =
+    NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
 
 // Root directory: MFT record 5 in every fake image.
 inline constexpr ULONGLONG root_dir_idx = 5;
@@ -42,24 +44,26 @@ inline constexpr ULONGLONG root_dir_idx = 5;
 void SetStdInfoPermission(std::vector<BYTE>& image, ULONGLONG idx,
                           StdInfoPermission permission) {
   const size_t record_offset =
-      fake_mft_offset + idx * NtfsBrowserTests::fake_file_record_size;
+      fake_mft_offset +
+      idx * NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
 
-  NtfsBrowser::Data::FileRecordHeader header{};
+  NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader header{};
   std::memcpy(&header, &image[record_offset],
-              NtfsBrowser::Data::FileRecordHeader::min_file_record_header_size);
+              NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                  min_file_record_header_size);
   REQUIRE(header.magic ==
-          NtfsBrowser::Data::FileRecordHeader::file_record_magic);
+          NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::file_record_magic);
 
   // The first attribute of the fixture record is its $STANDARD_INFORMATION.
   const size_t attr_offset = record_offset + header.offset_of_attr;
   const auto& attr =
-      *reinterpret_cast<const NtfsBrowser::Data::HeaderResident*>(
+      *reinterpret_cast<const NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
           &image[attr_offset]);
   REQUIRE(attr.header.type == Attr::Type::StandardInformation);
 
   const size_t permission_offset =
       attr_offset + attr.attr_offset +
-      offsetof(NtfsBrowser::Data::StandardInformation, permission);
+      offsetof(NTFS_BROWSER_NAMESPACE::Data::StandardInformation, permission);
   const auto bits = static_cast<DWORD>(permission);
   std::memcpy(&image[permission_offset], &bits, sizeof(bits));
 }
@@ -71,34 +75,44 @@ TEMPLATE_TEST_CASE_SIG(
     "permission bit",
     "[cov-frb]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  using Getter = bool (NtfsBrowser::Io::FileRecord<S>::*)() const noexcept;
+  using Getter =
+      bool (NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::*)() const noexcept;
   const std::array<std::pair<Getter, StdInfoPermission>, 9> flags{{
-      {&NtfsBrowser::Io::FileRecord<S>::IsDevice, StdInfoPermission::Device},
-      {&NtfsBrowser::Io::FileRecord<S>::IsNormal, StdInfoPermission::Normal},
-      {&NtfsBrowser::Io::FileRecord<S>::IsTemporary, StdInfoPermission::Temp},
-      {&NtfsBrowser::Io::FileRecord<S>::IsCompressed,
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsDevice,
+       StdInfoPermission::Device},
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsNormal,
+       StdInfoPermission::Normal},
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsTemporary,
+       StdInfoPermission::Temp},
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsCompressed,
        StdInfoPermission::Compressed},
-      {&NtfsBrowser::Io::FileRecord<S>::IsOffline, StdInfoPermission::Offline},
-      {&NtfsBrowser::Io::FileRecord<S>::IsNotContentIndexed,
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsOffline,
+       StdInfoPermission::Offline},
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsNotContentIndexed,
        StdInfoPermission::Nci},
-      {&NtfsBrowser::Io::FileRecord<S>::IsEncrypted,
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsEncrypted,
        StdInfoPermission::Encrypted},
-      {&NtfsBrowser::Io::FileRecord<S>::IsSparse, StdInfoPermission::Sparse},
-      {&NtfsBrowser::Io::FileRecord<S>::IsReparsePoint,
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsSparse,
+       StdInfoPermission::Sparse},
+      {&NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::IsReparsePoint,
        StdInfoPermission::Reparse},
   }};
 
   for (const auto& [getter, bit] : flags) {
-    std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
-    SetStdInfoPermission(image, NtfsBrowserTests::mft_tree_report_idx, bit);
+    std::vector<BYTE> image =
+        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+    SetStdInfoPermission(
+        image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx, bit);
 
     auto reader =
-        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image));
+        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+            std::move(image));
     const NtfsVolume<S> volume(std::move(reader));
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> record(volume);
-    REQUIRE(record.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
+    REQUIRE(record.ParseFileRecord(
+        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
     REQUIRE(record.ParseAttrs());
     CHECK((record.*getter)());
   }
@@ -109,13 +123,14 @@ TEMPLATE_TEST_CASE_SIG(
     "record has no STANDARD_INFORMATION",
     "[cov-frb]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImage());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
   REQUIRE(root.ParseFileRecord(root_dir_idx));
   REQUIRE(root.GetAttr(Attr::Type::StandardInformation).empty());
 
@@ -134,14 +149,16 @@ TEMPLATE_TEST_CASE_SIG(
     "FileRecord returns the Win32 name of a record that also has a DOS alias",
     "[cov-frb]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithMftTree());
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(NtfsBrowserTests::mft_tree_report_idx));
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
   REQUIRE(record.ParseAttrs());
 
   CHECK(record.GetFileName() == L"report.txt");

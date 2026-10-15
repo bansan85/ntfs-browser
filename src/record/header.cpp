@@ -9,11 +9,12 @@
 
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Record {
+namespace NTFS_BROWSER_NAMESPACE::Record {
 
 Header::Header(std::span<const BYTE> buffer) : buffer_size(buffer.size()) {
   if (buffer.size() < Data::FileRecordHeader::min_file_record_header_size) {
@@ -117,4 +118,4 @@ const Data::FileRecordHeader*
   return &data;
 }
 
-}  // namespace NtfsBrowser::Record
+}  // namespace NTFS_BROWSER_NAMESPACE::Record

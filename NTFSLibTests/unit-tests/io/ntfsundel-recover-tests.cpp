@@ -10,6 +10,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -19,9 +20,11 @@
 
 namespace {
 
-namespace Cache = NtfsBrowser::Cache;
-using NoCacheRecord = NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>;
-using NoCacheVolume = NtfsBrowser::NtfsVolume<Cache::Strategy::NoCache>;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NoCacheRecord =
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>;
+using NoCacheVolume =
+    NTFS_BROWSER_NAMESPACE::NtfsVolume<Cache::Strategy::NoCache>;
 using NtfsUndel::CopyResult;
 using NtfsUndel::RecoverError;
 
@@ -34,8 +37,9 @@ constexpr std::uint64_t freed_dir_ref = 20;
 // A volume over image, opened the way the dialog opens it for recovery.
 std::unique_ptr<NoCacheVolume> OpenVolume(std::vector<BYTE> image) {
   return std::make_unique<NoCacheVolume>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
-      NtfsBrowser::VolumeOptions{.include_deleted = true});
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)),
+      NTFS_BROWSER_NAMESPACE::VolumeOptions{.include_deleted = true});
 }
 
 // What a copy did: its result, the size of each chunk it wrote, the bytes
@@ -70,8 +74,8 @@ CopyRun RunCopy(const NoCacheRecord& record, bool confirm = true,
 
 TEST_CASE("NtfsUndel recovery opens a freed record and copies its data",
           "[undel][recover][characterization]") {
-  const auto volume =
-      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
 
   NtfsUndel::OpenedRecord opened = NtfsUndel::OpenDeletedFile(*volume, 19);
   REQUIRE(opened.error == RecoverError::None);
@@ -80,17 +84,19 @@ TEST_CASE("NtfsUndel recovery opens a freed record and copies its data",
   const CopyRun run = RunCopy(*opened.record);
 
   CHECK(run.result.error == RecoverError::None);
-  CHECK(run.result.bytes == NtfsBrowserTests::freed_file_content.size());
-  CHECK(run.bytes == NtfsBrowserTests::freed_file_content);
+  CHECK(run.result.bytes ==
+        NTFS_BROWSER_NAMESPACE::Tests::freed_file_content.size());
+  CHECK(run.bytes == NTFS_BROWSER_NAMESPACE::Tests::freed_file_content);
   CHECK(run.chunk_sizes ==
-        std::vector<std::size_t>{NtfsBrowserTests::freed_file_content.size()});
+        std::vector<std::size_t>{
+            NTFS_BROWSER_NAMESPACE::Tests::freed_file_content.size()});
   CHECK(run.confirm_calls == 0);
 }
 
 TEST_CASE("NtfsUndel recovery reports a record that does not parse",
           "[undel][recover][characterization]") {
-  const auto volume =
-      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
 
   // Record 4 is a zero-filled slot. Its magic does not match.
   NtfsUndel::OpenedRecord opened = NtfsUndel::OpenDeletedFile(*volume, 4);
@@ -102,10 +108,11 @@ TEST_CASE("NtfsUndel recovery reports a record that does not parse",
 TEST_CASE("NtfsUndel recovery reports attributes that do not parse",
           "[undel][recover][characterization]") {
   const auto volume =
-      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithUndersizedAttribute());
+      OpenVolume(NTFS_BROWSER_NAMESPACE::Tests::
+                     BuildFakeNtfsImageWithUndersizedAttribute());
 
   NtfsUndel::OpenedRecord opened = NtfsUndel::OpenDeletedFile(
-      *volume, NtfsBrowserTests::undersized_attr_record_idx);
+      *volume, NTFS_BROWSER_NAMESPACE::Tests::undersized_attr_record_idx);
 
   CHECK(opened.error == RecoverError::AttributeParse);
   CHECK(opened.record == nullptr);
@@ -113,8 +120,8 @@ TEST_CASE("NtfsUndel recovery reports attributes that do not parse",
 
 TEST_CASE("NtfsUndel recovery finds no data stream in a freed directory",
           "[undel][recover][characterization]") {
-  const auto volume =
-      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
 
   NtfsUndel::OpenedRecord opened =
       NtfsUndel::OpenDeletedFile(*volume, freed_dir_ref);
@@ -129,9 +136,10 @@ TEST_CASE("NtfsUndel recovery finds no data stream in a freed directory",
 TEST_CASE("NtfsUndel recovery copies a large file in ordered chunks",
           "[undel][recover][characterization]") {
   // 147 sparse clusters of 1 KiB: 150528 bytes, of which 150000 are data.
-  const auto volume =
-      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithFreedNonResidentFile(
-          150000, {NtfsBrowserTests::FakeDataRun{.clusters = 147}}));
+  const auto volume = OpenVolume(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
+          150000,
+          {NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun{.clusters = 147}}));
 
   NtfsUndel::OpenedRecord opened =
       NtfsUndel::OpenDeletedFile(*volume, freed_file_ref);
@@ -153,10 +161,10 @@ TEST_CASE("NtfsUndel recovery stops when the caller declines a large file",
   // One byte past the confirmation size. The runs stop short of that size:
   // nothing is read once the caller declines, and a full run list would not
   // fit one file record.
-  const auto volume =
-      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithFreedNonResidentFile(
+  const auto volume = OpenVolume(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
           NtfsUndel::kConfirmFileSize + 1,
-          {NtfsBrowserTests::FakeDataRun{.clusters = 255}}));
+          {NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun{.clusters = 255}}));
 
   NtfsUndel::OpenedRecord opened =
       NtfsUndel::OpenDeletedFile(*volume, freed_file_ref);
@@ -171,8 +179,8 @@ TEST_CASE("NtfsUndel recovery stops when the caller declines a large file",
 
 TEST_CASE("NtfsUndel recovery reports a failed write and stops there",
           "[undel][recover][characterization]") {
-  const auto volume =
-      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
 
   NtfsUndel::OpenedRecord opened = NtfsUndel::OpenDeletedFile(*volume, 19);
   REQUIRE(opened.error == RecoverError::None);
@@ -187,10 +195,10 @@ TEST_CASE("NtfsUndel recovery reports a failed write and stops there",
 TEST_CASE("NtfsUndel recovery reports a read the disk cannot serve",
           "[undel][recover][characterization]") {
   // The run maps far past the end of the image, so its read fails.
-  const auto volume =
-      OpenVolume(NtfsBrowserTests::BuildFakeNtfsImageWithFreedNonResidentFile(
-          1024,
-          {NtfsBrowserTests::FakeDataRun{.lcn = 1000000U, .clusters = 1}}));
+  const auto volume = OpenVolume(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
+          1024, {NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun{.lcn = 1000000U,
+                                                            .clusters = 1}}));
 
   NtfsUndel::OpenedRecord opened =
       NtfsUndel::OpenDeletedFile(*volume, freed_file_ref);

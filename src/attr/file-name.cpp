@@ -6,12 +6,13 @@
 #include <stdexcept>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
 #include "data/filename.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 template <typename Resident, Cache::Strategy S>
 AttrFileName<Resident, S>::AttrFileName(const HeaderCommon& ahc,
@@ -44,4 +45,4 @@ AttrFileName<Resident, S>::~AttrFileName() {
 template class AttrFileName<AttrResidentFullCache, Cache::Strategy::FullCache>;
 template class AttrFileName<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

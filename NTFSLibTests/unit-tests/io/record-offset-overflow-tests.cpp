@@ -7,14 +7,15 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
 
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using Catch::Matchers::ContainsSubstring;
 
 namespace {
@@ -34,17 +35,17 @@ TEMPLATE_TEST_CASE_SIG(
     "rejected, not aliased to a record read through $MFT's data",
     "[file-record][disk-read][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const NtfsBrowser::NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          NtfsBrowserTests::BuildFakeNtfsImage()));
+  const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
-  (void)NtfsBrowserTests::TakeCapturedLog();
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
+  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(wrapping_mapped_record_idx));
   CHECK_FALSE(parsed);
-  CHECK_THAT(NtfsBrowserTests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
              ContainsSubstring("past the end of $MFT"));
 }
 
@@ -55,16 +56,17 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // A volume whose $MFT does not parse has no extent map, so every record
   // takes the direct path.
-  const NtfsBrowser::NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          NtfsBrowserTests::BuildFakeNtfsImageWithCorruptMftRecord()));
+  const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithCorruptMftRecord()));
   REQUIRE_FALSE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
-  (void)NtfsBrowserTests::TakeCapturedLog();
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
+  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(wrapping_record_idx));
   CHECK_FALSE(parsed);
-  CHECK_THAT(NtfsBrowserTests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
              ContainsSubstring("past the end of $MFT"));
 }

@@ -17,6 +17,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "catch2/catch_message.hpp"
@@ -24,11 +25,11 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
@@ -39,16 +40,17 @@ constexpr BYTE sentinel_byte = 0xCC;
 // below the initialized size, zeros between it and the real size, and nothing
 // past the real size.
 std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length) {
-  const std::vector<BYTE> residue = NtfsBrowserTests::CompressionFixturePattern(
-      NtfsBrowserTests::uninitialized_tail_real_size);
+  const std::vector<BYTE> residue =
+      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
+          NTFS_BROWSER_NAMESPACE::Tests::uninitialized_tail_real_size);
 
   std::vector<BYTE> expected;
   for (ULONGLONG at = offset;
        at < offset + length &&
-       at < NtfsBrowserTests::uninitialized_tail_real_size;
+       at < NTFS_BROWSER_NAMESPACE::Tests::uninitialized_tail_real_size;
        at++) {
     expected.push_back(
-        at < NtfsBrowserTests::uninitialized_tail_ini_size
+        at < NTFS_BROWSER_NAMESPACE::Tests::uninitialized_tail_ini_size
             // at < uninitialized_tail_real_size = residue.size() by the loop
             // condition.
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -61,11 +63,12 @@ std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length) {
 template <Cache::Strategy S>
 void CheckReadsBeyondTheInitializedSizeAreZero() {
   const NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          NtfsBrowserTests::BuildFakeNtfsImageWithUninitializedTail()));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::
+              BuildFakeNtfsImageWithUninitializedTail()));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
@@ -98,8 +101,9 @@ void CheckReadsBeyondTheInitializedSizeAreZero() {
 
     const std::vector<BYTE> expected =
         ExpectedBytes(range.offset, range.length);
-    REQUIRE(NtfsBrowserTests::Unwrap(read) == expected.size());
-    buffer.resize(gsl::narrow<size_t>(NtfsBrowserTests::Unwrap(read)));
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(read) == expected.size());
+    buffer.resize(
+        gsl::narrow<size_t>(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(read)));
     const bool same = buffer == expected;
     CHECK(same);
   }

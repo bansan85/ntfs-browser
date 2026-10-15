@@ -12,6 +12,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
 #include "log/ntfs-common.h"
@@ -22,7 +23,7 @@
   #include "io/win32-disk-reader.h"
 #endif
 
-namespace NtfsBrowser::Io {
+namespace NTFS_BROWSER_NAMESPACE::Io {
 
 namespace {
 
@@ -222,4 +223,4 @@ template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<std::span<const BYTE>>
     FileReader<Cache::Strategy::FullCache>::Read<Cache::Strategy::FullCache>(
         LARGE_INTEGER& addr, DWORD length) const;
 
-}  // namespace NtfsBrowser::Io
+}  // namespace NTFS_BROWSER_NAMESPACE::Io

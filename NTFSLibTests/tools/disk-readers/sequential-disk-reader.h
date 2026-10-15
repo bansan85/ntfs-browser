@@ -9,11 +9,12 @@
 #include <vector>
 
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // A fake IDiskReader that ignores addr and serves bytes from a Producer.
-class SequentialDiskReader : public NtfsBrowser::IDiskReader {
+class SequentialDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
  public:
   // Fills dest, returns false once the source is exhausted.
   using Producer = std::function<bool(std::span<BYTE> dest)>;
@@ -41,4 +42,4 @@ class SequentialDiskReader : public NtfsBrowser::IDiskReader {
 [[nodiscard]] SequentialDiskReader::Producer
     MakeGeneratorProducer(std::function<void(std::span<BYTE>)> generate);
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

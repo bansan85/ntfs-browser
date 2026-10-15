@@ -17,6 +17,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -24,13 +25,13 @@
 #include "md5-test-support.h"
 #include "optional-access.h"
 
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::Attr::AttrBase;
-using NtfsBrowser::Io::FileRecord;
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
@@ -39,39 +40,40 @@ namespace {
 // one (Ext2, UFS2 or UFS1) formatted over it afterwards. Both remain
 // mountable.
 const std::filesystem::path autodetect_dir =
-    NtfsBrowserTests::DfttDir() / "10-ntfs-autodetect";
+    NTFS_BROWSER_NAMESPACE::Tests::DfttDir() / "10-ntfs-autodetect";
 
 // Opens a DFTT autodetect partition image and confirms the library reads its
 // NTFS side correctly: the root directory's own ntfs.txt is found, and its
 // $DATA attribute reads back the size the index entry advertises.
 void CheckReadsPartitionImage(std::wstring_view image_name) {
   const std::filesystem::path image_path = autodetect_dir / image_name;
-  NtfsBrowserTests::RequireCorpusImage(image_path);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(image_path);
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NtfsBrowserTests::OpenBareVolumeImage(image_path));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenBareVolumeImage(image_path));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord root(volume);
   root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"ntfs.txt");
   REQUIRE(entry.has_value());
-  CHECK_FALSE(NtfsBrowserTests::Unwrap(entry).IsDirectory());
-  CHECK(NtfsBrowserTests::Unwrap(entry).GetFileSize() > 0);
+  CHECK_FALSE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).IsDirectory());
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileSize() > 0);
 
-  NtfsBrowser::Io::FileRecord file(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord file(volume);
   file.SetAttrMask(Attr::Mask::Data);
-  REQUIRE(
-      file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
+  REQUIRE(file.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
-  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* data =
+  const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>* data =
       file.FindStream({});
   REQUIRE(data != nullptr);
-  CHECK(data->GetDataSize() == NtfsBrowserTests::Unwrap(entry).GetFileSize());
+  CHECK(data->GetDataSize() ==
+        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileSize());
 }
 
 }  // namespace
@@ -91,7 +93,7 @@ TEST_CASE("Reads the NTFS side of DFTT test #10 partition 3 (NTFS+UFS1)",
   CheckReadsPartitionImage(L"10-ntfs-part3.dd");
 }
 
-using NtfsBrowser::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
 namespace {
 
@@ -100,7 +102,8 @@ namespace {
 // combination of resident/non-resident, allocated/deleted, and plain/
 // alternate-data-stream content.
 const std::filesystem::path dftt_kwsrch_image =
-    NtfsBrowserTests::DfttDir() / "3-kwsrch-ntfs" / "ntfs-img-kw-1.dd";
+    NTFS_BROWSER_NAMESPACE::Tests::DfttDir() / "3-kwsrch-ntfs" /
+    "ntfs-img-kw-1.dd";
 
 // One DFTT test #3 search-term case, addressed by its own MFT record number
 // instead of by path (index.html gives the search term and the file it
@@ -146,15 +149,15 @@ constexpr ULONGLONG slack_record = 36;
 // its content contains the DFTT search term.
 void CheckReadsKeywordFile(const NtfsVolume<Cache::Strategy::NoCache>& volume,
                            const KeywordFile& file) {
-  NtfsBrowser::Io::FileRecord record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord record(volume);
   record.SetAttrMask(Attr::Mask::Data);
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted() == file.deleted);
   REQUIRE(record.ParseAttrs());
   CHECK(record.IsDirectory() == file.is_directory);
 
-  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
-      record.FindStream(file.stream_name);
+  const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>*
+      stream = record.FindStream(file.stream_name);
   REQUIRE(stream != nullptr);
   REQUIRE(stream->GetDataSize() == file.size);
 
@@ -170,10 +173,10 @@ void CheckReadsKeywordFile(const NtfsVolume<Cache::Strategy::NoCache>& volume,
 
 TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
           "[dftt][integration]") {
-  NtfsBrowserTests::RequireCorpusImage(dftt_kwsrch_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(dftt_kwsrch_image);
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NtfsBrowserTests::OpenBareVolumeImage(dftt_kwsrch_image));
+      NTFS_BROWSER_NAMESPACE::Tests::OpenBareVolumeImage(dftt_kwsrch_image));
   REQUIRE(volume.IsVolumeOK());
 
   CheckReadsKeywordFile(volume, resident_alloc);
@@ -189,19 +192,20 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   VolumeOptions options;
   options.include_deleted = true;
   const NtfsVolume<Cache::Strategy::NoCache> del_volume(
-      NtfsBrowserTests::OpenBareVolumeImage(dftt_kwsrch_image), options);
+      NTFS_BROWSER_NAMESPACE::Tests::OpenBareVolumeImage(dftt_kwsrch_image),
+      options);
   REQUIRE(del_volume.IsVolumeOK());
   CheckReadsKeywordFile(del_volume, resident_unalloc);
 
   // Non-resident allocated file: index.html places its search term in this
   // file's slack space, past its logical size. ReadData()/GetDataSize()
   // expose only the file's own content, so the term MUST NOT be found there.
-  NtfsBrowser::Io::FileRecord slack(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord slack(volume);
   slack.SetAttrMask(Attr::Mask::Data);
   REQUIRE(slack.ParseFileRecord(slack_record));
   REQUIRE(slack.ParseAttrs());
-  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* slack_data =
-      slack.FindStream({});
+  const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>*
+      slack_data = slack.FindStream({});
   REQUIRE(slack_data != nullptr);
   REQUIRE(slack_data->GetDataSize() == non_resident_size);
   std::vector<BYTE> data(non_resident_size);
@@ -213,7 +217,7 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
 }
 
 #ifdef NTFS_TEST_HAS_MD5
-using NtfsBrowserTests::Md5Hex;
+using NTFS_BROWSER_NAMESPACE::Tests::Md5Hex;
 #endif
 
 namespace {
@@ -222,7 +226,8 @@ namespace {
 // system with eight deleted files, two deleted directories, and a deleted
 // alternate data stream, none of which were touched afterwards.
 const std::filesystem::path dftt_undel_image =
-    NtfsBrowserTests::DfttDir() / "7-undel-ntfs" / "7-ntfs-undel.dd";
+    NTFS_BROWSER_NAMESPACE::Tests::DfttDir() / "7-undel-ntfs" /
+    "7-ntfs-undel.dd";
 
 // One DFTT test #7 file, addressed directly by its own MFT record number
 // instead of by path: index.html documents that dir3, the parent of
@@ -266,7 +271,7 @@ constexpr DeletedFile in_reallocated_dir_file{
 void CheckRecoversDeletedFile(
     const NtfsVolume<Cache::Strategy::NoCache>& volume,
     const DeletedFile& file) {
-  NtfsBrowser::Io::FileRecord record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord record(volume);
   record.SetAttrMask(Attr::Mask::Data | Attr::Mask::StandardInformation);
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted());
@@ -274,13 +279,14 @@ void CheckRecoversDeletedFile(
 
   FILETIME create_time{};
   record.GetFileTime(nullptr, &create_time, nullptr);
-  const auto [year, month, day] = NtfsBrowserTests::FileTimeToDate(create_time);
+  const auto [year, month, day] =
+      NTFS_BROWSER_NAMESPACE::Tests::FileTimeToDate(create_time);
   CHECK(year == 2004);
   CHECK(month == 2);
   CHECK(day == 29);
 
-  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
-      record.FindStream(file.stream_name);
+  const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>*
+      stream = record.FindStream(file.stream_name);
   REQUIRE(stream != nullptr);
   REQUIRE(stream->GetDataSize() == file.size);
 
@@ -295,12 +301,13 @@ void CheckRecoversDeletedFile(
 
 TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
           "[dftt][integration]") {
-  NtfsBrowserTests::RequireCorpusImage(dftt_undel_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(dftt_undel_image);
 
   VolumeOptions options;
   options.include_deleted = true;
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NtfsBrowserTests::OpenBareVolumeImage(dftt_undel_image), options);
+      NTFS_BROWSER_NAMESPACE::Tests::OpenBareVolumeImage(dftt_undel_image),
+      options);
   REQUIRE(volume.IsVolumeOK());
 
   CheckRecoversDeletedFile(volume, resident_file);
@@ -314,12 +321,12 @@ TEST_CASE("Recovers deleted files from DFTT test #7 (NTFS Undelete)",
   CheckRecoversDeletedFile(volume, in_reallocated_dir_file);
 
   // The two deleted directories themselves.
-  NtfsBrowser::Io::FileRecord dir1(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord dir1(volume);
   REQUIRE(dir1.ParseFileRecord(33));
   CHECK(dir1.IsDeleted());
   CHECK(dir1.IsDirectory());
 
-  NtfsBrowser::Io::FileRecord dir1_dir2(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord dir1_dir2(volume);
   REQUIRE(dir1_dir2.ParseFileRecord(34));
   CHECK(dir1_dir2.IsDeleted());
   CHECK(dir1_dir2.IsDirectory());

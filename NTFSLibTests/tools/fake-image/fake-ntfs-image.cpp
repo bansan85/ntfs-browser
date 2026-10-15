@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
@@ -16,7 +17,7 @@
 #include "fake-ntfs-image-internal.h"
 #include "file-record-header-edit.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
@@ -30,10 +31,11 @@ constexpr BYTE boot_signature_high = 0x55;
 // data run (GetRecordsCount() only reads real_size).
 FakeRecord MakeMftRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(attr_offset_value));
+  auto& attr =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
+          &record.at(attr_offset_value));
   attr.header.type = Attr::Type::Data;
   attr.header.non_resident = 1;
   attr.header.name_length = 0;
@@ -59,9 +61,9 @@ FakeRecord MakeMftRecord() {
 // attrSize bytes, reporting NTFS 3.1.
 FakeRecord MakeVolumeRecordSized(WORD attr_size) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::VolumeInformation;
   attr.header.non_resident = 0;
@@ -72,8 +74,9 @@ FakeRecord MakeVolumeRecordSized(WORD attr_size) {
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& vol_info = *reinterpret_cast<NtfsBrowser::Data::VolumeInformation*>(
-      &record.at(attr_offset_value + attr.attr_offset));
+  auto& vol_info =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::VolumeInformation*>(
+          &record.at(attr_offset_value + attr.attr_offset));
   vol_info.major_version = 3;
   vol_info.minor_version = 1;
 
@@ -83,8 +86,8 @@ FakeRecord MakeVolumeRecordSized(WORD attr_size) {
 }
 
 FakeRecord MakeVolumeRecord() {
-  return MakeVolumeRecordSized(
-      static_cast<WORD>(sizeof(NtfsBrowser::Data::VolumeInformation)));
+  return MakeVolumeRecordSized(static_cast<WORD>(
+      sizeof(NTFS_BROWSER_NAMESPACE::Data::VolumeInformation)));
 }
 
 // Builds a fake $Volume record carrying both VOLUME_INFORMATION (so the
@@ -92,11 +95,12 @@ FakeRecord MakeVolumeRecord() {
 FakeRecord MakeVolumeRecordWithName(std::wstring_view name) {
   FakeRecord record = MakeVolumeRecord();
 
-  const auto& vol_info = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
-      &record.at(attr_offset_value));
+  const auto& vol_info =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
+          &record.at(attr_offset_value));
   const DWORD name_offset = attr_offset_value + vol_info.header.total_size;
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(name_offset));
   attr.header.type = Attr::Type::VolumeName;
   attr.header.non_resident = 0;
@@ -119,9 +123,9 @@ FakeRecord MakeVolumeRecordWithName(std::wstring_view name) {
 // long, so a fixture can pin it to NTFS 1.2's real minimum size.
 FakeRecord MakeStandardInformationRecordSized(WORD attr_size) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::StandardInformation;
   attr.header.non_resident = 0;
@@ -132,13 +136,15 @@ FakeRecord MakeStandardInformationRecordSized(WORD attr_size) {
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& std_info = *reinterpret_cast<NtfsBrowser::Data::StandardInformation*>(
-      &record.at(attr_offset_value + attr.attr_offset));
+  auto& std_info =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::StandardInformation*>(
+          &record.at(attr_offset_value + attr.attr_offset));
   std_info.create_time = std_info_create_time;
   std_info.alter_time = std_info_alter_time;
   std_info.mft_time = std_info_mft_time;
   std_info.read_time = std_info_read_time;
-  std_info.permission = NtfsBrowser::Data::StdInfoPermission::ReadOnly;
+  std_info.permission =
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::ReadOnly;
   std_info.max_version_no = 0;
   std_info.version_no = 0;
   std_info.class_id = 0;
@@ -151,17 +157,18 @@ FakeRecord MakeStandardInformationRecordSized(WORD attr_size) {
 // Builds a bare root-directory record; ParseFileRecord() never looks at
 // attributes, so an empty one is enough to exercise a second read.
 FakeRecord MakeRootRecord() {
-  return MakeRecordHeader(attr_offset_value,
-                          NtfsBrowser::Data::FileRecordFlag::InUse |
-                              NtfsBrowser::Data::FileRecordFlag::Dir);
+  return MakeRecordHeader(
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 }
 
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImage() {
-  NtfsBrowser::Data::NtfsBpb bpb{};
+  NTFS_BROWSER_NAMESPACE::Data::NtfsBpb bpb{};
   std::memcpy(std::data(bpb.signature),
-              NtfsBrowser::Data::ntfs_signature.data(), sizeof(bpb.signature));
+              NTFS_BROWSER_NAMESPACE::Data::ntfs_signature.data(),
+              sizeof(bpb.signature));
   bpb.bytes_per_sector = bytes_per_sector;
   bpb.sectors_per_cluster = sectors_per_cluster;
   bpb.lcn_mft = mft_lcn;
@@ -242,7 +249,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeletedVolumeRecord() {
   // NtfsVolume::Init() read it.
   FakeRecord record = MakeVolumeRecord();
   EditFileRecordHeader(record, [](FileRecordHeader& header) {
-    header.flags = NtfsBrowser::Data::FileRecordFlag{};
+    header.flags = NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag{};
   });
 
   std::memcpy(&image.at(offset), record.data(), record.size());
@@ -324,4 +331,4 @@ std::filesystem::path WriteFakeNtfsImage(const std::vector<BYTE>& image) {
   return path;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

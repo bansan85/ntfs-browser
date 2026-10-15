@@ -3,8 +3,9 @@
 #include <ntfs-browser/win-types.h>
 
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser::Data {
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 struct IndexRoot {
   // Index Root Header
@@ -25,4 +26,4 @@ struct IndexRoot {
   BYTE padding2[3];  // Padding
 };
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

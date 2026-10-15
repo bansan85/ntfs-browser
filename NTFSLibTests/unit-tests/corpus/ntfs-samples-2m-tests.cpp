@@ -8,27 +8,28 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
 #include "partition-disk-reader.h"
 
-using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
+using NTFS_BROWSER_NAMESPACE::IndexEntryView;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
           "[ntfs-samples][integration]") {
-  NtfsBrowserTests::RequireCorpusImage(k2m_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(k2m_image);
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       OpenWholeDiskImage(k2m_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetClusterSize() == 2097152);
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   OpenRootDir(root);
 
   std::vector<std::wstring> names;

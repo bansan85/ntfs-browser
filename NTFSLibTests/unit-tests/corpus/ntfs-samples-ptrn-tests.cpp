@@ -8,6 +8,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "corpus-test-support.h"
@@ -15,24 +16,24 @@
 #include "optional-access.h"
 #include "partition-disk-reader.h"
 
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
           "[ntfs-samples][integration][slack]") {
-  NtfsBrowserTests::RequireCorpusImage(ptrn_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(ptrn_image);
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       OpenWholeDiskImage(ptrn_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   OpenRootDir(root);
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"2.txt");
   REQUIRE(entry.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(entry).GetFileSize() > 0);
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileSize() > 0);
 
   // /2.txt's own cluster slack (past its real size, still inside its last
   // allocated cluster) isn't checked: ReadData() clamps every read to
@@ -44,13 +45,13 @@ TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
 TEST_CASE(
     "Finds the RAM slack and cluster slack PTRN pattern (ntfs-ramslack.raw)",
     "[ntfs-samples][integration][slack]") {
-  NtfsBrowserTests::RequireCorpusImage(ramslack_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(ramslack_image);
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       OpenWholeDiskImage(ramslack_image, small_image_partition_offset));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
   OpenRootDir(root);
   REQUIRE(root.FindSubEntry(L"1.txt").has_value());
 
@@ -61,14 +62,15 @@ TEST_CASE(
   const std::optional<std::span<const BYTE>> ram_slack =
       volume.Read(ram_slack_addr, 4);
   REQUIRE(ram_slack.has_value());
-  CHECK(MatchesPtrnPattern(NtfsBrowserTests::Unwrap(ram_slack)));
+  CHECK(MatchesPtrnPattern(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(ram_slack)));
 
   // Cluster slack: the rest of the cluster past that same sector.
   LARGE_INTEGER cluster_slack_addr{.QuadPart = cluster_slack_address};
   const std::optional<std::span<const BYTE>> cluster_slack =
       volume.Read(cluster_slack_addr, 4);
   REQUIRE(cluster_slack.has_value());
-  CHECK(MatchesPtrnPattern(NtfsBrowserTests::Unwrap(cluster_slack)));
+  CHECK(
+      MatchesPtrnPattern(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(cluster_slack)));
 
   CheckRepairStreamsHoldPtrnPattern(volume);
 }

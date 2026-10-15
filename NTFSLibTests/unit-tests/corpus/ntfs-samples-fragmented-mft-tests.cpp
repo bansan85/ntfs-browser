@@ -6,6 +6,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "catch2/catch_message.hpp"
@@ -13,15 +14,16 @@
 #include "ntfs-samples-support.h"
 #include "partition-disk-reader.h"
 
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 TEST_CASE(
     "Resolves every file record of an extremely fragmented $MFT "
     "(ntfs_extremely_fragmented_mft.raw)",
     "[ntfs-samples][integration][fragmented-mft]") {
-  const std::filesystem::path& image = NtfsBrowserTests::FragmentedMftImage();
+  const std::filesystem::path& image =
+      NTFS_BROWSER_NAMESPACE::Tests::FragmentedMftImage();
   if (!std::filesystem::exists(image)) {
     SKIP("ntfs_extremely_fragmented_mft.raw not present: " << image.string());
   }
@@ -38,7 +40,8 @@ TEST_CASE(
        {0ULL, 15ULL, 16ULL, 17ULL, 18ULL, 19ULL, 20ULL, 21ULL, 22ULL,
         34'799'617ULL, 34'799'618ULL, 34'799'619ULL}) {
     INFO("record " << record_num);
-    NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> record(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> record(
+        volume);
     REQUIRE(record.ParseFileRecord(record_num));
     CHECK(record.GetBaseRecordReference() == 0);
   }

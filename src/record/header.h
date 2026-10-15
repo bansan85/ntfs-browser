@@ -7,11 +7,12 @@
 #include <vector>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "../internal-export.h"
 #include "data/file-record-header.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
 
@@ -79,4 +80,4 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY
 };
 
 }  // namespace Record
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

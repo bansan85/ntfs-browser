@@ -4,7 +4,9 @@
 
 #include <string_view>
 
-namespace NtfsBrowser::Data {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 // NTFS Boot Sector BPB
 
@@ -65,4 +67,4 @@ struct NtfsBpb {
 
 #pragma pack()
 
-};  // namespace NtfsBrowser::Data
+};  // namespace NTFS_BROWSER_NAMESPACE::Data

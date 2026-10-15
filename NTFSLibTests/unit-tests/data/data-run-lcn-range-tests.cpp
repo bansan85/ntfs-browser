@@ -14,6 +14,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 #include <ntfs-browser/volume-options.h>
 
@@ -21,13 +22,13 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::VolumeOptions;
-namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowserTests::FakeRunHost;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::Tests::FakeRunHost;
 
 namespace {
 
@@ -42,21 +43,23 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithWrappingLcn(FakeRunHost::Data);
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithWrappingLcn(
+          FakeRunHost::Data);
 
   const NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
           std::vector<BYTE>(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
   const auto& data_attrs = record.GetAttr(Attr::Type::Data);
   REQUIRE(data_attrs.size() == 1);
 
-  std::vector<BYTE> buffer(NtfsBrowserTests::fake_cluster_size, sentinel_byte);
+  std::vector<BYTE> buffer(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size,
+                           sentinel_byte);
   // The REQUIRE above checks the size of dataAttrs.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const std::optional<ULONGLONG> read = data_attrs[0]->ReadData(0, buffer);
@@ -75,13 +78,13 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("strict: the whole attribute is rejected") {
-    const NtfsVolume<S> volume(
-        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-            NtfsBrowserTests::BuildFakeNtfsImageWithOverflowingLcnSum(
-                FakeRunHost::Data)));
+    const NtfsVolume<S> volume(std::make_unique<
+                               NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithOverflowingLcnSum(
+            FakeRunHost::Data)));
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> record(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(record.ParseAttrs());
     CHECK(record.GetAttr(Attr::Type::Data).empty());
@@ -89,13 +92,13 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("recovering: the run decoded before the overflow is kept") {
     const NtfsVolume<S> volume(
-        std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-            NtfsBrowserTests::BuildFakeNtfsImageWithOverflowingLcnSum(
-                FakeRunHost::Data)),
+        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+            NTFS_BROWSER_NAMESPACE::Tests::
+                BuildFakeNtfsImageWithOverflowingLcnSum(FakeRunHost::Data)),
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
-    NtfsBrowser::Io::FileRecord<S> record(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK(record.ParseAttrs());
 
@@ -103,8 +106,9 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(data_attrs.size() == 1);
 
     // Only the first run (VCN 0) was kept: the second cluster is unmapped.
-    std::vector<BYTE> buffer(size_t{2} * NtfsBrowserTests::fake_cluster_size,
-                             sentinel_byte);
+    std::vector<BYTE> buffer(
+        size_t{2} * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size,
+        sentinel_byte);
     // The REQUIRE above checks the size of dataAttrs.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK_FALSE(data_attrs[0]->ReadData(0, buffer).has_value());

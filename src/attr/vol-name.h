@@ -5,8 +5,9 @@
 
 #include <ntfs-browser/cache/strategy.h>  // IWYU pragma: keep
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
 
@@ -29,7 +30,7 @@ class AttrVolName : public Resident {
   ~AttrVolName() override = default;
 
   template <Cache::Strategy>
-  friend class NtfsBrowser::NtfsVolume;
+  friend class NTFS_BROWSER_NAMESPACE::NtfsVolume;
 
  private:
   std::wstring name_;
@@ -40,4 +41,4 @@ class AttrVolName : public Resident {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

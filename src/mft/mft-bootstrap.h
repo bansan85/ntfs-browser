@@ -8,10 +8,11 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
 #include "mft/extent-map.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 template <Cache::Strategy S>
 class NtfsVolume;
@@ -75,4 +76,4 @@ class MftBootstrap {
 
 }  // namespace Mft
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

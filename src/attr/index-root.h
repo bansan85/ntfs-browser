@@ -6,8 +6,9 @@
 #include <vector>
 
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IndexEntryView;
 
@@ -49,9 +50,9 @@ class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
   ~AttrIndexRoot() override;
 
   template <Cache::Strategy>
-  friend class NtfsBrowser::Io::FileRecord;
+  friend class NTFS_BROWSER_NAMESPACE::Io::FileRecord;
   template <Cache::Strategy>
-  friend class NtfsBrowser::Io::DirectoryIndex;
+  friend class NTFS_BROWSER_NAMESPACE::Io::DirectoryIndex;
 
  private:
   const Data::IndexRoot* index_root_;
@@ -67,4 +68,4 @@ class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

@@ -10,12 +10,14 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <windows.h>
 
+#include <ntfs-browser/namespace.h>
+
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowserTests::SampleRun;
+using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
 namespace Fs = std::filesystem;
 
 namespace {
@@ -105,7 +107,7 @@ constexpr std::string_view missing_volume_error =
 SampleRun RunSample(const std::vector<std::wstring>& args) {
   const Fs::path exe(NTFS_MFT_LIST_EXE);
   REQUIRE(Fs::exists(exe));
-  return NtfsBrowserTests::RunSample(exe, args);
+  return NTFS_BROWSER_NAMESPACE::Tests::RunSample(exe, args);
 }
 
 // Writes an MFT tree image to a temp file, removed on exit. The default is
@@ -114,10 +116,11 @@ struct TempTreeImage final {
   Fs::path path;
 
   TempTreeImage()
-      : TempTreeImage(NtfsBrowserTests::BuildFakeNtfsImageWithMftTree()) {}
+      : TempTreeImage(
+            NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree()) {}
 
   explicit TempTreeImage(const std::vector<BYTE>& image)
-      : path(NtfsBrowserTests::WriteFakeNtfsImage(image)) {}
+      : path(NTFS_BROWSER_NAMESPACE::Tests::WriteFakeNtfsImage(image)) {}
 
   ~TempTreeImage() {
     std::error_code ignored;
@@ -197,20 +200,23 @@ TEST_CASE("NtfsMftList reports a target that is not an NTFS volume",
 
 TEST_CASE("NtfsMftList shows one letter per DOS permission flag",
           "[mft][sample][characterization]") {
-  const auto [permission, attributes] =
-      GENERATE(table<NtfsBrowser::Data::StdInfoPermission, std::string_view>({
-          {NtfsBrowser::Data::StdInfoPermission::ReadOnly, "R-----"},
-          {NtfsBrowser::Data::StdInfoPermission::Hidden, "-H----"},
-          {NtfsBrowser::Data::StdInfoPermission::System, "--S---"},
-          {NtfsBrowser::Data::StdInfoPermission::Compressed, "---C--"},
-          {NtfsBrowser::Data::StdInfoPermission::Encrypted, "----E-"},
-          {NtfsBrowser::Data::StdInfoPermission::Sparse, "-----P"},
+  const auto [permission, attributes] = GENERATE(
+      table<NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission, std::string_view>({
+          {NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::ReadOnly, "R-----"},
+          {NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Hidden, "-H----"},
+          {NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::System, "--S---"},
+          {NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
+           "---C--"},
+          {NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Encrypted,
+           "----E-"},
+          {NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Sparse, "-----P"},
       }));
   INFO(std::string(attributes));
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
-  NtfsBrowserTests::SetStdInfoPermission(image,
-                                         NtfsBrowserTests::mft_tree_report_idx,
-                                         static_cast<DWORD>(permission));
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+  NTFS_BROWSER_NAMESPACE::Tests::SetStdInfoPermission(
+      image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
+      static_cast<DWORD>(permission));
   const TempTreeImage tree_image(image);
   const SampleRun run = RunSample({tree_image.path.wstring()});
 

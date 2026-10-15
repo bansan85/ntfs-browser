@@ -14,17 +14,18 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
@@ -36,13 +37,14 @@ constexpr size_t buffer_size_value = 8;
 
 template <Cache::Strategy S>
 void CheckReadDataReturnsActualByteCount() {
-  auto reader = std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-      NtfsBrowserTests::BuildFakeNtfsImageWithSmallResidentData());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithSmallResidentData());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
@@ -57,15 +59,19 @@ void CheckReadDataReturnsActualByteCount() {
   const std::optional<ULONGLONG> result = data_attrs[0]->ReadData(0, buffer);
 
   REQUIRE(result.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(result) ==
-        NtfsBrowserTests::small_resident_data_content.size());
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result) ==
+        NTFS_BROWSER_NAMESPACE::Tests::small_resident_data_content.size());
 
-  CHECK(std::memcmp(buffer.data(),
-                    NtfsBrowserTests::small_resident_data_content.data(),
-                    NtfsBrowserTests::small_resident_data_content.size()) == 0);
+  CHECK(
+      std::memcmp(
+          buffer.data(),
+          NTFS_BROWSER_NAMESPACE::Tests::small_resident_data_content.data(),
+          NTFS_BROWSER_NAMESPACE::Tests::small_resident_data_content.size()) ==
+      0);
 
   // Bytes past the attribute's real size must remain untouched sentinels.
-  for (size_t i = NtfsBrowserTests::small_resident_data_content.size();
+  for (size_t i =
+           NTFS_BROWSER_NAMESPACE::Tests::small_resident_data_content.size();
        i < buffer.size(); i++) {
     // i < buffer.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

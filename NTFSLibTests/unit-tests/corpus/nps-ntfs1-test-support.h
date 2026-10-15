@@ -10,10 +10,11 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 
 #include "corpus-test-support.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Io {
 
@@ -25,9 +26,9 @@ class FileRecord;
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // The NPS Test Disk Image "nps-2009-ntfs1" (Digital Corpora), generation 2: a
 // real NTFS volume with RAW, Compressed, and Encrypted directories, each
@@ -62,34 +63,35 @@ inline constexpr std::array<KnownFile, 5> known_files{{
 // Opens ntfs1_image through a PartitionDiskReader, so NtfsVolume's own
 // path-based constructor - Windows-only, since it goes through
 // Win32DiskReader - is never needed for this corpus's bare-volume image.
-[[nodiscard]] std::unique_ptr<NtfsBrowser::IDiskReader> OpenNtfs1Image();
+[[nodiscard]] std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
+    OpenNtfs1Image();
 
 // Parses dir's own file record as the volume's root directory, ready for
 // FindSubEntry(). dir must already be constructed on that volume.
-void OpenRootDir(
-    NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& dir);
+void OpenRootDir(NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+                 NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& dir);
 
 // Looks up name under dir's current directory and reparses dir in place as
 // that subdirectory.
-void OpenSubDir(
-    NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& dir,
-    std::string_view name);
+void OpenSubDir(NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+                    NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& dir,
+                std::string_view name);
 
 // Looks up name under dir and parses file in place as it, ready for
 // FindStream(). file's storage is the caller's: it bounds the lifetime of
 // any attribute pointer FindStream() later returns on it.
-void OpenFile(
-    NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>& file,
-    const NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>&
-        dir,
-    std::string_view name);
+void OpenFile(NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+                  NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& file,
+              const NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+                  NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& dir,
+              std::string_view name);
 
 // Reads name's whole unnamed $DATA stream out of dir.
-[[nodiscard]] std::vector<BYTE> ReadFile(
-    const NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache>&
-        volume,
-    const NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>&
-        dir,
-    std::string_view name);
+[[nodiscard]] std::vector<BYTE>
+    ReadFile(const NTFS_BROWSER_NAMESPACE::NtfsVolume<
+                 NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
+             const NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+                 NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& dir,
+             std::string_view name);
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

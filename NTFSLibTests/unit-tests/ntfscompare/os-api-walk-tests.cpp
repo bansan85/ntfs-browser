@@ -6,6 +6,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
+
 #ifdef _WIN32
   #include <windows.h>
 #endif
@@ -14,7 +16,7 @@
 #include "optional-access.h"
 #include "os-api-walk.h"
 
-using NtfsBrowserTests::Unwrap;
+using NTFS_BROWSER_NAMESPACE::Tests::Unwrap;
 using NtfsCompare::Entry;
 using NtfsCompare::Listing;
 using NtfsCompare::WalkOsApi;

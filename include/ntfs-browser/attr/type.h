@@ -2,7 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Attr {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 enum class Type : DWORD {
   // Zero-initialised value, never found on disk
@@ -29,4 +31,4 @@ enum class Type : DWORD {
   All = static_cast<DWORD>(-1)
 };
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

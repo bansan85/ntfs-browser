@@ -7,6 +7,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
+
 #include "catch2/catch_message.hpp"
 #include "utf/utf.h"
 
@@ -44,6 +46,7 @@ TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]") {
 
   for (const Case& test_case : cases) {
     INFO(test_case.name);
-    CHECK(NtfsBrowser::Utf::WideToUtf8(test_case.input) == test_case.expected);
+    CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(test_case.input) ==
+          test_case.expected);
   }
 }

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/attribute-list.h"
 #include "data/filename.h"
@@ -15,7 +16,7 @@
 #include "data/index-root.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
@@ -24,26 +25,27 @@ namespace {
 // directory that outgrew its base record (eg. C:\Windows).
 FakeRecord MakeAttributeListOnlyDirRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size =
-      static_cast<DWORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
+  attr.attr_size = static_cast<DWORD>(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& al_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
-      &record.at(attr_offset_value + attr.attr_offset));
+  auto& al_entry =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+          &record.at(attr_offset_value + attr.attr_offset));
   al_entry.attr_type = Attr::Type::IndexRoot;
-  al_entry.record_size =
-      static_cast<WORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
+  al_entry.record_size = static_cast<WORD>(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
   al_entry.name_length = 0;
   al_entry.name_offset = 0;
   al_entry.start_vcn = 0;
@@ -64,7 +66,7 @@ FakeRecord MakeAttributeListOnlyDirRecord() {
 // record it extends; 0 leaves it a base record.
 FakeRecord MakeIndexRootExtensionRecord(ULONGLONG base_idx) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   SetRecordLink(record, 0, base_idx);
 
   const DWORD root_total =
@@ -80,13 +82,13 @@ namespace {
 // extension record, once for $INDEX_ROOT and once for $INDEX_ALLOCATION.
 FakeRecord MakeAttributeListTwoTypesDirRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
-  constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
+  constexpr WORD entry_size_value = static_cast<WORD>(AlignAttrSize(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
@@ -101,7 +103,8 @@ FakeRecord MakeAttributeListTwoTypesDirRecord() {
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
 
   auto& first_entry =
-      *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(body.data());
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+          body.data());
   first_entry.attr_type = Attr::Type::IndexRoot;
   first_entry.record_size = entry_size_value;
   first_entry.name_length = 0;
@@ -111,8 +114,9 @@ FakeRecord MakeAttributeListTwoTypesDirRecord() {
   first_entry.base_ref.sequence_number = 0;
   first_entry.attr_id = 0;
 
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
-      &gsl::at(body, entry_size_value));
+  auto& second_entry =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+          &gsl::at(body, entry_size_value));
   second_entry.attr_type = Attr::Type::IndexAllocation;
   second_entry.record_size = entry_size_value;
   second_entry.name_length = 0;
@@ -130,8 +134,9 @@ FakeRecord MakeAttributeListTwoTypesDirRecord() {
 // Writes an empty non-resident $INDEX_ALLOCATION at offset, its run list
 // holding no runs. Returns its total_size.
 DWORD WriteEmptyIndexAllocAttr(FakeRecord& record, DWORD offset) {
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(offset));
+  auto& alloc_attr =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
+          &record.at(offset));
   alloc_attr.header.type = Attr::Type::IndexAllocation;
   alloc_attr.header.non_resident = 1;
   alloc_attr.header.name_length = 0;
@@ -158,7 +163,7 @@ DWORD WriteEmptyIndexAllocAttr(FakeRecord& record, DWORD offset) {
 // non-resident $INDEX_ALLOCATION right after it. It extends record baseIdx.
 FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   SetRecordLink(record, 0, base_idx);
 
   const DWORD root_total = WriteFileNameIndexRootAttr(
@@ -175,11 +180,12 @@ FakeRecord MakeIndexRootAndAllocExtensionRecord(ULONGLONG base_idx) {
 FakeRecord MakeIndexAllocationOnlyExtensionRecord(DWORD real_size,
                                                   ULONGLONG base_idx) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
   SetRecordLink(record, 0, base_idx);
 
-  auto& alloc_attr = *reinterpret_cast<NtfsBrowser::Data::HeaderNonResident*>(
-      &record.at(attr_offset_value));
+  auto& alloc_attr =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
+          &record.at(attr_offset_value));
   alloc_attr.header.type = Attr::Type::IndexAllocation;
   alloc_attr.header.non_resident = 1;
   alloc_attr.header.name_length = 0;
@@ -207,13 +213,13 @@ FakeRecord MakeIndexAllocationOnlyExtensionRecord(DWORD real_size,
 // different extension record for the same attribute type.
 FakeRecord MakeFragmentedAttributeListDirRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
-  constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
+  constexpr WORD entry_size_value = static_cast<WORD>(AlignAttrSize(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
@@ -231,8 +237,9 @@ FakeRecord MakeFragmentedAttributeListDirRecord() {
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
   for (size_t i = 0; i < extension_idxs.size(); i++) {
-    auto& entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
-        &gsl::at(body, gsl::narrow<gsl::index>(i * entry_size_value)));
+    auto& entry =
+        *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+            &gsl::at(body, gsl::narrow<gsl::index>(i * entry_size_value)));
     entry.attr_type = Attr::Type::IndexAllocation;
     entry.record_size = entry_size_value;
     entry.name_length = 0;
@@ -252,18 +259,21 @@ FakeRecord MakeFragmentedAttributeListDirRecord() {
 // one full, self-referencing entry, followed by a truncated partial one.
 FakeRecord MakeAttributeListShortReadRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
   constexpr DWORD body_size =
-      static_cast<DWORD>(NtfsBrowser::Data::attribute_list_entry_header_size) +
+      static_cast<DWORD>(
+          NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size) +
       10;
   static_assert(
-      body_size % NtfsBrowser::Data::attribute_list_entry_header_size != 0,
+      body_size %
+              NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size !=
+          0,
       "body size must not be an exact multiple of the entry size, "
       "to reproduce a short final ReadData()");
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
@@ -274,11 +284,12 @@ FakeRecord MakeAttributeListShortReadRecord() {
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
-      &record.at(attr_offset_value + attr.attr_offset));
+  auto& first_entry =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+          &record.at(attr_offset_value + attr.attr_offset));
   first_entry.attr_type = Attr::Type::Data;
-  first_entry.record_size =
-      static_cast<WORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
+  first_entry.record_size = static_cast<WORD>(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
   first_entry.name_length = 0;
   first_entry.name_offset = 0;
   first_entry.start_vcn = 0;
@@ -298,15 +309,15 @@ FakeRecord MakeAttributeListShortReadRecord() {
 // ReadData().
 FakeRecord MakeAttributeListRecordSizeTooSmallDirRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
-  constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
+  constexpr WORD entry_size_value = static_cast<WORD>(AlignAttrSize(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
   // Nonzero, but smaller than entry_size - the exact condition under test.
   constexpr WORD too_small_record_size = 5;
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
@@ -321,7 +332,8 @@ FakeRecord MakeAttributeListRecordSizeTooSmallDirRecord() {
       std::span<BYTE>(record).subspan(attr_offset_value + attr.attr_offset);
 
   auto& first_entry =
-      *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(body.data());
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+          body.data());
   first_entry.attr_type = Attr::Type::IndexRoot;
   first_entry.record_size = entry_size_value;
   first_entry.name_length = 0;
@@ -333,8 +345,9 @@ FakeRecord MakeAttributeListRecordSizeTooSmallDirRecord() {
 
   // Relocates nowhere - base_ref names this same directory record, so
   // AttrList skips it - only its record_size matters here.
-  auto& second_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
-      &gsl::at(body, entry_size_value));
+  auto& second_entry =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+          &gsl::at(body, entry_size_value));
   second_entry.attr_type = Attr::Type::Data;
   second_entry.record_size = too_small_record_size;
   second_entry.name_length = 0;
@@ -356,17 +369,17 @@ FakeRecord MakeAttributeListRecordSizeTooSmallDirRecord() {
 // (nullopt) end, not a short ReadData().
 FakeRecord MakeAttributeListOffsetMismatchDirRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
-  constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
+  constexpr WORD entry_size_value = static_cast<WORD>(AlignAttrSize(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
   // Past entry_size, so the single entry's declared span overshoots the
   // attribute's own declared size below.
   constexpr WORD overshoot_record_size =
       static_cast<WORD>(entry_size_value + 4);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
@@ -377,8 +390,9 @@ FakeRecord MakeAttributeListOffsetMismatchDirRecord() {
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
-      &record.at(attr_offset_value + attr.attr_offset));
+  auto& first_entry =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+          &record.at(attr_offset_value + attr.attr_offset));
   first_entry.attr_type = Attr::Type::IndexRoot;
   first_entry.record_size = overshoot_record_size;
   first_entry.name_length = 0;
@@ -398,13 +412,13 @@ FakeRecord MakeAttributeListOffsetMismatchDirRecord() {
 FakeRecord MakeAttributeListEntriesDirRecord(
     const std::vector<std::pair<Attr::Type, ULONGLONG>>& entries) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
-  constexpr WORD entry_size_value = static_cast<WORD>(
-      AlignAttrSize(NtfsBrowser::Data::attribute_list_entry_header_size));
+  constexpr WORD entry_size_value = static_cast<WORD>(AlignAttrSize(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
@@ -417,8 +431,9 @@ FakeRecord MakeAttributeListEntriesDirRecord(
 
   const size_t body_offset = attr_offset_value + attr.attr_offset;
   for (size_t i = 0; i < entries.size(); i++) {
-    auto& entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
-        &record.at(body_offset + (i * entry_size_value)));
+    auto& entry =
+        *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+            &record.at(body_offset + (i * entry_size_value)));
     entry.attr_type = entries[i].first;
     entry.record_size = entry_size_value;
     entry.name_length = 0;
@@ -438,26 +453,27 @@ FakeRecord MakeAttributeListEntriesDirRecord(
 // full entry, relocates to targetIdx.
 FakeRecord MakeAttributeListCycleRecord(ULONGLONG target_idx) {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
-  attr.attr_size =
-      static_cast<DWORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
+  attr.attr_size = static_cast<DWORD>(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
   attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
-  auto& first_entry = *reinterpret_cast<NtfsBrowser::Data::AttributeList*>(
-      &record.at(attr_offset_value + attr.attr_offset));
+  auto& first_entry =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+          &record.at(attr_offset_value + attr.attr_offset));
   first_entry.attr_type = Attr::Type::AttributeList;
-  first_entry.record_size =
-      static_cast<WORD>(NtfsBrowser::Data::attribute_list_entry_header_size);
+  first_entry.record_size = static_cast<WORD>(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
   first_entry.name_length = 0;
   first_entry.name_offset = 0;
   first_entry.start_vcn = 0;
@@ -475,10 +491,10 @@ FakeRecord MakeAttributeListCycleRecord(ULONGLONG target_idx) {
 // sizeof(Data::AttributeList).
 FakeRecord MakeAttributeListTightlyPackedDirRecord() {
   FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NtfsBrowser::Data::FileRecordFlag::InUse |
-                             NtfsBrowser::Data::FileRecordFlag::Dir);
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
 
-  auto& attr = *reinterpret_cast<NtfsBrowser::Data::HeaderResident*>(
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
   attr.header.type = Attr::Type::AttributeList;
   attr.header.non_resident = 0;
@@ -496,7 +512,7 @@ FakeRecord MakeAttributeListTightlyPackedDirRecord() {
   // to a struct reference: fill an aligned copy and copy the on-disk bytes.
   const auto write_entry = [](BYTE* dest, Attr::Type type, ULONGLONG record_idx,
                               WORD attr_id) {
-    NtfsBrowser::Data::AttributeList entry{};
+    NTFS_BROWSER_NAMESPACE::Data::AttributeList entry{};
     entry.attr_type = type;
     entry.record_size = attribute_list_real_entry_size;
     entry.name_length = 0;
@@ -707,4 +723,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory() {
   return image;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

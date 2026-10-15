@@ -6,13 +6,15 @@
 
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
+#include <ntfs-browser/namespace.h>
 
 namespace NtfsCompare {
 
 namespace {
 
 // The fields of one MFT tree entry, with every timestamp in UTC.
-Entry EntryFromMftEntry(const NtfsBrowser::Mft::MftTree::Entry& entry) {
+Entry EntryFromMftEntry(
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry) {
   Entry out;
   out.is_directory = entry.directory;
   out.logical_size = entry.size;
@@ -33,15 +35,15 @@ Entry EntryFromMftEntry(const NtfsBrowser::Mft::MftTree::Entry& entry) {
 
 // Adds every name of the child record that names frame's directory as its
 // parent. A directory among them is queued on stack.
-void AddChildNames(const NtfsBrowser::Mft::MftTree& tree, ULONGLONG child,
-                   const WalkFrame& frame, Listing& result,
+void AddChildNames(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+                   ULONGLONG child, const WalkFrame& frame, Listing& result,
                    std::vector<WalkFrame>& stack) {
-  const NtfsBrowser::Mft::MftTree::Entry* entry = tree.Find(child);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* entry = tree.Find(child);
   if (entry == nullptr) {
     return;
   }
 
-  for (const NtfsBrowser::Mft::MftTree::Name& name : entry->names) {
+  for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& name : entry->names) {
     if (name.dos_only || !name.parent_valid ||
         name.parent_record != frame.record) {
       continue;
@@ -60,7 +62,8 @@ void AddChildNames(const NtfsBrowser::Mft::MftTree& tree, ULONGLONG child,
 
 }  // namespace
 
-Entry EntryFromIndexEntry(const NtfsBrowser::IndexEntryView& index_entry) {
+Entry EntryFromIndexEntry(
+    const NTFS_BROWSER_NAMESPACE::IndexEntryView& index_entry) {
   Entry entry;
   entry.is_directory = index_entry.IsDirectory();
   entry.logical_size = index_entry.GetFileSize();
@@ -85,13 +88,13 @@ Entry EntryFromIndexEntry(const NtfsBrowser::IndexEntryView& index_entry) {
   return entry;
 }
 
-void AddIndexEntry(const NtfsBrowser::IndexEntryView& index_entry,
+void AddIndexEntry(const NTFS_BROWSER_NAMESPACE::IndexEntryView& index_entry,
                    const std::wstring& prefix, Listing& result,
                    std::vector<WalkFrame>& stack) {
   // Skip system metafiles and the DOS 8.3 alias: the Win32 name is
   // this tool's path key everywhere.
   if (index_entry.GetFileReference() <
-          static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::User) ||
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User) ||
       !index_entry.IsWin32Name()) {
     return;
   }
@@ -111,7 +114,7 @@ void AddIndexEntry(const NtfsBrowser::IndexEntryView& index_entry,
   }
 }
 
-Listing WalkMftTree(const NtfsBrowser::Mft::MftTree& tree,
+Listing WalkMftTree(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
                     ULONGLONG start_record) {
   Listing result;
 
@@ -123,7 +126,8 @@ Listing WalkMftTree(const NtfsBrowser::Mft::MftTree& tree,
     stack.pop_back();
 
     for (const ULONGLONG child : tree.Children(frame.record)) {
-      if (child < static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::User)) {
+      if (child <
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User)) {
         continue;
       }
       AddChildNames(tree, child, frame, result, stack);

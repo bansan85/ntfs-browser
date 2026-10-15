@@ -17,6 +17,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 namespace NtfsUndel {
@@ -73,7 +74,8 @@ struct SearchResult {
 // filter matches every name. Returns nullopt when the filter is not a valid
 // regex. The volume must be opened with include_deleted set.
 std::optional<SearchResult> SearchDeletedFiles(
-    NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::FullCache>& volume,
+    NTFS_BROWSER_NAMESPACE::NtfsVolume<
+        NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>& volume,
     std::wstring_view filter, const SearchControl& control);
 
 // Warning the dialog shows when a search stops at kMaxListedFiles. Built from
@@ -104,15 +106,16 @@ enum class RecoverError : std::uint8_t {
 // A parsed freed record. The record owns the attributes read later.
 struct OpenedRecord {
   // Null unless error is None.
-  std::unique_ptr<
-      NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>>
+  std::unique_ptr<NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>>
       record;
   RecoverError error = RecoverError::None;
 };
 
 // Parses the freed record of reference, with its $DATA attributes.
 OpenedRecord OpenDeletedFile(
-    NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache>& volume,
+    NTFS_BROWSER_NAMESPACE::NtfsVolume<
+        NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
     std::uint64_t reference);
 
 struct CopyResult {
@@ -125,8 +128,8 @@ struct CopyResult {
 // confirm_large is asked once before a file over kConfirmFileSize; false
 // declines. write returns false to abort the copy.
 CopyResult CopyUnnamedData(
-    const NtfsBrowser::Io::FileRecord<NtfsBrowser::Cache::Strategy::NoCache>&
-        record,
+    const NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+        NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& record,
     const std::function<bool(std::uint64_t size)>& confirm_large,
     const std::function<bool(std::span<const BYTE> chunk)>& write);
 

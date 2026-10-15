@@ -7,7 +7,9 @@
 
 #include <gsl/narrow>
 
-namespace NtfsBrowser::Lznt1 {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Lznt1 {
 
 namespace {
 
@@ -203,4 +205,4 @@ size_t Decompress(std::span<const BYTE> src, std::span<BYTE> dest) {
   return cur.out;
 }
 
-}  // namespace NtfsBrowser::Lznt1
+}  // namespace NTFS_BROWSER_NAMESPACE::Lznt1

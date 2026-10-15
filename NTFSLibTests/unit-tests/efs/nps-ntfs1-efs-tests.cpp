@@ -21,18 +21,19 @@
   #include <ntfs-browser/cache/strategy.h>
   #include <ntfs-browser/efs/efs.h>
   #include <ntfs-browser/io/file-record.h>
+  #include <ntfs-browser/namespace.h>
   #include <ntfs-browser/ntfs-volume.h>
   #include <ntfs-browser/volume-options.h>
 
   #include "md5-test-support.h"
   #include "nps-ntfs1-test-support.h"
 
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Attr::AttrBase;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::VolumeOptions;
-using NtfsBrowser::Efs::MakePfxKeyProvider;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Efs::MakePfxKeyProvider;
 
 namespace {
 
@@ -76,18 +77,20 @@ TEST_CASE(
     "Encrypted files decrypt or fail to decrypt as their own $EFS entry "
     "dictates (NPS ntfs1, gen2)",
     "[nps][integration][efs]") {
-  NtfsBrowserTests::RequireCorpusImage(NtfsBrowserTests::ntfs1_image);
+  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image);
 
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      NtfsBrowserTests::OpenNtfs1Image(), VolumeOptions{});
+      NTFS_BROWSER_NAMESPACE::Tests::OpenNtfs1Image(), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
-  NtfsBrowserTests::OpenRootDir(root);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
+  NTFS_BROWSER_NAMESPACE::Tests::OpenRootDir(root);
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> encrypted_dir(volume);
-  NtfsBrowserTests::OpenRootDir(encrypted_dir);
-  NtfsBrowserTests::OpenSubDir(encrypted_dir, "Encrypted");
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>
+      encrypted_dir(volume);
+  NTFS_BROWSER_NAMESPACE::Tests::OpenRootDir(encrypted_dir);
+  NTFS_BROWSER_NAMESPACE::Tests::OpenSubDir(encrypted_dir, "Encrypted");
 
   for (const EfsKey& key : efs_keys) {
     INFO("key " << key.pfx_name);
@@ -95,24 +98,25 @@ TEST_CASE(
     // The key file itself sits unencrypted at the volume root, so a plain
     // read recovers it.
     const std::vector<BYTE> pfx_bytes =
-        NtfsBrowserTests::ReadFile(volume, root, key.pfx_name);
+        NTFS_BROWSER_NAMESPACE::Tests::ReadFile(volume, root, key.pfx_name);
     const std::filesystem::path pfx_path =
         WriteTempFile(key.pfx_name, pfx_bytes);
-    const std::shared_ptr<NtfsBrowser::Efs::IEfsKeyProvider> provider =
-        MakePfxKeyProvider(pfx_path, key.password);
+    const std::shared_ptr<NTFS_BROWSER_NAMESPACE::Efs::IEfsKeyProvider>
+        provider = MakePfxKeyProvider(pfx_path, key.password);
     std::filesystem::remove(pfx_path);
     REQUIRE(provider != nullptr);
     volume.SetEfsKeyProvider(provider);
 
-    for (const NtfsBrowserTests::KnownFile& file :
-         NtfsBrowserTests::known_files) {
+    for (const NTFS_BROWSER_NAMESPACE::Tests::KnownFile& file :
+         NTFS_BROWSER_NAMESPACE::Tests::known_files) {
       INFO("file " << file.name);
 
-      NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> stream_owner(
-          volume);
-      NtfsBrowserTests::OpenFile(stream_owner, encrypted_dir, file.name);
-      const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
-          stream_owner.FindStream({});
+      NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>
+          stream_owner(volume);
+      NTFS_BROWSER_NAMESPACE::Tests::OpenFile(stream_owner, encrypted_dir,
+                                              file.name);
+      const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>*
+          stream = stream_owner.FindStream({});
       REQUIRE(stream != nullptr);
       CHECK(stream->GetDataSize() == file.size);
 
@@ -124,7 +128,7 @@ TEST_CASE(
       if (file.name == reencrypted_file) {
         REQUIRE(read == data.size());
   #ifdef NTFS_TEST_HAS_MD5
-        CHECK(NtfsBrowserTests::Md5Hex(data) == file.md5);
+        CHECK(NTFS_BROWSER_NAMESPACE::Tests::Md5Hex(data) == file.md5);
   #endif
       } else {
         CHECK(read == std::nullopt);

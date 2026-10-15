@@ -5,8 +5,9 @@
 
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/filename.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Data {
 
 struct IndexEntry;
@@ -60,4 +61,4 @@ class NTFS_BROWSER_EXPORT IndexEntry : public IndexEntryView {
   std::vector<BYTE> bytes_;
 };  // IndexEntry
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

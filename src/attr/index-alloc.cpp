@@ -13,6 +13,7 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/index-block.h"
@@ -23,7 +24,7 @@
 #include "log/ntfs-common.h"
 #include "ntfs-browser/win-types.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 template <Cache::Strategy S>
 AttrIndexAlloc<S>::AttrIndexAlloc(const HeaderCommon& ahc,
@@ -249,4 +250,4 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
 template class AttrIndexAlloc<Cache::Strategy::FullCache>;
 template class AttrIndexAlloc<Cache::Strategy::NoCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

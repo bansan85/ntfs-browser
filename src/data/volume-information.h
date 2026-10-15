@@ -2,7 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsBrowser::Data {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Data {
 
 // Without this, alignof(ULONGLONG) pads sizeof() to 16, not the real
 // 12-byte on-disk size.
@@ -17,4 +19,4 @@ struct VolumeInformation {
 
 #pragma pack()
 
-}  // namespace NtfsBrowser::Data
+}  // namespace NTFS_BROWSER_NAMESPACE::Data

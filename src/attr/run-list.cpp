@@ -8,10 +8,12 @@
 #include <limits>
 #include <stdexcept>
 
+#include <ntfs-browser/namespace.h>
+
 #include "data/run-entry.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 RunList::RunList(ULONGLONG clusters) noexcept : clusters_(clusters) {}
 
@@ -235,4 +237,4 @@ bool RunList::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
   return true;
 }
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

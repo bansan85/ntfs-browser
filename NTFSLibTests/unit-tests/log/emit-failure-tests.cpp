@@ -13,12 +13,13 @@
 #include <spdlog/spdlog.h>
 
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
 #include "logging-test-support.h"
 #include "test-log-sink.h"
 
-namespace Log = NtfsBrowser::Log;
+namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 using Catch::Matchers::ContainsSubstring;
 
 namespace {
@@ -64,7 +65,7 @@ class FailingLoggerProbe final {
 
 TEST_CASE("a log call survives a sink and an error handler that both throw",
           "[logging]") {
-  static_cast<void>(NtfsBrowserTests::TakeCapturedLog());
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog());
 
   const auto logger = spdlog::get(std::string(Log::logger_name));
   REQUIRE(logger != nullptr);
@@ -72,7 +73,7 @@ TEST_CASE("a log call survives a sink and an error handler that both throw",
 
   // The capturing sink sits before the failing one, so it still gets the line.
   REQUIRE_NOTHROW(Log::Info("line before the failing sink"));
-  CHECK_THAT(NtfsBrowserTests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
              ContainsSubstring("line before the failing sink"));
 }
 

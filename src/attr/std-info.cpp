@@ -6,13 +6,14 @@
 #include <stdexcept>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {
 
@@ -169,4 +170,4 @@ void AttrStdInfo<Resident, S>::UTC2Local(const ULONGLONG& ultm,
 template class AttrStdInfo<AttrResidentFullCache, Cache::Strategy::FullCache>;
 template class AttrStdInfo<AttrResidentNoCache, Cache::Strategy::NoCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

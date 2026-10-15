@@ -8,12 +8,13 @@
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>  // IWYU pragma: keep
-#include <ntfs-browser/ntfs-volume.h>     // IWYU pragma: keep
+#include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "log/ntfs-common.h"
 #include "utf/utf.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 enum class Type : DWORD;
 
@@ -102,4 +103,4 @@ DWORD Attr::AttrBase<S>::GetIndexBlockSize() const noexcept {
 template class AttrBase<Cache::Strategy::NoCache>;
 template class AttrBase<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

@@ -19,6 +19,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -35,22 +36,22 @@
 #include "optional-access.h"
 #include "record/header.h"
 
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::IndexEntryView;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::VolumeOptions;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::Data::FileRecordHeader;
-using NtfsBrowser::Data::index_block_magic;
-namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowser::Record::HeaderImpl;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::IndexEntryView;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader;
+using NTFS_BROWSER_NAMESPACE::Data::index_block_magic;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::Record::HeaderImpl;
 
 namespace {
 
 // Every image BuildFakeNtfsImage() makes puts $MFT in its second cluster.
-constexpr size_t mft_offset = NtfsBrowserTests::fake_cluster_size;
+constexpr size_t mft_offset = NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
 
 // The first attribute of every fake record starts right after the fixed
 // header.
@@ -58,10 +59,12 @@ constexpr size_t first_attr_offset = 48;
 
 // Size of the resident attributes below: their header and one body byte. It
 // is not a multiple of 4, so the attribute after it sits off any alignment.
-constexpr DWORD odd_attr_size = sizeof(NtfsBrowser::Data::HeaderResident) + 1;
+constexpr DWORD odd_attr_size =
+    sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident) + 1;
 
 size_t RecordOffset(ULONGLONG idx) {
-  return mft_offset + (NtfsBrowserTests::fake_file_record_size * idx);
+  return mft_offset +
+         (NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size * idx);
 }
 
 // Copies value into image at offset. A plain store through a typed pointer
@@ -73,7 +76,7 @@ void Put(std::vector<BYTE>& image, size_t offset, T value) {
 
 // Writes a resident attribute of type at offset, odd_attr_size bytes long.
 void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, Attr::Type type) {
-  NtfsBrowser::Data::HeaderResident header{};
+  NTFS_BROWSER_NAMESPACE::Data::HeaderResident header{};
   header.header.type = type;
   header.header.total_size = odd_attr_size;
   header.attr_size = 1;
@@ -83,7 +86,7 @@ void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, Attr::Type type) {
 
 template <Cache::Strategy S>
 void RunOddSizedAttributesAreParsedAligned() {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImage();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
   const size_t root_offset =
       RecordOffset(static_cast<ULONGLONG>(Mft::Idx::Root));
   size_t offset = root_offset + first_attr_offset;
@@ -94,10 +97,11 @@ void RunOddSizedAttributesAreParsedAligned() {
   Put(image, offset, static_cast<DWORD>(Attr::Type::All));
 
   const NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
@@ -106,7 +110,8 @@ void RunOddSizedAttributesAreParsedAligned() {
     REQUIRE(attrs.size() == 1);
     const auto address =
         reinterpret_cast<std::uintptr_t>(&attrs.front()->GetAttrHeader());
-    CHECK(address % alignof(NtfsBrowser::Data::HeaderNonResident) == 0);
+    CHECK(address % alignof(NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident) ==
+          0);
     CHECK(attrs.front()->GetAttrTotalSize() == odd_attr_size);
   }
 }
@@ -114,11 +119,13 @@ void RunOddSizedAttributesAreParsedAligned() {
 // Number of entries TraverseSubEntries() reports for the root directory.
 size_t CountRootEntries(std::vector<BYTE> image, VolumeOptions options = {}) {
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)),
       options);
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> record(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> record(
+      volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(record.ParseAttrs());
 
@@ -148,75 +155,87 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr BYTE shortened_name_length = 2;
   constexpr WORD shortened_stream_size =
-      offsetof(NtfsBrowser::Data::Filename, name) +
+      offsetof(NTFS_BROWSER_NAMESPACE::Data::Filename, name) +
       (size_t{2} * shortened_name_length);
   constexpr WORD shortened_entry_size =
-      offsetof(NtfsBrowser::Data::IndexEntry, stream) + shortened_stream_size;
+      offsetof(NTFS_BROWSER_NAMESPACE::Data::IndexEntry, stream) +
+      shortened_stream_size;
   constexpr WORD terminator_size =
-      offsetof(NtfsBrowser::Data::IndexEntry, stream);
+      offsetof(NTFS_BROWSER_NAMESPACE::Data::IndexEntry, stream);
   constexpr DWORD entries_size = shortened_entry_size + terminator_size;
-  static_assert(shortened_entry_size % alignof(NtfsBrowser::Data::IndexEntry) !=
+  static_assert(shortened_entry_size %
+                    alignof(NTFS_BROWSER_NAMESPACE::Data::IndexEntry) !=
                 0);
 
   std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithIndexRootVariants();
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithIndexRootVariants();
   const size_t attr_offset =
-      RecordOffset(NtfsBrowserTests::index_root_variant_a_dir_idx) +
+      RecordOffset(
+          NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_dir_idx) +
       first_attr_offset;
   const size_t root_offset =
-      attr_offset + sizeof(NtfsBrowser::Data::HeaderResident);
+      attr_offset + sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident);
   const size_t entry_offset =
-      root_offset + sizeof(NtfsBrowser::Data::IndexRoot);
+      root_offset + sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexRoot);
 
   // The fixture's one real entry is "AAA" (88 bytes), then the terminator.
   // Dropping a character moves the terminator 2 bytes down.
   constexpr size_t original_entry_size = 88;
   Put(image,
-      entry_offset + offsetof(NtfsBrowser::Data::IndexEntry, stream) +
-          offsetof(NtfsBrowser::Data::Filename, name_length),
+      entry_offset +
+          offsetof(NTFS_BROWSER_NAMESPACE::Data::IndexEntry, stream) +
+          offsetof(NTFS_BROWSER_NAMESPACE::Data::Filename, name_length),
       shortened_name_length);
   Put(image,
-      entry_offset + offsetof(NtfsBrowser::Data::IndexEntry, stream_size),
+      entry_offset +
+          offsetof(NTFS_BROWSER_NAMESPACE::Data::IndexEntry, stream_size),
       shortened_stream_size);
-  Put(image, entry_offset + offsetof(NtfsBrowser::Data::IndexEntry, size),
+  Put(image,
+      entry_offset + offsetof(NTFS_BROWSER_NAMESPACE::Data::IndexEntry, size),
       shortened_entry_size);
   std::memmove(&image.at(entry_offset + shortened_entry_size),
                &image.at(entry_offset + original_entry_size), terminator_size);
   std::memset(&image.at(entry_offset + entries_size), 0, 2);
 
   Put(image,
-      root_offset + offsetof(NtfsBrowser::Data::IndexRoot, total_entry_size),
+      root_offset +
+          offsetof(NTFS_BROWSER_NAMESPACE::Data::IndexRoot, total_entry_size),
       entries_size);
   Put(image,
-      root_offset + offsetof(NtfsBrowser::Data::IndexRoot, alloc_entry_size),
+      root_offset +
+          offsetof(NTFS_BROWSER_NAMESPACE::Data::IndexRoot, alloc_entry_size),
       entries_size);
-  const DWORD attr_size = sizeof(NtfsBrowser::Data::IndexRoot) + entries_size;
+  const DWORD attr_size =
+      sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexRoot) + entries_size;
   Put(image,
-      attr_offset + offsetof(NtfsBrowser::Data::HeaderResident, attr_size),
+      attr_offset +
+          offsetof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident, attr_size),
       attr_size);
   const DWORD total_size =
-      sizeof(NtfsBrowser::Data::HeaderResident) + attr_size;
+      sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderResident) + attr_size;
   Put(image,
-      attr_offset + offsetof(NtfsBrowser::Attr::HeaderCommon, total_size),
+      attr_offset +
+          offsetof(NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon, total_size),
       total_size);
   std::memset(&image.at(attr_offset + total_size), 0, 2 * sizeof(DWORD));
   Put(image, attr_offset + total_size, static_cast<DWORD>(Attr::Type::All));
 
   // The named record is not built: only recover_errors lists this entry.
   const NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)),
       VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
-  NtfsBrowser::Io::FileRecord<S> record(volume);
-  REQUIRE(
-      record.ParseFileRecord(NtfsBrowserTests::index_root_variant_a_dir_idx));
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_dir_idx));
   REQUIRE(record.ParseAttrs());
 
   const std::optional<IndexEntry> entry = record.FindSubEntry(L"AA");
   REQUIRE(entry.has_value());
-  CHECK(NtfsBrowserTests::Unwrap(entry).GetFileReference() ==
-        NtfsBrowserTests::index_root_variant_a_mft_ref);
+  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference() ==
+        NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_mft_ref);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -231,11 +250,12 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr WORD second_block_word = 0xBBBB;
 
   std::vector<BYTE> storage(record_size, 0);
-  NtfsBrowserTests::EditFileRecordHeader(storage, [](FileRecordHeader& header) {
-    header.magic = FileRecordHeader::file_record_magic;
-    header.offset_of_us = odd_offset_of_us;
-    header.size_of_us = 3;
-  });
+  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+      storage, [](FileRecordHeader& header) {
+        header.magic = FileRecordHeader::file_record_magic;
+        header.offset_of_us = odd_offset_of_us;
+        header.size_of_us = 3;
+      });
   Put(storage, odd_offset_of_us, usn);
   Put(storage, odd_offset_of_us + sizeof(WORD), first_block_word);
   Put(storage, odd_offset_of_us + (2 * sizeof(WORD)), second_block_word);
@@ -255,10 +275,11 @@ TEST_CASE(
     "TraverseSubEntries reads an index block whose Update Sequence Array "
     "starts at an odd offset",
     "[attr-index-alloc][alignment][regression]") {
-  constexpr WORD odd_offset_of_us = NtfsBrowserTests::fake_cluster_size - 7;
+  constexpr WORD odd_offset_of_us =
+      NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size - 7;
 
-  std::vector<BYTE> image =
-      NtfsBrowserTests::BuildFakeNtfsImageWithOrphanedIndexBlocks();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+      BuildFakeNtfsImageWithOrphanedIndexBlocks();
   const VolumeOptions recover{.recover_errors = true};
   const size_t expected = CountRootEntries(image, recover);
   REQUIRE(expected > 0);
@@ -268,16 +289,18 @@ TEST_CASE(
   // value.
   size_t block_offset = 0;
   for (; block_offset + sizeof(DWORD) <= image.size();
-       block_offset += NtfsBrowserTests::fake_cluster_size) {
+       block_offset += NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size) {
     DWORD magic = 0;
     std::memcpy(&magic, &image.at(block_offset), sizeof(magic));
     if (magic == index_block_magic) {
       break;
     }
   }
-  REQUIRE(block_offset + NtfsBrowserTests::fake_cluster_size <= image.size());
+  REQUIRE(block_offset + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size <=
+          image.size());
   Put(image,
-      block_offset + offsetof(NtfsBrowser::Data::IndexBlock, offset_of_us),
+      block_offset +
+          offsetof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock, offset_of_us),
       odd_offset_of_us);
 
   const size_t actual = CountRootEntries(std::move(image), recover);

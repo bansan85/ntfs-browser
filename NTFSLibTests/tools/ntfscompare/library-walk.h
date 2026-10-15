@@ -14,11 +14,12 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
+#include <ntfs-browser/namespace.h>
 
 #include "entry.h"
 #include "time-convert.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Cache {
 
@@ -28,7 +29,7 @@ enum class Strategy : std::uint8_t;
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NtfsCompare {
 
@@ -37,23 +38,23 @@ namespace NtfsCompare {
 // number of the directory it names, walking FindSubEntry() one component at
 // a time from the root. FullCache, NoCache and MftTree each start their own
 // walk from this same record, so all three compare the very same subtree.
-template <NtfsBrowser::Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] std::optional<ULONGLONG>
-    ResolveDirectoryRecord(NtfsBrowser::NtfsVolume<S>& volume,
+    ResolveDirectoryRecord(NTFS_BROWSER_NAMESPACE::NtfsVolume<S>& volume,
                            std::wstring_view relative_path) {
-  using NtfsBrowser::IndexEntry;
-  using NtfsBrowser::Io::FileRecord;
+  using NTFS_BROWSER_NAMESPACE::IndexEntry;
+  using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 
-  NtfsBrowser::Io::FileRecord<S> current(volume);
-  current.SetAttrMask(NtfsBrowser::Attr::Mask::IndexRoot |
-                      NtfsBrowser::Attr::Mask::IndexAllocation);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> current(volume);
+  current.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
   if (!current.ParseFileRecord(
-          static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root)) ||
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) ||
       !current.ParseAttrs()) {
     return std::nullopt;
   }
 
-  auto record = static_cast<ULONGLONG>(NtfsBrowser::Mft::Idx::Root);
+  auto record = static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root);
   size_t pos = 0;
   while (pos < relative_path.size()) {
     const size_t next = relative_path.find(L'/', pos);
@@ -87,24 +88,25 @@ struct WalkFrame {
 };
 
 // The fields of one directory index entry, with every timestamp in UTC.
-[[nodiscard]] Entry
-    EntryFromIndexEntry(const NtfsBrowser::IndexEntryView& index_entry);
+[[nodiscard]] Entry EntryFromIndexEntry(
+    const NTFS_BROWSER_NAMESPACE::IndexEntryView& index_entry);
 
 // Adds index_entry, found in the directory keyed prefix, to result. A
 // directory is queued on stack to be listed in turn. System metafiles and DOS
 // alias names are skipped.
-void AddIndexEntry(const NtfsBrowser::IndexEntryView& index_entry,
+void AddIndexEntry(const NTFS_BROWSER_NAMESPACE::IndexEntryView& index_entry,
                    const std::wstring& prefix, Listing& result,
                    std::vector<WalkFrame>& stack);
 
 // Methods 4/5: recursively lists startRecord's subtree through
 // FileRecord::TraverseSubEntries(), reading each entry's own $FILE_NAME
 // (Filename/IndexEntry) for its fields.
-template <NtfsBrowser::Cache::Strategy S>
-[[nodiscard]] Listing WalkLibraryIndex(NtfsBrowser::NtfsVolume<S>& volume,
-                                       ULONGLONG start_record) {
-  using NtfsBrowser::IndexEntryView;
-  using NtfsBrowser::Io::FileRecord;
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+[[nodiscard]] Listing
+    WalkLibraryIndex(NTFS_BROWSER_NAMESPACE::NtfsVolume<S>& volume,
+                     ULONGLONG start_record) {
+  using NTFS_BROWSER_NAMESPACE::IndexEntryView;
+  using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 
   Listing result;
 
@@ -121,9 +123,9 @@ template <NtfsBrowser::Cache::Strategy S>
     const WalkFrame frame = std::move(stack.back());
     stack.pop_back();
 
-    NtfsBrowser::Io::FileRecord<S> dir(volume);
-    dir.SetAttrMask(NtfsBrowser::Attr::Mask::IndexRoot |
-                    NtfsBrowser::Attr::Mask::IndexAllocation);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> dir(volume);
+    dir.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
     if (!dir.ParseFileRecord(frame.record) || !dir.ParseAttrs()) {
       continue;
     }
@@ -145,7 +147,8 @@ template <NtfsBrowser::Cache::Strategy S>
 
 // Method 6: recursively lists startRecord's subtree through
 // MftTree::Children(), reading each entry's MftTree::Entry for its fields.
-[[nodiscard]] Listing WalkMftTree(const NtfsBrowser::Mft::MftTree& tree,
-                                  ULONGLONG start_record);
+[[nodiscard]] Listing
+    WalkMftTree(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+                ULONGLONG start_record);
 
 }  // namespace NtfsCompare

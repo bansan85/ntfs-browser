@@ -6,11 +6,12 @@
 #include <vector>
 
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // A fake IDiskReader backed entirely by an in-memory buffer.
-class MemoryDiskReader : public NtfsBrowser::IDiskReader {
+class MemoryDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
  public:
   // data is the whole fake volume/file content, ready to be read from.
   explicit MemoryDiskReader(std::vector<BYTE> data);
@@ -25,4 +26,4 @@ class MemoryDiskReader : public NtfsBrowser::IDiskReader {
   std::vector<BYTE> data_;
 };
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

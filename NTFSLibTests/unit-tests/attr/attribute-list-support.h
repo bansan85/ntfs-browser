@@ -8,12 +8,13 @@
 
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "nonresident-index-support.h"
 #include "test-log-sink.h"
 
-namespace Attr = NtfsBrowser::Attr;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 
 namespace {
 
@@ -32,7 +33,8 @@ template <Cache::Strategy S>
 ParsedRecord<S> OpenUnparsed(std::vector<BYTE> image,
                              VolumeOptions options = {}) {
   return OpenVolumeFrom<S>(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          std::move(image)),
       options);
 }
 
@@ -49,10 +51,10 @@ ListParse ParseListLog(std::vector<BYTE> image, ULONGLONG idx, bool recover,
                        Attr::Mask mask) {
   const ParsedRecord<S> opened = OpenListRecord<S>(
       std::move(image), idx, mask, VolumeOptions{.recover_errors = recover});
-  (void)NtfsBrowserTests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
 
   const bool parsed = opened.record->ParseAttrs();
-  return {parsed, NtfsBrowserTests::TakeCapturedLog()};
+  return {parsed, NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
 }
 
 }  // namespace

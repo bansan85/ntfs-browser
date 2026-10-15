@@ -9,11 +9,12 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/header-resident.h"
 #include "ntfs-browser/win-types.h"
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {
 
@@ -128,4 +129,4 @@ ULONGLONG AttrResidentFullCache::GetDataSize() const noexcept {
 template class AttrResident<Cache::Strategy::NoCache>;
 template class AttrResident<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

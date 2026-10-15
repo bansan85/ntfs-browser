@@ -1,12 +1,13 @@
 #include "StdAfx.h"
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "ntfsdump-core.h"
 #include "ntfsdump.h"
 #include "ntfsdumpDlg.h"
 
-using namespace NtfsBrowser;
+using namespace NTFS_BROWSER_NAMESPACE;
 
 #ifdef _DEBUG
   #define new DEBUG_NEW
@@ -128,8 +129,9 @@ void CNtfsdumpDlg::OnOK() {
   UpdateData(FALSE);
 
   // The drive letter of the path names the volume to open.
-  NtfsBrowser::NtfsVolume<NtfsBrowser::Cache::Strategy::NoCache> volume(
-      m_filename.GetAt(0));
+  NTFS_BROWSER_NAMESPACE::NtfsVolume<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>
+      volume(m_filename.GetAt(0));
   const NtfsDump::DumpResult result =
       NtfsDump::DumpFile(volume, m_filename.GetString());
   if (!result.message.empty()) {

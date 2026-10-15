@@ -22,6 +22,7 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -32,33 +33,34 @@
 #include "memory-disk-reader.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Mft::MftTree;
-namespace Attr = NtfsBrowser::Attr;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::VolumeOptions;
-namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowserTests::attr_name_exceeds_total_size_record_idx;
-using NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
-using NtfsBrowserTests::BuildFakeNtfsImageWithHugeMftRealSize;
-using NtfsBrowserTests::BuildFakeNtfsImageWithMftExtensionRecord;
-using NtfsBrowserTests::BuildFakeNtfsImageWithMftTree;
-using NtfsBrowserTests::FileTimeToTicks;
-using NtfsBrowserTests::MemoryDiskReader;
-using NtfsBrowserTests::mft_tree_deleted_child_idx;
-using NtfsBrowserTests::mft_tree_deleted_dir_idx;
-using NtfsBrowserTests::mft_tree_deleted_file_idx;
-using NtfsBrowserTests::mft_tree_docs_idx;
-using NtfsBrowserTests::mft_tree_extension_idx;
-using NtfsBrowserTests::mft_tree_hard_link_idx;
-using NtfsBrowserTests::mft_tree_record_count;
-using NtfsBrowserTests::mft_tree_report_allocated_size;
-using NtfsBrowserTests::mft_tree_report_data_size;
-using NtfsBrowserTests::mft_tree_report_idx;
-using NtfsBrowserTests::mft_tree_reused_dir_idx;
-using NtfsBrowserTests::mft_tree_stale_child_idx;
-using NtfsBrowserTests::mft_tree_zeroed_idx;
-using NtfsBrowserTests::SetStdInfoPermission;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::Tests::attr_name_exceeds_total_size_record_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::
+    BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
+using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithHugeMftRealSize;
+using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftExtensionRecord;
+using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
+using NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_child_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_dir_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_file_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_extension_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_hard_link_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_record_count;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_allocated_size;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_data_size;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_reused_dir_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_stale_child_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_zeroed_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::SetStdInfoPermission;
 
 namespace {
 
@@ -77,8 +79,9 @@ std::unique_ptr<NtfsVolume<S>>
 }
 
 // Children() as a vector, so Catch2 prints it on a mismatch.
-std::vector<ULONGLONG> ChildrenOf(const NtfsBrowser::Mft::MftTree& tree,
-                                  ULONGLONG dir) {
+std::vector<ULONGLONG>
+    ChildrenOf(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+               ULONGLONG dir) {
   const auto children = tree.Children(dir);
   return {children.begin(), children.end()};
 }
@@ -90,14 +93,14 @@ void RunMftTreeRebuildsPaths() {
   // is off by default now, so this test opts in explicitly.
   const auto volume =
       OpenMftTreeVolume<S>(VolumeOptions{.include_deleted = true});
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
   CHECK(tree.GetPath(root_value) == L"\\");
   CHECK(tree.GetPath(static_cast<ULONGLONG>(Mft::Idx::Mft)) == L"\\$MFT");
   CHECK(tree.GetPath(mft_tree_docs_idx) == L"\\Docs");
 
   SECTION("A DOS alias stays out of the path and the size comes from $DATA") {
-    const NtfsBrowser::Mft::MftTree::Entry* report =
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* report =
         tree.Find(mft_tree_report_idx);
     REQUIRE(report != nullptr);
     CHECK(tree.GetPath(mft_tree_report_idx) == L"\\Docs\\report.txt");
@@ -143,7 +146,7 @@ void RunMftTreeRebuildsPaths() {
   }
 
   SECTION("A deleted subtree stays linked through the bumped sequence number") {
-    const NtfsBrowser::Mft::MftTree::Entry* deleted =
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* deleted =
         tree.Find(mft_tree_deleted_file_idx);
     REQUIRE(deleted != nullptr);
     CHECK_FALSE(deleted->in_use);
@@ -166,7 +169,7 @@ void RunMftTreeRebuildsPaths() {
   }
 
   SECTION("Stats count every slot") {
-    const NtfsBrowser::Mft::MftTree::ScanStats& stats = tree.Stats();
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats = tree.Stats();
     CHECK(stats.slots == mft_tree_record_count);
     // $MFT, $Volume, the root, Docs, report.txt, the hard link, NewDir.
     CHECK(stats.in_use == 7);
@@ -187,7 +190,7 @@ void RunMftTreeWithoutDeleted() {
   // include_deleted defaults off, so the plain default volume already
   // excludes the fixture's freed records.
   const auto volume = OpenMftTreeVolume<S>();
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
   CHECK(tree.Find(mft_tree_deleted_file_idx) == nullptr);
   CHECK(tree.Find(mft_tree_deleted_dir_idx) == nullptr);
@@ -213,7 +216,7 @@ void RunMftTreeDropsUnrecoveredRecord() {
             BuildFakeNtfsImageWithAttrNameExceedsTotalSize()));
     REQUIRE(volume->IsVolumeOK());
 
-    const NtfsBrowser::Mft::MftTree tree(*volume);
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
     CHECK(tree.Stats().damaged == 1);
     CHECK(tree.Find(attr_name_exceeds_total_size_record_idx) == nullptr);
   }
@@ -224,7 +227,7 @@ void RunMftTreeDropsUnrecoveredRecord() {
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume->IsVolumeOK());
 
-    const NtfsBrowser::Mft::MftTree tree(*volume);
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
     CHECK(tree.Stats().damaged == 0);
     CHECK(tree.Find(attr_name_exceeds_total_size_record_idx) != nullptr);
   }
@@ -244,7 +247,7 @@ void RunMftTreeKeepsPartsParsedBeforeThrow() {
         OpenMftTreeVolume<S>(VolumeOptions{.include_deleted = true});
     REQUIRE(volume->InstallAttrRawCB(Attr::Type::Data, ThrowFromRawCallback));
 
-    const NtfsBrowser::Mft::MftTree tree(*volume);
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
     CHECK(tree.Stats().damaged == 2);
     CHECK(tree.Find(mft_tree_report_idx) == nullptr);
     CHECK(tree.Entries().size() == 9);
@@ -254,9 +257,9 @@ void RunMftTreeKeepsPartsParsedBeforeThrow() {
         VolumeOptions{.include_deleted = true, .recover_errors = true});
     REQUIRE(volume->InstallAttrRawCB(Attr::Type::Data, ThrowFromRawCallback));
 
-    const NtfsBrowser::Mft::MftTree tree(*volume);
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
     CHECK(tree.Stats().damaged == 2);
-    const NtfsBrowser::Mft::MftTree::Entry* report =
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* report =
         tree.Find(mft_tree_report_idx);
     REQUIRE(report != nullptr);
     CHECK(report->in_use);
@@ -268,7 +271,7 @@ template <Cache::Strategy S>
 void RunMftTreeProgressStops() {
   const auto volume = OpenMftTreeVolume<S>();
   std::vector<ULONGLONG> calls;
-  const NtfsBrowser::Mft::MftTree tree(
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(
       *volume, MftTree::ScanOptions{.progress = [&](ULONGLONG done, ULONGLONG) {
         calls.push_back(done);
         return false;
@@ -281,10 +284,10 @@ void RunMftTreeProgressStops() {
 
 template <Cache::Strategy S>
 void RunMftTreeCopiesStdInfoFlags() {
-  using NtfsBrowser::Data::StdInfoPermission;
+  using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 
   struct FlagCase {
-    bool NtfsBrowser::Mft::MftTree::Entry::* flag;
+    bool NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry::* flag;
     StdInfoPermission bit;
   };
 
@@ -330,7 +333,7 @@ void RunMftTreeSkipsMftExtensionRecord() {
   REQUIRE(volume->IsVolumeOK());
   REQUIRE(volume->GetRecordsCount() == mft_tree_record_count);
 
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
   CHECK(tree.Find(mft_tree_zeroed_idx) == nullptr);
   // Same counts as the plain fixture, with the extension counted as one.
@@ -351,7 +354,7 @@ void RunMftTreeClampsForgedRealSize() {
   REQUIRE(volume->IsVolumeOK());
   CHECK(volume->GetRecordsCount() == mft_tree_record_count);
 
-  const NtfsBrowser::Mft::MftTree tree(
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(
       *volume, MftTree::ScanOptions{.progress = [&](ULONGLONG done, ULONGLONG) {
         return done < runaway_slots;
       }});
@@ -416,7 +419,7 @@ TEMPLATE_TEST_CASE_SIG("MftTree logs no warning for never-used record slots",
                        "[mft-tree]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::shared_ptr<spdlog::logger> logger =
-      spdlog::get(std::string(NtfsBrowser::Log::logger_name));
+      spdlog::get(std::string(NTFS_BROWSER_NAMESPACE::Log::logger_name));
   REQUIRE(logger);
 
   std::ostringstream out;
@@ -425,7 +428,7 @@ TEMPLATE_TEST_CASE_SIG("MftTree logs no warning for never-used record slots",
   logger->sinks().push_back(sink);
   {
     const auto volume = OpenMftTreeVolume<S>();
-    const NtfsBrowser::Mft::MftTree tree(*volume);
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
   }
   logger->sinks().pop_back();
 

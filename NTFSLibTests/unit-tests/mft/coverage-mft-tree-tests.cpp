@@ -14,18 +14,19 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "volume-tree-support.h"
 
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Mft::MftTree;
-namespace Attr = NtfsBrowser::Attr;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
-using NtfsBrowserTests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 
 namespace {
 
@@ -75,7 +76,7 @@ void RedirectFileNames(std::vector<BYTE>& image, ULONGLONG idx,
 std::unique_ptr<NtfsVolume<Cache::Strategy::FullCache>> OpenMftTree() {
   auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(
-          NtfsBrowserTests::BuildFakeNtfsImageWithMftTree()));
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree()));
   REQUIRE(volume->IsVolumeOK());
   return volume;
 }
@@ -84,50 +85,55 @@ std::unique_ptr<NtfsVolume<Cache::Strategy::FullCache>> OpenMftTree() {
 
 TEST_CASE("MftTree copies and moves its scanned namespace", "[cov-vol]") {
   const auto volume = OpenMftTree();
-  const NtfsBrowser::Mft::MftTree source(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree source(*volume);
 
-  NtfsBrowser::Mft::MftTree copied(source);
+  NTFS_BROWSER_NAMESPACE::Mft::MftTree copied(source);
   CHECK(copied.Entries().size() == source.Entries().size());
 
-  NtfsBrowser::Mft::MftTree assigned(*volume);
+  NTFS_BROWSER_NAMESPACE::Mft::MftTree assigned(*volume);
   assigned = copied;
   CHECK(assigned.Entries().size() == source.Entries().size());
 
-  NtfsBrowser::Mft::MftTree moved(std::move(copied));
+  NTFS_BROWSER_NAMESPACE::Mft::MftTree moved(std::move(copied));
   CHECK(moved.Entries().size() == source.Entries().size());
 
-  NtfsBrowser::Mft::MftTree target(*volume);
+  NTFS_BROWSER_NAMESPACE::Mft::MftTree target(*volume);
   target = std::move(moved);
-  CHECK(target.Find(NtfsBrowserTests::mft_tree_docs_idx) != nullptr);
+  CHECK(target.Find(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx) !=
+        nullptr);
 }
 
 TEST_CASE("MftTree skips a file name with no characters", "[cov-vol]") {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
   // Only the first $FILE_NAME of report.txt loses its name; its DOS alias
   // stays.
-  Store<BYTE>(image,
-              ResidentBody(
-                  image, FirstAttr(image, NtfsBrowserTests::mft_tree_report_idx,
-                                   Attr::Type::FileName)) +
-                  filename_name_length_field,
-              0);
+  Store<BYTE>(
+      image,
+      ResidentBody(image,
+                   FirstAttr(image,
+                             NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
+                             Attr::Type::FileName)) +
+          filename_name_length_field,
+      0);
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
-  const NtfsBrowser::Mft::MftTree::Entry* entry =
-      tree.Find(NtfsBrowserTests::mft_tree_report_idx);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* entry =
+      tree.Find(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx);
   REQUIRE(entry != nullptr);
   CHECK(entry->names.size() == 1);
 }
 
 TEST_CASE("MftTree keeps a record whose names are all DOS aliases",
           "[cov-vol]") {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
   for (const size_t attr :
-       AttrOffsets(image, NtfsBrowserTests::mft_tree_report_idx,
+       AttrOffsets(image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
                    Attr::Type::FileName)) {
     Store<BYTE>(image, ResidentBody(image, attr) + filename_name_space_field,
                 filename_dos_namespace);
@@ -136,17 +142,20 @@ TEST_CASE("MftTree keeps a record whose names are all DOS aliases",
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
-  CHECK_FALSE(tree.GetPath(NtfsBrowserTests::mft_tree_report_idx).empty());
+  CHECK_FALSE(
+      tree.GetPath(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx).empty());
 }
 
 TEST_CASE("MftTree reports a lost ancestor that has no usable name",
           "[cov-vol]") {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
   // Docs keeps its directory flag and sequence, but loses every name.
-  for (const size_t attr : AttrOffsets(
-           image, NtfsBrowserTests::mft_tree_docs_idx, Attr::Type::FileName)) {
+  for (const size_t attr :
+       AttrOffsets(image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
+                   Attr::Type::FileName)) {
     Store<BYTE>(image, ResidentBody(image, attr) + filename_name_length_field,
                 0);
   }
@@ -154,78 +163,85 @@ TEST_CASE("MftTree reports a lost ancestor that has no usable name",
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
   std::optional<ULONGLONG> lost;
-  static_cast<void>(tree.GetPath(NtfsBrowserTests::mft_tree_report_idx, &lost));
-  CHECK(lost == NtfsBrowserTests::mft_tree_docs_idx);
+  static_cast<void>(
+      tree.GetPath(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx, &lost));
+  CHECK(lost == NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx);
 }
 
 TEST_CASE("MftTree marks a name invalid when its parent is not a directory",
           "[cov-vol]") {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
-  SetFileNameParents(image, NtfsBrowserTests::mft_tree_report_idx,
-                     NtfsBrowserTests::mft_tree_hard_link_idx);
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+  SetFileNameParents(image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
+                     NTFS_BROWSER_NAMESPACE::Tests::mft_tree_hard_link_idx);
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
-  const NtfsBrowser::Mft::MftTree::Entry* entry =
-      tree.Find(NtfsBrowserTests::mft_tree_report_idx);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* entry =
+      tree.Find(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx);
   REQUIRE(entry != nullptr);
-  for (const NtfsBrowser::Mft::MftTree::Name& name : entry->names) {
+  for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& name : entry->names) {
     CHECK_FALSE(name.parent_valid);
   }
-  CHECK_FALSE(tree.IsReachable(NtfsBrowserTests::mft_tree_report_idx));
+  CHECK_FALSE(
+      tree.IsReachable(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
 }
 
 TEST_CASE("MftTree marks a name invalid when its parent is not in the scan",
           "[cov-vol]") {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
-  SetFileNameParents(image, NtfsBrowserTests::mft_tree_report_idx,
-                     NtfsBrowserTests::mft_tree_zeroed_idx);
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+  SetFileNameParents(image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
+                     NTFS_BROWSER_NAMESPACE::Tests::mft_tree_zeroed_idx);
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
-  const NtfsBrowser::Mft::MftTree::Entry* entry =
-      tree.Find(NtfsBrowserTests::mft_tree_report_idx);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* entry =
+      tree.Find(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx);
   REQUIRE(entry != nullptr);
-  for (const NtfsBrowser::Mft::MftTree::Name& name : entry->names) {
+  for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& name : entry->names) {
     CHECK_FALSE(name.parent_valid);
   }
   std::optional<ULONGLONG> lost;
-  static_cast<void>(tree.GetPath(NtfsBrowserTests::mft_tree_report_idx, &lost));
-  CHECK(lost == NtfsBrowserTests::mft_tree_zeroed_idx);
+  static_cast<void>(
+      tree.GetPath(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx, &lost));
+  CHECK(lost == NTFS_BROWSER_NAMESPACE::Tests::mft_tree_zeroed_idx);
 }
 
 TEST_CASE("MftTree files a record once when two of its names share a parent",
           "[cov-vol]") {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
   // link-b moves from Docs to the root, so both names of record 18 name the
   // root.
-  RedirectFileNames(image, NtfsBrowserTests::mft_tree_hard_link_idx,
-                    NtfsBrowserTests::mft_tree_docs_idx,
+  RedirectFileNames(image,
+                    NTFS_BROWSER_NAMESPACE::Tests::mft_tree_hard_link_idx,
+                    NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
                     MakeRef(root_idx, mft_tree_root_sequence));
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
   const auto children = tree.Children(root_idx);
   CHECK(std::count(children.begin(), children.end(),
-                   NtfsBrowserTests::mft_tree_hard_link_idx) == 1);
+                   NTFS_BROWSER_NAMESPACE::Tests::mft_tree_hard_link_idx) == 1);
 }
 
 TEST_CASE("MftTree GetPath reports nothing for an unknown record or name",
           "[cov-vol]") {
   const auto volume = OpenMftTree();
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
   CHECK_FALSE(tree.IsReachable(999));
 
@@ -234,7 +250,9 @@ TEST_CASE("MftTree GetPath reports nothing for an unknown record or name",
   CHECK_FALSE(lost.has_value());
 
   lost = root_idx;
-  CHECK(tree.GetPath(NtfsBrowserTests::mft_tree_docs_idx, 99, &lost).empty());
+  CHECK(
+      tree.GetPath(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx, 99, &lost)
+          .empty());
   CHECK_FALSE(lost.has_value());
 }
 
@@ -243,25 +261,28 @@ TEST_CASE("MftTree stops a path at a loop of parent references", "[cov-vol]") {
   constexpr WORD docs_sequence = 1;
   constexpr WORD new_dir_sequence = 7;
 
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImageWithMftTree();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
   // Docs and NewDir each name the other as parent, so neither reaches the root.
   RedirectFileNames(
-      image, NtfsBrowserTests::mft_tree_docs_idx, root_idx,
-      MakeRef(NtfsBrowserTests::mft_tree_reused_dir_idx, new_dir_sequence));
+      image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx, root_idx,
+      MakeRef(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_reused_dir_idx,
+              new_dir_sequence));
   RedirectFileNames(
-      image, NtfsBrowserTests::mft_tree_reused_dir_idx, root_idx,
-      MakeRef(NtfsBrowserTests::mft_tree_docs_idx, docs_sequence));
+      image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_reused_dir_idx, root_idx,
+      MakeRef(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx, docs_sequence));
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
 
-  const NtfsBrowser::Mft::MftTree tree(*volume);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
 
   std::optional<ULONGLONG> lost;
   const std::wstring path =
-      tree.GetPath(NtfsBrowserTests::mft_tree_docs_idx, &lost);
+      tree.GetPath(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx, &lost);
   // The walk stops where the loop closes, at the record it re-enters.
-  CHECK(lost == NtfsBrowserTests::mft_tree_docs_idx);
+  CHECK(lost == NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx);
   CHECK(path == L"NewDir\\Docs");
-  CHECK_FALSE(tree.IsReachable(NtfsBrowserTests::mft_tree_docs_idx));
+  CHECK_FALSE(
+      tree.IsReachable(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx));
 }

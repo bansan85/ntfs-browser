@@ -4,8 +4,9 @@
 
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
 
@@ -22,7 +23,7 @@ enum class Strategy : std::uint8_t;
 namespace Attr {
 
 template <typename Resident, Cache::Strategy S>
-class AttrFileName : public Resident, public NtfsBrowser::Filename {
+class AttrFileName : public Resident, public NTFS_BROWSER_NAMESPACE::Filename {
  public:
   AttrFileName(const HeaderCommon& ahc, const Io::FileRecord<S>& file_record);
   AttrFileName(AttrFileName&& other) noexcept = delete;
@@ -34,4 +35,4 @@ class AttrFileName : public Resident, public NtfsBrowser::Filename {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

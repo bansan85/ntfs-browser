@@ -6,11 +6,12 @@
 #include <span>
 
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
 #include "attr/non-resident.h"
 #include "internal-export.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
 
@@ -64,4 +65,4 @@ class AttrIndexAlloc : public AttrNonResident<S> {
 
 }  // namespace Attr
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

@@ -7,6 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <ntfs-browser/namespace.h>
+
 #include "child-process.h"
 
 namespace Fs = std::filesystem;
@@ -34,32 +36,33 @@ std::string ReadWholeFile(const Fs::path& path) {
 
 TEST_CASE("RunProcessCapturingOutput throws when the executable is missing",
           "[child-process]") {
-  CHECK_THROWS_AS(
-      NtfsBrowserTests::RunProcessCapturingOutput(MissingExecutable(), {}),
-      std::runtime_error);
+  CHECK_THROWS_AS(NTFS_BROWSER_NAMESPACE::Tests::RunProcessCapturingOutput(
+                      MissingExecutable(), {}),
+                  std::runtime_error);
 }
 
 TEST_CASE("RunProcessToFiles throws when the executable is missing",
           "[child-process]") {
   const Fs::path out =
       Fs::temp_directory_path() / "ntfsbrowser-child-missing-out.txt";
-  CHECK_THROWS_AS(
-      NtfsBrowserTests::RunProcessToFiles(MissingExecutable(), {}, out, out),
-      std::runtime_error);
+  CHECK_THROWS_AS(NTFS_BROWSER_NAMESPACE::Tests::RunProcessToFiles(
+                      MissingExecutable(), {}, out, out),
+                  std::runtime_error);
 }
 
 TEST_CASE("RunProcessToFiles throws when a redirect file cannot be created",
           "[child-process]") {
-  CHECK_THROWS_AS(NtfsBrowserTests::RunProcessToFiles(NTFS_FUZZER_AFL_EXE, {},
-                                                      UncreatableRedirect(),
-                                                      UncreatableRedirect()),
+  CHECK_THROWS_AS(NTFS_BROWSER_NAMESPACE::Tests::RunProcessToFiles(
+                      NTFS_FUZZER_AFL_EXE, {}, UncreatableRedirect(),
+                      UncreatableRedirect()),
                   std::runtime_error);
 }
 
 TEST_CASE("RunProcessCapturingOutput returns the exit code and the output",
           "[child-process]") {
-  const NtfsBrowserTests::ProcessOutput result =
-      NtfsBrowserTests::RunProcessCapturingOutput(NTFS_FUZZER_AFL_EXE, {});
+  const NTFS_BROWSER_NAMESPACE::Tests::ProcessOutput result =
+      NTFS_BROWSER_NAMESPACE::Tests::RunProcessCapturingOutput(
+          NTFS_FUZZER_AFL_EXE, {});
   CHECK(result.exit_code == 1);
   CHECK_THAT(result.output, Catch::Matchers::ContainsSubstring("usage:"));
 }
@@ -71,8 +74,8 @@ TEST_CASE(
       Fs::temp_directory_path() / "ntfsbrowser-child-usage-out.txt";
   const Fs::path err =
       Fs::temp_directory_path() / "ntfsbrowser-child-usage-err.txt";
-  const int exit_code =
-      NtfsBrowserTests::RunProcessToFiles(NTFS_FUZZER_AFL_EXE, {}, out, err);
+  const int exit_code = NTFS_BROWSER_NAMESPACE::Tests::RunProcessToFiles(
+      NTFS_FUZZER_AFL_EXE, {}, out, err);
   CHECK(exit_code == 1);
   CHECK_THAT(ReadWholeFile(err), Catch::Matchers::ContainsSubstring("usage:"));
 }

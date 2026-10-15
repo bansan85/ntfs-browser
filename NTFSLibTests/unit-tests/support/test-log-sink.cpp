@@ -12,8 +12,9 @@
 #include <spdlog/spdlog.h>
 
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 namespace {
 
 // Keeps every line the library logs, so a test can assert on text that
@@ -59,13 +60,13 @@ std::shared_ptr<CaptureSink>& Sink() {
 }  // namespace
 
 void InstallCaptureSink() {
-  NtfsBrowser::Log::Config config;
-  config.console_level = NtfsBrowser::Log::Level::Off;
-  config.file_level = NtfsBrowser::Log::Level::Off;
-  NtfsBrowser::Log::Configure(config);
+  NTFS_BROWSER_NAMESPACE::Log::Config config;
+  config.console_level = NTFS_BROWSER_NAMESPACE::Log::Level::Off;
+  config.file_level = NTFS_BROWSER_NAMESPACE::Log::Level::Off;
+  NTFS_BROWSER_NAMESPACE::Log::Configure(config);
 
   const std::shared_ptr<spdlog::logger> logger =
-      spdlog::get(std::string(NtfsBrowser::Log::logger_name));
+      spdlog::get(std::string(NTFS_BROWSER_NAMESPACE::Log::logger_name));
   if (!logger) {
     return;
   }
@@ -80,4 +81,4 @@ void InstallCaptureSink() {
 
 std::string TakeCapturedLog() { return Sink()->Take(); }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

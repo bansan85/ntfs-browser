@@ -21,6 +21,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 
 #include "io/file-reader.h"
 #include "memory-disk-reader.h"
@@ -51,11 +52,13 @@ constexpr DWORD second_read_size = 2048;
 
 // Opens path through a PartitionDiskReader (offset 0) instead of
 // FileReader's own Open(), which only exists on Windows (Win32DiskReader).
-template <NtfsBrowser::Cache::Strategy S>
-NtfsBrowser::Io::FileReader<S> OpenOnDisk(const std::filesystem::path& path) {
-  auto reader = std::make_unique<NtfsBrowserTests::PartitionDiskReader>(0);
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+NTFS_BROWSER_NAMESPACE::Io::FileReader<S>
+    OpenOnDisk(const std::filesystem::path& path) {
+  auto reader =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::PartitionDiskReader>(0);
   REQUIRE(reader->Open(path.wstring()));
-  return NtfsBrowser::Io::FileReader<S>(std::move(reader));
+  return NTFS_BROWSER_NAMESPACE::Io::FileReader<S>(std::move(reader));
 }
 
 // Writes content to a new temp file and returns its path.
@@ -91,9 +94,9 @@ struct TempFile final {
 
 TEMPLATE_TEST_CASE_SIG(
     "FileReader::ReadInto reads into the caller-provided buffer",
-    "[file-reader]", ((NtfsBrowser::Cache::Strategy S), S),
-    NtfsBrowser::Cache::Strategy::NoCache,
-    NtfsBrowser::Cache::Strategy::FullCache) {
+    "[file-reader]", ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
+    NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
+    NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
   std::vector<BYTE> content(content_size);
   for (size_t i = 0; i < content.size(); i++) {
     // i < content.size() by the loop condition.
@@ -102,7 +105,8 @@ TEMPLATE_TEST_CASE_SIG(
   }
   const TempFile file(content);
 
-  const NtfsBrowser::Io::FileReader<S> reader = OpenOnDisk<S>(file.path);
+  const NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader =
+      OpenOnDisk<S>(file.path);
 
   std::array<BYTE, read_into_size> dest{};
   LARGE_INTEGER addr{.QuadPart = read_into_offset};
@@ -116,13 +120,15 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG("FileReader::ReadInto fails past end of file",
-                       "[file-reader]", ((NtfsBrowser::Cache::Strategy S), S),
-                       NtfsBrowser::Cache::Strategy::NoCache,
-                       NtfsBrowser::Cache::Strategy::FullCache) {
+                       "[file-reader]",
+                       ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
+                       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
+                       NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
   std::vector<BYTE> content(tiny_file_size, tiny_file_fill);
   const TempFile file(content);
 
-  const NtfsBrowser::Io::FileReader<S> reader = OpenOnDisk<S>(file.path);
+  const NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader =
+      OpenOnDisk<S>(file.path);
 
   std::array<BYTE, read_into_size> dest{};
   LARGE_INTEGER addr{.QuadPart = 0};
@@ -138,28 +144,33 @@ TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
     content[i] = static_cast<BYTE>(i * pattern_step);
   }
 
-  const NtfsBrowser::Io::FileReader<NtfsBrowser::Cache::Strategy::NoCache>
-      reader(std::make_unique<NtfsBrowserTests::MemoryDiskReader>(content));
+  const NTFS_BROWSER_NAMESPACE::Io::FileReader<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>
+      reader(std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          content));
 
   LARGE_INTEGER first_addr{.QuadPart = 0};
   const auto first = reader.Read(first_addr, first_read_size);
   REQUIRE(first.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(first).size() == first_read_size);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(first).size() ==
+          first_read_size);
 
   LARGE_INTEGER second_addr{.QuadPart = second_read_offset};
   const auto second = reader.Read(second_addr, second_read_size);
   REQUIRE(second.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(second).size() == second_read_size);
-  for (size_t i = 0; i < NtfsBrowserTests::Unwrap(second).size(); i++) {
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second).size() ==
+          second_read_size);
+  for (size_t i = 0; i < NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second).size();
+       i++) {
     // i < second->size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    REQUIRE(NtfsBrowserTests::Unwrap(second)[i] ==
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second)[i] ==
             content.at(second_read_offset + i));
   }
 }
 
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::Io::FileReader;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Io::FileReader;
 
 namespace {
 
@@ -206,7 +217,8 @@ TEST_CASE(
   }
 
   auto reader_double =
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing);
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          backing);
   const FileReader<Cache::Strategy::FullCache> reader(std::move(reader_double));
 
   // Straddles the boundary between the first and second 64KiB cache blocks.
@@ -243,9 +255,11 @@ TEST_CASE(
   }
 
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          backing));
   const FileReader<Cache::Strategy::NoCache> exact(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          backing));
 
   struct Range {
     size_t offset;
@@ -268,13 +282,13 @@ TEST_CASE(
 
     const auto actual = full.Read(addr_full, range.length);
     REQUIRE(actual.has_value());
-    REQUIRE(NtfsBrowserTests::Unwrap(actual).size() ==
-            NtfsBrowserTests::Unwrap(expected).size());
-    CHECK(std::equal(NtfsBrowserTests::Unwrap(actual).begin(),
-                     NtfsBrowserTests::Unwrap(actual).end(),
-                     NtfsBrowserTests::Unwrap(expected).begin()));
-    CHECK(std::equal(NtfsBrowserTests::Unwrap(actual).begin(),
-                     NtfsBrowserTests::Unwrap(actual).end(),
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).size() ==
+            NTFS_BROWSER_NAMESPACE::Tests::Unwrap(expected).size());
+    CHECK(std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).begin(),
+                     NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).end(),
+                     NTFS_BROWSER_NAMESPACE::Tests::Unwrap(expected).begin()));
+    CHECK(std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).begin(),
+                     NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).end(),
                      backing.begin() + gsl::narrow<ptrdiff_t>(range.offset)));
   }
 
@@ -283,8 +297,8 @@ TEST_CASE(
                           static_cast<LONGLONG>(block_value + inner_offset)};
   const auto second = full.Read(again, inner_length);
   REQUIRE(second.has_value());
-  CHECK(std::equal(NtfsBrowserTests::Unwrap(second).begin(),
-                   NtfsBrowserTests::Unwrap(second).end(),
+  CHECK(std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second).begin(),
+                   NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second).end(),
                    backing.begin() +
                        static_cast<ptrdiff_t>(block_value + inner_offset)));
 
@@ -306,14 +320,15 @@ TEST_CASE(
   }
 
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          backing));
 
   LARGE_INTEGER addr{.QuadPart = inner_length};
   const auto result = full.Read(addr, inner_length);
   REQUIRE(result.has_value());
-  REQUIRE(NtfsBrowserTests::Unwrap(result).size() == inner_length);
-  CHECK(std::equal(NtfsBrowserTests::Unwrap(result).begin(),
-                   NtfsBrowserTests::Unwrap(result).end(),
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result).size() == inner_length);
+  CHECK(std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result).begin(),
+                   NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result).end(),
                    backing.begin() + inner_length));
 }
 
@@ -323,7 +338,8 @@ TEST_CASE(
     "[file-reader][regression]") {
   const std::vector<BYTE> backing(cache_block_size);
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          backing));
 
   LARGE_INTEGER addr{.QuadPart = -1};
   CHECK_FALSE(full.Read(addr, 100).has_value());
@@ -335,7 +351,8 @@ TEST_CASE(
     "[file-reader][regression]") {
   const std::vector<BYTE> backing(cache_block_size);
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(backing));
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          backing));
 
   constexpr DWORD length_value = 100;
   const auto addresses = std::to_array<LONGLONG>(
@@ -352,16 +369,16 @@ TEST_CASE(
 #ifdef _WIN32
 TEMPLATE_TEST_CASE_SIG(
     "FileReader::Open honours the length of a non NUL-terminated view",
-    "[file-reader]", ((NtfsBrowser::Cache::Strategy S), S),
-    NtfsBrowser::Cache::Strategy::NoCache,
-    NtfsBrowser::Cache::Strategy::FullCache) {
+    "[file-reader]", ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
+    NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
+    NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
   const std::vector<BYTE> content(64, 0x5A);
   TempFile file(content);
 
   const std::wstring real_path = file.path.wstring();
   const std::wstring longer = real_path + L"xyz";
 
-  NtfsBrowser::Io::FileReader<S> reader;
+  NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader;
   REQUIRE(reader.Open(std::wstring_view(longer.data(), real_path.size())));
 
   std::array<BYTE, tiny_file_size> dest{};

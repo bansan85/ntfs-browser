@@ -11,14 +11,15 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/namespace.h>
 
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"
 #include "data/filename.h"
 #include "data/index-entry.h"
 
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::IndexEntryView;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 
 namespace {
 
@@ -41,15 +42,16 @@ IndexEntry MakeSystemEntry() {
   std::vector<BYTE> buffer(entry_buffer_size);
 
   auto& index_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.data());
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(
+          buffer.data());
   index_entry.mft_index = entry_record_number;
   index_entry.mft_sn = 1;
 
-  auto& filename =
-      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
-  filename.flags = NtfsBrowser::Data::FilenameFlag::Directory;
+  auto& filename = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
+      &index_entry.stream);
+  filename.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::Directory;
   filename.name_length = name_len;
-  filename.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
+  filename.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
   for (BYTE i = 0; i < name_len; i++) {
     // i is below name_len, the length of name.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -74,15 +76,16 @@ IndexEntry MakeNamedEntry(std::wstring_view name) {
   std::vector<BYTE> buffer(entry_buffer_size);
 
   auto& index_entry =
-      *reinterpret_cast<NtfsBrowser::Data::IndexEntry*>(buffer.data());
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(
+          buffer.data());
   index_entry.mft_index = entry_record_number;
   index_entry.mft_sn = 1;
 
-  auto& filename =
-      *reinterpret_cast<NtfsBrowser::Data::Filename*>(&index_entry.stream);
-  filename.flags = NtfsBrowser::Data::FilenameFlag::Directory;
+  auto& filename = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
+      &index_entry.stream);
+  filename.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::Directory;
   filename.name_length = gsl::narrow<BYTE>(name.size());
-  filename.name_space = NtfsBrowser::Data::FilenameNamespace::Win32;
+  filename.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
   for (size_t i = 0; i < name.size(); i++) {
     // i < name.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

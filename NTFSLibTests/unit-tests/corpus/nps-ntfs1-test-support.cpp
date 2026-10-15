@@ -14,26 +14,27 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 
 #include "optional-access.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IDiskReader;
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NtfsBrowserTests {
+namespace NTFS_BROWSER_NAMESPACE::Tests {
 
-using NtfsBrowser::IndexEntry;
-using NtfsBrowser::Attr::AttrBase;
-using NtfsBrowser::Io::FileRecord;
-namespace Attr = NtfsBrowser::Attr;
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
-namespace Mft = NtfsBrowser::Mft;
+using NTFS_BROWSER_NAMESPACE::IndexEntry;
+using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 namespace {
 
@@ -43,8 +44,9 @@ std::wstring Widen(std::string_view narrow) {
   return {narrow.begin(), narrow.end()};
 }
 
-void ParseDir(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
-              ULONGLONG file_ref) {
+void ParseDir(
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir,
+    ULONGLONG file_ref) {
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(dir.ParseFileRecord(file_ref));
   REQUIRE(dir.ParseAttrs());
@@ -52,42 +54,46 @@ void ParseDir(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
 
 }  // namespace
 
-std::unique_ptr<NtfsBrowser::IDiskReader> OpenNtfs1Image() {
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenNtfs1Image() {
   return OpenBareVolumeImage(ntfs1_image);
 }
 
-void OpenRootDir(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir) {
+void OpenRootDir(
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir) {
   ParseDir(dir, static_cast<ULONGLONG>(Mft::Idx::Root));
 }
 
-void OpenSubDir(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
-                std::string_view name) {
+void OpenSubDir(
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir,
+    std::string_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
-  ParseDir(dir, NtfsBrowserTests::Unwrap(entry).GetFileReference());
+  ParseDir(dir,
+           NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference());
 }
 
-void OpenFile(NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& file,
-              const NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
-              std::string_view name) {
+void OpenFile(
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& file,
+    const NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir,
+    std::string_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
 
   file.SetAttrMask(Attr::Mask::Data);
-  REQUIRE(
-      file.ParseFileRecord(NtfsBrowserTests::Unwrap(entry).GetFileReference()));
+  REQUIRE(file.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 }
 
-std::vector<BYTE>
-    ReadFile(const NtfsVolume<Cache::Strategy::NoCache>& volume,
-             const NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache>& dir,
-             std::string_view name) {
-  NtfsBrowser::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
+std::vector<BYTE> ReadFile(
+    const NtfsVolume<Cache::Strategy::NoCache>& volume,
+    const NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir,
+    std::string_view name) {
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   OpenFile(file, dir, name);
 
-  const NtfsBrowser::Attr::AttrBase<Cache::Strategy::NoCache>* stream =
-      file.FindStream({});
+  const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>*
+      stream = file.FindStream({});
   REQUIRE(stream != nullptr);
 
   std::vector<BYTE> data(stream->GetDataSize());
@@ -95,4 +101,4 @@ std::vector<BYTE>
   return data;
 }
 
-}  // namespace NtfsBrowserTests
+}  // namespace NTFS_BROWSER_NAMESPACE::Tests

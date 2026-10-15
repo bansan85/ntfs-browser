@@ -3,7 +3,9 @@
 #include <cstddef>
 #include <type_traits>
 
-namespace NtfsBrowser::Utf {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Utf {
 namespace {
 
 // First and last code unit of the UTF-16 high (leading) surrogate range.
@@ -160,4 +162,4 @@ std::wstring Utf16ToWide(std::u16string_view units) {
   return out;
 }
 
-}  // namespace NtfsBrowser::Utf
+}  // namespace NTFS_BROWSER_NAMESPACE::Utf

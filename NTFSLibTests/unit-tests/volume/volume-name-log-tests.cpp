@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "catch2/matchers/catch_matchers.hpp"
@@ -17,14 +18,15 @@
 using Catch::Matchers::ContainsSubstring;
 
 TEMPLATE_TEST_CASE_SIG("the volume name is logged without its terminator",
-                       "[logging]", ((NtfsBrowser::Cache::Strategy S), S),
-                       NtfsBrowser::Cache::Strategy::NoCache,
-                       NtfsBrowser::Cache::Strategy::FullCache) {
-  (void)NtfsBrowserTests::TakeCapturedLog();
-  const NtfsBrowser::NtfsVolume<S> volume(
-      std::make_unique<NtfsBrowserTests::MemoryDiskReader>(
-          NtfsBrowserTests::BuildFakeNtfsImageWithVolumeName()));
-  const std::string captured = NtfsBrowserTests::TakeCapturedLog();
+                       "[logging]",
+                       ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
+                       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
+                       NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
+  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithVolumeName()));
+  const std::string captured = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
 
   CHECK(volume.IsVolumeOK());
   CHECK_THAT(captured, ContainsSubstring("NTFS volume name: TESTVOL"));

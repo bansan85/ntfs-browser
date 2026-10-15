@@ -9,6 +9,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "data/ntfs-bpb.h"
@@ -16,17 +17,17 @@
 #include "memory-disk-reader.h"
 #include "volume-tree-support.h"
 
-using NtfsBrowser::NtfsVolume;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowserTests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 
 namespace {
 
 // BuildFakeNtfsImage() with edit applied to its boot sector BPB.
 template <typename Edit>
 std::vector<BYTE> ImageWithBpb(Edit edit) {
-  std::vector<BYTE> image = NtfsBrowserTests::BuildFakeNtfsImage();
-  edit(*reinterpret_cast<NtfsBrowser::Data::NtfsBpb*>(image.data()));
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  edit(*reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data()));
   return image;
 }
 
@@ -59,7 +60,7 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("a refused boot sector read leaves every value zero") {
     const auto refused = std::make_shared<size_t>(0);
     const NtfsVolume<S> volume(std::make_unique<RefusingDiskReader>(
-        NtfsBrowserTests::BuildFakeNtfsImage(), 0, 1, refused));
+        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), 0, 1, refused));
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetSectorSize() == 0);
@@ -85,7 +86,8 @@ TEMPLATE_TEST_CASE_SIG(
         ImageWithBpb([](auto& bpb) { bpb.sectors_per_cluster = 0; })));
 
     CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetSectorSize() == NtfsBrowserTests::fake_bytes_per_sector);
+    CHECK(volume.GetSectorSize() ==
+          NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
     CHECK(volume.GetClusterSize() == 0);
     CHECK(volume.GetFileRecordSize() == 0);
     CHECK(volume.GetClusterBuffer().empty());
@@ -100,13 +102,15 @@ TEMPLATE_TEST_CASE_SIG(
         })));
 
     CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetSectorSize() == NtfsBrowserTests::fake_bytes_per_sector);
-    CHECK(volume.GetClusterSize() == NtfsBrowserTests::fake_cluster_size);
+    CHECK(volume.GetSectorSize() ==
+          NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
+    CHECK(volume.GetClusterSize() ==
+          NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
     CHECK(volume.GetFileRecordSize() == 0);
     CHECK(volume.GetIndexBlockSize() == 0);
     CHECK(volume.GetMFTAddr() == 0);
     CHECK(volume.GetClusterBuffer().size() ==
-          NtfsBrowserTests::fake_cluster_size);
+          NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
   }
 
   SECTION("a file record above the maximum keeps its decoded size") {
@@ -117,7 +121,7 @@ TEMPLATE_TEST_CASE_SIG(
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetFileRecordSize() ==
-          8 * NtfsBrowserTests::fake_cluster_size);
+          8 * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
     CHECK(volume.GetIndexBlockSize() == 0);
     CHECK(volume.GetMFTAddr() == 0);
   }
@@ -130,7 +134,7 @@ TEMPLATE_TEST_CASE_SIG(
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetFileRecordSize() ==
-          NtfsBrowserTests::fake_file_record_size);
+          NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size);
     CHECK(volume.GetIndexBlockSize() == 0);
     CHECK(volume.GetMFTAddr() == 0);
   }
@@ -139,14 +143,15 @@ TEMPLATE_TEST_CASE_SIG(
     const NtfsVolume<S> volume(
         std::make_unique<MemoryDiskReader>(ImageWithBpb([](auto& bpb) {
           bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max() /
-                            NtfsBrowserTests::fake_cluster_size +
+                            NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size +
                         1;
         })));
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetFileRecordSize() ==
-          NtfsBrowserTests::fake_file_record_size);
-    CHECK(volume.GetIndexBlockSize() == NtfsBrowserTests::fake_cluster_size);
+          NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size);
+    CHECK(volume.GetIndexBlockSize() ==
+          NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
     CHECK(volume.GetMFTAddr() == std::numeric_limits<ULONGLONG>::max());
   }
 
@@ -157,7 +162,7 @@ TEMPLATE_TEST_CASE_SIG(
         })));
 
     CHECK(volume.GetIndexBlockSize() ==
-          8 * NtfsBrowserTests::fake_cluster_size);
+          8 * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
   }
 
   SECTION("a 2 MiB cluster sizes every value and the cluster buffer") {

@@ -14,6 +14,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -22,13 +23,14 @@
 #include "memory-disk-reader.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NtfsBrowser::NtfsVolume;
-using NtfsBrowser::Io::FileRecord;
-namespace Cache = NtfsBrowser::Cache;
-using NtfsBrowser::VolumeOptions;
-using NtfsBrowserTests::attr_name_exceeds_total_size_record_idx;
-using NtfsBrowserTests::BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
-using NtfsBrowserTests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Tests::attr_name_exceeds_total_size_record_idx;
+using NTFS_BROWSER_NAMESPACE::Tests::
+    BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
+using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 
 namespace {
 
@@ -38,7 +40,7 @@ namespace {
 template <Cache::Strategy S>
 void RunSalvageableConditionLogLevel() {
   const std::shared_ptr<spdlog::logger> logger =
-      spdlog::get(std::string(NtfsBrowser::Log::logger_name));
+      spdlog::get(std::string(NTFS_BROWSER_NAMESPACE::Log::logger_name));
   REQUIRE(logger);
 
   const auto capture_for = [&](const VolumeOptions& options) {
@@ -52,7 +54,7 @@ void RunSalvageableConditionLogLevel() {
             BuildFakeNtfsImageWithAttrNameExceedsTotalSize()),
         options);
     REQUIRE(volume.IsVolumeOK());
-    NtfsBrowser::Io::FileRecord<S> record(volume);
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(attr_name_exceeds_total_size_record_idx));
     (void)record.ParseAttrs();
 

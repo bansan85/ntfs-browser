@@ -1,3 +1,5 @@
+#include "io/file-record-efs.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
@@ -10,16 +12,16 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/flags.h"
 #include "attr/non-resident.h"  // IWYU pragma: keep
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
-#include "io/file-record-efs.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser::Io {
+namespace NTFS_BROWSER_NAMESPACE::Io {
 
 namespace {
 
@@ -148,4 +150,4 @@ template bool AttachEfsContext<Cache::Strategy::NoCache>(
 template bool AttachEfsContext<Cache::Strategy::FullCache>(
     FileRecord<Cache::Strategy::FullCache>& record);
 
-}  // namespace NtfsBrowser::Io
+}  // namespace NTFS_BROWSER_NAMESPACE::Io

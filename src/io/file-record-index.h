@@ -10,10 +10,11 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/namespace.h>
 
 #include "upcase/upcase.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IndexEntry;
 class IndexEntryView;
@@ -94,4 +95,4 @@ class DirectoryIndex {
 
 }  // namespace Io
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

@@ -22,6 +22,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/non-resident.h"  // IWYU pragma: keep
@@ -39,7 +40,7 @@
 #include "utf/utf.h"
 #include "volume/volume-geometry.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IDiskReader;
 
@@ -449,4 +450,4 @@ const UpCase::Table& NtfsVolume<S>::Impl::GetUpCaseTable() const {
 template class NtfsVolume<Cache::Strategy::NoCache>;
 template class NtfsVolume<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE

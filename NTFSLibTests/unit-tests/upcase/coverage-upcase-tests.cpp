@@ -2,6 +2,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
+
 #include "upcase/upcase.h"
 
 namespace {
@@ -15,7 +17,8 @@ TEST_CASE("a code point past U+10FFFF compares as the replacement character",
           "[cov-attrs]") {
   if constexpr (sizeof(wchar_t) > sizeof(char16_t)) {
     const std::wstring beyond(1, beyond_unicode);
-    CHECK(NtfsBrowser::UpCase::Table::BuiltIn().Compare(beyond, L"a") > 0);
+    CHECK(NTFS_BROWSER_NAMESPACE::UpCase::Table::BuiltIn().Compare(beyond,
+                                                                   L"a") > 0);
   } else {
     SKIP("wchar_t is 16 bits here: no code point past the BMP exists");
   }

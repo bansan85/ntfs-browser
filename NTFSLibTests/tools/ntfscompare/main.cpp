@@ -25,6 +25,7 @@
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/tree.h>
+#include <ntfs-browser/namespace.h>
 
 #include "compare-engine.h"
 #include "console.h"
@@ -34,7 +35,7 @@
 #include "std-filesystem-walk.h"
 #include "volume-open.h"
 
-using NtfsBrowser::Mft::MftTree;
+using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 using NtfsCompare::Listing;
 using NtfsCompare::NativeText;
 using NtfsCompare::OpenVolumeFor;
@@ -48,7 +49,7 @@ using NtfsCompare::WalkMftTree;
 using NtfsCompare::WalkOsApi;
 using NtfsCompare::WalkStdFilesystem;
 
-namespace Log = NtfsBrowser::Log;
+namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 
 // main() only ever sees argv through the active ANSI code page on Windows,
 // which cannot express every path; wmain()'s argv is wide instead. Every
@@ -120,13 +121,14 @@ struct LibraryListings {
 
 // Scans the whole $MFT of volume, reporting its progress, and lists the
 // subtree at start_record through the resulting tree.
-Listing ListMftTree(const NtfsBrowser::NtfsVolume<
-                        NtfsBrowser::Cache::Strategy::NoCache>& volume,
-                    ULONGLONG start_record) {
+Listing
+    ListMftTree(const NTFS_BROWSER_NAMESPACE::NtfsVolume<
+                    NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
+                ULONGLONG start_record) {
   PrintErr(
       "Scanning the whole $MFT for MftTree (this can take a "
       "while on a large volume)...\n");
-  NtfsBrowser::Mft::MftTree::ScanOptions scan_options;
+  NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanOptions scan_options;
   scan_options.progress = [](ULONGLONG done, ULONGLONG total) {
     PrintErr("\r$MFT: {} / {}", done, total);
     if (done == total) {
@@ -134,7 +136,7 @@ Listing ListMftTree(const NtfsBrowser::NtfsVolume<
     }
     return true;
   };
-  const NtfsBrowser::Mft::MftTree tree(volume, scan_options);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(volume, scan_options);
   return WalkMftTree(tree, start_record);
 }
 

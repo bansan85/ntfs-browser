@@ -14,6 +14,7 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "data/header-non-resident.h"
@@ -29,7 +30,7 @@
   #include "lznt1/decompress.h"
 #endif
 
-namespace NtfsBrowser::Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {
 
@@ -694,4 +695,4 @@ void AttrNonResident<S>::AppendRuns(const AttrNonResident& other) {
 template class AttrNonResident<Cache::Strategy::NoCache>;
 template class AttrNonResident<Cache::Strategy::FullCache>;
 
-}  // namespace NtfsBrowser::Attr
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr
