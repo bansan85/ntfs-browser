@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
@@ -109,7 +110,7 @@ class AttrNonResident : public Attr::AttrBase<S> {
   std::shared_ptr<const Efs::Context> efs_context_;
 
   void ParseDataRun();
-  [[nodiscard]] std::optional<std::span<const BYTE>>
+  [[nodiscard]] std::optional<Cache::ReadResult<S>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;
   [[nodiscard]] bool ReadClusterPart(ULONGLONG vcn, DWORD from,

@@ -10,7 +10,9 @@
 
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/export.h>
@@ -77,10 +79,19 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
 
   [[nodiscard]] std::span<BYTE> GetClusterBuffer() const noexcept;
 
-  [[nodiscard]] std::optional<std::span<const BYTE>> Read(LARGE_INTEGER& addr,
-                                                          DWORD length) const;
+  // Reads length bytes at addr. FullCache returns a Cache::View: the bytes
+  // stay valid while a copy of it lives and the volume is open. NoCache
+  // returns a bare span, valid until the next read on this volume.
+  [[nodiscard]] std::optional<Cache::ReadResult<S>> Read(LARGE_INTEGER& addr,
+                                                         DWORD length) const;
   // Reads from addr into dest.
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
+
+  // Frees every cached block that no Cache::View uses. The volume stays open,
+  // and a later read loads the data again. A no-op under NoCache.
+  void MinifyCache() const;
+  // The memory the cache holds right now. All zero under NoCache.
+  [[nodiscard]] Cache::Stats GetCacheStats() const;
 
   [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
                                       Attr::RawCallback callback) noexcept;

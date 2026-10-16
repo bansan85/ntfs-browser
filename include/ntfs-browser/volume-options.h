@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+
+#include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/namespace.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -29,6 +32,15 @@ struct VolumeOptions {
   // pointer reaches, up to max_orphan_scan_blocks; an entry found that way is
   // kept only if its parent matches.
   bool recover_errors{false};
+
+  // Soft ceiling, per volume, on the memory FullCache holds. NoCache ignores
+  // it. After each read, the cache frees the fewest unused blocks needed to
+  // get back under it, least recently used first. Memory that a live
+  // Cache::View holds is never freed, so the total can stay above the ceiling
+  // while such views exist. Cache::unlimited_bytes removes the limit. 0 frees
+  // a block as soon as its last view is dropped. Last member, so designated
+  // initialisers that stop before it stay valid.
+  std::uint64_t max_cache_bytes{Cache::default_max_cache_bytes};
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE

@@ -4,6 +4,7 @@
 add_executable(NtfsBrowserTests)
 
 add_subdirectory("attr")
+add_subdirectory("cache")
 add_subdirectory("corpus")
 add_subdirectory("data")
 add_subdirectory("efs")

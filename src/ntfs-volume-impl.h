@@ -12,6 +12,7 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/io/file-record.h>
@@ -108,7 +109,7 @@ class NtfsVolume<S>::Impl {
 #endif
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
-  [[nodiscard]] std::optional<std::span<const BYTE>> ReadBootSector() const;
+  [[nodiscard]] std::optional<Cache::ReadResult<S>> ReadBootSector() const;
   [[nodiscard]] bool ParseVolumeRecord(Io::FileRecord<S>& vol);
   [[nodiscard]] bool AcceptVolumeVersion(const Io::FileRecord<S>& vol);
   void LogVolumeName(const Io::FileRecord<S>& vol) const;

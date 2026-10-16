@@ -684,6 +684,22 @@ struct FakeIndexAllocShape {
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithIndexAllocationShape(FakeIndexAllocShape shape);
 
+// First MFT reference BuildFakeNtfsImageWithManyIndexBlocks() gives its
+// entries: block "vcn" names many_index_blocks_mft_ref_base + vcn.
+inline constexpr ULONGLONG many_index_blocks_mft_ref_base = 1000;
+
+// Name of the entry in block "vcn" of BuildFakeNtfsImageWithManyIndexBlocks():
+// L"Block" followed by the VCN in decimal.
+[[nodiscard]] std::wstring ManyIndexBlocksName(ULONGLONG vcn);
+
+// Same volume as BuildFakeNtfsImageWithOrphanedIndexBlocks(), except the
+// root's $INDEX_ALLOCATION maps block_count one-cluster blocks, each holding
+// one entry named ManyIndexBlocksName(vcn). The image grows to hold them.
+// $INDEX_ROOT points at block 0 only: a walk with recover_errors on reads the
+// others as orphans, so one directory walk reads block_count clusters.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithManyIndexBlocks(DWORD block_count);
+
 // clusters_per_ib BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock()
 // declares (via the shared BPB's clusters_per_index_block): more than 1, so
 // ScanOrphanedIndexBlocks()'s blockIndex-to-VCN scaling (blockIndex times

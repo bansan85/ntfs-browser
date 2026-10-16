@@ -1,6 +1,7 @@
 #include <array>
 #include <cstring>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -488,6 +489,47 @@ std::vector<BYTE>
                      static_cast<size_t>(Mft::Idx::Root);
   const FakeRecord record = MakeOrphanedIndexBlocksRootRecord(shape);
   std::memcpy(&image.at(root_offset), record.data(), record.size());
+
+  return image;
+}
+
+std::wstring ManyIndexBlocksName(ULONGLONG vcn) {
+  return L"Block" + std::to_wstring(vcn);
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithManyIndexBlocks(DWORD block_count) {
+  std::vector<BYTE> image = BuildFakeNtfsImageWithIndexAllocationShape(
+      FakeIndexAllocShape{.last_vcn = block_count - 1ULL,
+                          .mapped_clusters = block_count,
+                          .declared_block_count = block_count});
+
+  const size_t blocks_offset =
+      static_cast<size_t>(orphaned_blocks_lcn) * cluster_size;
+  // FullCache reads whole 64KiB-aligned blocks, so the image must extend
+  // past the last cluster to the next such boundary.
+  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
+  const size_t blocks_end =
+      blocks_offset + static_cast<size_t>(block_count) * cluster_size;
+  const size_t aligned_end = ((blocks_end + full_cache_read_block_size - 1) /
+                              full_cache_read_block_size) *
+                             full_cache_read_block_size;
+  if (image.size() < aligned_end) {
+    image.resize(aligned_end, 0);
+  }
+
+  const ULONGLONG root_ref = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  for (DWORD vcn = 0; vcn < block_count; vcn++) {
+    const std::wstring name = ManyIndexBlocksName(vcn);
+    WriteIndexLeafBlockAt(
+        image,
+        {.offset = blocks_offset + static_cast<size_t>(vcn) * cluster_size,
+         .size = cluster_size,
+         .vcn = vcn,
+         .mft_ref = many_index_blocks_mft_ref_base + vcn,
+         .parent_ref = root_ref,
+         .name = name});
+  }
 
   return image;
 }

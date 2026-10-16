@@ -5,6 +5,8 @@ target_sources(
     "coverage-volume-tests.cpp"
     "drive-letter-tests.cpp"
     "filename-compare-tests.cpp"
+    "fullcache-repeated-walk-tests.cpp"
+    "fullcache-walk-support.h"
     "init-exit-tests.cpp"
     "mft-list-entry-characterization-tests.cpp"
     "mft-parse-failure-volume-ok-tests.cpp"

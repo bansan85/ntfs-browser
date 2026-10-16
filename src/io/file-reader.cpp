@@ -3,17 +3,23 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <limits>
+#include <memory>
+#include <optional>
 #include <span>
 #include <utility>
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
+#include "cache/block-cache.h"
 #include "internal-export.h"
 #include "log/ntfs-common.h"
 
@@ -31,20 +37,30 @@ namespace {
 // of a disk read without holding much more than a cluster run's worth of data.
 constexpr LONGLONG read_buffer_size = LONGLONG{64} * 1024;
 
-// Size of one allocation that backs many blocks: 512 blocks, so 32 MiB.
-constexpr LONGLONG memory_buffer_size = 512 * read_buffer_size;
-
 // read_buffer_size as a size_t, to size a std::span over one cached block.
 constexpr size_t block_bytes_value = static_cast<size_t>(read_buffer_size);
+
+// A BlockCache for FullCache only: NoCache keeps none.
+template <Cache::Strategy S>
+std::shared_ptr<Cache::BlockCache> MakeCache(std::uint64_t max_cache_bytes) {
+  if constexpr (S == Cache::Strategy::FullCache) {
+    return std::make_shared<Cache::BlockCache>(block_bytes_value,
+                                               max_cache_bytes);
+  } else {
+    return nullptr;
+  }
+}
 
 }  // namespace
 
 template <Cache::Strategy S>
-FileReader<S>::FileReader() = default;
+FileReader<S>::FileReader(std::uint64_t max_cache_bytes)
+    : cache_(MakeCache<S>(max_cache_bytes)) {}
 
 template <Cache::Strategy S>
-FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader)
-    : reader_(std::move(reader)) {}
+FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader,
+                          std::uint64_t max_cache_bytes)
+    : reader_(std::move(reader)), cache_(MakeCache<S>(max_cache_bytes)) {}
 
 #ifdef _WIN32
 template <Cache::Strategy S>
@@ -83,45 +99,22 @@ std::enable_if_t<std::is_same_v<std::integral_constant<Cache::Strategy, Q>,
   return std::span<const BYTE>{buffer_.data(), length};
 }
 
-// Fetches (loading and caching on first access) the single 64KiB block
-// containing "blockAddr" - which must already be 64KiB-aligned - and
-// returns a pointer to its start, or nullptr on a read failure.
+// Reads exactly "length" bytes at "addr" into a buffer that only the returned
+// view owns, bypassing the block cache. FullCache falls back to it when a
+// whole 64KiB block cannot be read: the block may extend past the end of the
+// medium. The short block MUST NOT be cached as if it were complete.
 template <Cache::Strategy S>
-BYTE* FileReader<S>::GetCachedBlock(LARGE_INTEGER block_addr) const {
-  const size_t index = block_addr.QuadPart / read_buffer_size;
-  const auto iterator = map_buffer_.find(index);
-  if (iterator != map_buffer_.end()) {
-    return iterator->second;
-  }
-
-  BYTE* new_data = NextMemory();
-
-  if (!reader_->ReadInto(
-          block_addr,
-          std::span<BYTE>{new_data, static_cast<size_t>(read_buffer_size)})) {
-    return nullptr;
-  }
-
-  map_buffer_[index] = new_data;
-  return new_data;
-}
-
-// Reads exactly "length" bytes at "addr" into a buffer this reader owns,
-// bypassing the block cache. FullCache falls back to it when a whole 64KiB
-// block cannot be read: the block may extend past the end of the medium. The
-// short block MUST NOT be cached as if it were complete.
-template <Cache::Strategy S>
-std::optional<std::span<const BYTE>>
-    FileReader<S>::ReadUncached(LARGE_INTEGER addr, DWORD length) const {
-  std::vector<BYTE> exact(length);
-  if (!reader_->ReadInto(addr, exact)) {
+std::optional<Cache::View> FileReader<S>::ReadUncached(LARGE_INTEGER addr,
+                                                       DWORD length) const {
+  const Cache::BlockCache::Stitched exact = cache_->NewStitched(length);
+  if (!reader_->ReadInto(addr, exact.bytes)) {
     Log::Error("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
 
-  const BYTE* const data = exact.data();
-  crossing_reads_.push_back(std::move(exact));
-  return std::span<const BYTE>{data, length};
+  Cache::View view{exact.bytes, exact.owner, cache_};
+  cache_->Trim();
+  return view;
 }
 
 template <Cache::Strategy T>
@@ -130,10 +123,10 @@ std::enable_if_t<
     std::is_same_v<
         std::integral_constant<Cache::Strategy, Q>,
         std::integral_constant<Cache::Strategy, Cache::Strategy::FullCache>>,
-    std::optional<std::span<const BYTE>>>
+    std::optional<Cache::View>>
     FileReader<T>::Read(LARGE_INTEGER& addr, DWORD length) const {
   if (length == 0) {
-    return std::span<const BYTE>{};
+    return Cache::View{};
   }
 
   // A negative address has no block to cache. An end past LLONG_MAX would
@@ -145,6 +138,17 @@ std::enable_if_t<
     return {};
   }
 
+  // Loads the block at block_addr, or returns the cached one. Null when the
+  // disk read fails or comes back short: nothing is cached then.
+  const auto get_block =
+      [this](LARGE_INTEGER block_addr) -> std::shared_ptr<Cache::Block> {
+    return cache_->GetOrLoad(
+        static_cast<std::uint64_t>(block_addr.QuadPart / read_buffer_size),
+        [&](std::span<BYTE> dest) {
+          return reader_->ReadInto(block_addr, dest);
+        });
+  };
+
   const bool crosses_block = addr.QuadPart / read_buffer_size !=
                              (addr.QuadPart + length - 1) / read_buffer_size;
 
@@ -152,27 +156,31 @@ std::enable_if_t<
     // Fast path: the request fits in a single block; return a zero-copy view.
     const LARGE_INTEGER block_addr{
         .QuadPart = addr.QuadPart - addr.QuadPart % read_buffer_size};
-    BYTE* block = GetCachedBlock(block_addr);
-    if (block == nullptr) {
+    const std::shared_ptr<Cache::Block> block = get_block(block_addr);
+    if (!block) {
       return ReadUncached(addr, length);
     }
 
-    return std::span<const BYTE>{block, block_bytes_value}.subspan(
-        gsl::narrow<size_t>(addr.QuadPart % read_buffer_size), length);
+    const std::span<const BYTE> bytes =
+        std::span<const BYTE>{block->bytes.get(), block_bytes_value}.subspan(
+            gsl::narrow<size_t>(addr.QuadPart % read_buffer_size), length);
+    Cache::View view{bytes, block, cache_};
+    cache_->Trim();
+    return view;
   }
 
-  // Slow path: stitch the range together one block at a time.
-  std::vector<BYTE> assembled(length);
-  BYTE* const result = assembled.data();
-  std::span<BYTE> out{result, length};
+  // Slow path: stitch the range together one block at a time. The buffer
+  // belongs to the view alone, so the blocks stay free to be evicted.
+  const Cache::BlockCache::Stitched stitched = cache_->NewStitched(length);
+  std::span<BYTE> out = stitched.bytes;
 
   LARGE_INTEGER cur = addr;
   DWORD remaining = length;
   while (remaining != 0) {
     const LARGE_INTEGER block_addr{.QuadPart = cur.QuadPart -
                                                cur.QuadPart % read_buffer_size};
-    BYTE const* block = GetCachedBlock(block_addr);
-    if (block == nullptr) {
+    const std::shared_ptr<Cache::Block> block = get_block(block_addr);
+    if (!block) {
       return ReadUncached(addr, length);
     }
 
@@ -181,7 +189,8 @@ std::enable_if_t<
     const auto chunk = gsl::narrow<DWORD>(
         std::min<LONGLONG>(read_buffer_size - offset_in_block, remaining));
 
-    const std::span<const BYTE> block_bytes{block, block_bytes_value};
+    const std::span<const BYTE> block_bytes{block->bytes.get(),
+                                            block_bytes_value};
     // offsetInBlock is a remainder modulo READ_BUFFER_SIZE = block_bytes.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     memcpy(out.data(), &block_bytes[offset_in_block], chunk);
@@ -189,24 +198,25 @@ std::enable_if_t<
     out = out.subspan(chunk);
     cur.QuadPart += chunk;
     remaining -= chunk;
+    // The block is copied: it is free to go if the read outgrows the ceiling.
+    cache_->Trim();
   }
 
-  crossing_reads_.push_back(std::move(assembled));
-  return std::span<const BYTE>{result, length};
+  Cache::View view{stitched.bytes, stitched.owner, cache_};
+  cache_->Trim();
+  return view;
 }
 
 template <Cache::Strategy S>
-BYTE* FileReader<S>::NextMemory() const {
-  if (mem_alloc_.empty() ||
-      last_alloc_ * read_buffer_size == memory_buffer_size) {
-    last_alloc_ = 0;
-    mem_alloc_.emplace_back(memory_buffer_size);
+void FileReader<S>::Minify() const noexcept {
+  if (cache_) {
+    cache_->Minify();
   }
-  // last_alloc was reset above once the buffer held MEMORY_BUFFER_SIZE bytes.
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  BYTE* retval = &mem_alloc_.back()[last_alloc_ * block_bytes_value];
-  last_alloc_++;
-  return retval;
+}
+
+template <Cache::Strategy S>
+Cache::Stats FileReader<S>::GetCacheStats() const noexcept {
+  return cache_ ? cache_->GetStats() : Cache::Stats{};
 }
 
 template class FileReader<Cache::Strategy::NoCache>;
@@ -219,7 +229,7 @@ template class FileReader<Cache::Strategy::FullCache>;
 template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<std::span<const BYTE>>
     FileReader<Cache::Strategy::NoCache>::Read<Cache::Strategy::NoCache>(
         LARGE_INTEGER& addr, DWORD length) const;
-template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<std::span<const BYTE>>
+template NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<Cache::View>
     FileReader<Cache::Strategy::FullCache>::Read<Cache::Strategy::FullCache>(
         LARGE_INTEGER& addr, DWORD length) const;
 

@@ -20,6 +20,7 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
@@ -227,15 +228,15 @@ TEST_CASE(
 
   // A crossing read may abort the process; ctest reports that as this
   // test failing.
-  const std::optional<std::span<const BYTE>> result =
-      reader.Read(addr, length_value);
+  const std::optional<Cache::View> result = reader.Read(addr, length_value);
 
   if (result) {
-    CHECK(result->size() == length_value);
-    for (size_t i = 0; i < result->size(); i++) {
-      // i < result->size() by the loop condition.
+    const std::span<const BYTE> bytes = *result;
+    CHECK(bytes.size() == length_value);
+    for (size_t i = 0; i < bytes.size(); i++) {
+      // i < bytes.size() by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      CHECK((*result)[i] == backing.at(cache_block_size - straddle_before + i));
+      CHECK(bytes[i] == backing.at(cache_block_size - straddle_before + i));
     }
   }
 }
@@ -280,25 +281,26 @@ TEST_CASE(
     const auto expected = exact.Read(addr_exact, range.length);
     REQUIRE(expected.has_value());
 
-    const auto actual = full.Read(addr_full, range.length);
-    REQUIRE(actual.has_value());
-    REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).size() ==
+    const auto actual_view = full.Read(addr_full, range.length);
+    REQUIRE(actual_view.has_value());
+    const std::span<const BYTE> actual =
+        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual_view);
+    REQUIRE(actual.size() ==
             NTFS_BROWSER_NAMESPACE::Tests::Unwrap(expected).size());
-    CHECK(std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).begin(),
-                     NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).end(),
+    CHECK(std::equal(actual.begin(), actual.end(),
                      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(expected).begin()));
-    CHECK(std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).begin(),
-                     NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual).end(),
+    CHECK(std::equal(actual.begin(), actual.end(),
                      backing.begin() + gsl::narrow<ptrdiff_t>(range.offset)));
   }
 
   // Reading the same range twice keeps returning the same bytes.
   LARGE_INTEGER again{.QuadPart =
                           static_cast<LONGLONG>(block_value + inner_offset)};
-  const auto second = full.Read(again, inner_length);
-  REQUIRE(second.has_value());
-  CHECK(std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second).begin(),
-                   NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second).end(),
+  const auto second_view = full.Read(again, inner_length);
+  REQUIRE(second_view.has_value());
+  const std::span<const BYTE> second =
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second_view);
+  CHECK(std::equal(second.begin(), second.end(),
                    backing.begin() +
                        static_cast<ptrdiff_t>(block_value + inner_offset)));
 
@@ -324,12 +326,13 @@ TEST_CASE(
           backing));
 
   LARGE_INTEGER addr{.QuadPart = inner_length};
-  const auto result = full.Read(addr, inner_length);
-  REQUIRE(result.has_value());
-  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result).size() == inner_length);
-  CHECK(std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result).begin(),
-                   NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result).end(),
-                   backing.begin() + inner_length));
+  const auto result_view = full.Read(addr, inner_length);
+  REQUIRE(result_view.has_value());
+  const std::span<const BYTE> result =
+      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result_view);
+  REQUIRE(result.size() == inner_length);
+  CHECK(
+      std::equal(result.begin(), result.end(), backing.begin() + inner_length));
 }
 
 TEST_CASE(

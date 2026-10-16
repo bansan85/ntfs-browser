@@ -14,6 +14,7 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
@@ -130,7 +131,7 @@ void AttrNonResident<S>::ParseDataRun() {
 // Read clusters from disk, or sparse data
 // *actural = Clusters acturally read
 template <Cache::Strategy S>
-std::optional<std::span<const BYTE>>
+std::optional<Cache::ReadResult<S>>
     AttrNonResident<S>::ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                                      ULONGLONG offset) const {
   // start_lcn and offset are attacker-controlled. Their sum times the
@@ -149,7 +150,7 @@ std::optional<std::span<const BYTE>>
   LARGE_INTEGER addr{.QuadPart =
                          static_cast<LONGLONG>(lcn * this->GetClusterSize())};
 
-  std::optional<std::span<const BYTE>> buffer;
+  std::optional<Cache::ReadResult<S>> buffer;
   try {
     buffer = this->volume_.Read(
         addr, gsl::narrow<DWORD>(clusters * this->GetClusterSize()));
@@ -415,7 +416,8 @@ AttrNonResident<S>::RunRead AttrNonResident<S>::ReadRunClusters(
     return RunRead::Done;
   }
 
-  std::optional<std::span<const BYTE>> bufferi =
+  // Held until the copy below is done: under FullCache it owns the bytes.
+  const std::optional<Cache::ReadResult<S>> bufferi =
       ReadClusters(clusters_to_read, *data_run.lcn, vcn - data_run.start_vcn);
   if (!bufferi) {
     return RunRead::ShortRead;

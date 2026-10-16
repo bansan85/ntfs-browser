@@ -19,7 +19,9 @@
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
@@ -77,7 +79,7 @@ constexpr size_t volume_path_length = 6;
 template <Cache::Strategy S>
 NtfsVolume<S>::Impl::Impl(NtfsVolume<S>& self, const VolumeOptions& options)
     : self(&self),
-      volume(std::make_unique<Io::FileReader<S>>()),
+      volume(std::make_unique<Io::FileReader<S>>(options.max_cache_bytes)),
       mft(self),
       options(options) {}
 
@@ -208,7 +210,8 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
 // Use an already-open reader (eg. a test double), get BPB
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
-  volume = std::make_unique<Io::FileReader<S>>(std::move(reader));
+  volume = std::make_unique<Io::FileReader<S>>(std::move(reader),
+                                               options.max_cache_bytes);
 
   return ParseBootSector();
 }
@@ -216,7 +219,8 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
 // Read the first sector (boot sector) and derive volume geometry from it
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::ParseBootSector() {
-  const std::optional<std::span<const BYTE>> bpb_buffer = ReadBootSector();
+  // Held until the parse is done: under FullCache it owns the bytes.
+  const std::optional<Cache::ReadResult<S>> bpb_buffer = ReadBootSector();
   if (!bpb_buffer) {
     Log::Error("Read boot sector error");
     return false;
@@ -230,7 +234,7 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
 
 // Read the boot sector, retrying with 512 bytes when the 4096-byte read fails.
 template <Cache::Strategy S>
-std::optional<std::span<const BYTE>>
+std::optional<Cache::ReadResult<S>>
     NtfsVolume<S>::Impl::ReadBootSector() const {
   // Smallest sector size NTFS uses. It is also the size of the BPB read.
   constexpr DWORD min_sector_size = 512;
@@ -239,7 +243,7 @@ std::optional<std::span<const BYTE>>
   // of the device's sectors.
   constexpr DWORD max_sector_size = 4096;
   LARGE_INTEGER fr_addr{.QuadPart = 0};
-  std::optional<std::span<const BYTE>> bpb_buffer =
+  std::optional<Cache::ReadResult<S>> bpb_buffer =
       volume->Read(fr_addr, max_sector_size);
   if (!bpb_buffer) {
     // A backing file shorter than max_sector_size cannot serve that read.
@@ -307,9 +311,19 @@ std::span<BYTE> NtfsVolume<S>::GetClusterBuffer() const noexcept {
 }
 
 template <Cache::Strategy S>
-std::optional<std::span<const BYTE>> NtfsVolume<S>::Read(LARGE_INTEGER& addr,
-                                                         DWORD length) const {
+std::optional<Cache::ReadResult<S>> NtfsVolume<S>::Read(LARGE_INTEGER& addr,
+                                                        DWORD length) const {
   return impl_->volume->Read(addr, length);
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::MinifyCache() const {
+  impl_->volume->Minify();
+}
+
+template <Cache::Strategy S>
+Cache::Stats NtfsVolume<S>::GetCacheStats() const {
+  return impl_->volume->GetCacheStats();
 }
 
 template <Cache::Strategy S>
