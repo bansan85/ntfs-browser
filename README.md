@@ -56,6 +56,23 @@ Crypto++ is a git submodule, linked statically and privately, even into a
 shared `NtfsBrowser`. To use an installed copy instead, for example one from
 vcpkg, configure with `-DNTFS_BROWSER_USE_INSTALLED_CRYPTOPP=ON`.
 
+## FullCache memory
+
+`Cache::Strategy::FullCache` keeps the 64 KiB blocks it reads, up to a soft
+ceiling per volume: `VolumeOptions::max_cache_bytes`, 256 MiB by default. When a
+read pushes the cache over it, the blocks used least recently go first. Pass
+`Cache::unlimited_bytes` to keep everything, as earlier versions did.
+
+`NtfsVolume<FullCache>::Read()` returns a `Cache::View`. The bytes stay valid
+while a copy of the view lives and the volume is open, and the cache never
+frees a block a view holds. So the total can exceed the ceiling while views are
+alive. Dropping the last view of a block lets the cache catch up.
+
+`NtfsVolume::GetCacheStats()` reports the bytes the cache holds and the part a
+view uses. `NtfsVolume::MinifyCache()` frees every block no view uses, and
+keeps the volume open. `NoCache` has no cache: it ignores the ceiling, returns
+a bare span, and reports zero.
+
 ## Tests
 
 The unit tests build and run on Windows and Linux (CI runs them with MSVC, GCC
