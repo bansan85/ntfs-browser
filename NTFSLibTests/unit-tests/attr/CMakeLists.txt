@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "attr-bitmap-tests.cpp"
     "attr-body-size-tests.cpp"
+    "attr-cache-release-tests.cpp"
     "attr-initialized-size-tests.cpp"
     "attr-name-bounds-tests.cpp"
     "attr-read-data-bounded-tests.cpp"

@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <format>
@@ -71,12 +72,19 @@ void PatchBpbSignature(std::span<BYTE> data) {
 // first index block reads. Later reads mostly repeat those code paths.
 constexpr size_t injected_failure_runs = 16;
 
-// The two VolumeOptions combinations every input is run under: strict
-// (both flags off, the default) and fully recovering (both on). Exercises
-// both the "reject the damaged item whole" and "salvage it" code paths.
-constexpr std::array<VolumeOptions, 2> volume_option_modes{
+// Ceiling of the eviction mode: one 64 KiB FullCache block, the smallest that
+// still caches. Nearly every read then evicts the block before it.
+constexpr std::uint64_t eviction_ceiling = 65536;
+
+// The three VolumeOptions combinations every input is run under: strict (both
+// flags off, the default), fully recovering (both on), and strict under a
+// one-block cache ceiling. The first two exercise the "reject the damaged
+// item whole" and "salvage it" code paths. The third replays the input with
+// FullCache evicting, which only FullCache sees: NoCache ignores the ceiling.
+constexpr std::array<VolumeOptions, 3> volume_option_modes{
     VolumeOptions{},
-    VolumeOptions{.include_deleted = true, .recover_errors = true}};
+    VolumeOptions{.include_deleted = true, .recover_errors = true},
+    VolumeOptions{.max_cache_bytes = eviction_ceiling}};
 
 // Parses the root file record, then walks its sub entries.
 //
@@ -340,17 +348,28 @@ void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
   }
 }
 
+// Runs the input under both strategies. A mode that only changes the cache
+// ceiling has nothing to say to NoCache, which ignores it, so it runs
+// FullCache alone.
+void RunBothStrategies(std::span<const BYTE> data, const VolumeOptions& options,
+                       std::optional<size_t> failing_read = {}) {
+  if (options.max_cache_bytes == VolumeOptions{}.max_cache_bytes) {
+    RunGuarded<Cache::Strategy::NoCache>(data, options, failing_read);
+  }
+  RunGuarded<Cache::Strategy::FullCache>(data, options, failing_read);
+}
+
 }  // namespace
 
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures) {
   PatchBpbSignature(data);
 
   // Guarded independently, so one run's exception can't skip the others.
-  // Each strategy runs once per VolumeOptions mode, so both the strict
-  // (reject-whole) and recovering (salvage) code paths are exercised.
+  // Each strategy runs once per VolumeOptions mode, so the strict
+  // (reject-whole), recovering (salvage) and evicting code paths are all
+  // exercised.
   for (const VolumeOptions& options : volume_option_modes) {
-    RunGuarded<Cache::Strategy::NoCache>(data, options);
-    RunGuarded<Cache::Strategy::FullCache>(data, options);
+    RunBothStrategies(data, options);
   }
 
   if (!inject_failures) {
@@ -360,8 +379,7 @@ void FuzzTestcase(std::span<BYTE> data, bool inject_failures) {
   for (size_t failing_read = 0; failing_read < injected_failure_runs;
        ++failing_read) {
     for (const VolumeOptions& options : volume_option_modes) {
-      RunGuarded<Cache::Strategy::NoCache>(data, options, failing_read);
-      RunGuarded<Cache::Strategy::FullCache>(data, options, failing_read);
+      RunBothStrategies(data, options, failing_read);
     }
   }
 }

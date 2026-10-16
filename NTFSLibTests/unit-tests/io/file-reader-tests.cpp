@@ -19,6 +19,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
+#include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
@@ -367,6 +368,197 @@ TEST_CASE(
     LARGE_INTEGER addr{.QuadPart = address};
     CHECK_FALSE(full.Read(addr, length_value).has_value());
   }
+}
+
+namespace {
+
+// Blocks of the backing store of the bounded-cache tests: enough for a read
+// that spans three of them, plus a fourth.
+constexpr size_t bounded_backing_blocks = 4;
+
+// Serves a memory image, and fails every read while "failing" is set.
+class SwitchableDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
+ public:
+  SwitchableDiskReader(std::vector<BYTE> data, std::shared_ptr<bool> failing)
+      : inner_(std::move(data)), failing_(std::move(failing)) {}
+
+  bool Open(std::wstring_view path) override { return inner_.Open(path); }
+
+  [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
+                              std::span<BYTE> dest) const override {
+    return !*failing_ && inner_.ReadInto(addr, dest);
+  }
+
+ private:
+  NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader inner_;
+  std::shared_ptr<bool> failing_;
+};
+
+// Bytes that depend on their offset, so a view over the wrong range cannot
+// match by accident.
+std::vector<BYTE> BoundedBacking() {
+  std::vector<BYTE> backing(bounded_backing_blocks * cache_block_size);
+  for (size_t i = 0; i < backing.size(); i++) {
+    // i < backing.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    backing[i] = static_cast<BYTE>(i * pattern_step_a + (i >> bits_per_byte));
+  }
+  return backing;
+}
+
+// True when the bytes are the backing store's at "offset".
+bool MatchesBounded(std::span<const BYTE> bytes, size_t offset) {
+  const std::vector<BYTE> backing = BoundedBacking();
+  return std::equal(bytes.begin(), bytes.end(),
+                    backing.begin() + gsl::narrow<ptrdiff_t>(offset));
+}
+
+}  // namespace
+
+TEST_CASE(
+    "FileReader<FullCache>::Read caches each missing block of a straddling "
+    "read and returns the bytes NoCache returns",
+    "[file-reader][cache]") {
+  const FileReader<Cache::Strategy::FullCache> full(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          BoundedBacking()),
+      Cache::unlimited_bytes);
+  const FileReader<Cache::Strategy::NoCache> exact(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          BoundedBacking()));
+
+  LARGE_INTEGER addr_full{.QuadPart = cache_block_size - straddle_before};
+  LARGE_INTEGER addr_exact{.QuadPart = cache_block_size - straddle_before};
+  {
+    const auto actual = full.Read(addr_full, straddle_length);
+    const auto expected = exact.Read(addr_exact, straddle_length);
+    REQUIRE(actual.has_value());
+    REQUIRE(expected.has_value());
+    const std::span<const BYTE> actual_bytes = *actual;
+    const std::span<const BYTE> expected_bytes = *expected;
+    CHECK(std::ranges::equal(actual_bytes, expected_bytes));
+    // The stitched copy belongs to the view, apart from the two blocks.
+    CHECK(full.GetCacheStats().held_bytes ==
+          (2 * cache_block_size) + straddle_length);
+    CHECK(full.GetCacheStats().in_use_bytes == straddle_length);
+  }
+
+  CHECK(full.GetCacheStats().held_bytes == 2 * cache_block_size);
+  CHECK(full.GetCacheStats().in_use_bytes == 0);
+}
+
+TEST_CASE("FileReader<FullCache>::Read serves a read larger than the ceiling",
+          "[file-reader][cache]") {
+  const FileReader<Cache::Strategy::FullCache> full(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          BoundedBacking()),
+      cache_block_size);
+
+  constexpr size_t offset = 100;
+  constexpr DWORD length = (3 * cache_block_size) - (2 * offset);
+  LARGE_INTEGER addr{.QuadPart = offset};
+  {
+    const auto result = full.Read(addr, length);
+    REQUIRE(result.has_value());
+    CHECK(result->size() == length);
+    CHECK(MatchesBounded(*result, offset));
+    // The view owns a copy larger than the ceiling, so it is all in use.
+    CHECK(full.GetCacheStats().in_use_bytes == length);
+  }
+
+  CHECK(full.GetCacheStats().held_bytes <= cache_block_size);
+}
+
+TEST_CASE(
+    "FileReader<FullCache>::Read reports a failed read, caches nothing of "
+    "it and reads correctly afterwards",
+    "[file-reader][cache]") {
+  const auto failing = std::make_shared<bool>(false);
+  const FileReader<Cache::Strategy::FullCache> full(
+      std::make_unique<SwitchableDiskReader>(BoundedBacking(), failing),
+      cache_block_size);
+
+  const auto read_block = [&full](size_t block, DWORD length) {
+    LARGE_INTEGER addr{.QuadPart =
+                           gsl::narrow<LONGLONG>(block * cache_block_size)};
+    return full.Read(addr, length);
+  };
+  REQUIRE(read_block(0, inner_length).has_value());
+  REQUIRE(read_block(1, inner_length).has_value());
+  const uint64_t held_before = full.GetCacheStats().held_bytes;
+  REQUIRE(held_before == cache_block_size);
+
+  *failing = true;
+  CHECK_FALSE(read_block(2, inner_length).has_value());
+  // A straddling read fails too, and its stitched buffer goes with it.
+  LARGE_INTEGER straddle{.QuadPart = (3 * cache_block_size) - straddle_before};
+  CHECK_FALSE(full.Read(straddle, straddle_length).has_value());
+  CHECK(full.GetCacheStats().held_bytes == held_before);
+
+  *failing = false;
+  const auto again = read_block(2, inner_length);
+  REQUIRE(again.has_value());
+  CHECK(MatchesBounded(*again, 2 * cache_block_size));
+}
+
+TEST_CASE(
+    "FileReader<FullCache>::Read leaves the data under a held view unchanged "
+    "while other reads evict blocks",
+    "[file-reader][cache]") {
+  const FileReader<Cache::Strategy::FullCache> full(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          BoundedBacking()),
+      0);
+
+  LARGE_INTEGER held_addr{.QuadPart = inner_offset};
+  const auto held = full.Read(held_addr, inner_length);
+  REQUIRE(held.has_value());
+
+  for (int pass = 0; pass < 3; pass++) {
+    for (size_t block = 1; block < bounded_backing_blocks; block++) {
+      LARGE_INTEGER addr{.QuadPart =
+                             gsl::narrow<LONGLONG>(block * cache_block_size)};
+      REQUIRE(full.Read(addr, inner_length).has_value());
+    }
+  }
+
+  CHECK(MatchesBounded(*held, inner_offset));
+  CHECK(full.GetCacheStats().held_bytes == cache_block_size);
+}
+
+TEST_CASE("FileReader<FullCache>::Minify frees only the blocks no view uses",
+          "[file-reader][cache]") {
+  const FileReader<Cache::Strategy::FullCache> full(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          BoundedBacking()),
+      Cache::unlimited_bytes);
+
+  LARGE_INTEGER held_addr{.QuadPart = 0};
+  const auto held = full.Read(held_addr, inner_length);
+  REQUIRE(held.has_value());
+  LARGE_INTEGER other_addr{.QuadPart = cache_block_size};
+  REQUIRE(full.Read(other_addr, inner_length).has_value());
+  REQUIRE(full.GetCacheStats().held_bytes == 2 * cache_block_size);
+
+  full.Minify();
+
+  CHECK(full.GetCacheStats().held_bytes == cache_block_size);
+  CHECK(full.GetCacheStats().in_use_bytes == cache_block_size);
+  CHECK(MatchesBounded(*held, 0));
+}
+
+TEST_CASE("FileReader<NoCache> keeps no cache to report or minify",
+          "[file-reader][cache]") {
+  const FileReader<Cache::Strategy::NoCache> exact(
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+          BoundedBacking()));
+  LARGE_INTEGER addr{.QuadPart = 0};
+  REQUIRE(exact.Read(addr, inner_length).has_value());
+
+  exact.Minify();
+
+  CHECK(exact.GetCacheStats().held_bytes == 0);
+  CHECK(exact.GetCacheStats().in_use_bytes == 0);
 }
 
 #ifdef _WIN32

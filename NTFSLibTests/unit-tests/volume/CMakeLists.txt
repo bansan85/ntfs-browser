@@ -2,13 +2,16 @@ target_sources(
   NtfsBrowserTests
   PRIVATE
     "boot-sector-geometry-characterization-tests.cpp"
+    "cache-ceiling-options-tests.cpp"
     "coverage-volume-tests.cpp"
     "drive-letter-tests.cpp"
     "filename-compare-tests.cpp"
+    "fullcache-bounded-walk-tests.cpp"
     "fullcache-repeated-walk-tests.cpp"
     "fullcache-walk-support.h"
     "init-exit-tests.cpp"
     "mft-list-entry-characterization-tests.cpp"
+    "minify-cache-tests.cpp"
     "mft-parse-failure-volume-ok-tests.cpp"
     "no-cache-lifetime-tests.cpp"
     "volume-name-log-tests.cpp"
