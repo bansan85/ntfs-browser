@@ -1,50 +1,112 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# NtfsBrowser Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Direct MFT Access for Performance
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+NtfsBrowser MUST read volumes by parsing raw disk bytes and the MFT directly.
+The library MUST NOT use filesystem APIs to enumerate or read volume content.
+Tools that compare against the operating system's view, such as NtfsCompare, are exempt.
+Full MFT scans (`MftTree`) SHOULD run on a `NoCache` volume, so the whole `$MFT` is never held in memory.
+A change that claims a speed gain MUST show a measurement.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+Rationale: reading the MFT directly is the reason this library exists. Going through
+the OS removes that advantage.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Corrupt Data Is Untrusted Input
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+Every byte read from a volume, device or image is untrusted.
+The library MUST reject a damaged item (file record, index block, cluster run, attribute list)
+without crashing.
+A crash, access violation or undefined behaviour MUST NOT escape the library.
+Rejection MUST affect one item only: the enclosing scan or walk continues with the next item.
+Salvaging partial data MUST be opt-in through `VolumeOptions::recover_errors`. Strict mode is the default.
+Each crash found by fuzzing MUST be saved in `NTFSLibTests/fuzz/data/` as a regression input.
+Its test MUST fail before the fix and pass after it.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Rationale: the disks this library reads are often damaged, and they are never trusted.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Test Coverage on Synthetic and Corpus Images
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Every behaviour MUST be covered by a Catch2 test.
+Coverage MUST stay high. A change that adds code without tests MUST NOT merge.
+Tests MUST NOT touch a real disk or device. They MUST use the synthetic images in
+`fake-ntfs-image.h`, or corpus image files reached through `RequireCorpusImage()` and `OpenCorpusImage()`.
+Corpus traces in `NTFSLibTests/fuzz/data/` MUST be re-recorded after any change to the read path.
+New test scaffolding SHOULD NOT be written when an existing fake disk reader can be extended.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+Rationale: synthetic images cover the rules. Corpus images and traces catch what synthetic images miss.
+
+### IV. Read-Only Operation
+
+The library MUST NOT write to a volume, device or image. It MUST open them for reading only.
+The library MUST NOT compress or encrypt data. Decompression and decryption are the only
+transforms it applies.
+
+Rationale: writing to a damaged or in-use volume destroys evidence and data.
+
+### V. Scope: NTFS 3.0 and Later
+
+The library MUST support NTFS 3.0 and later on-disk layouts.
+Earlier NTFS versions are out of scope and MUST NOT be claimed as supported.
+Attribute decompression (LZNT1) and EFS decryption (AES, 3DES, DESX) are in scope.
+Each MUST remain compilable out through its feature option.
+
+Rationale: a clear scope keeps the parser auditable against the on-disk specification.
+
+## Technical Constraints
+
+- The primary target is C++20 with MSVC on Windows. The library, the unit tests, NtfsCompare
+  and NtfsFuzzerAfl MUST also build with GCC on Linux.
+- Windows-only executables MUST be guarded with `if(WIN32)` in CMake.
+- Public headers in `include/ntfs-browser/` are the only consumer surface. They MUST NOT include
+  spdlog, Crypto++, `<windows.h>`, or any feature macro. Win32 types come from the `win-types.h` shim.
+- Core classes that depend on cache behaviour MUST be templated on `Cache::Strategy`.
+  Callers under `NoCache` MUST NOT assume attribute data outlives the next read.
+- `NtfsVolume`, `FileRecord` and `MftTree` MUST keep every data member and private method behind
+  a private `Impl`.
+- A symbol that crosses a shared-library boundary MUST carry `NTFS_BROWSER_EXPORT`.
+  An internal symbol that tests reach MUST carry `NTFS_BROWSER_EXPORT_TESTS_ONLY`.
+- Public types and functions MUST live in `NTFS_BROWSER_NAMESPACE`, in a sub-namespace per domain.
+  Code MUST NOT spell out the namespace name.
+- The library and its logging are single-threaded. `Log::Configure()` and every log message
+  MUST run on one thread.
+- Every source file MUST be listed explicitly in its folder's `CMakeLists.txt`. Globbing MUST NOT be used.
+- Every public function in `include/ntfs-browser/` MUST have a purpose comment.
+  Every constant MUST have a comment that says what it is for and why it has its value.
+
+## Development Workflow and Quality Gates
+
+- Commits MUST follow Conventional Commits, without a scope, written in English.
+  The title MUST start lowercase after the prefix, MUST NOT end with a period, and MUST NOT exceed
+  50 characters including the prefix. The body wraps at 72 characters.
+  Each commit MUST end with a `Co-Authored-By:` trailer.
+- Code MUST be formatted before each commit with `uv run bash ./.github/scripts/format.sh`
+  (clang-format 23.1.0 and gersemi).
+- A bug fix MUST begin with a regression test that fails on the current code.
+- A change to library code MUST pass the clang-tidy and cppcheck workflows before merge.
+- A pull request MUST pass the CI matrix: Debug and Release, static and shared, Windows x64 and x86,
+  Linux GCC and Clang, and each reduced feature configuration. `ctest` MUST pass on every leg.
+- Obligations in comments and docs MUST use RFC 2119 keywords. A comment MUST say what the code
+  cannot say on its own.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes other project practices.
+`CLAUDE.md` is the runtime guidance for development. It MUST NOT contradict this file.
+If the two disagree, the change that creates the conflict MUST fix one of them.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Amendments**: an amendment is a pull request that edits this file and includes a Sync Impact Report.
+The pull request MUST name each principle or section it changes, and the reason.
+The project maintainer MUST approve it before merge.
+An amendment that changes a gate MUST update the CI workflow or `CLAUDE.md` in the same pull request.
+
+**Versioning**: MAJOR for removing or redefining a principle in a way that makes compliant code
+non-compliant. MINOR for a new principle or section, or materially expanded guidance.
+PATCH for wording, typo fixes and clarifications that change no obligation.
+
+**Compliance**: every pull request review MUST verify principles I to V and the gates in
+Development Workflow and Quality Gates. A violated MUST MUST be fixed, or justified in the
+pull request description. Complexity beyond what a principle requires MUST be justified in the same way.
+
+**Version**: 1.0.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-17
