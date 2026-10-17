@@ -29,16 +29,22 @@ bool Win32DiskReader::Open(std::wstring_view path) {
 
 bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr,
                                std::span<BYTE> dest) const {
-  DWORD len = SetFilePointer(handle_.get(), static_cast<LONG>(addr.LowPart),
-                             &addr.HighPart, FILE_BEGIN);
-
-  if (len == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR) {
-    Log::Error("Cannot set file pointer to {}", addr.QuadPart);
+  // OVERLAPPED carries the offset as unsigned: a negative one would wrap.
+  if (addr.QuadPart < 0) {
+    Log::Error("Cannot read file at adress {}: negative address",
+               addr.QuadPart);
     return false;
   }
 
+  // The handle is synchronous, so OVERLAPPED only carries the offset. ReadFile
+  // reads there and ignores the handle's own file pointer.
+  OVERLAPPED overlapped{};
+  overlapped.Offset = addr.LowPart;
+  overlapped.OffsetHigh = gsl::narrow<DWORD>(addr.HighPart);
+
+  DWORD len = 0;
   if (ReadFile(handle_.get(), dest.data(), gsl::narrow<DWORD>(dest.size()),
-               &len, nullptr) == FALSE ||
+               &len, &overlapped) == FALSE ||
       len != dest.size()) {
     Log::Error("Cannot read file at adress {}", addr.QuadPart);
     return false;

@@ -25,7 +25,10 @@ if(WIN32)
   )
 
   # Win32DiskReader only exists on Windows.
-  target_sources(NtfsBrowserTests PRIVATE "win32-disk-reader-tests.cpp")
+  target_sources(
+    NtfsBrowserTests
+    PRIVATE "win32-disk-reader-offset-tests.cpp" "win32-disk-reader-tests.cpp"
+  )
 
   # NtfsUndel's search and recovery logic (examples/ntfsundel/ntfsundel-core.h)
   # is Windows-only, like its dialog. The tests link it directly, so the
