@@ -6,6 +6,7 @@
 #include <list>
 #include <memory>
 #include <optional>
+#include <span>
 #include <unordered_set>
 #include <vector>
 
@@ -81,8 +82,18 @@ class FileRecord<S>::Impl {
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
   // Reads file_ref at its fixed offset from mft_addr, see ReadFileRecord().
   [[nodiscard]] bool ReadDirectRecord(ULONGLONG file_ref);
+  // Reads out.size() bytes of $MFT's data, from the slot of record first_ref.
+  // False when first_ref is read from a fixed address anyway, or the read
+  // falls short.
+  [[nodiscard]] bool ReadMftSlots(ULONGLONG first_ref, std::span<BYTE> out);
+  // preread is the bytes of record file_ref when the caller already has them,
+  // empty to read them. See ParseRecord().
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
-      ReadFileRecord(ULONGLONG file_ref);
+      ReadFileRecord(ULONGLONG file_ref, std::span<const BYTE> preread);
+  // ParseFileRecord() with the record's bytes optionally supplied by the
+  // caller: they are copied, so they may be reused right after.
+  [[nodiscard]] bool ParseRecord(ULONGLONG file_ref,
+                                 std::span<const BYTE> preread);
   [[nodiscard]] const Attr::AttrStdInfo<ResidentOf<S>, S>*
       StdInfo() const noexcept;
   [[nodiscard]] bool

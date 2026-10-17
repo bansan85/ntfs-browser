@@ -863,6 +863,29 @@ enum class FakeMftBitmap : std::uint8_t {
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMftBitmap(FakeMftBitmap kind);
 
+// Clusters in each fragment of the $MFT
+// BuildFakeNtfsImageWithFragmentedMftScan() builds by default.
+inline constexpr ULONGLONG fragmented_mft_scan_fragment_clusters = 100;
+
+// Same volume as BuildFakeNtfsImage(), with a $MFT of record_count slots (one
+// cluster each) mapped by one data run per fragment_clusters slots, the
+// fragments far apart on the disk. fragment_clusters MUST fit a run's one
+// length byte, and the run list MUST fit before the end of the $MFT record's
+// first sector: 250 serves up to about 4000 slots. Past the system files the
+// slots cycle through eight kinds: files in use, a freed file, a directory, a
+// zero-filled slot, an extension record, and a record whose update sequence
+// number is wrong. The root (#5) is a directory, every other record sits in
+// it. record_count MUST be at least Mft::Idx::User.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFragmentedMftScan(
+    ULONGLONG record_count,
+    ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
+
+// Byte offset, in BuildFakeNtfsImageWithFragmentedMftScan()'s image, of the
+// record of $MFT slot idx.
+[[nodiscard]] ULONGLONG FragmentedMftScanSlotOffset(
+    ULONGLONG idx,
+    ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
+
 // $MFT real_size BuildFakeNtfsImageWithHugeMftRealSize() declares: the largest
 // value the field holds, so no record count derived from it is believable.
 inline constexpr ULONGLONG huge_mft_real_size = ~0ULL;

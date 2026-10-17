@@ -8,6 +8,7 @@ add_library(
   "fake-ntfs-image-records.cpp"
   "fake-ntfs-image-attributes.cpp"
   "fake-ntfs-image-mft.cpp"
+  "fake-ntfs-image-mft-scan.cpp"
   "fake-ntfs-image-mft-tree.cpp"
   "fake-ntfs-image-attr-list.cpp"
   "fake-ntfs-image-attr-data.cpp"

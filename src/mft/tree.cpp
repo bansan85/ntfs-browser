@@ -34,6 +34,7 @@
 #include "io/file-record-attrs.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "mft/slot-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 
@@ -48,6 +49,10 @@ constexpr ULONGLONG progress_interval = 4096;
 
 // Bits in one byte of the $MFT bitmap.
 constexpr ULONGLONG bits_per_byte = 8;
+
+// Free slots a block read may span between two used ones. 64 slots are 64 KiB
+// at the usual 1 KiB record: a disk seek costs more than reading that much.
+constexpr ULONGLONG max_gap_slots = 64;
 
 // The Filename side of a $FILE_NAME attribute. FileRecord<S> always wraps a
 // $FILE_NAME in the AttrFileName over the resident type that matches S.
@@ -184,15 +189,31 @@ bool IsMarkedFree(const std::vector<BYTE>& bitmap, ULONGLONG record) noexcept {
   return (bits & (1U << (record % bits_per_byte))) == 0;
 }
 
+// End (exclusive) of the slots one block read serves, from the used slot
+// first: up to the last used slot before a gap of more than max_gap_slots free
+// ones, or total. The free slots inside are read with it, but not parsed.
+ULONGLONG ReadRangeEnd(const std::vector<BYTE>& bitmap, ULONGLONG first,
+                       ULONGLONG total) noexcept {
+  ULONGLONG last_used = first;
+  for (ULONGLONG slot = first + 1;
+       slot < total && slot - last_used <= max_gap_slots; slot++) {
+    if (!IsMarkedFree(bitmap, slot)) {
+      last_used = slot;
+    }
+  }
+  return last_used + 1;
+}
+
 // Classifies one record slot and, when it is an entry to keep, reads it.
 // Counts the outcome in stats. Returns nullopt for a slot that is not kept:
 // unreadable, an extension, a freed record not asked for, or a damaged one
 // when strict.
 template <Cache::Strategy S>
 std::optional<Mft::MftTree::Entry>
-    ReadSlot(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
-             ULONGLONG record, Mft::MftTree::ScanStats& stats) {
-  if (!file_record.ParseFileRecord(record)) {
+    ReadSlot(Io::FileRecord<S>& file_record, Mft::SlotReader<S>& slots,
+             const NtfsVolume<S>& volume, ULONGLONG record,
+             Mft::MftTree::ScanStats& stats) {
+  if (!slots.ParseFileRecord(file_record, record)) {
     stats.unreadable++;
     return std::nullopt;
   }
@@ -312,6 +333,10 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
 
   Io::FileRecord<S> file_record(volume);
   file_record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+  // Reads $MFT in big blocks, not record by record.
+  Mft::SlotReader<S> slots(volume);
+  // End of the slots the current block read is allowed to cover, bitmap only.
+  ULONGLONG range_end = 0;
 
   for (ULONGLONG record = 0; record < total; record++) {
     // Every progress_interval records, the caller follows along or stops.
@@ -325,9 +350,13 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
       stats.skipped++;
       continue;
     }
+    if (bitmap && record >= range_end) {
+      range_end = ReadRangeEnd(*bitmap, record, total);
+      slots.Expect(record, range_end);
+    }
 
     std::optional<Mft::MftTree::Entry> entry =
-        ReadSlot(file_record, volume, record, stats);
+        ReadSlot(file_record, slots, volume, record, stats);
     if (!entry) {
       continue;
     }

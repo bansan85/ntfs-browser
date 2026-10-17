@@ -219,9 +219,14 @@ TEST_CASE("MftTree does not read the slots the $MFT bitmap marks free",
        {FakeMftBitmap::Resident, FakeMftBitmap::NonResident}) {
     const std::vector<bool> touched =
         SlotsRead(ScanAndLogReads(kind, VolumeOptions{}));
+    // The used slots from Mft::Idx::User on share one block read, which also
+    // covers the free slots between them.
+    const ULONGLONG block_first = mft_tree_bitmap_used_idx[3];
+    const ULONGLONG block_last = mft_tree_bitmap_used_idx.back();
     for (ULONGLONG idx = 0; idx < slot_count; idx++) {
       INFO("slot " << idx);
-      CHECK(touched.at(idx) == IsUsedIdx(idx));
+      CHECK(touched.at(idx) ==
+            (IsUsedIdx(idx) || (idx >= block_first && idx <= block_last)));
     }
   }
 }

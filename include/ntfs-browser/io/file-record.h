@@ -35,6 +35,9 @@ namespace Mft {
 template <Cache::Strategy S>
 class MftBootstrap;
 
+template <Cache::Strategy S>
+class SlotReader;
+
 }  // namespace Mft
 
 namespace Io {
@@ -76,6 +79,8 @@ class NTFS_BROWSER_EXPORT FileRecord {
   friend class AttrParser;
   template <Cache::Strategy>
   friend class Mft::MftBootstrap;
+  template <Cache::Strategy>
+  friend class Mft::SlotReader;
 
  private:
   // Every member and private method, kept out of this header.

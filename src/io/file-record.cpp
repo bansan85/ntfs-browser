@@ -1,11 +1,13 @@
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <unordered_set>
 #include <utility>
@@ -166,20 +168,49 @@ bool Io::FileRecord<S>::Impl::ReadDirectRecord(ULONGLONG file_ref) {
   return volume->ReadInto(fr_addr, record_buffer);
 }
 
+// Reads out.size() bytes of $MFT's data, from the slot of record first_ref,
+// through $MFT's own extents. Records below Mft::Idx::User are read from a
+// fixed address instead, so they are not served here.
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::Impl::ReadMftSlots(ULONGLONG first_ref,
+                                           std::span<BYTE> out) {
+  if (first_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
+      !volume->impl_->mft.Map().HasBase()) {
+    return false;
+  }
+
+  const std::optional<ULONGLONG> offset =
+      RecordOffset(volume->GetFileRecordSize(), first_ref);
+  if (!offset) {
+    return false;
+  }
+
+  const std::optional<ULONGLONG> len =
+      volume->impl_->mft.Map().ReadData(*offset, out);
+  return len && *len == out.size();
+}
+
 // Reads file record fileRef into record_buffer_ and returns its parsed
 // header. Early records (and any record read before $MFT's own DATA
 // attribute is known) come straight from disk at a fixed offset; later
 // records go through $MFT's DATA attribute, since $MFT itself may be
-// fragmented across the disk.
+// fragmented across the disk. A non-empty preread replaces the read.
 template <Cache::Strategy S>
 std::unique_ptr<Record::HeaderImpl<S>>
-    Io::FileRecord<S>::Impl::ReadFileRecord(ULONGLONG file_ref) {
+    Io::FileRecord<S>::Impl::ReadFileRecord(ULONGLONG file_ref,
+                                            std::span<const BYTE> preread) {
   if (record_buffer.size() != volume->GetFileRecordSize()) {
     record_buffer.resize(volume->GetFileRecordSize());
   }
 
-  if (file_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
-      !volume->impl_->mft.Map().HasBase()) {
+  if (!preread.empty()) {
+    // The header patches the update sequence in place, so it works on a copy.
+    if (preread.size() != record_buffer.size()) {
+      return {};
+    }
+    std::ranges::copy(preread, record_buffer.begin());
+  } else if (file_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
+             !volume->impl_->mft.Map().HasBase()) {
     if (!ReadDirectRecord(file_ref)) {
       return {};
     }
@@ -212,23 +243,31 @@ std::unique_ptr<Record::HeaderImpl<S>>
 // Read File Record, verify and patch the US (update sequence)
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
+  return impl_->ParseRecord(file_ref, {});
+}
+
+// The body of ParseFileRecord(), shared with callers that already hold the
+// record's bytes.
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
+                                          std::span<const BYTE> preread) {
   // Clear previous data
-  impl_->ClearAttrs();
-  if (impl_->file_record) {
-    impl_->file_record.reset();
+  ClearAttrs();
+  if (file_record) {
+    file_record.reset();
   }
 
   std::unique_ptr<Record::HeaderImpl<S>> header =
-      impl_->ReadFileRecord(file_ref);
+      ReadFileRecord(file_ref, preread);
   if (!header) {
     Log::Error("Cannot read file record {}", file_ref);
 
-    impl_->file_reference = {};
+    file_reference = {};
 
     return false;
   }
 
-  impl_->file_reference = file_ref;
+  file_reference = file_ref;
 
   // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
   // meets this on every such slot. A caller gets false either way.
@@ -243,7 +282,7 @@ bool Io::FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
   }
 
   Log::Debug("File Record {} Found", file_ref);
-  impl_->file_record = std::move(header);
+  file_record = std::move(header);
 
   return true;
 }
