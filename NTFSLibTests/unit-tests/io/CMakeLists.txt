@@ -4,6 +4,7 @@ target_sources(
     "disk-read-failure-tests.cpp"
     "disk-reader-tests.cpp"
     "file-reader-tests.cpp"
+    "read-ahead-disk-reader-tests.cpp"
     "record-offset-overflow-tests.cpp"
 )
 

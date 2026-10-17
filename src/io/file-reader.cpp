@@ -17,6 +17,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/io/read-ahead-disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
 #include "cache/block-cache.h"
@@ -74,6 +75,14 @@ bool FileReader<S>::Open(std::wstring_view volume) {
   return true;
 }
 #endif
+
+template <Cache::Strategy S>
+void FileReader<S>::EnableReadAhead(std::uint64_t chunk_bytes) {
+  if (reader_) {
+    reader_ = std::make_unique<ReadAheadDiskReader>(
+        std::move(reader_), ReadAheadOptions{.chunk_bytes = chunk_bytes});
+  }
+}
 
 template <Cache::Strategy S>
 bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {

@@ -203,6 +203,9 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
     return false;
   }
 
+  if (options.read_ahead_bytes != 0) {
+    volume->EnableReadAhead(options.read_ahead_bytes);
+  }
   return ParseBootSector();
 }
 #endif
@@ -212,6 +215,9 @@ template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
   volume = std::make_unique<Io::FileReader<S>>(std::move(reader),
                                                options.max_cache_bytes);
+  if (options.read_ahead_bytes != 0) {
+    volume->EnableReadAhead(options.read_ahead_bytes);
+  }
 
   return ParseBootSector();
 }

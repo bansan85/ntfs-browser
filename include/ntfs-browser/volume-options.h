@@ -38,9 +38,17 @@ struct VolumeOptions {
   // unused blocks needed to get back under it, least recently used first.
   // Memory that a live Cache::View holds is never freed, so the total can stay
   // above the ceiling while such views exist. Cache::unlimited_bytes removes
-  // the limit. 0 frees a block as soon as its last view is dropped. Last
-  // member, so designated initialisers that stop before it stay valid.
+  // the limit. 0 frees a block as soon as its last view is dropped.
   std::uint64_t max_cache_bytes{Cache::default_max_cache_bytes};
+
+  // Off (0) by default. A non-zero value wraps the volume's disk reader in an
+  // Io::ReadAheadDiskReader whose chunks are this many bytes
+  // (Io::default_read_ahead_bytes is a good start). A thread of the volume's
+  // own then reads the next chunks while the caller parses the current one,
+  // as long as the reads go forward, as a full $MFT scan's do. The thread is
+  // internal: the volume is no more thread safe for it. Last member, so
+  // designated initialisers that stop before it stay valid.
+  std::uint64_t read_ahead_bytes{0};
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE

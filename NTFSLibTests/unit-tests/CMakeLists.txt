@@ -34,6 +34,7 @@ target_link_libraries(
     Catch2::Catch2WithMain
     spdlog::spdlog
     frozen::frozen
+    Threads::Threads
 )
 
 # These tests reach several internal (non-public) NtfsBrowser symbols directly,

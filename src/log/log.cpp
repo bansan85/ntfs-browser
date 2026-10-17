@@ -328,7 +328,20 @@ bool ParseOption(std::wstring_view arg, Config& config) noexcept {
 
 namespace NTFS_BROWSER_NAMESPACE::Log::Detail {
 
+namespace {
+
+// Set by SilenceCurrentThread(), once per thread that must never log.
+thread_local bool current_thread_silenced = false;
+
+}  // namespace
+
+void SilenceCurrentThread() noexcept { current_thread_silenced = true; }
+
 bool IsEnabled(Level level) noexcept {
+  if (current_thread_silenced) {
+    return false;
+  }
+
   // Off is a threshold, not a message level: no message is written at it.
   if (level == Level::Off) {
     return false;
@@ -343,6 +356,10 @@ bool IsEnabled(Level level) noexcept {
 }
 
 void Emit(Level level, std::string_view message) noexcept {
+  if (current_thread_silenced) {
+    return;
+  }
+
   try {
     spdlog::logger* const logger = EnsureLogger();
     if (logger == nullptr) {

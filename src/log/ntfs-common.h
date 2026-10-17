@@ -18,6 +18,12 @@ namespace NTFS_BROWSER_NAMESPACE::Log::Detail {
 // a std::format() call and the string it allocates.
 NTFS_BROWSER_EXPORT_TESTS_ONLY bool IsEnabled(Level level) noexcept;
 
+// Mutes the calling thread for good: IsEnabled() is false there and Emit()
+// drops its line. A worker thread of the library calls it first, since the
+// sinks are single-threaded and every message MUST come from the caller's
+// thread.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void SilenceCurrentThread() noexcept;
+
 // Hands one finished line to the library logger.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void Emit(Level level,
                                          std::string_view message) noexcept;

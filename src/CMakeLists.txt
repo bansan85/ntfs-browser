@@ -21,6 +21,7 @@ set(
   "io/file-record-index.cpp"
   "filename.cpp"
   "io/file-reader.cpp"
+  "io/read-ahead-disk-reader.cpp"
   "attr/index-block.cpp"
   "index-entry.cpp"
   "log/log.cpp"
@@ -73,6 +74,7 @@ set(
   "../include/ntfs-browser/efs/efs.h"
   "../include/ntfs-browser/namespace.h.in"
   "../include/ntfs-browser/io/file-record.h"
+  "../include/ntfs-browser/io/read-ahead-disk-reader.h"
   "../include/ntfs-browser/index-entry.h"
   "../include/ntfs-browser/log/log.h"
   "../include/ntfs-browser/attr/mask.h"
@@ -171,6 +173,9 @@ configure_file(
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC Microsoft.GSL::GSL)
+# Private: the read-ahead worker of Io::ReadAheadDiskReader is a std::thread.
+find_package(Threads REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 # Private: spdlog is an implementation detail, absent from the public API.
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)
 # Private too: frozen's maps back internal static lookups only, never a public

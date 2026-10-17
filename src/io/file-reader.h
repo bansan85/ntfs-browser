@@ -53,6 +53,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   bool Open(std::wstring_view volume);
 #endif
 
+  // Wraps the reader in an Io::ReadAheadDiskReader with chunks of this many
+  // bytes. Call it once the reader is open and before the first read.
+  void EnableReadAhead(std::uint64_t chunk_bytes);
+
   // Reads from addr into dest.
   bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
