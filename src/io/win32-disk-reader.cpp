@@ -16,11 +16,14 @@ Win32DiskReader::Win32DiskReader()
 bool Win32DiskReader::Open(std::wstring_view path) {
   // A view carries no NUL terminator, and CreateFileW needs one.
   const std::wstring path_z(path);
-  handle_ =
-      HandlePtr(CreateFileW(path_z.c_str(), GENERIC_READ,
-                            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                            OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, nullptr),
-                &CloseHandle);
+  // SEQUENTIAL_SCAN is only a hint: it asks the cache manager for more
+  // read-ahead and earlier eviction of pages already read, so an $MFT scan
+  // does not flood the system cache. A random read stays correct.
+  handle_ = HandlePtr(
+      CreateFileW(path_z.c_str(), GENERIC_READ,
+                  FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                  FILE_ATTRIBUTE_READONLY | FILE_FLAG_SEQUENTIAL_SCAN, nullptr),
+      &CloseHandle);
   return handle_.get() != INVALID_HANDLE_VALUE;
 }
 
