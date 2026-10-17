@@ -95,6 +95,11 @@ class NTFS_BROWSER_EXPORT MftTree {
     ULONGLONG extensions{0};
     // Slots with no FILE magic (never used), a bad fixup, or a read error.
     ULONGLONG unreadable{0};
+    // Slots $MFT's $BITMAP marks free, which the scan did not read. Only when
+    // the volume's include_deleted is off and $MFT has a usable $BITMAP. Such
+    // a slot is counted here and in none of the counters above, whatever it
+    // holds: a freed record, or one that never held a file.
+    ULONGLONG skipped{0};
     // Records with an attribute that failed to parse, counted either way.
     // Dropped unless the volume's recover_errors is on, which keeps what
     // parsed before the failure.

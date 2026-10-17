@@ -837,6 +837,32 @@ inline constexpr DWORD mft_tree_report_allocated_size = 40;
 // number over record number 0, so its record number alone is 0.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord();
 
+// Records of BuildFakeNtfsImageWithMftTree() that are in use: $MFT, $Volume,
+// the root, Docs, report.txt, the hard link, NewDir and the extension record.
+// The $BITMAP of BuildFakeNtfsImageWithMftBitmap() marks exactly these.
+inline constexpr std::array<ULONGLONG, 8> mft_tree_bitmap_used_idx{
+    0, 3, 5, 16, 17, 18, 23, 24};
+
+// Shape of the $MFT $BITMAP in BuildFakeNtfsImageWithMftBitmap().
+enum class FakeMftBitmap : std::uint8_t {
+  // Resident, marking mft_tree_bitmap_used_idx.
+  Resident,
+  // The same bits, non-resident, in a cluster of its own.
+  NonResident,
+  // Resident, and too short to cover every record slot.
+  TooShort,
+  // Non-resident, over a cluster the image does not hold.
+  Unreadable,
+  // Resident, with a wrong bit each way: report.txt (in use) marked free, and
+  // old.tmp (freed) marked used.
+  Lying
+};
+
+// Same volume as BuildFakeNtfsImageWithMftTree(), with a $BITMAP attribute
+// added to $MFT's record, shaped as kind says.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMftBitmap(FakeMftBitmap kind);
+
 // $MFT real_size BuildFakeNtfsImageWithHugeMftRealSize() declares: the largest
 // value the field holds, so no record count derived from it is believable.
 inline constexpr ULONGLONG huge_mft_real_size = ~0ULL;

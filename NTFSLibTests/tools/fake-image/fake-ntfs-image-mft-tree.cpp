@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -41,7 +42,10 @@ namespace {
 
 // The $MFT record of BuildFakeNtfsImageWithMftTree(): a data run over every
 // record slot, and the name real volumes give it.
-FakeRecord MakeMftTreeMftRecord() {
+// extra_attr, when set, writes one more attribute after $FILE_NAME and returns
+// its total_size.
+FakeRecord MakeMftTreeMftRecord(
+    const std::function<DWORD(FakeRecord&, DWORD)>& extra_attr = {}) {
   FakeRecord mft = MakeMftRecordWithRealDataRun(
       static_cast<DWORD>(mft_lcn), static_cast<DWORD>(mft_tree_record_count));
   EditFileRecordHeader(mft,
@@ -55,6 +59,9 @@ FakeRecord MakeMftTreeMftRecord() {
           ->header.total_size;
   offset += WriteFileNameAttr(mft, offset,
                               {.name = L"$MFT", .parent_ref = root}, false);
+  if (extra_attr) {
+    offset += extra_attr(mft, offset);
+  }
   WriteEndOfAttributesMarker(mft, offset);
   return mft;
 }
@@ -584,6 +591,87 @@ std::vector<BYTE>
     LayRunBytes(image, big_runs, pattern);
   }
 
+  return image;
+}
+
+namespace {
+
+// Where the non-resident $BITMAP of the fixtures below lies: past the $MFT's
+// clusters, inside the image's first 64 KiB.
+constexpr DWORD mft_bitmap_lcn = 60;
+
+// A cluster number no image holds, so reading it fails.
+constexpr DWORD mft_bitmap_unreadable_lcn = 1U << 20U;
+
+// Bytes of the bitmap that matches the fixture: mft_tree_bitmap_used_idx set.
+std::vector<BYTE> AccurateMftBitmap() {
+  std::vector<BYTE> bitmap(AlignAttrSize((mft_tree_record_count + 7) / 8),
+                           BYTE{0});
+  for (const ULONGLONG idx : mft_tree_bitmap_used_idx) {
+    bitmap.at(idx / 8) |= static_cast<BYTE>(1U << (idx % 8));
+  }
+  return bitmap;
+}
+
+// Writes a resident $BITMAP holding bytes at record[offset] and returns its
+// total_size.
+DWORD WriteResidentBitmapAttr(FakeRecord& record, DWORD offset,
+                              const std::vector<BYTE>& bytes) {
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
+      &record.at(offset));
+  attr.header.type = Attr::Type::Bitmap;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  attr.attr_size = gsl::narrow<DWORD>(bytes.size());
+  attr.header.total_size = AlignAttrSize(sizeof(attr) + bytes.size());
+  std::memcpy(&record.at(offset + attr.attr_offset), bytes.data(),
+              bytes.size());
+  return attr.header.total_size;
+}
+
+}  // namespace
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftBitmap(FakeMftBitmap kind) {
+  std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
+  std::vector<BYTE> bitmap = AccurateMftBitmap();
+  std::function<DWORD(FakeRecord&, DWORD)> write_bitmap;
+
+  if (kind == FakeMftBitmap::Lying) {
+    // In use but marked free, and freed but marked used.
+    bitmap.at(mft_tree_report_idx / 8) &=
+        static_cast<BYTE>(~(1U << (mft_tree_report_idx % 8)));
+    bitmap.at(mft_tree_deleted_file_idx / 8) |=
+        static_cast<BYTE>(1U << (mft_tree_deleted_file_idx % 8));
+  } else if (kind == FakeMftBitmap::TooShort) {
+    // Covers records 0-15 only.
+    bitmap.resize(2);
+  }
+
+  if (kind == FakeMftBitmap::NonResident || kind == FakeMftBitmap::Unreadable) {
+    const DWORD lcn = kind == FakeMftBitmap::NonResident
+                          ? mft_bitmap_lcn
+                          : mft_bitmap_unreadable_lcn;
+    write_bitmap = [lcn, &bitmap](FakeRecord& record, DWORD offset) {
+      return WriteNonResidentAttr(
+          record, offset, Attr::Type::Bitmap,
+          {.real_size = bitmap.size(), .runs = {{lcn, 1}}});
+    };
+    if (kind == FakeMftBitmap::NonResident) {
+      std::memcpy(&image.at(static_cast<size_t>(mft_bitmap_lcn) * cluster_size),
+                  bitmap.data(), bitmap.size());
+    }
+  } else {
+    write_bitmap = [&bitmap](FakeRecord& record, DWORD offset) {
+      return WriteResidentBitmapAttr(record, offset, bitmap);
+    };
+  }
+
+  PutMftRecord(image, static_cast<DWORD>(mft_lcn) * cluster_size,
+               static_cast<ULONGLONG>(Mft::Idx::Mft),
+               MakeMftTreeMftRecord(write_bitmap));
   return image;
 }
 

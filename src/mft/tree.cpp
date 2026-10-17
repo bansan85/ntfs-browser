@@ -16,6 +16,9 @@
 #include <utility>
 #include <vector>
 
+#include <gsl/narrow>
+
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -42,6 +45,9 @@ constexpr ULONGLONG root_record = static_cast<ULONGLONG>(Mft::Idx::Root);
 // Records between two progress() calls: often enough for a live progress
 // line, rare enough to cost nothing next to a record read.
 constexpr ULONGLONG progress_interval = 4096;
+
+// Bits in one byte of the $MFT bitmap.
+constexpr ULONGLONG bits_per_byte = 8;
 
 // The Filename side of a $FILE_NAME attribute. FileRecord<S> always wraps a
 // $FILE_NAME in the AttrFileName over the resident type that matches S.
@@ -133,6 +139,49 @@ bool ReadEntry(Io::FileRecord<S>& file_record, ULONGLONG record,
   ReadPermissions(file_record, entry);
 
   return parsed;
+}
+
+// Reads the unnamed $BITMAP of $MFT: one bit per record slot, set when the
+// slot is in use. Returns nullopt, and the scan then reads every slot, when
+// record 0 or its bitmap cannot be read or the bitmap does not cover total
+// slots.
+template <Cache::Strategy S>
+std::optional<std::vector<BYTE>> ReadMftBitmap(const NtfsVolume<S>& volume,
+                                               ULONGLONG total) {
+  try {
+    Io::FileRecord<S> mft_record(volume);
+    mft_record.SetAttrMask(Attr::Mask::Bitmap);
+    if (!mft_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Mft)) ||
+        !TryParseAttrs(mft_record)) {
+      return std::nullopt;
+    }
+
+    const ULONGLONG needed = (total + bits_per_byte - 1) / bits_per_byte;
+    for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
+         mft_record.GetAttr(Attr::Type::Bitmap)) {
+      if (!attr->IsUnNamed() || attr->GetDataSize() < needed) {
+        continue;
+      }
+      std::vector<BYTE> bits(gsl::narrow<size_t>(needed));
+      const std::optional<ULONGLONG> read =
+          attr->ReadData(0, {bits.data(), bits.size()});
+      if (read && *read == needed) {
+        return bits;
+      }
+    }
+  } catch (const std::exception& e) {
+    Log::Exception(e);
+  }
+  return std::nullopt;
+}
+
+// Whether bitmap marks record as free. The bitmap covers every record the
+// scan visits, so record / 8 is in range.
+bool IsMarkedFree(const std::vector<BYTE>& bitmap, ULONGLONG record) noexcept {
+  // ReadMftBitmap() sized bitmap to cover all slots, and record is one of them.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const BYTE bits = bitmap[record / bits_per_byte];
+  return (bits & (1U << (record % bits_per_byte))) == 0;
 }
 
 // Classifies one record slot and, when it is an entry to keep, reads it.
@@ -246,13 +295,20 @@ Mft::MftTree& Mft::MftTree::operator=(Mft::MftTree&& other) noexcept = default;
 
 Mft::MftTree::~MftTree() = default;
 
-// Reads every record slot of volume's $MFT through one reused FileRecord,
-// keeps each base record's entry, then links the entries into a tree.
+// Reads the record slots of volume's $MFT through one reused FileRecord, keeps
+// each base record's entry, then links the entries into a tree. With
+// include_deleted off, the slots $MFT's $BITMAP marks free are not read.
 template <Cache::Strategy S>
 void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
                               const Mft::MftTree::ScanOptions& options) {
   const ULONGLONG total = volume.GetRecordsCount();
   stats.slots = total;
+
+  // A freed record is dropped anyway without include_deleted, so its read is
+  // saved. With it, every slot is read, bitmap or not.
+  const std::optional<std::vector<BYTE>> bitmap =
+      volume.GetOptions().include_deleted ? std::nullopt
+                                          : ReadMftBitmap(volume, total);
 
   Io::FileRecord<S> file_record(volume);
   file_record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
@@ -263,6 +319,11 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
         !options.progress(record, total)) {
       stats.complete = false;
       break;
+    }
+
+    if (bitmap && IsMarkedFree(*bitmap, record)) {
+      stats.skipped++;
+      continue;
     }
 
     std::optional<Mft::MftTree::Entry> entry =
@@ -278,8 +339,10 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
     options.progress(total, total);
   }
 
-  Log::Info("MFT scan: {} slots, {} in use, {} deleted, {} unreadable",
-            stats.slots, stats.in_use, stats.deleted, stats.unreadable);
+  Log::Info(
+      "MFT scan: {} slots, {} in use, {} deleted, {} unreadable, {} skipped",
+      stats.slots, stats.in_use, stats.deleted, stats.unreadable,
+      stats.skipped);
   Link();
 }
 
