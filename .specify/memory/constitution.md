@@ -1,3 +1,11 @@
+<!--
+Sync Impact Report
+Version change: 1.0.0 -> 1.1.0 (MINOR: new rule).
+Modified sections: Technical Constraints (new MUST: no `friend` declaration).
+Reason: friend classes are an architecture defect; specs/001-remove-friend-classes.
+Templates: plan-template.md checked, no change needed.
+-->
+
 # NtfsBrowser Constitution
 
 ## Core Principles
@@ -59,6 +67,9 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
 - The primary target is C++20 with MSVC on Windows. The library, the unit tests, NtfsCompare
   and NtfsFuzzerAfl MUST also build with GCC on Linux.
 - Windows-only executables MUST be guarded with `if(WIN32)` in CMake.
+- `include/`, `src/` and `NTFSLibTests/` MUST NOT contain a `friend` declaration. A class MUST get
+  what it needs from another class through that class's methods, not through friendship.
+  `.github/scripts/check-no-friend.py` enforces it in CI.
 - Public headers in `include/ntfs-browser/` are the only consumer surface. They MUST NOT include
   spdlog, Crypto++, `<windows.h>`, or any feature macro. Win32 types come from the `win-types.h` shim.
 - Core classes that depend on cache behaviour MUST be templated on `Cache::Strategy`.
@@ -109,4 +120,4 @@ PATCH for wording, typo fixes and clarifications that change no obligation.
 Development Workflow and Quality Gates. A violated MUST MUST be fixed, or justified in the
 pull request description. Complexity beyond what a principle requires MUST be justified in the same way.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-17
+**Version**: 1.1.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-18
