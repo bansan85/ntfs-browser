@@ -19,6 +19,10 @@ jobs:
           python-version: '3.14'
       - name: Install python modules dependencies
         run: uv sync --locked
+      - name: no friend declaration
+        shell: bash
+        run: |
+          uv run python ./.github/scripts/check-no-friend.py
       - name: formatter
         shell: bash
         run: |
