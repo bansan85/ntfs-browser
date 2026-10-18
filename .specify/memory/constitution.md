@@ -1,9 +1,11 @@
 <!--
 Sync Impact Report
-Version change: 1.0.0 -> 1.1.0 (MINOR: new rule).
-Modified sections: Technical Constraints (new MUST: no `friend` declaration).
-Reason: friend classes are an architecture defect; specs/001-remove-friend-classes.
+Version change: 1.1.0 -> 1.2.0 (MINOR: new rule).
+Modified sections: Technical Constraints (new MUST: no function body in a header for a
+Strategy-only template).
+Reason: the two instantiations are known, so the code belongs in the .cpp; specs/002-no-template-code-in-headers.
 Templates: plan-template.md checked, no change needed.
+Previous: 1.0.0 -> 1.1.0 (MINOR: new MUST, no `friend` declaration; specs/001-remove-friend-classes).
 -->
 
 # NtfsBrowser Constitution
@@ -74,6 +76,10 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
   spdlog, Crypto++, `<windows.h>`, or any feature macro. Win32 types come from the `win-types.h` shim.
 - Core classes that depend on cache behaviour MUST be templated on `Cache::Strategy`.
   Callers under `NoCache` MUST NOT assume attribute data outlives the next read.
+- A template whose only parameter is a `Cache::Strategy` MUST NOT define a function in a header
+  under `include/` or `src/`. A header declares it. Its code MUST live in one `.cpp`, which ends with
+  the explicit instantiations for `NoCache` and `FullCache`. A template with another parameter is exempt.
+  `.github/scripts/check-strategy-templates.py` enforces it in CI.
 - `NtfsVolume`, `FileRecord` and `MftTree` MUST keep every data member and private method behind
   a private `Impl`.
 - A symbol that crosses a shared-library boundary MUST carry `NTFS_BROWSER_EXPORT`.
@@ -120,4 +126,4 @@ PATCH for wording, typo fixes and clarifications that change no obligation.
 Development Workflow and Quality Gates. A violated MUST MUST be fixed, or justified in the
 pull request description. Complexity beyond what a principle requires MUST be justified in the same way.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-18
+**Version**: 1.2.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-18
