@@ -23,6 +23,14 @@ jobs:
         shell: bash
         run: |
           uv run python ./.github/scripts/check-no-friend.py
+      - name: strategy templates self-test
+        shell: bash
+        run: |
+          uv run python ./.github/scripts/check-strategy-templates.py --self-test
+      - name: no code in Strategy-only template headers
+        shell: bash
+        run: |
+          uv run python ./.github/scripts/check-strategy-templates.py
       - name: formatter
         shell: bash
         run: |
