@@ -57,6 +57,7 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   // AttrParser::Parse() runs only on a record that ParseFileRecord() read,
   // and that sets file_reference too.
   assert(file_record.GetFileReference().has_value());
+  const ULONGLONG self_ref = file_record.GetFileReference().value_or(0);
 
   const bool recover = file_record.GetVolume().GetOptions().recover_errors;
   ULONGLONG offset = 0;
@@ -64,8 +65,7 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   bool truncated = false;
 
   // Marks this record's own chain key first, so a cycle back to it is caught.
-  attr_list_chain.insert(
-      MakeChainKey(*file_record.GetFileReference(), Type::AttributeList));
+  attr_list_chain.insert(MakeChainKey(self_ref, Type::AttributeList));
 
   while (ReadEntryHeader(offset, al_record, recover, truncated)) {
     if (!Attr::IsValidAttrType(al_record.attr_type)) {

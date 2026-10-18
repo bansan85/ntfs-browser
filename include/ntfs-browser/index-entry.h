@@ -28,11 +28,14 @@ class NTFS_BROWSER_EXPORT IndexEntryView : public Filename {
   ~IndexEntryView() override = default;
 
  protected:
-  const Data::IndexEntry* index_entry_;
-
   // Points the view, and the file name it decoded, at another copy of the
   // same bytes.
   void Rebind(const Data::IndexEntry& index_entry);
+  // The on-disk entry this view reads.
+  [[nodiscard]] const Data::IndexEntry& RawEntry() const noexcept;
+
+ private:
+  const Data::IndexEntry* index_entry_;
 
  public:
   [[nodiscard]] ULONGLONG GetFileReference() const noexcept;

@@ -129,13 +129,17 @@ std::vector<BYTE> CopyEntryBytes(const Data::IndexEntry& index_entry) {
 }  // namespace
 
 IndexEntry::IndexEntry(const IndexEntryView& view)
-    : IndexEntryView(view), bytes_(CopyEntryBytes(*index_entry_)) {
+    : IndexEntryView(view), bytes_(CopyEntryBytes(RawEntry())) {
   Rebind(*reinterpret_cast<const Data::IndexEntry*>(bytes_.data()));
 }
 
 IndexEntry::IndexEntry(const IndexEntry& other)
     : IndexEntryView(other), bytes_(other.bytes_) {
   Rebind(*reinterpret_cast<const Data::IndexEntry*>(bytes_.data()));
+}
+
+const Data::IndexEntry& IndexEntryView::RawEntry() const noexcept {
+  return *index_entry_;
 }
 
 ULONGLONG IndexEntryView::GetFileReference() const noexcept {

@@ -8,9 +8,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE {
-
-namespace Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 // The entries are views into bytes_ and realigned_, which this object owns:
 // they MUST NOT outlive it.
@@ -37,6 +35,4 @@ class IndexBlock : public std::vector<IndexEntryView> {
   std::vector<std::vector<BYTE>> realigned_;
 };  // IndexBlock
 
-}  // namespace Attr
-
-}  // namespace NTFS_BROWSER_NAMESPACE
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr

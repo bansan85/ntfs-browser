@@ -17,9 +17,7 @@
 #include "io/file-record-attr-types.h"
 #include "io/file-record-impl.h"
 
-namespace NTFS_BROWSER_NAMESPACE {
-
-namespace Io {
+namespace NTFS_BROWSER_NAMESPACE::Io {
 
 // Parses the attributes of one file record into its Impl: walks the attribute
 // headers, wraps each wanted attribute, and merges the VCN-split ones.
@@ -60,6 +58,4 @@ class FileRecord<S>::Impl::AttrParser {
                        std::vector<size_t>& to_erase);
 };
 
-}  // namespace Io
-
-}  // namespace NTFS_BROWSER_NAMESPACE
+}  // namespace NTFS_BROWSER_NAMESPACE::Io

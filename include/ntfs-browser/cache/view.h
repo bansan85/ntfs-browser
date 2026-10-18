@@ -11,9 +11,7 @@
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE {
-
-namespace Cache {
+namespace NTFS_BROWSER_NAMESPACE::Cache {
 
 // Declared only: its definition is internal to the library, so a consumer
 // cannot build a View from raw bytes.
@@ -66,6 +64,4 @@ template <Strategy S>
 using ReadResult =
     std::conditional_t<S == Strategy::FullCache, View, std::span<const BYTE>>;
 
-}  // namespace Cache
-
-}  // namespace NTFS_BROWSER_NAMESPACE
+}  // namespace NTFS_BROWSER_NAMESPACE::Cache

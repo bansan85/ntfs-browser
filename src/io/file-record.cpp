@@ -336,7 +336,7 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
   const Attr::Mask entry_mask = Attr::AttrMask(attr_type);
   // Set by ParseRecord(), which every attribute parse follows.
-  const ULONGLONG self_ref = *file_reference;
+  const ULONGLONG self_ref = file_reference.value_or(0);
   // Skip contained attributes
   // Skip unwanted attributes
   if (record_number == self_ref || !static_cast<bool>(entry_mask & attr_mask)) {
