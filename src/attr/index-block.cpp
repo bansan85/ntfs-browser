@@ -19,4 +19,8 @@ std::span<BYTE> IndexBlock::AllocIndexBlock(DWORD size) {
   return bytes_;
 }
 
+std::vector<std::vector<BYTE>>& IndexBlock::RealignedStorage() noexcept {
+  return realigned_;
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Attr

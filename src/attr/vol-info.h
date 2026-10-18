@@ -21,8 +21,6 @@ namespace Attr {
 struct HeaderCommon;
 
 }  // namespace Attr
-template <Cache::Strategy S>
-class NtfsVolume;
 
 namespace Data {
 
@@ -43,14 +41,11 @@ class AttrVolInfo : public Resident {
 
   ~AttrVolInfo() override;
 
-  template <Cache::Strategy>
-  friend class NTFS_BROWSER_NAMESPACE::NtfsVolume;
+  // Get NTFS Volume Version
+  [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
 
  private:
   const Data::VolumeInformation& vol_info_;
-
-  // Get NTFS Volume Version
-  [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
 };  // AttrVolInfo
 
 }  // namespace Attr

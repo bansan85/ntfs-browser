@@ -228,7 +228,7 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
     }
 
     const Data::IndexEntry& aligned_index_entry =
-        Data::AlignIndexEntry(ib_class.realigned_, cur, head.size);
+        Data::AlignIndexEntry(ib_class.RealignedStorage(), cur, head.size);
     if (const std::optional<std::string_view> defect =
             Data::ValidateIndexEntry(aligned_index_entry);
         defect && RejectBlockOnDefect(recover, *defect, ib_class)) {

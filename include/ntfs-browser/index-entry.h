@@ -27,9 +27,7 @@ class NTFS_BROWSER_EXPORT IndexEntryView : public Filename {
   IndexEntryView& operator=(const IndexEntryView& other) = delete;
   ~IndexEntryView() override = default;
 
-  friend class IndexEntry;
-
- private:
+ protected:
   const Data::IndexEntry* index_entry_;
 
   // Points the view, and the file name it decoded, at another copy of the

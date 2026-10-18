@@ -47,8 +47,11 @@ class Context final {
   Context(std::vector<WrappedFek> entries, KeyProviderSource provider_source,
           CipherBackend backend);
 
-  template <Cache::Strategy S>
-  friend class NTFS_BROWSER_NAMESPACE::Attr::AttrNonResident;
+  // Decrypts data in place. "streamOffset" is the byte offset of data[0] in
+  // its stream, and both it and the size MUST be sector aligned. Returns
+  // false, with a warning naming the cause, if the data cannot be decrypted.
+  [[nodiscard]] bool Decrypt(ULONGLONG stream_offset,
+                             std::span<BYTE> data) const;
 
  private:
   std::vector<WrappedFek> entries_;
@@ -59,12 +62,6 @@ class Context final {
   mutable bool resolved_{false};
   mutable std::unique_ptr<SectorDecryptor> decryptor_;
   mutable std::string failure_;
-
-  // Decrypts data in place. "streamOffset" is the byte offset of data[0] in
-  // its stream, and both it and the size MUST be sector aligned. Returns
-  // false, with a warning naming the cause, if the data cannot be decrypted.
-  [[nodiscard]] bool Decrypt(ULONGLONG stream_offset,
-                             std::span<BYTE> data) const;
 
   void Resolve() const;
   [[nodiscard]] std::unique_ptr<SectorDecryptor>

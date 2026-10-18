@@ -45,12 +45,6 @@ class AttrStdInfo : public Resident {
   AttrStdInfo& operator=(const AttrStdInfo& other) = delete;
   ~AttrStdInfo() override;
 
-  template <Cache::Strategy>
-  friend class NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-
- private:
-  const Data::StandardInformation& std_info_;
-
   void GetFileTime(FILETIME* write_tm, FILETIME* create_tm, FILETIME* access_tm,
                    FILETIME* change_tm = nullptr) const noexcept;
   [[nodiscard]] bool IsReadOnly() const noexcept;
@@ -67,9 +61,11 @@ class AttrStdInfo : public Resident {
   [[nodiscard]] bool IsNotContentIndexed() const noexcept;
   [[nodiscard]] bool IsEncrypted() const noexcept;
 
- public:
   // Also used by Filename (src/filename.cpp) for $FILE_NAME timestamps.
   static void UTC2Local(const ULONGLONG& ultm, FILETIME& lftm) noexcept;
+
+ private:
+  const Data::StandardInformation& std_info_;
 };  // AttrStdInfo
 
 }  // namespace Attr

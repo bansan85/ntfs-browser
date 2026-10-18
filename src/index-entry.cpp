@@ -129,7 +129,7 @@ std::vector<BYTE> CopyEntryBytes(const Data::IndexEntry& index_entry) {
 }  // namespace
 
 IndexEntry::IndexEntry(const IndexEntryView& view)
-    : IndexEntryView(view), bytes_(CopyEntryBytes(*view.index_entry_)) {
+    : IndexEntryView(view), bytes_(CopyEntryBytes(*index_entry_)) {
   Rebind(*reinterpret_cast<const Data::IndexEntry*>(bytes_.data()));
 }
 

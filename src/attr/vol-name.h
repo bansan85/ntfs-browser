@@ -14,8 +14,6 @@ namespace Attr {
 struct HeaderCommon;
 
 }  // namespace Attr
-template <Cache::Strategy S>
-class NtfsVolume;
 
 namespace Attr {
 
@@ -29,14 +27,11 @@ class AttrVolName : public Resident {
   AttrVolName& operator=(const AttrVolName& other) = delete;
   ~AttrVolName() override = default;
 
-  template <Cache::Strategy>
-  friend class NTFS_BROWSER_NAMESPACE::NtfsVolume;
+  // Get NTFS Volume Unicode Name
+  [[nodiscard]] std::wstring_view GetName() const noexcept;
 
  private:
   std::wstring name_;
-
-  // Get NTFS Volume Unicode Name
-  [[nodiscard]] std::wstring_view GetName() const noexcept;
 };  // AttrVolInfo
 
 }  // namespace Attr

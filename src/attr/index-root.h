@@ -30,13 +30,6 @@ struct IndexRoot;
 
 }  // namespace Data
 
-namespace Io {
-
-template <Cache::Strategy S>
-class DirectoryIndex;
-
-}  // namespace Io
-
 namespace Attr {
 
 template <typename Resident, Cache::Strategy S>
@@ -49,10 +42,7 @@ class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
   AttrIndexRoot& operator=(const AttrIndexRoot& other) = delete;
   ~AttrIndexRoot() override;
 
-  template <Cache::Strategy>
-  friend class NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-  template <Cache::Strategy>
-  friend class NTFS_BROWSER_NAMESPACE::Io::DirectoryIndex;
+  [[nodiscard]] bool IsFileName() const noexcept;
 
  private:
   const Data::IndexRoot* index_root_;
@@ -63,7 +53,6 @@ class AttrIndexRoot : public Resident, public std::vector<IndexEntryView> {
   std::vector<std::vector<BYTE>> realigned_;
 
   [[nodiscard]] bool ParseIndexEntries();
-  [[nodiscard]] bool IsFileName() const noexcept;
 };  // AttrIndexRoot
 
 }  // namespace Attr

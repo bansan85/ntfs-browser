@@ -25,13 +25,6 @@ enum class Strategy : std::uint8_t;
 
 }  // namespace Cache
 
-namespace Io {
-
-template <Cache::Strategy S>
-class DirectoryIndex;
-
-}  // namespace Io
-
 namespace Attr {
 
 class IndexBlock;
@@ -46,8 +39,9 @@ class AttrIndexAlloc : public AttrNonResident<S> {
   AttrIndexAlloc& operator=(const AttrIndexAlloc& other) = delete;
   ~AttrIndexAlloc() override;
 
-  friend class Io::FileRecord<S>;
-  friend class Io::DirectoryIndex<S>;
+  [[nodiscard]] ULONGLONG GetIndexBlockCount() const noexcept;
+  [[nodiscard]] bool ParseIndexBlock(const ULONGLONG& vcn,
+                                     IndexBlock& ib_class);
 
  private:
   ULONGLONG index_block_count_{0};
@@ -55,9 +49,6 @@ class AttrIndexAlloc : public AttrNonResident<S> {
   [[nodiscard]] bool PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
                              std::span<const WORD> usarray);
 
-  [[nodiscard]] ULONGLONG GetIndexBlockCount() const noexcept;
-  [[nodiscard]] bool ParseIndexBlock(const ULONGLONG& vcn,
-                                     IndexBlock& ib_class);
   [[nodiscard]] bool FixupIndexBlock(std::span<BYTE> block);
   [[nodiscard]] bool ParseIndexEntries(std::span<BYTE> block,
                                        IndexBlock& ib_class);
