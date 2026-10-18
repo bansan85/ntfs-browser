@@ -94,7 +94,7 @@ bool SlotReader<S>::LoadWindow(Io::FileRecord<S>& file_record,
   window_first_ = 0;
   window_last_ = 0;
   window_.resize(gsl::narrow<size_t>((last - first) * record_size_));
-  if (!file_record.impl_->ReadMftSlots(first, window_)) {
+  if (!file_record.GetVolume().ReadMftSlots(first, window_)) {
     Log::Debug("Block read of $MFT slots [{}, {}) failed; reading them alone",
                first, last);
     failed_first_ = first;

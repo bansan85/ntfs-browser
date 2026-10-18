@@ -46,8 +46,8 @@ class Table;
 }  // namespace UpCase
 
 // Everything NtfsVolume<S> keeps out of its public header: the members, and the
-// private methods that work on them. FileRecord<S>, a friend of NtfsVolume<S>,
-// reaches it through NtfsVolume<S>::impl_.
+// private methods that work on them. Only NtfsVolume<S> reaches it, through
+// impl_: other classes use the methods of NtfsVolume<S> that forward to it.
 template <Cache::Strategy S>
 class NtfsVolume<S>::Impl {
  public:

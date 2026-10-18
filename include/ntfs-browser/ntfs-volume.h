@@ -25,12 +25,17 @@
 
 namespace NTFS_BROWSER_NAMESPACE {
 
-namespace Io {
+namespace Attr {
 
-template <Cache::Strategy S>
-class FileRecord;
+struct HeaderCommon;
 
-}  // namespace Io
+}  // namespace Attr
+
+namespace UpCase {
+
+class Table;
+
+}  // namespace UpCase
 
 template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT NtfsVolume {
@@ -54,8 +59,6 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
   NtfsVolume& operator=(const NtfsVolume& other) = delete;
   virtual ~NtfsVolume();
-
-  friend class Io::FileRecord<S>;
 
  private:
   // Every member and private method, kept out of this header.
@@ -120,6 +123,28 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // The backend SetEfsCipherBackend() last accepted. Defaults to whichever
   // backend the build compiled in; CryptoPp if both are.
   [[nodiscard]] Efs::CipherBackend GetEfsCipherBackend() const noexcept;
+
+  // Runs the raw attribute callback this volume has for att_type, if any.
+  // att_type MUST be below Attr::attr_nums. The callback sets discard.
+  void DispatchAttrRawCB(DWORD att_type, const Attr::HeaderCommon& ahc,
+                         bool& discard) const;
+
+  // True once the data extents of $MFT are mapped. Records from
+  // Mft::Idx::User on are then read through them, not from a fixed address.
+  [[nodiscard]] bool HasMftBase() const noexcept;
+  // Reads out.size() bytes of $MFT's data at offset, through its own extents.
+  // Returns the byte count read, or nothing when the read fails.
+  [[nodiscard]] std::optional<ULONGLONG> ReadMftData(ULONGLONG offset,
+                                                     std::span<BYTE> out) const;
+  // Reads out.size() bytes of $MFT's data, from the slot of record first_ref.
+  // False when the records below Mft::Idx::User are asked for (they are read
+  // from a fixed address instead), when $MFT is not mapped, or on a short read.
+  [[nodiscard]] bool ReadMftSlots(ULONGLONG first_ref,
+                                  std::span<BYTE> out) const;
+
+  // The volume's $UpCase table, loaded on first use. When it cannot be read,
+  // the built-in Unicode simple uppercase mapping stands in.
+  [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
 };  // NtfsVolume
 
 }  // namespace NTFS_BROWSER_NAMESPACE

@@ -36,6 +36,7 @@
 #include "io/file-record-index.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "mft/record-offset.h"
 #include "ntfs-volume-impl.h"
 #include "record/header.h"
 #include "upcase/upcase.h"
@@ -49,26 +50,13 @@ namespace {
 template <Cache::Strategy S>
 using StdInfoType = Attr::AttrStdInfo<ResidentOf<S>, S>;
 
-// Byte offset of record file_ref within $MFT's data. Empty when the offset
-// does not fit a LONGLONG. The check runs before the multiplication: a
-// wrapped product would alias an earlier record.
-std::optional<ULONGLONG> RecordOffset(DWORD record_size, ULONGLONG file_ref) {
-  // Largest offset a LONGLONG can hold, so every later sum stays in range.
-  constexpr ULONGLONG max_offset = std::numeric_limits<LONGLONG>::max();
-  if (file_ref > max_offset / record_size) {
-    Log::Warn("File record {} lies past the end of $MFT", file_ref);
-    return std::nullopt;
-  }
-  return record_size * file_ref;
-}
-
 // Byte offset of record file_ref when $MFT is taken as one continuous disk
 // run. Empty when the offset does not fit a LONGLONG.
 template <Cache::Strategy S>
 std::optional<LONGLONG> DirectRecordAddress(const NtfsVolume<S>& volume,
                                             ULONGLONG file_ref) {
   const std::optional<ULONGLONG> offset =
-      RecordOffset(volume.GetFileRecordSize(), file_ref);
+      Mft::RecordOffset(volume.GetFileRecordSize(), file_ref);
   if (!offset) {
     return std::nullopt;
   }
@@ -150,7 +138,7 @@ void Io::FileRecord<S>::Impl::UserCallBack(DWORD att_type,
   if (attr_raw_call_back.at(att_type) != nullptr) {
     attr_raw_call_back.at(att_type)(ahc, discard);
   } else {
-    volume->impl_->AttrRawCallBack(att_type, ahc, discard);
+    volume->DispatchAttrRawCB(att_type, ahc, discard);
   }
 }
 
@@ -166,28 +154,6 @@ bool Io::FileRecord<S>::Impl::ReadDirectRecord(ULONGLONG file_ref) {
   LARGE_INTEGER fr_addr{};
   fr_addr.QuadPart = *addr;
   return volume->ReadInto(fr_addr, record_buffer);
-}
-
-// Reads out.size() bytes of $MFT's data, from the slot of record first_ref,
-// through $MFT's own extents. Records below Mft::Idx::User are read from a
-// fixed address instead, so they are not served here.
-template <Cache::Strategy S>
-bool Io::FileRecord<S>::Impl::ReadMftSlots(ULONGLONG first_ref,
-                                           std::span<BYTE> out) {
-  if (first_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
-      !volume->impl_->mft.Map().HasBase()) {
-    return false;
-  }
-
-  const std::optional<ULONGLONG> offset =
-      RecordOffset(volume->GetFileRecordSize(), first_ref);
-  if (!offset) {
-    return false;
-  }
-
-  const std::optional<ULONGLONG> len =
-      volume->impl_->mft.Map().ReadData(*offset, out);
-  return len && *len == out.size();
 }
 
 // Reads file record fileRef into record_buffer_ and returns its parsed
@@ -210,7 +176,7 @@ std::unique_ptr<Record::HeaderImpl<S>>
     }
     std::ranges::copy(preread, record_buffer.begin());
   } else if (file_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
-             !volume->impl_->mft.Map().HasBase()) {
+             !volume->HasMftBase()) {
     if (!ReadDirectRecord(file_ref)) {
       return {};
     }
@@ -219,13 +185,13 @@ std::unique_ptr<Record::HeaderImpl<S>>
     // across extension records - ReadData() picks whichever instance
     // covers this offset.
     const std::optional<ULONGLONG> fr_addr =
-        RecordOffset(volume->GetFileRecordSize(), file_ref);
+        Mft::RecordOffset(volume->GetFileRecordSize(), file_ref);
     if (!fr_addr) {
       return {};
     }
 
     if (std::optional<ULONGLONG> len =
-            volume->impl_->mft.Map().ReadData(*fr_addr, record_buffer);
+            volume->ReadMftData(*fr_addr, record_buffer);
         !len || *len != volume->GetFileRecordSize()) {
       return {};
     }
@@ -495,7 +461,7 @@ template <Cache::Strategy S>
 std::optional<IndexEntry>
     Io::FileRecord<S>::FindSubEntry(std::wstring_view file_name) const {
   // Loaded before the walk: reading $UpCase reuses the volume's buffers.
-  const UpCase::Table& upcase = impl_->volume->impl_->GetUpCaseTable();
+  const UpCase::Table& upcase = impl_->volume->GetUpCaseTable();
   return DirectoryIndex<S>(*this).Find(file_name, upcase);
 }
 

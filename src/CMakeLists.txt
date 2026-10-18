@@ -132,6 +132,7 @@ set(
   "mft/extent-map.h"
   "mft/file-reference.h"
   "mft/mft-bootstrap.h"
+  "mft/record-offset.h"
   "mft/slot-reader.h"
   "log/ntfs-common.h"
   "ntfs-volume-impl.h"

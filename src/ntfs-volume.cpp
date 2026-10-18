@@ -37,6 +37,7 @@
 #include "io/file-record-impl.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "mft/record-offset.h"
 #include "ntfs-volume-impl.h"
 #include "upcase/upcase.h"
 #include "utf/utf.h"
@@ -353,10 +354,10 @@ bool NtfsVolume<S>::InstallAttrRawCB(Attr::Type attr_type,
 }
 
 // attType is an already-bounds-checked index into attr_raw_call_back_
-// (attr_nums), not a raw Attr::Type/DWORD value. Only FileRecord<S>, a friend,
-// calls it, from an index it already validated, which avoids exposing an
-// unbounded array index through the public API. See N11 in
-// docs/bug-reports/2026-09-03-full-repo.md.
+// (attr_nums), not a raw Attr::Type/DWORD value. Only FileRecord<S> calls it,
+// through NtfsVolume<S>::DispatchAttrRawCB(), from an index it already
+// validated, which avoids exposing an unbounded array index through the public
+// API. See N11 in docs/bug-reports/2026-09-03-full-repo.md.
 template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::AttrRawCallBack(DWORD att_type,
                                           const Attr::HeaderCommon& ahc,
@@ -367,6 +368,46 @@ void NtfsVolume<S>::Impl::AttrRawCallBack(DWORD att_type,
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     attr_raw_call_back[att_type](ahc, discard);
   }
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::DispatchAttrRawCB(DWORD att_type,
+                                      const Attr::HeaderCommon& ahc,
+                                      bool& discard) const {
+  impl_->AttrRawCallBack(att_type, ahc, discard);
+}
+
+template <Cache::Strategy S>
+bool NtfsVolume<S>::HasMftBase() const noexcept {
+  return impl_->mft.Map().HasBase();
+}
+
+template <Cache::Strategy S>
+std::optional<ULONGLONG> NtfsVolume<S>::ReadMftData(ULONGLONG offset,
+                                                    std::span<BYTE> out) const {
+  return impl_->mft.Map().ReadData(offset, out);
+}
+
+template <Cache::Strategy S>
+bool NtfsVolume<S>::ReadMftSlots(ULONGLONG first_ref,
+                                 std::span<BYTE> out) const {
+  if (first_ref < static_cast<ULONGLONG>(Mft::Idx::User) || !HasMftBase()) {
+    return false;
+  }
+
+  const std::optional<ULONGLONG> offset =
+      Mft::RecordOffset(GetFileRecordSize(), first_ref);
+  if (!offset) {
+    return false;
+  }
+
+  const std::optional<ULONGLONG> len = ReadMftData(*offset, out);
+  return len && *len == out.size();
+}
+
+template <Cache::Strategy S>
+const UpCase::Table& NtfsVolume<S>::GetUpCaseTable() const {
+  return impl_->GetUpCaseTable();
 }
 
 // Clear all Attribute CallBack routines
