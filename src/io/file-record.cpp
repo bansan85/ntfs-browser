@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string_view>
 #include <unordered_set>
 #include <utility>
@@ -28,6 +29,7 @@
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "attr/file-name.h"
+#include "attr/list-chain.h"
 #include "attr/std-info.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
@@ -318,6 +320,78 @@ void Io::FileRecord<S>::ClearAttrRawCB() noexcept {
   for (Attr::RawCallback& callback : impl_->attr_raw_call_back) {
     callback = nullptr;
   }
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::ImportAttrListEntry(
+    ULONGLONG record_number, WORD sequence_number, Attr::Type attr_type,
+    std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
+  impl_->ImportAttrListEntry(record_number, sequence_number, attr_type,
+                             attr_list_chain, recover);
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::Impl::ImportAttrListEntry(
+    ULONGLONG record_number, WORD sequence_number, Attr::Type attr_type,
+    std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
+  const Attr::Mask entry_mask = Attr::AttrMask(attr_type);
+  // Set by ParseRecord(), which every attribute parse follows.
+  const ULONGLONG self_ref = *file_reference;
+  // Skip contained attributes
+  // Skip unwanted attributes
+  if (record_number == self_ref || !static_cast<bool>(entry_mask & attr_mask)) {
+    return;
+  }
+
+  if (!attr_list_chain.insert(Attr::MakeChainKey(record_number, attr_type))
+           .second) {
+    Log::Info(
+        "Attribute List: record {}, type 0x{:04x} already resolved in "
+        "this chain, skipping",
+        record_number, static_cast<DWORD>(attr_type));
+    return;
+  }
+
+  // Owned by this record, not by the caller: the attributes moved into it
+  // below keep pointing into frnew's bytes.
+  extension_records.emplace_back(*volume);
+  Io::FileRecord<S>& frnew = extension_records.back();
+
+  frnew.impl_->attr_mask = entry_mask;
+  frnew.impl_->attr_raw_call_back = attr_raw_call_back;
+  if (!frnew.ParseFileRecord(record_number)) {
+    throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
+  }
+
+  // A record another file reused since the list was written is not
+  // this file's extension: its attributes belong to someone else.
+  const bool genuine = Mft::IsGenuineExtensionRecord(
+      sequence_number, frnew.GetSequenceNumber(),
+      frnew.GetBaseRecordReference(), self_ref & Mft::mft_record_number_mask);
+  if (!genuine) {
+    extension_records.pop_back();
+    Log::Recoverable(recover,
+                     "Attribute List: record {} is not an extension of "
+                     "record {} (reused or foreign) - skipping",
+                     record_number, self_ref);
+    if (!recover) {
+      throw std::runtime_error(
+          "Attribute List names a record of another file.\n");
+    }
+    return;
+  }
+
+  if (!frnew.impl_->ParseAttrs(attr_list_chain)) {
+    throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
+  }
+
+  // Insert new found AttrList to fr.AttrList
+  std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
+      frnew.GetAttr(attr_type);
+  for (std::unique_ptr<Attr::AttrBase<S>>& veci : vec) {
+    attr_list.at(Attr::AttrIndex(attr_type)).push_back(std::move(veci));
+  }
+  vec.clear();
 }
 
 // Choose attributes to handle, unwanted attributes will be discarded silently

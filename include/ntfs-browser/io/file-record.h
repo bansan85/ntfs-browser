@@ -7,6 +7,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include <ntfs-browser/attr/base.h>
@@ -59,8 +60,6 @@ class NTFS_BROWSER_EXPORT FileRecord {
   FileRecord& operator=(const FileRecord& other) = delete;
 
   virtual ~FileRecord();
-  template <class Resident, Cache::Strategy>
-  friend class Attr::AttrList;
 
  private:
   // Every member and private method, kept out of this header.
@@ -94,6 +93,17 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // Like SetAttrMask(), but keeps exactly mask: it adds none of the attributes
   // SetAttrMask() always parses. For the volume's own metadata records.
   void SetExactAttrMask(Attr::Mask mask) noexcept;
+  // Moves the attributes of one $ATTRIBUTE_LIST entry, from the extension
+  // record that holds them, into this record. A contained or unwanted
+  // attribute is skipped. record_number and sequence_number are the entry's
+  // base reference. attr_list_chain holds the (record, attribute type) pairs
+  // already resolved along the current $ATTRIBUTE_LIST chain. Throws when the
+  // extension record cannot be parsed, or, unless recover is set, when it
+  // belongs to another file.
+  void ImportAttrListEntry(ULONGLONG record_number, WORD sequence_number,
+                           Attr::Type attr_type,
+                           std::unordered_set<ULONGLONG>& attr_list_chain,
+                           bool recover);
   // Marks this record as volume metadata ($MFT, $UpCase, ...): ParseAttrs()
   // then ignores the deleted flag, whatever include_deleted says.
   void SetBypassDeletedGate(bool bypass) noexcept;

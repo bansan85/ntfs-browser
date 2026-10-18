@@ -91,6 +91,7 @@ set(
   "attr/file-name.h"
   "attr/index-alloc.h"
   "attr/index-root.h"
+  "attr/list-chain.h"
   "attr/list.h"
   "attr/non-resident.h"
   "attr/resident.h"

@@ -82,6 +82,11 @@ class FileRecord<S>::Impl {
   // FileRecord<S> may name. Attributes call it through this Impl.
   void UserCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                     bool& discard);
+  // See FileRecord<S>::ImportAttrListEntry().
+  void ImportAttrListEntry(ULONGLONG record_number, WORD sequence_number,
+                           Attr::Type attr_type,
+                           std::unordered_set<ULONGLONG>& attr_list_chain,
+                           bool recover);
   // Parses the attributes of this record, see AttrParser::Parse().
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
   // Reads file_ref at its fixed offset from mft_addr, see ReadFileRecord().
