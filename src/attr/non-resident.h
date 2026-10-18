@@ -17,7 +17,6 @@
 #include "attr/run-list.h"
 #include "data/run-entry.h"
 #include "internal-export.h"
-#include "io/file-record-efs.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -32,8 +31,6 @@ namespace Attr {
 struct HeaderCommon;
 
 }  // namespace Attr
-template <Cache::Strategy S>
-class NtfsVolume;
 
 namespace Data {
 
@@ -46,26 +43,6 @@ namespace Efs {
 class Context;
 
 }  // namespace Efs
-
-namespace Mft {
-
-template <Cache::Strategy S>
-class ExtentMap;
-
-template <Cache::Strategy S>
-class MftBootstrap;
-
-}  // namespace Mft
-
-namespace Io {
-
-template <Cache::Strategy S>
-class AttrParser;
-
-template <Cache::Strategy S>
-class DirectoryIndex;
-
-}  // namespace Io
 
 ////////////////////////////////
 // NonResident Attributes
@@ -83,15 +60,17 @@ class AttrNonResident : public Attr::AttrBase<S> {
   AttrNonResident& operator=(const AttrNonResident& other) = delete;
   ~AttrNonResident() override = default;
 
-  friend class Io::FileRecord<S>;
-  friend class Io::AttrParser<S>;
-  friend class Io::DirectoryIndex<S>;
-  friend class NtfsVolume<S>;
-  friend class Mft::ExtentMap<S>;
-  friend class Mft::MftBootstrap<S>;
-  // Gives an encrypted stream its context, through SetEfsContext().
-  template <Cache::Strategy T>
-  friend bool Io::AttachEfsContext(Io::FileRecord<T>& record);
+  // Makes ReadData() decrypt this stream with the given context.
+  void SetEfsContext(std::shared_ptr<const Efs::Context> context) noexcept;
+
+  [[nodiscard]] ULONGLONG GetStartVcn() const noexcept;
+  [[nodiscard]] ULONGLONG GetLastVcn() const noexcept;
+  [[nodiscard]] ULONGLONG MappedClusters() const noexcept;
+  // Virtual clusters this attribute describes, merged instances included.
+  [[nodiscard]] ULONGLONG TotalClusters() const noexcept;
+
+  // Splices other's own runs onto this instance's, as the next VCN range.
+  void AppendRuns(const AttrNonResident& other);
 
  private:
   const Data::HeaderNonResident& attr_header_nr_;
@@ -131,7 +110,6 @@ class AttrNonResident : public Attr::AttrBase<S> {
 
   // Compression support. See attr-non-resident.cpp for the compression-unit
   // layout these implement.
-  [[nodiscard]] ULONGLONG TotalClusters() const noexcept;
   [[nodiscard]] ULONGLONG UnitClusters(ULONGLONG unit_first_vcn) const noexcept;
   [[nodiscard]] const std::vector<BYTE>*
       GetCompressionUnit(ULONGLONG unit_index) const;
@@ -158,16 +136,6 @@ class AttrNonResident : public Attr::AttrBase<S> {
   [[nodiscard]] std::optional<ULONGLONG>
       ReadVirtualClustersCompressed(ULONGLONG vcn, ULONGLONG clusters,
                                     std::span<BYTE> buffer) const;
-
-  // Makes ReadData() decrypt this stream with the given context.
-  void SetEfsContext(std::shared_ptr<const Efs::Context> context) noexcept;
-
-  [[nodiscard]] ULONGLONG GetStartVcn() const noexcept;
-  [[nodiscard]] ULONGLONG GetLastVcn() const noexcept;
-  [[nodiscard]] ULONGLONG MappedClusters() const noexcept;
-
-  // Splices other's own runs onto this instance's, as the next VCN range.
-  void AppendRuns(const AttrNonResident& other);
 
  public:
   [[nodiscard]] const BYTE* GetData() const noexcept override;
