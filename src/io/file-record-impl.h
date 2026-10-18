@@ -20,7 +20,7 @@
 #include "attr/slot.h"
 #include "attr/std-info.h"
 #include "data/file-record-header.h"
-#include "io/file-record-attrs.h"
+#include "io/file-record-attr-types.h"
 #include "record/header.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -28,13 +28,17 @@ namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {
 
 // Everything FileRecord<S> keeps out of its public header: the members, and the
-// private methods that work on them. Friends of FileRecord<S> (AttrList,
-// NtfsVolume) reach it through FileRecord<S>::impl_. AttrParser<S> fills the
-// attribute lists it holds.
+// private methods that work on them. Only FileRecord<S> reaches it, through
+// impl_: other classes use the methods of FileRecord<S> that forward to it.
+// AttrParser, nested here, fills the attribute lists it holds.
 template <Cache::Strategy S>
 class FileRecord<S>::Impl {
  public:
   Impl(Io::FileRecord<S>& self, const NtfsVolume<S>& volume) noexcept;
+
+  // Parses the attributes of a record into this Impl. Defined in
+  // file-record-attrs.h.
+  class AttrParser;
 
   // The FileRecord this belongs to. Attributes are built over it, and private
   // methods that need a public one go through it. A pointer, not a reference:
@@ -78,7 +82,7 @@ class FileRecord<S>::Impl {
   // FileRecord<S> may name. Attributes call it through this Impl.
   void UserCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                     bool& discard);
-  // Parses the attributes of this record, see AttrParser<S>::Parse().
+  // Parses the attributes of this record, see AttrParser::Parse().
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
   // Reads file_ref at its fixed offset from mft_addr, see ReadFileRecord().
   [[nodiscard]] bool ReadDirectRecord(ULONGLONG file_ref);

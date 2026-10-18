@@ -223,11 +223,12 @@ std::unordered_map<std::wstring, std::vector<size_t>> GroupNonResidentByName(
 }  // namespace
 
 template <Cache::Strategy S>
-Io::AttrParser<S>::AttrParser(typename FileRecord<S>::Impl& impl) noexcept
+Io::FileRecord<S>::Impl::AttrParser::AttrParser(Impl& impl) noexcept
     : impl_(impl) {}
 
 template <Cache::Strategy S>
-bool Io::AttrParser<S>::Parse(std::unordered_set<ULONGLONG>& attr_list_chain) {
+bool Io::FileRecord<S>::Impl::AttrParser::Parse(
+    std::unordered_set<ULONGLONG>& attr_list_chain) {
   assert(impl_.file_record);
 
   // Clear previous data
@@ -274,7 +275,8 @@ bool Io::AttrParser<S>::Parse(std::unordered_set<ULONGLONG>& attr_list_chain) {
 // Returns the header of the first attribute to walk, or nullptr when this
 // record must not be parsed: it is freed and not opted in, or has no header.
 template <Cache::Strategy S>
-const Attr::HeaderCommon* Io::AttrParser<S>::FirstAttrToWalk() {
+const Attr::HeaderCommon*
+    Io::FileRecord<S>::Impl::AttrParser::FirstAttrToWalk() {
   // A freed record still parsed its header (IsDeleted() works), but not its
   // attributes: this record exposes no content unless include_deleted opted
   // in, or this is one of the volume's own metadata reads.
@@ -291,7 +293,7 @@ const Attr::HeaderCommon* Io::AttrParser<S>::FirstAttrToWalk() {
 // wanted attribute. Stops early at a malformed header, or where VisitAttr
 // fails.
 template <Cache::Strategy S>
-WalkEnd Io::AttrParser<S>::WalkAttrHeaders(
+WalkEnd Io::FileRecord<S>::Impl::AttrParser::WalkAttrHeaders(
     const Attr::HeaderCommon& first,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   // guard if data exceeds file_record_size_ bounds
@@ -324,7 +326,7 @@ WalkEnd Io::AttrParser<S>::WalkAttrHeaders(
 // Parses the attribute at the front of cur, if its type is wanted. Returns
 // false when it must end the walk.
 template <Cache::Strategy S>
-bool Io::AttrParser<S>::VisitAttr(
+bool Io::FileRecord<S>::Impl::AttrParser::VisitAttr(
     std::span<const BYTE> cur, const Attr::HeaderCommon& head,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   // True only when the type is a real attribute slot and the caller's
@@ -360,7 +362,8 @@ bool Io::AttrParser<S>::VisitAttr(
 // makes inside the record, as in place.
 template <Cache::Strategy S>
 const Attr::HeaderCommon&
-    Io::AttrParser<S>::AlignedAttrHeader(std::span<const BYTE> bytes) {
+    Io::FileRecord<S>::Impl::AttrParser::AlignedAttrHeader(
+        std::span<const BYTE> bytes) {
   if (reinterpret_cast<std::uintptr_t>(bytes.data()) %
           alignof(Data::HeaderNonResident) ==
       0) {
@@ -375,9 +378,10 @@ const Attr::HeaderCommon&
 // Wraps one raw attribute in the class that matches its type. unhandled is
 // set for a type this library has no wrapper for.
 template <Cache::Strategy S>
-std::unique_ptr<Attr::AttrBase<S>> Io::AttrParser<S>::AllocAttr(
-    const Attr::HeaderCommon& ahc, bool& unhandled,
-    std::unordered_set<ULONGLONG>& attr_list_chain) {
+std::unique_ptr<Attr::AttrBase<S>>
+    Io::FileRecord<S>::Impl::AttrParser::AllocAttr(
+        const Attr::HeaderCommon& ahc, bool& unhandled,
+        std::unordered_set<ULONGLONG>& attr_list_chain) {
   FileRecord<S>& record = *impl_.self;
   std::unique_ptr<Attr::AttrBase<S>> resident_only =
       AllocResidentOnly<S>(ahc, record);
@@ -418,7 +422,7 @@ std::unique_ptr<Attr::AttrBase<S>> Io::AttrParser<S>::AllocAttr(
 // Parse a single Attribute
 // Return False on error
 template <Cache::Strategy S>
-bool Io::AttrParser<S>::ParseAttr(
+bool Io::FileRecord<S>::Impl::AttrParser::ParseAttr(
     const Attr::HeaderCommon& ahc,
     std::unordered_set<ULONGLONG>& attr_list_chain) {
   // VisitAttr() admits only a type IsValidAttrType() accepts. Every such type
@@ -463,7 +467,7 @@ bool Io::AttrParser<S>::ParseAttr(
 // unsupported layout: every instance is then left exactly as parsed instead of
 // splicing a wrong or partial result together.
 template <Cache::Strategy S>
-void Io::AttrParser<S>::MergeStreamChain(
+void Io::FileRecord<S>::Impl::AttrParser::MergeStreamChain(
     std::vector<std::unique_ptr<Attr::AttrBase<S>>>& attrs,
     std::vector<size_t>& indices, std::vector<size_t>& to_erase) {
   // indices only holds indices below attrs.size().
@@ -507,7 +511,7 @@ void Io::AttrParser<S>::MergeStreamChain(
 // attr_list_ by now) back into one, so getAttr()/FindStream() see exactly
 // one complete attribute per stream instead of several partial ones.
 template <Cache::Strategy S>
-void Io::AttrParser<S>::MergeAttributeContinuations() {
+void Io::FileRecord<S>::Impl::AttrParser::MergeAttributeContinuations() {
   for (std::vector<std::unique_ptr<Attr::AttrBase<S>>>& attrs :
        impl_.attr_list) {
     if (attrs.size() < 2) {
@@ -528,7 +532,7 @@ void Io::AttrParser<S>::MergeAttributeContinuations() {
   }
 }
 
-template class AttrParser<Cache::Strategy::NoCache>;
-template class AttrParser<Cache::Strategy::FullCache>;
+template class FileRecord<Cache::Strategy::NoCache>::Impl::AttrParser;
+template class FileRecord<Cache::Strategy::FullCache>::Impl::AttrParser;
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

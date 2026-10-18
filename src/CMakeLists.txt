@@ -122,6 +122,7 @@ set(
   "efs/fek.h"
   "efs/sector-cipher.h"
   "io/file-reader.h"
+  "io/file-record-attr-types.h"
   "io/file-record-attrs.h"
   "io/file-record-efs.h"
   "io/file-record-impl.h"

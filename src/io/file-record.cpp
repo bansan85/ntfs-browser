@@ -268,11 +268,11 @@ bool Io::FileRecord<S>::ParseAttrs() {
   return impl_->ParseAttrs(attr_list_chain);
 }
 
-// Parses the attributes of this record, see AttrParser<S>::Parse().
+// Parses the attributes of this record, see AttrParser::Parse().
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::Impl::ParseAttrs(
     std::unordered_set<ULONGLONG>& attr_list_chain) {
-  return AttrParser<S>(*this).Parse(attr_list_chain);
+  return AttrParser(*this).Parse(attr_list_chain);
 }
 
 template <Cache::Strategy S>

@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <memory>
 #include <span>
-#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -15,35 +14,20 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
-#include "attr/resident.h"
+#include "io/file-record-attr-types.h"
+#include "io/file-record-impl.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Io {
 
-template <Cache::Strategy S>
-class AttrParser;
-
-// How the walk over a record's attribute headers ended.
-enum class WalkEnd : BYTE {
-  EndMarker,  // The terminating Attr::Type::All marker was reached.
-  RanOut,     // The record ended without a marker, or an attribute overran it.
-  Aborted     // An attribute was malformed, or the visit stopped the walk.
-};
-
-// The resident base the attribute wrappers of strategy S are built over.
-template <Cache::Strategy S>
-using ResidentOf =
-    std::conditional_t<S == Cache::Strategy::NoCache, Attr::AttrResidentNoCache,
-                       Attr::AttrResidentFullCache>;
-
 // Parses the attributes of one file record into its Impl: walks the attribute
 // headers, wraps each wanted attribute, and merges the VCN-split ones.
 // Short-lived: built over an Impl for one ParseAttrs() call, never stored.
 template <Cache::Strategy S>
-class AttrParser {
+class FileRecord<S>::Impl::AttrParser {
  public:
-  explicit AttrParser(typename FileRecord<S>::Impl& impl) noexcept;
+  explicit AttrParser(Impl& impl) noexcept;
 
   // Clears the previous attributes, then parses every wanted one of the record
   // into the Impl. attr_list_chain carries one $ATTRIBUTE_LIST resolution's
@@ -53,7 +37,7 @@ class AttrParser {
 
  private:
   // The Impl whose attributes this fills. It MUST outlive this object.
-  typename FileRecord<S>::Impl& impl_;
+  Impl& impl_;
 
   [[nodiscard]] const Attr::HeaderCommon&
       AlignedAttrHeader(std::span<const BYTE> bytes);

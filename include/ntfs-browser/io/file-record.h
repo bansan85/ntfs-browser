@@ -34,9 +34,6 @@ class AttrList;
 namespace Io {
 
 template <Cache::Strategy S>
-class AttrParser;
-
-template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT FileRecord {
  public:
   // User defined Callback routine to handle Directory traversing
@@ -64,8 +61,6 @@ class NTFS_BROWSER_EXPORT FileRecord {
   virtual ~FileRecord();
   template <class Resident, Cache::Strategy>
   friend class Attr::AttrList;
-  template <Cache::Strategy>
-  friend class AttrParser;
 
  private:
   // Every member and private method, kept out of this header.
