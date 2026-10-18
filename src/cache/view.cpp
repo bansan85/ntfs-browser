@@ -14,7 +14,8 @@ namespace NTFS_BROWSER_NAMESPACE::Cache {
 
 View::View() noexcept = default;
 
-View::View(std::span<const BYTE> bytes, std::shared_ptr<const void> owner,
+View::View(const ViewKey& /*key*/, std::span<const BYTE> bytes,
+           std::shared_ptr<const void> owner,
            std::weak_ptr<void> cache) noexcept
     : bytes_(bytes), owner_(std::move(owner)), cache_(std::move(cache)) {}
 

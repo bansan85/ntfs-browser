@@ -13,14 +13,11 @@
 
 namespace NTFS_BROWSER_NAMESPACE {
 
-namespace Io {
-
-template <Cache::Strategy S>
-class FileReader;
-
-}  // namespace Io
-
 namespace Cache {
+
+// Declared only: its definition is internal to the library, so a consumer
+// cannot build a View from raw bytes.
+class ViewKey;
 
 // Bytes read from a FullCache volume, plus what keeps them alive.
 //
@@ -49,15 +46,13 @@ class NTFS_BROWSER_EXPORT View {
   [[nodiscard]] std::size_t size() const noexcept;
   [[nodiscard]] bool empty() const noexcept;
 
- private:
-  template <Strategy S>
-  friend class Io::FileReader;
-
   // Builds a populated view. owner keeps the bytes alive. cache is the cache
-  // to trim once the last holder of owner goes away.
-  View(std::span<const BYTE> bytes, std::shared_ptr<const void> owner,
-       std::weak_ptr<void> cache) noexcept;
+  // to trim once the last holder of owner goes away. Only the library can
+  // name key.
+  View(const ViewKey& key, std::span<const BYTE> bytes,
+       std::shared_ptr<const void> owner, std::weak_ptr<void> cache) noexcept;
 
+ private:
   void Swap(View& other) noexcept;
 
   std::span<const BYTE> bytes_;

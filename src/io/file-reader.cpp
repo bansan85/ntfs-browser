@@ -21,6 +21,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "cache/block-cache.h"
+#include "cache/view-key.h"
 #include "internal-export.h"
 #include "log/ntfs-common.h"
 
@@ -121,7 +122,7 @@ std::optional<Cache::View> FileReader<S>::ReadUncached(LARGE_INTEGER addr,
     return {};
   }
 
-  Cache::View view{exact.bytes, exact.owner, cache_};
+  Cache::View view{Cache::ViewKey{}, exact.bytes, exact.owner, cache_};
   cache_->Trim();
   return view;
 }
@@ -173,7 +174,7 @@ std::enable_if_t<
     const std::span<const BYTE> bytes =
         std::span<const BYTE>{block->bytes.get(), block_bytes_value}.subspan(
             gsl::narrow<size_t>(addr.QuadPart % read_buffer_size), length);
-    Cache::View view{bytes, block, cache_};
+    Cache::View view{Cache::ViewKey{}, bytes, block, cache_};
     cache_->Trim();
     return view;
   }
@@ -211,7 +212,7 @@ std::enable_if_t<
     cache_->Trim();
   }
 
-  Cache::View view{stitched.bytes, stitched.owner, cache_};
+  Cache::View view{Cache::ViewKey{}, stitched.bytes, stitched.owner, cache_};
   cache_->Trim();
   return view;
 }
