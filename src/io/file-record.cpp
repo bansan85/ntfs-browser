@@ -212,6 +212,12 @@ bool Io::FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
   return impl_->ParseRecord(file_ref, {});
 }
 
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::ParseFileRecord(ULONGLONG file_ref,
+                                        std::span<const BYTE> preread) {
+  return impl_->ParseRecord(file_ref, preread);
+}
+
 // The body of ParseFileRecord(), shared with callers that already hold the
 // record's bytes.
 template <Cache::Strategy S>
@@ -325,6 +331,21 @@ void Io::FileRecord<S>::SetAttrMask(Attr::Mask mask) noexcept {
   if ((mask & Attr::Mask::Data) == Attr::Mask::Data) {
     impl_->attr_mask |= Attr::Mask::LoggedUtilityStream;
   }
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetExactAttrMask(Attr::Mask mask) noexcept {
+  impl_->attr_mask = mask;
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetBypassDeletedGate(bool bypass) noexcept {
+  impl_->bypass_deleted_gate = bypass;
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetResolveAttrList(bool resolve) noexcept {
+  impl_->resolve_attr_list = resolve;
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine

@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -29,16 +30,6 @@ template <class Resident, Cache::Strategy S>
 class AttrList;
 
 }  // namespace Attr
-
-namespace Mft {
-
-template <Cache::Strategy S>
-class MftBootstrap;
-
-template <Cache::Strategy S>
-class SlotReader;
-
-}  // namespace Mft
 
 namespace Io {
 
@@ -71,16 +62,10 @@ class NTFS_BROWSER_EXPORT FileRecord {
   FileRecord& operator=(const FileRecord& other) = delete;
 
   virtual ~FileRecord();
-  friend class Attr::AttrBase<S>;
-  friend class NtfsVolume<S>;
   template <class Resident, Cache::Strategy>
   friend class Attr::AttrList;
   template <Cache::Strategy>
   friend class AttrParser;
-  template <Cache::Strategy>
-  friend class Mft::MftBootstrap;
-  template <Cache::Strategy>
-  friend class Mft::SlotReader;
 
  private:
   // Every member and private method, kept out of this header.
@@ -90,6 +75,11 @@ class NTFS_BROWSER_EXPORT FileRecord {
  public:
   [[nodiscard]] const NtfsVolume<S>& GetVolume() const noexcept;
   [[nodiscard]] bool ParseFileRecord(ULONGLONG file_ref);
+  // ParseFileRecord() with the record's bytes supplied by the caller. They
+  // are copied, so the caller may reuse them right away. preread MUST be
+  // exactly one file record long.
+  [[nodiscard]] bool ParseFileRecord(ULONGLONG file_ref,
+                                     std::span<const BYTE> preread);
   [[nodiscard]] bool ParseAttrs();
   [[nodiscard]] std::optional<ULONGLONG> GetFileReference() const noexcept;
   // Times this record was reused; 0 when no record is parsed.
@@ -106,6 +96,15 @@ class NTFS_BROWSER_EXPORT FileRecord {
   void ClearAttrRawCB() noexcept;
 
   void SetAttrMask(Attr::Mask mask) noexcept;
+  // Like SetAttrMask(), but keeps exactly mask: it adds none of the attributes
+  // SetAttrMask() always parses. For the volume's own metadata records.
+  void SetExactAttrMask(Attr::Mask mask) noexcept;
+  // Marks this record as volume metadata ($MFT, $UpCase, ...): ParseAttrs()
+  // then ignores the deleted flag, whatever include_deleted says.
+  void SetBypassDeletedGate(bool bypass) noexcept;
+  // False makes a $ATTRIBUTE_LIST be wrapped as a plain attribute, not
+  // resolved into the attributes it names.
+  void SetResolveAttrList(bool resolve) noexcept;
   void TraverseAttrs(const AttrsCallback& attr_call_back, void* context);
   [[nodiscard]] const std::vector<std::unique_ptr<Attr::AttrBase<S>>>&
       GetAttr(Attr::Type attr_type) const noexcept;

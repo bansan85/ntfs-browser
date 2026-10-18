@@ -57,7 +57,7 @@ bool SlotReader<S>::ParseFileRecord(Io::FileRecord<S>& file_record,
   if (bytes.empty()) {
     return file_record.ParseFileRecord(record);
   }
-  return file_record.impl_->ParseRecord(record, bytes);
+  return file_record.ParseFileRecord(record, bytes);
 }
 
 template <Cache::Strategy S>

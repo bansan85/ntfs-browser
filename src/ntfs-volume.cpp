@@ -118,7 +118,7 @@ NtfsVolume<S>::~NtfsVolume() = default;
 // not parse or has no VolumeInformation.
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::ParseVolumeRecord(Io::FileRecord<S>& vol) {
-  vol.impl_->bypass_deleted_gate = true;
+  vol.SetBypassDeletedGate(true);
   vol.SetAttrMask(Attr::Mask::VolumeName | Attr::Mask::VolumeInformation);
   if (!vol.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Volume)) ||
       !vol.ParseAttrs()) {
@@ -470,7 +470,7 @@ std::unique_ptr<const UpCase::Table>
   // Like the volume's other metadata reads, it MUST NOT depend on
   // include_deleted.
   Io::FileRecord<S> record(*self);
-  record.impl_->bypass_deleted_gate = true;
+  record.SetBypassDeletedGate(true);
   record.SetAttrMask(Attr::Mask::Data);
   if (!record.ParseFileRecord(upcase_record) || !record.ParseAttrs()) {
     return {};

@@ -41,7 +41,7 @@ MftBootstrap<S>::MftBootstrap(NtfsVolume<S>& volume)
   // The volume's own metadata reads always see their own content, whatever
   // include_deleted says: a freed $MFT would otherwise make the whole volume
   // unreadable.
-  record_.impl_->bypass_deleted_gate = true;
+  record_.SetBypassDeletedGate(true);
 }
 
 // Parses $MFT's base record for its DATA attribute. False when it does not
@@ -49,7 +49,7 @@ MftBootstrap<S>::MftBootstrap(NtfsVolume<S>& volume)
 template <Cache::Strategy S>
 bool MftBootstrap<S>::ParseRecord() {
   // Skips SetAttrMask()'s automatic ATTRIBUTE_LIST bit (resolved later).
-  record_.impl_->attr_mask = Attr::Mask::Data;
+  record_.SetExactAttrMask(Attr::Mask::Data);
   return record_.ParseFileRecord(static_cast<DWORD>(Idx::Mft)) &&
          record_.ParseAttrs();
 }
@@ -107,9 +107,9 @@ template <Cache::Strategy S>
 void MftBootstrap<S>::ResolveMftDataExtents() {
   // Isolated from record_; resolve_attr_list_ = false skips AttrList.
   Io::FileRecord<S> list_record(*volume_);
-  list_record.impl_->attr_mask = Attr::Mask::AttributeList;
-  list_record.impl_->resolve_attr_list = false;
-  list_record.impl_->bypass_deleted_gate = true;
+  list_record.SetExactAttrMask(Attr::Mask::AttributeList);
+  list_record.SetResolveAttrList(false);
+  list_record.SetBypassDeletedGate(true);
 
   if (!list_record.ParseFileRecord(static_cast<DWORD>(Idx::Mft)) ||
       !list_record.ParseAttrs()) {
@@ -223,8 +223,8 @@ void MftBootstrap<S>::ResolvePendingMftExtension(
     const PendingMftExtension& item, ULONGLONG self_ref) {
   extension_records_.emplace_back(*volume_);
   Io::FileRecord<S>& ext = extension_records_.back();
-  ext.impl_->attr_mask = Attr::Mask::Data;
-  ext.impl_->bypass_deleted_gate = true;
+  ext.SetExactAttrMask(Attr::Mask::Data);
+  ext.SetBypassDeletedGate(true);
 
   const bool parsed = ext.ParseFileRecord(item.record);
   // A record another file reused since the list was written is not
