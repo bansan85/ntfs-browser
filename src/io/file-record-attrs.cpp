@@ -532,7 +532,17 @@ void Io::FileRecord<S>::Impl::AttrParser::MergeAttributeContinuations() {
   }
 }
 
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::Impl::ParseAttrs(
+    std::unordered_set<ULONGLONG>& attr_list_chain) {
+  return AttrParser(*this).Parse(attr_list_chain);
+}
+
 template class FileRecord<Cache::Strategy::NoCache>::Impl::AttrParser;
 template class FileRecord<Cache::Strategy::FullCache>::Impl::AttrParser;
+template bool FileRecord<Cache::Strategy::NoCache>::Impl::ParseAttrs(
+    std::unordered_set<ULONGLONG>& attr_list_chain);
+template bool FileRecord<Cache::Strategy::FullCache>::Impl::ParseAttrs(
+    std::unordered_set<ULONGLONG>& attr_list_chain);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

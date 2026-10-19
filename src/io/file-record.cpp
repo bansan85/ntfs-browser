@@ -33,7 +33,6 @@
 #include "attr/std-info.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
-#include "io/file-record-attrs.h"
 #include "io/file-record-impl.h"
 #include "io/file-record-index.h"
 #include "log/ntfs-common.h"
@@ -268,13 +267,6 @@ bool Io::FileRecord<S>::ParseAttrs() {
   // A fresh chain, unrelated to any previous ParseFileRecord() on this object.
   std::unordered_set<ULONGLONG> attr_list_chain;
   return impl_->ParseAttrs(attr_list_chain);
-}
-
-// Parses the attributes of this record, see AttrParser::Parse().
-template <Cache::Strategy S>
-bool Io::FileRecord<S>::Impl::ParseAttrs(
-    std::unordered_set<ULONGLONG>& attr_list_chain) {
-  return AttrParser(*this).Parse(attr_list_chain);
 }
 
 template <Cache::Strategy S>

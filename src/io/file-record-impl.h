@@ -31,13 +31,18 @@ namespace Io {
 // private methods that work on them. Only FileRecord<S> reaches it, through
 // impl_: other classes use the methods of FileRecord<S> that forward to it.
 // AttrParser, nested here, fills the attribute lists it holds.
+// file-record.cpp instantiates this class, but ParseAttrs() and AttrParser are
+// defined in file-record-attrs.cpp: MSVC then warns (C4661) at the class line.
+#ifdef _MSC_VER
+  #pragma warning(push)
+  #pragma warning(disable : 4661)
+#endif
 template <Cache::Strategy S>
 class FileRecord<S>::Impl {
  public:
   Impl(Io::FileRecord<S>& self, const NtfsVolume<S>& volume) noexcept;
 
-  // Parses the attributes of a record into this Impl. Defined in
-  // file-record-attrs.h.
+  // Defined in file-record-attrs.h, see AttrParser::Parse().
   class AttrParser;
 
   // The FileRecord this belongs to. Attributes are built over it, and private
@@ -87,7 +92,8 @@ class FileRecord<S>::Impl {
                            Attr::Type attr_type,
                            std::unordered_set<ULONGLONG>& attr_list_chain,
                            bool recover);
-  // Parses the attributes of this record, see AttrParser::Parse().
+  // Parses the attributes of this record, see AttrParser::Parse(). Defined in
+  // file-record-attrs.cpp.
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
   // Reads file_ref at its fixed offset from mft_addr, see ReadFileRecord().
   [[nodiscard]] bool ReadDirectRecord(ULONGLONG file_ref);
@@ -105,6 +111,9 @@ class FileRecord<S>::Impl {
       StdInfoFlag(bool (Attr::AttrStdInfo<ResidentOf<S>, S>::*flag)()
                       const noexcept) const noexcept;
 };
+#ifdef _MSC_VER
+  #pragma warning(pop)
+#endif
 
 }  // namespace Io
 
