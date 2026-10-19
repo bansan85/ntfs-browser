@@ -21,6 +21,8 @@ struct BootSectorPatch {
   bool marker{true};
   // total_sectors, set high enough to hold any MFT address.
   bool total_sectors{true};
+  // The FAT-era fields a real NTFS BPB keeps at zero, set to zero.
+  bool reserved_fields{true};
 };
 
 // Runs one testcase through every parse path the fuzzer covers, once per

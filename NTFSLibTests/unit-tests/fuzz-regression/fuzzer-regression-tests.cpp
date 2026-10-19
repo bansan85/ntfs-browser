@@ -65,7 +65,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 152>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 155>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -527,6 +527,14 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 152>
          {true, {"Sector Size must be between 256 and 4096 bytes"}}},
         {"boot_sector_sectors_per_cluster_not_power_of_two",
          {true, {"Cluster Size must be a power of two"}}},
+        {"boot_sector_reserved_sectors_nonzero",
+         {true, {"fields that must be zero are not: reserved_sectors (0x0E)"}}},
+        {"boot_sector_fat_count_nonzero",
+         {true,
+          {"fields that must be zero are not: fat_count_and_root_entries "
+           "(0x10)"}}},
+        {"boot_sector_large_sectors_nonzero",
+         {true, {"fields that must be zero are not: large_sectors (0x20)"}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -534,7 +542,10 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 152>
 NtfsFuzz::BootSectorPatch PatchFor(std::string_view name) {
   return {.marker = name != "boot_sector_missing_aa55_marker",
           .total_sectors = name != "boot_sector_total_sectors_zero" &&
-                           name != "boot_sector_mft_beyond_total_sectors"};
+                           name != "boot_sector_mft_beyond_total_sectors",
+          .reserved_fields = name != "boot_sector_reserved_sectors_nonzero" &&
+                             name != "boot_sector_fat_count_nonzero" &&
+                             name != "boot_sector_large_sectors_nonzero"};
 }
 
 // Runs one saved regression testcase in-process and, if
@@ -618,8 +629,11 @@ NTFS_REGRESSION_TESTCASE("bitmap_multi_cluster")
 NTFS_REGRESSION_TESTCASE("bitmap_nonres_sparse_runs")
 NTFS_REGRESSION_TESTCASE("bitmap_resident_data_read")
 NTFS_REGRESSION_TESTCASE("boot_sector_mft_beyond_total_sectors")
+NTFS_REGRESSION_TESTCASE("boot_sector_fat_count_nonzero")
+NTFS_REGRESSION_TESTCASE("boot_sector_large_sectors_nonzero")
 NTFS_REGRESSION_TESTCASE("boot_sector_missing_aa55_marker")
 NTFS_REGRESSION_TESTCASE("boot_sector_read_failure")
+NTFS_REGRESSION_TESTCASE("boot_sector_reserved_sectors_nonzero")
 NTFS_REGRESSION_TESTCASE("boot_sector_sector_size_above_range")
 NTFS_REGRESSION_TESTCASE("boot_sector_sector_size_not_power_of_two")
 NTFS_REGRESSION_TESTCASE("boot_sector_sector_size_out_of_range")

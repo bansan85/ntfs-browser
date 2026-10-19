@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "boot-sector-geometry-characterization-tests.cpp"
     "boot-sector-marker-tests.cpp"
+    "boot-sector-reserved-fields-tests.cpp"
     "boot-sector-sizes-tests.cpp"
     "boot-sector-total-sectors-tests.cpp"
     "cache-ceiling-options-tests.cpp"

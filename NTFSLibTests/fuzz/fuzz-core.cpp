@@ -69,9 +69,20 @@ constexpr size_t bpb_total_sectors_offset = 40;
 constexpr std::uint64_t bpb_total_sectors =
     std::numeric_limits<std::uint64_t>::max();
 
+// The BPB byte ranges a real NTFS volume keeps at zero: reserved_sectors up
+// to the small sector count (bytes 14 to 20), sectors_per_fat (22 and 23) and
+// the large sector count (32 to 35). The ranges leave out the media
+// descriptor and not_used3, which are not checked.
+struct ZeroRange {
+  size_t offset;
+  size_t size;
+};
+
+constexpr std::array<ZeroRange, 3> bpb_zero_ranges{{{14, 7}, {22, 2}, {32, 4}}};
+
 // Overwrites the boot sector signature so ParseBootSector() accepts it. Also
-// overwrites the 0xAA55 end marker and total_sectors, each one when patch
-// asks for it.
+// overwrites the 0xAA55 end marker, total_sectors and the zero ranges, each
+// one when patch asks for it.
 void PatchBpbSignature(std::span<BYTE> data, const BootSectorPatch& patch) {
   if (data.size() >= bpb_signature_offset + bpb_signature_len) {
     // The enclosing check leaves room for bpb_signature_len bytes at the
@@ -91,6 +102,15 @@ void PatchBpbSignature(std::span<BYTE> data, const BootSectorPatch& patch) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&data[bpb_total_sectors_offset], &bpb_total_sectors,
                 sizeof(bpb_total_sectors));
+  }
+  if (patch.reserved_fields) {
+    for (const ZeroRange& range : bpb_zero_ranges) {
+      if (data.size() >= range.offset + range.size) {
+        // The enclosing check leaves room for the range at the offset.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        std::memset(&data[range.offset], 0, range.size);
+      }
+    }
   }
 }
 

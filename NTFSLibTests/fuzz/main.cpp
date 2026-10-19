@@ -90,6 +90,16 @@ constexpr size_t bpb_total_sectors_offset = 40;
 // Passes any size check: no real MFT address exceeds it.
 constexpr uint64_t bpb_total_sectors = std::numeric_limits<uint64_t>::max();
 
+// The BPB byte ranges a real NTFS volume keeps at zero: reserved_sectors up
+// to the small sector count (bytes 14 to 20), sectors_per_fat (22 and 23) and
+// the large sector count (32 to 35).
+struct ZeroRange {
+  size_t offset;
+  size_t size;
+};
+
+constexpr std::array<ZeroRange, 3> bpb_zero_ranges{{{14, 7}, {22, 2}, {32, 4}}};
+
 // Serves an endless RNG stream, patching a valid boot-sector signature
 // into the first read 95% of the time, so most iterations reach real
 // MFT/attribute parsing instead of rejecting at ParseBootSector().
@@ -123,6 +133,13 @@ SequentialDiskReader::Producer
         dest.size() >= bpb_total_sectors_offset + sizeof(bpb_total_sectors)) {
       std::memcpy(dest.data() + bpb_total_sectors_offset, &bpb_total_sectors,
                   sizeof(bpb_total_sectors));
+    }
+    if (nth_call == 0 && inject_signature) {
+      for (const ZeroRange& range : bpb_zero_ranges) {
+        if (dest.size() >= range.offset + range.size) {
+          std::memset(dest.data() + range.offset, 0, range.size);
+        }
+      }
     }
     nth_call++;
   });

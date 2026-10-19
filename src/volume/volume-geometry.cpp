@@ -2,10 +2,12 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <bit>
 #include <limits>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
@@ -62,6 +64,39 @@ std::optional<DWORD> DecodeClusterSize(char spc, WORD sector_size) {
     return std::nullopt;
   }
   return sector_size * (1U << static_cast<unsigned char>(-spc));
+}
+
+// Checks the BPB fields NTFS inherits from FAT, which a real volume keeps at
+// zero: reserved_sectors, the FAT count and root entries, the 16-bit sector
+// count, sectors_per_fat and the 32-bit sector count. A non-zero field is one
+// message naming each offender, kept when recover is true. not_used3 is
+// not checked: many volumes hold 0x80008000 there.
+bool ParseReservedFields(const Data::NtfsBpb& bpb, bool recover) {
+  const auto all_zero = [](const auto& field) {
+    const auto* bytes = reinterpret_cast<const BYTE*>(&field);
+    return std::ranges::all_of(std::span(bytes, sizeof(field)),
+                               [](BYTE byte) { return byte == 0; });
+  };
+
+  std::string offenders;
+  const auto note = [&](const auto& field, std::string_view name) {
+    if (!all_zero(field)) {
+      offenders += offenders.empty() ? "" : ", ";
+      offenders += name;
+    }
+  };
+  note(bpb.reserved_sectors, "reserved_sectors (0x0E)");
+  note(bpb.zeros1, "fat_count_and_root_entries (0x10)");
+  note(bpb.not_used1, "small_sectors (0x13)");
+  note(bpb.zeros2, "sectors_per_fat (0x16)");
+  note(bpb.not_used2, "large_sectors (0x20)");
+
+  if (offenders.empty()) {
+    return true;
+  }
+  Log::Recoverable(recover, "Boot sector fields that must be zero are not: {}",
+                   offenders);
+  return recover;
 }
 
 // Set sector_size from the BPB. Reject a size outside 256..4096 bytes, and a
@@ -233,6 +268,10 @@ BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
     if (!recover) {
       return parse;
     }
+  }
+
+  if (!ParseReservedFields(bpb, recover)) {
+    return parse;
   }
 
   // Each field is validated and logged in turn. The first failure stops the
