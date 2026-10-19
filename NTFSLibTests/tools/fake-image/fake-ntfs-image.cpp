@@ -53,8 +53,9 @@ FakeRecord MakeMftRecord() {
 }
 
 // Builds a fake $Volume record whose VOLUME_INFORMATION attribute declares
-// attrSize bytes, reporting NTFS 3.1.
-FakeRecord MakeVolumeRecordSized(WORD attr_size) {
+// attrSize bytes, reporting NTFS 3.1. The flags go into the body only when it
+// is large enough to hold them.
+FakeRecord MakeVolumeRecordSized(WORD attr_size, WORD flags = 0) {
   FakeRecord record = MakeRecordHeader(
       attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
 
@@ -74,15 +75,18 @@ FakeRecord MakeVolumeRecordSized(WORD attr_size) {
           &record.at(attr_offset_value + attr.attr_offset));
   vol_info.major_version = 3;
   vol_info.minor_version = 1;
+  vol_info.flags = flags;
 
   WriteEndOfAttributesMarker(record,
                              attr_offset_value + attr.header.total_size);
   return record;
 }
 
-FakeRecord MakeVolumeRecord() {
-  return MakeVolumeRecordSized(static_cast<WORD>(
-      sizeof(NTFS_BROWSER_NAMESPACE::Data::VolumeInformation)));
+FakeRecord MakeVolumeRecord(WORD flags = 0) {
+  return MakeVolumeRecordSized(
+      static_cast<WORD>(
+          sizeof(NTFS_BROWSER_NAMESPACE::Data::VolumeInformation)),
+      flags);
 }
 
 // Builds a fake $Volume record carrying both VOLUME_INFORMATION (so the
@@ -217,6 +221,18 @@ std::vector<BYTE> BuildFakeNtfsImageWithEmptyVolumeInformation() {
   const size_t offset = mft_addr + static_cast<size_t>(fake_file_record_size) *
                                        static_cast<size_t>(Mft::Idx::Volume);
   const FakeRecord record = MakeVolumeRecordSized(0);
+  std::memcpy(&image.at(offset), record.data(), record.size());
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithVolumeFlags(WORD flags) {
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const size_t offset = mft_addr + static_cast<size_t>(fake_file_record_size) *
+                                       static_cast<size_t>(Mft::Idx::Volume);
+  const FakeRecord record = MakeVolumeRecord(flags);
   std::memcpy(&image.at(offset), record.data(), record.size());
 
   return image;

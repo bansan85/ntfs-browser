@@ -65,7 +65,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 155>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 156>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -535,6 +535,8 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 155>
            "(0x10)"}}},
         {"boot_sector_large_sectors_nonzero",
          {true, {"fields that must be zero are not: large_sectors (0x20)"}}},
+        {"volume_dirty_flag_set",
+         {true, {"NTFS volume was not unmounted cleanly"}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -763,6 +765,7 @@ NTFS_REGRESSION_TESTCASE("upcase_run_lcn_at_address_space_limit")
 NTFS_REGRESSION_TESTCASE("upcase_table_read_crosses_64k_blocks")
 NTFS_REGRESSION_TESTCASE("usn_array_exceeds_record_buffer")
 NTFS_REGRESSION_TESTCASE("volume_information_minimal_size")
+NTFS_REGRESSION_TESTCASE("volume_dirty_flag_set")
 NTFS_REGRESSION_TESTCASE("volume_information_must_be_resident")
 NTFS_REGRESSION_TESTCASE("volume_information_version_below_three")
 NTFS_REGRESSION_TESTCASE("volume_name_must_be_resident")

@@ -19,4 +19,8 @@ struct VolumeInformation {
 
 #pragma pack()
 
+// Bit 0 of VolumeInformation::flags: the volume was not unmounted cleanly and
+// its $LogFile was not replayed.
+inline constexpr WORD volume_dirty_flag = 0x0001;
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Data

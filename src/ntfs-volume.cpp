@@ -33,6 +33,7 @@
 #include "attr/vol-info.h"
 #include "attr/vol-name.h"
 #include "data/attribute-list.h"
+#include "data/volume-information.h"
 #include "io/file-reader.h"  // IWYU pragma: keep
 #include "io/file-record-impl.h"
 #include "log/ntfs-common.h"
@@ -127,8 +128,9 @@ bool NtfsVolume<S>::Impl::ParseVolumeRecord(Io::FileRecord<S>& vol) {
   return !vol.GetAttr(Attr::Type::VolumeInformation).empty();
 }
 
-// Reads the NTFS version from $VOLUME_INFORMATION and logs it. False below 3.0,
-// the NT4 era. Needs ParseVolumeRecord() to have passed first.
+// Reads the NTFS version from $VOLUME_INFORMATION and logs it, with a warning
+// if the volume is dirty. False below 3.0, the NT4 era. Needs
+// ParseVolumeRecord() to have passed first.
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::AcceptVolumeVersion(const Io::FileRecord<S>& vol) {
   const auto* info =
@@ -136,6 +138,11 @@ bool NtfsVolume<S>::Impl::AcceptVolumeVersion(const Io::FileRecord<S>& vol) {
           vol.GetAttr(Attr::Type::VolumeInformation).front().get());
   std::tie(version_major, version_minor) = info->GetVersion();
   Log::Info("NTFS volume version: {}.{}", version_major, version_minor);
+  if ((info->GetFlags() & Data::volume_dirty_flag) != 0) {
+    Log::Warn(
+        "NTFS volume was not unmounted cleanly: its journal was not "
+        "replayed, so the data read may be stale");
+  }
   return version_major >= 3;
 }
 

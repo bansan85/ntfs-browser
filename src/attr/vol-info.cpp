@@ -45,6 +45,11 @@ std::pair<BYTE, BYTE> AttrVolInfo<Resident, S>::GetVersion() const noexcept {
   return {vol_info_.major_version, vol_info_.minor_version};
 }
 
+template <typename Resident, Cache::Strategy S>
+WORD AttrVolInfo<Resident, S>::GetFlags() const noexcept {
+  return vol_info_.flags;
+}
+
 template class AttrVolInfo<AttrResidentFullCache, Cache::Strategy::FullCache>;
 template class AttrVolInfo<AttrResidentNoCache, Cache::Strategy::NoCache>;
 

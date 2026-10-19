@@ -58,6 +58,10 @@ inline constexpr WORD minimal_volume_information_size = 12;
 // attribute declaring no body at all (attr_size 0).
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithEmptyVolumeInformation();
 
+// Same volume as BuildFakeNtfsImage(), with the flags word of $Volume's (#3)
+// VOLUME_INFORMATION set to flags.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithVolumeFlags(WORD flags);
+
 // Volume name BuildFakeNtfsImageWithVolumeName() stores in $Volume's
 // VOLUME_NAME attribute. ASCII, so its UTF-8 form is the same bytes.
 inline constexpr std::wstring_view fake_volume_name = L"TESTVOL";

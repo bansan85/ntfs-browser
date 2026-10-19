@@ -44,6 +44,9 @@ class AttrVolInfo : public Resident {
   // Get NTFS Volume Version
   [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
 
+  // Get the volume flags (Data::volume_dirty_flag, ...)
+  [[nodiscard]] WORD GetFlags() const noexcept;
+
  private:
   const Data::VolumeInformation& vol_info_;
 };  // AttrVolInfo

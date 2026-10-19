@@ -18,6 +18,7 @@ target_sources(
     "minify-cache-tests.cpp"
     "mft-parse-failure-volume-ok-tests.cpp"
     "no-cache-lifetime-tests.cpp"
+    "volume-dirty-flag-tests.cpp"
     "volume-name-log-tests.cpp"
     "volume-options-getters-tests.cpp"
     "volume-tree-support.h"
