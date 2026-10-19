@@ -5,8 +5,9 @@
 // Data::HeaderNonResident::comp_unit_size) stores its compression units in.
 //
 // Written from scratch against the public [MS-XCA] specification
-// (docs/[MS-XCA].pdf), section 2.5 "LZNT1 Algorithm Details" - Microsoft's
-// Open Specifications documentation, whose IP notice explicitly permits
+// (https://learn.microsoft.com/openspecs/windows_protocols/ms-xca/), section
+// 2.5 "LZNT1 Algorithm Details" - Microsoft's Open Specifications
+// documentation, whose IP notice explicitly permits
 // copying portions of it into an implementation, keeping this library's
 // licensing Apache/MIT-compatible. No GPL/LGPL LZNT1 implementation
 // (ms-compress, libfwnt, ...) was consulted.

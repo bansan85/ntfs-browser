@@ -167,7 +167,7 @@ The root namespace is the macro `NTFS_BROWSER_NAMESPACE` from `<ntfs-browser/nam
 - `include/ntfs-browser/` — public API headers. These are what consumers of the library include.
 - `src/` — implementation, plus internal-only headers not exposed publicly: `src/data/` (on-disk struct layouts and their bitflag enums, namespace `Data`: boot sector BPB, file record header, index block/entry, run entry, attribute headers and bodies), `src/attr/` (attribute flag bits), `src/cache/` (the `FullCache` block cache and `Cache::View`, namespace `Cache`), `src/record/` (file record header validation and fixups), `src/volume/` (boot sector geometry, namespace `Volume`), `src/efs/` (EFS: `$EFS` parser, FEK, sector ciphers for both backends, Windows key providers). Tests include from `src/` directly (see `NTFSLibTests/unit-tests/CMakeLists.txt`), to reuse these on-disk struct layouts when building fake images, rather than duplicating byte offsets.
 - `NTFSLibTests/` — `unit-tests/` (Catch2, one folder per namespace), `tools/` (the `NtfsFakeImage` and `NtfsTestDiskReaders` static libraries the tests and `NtfsFuzzer` link, the `NtfsDeviceAccess` library the samples and `NtfsCompare` share, plus `ntfscompare`), `fuzz/` and `examples/` (the older MFC-based sample/demo apps).
-- `docs/[MS-XCA].pdf` — Microsoft's compression spec, LZNT1 included. The LZNT1 tests cite its sections.
+- The repository holds no copy of Microsoft's compression spec, [MS-XCA] (LZNT1 included). It is online: <https://learn.microsoft.com/openspecs/windows_protocols/ms-xca/>. The LZNT1 tests cite its sections.
 
 ### Callbacks
 
