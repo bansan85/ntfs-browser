@@ -78,6 +78,6 @@ void CompareAgainstReference(const std::string& method_name,
 
 // Prints every finding, then a per-method summary line, to stdout. Returns
 // true if the report holds a finding other than UNINDEXED.
-bool PrintReport(const Report& report);
+bool PrintReport(const Report& report, bool details = true);
 
 }  // namespace NtfsCompare

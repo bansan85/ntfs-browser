@@ -73,17 +73,24 @@ namespace {
 
 #ifdef _WIN32
 constexpr std::wstring_view log_prefix = Log::option_prefix_w;
+// Command-line switch that prints counts per field instead of each difference.
+constexpr std::wstring_view summary_option = L"--summary";
 #else
 constexpr std::string_view log_prefix = Log::option_prefix;
+constexpr std::string_view summary_option = "--summary";
 #endif
 
 void Usage(const ArgChar* program) {
 #ifdef _WIN32
-  PrintErr("usage: {} [--log=...] <folder>\n", NativeText(program));
+  PrintErr("usage: {} [--log=...] [--summary] <folder>\n", NativeText(program));
 #else
-  PrintErr("usage: {} [--log=...] <folder-or-device>\n", NativeText(program));
+  PrintErr("usage: {} [--log=...] [--summary] <folder-or-device>\n",
+           NativeText(program));
 #endif
   PrintErr("  {}\n", Log::option_usage);
+  PrintErr(
+      "  --summary     print the count of differences per field, with a few "
+      "examples, instead of every difference\n");
   PrintErr(
       "Compares 6 ways of recursively listing <folder>: std::filesystem, "
       "the platform's native API, and NtfsBrowser via NtfsVolume<FullCache>, "
@@ -99,6 +106,8 @@ void Usage(const ArgChar* program) {
 // What the command line asks for: the --log settings and the one folder.
 struct Arguments {
   Log::Config log_config;
+  // Print only the per-field counts of the differences, not each one.
+  bool summary = false;
   // Stays null until the command line names a folder.
   const ArgChar* target = nullptr;
 };
@@ -115,6 +124,10 @@ std::optional<Arguments> ParseArguments(std::span<ArgChar*> args) {
       if (!Log::ParseOption(arg, parsed.log_config)) {
         return std::nullopt;
       }
+      continue;
+    }
+    if (std::basic_string_view<ArgChar>(arg) == summary_option) {
+      parsed.summary = true;
       continue;
     }
     if (parsed.target != nullptr) {
@@ -192,7 +205,8 @@ std::optional<LibraryListings> ListLibraries(VolumeHandles& volume,
 // are skipped, and the library listings are only compared with each other.
 // Returns the exit code.
 int CompareVolume(VolumeHandles& volume, const ArgChar* target_arg,
-                  const std::optional<std::filesystem::path>& os_target) {
+                  const std::optional<std::filesystem::path>& os_target,
+                  bool details) {
   const std::optional<LibraryListings> libraries =
       ListLibraries(volume, target_arg);
   if (!libraries) {
@@ -229,14 +243,14 @@ int CompareVolume(VolumeHandles& volume, const ArgChar* target_arg,
     PrintOut("Not mounted: the operating-system comparison is skipped.\n");
   }
 
-  const bool has_findings = PrintReport(report);
+  const bool has_findings = PrintReport(report, details);
   return has_findings ? 1 : 0;
 }
 
 // Compares the folder target, named target_arg, against the NTFS volume
 // behind it. Returns the exit code.
 int CompareFolder(const std::filesystem::path& target,
-                  const ArgChar* target_arg) {
+                  const ArgChar* target_arg, bool details) {
   std::optional<VolumeHandles> volume = OpenVolumeFor(target);
   if (!volume) {
     PrintErr(
@@ -249,7 +263,7 @@ int CompareFolder(const std::filesystem::path& target,
     return 1;
   }
 
-  return CompareVolume(*volume, target_arg, target);
+  return CompareVolume(*volume, target_arg, target, details);
 }
 
 #ifndef _WIN32
@@ -258,7 +272,7 @@ int CompareFolder(const std::filesystem::path& target,
 // against the operating system at its mount point plus the directory, if it
 // is mounted. Returns the exit code.
 int CompareDevice(const NtfsDevice::DeviceTarget& device,
-                  const ArgChar* target_arg) {
+                  const ArgChar* target_arg, bool details) {
   std::optional<VolumeHandles> volume = OpenDeviceVolume(device);
   if (!volume) {
     return 1;
@@ -271,7 +285,7 @@ int CompareDevice(const NtfsDevice::DeviceTarget& device,
       *os_target /= NtfsDevice::PathFromWide(volume->relative_path);
     }
   }
-  return CompareVolume(*volume, target_arg, os_target);
+  return CompareVolume(*volume, target_arg, os_target, details);
 }
 
 #endif  // !_WIN32
@@ -296,7 +310,7 @@ int Run(int argc, ArgChar** argv) {
   if (const std::optional<NtfsDevice::DeviceTarget> device =
           NtfsDevice::SplitDeviceTarget(
               NtfsDevice::Utf8ToWide(arguments->target))) {
-    return CompareDevice(*device, arguments->target);
+    return CompareDevice(*device, arguments->target, !arguments->summary);
   }
 #endif
 
@@ -307,7 +321,7 @@ int Run(int argc, ArgChar** argv) {
     return 1;
   }
 
-  return CompareFolder(target, arguments->target);
+  return CompareFolder(target, arguments->target, !arguments->summary);
 }
 
 }  // namespace

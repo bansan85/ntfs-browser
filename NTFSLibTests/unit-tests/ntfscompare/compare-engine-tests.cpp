@@ -275,6 +275,95 @@ TEST_CASE(
   CHECK(os_stats.unindexed == 1);
 }
 
+TEST_CASE("The two cache strategies disagreeing lists what each reported",
+          "[ntfscompare][compare][characterization]") {
+  Entry full = FileEntry(5);
+  full.modification_time_utc = 100;
+  Entry none = FileEntry(5);
+  none.modification_time_utc = 101;
+  Entry record = FileEntry(5);
+  record.modification_time_utc = 250;
+  Report report;
+
+  const Listing reference = CompareLibraryMethods(
+      Listing{{L"a.txt", full}}, Listing{{L"a.txt", none}},
+      Listing{{L"a.txt", record}}, report);
+
+  REQUIRE(report.findings.size() == 1);
+  CHECK(report.findings.front().kind == "LIB-MISMATCH");
+  CHECK(report.findings.front().field == "ModificationTimeUtc");
+  CHECK(report.findings.front().actual == "full-cache=100 no-cache=101");
+  CHECK(reference.at(L"a.txt").modification_time_utc == 250);
+}
+
+TEST_CASE("The reference takes the record's values, not the index's",
+          "[ntfscompare][compare][characterization]") {
+  Entry index = FileEntry(0);
+  index.modification_time_utc = 100;
+  index.change_time_utc = 100;
+  Entry record = FileEntry(5);
+  record.modification_time_utc = 250;
+  record.change_time_utc = 300;
+  Report report;
+
+  const Listing reference = CompareLibraryMethods(
+      Listing{{L"a.txt", index}}, Listing{{L"a.txt", index}},
+      Listing{{L"a.txt", record}}, report);
+
+  CHECK(report.findings.empty());
+  CHECK(reference.at(L"a.txt").logical_size == 5);
+  CHECK(reference.at(L"a.txt").modification_time_utc == 250);
+  CHECK(reference.at(L"a.txt").change_time_utc == 300);
+}
+
+TEST_CASE("An access time that differs is not a difference",
+          "[ntfscompare][compare][characterization]") {
+  Entry expected = FileEntry(5);
+  expected.access_time_utc = 100;
+  Entry actual = FileEntry(5);
+  actual.access_time_utc = 900;
+  const Listing listing{{L"a.txt", expected}};
+  Report report;
+  const Listing reference =
+      CompareLibraryMethods(listing, listing, listing, report);
+
+  CompareAgainstReference("std::filesystem", reference,
+                          Listing{{L"a.txt", actual}}, report);
+
+  CHECK(report.findings.empty());
+}
+
+TEST_CASE("A path the records do not reach has no value to compare",
+          "[ntfscompare][compare][characterization]") {
+  Report report;
+
+  const Listing reference = CompareLibraryMethods(
+      Listing{{L"a.txt", FileEntry(5)}}, Listing{{L"a.txt", FileEntry(5)}},
+      Listing{}, report);
+
+  CHECK_FALSE(reference.at(L"a.txt").logical_size.has_value());
+}
+
+TEST_CASE("A modification time that differs from the reference is reported",
+          "[ntfscompare][compare][characterization]") {
+  Entry expected = FileEntry(5);
+  expected.modification_time_utc = 100;
+  Entry actual = FileEntry(5);
+  actual.modification_time_utc = 101;
+  const Listing listing{{L"a.txt", expected}};
+  Report report;
+  const Listing reference =
+      CompareLibraryMethods(listing, listing, listing, report);
+
+  CompareAgainstReference("std::filesystem", reference,
+                          Listing{{L"a.txt", actual}}, report);
+
+  REQUIRE(report.findings.size() == 1);
+  CHECK(report.findings.front().field == "ModificationTimeUtc");
+  CHECK(report.findings.front().expected == "100");
+  CHECK(report.findings.front().actual == "101");
+}
+
 TEST_CASE("PrintReport does not fail on UNINDEXED alone",
           "[ntfscompare][compare][characterization]") {
   const Listing mft_tree{{L"link-a", FileEntry(5)}};

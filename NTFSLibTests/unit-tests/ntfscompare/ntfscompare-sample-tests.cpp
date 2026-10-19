@@ -89,6 +89,28 @@ TEST_CASE("NtfsCompare prints usage for a malformed --log option",
   CHECK(run.out.empty());
 }
 
+TEST_CASE("NtfsCompare accepts --summary before or after the folder",
+          "[ntfscompare][sample][characterization]") {
+  const SampleRun before =
+      RunCompare({L"--summary", L"ntfscompare-no-such-folder"});
+  const SampleRun after =
+      RunCompare({L"ntfscompare-no-such-folder", L"--summary"});
+
+  CHECK(before.exit_code == 1);
+  CHECK(before.err == "ntfscompare-no-such-folder is not a directory\n");
+  CHECK(after.exit_code == 1);
+  CHECK(after.err == before.err);
+}
+
+TEST_CASE("NtfsCompare prints usage for --summary alone",
+          "[ntfscompare][sample][characterization]") {
+  const SampleRun run = RunCompare({L"--summary"});
+
+  CHECK(run.exit_code == 1);
+  CHECK_THAT(run.err, ContainsSubstring("[--summary]"));
+  CHECK(run.out.empty());
+}
+
 TEST_CASE("NtfsCompare refuses a missing folder before opening any volume",
           "[ntfscompare][sample][characterization]") {
   const SampleRun run = RunCompare({L"ntfscompare-no-such-folder"});
@@ -138,11 +160,12 @@ TEST_CASE("NtfsCompare skips the operating system for an unmounted device",
 
   const SampleRun run = RunCompare({image.path.wstring()});
 
-  // The fake image's index entries and records disagree, so the library
-  // comparison itself finds differences and the exit status is 1.
+  // The fake image's index entries and records disagree, which is no
+  // mismatch: the status only depends on the names and the cache strategies.
+  CHECK(run.exit_code == 0);
   CHECK_THAT(run.out, ContainsSubstring("Not mounted: the operating-system "
                                         "comparison is skipped.\n"));
-  CHECK_THAT(run.out, ContainsSubstring("[LIB-MISMATCH]"));
+  CHECK_THAT(run.out, !ContainsSubstring("[LIB-MISMATCH]"));
   CHECK_THAT(run.err, ContainsSubstring("via NtfsVolume<FullCache>"));
   CHECK_THAT(run.err, ContainsSubstring("via NtfsVolume<NoCache>"));
   CHECK_THAT(run.err, !ContainsSubstring("via std::filesystem"));

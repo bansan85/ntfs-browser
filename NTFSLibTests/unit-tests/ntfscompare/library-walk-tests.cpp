@@ -372,17 +372,16 @@ TEST_CASE(
   CHECK(count_kind("UNINDEXED") == 3);
   CHECK(count_kind("LIB-MISSING") == 0);
 
-  // Index entries and MftTree disagree on these fields, so the reference drops
-  // them. Docs/Broken is in no listing, so it is never counted.
-  std::set<std::wstring> mismatched_paths;
-  for (const Finding& finding : report.findings) {
-    if (finding.kind == "LIB-MISMATCH") {
-      mismatched_paths.insert(finding.path);
-    }
-  }
-  CHECK(count_kind("LIB-MISMATCH") == 4);
-  CHECK(mismatched_paths ==
-        std::set<std::wstring>{L"Docs", L"Docs/report.txt"});
+  // Index entries and records disagree on the sizes and times of Docs and
+  // report.txt. That is how NTFS keeps them, not a library mismatch: the
+  // reference takes the record's values. Docs/Broken is in no listing, so it
+  // is never counted.
+  CHECK(count_kind("LIB-MISMATCH") == 0);
+  const Entry& report_record = tree_listing.at(L"Docs/report.txt");
+  const Entry& report_index = full_listing.at(L"Docs/report.txt");
+  REQUIRE(report_record.logical_size != report_index.logical_size);
+  CHECK(reference.at(L"Docs/report.txt").logical_size ==
+        report_record.logical_size);
 
   CompareAgainstReference("std::filesystem", reference, full_listing, report);
 
