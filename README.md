@@ -1,191 +1,143 @@
 # ntfs-browser
-C++20 Fast NTFS browser. Windows-first; the library, its unit tests,
-`NtfsCompare` and `NtfsFuzzerAfl` also build on Linux.
 
+A C++20 Fast NTFS browser.
 
+Reading a volume needs administrator rights.
 
-## Based on Code Project [An NTFS Parser Lib](https://www.codeproject.com/Articles/81456/An-NTFS-Parser-Lib)
+**Disclaimer:** Please read these points first:
 
-Project licensed under BSD-3c.
+- The original project was taken over from codeproject.
+- I have no knowledge of the NTFS or MFT on-disk format on the author's side.
+- Large changes (refactoring, tests, new features) were then made by an AI assistant (Claude), based on the available documentation and its own knowledge of NTFS.
+- The code is 100% vibe coded, and no human has reviewed it.
+- Large changes are still in progress, and the public API is not stable yet.
+- Use at your own risk, and check results against another tool before relying on them.
 
-In `documentation/old` folder, there is an archive of the main web page of the project.
+## Features
 
-This project improves the historical software by:
+- Browse the folders of an NTFS volume.
+- Read files, including compressed files and encrypted files. Encrypted files need the certificate that encrypted them.
+- Show deleted files, if you ask for them.
+- Recover what can be read from a damaged volume, if you ask for it.
+- Read-only: the library never writes to the disk.
 
-  - fixing minor bugs,
-  - rewriting it with C++20 coding style,
-  - caching disk reads (the original's `ReadFile` in
-    `CAttrNonResident::ReadClusters`), now in `Io::FileReader` under
-    `Cache::Strategy::FullCache`,
-  - reading LZNT1-compressed files and directories
-    (`FILE_ATTRIBUTE_COMPRESSED`), which the original skipped entirely:
-    compression units are decompressed transparently, so `ReadData()` keeps
-    returning plain bytes,
-  - reading EFS-encrypted files and directories (`FILE_ATTRIBUTE_ENCRYPTED`),
-    which the original skipped as well. `ReadData()` decrypts `$DATA` streams
-    transparently, when a key is available. See below.
+## Usage
 
-## EFS encryption
+### Command-line tools (Windows)
 
-The File Encryption Key (FEK) of a file is stored in its `$EFS` stream, once per
-allowed user, wrapped with that user's RSA public key. The library needs the
-matching private key to unwrap it. A key comes from an `Efs::IEfsKeyProvider`,
-installed with `NtfsVolume::SetEfsKeyProvider()`:
+- `NtfsDir "C:\Windows"` lists a folder.
+- `NtfsMftList C:` lists every file of a volume. `--deleted` adds deleted files, and `--recover` salvages damaged entries.
+- `NtfsUndel` is a graphical tool that finds and recovers deleted files.
 
-  - by default, the personal certificate store of the current user
-    (`CurrentUser\My`), on Windows. It is opened on the first decryption.
-  - `Efs::MakePfxKeyProvider()`, for a key in a PFX file. The key is never
-    imported into the user's key storage.
-  - your own implementation of `IEfsKeyProvider`.
-  - `SetEfsKeyProvider(nullptr)`, which turns decryption off. Encrypted
-    directories still list, and an encrypted stream reads as `nullopt`, with a
-    warning naming the cause.
+### As a library (C++)
 
-The supported ciphers are AES-256, AES-192, AES-128, 3DES and DESX. Only AES-256
-was checked against a real volume. The others are covered by known-answer and
-round-trip tests. The DESX key layout is a guess, and untested on real data.
-`NtfsVolume::SetEfsCipherBackend()` picks the library that runs the cipher: Crypto++
-(the default) or, on Windows, BCrypt. BCrypt has no DESX, so DESX always uses
-Crypto++.
+```cpp
+#include <cstdio>
 
-Limits: decryption is read-only, and there is no EFS on compressed data. Only a
-`$DATA` stream flagged encrypted is decrypted. `$INDEX_ALLOCATION`, `$BITMAP`
-and `$ATTRIBUTE_LIST` never are.
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/ntfs-volume.h>
 
-Crypto++ is a git submodule, linked statically and privately, even into a
-shared `NtfsBrowser`. To use an installed copy instead, for example one from
-vcpkg, configure with `-DNTFS_BROWSER_USE_INSTALLED_CRYPTOPP=ON`.
+// Called once for each entry of the directory.
+void CountEntry(const NtfsBrowser::IndexEntryView& /*entry*/, void* context) {
+  ++*static_cast<int*>(context);
+}
 
-## FullCache memory
+int main() {
+  using Strategy = NtfsBrowser::Cache::Strategy;
 
-`Cache::Strategy::FullCache` keeps the 64 KiB blocks it reads, up to a soft
-ceiling per volume: `VolumeOptions::max_cache_bytes`, 256 MiB by default. When a
-read pushes the cache over it, the blocks used least recently go first. Pass
-`Cache::unlimited_bytes` to keep everything, as earlier versions did.
+  NtfsBrowser::NtfsVolume<Strategy::FullCache> volume(L'C');
+  if (!volume.IsVolumeOK()) {
+    return 1;
+  }
 
-`NtfsVolume<FullCache>::Read()` returns a `Cache::View`. The bytes stay valid
-while a copy of the view lives and the volume is open, and the cache never
-frees a block a view holds. So the total can exceed the ceiling while views are
-alive. Dropping the last view of a block lets the cache catch up.
+  // Record 5 is the root directory.
+  NtfsBrowser::Io::FileRecord<Strategy::FullCache> root(volume);
+  if (!root.ParseFileRecord(5) || !root.ParseAttrs()) {
+    return 1;
+  }
 
-`NtfsVolume::GetCacheStats()` reports the bytes the cache holds and the part a
-view uses. `NtfsVolume::MinifyCache()` frees every block no view uses, and
-keeps the volume open. `NoCache` has no cache: it ignores the ceiling, returns
-a bare span, and reports zero.
+  int count = 0;
+  root.TraverseSubEntries(CountEntry, &count);
+  std::printf("%d entries in the root directory\n", count);
+  return 0;
+}
+```
 
-## Tests
+## Installation
 
-The unit tests build and run on Windows and Linux (CI runs them with MSVC, GCC
-and Clang). Most of them build synthetic NTFS images in memory and need nothing
-else:
+You need:
+
+- Windows 10 or 11 with Visual Studio 2022 or 2026, or Linux with GCC or Clang.
+- CMake 3.25 or newer.
+- Git.
+
+Clone the repository with its submodules, which hold the third-party libraries:
+
+```
+git clone --recurse-submodules https://github.com/bansan85/ntfs-browser
+```
+
+If you cloned without `--recurse-submodules`, run `git submodule update --init --recursive`.
+
+## Build and test
+
+On Windows, with the CMake presets:
 
 ```
 cmake --preset static
 cmake --build --preset static --parallel
-ctest --test-dir build/static
+ctest --test-dir build/static -C Debug
 ```
 
-### Forensic image corpora
-
-The integration tests (Catch2 tag `[integration]`) read real NTFS images, too
-large for this repository:
-
-| Corpus | Source | Tests |
-| --- | --- | --- |
-| DFTT #3, #7, #10 | [dftt.sourceforge.net](https://dftt.sourceforge.net/): `3-kwsrch-ntfs.zip`, `7-undel-ntfs.zip`, `10b-ntfs-autodetect.zip` | `corpus/dftt-ntfs-tests.cpp` |
-| nps-2009-ntfs1, generation 2 | [Digital Corpora](https://downloads.digitalcorpora.org/corpora/drives/nps-2009-ntfs1/): `ntfs1-gen2.E01`, converted to raw | `corpus/nps-ntfs1-*tests.cpp` |
-| ntfs-samples | [msuhanov/ntfs-samples](https://github.com/msuhanov/ntfs-samples): each `*.raw.gz`, decompressed | `corpus/ntfs-samples-*-tests.cpp` |
-
-A test whose image is missing is skipped. To fetch them all:
+On Linux:
 
 ```
-python .github/scripts/fetch-test-data.py
+cmake -S . -B build-linux
+cmake --build build-linux --parallel
+ctest --test-dir build-linux
 ```
 
-The script needs Python 3, `git`, and `ewfexport` from
-[libewf](https://github.com/libyal/libewf) to convert the E01 image
-(`sudo apt install ewf-tools` on Debian/Ubuntu). On Windows, run it under WSL,
-or run `download` under WSL and `decompress` on Windows. It fills `test-data/`
-at the repository root (gitignored), about 5.1 GiB:
+Some tests read real forensic images. `python .github/scripts/fetch-test-data.py` downloads them. Without them, those tests replay recorded traces, so `ctest` passes without any download.
 
-```
-test-data/
-  dftt/10-ntfs-autodetect/10-ntfs-part{1,2,3}.dd
-  dftt/3-kwsrch-ntfs/ntfs-img-kw-1.dd
-  dftt/7-undel-ntfs/7-ntfs-undel.dd
-  nps-2009-ntfs1/ntfs1-gen2.raw
-  ntfs-samples/ntfs-{2m,lastaccess,ptrn,ramslack,si-vs-fn}.raw
-```
+To leave features out, or to change the build, add options to the configure step:
 
-Two ntfs-samples images are left out:
+- `-DBUILD_SHARED_LIBS=ON` builds a DLL instead of a static library.
+- `-DNTFS_BROWSER_ENABLE_DECOMPRESSION=OFF` removes compressed-file support.
+- `-DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=OFF` and `-DNTFS_BROWSER_ENABLE_EFS_BCRYPT=OFF` remove the encryption backends (BCrypt is Windows only).
+- `-DNTFS_BROWSER_BUILD_MFC_APPS=OFF` skips the graphical tools.
 
-  - `ntfs.raw` needs 64 GiB once `ntfs.tgz` is extracted. Extract it into the
-    ntfs-samples directory by hand to run its test on the real image.
-  - `ntfs_extremely_fragmented_mft.raw` needs 256 GiB. Its RAR archive is not
-    in the repository: its `ReadMe.md` links to it. Point
-    `NTFS_BROWSER_TEST_FRAGMENTED_MFT_IMAGE` at the extracted image to run its
-    test on the real image.
+## Documentation
 
-Without its image, a corpus test does not skip: it replays a recorded trace
-(see below).
+Each public class and function is described in the headers under `include/ntfs-browser/`.
 
-These CMake cache variables locate the images:
+## Contributing
 
-| Variable | Default |
-| --- | --- |
-| `NTFS_BROWSER_TEST_DATA_DIR` | `<repository>/test-data` |
-| `NTFS_BROWSER_TEST_DFTT_DIR` | `<NTFS_BROWSER_TEST_DATA_DIR>/dftt` |
-| `NTFS_BROWSER_TEST_NPS_NTFS1_DIR` | `<NTFS_BROWSER_TEST_DATA_DIR>/nps-2009-ntfs1` |
-| `NTFS_BROWSER_TEST_NTFS_SAMPLES_DIR` | `<NTFS_BROWSER_TEST_DATA_DIR>/ntfs-samples` |
-| `NTFS_BROWSER_TEST_FRAGMENTED_MFT_IMAGE` | `<ntfs-samples dir>/ntfs_extremely_fragmented_mft.raw` |
+- Format the code before committing: `uv run bash ./.github/scripts/format.sh`.
+- Commit messages follow Conventional Commits, with a title of 50 characters at most.
+- [CLAUDE.md](CLAUDE.md) holds the project rules for code, tests and logging.
 
-For example, with the images already on another drive:
+## Changelog
 
-```
-cmake --preset static -DNTFS_BROWSER_TEST_DATA_DIR=D:/ntfs-images
-```
+- 2022-08 — Import of the CodeProject [An NTFS Parser Lib](https://www.codeproject.com/Articles/81456/An-NTFS-Parser-Lib), without changes
+- 2022-08 — First C++ cleanup, CMake build, CI with clang-format and clang-tidy
+- 2022-09 — Disk read cache (`FULL_CACHE`) and first unit tests
+- 2023-10 — Portability fixes: shared library on Windows, clang-cl, `Cache::Strategy` as template parameter
+- 2023-11 — Full path support
+- 2023-11 → 2026-08 — Pause, no commits
+- 2026-08 — Start of work with Claude Code: bug fixes and new features from here on
+- 2026-09 — Hardening against corrupted volumes
+- 2026-09 — AFL fuzzer and Linux port
+- 2026-09 — Deleted files recovery
+- 2026-09 — Damaged data recovery
+- 2026-09 — LZNT1 decompression
+- 2026-09 — EFS decryption (AES, 3DES, DESX)
+- 2026-09 — Integration tests on forensic images, `NtfsCompare` metadata cross-check
+- 2026-10 — Sanitizer builds and 32-bit builds
+- 2026-10 — Static analysis fixes and refactoring, namespaces
+- 2026-10 — Bounded `FullCache` memory
+- 2026-10 — Faster `$MFT` reads and optional read-ahead
 
-The four per-corpus variables can also come from the environment, under the
-same name. A cache variable set with `-D` wins over the environment. The
-environment reaches every preset without editing `CMakePresets.json`. In VS
-Code, set it in `cmake.configureEnvironment`, in your own
-`.vscode/settings.json` (gitignored):
+## Credits and licence
 
-```json
-"cmake.configureEnvironment": {
-  "NTFS_BROWSER_TEST_DFTT_DIR": "D:/ntfs-images/dftt",
-  "NTFS_BROWSER_TEST_NTFS_SAMPLES_DIR": "E:/ntfs-samples"
-}
-```
-
-CMake reads the environment only when it configures. After changing a value,
-configure again.
-
-`-DNTFS_BROWSER_REQUIRE_TEST_DATA=ON` fails, instead of replaying a trace, a
-test whose image the script provides. CI sets it on the Windows legs.
-
-### Recorded traces
-
-[NTFSLibTests/fuzz/data/corpus-traces/](NTFSLibTests/fuzz/data/corpus-traces/)
-holds, for each corpus test, the bytes it read from its image: one read after
-the other, without their address. That is what `SequentialDiskReader` serves,
-so a test runs without the image. A test whose image is missing replays its
-trace, and the Linux legs of CI do so. 
-A trace only fits the read order of the library that recorded it. After a
-change to the read path, a trace test fails. Record the traces again with the
-images present:
-
-```
-NTFS_BROWSER_RECORD_TRACES=1 build/static/NTFSLibTests/unit-tests/Debug/NtfsBrowserTests.exe "[integration]"
-```
-
-`NTFS_BROWSER_FORCE_TRACES=1` replays the traces even when the images are
-present, to check them without removing the images. The Windows-only EFS test
-of the NPS corpus has no trace: it still needs the image.
-
-### CI
-
-The `test-data` job runs the script's `download` step on Ubuntu, and caches
-`test-data/`. The cache key is the script's hash, so editing the script fetches
-everything again. Each Windows leg restores the cache, runs `decompress`, and
-runs `ctest` with `NTFS_BROWSER_REQUIRE_TEST_DATA=ON`.
+Based on [An NTFS Parser Lib](https://www.codeproject.com/Articles/81456/An-NTFS-Parser-Lib) from CodeProject. The project is licensed under BSD-3c. The original web page is archived in `documentation/old`.
