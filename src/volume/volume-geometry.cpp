@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <bit>
 #include <limits>
 #include <optional>
 #include <span>
@@ -17,6 +18,12 @@
 namespace NTFS_BROWSER_NAMESPACE::Volume {
 
 namespace {
+
+// Smallest sector size NTFS supports, in bytes.
+constexpr WORD min_sector_size = 256;
+
+// Largest sector size NTFS supports, in bytes: the 4Kn drive sector.
+constexpr WORD max_sector_size = 4096;
 
 // Largest -log2 of sectors per cluster the BPB encoding may carry: a cluster
 // of 2^12 sectors, far beyond any real volume.
@@ -57,20 +64,28 @@ std::optional<DWORD> DecodeClusterSize(char spc, WORD sector_size) {
   return sector_size * (1U << static_cast<unsigned char>(-spc));
 }
 
-// Set sector_size from the BPB. Reject a sector too small to be real.
+// Set sector_size from the BPB. Reject a size outside 256..4096 bytes, and a
+// size that is not a power of two. The geometry is not salvageable.
 bool ParseSectorSize(const Data::NtfsBpb& bpb, Geometry& geometry) {
   geometry.sector_size = bpb.bytes_per_sector;
   Log::Info("Sector Size = {} bytes", geometry.sector_size);
 
-  // A sector smaller than one WORD cannot be a real BPB value.
-  if (geometry.sector_size < sizeof(WORD)) {
-    Log::Error("Sector Size must be at least 2 bytes");
+  if (geometry.sector_size < min_sector_size ||
+      geometry.sector_size > max_sector_size) {
+    Log::Error("Sector Size must be between {} and {} bytes", min_sector_size,
+               max_sector_size);
+    return false;
+  }
+  if (!std::has_single_bit(geometry.sector_size)) {
+    Log::Error("Sector Size must be a power of two");
     return false;
   }
   return true;
 }
 
-// Set cluster_size from the BPB. Reject a null cluster.
+// Set cluster_size from the BPB. Reject a null cluster, and a cluster that is
+// not a power of two. The sector size is one, so this means a positive
+// sectors_per_cluster that is not.
 bool ParseClusterSize(const Data::NtfsBpb& bpb, Geometry& geometry) {
   const std::optional<DWORD> decoded_cluster_size = DecodeClusterSize(
       static_cast<char>(bpb.sectors_per_cluster), geometry.sector_size);
@@ -83,6 +98,11 @@ bool ParseClusterSize(const Data::NtfsBpb& bpb, Geometry& geometry) {
 
   if (geometry.cluster_size == 0) {
     Log::Error("Cluster Size can't be null");
+    return false;
+  }
+
+  if (!std::has_single_bit(geometry.cluster_size)) {
+    Log::Error("Cluster Size must be a power of two");
     return false;
   }
   return true;

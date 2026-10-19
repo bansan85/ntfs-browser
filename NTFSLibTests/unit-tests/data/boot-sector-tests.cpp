@@ -256,22 +256,6 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK_THAT(log, !ContainsSubstring("Sector Size = "));
 }
 
-TEMPLATE_TEST_CASE_SIG("NtfsVolume rejects a sector size below two bytes",
-                       "[ntfs-volume][regression]", ((Cache::Strategy S), S),
-                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const WORD sector_size : {WORD{0}, WORD{1}}) {
-    INFO("bytes_per_sector = " << sector_size);
-    bool volume_ok = true;
-    const std::string log = LogOfBpbEdit<S>(
-        [sector_size](auto& bpb) { bpb.bytes_per_sector = sector_size; },
-        volume_ok);
-
-    CHECK_FALSE(volume_ok);
-    CHECK_THAT(log, ContainsSubstring("Sector Size must be at least 2 bytes"));
-    CHECK_THAT(log, !ContainsSubstring("Cluster Size = "));
-  }
-}
-
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a sectors_per_cluster magnitude beyond -12",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
@@ -342,27 +326,6 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "NtfsVolume rejects a file record smaller than its header",
-    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
-    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  // 2-byte sectors keep a 16-byte record a whole number of sectors, so only
-  // the header-size check can reject it.
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) {
-        bpb.bytes_per_sector = 2;
-        bpb.sectors_per_cluster = 32;
-        bpb.clusters_per_file_record = static_cast<DWORD>(-4);
-      },
-      volume_ok);
-
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("FileRecord Size = 16 bytes"));
-  CHECK_THAT(log, ContainsSubstring("FileRecord Size is invalid"));
-  CHECK_THAT(log, !ContainsSubstring("IndexBlock Size = "));
-}
-
-TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a file record that is not a whole number of sectors",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
@@ -408,28 +371,6 @@ TEMPLATE_TEST_CASE_SIG(
                         "clusters_per_index_block magnitude out of range"));
     CHECK_THAT(log, !ContainsSubstring("MFT address = "));
   }
-}
-
-TEMPLATE_TEST_CASE_SIG(
-    "NtfsVolume rejects an index block smaller than its header",
-    "[ntfs-volume][regression]", ((Cache::Strategy S), S),
-    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  // 2-byte sectors keep a 2-byte index block a whole number of sectors, so
-  // only the header-size check can reject it.
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) {
-        bpb.bytes_per_sector = 2;
-        bpb.sectors_per_cluster = 32;
-        bpb.clusters_per_file_record = 1;
-        bpb.clusters_per_index_block = static_cast<DWORD>(-1);
-      },
-      volume_ok);
-
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("IndexBlock Size = 2 bytes"));
-  CHECK_THAT(log, ContainsSubstring("IndexBlock Size is invalid"));
-  CHECK_THAT(log, !ContainsSubstring("MFT address = "));
 }
 
 TEMPLATE_TEST_CASE_SIG(

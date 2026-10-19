@@ -65,7 +65,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 148>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 152>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -107,7 +107,7 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 148>
           {"FileRecord Size exceeds the maximum supported file record "
            "size"}}},
         {"sector_size_too_small",
-         {true, {"Sector Size must be at least 2 bytes"}}},
+         {true, {"Sector Size must be between 256 and 4096 bytes"}}},
         {"attribute_list_extension_record_cycle",
          {true, {"already resolved in this chain, skipping"}}},
         {"attribute_list_short_read",
@@ -519,6 +519,14 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 148>
          {true, {"Total sectors can't be null"}}},
         {"boot_sector_mft_beyond_total_sectors",
          {true, {"First $MFT record lies beyond the volume's 2 sectors"}}},
+        {"boot_sector_sector_size_not_power_of_two",
+         {true, {"Sector Size must be a power of two"}}},
+        {"boot_sector_sector_size_out_of_range",
+         {true, {"Sector Size must be between 256 and 4096 bytes"}}},
+        {"boot_sector_sector_size_above_range",
+         {true, {"Sector Size must be between 256 and 4096 bytes"}}},
+        {"boot_sector_sectors_per_cluster_not_power_of_two",
+         {true, {"Cluster Size must be a power of two"}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -612,6 +620,10 @@ NTFS_REGRESSION_TESTCASE("bitmap_resident_data_read")
 NTFS_REGRESSION_TESTCASE("boot_sector_mft_beyond_total_sectors")
 NTFS_REGRESSION_TESTCASE("boot_sector_missing_aa55_marker")
 NTFS_REGRESSION_TESTCASE("boot_sector_read_failure")
+NTFS_REGRESSION_TESTCASE("boot_sector_sector_size_above_range")
+NTFS_REGRESSION_TESTCASE("boot_sector_sector_size_not_power_of_two")
+NTFS_REGRESSION_TESTCASE("boot_sector_sector_size_out_of_range")
+NTFS_REGRESSION_TESTCASE("boot_sector_sectors_per_cluster_not_power_of_two")
 NTFS_REGRESSION_TESTCASE("boot_sector_total_sectors_zero")
 NTFS_REGRESSION_TESTCASE("boot_sectors_per_cluster_shift_out_of_range")
 NTFS_REGRESSION_TESTCASE("cluster_size_null")

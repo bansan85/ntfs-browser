@@ -29,7 +29,9 @@ struct BootSectorParse {
 // end marker rejects the sector, unless recover is true: it is then logged
 // and the parse goes on. The same holds for a null total_sectors, and for a
 // volume too small to hold the first $MFT record. The last check needs the
-// geometry, so it runs after the others.
+// geometry, so it runs after the others. A sector size outside 256..4096
+// bytes or not a power of two, and a cluster size that is not a power of two,
+// always reject: that geometry cannot be salvaged.
 [[nodiscard]] BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
                                               bool recover);
 
