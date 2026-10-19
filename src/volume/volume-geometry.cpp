@@ -161,6 +161,38 @@ bool ParseMftAddress(const Data::NtfsBpb& bpb, Geometry& geometry) {
   return true;
 }
 
+// Check total_sectors from the BPB. Reject a null count, and a volume too
+// small to hold the first $MFT record. A salvageable condition is logged and
+// kept when recover is true.
+bool ParseTotalSectors(const Data::NtfsBpb& bpb, const Geometry& geometry,
+                       bool recover) {
+  Log::Info("Total sectors = {}", bpb.total_sectors);
+
+  if (bpb.total_sectors == 0) {
+    Log::Recoverable(recover, "Total sectors can't be null");
+    // A null volume holds no record at all: the size check adds nothing.
+    return recover;
+  }
+
+  // Saturates instead of overflowing: both factors come from the BPB.
+  const ULONGLONG volume_bytes =
+      bpb.total_sectors >
+              std::numeric_limits<ULONGLONG>::max() / geometry.sector_size
+          ? std::numeric_limits<ULONGLONG>::max()
+          : bpb.total_sectors * geometry.sector_size;
+
+  // The first $MFT record, at mft_addr, MUST end inside the volume. The
+  // subtraction cannot wrap, since the first operand is checked first.
+  if (geometry.mft_addr > volume_bytes ||
+      geometry.file_record_size > volume_bytes - geometry.mft_addr) {
+    Log::Recoverable(recover,
+                     "First $MFT record lies beyond the volume's {} sectors",
+                     bpb.total_sectors);
+    return recover;
+  }
+  return true;
+}
+
 }  // namespace
 
 BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
@@ -189,7 +221,8 @@ BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
              ParseClusterSize(bpb, parse.geometry) &&
              ParseFileRecordSize(bpb, parse.geometry) &&
              ParseIndexBlockSize(bpb, parse.geometry) &&
-             ParseMftAddress(bpb, parse.geometry);
+             ParseMftAddress(bpb, parse.geometry) &&
+             ParseTotalSectors(bpb, parse.geometry, recover);
   return parse;
 }
 

@@ -27,7 +27,9 @@ struct BootSectorParse {
 // Decodes the geometry from a boot sector, logging each field as it goes.
 // boot_sector MUST hold at least one whole BPB, 512 bytes. A missing 0xAA55
 // end marker rejects the sector, unless recover is true: it is then logged
-// and the parse goes on.
+// and the parse goes on. The same holds for a null total_sectors, and for a
+// volume too small to hold the first $MFT record. The last check needs the
+// geometry, so it runs after the others.
 [[nodiscard]] BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
                                               bool recover);
 

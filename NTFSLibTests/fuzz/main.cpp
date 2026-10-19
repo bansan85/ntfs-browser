@@ -1,9 +1,11 @@
 #include <array>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
 #include <exception>
+#include <limits>
 #include <optional>
 #include <random>
 #include <span>
@@ -83,6 +85,10 @@ constexpr size_t bpb_signature_len = 8;
 constexpr size_t bpb_marker_offset = 510;
 // The two bytes of the 0xAA55 end marker, in disk order.
 constexpr std::array<BYTE, 2> bpb_marker{0x55, 0xAA};
+// NtfsBpb::total_sectors sits at byte 40 of the boot sector.
+constexpr size_t bpb_total_sectors_offset = 40;
+// Passes any size check: no real MFT address exceeds it.
+constexpr uint64_t bpb_total_sectors = std::numeric_limits<uint64_t>::max();
 
 // Serves an endless RNG stream, patching a valid boot-sector signature
 // into the first read 95% of the time, so most iterations reach real
@@ -93,28 +99,33 @@ SequentialDiskReader::Producer
   const bool inject_signature =
       std::uniform_int_distribution<int>(1, 100)(rng) <= 95;
 
-  return MakeGeneratorProducer(
-      [rng, inject_signature, nth_call = 0](std::span<BYTE> dest) mutable {
-        size_t filled = 0;
-        while (filled < dest.size()) {
-          const uint64_t word = rng();
-          const size_t chunk = std::min(sizeof(word), dest.size() - filled);
-          std::memcpy(dest.data() + filled, &word, chunk);
-          filled += chunk;
-        }
+  return MakeGeneratorProducer([rng, inject_signature,
+                                nth_call = 0](std::span<BYTE> dest) mutable {
+    size_t filled = 0;
+    while (filled < dest.size()) {
+      const uint64_t word = rng();
+      const size_t chunk = std::min(sizeof(word), dest.size() - filled);
+      std::memcpy(dest.data() + filled, &word, chunk);
+      filled += chunk;
+    }
 
-        if (nth_call == 0 && inject_signature &&
-            dest.size() >= bpb_signature_offset + bpb_signature_len) {
-          std::memcpy(dest.data() + bpb_signature_offset, bpb_signature.data(),
-                      bpb_signature_len);
-        }
-        if (nth_call == 0 && inject_signature &&
-            dest.size() >= bpb_marker_offset + bpb_marker.size()) {
-          std::memcpy(dest.data() + bpb_marker_offset, bpb_marker.data(),
-                      bpb_marker.size());
-        }
-        nth_call++;
-      });
+    if (nth_call == 0 && inject_signature &&
+        dest.size() >= bpb_signature_offset + bpb_signature_len) {
+      std::memcpy(dest.data() + bpb_signature_offset, bpb_signature.data(),
+                  bpb_signature_len);
+    }
+    if (nth_call == 0 && inject_signature &&
+        dest.size() >= bpb_marker_offset + bpb_marker.size()) {
+      std::memcpy(dest.data() + bpb_marker_offset, bpb_marker.data(),
+                  bpb_marker.size());
+    }
+    if (nth_call == 0 && inject_signature &&
+        dest.size() >= bpb_total_sectors_offset + sizeof(bpb_total_sectors)) {
+      std::memcpy(dest.data() + bpb_total_sectors_offset, &bpb_total_sectors,
+                  sizeof(bpb_total_sectors));
+    }
+    nth_call++;
+  });
 }
 
 // The two VolumeOptions combinations every seed is run under: strict (both

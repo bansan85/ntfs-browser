@@ -180,6 +180,8 @@ std::vector<BYTE> BuildFakeNtfsImage() {
   constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
   const size_t image_size = std::max(records_end, full_cache_read_block_size);
   std::vector<BYTE> image(image_size, 0);
+  // The volume spans the whole image, so the $MFT records sit inside it.
+  bpb.total_sectors = image_size / bytes_per_sector;
   std::memcpy(image.data(), &bpb, sizeof(bpb));
 
   const auto put_record = [&](Mft::Idx idx, const FakeRecord& record) {

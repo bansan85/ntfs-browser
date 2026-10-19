@@ -494,12 +494,19 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume accepts the largest plausible MFT address",
                        "[ntfs-volume][regression]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // (2^52 - 1) clusters of 1024 bytes: the last offset under LONGLONG_MAX / 2.
+  // The volume declares the most sectors it can, so the first $MFT record
+  // fits in it.
   bool volume_ok = true;
   const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) { bpb.lcn_mft = (1ULL << 52U) - 1; }, volume_ok);
+      [](auto& bpb) {
+        bpb.lcn_mft = (1ULL << 52U) - 1;
+        bpb.total_sectors = std::numeric_limits<ULONGLONG>::max();
+      },
+      volume_ok);
 
   CHECK_THAT(log, ContainsSubstring("MFT address = 0x3FFFFFFFFFFFFC00"));
   CHECK_THAT(log, !ContainsSubstring("MFT address is invalid"));
+  CHECK_THAT(log, !ContainsSubstring("First $MFT record lies beyond"));
 }
 
 TEMPLATE_TEST_CASE_SIG(

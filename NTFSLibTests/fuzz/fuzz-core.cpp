@@ -7,6 +7,7 @@
 #include <cstring>
 #include <exception>
 #include <format>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -61,9 +62,17 @@ constexpr size_t bpb_marker_offset = 510;
 // The two bytes of the 0xAA55 end marker, in disk order.
 constexpr std::array<BYTE, 2> bpb_marker{0x55, 0xAA};
 
-// Overwrites the boot sector signature, and the 0xAA55 end marker when
-// patch_marker is true, so ParseBootSector() accepts it.
-void PatchBpbSignature(std::span<BYTE> data, bool patch_marker) {
+// NtfsBpb::total_sectors sits at byte 40 of the boot sector.
+constexpr size_t bpb_total_sectors_offset = 40;
+// Passes any size check: the volume check compares it with a saturating
+// byte count, so no real MFT address exceeds it.
+constexpr std::uint64_t bpb_total_sectors =
+    std::numeric_limits<std::uint64_t>::max();
+
+// Overwrites the boot sector signature so ParseBootSector() accepts it. Also
+// overwrites the 0xAA55 end marker and total_sectors, each one when patch
+// asks for it.
+void PatchBpbSignature(std::span<BYTE> data, const BootSectorPatch& patch) {
   if (data.size() >= bpb_signature_offset + bpb_signature_len) {
     // The enclosing check leaves room for bpb_signature_len bytes at the
     // offset.
@@ -71,10 +80,17 @@ void PatchBpbSignature(std::span<BYTE> data, bool patch_marker) {
     std::memcpy(&data[bpb_signature_offset], bpb_signature.data(),
                 bpb_signature_len);
   }
-  if (patch_marker && data.size() >= bpb_marker_offset + bpb_marker.size()) {
+  if (patch.marker && data.size() >= bpb_marker_offset + bpb_marker.size()) {
     // The enclosing check leaves room for the marker at the offset.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&data[bpb_marker_offset], bpb_marker.data(), bpb_marker.size());
+  }
+  if (patch.total_sectors &&
+      data.size() >= bpb_total_sectors_offset + sizeof(bpb_total_sectors)) {
+    // The enclosing check leaves room for the field at the offset.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    std::memcpy(&data[bpb_total_sectors_offset], &bpb_total_sectors,
+                sizeof(bpb_total_sectors));
   }
 }
 
@@ -373,8 +389,8 @@ void RunBothStrategies(std::span<const BYTE> data, const VolumeOptions& options,
 }  // namespace
 
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
-                  bool patch_boot_marker) {
-  PatchBpbSignature(data, patch_boot_marker);
+                  const BootSectorPatch& patch) {
+  PatchBpbSignature(data, patch);
 
   // Guarded independently, so one run's exception can't skip the others.
   // Each strategy runs once per VolumeOptions mode, so the strict

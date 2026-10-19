@@ -65,7 +65,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 146>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 148>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -515,12 +515,19 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 146>
         {"names_filename_zero_length_name", {true, {"Attribute: File Name"}}},
         {"boot_sector_missing_aa55_marker",
          {true, {"Boot sector end marker is not 0xAA55"}}},
+        {"boot_sector_total_sectors_zero",
+         {true, {"Total sectors can't be null"}}},
+        {"boot_sector_mft_beyond_total_sectors",
+         {true, {"First $MFT record lies beyond the volume's 2 sectors"}}},
 };
 
-// The testcase whose boot sector end marker FuzzTestcase() MUST leave as it
-// is: it tests the marker's absence. Every other one gets it patched in.
-constexpr std::string_view unpatched_marker_testcase =
-    "boot_sector_missing_aa55_marker";
+// The boot sector fields FuzzTestcase() patches for a testcase: all of them,
+// except the one whose check the testcase tests.
+NtfsFuzz::BootSectorPatch PatchFor(std::string_view name) {
+  return {.marker = name != "boot_sector_missing_aa55_marker",
+          .total_sectors = name != "boot_sector_total_sectors_zero" &&
+                           name != "boot_sector_mft_beyond_total_sectors"};
+}
 
 // Runs one saved regression testcase in-process and, if
 // expected_error_messages has an entry for it, checks the messages it logged
@@ -540,8 +547,7 @@ void RunRegressionTestcase(std::string_view name) {
   (void)TakeCapturedLog();
   // A library exception escaping FuzzTestcase() is a failure here, as a
   // crash would be in the old subprocess run.
-  CHECK_NOTHROW(
-      NtfsFuzz::FuzzTestcase(*data, true, name != unpatched_marker_testcase));
+  CHECK_NOTHROW(NtfsFuzz::FuzzTestcase(*data, true, PatchFor(name)));
   const std::string output = TakeCapturedLog();
 
   const auto* const iterator = expected_error_messages.find(name);
@@ -603,8 +609,10 @@ NTFS_REGRESSION_TESTCASE("attribute_walk_no_end_marker")
 NTFS_REGRESSION_TESTCASE("bitmap_multi_cluster")
 NTFS_REGRESSION_TESTCASE("bitmap_nonres_sparse_runs")
 NTFS_REGRESSION_TESTCASE("bitmap_resident_data_read")
+NTFS_REGRESSION_TESTCASE("boot_sector_mft_beyond_total_sectors")
 NTFS_REGRESSION_TESTCASE("boot_sector_missing_aa55_marker")
 NTFS_REGRESSION_TESTCASE("boot_sector_read_failure")
+NTFS_REGRESSION_TESTCASE("boot_sector_total_sectors_zero")
 NTFS_REGRESSION_TESTCASE("boot_sectors_per_cluster_shift_out_of_range")
 NTFS_REGRESSION_TESTCASE("cluster_size_null")
 NTFS_REGRESSION_TESTCASE("compressed_data_read")
