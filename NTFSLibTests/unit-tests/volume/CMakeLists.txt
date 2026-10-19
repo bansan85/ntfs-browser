@@ -2,6 +2,7 @@ target_sources(
   NtfsBrowserTests
   PRIVATE
     "boot-sector-geometry-characterization-tests.cpp"
+    "boot-sector-marker-tests.cpp"
     "cache-ceiling-options-tests.cpp"
     "coverage-volume-tests.cpp"
     "drive-letter-tests.cpp"

@@ -21,11 +21,6 @@ namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
-// The boot sector's last two bytes: 0xAA55, little-endian.
-constexpr BYTE boot_signature_low = 0xAA;
-
-constexpr BYTE boot_signature_high = 0x55;
-
 // Builds a fake $MFT record: one non-resident DATA attribute whose
 // real_size reports sentinel_record_count fake records, with an empty
 // data run (GetRecordsCount() only reads real_size).
@@ -174,8 +169,8 @@ std::vector<BYTE> BuildFakeNtfsImage() {
   bpb.lcn_mft = mft_lcn;
   bpb.clusters_per_file_record = 1;
   bpb.clusters_per_index_block = 1;
-  bpb.x_aa = boot_signature_low;
-  bpb.x_55 = boot_signature_high;
+  bpb.x_aa = NTFS_BROWSER_NAMESPACE::Data::bpb_marker_first;
+  bpb.x_55 = NTFS_BROWSER_NAMESPACE::Data::bpb_marker_second;
 
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
   const size_t records_end =

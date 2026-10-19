@@ -163,7 +163,8 @@ bool ParseMftAddress(const Data::NtfsBpb& bpb, Geometry& geometry) {
 
 }  // namespace
 
-BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector) {
+BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
+                                bool recover) {
   BootSectorParse parse;
   const auto& bpb = *reinterpret_cast<const Data::NtfsBpb*>(boot_sector.data());
 
@@ -172,6 +173,14 @@ BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector) {
   if (signature != Data::ntfs_signature) {
     Log::Warn("Volume file system is not NTFS");
     return parse;
+  }
+
+  if (bpb.x_aa != Data::bpb_marker_first ||
+      bpb.x_55 != Data::bpb_marker_second) {
+    Log::Recoverable(recover, "Boot sector end marker is not 0xAA55");
+    if (!recover) {
+      return parse;
+    }
   }
 
   // Each field is validated and logged in turn. The first failure stops the

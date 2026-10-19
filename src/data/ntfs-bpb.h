@@ -23,6 +23,13 @@ inline constexpr size_t bpb_volume_serial_size = 8;
 // Size of the boot code that fills the sector up to its 0xAA55 marker.
 inline constexpr size_t bpb_boot_code_size = 430;
 
+// Byte 510 of the boot sector: the low byte of the end marker WORD 0xAA55,
+// which little-endian storage puts first.
+inline constexpr BYTE bpb_marker_first = 0x55;
+
+// Byte 511 of the boot sector: the high byte of the end marker WORD 0xAA55.
+inline constexpr BYTE bpb_marker_second = 0xAA;
+
 #pragma pack(1)
 
 struct NtfsBpb {
@@ -60,7 +67,8 @@ struct NtfsBpb {
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   BYTE code[bpb_boot_code_size];
 
-  // 0xAA55
+  // End marker 0xAA55. As stored, x_aa (byte 510) is 0x55 and x_55 (byte
+  // 511) is 0xAA: the names read the WORD, not the bytes.
   BYTE x_aa;
   BYTE x_55;
 };

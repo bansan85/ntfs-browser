@@ -79,6 +79,10 @@ constexpr size_t bpb_signature_offset = 3;
 constexpr std::string_view bpb_signature = "NTFS    ";
 // Byte length of bpb_signature, excluding its terminator.
 constexpr size_t bpb_signature_len = 8;
+// NtfsBpb::x_aa sits at the end of the 512-byte boot sector.
+constexpr size_t bpb_marker_offset = 510;
+// The two bytes of the 0xAA55 end marker, in disk order.
+constexpr std::array<BYTE, 2> bpb_marker{0x55, 0xAA};
 
 // Serves an endless RNG stream, patching a valid boot-sector signature
 // into the first read 95% of the time, so most iterations reach real
@@ -103,6 +107,11 @@ SequentialDiskReader::Producer
             dest.size() >= bpb_signature_offset + bpb_signature_len) {
           std::memcpy(dest.data() + bpb_signature_offset, bpb_signature.data(),
                       bpb_signature_len);
+        }
+        if (nth_call == 0 && inject_signature &&
+            dest.size() >= bpb_marker_offset + bpb_marker.size()) {
+          std::memcpy(dest.data() + bpb_marker_offset, bpb_marker.data(),
+                      bpb_marker.size());
         }
         nth_call++;
       });

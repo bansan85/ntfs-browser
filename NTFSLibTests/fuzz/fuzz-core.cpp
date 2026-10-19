@@ -56,14 +56,25 @@ constexpr std::string_view bpb_signature = "NTFS    ";
 // Byte length of bpb_signature, excluding its terminator.
 constexpr size_t bpb_signature_len = 8;
 
-// Overwrites the boot sector signature so ParseBootSector() accepts it.
-void PatchBpbSignature(std::span<BYTE> data) {
+// NtfsBpb::x_aa sits at the end of the 512-byte boot sector.
+constexpr size_t bpb_marker_offset = 510;
+// The two bytes of the 0xAA55 end marker, in disk order.
+constexpr std::array<BYTE, 2> bpb_marker{0x55, 0xAA};
+
+// Overwrites the boot sector signature, and the 0xAA55 end marker when
+// patch_marker is true, so ParseBootSector() accepts it.
+void PatchBpbSignature(std::span<BYTE> data, bool patch_marker) {
   if (data.size() >= bpb_signature_offset + bpb_signature_len) {
     // The enclosing check leaves room for bpb_signature_len bytes at the
     // offset.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     std::memcpy(&data[bpb_signature_offset], bpb_signature.data(),
                 bpb_signature_len);
+  }
+  if (patch_marker && data.size() >= bpb_marker_offset + bpb_marker.size()) {
+    // The enclosing check leaves room for the marker at the offset.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    std::memcpy(&data[bpb_marker_offset], bpb_marker.data(), bpb_marker.size());
   }
 }
 
@@ -361,8 +372,9 @@ void RunBothStrategies(std::span<const BYTE> data, const VolumeOptions& options,
 
 }  // namespace
 
-void FuzzTestcase(std::span<BYTE> data, bool inject_failures) {
-  PatchBpbSignature(data);
+void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
+                  bool patch_boot_marker) {
+  PatchBpbSignature(data, patch_boot_marker);
 
   // Guarded independently, so one run's exception can't skip the others.
   // Each strategy runs once per VolumeOptions mode, so the strict

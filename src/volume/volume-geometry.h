@@ -25,8 +25,10 @@ struct BootSectorParse {
 };
 
 // Decodes the geometry from a boot sector, logging each field as it goes.
-// boot_sector MUST hold at least one whole BPB, 512 bytes.
-[[nodiscard]] BootSectorParse
-    ParseBootSector(std::span<const BYTE> boot_sector);
+// boot_sector MUST hold at least one whole BPB, 512 bytes. A missing 0xAA55
+// end marker rejects the sector, unless recover is true: it is then logged
+// and the parse goes on.
+[[nodiscard]] BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
+                                              bool recover);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Volume

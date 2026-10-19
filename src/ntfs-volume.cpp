@@ -232,7 +232,8 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     Log::Error("Read boot sector error");
     return false;
   }
-  const Volume::BootSectorParse parse = Volume::ParseBootSector(*bpb_buffer);
+  const Volume::BootSectorParse parse =
+      Volume::ParseBootSector(*bpb_buffer, options.recover_errors);
   geometry = parse.geometry;
   // Sized from the decoded cluster, even when a later field is rejected.
   cluster_buffer.resize(geometry.cluster_size);
