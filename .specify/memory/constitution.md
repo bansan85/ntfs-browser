@@ -1,10 +1,12 @@
 <!--
 Sync Impact Report
-Version change: 1.1.0 -> 1.2.0 (MINOR: new rule).
-Modified sections: Technical Constraints (new MUST: no function body in a header for a
-Strategy-only template).
-Reason: the two instantiations are known, so the code belongs in the .cpp; specs/002-no-template-code-in-headers.
+Version change: 1.2.0 -> 1.3.0 (MINOR: materially expanded guidance). Awaiting maintainer approval.
+Modified sections: Technical Constraints (NtfsDir and NtfsMftList MUST build with GCC on Linux;
+the Windows-only list names NtfsDir2, NtfsAttr, NtfsDump, NtfsUndel and NtfsFuzzer).
+Reason: NtfsDir and NtfsMftList run on Linux; specs/003-linux-ntfsdir-mftlist.
 Templates: plan-template.md checked, no change needed.
+Previous: 1.1.0 -> 1.2.0 (MINOR: new rule, no function body in a header for a Strategy-only
+template; specs/002-no-template-code-in-headers).
 Previous: 1.0.0 -> 1.1.0 (MINOR: new MUST, no `friend` declaration; specs/001-remove-friend-classes).
 -->
 
@@ -66,9 +68,10 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
 
 ## Technical Constraints
 
-- The primary target is C++20 with MSVC on Windows. The library, the unit tests, NtfsCompare
-  and NtfsFuzzerAfl MUST also build with GCC on Linux.
-- Windows-only executables MUST be guarded with `if(WIN32)` in CMake.
+- The primary target is C++20 with MSVC on Windows. The library, the unit tests, NtfsDir,
+  NtfsMftList, NtfsCompare and NtfsFuzzerAfl MUST also build with GCC on Linux.
+- Windows-only executables MUST be guarded with `if(WIN32)` in CMake. They are NtfsDir2, NtfsAttr,
+  NtfsDump, NtfsUndel and NtfsFuzzer.
 - `include/`, `src/` and `NTFSLibTests/` MUST NOT contain a `friend` declaration. A class MUST get
   what it needs from another class through that class's methods, not through friendship.
   `.github/scripts/check-no-friend.py` enforces it in CI.
@@ -126,4 +129,4 @@ PATCH for wording, typo fixes and clarifications that change no obligation.
 Development Workflow and Quality Gates. A violated MUST MUST be fixed, or justified in the
 pull request description. Complexity beyond what a principle requires MUST be justified in the same way.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-18
+**Version**: 1.3.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-19

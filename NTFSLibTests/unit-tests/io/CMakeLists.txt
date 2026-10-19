@@ -4,6 +4,7 @@ target_sources(
     "disk-read-failure-tests.cpp"
     "disk-reader-tests.cpp"
     "file-reader-tests.cpp"
+    "ntfsdir-sample-tests.cpp"
     "read-ahead-disk-reader-tests.cpp"
     "record-offset-overflow-tests.cpp"
 )
@@ -13,16 +14,19 @@ target_include_directories(
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-# NtfsDir and NtfsDir2 are Windows-only samples (examples/CMakeLists.txt), so
-# their test exists only where the samples build.
+# NtfsDir runs on Windows and Linux (examples/CMakeLists.txt). NtfsDir2, the
+# same listing over the other cache strategy, is Windows-only.
+add_dependencies(NtfsBrowserTests NtfsDir)
+target_compile_definitions(
+  NtfsBrowserTests
+  PRIVATE NTFS_DIR_EXE="$<TARGET_FILE:NtfsDir>"
+)
+
 if(WIN32)
-  target_sources(NtfsBrowserTests PRIVATE "ntfsdir-sample-tests.cpp")
-  add_dependencies(NtfsBrowserTests NtfsDir NtfsDir2)
+  add_dependencies(NtfsBrowserTests NtfsDir2)
   target_compile_definitions(
     NtfsBrowserTests
-    PRIVATE
-      NTFS_DIR_EXE="$<TARGET_FILE:NtfsDir>"
-      NTFS_DIR2_EXE="$<TARGET_FILE:NtfsDir2>"
+    PRIVATE NTFS_DIR2_EXE="$<TARGET_FILE:NtfsDir2>"
   )
 
   # Win32DiskReader only exists on Windows.

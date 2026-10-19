@@ -1,11 +1,12 @@
 #include "ntfsdir-core.h"
 
+#include <cerrno>
 #include <cstdio>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-
-#include <gsl/narrow>
+#include <utility>
 
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/index-entry.h>
@@ -15,15 +16,32 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "device-path.h"
+#include "local-time.h"
+#include "text-convert.h"
+#include "tool-support.h"
+
+#ifndef _WIN32
+  #include "posix-device-disk-reader.h"
+#endif
+
 using namespace NTFS_BROWSER_NAMESPACE;
 
 void Usage() {
   printf("Invalid parameter\n");
   printf("Usage: ntfsdir [--log=...] \"path\"\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
+#ifdef _WIN32
   printf("eg. ntfsdir c:\n");
   printf("eg. ntfsdir c:\\windows\n");
   printf("eg. ntfsdir \"c:\\program files\\common files\"\n");
+  printf("eg. ntfsdir c:\\image.img\\Windows\n");
+#else
+  printf("eg. ntfsdir /dev/sda1\n");
+  printf("eg. ntfsdir /dev/sda1/Windows\n");
+  printf("eg. ntfsdir \"/dev/sda1/Program Files/Common Files\"\n");
+  printf("eg. ntfsdir ./disk.img/Windows\n");
+#endif
 }
 
 wchar_t Getvolume(wchar_t** ppath) {
@@ -87,6 +105,17 @@ std::wstring Getpathname(std::wstring& ppath) {
 
 namespace {
 
+#ifndef _WIN32
+// Bits in a DWORD: where a FILETIME's high half starts.
+constexpr unsigned dword_bits = 32;
+#endif
+
+// Prints message and a newline to stdout.
+void Say(const std::wstring& message) {
+  NtfsDevice::WriteText(stdout, message);
+  printf("\n");
+}
+
 // Reports whether the listing shows ie. Hides system metafiles, DOS alias
 // file names and entries with no name.
 bool IsListed(const IndexEntryView& ie) {
@@ -103,22 +132,46 @@ bool IsListed(const IndexEntryView& ie) {
   return !ie.GetFilename().empty();
 }
 
+// The modification time of ie in the host's local zone, or nothing for a
+// time the platform cannot show.
+std::optional<NtfsDevice::LocalTime> LocalWriteTime(const IndexEntryView& ie) {
+  FILETIME ft;
+  ie.GetFileTime(&ft, nullptr, nullptr);
+#ifdef _WIN32
+  // The library already converts the time to local on Windows.
+  SYSTEMTIME st;
+  if (FileTimeToSystemTime(&ft, &st) != TRUE) {
+    return std::nullopt;
+  }
+  return NtfsDevice::LocalTime{.year = st.wYear,
+                               .month = st.wMonth,
+                               .day = st.wDay,
+                               .hour = st.wHour,
+                               .minute = st.wMinute};
+#else
+  // The library leaves the time in UTC off Windows.
+  return NtfsDevice::UtcTicksToLocalTime(
+      (static_cast<ULONGLONG>(ft.dwHighDateTime) << dword_bits) |
+      ft.dwLowDateTime);
+#endif
+}
+
 // Prints the modification time, the size or <DIR>, the attribute flags and
-// the name of one entry. st is the entry time in local time.
-void PrintLine(const IndexEntryView& ie, const SYSTEMTIME& st) {
-  printf("%u-%02u-%02u  %02u:%02u\t%s    ", st.wYear, st.wMonth, st.wDay,
-         st.wHour, st.wMinute, ie.IsDirectory() ? "<DIR>" : "     ");
+// the name of one entry. time is the entry time in local time.
+void PrintLine(const IndexEntryView& ie, const NtfsDevice::LocalTime& time) {
+  printf("%u-%02u-%02u  %02u:%02u\t%s    ", time.year, time.month, time.day,
+         time.hour, time.minute, ie.IsDirectory() ? "<DIR>" : "     ");
 
   if (!ie.IsDirectory()) {
-    printf("%I64u\t", ie.GetFileSize());
+    printf("%llu\t", static_cast<unsigned long long>(ie.GetFileSize()));
   } else {
     printf("\t");
   }
 
-  const std::wstring_view fn = ie.GetFilename();
-  printf("<%c%c%c>\t%.*ls\n", ie.IsReadOnly() ? 'R' : ' ',
-         ie.IsHidden() ? 'H' : ' ', ie.IsSystem() ? 'S' : ' ',
-         gsl::narrow<int>(fn.size()), fn.data());
+  printf("<%c%c%c>\t", ie.IsReadOnly() ? 'R' : ' ', ie.IsHidden() ? 'H' : ' ',
+         ie.IsSystem() ? 'S' : ' ');
+  NtfsDevice::WriteText(stdout, ie.GetFilename());
+  printf("\n");
 }
 
 // Moves fr into the subdirectory named pathname. Returns false after
@@ -127,17 +180,17 @@ template <Cache::Strategy S>
 bool EnterSubdirectory(Io::FileRecord<S>& fr, const std::wstring& pathname) {
   std::optional<IndexEntry> ie = fr.FindSubEntry(pathname);
   if (!ie) {
-    printf("Cannot find directory %ls\n", pathname.c_str());
+    Say(L"Cannot find directory " + pathname);
     return false;
   }
 
   if (!ie->IsDirectory()) {
-    printf("%ls is not a directory\n", pathname.c_str());
+    Say(pathname + L" is not a directory");
     return false;
   }
 
   if (!fr.ParseFileRecord(ie->GetFileReference())) {
-    printf("Cannot read directory %ls\n", pathname.c_str());
+    Say(L"Cannot read directory " + pathname);
     return false;
   }
   if (!fr.ParseAttrs()) {
@@ -147,13 +200,13 @@ bool EnterSubdirectory(Io::FileRecord<S>& fr, const std::wstring& pathname) {
   return true;
 }
 
-// Moves fr to the root directory, then to each directory path names in turn.
-// Returns false after printing why it cannot.
+// Moves fr to the root directory of the volume called label, then to each
+// directory path names in turn. Returns false after printing why it cannot.
 template <Cache::Strategy S>
-bool EnterDirectories(Io::FileRecord<S>& fr, wchar_t volname,
+bool EnterDirectories(Io::FileRecord<S>& fr, const std::wstring& label,
                       std::wstring path) {
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
-    printf("Cannot read root directory of volume %lc\n", volname);
+    Say(L"Cannot read root directory of volume " + label);
     return false;
   }
   if (!fr.ParseAttrs()) {
@@ -173,26 +226,16 @@ bool EnterDirectories(Io::FileRecord<S>& fr, wchar_t volname,
   }
 }
 
-// Lists the directory that path names. Returns the exit code.
+// Lists the directory path names on volume, which label names in messages.
+// Returns the exit code.
 template <Cache::Strategy S>
-int ListDirectory(wchar_t* path) {
-  const wchar_t volname = Getvolume(&path);
-  if (volname == L'\0') {
-    Usage();
-    return -1;
-  }
-
-  NtfsVolume<S> volume(volname);
-  if (!volume.IsVolumeOK()) {
-    printf("Cannot get NTFS BPB from boot sector of volume %lc\n", volname);
-    return -1;
-  }
-
+int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
+             const std::wstring& path) {
   Io::FileRecord<S> fr(volume);
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
   fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (!EnterDirectories(fr, volname, path)) {
+  if (!EnterDirectories(fr, label, path)) {
     return -1;
   }
 
@@ -202,6 +245,85 @@ int ListDirectory(wchar_t* path) {
   return 0;
 }
 
+// Opens the device or image file at device, which label names in messages.
+// Returns null after printing why it cannot.
+template <Cache::Strategy S>
+std::unique_ptr<NtfsVolume<S>>
+    OpenDeviceVolume(const std::filesystem::path& device,
+                     const std::wstring& label) {
+#ifdef _WIN32
+  // Win32DiskReader opens a plain file the same way as a device.
+  return std::make_unique<NtfsVolume<S>>(std::wstring_view(label));
+#else
+  auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
+  if (!reader->Open(NtfsDevice::WideFromPath(device))) {
+    const int error = reader->LastError();
+    if (error == EACCES || error == EPERM) {
+      Say(L"Cannot read device " + label + L": read access is needed");
+    } else {
+      Say(L"Cannot open " + label);
+    }
+    return nullptr;
+  }
+  return std::make_unique<NtfsVolume<S>>(std::move(reader));
+#endif
+}
+
+// Lists the directory of an image file or device. Returns the exit code.
+template <Cache::Strategy S>
+int ListDevice(const NtfsDevice::DeviceTarget& target) {
+  const std::wstring label = NtfsDevice::WideFromPath(target.device);
+  const std::unique_ptr<NtfsVolume<S>> volume =
+      OpenDeviceVolume<S>(target.device, label);
+  if (!volume) {
+    return -1;
+  }
+  if (!volume->IsVolumeOK()) {
+    Say(L"Cannot get NTFS BPB from boot sector of " + label);
+    return -1;
+  }
+  return ListFrom(*volume, label, target.directory);
+}
+
+#ifdef _WIN32
+
+// Lists the directory of a drive, from a path such as "c:\windows". Returns
+// the exit code.
+template <Cache::Strategy S>
+int ListDrive(wchar_t* path) {
+  const wchar_t volname = Getvolume(&path);
+  if (volname == L'\0') {
+    Usage();
+    return -1;
+  }
+
+  NtfsVolume<S> volume(volname);
+  const std::wstring label(1, volname);
+  if (!volume.IsVolumeOK()) {
+    Say(L"Cannot get NTFS BPB from boot sector of volume " + label);
+    return -1;
+  }
+  return ListFrom(volume, label, path);
+}
+
+#endif  // _WIN32
+
+// Lists the directory that path names. Returns the exit code.
+template <Cache::Strategy S>
+int ListDirectory(wchar_t* path) {
+  if (const std::optional<NtfsDevice::DeviceTarget> target =
+          NtfsDevice::SplitDeviceTarget(path)) {
+    return ListDevice<S>(*target);
+  }
+
+#ifdef _WIN32
+  return ListDrive<S>(path);
+#else
+  Say(L"Cannot find a device or image file in " + std::wstring(path));
+  return -1;
+#endif
+}
+
 }  // namespace
 
 void Printfile(const IndexEntryView& ie, void* context) {
@@ -209,11 +331,8 @@ void Printfile(const IndexEntryView& ie, void* context) {
     return;
   }
 
-  FILETIME ft;
-  ie.GetFileTime(&ft, nullptr, nullptr);
-  SYSTEMTIME st;
-  if (FileTimeToSystemTime(&ft, &st) == TRUE) {
-    PrintLine(ie, st);
+  if (const std::optional<NtfsDevice::LocalTime> time = LocalWriteTime(ie)) {
+    PrintLine(ie, *time);
   }
 
   Total& total = *static_cast<Total*>(context);
@@ -227,8 +346,8 @@ void Printfile(const IndexEntryView& ie, void* context) {
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
   Arguments args;
   for (int i = 1; i < argc; i++) {
-    if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w)) {
-      if (!Log::ParseOption(argv[i], args.log_config)) {
+    if (NtfsDevice::IsLogOption(argv[i])) {
+      if (!NtfsDevice::ParseLogOption(argv[i], args.log_config)) {
         return std::nullopt;
       }
     } else if (args.path == nullptr) {
@@ -253,8 +372,7 @@ int RunNtfsDir(int argc, wchar_t* argv[]) {
   }
 
   if (!Log::Configure(args->log_config)) {
-    fprintf(stderr, "Cannot open log file %ls\n",
-            args->log_config.file_path.c_str());
+    NtfsDevice::ReportLogFileError(args->log_config);
   }
 
   return ListDirectory<S>(args->path);

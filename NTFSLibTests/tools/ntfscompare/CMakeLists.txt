@@ -20,13 +20,9 @@ add_library(
   "os-api-walk.cpp"
   "volume-open.h"
   "volume-open.cpp"
-  "raw-device-disk-reader.h"
-  "raw-device-disk-reader.cpp"
-  "linux-utf8.h"
-  "linux-utf8.cpp"
 )
 target_include_directories(NtfsCompareCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(NtfsCompareCore PUBLIC ${PROJECT_NAME})
+target_link_libraries(NtfsCompareCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
 
 add_executable(NtfsCompare "main.cpp")
 target_link_libraries(NtfsCompare PRIVATE ${PROJECT_NAME} NtfsCompareCore)

@@ -47,6 +47,8 @@ struct Arguments {
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]);
 
 // Lists the directory named on the command line, opening the volume with
-// cache strategy S. Returns the exit code.
+// cache strategy S. The target is a device or image file followed by a
+// directory ("/dev/sda1/Windows", "c:\image.img\Windows"), or on Windows a
+// drive letter ("c:\windows"). Returns the exit code.
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 int RunNtfsDir(int argc, wchar_t* argv[]);

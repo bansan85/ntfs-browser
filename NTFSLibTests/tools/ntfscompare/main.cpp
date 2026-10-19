@@ -29,18 +29,25 @@
 
 #include "compare-engine.h"
 #include "console.h"
+#include "device-path.h"
 #include "entry.h"
 #include "library-walk.h"
 #include "os-api-walk.h"
 #include "std-filesystem-walk.h"
+#include "text-convert.h"
 #include "volume-open.h"
 
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 using NtfsCompare::Listing;
 using NtfsCompare::NativeText;
 using NtfsCompare::OpenVolumeFor;
+#ifndef _WIN32
+using NtfsCompare::OpenDeviceVolume;
+using NtfsCompare::OsNamesAreComparable;
+#endif
 using NtfsCompare::OsApiMethodName;
 using NtfsCompare::PrintErr;
+using NtfsCompare::PrintOut;
 using NtfsCompare::Report;
 using NtfsCompare::ResolveDirectoryRecord;
 using NtfsCompare::VolumeHandles;
@@ -71,12 +78,22 @@ constexpr std::string_view log_prefix = Log::option_prefix;
 #endif
 
 void Usage(const ArgChar* program) {
+#ifdef _WIN32
   PrintErr("usage: {} [--log=...] <folder>\n", NativeText(program));
+#else
+  PrintErr("usage: {} [--log=...] <folder-or-device>\n", NativeText(program));
+#endif
   PrintErr("  {}\n", Log::option_usage);
   PrintErr(
       "Compares 6 ways of recursively listing <folder>: std::filesystem, "
       "the platform's native API, and NtfsBrowser via NtfsVolume<FullCache>, "
       "NtfsVolume<NoCache> and MftTree.\n");
+#ifndef _WIN32
+  PrintErr(
+      "A device path such as /dev/sda1/Windows names a folder of that "
+      "volume. If the device is not mounted, the operating-system methods "
+      "are skipped.\n");
+#endif
 }
 
 // What the command line asks for: the --log settings and the one folder.
@@ -169,18 +186,57 @@ std::optional<LibraryListings> ListLibraries(VolumeHandles& volume,
                          .mft_tree = std::move(mft_tree_listing)};
 }
 
+// Compares the NtfsBrowser-based listings of volume, for the folder
+// target_arg names, against the operating system's listing of os_target.
+// With no os_target (a device that is not mounted) the operating-system walks
+// are skipped, and the library listings are only compared with each other.
+// Returns the exit code.
+int CompareVolume(VolumeHandles& volume, const ArgChar* target_arg,
+                  const std::optional<std::filesystem::path>& os_target) {
+  const std::optional<LibraryListings> libraries =
+      ListLibraries(volume, target_arg);
+  if (!libraries) {
+    return 1;
+  }
+
+  Report report;
+  const Listing reference = CompareLibraryMethods(
+      libraries->full_cache, libraries->no_cache, libraries->mft_tree, report);
+
+  // std::filesystem and the native API are walked right before they're
+  // compared (below), not earlier: the target is live, ordinary system
+  // activity keeps changing it, and every NtfsBrowser-based listing this
+  // reference is built from - especially the whole-$MFT scan MftTree needs
+  // - takes real time. Snapshotting std::filesystem/the native API early
+  // would widen that window instead of closing it, and a field that changed
+  // in between (eg. AccessTimeUtc) would show up as a false MISMATCH.
+  if (os_target) {
+#ifndef _WIN32
+    if (!OsNamesAreComparable(reference, volume.mount_fstype)) {
+      return 1;
+    }
+#endif
+
+    PrintErr("Listing {} via std::filesystem...\n", NativeText(target_arg));
+    CompareAgainstReference("std::filesystem", reference,
+                            WalkStdFilesystem(*os_target), report);
+
+    PrintErr("Listing {} via {}...\n", NativeText(target_arg),
+             OsApiMethodName());
+    CompareAgainstReference(OsApiMethodName(), reference, WalkOsApi(*os_target),
+                            report);
+  } else {
+    PrintOut("Not mounted: the operating-system comparison is skipped.\n");
+  }
+
+  const bool has_findings = PrintReport(report);
+  return has_findings ? 1 : 0;
+}
+
 // Compares the folder target, named target_arg, against the NTFS volume
 // behind it. Returns the exit code.
 int CompareFolder(const std::filesystem::path& target,
                   const ArgChar* target_arg) {
-  // std::filesystem and the native API are walked right before they're
-  // compared (below), not here: the target is live, ordinary system
-  // activity keeps changing it, and every NtfsBrowser-based listing this
-  // reference is built from - especially the whole-$MFT scan MftTree needs
-  // - takes real time. Snapshotting std::filesystem/the native API this
-  // early would widen that window instead of closing it, and a field that
-  // changed in between (eg. AccessTimeUtc) would show up as a false
-  // MISMATCH.
   std::optional<VolumeHandles> volume = OpenVolumeFor(target);
   if (!volume) {
     PrintErr(
@@ -193,27 +249,32 @@ int CompareFolder(const std::filesystem::path& target,
     return 1;
   }
 
-  const std::optional<LibraryListings> libraries =
-      ListLibraries(*volume, target_arg);
-  if (!libraries) {
+  return CompareVolume(*volume, target_arg, target);
+}
+
+#ifndef _WIN32
+
+// Compares the volume that device names, an image file or a block device,
+// against the operating system at its mount point plus the directory, if it
+// is mounted. Returns the exit code.
+int CompareDevice(const NtfsDevice::DeviceTarget& device,
+                  const ArgChar* target_arg) {
+  std::optional<VolumeHandles> volume = OpenDeviceVolume(device);
+  if (!volume) {
     return 1;
   }
 
-  Report report;
-  const Listing reference = CompareLibraryMethods(
-      libraries->full_cache, libraries->no_cache, libraries->mft_tree, report);
-
-  PrintErr("Listing {} via std::filesystem...\n", NativeText(target_arg));
-  CompareAgainstReference("std::filesystem", reference,
-                          WalkStdFilesystem(target), report);
-
-  PrintErr("Listing {} via {}...\n", NativeText(target_arg), OsApiMethodName());
-  CompareAgainstReference(OsApiMethodName(), reference, WalkOsApi(target),
-                          report);
-
-  const bool has_findings = PrintReport(report);
-  return has_findings ? 1 : 0;
+  std::optional<std::filesystem::path> os_target;
+  if (volume->mount_point) {
+    os_target = *volume->mount_point;
+    if (!volume->relative_path.empty()) {
+      *os_target /= NtfsDevice::PathFromWide(volume->relative_path);
+    }
+  }
+  return CompareVolume(*volume, target_arg, os_target);
 }
+
+#endif  // !_WIN32
 
 // Lists and compares the folder the command line names. Returns the exit
 // code.
@@ -229,6 +290,15 @@ int Run(int argc, ArgChar** argv) {
     PrintErr("Cannot open log file {}\n",
              NativeText(arguments->log_config.file_path));
   }
+
+#ifndef _WIN32
+  // A device or an image file leads the target: /dev/sda1/Windows.
+  if (const std::optional<NtfsDevice::DeviceTarget> device =
+          NtfsDevice::SplitDeviceTarget(
+              NtfsDevice::Utf8ToWide(arguments->target))) {
+    return CompareDevice(*device, arguments->target);
+  }
+#endif
 
   const std::filesystem::path target(arguments->target);
   std::error_code error_code;

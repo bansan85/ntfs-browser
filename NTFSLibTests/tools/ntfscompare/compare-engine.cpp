@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <set>
@@ -10,12 +11,19 @@
 
 #include "console.h"
 
+#ifndef _WIN32
+  #include "driver-names.h"
+  #include "text-convert.h"
+#endif
+
 namespace NtfsCompare {
 
 namespace {
 
+#ifdef _WIN32
 // First code point past ASCII: Narrow() keeps only below it.
 constexpr wchar_t ascii_limit = 128;
+#endif
 
 // Method name of the merged library reference. Every other method is an OS
 // candidate.
@@ -28,9 +36,12 @@ std::string FormatValue(ULONGLONG value) { return std::to_string(value); }
 
 std::string FormatValue(bool value) { return value ? "true" : "false"; }
 
-// ASCII-safe narrowing for a report line. Names round-trip correctly through
-// the wide Listing key every method shares; this is display only.
+// Narrowing for a report line. Names round-trip correctly through the wide
+// Listing key every method shares; this is display only. Windows keeps to
+// ASCII, since its console code page is not known. Elsewhere a name prints as
+// UTF-8, like the other tools' output.
 std::string Narrow(const std::wstring& wide) {
+#ifdef _WIN32
   std::string out;
   out.reserve(wide.size());
   for (const wchar_t character : wide) {
@@ -39,6 +50,9 @@ std::string Narrow(const std::wstring& wide) {
                       : '?');
   }
   return out;
+#else
+  return NtfsDevice::WideToUtf8(wide);
+#endif
 }
 
 // Calls visit(member pointer, report name) once per compared Entry field.
@@ -260,5 +274,27 @@ bool PrintReport(const Report& report) {
 
   return has_failure;
 }
+
+#ifndef _WIN32
+
+bool OsNamesAreComparable(const Listing& reference,
+                          const std::string& mount_fstype) {
+  const bool needs_mapping =
+      std::ranges::any_of(reference, [](const auto& listed) {
+        return NtfsDevice::NeedsDriverMapping(listed.first);
+      });
+  if (!needs_mapping || NtfsDevice::IsDriverMappingKnown(mount_fstype)) {
+    return true;
+  }
+
+  PrintErr(
+      "A name has no UTF-8 form, and the mapping of the \"{}\" driver that "
+      "mounts this volume is not known: the operating-system comparison "
+      "cannot proceed.\n",
+      mount_fstype);
+  return false;
+}
+
+#endif  // !_WIN32
 
 }  // namespace NtfsCompare

@@ -1,5 +1,5 @@
 add_executable(NtfsMftList WIN32 "main.cpp")
-target_link_libraries(NtfsMftList PRIVATE ${PROJECT_NAME})
+target_link_libraries(NtfsMftList PRIVATE ${PROJECT_NAME} NtfsDeviceAccess)
 set_target_properties(NtfsMftList PROPERTIES WIN32_EXECUTABLE 0)
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(

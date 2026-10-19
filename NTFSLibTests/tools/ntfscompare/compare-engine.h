@@ -63,6 +63,19 @@ void CompareAgainstReference(const std::string& method_name,
                              const Listing& reference, const Listing& candidate,
                              Report& report);
 
+#ifndef _WIN32
+
+// Reports whether the operating system's names can be compared with
+// reference's. A name with an unpaired surrogate has no UTF-8 form, and each
+// Linux NTFS driver renders it its own way: when the driver of the mount,
+// mount_fstype, is not one whose rendering is known, that is an error of this
+// tool, not a difference between the listings. It says so on stderr and
+// returns false.
+[[nodiscard]] bool OsNamesAreComparable(const Listing& reference,
+                                        const std::string& mount_fstype);
+
+#endif  // !_WIN32
+
 // Prints every finding, then a per-method summary line, to stdout. Returns
 // true if the report holds a finding other than UNINDEXED.
 bool PrintReport(const Report& report);

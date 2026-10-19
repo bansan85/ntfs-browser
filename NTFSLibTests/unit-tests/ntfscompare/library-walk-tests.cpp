@@ -26,6 +26,14 @@
 #include "optional-access.h"
 #include "volume-open.h"
 
+#ifndef _WIN32
+  #include <fstream>
+
+  #include "os-api-walk.h"
+  #include "std-filesystem-walk.h"
+  #include "temp-dir.h"
+#endif
+
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -386,3 +394,75 @@ TEST_CASE(
   CHECK(count_kind("MISSING") == 0);
   CHECK(count_kind("EXTRA") == 0);
 }
+
+#ifndef _WIN32
+
+namespace {
+
+// The keys of listing, in order.
+std::vector<std::wstring> Keys(const Listing& listing) {
+  std::vector<std::wstring> keys;
+  for (const auto& listed : listing) {
+    keys.push_back(listed.first);
+  }
+  return keys;
+}
+
+}  // namespace
+
+TEST_CASE("A name with an unpaired surrogate is the same in every method",
+          "[ntfscompare][library-walk][names]") {
+  // The NTFS name U+D800, "a" has no UTF-8 form: ntfs-3g shows it as the
+  // WTF-8 bytes ED A0 80 61.
+  const std::wstring name = {static_cast<wchar_t>(0xD800), L'a'};
+  const NTFS_BROWSER_NAMESPACE::Tests::TempDir dir;
+  const std::string os_name =
+      "\xED\xA0\x80"
+      "a";
+  {
+    std::error_code ignored;
+    std::ofstream file(dir.Path() / os_name, std::ios::binary);
+    if (!file) {
+      SKIP("the temp file system refuses a name that is not valid UTF-8");
+    }
+  }
+
+  const auto volume = OpenVolume<Strategy::NoCache>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithReportName(name));
+  const auto docs = ResolveDirectoryRecord(*volume, L"Docs");
+  REQUIRE(docs.has_value());
+  const Listing library = WalkLibraryIndex(*volume, *docs);
+
+  const std::vector<std::wstring> expected{name};
+  CHECK(Keys(library) == expected);
+  CHECK(Keys(NtfsCompare::WalkStdFilesystem(dir.Path())) == expected);
+  CHECK(Keys(NtfsCompare::WalkOsApi(dir.Path())) == expected);
+}
+
+TEST_CASE("An accented name is the same in every method",
+          "[ntfscompare][library-walk][names]") {
+  // The image stores UTF-16, so the character outside the BMP is a pair of
+  // code units there, and one wchar_t in the listings.
+  const std::wstring stored = std::wstring(L"café-") +
+                              static_cast<wchar_t>(0xD83D) +
+                              static_cast<wchar_t>(0xDE00) + L".txt";
+  const std::wstring name = L"café-\U0001F600.txt";
+  const NTFS_BROWSER_NAMESPACE::Tests::TempDir dir;
+  const std::filesystem::path os_file = dir.Write(
+      "caf\xC3\xA9-\xF0\x9F\x98\x80"
+      ".txt",
+      "x");
+  REQUIRE(std::filesystem::exists(os_file));
+
+  const auto volume = OpenVolume<Strategy::NoCache>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithReportName(stored));
+  const auto docs = ResolveDirectoryRecord(*volume, L"Docs");
+  REQUIRE(docs.has_value());
+
+  const std::vector<std::wstring> expected{name};
+  CHECK(Keys(WalkLibraryIndex(*volume, *docs)) == expected);
+  CHECK(Keys(NtfsCompare::WalkStdFilesystem(dir.Path())) == expected);
+  CHECK(Keys(NtfsCompare::WalkOsApi(dir.Path())) == expected);
+}
+
+#endif  // !_WIN32

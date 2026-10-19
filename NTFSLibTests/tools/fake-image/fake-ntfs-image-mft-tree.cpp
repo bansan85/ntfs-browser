@@ -507,6 +507,45 @@ bool RunsInsideImage(const std::vector<BYTE>& image,
 
 }  // namespace
 
+std::vector<BYTE> BuildFakeNtfsImageWithReportName(std::wstring_view name,
+                                                   ULONGLONG alter_time) {
+  // Sequence numbers the records below carry, where another record names them.
+  constexpr WORD docs_sequence = 1;
+  constexpr WORD report_sequence = 3;
+
+  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
+
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const auto put_record = [&](ULONGLONG idx, const FakeRecord& record) {
+    const size_t offset =
+        mft_addr +
+        static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
+    std::memcpy(&image.at(offset), record.data(), record.size());
+  };
+
+  const ULONGLONG root_ref = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG docs_ref =
+      MakeFileReference(mft_tree_docs_idx, docs_sequence);
+
+  const std::array<FakeIndexName, 1> docs_names{
+      {{.name = name,
+        .mft_ref = mft_tree_report_idx,
+        .directory = false,
+        .sequence = report_sequence,
+        .alter_time = alter_time}}};
+  put_record(mft_tree_docs_idx,
+             MakeIndexedDirRecord(
+                 docs_sequence,
+                 FakeFileName{.name = L"Docs", .parent_ref = root_ref},
+                 docs_names));
+  put_record(mft_tree_report_idx,
+             MakeResidentFileRecord(report_sequence,
+                                    {.name = name, .parent_ref = docs_ref},
+                                    dump_report_content));
+  return image;
+}
+
 std::vector<BYTE>
     BuildFakeNtfsImageWithDumpTree(ULONGLONG big_real_size,
                                    const std::vector<FakeDataRun>& big_runs) {

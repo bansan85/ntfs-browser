@@ -1,3 +1,5 @@
+#include <ntfs-browser/win-types.h>
+
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
@@ -8,15 +10,16 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include <windows.h>
 
 #include <ntfs-browser/namespace.h>
 
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
+#include "local-time.h"
 #include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
+using NTFS_BROWSER_NAMESPACE::Tests::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
 namespace Fs = std::filesystem;
 
@@ -25,20 +28,15 @@ namespace {
 // $STANDARD_INFORMATION last write time of every record of the fake image.
 constexpr ULONGLONG image_write_time = 0x1112131415161718ULL;
 
-// The listings' "{write}" as NtfsMftList prints it. The library converts
+// The listings' "{write}" as NtfsMftList prints it. The sample converts
 // the time to the machine's local zone, so the text depends on the host.
 std::string LocalWriteTime() {
-  const ULARGE_INTEGER utc{.QuadPart = image_write_time};
-  const FILETIME utc_ft{.dwLowDateTime = utc.LowPart,
-                        .dwHighDateTime = utc.HighPart};
-  FILETIME local_ft{};
-  SYSTEMTIME local{};
-  REQUIRE(FileTimeToLocalFileTime(&utc_ft, &local_ft) != 0);
-  REQUIRE(FileTimeToSystemTime(&local_ft, &local) != 0);
+  const auto local = NtfsDevice::UtcTicksToLocalTime(image_write_time);
+  REQUIRE(local.has_value());
 
   char text[32]{};
-  snprintf(text, sizeof(text), "%04u-%02u-%02u %02u:%02u", local.wYear,
-           local.wMonth, local.wDay, local.wHour, local.wMinute);
+  snprintf(text, sizeof(text), "%04u-%02u-%02u %02u:%02u", local->year,
+           local->month, local->day, local->hour, local->minute);
   return text;
 }
 
@@ -97,11 +95,17 @@ Record slots: 26, in use: 7, deleted: 4, extensions: 1
 Unreadable: 14, damaged: 0, not linked to the root: 2
 )";
 
-// Stderr of NtfsMftList on a file that is not a volume: the library's own
-// error line, then the sample's.
+// Stderr of NtfsMftList on a target that does not exist. Windows hands the
+// path to the library, which logs its own error line first. Off Windows the
+// sample finds no device or image to give the library.
+#ifdef _WIN32
 constexpr std::string_view missing_volume_error =
     "Cannot open volume\n"
     "Cannot open no-such-volume.img as an NTFS volume\n";
+#else
+constexpr std::string_view missing_volume_error =
+    "Cannot open no-such-volume.img as an NTFS volume\n";
+#endif
 
 // Runs NtfsMftList with args, its stdout and stderr captured apart.
 SampleRun RunSample(const std::vector<std::wstring>& args) {
@@ -168,7 +172,7 @@ TEST_CASE("NtfsMftList without a target prints usage and fails",
           "[mft][sample][characterization]") {
   const SampleRun run = RunSample({L"--deleted"});
 
-  CHECK(run.exit_code == -1);
+  CHECK(run.exit_code == sample_failure_exit_code);
   CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsmftlist"));
 }
 
@@ -176,7 +180,7 @@ TEST_CASE("NtfsMftList with two targets prints usage and fails",
           "[mft][sample][characterization]") {
   const SampleRun run = RunSample({L"first.img", L"second.img"});
 
-  CHECK(run.exit_code == -1);
+  CHECK(run.exit_code == sample_failure_exit_code);
   CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsmftlist"));
 }
 
@@ -185,7 +189,7 @@ TEST_CASE("NtfsMftList rejects a malformed --log option with usage",
   const TempTreeImage image;
   const SampleRun run = RunSample({L"--log=bogus", image.path.wstring()});
 
-  CHECK(run.exit_code == -1);
+  CHECK(run.exit_code == sample_failure_exit_code);
   CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsmftlist"));
 }
 
@@ -193,7 +197,7 @@ TEST_CASE("NtfsMftList reports a target that is not an NTFS volume",
           "[mft][sample][characterization]") {
   const SampleRun run = RunSample({L"no-such-volume.img"});
 
-  CHECK(run.exit_code == -1);
+  CHECK(run.exit_code == sample_failure_exit_code);
   CHECK(run.out.empty());
   CHECK(run.err == missing_volume_error);
 }
@@ -224,3 +228,42 @@ TEST_CASE("NtfsMftList shows one letter per DOS permission flag",
   CHECK_THAT(run.out, ContainsSubstring(" " + std::string(attributes) +
                                         "  1 \\Docs\\report.txt\n"));
 }
+
+TEST_CASE("NtfsMftList reports a file that is not an NTFS volume",
+          "[mft][sample][characterization]") {
+  const TempTreeImage not_ntfs(std::vector<BYTE>(4096, 0));
+  const SampleRun run = RunSample({not_ntfs.path.wstring()});
+
+  CHECK(run.exit_code == sample_failure_exit_code);
+  CHECK(run.out.empty());
+  CHECK_THAT(run.err,
+             ContainsSubstring("Cannot open " + not_ntfs.path.string() +
+                               " as an NTFS volume\n"));
+}
+
+TEST_CASE("NtfsMftList usage names the device and image forms",
+          "[mft][sample][characterization]") {
+  const SampleRun run = RunSample({L"--deleted"});
+
+#ifdef _WIN32
+  CHECK_THAT(run.out, ContainsSubstring("eg. ntfsmftlist c:\n"));
+#else
+  CHECK_THAT(run.out, ContainsSubstring("eg. ntfsmftlist /dev/sda1\n"));
+  CHECK_THAT(run.out,
+             ContainsSubstring("eg. ntfsmftlist --deleted ./disk.img\n"));
+#endif
+}
+
+#ifndef _WIN32
+
+TEST_CASE("NtfsMftList refuses a directory after the image",
+          "[mft][sample][characterization]") {
+  const TempTreeImage image;
+  const SampleRun run = RunSample({image.path.wstring() + L"/Docs"});
+
+  CHECK(run.exit_code == sample_failure_exit_code);
+  CHECK(run.out.empty());
+  CHECK_THAT(run.err, ContainsSubstring("as an NTFS volume\n"));
+}
+
+#endif  // !_WIN32

@@ -23,11 +23,19 @@ Reading a volume needs administrator rights.
 
 ## Usage
 
-### Command-line tools (Windows)
+### Command-line tools
 
-- `NtfsDir "C:\Windows"` lists a folder.
+On Windows:
+
+- `NtfsDir "C:\Windows"` lists a folder. `NtfsDir C:\image.img\Windows` lists a folder of an image file.
 - `NtfsMftList C:` lists every file of a volume. `--deleted` adds deleted files, and `--recover` salvages damaged entries.
 - `NtfsUndel` is a graphical tool that finds and recovers deleted files.
+
+On Linux, `NtfsDir` and `NtfsMftList` take a device or an image file. Reading a device needs read access to it.
+
+- `NtfsDir /dev/sda1/Windows` or `NtfsDir ./disk.img/Windows` lists a folder.
+- `NtfsMftList /dev/sda1` or `NtfsMftList ./disk.img` lists every file of a volume, with the same options as on Windows.
+- `NtfsCompare /dev/sda1/Windows` compares the library with the operating system. If the partition is not mounted, it only compares the library's own listings with each other.
 
 ### As a library (C++)
 
@@ -137,6 +145,7 @@ Each public class and function is described in the headers under `include/ntfs-b
 - 2026-10 — Static analysis fixes and refactoring, namespaces
 - 2026-10 — Bounded `FullCache` memory
 - 2026-10 — Faster `$MFT` reads and optional read-ahead
+- 2026-10 — `NtfsDir` and `NtfsMftList` run on Linux, on a device or an image file
 
 ## Credits and licence
 

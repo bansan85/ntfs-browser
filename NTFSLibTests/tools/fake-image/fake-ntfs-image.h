@@ -955,6 +955,14 @@ inline constexpr std::string_view freed_file_content = "Recovered text.\n";
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithNamedRoot(std::wstring_view root_name);
 
+// Same volume as BuildFakeNtfsImageWithFreedFileTree(), except that Docs (16)
+// indexes only the in-use file mft_tree_report_idx, called name and holding
+// dump_report_content. name may hold an unpaired surrogate. The index entry
+// of that file reports alter_time as its last write time.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithReportName(std::wstring_view name,
+                                     ULONGLONG alter_time = 0);
+
 // Same volume as BuildFakeNtfsImageWithFreedFileTree(), with directory entries
 // that loop. Docs (16) indexes "NewDir" (mft_tree_reused_dir_idx) and the
 // freed "old.tmp" (19). NewDir indexes Docs back, so each names the other as

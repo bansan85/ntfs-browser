@@ -12,6 +12,10 @@
 #include "console.h"
 #include "time-convert.h"
 
+#ifndef _WIN32
+  #include "text-convert.h"
+#endif
+
 namespace NtfsCompare {
 
 namespace {
@@ -38,7 +42,13 @@ FileClockToUtcTicks(std::filesystem::file_time_type file_time) noexcept {
 // The relative path key every method shares: "/"-separated, root-relative.
 std::wstring RelativeKey(const std::filesystem::path& root,
                          const std::filesystem::path& full) {
-  return full.lexically_relative(root).generic_wstring();
+  const std::filesystem::path relative = full.lexically_relative(root);
+#ifdef _WIN32
+  return relative.generic_wstring();
+#else
+  // The std wide conversion refuses a name that is not valid UTF-8.
+  return NtfsDevice::Utf8ToWide(relative.generic_string());
+#endif
 }
 
 }  // namespace

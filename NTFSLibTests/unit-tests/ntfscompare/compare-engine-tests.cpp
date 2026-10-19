@@ -11,6 +11,9 @@ using NtfsCompare::CompareLibraryMethods;
 using NtfsCompare::Entry;
 using NtfsCompare::Finding;
 using NtfsCompare::Listing;
+#ifndef _WIN32
+using NtfsCompare::OsNamesAreComparable;
+#endif
 using NtfsCompare::PrintReport;
 using NtfsCompare::Report;
 
@@ -282,3 +285,36 @@ TEST_CASE("PrintReport does not fail on UNINDEXED alone",
   CHECK(reference.contains(L"link-a"));
   CHECK_FALSE(PrintReport(report));
 }
+
+#ifndef _WIN32
+
+TEST_CASE("OsNamesAreComparable refuses an unknown driver for a surrogate name",
+          "[ntfscompare][compare][driver-names]") {
+  const std::wstring surrogate_name = {static_cast<wchar_t>(0xD800), L'a'};
+  const Listing with_surrogate{{surrogate_name, FileEntry(5)}};
+
+  CHECK_FALSE(OsNamesAreComparable(with_surrogate, "ntfs3"));
+  CHECK_FALSE(OsNamesAreComparable(with_surrogate, ""));
+}
+
+TEST_CASE("OsNamesAreComparable accepts a driver whose mapping is known",
+          "[ntfscompare][compare][driver-names]") {
+  const std::wstring surrogate_name = {static_cast<wchar_t>(0xD800), L'a'};
+  const Listing with_surrogate{{surrogate_name, FileEntry(5)}};
+
+  CHECK(OsNamesAreComparable(with_surrogate, "fuse"));
+  CHECK(OsNamesAreComparable(with_surrogate, "fuseblk"));
+}
+
+TEST_CASE("OsNamesAreComparable needs no mapping for names with a UTF-8 form",
+          "[ntfscompare][compare][driver-names]") {
+  const Listing plain{{L"a.txt", FileEntry(5)},
+                      {L"café", FileEntry(5)},
+                      {L"\U0001F600", FileEntry(5)}};
+
+  CHECK(OsNamesAreComparable(plain, "ntfs3"));
+  CHECK(OsNamesAreComparable(plain, ""));
+  CHECK(OsNamesAreComparable(Listing{}, "ntfs3"));
+}
+
+#endif  // !_WIN32

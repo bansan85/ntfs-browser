@@ -9,6 +9,7 @@ target_sources(
     "mft-tree-bounded-cache-tests.cpp"
     "mft-extent-map-tests.cpp"
     "mft-tree-tests.cpp"
+    "ntfsmftlist-sample-tests.cpp"
 )
 
 target_include_directories(
@@ -16,13 +17,9 @@ target_include_directories(
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-# NtfsMftList is a Windows-only sample (examples/CMakeLists.txt), so its test
-# exists only where the sample builds.
-if(WIN32)
-  target_sources(NtfsBrowserTests PRIVATE "ntfsmftlist-sample-tests.cpp")
-  add_dependencies(NtfsBrowserTests NtfsMftList)
-  target_compile_definitions(
-    NtfsBrowserTests
-    PRIVATE NTFS_MFT_LIST_EXE="$<TARGET_FILE:NtfsMftList>"
-  )
-endif()
+# NtfsMftList runs on Windows and Linux (examples/CMakeLists.txt).
+add_dependencies(NtfsBrowserTests NtfsMftList)
+target_compile_definitions(
+  NtfsBrowserTests
+  PRIVATE NTFS_MFT_LIST_EXE="$<TARGET_FILE:NtfsMftList>"
+)

@@ -26,7 +26,7 @@
     #include <sys/xattr.h>
   #endif
 
-  #include "linux-utf8.h"
+  #include "text-convert.h"
 #endif
 
 #include "time-convert.h"
@@ -282,7 +282,7 @@ void AddDirent(const Frame& frame, const char* name, Listing& result,
   }
 
   const Entry entry = EntryFromStat(file_stat, full);
-  const std::wstring path = ChildPath(frame, Utf8ToWide(name));
+  const std::wstring path = ChildPath(frame, NtfsDevice::Utf8ToWide(name));
   result.emplace(path, entry);
 
   // lstat() reports a symlink as a link, never as a directory, so symlinks

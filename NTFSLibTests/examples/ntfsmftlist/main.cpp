@@ -2,14 +2,16 @@
 // from each record's own $FILE_NAME parent reference, not from directory
 // indexes, so files of a directory whose index is lost still show up.
 
+#include <ntfs-browser/win-types.h>
+
+#include <cerrno>
 #include <cstdio>
-#include <cwctype>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-
-#include <gsl/narrow>
+#include <utility>
+#include <vector>
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/tree.h>
@@ -17,9 +19,28 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "device-path.h"
+#include "local-time.h"
+#include "text-convert.h"
+#include "tool-support.h"
+
+#ifdef _WIN32
+  #include <cwctype>
+#else
+  #include "argv-wide.h"
+  #include "posix-device-disk-reader.h"
+#endif
+
 using namespace NTFS_BROWSER_NAMESPACE;
 
 namespace {
+
+#ifndef _WIN32
+// Bits in a DWORD: where a FILETIME's high half starts.
+constexpr unsigned dword_bits = 32;
+// Year a FILETIME of zero names.
+constexpr unsigned filetime_epoch_year = 1601;
+#endif
 
 // Command-line switch that adds the records NTFS freed to the listing.
 constexpr std::wstring_view deleted_option = L"--deleted";
@@ -36,31 +57,59 @@ void Usage() {
   printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("  --deleted     also list the records NTFS freed\n");
   printf("  --recover     salvage a damaged item instead of rejecting it\n");
+#ifdef _WIN32
   printf("  <volume>      a drive letter (c:), or a device or image path\n");
+#else
+  printf("  <volume>      a device or image path\n");
+#endif
   printf(
       "Columns: record, sequence, DEL if freed, <DIR> or size, last write,\n");
   printf(
       "  attributes (Read-only Hidden System Compressed Encrypted sParse),\n");
   printf("  hard links, path. A path whose parent chain breaks reads\n");
   printf("  <lost #N>\\..., N being the record where it breaks.\n");
+#ifdef _WIN32
   printf("eg. ntfsmftlist c:\n");
   printf("eg. ntfsmftlist --deleted d:\\images\\disk.img\n");
   printf("eg. ntfsmftlist --deleted --recover d:\\images\\disk.img\n");
+#else
+  printf("eg. ntfsmftlist /dev/sda1\n");
+  printf("eg. ntfsmftlist --deleted ./disk.img\n");
+  printf("eg. ntfsmftlist --deleted --recover ./disk.img\n");
+#endif
 }
 
-// Converts to UTF-8, which the console is switched to, so every name prints
-// whatever the active code page.
+// Converts to UTF-8, which the console is switched to on Windows, so every
+// name prints whatever the active code page or locale.
 std::string ToUtf8(std::wstring_view text) {
-  if (text.empty()) {
-    return {};
+  return NtfsDevice::WideToUtf8(text);
+}
+
+// The last write time of an entry in the host's local zone. A time the
+// platform cannot show reads as all zeros.
+NtfsDevice::LocalTime LocalWriteTime(const FILETIME& write_time) {
+#ifdef _WIN32
+  // The library already converts the time to local on Windows.
+  SYSTEMTIME local{};
+  FileTimeToSystemTime(&write_time, &local);
+  return {.year = local.wYear,
+          .month = local.wMonth,
+          .day = local.wDay,
+          .hour = local.wHour,
+          .minute = local.wMinute};
+#else
+  // The library leaves the time in UTC off Windows.
+  const ULONGLONG ticks =
+      (static_cast<ULONGLONG>(write_time.dwHighDateTime) << dword_bits) |
+      write_time.dwLowDateTime;
+  // A record with no $STANDARD_INFORMATION keeps a time of zero, which
+  // Windows shows as it is, so the zone does not move it.
+  if (ticks == 0) {
+    return {.year = filetime_epoch_year, .month = 1, .day = 1};
   }
-  const int length = gsl::narrow<int>(text.size());
-  const int size = WideCharToMultiByte(CP_UTF8, 0, text.data(), length, nullptr,
-                                       0, nullptr, nullptr);
-  std::string utf8(gsl::narrow<size_t>(size), '\0');
-  WideCharToMultiByte(CP_UTF8, 0, text.data(), length, utf8.data(), size,
-                      nullptr, nullptr);
-  return utf8;
+  return NtfsDevice::UtcTicksToLocalTime(ticks).value_or(
+      NtfsDevice::LocalTime{});
+#endif
 }
 
 // The path of one name of entry, as shown in the listing.
@@ -116,13 +165,12 @@ size_t
 // Prints the columns of entry, then its path.
 void PrintMainLine(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                    const std::string& path) {
-  SYSTEMTIME local_time{};
-  FileTimeToSystemTime(&entry.write_time, &local_time);
+  const NtfsDevice::LocalTime local_time = LocalWriteTime(entry.write_time);
 
   printf("%10llu %5u %-3s %14s %04u-%02u-%02u %02u:%02u %s %2zu %s\n",
-         entry.record, entry.sequence, entry.in_use ? "" : "DEL",
-         SizeColumn(entry).c_str(), local_time.wYear, local_time.wMonth,
-         local_time.wDay, local_time.wHour, local_time.wMinute,
+         static_cast<unsigned long long>(entry.record), entry.sequence,
+         entry.in_use ? "" : "DEL", SizeColumn(entry).c_str(), local_time.year,
+         local_time.month, local_time.day, local_time.hour, local_time.minute,
          AttributeColumn(entry).c_str(), CountHardLinks(entry), path.c_str());
 }
 
@@ -151,6 +199,8 @@ void PrintEntry(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
   PrintOtherLinks(tree, entry, path);
 }
 
+#ifdef _WIN32
+
 // Opens target as a drive letter ("c" or "c:"), or else as a device or
 // image path.
 std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
@@ -167,6 +217,34 @@ std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
                                                                 options);
 }
 
+#else
+
+// Opens target, a block device or an image file, through a POSIX reader.
+// Returns null after saying why when it cannot.
+std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
+    OpenVolume(std::wstring_view target, const VolumeOptions& options) {
+  // The whole volume is listed, so the target must name no directory.
+  const std::optional<NtfsDevice::DeviceTarget> split =
+      NtfsDevice::SplitDeviceTarget(target);
+  if (!split || !split->directory.empty()) {
+    return nullptr;
+  }
+
+  auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
+  if (!reader->Open(NtfsDevice::WideFromPath(split->device))) {
+    const int error = reader->LastError();
+    if (error == EACCES || error == EPERM) {
+      fprintf(stderr, "Cannot read device %s: read access is needed\n",
+              split->device.c_str());
+    }
+    return nullptr;
+  }
+  return std::make_unique<NtfsVolume<Cache::Strategy::NoCache>>(
+      std::move(reader), options);
+}
+
+#endif  // _WIN32
+
 // What the command line asks for.
 struct Arguments {
   Log::Config log_config;
@@ -180,8 +258,8 @@ struct Arguments {
 bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
   for (int i = 1; i < argc; i++) {
     const std::wstring_view arg(argv[i]);
-    if (arg.starts_with(Log::option_prefix_w)) {
-      if (!Log::ParseOption(arg, args.log_config)) {
+    if (NtfsDevice::IsLogOption(arg)) {
+      if (!NtfsDevice::ParseLogOption(arg, args.log_config)) {
         return false;
       }
       continue;
@@ -204,7 +282,9 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
 
 // Shows the $MFT scan's progress on stderr, and ends the line when it is done.
 bool ShowScanProgress(ULONGLONG done, ULONGLONG total) {
-  fprintf(stderr, "\rScanning $MFT: %llu / %llu", done, total);
+  fprintf(stderr, "\rScanning $MFT: %llu / %llu",
+          static_cast<unsigned long long>(done),
+          static_cast<unsigned long long>(total));
   if (done == total) {
     fprintf(stderr, "\n");
   }
@@ -215,24 +295,31 @@ bool ShowScanProgress(ULONGLONG done, ULONGLONG total) {
 void PrintStats(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats) {
   printf(
       "\nRecord slots: %llu, in use: %llu, deleted: %llu, extensions: %llu\n",
-      stats.slots, stats.in_use, stats.deleted, stats.extensions);
+      static_cast<unsigned long long>(stats.slots),
+      static_cast<unsigned long long>(stats.in_use),
+      static_cast<unsigned long long>(stats.deleted),
+      static_cast<unsigned long long>(stats.extensions));
   printf("Unreadable: %llu, damaged: %llu, not linked to the root: %llu\n",
-         stats.unreadable, stats.damaged, stats.unreachable);
+         static_cast<unsigned long long>(stats.unreadable),
+         static_cast<unsigned long long>(stats.damaged),
+         static_cast<unsigned long long>(stats.unreachable));
 }
 
 // Lists every $MFT record of the volume args names. Returns the exit code.
 int ListVolume(const Arguments& args) {
   if (!Log::Configure(args.log_config)) {
-    fprintf(stderr, "Cannot open log file %ls\n",
-            args.log_config.file_path.c_str());
+    NtfsDevice::ReportLogFileError(args.log_config);
   }
 
+#ifdef _WIN32
   SetConsoleOutputCP(CP_UTF8);
+#endif
 
   const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
       OpenVolume(args.target, args.volume_options);
-  if (!volume->IsVolumeOK()) {
-    fprintf(stderr, "Cannot open %ls as an NTFS volume\n", args.target);
+  if (!volume || !volume->IsVolumeOK()) {
+    fprintf(stderr, "Cannot open %s as an NTFS volume\n",
+            ToUtf8(args.target).c_str());
     return -1;
   }
 
@@ -251,10 +338,9 @@ int ListVolume(const Arguments& args) {
   return 0;
 }
 
-}  // namespace
-
-// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
-int wmain(int argc, wchar_t* argv[]) {
+// Parses the wide command line and lists the volume it names. Returns the
+// exit code.
+int Run(int argc, wchar_t* argv[]) {
   Arguments args;
   if (!ParseArguments(argc, argv, args)) {
     Usage();
@@ -262,3 +348,20 @@ int wmain(int argc, wchar_t* argv[]) {
   }
   return ListVolume(args);
 }
+
+}  // namespace
+
+#ifdef _WIN32
+
+// NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
+int wmain(int argc, wchar_t* argv[]) { return Run(argc, argv); }
+
+#else
+
+int main(int argc, char* argv[]) {
+  std::vector<std::wstring> wide = NtfsDevice::ArgumentsAsWide(argc, argv);
+  std::vector<wchar_t*> pointers = NtfsDevice::ArgumentPointers(wide);
+  return Run(argc, pointers.data());
+}
+
+#endif
