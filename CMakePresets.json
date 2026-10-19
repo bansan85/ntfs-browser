@@ -117,6 +117,86 @@
                 "CMAKE_C_COMPILER": "cl.exe",
                 "CMAKE_CXX_COMPILER": "cl.exe"
             }
+        },
+        {
+            "name": "shared-relwithdebinfo",
+            "displayName": "Shared RelWithDebInfo",
+            "inherits": "shared",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "static-relwithdebinfo",
+            "displayName": "Static RelWithDebInfo",
+            "inherits": "static",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "shared-vcpkg-relwithdebinfo",
+            "displayName": "Shared (vcpkg, x64-windows) RelWithDebInfo",
+            "inherits": "shared-vcpkg",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "static-vcpkg-relwithdebinfo",
+            "displayName": "Static /MD (vcpkg, x64-windows-static-md) RelWithDebInfo",
+            "inherits": "static-vcpkg",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "no-decompression-relwithdebinfo",
+            "displayName": "Static, LZNT1 decompression disabled RelWithDebInfo",
+            "inherits": "no-decompression",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "efs-cryptopp-only-relwithdebinfo",
+            "displayName": "Static, EFS decryption via Crypto++ only RelWithDebInfo",
+            "inherits": "efs-cryptopp-only",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "efs-bcrypt-only-relwithdebinfo",
+            "displayName": "Static, EFS decryption via BCrypt only RelWithDebInfo",
+            "inherits": "efs-bcrypt-only",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "no-efs-relwithdebinfo",
+            "displayName": "Static, EFS decryption disabled (both backends off) RelWithDebInfo",
+            "inherits": "no-efs",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "vs2022-amd64-relwithdebinfo",
+            "displayName": "Visual Studio Community 2022 RelWithDebInfo - amd64",
+            "inherits": "vs2022-amd64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "vs2026-x86-relwithdebinfo",
+            "displayName": "Visual Studio Community 2026 RelWithDebInfo - x86",
+            "inherits": "vs2026-x86",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
         }
     ],
     "buildPresets": [
@@ -176,6 +256,63 @@
             "displayName": "Visual Studio Community 2026 x86",
             "configurePreset": "vs2026-x86",
             "inherits": "build-base"
+        },
+        {
+            "name": "build-relwithdebinfo-base",
+            "hidden": true,
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "shared-relwithdebinfo",
+            "configurePreset": "shared-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "static-relwithdebinfo",
+            "configurePreset": "static-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "shared-vcpkg-relwithdebinfo",
+            "configurePreset": "shared-vcpkg-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "static-vcpkg-relwithdebinfo",
+            "configurePreset": "static-vcpkg-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "no-decompression-relwithdebinfo",
+            "configurePreset": "no-decompression-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "efs-cryptopp-only-relwithdebinfo",
+            "configurePreset": "efs-cryptopp-only-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "efs-bcrypt-only-relwithdebinfo",
+            "configurePreset": "efs-bcrypt-only-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "no-efs-relwithdebinfo",
+            "configurePreset": "no-efs-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "vs2022-amd64-relwithdebinfo",
+            "displayName": "Visual Studio Community 2022 RelWithDebInfo - amd64",
+            "configurePreset": "vs2022-amd64-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
+        },
+        {
+            "name": "vs2026-x86-relwithdebinfo",
+            "displayName": "Visual Studio Community 2026 x86 RelWithDebInfo",
+            "configurePreset": "vs2026-x86-relwithdebinfo",
+            "inherits": "build-relwithdebinfo-base"
         }
     ],
     "workflowPresets": [
@@ -280,6 +417,110 @@
                 {
                     "type": "build",
                     "name": "static-vcpkg"
+                }
+            ]
+        },
+        {
+            "name": "shared-relwithdebinfo",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "shared-relwithdebinfo"
+                },
+                {
+                    "type": "build",
+                    "name": "shared-relwithdebinfo"
+                }
+            ]
+        },
+        {
+            "name": "static-relwithdebinfo",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "static-relwithdebinfo"
+                },
+                {
+                    "type": "build",
+                    "name": "static-relwithdebinfo"
+                }
+            ]
+        },
+        {
+            "name": "no-decompression-relwithdebinfo",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "no-decompression-relwithdebinfo"
+                },
+                {
+                    "type": "build",
+                    "name": "no-decompression-relwithdebinfo"
+                }
+            ]
+        },
+        {
+            "name": "efs-cryptopp-only-relwithdebinfo",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "efs-cryptopp-only-relwithdebinfo"
+                },
+                {
+                    "type": "build",
+                    "name": "efs-cryptopp-only-relwithdebinfo"
+                }
+            ]
+        },
+        {
+            "name": "efs-bcrypt-only-relwithdebinfo",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "efs-bcrypt-only-relwithdebinfo"
+                },
+                {
+                    "type": "build",
+                    "name": "efs-bcrypt-only-relwithdebinfo"
+                }
+            ]
+        },
+        {
+            "name": "no-efs-relwithdebinfo",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "no-efs-relwithdebinfo"
+                },
+                {
+                    "type": "build",
+                    "name": "no-efs-relwithdebinfo"
+                }
+            ]
+        },
+        {
+            "name": "shared-vcpkg-relwithdebinfo",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "shared-vcpkg-relwithdebinfo"
+                },
+                {
+                    "type": "build",
+                    "name": "shared-vcpkg-relwithdebinfo"
+                }
+            ]
+        },
+        {
+            "name": "static-vcpkg-relwithdebinfo",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "static-vcpkg-relwithdebinfo"
+                },
+                {
+                    "type": "build",
+                    "name": "static-vcpkg-relwithdebinfo"
                 }
             ]
         }
