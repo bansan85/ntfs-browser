@@ -72,6 +72,24 @@ std::optional<LONGLONG> DirectRecordAddress(const NtfsVolume<S>& volume,
   }
 }
 
+// Checks the magic of a record just read, and patches its update sequence.
+// False if either fails.
+template <Cache::Strategy S>
+bool AcceptRecordHeader(Record::HeaderImpl<S>& header) {
+  // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
+  // meets this on every such slot. A caller gets false either way.
+  if (header.GetData()->magic != Data::FileRecordHeader::file_record_magic) {
+    Log::Debug("Invalid file record");
+    return false;
+  }
+
+  if (!header.PatchUS()) {
+    Log::Warn("Update Sequence Number error");
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -219,6 +237,24 @@ bool Io::FileRecord<S>::ParseFileRecord(ULONGLONG file_ref,
   return impl_->ParseRecord(file_ref, preread);
 }
 
+// Reads the $MFTMirr copy of file_ref into record_buffer. Null when there is
+// no copy to read, or it has no usable header.
+template <Cache::Strategy S>
+std::unique_ptr<Record::HeaderImpl<S>>
+    Io::FileRecord<S>::Impl::ReadMirrorRecord(ULONGLONG file_ref) {
+  if (!volume->ReadMftMirrorRecord(file_ref, record_buffer)) {
+    return {};
+  }
+
+  try {
+    return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
+  } catch (const std::exception& e) {
+    // The same header constructor check as on the $MFT path.
+    Log::Exception(e);
+    return {};
+  }
+}
+
 // The body of ParseFileRecord(), shared with callers that already hold the
 // record's bytes.
 template <Cache::Strategy S>
@@ -232,25 +268,34 @@ bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
 
   std::unique_ptr<Record::HeaderImpl<S>> header =
       ReadFileRecord(file_ref, preread);
-  if (!header) {
+  const bool read_ok = header != nullptr;
+  if (!read_ok) {
     Log::Error("Cannot read file record {}", file_ref);
+  }
+  bool accepted = read_ok && AcceptRecordHeader(*header);
 
+  // The mirror is the last resort: it may be older than $MFT's own record, as
+  // NTFS refreshes it only now and then. The volume reads it only when
+  // recovering, and only for the first four records. A caller that supplies
+  // the bytes has no use for another source.
+  if (!accepted && preread.empty()) {
+    header.reset();
+    header = ReadMirrorRecord(file_ref);
+    if (header && AcceptRecordHeader(*header)) {
+      accepted = true;
+      Log::Info(
+          "File record {} is unusable in $MFT: using its copy in $MFTMirr, "
+          "which may be stale",
+          file_ref);
+    }
+  }
+
+  if (read_ok || accepted) {
+    file_reference = file_ref;
+  } else {
     file_reference = {};
-
-    return false;
   }
-
-  file_reference = file_ref;
-
-  // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
-  // meets this on every such slot. A caller gets false either way.
-  if (header->GetData()->magic != Data::FileRecordHeader::file_record_magic) {
-    Log::Debug("Invalid file record");
-    return false;
-  }
-
-  if (!header->PatchUS()) {
-    Log::Warn("Update Sequence Number error");
+  if (!accepted) {
     return false;
   }
 

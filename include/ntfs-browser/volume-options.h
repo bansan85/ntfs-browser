@@ -30,7 +30,8 @@ struct VolumeOptions {
   // hidden when off, returned when on, with its metadata taken from that
   // entry. On, a walk also reads the $INDEX_ALLOCATION blocks no index
   // pointer reaches, up to max_orphan_scan_blocks; an entry found that way is
-  // kept only if its parent matches.
+  // kept only if its parent matches. On, a first record (0 to 3) that does not
+  // parse in $MFT is also read from its copy in $MFTMirr, which may be stale.
   bool recover_errors{false};
 
   // Soft ceiling, per volume, on the memory FullCache holds. 256 MiB by

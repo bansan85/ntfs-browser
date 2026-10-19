@@ -220,6 +220,37 @@ inline constexpr std::array<DWORD, 4> uaf_real_size_sentinels{1024, 2048, 3072,
 // root directory are left untouched and valid.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithCorruptMftRecord();
 
+// LCN where BuildFakeNtfsImageWithMftMirror() puts its $MFTMirr copy: past
+// $MFT's records, inside the image's first 64 KiB.
+inline constexpr ULONGLONG fake_mft_mirror_lcn = 16;
+
+// Records $MFTMirr copies: $MFT, $MFTMirr, $LogFile and $Volume.
+inline constexpr ULONGLONG fake_mft_mirror_records = 4;
+
+// How BuildFakeNtfsImageWithMftMirror() breaks a record.
+enum class MirrorRecordDamage : std::uint8_t {
+  // The "FILE" magic is overwritten.
+  Magic,
+  // The last word of the first sector no longer matches the update sequence.
+  UpdateSequence
+};
+
+// Which of records 0 to 3 BuildFakeNtfsImageWithMftMirror() breaks, as one bit
+// per record number (bit 0 is $MFT, bit 3 is $Volume), in $MFT and in its
+// copy.
+struct MftMirrorDamage {
+  std::uint32_t in_mft{0};
+  std::uint32_t in_mirror{0};
+  MirrorRecordDamage kind{MirrorRecordDamage::Magic};
+};
+
+// Same volume as BuildFakeNtfsImage(), with valid records 1 and 2 added, and
+// a copy of records 0 to 3 at fake_mft_mirror_lcn, which the BPB's
+// lcn_mft_mirr names. damage then breaks some of the records, before or after
+// the copy is taken.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMftMirror(const MftMirrorDamage& damage = {});
+
 // MFT index of the record built by
 // BuildFakeNtfsImageWithAttrNameExceedsTotalSize(). Free below
 // Mft::Idx::User (16).

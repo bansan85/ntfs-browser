@@ -15,6 +15,8 @@ target_sources(
     "fullcache-walk-support.h"
     "init-exit-tests.cpp"
     "mft-list-entry-characterization-tests.cpp"
+    "mft-mirror-fallback-tests.cpp"
+    "mft-mirror-geometry-tests.cpp"
     "minify-cache-tests.cpp"
     "mft-parse-failure-volume-ok-tests.cpp"
     "no-cache-lifetime-tests.cpp"

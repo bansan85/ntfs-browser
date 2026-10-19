@@ -414,6 +414,22 @@ bool NtfsVolume<S>::ReadMftSlots(ULONGLONG first_ref,
 }
 
 template <Cache::Strategy S>
+bool NtfsVolume<S>::ReadMftMirrorRecord(ULONGLONG file_ref,
+                                        std::span<BYTE> out) const {
+  const Volume::Geometry& geometry = impl_->geometry;
+  if (!impl_->options.recover_errors || !geometry.mft_mirr_usable ||
+      file_ref >= Volume::mft_mirror_record_count) {
+    return false;
+  }
+
+  // The geometry check bounds the copy, so this sum fits a LONGLONG.
+  LARGE_INTEGER addr{};
+  addr.QuadPart = static_cast<LONGLONG>(geometry.mft_mirr_addr +
+                                        file_ref * geometry.file_record_size);
+  return impl_->volume->ReadInto(addr, out);
+}
+
+template <Cache::Strategy S>
 const UpCase::Table& NtfsVolume<S>::GetUpCaseTable() const {
   return impl_->GetUpCaseTable();
 }

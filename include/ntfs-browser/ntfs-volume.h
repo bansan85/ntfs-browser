@@ -141,6 +141,13 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // from a fixed address instead), when $MFT is not mapped, or on a short read.
   [[nodiscard]] bool ReadMftSlots(ULONGLONG first_ref,
                                   std::span<BYTE> out) const;
+  // Reads out.size() bytes of the $MFTMirr copy of record file_ref. It reads
+  // nothing and returns false unless recover_errors is on, the boot sector
+  // names a usable $MFTMirr, and file_ref is below 4: the copy holds only
+  // $MFT, $MFTMirr, $LogFile and $Volume. The copy may be older than $MFT's
+  // own record.
+  [[nodiscard]] bool ReadMftMirrorRecord(ULONGLONG file_ref,
+                                         std::span<BYTE> out) const;
 
   // The volume's $UpCase table, loaded on first use. When it cannot be read,
   // the built-in Unicode simple uppercase mapping stands in.

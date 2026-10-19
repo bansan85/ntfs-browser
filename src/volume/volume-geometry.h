@@ -6,7 +6,12 @@
 
 #include <ntfs-browser/namespace.h>
 
+#include "internal-export.h"
+
 namespace NTFS_BROWSER_NAMESPACE::Volume {
+
+// Records $MFTMirr copies: $MFT, $MFTMirr, $LogFile and $Volume.
+inline constexpr ULONGLONG mft_mirror_record_count = 4;
 
 // Sizes and addresses the boot sector's BPB declares, in bytes.
 struct Geometry {
@@ -15,6 +20,12 @@ struct Geometry {
   DWORD file_record_size{0};
   DWORD index_block_size{0};
   ULONGLONG mft_addr{0};
+  // lcn_mft_mirr in bytes, saturated when the product overflows. Decoded
+  // whenever the whole parse is accepted, usable or not.
+  ULONGLONG mft_mirr_addr{0};
+  // True when a copy of the first mft_mirror_record_count records can be read
+  // at mft_mirr_addr: see ParseBootSector().
+  bool mft_mirr_usable{false};
 };
 
 // Result of ParseBootSector(). geometry keeps every field decoded before the
@@ -34,7 +45,13 @@ struct BootSectorParse {
 // last check needs the geometry, so it runs after the others. A sector size
 // outside 256..4096 bytes or not a power of two, and a cluster size that is not
 // a power of two, always reject: that geometry cannot be salvaged.
-[[nodiscard]] BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
-                                              bool recover);
+// Once the parse is accepted, lcn_mft_mirr is decoded too. It never rejects:
+// an unusable $MFTMirr only leaves mft_mirr_usable false. It is unusable when
+// null (the boot sector sits at LCN 0), when its address overflows or is too
+// high for a LONGLONG, when it equals mft_addr, or when the copy would end
+// beyond total_sectors. A null total_sectors, only accepted when recovering,
+// leaves the volume's end unknown: that last check is then skipped.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY BootSectorParse
+    ParseBootSector(std::span<const BYTE> boot_sector, bool recover);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Volume

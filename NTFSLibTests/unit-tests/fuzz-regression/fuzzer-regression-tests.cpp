@@ -65,7 +65,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 156>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 159>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -537,6 +537,16 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 156>
          {true, {"fields that must be zero are not: large_sectors (0x20)"}}},
         {"volume_dirty_flag_set",
          {true, {"NTFS volume was not unmounted cleanly"}}},
+        {"mft_record0_corrupt_mirror_intact",
+         {true,
+          {"File record 0 is unusable in $MFT: using its copy in "
+           "$MFTMirr"}}},
+        {"volume_record_corrupt_mirror_intact",
+         {true,
+          {"File record 3 is unusable in $MFT: using its copy in "
+           "$MFTMirr"}}},
+        {"mft_mirror_same_as_mft",
+         {true, {"No usable $MFTMirr: records 0 to 3 have no fallback copy"}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -745,6 +755,8 @@ NTFS_REGRESSION_TESTCASE("mft_data_merged_span_overflow")
 NTFS_REGRESSION_TESTCASE("mft_data_run_cluster_lcn_narrowing_error")
 NTFS_REGRESSION_TESTCASE("mft_data_without_base_extent")
 NTFS_REGRESSION_TESTCASE("mft_huge_scan_stops_at_progress")
+NTFS_REGRESSION_TESTCASE("mft_mirror_same_as_mft")
+NTFS_REGRESSION_TESTCASE("mft_record0_corrupt_mirror_intact")
 NTFS_REGRESSION_TESTCASE("mft_tree_full_cache")
 NTFS_REGRESSION_TESTCASE("mft_tree_huge_real_size")
 NTFS_REGRESSION_TESTCASE("mft_tree_names_damaged_record_and_duplicate_link")
@@ -770,6 +782,7 @@ NTFS_REGRESSION_TESTCASE("volume_information_must_be_resident")
 NTFS_REGRESSION_TESTCASE("volume_information_version_below_three")
 NTFS_REGRESSION_TESTCASE("volume_name_must_be_resident")
 NTFS_REGRESSION_TESTCASE("volume_name_resident_present")
+NTFS_REGRESSION_TESTCASE("volume_record_corrupt_mirror_intact")
 
 #undef NTFS_REGRESSION_TESTCASE
 

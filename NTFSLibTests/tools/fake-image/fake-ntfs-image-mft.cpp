@@ -195,6 +195,55 @@ std::vector<BYTE> BuildFakeNtfsImageWithCorruptMftRecord() {
   return image;
 }
 
+namespace {
+
+// Breaks the record at offset in image.
+void DamageRecordAt(std::vector<BYTE>& image, size_t offset,
+                    MirrorRecordDamage kind) {
+  if (kind == MirrorRecordDamage::Magic) {
+    std::memset(&image.at(offset), 0,
+                sizeof(FileRecordHeader::file_record_magic));
+    return;
+  }
+  // The fake records keep their update sequence number at zero.
+  constexpr size_t first_sector_end = fake_bytes_per_sector - sizeof(WORD);
+  std::memset(&image.at(offset + first_sector_end), 0xFF, sizeof(WORD));
+}
+
+}  // namespace
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithMftMirror(const MftMirrorDamage& damage) {
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
+  const DWORD mirror_addr =
+      static_cast<DWORD>(fake_mft_mirror_lcn) * cluster_size;
+
+  const FakeRecord plain = MakeRecordHeader(
+      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+  PutMftRecord(image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::MftMirr),
+               plain);
+  PutMftRecord(image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::LogFile),
+               plain);
+
+  const size_t copy_size = fake_file_record_size * fake_mft_mirror_records;
+  std::memcpy(&image.at(mirror_addr), &image.at(mft_addr), copy_size);
+  auto& bpb =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data());
+  bpb.lcn_mft_mirr = fake_mft_mirror_lcn;
+
+  for (ULONGLONG record = 0; record < fake_mft_mirror_records; record++) {
+    const size_t offset = fake_file_record_size * record;
+    if (((damage.in_mft >> record) & 1U) != 0) {
+      DamageRecordAt(image, mft_addr + offset, damage.kind);
+    }
+    if (((damage.in_mirror >> record) & 1U) != 0) {
+      DamageRecordAt(image, mirror_addr + offset, damage.kind);
+    }
+  }
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithFragmentedMftInvalidRecord() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
