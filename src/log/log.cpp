@@ -3,6 +3,8 @@
 #include <exception>
 #include <filesystem>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -13,14 +15,12 @@
 #include <frozen/unordered_map.h>
 #include <spdlog/common.h>
 #include <spdlog/details/log_msg.h>
-#include <spdlog/formatter.h>
-#include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
-#include <spdlog/spdlog.h>
 
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
@@ -72,123 +72,113 @@ spdlog::level::level_enum ToSpdlog(Log::Level level) noexcept {
   return spdlog::level::off;
 }
 
-// Wraps a sink and drops everything at or above an exclusive ceiling.
-// spdlog gives a sink a minimum level only. Without this the stdout half
-// of the console target would repeat every warning and error that its
-// stderr half already printed.
-class CeilingSink final : public spdlog::sinks::sink {
+// Writes to spdlog sinks. Warn and the more severe levels go to severe,
+// the others to mild; the file target passes one sink for both. The sinks
+// are never asked about their own level: threshold is the only filter, so
+// the console's stderr half and stdout half cannot repeat a message.
+class SpdlogTargetSink final : public ISink {
  public:
-  CeilingSink(std::shared_ptr<spdlog::sinks::sink> inner,
-              spdlog::level::level_enum ceiling)
-      : inner_(std::move(inner)), ceiling_(ceiling) {}
+  SpdlogTargetSink(std::shared_ptr<spdlog::sinks::sink> severe,
+                   std::shared_ptr<spdlog::sinks::sink> mild,
+                   Log::Level threshold)
+      : severe_(std::move(severe)),
+        mild_(std::move(mild)),
+        threshold_(threshold) {}
 
-  CeilingSink(CeilingSink&&) = delete;
-  CeilingSink(const CeilingSink&) = delete;
-  CeilingSink& operator=(CeilingSink&&) = delete;
-  CeilingSink& operator=(const CeilingSink&) = delete;
-  ~CeilingSink() override = default;
+  [[nodiscard]] bool ShouldLog(Log::Level level) const override {
+    // Off is a threshold, never a message level.
+    return level != Log::Level::Off && level <= threshold_;
+  }
 
-  void log(const spdlog::details::log_msg& msg) override {
-    if (msg.level >= ceiling_) {
-      return;
+  void Write(Log::Level level, std::string_view message) override {
+    const spdlog::details::log_msg msg(
+        spdlog::source_loc{},
+        spdlog::string_view_t(Log::logger_name.data(), Log::logger_name.size()),
+        ToSpdlog(level), spdlog::string_view_t(message.data(), message.size()));
+    (level <= Log::Level::Warn ? severe_ : mild_)->log(msg);
+  }
+
+  void Flush() override {
+    severe_->flush();
+    if (mild_ != severe_) {
+      mild_->flush();
     }
-    inner_->log(msg);
-  }
-
-  void flush() override { inner_->flush(); }
-
-  void set_pattern(const std::string& pattern) override {
-    inner_->set_pattern(pattern);
-  }
-
-  void set_formatter(
-      std::unique_ptr<spdlog::formatter> sink_formatter) override {
-    inner_->set_formatter(std::move(sink_formatter));
   }
 
  private:
-  std::shared_ptr<spdlog::sinks::sink> inner_;
-  spdlog::level::level_enum ceiling_;
+  std::shared_ptr<spdlog::sinks::sink> severe_;
+  std::shared_ptr<spdlog::sinks::sink> mild_;
+  Log::Level threshold_;
 };
 
-// Holds the library logger. Deliberately never destroyed: objects with
-// static storage duration log from their destructors, and a logger
-// destroyed before them would be used after its lifetime ended.
-struct LoggerHolder {
-  std::shared_ptr<spdlog::logger> logger;
+// The sinks the library offers each message to. Deliberately never
+// destroyed: objects with static storage duration log from their
+// destructors, and sinks destroyed before them would be used after their
+// lifetime ended.
+struct SinkHolder {
+  std::vector<std::shared_ptr<ISink>> sinks;
+  // False until a call installs a set, so the first message can install
+  // the default configuration.
+  bool is_installed = false;
+  // Set when every sink is a built-in target, whose threshold never
+  // changes: the least severe level any of them accepts. IsEnabled() then
+  // answers with one comparison instead of one virtual call per sink. A
+  // set with a sink of the consumer's has none, since that sink may change
+  // its mind between two messages.
+  std::optional<Log::Level> fixed_threshold;
 };
 
-LoggerHolder& Holder() {
+SinkHolder& Holder() {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-  static auto* const holder = new LoggerHolder();
+  static auto* const holder = new SinkHolder();
   return *holder;
 }
 
-// The least severe level any sink accepts, which is the level the logger
-// itself must sit at for every sink to see what it asked for.
-spdlog::level::level_enum
-    LeastSevere(const std::vector<spdlog::sink_ptr>& sinks) noexcept {
-  spdlog::level::level_enum result = spdlog::level::off;
-  for (const spdlog::sink_ptr& sink : sinks) {
-    result = (std::min)(result, sink->level());
+// Makes sinks the library's set. The previous sinks are released here, and
+// a destructor of theirs that throws is the consumer's problem, not a
+// reason to leave the new set uninstalled.
+void Install(std::vector<std::shared_ptr<ISink>> sinks,
+             std::optional<Log::Level> fixed_threshold) noexcept {
+  SinkHolder& holder = Holder();
+  holder.sinks.swap(sinks);
+  holder.fixed_threshold = fixed_threshold;
+  holder.is_installed = true;
+  try {
+    sinks.clear();
+  } catch (...) {
+    return;
   }
-  return result;
 }
 
-// Builds the console target: a stdout sink capped below warn, plus a
-// stderr sink floored at warn, so each message lands on one stream only.
-// The _st sinks take no lock, which the library's single-threaded
-// contract allows and its per-cluster message volume wants.
-void AddConsoleSinks(Log::Level level, std::vector<spdlog::sink_ptr>& sinks) {
-  const auto out = std::make_shared<CeilingSink>(
-      std::make_shared<spdlog::sinks::stdout_sink_st>(), spdlog::level::warn);
-  out->set_level(ToSpdlog(level));
-  out->set_pattern(std::string(console_pattern));
-  sinks.push_back(out);
-
-  const auto err = std::make_shared<spdlog::sinks::stderr_sink_st>();
-  err->set_level((std::max)(spdlog::level::warn, ToSpdlog(level)));
-  err->set_pattern(std::string(console_pattern));
-  sinks.push_back(err);
-}
-
-// Installs the sinks config asks for on a freshly built logger, which
-// replaces any logger a previous call left behind. Returns false if the
-// file sink could not be opened; the console target is installed anyway.
+// Installs the targets config asks for, which replaces any set a previous
+// call left behind. Returns false if the file sink could not be opened; the
+// console target is installed anyway.
 bool Apply(const Log::Config& config) noexcept {
   bool is_ok = true;
 
   try {
-    std::vector<spdlog::sink_ptr> sinks;
+    std::vector<std::shared_ptr<ISink>> sinks;
+    // Enumerators run from most to least severe, so the larger one is the
+    // less severe.
+    Log::Level least_severe = Log::Level::Off;
 
     if (config.console_level != Log::Level::Off) {
-      AddConsoleSinks(config.console_level, sinks);
+      sinks.push_back(Log::MakeConsoleSink(config.console_level));
+      least_severe = (std::max)(least_severe, config.console_level);
     }
 
     if (config.file_level != Log::Level::Off) {
-      try {
-        // Appends: a second Configure() with the same path must not wipe
-        // what the first one already wrote.
-        const auto file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
-            config.file_path.native(), false);
-        file->set_level(ToSpdlog(config.file_level));
-        file->set_pattern(std::string(file_pattern));
-        sinks.push_back(file);
-      } catch (...) {
+      std::shared_ptr<ISink> file =
+          Log::MakeFileSink(config.file_path, config.file_level);
+      if (file) {
+        sinks.push_back(std::move(file));
+        least_severe = (std::max)(least_severe, config.file_level);
+      } else {
         is_ok = false;
       }
     }
 
-    auto logger = std::make_shared<spdlog::logger>(
-        std::string(Log::logger_name), sinks.begin(), sinks.end());
-    logger->set_level(LeastSevere(sinks));
-    // The holder is never destroyed, so nothing would flush the file sink
-    // at exit; every line is therefore flushed as it is written.
-    logger->flush_on(spdlog::level::trace);
-
-    spdlog::drop(std::string(Log::logger_name));
-    spdlog::register_logger(logger);
-    Holder().logger = std::move(logger);
+    Install(std::move(sinks), least_severe);
   } catch (...) {
     return false;
   }
@@ -196,14 +186,14 @@ bool Apply(const Log::Config& config) noexcept {
   return is_ok;
 }
 
-// The library logger, created with the default configuration on first use.
-// Null only if even that could not be built.
-spdlog::logger* EnsureLogger() {
-  const LoggerHolder& holder = Holder();
-  if (!holder.logger) {
+// The installed sinks, with the default configuration installed on first
+// use.
+const SinkHolder& EnsureSinks() {
+  const SinkHolder& holder = Holder();
+  if (!holder.is_installed) {
     Apply(Log::Config{});
   }
-  return holder.logger.get();
+  return holder;
 }
 
 // True if text spells out the ASCII string ascii. Every keyword --log
@@ -244,6 +234,46 @@ void Exception(const std::exception& exception) noexcept {
 }
 
 bool Configure(const Config& config) noexcept { return Apply(config); }
+
+void SetSinks(std::span<const std::shared_ptr<ISink>> sinks) noexcept {
+  try {
+    std::vector<std::shared_ptr<ISink>> installed;
+    installed.reserve(sinks.size());
+    for (const std::shared_ptr<ISink>& sink : sinks) {
+      if (sink) {
+        installed.push_back(sink);
+      }
+    }
+    Install(std::move(installed), std::nullopt);
+  } catch (...) {
+    // Nothing is left to report the failure with: the previous set stays.
+    return;
+  }
+}
+
+std::shared_ptr<ISink> MakeConsoleSink(Level threshold) {
+  // The _st sinks take no lock, which the library's single-threaded
+  // contract allows and its per-message volume wants.
+  const auto out = std::make_shared<spdlog::sinks::stdout_sink_st>();
+  out->set_pattern(std::string(console_pattern));
+  const auto err = std::make_shared<spdlog::sinks::stderr_sink_st>();
+  err->set_pattern(std::string(console_pattern));
+  return std::make_shared<SpdlogTargetSink>(err, out, threshold);
+}
+
+std::shared_ptr<ISink> MakeFileSink(const std::filesystem::path& path,
+                                    Level threshold) {
+  try {
+    // Appends: a second Configure() with the same path must not wipe what
+    // the first one already wrote.
+    const auto file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
+        path.native(), false);
+    file->set_pattern(std::string(file_pattern));
+    return std::make_shared<SpdlogTargetSink>(file, file, threshold);
+  } catch (...) {
+    return nullptr;
+  }
+}
 
 namespace {
 
@@ -348,8 +378,21 @@ bool IsEnabled(Level level) noexcept {
   }
 
   try {
-    const spdlog::logger* const logger = EnsureLogger();
-    return logger != nullptr && logger->should_log(ToSpdlog(level));
+    const SinkHolder& holder = EnsureSinks();
+    if (holder.fixed_threshold) {
+      return level <= *holder.fixed_threshold;
+    }
+
+    return std::ranges::any_of(holder.sinks,
+                               [level](const std::shared_ptr<ISink>& sink) {
+                                 try {
+                                   return sink->ShouldLog(level);
+                                 } catch (...) {
+                                   // A sink that cannot answer is taken not to
+                                   // want the message.
+                                   return false;
+                                 }
+                               });
   } catch (...) {
     return false;
   }
@@ -361,12 +404,22 @@ void Emit(Level level, std::string_view message) noexcept {
   }
 
   try {
-    spdlog::logger* const logger = EnsureLogger();
-    if (logger == nullptr) {
-      return;
+    // A copy: a sink may replace the set from inside Write(), which would
+    // otherwise invalidate this loop and free the sink that is running.
+    const std::vector<std::shared_ptr<ISink>> sinks = EnsureSinks().sinks;
+    for (const std::shared_ptr<ISink>& sink : sinks) {
+      try {
+        if (sink->ShouldLog(level)) {
+          sink->Write(level, message);
+          // The sinks are never destroyed at exit, so nothing else would
+          // flush a file sink: every line is flushed as it is written.
+          sink->Flush();
+        }
+      } catch (...) {
+        // One failing sink MUST NOT keep the next one from the line.
+        continue;
+      }
     }
-    logger->log(ToSpdlog(level),
-                spdlog::string_view_t(message.data(), message.size()));
   } catch (...) {
     // Nothing is left to report the failure with, so the line is dropped.
     return;

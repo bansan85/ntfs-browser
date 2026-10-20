@@ -77,6 +77,8 @@ set(
   "../include/ntfs-browser/io/read-ahead-disk-reader.h"
   "../include/ntfs-browser/index-entry.h"
   "../include/ntfs-browser/log/log.h"
+  "../include/ntfs-browser/log/sink.h"
+  "../include/ntfs-browser/log/spdlog-adapter.h"
   "../include/ntfs-browser/attr/mask.h"
   "../include/ntfs-browser/mft/idx.h"
   "../include/ntfs-browser/mft/tree.h"

@@ -1,12 +1,9 @@
 #include <algorithm>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
 #include <catch2/catch_test_macros.hpp>
-#include <spdlog/pattern_formatter.h>
-#include <spdlog/spdlog.h>
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
@@ -41,23 +38,6 @@ TEST_CASE("a message that cannot be formatted is logged as such",
 
   const std::string text = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   CHECK(text.find("Log message could not be formatted") != std::string::npos);
-}
-
-TEST_CASE("a formatter set on the library logger reaches its console sink",
-          "[cov-attrs]") {
-  const RestoreCaptureSink restore;
-
-  Log::Config config;
-  config.console_level = Log::Level::Error;
-  config.file_level = Log::Level::Off;
-  REQUIRE(Log::Configure(config));
-
-  const auto logger = spdlog::get(std::string(Log::logger_name));
-  REQUIRE(logger != nullptr);
-  logger->set_formatter(std::make_unique<spdlog::pattern_formatter>("%v"));
-
-  // Below the console's error level, so nothing reaches the streams.
-  Log::Info("formatter probe");
 }
 
 TEST_CASE(

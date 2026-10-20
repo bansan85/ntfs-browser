@@ -35,8 +35,10 @@ inline constexpr std::string_view option_usage =
 // same file whichever encoding a platform's paths use.
 inline constexpr std::string_view default_file_path = "ntfs-browser.log";
 
-// Name of the logger the library emits through. It is deliberately not the
-// process-wide default logger, which belongs to the host application.
+// Name the library gives its messages. The built-in sinks and the spdlog
+// adapter hand it to spdlog as the logger name, so a pattern with %n prints
+// it. No spdlog logger of that name is registered: the library never touches
+// the host application's default logger.
 inline constexpr std::string_view logger_name = "ntfs-browser";
 
 // Runtime logging configuration, one level per target. The console target
@@ -53,11 +55,12 @@ struct Config {
 };
 
 // Applies config, replacing the library logger's sinks and their levels
-// wholesale. Returns false if the file sink could not be opened; the
-// console target is installed either way. Never throws: the library logs
-// from destructors and from noexcept functions.
-// The library is not thread safe, and neither is logging: this call and
-// every emitted message MUST come from one thread. The sinks are spdlog's
+// wholesale, including any set installed with SetSinks() (log/sink.h),
+// which is how a consumer sends messages elsewhere. Returns false if the file
+// sink could not be opened; the console target is installed either way. Never
+// throws: the library logs from destructors and from noexcept functions. The
+// library is not thread safe, and neither is logging: this call and every
+// emitted message MUST come from one thread. The built-in sinks are spdlog's
 // single-threaded ones, so a message costs no lock.
 NTFS_BROWSER_EXPORT bool Configure(const Config& config) noexcept;
 

@@ -21,8 +21,8 @@ add_subdirectory("upcase")
 add_subdirectory("utf")
 add_subdirectory("volume")
 
-# spdlog: the capturing sink the tests install on the library's logger is an
-# spdlog sink. The library keeps spdlog private, so the tests link it too.
+# spdlog: the tests of log/spdlog-adapter.h build spdlog sinks and loggers of
+# their own. The library keeps spdlog private, so the tests link it too.
 # frozen: fuzzer-regression-tests.cpp builds its own expected_error_messages map
 # with it, independent of the library's own (private) use of frozen.
 # Threads::Threads is imported in src/, so it is not visible from this folder.

@@ -12,14 +12,14 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include <spdlog/logger.h>
 #include <spdlog/sinks/ostream_sink.h>
-#include <spdlog/spdlog.h>
 
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/log/sink.h>
+#include <ntfs-browser/log/spdlog-adapter.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
@@ -31,6 +31,7 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "test-log-sink.h"
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -418,19 +419,16 @@ TEMPLATE_TEST_CASE_SIG("MftTree stops when progress returns false",
 TEMPLATE_TEST_CASE_SIG("MftTree logs no warning for never-used record slots",
                        "[mft-tree]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const std::shared_ptr<spdlog::logger> logger =
-      spdlog::get(std::string(NTFS_BROWSER_NAMESPACE::Log::logger_name));
-  REQUIRE(logger);
-
   std::ostringstream out;
   const auto sink = std::make_shared<spdlog::sinks::ostream_sink_st>(out);
   sink->set_pattern("%l %v");
-  logger->sinks().push_back(sink);
+  NTFS_BROWSER_NAMESPACE::Log::SetSinks(
+      {NTFS_BROWSER_NAMESPACE::Log::MakeSpdlogSink(sink)});
   {
     const auto volume = OpenMftTreeVolume<S>();
     const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
   }
-  logger->sinks().pop_back();
+  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
 
   CHECK_THAT(out.str(), ContainsSubstring("debug Invalid file record"));
   CHECK_THAT(out.str(), !ContainsSubstring("warning"));

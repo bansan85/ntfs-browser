@@ -146,6 +146,7 @@ Each public class and function is described in the headers under `include/ntfs-b
 - 2026-10 — Bounded `FullCache` memory
 - 2026-10 — Faster `$MFT` reads and optional read-ahead
 - 2026-10 — `NtfsDir` and `NtfsMftList` run on Linux, on a device or an image file
+- 2026-10 — Custom log destinations and an opt-in spdlog adapter
 
 ## Credits and licence
 

@@ -7,13 +7,13 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include <spdlog/logger.h>
 #include <spdlog/sinks/ostream_sink.h>
-#include <spdlog/spdlog.h>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/log/sink.h>
+#include <ntfs-browser/log/spdlog-adapter.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
@@ -21,6 +21,7 @@
 #include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "test-log-sink.h"
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -39,15 +40,12 @@ namespace {
 // the same text either way.
 template <Cache::Strategy S>
 void RunSalvageableConditionLogLevel() {
-  const std::shared_ptr<spdlog::logger> logger =
-      spdlog::get(std::string(NTFS_BROWSER_NAMESPACE::Log::logger_name));
-  REQUIRE(logger);
-
   const auto capture_for = [&](const VolumeOptions& options) {
     std::ostringstream out;
     const auto sink = std::make_shared<spdlog::sinks::ostream_sink_st>(out);
     sink->set_pattern("%l %v");
-    logger->sinks().push_back(sink);
+    NTFS_BROWSER_NAMESPACE::Log::SetSinks(
+        {NTFS_BROWSER_NAMESPACE::Log::MakeSpdlogSink(sink)});
 
     const NtfsVolume<S> volume(
         std::make_unique<MemoryDiskReader>(
@@ -58,7 +56,7 @@ void RunSalvageableConditionLogLevel() {
     REQUIRE(record.ParseFileRecord(attr_name_exceeds_total_size_record_idx));
     (void)record.ParseAttrs();
 
-    logger->sinks().pop_back();
+    NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
     return out.str();
   };
 

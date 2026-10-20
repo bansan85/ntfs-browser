@@ -1,13 +1,18 @@
 <!--
 Sync Impact Report
-Version change: 1.2.0 -> 1.3.0 (MINOR: materially expanded guidance). Awaiting maintainer approval.
+Version change: 1.3.0 -> 1.4.0 (MINOR: materially expanded guidance). Awaiting maintainer approval.
+Modified sections: Technical Constraints (public headers MUST NOT include spdlog, except
+include/ntfs-browser/log/spdlog-adapter.h, an opt-in header-only adapter to Log::ISink).
+Reason: consumers customize the log output, through sinks of their own or through their own spdlog
+logger.
+Previous: 1.2.0 -> 1.3.0 (MINOR: materially expanded guidance).
 Modified sections: Technical Constraints (NtfsDir and NtfsMftList MUST build with GCC on Linux;
 the Windows-only list names NtfsDir2, NtfsAttr, NtfsDump, NtfsUndel and NtfsFuzzer).
-Reason: NtfsDir and NtfsMftList run on Linux; specs/003-linux-ntfsdir-mftlist.
+Reason: NtfsDir and NtfsMftList run on Linux.
 Templates: plan-template.md checked, no change needed.
 Previous: 1.1.0 -> 1.2.0 (MINOR: new rule, no function body in a header for a Strategy-only
-template; specs/002-no-template-code-in-headers).
-Previous: 1.0.0 -> 1.1.0 (MINOR: new MUST, no `friend` declaration; specs/001-remove-friend-classes).
+template).
+Previous: 1.0.0 -> 1.1.0 (MINOR: new MUST, no `friend` declaration).
 -->
 
 # NtfsBrowser Constitution
@@ -77,6 +82,8 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
   `.github/scripts/check-no-friend.py` enforces it in CI.
 - Public headers in `include/ntfs-browser/` are the only consumer surface. They MUST NOT include
   spdlog, Crypto++, `<windows.h>`, or any feature macro. Win32 types come from the `win-types.h` shim.
+  One header is the exception for spdlog: `include/ntfs-browser/log/spdlog-adapter.h`. It is opt-in
+  and header-only, the library never includes it, and no other public header MAY include spdlog.
 - Core classes that depend on cache behaviour MUST be templated on `Cache::Strategy`.
   Callers under `NoCache` MUST NOT assume attribute data outlives the next read.
 - A template whose only parameter is a `Cache::Strategy` MUST NOT define a function in a header
@@ -89,7 +96,7 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
   An internal symbol that tests reach MUST carry `NTFS_BROWSER_EXPORT_TESTS_ONLY`.
 - Public types and functions MUST live in `NTFS_BROWSER_NAMESPACE`, in a sub-namespace per domain.
   Code MUST NOT spell out the namespace name.
-- The library and its logging are single-threaded. `Log::Configure()` and every log message
+- The library and its logging are single-threaded. `Log::Configure()`, `Log::SetSinks()` and every log message
   MUST run on one thread.
 - Every source file MUST be listed explicitly in its folder's `CMakeLists.txt`. Globbing MUST NOT be used.
 - Every public function in `include/ntfs-browser/` MUST have a purpose comment.
@@ -129,4 +136,4 @@ PATCH for wording, typo fixes and clarifications that change no obligation.
 Development Workflow and Quality Gates. A violated MUST MUST be fixed, or justified in the
 pull request description. Complexity beyond what a principle requires MUST be justified in the same way.
 
-**Version**: 1.3.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-19
+**Version**: 1.4.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-20

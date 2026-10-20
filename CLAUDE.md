@@ -24,7 +24,7 @@ cmake --preset static
 cmake --build --preset static --parallel
 ```
 
-`BUILD_SHARED_LIBS` (default OFF) selects a static or shared `NtfsBrowser` lib. spdlog follows it, and is linked PRIVATE: it never appears in a public header. Crypto++ (`cryptopp-cmake` over `3rdparty/cryptopp`) does not follow it: it is always static, and linked PRIVATE too. On MSVC the root [CMakeLists.txt](CMakeLists.txt) works around two Crypto++ 8.9 problems: MASM object directories the Visual Studio generator does not create, and `stdext` iterators the newest MSVC STL dropped ([cmake/cryptopp-stdext-compat.h](cmake/cryptopp-stdext-compat.h)).
+`BUILD_SHARED_LIBS` (default OFF) selects a static or shared `NtfsBrowser` lib. spdlog follows it, and is linked PRIVATE: it appears in no public header the library includes. The one public header that includes it, [include/ntfs-browser/log/spdlog-adapter.h](include/ntfs-browser/log/spdlog-adapter.h), is opt-in and header-only (see Logging). Crypto++ (`cryptopp-cmake` over `3rdparty/cryptopp`) does not follow it: it is always static, and linked PRIVATE too. On MSVC the root [CMakeLists.txt](CMakeLists.txt) works around two Crypto++ 8.9 problems: MASM object directories the Visual Studio generator does not create, and `stdext` iterators the newest MSVC STL dropped ([cmake/cryptopp-stdext-compat.h](cmake/cryptopp-stdext-compat.h)).
 
 `NTFS_BROWSER_USE_INSTALLED_{GSL,FROZEN,CATCH2,SPDLOG,CRYPTOPP}` each link an installed copy instead of the submodule. All five default ON under the vcpkg toolchain ([vcpkg.json](vcpkg.json)), OFF otherwise. `NTFS_BROWSER_ENABLE_TESTING` defaults ON only in a top-level build, not under FetchContent.
 
@@ -65,9 +65,13 @@ A trace is the bytes a test read from its image, one read after the other, witho
 
 ## Logging
 
-All library diagnostics go through spdlog (`3rdparty/spdlog`, pinned to v1.17.0), behind the levelled `Log::Trace`/`Log::Debug`/`Log::Info`/`Log::Warn`/`Log::Error`/`Log::Exception` entry points in [src/log/ntfs-common.h](src/log/ntfs-common.h). Every level is always compiled in; filtering is runtime-only. spdlog MUST NOT appear in `include/ntfs-browser/*.h`, nor in any `src/*.h` the unit tests include.
+All library diagnostics go through spdlog (`3rdparty/spdlog`, pinned to v1.17.0), behind the levelled `Log::Trace`/`Log::Debug`/`Log::Info`/`Log::Warn`/`Log::Error`/`Log::Exception` entry points in [src/log/ntfs-common.h](src/log/ntfs-common.h). Every level is always compiled in; filtering is runtime-only. spdlog MUST NOT appear in `include/ntfs-browser/*.h`, except `log/spdlog-adapter.h`, nor in any `src/*.h` the unit tests include.
 
 [include/ntfs-browser/log/log.h](include/ntfs-browser/log/log.h) is the public surface: a `Log::Level` enum, a `Log::Config`, a `noexcept Log::Configure()`, and `Log::ParseOption()` for one `--log` argument.
+
+[include/ntfs-browser/log/sink.h](include/ntfs-browser/log/sink.h) lets a consumer choose where messages go. `Log::ISink` is a backend-neutral destination: `ShouldLog(Level)`, `Write(Level, message)` and `Flush()`, none `noexcept`. `Log::SetSinks()` replaces the library's sinks wholesale, with a braced list or a span; null entries are skipped and an empty set discards every message. `Configure()` is `SetSinks()` over the two built-in targets, which `Log::MakeConsoleSink()` and `Log::MakeFileSink()` also return as sinks, so a consumer can keep them next to its own. `Configure()` and `SetSinks()` replace each other's set. The library keeps a reference to each sink until the next call, and never destroys them at exit: a sink that depends on state which dies earlier MUST be released with `SetSinks({})` first. Every sink call is wrapped, so a sink that throws neither makes a log call throw nor keeps the next sink from the message. `Emit()` works on a copy of the set, so a sink MAY call `SetSinks()` or `Configure()` from `Write()`: the message in flight still reaches the old set, and the sink stays alive until its call returns.
+
+[include/ntfs-browser/log/spdlog-adapter.h](include/ntfs-browser/log/spdlog-adapter.h) is the opt-in spdlog layer: `Log::MakeSpdlogSink()` forwards to a consumer's `spdlog::sink_ptr`, and `Log::MakeSpdlogLogger()` emits through a consumer-owned `spdlog::logger`. It is the only public header that includes spdlog. It is header-only and exports nothing, so it compiles against the consumer's spdlog and only an `ISink` crosses into the library: the two spdlog versions, linkages and `SPDLOG_WCHAR_FILENAMES` settings need not match. The library never includes it.
 
 The console-app executables (`NtfsDir`, `NtfsDir2`, `NtfsMftList`, `NtfsFuzzer`, `NtfsFuzzerAfl`) accept the option; the MFC dialog apps have no command line and do not.
 
@@ -83,9 +87,9 @@ The console target is split by severity: `error` and `warn` go to stderr, `info`
 
 `NtfsFuzzerAfl` defaults to `--log=console:trace`. The regression corpus in [NTFSLibTests/unit-tests/fuzz-regression/fuzzer-regression-tests.cpp](NTFSLibTests/unit-tests/fuzz-regression/fuzzer-regression-tests.cpp) asserts against the same trace messages, through the test log sink.
 
-Neither the library nor its logging is thread safe, and the sinks are spdlog's single-threaded `_st` variants, so a message takes no lock. `Configure()` and every emitted message MUST come from one thread. A thread-safe sink is the answer if that ever has to change.
+Neither the library nor its logging is thread safe, and the built-in sinks are spdlog's single-threaded `_st` variants, so a message takes no lock. `Configure()`, `SetSinks()` and every emitted message MUST come from one thread. A consumer sink shared with other threads MUST take its own lock. A thread-safe sink is the answer if that ever has to change.
 
-The unit tests pin the library logger to a trace-level capturing spdlog sink before `main()` ([NTFSLibTests/unit-tests/support/test-log-sink.h](NTFSLibTests/unit-tests/support/test-log-sink.h)). A test that calls `Configure()` itself MUST call `InstallCaptureSink()` again afterwards, since `Configure()` replaces the logger's sinks wholesale.
+The unit tests make a capturing `Log::ISink` the library's only sink before `main()` ([NTFSLibTests/unit-tests/support/test-log-sink.h](NTFSLibTests/unit-tests/support/test-log-sink.h)). A test that calls `Configure()` or `SetSinks()` itself MUST call `InstallCaptureSink()` again afterwards, since both replace the sinks wholesale. `CaptureSinkHandle()` gives the sink to a test that installs it next to one of its own. A test that needs spdlog output builds a sink with `MakeSpdlogSink()`. The `[.benchmark]` case `rejected log calls cost` in `log/rejection-cost-tests.cpp` prints the cost of a rejected message; run it in a Release build to compare a change to the dispatcher.
 
 ## Formatting and linting
 
