@@ -48,8 +48,8 @@ constexpr const char* no_candidate_message = "No usable backup boot sector";
 // Bytes of a boot sector: the shortest read of a candidate.
 constexpr size_t boot_sector_bytes = 512;
 
-// Sector sizes NTFS supports, each of which the backup may declare.
-constexpr std::array<WORD, 5> sector_sizes{256, 512, 1024, 2048, 4096};
+// Sector sizes the backup may declare: the candidates the reader tries.
+constexpr std::array<WORD, 4> sector_sizes{512, 1024, 2048, 4096};
 
 // Extra sectors that make an image's size no multiple of a cache block.
 constexpr size_t extra_sectors = 3;
@@ -339,7 +339,7 @@ TEMPLATE_TEST_CASE_SIG("a size that is no multiple of a sector gives no backup",
 TEMPLATE_TEST_CASE_SIG("a size that fits only a smaller sector skips the rest",
                        "[ntfs-volume][backup-boot]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  // A multiple of 512 but not of 1024: only the 512 and 256 candidates apply.
+  // A multiple of 512 but not of 1024: only the 512 candidate applies.
   const size_t image_bytes = Tests::fake_backup_image_bytes + boot_sector_bytes;
   const Opened<S> opened =
       Open<S>(Tests::BuildFakeNtfsImageWithBackupBootSector(
@@ -366,7 +366,7 @@ TEMPLATE_TEST_CASE_SIG("a candidate must declare the sector size it is read at",
        {Case{"a 1024-byte sector copy where a 512 one is read", 1024, 512},
         Case{"a 512-byte sector copy where a 1024 one is read", 512, 1024},
         Case{"a 512-byte sector copy where a 4096 one is read", 512, 4096},
-        Case{"a 2048-byte sector copy where a 256 one is read", 2048, 256}}) {
+        Case{"a 256-byte sector copy where a 512 one is read", 256, 512}}) {
     INFO(mismatch.name);
     const Opened<S> opened =
         Open<S>(Tests::BuildFakeNtfsImageWithBackupBootSector(

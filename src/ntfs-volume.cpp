@@ -78,10 +78,10 @@ constexpr size_t volume_path_length = 6;
 
 // Sector sizes the backup boot sector is tried with, most common first. The
 // copy sits in the volume's last sector, whose size is not known yet.
-constexpr std::array<WORD, 5> backup_sector_sizes{512, 4096, 1024, 2048, 256};
+constexpr std::array<WORD, 4> backup_sector_sizes{512, 4096, 1024, 2048};
 
-// Bytes of a boot sector, whatever the sector size. The backup read is never
-// shorter: for 256-byte sectors the copy spans the last two.
+// Bytes of a boot sector, whatever the sector size. It is also the smallest
+// candidate sector size, so every backup read holds a whole boot sector.
 constexpr WORD boot_sector_bytes = 512;
 
 // Largest backup candidate read: the biggest sector size tried.
@@ -280,20 +280,19 @@ bool NtfsVolume<S>::Impl::UseBackupBootSector() {
   }
 
   for (const WORD sector_size : backup_sector_sizes) {
-    const WORD read_bytes = std::max(sector_size, boot_sector_bytes);
     // The store MUST hold whole sectors, and the read MUST fit in it. The read
     // then starts on a sector boundary, which a raw device requires.
-    if (*volume_bytes % sector_size != 0 || *volume_bytes < read_bytes) {
+    if (*volume_bytes % sector_size != 0 || *volume_bytes < sector_size) {
       continue;
     }
 
     LARGE_INTEGER addr{};
-    if (!std::in_range<LONGLONG>(*volume_bytes - read_bytes)) {
+    if (!std::in_range<LONGLONG>(*volume_bytes - sector_size)) {
       continue;
     }
-    addr.QuadPart = static_cast<LONGLONG>(*volume_bytes - read_bytes);
+    addr.QuadPart = static_cast<LONGLONG>(*volume_bytes - sector_size);
     std::array<BYTE, backup_read_max_bytes> copy{};
-    const std::span<BYTE> buffer{copy.data(), read_bytes};
+    const std::span<BYTE> buffer{copy.data(), sector_size};
     if (!volume->ReadInto(addr, buffer)) {
       continue;
     }
