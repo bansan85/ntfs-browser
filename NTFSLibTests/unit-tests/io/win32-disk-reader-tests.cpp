@@ -139,3 +139,21 @@ TEMPLATE_TEST_CASE_SIG(
   LARGE_INTEGER inside{.QuadPart = gsl::narrow<LONGLONG>(unaligned_offset)};
   CHECK(reader.ReadInto(inside, dest));
 }
+
+TEMPLATE_TEST_CASE_SIG("Win32DiskReader reports the size of an ordinary file",
+                       "[win32-disk-reader]",
+                       ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
+                       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
+                       NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
+  const TempFile file(MakeContent());
+  const TempFile empty(std::span<const BYTE>{});
+
+  NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader;
+  CHECK_FALSE(reader.Size().has_value());
+  REQUIRE(reader.Open(file.path.wstring()));
+  CHECK(reader.Size() == file_size);
+
+  NTFS_BROWSER_NAMESPACE::Io::FileReader<S> empty_reader;
+  REQUIRE(empty_reader.Open(empty.path.wstring()));
+  CHECK(empty_reader.Size() == 0);
+}

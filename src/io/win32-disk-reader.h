@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <type_traits>
@@ -23,6 +24,9 @@ class Win32DiskReader : public IDiskReader {
 
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
                               std::span<BYTE> dest) const override;
+
+  // The length of a disk or volume handle, or the size of an ordinary file.
+  [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
  private:
   using HandlePtr =

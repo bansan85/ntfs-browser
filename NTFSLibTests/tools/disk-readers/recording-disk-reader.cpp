@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -46,6 +47,10 @@ bool RecordingDiskReader::ReadInto(LARGE_INTEGER& addr,
     throw std::runtime_error("cannot write the trace");
   }
   return true;
+}
+
+std::optional<ULONGLONG> RecordingDiskReader::Size() const {
+  return inner_->Size();
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

@@ -10,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <new>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -103,6 +104,12 @@ class ReadAheadDiskReader::Impl {
   }
 
   bool ReadInto(LONGLONG start, std::span<BYTE> dest);
+
+  // Size of the wrapped reader. It reads nothing.
+  std::optional<ULONGLONG> Size() {
+    const std::scoped_lock inner_lock{inner_mutex_};
+    return inner_ != nullptr ? inner_->Size() : std::nullopt;
+  }
 
  private:
   using Chunk = ReadAheadChunk;
@@ -387,6 +394,10 @@ bool ReadAheadDiskReader::Open(std::wstring_view path) {
 bool ReadAheadDiskReader::ReadInto(LARGE_INTEGER& addr,
                                    std::span<BYTE> dest) const {
   return impl_->ReadInto(addr.QuadPart, dest);
+}
+
+std::optional<ULONGLONG> ReadAheadDiskReader::Size() const {
+  return impl_->Size();
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

@@ -3,15 +3,23 @@
   #include "posix-device-disk-reader.h"
 
   #include <cerrno>
+  #include <cstdint>
   #include <format>
   #include <iostream>
+  #include <optional>
   #include <span>
   #include <string>
   #include <string_view>
 
   #include <fcntl.h>
+  #include <sys/ioctl.h>
+  #include <sys/stat.h>
   #include <sys/types.h>
   #include <unistd.h>
+
+  #ifdef __linux__
+    #include <linux/fs.h>
+  #endif
 
   #include "ntfs-browser/win-types.h"
   #include "text-convert.h"
@@ -48,6 +56,27 @@ bool PosixDeviceDiskReader::ReadInto(LARGE_INTEGER& addr,
     return false;
   }
   return true;
+}
+
+std::optional<ULONGLONG> PosixDeviceDiskReader::Size() const {
+  struct stat info{};
+  if (fd_ < 0 || fstat(fd_, &info) != 0) {
+    return std::nullopt;
+  }
+  if (S_ISREG(info.st_mode)) {
+    return static_cast<ULONGLONG>(info.st_size);
+  }
+  #ifdef BLKGETSIZE64
+  if (S_ISBLK(info.st_mode)) {
+    std::uint64_t bytes = 0;
+    // ioctl() is variadic and has no fixed-arity form.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
+    if (ioctl(fd_, BLKGETSIZE64, &bytes) == 0) {
+      return bytes;
+    }
+  }
+  #endif
+  return std::nullopt;
 }
 
 }  // namespace NtfsDevice

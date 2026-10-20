@@ -4,6 +4,7 @@
 
   #include <ntfs-browser/win-types.h>
 
+  #include <optional>
   #include <span>
   #include <string_view>
 
@@ -29,6 +30,10 @@ class PosixDeviceDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   bool Open(std::wstring_view path) override;
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
                               std::span<BYTE> dest) const override;
+
+  // The size of an image file, or of a block device. Nullopt for any other
+  // kind of file.
+  [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
   // The errno of the last Open() that failed, 0 after one that succeeded.
   // Callers tell "permission denied" from "no such file" with it, since

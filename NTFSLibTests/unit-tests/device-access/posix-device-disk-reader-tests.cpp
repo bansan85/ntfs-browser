@@ -97,3 +97,33 @@ TEST_CASE("PosixDeviceDiskReader clears the error after a good open",
   REQUIRE(reader.Open(WideFromPath(file)));
   CHECK(reader.LastError() == 0);
 }
+
+TEST_CASE("PosixDeviceDiskReader reports the size of an image file",
+          "[device-access][posix-reader]") {
+  const TempDir dir;
+  const std::string content = Pattern();
+  const std::filesystem::path file = dir.Write("disk.img", content);
+  const std::filesystem::path empty = dir.Write("empty.img", "");
+
+  PosixDeviceDiskReader reader;
+  CHECK_FALSE(reader.Size().has_value());
+  REQUIRE(reader.Open(WideFromPath(file)));
+  CHECK(reader.Size() == content.size());
+
+  REQUIRE(reader.Open(WideFromPath(empty)));
+  CHECK(reader.Size() == 0);
+}
+
+TEST_CASE("PosixDeviceDiskReader has no size for a file that is not a disk",
+          "[device-access][posix-reader]") {
+  const TempDir dir;
+
+  PosixDeviceDiskReader directory;
+  REQUIRE(directory.Open(WideFromPath(dir.Path())));
+  CHECK_FALSE(directory.Size().has_value());
+
+  // A character device is neither an image file nor a block device.
+  PosixDeviceDiskReader null_device;
+  REQUIRE(null_device.Open(L"/dev/null"));
+  CHECK_FALSE(null_device.Size().has_value());
+}

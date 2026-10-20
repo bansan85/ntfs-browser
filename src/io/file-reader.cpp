@@ -90,6 +90,11 @@ bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {
   return reader_->ReadInto(addr, dest);
 }
 
+template <Cache::Strategy S>
+std::optional<ULONGLONG> FileReader<S>::Size() const {
+  return reader_ ? reader_->Size() : std::nullopt;
+}
+
 template <Cache::Strategy T>
 template <Cache::Strategy Q>
 std::enable_if_t<std::is_same_v<std::integral_constant<Cache::Strategy, Q>,

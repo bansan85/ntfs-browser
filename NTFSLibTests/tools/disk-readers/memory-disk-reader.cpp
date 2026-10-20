@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <utility>
 
@@ -40,5 +41,7 @@ bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr,
               dest.size());
   return true;
 }
+
+std::optional<ULONGLONG> MemoryDiskReader::Size() const { return data_.size(); }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

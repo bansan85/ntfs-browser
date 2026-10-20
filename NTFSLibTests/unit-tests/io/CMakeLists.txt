@@ -2,6 +2,7 @@ target_sources(
   NtfsBrowserTests
   PRIVATE
     "disk-read-failure-tests.cpp"
+    "disk-reader-size-tests.cpp"
     "disk-reader-tests.cpp"
     "file-reader-tests.cpp"
     "ntfsdir-sample-tests.cpp"

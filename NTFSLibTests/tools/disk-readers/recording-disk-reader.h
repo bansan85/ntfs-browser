@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -29,6 +30,10 @@ class RecordingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
                               std::span<BYTE> dest) const override;
+
+  // The size of the wrapped reader. It reads nothing, so the trace is the
+  // same.
+  [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
  private:
   std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> inner_;

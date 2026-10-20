@@ -60,6 +60,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   // Reads from addr into dest.
   bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
+  // Size of the reader's backing store, or nullopt when it has none or no
+  // reader is set. Reads nothing.
+  [[nodiscard]] std::optional<ULONGLONG> Size() const;
+
   // NoCache: a span over the reader's own buffer, valid until the next read.
   template <Cache::Strategy S2 = S>
   std::enable_if_t<

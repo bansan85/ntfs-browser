@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -21,6 +22,9 @@ class MemoryDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
                               std::span<BYTE> dest) const override;
+
+  // The length of the buffer.
+  [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
  private:
   std::vector<BYTE> data_;

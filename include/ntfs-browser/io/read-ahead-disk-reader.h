@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -52,6 +53,9 @@ class NTFS_BROWSER_EXPORT ReadAheadDiskReader : public IDiskReader {
   // Reads from addr into dest, from the read ahead when it holds those bytes.
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
                               std::span<BYTE> dest) const override;
+
+  // Size of the wrapped reader. It reads nothing, so the read ahead is kept.
+  [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
  private:
   // Every member and private method, kept out of this header.

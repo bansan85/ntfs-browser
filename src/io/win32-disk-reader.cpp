@@ -1,8 +1,10 @@
 #include "io/win32-disk-reader.h"
 
+#include <optional>
 #include <string>
 
 #include <gsl/narrow>
+#include <winioctl.h>
 
 #include <ntfs-browser/namespace.h>
 
@@ -51,6 +53,25 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr,
   }
 
   return true;
+}
+
+std::optional<ULONGLONG> Win32DiskReader::Size() const {
+  // Answers for a disk or a volume handle, and fails for an ordinary file.
+  GET_LENGTH_INFORMATION length_info{};
+  DWORD returned = 0;
+  if (DeviceIoControl(handle_.get(), IOCTL_DISK_GET_LENGTH_INFO, nullptr, 0,
+                      &length_info, sizeof(length_info), &returned,
+                      nullptr) != FALSE &&
+      length_info.Length.QuadPart >= 0) {
+    return gsl::narrow<ULONGLONG>(length_info.Length.QuadPart);
+  }
+
+  LARGE_INTEGER file_size{};
+  if (GetFileSizeEx(handle_.get(), &file_size) != FALSE &&
+      file_size.QuadPart >= 0) {
+    return gsl::narrow<ULONGLONG>(file_size.QuadPart);
+  }
+  return std::nullopt;
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

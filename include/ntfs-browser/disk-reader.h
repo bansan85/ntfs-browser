@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -27,6 +28,11 @@ class IDiskReader {
   // Reads from addr into dest.
   [[nodiscard]] virtual bool ReadInto(LARGE_INTEGER& addr,
                                       std::span<BYTE> dest) const = 0;
+
+  // Size of the backing store in bytes, or nullopt when it has no fixed size.
+  [[nodiscard]] virtual std::optional<ULONGLONG> Size() const {
+    return std::nullopt;
+  }
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE

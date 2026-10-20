@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <span>
 
 #include <gsl/narrow>
@@ -12,8 +13,10 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 
-PartitionDiskReader::PartitionDiskReader(ULONGLONG partition_offset)
-    : partition_offset_(partition_offset) {}
+PartitionDiskReader::PartitionDiskReader(
+    ULONGLONG partition_offset, std::optional<ULONGLONG> partition_length)
+    : partition_offset_(partition_offset),
+      partition_length_(partition_length) {}
 
 bool PartitionDiskReader::Open(std::wstring_view path) {
   file_.open(std::filesystem::path(path), std::ios::binary);
@@ -32,6 +35,10 @@ bool PartitionDiskReader::ReadInto(LARGE_INTEGER& addr,
   file_.read(reinterpret_cast<char*>(dest.data()),
              gsl::narrow<std::streamsize>(dest.size()));
   return gsl::narrow<size_t>(file_.gcount()) == dest.size();
+}
+
+std::optional<ULONGLONG> PartitionDiskReader::Size() const {
+  return partition_length_;
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests
