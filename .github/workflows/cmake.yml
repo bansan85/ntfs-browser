@@ -5,7 +5,9 @@ env:
   VERBOSE: 1
 jobs:
   # Downloads the forensic image corpora once, into a cache every Windows test
-  # leg restores. On Linux: ewfexport (libewf) converts the NPS E01 to raw.
+  # leg restores. On Linux: ewfexport (libewf) converts the NPS E01 to raw, and
+  # 7-Zip opens the .7z files of the external projects (the `external` step).
+  # The cache key hashes the script: it holds the pinned revisions and hashes.
   test-data:
     runs-on: ubuntu-26.04
     steps:
@@ -19,8 +21,9 @@ jobs:
       - name: Download test data
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update && sudo apt-get install -yq ewf-tools
+          sudo apt-get update && sudo apt-get install -yq ewf-tools 7zip
           python3 .github/scripts/fetch-test-data.py download
+          python3 .github/scripts/fetch-test-data.py external --require-7z
   build:
     needs: test-data
     runs-on: ${{ matrix.os }}

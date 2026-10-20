@@ -108,6 +108,19 @@ ctest --test-dir build-linux
 
 Some tests read real forensic images. `python .github/scripts/fetch-test-data.py` downloads them. Without them, those tests replay recorded traces, so `ctest` passes without any download.
 
+`python .github/scripts/fetch-test-data.py external` fetches a selection of NTFS files (`$MFT`, `$J`, `$I30`, boot sectors, `$LogFile`, Sleuth Kit listings) from three projects: [dfir_ntfs](https://github.com/msuhanov/dfir_ntfs), [MFT](https://github.com/EricZimmerman/MFT) and [DFIRArtifactMuseum](https://github.com/AndrewRathbun/DFIRArtifactMuseum). It clones each one shallowly at a pinned revision, keeps only the selected paths (about 384 MiB downloaded, 650 MiB on disk), and checks every file against its SHA-256. It needs `git` and, for the `.7z` files, `7zz`, `7z`, `7za` or `7zr` on the `PATH`. Without 7-Zip it skips only those files. Nothing from these projects is committed. Their tests are skipped when a file is absent, and fail under `-DNTFS_BROWSER_REQUIRE_TEST_DATA=ON`.
+
+CMake looks for the corpora under `NTFS_BROWSER_TEST_DATA_DIR` (default `test-data/`). A cache variable, or an environment variable of the same name, points one corpus elsewhere:
+
+| Variable | Default | Content |
+|---|---|---|
+| `NTFS_BROWSER_TEST_DFTT_DIR` | `<data>/dftt` | DFTT images |
+| `NTFS_BROWSER_TEST_NPS_NTFS1_DIR` | `<data>/nps-2009-ntfs1` | NPS ntfs1-gen2 raw image |
+| `NTFS_BROWSER_TEST_NTFS_SAMPLES_DIR` | `<data>/ntfs-samples` | ntfs-samples raw images |
+| `NTFS_BROWSER_TEST_DFIR_NTFS_DIR` | `<data>/dfir-ntfs` | dfir_ntfs files, under `test_data/` |
+| `NTFS_BROWSER_TEST_ZIMMERMAN_MFT_DIR` | `<data>/zimmerman-mft` | MFT project files (none are taken today) |
+| `NTFS_BROWSER_TEST_DFIR_MUSEUM_DIR` | `<data>/dfir-artifact-museum` | DFIRArtifactMuseum files, under `Windows/NTFSArtifacts/` |
+
 To leave features out, or to change the build, add options to the configure step:
 
 - `-DBUILD_SHARED_LIBS=ON` builds a DLL instead of a static library.

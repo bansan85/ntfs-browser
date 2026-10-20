@@ -4,11 +4,15 @@
 
 #include <cstddef>
 #include <cstdlib>
+#include <fstream>
+#include <ios>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <gsl/narrow>
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
@@ -102,6 +106,29 @@ void RequireCorpusImage(const std::filesystem::path& image) {
 #else
   SKIP("test image not present: " << image.string());
 #endif
+}
+
+std::filesystem::path RequireCorpusFile(const std::filesystem::path& file) {
+  if (std::filesystem::exists(file)) {
+    return file;
+  }
+#ifdef NTFS_TEST_REQUIRE_DATA
+  FAIL("test file not present: " << file.string());
+#else
+  SKIP("test file not present: " << file.string());
+#endif
+  return file;
+}
+
+std::vector<BYTE> ReadCorpusFile(const std::filesystem::path& file) {
+  std::ifstream in(file, std::ios::binary);
+  REQUIRE(in.is_open());
+  std::vector<BYTE> bytes(
+      gsl::narrow<std::size_t>(std::filesystem::file_size(file)));
+  in.read(reinterpret_cast<char*>(bytes.data()),
+          gsl::narrow<std::streamsize>(bytes.size()));
+  REQUIRE(gsl::narrow<std::size_t>(in.gcount()) == bytes.size());
+  return bytes;
 }
 
 std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>

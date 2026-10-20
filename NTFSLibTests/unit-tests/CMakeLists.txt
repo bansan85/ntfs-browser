@@ -124,6 +124,24 @@ set(
   "ntfs-samples raw images (empty: <NTFS_BROWSER_TEST_DATA_DIR>/ntfs-samples)"
 )
 set(
+  NTFS_BROWSER_TEST_DFIR_NTFS_DIR
+  ""
+  CACHE PATH
+  "msuhanov/dfir_ntfs files (empty: <NTFS_BROWSER_TEST_DATA_DIR>/dfir-ntfs)"
+)
+set(
+  NTFS_BROWSER_TEST_ZIMMERMAN_MFT_DIR
+  ""
+  CACHE PATH
+  "EricZimmerman/MFT files (empty: <NTFS_BROWSER_TEST_DATA_DIR>/zimmerman-mft)"
+)
+set(
+  NTFS_BROWSER_TEST_DFIR_MUSEUM_DIR
+  ""
+  CACHE PATH
+  "DFIRArtifactMuseum files (empty: <NTFS_BROWSER_TEST_DATA_DIR>/dfir-artifact-museum)"
+)
+set(
   NTFS_BROWSER_TEST_FRAGMENTED_MFT_IMAGE
   ""
   CACHE FILEPATH
@@ -138,12 +156,22 @@ option(
 set(test_DFTT_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/dftt")
 set(test_NPS_NTFS1_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/nps-2009-ntfs1")
 set(test_NTFS_SAMPLES_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/ntfs-samples")
+set(test_DFIR_NTFS_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/dfir-ntfs")
+set(test_ZIMMERMAN_MFT_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/zimmerman-mft")
+set(test_DFIR_MUSEUM_DIR "${NTFS_BROWSER_TEST_DATA_DIR}/dfir-artifact-museum")
 # The cache variable wins, then the same-named environment variable, then the
 # default. The environment lets one machine's paths reach every preset.
 foreach(
   name
   IN
-  ITEMS DFTT_DIR NPS_NTFS1_DIR NTFS_SAMPLES_DIR FRAGMENTED_MFT_IMAGE
+  ITEMS
+    DFTT_DIR
+    NPS_NTFS1_DIR
+    NTFS_SAMPLES_DIR
+    DFIR_NTFS_DIR
+    ZIMMERMAN_MFT_DIR
+    DFIR_MUSEUM_DIR
+    FRAGMENTED_MFT_IMAGE
 )
   # Its default depends on NTFS_SAMPLES_DIR, resolved by the previous pass.
   if(name STREQUAL "FRAGMENTED_MFT_IMAGE")
@@ -166,6 +194,9 @@ target_compile_definitions(
     NTFS_TEST_DFTT_DIR="${test_DFTT_DIR}"
     NTFS_TEST_NPS_NTFS1_DIR="${test_NPS_NTFS1_DIR}"
     NTFS_TEST_NTFS_SAMPLES_DIR="${test_NTFS_SAMPLES_DIR}"
+    NTFS_TEST_DFIR_NTFS_DIR="${test_DFIR_NTFS_DIR}"
+    NTFS_TEST_ZIMMERMAN_MFT_DIR="${test_ZIMMERMAN_MFT_DIR}"
+    NTFS_TEST_DFIR_MUSEUM_DIR="${test_DFIR_MUSEUM_DIR}"
     NTFS_TEST_FRAGMENTED_MFT_IMAGE="${test_FRAGMENTED_MFT_IMAGE}"
     $<$<BOOL:${NTFS_BROWSER_REQUIRE_TEST_DATA}>:NTFS_TEST_REQUIRE_DATA>
 )

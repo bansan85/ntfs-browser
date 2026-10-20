@@ -6,6 +6,7 @@
 #include <memory>
 #include <string_view>
 #include <tuple>
+#include <vector>
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
@@ -31,6 +32,28 @@ inline const std::filesystem::path& NpsNtfs1Dir() {
 // github.com/msuhanov/ntfs-samples, each *.raw.gz decompressed in place.
 inline const std::filesystem::path& NtfsSamplesDir() {
   static const std::filesystem::path path = u8"" NTFS_TEST_NTFS_SAMPLES_DIR;
+  return path;
+}
+
+// github.com/msuhanov/dfir_ntfs: the kept files of its test_data folder, under
+// test_data/. A .gz is decompressed in place.
+inline const std::filesystem::path& DfirNtfsDir() {
+  static const std::filesystem::path path = u8"" NTFS_TEST_DFIR_NTFS_DIR;
+  return path;
+}
+
+// github.com/EricZimmerman/MFT: the kept files of its test files. The fetch
+// step takes none today.
+inline const std::filesystem::path& ZimmermanMftDir() {
+  static const std::filesystem::path path = u8"" NTFS_TEST_ZIMMERMAN_MFT_DIR;
+  return path;
+}
+
+// github.com/AndrewRathbun/DFIRArtifactMuseum: the kept files, under their
+// path in the project (Windows/NTFSArtifacts/...). A .7z is extracted in
+// place.
+inline const std::filesystem::path& DfirMuseumDir() {
+  static const std::filesystem::path path = u8"" NTFS_TEST_DFIR_MUSEUM_DIR;
   return path;
 }
 
@@ -67,6 +90,17 @@ void RequireUnfetchedCorpusImage(const std::filesystem::path& image,
 // SKIPs the running test when image is absent. Under
 // NTFS_BROWSER_REQUIRE_TEST_DATA, FAILs it instead. For a test with no trace.
 void RequireCorpusImage(const std::filesystem::path& image);
+
+// SKIPs the running test when file is absent. Under
+// NTFS_BROWSER_REQUIRE_TEST_DATA, FAILs it instead, with the file's path. For
+// a plain file (a standalone $MFT, $J, listing...) that is not a disk image,
+// and has no trace. Returns file.
+std::filesystem::path RequireCorpusFile(const std::filesystem::path& file);
+
+// Reads all of file into memory. Fails the running test when it cannot. The
+// caller MUST judge the size: some kept files hold over 100 MiB.
+[[nodiscard]] std::vector<BYTE>
+    ReadCorpusFile(const std::filesystem::path& file);
 
 // Opens image through a PartitionDiskReader, offsetting every read by
 // partition_offset (0 for a bare-volume image: no MBR, boot sector at byte

@@ -4,6 +4,7 @@ target_sources(
     "corpus-test-support.cpp"
     "corpus-test-support.h"
     "dftt-ntfs-tests.cpp"
+    "external-logfile-fixtures-tests.cpp"
     "nps-ntfs1-test-support.cpp"
     "nps-ntfs1-test-support.h"
     "nps-ntfs1-tests.cpp"
