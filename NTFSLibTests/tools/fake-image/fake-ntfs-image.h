@@ -251,6 +251,47 @@ struct MftMirrorDamage {
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithMftMirror(const MftMirrorDamage& damage = {});
 
+// How BuildFakeNtfsImageWithBackupBootSector() breaks a boot sector.
+enum class BootSectorDamage : std::uint8_t {
+  // Left as it is.
+  None,
+  // All 512 bytes are zero: an unreadable sector.
+  Zeroed,
+  // The "NTFS    " signature is overwritten.
+  Signature,
+  // bytes_per_sector becomes a value that is not a power of two.
+  SectorSize
+};
+
+// Size of the image BuildFakeNtfsImageWithBackupBootSector() builds when asked
+// for none: the default image's size, 64 KiB.
+inline constexpr std::size_t fake_backup_image_bytes = std::size_t{64} * 1024;
+
+// What BuildFakeNtfsImageWithBackupBootSector() builds.
+struct BackupBootSector {
+  // Sector size the boot sectors declare: 256 to 4096. The cluster is at
+  // least 1024 bytes, and a file record is one cluster. Above 1024 bytes the
+  // boot sector is valid, but the 1024-byte fake records no longer fill a
+  // record: the volume does not open.
+  WORD sector_size{fake_bytes_per_sector};
+  // Sector size that decides where the copy sits, which is the last
+  // max(placed_for, 512) bytes. Defaults to sector_size: another value builds
+  // a copy that declares a size other than the one its position implies.
+  std::optional<WORD> placed_for{};
+  // Size of the image in bytes. The volume fills it all.
+  std::size_t image_bytes{fake_backup_image_bytes};
+  // Damage to the boot sector at offset 0, and to the copy at the end.
+  BootSectorDamage sector0{BootSectorDamage::Zeroed};
+  BootSectorDamage backup{BootSectorDamage::None};
+};
+
+// Same volume as BuildFakeNtfsImage(), with a copy of its boot sector in the
+// last sector of the image, as NTFS keeps one. spec chooses the sector size,
+// the image size and what is broken in either boot sector. The image is the
+// same size as BuildFakeNtfsImage()'s unless spec says otherwise.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithBackupBootSector(const BackupBootSector& spec = {});
+
 // MFT index of the record built by
 // BuildFakeNtfsImageWithAttrNameExceedsTotalSize(). Free below
 // Mft::Idx::User (16).

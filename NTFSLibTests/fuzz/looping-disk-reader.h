@@ -33,6 +33,10 @@ class LoopingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
                               std::span<BYTE> dest) const override;
 
+  // The length of the testcase. A read of the backup boot sector ignores its
+  // address like any other, and takes the next bytes of the stream.
+  [[nodiscard]] std::optional<ULONGLONG> Size() const override;
+
  private:
   std::span<const BYTE> data_;
   std::optional<size_t> failing_read_;

@@ -1,6 +1,7 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
+    "backup-boot-sector-tests.cpp"
     "boot-sector-geometry-characterization-tests.cpp"
     "boot-sector-marker-tests.cpp"
     "boot-sector-reserved-fields-tests.cpp"

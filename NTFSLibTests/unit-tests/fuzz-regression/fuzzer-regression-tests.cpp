@@ -65,7 +65,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 159>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 160>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -547,6 +547,8 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 159>
            "$MFTMirr"}}},
         {"mft_mirror_same_as_mft",
          {true, {"No usable $MFTMirr: records 0 to 3 have no fallback copy"}}},
+        {"boot_sector_backup_fallback",
+         {true, {"using the backup boot sector at 0x"}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -642,6 +644,7 @@ NTFS_REGRESSION_TESTCASE("bitmap_nonres_sparse_runs")
 NTFS_REGRESSION_TESTCASE("bitmap_resident_data_read")
 NTFS_REGRESSION_TESTCASE("boot_sector_mft_beyond_total_sectors")
 NTFS_REGRESSION_TESTCASE("boot_sector_fat_count_nonzero")
+NTFS_REGRESSION_TESTCASE("boot_sector_backup_fallback")
 NTFS_REGRESSION_TESTCASE("boot_sector_large_sectors_nonzero")
 NTFS_REGRESSION_TESTCASE("boot_sector_missing_aa55_marker")
 NTFS_REGRESSION_TESTCASE("boot_sector_read_failure")

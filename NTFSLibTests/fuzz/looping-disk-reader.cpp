@@ -74,4 +74,8 @@ bool LoopingDiskReader::ReadInto(LARGE_INTEGER& /*addr*/,
   return true;
 }
 
+std::optional<ULONGLONG> LoopingDiskReader::Size() const {
+  return data_.size();
+}
+
 }  // namespace NtfsFuzz

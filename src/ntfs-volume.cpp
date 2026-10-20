@@ -76,6 +76,17 @@ std::wstring_view TrimTrailingNuls(std::wstring_view name) noexcept {
 // Length of a Win32 volume device path, NUL excluded: \\.\C:
 constexpr size_t volume_path_length = 6;
 
+// Sector sizes the backup boot sector is tried with, most common first. The
+// copy sits in the volume's last sector, whose size is not known yet.
+constexpr std::array<WORD, 5> backup_sector_sizes{512, 4096, 1024, 2048, 256};
+
+// Bytes of a boot sector, whatever the sector size. The backup read is never
+// shorter: for 256-byte sectors the copy spans the last two.
+constexpr WORD boot_sector_bytes = 512;
+
+// Largest backup candidate read: the biggest sector size tried.
+constexpr WORD backup_read_max_bytes = 4096;
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -230,21 +241,79 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
   return ParseBootSector();
 }
 
-// Read the first sector (boot sector) and derive volume geometry from it
+// Read the first sector (boot sector) and derive volume geometry from it. When
+// recovering and that sector is unusable, falls back on the backup boot sector.
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::ParseBootSector() {
-  // Held until the parse is done: under FullCache it owns the bytes.
-  const std::optional<Cache::ReadResult<S>> bpb_buffer = ReadBootSector();
-  if (!bpb_buffer) {
-    Log::Error("Read boot sector error");
+  bool accepted = false;
+  {
+    // Held until the parse is done: under FullCache it owns the bytes.
+    const std::optional<Cache::ReadResult<S>> bpb_buffer = ReadBootSector();
+    if (!bpb_buffer) {
+      Log::Error("Read boot sector error");
+    } else {
+      const Volume::BootSectorParse parse =
+          Volume::ParseBootSector(*bpb_buffer, options.recover_errors);
+      geometry = parse.geometry;
+      // Sized from the decoded cluster, even when a later field is rejected.
+      cluster_buffer.resize(geometry.cluster_size);
+      accepted = parse.ok;
+    }
+  }
+  return accepted || (options.recover_errors && UseBackupBootSector());
+}
+
+// Looks for the copy of the boot sector that NTFS keeps in the last sector of
+// the volume, and adopts its geometry when it parses. Only a volume that fills
+// its whole backing store ends there: a partition larger than its file system
+// puts the copy before the end. Each candidate is read apart from the block
+// cache, so that FullCache does not ask for a 64 KiB block that runs past the
+// end. False, with the geometry untouched, when no candidate fits.
+template <Cache::Strategy S>
+bool NtfsVolume<S>::Impl::UseBackupBootSector() {
+  const std::optional<ULONGLONG> volume_bytes = volume->Size();
+  if (!volume_bytes || *volume_bytes < boot_sector_bytes) {
+    Log::Info(
+        "Cannot try the backup boot sector: the size of the volume is unknown "
+        "or too small");
     return false;
   }
-  const Volume::BootSectorParse parse =
-      Volume::ParseBootSector(*bpb_buffer, options.recover_errors);
-  geometry = parse.geometry;
-  // Sized from the decoded cluster, even when a later field is rejected.
-  cluster_buffer.resize(geometry.cluster_size);
-  return parse.ok;
+
+  for (const WORD sector_size : backup_sector_sizes) {
+    const WORD read_bytes = std::max(sector_size, boot_sector_bytes);
+    // The store MUST hold whole sectors, and the read MUST fit in it. The read
+    // then starts on a sector boundary, which a raw device requires.
+    if (*volume_bytes % sector_size != 0 || *volume_bytes < read_bytes) {
+      continue;
+    }
+
+    LARGE_INTEGER addr{};
+    if (!std::in_range<LONGLONG>(*volume_bytes - read_bytes)) {
+      continue;
+    }
+    addr.QuadPart = static_cast<LONGLONG>(*volume_bytes - read_bytes);
+    std::array<BYTE, backup_read_max_bytes> copy{};
+    const std::span<BYTE> buffer{copy.data(), read_bytes};
+    if (!volume->ReadInto(addr, buffer)) {
+      continue;
+    }
+
+    const Volume::BootSectorParse parse = Volume::ParseBootSector(
+        buffer.first<boot_sector_bytes>(), /*recover=*/true);
+    // A copy that declares another sector size was not read at its own
+    // boundary: it is garbage for this candidate.
+    if (parse.ok && parse.geometry.sector_size == sector_size) {
+      geometry = parse.geometry;
+      cluster_buffer.resize(geometry.cluster_size);
+      Log::Info(
+          "Boot sector is unusable: using the backup boot sector at 0x{:X}",
+          addr.QuadPart);
+      return true;
+    }
+  }
+
+  Log::Info("No usable backup boot sector");
+  return false;
 }
 
 // Read the boot sector, retrying with 512 bytes when the 4096-byte read fails.
