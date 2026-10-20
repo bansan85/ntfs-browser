@@ -19,6 +19,7 @@ add_subdirectory("ntfscompare")
 add_subdirectory("record")
 add_subdirectory("support")
 add_subdirectory("upcase")
+add_subdirectory("usn")
 add_subdirectory("utf")
 add_subdirectory("volume")
 

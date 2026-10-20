@@ -90,6 +90,36 @@ RunList::ExtentList RunList::Extents() const {
   return list;
 }
 
+// Lists the real runs with their VCN. A run is damaged when it is empty or
+// when lcn + clusters wraps past 2^64: it is then left out.
+RunList::VcnRunList RunList::RealRanges() const {
+  VcnRunList list;
+  for (const Data::RunEntry& data_run : runs_) {
+    if (data_run.clusters == 0) {
+      list.well_formed = false;
+      continue;
+    }
+    list.covered_clusters = data_run.last_vcn + 1;
+    if (!data_run.lcn) {
+      continue;
+    }
+    if (data_run.clusters >
+        std::numeric_limits<ULONGLONG>::max() - *data_run.lcn) {
+      list.well_formed = false;
+      continue;
+    }
+    if (!list.runs.empty() &&
+        list.runs.back().start_vcn + list.runs.back().clusters ==
+            data_run.start_vcn) {
+      list.runs.back().clusters += data_run.clusters;
+      continue;
+    }
+    list.runs.push_back(
+        {.start_vcn = data_run.start_vcn, .clusters = data_run.clusters});
+  }
+  return list;
+}
+
 // Returns the first run whose VCN range holds vcn.
 const Data::RunEntry* RunList::Find(ULONGLONG vcn) const noexcept {
   for (const Data::RunEntry& data_run : runs_) {

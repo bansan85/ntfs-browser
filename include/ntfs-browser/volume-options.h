@@ -4,6 +4,7 @@
 
 #include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/usn/types.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -50,6 +51,15 @@ struct VolumeOptions {
   // internal: the volume is no more thread safe for it. Last member, so
   // designated initialisers that stop before it stay valid.
   std::uint64_t read_ahead_bytes{0};
+
+  // Most journal records ($UsnJrnl:$J) the volume keeps when it reads the
+  // journal, which it does only with recover_errors on. When the journal holds
+  // more, the newest are kept and the result is flagged truncated. 0 keeps
+  // none. The default (Usn::default_max_records) holds a 100 MiB journal whole.
+  // A journal never holds more than its maximum size / 64 records, so that
+  // count never truncates. Usn::unlimited_records removes the limit. Last
+  // member, so designated initialisers that stop before it stay valid.
+  std::uint64_t max_usn_records{Usn::default_max_records};
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE

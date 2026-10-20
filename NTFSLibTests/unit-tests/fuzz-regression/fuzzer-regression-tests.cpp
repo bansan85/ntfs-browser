@@ -75,7 +75,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 174>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 182>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -584,6 +584,26 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 174>
         {"bad_clusters_odd_flags",
          {both_efs_backends,
           {"Clusters listed in $BadClus are free in $Bitmap"}}},
+        {"usn_journal_forged_length",
+         {both_efs_backends,
+          {"USN journal: no record at offset", "MFT scan journal: "}}},
+        {"usn_journal_zero_length",
+         {both_efs_backends,
+          {"USN journal: no record at offset", "MFT scan journal: "}}},
+        {"usn_journal_name_past_record",
+         {both_efs_backends,
+          {"USN journal: no record at offset", "MFT scan journal: "}}},
+        {"usn_journal_truncated_tail",
+         {both_efs_backends,
+          {"USN journal: no record at offset", "MFT scan journal: "}}},
+        {"usn_journal_anchor_mismatch",
+         {both_efs_backends,
+          {"USN journal: no record at offset", "MFT scan journal: "}}},
+        {"usn_journal_v4_record", {both_efs_backends, {"MFT scan journal: "}}},
+        {"usn_journal_mixed_versions",
+         {both_efs_backends, {"MFT scan journal: "}}},
+        {"usn_journal_sparse_head",
+         {both_efs_backends, {"MFT scan journal: "}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -828,6 +848,14 @@ NTFS_REGRESSION_TESTCASE("traverse_attrs_empty_callback")
 NTFS_REGRESSION_TESTCASE("upcase_run_lcn_at_address_space_limit")
 NTFS_REGRESSION_TESTCASE("upcase_table_read_crosses_64k_blocks")
 NTFS_REGRESSION_TESTCASE("usn_array_exceeds_record_buffer")
+NTFS_REGRESSION_TESTCASE("usn_journal_anchor_mismatch")
+NTFS_REGRESSION_TESTCASE("usn_journal_forged_length")
+NTFS_REGRESSION_TESTCASE("usn_journal_mixed_versions")
+NTFS_REGRESSION_TESTCASE("usn_journal_name_past_record")
+NTFS_REGRESSION_TESTCASE("usn_journal_sparse_head")
+NTFS_REGRESSION_TESTCASE("usn_journal_truncated_tail")
+NTFS_REGRESSION_TESTCASE("usn_journal_v4_record")
+NTFS_REGRESSION_TESTCASE("usn_journal_zero_length")
 NTFS_REGRESSION_TESTCASE("volume_information_minimal_size")
 NTFS_REGRESSION_TESTCASE("volume_dirty_flag_set")
 NTFS_REGRESSION_TESTCASE("volume_information_must_be_resident")

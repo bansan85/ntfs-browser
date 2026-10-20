@@ -776,6 +776,46 @@ Alloc::StreamExtents AttrNonResident<S>::GetExtents() const {
   return extents;
 }
 
+// The real stretches in bytes. Each is cut at the data size, since clusters
+// past it are allocated but hold no byte of the stream. The list is complete
+// on the same terms as GetExtents().
+template <Cache::Strategy S>
+Alloc::StreamRanges AttrNonResident<S>::GetRealRanges() const {
+  const RunList::VcnRunList list = runs_.RealRanges();
+  Alloc::StreamRanges result{.complete = list.well_formed};
+
+  const ULONGLONG cluster_size = this->GetClusterSize();
+  if (cluster_size == 0) {
+    result.complete = false;
+    return result;
+  }
+
+  const ULONGLONG allocated = attr_header_nr_.alloc_size;
+  const ULONGLONG needed =
+      allocated / cluster_size + (allocated % cluster_size != 0 ? 1 : 0);
+  if (list.covered_clusters < needed) {
+    result.complete = false;
+  }
+
+  const ULONGLONG data_size = GetDataSize();
+  constexpr ULONGLONG max_offset = std::numeric_limits<ULONGLONG>::max();
+  for (const RunList::VcnRun& run : list.runs) {
+    if (run.start_vcn > max_offset / cluster_size ||
+        run.clusters > max_offset / cluster_size) {
+      result.complete = false;
+      continue;
+    }
+    const ULONGLONG offset = run.start_vcn * cluster_size;
+    if (offset >= data_size) {
+      continue;
+    }
+    const ULONGLONG length =
+        (std::min)(run.clusters * cluster_size, data_size - offset);
+    result.ranges.push_back({.offset = offset, .length = length});
+  }
+  return result;
+}
+
 template <Cache::Strategy S>
 ULONGLONG AttrNonResident<S>::GetStartVcn() const noexcept {
   return attr_header_nr_.start_vcn;

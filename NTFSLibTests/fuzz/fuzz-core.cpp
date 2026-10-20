@@ -31,11 +31,13 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "gap-collation-probe.h"
 #include "looping-disk-reader.h"
 #include "named-stream-probe.h"
+#include "usn/usn-record-scanner.h"
 
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
@@ -348,6 +350,23 @@ void ProbeAllocation(const NtfsVolume<S>& volume) {
   }
 }
 
+// Reads the change journal, which only a recovering volume does, and walks what
+// it gave. $Extend, $UsnJrnl and $J are untrusted input like everything else.
+template <Cache::Strategy S>
+void ProbeJournal(const NtfsVolume<S>& volume) {
+  const NTFS_BROWSER_NAMESPACE::Usn::Journal* journal = volume.GetUsnJournal();
+  if (journal == nullptr) {
+    return;
+  }
+  ULONGLONG seen = journal->damaged_records + journal->skipped_records;
+  for (const NTFS_BROWSER_NAMESPACE::Usn::Record& record : journal->records) {
+    seen += record.name.size() + record.file_record + record.usn;
+  }
+  // Reading every field is the point: a bad length or a wild pointer shows up
+  // here, in the sanitizers of a fuzzing build.
+  (void)seen;
+}
+
 // Vetoes the attribute: the parse then skips it.
 void DiscardAttr(const Attr::HeaderCommon& /*attr_head*/, bool& discard) {
   discard = true;
@@ -427,6 +446,7 @@ void ProbeVolume(NtfsVolume<S>& volume) {
   }
   ProbeMftTree(volume);
   ProbeAllocation(volume);
+  ProbeJournal(volume);
   ProbeVolumeApi(volume);
 }
 
@@ -465,6 +485,32 @@ void RunBothStrategies(std::span<const BYTE> data, const VolumeOptions& options,
   RunGuarded<Cache::Strategy::FullCache>(data, options, failing_read);
 }
 
+// Feeds the input straight to the journal scanner, as the bytes of one range of
+// $J: from each of the eight alignments, whole and then cut in two. A volume
+// seldom reaches the scanner through random bytes, so this is its own probe.
+void FuzzJournalScanner(std::span<const BYTE> data) {
+  constexpr size_t alignments = 8;
+  for (size_t skip = 0; skip < alignments && skip < data.size(); ++skip) {
+    const std::span<const BYTE> bytes = data.subspan(skip);
+    const size_t split = bytes.size() / 3;
+    try {
+      NTFS_BROWSER_NAMESPACE::Usn::RecordScanner scanner;
+      std::vector<NTFS_BROWSER_NAMESPACE::Usn::Record> records;
+      scanner.Reset();
+      scanner.Feed(bytes, 0, records);
+      scanner.Finish(records);
+
+      scanner.Reset();
+      scanner.Feed(bytes.first(split), 0, records);
+      scanner.Feed(bytes.subspan(split), split, records);
+      scanner.Finish(records);
+    }
+    // NOLINTNEXTLINE(bugprone-empty-catch)
+    catch (const std::exception&) {
+    }
+  }
+}
+
 }  // namespace
 
 void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
@@ -481,6 +527,8 @@ void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
                   const BootSectorPatch& patch) {
   PatchBpbSignature(data, patch);
+
+  FuzzJournalScanner(data);
 
   // Guarded independently, so one run's exception can't skip the others.
   // Each strategy runs once per VolumeOptions mode, so the strict

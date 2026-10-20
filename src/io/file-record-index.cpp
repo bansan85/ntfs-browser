@@ -113,9 +113,12 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
 // Decides whether a normal walk or name lookup skips entry. A named record that
 // does not parse is damaged, not freed: it is skipped unless recover_errors is
 // on, whatever include_deleted says. With include_deleted off, an entry whose
-// named record is freed, or reused under another sequence number, is hidden.
+// named record is freed, or reused under another sequence number, is hidden,
+// unless the directory is volume metadata (bypass_deleted_gate): its entries
+// name metadata files, which are read whatever include_deleted says.
 template <Cache::Strategy S>
-bool IsEntryHidden(const IndexEntryView& entry, const NtfsVolume<S>& volume) {
+bool IsEntryHidden(const IndexEntryView& entry, const NtfsVolume<S>& volume,
+                   bool bypass_deleted_gate) {
   const bool recover = volume.GetOptions().recover_errors;
   Io::FileRecord<S> named(volume);
   if (!named.ParseFileRecord(entry.GetFileReference())) {
@@ -123,7 +126,7 @@ bool IsEntryHidden(const IndexEntryView& entry, const NtfsVolume<S>& volume) {
                      entry.GetFileReference());
     return !recover;
   }
-  if (volume.GetOptions().include_deleted) {
+  if (volume.GetOptions().include_deleted || bypass_deleted_gate) {
     return false;
   }
   return named.IsDeleted() ||
@@ -178,7 +181,8 @@ void Io::DirectoryIndex<S>::Traverse(const SubentryCallback& se_call_back,
                       visited_vcns, 0);
     }
 
-    if (index_entry.HasName() && !IsEntryHidden(index_entry, volume)) {
+    if (index_entry.HasName() &&
+        !IsEntryHidden(index_entry, volume, record_.BypassesDeletedGate())) {
       se_call_back(index_entry, context);
     }
   }
@@ -306,7 +310,8 @@ std::optional<IndexEntry> Io::DirectoryIndex<S>::SearchIndexEntries(
           index_entry.Compare(search.file_name, search.upcase);
       if (comparison == 0) {
         // Names are unique in a directory, so a hidden match ends the search.
-        if (IsEntryHidden(index_entry, record_.GetVolume())) {
+        if (IsEntryHidden(index_entry, record_.GetVolume(),
+                          record_.BypassesDeletedGate())) {
           return {};
         }
         // Must be a copy: the view dies with its node (this FileRecord for
@@ -380,7 +385,8 @@ void Io::DirectoryIndex<S>::TraverseSubNode(
     }
 
     if (index_entry.HasName() &&
-        !IsEntryHidden(index_entry, record_.GetVolume())) {
+        !IsEntryHidden(index_entry, record_.GetVolume(),
+                       record_.BypassesDeletedGate())) {
       se_call_back(index_entry, context);
     }
   }
@@ -439,7 +445,7 @@ void Io::DirectoryIndex<S>::ReportOrphanedBlock(
 
   for (const IndexEntryView& index_entry : index_block) {
     if (index_entry.HasName() && IsOrphanEntryReportable(index_entry, owner) &&
-        !IsEntryHidden(index_entry, volume)) {
+        !IsEntryHidden(index_entry, volume, record_.BypassesDeletedGate())) {
       se_call_back(index_entry, context);
     }
   }

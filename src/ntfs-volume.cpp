@@ -45,6 +45,7 @@
 #include "mft/record-offset.h"
 #include "ntfs-volume-impl.h"
 #include "upcase/upcase.h"
+#include "usn/usn-journal-loader.h"
 #include "utf/utf.h"
 #include "volume/volume-geometry.h"
 
@@ -885,6 +886,41 @@ const Alloc::BadClusters* NtfsVolume<S>::GetBadClusters() const {
     Log::Exception(e);
     return nullptr;
   }
+}
+
+// Loads the change journal on first use. Strict mode returns null before any
+// read. A failure is cached: every later call answers null without trying
+// again, and the first one is logged once.
+template <Cache::Strategy S>
+const Usn::Journal* NtfsVolume<S>::GetUsnJournal() const {
+  if (!impl_->options.recover_errors || impl_->loading_usn) {
+    return nullptr;
+  }
+  if (!impl_->usn_loaded) {
+    impl_->usn_loaded = true;
+    impl_->loading_usn = true;
+    impl_->usn_journal = Usn::LoadJournal(*this);
+    impl_->loading_usn = false;
+    if (!impl_->usn_journal) {
+      Log::Recoverable(impl_->options.recover_errors,
+                       "$UsnJrnl is not usable: the change journal is unknown");
+    } else {
+      if (impl_->usn_journal->damaged_records != 0) {
+        Log::Recoverable(
+            impl_->options.recover_errors,
+            "$UsnJrnl: {} damaged stretch(es) of the journal were skipped",
+            impl_->usn_journal->damaged_records);
+      }
+      if (impl_->usn_journal->truncated) {
+        Log::Recoverable(
+            impl_->options.recover_errors,
+            "$UsnJrnl: the journal holds more than {} records, the oldest "
+            "were dropped",
+            impl_->options.max_usn_records);
+      }
+    }
+  }
+  return impl_->usn_journal.get();
 }
 
 template class NtfsVolume<Cache::Strategy::NoCache>;

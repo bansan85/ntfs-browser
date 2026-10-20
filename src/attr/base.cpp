@@ -91,6 +91,16 @@ Alloc::StreamExtents Attr::AttrBase<S>::GetExtents() const {
   return {};
 }
 
+// The whole data, as one range: right for an attribute that has no run list.
+template <Cache::Strategy S>
+Alloc::StreamRanges Attr::AttrBase<S>::GetRealRanges() const {
+  const ULONGLONG size = GetDataSize();
+  if (size == 0) {
+    return {};
+  }
+  return {.ranges = {{.offset = 0, .length = size}}, .complete = true};
+}
+
 template <Cache::Strategy S>
 WORD Attr::AttrBase<S>::GetSectorSize() const noexcept {
   return volume_.GetSectorSize();

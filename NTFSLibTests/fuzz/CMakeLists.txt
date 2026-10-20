@@ -31,6 +31,18 @@ add_library(
 
 target_link_libraries(NtfsFuzzCore PUBLIC ${PROJECT_NAME})
 
+# FuzzJournalScanner() drives the journal scanner, an internal class: it needs
+# the src/ header, and the macro that makes the library export it (defined in
+# tools/fake-image/CMakeLists.txt on the library itself, so both sides agree).
+target_include_directories(
+  NtfsFuzzCore
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../src"
+)
+target_compile_definitions(
+  NtfsFuzzCore
+  PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
+)
+
 # Portable C++, no Win32 API, so it builds on Linux and Windows alike.
 add_executable(NtfsFuzzerAfl "afl-main.cpp")
 

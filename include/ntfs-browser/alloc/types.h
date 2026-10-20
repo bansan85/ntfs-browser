@@ -48,6 +48,22 @@ struct StreamExtents {
   bool complete{true};
 };
 
+// A run of real (non-sparse) bytes, at a byte offset of the stream's own
+// address space. Unlike Extent, it says where in the stream the bytes sit.
+struct ByteRange {
+  ULONGLONG offset{0};
+  ULONGLONG length{0};
+};
+
+// The real byte ranges of one stream, sorted by offset, sparse holes left out.
+// complete means what it means in StreamExtents: it is false when the run list
+// is shorter than the stream declares, holds a zero-length run, or holds a run
+// that overflows 64 bits.
+struct StreamRanges {
+  std::vector<ByteRange> ranges;
+  bool complete{true};
+};
+
 // One question of NtfsVolume::GetRangeStates(). The caller fills lcn and
 // clusters; the call fills the rest. allocated_clusters and free_clusters count
 // the clusters of the range, clamped to the volume, that the bitmap judged

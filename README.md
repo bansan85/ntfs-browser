@@ -28,7 +28,7 @@ Reading a volume needs administrator rights.
 On Windows:
 
 - `NtfsDir "C:\Windows"` lists a folder. `NtfsDir C:\image.img\Windows` lists a folder of an image file.
-- `NtfsMftList C:` lists every file of a volume. `--deleted` adds deleted files, and `--recover` salvages damaged entries.
+- `NtfsMftList C:` lists every file of a volume. `--deleted` adds deleted files, and `--recover` salvages damaged entries and reads the change journal (`$UsnJrnl`), which names files the `$MFT` lost.
 - `NtfsUndel` is a graphical tool that finds and recovers deleted files.
 
 On Linux, `NtfsDir` and `NtfsMftList` take a device or an image file. Reading a device needs read access to it.
@@ -149,6 +149,7 @@ Each public class and function is described in the headers under `include/ntfs-b
 - 2026-10 — Custom log destinations and an opt-in spdlog adapter
 - 2026-10 — Cluster allocation from `$Bitmap`
 - 2026-10 — Bad clusters from `$BadClus`
+- 2026-10 — Change journal (`$UsnJrnl`) in recovery mode
 
 ## Credits and licence
 

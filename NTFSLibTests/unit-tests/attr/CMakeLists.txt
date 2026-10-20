@@ -17,6 +17,7 @@ target_sources(
     "coverage-nonresident-index-tests.cpp"
     "index-entry-size-tests.cpp"
     "nonresident-index-support.h"
+    "real-ranges-tests.cpp"
 )
 
 # These call Lznt1::Decompress directly or drive compressed reads end to end:

@@ -54,6 +54,26 @@ class RunList {
   // The extents of every real run, in VCN order. Sparse runs own no cluster.
   [[nodiscard]] ExtentList Extents() const;
 
+  // One stretch of real clusters, at a VCN. Runs that touch are one stretch.
+  struct VcnRun {
+    ULONGLONG start_vcn{0};
+    ULONGLONG clusters{0};
+  };
+
+  // The real stretches the list maps, with where they sit in the stream.
+  struct VcnRunList {
+    std::vector<VcnRun> runs;
+    // Same meaning as in ExtentList.
+    ULONGLONG covered_clusters{0};
+    // False when a run has zero length, or when lcn + clusters overflows 64
+    // bits. Unlike Extents(), an overflowing run is left out.
+    bool well_formed{true};
+  };
+
+  // The real stretches of the list in VCN order, sparse runs left out and
+  // touching real runs merged.
+  [[nodiscard]] VcnRunList RealRanges() const;
+
   // The run holding vcn, or nullptr if no run holds it.
   [[nodiscard]] const Data::RunEntry* Find(ULONGLONG vcn) const noexcept;
 

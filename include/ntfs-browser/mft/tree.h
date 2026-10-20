@@ -52,6 +52,27 @@ struct MftScanOptions {
 // $MFT in memory.
 class NTFS_BROWSER_EXPORT MftTree {
  public:
+  // What the change journal ($UsnJrnl:$J) says about one file, from the
+  // records of the journal that name it. Only a volume opened with
+  // recover_errors reads the journal. A record names a file by its record
+  // number and the sequence number it had at the time: one that does not fit
+  // the $MFT record's own generation names an earlier file, and is not counted.
+  struct UsnInfo {
+    // USN of the newest record that names the file.
+    LONGLONG last_usn{0};
+    // Reason bits (Usn::Reason) of that record, and its time, converted like
+    // the entry's own times.
+    DWORD last_reason{0};
+    FILETIME last_time{};
+    // Every reason bit of every record that names the file.
+    DWORD all_reasons{0};
+    // Time of the newest record with the FileDelete reason. Empty when the
+    // journal holds none.
+    std::optional<FILETIME> delete_time;
+    // Records that name the file, among those the volume kept.
+    ULONGLONG record_count{0};
+  };
+
   // One $FILE_NAME of an MFT record. A record has one per hard link, plus a
   // DOS 8.3 alias when its long name needs one.
   struct Name {
@@ -98,6 +119,31 @@ class NTFS_BROWSER_EXPORT MftTree {
     // ScanOptions::annotate_data_state, or when the record has no such stream:
     // a directory, for instance.
     std::optional<Alloc::DataState> data_state;
+    // What the journal says about the file. Empty when the scan did not read
+    // the journal (recover_errors off), or when it does not name the file.
+    std::optional<UsnInfo> usn;
+  };
+
+  // A file that the change journal names and that no $MFT record accounts for:
+  // the record is gone, overwritten, or reused by another file. It has no data
+  // and no attribute beyond what the journal gives, and it is not an Entry:
+  // Entries() and Find() keep one entry per record number. Only a scan with
+  // both recover_errors and include_deleted on lists them.
+  struct JournalOnlyEntry {
+    ULONGLONG record{0};
+    WORD sequence{0};
+    // The name of the newest journal record that names the file. Not a path.
+    std::wstring name;
+    ULONGLONG parent_record{0};
+    WORD parent_sequence{0};
+    // The parent reference names a directory the scan found, under the rules
+    // of MftTree. Then GetJournalPath() reaches the file through it.
+    bool parent_valid{false};
+    // File attributes at the time of the newest journal record.
+    DWORD file_attributes{0};
+    // The directory attribute was set then.
+    bool directory{false};
+    UsnInfo usn;
   };
 
   using ScanOptions = MftScanOptions;
@@ -134,6 +180,18 @@ class NTFS_BROWSER_EXPORT MftTree {
     ULONGLONG data_unknown{0};
     // Entries whose data sits on bad clusters. Counted next to the three above.
     ULONGLONG data_bad{0};
+    // The journal's side of the scan, all zero or false when it was not read
+    // (recover_errors off, no journal, or a scan that progress() stopped).
+    // Journal records the volume kept.
+    ULONGLONG usn_records{0};
+    // Entries given a UsnInfo.
+    ULONGLONG usn_annotated{0};
+    // Entries of JournalOnly().
+    ULONGLONG usn_journal_only{0};
+    // Stretches of the journal that were skipped as damaged.
+    ULONGLONG usn_damaged{0};
+    // The journal held more records than the volume keeps.
+    bool usn_truncated{false};
   };
 
   // Scans every record of volume's $MFT.
@@ -167,6 +225,17 @@ class NTFS_BROWSER_EXPORT MftTree {
   [[nodiscard]] std::wstring
       GetPath(ULONGLONG record, size_t name_index,
               std::optional<ULONGLONG>* lost_ancestor = nullptr) const;
+  // Files the change journal names that no kept record accounts for, ordered by
+  // record number, then sequence number. Empty unless the volume was opened
+  // with recover_errors and include_deleted both on.
+  [[nodiscard]] std::span<const JournalOnlyEntry> JournalOnly() const noexcept;
+  // Path of JournalOnly()[index]: its name, joined to the path of its parent
+  // when parent_valid is true ("\dir\file"). Otherwise the bare name, which
+  // is relative to the lost parent, whose number lostAncestor receives, as
+  // GetPath() does. Empty when index is out of range.
+  [[nodiscard]] std::wstring
+      GetJournalPath(size_t index,
+                     std::optional<ULONGLONG>* lost_ancestor = nullptr) const;
   // What the scan met, record slot by record slot.
   [[nodiscard]] const ScanStats& Stats() const noexcept;
 

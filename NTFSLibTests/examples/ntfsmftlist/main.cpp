@@ -1,9 +1,12 @@
 // Lists every file the $MFT records, with its characteristics. Paths come
 // from each record's own $FILE_NAME parent reference, not from directory
-// indexes, so files of a directory whose index is lost still show up.
+// indexes, so files of a directory whose index is lost still show up. With
+// --recover, the change journal ($UsnJrnl) adds what it knows of each file, and
+// lists the files only it names.
 
 #include <ntfs-browser/win-types.h>
 
+#include <array>
 #include <cerrno>
 #include <cstdio>
 #include <memory>
@@ -17,6 +20,7 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "device-path.h"
@@ -56,7 +60,14 @@ void Usage() {
   printf("Usage: ntfsmftlist [--log=...] [--deleted] [--recover] <volume>\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("  --deleted     also list the records NTFS freed\n");
-  printf("  --recover     salvage a damaged item instead of rejecting it\n");
+  printf(
+      "  --recover     salvage a damaged item instead of rejecting it, and\n");
+  printf(
+      "                read the change journal ($UsnJrnl): a ~ line gives\n");
+  printf(
+      "                what it knows of a file, and with --deleted the "
+      "files\n");
+  printf("                only it names follow the listing\n");
 #ifdef _WIN32
   printf("  <volume>      a drive letter (c:), or a device or image path\n");
 #else
@@ -191,12 +202,115 @@ void PrintOtherLinks(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
   }
 }
 
-// Prints one listing line for entry, then one line per other hard link.
+// One reason bit of a journal record, and the name the listing gives it.
+struct ReasonName {
+  Usn::Reason bit;
+  std::string_view name;
+};
+
+// The reasons a journal record can give, in bit order.
+constexpr std::array<ReasonName, 24> reason_names{{
+    {Usn::Reason::DataOverwrite, "DataOverwrite"},
+    {Usn::Reason::DataExtend, "DataExtend"},
+    {Usn::Reason::DataTruncation, "DataTruncation"},
+    {Usn::Reason::NamedDataOverwrite, "NamedDataOverwrite"},
+    {Usn::Reason::NamedDataExtend, "NamedDataExtend"},
+    {Usn::Reason::NamedDataTruncation, "NamedDataTruncation"},
+    {Usn::Reason::FileCreate, "FileCreate"},
+    {Usn::Reason::FileDelete, "FileDelete"},
+    {Usn::Reason::EaChange, "EaChange"},
+    {Usn::Reason::SecurityChange, "SecurityChange"},
+    {Usn::Reason::RenameOldName, "RenameOldName"},
+    {Usn::Reason::RenameNewName, "RenameNewName"},
+    {Usn::Reason::IndexableChange, "IndexableChange"},
+    {Usn::Reason::BasicInfoChange, "BasicInfoChange"},
+    {Usn::Reason::HardLinkChange, "HardLinkChange"},
+    {Usn::Reason::CompressionChange, "CompressionChange"},
+    {Usn::Reason::EncryptionChange, "EncryptionChange"},
+    {Usn::Reason::ObjectIdChange, "ObjectIdChange"},
+    {Usn::Reason::ReparsePointChange, "ReparsePointChange"},
+    {Usn::Reason::StreamChange, "StreamChange"},
+    {Usn::Reason::TransactedChange, "TransactedChange"},
+    {Usn::Reason::IntegrityChange, "IntegrityChange"},
+    {Usn::Reason::DesiredStorageClassChange, "DesiredStorageClassChange"},
+    {Usn::Reason::Close, "Close"},
+}};
+
+// The names of the reason bits set in reasons, joined by '|'.
+std::string ReasonText(DWORD reasons) {
+  std::string text;
+  for (const ReasonName& reason : reason_names) {
+    if ((reasons & static_cast<DWORD>(reason.bit)) != 0) {
+      text += text.empty() ? "" : "|";
+      text += reason.name;
+    }
+  }
+  return text.empty() ? "-" : text;
+}
+
+// A time of the journal as "YYYY-MM-DD hh:mm".
+std::string TimeText(const FILETIME& time) {
+  const NtfsDevice::LocalTime local = LocalWriteTime(time);
+  char text[32]{};
+  snprintf(text, sizeof(text), "%04u-%02u-%02u %02u:%02u", local.year,
+           local.month, local.day, local.hour, local.minute);
+  return text;
+}
+
+// Prints what the journal knows of an entry, under its listing lines.
+void PrintJournalLine(
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::UsnInfo& info) {
+  printf("%*s~ %s %s", path_column, "", TimeText(info.last_time).c_str(),
+         ReasonText(info.last_reason).c_str());
+  if (info.delete_time) {
+    printf(", deleted %s", TimeText(*info.delete_time).c_str());
+  }
+  printf(" (%llu records)\n",
+         static_cast<unsigned long long>(info.record_count));
+}
+
+// Prints one listing line for entry, then one line per other hard link, then
+// what the journal knows of it.
 void PrintEntry(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
                 const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry) {
   const std::string path = DisplayPath(tree, entry, std::nullopt);
   PrintMainLine(entry, path);
   PrintOtherLinks(tree, entry, path);
+  if (entry.usn) {
+    PrintJournalLine(*entry.usn);
+  }
+}
+
+// The path of one file only the journal names, as shown in the listing.
+std::string JournalDisplayPath(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+                               size_t index) {
+  std::optional<ULONGLONG> lost;
+  const std::wstring path = tree.GetJournalPath(index, &lost);
+  if (lost) {
+    return "<lost #" + std::to_string(*lost) + ">\\" + ToUtf8(path);
+  }
+  return ToUtf8(path);
+}
+
+// Prints the files only the journal names, after the listing.
+void PrintJournalOnly(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree) {
+  const auto files = tree.JournalOnly();
+  if (files.empty()) {
+    return;
+  }
+  printf("\nFiles only the journal names: %zu\n", files.size());
+  printf("%10s %5s %-5s %-16s %s\n", "Record", "Seq", "", "Last event",
+         "Path [reasons]");
+  for (size_t i = 0; i < files.size(); i++) {
+    // i < files.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const auto& file = files[i];
+    printf("%10llu %5u %-5s %-16s %s [%s]\n",
+           static_cast<unsigned long long>(file.record), file.sequence,
+           file.directory ? "<DIR>" : "", TimeText(file.usn.last_time).c_str(),
+           JournalDisplayPath(tree, i).c_str(),
+           ReasonText(file.usn.all_reasons).c_str());
+  }
 }
 
 #ifdef _WIN32
@@ -303,6 +417,16 @@ void PrintStats(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats) {
          static_cast<unsigned long long>(stats.unreadable),
          static_cast<unsigned long long>(stats.damaged),
          static_cast<unsigned long long>(stats.unreachable));
+  if (stats.usn_records != 0) {
+    printf(
+        "Journal: %llu records, %llu files annotated, %llu only in the "
+        "journal, %llu damaged%s\n",
+        static_cast<unsigned long long>(stats.usn_records),
+        static_cast<unsigned long long>(stats.usn_annotated),
+        static_cast<unsigned long long>(stats.usn_journal_only),
+        static_cast<unsigned long long>(stats.usn_damaged),
+        stats.usn_truncated ? " (truncated)" : "");
+  }
 }
 
 // Lists every $MFT record of the volume args names. Returns the exit code.
@@ -333,6 +457,7 @@ int ListVolume(const Arguments& args) {
        tree.Entries()) {
     PrintEntry(tree, entry);
   }
+  PrintJournalOnly(tree);
   PrintStats(tree.Stats());
 
   return 0;

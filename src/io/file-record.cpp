@@ -457,6 +457,11 @@ void Io::FileRecord<S>::SetBypassDeletedGate(bool bypass) noexcept {
 }
 
 template <Cache::Strategy S>
+bool Io::FileRecord<S>::BypassesDeletedGate() const noexcept {
+  return impl_->bypass_deleted_gate;
+}
+
+template <Cache::Strategy S>
 void Io::FileRecord<S>::SetResolveAttrList(bool resolve) noexcept {
   impl_->resolve_attr_list = resolve;
 }

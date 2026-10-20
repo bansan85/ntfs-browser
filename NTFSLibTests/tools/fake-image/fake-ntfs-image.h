@@ -1781,4 +1781,100 @@ inline constexpr ULONGLONG wrapping_lcn =
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithNegativeLcn(FakeRunHost host);
 
+// MFT slot PutUsnJournal() writes $UsnJrnl at. Slot 12 is free on the 26-slot
+// MftTree base. On a real volume $UsnJrnl sits past the system files; this one
+// stays below mft_tree_docs_idx, so no existing record is touched.
+inline constexpr ULONGLONG usn_journal_idx = 12;
+
+// Time a journal record carries unless the fixture says otherwise: a FILETIME
+// in 2022, in UTC.
+inline constexpr ULONGLONG fake_usn_default_time = 0x01D87F3C00000000ULL;
+
+// USN_REASON_FILE_CREATE | USN_REASON_CLOSE: the reason a journal record has
+// when the fixture does not say.
+inline constexpr DWORD fake_usn_default_reason = 0x80000100;
+
+// FILE_ATTRIBUTE_ARCHIVE: what a plain file has.
+inline constexpr DWORD fake_usn_default_attributes = 0x20;
+
+// One journal record a fixture writes. The version picks the on-disk layout:
+// 2 and 3 carry a name, 4 (range tracking) carries none.
+struct FakeUsnRecord {
+  std::wstring name;
+  WORD major_version = 2;
+  ULONGLONG file_record = 0;
+  WORD file_sequence = 1;
+  // High half of a V3 file reference. Zero on NTFS.
+  ULONGLONG file_reference_high = 0;
+  // Record 5 is the root, as the 26-slot MftTree base has it.
+  ULONGLONG parent_record = 5;
+  WORD parent_sequence = 5;
+  ULONGLONG parent_reference_high = 0;
+  ULONGLONG time = fake_usn_default_time;
+  DWORD reason = fake_usn_default_reason;
+  DWORD file_attributes = fake_usn_default_attributes;
+  // The USN to write. By default the record's own offset in $J, as NTFS does.
+  std::optional<LONGLONG> usn;
+};
+
+// Bytes of one record, as it sits at stream_offset of $J: padded with zeros to
+// a multiple of 8, and carrying stream_offset as its USN unless record.usn is
+// set.
+[[nodiscard]] std::vector<BYTE> EncodeUsnRecord(const FakeUsnRecord& record,
+                                                ULONGLONG stream_offset);
+
+// Real records that follow a hole.
+struct FakeUsnStretch {
+  // Bytes of sparse stream before the first record. A multiple of
+  // fake_cluster_size.
+  ULONGLONG hole_bytes = 0;
+  std::vector<FakeUsnRecord> records;
+};
+
+// Bytes to write over the stream after it is laid out, to break it.
+struct FakeUsnPatch {
+  // Offset in $J. It MUST fall inside a real stretch.
+  ULONGLONG stream_offset = 0;
+  std::vector<BYTE> bytes;
+};
+
+// How PutUsnJournal() writes $Extend, $UsnJrnl and $J.
+struct FakeUsnOptions {
+  // The first real stretch: records laid back to back from sparse_head_bytes.
+  std::vector<FakeUsnRecord> records;
+  // Sparse bytes before the first stretch: the part of $J that NTFS purged. A
+  // multiple of fake_cluster_size, and as large as a terabyte if need be.
+  ULONGLONG sparse_head_bytes = 0;
+  // Written at sparse_head_bytes in place of records, when not empty. For
+  // journals too large to build from records, or for forged bytes.
+  std::vector<BYTE> raw_stream;
+  // Further real stretches, each after its own hole.
+  std::vector<FakeUsnStretch> more_stretches;
+  std::vector<FakeUsnPatch> patches;
+  // $Extend indexes no $UsnJrnl.
+  bool omit_extend_entry = false;
+  // The record $Extend names for $UsnJrnl is left empty and not in use, and
+  // it has no $J: its slot is unused.
+  bool omit_journal_record = false;
+  // $UsnJrnl has no $J stream: only an unnamed, empty $DATA.
+  bool omit_j_stream = false;
+  // Clears the in-use flag of $UsnJrnl's record.
+  bool journal_record_freed = false;
+  // Ends the run list of $J on a byte no run can start with, after its first
+  // run: a damaged list.
+  bool cut_run_list = false;
+  // Maps the data of $J at a cluster the image does not hold: reading it fails.
+  bool unreadable_data = false;
+  // Declares this size for $J instead of its real one: a forged length.
+  std::optional<ULONGLONG> forged_size;
+};
+
+// Writes record 11 as $Extend, indexing "$UsnJrnl", and record usn_journal_idx
+// as $UsnJrnl, with a sparse, non-resident $J that holds the options' records.
+// Meant for an image built on the 26-slot MftTree base, where slots 11 and 12
+// are free. The data of $J goes past the end of the image, which grows. It
+// composes with PutClusterBitmap(): add the bitmap after the journal, since the
+// bitmap takes the clusters after the image's end too.
+void PutUsnJournal(std::vector<BYTE>& image, const FakeUsnOptions& options);
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

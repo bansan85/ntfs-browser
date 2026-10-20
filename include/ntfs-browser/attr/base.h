@@ -90,6 +90,12 @@ class NTFS_BROWSER_EXPORT AttrBase {
   // left out, and is not complete when its run list is shorter than the
   // allocated size it declares, or holds a damaged run.
   [[nodiscard]] virtual Alloc::StreamExtents GetExtents() const;
+  // The real (non-sparse) byte ranges of this attribute's data, in its own
+  // address space, sorted and cut at GetDataSize(). Resident data is one range
+  // that covers all of it. Never reads the disk, so a stream with a huge sparse
+  // head costs nothing to ask about. Not complete when a run list is short or
+  // damaged, as for GetExtents().
+  [[nodiscard]] virtual Alloc::StreamRanges GetRealRanges() const;
 };  // AttrBase
 
 }  // namespace Attr

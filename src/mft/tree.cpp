@@ -5,12 +5,14 @@
 #include <cstddef>
 #include <exception>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -29,6 +31,7 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/usn/types.h>
 
 #include "alloc/data-state.h"
 #include "attr/file-name.h"
@@ -390,15 +393,25 @@ class MftTree::Impl {
   // Parallel to entries_.
   std::vector<bool> reachable;
   Mft::MftTree::ScanStats stats;
+  // The files only the journal names, ordered by record, then sequence.
+  std::vector<Mft::MftTree::JournalOnlyEntry> journal_only;
 
   template <Cache::Strategy S>
   void Scan(const NtfsVolume<S>& volume,
             const Mft::MftTree::ScanOptions& options);
   void Link();
+  // Gives each entry the journal names its UsnInfo, and, with include_deleted,
+  // lists the files it names that no entry accounts for.
+  void ApplyJournal(const Usn::Journal& journal, bool include_deleted);
   [[nodiscard]] const Mft::MftTree::Entry* Find(ULONGLONG record) const;
   [[nodiscard]] std::span<const ULONGLONG> Children(ULONGLONG dir_record) const;
   [[nodiscard]] bool IsValidParent(const Mft::MftTree::Entry& child,
                                    const Mft::MftTree::Name& name) const;
+  // Whether a parent reference names a directory the scan found, under the
+  // same rules as IsValidParent(), minus the case of a record filed under
+  // itself.
+  [[nodiscard]] bool NamesDirectory(ULONGLONG parent_record,
+                                    WORD parent_sequence) const;
   [[nodiscard]] std::wstring
       PathThrough(const Mft::MftTree::Entry& entry,
                   const Mft::MftTree::Name& name,
@@ -506,6 +519,18 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
               stats.data_bad);
   }
   Link();
+
+  // A scan that progress() stopped holds only some records: a file would look
+  // lost to the journal that is merely not read yet.
+  if (volume.GetOptions().recover_errors && stats.complete) {
+    if (const Usn::Journal* journal = volume.GetUsnJournal()) {
+      ApplyJournal(*journal, volume.GetOptions().include_deleted);
+      Log::Info(
+          "MFT scan journal: {} records, {} entries annotated, {} only in the "
+          "journal",
+          stats.usn_records, stats.usn_annotated, stats.usn_journal_only);
+    }
+  }
 }
 
 // Validates every name's parent reference, files each record under the
@@ -567,18 +592,100 @@ bool Mft::MftTree::Impl::IsValidParent(const Mft::MftTree::Entry& child,
     return child.record == root_record;
   }
 
-  const Mft::MftTree::Entry* parent = Find(name.parent_record);
+  return NamesDirectory(name.parent_record, name.parent_sequence);
+}
+
+bool Mft::MftTree::Impl::NamesDirectory(ULONGLONG parent_record,
+                                        WORD parent_sequence) const {
+  const Mft::MftTree::Entry* parent = Find(parent_record);
   if (parent == nullptr) {
-    return name.parent_record == root_record;
+    return parent_record == root_record;
   }
   if (!parent->directory) {
     return false;
   }
 
-  // The parent is the same one the name was filed under: unchecked, still
+  // The parent is the same one the reference was written for: unchecked, still
   // the same generation, or the generation NTFS freed right after.
-  return Mft::IsSameRecordGeneration(name.parent_sequence, parent->sequence,
+  return Mft::IsSameRecordGeneration(parent_sequence, parent->sequence,
                                      parent->in_use);
+}
+
+namespace {
+
+// Adds one journal record to what is known of a file.
+void NoteRecord(Mft::MftTree::UsnInfo& info, const Usn::Record& record) {
+  info.last_usn = record.usn;
+  info.last_reason = record.reason;
+  info.last_time = record.time;
+  info.all_reasons |= record.reason;
+  info.record_count++;
+  if ((record.reason & static_cast<DWORD>(Usn::Reason::FileDelete)) != 0) {
+    info.delete_time = record.time;
+  }
+}
+
+// FILE_ATTRIBUTE_DIRECTORY, in the attributes a journal record carries.
+constexpr DWORD journal_directory_attribute = 0x10;
+
+}  // namespace
+
+// Walks the journal in order, so the newest record of a file is the last one
+// seen. A record names a file by record number and sequence. It belongs to an
+// entry when the sequence is that entry's generation (see
+// IsSameRecordGeneration()); otherwise it names a file that no entry accounts
+// for: one whose record is gone, or was reused. A V3 reference with a high half
+// cannot name an $MFT record, so it never matches one.
+void Mft::MftTree::Impl::ApplyJournal(const Usn::Journal& journal,
+                                      bool include_deleted) {
+  stats.usn_records = journal.records.size();
+  stats.usn_damaged = journal.damaged_records;
+  stats.usn_truncated = journal.truncated;
+
+  // Record number, sequence number, high half of the reference.
+  using Key = std::tuple<ULONGLONG, WORD, ULONGLONG>;
+  std::map<Key, Mft::MftTree::JournalOnlyEntry> lost;
+
+  for (const Usn::Record& record : journal.records) {
+    if (record.file_reference_high == 0) {
+      const auto found = by_record.find(record.file_record);
+      if (found != by_record.end()) {
+        // by_record maps to indices of entries.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        Mft::MftTree::Entry& entry = entries[found->second];
+        if (Mft::IsSameRecordGeneration(record.file_sequence, entry.sequence,
+                                        entry.in_use)) {
+          if (!entry.usn) {
+            entry.usn.emplace();
+            stats.usn_annotated++;
+          }
+          NoteRecord(*entry.usn, record);
+          continue;
+        }
+      }
+    }
+    if (!include_deleted) {
+      continue;
+    }
+
+    Mft::MftTree::JournalOnlyEntry& item = lost[Key{
+        record.file_record, record.file_sequence, record.file_reference_high}];
+    item.record = record.file_record;
+    item.sequence = record.file_sequence;
+    item.name = record.name;
+    item.parent_record = record.parent_record;
+    item.parent_sequence = record.parent_sequence;
+    item.file_attributes = record.file_attributes;
+    NoteRecord(item.usn, record);
+  }
+
+  for (auto& [key, item] : lost) {
+    item.parent_valid =
+        NamesDirectory(item.parent_record, item.parent_sequence);
+    item.directory = (item.file_attributes & journal_directory_attribute) != 0;
+    journal_only.push_back(std::move(item));
+  }
+  stats.usn_journal_only = journal_only.size();
 }
 
 // Joins name and its ancestors' primary names up to the root, or up to the
@@ -702,6 +809,47 @@ std::wstring
   // nameIndex < names.size() was checked above.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   return impl_->PathThrough(*entry, entry->names[name_index], lost_ancestor);
+}
+
+std::span<const Mft::MftTree::JournalOnlyEntry>
+    Mft::MftTree::JournalOnly() const noexcept {
+  return impl_->journal_only;
+}
+
+std::wstring Mft::MftTree::GetJournalPath(
+    size_t index, std::optional<ULONGLONG>* lost_ancestor) const {
+  if (lost_ancestor != nullptr) {
+    lost_ancestor->reset();
+  }
+  if (index >= impl_->journal_only.size()) {
+    return {};
+  }
+  // index is checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const Mft::MftTree::JournalOnlyEntry& item = impl_->journal_only[index];
+
+  if (!item.parent_valid) {
+    if (lost_ancestor != nullptr) {
+      *lost_ancestor = item.parent_record;
+    }
+    return item.name;
+  }
+  // The root is always a valid parent, even when its own record is lost.
+  if (item.parent_record == root_record) {
+    return L"\\" + item.name;
+  }
+
+  std::wstring path = GetPath(item.parent_record, lost_ancestor);
+  if (path.empty()) {
+    if (lost_ancestor != nullptr) {
+      *lost_ancestor = item.parent_record;
+    }
+    return item.name;
+  }
+  if (path.back() != L'\\') {
+    path += L'\\';
+  }
+  return path + item.name;
 }
 
 const Mft::MftTree::ScanStats& Mft::MftTree::Stats() const noexcept {

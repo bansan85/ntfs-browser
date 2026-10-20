@@ -19,6 +19,7 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc/bad-cluster-list.h"
@@ -93,6 +94,11 @@ class NtfsVolume<S>::Impl {
   // destroyed after it.
   mutable std::unique_ptr<Alloc::BadClusterList> bad_list;
 
+  // The change journal ($UsnJrnl:$J of $Extend), loaded on first use and only
+  // with recover_errors on. usn_journal stays null when the journal is absent
+  // or unusable; usn_loaded then keeps the failure from being retried.
+  mutable std::unique_ptr<Usn::Journal> usn_journal;
+
   // The cluster bitmap ($Bitmap, MFT record 6), loaded on first use. The record
   // stays alive for as long as the bitmap reads through its data stream, so it
   // is declared first and destroyed last. bitmap stays null when $Bitmap cannot
@@ -124,6 +130,10 @@ class NtfsVolume<S>::Impl {
   mutable bool degraded_logged{false};
   mutable bool summary_computed{false};
   mutable bool bad_loaded{false};
+  mutable bool usn_loaded{false};
+  // Set while the journal loads: a query made then sees no journal instead of
+  // loading it again.
+  mutable bool loading_usn{false};
   // Set while the bad list loads: a query made then sees no list instead of
   // loading it again.
   mutable bool loading_bad{false};

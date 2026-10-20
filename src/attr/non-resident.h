@@ -156,6 +156,7 @@ class AttrNonResident : public Attr::AttrBase<S> {
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
   [[nodiscard]] Alloc::StreamExtents GetExtents() const override;
+  [[nodiscard]] Alloc::StreamRanges GetRealRanges() const override;
 
   // Like ReadData(), but bounded by this instance's own VCN range instead
   // of real_size, which continuation instances leave at 0. Public only for

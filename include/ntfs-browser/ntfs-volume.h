@@ -18,6 +18,7 @@
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #ifdef _WIN32
@@ -196,6 +197,22 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // again, so a live device may differ. The library never skips a bad cluster
   // when it reads: what to do with one is the caller's choice. Not thread safe.
   [[nodiscard]] const Alloc::BadClusters* GetBadClusters() const;
+
+  // The records of the volume's change journal, $UsnJrnl:$J of $Extend, in
+  // journal order, or null. Null in strict mode: with recover_errors off the
+  // journal is never read, nor is $Extend looked up for it. With recover_errors
+  // on, it is loaded on first use, whatever include_deleted says, and only the
+  // real ranges of the stream are read, so a sparse head costs nothing. Null
+  // also means there is no journal, or that its stream cannot be read at all:
+  // that is remembered, logged once, and never retried. An empty result means
+  // the journal exists and holds no usable record. A record whose bytes are
+  // damaged is skipped, the next one is found again, and the count of skipped
+  // stretches is in the result. Only the newest VolumeOptions::max_usn_records
+  // records are kept. The result owns its data: it does not depend on a cache
+  // view or on a buffer that the next read replaces, and the pointer lives as
+  // long as the volume. A snapshot: the journal is never read again, so a live
+  // device may differ. Not thread safe.
+  [[nodiscard]] const Usn::Journal* GetUsnJournal() const;
 };  // NtfsVolume
 
 }  // namespace NTFS_BROWSER_NAMESPACE

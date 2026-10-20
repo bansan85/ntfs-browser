@@ -108,6 +108,10 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // Marks this record as volume metadata ($MFT, $UpCase, ...): ParseAttrs()
   // then ignores the deleted flag, whatever include_deleted says.
   void SetBypassDeletedGate(bool bypass) noexcept;
+  // Whether SetBypassDeletedGate(true) was called. A directory record that
+  // bypasses the gate also shows the entries that name freed records, since
+  // volume metadata is read whatever include_deleted says.
+  [[nodiscard]] bool BypassesDeletedGate() const noexcept;
   // False makes a $ATTRIBUTE_LIST be wrapped as a plain attribute, not
   // resolved into the attributes it names.
   void SetResolveAttrList(bool resolve) noexcept;

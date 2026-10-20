@@ -168,6 +168,96 @@ TEST_CASE("NtfsMftList --recover on a clean image lists what it lists without",
   CHECK(recovering.out == plain.out);
 }
 
+namespace {
+
+// The journal's own time, as the sample prints it.
+std::string JournalTimeText() {
+  const auto local = NtfsDevice::UtcTicksToLocalTime(
+      NTFS_BROWSER_NAMESPACE::Tests::fake_usn_default_time);
+  REQUIRE(local.has_value());
+
+  char text[32]{};
+  snprintf(text, sizeof(text), "%04u-%02u-%02u %02u:%02u", local->year,
+           local->month, local->day, local->hour, local->minute);
+  return text;
+}
+
+// The tree image with a journal that names the live report.txt, the freed
+// old.tmp, and a file no record names, in Docs.
+std::vector<BYTE> ImageWithJournal() {
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree();
+  NTFS_BROWSER_NAMESPACE::Tests::PutUsnJournal(
+      image,
+      {.records = {
+           {.name = L"report.txt",
+            .file_record = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
+            .file_sequence = 3,
+            .parent_record = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
+            .parent_sequence = 1,
+            .reason = 0x00000100},
+           {.name = L"old.tmp",
+            .file_record =
+                NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_file_idx,
+            .file_sequence = 1,
+            .parent_record = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
+            .parent_sequence = 1,
+            .reason = 0x80000200},
+           {.name = L"ghost.bin",
+            .file_record = 40,
+            .file_sequence = 2,
+            .parent_record = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
+            .parent_sequence = 1,
+            .reason = 0x80000200}}});
+  return image;
+}
+
+}  // namespace
+
+TEST_CASE("NtfsMftList --recover --deleted shows what the journal knows",
+          "[mft][sample][usn]") {
+  const TempTreeImage image(ImageWithJournal());
+  const SampleRun run =
+      RunSample({L"--deleted", L"--recover", image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  const std::string time = JournalTimeText();
+  CHECK_THAT(run.out, ContainsSubstring("\\Docs\\report.txt\n"));
+  CHECK_THAT(run.out,
+             ContainsSubstring("~ " + time + " FileCreate (1 records)\n"));
+  CHECK_THAT(run.out,
+             ContainsSubstring("~ " + time + " FileDelete|Close, deleted " +
+                               time + " (1 records)\n"));
+  CHECK_THAT(run.out, ContainsSubstring("Files only the journal names: 1\n"));
+  CHECK_THAT(run.out,
+             ContainsSubstring("\\Docs\\ghost.bin [FileDelete|Close]\n"));
+  CHECK_THAT(run.out,
+             ContainsSubstring("Journal: 3 records, 2 files annotated, 1 only "
+                               "in the journal, 0 damaged\n"));
+}
+
+TEST_CASE("NtfsMftList --recover without --deleted lists no journal-only file",
+          "[mft][sample][usn]") {
+  const TempTreeImage image(ImageWithJournal());
+  const SampleRun run = RunSample({L"--recover", image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK_THAT(run.out, ContainsSubstring("~ " + JournalTimeText() +
+                                        " FileCreate (1 records)\n"));
+  CHECK_THAT(run.out, !ContainsSubstring("Files only the journal names"));
+}
+
+TEST_CASE("NtfsMftList without --recover ignores the journal",
+          "[mft][sample][usn]") {
+  const TempTreeImage image(ImageWithJournal());
+  const SampleRun run = RunSample({L"--deleted", image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK_THAT(run.out, !ContainsSubstring("~ "));
+  CHECK_THAT(run.out, !ContainsSubstring("Files only the journal names"));
+  CHECK_THAT(run.out, !ContainsSubstring("Journal:"));
+}
+
 TEST_CASE("NtfsMftList without a target prints usage and fails",
           "[mft][sample][characterization]") {
   const SampleRun run = RunSample({L"--deleted"});

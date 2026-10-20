@@ -61,7 +61,8 @@ struct RecordingReader {
       if (offset >= bytes->size()) {
         return std::nullopt;
       }
-      size_t count = std::min(out.size(), bytes->size() - offset);
+      size_t count = static_cast<size_t>(
+          std::min<ULONGLONG>(out.size(), bytes->size() - offset));
       if (cap) {
         count = std::min(count, *cap);
       }
