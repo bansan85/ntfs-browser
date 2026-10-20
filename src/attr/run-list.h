@@ -7,6 +7,7 @@
 #include <span>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/run-entry.h"
@@ -37,6 +38,21 @@ class RunList {
 
   // Clusters from the first VCN through the last run that maps real clusters.
   [[nodiscard]] ULONGLONG MappedClusters() const noexcept;
+
+  // The real (non-sparse) clusters the list maps, and how far it reaches.
+  struct ExtentList {
+    std::vector<Alloc::Extent> extents;
+    // Clusters from the first VCN through the end of the last non-empty run,
+    // sparse runs included.
+    ULONGLONG covered_clusters{0};
+    // False when a run has zero length, or when lcn + clusters overflows 64
+    // bits. Such a run is damaged: an overflowing one is still listed, so the
+    // caller sees it as out of range, a zero-length one is left out.
+    bool well_formed{true};
+  };
+
+  // The extents of every real run, in VCN order. Sparse runs own no cluster.
+  [[nodiscard]] ExtentList Extents() const;
 
   // The run holding vcn, or nullptr if no run holds it.
   [[nodiscard]] const Data::RunEntry* Find(ULONGLONG vcn) const noexcept;

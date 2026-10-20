@@ -65,7 +65,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 160>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 165>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -313,8 +313,6 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 160>
          {true, {"TraverseAttrs() called with an empty callback"}}},
         {"file_record_unhandled_attribute",
          {true, {"Unhandled attribute: 0x0040"}}},
-        {"bitmap_resident_data_read",
-         {true, {"8 bytes of resident Bitmap data read"}}},
         {"full_cache_attribute_list_record_growth",
          {true,
           {"Attribute continuation VCNs are not contiguous from 0; "
@@ -411,6 +409,7 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 160>
           {"$MFT DATA continuation in record 120 could not be resolved",
            "Attribute continuation VCNs are not contiguous from 0; leaving 3 "
            "instance(s) unmerged"}}},
+        {"bitmap_resident_data_read", {true, {"Attribute: Bitmap (Resident)"}}},
         {"bitmap_multi_cluster",
          {true,
           {"Attribute: Bitmap (NonResident)",
@@ -549,6 +548,12 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 160>
          {true, {"No usable $MFTMirr: records 0 to 3 have no fallback copy"}}},
         {"boot_sector_backup_fallback",
          {true, {"using the backup boot sector at 0x"}}},
+        {"alloc_bitmap_huge_volume_claim", {true, {"MFT scan data: "}}},
+        {"alloc_bitmap_fragmented", {true, {"MFT scan data: "}}},
+        {"alloc_bitmap_forged_size", {true, {"MFT scan data: "}}},
+        {"alloc_bitmap_cut_run_list", {true, {"DataRun decode error 1: 0x1F"}}},
+        {"alloc_bitmap_short_resident",
+         {true, {"$Bitmap is shorter than the volume"}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -624,6 +629,11 @@ NTFS_REGRESSION_TESTCASE("0724c913e1b2f0607bb5cd3ebfacb596db4458e9")
 NTFS_REGRESSION_TESTCASE("65b60629c20b4730c35650dd68b6f87fe57c07a3")
 NTFS_REGRESSION_TESTCASE("8fc085f7649f977b0ab5f67b5b9da055eebc56dd")
 NTFS_REGRESSION_TESTCASE("9d6b29a12783a8d0595bf861671e5401493570b5")
+NTFS_REGRESSION_TESTCASE("alloc_bitmap_cut_run_list")
+NTFS_REGRESSION_TESTCASE("alloc_bitmap_forged_size")
+NTFS_REGRESSION_TESTCASE("alloc_bitmap_fragmented")
+NTFS_REGRESSION_TESTCASE("alloc_bitmap_huge_volume_claim")
+NTFS_REGRESSION_TESTCASE("alloc_bitmap_short_resident")
 NTFS_REGRESSION_TESTCASE("attr_list_nonres_entry_past_end")
 NTFS_REGRESSION_TESTCASE("attr_name_exceeds_total_size")
 NTFS_REGRESSION_TESTCASE("attr_offset_exceeds_record_size")

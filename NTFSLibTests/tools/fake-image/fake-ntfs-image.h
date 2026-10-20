@@ -1054,6 +1054,93 @@ inline constexpr std::string_view freed_file_content = "Recovered text.\n";
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFreedNonResidentFile(
     ULONGLONG real_size, const std::vector<FakeDataRun>& runs);
 
+// A freed file's unnamed $DATA stream, for PutFreedNonResidentRecord().
+struct FakeFreedStream {
+  // Size of the stream, in bytes.
+  ULONGLONG real_size = 0;
+  // Clusters the header declares, sparse holes included. They set the
+  // allocated size, and the run list unless raw_runs replaces it.
+  std::vector<FakeDataRun> runs;
+  // A hand-encoded run list, terminator included, written instead of the
+  // encoding of runs: for damaged lists a well-formed encoder cannot write.
+  std::vector<BYTE> raw_runs;
+  // Forged last VCN of the header. By default it follows runs.
+  std::optional<ULONGLONG> last_vcn;
+};
+
+// Writes, at $MFT slot idx of an image built on the 26-slot MftTree base, a
+// freed file "stale.txt" in Docs whose unnamed $DATA is non-resident as stream
+// describes. It grows the image when idx lies past its end.
+void PutFreedNonResidentRecord(std::vector<BYTE>& image, ULONGLONG idx,
+                               const FakeFreedStream& stream);
+
+// Where a bitmap put by PutClusterBitmap() keeps its bytes.
+enum class FakeBitmapShape : std::uint8_t {
+  // Inside the record. At most 800 bytes.
+  Resident,
+  // In one run of clusters appended to the image.
+  NonResident,
+  // In two runs, with an unused cluster between them.
+  Fragmented,
+  // Like Fragmented, but the run list stops after the first run, on a byte
+  // that no run can start with. A decoder that recovers keeps the first run.
+  CutRunList
+};
+
+// How PutClusterBitmap() writes the bitmap.
+struct FakeBitmapOptions {
+  FakeBitmapShape shape = FakeBitmapShape::NonResident;
+  // Grows the image to at least this many clusters first. 0 leaves it as is.
+  ULONGLONG volume_clusters = 0;
+  // Extends the bitmap with zero bits to cover every cluster of the final
+  // volume, and marks the clusters it appended allocated, as real NTFS does
+  // for $Bitmap itself. False keeps the bytes as given: a short bitmap.
+  bool pad_to_volume = true;
+  // Declares this size for a non-resident bitmap instead of the bytes it
+  // holds: a forged length, as a hostile volume has.
+  std::optional<ULONGLONG> forged_size;
+};
+
+// Rewrites MFT record 6 of an image built on the 26-slot MftTree base (record
+// 6 is free there) as $Bitmap, whose unnamed $DATA holds bitmap_bytes: one bit
+// per cluster the image has before the call, bit 0 first. A non-resident bitmap
+// appends its clusters at the end of the image, so the image grows, and the
+// boot sector's sector count follows. The dump-tree and attribute-list fixtures
+// use record 6 for other files, so this does not compose with them.
+void PutClusterBitmap(std::vector<BYTE>& image,
+                      std::span<const BYTE> bitmap_bytes,
+                      const FakeBitmapOptions& options = {});
+
+// Marks MFT record idx of an image in use, or freed.
+void SetRecordInUse(std::vector<BYTE>& image, ULONGLONG idx, bool in_use);
+
+// A bitmap, sized for the clusters image holds and rounded up to 8 bytes, with
+// exactly the clusters of the real runs set.
+[[nodiscard]] std::vector<BYTE>
+    AllocatedBitmapFor(const std::vector<BYTE>& image,
+                       std::span<const FakeDataRun> allocated_runs);
+
+// MFT index of the first of the freed files
+// BuildFakeNtfsImageWithManyDeletedFiles builds; the others follow.
+inline constexpr ULONGLONG many_deleted_first_idx = 16;
+
+// An image with many freed files, and where their data sits.
+struct FakeManyDeleted {
+  std::vector<BYTE> image;
+  // First cluster of each file's run, in record order.
+  std::vector<ULONGLONG> lcns;
+  // Clusters of each run.
+  DWORD run_clusters = 0;
+};
+
+// Same volume as BuildFakeNtfsImage(), with $MFT mapping many_deleted_first_idx
+// + count records, and count freed files from many_deleted_first_idx on, each
+// with one run of run_clusters clusters (1 to 255). The runs lie past the
+// records, scattered in no particular order and all inside the volume. Their
+// clusters hold zeros.
+[[nodiscard]] FakeManyDeleted
+    BuildFakeNtfsImageWithManyDeletedFiles(size_t count, DWORD run_clusters);
+
 // MFT indices of the two in-use files BuildFakeNtfsImageWithDumpTree() adds to
 // the root directory. The file in Docs is mft_tree_report_idx.
 inline constexpr ULONGLONG dump_big_file_idx = 6;

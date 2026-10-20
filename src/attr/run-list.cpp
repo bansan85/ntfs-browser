@@ -67,6 +67,29 @@ ULONGLONG RunList::MappedClusters() const noexcept {
   return mapped;
 }
 
+// Lists the real runs as extents and measures how far the list reaches. A run
+// is damaged when it is empty or when lcn + clusters wraps past 2^64.
+RunList::ExtentList RunList::Extents() const {
+  ExtentList list;
+  for (const Data::RunEntry& data_run : runs_) {
+    if (data_run.clusters == 0) {
+      list.well_formed = false;
+      continue;
+    }
+    list.covered_clusters = data_run.last_vcn + 1;
+    if (!data_run.lcn) {
+      continue;
+    }
+    if (data_run.clusters >
+        std::numeric_limits<ULONGLONG>::max() - *data_run.lcn) {
+      list.well_formed = false;
+    }
+    list.extents.push_back(
+        {.lcn = *data_run.lcn, .clusters = data_run.clusters});
+  }
+  return list;
+}
+
 // Returns the first run whose VCN range holds vcn.
 const Data::RunEntry* RunList::Find(ULONGLONG vcn) const noexcept {
   for (const Data::RunEntry& data_run : runs_) {

@@ -8,6 +8,7 @@
 #include <string_view>
 #include <utility>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/stats.h>
@@ -152,6 +153,34 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // The volume's $UpCase table, loaded on first use. When it cannot be read,
   // the built-in Unicode simple uppercase mapping stands in.
   [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
+
+  // State of one cluster, from the volume's $Bitmap. The bitmap is loaded on
+  // first use, whatever include_deleted says. Unknown when $Bitmap cannot be
+  // read, now or earlier: that failure is remembered and logged once. With
+  // recover_errors off a damaged $Bitmap is rejected whole; on, what parses is
+  // used. A snapshot: the bitmap is never read again, so a live device may
+  // differ. Not thread safe.
+  [[nodiscard]] Alloc::ClusterState GetClusterState(ULONGLONG lcn) const;
+
+  // State of clusters [lcn, lcn + clusters). A range is Allocated when any
+  // cluster is; else OutOfRange when one lies past the volume's last cluster;
+  // else Unknown when the bitmap cannot say for one; else Free. An empty range
+  // is Free. The same snapshot rules apply.
+  [[nodiscard]] Alloc::ClusterState GetRangeState(ULONGLONG lcn,
+                                                  ULONGLONG clusters) const;
+
+  // Fills the state of each query, and how many clusters of it were allocated
+  // and free. Queries are handled in LCN order, so the bitmap is read at most
+  // once per window of it, whatever the order of queries. The array keeps its
+  // order. Use it for many ranges at random places. A query the bitmap cannot
+  // answer stays Unknown, and does not spoil the others.
+  void GetRangeStates(std::span<Alloc::RangeQuery> queries) const;
+
+  // Free clusters and bytes. Empty only when $Bitmap is unusable. A bitmap
+  // shorter than the volume gives the free clusters among those it covers, and
+  // counts the rest as unknown_clusters. Padding bits past the last cluster
+  // never count. A snapshot, like GetClusterState().
+  [[nodiscard]] std::optional<Alloc::SpaceSummary> GetSpaceSummary() const;
 };  // NtfsVolume
 
 }  // namespace NTFS_BROWSER_NAMESPACE

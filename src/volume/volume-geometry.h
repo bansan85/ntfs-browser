@@ -26,6 +26,10 @@ struct Geometry {
   // True when a copy of the first mft_mirror_record_count records can be read
   // at mft_mirr_addr: see ParseBootSector().
   bool mft_mirr_usable{false};
+  // Clusters in the volume: the boot sector's sector count in bytes, over the
+  // cluster size. 0 when the count is null, which only recover mode accepts, or
+  // when the parse is rejected.
+  ULONGLONG cluster_count{0};
 };
 
 // Result of ParseBootSector(). geometry keeps every field decoded before the

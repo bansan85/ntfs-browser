@@ -244,10 +244,9 @@ FakeRecord MakeIndexedDirRecord(WORD sequence,
   return record;
 }
 
-// Freed file record of sequence 2, its unnamed $DATA non-resident over runs.
-FakeRecord
-    MakeFreedNonResidentFileRecord(ULONGLONG real_size,
-                                   const std::vector<FakeDataRun>& runs) {
+// Freed file record of sequence 2, its unnamed $DATA non-resident as stream
+// describes.
+FakeRecord MakeFreedNonResidentFileRecord(const FakeFreedStream& stream) {
   FakeRecord record = MakeRecordHeader(attr_offset_value, {});
   EditFileRecordHeader(record,
                        [](FileRecordHeader& header) { header.seq_no = 2; });
@@ -260,9 +259,12 @@ FakeRecord
                         {.name = L"stale.txt",
                          .parent_ref = MakeFileReference(mft_tree_docs_idx, 1)},
                         false);
-  offset += WriteNonResidentAttr(
-      record, offset, Attr::Type::Data,
-      {.comp_unit_size = 0, .real_size = real_size, .runs = runs});
+  offset += WriteNonResidentAttr(record, offset, Attr::Type::Data,
+                                 {.comp_unit_size = 0,
+                                  .real_size = stream.real_size,
+                                  .runs = stream.runs,
+                                  .overrides = {.last_vcn = stream.last_vcn,
+                                                .raw_runs = stream.raw_runs}});
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }
@@ -434,14 +436,15 @@ std::vector<BYTE> BuildFakeNtfsImageWithIndexCycle() {
 std::vector<BYTE> BuildFakeNtfsImageWithFreedNonResidentFile(
     ULONGLONG real_size, const std::vector<FakeDataRun>& runs) {
   std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const FakeRecord record = MakeFreedNonResidentFileRecord(real_size, runs);
-  const size_t offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     gsl::narrow<size_t>(mft_tree_stale_child_idx);
-  std::memcpy(&image.at(offset), record.data(), record.size());
+  PutFreedNonResidentRecord(image, mft_tree_stale_child_idx,
+                            {.real_size = real_size, .runs = runs});
   return image;
+}
+
+void PutFreedNonResidentRecord(std::vector<BYTE>& image, ULONGLONG idx,
+                               const FakeFreedStream& stream) {
+  PutMftRecord(image, static_cast<DWORD>(mft_lcn) * cluster_size, idx,
+               MakeFreedNonResidentFileRecord(stream));
 }
 
 namespace {

@@ -2,6 +2,8 @@
 add_library(
   NtfsTestDiskReaders
   STATIC
+  "counting-disk-reader.h"
+  "counting-disk-reader.cpp"
   "memory-disk-reader.h"
   "memory-disk-reader.cpp"
   "sequential-disk-reader.h"

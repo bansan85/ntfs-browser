@@ -4,6 +4,7 @@
 #include <array>
 #include <cassert>
 #include <cstring>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <span>
@@ -16,6 +17,8 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/alloc/types.h>
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
@@ -27,6 +30,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "alloc/cluster-bitmap.h"
 #include "attr/non-resident.h"  // IWYU pragma: keep
 #include "attr/resident.h"
 #include "attr/slot.h"
@@ -86,6 +90,44 @@ constexpr WORD boot_sector_bytes = 512;
 
 // Largest backup candidate read: the biggest sector size tried.
 constexpr WORD backup_read_max_bytes = 4096;
+
+// Reads out.size() bytes of a bitmap stream at offset. When the whole read
+// fails or stops short, it reads again piece by piece, so the pieces before the
+// damage are not lost with it. Returns the bytes read from the start, or
+// nothing when not even the first piece could be read. Never throws.
+template <Cache::Strategy S>
+std::optional<ULONGLONG> ReadBitmapBytes(const Attr::AttrBase<S>& stream,
+                                         DWORD piece, ULONGLONG offset,
+                                         std::span<BYTE> out) {
+  try {
+    const std::optional<ULONGLONG> whole = stream.ReadData(offset, out);
+    if (whole && *whole == out.size()) {
+      return whole;
+    }
+
+    ULONGLONG done = 0;
+    while (done < out.size()) {
+      const size_t length =
+          static_cast<size_t>(std::min<ULONGLONG>(piece, out.size() - done));
+      const std::optional<ULONGLONG> part =
+          stream.ReadData(offset + done, out.subspan(done, length));
+      if (!part || *part == 0) {
+        break;
+      }
+      done += *part;
+      if (*part < length) {
+        break;
+      }
+    }
+    if (done == 0) {
+      return std::nullopt;
+    }
+    return done;
+  } catch (const std::exception& e) {
+    Log::Exception(e);
+    return std::nullopt;
+  }
+}
 
 }  // namespace
 
@@ -598,6 +640,151 @@ const UpCase::Table& NtfsVolume<S>::Impl::GetUpCaseTable() const {
     }
   }
   return upcase ? *upcase : UpCase::Table::BuiltIn();
+}
+
+// Reads $Bitmap (MFT record 6) and wraps its data stream. Null when the record
+// or the stream is missing or unusable. Like the volume's other metadata reads,
+// it MUST NOT depend on include_deleted. With recover_errors off a damaged run
+// list rejects the attribute, so the bitmap is absent; on, the runs that parse
+// are kept, and the clusters past them read as unknown.
+template <Cache::Strategy S>
+std::unique_ptr<Alloc::ClusterBitmap>
+    NtfsVolume<S>::Impl::LoadClusterBitmap() const {
+  const auto bitmap_record_idx = static_cast<ULONGLONG>(Mft::Idx::Bitmap);
+  const DWORD record_size = geometry.file_record_size;
+  if (!volume_ok ||
+      !mft.Map().IsRangeMapped(bitmap_record_idx * record_size, record_size)) {
+    return {};
+  }
+
+  auto record = std::make_unique<Io::FileRecord<S>>(*self);
+  record->SetBypassDeletedGate(true);
+  record->SetAttrMask(Attr::Mask::Data);
+  if (!record->ParseFileRecord(bitmap_record_idx) || !record->ParseAttrs()) {
+    return {};
+  }
+
+  const Attr::AttrBase<S>* data = record->FindStream({});
+  if (data == nullptr) {
+    return {};
+  }
+
+  // The store cannot hold more clusters than its size says, and a volume that
+  // claims more is cut at the store. Bytes of bitmap past what those clusters
+  // need are never looked at, so a forged size cannot make a query long.
+  ULONGLONG cluster_count = geometry.cluster_count;
+  ULONGLONG data_size = data->GetDataSize();
+  if (const std::optional<ULONGLONG> store_bytes = volume->Size();
+      store_bytes && geometry.cluster_size != 0) {
+    const ULONGLONG store_clusters = *store_bytes / geometry.cluster_size;
+    cluster_count =
+        cluster_count == 0 ? 0 : std::min(cluster_count, store_clusters);
+    data_size = std::min(data_size, store_clusters / 8 + 1);
+  }
+  if (cluster_count != 0) {
+    data_size = std::min(data_size, cluster_count / 8 + 1);
+  }
+
+  const DWORD piece = geometry.cluster_size;
+  auto reader = [data, piece](ULONGLONG offset, std::span<BYTE> out) {
+    return ReadBitmapBytes<S>(*data, piece, offset, out);
+  };
+  auto loaded = std::make_unique<Alloc::ClusterBitmap>(
+      reader, data_size, cluster_count, Alloc::BitmapWindowBytes());
+  bitmap_record = std::move(record);
+  return loaded;
+}
+
+// Loads the cluster bitmap on first use. A failure is cached: every later
+// query answers unknown without trying again.
+template <Cache::Strategy S>
+Alloc::ClusterBitmap* NtfsVolume<S>::Impl::GetClusterBitmap() const {
+  if (loading_bitmap) {
+    return nullptr;
+  }
+  if (!bitmap_loaded) {
+    bitmap_loaded = true;
+    loading_bitmap = true;
+    try {
+      bitmap = LoadClusterBitmap();
+    } catch (const std::exception& e) {
+      Log::Exception(e);
+      bitmap.reset();
+    }
+    loading_bitmap = false;
+    if (!bitmap) {
+      degraded_logged = true;
+      Log::Recoverable(options.recover_errors,
+                       "$Bitmap is not usable: cluster allocation is unknown");
+    }
+  }
+  return bitmap.get();
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::Impl::NoteBitmapHealth() const {
+  if (!bitmap || degraded_logged) {
+    return;
+  }
+  const Alloc::ClusterBitmap::Status status = bitmap->GetStatus();
+  if (status.shorter_than_volume || status.failed_windows != 0) {
+    degraded_logged = true;
+    Log::Recoverable(options.recover_errors,
+                     "$Bitmap is {}: some clusters are unknown",
+                     status.shorter_than_volume ? "shorter than the volume"
+                                                : "partly unreadable");
+  }
+}
+
+template <Cache::Strategy S>
+Alloc::ClusterState NtfsVolume<S>::GetClusterState(ULONGLONG lcn) const {
+  return GetRangeState(lcn, 1);
+}
+
+template <Cache::Strategy S>
+Alloc::ClusterState NtfsVolume<S>::GetRangeState(ULONGLONG lcn,
+                                                 ULONGLONG clusters) const {
+  Alloc::RangeQuery query{.lcn = lcn, .clusters = clusters};
+  GetRangeStates({&query, 1});
+  return query.state;
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::GetRangeStates(std::span<Alloc::RangeQuery> queries) const {
+  // A query nobody answers stays unknown.
+  for (Alloc::RangeQuery& query : queries) {
+    query.state = Alloc::ClusterState::Unknown;
+    query.allocated_clusters = 0;
+    query.free_clusters = 0;
+  }
+
+  Alloc::ClusterBitmap* bitmap = impl_->GetClusterBitmap();
+  if (bitmap == nullptr) {
+    return;
+  }
+  try {
+    bitmap->StatesInOrder(queries);
+  } catch (const std::exception& e) {
+    Log::Exception(e);
+  }
+  impl_->NoteBitmapHealth();
+}
+
+template <Cache::Strategy S>
+std::optional<Alloc::SpaceSummary> NtfsVolume<S>::GetSpaceSummary() const {
+  if (!impl_->summary_computed) {
+    impl_->summary_computed = true;
+    Alloc::ClusterBitmap* bitmap = impl_->GetClusterBitmap();
+    if (bitmap != nullptr) {
+      try {
+        impl_->summary = bitmap->Summary(impl_->geometry.cluster_size);
+      } catch (const std::exception& e) {
+        Log::Exception(e);
+      }
+      impl_->NoteBitmapHealth();
+    }
+  }
+  return impl_->summary;
 }
 
 template class NtfsVolume<Cache::Strategy::NoCache>;

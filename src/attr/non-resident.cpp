@@ -11,16 +11,19 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
 #include "data/header-non-resident.h"
 #include "data/run-entry.h"
 #include "log/ntfs-common.h"
+#include "mft/file-reference.h"
 #include "ntfs-browser/win-types.h"
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
@@ -69,7 +72,9 @@ AttrNonResident<S>::AttrNonResident(const HeaderCommon& ahc,
                                     const Io::FileRecord<S>& file_record)
     : Attr::AttrBase<S>(ahc, file_record),
       attr_header_nr_(reinterpret_cast<const Data::HeaderNonResident&>(ahc)),
-      runs_(SpannedClusters(attr_header_nr_)) {
+      runs_(SpannedClusters(attr_header_nr_)),
+      record_deleted_(file_record.IsDeleted()),
+      record_number_(file_record.GetFileReference()) {
   // total_size already covers this field (ParseAttrs()); start_vcn must be
   // unit-aligned or units decode against the wrong window.
   if (Data::HasCompressedSizeField(attr_header_nr_)) {
@@ -626,6 +631,58 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   return static_cast<ULONGLONG>(out.size());
 }
 
+// Looks, once, at the clusters of a live data stream in the cluster bitmap. A
+// run on a free cluster is a sign of damage: the volume and its bitmap
+// disagree. It only matters when recovering, so strict mode reads nothing more.
+// The volume's own metadata (records below Mft::Idx::User, $Bitmap included)
+// and freed records are left out: a freed file's clusters are free by nature,
+// and checking $Bitmap against itself would loop.
+template <Cache::Strategy S>
+void AttrNonResident<S>::CheckForFreeClusters() const {
+  if (alloc_checked_) {
+    return;
+  }
+  alloc_checked_ = true;
+
+  if (!this->volume_.GetOptions().recover_errors || record_deleted_ ||
+      this->GetAttrType() != Attr::Type::Data || !record_number_) {
+    return;
+  }
+  const ULONGLONG record = *record_number_ & Mft::mft_record_number_mask;
+  if (record < static_cast<ULONGLONG>(Mft::Idx::User)) {
+    return;
+  }
+
+  try {
+    const Alloc::StreamExtents extents = GetExtents();
+    std::vector<Alloc::RangeQuery> queries;
+    queries.reserve(extents.extents.size());
+    for (const Alloc::Extent& extent : extents.extents) {
+      queries.push_back({.lcn = extent.lcn, .clusters = extent.clusters});
+    }
+    this->volume_.GetRangeStates(queries);
+
+    ULONGLONG free_clusters = 0;
+    std::optional<ULONGLONG> first_lcn;
+    for (const Alloc::RangeQuery& query : queries) {
+      if (query.free_clusters != 0) {
+        free_clusters += query.free_clusters;
+        if (!first_lcn) {
+          first_lcn = query.lcn;
+        }
+      }
+    }
+    if (first_lcn) {
+      Log::Recoverable(true,
+                       "Record {}: {} clusters of a data stream are free in "
+                       "$Bitmap, from the run at LCN {}",
+                       record, free_clusters, *first_lcn);
+    }
+  } catch (const std::exception& e) {
+    Log::Exception(e);
+  }
+}
+
 // Reads are bounded by real_size, and bytes from ini_size on read as zeros:
 // the clusters there hold whatever the disk held before, and are never read
 // (nor decrypted). real_size and ini_size are 0 on continuation instances;
@@ -634,6 +691,7 @@ template <Cache::Strategy S>
 std::optional<ULONGLONG>
     AttrNonResident<S>::ReadData(ULONGLONG offset,
                                  const std::span<BYTE>& buffer) const {
+  CheckForFreeClusters();
   const ULONGLONG real_size = attr_header_nr_.real_size;
   if (buffer.empty()) {
     return 0;
@@ -678,6 +736,28 @@ std::optional<ULONGLONG>
   }
 
   return ReadDataBounded(offset, buffer, clusters * cluster_size);
+}
+
+// The runs that map clusters. The list is complete when it reaches the end of
+// the allocated size the first record declares. A shorter list means a run was
+// lost: recover mode stops at a bad run, and an extension record that failed to
+// parse leaves its part of the stream out.
+template <Cache::Strategy S>
+Alloc::StreamExtents AttrNonResident<S>::GetExtents() const {
+  RunList::ExtentList list = runs_.Extents();
+  Alloc::StreamExtents extents{.extents = std::move(list.extents),
+                               .complete = list.well_formed};
+
+  const ULONGLONG cluster_size = this->GetClusterSize();
+  if (cluster_size != 0) {
+    const ULONGLONG allocated = attr_header_nr_.alloc_size;
+    const ULONGLONG needed =
+        allocated / cluster_size + (allocated % cluster_size != 0 ? 1 : 0);
+    if (list.covered_clusters < needed) {
+      extents.complete = false;
+    }
+  }
+  return extents;
 }
 
 template <Cache::Strategy S>

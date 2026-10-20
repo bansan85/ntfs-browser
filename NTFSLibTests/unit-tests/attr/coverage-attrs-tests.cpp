@@ -266,10 +266,9 @@ class SectorProbe final : public ResidentFor<S> {
 
 }  // namespace
 
-TEMPLATE_TEST_CASE_SIG(
-    "a resident bitmap answers from its own bytes and past its end",
-    "[cov-attrs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
-    Cache::Strategy::FullCache) {
+TEMPLATE_TEST_CASE_SIG("a resident bitmap attribute keeps its bytes",
+                       "[cov-attrs]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto attr = ResidentAttr(Attr::Type::Bitmap, bitmap_bytes);
   const NtfsVolume<S> volume(
       std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
@@ -284,19 +283,14 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(record.ParseAttrs());
   const auto& bitmaps = record.GetAttr(Attr::Type::Bitmap);
   REQUIRE(bitmaps.size() == 1);
-  auto& bitmap = static_cast<Attr::AttrBitmap<ResidentFor<S>, S>&>(*bitmaps[0]);
-
-  CHECK_FALSE(bitmap.IsClusterFree(0));
-  CHECK(bitmap.IsClusterFree(1));
-  CHECK(bitmap.IsClusterFree(8));
-  // Bit 128 lies past the two bitmap bytes: reported free.
-  CHECK(bitmap.IsClusterFree(128));
+  // The REQUIRE above checks the size of bitmaps.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  CHECK(bitmaps[0]->GetDataSize() == bitmap_bytes.size());
 }
 
-TEMPLATE_TEST_CASE_SIG(
-    "a resident bitmap with no bytes reports no free cluster", "[cov-attrs]",
-    ((Cache::Strategy S), S), Cache::Strategy::NoCache,
-    Cache::Strategy::FullCache) {
+TEMPLATE_TEST_CASE_SIG("a resident bitmap attribute with no bytes is empty",
+                       "[cov-attrs]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto attr = ResidentAttr(Attr::Type::Bitmap, std::span<const BYTE>{});
   const NtfsVolume<S> volume(
       std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
@@ -311,14 +305,14 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(record.ParseAttrs());
   const auto& bitmaps = record.GetAttr(Attr::Type::Bitmap);
   REQUIRE(bitmaps.size() == 1);
-  auto& bitmap = static_cast<Attr::AttrBitmap<ResidentFor<S>, S>&>(*bitmaps[0]);
-
-  CHECK_FALSE(bitmap.IsClusterFree(0));
+  // The REQUIRE above checks the size of bitmaps.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  CHECK(bitmaps[0]->GetDataSize() == 0);
 }
 
 TEMPLATE_TEST_CASE_SIG(
-    "a non-resident bitmap whose cluster read comes back short reports no free "
-    "cluster",
+    "a non-resident bitmap attribute is wrapped even when its clusters are "
+    "short",
     "[cov-attrs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const auto attr = NonResidentAttr(Attr::Type::Bitmap, short_bitmap_size);
@@ -335,11 +329,9 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(record.ParseAttrs());
   const auto& bitmaps = record.GetAttr(Attr::Type::Bitmap);
   REQUIRE(bitmaps.size() == 1);
-  auto& bitmap =
-      static_cast<Attr::AttrBitmap<Attr::AttrNonResident<S>, S>&>(*bitmaps[0]);
-
-  CHECK_FALSE(bitmap.IsClusterFree(0));
-  CHECK_FALSE(bitmap.IsClusterFree(0));
+  // The REQUIRE above checks the size of bitmaps.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  CHECK(bitmaps[0]->IsNonResident());
 }
 
 TEMPLATE_TEST_CASE_SIG(

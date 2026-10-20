@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
@@ -19,6 +20,21 @@ template <Cache::Strategy S>
 class NtfsVolume;
 
 namespace Mft {
+
+// Options of one MftTree scan, known as MftTree::ScanOptions. It sits outside
+// the class so that the constructors can default it to {}: a nested struct with
+// a default member initializer cannot be used that way inside its own class.
+struct MftScanOptions {
+  // Called every few thousand records, and once at the end. Returning false
+  // stops the scan: the tree then holds the records scanned so far.
+  std::function<bool(ULONGLONG done, ULONGLONG total)> progress;
+  // True gives each kept entry its data_state. It only takes effect when the
+  // volume was opened with include_deleted, since only then does the scan
+  // list freed records. It reads the cluster bitmap and the runs of each
+  // deleted file, in sorted batches. False skips both: the scan then reads
+  // exactly what it would without this feature.
+  bool annotate_data_state{true};
+};
 
 // Every file of a volume, rebuilt from the parent reference in each MFT
 // record's own $FILE_NAME, not from directory indexes. It survives the loss
@@ -75,13 +91,15 @@ class NTFS_BROWSER_EXPORT MftTree {
     bool compressed{false};
     bool encrypted{false};
     bool sparse{false};
+    // Whether the unnamed $DATA stream, the one size describes, probably still
+    // holds the file's own bytes (a hint, not a proof). Intact for a record in
+    // use. Empty when the scan was not asked to annotate, see
+    // ScanOptions::annotate_data_state, or when the record has no such stream:
+    // a directory, for instance.
+    std::optional<Alloc::DataState> data_state;
   };
 
-  struct ScanOptions {
-    // Called every few thousand records, and once at the end. Returning false
-    // stops the scan: the tree then holds the records scanned so far.
-    std::function<bool(ULONGLONG done, ULONGLONG total)> progress;
-  };
+  using ScanOptions = MftScanOptions;
 
   struct ScanStats {
     // Record slots $MFT has room for.
@@ -108,6 +126,11 @@ class NTFS_BROWSER_EXPORT MftTree {
     ULONGLONG unreachable{0};
     // False when progress() stopped the scan early.
     bool complete{true};
+    // Entries given a data_state, by state. All zero when the scan did not
+    // annotate.
+    ULONGLONG data_intact{0};
+    ULONGLONG data_reallocated{0};
+    ULONGLONG data_unknown{0};
   };
 
   // Scans every record of volume's $MFT.

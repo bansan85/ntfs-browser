@@ -18,6 +18,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
@@ -29,12 +30,14 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
+#include "alloc/data-state.h"
 #include "attr/file-name.h"
 #include "attr/resident.h"
 #include "io/file-record-attrs.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 #include "mft/slot-reader.h"
+#include "mft/tree-testing.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 
@@ -49,6 +52,15 @@ constexpr ULONGLONG progress_interval = 4096;
 
 // Bits in one byte of the $MFT bitmap.
 constexpr ULONGLONG bits_per_byte = 8;
+
+// Data-state queries a scan keeps pending before it resolves them. A RangeQuery
+// is 40 bytes, so this is about 10 MiB: enough to batch thousands of files, so
+// the bitmap is read once per batch and not once per file, and small enough to
+// bound the memory of a scan whatever the volume holds.
+constexpr size_t default_max_pending_ranges = 262144;
+
+// The cap a test asked for. 0 means the default.
+size_t max_pending_ranges_override = 0;
 
 // Free slots a block read may span between two used ones. 64 slots are 64 KiB
 // at the usual 1 KiB record: a disk seek costs more than reading that much.
@@ -263,7 +275,109 @@ const Mft::MftTree::Name*
   return entry.names.empty() ? nullptr : &entry.names.front();
 }
 
+// Gives the entries of one scan their data state. A deleted stream's extents
+// are kept as queries, and resolved against the cluster bitmap in one sorted
+// batch once enough of them wait, and at the end: deleted files sit at random
+// clusters, so a query per file would reload a window of the bitmap for nearly
+// each of them.
+template <Cache::Strategy S>
+class DataStateResolver {
+ public:
+  DataStateResolver(const NtfsVolume<S>& volume,
+                    std::vector<Mft::MftTree::Entry>& entries,
+                    Mft::MftTree::ScanStats& stats)
+      : volume_(&volume), entries_(&entries), stats_(&stats) {}
+
+  // Handles the entry at entry_index, which file_record has just filled.
+  void Note(const Io::FileRecord<S>& file_record, size_t entry_index) {
+    const Attr::AttrBase<S>* data = file_record.FindStream({});
+    if (data == nullptr) {
+      return;
+    }
+    if (!file_record.IsDeleted()) {
+      Set(entry_index, Alloc::DataState::Intact);
+      return;
+    }
+
+    const Alloc::StreamExtents extents = data->GetExtents();
+    if (extents.extents.empty()) {
+      Set(entry_index, extents.complete ? Alloc::DataState::Intact
+                                        : Alloc::DataState::Unknown);
+      return;
+    }
+    waiting_.push_back({.entry_index = entry_index,
+                        .first_query = queries_.size(),
+                        .query_count = extents.extents.size(),
+                        .complete = extents.complete});
+    for (const Alloc::Extent& extent : extents.extents) {
+      queries_.push_back({.lcn = extent.lcn, .clusters = extent.clusters});
+    }
+    if (queries_.size() >= MaxPendingRanges()) {
+      Flush();
+    }
+  }
+
+  // Resolves every waiting entry. A bitmap that cannot answer leaves them
+  // unknown: the scan goes on.
+  void Flush() {
+    if (waiting_.empty()) {
+      return;
+    }
+    volume_->GetRangeStates(queries_);
+
+    std::vector<Alloc::ClusterState> states;
+    for (const Waiting& entry : waiting_) {
+      states.clear();
+      for (size_t i = 0; i < entry.query_count; i++) {
+        states.push_back(queries_.at(entry.first_query + i).state);
+      }
+      Set(entry.entry_index, Alloc::FoldDataState(entry.complete, states));
+    }
+    waiting_.clear();
+    queries_.clear();
+  }
+
+ private:
+  // An entry whose extents wait in queries_.
+  struct Waiting {
+    size_t entry_index;
+    size_t first_query;
+    size_t query_count;
+    bool complete;
+  };
+
+  void Set(size_t entry_index, Alloc::DataState state) {
+    entries_->at(entry_index).data_state = state;
+    switch (state) {
+      case Alloc::DataState::Intact:
+        stats_->data_intact++;
+        break;
+      case Alloc::DataState::Reallocated:
+        stats_->data_reallocated++;
+        break;
+      case Alloc::DataState::Unknown:
+        stats_->data_unknown++;
+        break;
+    }
+  }
+
+  const NtfsVolume<S>* volume_;
+  std::vector<Mft::MftTree::Entry>* entries_;
+  Mft::MftTree::ScanStats* stats_;
+  std::vector<Alloc::RangeQuery> queries_;
+  std::vector<Waiting> waiting_;
+};
+
 }  // namespace
+
+size_t MaxPendingRanges() {
+  return max_pending_ranges_override != 0 ? max_pending_ranges_override
+                                          : default_max_pending_ranges;
+}
+
+void SetMaxPendingRangesForTests(size_t limit) {
+  max_pending_ranges_override = limit;
+}
 
 class MftTree::Impl {
  public:
@@ -333,6 +447,11 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
 
   Io::FileRecord<S> file_record(volume);
   file_record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+  // Deleted entries only exist with include_deleted, and the annotation reads
+  // the bitmap: without both, the scan reads what it always did.
+  const bool annotate =
+      volume.GetOptions().include_deleted && options.annotate_data_state;
+  DataStateResolver<S> resolver(volume, entries, stats);
   // Reads $MFT in big blocks, not record by record.
   Mft::SlotReader<S> slots(volume);
   // End of the slots the current block read is allowed to cover, bitmap only.
@@ -362,6 +481,12 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
     }
     by_record.emplace(record, entries.size());
     entries.push_back(std::move(*entry));
+    if (annotate) {
+      resolver.Note(file_record, entries.size() - 1);
+    }
+  }
+  if (annotate) {
+    resolver.Flush();
   }
 
   if (options.progress && stats.complete) {
@@ -372,6 +497,10 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
       "MFT scan: {} slots, {} in use, {} deleted, {} unreadable, {} skipped",
       stats.slots, stats.in_use, stats.deleted, stats.unreadable,
       stats.skipped);
+  if (annotate) {
+    Log::Info("MFT scan data: {} intact, {} reallocated, {} unknown",
+              stats.data_intact, stats.data_reallocated, stats.data_unknown);
+  }
   Link();
 }
 

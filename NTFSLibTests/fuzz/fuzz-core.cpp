@@ -15,10 +15,13 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/index-entry.h>  // IWYU pragma: keep
@@ -295,6 +298,41 @@ void ProbeMftTree(const NtfsVolume<S>& volume) {
   }
 }
 
+// Asks the cluster bitmap about the first, last, middle and an out-of-range
+// cluster, then about the extents and the data state of each data stream of
+// the records the other probes parse. The bitmap is untrusted input too.
+template <Cache::Strategy S>
+void ProbeAllocation(const NtfsVolume<S>& volume) {
+  const std::optional<NTFS_BROWSER_NAMESPACE::Alloc::SpaceSummary> summary =
+      volume.GetSpaceSummary();
+  const ULONGLONG total = summary ? summary->total_clusters : 0;
+  for (const ULONGLONG lcn :
+       {ULONGLONG{0}, total / 2, total == 0 ? ULONGLONG{0} : total - 1, total,
+        std::numeric_limits<ULONGLONG>::max()}) {
+    (void)volume.GetClusterState(lcn);
+  }
+
+  const auto probe_record = [&volume](ULONGLONG record) {
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
+    file_record.SetAttrMask(Attr::Mask::Data);
+    if (!file_record.ParseFileRecord(record) || !file_record.ParseAttrs()) {
+      return;
+    }
+    (void)file_record.GetDataState();
+    (void)file_record.GetDataState(named_data_stream_name);
+    for (const auto& stream : file_record.GetAttr(Attr::Type::Data)) {
+      for (const NTFS_BROWSER_NAMESPACE::Alloc::Extent& extent :
+           stream->GetExtents().extents) {
+        (void)volume.GetRangeState(extent.lcn, extent.clusters);
+      }
+    }
+  };
+  probe_record(static_cast<ULONGLONG>(Mft::Idx::Root));
+  for (const Mft::Idx record : probed_records) {
+    probe_record(static_cast<ULONGLONG>(record));
+  }
+}
+
 // Vetoes the attribute: the parse then skips it.
 void DiscardAttr(const Attr::HeaderCommon& /*attr_head*/, bool& discard) {
   discard = true;
@@ -346,10 +384,7 @@ void ProbeVolumeApi(NtfsVolume<S>& volume) {
 // failingRead makes that one ReadInto() call fail, exercising the
 // disk-read error paths a looping reader never reaches on its own.
 template <Cache::Strategy S>
-void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
-              std::optional<size_t> failing_read = {}) {
-  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
-                       options);
+void ProbeVolume(NtfsVolume<S>& volume) {
   if (!volume.IsVolumeOK()) {
     return;
   }
@@ -376,7 +411,16 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
     ProbeRecord(volume, static_cast<ULONGLONG>(record));
   }
   ProbeMftTree(volume);
+  ProbeAllocation(volume);
   ProbeVolumeApi(volume);
+}
+
+template <Cache::Strategy S>
+void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
+              std::optional<size_t> failing_read = {}) {
+  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
+                       options);
+  ProbeVolume(volume);
 }
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash
@@ -407,6 +451,17 @@ void RunBothStrategies(std::span<const BYTE> data, const VolumeOptions& options,
 }
 
 }  // namespace
+
+void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+               const VolumeOptions& options) {
+  try {
+    NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
+    ProbeVolume(volume);
+  }
+  // NOLINTNEXTLINE(bugprone-empty-catch)
+  catch (const std::exception&) {
+  }
+}
 
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
                   const BootSectorPatch& patch) {

@@ -3,8 +3,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstdint>
-#include <optional>
-#include <vector>
 
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
@@ -38,17 +36,6 @@ class AttrBitmap : public Resident {
   AttrBitmap& operator=(const AttrBitmap& other) = delete;
 
   ~AttrBitmap() override { Log::Trace("AttrBitmap deleted"); }
-
- private:
-  ULONGLONG bitmap_size_;         // Bitmap data size
-  std::vector<BYTE> bitmap_buf_;  // Bitmap data buffer
-  std::optional<ULONGLONG> current_cluster_;
-
- public:
-  // Verify if a single cluster is free
-  [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY bool
-      IsClusterFree(ULONGLONG cluster);
-
 };  // AttrBitmap
 
 }  // namespace Attr

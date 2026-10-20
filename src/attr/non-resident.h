@@ -88,7 +88,18 @@ class AttrNonResident : public Attr::AttrBase<S> {
   // streams, which hold the same key.
   std::shared_ptr<const Efs::Context> efs_context_;
 
+  // Whether the record this attribute sits in was freed, and its record
+  // number. The free-cluster check needs both: a freed record legitimately
+  // points at free clusters, and the volume's own metadata is not checked.
+  bool record_deleted_{false};
+  std::optional<ULONGLONG> record_number_;
+  // Set by the first ReadData(): the check runs once per attribute.
+  mutable bool alloc_checked_{false};
+
   void ParseDataRun();
+  // With recover_errors on, logs once if a cluster of this live data stream
+  // is free in the cluster bitmap. Never changes what a read returns.
+  void CheckForFreeClusters() const;
   [[nodiscard]] std::optional<Cache::ReadResult<S>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;
@@ -143,6 +154,7 @@ class AttrNonResident : public Attr::AttrBase<S> {
   [[nodiscard]] ULONGLONG GetAllocatedSize() const noexcept override;
   [[nodiscard]] std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const override;
+  [[nodiscard]] Alloc::StreamExtents GetExtents() const override;
 
   // Like ReadData(), but bounded by this instance's own VCN range instead
   // of real_size, which continuation instances leave at 0. Public only for

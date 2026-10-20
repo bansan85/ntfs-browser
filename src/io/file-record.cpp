@@ -16,6 +16,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
@@ -28,6 +29,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
 
+#include "alloc/data-state.h"
 #include "attr/file-name.h"
 #include "attr/list-chain.h"
 #include "attr/std-info.h"
@@ -620,6 +622,35 @@ const Attr::AttrBase<S>*
   Log::Debug("FindStream() found no stream named \"{}\"",
              Utf::WideToUtf8(name));
   return nullptr;
+}
+
+// Judges a stream by asking the volume's cluster bitmap about each extent. A
+// live record owns its clusters by definition, so it is not asked.
+template <Cache::Strategy S>
+std::optional<Alloc::DataState>
+    Io::FileRecord<S>::GetDataState(std::wstring_view stream_name) const {
+  const Attr::AttrBase<S>* stream = FindStream(stream_name);
+  if (stream == nullptr) {
+    return std::nullopt;
+  }
+  if (!IsDeleted()) {
+    return Alloc::DataState::Intact;
+  }
+
+  const Alloc::StreamExtents extents = stream->GetExtents();
+  std::vector<Alloc::RangeQuery> queries;
+  queries.reserve(extents.extents.size());
+  for (const Alloc::Extent& extent : extents.extents) {
+    queries.push_back({.lcn = extent.lcn, .clusters = extent.clusters});
+  }
+  impl_->volume->GetRangeStates(queries);
+
+  std::vector<Alloc::ClusterState> states;
+  states.reserve(queries.size());
+  for (const Alloc::RangeQuery& query : queries) {
+    states.push_back(query.state);
+  }
+  return Alloc::FoldDataState(extents.complete, states);
 }
 
 // Check if it's deleted or in use

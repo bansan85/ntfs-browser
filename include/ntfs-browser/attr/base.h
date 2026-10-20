@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/export.h>
@@ -84,6 +85,11 @@ class NTFS_BROWSER_EXPORT AttrBase {
   [[nodiscard]] virtual ULONGLONG GetAllocatedSize() const noexcept = 0;
   [[nodiscard]] virtual std::optional<ULONGLONG>
       ReadData(ULONGLONG offset, const std::span<BYTE>& buffer) const = 0;
+  // The real clusters this attribute's data lives on. Resident data owns none.
+  // A non-resident attribute lists the runs that map clusters, sparse runs
+  // left out, and is not complete when its run list is shorter than the
+  // allocated size it declares, or holds a damaged run.
+  [[nodiscard]] virtual Alloc::StreamExtents GetExtents() const;
 };  // AttrBase
 
 }  // namespace Attr

@@ -1,5 +1,7 @@
 set(
   ${PROJECT_NAME}_SRC
+  "alloc/cluster-bitmap.cpp"
+  "alloc/data-state.cpp"
   "attr/base.cpp"
   "attr/bitmap.cpp"
   "attr/file-name.cpp"
@@ -66,6 +68,7 @@ endif()
 
 set(
   ${PROJECT_NAME}_H
+  "../include/ntfs-browser/alloc/types.h"
   "../include/ntfs-browser/attr/defines.h"
   "../include/ntfs-browser/attr/header-common.h"
   "../include/ntfs-browser/attr/type.h"
@@ -87,6 +90,8 @@ set(
   "../include/ntfs-browser/cache/strategy.h"
   "../include/ntfs-browser/cache/view.h"
   "../include/ntfs-browser/volume-options.h"
+  "alloc/cluster-bitmap.h"
+  "alloc/data-state.h"
   "attr/flags.h"
   "attr/bitmap.h"
   "attr/data.h"
@@ -138,6 +143,7 @@ set(
   "mft/mft-bootstrap.h"
   "mft/record-offset.h"
   "mft/slot-reader.h"
+  "mft/tree-testing.h"
   "log/ntfs-common.h"
   "ntfs-volume-impl.h"
   "record/header.h"

@@ -85,6 +85,12 @@ bool Attr::AttrBase<S>::IsUnNamed() const noexcept {
   return attr_header_.name_length == 0;
 }
 
+// Resident data lives in the file record: it owns no cluster.
+template <Cache::Strategy S>
+Alloc::StreamExtents Attr::AttrBase<S>::GetExtents() const {
+  return {};
+}
+
 template <Cache::Strategy S>
 WORD Attr::AttrBase<S>::GetSectorSize() const noexcept {
   return volume_.GetSectorSize();

@@ -2,6 +2,7 @@ target_sources(
   NtfsBrowserTests
   PRIVATE
     "attr-bitmap-tests.cpp"
+    "attr-extents-tests.cpp"
     "attr-body-size-tests.cpp"
     "attr-cache-release-tests.cpp"
     "attr-initialized-size-tests.cpp"

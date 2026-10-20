@@ -5,6 +5,8 @@ target_sources(
     "fragmented-mft-invalid-record-tests.cpp"
     "mft-addr-narrowing-tests.cpp"
     "mft-tree-bitmap-tests.cpp"
+    "mft-tree-data-state-batch-tests.cpp"
+    "mft-tree-data-state-tests.cpp"
     "mft-slot-reader-tests.cpp"
     "mft-tree-bounded-cache-tests.cpp"
     "mft-extent-map-tests.cpp"

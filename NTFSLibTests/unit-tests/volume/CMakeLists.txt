@@ -8,6 +8,7 @@ target_sources(
     "boot-sector-sizes-tests.cpp"
     "boot-sector-total-sectors-tests.cpp"
     "cache-ceiling-options-tests.cpp"
+    "cluster-count-tests.cpp"
     "coverage-volume-tests.cpp"
     "drive-letter-tests.cpp"
     "filename-compare-tests.cpp"

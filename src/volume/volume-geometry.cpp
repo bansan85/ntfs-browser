@@ -326,6 +326,10 @@ BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
              ParseTotalSectors(bpb, parse.geometry, recover);
   if (parse.ok) {
     ParseMftMirrorAddress(bpb, parse.geometry);
+    parse.geometry.cluster_count =
+        bpb.total_sectors == 0
+            ? 0
+            : VolumeBytes(bpb, parse.geometry) / parse.geometry.cluster_size;
   }
   return parse;
 }

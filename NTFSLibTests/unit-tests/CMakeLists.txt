@@ -3,6 +3,7 @@
 # one executable.
 add_executable(NtfsBrowserTests)
 
+add_subdirectory("alloc")
 add_subdirectory("attr")
 add_subdirectory("cache")
 add_subdirectory("corpus")

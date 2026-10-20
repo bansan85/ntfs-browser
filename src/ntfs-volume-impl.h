@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -20,6 +21,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "alloc/cluster-bitmap.h"
 #include "attr/slot.h"
 #include "mft/mft-bootstrap.h"
 #include "volume/volume-geometry.h"
@@ -83,6 +85,14 @@ class NtfsVolume<S>::Impl {
   // from being retried.
   mutable std::unique_ptr<const UpCase::Table> upcase;
 
+  // The cluster bitmap ($Bitmap, MFT record 6), loaded on first use. The record
+  // stays alive for as long as the bitmap reads through its data stream, so it
+  // is declared first and destroyed last. bitmap stays null when $Bitmap cannot
+  // be read; bitmap_loaded then keeps the failure from being retried.
+  mutable std::unique_ptr<Io::FileRecord<S>> bitmap_record;
+  mutable std::unique_ptr<Alloc::ClusterBitmap> bitmap;
+  mutable std::optional<Alloc::SpaceSummary> summary;
+
   // The EFS key source and cipher backend the caller chose, or the defaults.
   EfsSettings efs;
 
@@ -97,6 +107,14 @@ class NtfsVolume<S>::Impl {
   BYTE version_major{0};
   BYTE version_minor{0};
   mutable bool upcase_loaded{false};
+  mutable bool bitmap_loaded{false};
+  // Set while the bitmap loads: a query made then answers Unknown instead of
+  // loading it again.
+  mutable bool loading_bitmap{false};
+  // Set once a partial or unusable bitmap was logged: that log is once per
+  // volume.
+  mutable bool degraded_logged{false};
+  mutable bool summary_computed{false};
 
   // Fixed for the volume's lifetime; set by the constructor, read back
   // through GetOptions(). No setter: every component that reads it goes
@@ -117,6 +135,12 @@ class NtfsVolume<S>::Impl {
   void Init();
   [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
   [[nodiscard]] std::unique_ptr<const UpCase::Table> LoadUpCaseTable() const;
+  // The cluster bitmap, loaded now if it was not. Null when it is unusable, or
+  // while it loads.
+  [[nodiscard]] Alloc::ClusterBitmap* GetClusterBitmap() const;
+  [[nodiscard]] std::unique_ptr<Alloc::ClusterBitmap> LoadClusterBitmap() const;
+  // Logs, once per volume, that the bitmap turned out short or lost a window.
+  void NoteBitmapHealth() const;
   void AttrRawCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                        bool& discard) const;
 };

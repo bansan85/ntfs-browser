@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
@@ -143,6 +144,16 @@ class NTFS_BROWSER_EXPORT FileRecord {
       FindSubEntry(std::wstring_view file_name) const;
   [[nodiscard]] const Attr::AttrBase<S>*
       FindStream(std::wstring_view name) const;
+
+  // Whether the bytes of the data stream called stream_name (empty: the
+  // unnamed one) are probably still the file's own: Intact, Reallocated, or
+  // Unknown. Intact, without reading $Bitmap, for a record that is not deleted
+  // and for resident data. Empty when the stream does not exist. Never changes
+  // what ReadData() returns. A strong hint, not a proof: a cluster that is free
+  // now may have held other data in between. A snapshot of the volume's
+  // $Bitmap, and not thread safe.
+  [[nodiscard]] std::optional<Alloc::DataState>
+      GetDataState(std::wstring_view stream_name = {}) const;
 
   [[nodiscard]] bool IsDeleted() const noexcept;
   [[nodiscard]] bool IsDirectory() const noexcept;

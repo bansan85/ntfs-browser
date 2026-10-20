@@ -3,10 +3,14 @@
 #include <ntfs-browser/win-types.h>
 
 #include <filesystem>
+#include <memory>
 #include <ostream>
 #include <span>
 #include <string>
 #include <vector>
+
+#include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/volume-options.h>
 
 namespace NtfsFuzz {
 
@@ -34,6 +38,13 @@ struct BootSectorPatch {
 // read failure.
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
                   const BootSectorPatch& patch = {});
+
+// Runs every probe of FuzzTestcase() once, on a NoCache volume over reader.
+// The reads are those of the first run FuzzTestcase() makes of an input, so a
+// recording reader around an image yields the byte stream that input replays.
+// Library exceptions are caught here.
+void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+               const NTFS_BROWSER_NAMESPACE::VolumeOptions& options = {});
 
 // Runs the NtfsFuzzerAfl command line. args[0] is the program name, the
 // rest are options and one input file. Usage and errors go to err. Applies
