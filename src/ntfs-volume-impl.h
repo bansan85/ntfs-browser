@@ -21,6 +21,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
 #include "attr/slot.h"
 #include "mft/mft-bootstrap.h"
@@ -85,6 +86,13 @@ class NtfsVolume<S>::Impl {
   // from being retried.
   mutable std::unique_ptr<const UpCase::Table> upcase;
 
+  // The bad cluster list ($Bad stream of $BadClus, MFT record 8), loaded on
+  // first use. It is a copy, so no record stays alive for it. bad_list stays
+  // null when $BadClus cannot be read; bad_loaded then keeps the failure from
+  // being retried. Declared before the bitmap, which points to it, so it is
+  // destroyed after it.
+  mutable std::unique_ptr<Alloc::BadClusterList> bad_list;
+
   // The cluster bitmap ($Bitmap, MFT record 6), loaded on first use. The record
   // stays alive for as long as the bitmap reads through its data stream, so it
   // is declared first and destroyed last. bitmap stays null when $Bitmap cannot
@@ -115,6 +123,13 @@ class NtfsVolume<S>::Impl {
   // volume.
   mutable bool degraded_logged{false};
   mutable bool summary_computed{false};
+  mutable bool bad_loaded{false};
+  // Set while the bad list loads: a query made then sees no list instead of
+  // loading it again.
+  mutable bool loading_bad{false};
+  // Set once a bad cluster that the bitmap calls free was logged: that log is
+  // once per volume.
+  mutable bool bad_logged{false};
 
   // Fixed for the volume's lifetime; set by the constructor, read back
   // through GetOptions(). No setter: every component that reads it goes
@@ -139,8 +154,17 @@ class NtfsVolume<S>::Impl {
   // while it loads.
   [[nodiscard]] Alloc::ClusterBitmap* GetClusterBitmap() const;
   [[nodiscard]] std::unique_ptr<Alloc::ClusterBitmap> LoadClusterBitmap() const;
-  // Logs, once per volume, that the bitmap turned out short or lost a window.
+  // Logs, once per volume, that the bitmap turned out short or lost a window,
+  // and, once per volume, that it calls free a cluster the bad list names.
   void NoteBitmapHealth() const;
+  // The bad cluster list, loaded now if it was not. Null when it is unusable,
+  // or while it loads.
+  [[nodiscard]] const Alloc::BadClusterList* GetBadList() const;
+  [[nodiscard]] std::unique_ptr<Alloc::BadClusterList>
+      LoadBadClusterList() const;
+  // The volume's cluster count, cut at the size of the backing store when that
+  // is known. 0 when the boot sector gave none.
+  [[nodiscard]] ULONGLONG UsableClusterCount() const;
   void AttrRawCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                        bool& discard) const;
 };

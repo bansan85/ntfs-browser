@@ -67,6 +67,27 @@ inline std::vector<BYTE> WithBitmap(std::vector<BYTE> image,
   return image;
 }
 
+// image with record 8 rewritten as $BadClus naming bad_extents. Call it after
+// WithBitmap(): the bitmap grows the image, and $Bad declares its size.
+inline std::vector<BYTE>
+    WithBadClusters(std::vector<BYTE> image,
+                    std::span<const Alloc::Extent> bad_extents,
+                    const FakeBadClusterOptions& options = {}) {
+  PutBadClusterList(image, bad_extents, options);
+  return image;
+}
+
+// allocated plus the runs of extents: a bitmap that marks the bad clusters
+// allocated, as NTFS does.
+inline std::vector<FakeDataRun>
+    WithBadRuns(std::vector<FakeDataRun> allocated,
+                std::span<const Alloc::Extent> extents) {
+  for (const FakeDataRun& run : ExtentsAsRuns(extents)) {
+    allocated.push_back(run);
+  }
+  return allocated;
+}
+
 // A file record parsed and its attributes read, from a volume.
 template <Cache::Strategy S>
 std::unique_ptr<Io::FileRecord<S>> ParsedRecord(const NtfsVolume<S>& volume,

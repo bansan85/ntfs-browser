@@ -57,6 +57,16 @@ inline constexpr bool efs_enabled = true;
 inline constexpr bool efs_enabled = false;
 #endif
 
+// Whether the build has both EFS cipher backends, as the build that recorded
+// the bad_clusters_* inputs did. Another build reads the volume in another
+// order, so those inputs replay out of step and their messages do not appear.
+#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) && defined(_WIN32) && \
+    defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
+inline constexpr bool both_efs_backends = true;
+#else
+inline constexpr bool both_efs_backends = false;
+#endif
+
 inline constexpr std::size_t max_expected_messages = 7;
 using MessageList = std::array<std::string_view, max_expected_messages>;
 
@@ -65,7 +75,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 165>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 174>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -554,6 +564,26 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 165>
         {"alloc_bitmap_cut_run_list", {true, {"DataRun decode error 1: 0x1F"}}},
         {"alloc_bitmap_short_resident",
          {true, {"$Bitmap is shorter than the volume"}}},
+        {"bad_clusters_marked",
+         {both_efs_backends,
+          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+        {"bad_clusters_cut_runs", {true, {"DataRun decode error 1: 0x1F"}}},
+        {"bad_clusters_past_volume",
+         {both_efs_backends, {"$BadClus names clusters past the volume"}}},
+        {"bad_clusters_overlap",
+         {both_efs_backends,
+          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+        {"bad_clusters_out_of_order",
+         {both_efs_backends,
+          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+        {"bad_clusters_huge_count",
+         {both_efs_backends,
+          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+        {"bad_clusters_no_stream", {true, {"$BadClus is not usable"}}},
+        {"bad_clusters_conflicting_flags", {true, {"$BadClus is not usable"}}},
+        {"bad_clusters_odd_flags",
+         {both_efs_backends,
+          {"Clusters listed in $BadClus are free in $Bitmap"}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -634,6 +664,15 @@ NTFS_REGRESSION_TESTCASE("alloc_bitmap_forged_size")
 NTFS_REGRESSION_TESTCASE("alloc_bitmap_fragmented")
 NTFS_REGRESSION_TESTCASE("alloc_bitmap_huge_volume_claim")
 NTFS_REGRESSION_TESTCASE("alloc_bitmap_short_resident")
+NTFS_REGRESSION_TESTCASE("bad_clusters_conflicting_flags")
+NTFS_REGRESSION_TESTCASE("bad_clusters_cut_runs")
+NTFS_REGRESSION_TESTCASE("bad_clusters_huge_count")
+NTFS_REGRESSION_TESTCASE("bad_clusters_marked")
+NTFS_REGRESSION_TESTCASE("bad_clusters_no_stream")
+NTFS_REGRESSION_TESTCASE("bad_clusters_odd_flags")
+NTFS_REGRESSION_TESTCASE("bad_clusters_out_of_order")
+NTFS_REGRESSION_TESTCASE("bad_clusters_overlap")
+NTFS_REGRESSION_TESTCASE("bad_clusters_past_volume")
 NTFS_REGRESSION_TESTCASE("attr_list_nonres_entry_past_end")
 NTFS_REGRESSION_TESTCASE("attr_name_exceeds_total_size")
 NTFS_REGRESSION_TESTCASE("attr_offset_exceeds_record_size")

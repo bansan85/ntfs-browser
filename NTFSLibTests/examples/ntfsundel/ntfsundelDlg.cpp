@@ -299,6 +299,21 @@ void CNtfsundelDlg::OnRecover() {
     return;
   }
 
+  // Ask before anything is created: the data may belong to another file now,
+  // or sit on bad clusters. A refusal copies nothing and leaves no empty file.
+  const bool go_on = NtfsUndel::ShouldRecover(
+      *opened.record, [this](const NtfsUndel::RecoveryCheck& check) {
+        const std::wstring message = NtfsUndel::RecoveryMessage(check);
+        if (check.advice == NtfsUndel::RecoveryAdvice::Warn) {
+          MessageBox(message.c_str());
+          return true;
+        }
+        return MessageBox(message.c_str(), nullptr, MB_OKCANCEL) != IDCANCEL;
+      });
+  if (!go_on) {
+    return;
+  }
+
   CString path;
   if (!ChooseRecoveryPath(fn, volname, path)) {
     return;

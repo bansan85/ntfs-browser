@@ -4,6 +4,7 @@ target_sources(
     "coverage-mft-tree-tests.cpp"
     "fragmented-mft-invalid-record-tests.cpp"
     "mft-addr-narrowing-tests.cpp"
+    "mft-tree-bad-state-tests.cpp"
     "mft-tree-bitmap-tests.cpp"
     "mft-tree-data-state-batch-tests.cpp"
     "mft-tree-data-state-tests.cpp"

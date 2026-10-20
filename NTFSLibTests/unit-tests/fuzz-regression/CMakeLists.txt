@@ -1,4 +1,7 @@
-target_sources(NtfsBrowserTests PRIVATE "fuzzer-regression-tests.cpp")
+target_sources(
+  NtfsBrowserTests
+  PRIVATE "bad-cluster-fuzz-inputs.cpp" "fuzzer-regression-tests.cpp"
+)
 
 target_include_directories(
   NtfsBrowserTests

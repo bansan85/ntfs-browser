@@ -16,6 +16,8 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 
+class BadClusterList;
+
 // Bytes of the cluster bitmap one window holds. One byte tracks 8 clusters, so
 // a window of 1 MiB covers 8 Mi clusters: 32 GiB at 4 KiB per cluster. That is
 // large enough to turn a sequential pass into one read per 32 GiB, and small
@@ -26,7 +28,9 @@ inline constexpr size_t default_window_bytes = size_t{1} * 1024 * 1024;
 // a time. It does not know where the bits come from: a reader supplies them.
 // An error narrows only the answer it touches. A window whose read fails or
 // stops short keeps the bytes it returned for as long as it is held, marks the
-// rest unknown, and is never read again. Not thread safe.
+// rest unknown, and is never read again. A bad cluster list, when attached,
+// takes its clusters out of the allocated, free and unknown counts: they are
+// bad, whatever the bitmap says of them. Not thread safe.
 class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
  public:
   // Reads out.size() bytes of the bitmap at offset. Returns the byte count
@@ -40,6 +44,9 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
     bool shorter_than_volume{false};
     // Windows whose read failed or stopped short.
     ULONGLONG failed_windows{0};
+    // A cluster the bad list names has its bit clear in the bitmap: the two
+    // files disagree. Set once a query has met one.
+    bool bad_with_clear_bit{false};
   };
 
   // data_size is the bitmap's length in bytes. cluster_count is the volume's
@@ -47,6 +54,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   // the queries.
   ClusterBitmap(Reader reader, ULONGLONG data_size, ULONGLONG cluster_count,
                 size_t window_bytes = default_window_bytes);
+
+  // Attaches the bad cluster list. The list MUST outlive this object, and is
+  // set once, before the first query.
+  void SetBadList(const BadClusterList* list) noexcept;
 
   // State of one cluster.
   [[nodiscard]] ClusterState State(ULONGLONG lcn);
@@ -68,11 +79,15 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   [[nodiscard]] size_t BytesHeld() const noexcept;
 
  private:
-  // Bits judged in one pass over a range.
+  // Clusters judged in one pass over a range. allocated, free, unknown and bad
+  // never overlap. judged counts the clusters whose bit was read, bad ones
+  // included.
   struct Counts {
     ULONGLONG allocated{0};
     ULONGLONG free{0};
     ULONGLONG unknown{0};
+    ULONGLONG bad{0};
+    ULONGLONG judged{0};
   };
 
   // The window held: bytes [index * window_bytes_, ...) of the bitmap.
@@ -85,6 +100,13 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
 
   // Judges bits [first, last), which lie inside the volume.
   [[nodiscard]] Counts Count(ULONGLONG first, ULONGLONG last);
+
+  // Moves the clusters of [first, last) that the bad list names into
+  // counts.bad. Bits [first, judged_stop) were read from window, whose first
+  // bit is base. The rest of the range was not judged, and window may be null
+  // then.
+  void ApplyBad(Counts& counts, ULONGLONG first, ULONGLONG last,
+                const Window* window, ULONGLONG base, ULONGLONG judged_stop);
 
   // The window of that index, read now if it is not the one held. Null when
   // that window failed earlier and is not held.
@@ -101,6 +123,8 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   bool have_window_{false};
   Window window_;
   std::unordered_set<ULONGLONG> failed_;
+  const BadClusterList* bad_{nullptr};
+  bool bad_with_clear_bit_{false};
 };
 
 // Test hook: the window size new bitmaps use. 0 restores the default. A test

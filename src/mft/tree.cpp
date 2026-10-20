@@ -358,6 +358,9 @@ class DataStateResolver {
       case Alloc::DataState::Unknown:
         stats_->data_unknown++;
         break;
+      case Alloc::DataState::Bad:
+        stats_->data_bad++;
+        break;
     }
   }
 
@@ -498,8 +501,9 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
       stats.slots, stats.in_use, stats.deleted, stats.unreadable,
       stats.skipped);
   if (annotate) {
-    Log::Info("MFT scan data: {} intact, {} reallocated, {} unknown",
-              stats.data_intact, stats.data_reallocated, stats.data_unknown);
+    Log::Info("MFT scan data: {} intact, {} reallocated, {} unknown, {} bad",
+              stats.data_intact, stats.data_reallocated, stats.data_unknown,
+              stats.data_bad);
   }
   Link();
 }

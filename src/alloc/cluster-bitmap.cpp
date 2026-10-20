@@ -16,6 +16,7 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/bad-cluster-list.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
@@ -65,6 +66,13 @@ ULONGLONG CountSet(std::span<const BYTE> bytes, ULONGLONG first,
   return set;
 }
 
+// First cluster past the extent, saturated when it would wrap past 2^64.
+ULONGLONG EndOf(const Extent& extent) noexcept {
+  return extent.lcn > std::numeric_limits<ULONGLONG>::max() - extent.clusters
+             ? std::numeric_limits<ULONGLONG>::max()
+             : extent.lcn + extent.clusters;
+}
+
 }  // namespace
 
 ClusterBitmap::ClusterBitmap(Reader reader, ULONGLONG data_size,
@@ -75,6 +83,10 @@ ClusterBitmap::ClusterBitmap(Reader reader, ULONGLONG data_size,
       limit_(cluster_count != 0 ? cluster_count : data_bits_),
       window_bytes_(window_bytes != 0 ? window_bytes : default_window_bytes),
       shorter_than_volume_(cluster_count != 0 && data_bits_ < cluster_count) {}
+
+void ClusterBitmap::SetBadList(const BadClusterList* list) noexcept {
+  bad_ = list;
+}
 
 ClusterState ClusterBitmap::State(ULONGLONG lcn) { return RangeState(lcn, 1); }
 
@@ -120,6 +132,34 @@ const ClusterBitmap::Window* ClusterBitmap::Load(ULONGLONG index) {
   return &window_;
 }
 
+void ClusterBitmap::ApplyBad(Counts& counts, ULONGLONG first, ULONGLONG last,
+                             const Window* window, ULONGLONG base,
+                             ULONGLONG judged_stop) {
+  if (bad_ == nullptr) {
+    return;
+  }
+  for (const Extent& extent : bad_->Overlapping(first, last)) {
+    const ULONGLONG from = std::max(extent.lcn, first);
+    const ULONGLONG to = std::min(EndOf(extent), last);
+    const ULONGLONG judged_to = std::min(to, judged_stop);
+    ULONGLONG unjudged_from = from;
+    if (judged_to > from && window != nullptr) {
+      const ULONGLONG set =
+          CountSet(window->bytes, from - base, judged_to - base);
+      const ULONGLONG clear = (judged_to - from) - set;
+      counts.allocated -= set;
+      counts.free -= clear;
+      counts.bad += judged_to - from;
+      bad_with_clear_bit_ = bad_with_clear_bit_ || clear != 0;
+      unjudged_from = judged_to;
+    }
+    if (to > unjudged_from) {
+      counts.unknown -= to - unjudged_from;
+      counts.bad += to - unjudged_from;
+    }
+  }
+}
+
 ClusterBitmap::Counts ClusterBitmap::Count(ULONGLONG first, ULONGLONG last) {
   Counts counts;
   const ULONGLONG window_bits = ULONGLONG{window_bytes_} * bits_per_byte;
@@ -130,6 +170,7 @@ ClusterBitmap::Counts ClusterBitmap::Count(ULONGLONG first, ULONGLONG last) {
     // size of the volume: do not walk it window by window.
     if (bit >= data_bits_) {
       counts.unknown += last - bit;
+      ApplyBad(counts, bit, last, nullptr, 0, bit);
       break;
     }
     const ULONGLONG index = bit / window_bits;
@@ -153,15 +194,19 @@ ClusterBitmap::Counts ClusterBitmap::Count(ULONGLONG first, ULONGLONG last) {
               CountSet(window->bytes, bit - base, judged_stop - base);
           counts.allocated += set;
           counts.free += (judged_stop - bit) - set;
+          counts.judged += judged_stop - bit;
         }
       }
     }
     counts.unknown += stop - std::max(bit, judged_stop);
+    ApplyBad(counts, bit, stop, judged_stop > bit ? &window_ : nullptr, base,
+             judged_stop);
     bit = stop;
 
     // Too many windows failed: the rest of the range is not worth walking.
     if (failed_.size() >= max_failed_windows && bit < last) {
       counts.unknown += last - bit;
+      ApplyBad(counts, bit, last, nullptr, 0, bit);
       break;
     }
   }
@@ -179,6 +224,7 @@ void ClusterBitmap::StatesInOrder(std::span<RangeQuery> queries) {
     RangeQuery& query = queries[at];
     query.allocated_clusters = 0;
     query.free_clusters = 0;
+    query.bad_clusters = 0;
 
     if (query.clusters == 0) {
       query.state = ClusterState::Free;
@@ -195,9 +241,12 @@ void ClusterBitmap::StatesInOrder(std::span<RangeQuery> queries) {
     const Counts counts = Count(query.lcn, end);
     query.allocated_clusters = counts.allocated;
     query.free_clusters = counts.free;
+    query.bad_clusters = counts.bad;
 
     if (counts.allocated > 0) {
       query.state = ClusterState::Allocated;
+    } else if (counts.bad > 0) {
+      query.state = ClusterState::Bad;
     } else if (beyond) {
       query.state = ClusterState::OutOfRange;
     } else if (counts.unknown > 0) {
@@ -213,7 +262,9 @@ std::optional<SpaceSummary> ClusterBitmap::Summary(DWORD cluster_size) {
     return std::nullopt;
   }
   const Counts counts = Count(0, limit_);
-  if (counts.allocated + counts.free == 0) {
+  // Nothing was read from the bitmap, so nothing can be said of free space:
+  // listed bad clusters alone do not make a report.
+  if (counts.judged == 0) {
     return std::nullopt;
   }
 
@@ -221,6 +272,14 @@ std::optional<SpaceSummary> ClusterBitmap::Summary(DWORD cluster_size) {
   summary.total_clusters = limit_;
   summary.free_clusters = counts.free;
   summary.unknown_clusters = counts.unknown;
+  summary.bad_clusters = counts.bad;
+  if (cluster_size != 0 &&
+      counts.bad > std::numeric_limits<ULONGLONG>::max() / cluster_size) {
+    Log::Warn("Bad space in bytes overflows 64 bits: reported saturated");
+    summary.bad_bytes = std::numeric_limits<ULONGLONG>::max();
+  } else {
+    summary.bad_bytes = counts.bad * cluster_size;
+  }
   if (cluster_size != 0 &&
       counts.free > std::numeric_limits<ULONGLONG>::max() / cluster_size) {
     Log::Warn("Free space in bytes overflows 64 bits: reported saturated");
@@ -233,7 +292,8 @@ std::optional<SpaceSummary> ClusterBitmap::Summary(DWORD cluster_size) {
 
 ClusterBitmap::Status ClusterBitmap::GetStatus() const noexcept {
   return {.shorter_than_volume = shorter_than_volume_,
-          .failed_windows = failed_.size()};
+          .failed_windows = failed_.size(),
+          .bad_with_clear_bit = bad_with_clear_bit_};
 }
 
 size_t ClusterBitmap::BytesHeld() const noexcept {

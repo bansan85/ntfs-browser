@@ -1,5 +1,6 @@
 set(
   ${PROJECT_NAME}_SRC
+  "alloc/bad-cluster-list.cpp"
   "alloc/cluster-bitmap.cpp"
   "alloc/data-state.cpp"
   "attr/base.cpp"
@@ -90,6 +91,7 @@ set(
   "../include/ntfs-browser/cache/strategy.h"
   "../include/ntfs-browser/cache/view.h"
   "../include/ntfs-browser/volume-options.h"
+  "alloc/bad-cluster-list.h"
   "alloc/cluster-bitmap.h"
   "alloc/data-state.h"
   "attr/flags.h"

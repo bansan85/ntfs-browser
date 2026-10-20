@@ -312,6 +312,21 @@ void ProbeAllocation(const NtfsVolume<S>& volume) {
     (void)volume.GetClusterState(lcn);
   }
 
+  // The bad list, and the state of the first extents it names. A hostile list
+  // can name millions, so the walk stops early: the queries are the point, not
+  // the length.
+  if (const NTFS_BROWSER_NAMESPACE::Alloc::BadClusters* bad =
+          volume.GetBadClusters()) {
+    constexpr size_t probed_bad_extents = 64;
+    size_t probed = 0;
+    for (const NTFS_BROWSER_NAMESPACE::Alloc::Extent& extent : bad->extents) {
+      (void)volume.GetRangeState(extent.lcn, extent.clusters);
+      if (++probed == probed_bad_extents) {
+        break;
+      }
+    }
+  }
+
   const auto probe_record = [&volume](ULONGLONG record) {
     NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
     file_record.SetAttrMask(Attr::Mask::Data);

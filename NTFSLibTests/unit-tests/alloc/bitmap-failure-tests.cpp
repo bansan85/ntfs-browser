@@ -24,6 +24,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "alloc-failure-support.h"
 #include "alloc-test-support.h"
 #include "alloc/cluster-bitmap.h"
 #include "fake-ntfs-image.h"
@@ -39,6 +40,9 @@ namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using Support::LevelSink;
+using Support::ScopedSink;
+using Support::ThrowingCallback;
 using Tests::FakeBitmapOptions;
 using Tests::FakeBitmapShape;
 using Tests::FakeDataRun;
@@ -64,62 +68,6 @@ constexpr ULONGLONG two_cluster_data_lcn = 8320;
 
 // Bytes of a bitmap window in the window tests: one cluster of bitmap.
 constexpr size_t one_cluster_window = Tests::fake_cluster_size;
-
-// Records each message of the library with its level.
-class LevelSink final : public Log::ISink {
- public:
-  struct Line {
-    Log::Level level;
-    std::string text;
-  };
-
-  [[nodiscard]] bool ShouldLog(Log::Level level) const override {
-    return level != Log::Level::Off;
-  }
-
-  void Write(Log::Level level, std::string_view message) override {
-    lines.push_back({level, std::string(message)});
-  }
-
-  void Flush() override {}
-
-  [[nodiscard]] size_t Count(std::string_view text) const {
-    size_t count = 0;
-    for (const Line& line : lines) {
-      count += line.text.find(text) != std::string::npos ? 1 : 0;
-    }
-    return count;
-  }
-
-  [[nodiscard]] std::optional<Log::Level> LevelOf(std::string_view text) const {
-    for (const Line& line : lines) {
-      if (line.text.find(text) != std::string::npos) {
-        return line.level;
-      }
-    }
-    return std::nullopt;
-  }
-
-  std::vector<Line> lines;
-};
-
-// Makes sink hear the library next to the capture sink, for as long as it
-// lives, then puts the capture sink back alone.
-class ScopedSink {
- public:
-  explicit ScopedSink(std::shared_ptr<LevelSink> sink)
-      : sink_(std::move(sink)) {
-    Log::SetSinks({Tests::CaptureSinkHandle(), sink_});
-  }
-
-  ScopedSink(const ScopedSink&) = delete;
-  ScopedSink& operator=(const ScopedSink&) = delete;
-
-  ~ScopedSink() { Tests::InstallCaptureSink(); }
-
- private:
-  std::shared_ptr<LevelSink> sink_;
-};
 
 // Fails every read that touches [first, last), and forwards the others.
 class FailingRangeReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
@@ -147,11 +95,6 @@ class FailingRangeReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   ULONGLONG first_;
   ULONGLONG last_;
 };
-
-// A raw attribute callback that throws, as a user callback can.
-void ThrowingCallback(const Attr::HeaderCommon& /*header*/, bool& /*discard*/) {
-  throw std::runtime_error("callback failed");
-}
 
 // The freed tree, with a bitmap marking the clusters 40 and 41.
 std::vector<BYTE> TreeWithBitmap(const FakeBitmapOptions& options = {}) {

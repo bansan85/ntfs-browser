@@ -89,8 +89,8 @@ class AttrNonResident : public Attr::AttrBase<S> {
   std::shared_ptr<const Efs::Context> efs_context_;
 
   // Whether the record this attribute sits in was freed, and its record
-  // number. The free-cluster check needs both: a freed record legitimately
-  // points at free clusters, and the volume's own metadata is not checked.
+  // number. The cluster check needs both: a freed record legitimately points
+  // at free clusters, and the volume's own metadata is not checked.
   bool record_deleted_{false};
   std::optional<ULONGLONG> record_number_;
   // Set by the first ReadData(): the check runs once per attribute.
@@ -98,8 +98,9 @@ class AttrNonResident : public Attr::AttrBase<S> {
 
   void ParseDataRun();
   // With recover_errors on, logs once if a cluster of this live data stream
-  // is free in the cluster bitmap. Never changes what a read returns.
-  void CheckForFreeClusters() const;
+  // is free in the cluster bitmap, and once if one is marked bad in $BadClus.
+  // Never changes what a read returns.
+  void CheckClusterAllocation() const;
   [[nodiscard]] std::optional<Cache::ReadResult<S>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;

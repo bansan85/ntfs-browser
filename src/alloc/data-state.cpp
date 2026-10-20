@@ -13,6 +13,9 @@ DataState FoldDataState(bool complete,
   if (std::ranges::find(extents, ClusterState::Allocated) != extents.end()) {
     return DataState::Reallocated;
   }
+  if (std::ranges::find(extents, ClusterState::Bad) != extents.end()) {
+    return DataState::Bad;
+  }
   const bool unjudged = std::ranges::any_of(extents, [](ClusterState state) {
     return state == ClusterState::OutOfRange || state == ClusterState::Unknown;
   });

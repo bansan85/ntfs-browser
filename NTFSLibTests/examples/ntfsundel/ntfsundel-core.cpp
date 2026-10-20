@@ -10,6 +10,7 @@
 
 #include <windows.h>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
@@ -32,6 +33,24 @@ constexpr std::chrono::milliseconds kPumpTimeInterval(100);
 
 // Filter that matches every name. Used when the user leaves the box empty.
 constexpr std::wstring_view kMatchAllFilter = L".*";
+
+// What the user is told when the data of a freed file probably belongs to
+// another file now. Ends with the question the dialog asks.
+constexpr std::wstring_view kReallocatedMessage =
+    L"The clusters of this file were given to another file after it was "
+    L"deleted. The recovered data probably belongs to that other file. "
+    L"Continue anyway ?";
+
+// What the user is told when clusters of a freed file are marked bad.
+constexpr std::wstring_view kBadClustersMessage =
+    L"Some clusters of this file are marked bad. The recovered data may be "
+    L"incomplete, or the read may fail. Continue anyway ?";
+
+// What the user is told when the allocation of a freed file could not be read.
+// It is a warning, not a question.
+constexpr std::wstring_view kUncheckedMessage =
+    L"The allocation of the clusters of this file could not be checked. The "
+    L"recovered data may be wrong.";
 
 // Trims blanks off the filter. An empty filter becomes the match-all pattern.
 std::wstring NormalizeFilter(std::wstring_view filter) {
@@ -301,6 +320,47 @@ CopyResult CopyUnnamedData(
     remain -= *len;
   }
   return {.error = RecoverError::None, .bytes = datalen};
+}
+
+RecoveryCheck
+    AssessRecovery(const Io::FileRecord<Cache::Strategy::NoCache>& record) {
+  const std::optional<Alloc::DataState> state = record.GetDataState({});
+  if (!state) {
+    return {};
+  }
+  switch (*state) {
+    case Alloc::DataState::Intact:
+      return {};
+    case Alloc::DataState::Reallocated:
+      return {.advice = RecoveryAdvice::Confirm,
+              .cause = RecoveryCause::Reallocated};
+    case Alloc::DataState::Bad:
+      return {.advice = RecoveryAdvice::Confirm,
+              .cause = RecoveryCause::BadClusters};
+    case Alloc::DataState::Unknown:
+      break;
+  }
+  return {.advice = RecoveryAdvice::Warn, .cause = RecoveryCause::Unchecked};
+}
+
+std::wstring RecoveryMessage(const RecoveryCheck& check) {
+  switch (check.cause) {
+    case RecoveryCause::Reallocated:
+      return std::wstring(kReallocatedMessage);
+    case RecoveryCause::BadClusters:
+      return std::wstring(kBadClustersMessage);
+    case RecoveryCause::Unchecked:
+      return std::wstring(kUncheckedMessage);
+    case RecoveryCause::None:
+      break;
+  }
+  return {};
+}
+
+bool ShouldRecover(const Io::FileRecord<Cache::Strategy::NoCache>& record,
+                   const std::function<bool(const RecoveryCheck&)>& confirm) {
+  const RecoveryCheck check = AssessRecovery(record);
+  return check.advice == RecoveryAdvice::Proceed || confirm(check);
 }
 
 }  // namespace NtfsUndel

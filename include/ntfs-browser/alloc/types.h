@@ -9,18 +9,30 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 
-// What the cluster bitmap says about one cluster, or about a range of them.
-// A range is Allocated when any cluster is; else OutOfRange when any lies past
-// the volume's last cluster; else Unknown when the bitmap cannot say for at
-// least one; else Free. A positive finding wins over an error.
-enum class ClusterState : std::uint8_t { Allocated, Free, OutOfRange, Unknown };
+// What the cluster bitmap and the bad cluster list say about one cluster, or
+// about a range of them. A range is Allocated when any cluster is allocated and
+// not bad; else Bad when any is bad; else OutOfRange when any lies past the
+// volume's last cluster; else Unknown when the bitmap cannot say for at least
+// one; else Free. A positive finding wins over an error. A cluster named by the
+// bad list is Bad whatever its bit in the bitmap, which marks it allocated.
+// Bad is appended last: a switch over this enum MUST have a case for it.
+enum class ClusterState : std::uint8_t {
+  Allocated,
+  Free,
+  OutOfRange,
+  Unknown,
+  Bad
+};
 
 // Whether the bytes of a deleted data stream are probably still the file's own.
 // Reallocated: at least one of its clusters is allocated again, so the bytes
-// are probably another file's. Intact: none is. Unknown: the bitmap or the run
-// list could not say. A strong hint, not a proof: a cluster that is free now
-// may have held other data in between.
-enum class DataState : std::uint8_t { Intact, Reallocated, Unknown };
+// are probably another file's. Bad: none is reallocated, but one is marked bad,
+// so the bytes may be lost or unreadable. Intact: none is either. Unknown: the
+// bitmap, the bad list or the run list could not say. The order is
+// Reallocated, then Bad, then Unknown, then Intact. A strong hint, not a proof:
+// a cluster that is free now may have held other data in between. Bad is
+// appended last: a switch over this enum MUST have a case for it.
+enum class DataState : std::uint8_t { Intact, Reallocated, Unknown, Bad };
 
 // A run of real (non-sparse) clusters.
 struct Extent {
@@ -39,23 +51,41 @@ struct StreamExtents {
 // One question of NtfsVolume::GetRangeStates(). The caller fills lcn and
 // clusters; the call fills the rest. allocated_clusters and free_clusters count
 // the clusters of the range, clamped to the volume, that the bitmap judged
-// allocated and free. The others were out of range or unknown.
+// allocated and free. The others were out of range or unknown. bad_clusters
+// counts the clusters of the range, clamped to the volume, that the bad list
+// names. They are in neither allocated_clusters nor free_clusters.
 struct RangeQuery {
   ULONGLONG lcn{0};
   ULONGLONG clusters{0};
   ClusterState state{ClusterState::Unknown};
   ULONGLONG allocated_clusters{0};
   ULONGLONG free_clusters{0};
+  ULONGLONG bad_clusters{0};
 };
 
 // Free space as the cluster bitmap counts it. unknown_clusters are the ones it
 // could not judge (a bitmap shorter than the volume, a window that failed to
-// read): free_clusters counts only the ones it could.
+// read): free_clusters counts only the ones it could. bad_clusters are the ones
+// the bad list names, and bad_bytes their size (saturated on overflow). A bad
+// cluster is in neither free_clusters nor unknown_clusters, whatever its bit in
+// the bitmap.
 struct SpaceSummary {
   ULONGLONG total_clusters{0};
   ULONGLONG free_clusters{0};
   ULONGLONG free_bytes{0};
   ULONGLONG unknown_clusters{0};
+  ULONGLONG bad_clusters{0};
+  ULONGLONG bad_bytes{0};
+};
+
+// The volume's bad extents, from the $Bad stream of $BadClus: sorted by
+// cluster, merged, and clamped to the volume. truncated is true when the list
+// was cut at its ceiling of 5 242 880 extents, which only recover mode does:
+// the clusters past the last extent are then judged by the bitmap alone. A
+// snapshot, read once.
+struct BadClusters {
+  std::vector<Extent> extents;
+  bool truncated{false};
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Alloc

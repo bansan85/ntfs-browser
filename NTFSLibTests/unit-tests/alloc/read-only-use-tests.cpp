@@ -55,6 +55,37 @@ void CheckEveryQueryOnlyReads() {
   }));
 }
 
+template <Cache::Strategy S>
+void CheckEveryBadClusterQueryOnlyReads() {
+  const std::vector<FakeDataRun> allocated{
+      FakeDataRun{.lcn = 40, .clusters = 2}};
+  const std::vector<Alloc::Extent> bad{{.lcn = 41, .clusters = 1}};
+  const auto opened = Support::Open<S>(Support::WithBadClusters(
+      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
+                              4 * Tests::fake_cluster_size,
+                              {FakeDataRun{.lcn = 40, .clusters = 4}}),
+                          Support::WithBadRuns(allocated, bad)),
+      bad));
+
+  REQUIRE(opened.volume->GetBadClusters() != nullptr);
+  CHECK(opened.volume->GetClusterState(41) == Alloc::ClusterState::Bad);
+  CHECK(opened.volume->GetRangeState(30, 20) == Alloc::ClusterState::Allocated);
+  std::vector<Alloc::RangeQuery> queries{{.lcn = 10, .clusters = 5},
+                                         {.lcn = 41, .clusters = 1}};
+  opened.volume->GetRangeStates(queries);
+  CHECK(opened.volume->GetSpaceSummary());
+  const auto record =
+      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
+  CHECK(record->GetDataState() == Alloc::DataState::Reallocated);
+
+  const auto& calls = opened.counter->Calls();
+  REQUIRE_FALSE(calls.empty());
+  CHECK(std::ranges::all_of(calls, [](const CountingDiskReader::Call& call) {
+    return call.kind == Kind::Open || call.kind == Kind::Read ||
+           call.kind == Kind::Size;
+  }));
+}
+
 }  // namespace
 
 TEST_CASE("the counting reader records open, read and size calls",
@@ -82,4 +113,9 @@ TEST_CASE("the counting reader records open, read and size calls",
 TEST_CASE("every allocation query only reads", "[alloc][read-only]") {
   CheckEveryQueryOnlyReads<Cache::Strategy::NoCache>();
   CheckEveryQueryOnlyReads<Cache::Strategy::FullCache>();
+}
+
+TEST_CASE("every bad cluster query only reads", "[alloc][read-only]") {
+  CheckEveryBadClusterQueryOnlyReads<Cache::Strategy::NoCache>();
+  CheckEveryBadClusterQueryOnlyReads<Cache::Strategy::FullCache>();
 }

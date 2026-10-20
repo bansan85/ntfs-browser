@@ -146,12 +146,14 @@ class NTFS_BROWSER_EXPORT FileRecord {
       FindStream(std::wstring_view name) const;
 
   // Whether the bytes of the data stream called stream_name (empty: the
-  // unnamed one) are probably still the file's own: Intact, Reallocated, or
-  // Unknown. Intact, without reading $Bitmap, for a record that is not deleted
-  // and for resident data. Empty when the stream does not exist. Never changes
-  // what ReadData() returns. A strong hint, not a proof: a cluster that is free
-  // now may have held other data in between. A snapshot of the volume's
-  // $Bitmap, and not thread safe.
+  // unnamed one) are probably still the file's own: Intact, Reallocated, Bad,
+  // or Unknown. The order is Reallocated, then Bad (a cluster is marked bad in
+  // $BadClus), then Unknown, then Intact. Intact, without reading $Bitmap or
+  // $BadClus, for a record that is not deleted and for resident data. Empty
+  // when the stream does not exist. Never changes what ReadData() returns: a
+  // read on a bad cluster is attempted like any other. A strong hint, not a
+  // proof: a cluster that is free now may have held other data in between. A
+  // snapshot of the volume's $Bitmap and $BadClus, and not thread safe.
   [[nodiscard]] std::optional<Alloc::DataState>
       GetDataState(std::wstring_view stream_name = {}) const;
 

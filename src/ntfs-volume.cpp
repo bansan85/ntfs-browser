@@ -695,8 +695,78 @@ std::unique_ptr<Alloc::ClusterBitmap>
   return loaded;
 }
 
-// Loads the cluster bitmap on first use. A failure is cached: every later
-// query answers unknown without trying again.
+// The volume's cluster count, cut where the backing store ends: a volume that
+// claims more clusters than its store can hold is cut at the store.
+template <Cache::Strategy S>
+ULONGLONG NtfsVolume<S>::Impl::UsableClusterCount() const {
+  ULONGLONG cluster_count = geometry.cluster_count;
+  if (const std::optional<ULONGLONG> store_bytes = volume->Size();
+      store_bytes && geometry.cluster_size != 0 && cluster_count != 0) {
+    cluster_count =
+        std::min(cluster_count, *store_bytes / geometry.cluster_size);
+  }
+  return cluster_count;
+}
+
+// Reads $BadClus (MFT record 8) and copies the real runs of its $Bad stream.
+// Null when the record or the stream is missing or unusable, or when the runs
+// are damaged and recover_errors is off. Like the volume's other metadata
+// reads, it MUST NOT depend on include_deleted. The record is local: once the
+// extents are copied, its run list is released.
+template <Cache::Strategy S>
+std::unique_ptr<Alloc::BadClusterList>
+    NtfsVolume<S>::Impl::LoadBadClusterList() const {
+  const auto bad_record_idx = static_cast<ULONGLONG>(Mft::Idx::BadCluster);
+  const DWORD record_size = geometry.file_record_size;
+  if (!volume_ok ||
+      !mft.Map().IsRangeMapped(bad_record_idx * record_size, record_size)) {
+    return {};
+  }
+
+  Io::FileRecord<S> record(*self);
+  record.SetBypassDeletedGate(true);
+  record.SetAttrMask(Attr::Mask::Data);
+  if (!record.ParseFileRecord(bad_record_idx) || !record.ParseAttrs()) {
+    return {};
+  }
+
+  const Attr::AttrBase<S>* stream = record.FindStream(L"$Bad");
+  if (stream == nullptr) {
+    return {};
+  }
+  return Alloc::BadClusterList::Build(
+      stream->GetExtents(), UsableClusterCount(), options.recover_errors);
+}
+
+// Loads the bad cluster list on first use. A failure is cached: every later
+// query goes on without the list, and the bitmap alone answers.
+template <Cache::Strategy S>
+const Alloc::BadClusterList* NtfsVolume<S>::Impl::GetBadList() const {
+  if (loading_bad) {
+    return nullptr;
+  }
+  if (!bad_loaded) {
+    bad_loaded = true;
+    loading_bad = true;
+    try {
+      bad_list = LoadBadClusterList();
+    } catch (const std::exception& e) {
+      Log::Exception(e);
+      bad_list.reset();
+    }
+    loading_bad = false;
+    if (!bad_list) {
+      Log::Recoverable(options.recover_errors,
+                       "$BadClus is not usable: bad clusters are unknown");
+    }
+  }
+  return bad_list.get();
+}
+
+// Loads the cluster bitmap on first use, and the bad list with it. A failure is
+// cached: every later query answers unknown without trying again. When only the
+// bitmap fails, a bitmap with no bits stands in, so the clusters the bad list
+// names stay bad and the rest are unknown.
 template <Cache::Strategy S>
 Alloc::ClusterBitmap* NtfsVolume<S>::Impl::GetClusterBitmap() const {
   if (loading_bitmap) {
@@ -704,6 +774,7 @@ Alloc::ClusterBitmap* NtfsVolume<S>::Impl::GetClusterBitmap() const {
   }
   if (!bitmap_loaded) {
     bitmap_loaded = true;
+    const Alloc::BadClusterList* bad = GetBadList();
     loading_bitmap = true;
     try {
       bitmap = LoadClusterBitmap();
@@ -716,6 +787,17 @@ Alloc::ClusterBitmap* NtfsVolume<S>::Impl::GetClusterBitmap() const {
       degraded_logged = true;
       Log::Recoverable(options.recover_errors,
                        "$Bitmap is not usable: cluster allocation is unknown");
+      const ULONGLONG cluster_count = UsableClusterCount();
+      if (bad != nullptr && !bad->Get().extents.empty() && cluster_count != 0) {
+        bitmap = std::make_unique<Alloc::ClusterBitmap>(
+            [](ULONGLONG, std::span<BYTE>) -> std::optional<ULONGLONG> {
+              return std::nullopt;
+            },
+            0, cluster_count, Alloc::BitmapWindowBytes());
+      }
+    }
+    if (bitmap) {
+      bitmap->SetBadList(bad);
     }
   }
   return bitmap.get();
@@ -723,6 +805,12 @@ Alloc::ClusterBitmap* NtfsVolume<S>::Impl::GetClusterBitmap() const {
 
 template <Cache::Strategy S>
 void NtfsVolume<S>::Impl::NoteBitmapHealth() const {
+  if (bitmap && !bad_logged && bitmap->GetStatus().bad_with_clear_bit) {
+    bad_logged = true;
+    Log::Recoverable(options.recover_errors,
+                     "Clusters listed in $BadClus are free in $Bitmap: they "
+                     "are bad all the same");
+  }
   if (!bitmap || degraded_logged) {
     return;
   }
@@ -756,6 +844,7 @@ void NtfsVolume<S>::GetRangeStates(std::span<Alloc::RangeQuery> queries) const {
     query.state = Alloc::ClusterState::Unknown;
     query.allocated_clusters = 0;
     query.free_clusters = 0;
+    query.bad_clusters = 0;
   }
 
   Alloc::ClusterBitmap* bitmap = impl_->GetClusterBitmap();
@@ -785,6 +874,17 @@ std::optional<Alloc::SpaceSummary> NtfsVolume<S>::GetSpaceSummary() const {
     }
   }
   return impl_->summary;
+}
+
+template <Cache::Strategy S>
+const Alloc::BadClusters* NtfsVolume<S>::GetBadClusters() const {
+  try {
+    const Alloc::BadClusterList* list = impl_->GetBadList();
+    return list != nullptr ? &list->Get() : nullptr;
+  } catch (const std::exception& e) {
+    Log::Exception(e);
+    return nullptr;
+  }
 }
 
 template class NtfsVolume<Cache::Strategy::NoCache>;

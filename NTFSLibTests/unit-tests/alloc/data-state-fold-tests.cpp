@@ -56,3 +56,23 @@ TEST_CASE("free extents make a complete stream intact", "[alloc][fold]") {
 TEST_CASE("a complete stream with no extent is intact", "[alloc][fold]") {
   CHECK(FoldDataState(true, {}) == DataState::Intact);
 }
+
+TEST_CASE("a bad extent makes a stream bad unless it is reallocated",
+          "[alloc][fold]") {
+  const std::array<ClusterState, 3> bad_only{
+      ClusterState::Free, ClusterState::Bad, ClusterState::Free};
+  const std::array<ClusterState, 3> reused{
+      ClusterState::Bad, ClusterState::Allocated, ClusterState::Free};
+
+  CHECK(FoldDataState(true, bad_only) == DataState::Bad);
+  CHECK(FoldDataState(true, reused) == DataState::Reallocated);
+}
+
+TEST_CASE("a bad extent outranks damage and an unjudged extent",
+          "[alloc][fold]") {
+  const std::array<ClusterState, 3> states{
+      ClusterState::Unknown, ClusterState::OutOfRange, ClusterState::Bad};
+
+  CHECK(FoldDataState(false, states) == DataState::Bad);
+  CHECK(FoldDataState(true, states) == DataState::Bad);
+}

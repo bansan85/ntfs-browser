@@ -41,7 +41,10 @@ if(WIN32)
   # dialog's MFC never enters the test binary.
   target_sources(
     NtfsBrowserTests
-    PRIVATE "ntfsundel-recover-tests.cpp" "ntfsundel-search-tests.cpp"
+    PRIVATE
+      "ntfsundel-advice-tests.cpp"
+      "ntfsundel-recover-tests.cpp"
+      "ntfsundel-search-tests.cpp"
   )
   target_link_libraries(NtfsBrowserTests PRIVATE NtfsUndelCore)
 

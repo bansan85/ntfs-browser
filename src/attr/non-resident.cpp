@@ -631,14 +631,16 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   return static_cast<ULONGLONG>(out.size());
 }
 
-// Looks, once, at the clusters of a live data stream in the cluster bitmap. A
-// run on a free cluster is a sign of damage: the volume and its bitmap
-// disagree. It only matters when recovering, so strict mode reads nothing more.
-// The volume's own metadata (records below Mft::Idx::User, $Bitmap included)
-// and freed records are left out: a freed file's clusters are free by nature,
-// and checking $Bitmap against itself would loop.
+// Looks, once, at the clusters of a live data stream in the cluster bitmap and
+// in the bad list. A run on a free cluster, or on a cluster marked bad, is a
+// sign of damage: the volume and its metadata disagree. Each is logged apart,
+// once per stream, and a cluster is in one count only. It only matters when
+// recovering, so strict mode reads nothing more. The volume's own metadata
+// (records below Mft::Idx::User, $Bitmap and $BadClus included) and freed
+// records are left out: a freed file's clusters are free by nature, and
+// checking $Bitmap against itself would loop.
 template <Cache::Strategy S>
-void AttrNonResident<S>::CheckForFreeClusters() const {
+void AttrNonResident<S>::CheckClusterAllocation() const {
   if (alloc_checked_) {
     return;
   }
@@ -663,20 +665,34 @@ void AttrNonResident<S>::CheckForFreeClusters() const {
     this->volume_.GetRangeStates(queries);
 
     ULONGLONG free_clusters = 0;
-    std::optional<ULONGLONG> first_lcn;
+    ULONGLONG bad_clusters = 0;
+    std::optional<ULONGLONG> first_free_lcn;
+    std::optional<ULONGLONG> first_bad_lcn;
     for (const Alloc::RangeQuery& query : queries) {
       if (query.free_clusters != 0) {
         free_clusters += query.free_clusters;
-        if (!first_lcn) {
-          first_lcn = query.lcn;
+        if (!first_free_lcn) {
+          first_free_lcn = query.lcn;
+        }
+      }
+      if (query.bad_clusters != 0) {
+        bad_clusters += query.bad_clusters;
+        if (!first_bad_lcn) {
+          first_bad_lcn = query.lcn;
         }
       }
     }
-    if (first_lcn) {
+    if (first_free_lcn) {
       Log::Recoverable(true,
                        "Record {}: {} clusters of a data stream are free in "
                        "$Bitmap, from the run at LCN {}",
-                       record, free_clusters, *first_lcn);
+                       record, free_clusters, *first_free_lcn);
+    }
+    if (first_bad_lcn) {
+      Log::Recoverable(true,
+                       "Record {}: {} clusters of a data stream are marked bad "
+                       "in $BadClus, from the run at LCN {}",
+                       record, bad_clusters, *first_bad_lcn);
     }
   } catch (const std::exception& e) {
     Log::Exception(e);
@@ -691,7 +707,7 @@ template <Cache::Strategy S>
 std::optional<ULONGLONG>
     AttrNonResident<S>::ReadData(ULONGLONG offset,
                                  const std::span<BYTE>& buffer) const {
-  CheckForFreeClusters();
+  CheckClusterAllocation();
   const ULONGLONG real_size = attr_header_nr_.real_size;
   if (buffer.empty()) {
     return 0;

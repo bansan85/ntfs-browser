@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
 #include "gap-collation-probe.h"
@@ -1119,6 +1120,43 @@ void SetRecordInUse(std::vector<BYTE>& image, ULONGLONG idx, bool in_use);
 [[nodiscard]] std::vector<BYTE>
     AllocatedBitmapFor(const std::vector<BYTE>& image,
                        std::span<const FakeDataRun> allocated_runs);
+
+// How PutBadClusterList() writes record 8.
+struct FakeBadClusterOptions {
+  // Ends the run list of $Bad on a byte no run can start with, after the first
+  // run: a damaged list. A decoder that recovers keeps the first run.
+  bool cut_run_list = false;
+  // Declares this size for the $Bad stream instead of the image's size: a
+  // forged length, as a hostile volume has.
+  std::optional<ULONGLONG> forged_size;
+  // Writes record 8 with no named stream at all.
+  bool omit_bad_stream = false;
+  // Forges the attribute flags of $Bad (compressed, encrypted, sparse). The
+  // default is the sparse flag, as on a real volume.
+  std::optional<WORD> attr_flags;
+  // Clears the in-use flag of record 8.
+  bool record_not_in_use = false;
+};
+
+// Rewrites MFT record 8 of an image built on the 26-slot MftTree base (nothing
+// uses record 8 there) as $BadClus: an empty unnamed $DATA, and a named,
+// sparse, non-resident $DATA called $Bad whose real runs are bad_extents. The
+// extents are written as given, in order: out of order, touching, overlapping
+// or past the volume are all possible. An extent in order is preceded by the
+// hole that puts its position in the stream at its cluster number, as on a real
+// volume. The bitmap is not touched: a test that wants the bad clusters marked
+// allocated, as NTFS does, adds them to the runs it gives AllocatedBitmapFor().
+// It composes with PutClusterBitmap() and PutFreedNonResidentRecord(). The run
+// list MUST fit in the 1 KiB record, which holds roughly 400 holes: keep the
+// extents within the first few hundred clusters.
+void PutBadClusterList(std::vector<BYTE>& image,
+                       std::span<const Alloc::Extent> bad_extents,
+                       const FakeBadClusterOptions& options = {});
+
+// The extents as runs of at most 255 clusters, for AllocatedBitmapFor() or a
+// freed file's run list.
+[[nodiscard]] std::vector<FakeDataRun>
+    ExtentsAsRuns(std::span<const Alloc::Extent> extents);
 
 // MFT index of the first of the freed files
 // BuildFakeNtfsImageWithManyDeletedFiles builds; the others follow.

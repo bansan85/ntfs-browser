@@ -154,33 +154,48 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // the built-in Unicode simple uppercase mapping stands in.
   [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
 
-  // State of one cluster, from the volume's $Bitmap. The bitmap is loaded on
-  // first use, whatever include_deleted says. Unknown when $Bitmap cannot be
-  // read, now or earlier: that failure is remembered and logged once. With
-  // recover_errors off a damaged $Bitmap is rejected whole; on, what parses is
-  // used. A snapshot: the bitmap is never read again, so a live device may
-  // differ. Not thread safe.
+  // State of one cluster, from the volume's $Bitmap and the bad list of
+  // $BadClus. The bitmap is loaded on first use, whatever include_deleted says.
+  // A cluster the bad list names is Bad, whatever its bit in the bitmap.
+  // Unknown when $Bitmap cannot be read, now or earlier: that failure is
+  // remembered and logged once. With recover_errors off a damaged $Bitmap is
+  // rejected whole; on, what parses is used. A bad list that cannot be read
+  // leaves the answer of the bitmap alone. A snapshot: neither file is read
+  // again, so a live device may differ. Not thread safe.
   [[nodiscard]] Alloc::ClusterState GetClusterState(ULONGLONG lcn) const;
 
   // State of clusters [lcn, lcn + clusters). A range is Allocated when any
-  // cluster is; else OutOfRange when one lies past the volume's last cluster;
-  // else Unknown when the bitmap cannot say for one; else Free. An empty range
-  // is Free. The same snapshot rules apply.
+  // cluster is allocated and not bad; else Bad when any is bad; else OutOfRange
+  // when one lies past the volume's last cluster; else Unknown when the bitmap
+  // cannot say for one; else Free. An empty range is Free. The same snapshot
+  // rules apply.
   [[nodiscard]] Alloc::ClusterState GetRangeState(ULONGLONG lcn,
                                                   ULONGLONG clusters) const;
 
-  // Fills the state of each query, and how many clusters of it were allocated
-  // and free. Queries are handled in LCN order, so the bitmap is read at most
-  // once per window of it, whatever the order of queries. The array keeps its
-  // order. Use it for many ranges at random places. A query the bitmap cannot
-  // answer stays Unknown, and does not spoil the others.
+  // Fills the state of each query, and how many clusters of it were allocated,
+  // free and bad. Queries are handled in LCN order, so the bitmap is read at
+  // most once per window of it, whatever the order of queries. The array keeps
+  // its order. Use it for many ranges at random places. A query the bitmap
+  // cannot answer stays Unknown, and does not spoil the others.
   void GetRangeStates(std::span<Alloc::RangeQuery> queries) const;
 
   // Free clusters and bytes. Empty only when $Bitmap is unusable. A bitmap
   // shorter than the volume gives the free clusters among those it covers, and
   // counts the rest as unknown_clusters. Padding bits past the last cluster
-  // never count. A snapshot, like GetClusterState().
+  // never count. The bad clusters are reported apart, in clusters and in bytes,
+  // and are never counted free. A snapshot, like GetClusterState().
   [[nodiscard]] std::optional<Alloc::SpaceSummary> GetSpaceSummary() const;
+
+  // The bad extents that the $Bad stream of $BadClus names, or null when that
+  // list is unusable (which is not the same as empty: an empty list means no
+  // bad cluster). Loaded on first use, whatever include_deleted says. With
+  // recover_errors off a damaged run list rejects the whole list; on, the runs
+  // that parse are used, and a list over its ceiling of 5 242 880 extents is
+  // cut and flagged truncated. A failure is remembered and logged once. The
+  // pointer lives as long as the volume. A snapshot: the list is never read
+  // again, so a live device may differ. The library never skips a bad cluster
+  // when it reads: what to do with one is the caller's choice. Not thread safe.
+  [[nodiscard]] const Alloc::BadClusters* GetBadClusters() const;
 };  // NtfsVolume
 
 }  // namespace NTFS_BROWSER_NAMESPACE

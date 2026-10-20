@@ -133,4 +133,52 @@ CopyResult CopyUnnamedData(
     const std::function<bool(std::uint64_t size)>& confirm_large,
     const std::function<bool(std::span<const BYTE> chunk)>& write);
 
+// What to do before copying a freed file.
+enum class RecoveryAdvice : std::uint8_t {
+  // Copy with no question.
+  Proceed,
+  // Ask first: the bytes are probably wrong.
+  Confirm,
+  // Copy, and tell the user that the state could not be checked.
+  Warn
+};
+
+// Why a recovery is not plain.
+enum class RecoveryCause : std::uint8_t {
+  // Nothing to say.
+  None,
+  // The clusters were given to another file after the deletion.
+  Reallocated,
+  // The clusters are marked bad in $BadClus.
+  BadClusters,
+  // The allocation could not be read.
+  Unchecked
+};
+
+struct RecoveryCheck {
+  RecoveryAdvice advice = RecoveryAdvice::Proceed;
+  RecoveryCause cause = RecoveryCause::None;
+};
+
+// Asks the volume for the data state of the unnamed $DATA stream of record and
+// turns it into advice: intact goes ahead, reallocated or bad asks first, and
+// an unknown state warns. Reads no data. A record with no unnamed stream goes
+// ahead: the copy reports the missing stream itself.
+RecoveryCheck
+    AssessRecovery(const NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+                   NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& record);
+
+// The text that names check.cause, for a dialog. Empty for None.
+std::wstring RecoveryMessage(const RecoveryCheck& check);
+
+// True when the copy may go on. A Proceed check is true without asking. Any
+// other check is put to confirm, whose answer is returned: the caller shows
+// the message and answers false to stop. The caller copies nothing when this
+// is false. Uses no window and no Win32 call, so a command-line tool can reuse
+// it.
+bool ShouldRecover(
+    const NTFS_BROWSER_NAMESPACE::Io::FileRecord<
+        NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& record,
+    const std::function<bool(const RecoveryCheck&)>& confirm);
+
 }  // namespace NtfsUndel

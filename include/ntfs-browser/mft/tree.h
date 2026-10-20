@@ -93,7 +93,8 @@ class NTFS_BROWSER_EXPORT MftTree {
     bool sparse{false};
     // Whether the unnamed $DATA stream, the one size describes, probably still
     // holds the file's own bytes (a hint, not a proof). Intact for a record in
-    // use. Empty when the scan was not asked to annotate, see
+    // use. Bad when a cluster of a freed file is marked bad and none was
+    // reallocated. Empty when the scan was not asked to annotate, see
     // ScanOptions::annotate_data_state, or when the record has no such stream:
     // a directory, for instance.
     std::optional<Alloc::DataState> data_state;
@@ -131,6 +132,8 @@ class NTFS_BROWSER_EXPORT MftTree {
     ULONGLONG data_intact{0};
     ULONGLONG data_reallocated{0};
     ULONGLONG data_unknown{0};
+    // Entries whose data sits on bad clusters. Counted next to the three above.
+    ULONGLONG data_bad{0};
   };
 
   // Scans every record of volume's $MFT.
