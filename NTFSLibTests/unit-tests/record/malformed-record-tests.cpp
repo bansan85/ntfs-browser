@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -224,6 +225,65 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK_FALSE(parsed.attrs_ok);
     CHECK(Count(parsed, Attr::Type::StandardInformation) == 1);
     CHECK(Count(parsed, Attr::Type::FileName) == 0);
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A $FILE_NAME that fails to parse does not hide the attributes after it",
+    "[malformed-record][!shouldfail]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto std_info = ScratchStdInfoBody();
+  const auto broken =
+      ScratchFileNameBody(L"x", root_reference, huge_name_length);
+  const auto sound = ScratchFileNameBody(L"ok.txt", root_reference);
+  ScratchRecord scratch;
+  scratch.Resident(Attr::Type::StandardInformation, std_info)
+      .Resident(Attr::Type::FileName, broken)
+      .Resident(Attr::Type::FileName, sound)
+      .Resident(Attr::Type::Data, file_content)
+      .End();
+
+  SECTION("strict") {
+    const Parsed<S> parsed = ParseScratch<S>(scratch, Options(false));
+    CHECK_FALSE(parsed.attrs_ok);
+    CHECK(Count(parsed, Attr::Type::StandardInformation) == 0);
+    CHECK(Count(parsed, Attr::Type::FileName) == 0);
+    CHECK(Count(parsed, Attr::Type::Data) == 0);
+  }
+
+  SECTION("recovering") {
+    const Parsed<S> parsed = ParseScratch<S>(scratch, Options(true));
+    // An attribute was lost: the result is partial, as it always was.
+    CHECK_FALSE(parsed.attrs_ok);
+    CHECK(Count(parsed, Attr::Type::StandardInformation) == 1);
+    CHECK(Count(parsed, Attr::Type::FileName) == 1);
+    CHECK(DataBytes(parsed) ==
+          std::vector<BYTE>(file_content.begin(), file_content.end()));
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "An attribute of an impossible length still ends the walk",
+    "[malformed-record]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const auto std_info = ScratchStdInfoBody();
+  ScratchRecord scratch;
+  scratch.Resident(Attr::Type::StandardInformation, std_info);
+  // A $FILE_NAME header that declares 4 bytes: it says where nothing starts.
+  std::array<BYTE, 16> header{};
+  const DWORD type = static_cast<DWORD>(Attr::Type::FileName);
+  const DWORD total_size = 4;
+  std::memcpy(header.data(), &type, sizeof(type));
+  std::memcpy(&header.at(sizeof(type)), &total_size, sizeof(total_size));
+  scratch.Raw(header).Resident(Attr::Type::Data, file_content).End();
+
+  for (const bool recover : {false, true}) {
+    CAPTURE(recover);
+    const Parsed<S> parsed = ParseScratch<S>(scratch, Options(recover));
+    CHECK_FALSE(parsed.attrs_ok);
+    CHECK(Count(parsed, Attr::Type::StandardInformation) ==
+          (recover ? 1U : 0U));
+    CHECK(Count(parsed, Attr::Type::Data) == 0);
   }
 }
 
