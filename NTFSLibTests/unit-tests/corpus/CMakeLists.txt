@@ -7,6 +7,7 @@ target_sources(
     "external-boot-tests.cpp"
     "external-logfile-fixtures-tests.cpp"
     "external-mft-corruption-tests.cpp"
+    "external-mft-salvage-tests.cpp"
     "external-mft-support.cpp"
     "external-mft-support.h"
     "external-mft-tests.cpp"
