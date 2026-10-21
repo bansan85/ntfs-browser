@@ -13,6 +13,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/record/carved-name.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -122,6 +123,11 @@ class NTFS_BROWSER_EXPORT MftTree {
     // What the journal says about the file. Empty when the scan did not read
     // the journal (recover_errors off), or when it does not name the file.
     std::optional<UsnInfo> usn;
+    // Names recognised in the slack of the record, after its attribute end
+    // marker: candidates, never live names, and none repeats a name of the
+    // record. Filled only by a scan whose volume was opened with both
+    // recover_errors and include_deleted on. Empty otherwise.
+    std::vector<Record::CarvedName> carved_names;
   };
 
   // A file that the change journal names and that no $MFT record accounts for:
@@ -173,6 +179,9 @@ class NTFS_BROWSER_EXPORT MftTree {
     ULONGLONG unreachable{0};
     // False when progress() stopped the scan early.
     bool complete{true};
+    // Names carved from record slack, over all entries. Zero unless the volume
+    // has both recover_errors and include_deleted on.
+    ULONGLONG carved_names{0};
     // Entries given a data_state, by state. All zero when the scan did not
     // annotate.
     ULONGLONG data_intact{0};

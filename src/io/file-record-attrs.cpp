@@ -309,6 +309,7 @@ WalkEnd Io::FileRecord<S>::Impl::AttrParser::WalkAttrHeaders(
     const AttrWalk step =
         ReadAttrHeader(cur, data_ptr, impl_.volume->GetFileRecordSize(), head);
     if (step == AttrWalk::EndMarker) {
+      impl_.end_marker_offset = data_ptr;
       return WalkEnd::EndMarker;
     }
     if (step == AttrWalk::RanOut) {

@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
+#include <cstddef>
 #include <list>
 #include <memory>
 #include <optional>
@@ -16,6 +17,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/record/carved-name.h>
 
 #include "attr/slot.h"
 #include "attr/std-info.h"
@@ -82,7 +84,13 @@ class FileRecord<S>::Impl {
   // another FileRecord's read (eg. NtfsVolume's $MFT record vs. this one).
   std::vector<BYTE> record_buffer;
 
+  // Where the attribute walk of the last ParseAttrs() met the end marker.
+  // Empty when it did not reach one.
+  std::optional<size_t> end_marker_offset;
+
   void ClearAttrs() noexcept;
+  // See FileRecord<S>::CarveSlackNames().
+  [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;
   // Stays here: it reaches the volume's private Impl, which only
   // FileRecord<S> may name. Attributes call it through this Impl.
   void UserCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,

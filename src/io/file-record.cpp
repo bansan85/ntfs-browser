@@ -42,6 +42,7 @@
 #include "mft/record-offset.h"
 #include "ntfs-volume-impl.h"
 #include "record/header.h"
+#include "record/slack-carver.h"
 #include "upcase/upcase.h"
 #include "utf/utf.h"
 
@@ -147,6 +148,7 @@ void Io::FileRecord<S>::Impl::ClearAttrs() noexcept {
   // Only now: attributes imported from these records are gone.
   extension_records.clear();
   realigned_attrs.clear();
+  end_marker_offset.reset();
 }
 
 // Call user defined Callback routines for an attribute
@@ -587,6 +589,67 @@ void Io::FileRecord<S>::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
     change_tm->dwHighDateTime = 0;
     change_tm->dwLowDateTime = 0;
   }
+}
+
+template <Cache::Strategy S>
+std::vector<Record::CarvedName> Io::FileRecord<S>::CarveSlackNames() const {
+  return impl_->CarveSlackNames();
+}
+
+// Carves the bytes after the end marker, patched like the rest of the record,
+// then drops the names this record also holds live.
+template <Cache::Strategy S>
+std::vector<Record::CarvedName>
+    Io::FileRecord<S>::Impl::CarveSlackNames() const {
+  const VolumeOptions& options = volume->GetOptions();
+  if (!options.recover_errors || !options.include_deleted || !file_record ||
+      !end_marker_offset) {
+    return {};
+  }
+
+  const std::span<const BYTE> bytes(file_record->GetData()->raw,
+                                    file_record->buffer_size);
+  std::vector<Record::CarvedName> carved =
+      Record::CarveFileNames(bytes, *end_marker_offset);
+
+  const auto& live_names =
+      std::get<Attr::AttrIndex(Attr::Type::FileName)>(attr_list);
+  std::erase_if(carved, [&live_names](const Record::CarvedName& candidate) {
+    return std::ranges::any_of(
+        live_names, [&candidate](const std::unique_ptr<Attr::AttrBase<S>>& fn) {
+          const Filename& live =
+              *static_cast<const Attr::AttrFileName<ResidentOf<S>, S>*>(
+                  fn.get());
+          return live.GetFilename() == candidate.name &&
+                 (!candidate.parent_known ||
+                  live.GetParentReference() == candidate.parent_record);
+        });
+  });
+
+  // The carver reports UTC, as stored.
+  const auto to_local = [](FILETIME& time) {
+    constexpr unsigned dword_bits = 32;
+    const ULONGLONG utc =
+        (static_cast<ULONGLONG>(time.dwHighDateTime) << dword_bits) |
+        time.dwLowDateTime;
+    StdInfoType<S>::UTC2Local(utc, time);
+  };
+  for (Record::CarvedName& name : carved) {
+    // Unknown times stay zero.
+    if (!name.times_known) {
+      continue;
+    }
+    to_local(name.create_time);
+    to_local(name.write_time);
+    to_local(name.change_time);
+    to_local(name.access_time);
+  }
+
+  if (!carved.empty()) {
+    Log::Debug("File record {}: {} name(s) carved from the slack",
+               file_reference.value_or(0), carved.size());
+  }
+  return carved;
 }
 
 template <Cache::Strategy S>

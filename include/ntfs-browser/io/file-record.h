@@ -18,6 +18,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/record/carved-name.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -131,6 +132,16 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // that leaves the file's content untouched.
   void GetFileTime(FILETIME* write_tm, FILETIME* create_tm, FILETIME* access_tm,
                    FILETIME* change_tm = nullptr) const noexcept;
+
+  // Names recognised in the slack of the record: the bytes after its attribute
+  // end marker, where a name of an earlier version of the record, or of an
+  // index that shrank, can linger. Each is a candidate, reported apart from the
+  // live names: it changes none of the getters above, and no live name of this
+  // record is repeated in it. Empty unless the volume was opened with both
+  // recover_errors and include_deleted, and ParseAttrs() reached the end
+  // marker. Reads nothing from the volume. The times are converted like those
+  // of GetFileTime().
+  [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;
 
   // With the volume's recover_errors on, also scans every $INDEX_ALLOCATION
   // block the B+ tree walk itself doesn't reach - recovery for a directory

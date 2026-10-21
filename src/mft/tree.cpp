@@ -109,6 +109,16 @@ void AddNames(const Io::FileRecord<S>& file_record,
   }
 }
 
+// Copies the names carved from file_record's slack into entry, and counts them.
+// The record gives none unless the volume recovers and shows deleted items.
+template <Cache::Strategy S>
+void AddCarvedNames(const Io::FileRecord<S>& file_record,
+                    Mft::MftTree::Entry& entry,
+                    Mft::MftTree::ScanStats& stats) {
+  entry.carved_names = file_record.CarveSlackNames();
+  stats.carved_names += entry.carved_names.size();
+}
+
 // Copies record's number, sequence number, liveness and kind into entry.
 template <Cache::Strategy S>
 void ReadIdentity(const Io::FileRecord<S>& file_record, ULONGLONG record,
@@ -253,6 +263,7 @@ std::optional<Mft::MftTree::Entry>
       return std::nullopt;
     }
   }
+  AddCarvedNames(file_record, entry, stats);
   return entry;
 }
 
@@ -517,6 +528,9 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
     Log::Info("MFT scan data: {} intact, {} reallocated, {} unknown, {} bad",
               stats.data_intact, stats.data_reallocated, stats.data_unknown,
               stats.data_bad);
+  }
+  if (stats.carved_names != 0) {
+    Log::Info("MFT scan slack: {} names carved", stats.carved_names);
   }
   Link();
 

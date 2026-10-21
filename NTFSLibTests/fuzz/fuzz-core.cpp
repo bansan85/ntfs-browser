@@ -31,6 +31,7 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -232,6 +233,20 @@ void ProbeAttrData(const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& attr) {
   (void)attr.ReadData(size, window);
 }
 
+// Reads every field of the carved names. A bad length or a wild pointer shows
+// up here, in the sanitizers of a fuzzing build.
+void ReadCarvedNames(
+    const std::vector<NTFS_BROWSER_NAMESPACE::Record::CarvedName>& names) {
+  ULONGLONG seen = 0;
+  for (const NTFS_BROWSER_NAMESPACE::Record::CarvedName& name : names) {
+    seen += name.name.size() + name.parent_record + name.parent_sequence +
+            name.create_time.dwLowDateTime + name.write_time.dwLowDateTime +
+            name.change_time.dwLowDateTime + name.access_time.dwLowDateTime +
+            name.name_space;
+  }
+  (void)seen;
+}
+
 // Parses one record with every attribute type and calls the getters the
 // directory walk never needs. Reads each attribute's data, which is where
 // decompression and decryption happen.
@@ -271,6 +286,9 @@ void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
   (void)file_record.IsSparse();
   (void)file_record.IsReparsePoint();
 
+  // The names left in the slack: only a recovering volume carves them.
+  ReadCarvedNames(file_record.CarveSlackNames());
+
   file_record.TraverseAttrs(
       [](const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& attr, void*, bool*) {
         ProbeAttrData(attr);
@@ -293,6 +311,7 @@ void ProbeMftTree(const NtfsVolume<S>& volume) {
   for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry :
        tree.Entries()) {
     (void)tree.IsReachable(entry.record);
+    ReadCarvedNames(entry.carved_names);
     (void)tree.GetPath(entry.record);
     for (size_t i = 0; i < entry.names.size(); ++i) {
       (void)tree.GetPath(entry.record, i);

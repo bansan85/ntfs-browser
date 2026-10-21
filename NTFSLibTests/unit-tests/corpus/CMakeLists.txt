@@ -8,6 +8,7 @@ target_sources(
     "external-mft-support.cpp"
     "external-mft-support.h"
     "external-mft-tests.cpp"
+    "external-slack-tests.cpp"
     "nps-ntfs1-test-support.cpp"
     "nps-ntfs1-test-support.h"
     "nps-ntfs1-tests.cpp"
