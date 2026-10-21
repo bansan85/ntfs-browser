@@ -689,3 +689,45 @@ TEST_CASE("a space summary reports the bad clusters apart",
   CHECK(summary->free_clusters == 14);
   CHECK(summary->unknown_clusters == 0);
 }
+
+TEST_CASE("a bitmap size whose bit count overflows 64 bits is saturated",
+          "[alloc][cluster-bitmap]") {
+  const auto reader = [](ULONGLONG,
+                         std::span<BYTE> out) -> std::optional<ULONGLONG> {
+    return out.size();
+  };
+  const ULONGLONG forged_size = std::numeric_limits<ULONGLONG>::max();
+  ClusterBitmap bitmap(reader, forged_size, 0, small_window);
+
+  CHECK(bitmap.State(5) == ClusterState::Free);
+  CHECK(bitmap.BytesHeld() == small_window);
+}
+
+TEST_CASE("a bitmap with no window size takes the default one",
+          "[alloc][cluster-bitmap]") {
+  const auto reader = [](ULONGLONG,
+                         std::span<BYTE> out) -> std::optional<ULONGLONG> {
+    return out.size();
+  };
+  ClusterBitmap bitmap(reader, 8, 0, 0);
+
+  CHECK(bitmap.BytesHeld() == 0);
+  CHECK(bitmap.State(3) == ClusterState::Free);
+  CHECK(bitmap.BytesHeld() == 8);
+}
+
+TEST_CASE("a space summary of a cluster size of 0 has no byte count",
+          "[alloc][cluster-bitmap]") {
+  const auto reader = [](ULONGLONG,
+                         std::span<BYTE> out) -> std::optional<ULONGLONG> {
+    return out.size();
+  };
+  ClusterBitmap bitmap(reader, 8, 64, small_window);
+
+  const auto summary = bitmap.Summary(0);
+
+  REQUIRE(summary);
+  CHECK(summary->free_clusters == 64);
+  CHECK(summary->free_bytes == 0);
+  CHECK(summary->bad_bytes == 0);
+}

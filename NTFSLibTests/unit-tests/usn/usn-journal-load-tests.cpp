@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -16,7 +17,9 @@
 
 #include "alloc-failure-support.h"
 #include "fake-ntfs-image.h"
+#include "scripted-disk-reader.h"
 #include "usn-test-support.h"
+#include "usn/usn-journal-loader.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
@@ -24,6 +27,7 @@ namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using Tests::FakeUsnOptions;
@@ -190,4 +194,75 @@ TEST_CASE("a journal that holds no record is empty, not absent",
           "[usn][journal]") {
   CheckAJournalWithNoRecordIsEmpty<Cache::Strategy::NoCache>();
   CheckAJournalWithNoRecordIsEmpty<Cache::Strategy::FullCache>();
+}
+
+namespace {
+
+template <Cache::Strategy S>
+void CheckADamagedRunListIsReadAsFarAsItGoes() {
+  const auto sink = std::make_shared<AllocSupport::LevelSink>();
+  const AllocSupport::ScopedSink scoped(sink);
+  // The cut drops the run of the second stretch, which follows a hole.
+  const auto opened = Support::Open<S>(Support::JournalImage(
+      {.records = {Ghost()},
+       .more_stretches = {{.hole_bytes = Tests::fake_cluster_size,
+                           .records = {{.name = L"far.txt",
+                                        .file_record = 41}}}},
+       .cut_run_list = true}));
+
+  const Usn::Journal* journal = opened.volume->GetUsnJournal();
+
+  REQUIRE(journal != nullptr);
+  CHECK_FALSE(journal->records.empty());
+  CHECK(sink->Count("the run list of $J is damaged") == 1);
+  CHECK(sink->LevelOf("the run list of $J is damaged") == Log::Level::Info);
+}
+
+template <Cache::Strategy S>
+void CheckStrictModeLoadsNothing() {
+  const auto opened = Support::Open<S>(
+      Support::JournalImage({.records = {Ghost()}}), VolumeOptions{});
+
+  CHECK(Usn::LoadJournal(*opened.volume) == nullptr);
+}
+
+// The journal of image over a reader that throws on every read of its data.
+template <Cache::Strategy S>
+void CheckAThrowingReaderGivesNoJournal() {
+  const std::vector<BYTE> base = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  std::vector<BYTE> image = base;
+  Tests::PutUsnJournal(image, {.records = {Ghost()}});
+  const ULONGLONG data_start = ((base.size() + Tests::fake_cluster_size - 1) /
+                                Tests::fake_cluster_size) *
+                               Tests::fake_cluster_size;
+  const ULONGLONG image_size = image.size();
+
+  auto reader = std::make_unique<Tests::ScriptedDiskReader>(std::move(image));
+  reader->FaultRange(data_start, image_size,
+                     Tests::ScriptedDiskReader::Fault::Throw);
+  const NtfsVolume<S> volume(std::move(reader), Support::RecoverOptions());
+  REQUIRE(volume.IsVolumeOK());
+
+  CHECK_NOTHROW(volume.GetUsnJournal());
+  CHECK(volume.GetUsnJournal() == nullptr);
+}
+
+}  // namespace
+
+TEST_CASE("a journal whose run list is damaged is read as far as it goes",
+          "[usn][journal]") {
+  CheckADamagedRunListIsReadAsFarAsItGoes<Cache::Strategy::NoCache>();
+  CheckADamagedRunListIsReadAsFarAsItGoes<Cache::Strategy::FullCache>();
+}
+
+TEST_CASE("LoadJournal gives nothing to a volume that does not recover",
+          "[usn][journal]") {
+  CheckStrictModeLoadsNothing<Cache::Strategy::NoCache>();
+  CheckStrictModeLoadsNothing<Cache::Strategy::FullCache>();
+}
+
+TEST_CASE("a reader that throws while the journal is read gives no journal",
+          "[usn][journal]") {
+  CheckAThrowingReaderGivesNoJournal<Cache::Strategy::NoCache>();
+  CheckAThrowingReaderGivesNoJournal<Cache::Strategy::FullCache>();
 }

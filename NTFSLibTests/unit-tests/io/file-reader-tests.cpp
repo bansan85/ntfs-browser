@@ -584,3 +584,15 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(dest[0] == 0x5A);
 }
 #endif
+
+TEMPLATE_TEST_CASE_SIG("A FileReader with no reader ignores a read ahead",
+                       "[file-reader]",
+                       ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
+                       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
+                       NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
+  NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader;
+
+  reader.EnableReadAhead(first_read_size);
+
+  CHECK_FALSE(reader.Size().has_value());
+}

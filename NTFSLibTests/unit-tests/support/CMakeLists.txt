@@ -10,6 +10,7 @@ target_sources(
     "sample-run.cpp"
     "sample-run.h"
     "scratch-record.h"
+    "scripted-disk-reader.h"
     "test-log-sink.cpp"
     "test-log-sink.h"
 )

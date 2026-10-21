@@ -50,3 +50,46 @@ TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]") {
           test_case.expected);
   }
 }
+
+TEST_CASE("WideToUtf8 replaces a unit that no code point can be", "[utf]") {
+  // U+FFFD REPLACEMENT CHARACTER.
+  const std::string replacement = "\xEF\xBF\xBD";
+  // A high surrogate followed by a unit above the low surrogates.
+  const std::wstring above_low{static_cast<wchar_t>(0xD83D),
+                               static_cast<wchar_t>(0xE000)};
+
+  CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(above_low) ==
+        replacement + "\xEE\x80\x80");
+
+  if constexpr (sizeof(wchar_t) > sizeof(char16_t)) {
+    // First value past U+10FFFF: only a 32-bit wchar_t can hold it.
+    const std::wstring past_unicode{static_cast<wchar_t>(0x110000)};
+    CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(past_unicode) == replacement);
+  }
+}
+
+TEST_CASE("Utf16ToWide keeps what is not a surrogate pair", "[utf]") {
+  using NTFS_BROWSER_NAMESPACE::Utf::Utf16ToWide;
+
+  CHECK(Utf16ToWide(u"Aé") == L"Aé");
+
+  if constexpr (sizeof(wchar_t) > sizeof(char16_t)) {
+    SECTION("a pair becomes one code point") {
+      CHECK(Utf16ToWide(u"\xD83D\xDE00") ==
+            std::wstring{static_cast<wchar_t>(0x1F600)});
+    }
+    SECTION("a high surrogate at the end stays as it is") {
+      CHECK(Utf16ToWide(u"A\xD83D") ==
+            std::wstring{L'A', static_cast<wchar_t>(0xD83D)});
+    }
+    SECTION("a high surrogate before a unit past the low surrogates") {
+      CHECK(Utf16ToWide(u"\xD83D\xE000") ==
+            std::wstring{static_cast<wchar_t>(0xD83D),
+                         static_cast<wchar_t>(0xE000)});
+    }
+  } else {
+    CHECK(Utf16ToWide(u"\xD83D\xDE00") ==
+          std::wstring{static_cast<wchar_t>(0xD83D),
+                       static_cast<wchar_t>(0xDE00)});
+  }
+}

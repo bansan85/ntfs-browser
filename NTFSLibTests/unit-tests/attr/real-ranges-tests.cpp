@@ -16,10 +16,12 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "attr/non-resident.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
+namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -48,6 +50,14 @@ const std::vector<BYTE> overflowing_run{0x88, 0x01, 0x00, 0x00, 0x00, 0x00,
                                         0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00};
 
 constexpr ULONGLONG past_half_range = (1ULL << 63U) + 10;
+
+// Run list bytes: a sparse run of 2^62 clusters, then one real cluster at LCN
+// 10. The real run starts at a VCN whose byte offset does not fit 64 bits.
+const std::vector<BYTE> far_real_run{0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                     0x00, 0x40, 0x11, 0x01, 0x0A, 0x00};
+
+// Last VCN that holds the real run of far_real_run.
+constexpr ULONGLONG far_real_run_last_vcn = (1ULL << 62U) + 1;
 
 template <Cache::Strategy S>
 std::optional<Alloc::StreamRanges> RangesOf(std::vector<BYTE> image,
@@ -186,6 +196,62 @@ void CheckOverflowingRunIsDamaged() {
 }
 
 template <Cache::Strategy S>
+void CheckFarRealRunIsDamaged() {
+  const auto ranges =
+      RangesOf<S>(ImageWith({.real_size = cluster_bytes,
+                             .runs = {FakeDataRun{.lcn = 10, .clusters = 1}},
+                             .raw_runs = far_real_run,
+                             .last_vcn = far_real_run_last_vcn}),
+                  false);
+  REQUIRE(ranges);
+  CHECK_FALSE(ranges->complete);
+  CHECK(ranges->ranges.empty());
+}
+
+template <Cache::Strategy S>
+void CheckExtentReadRefusesAnOverflowingSize() {
+  const NtfsVolume<S> volume(
+      std::make_unique<Tests::MemoryDiskReader>(
+          ImageWith({.real_size = cluster_bytes,
+                     .runs = {FakeDataRun{.lcn = 10, .clusters = 1}},
+                     .raw_runs = overflowing_run,
+                     .last_vcn = past_half_range})),
+      VolumeOptions{.include_deleted = true});
+  REQUIRE(volume.IsVolumeOK());
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(Tests::mft_tree_stale_child_idx));
+  REQUIRE(record.ParseAttrs());
+  const auto* stream = record.FindStream({});
+  REQUIRE(stream != nullptr);
+  REQUIRE(stream->IsNonResident());
+
+  std::vector<BYTE> buffer(16);
+  const auto* non_resident =
+      static_cast<const Attr::AttrNonResident<S>*>(stream);
+  CHECK_FALSE(non_resident->ReadExtentData(0, buffer));
+}
+
+template <Cache::Strategy S>
+void CheckEmptyResidentHasNoRange() {
+  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  // $UsnJrnl without a $J stream keeps an empty, unnamed resident $DATA.
+  Tests::PutUsnJournal(image, {.omit_j_stream = true});
+  const NtfsVolume<S> volume(
+      std::make_unique<Tests::MemoryDiskReader>(std::move(image)),
+      VolumeOptions{.include_deleted = true});
+  REQUIRE(volume.IsVolumeOK());
+  FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(Tests::usn_journal_idx));
+  REQUIRE(record.ParseAttrs());
+
+  const auto* stream = record.FindStream({});
+  REQUIRE(stream != nullptr);
+  REQUIRE(stream->GetDataSize() == 0);
+  const Alloc::StreamRanges ranges = stream->GetRealRanges();
+  CHECK(ranges.ranges.empty());
+}
+
+template <Cache::Strategy S>
 void CheckResidentIsOneRange() {
   const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
                                  Tests::BuildFakeNtfsImageWithFreedFileTree()),
@@ -251,4 +317,21 @@ TEST_CASE("a run whose end overflows 64 bits makes the ranges incomplete",
 TEST_CASE("a resident attribute is one range", "[attr][ranges]") {
   CheckResidentIsOneRange<Cache::Strategy::NoCache>();
   CheckResidentIsOneRange<Cache::Strategy::FullCache>();
+}
+
+TEST_CASE("a real run too far for a byte offset makes the ranges incomplete",
+          "[attr][ranges]") {
+  CheckFarRealRunIsDamaged<Cache::Strategy::NoCache>();
+  CheckFarRealRunIsDamaged<Cache::Strategy::FullCache>();
+}
+
+TEST_CASE("an extent read refuses a size that overflows 64 bits",
+          "[attr][ranges]") {
+  CheckExtentReadRefusesAnOverflowingSize<Cache::Strategy::NoCache>();
+  CheckExtentReadRefusesAnOverflowingSize<Cache::Strategy::FullCache>();
+}
+
+TEST_CASE("an empty resident attribute has no range", "[attr][ranges]") {
+  CheckEmptyResidentHasNoRange<Cache::Strategy::NoCache>();
+  CheckEmptyResidentHasNoRange<Cache::Strategy::FullCache>();
 }

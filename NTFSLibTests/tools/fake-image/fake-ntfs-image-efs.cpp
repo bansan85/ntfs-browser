@@ -15,10 +15,11 @@ namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {
 
-// Writes a resident $EFS attribute holding "body" and returns its total_size.
-DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
-                           std::span<const BYTE> body) {
-  constexpr std::wstring_view name_value = L"$EFS";
+// Writes a resident $LOGGED_UTILITY_STREAM called name, holding "body", and
+// returns its total_size.
+DWORD WriteResidentLoggedStreamAttr(FakeRecord& record, DWORD offset,
+                                    std::wstring_view name_value,
+                                    std::span<const BYTE> body) {
   const std::vector<WORD> encoded_name = ToUtf16(name_value);
   auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(offset));
@@ -37,6 +38,12 @@ DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
               encoded_name.size() * sizeof(WORD));
   std::memcpy(&record.at(offset + attr.attr_offset), body.data(), body.size());
   return attr.header.total_size;
+}
+
+// Writes a resident $EFS attribute holding "body" and returns its total_size.
+DWORD WriteResidentEfsAttr(FakeRecord& record, DWORD offset,
+                           std::span<const BYTE> body) {
+  return WriteResidentLoggedStreamAttr(record, offset, L"$EFS", body);
 }
 
 }  // namespace
@@ -89,6 +96,12 @@ std::vector<BYTE>
 
   for (const FakeEncryptedStream& stream : file.streams) {
     offset += WriteEncryptedStreamAttr(record, offset, stream);
+  }
+
+  if (!file.other_logged_stream_name.empty()) {
+    constexpr std::array<BYTE, 4> other_body{1, 2, 3, 4};
+    offset += WriteResidentLoggedStreamAttr(
+        record, offset, file.other_logged_stream_name, other_body);
   }
 
   std::vector<FakeDataRun> efs_runs;

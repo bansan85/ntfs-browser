@@ -7,9 +7,11 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -688,4 +690,81 @@ TEST_CASE("NtfsVolume with read_ahead_bytes lists what it lists without",
         expected);
   CHECK(list.template operator()<Cache::Strategy::NoCache>(
             Io::default_read_ahead_bytes) == expected);
+}
+
+namespace {
+
+// Answers a read at any address, with zeros. When throw_off_thread is set, a
+// read from any other thread than the one that built it throws.
+class AnyAddressReader final : public IDiskReader {
+ public:
+  explicit AnyAddressReader(bool throw_off_thread = false)
+      : throw_off_thread_(throw_off_thread) {}
+
+  bool Open(std::wstring_view /*path*/) override { return true; }
+
+  [[nodiscard]] bool ReadInto(LARGE_INTEGER& /*addr*/,
+                              std::span<BYTE> dest) const override {
+    if (throw_off_thread_ && std::this_thread::get_id() != owner_) {
+      throw std::runtime_error("read failed off the caller's thread");
+    }
+    std::ranges::fill(dest, BYTE{0});
+    return true;
+  }
+
+ private:
+  bool throw_off_thread_;
+  std::thread::id owner_{std::this_thread::get_id()};
+};
+
+// The largest address a read can name.
+constexpr LONGLONG last_address = std::numeric_limits<LONGLONG>::max();
+
+}  // namespace
+
+TEST_CASE("ReadAheadDiskReader does not read ahead past the largest address",
+          "[io][read-ahead]") {
+  Io::ReadAheadDiskReader reader(std::make_unique<AnyAddressReader>(),
+                                 {.chunk_bytes = test_chunk});
+  std::vector<BYTE> buffer(first_read_size);
+
+  LARGE_INTEGER at{.QuadPart = last_address - 2500};
+  REQUIRE(reader.ReadInto(at, buffer));
+  at.QuadPart += gsl::narrow<LONGLONG>(buffer.size());
+  REQUIRE(reader.ReadInto(at, buffer));
+  // The chunk to read ahead would end past the largest address.
+  at.QuadPart += gsl::narrow<LONGLONG>(buffer.size());
+  CHECK(reader.ReadInto(at, std::span<BYTE>(buffer).first(100)));
+}
+
+TEST_CASE("ReadAheadDiskReader hands a request past the largest address on",
+          "[io][read-ahead]") {
+  Io::ReadAheadDiskReader reader(std::make_unique<AnyAddressReader>(),
+                                 {.chunk_bytes = test_chunk});
+  std::vector<BYTE> buffer(100);
+
+  LARGE_INTEGER at{.QuadPart = last_address - 10};
+  CHECK(reader.ReadInto(at, buffer));
+}
+
+TEST_CASE("ReadAheadDiskReader hides a read ahead that throws",
+          "[io][read-ahead]") {
+  Io::ReadAheadDiskReader reader(std::make_unique<AnyAddressReader>(true),
+                                 {.chunk_bytes = test_chunk});
+  std::vector<BYTE> buffer(1500);
+
+  LARGE_INTEGER at{.QuadPart = 0};
+  for (int i = 0; i < 20; i++) {
+    REQUIRE(reader.ReadInto(at, buffer));
+    at.QuadPart += gsl::narrow<LONGLONG>(buffer.size());
+  }
+}
+
+TEST_CASE("ReadAheadDiskReader reports a wrapped reader that cannot open",
+          "[io][read-ahead]") {
+  Io::ReadAheadDiskReader reader(
+      std::make_unique<MemoryDiskReader>(std::vector<BYTE>{}),
+      {.chunk_bytes = test_chunk});
+
+  CHECK_FALSE(reader.Open(L"no-such-file-for-the-test.img"));
 }

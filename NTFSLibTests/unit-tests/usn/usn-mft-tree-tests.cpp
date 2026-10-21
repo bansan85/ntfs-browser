@@ -514,3 +514,51 @@ TEST_CASE("a scan that progress() stopped does not read the journal",
   CheckAStoppedScanLeavesTheJournalAlone<Cache::Strategy::NoCache>();
   CheckAStoppedScanLeavesTheJournalAlone<Cache::Strategy::FullCache>();
 }
+
+namespace {
+
+template <Cache::Strategy S>
+void CheckPathsWithoutAnAncestorOutput() {
+  FakeUsnRecord in_docs =
+      Rec(L"in-docs.bin", 41, 1, reason_file_create, time_a);
+  FakeUsnRecord in_root =
+      Rec(L"in-root.bin", 42, 1, reason_file_create, time_a, 5, 5);
+  FakeUsnRecord in_lost =
+      Rec(L"in-lost.bin", 43, 1, reason_file_create, time_a, 99, 1);
+
+  Mft::MftTree tree = ScanWith<S>({.records = {in_docs, in_root, in_lost}},
+                                  Support::RecoverOptions());
+  REQUIRE(tree.JournalOnly().size() == 3);
+
+  const auto index_of = [&](ULONGLONG record) {
+    const auto* item = FindJournalOnly(tree, record, 1);
+    REQUIRE(item != nullptr);
+    return static_cast<size_t>(item - tree.JournalOnly().data());
+  };
+  CHECK(tree.GetJournalPath(index_of(41), nullptr) == L"\\Docs\\in-docs.bin");
+  CHECK(tree.GetJournalPath(index_of(42), nullptr) == L"\\in-root.bin");
+  CHECK(tree.GetJournalPath(index_of(43), nullptr) == L"in-lost.bin");
+  CHECK(tree.GetJournalPath(tree.JournalOnly().size(), nullptr).empty());
+
+  // A name the record does not have, with and without an output.
+  std::optional<ULONGLONG> lost{7};
+  CHECK(tree.GetPath(Tests::mft_tree_docs_idx, 1000, nullptr).empty());
+  CHECK(tree.GetPath(Tests::mft_tree_docs_idx, 1000, &lost).empty());
+  CHECK_FALSE(lost);
+  CHECK(tree.GetPath(ghost_record, 0, nullptr).empty());
+
+  // Assigning a tree to itself changes nothing.
+  const size_t entries = tree.Entries().size();
+  const Mft::MftTree& same = tree;
+  tree = same;
+  CHECK(tree.Entries().size() == entries);
+  CHECK(tree.JournalOnly().size() == 3);
+}
+
+}  // namespace
+
+TEST_CASE("paths are given without an output for the lost ancestor",
+          "[usn][tree]") {
+  CheckPathsWithoutAnAncestorOutput<Cache::Strategy::NoCache>();
+  CheckPathsWithoutAnAncestorOutput<Cache::Strategy::FullCache>();
+}

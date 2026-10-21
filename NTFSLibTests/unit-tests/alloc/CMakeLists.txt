@@ -17,6 +17,7 @@ target_sources(
     "read-only-use-tests.cpp"
     "space-summary-tests.cpp"
     "volume-cluster-state-tests.cpp"
+    "volume-load-edge-tests.cpp"
 )
 
 target_include_directories(

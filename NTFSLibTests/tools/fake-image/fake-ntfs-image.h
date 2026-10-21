@@ -1447,6 +1447,10 @@ struct FakeEncryptedFile {
   // A malformed attribute after the last valid one: its total_size is
   // smaller than a resident attribute's own header.
   bool trailing_undersized_attribute{false};
+  // Puts a resident $LOGGED_UTILITY_STREAM of this name before the $EFS
+  // stream, as other utility streams (eg. $TXF_DATA) sit beside it. Empty:
+  // none.
+  std::wstring other_logged_stream_name;
 };
 
 // Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by

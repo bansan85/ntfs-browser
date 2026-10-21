@@ -8,8 +8,10 @@ if(NTFS_BROWSER_EFS_MASTER)
     NtfsBrowserTests
     PRIVATE
       "coverage-efs-tests.cpp"
+      "efs-context-tests.cpp"
       "efs-parser-tests.cpp"
       "efs-pfx-tests.cpp"
+      "efs-stream-limits-tests.cpp"
       "efs-stream-tests.cpp"
       "efs-test-support.cpp"
       "efs-test-support.h"

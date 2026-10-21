@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <span>
 #include <string>
@@ -324,4 +325,27 @@ TEMPLATE_TEST_CASE_SIG("an image without a mirror opens as before",
       CHECK_THAT(opened.log, !ContainsSubstring(fallback_message));
     }
   }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "a $MFTMirr copy whose header is forged is refused, not trusted",
+    "[ntfs-volume][mft-mirror]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  // The header field that tells where the update sequence array starts.
+  constexpr size_t offset_of_us_field = 4;
+  // An offset far past the end of a record.
+  constexpr WORD forged_offset = 0xFFFF;
+  constexpr size_t volume_record = 3;
+
+  std::vector<BYTE> image = Image(Bit(volume_record));
+  const size_t copy_offset = static_cast<size_t>(mirror_addr) +
+                             (volume_record * Tests::fake_file_record_size) +
+                             offset_of_us_field;
+  std::memcpy(&image.at(copy_offset), &forged_offset, sizeof(forged_offset));
+
+  const Opened<S> opened = Open<S>(std::move(image), true);
+
+  CHECK_FALSE(opened.volume->IsVolumeOK());
+  CHECK_THAT(opened.log, !ContainsSubstring(fallback_message));
+  CHECK_THAT(opened.log, ContainsSubstring("Offset must be lower than"));
 }

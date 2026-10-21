@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "coverage-file-record-a-tests.cpp"
     "coverage-file-record-b-tests.cpp"
+    "file-record-argument-edge-tests.cpp"
     "file-record-characterization-tests.cpp"
     "file-record-extended-metadata-tests.cpp"
     "file-record-header-coverage-tests.cpp"

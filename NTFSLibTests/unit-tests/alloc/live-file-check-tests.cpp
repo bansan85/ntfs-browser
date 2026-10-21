@@ -23,6 +23,7 @@
 #include "test-log-sink.h"
 
 using Catch::Matchers::ContainsSubstring;
+namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
@@ -168,6 +169,49 @@ void CheckTheVolumesOwnMetadataIsNotChecked() {
   CHECK_THAT(Tests::TakeCapturedLog(), !ContainsSubstring(free_message));
 }
 
+// A live stale file in two fragments of two clusters, at LCN 40 and 50.
+std::vector<BYTE> FragmentedLiveImage(std::span<const FakeDataRun> allocated,
+                                      std::span<const Alloc::Extent> bad) {
+  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
+      stale_size, {FakeDataRun{.lcn = 40, .clusters = 2},
+                   FakeDataRun{.lcn = 50, .clusters = 2}});
+  Tests::SetRecordInUse(image, Tests::mft_tree_stale_child_idx, true);
+  image = Support::WithBitmap(std::move(image), allocated);
+  if (!bad.empty()) {
+    image = Support::WithBadClusters(std::move(image), bad);
+  }
+  return image;
+}
+
+template <Cache::Strategy S>
+void CheckEveryFragmentIsCounted() {
+  SECTION("free clusters of two fragments") {
+    const auto opened =
+        Support::Open<S>(FragmentedLiveImage({}, {}), recovering);
+    (void)Tests::TakeCapturedLog();
+
+    (void)ReadStale(opened);
+
+    CHECK_THAT(Tests::TakeCapturedLog(),
+               ContainsSubstring("4 clusters of a data stream are free in "
+                                 "$Bitmap, from the run at LCN 40"));
+  }
+
+  SECTION("bad clusters of two fragments") {
+    const std::vector<Alloc::Extent> bad{{.lcn = 40, .clusters = 2},
+                                         {.lcn = 50, .clusters = 2}};
+    const auto opened = Support::Open<S>(
+        FragmentedLiveImage(Support::WithBadRuns({}, bad), bad), recovering);
+    (void)Tests::TakeCapturedLog();
+
+    (void)ReadStale(opened);
+
+    CHECK_THAT(Tests::TakeCapturedLog(),
+               ContainsSubstring("4 clusters of a data stream are marked bad "
+                                 "in $BadClus, from the run at LCN 40"));
+  }
+}
+
 }  // namespace
 
 TEST_CASE("a live file on free clusters is logged in recover mode",
@@ -207,4 +251,10 @@ TEST_CASE("a deleted file is not checked", "[alloc][live-check]") {
 TEST_CASE("the volume's own metadata is not checked", "[alloc][live-check]") {
   CheckTheVolumesOwnMetadataIsNotChecked<Cache::Strategy::NoCache>();
   CheckTheVolumesOwnMetadataIsNotChecked<Cache::Strategy::FullCache>();
+}
+
+TEMPLATE_TEST_CASE_SIG("a live file counts the clusters of every fragment",
+                       "[alloc][live-check]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  CheckEveryFragmentIsCounted<S>();
 }

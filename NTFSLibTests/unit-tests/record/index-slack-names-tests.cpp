@@ -471,3 +471,78 @@ TEST_CASE("CarveFileNamesFrom accepts a begin at or past the end",
   CHECK(Record::CarveFileNamesFrom({}, 0, Record::CarveSource::IndexSlack)
             .empty());
 }
+
+TEST_CASE("A block with a damaged entry that recovery let pass gives no slack",
+          "[index-slack]") {
+  // First entry of a block: its 16-byte header, then the $FILE_NAME, whose
+  // name length sits 64 bytes in.
+  constexpr size_t first_entry_offset = 0x40;
+  constexpr size_t entry_header_size = 16;
+  constexpr size_t name_length_in_stream = 64;
+  // A name length that reaches far past its entry.
+  constexpr BYTE forged_name_length = 200;
+
+  ForEachStrategy([](auto strategy) {
+    std::vector<BYTE> damaged =
+        Block({L"live.txt"}, {Old(L"older.txt"), Old(L"oldest.txt")});
+    damaged.at(first_entry_offset + entry_header_size + name_length_in_stream) =
+        forged_name_length;
+
+    const std::vector<std::vector<BYTE>> blocks{damaged};
+    const auto carved = Carve<decltype(strategy)::value>(
+        Tests::BuildFakeNtfsImageWithIndexBlocks(blocks), both_flags);
+
+    CHECK(carved.empty());
+  });
+}
+
+TEST_CASE("Index slack of a root that names entries of its own",
+          "[index-slack]") {
+  ForEachStrategy([](auto strategy) {
+    const auto carved = Carve<decltype(strategy)::value>(
+        Tests::BuildFakeNtfsImageWithGapCollationSubNode(), both_flags);
+
+    // The root entry is live, and the block it points to holds no stale name.
+    CHECK(carved.empty());
+  });
+}
+
+TEST_CASE("Index slack of an index that holds no file names is empty",
+          "[index-slack]") {
+  // Offset of the first attribute in a record header, and of the type and the
+  // total size in an attribute header.
+  constexpr size_t first_attr_field = 0x14;
+  constexpr size_t attr_size_field = 4;
+  // Offset of the body in a resident attribute header.
+  constexpr size_t resident_body_field = 20;
+  constexpr DWORD index_root_type = 0x90;
+  // The indexed attribute type 0 marks an index view, not a directory.
+  constexpr DWORD index_view = 0;
+
+  const std::vector<std::vector<BYTE>> blocks{
+      Block({L"live.txt"}, {Old(L"older.txt")})};
+  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithIndexBlocks(blocks);
+  const ULONGLONG mft_addr =
+      NtfsVolume<Cache::Strategy::NoCache>(
+          std::make_unique<Tests::MemoryDiskReader>(image))
+          .GetMFTAddr();
+  size_t attr = mft_addr + (Tests::index_slack_directory_record *
+                            Tests::fake_file_record_size);
+  attr += image.at(attr + first_attr_field);
+  DWORD type = 0;
+  std::memcpy(&type, &image.at(attr), sizeof(type));
+  while (type != index_root_type) {
+    DWORD size = 0;
+    std::memcpy(&size, &image.at(attr + attr_size_field), sizeof(size));
+    REQUIRE(size != 0);
+    attr += size;
+    std::memcpy(&type, &image.at(attr), sizeof(type));
+  }
+  WORD body = 0;
+  std::memcpy(&body, &image.at(attr + resident_body_field), sizeof(body));
+  std::memcpy(&image.at(attr + body), &index_view, sizeof(index_view));
+
+  ForEachStrategy([&](auto strategy) {
+    CHECK(Carve<decltype(strategy)::value>(image, both_flags).empty());
+  });
+}

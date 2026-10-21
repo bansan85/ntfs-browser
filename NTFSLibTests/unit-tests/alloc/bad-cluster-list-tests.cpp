@@ -347,3 +347,15 @@ TEST_CASE("bad list load", "[.benchmark][alloc]") {
       << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()
       << " ms, " << list->BytesHeld() / (1024 * 1024) << " MiB held\n";
 }
+
+TEST_CASE("extents that start on the same cluster merge into the longest",
+          "[alloc][bad-list]") {
+  const auto list = BadClusterList::Build(Stream({{.lcn = 10, .clusters = 5},
+                                                  {.lcn = 10, .clusters = 2},
+                                                  {.lcn = 10, .clusters = 9}}),
+                                          100, false);
+
+  REQUIRE(list != nullptr);
+  const std::vector<std::pair<ULONGLONG, ULONGLONG>> expected{{10, 9}};
+  CHECK(Pairs(*list) == expected);
+}

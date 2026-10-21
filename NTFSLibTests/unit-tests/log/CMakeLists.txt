@@ -4,6 +4,7 @@ target_sources(
     "coverage-log-tests.cpp"
     "custom-sink-tests.cpp"
     "emit-failure-tests.cpp"
+    "log-level-edge-tests.cpp"
     "logging-child-process-tests.cpp"
     "logging-test-support.h"
     "logging-tests.cpp"

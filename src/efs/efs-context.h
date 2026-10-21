@@ -14,6 +14,7 @@
 
 #include "efs/efs-stream.h"
 #include "efs/sector-cipher.h"
+#include "internal-export.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -41,7 +42,7 @@ using KeyProviderSource = std::function<std::shared_ptr<IEfsKeyProvider>()>;
 // streams: its $EFS entries, and the key resolved from them once. A failed
 // resolution is remembered too, so a file nobody holds a key for is not
 // retried on every read.
-class Context final {
+class NTFS_BROWSER_EXPORT_TESTS_ONLY Context final {
  public:
   // "entries" is empty when the record has no usable $EFS stream.
   Context(std::vector<WrappedFek> entries, KeyProviderSource provider_source,

@@ -119,6 +119,16 @@ TEST_CASE("A BCrypt sector decryptor takes exactly one sector",
   }
 }
 
+TEST_CASE("The BCrypt backend declines a DESX key", "[cov-efs][efs]") {
+  const std::optional<Fek> fek =
+      Fek::Parse(NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
+          Algorithm::Desx,
+          NTFS_BROWSER_NAMESPACE::Tests::TestKey(Algorithm::Desx)));
+  REQUIRE(fek.has_value());
+
+  CHECK(NTFS_BROWSER_NAMESPACE::Efs::MakeBCryptDecryptor(*fek) == nullptr);
+}
+
 #endif
 
 TEST_CASE("An $EFS entry with no FEK bytes, or an oversized one, is rejected",
