@@ -9,6 +9,7 @@ target_sources(
     "optional-access.h"
     "sample-run.cpp"
     "sample-run.h"
+    "scratch-record.h"
     "test-log-sink.cpp"
     "test-log-sink.h"
 )

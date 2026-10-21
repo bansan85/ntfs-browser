@@ -11,6 +11,7 @@ target_sources(
     "mft-slot-reader-tests.cpp"
     "mft-tree-bounded-cache-tests.cpp"
     "mft-extent-map-tests.cpp"
+    "mft-tree-malformed-record-tests.cpp"
     "mft-tree-tests.cpp"
     "ntfsmftlist-sample-tests.cpp"
 )

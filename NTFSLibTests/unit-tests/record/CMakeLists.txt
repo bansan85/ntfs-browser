@@ -15,6 +15,7 @@ target_sources(
     "index-block-recursion-depth-tests.cpp"
     "index-slack-names-tests.cpp"
     "index-root-entry-lifetime-tests.cpp"
+    "malformed-record-tests.cpp"
     "parse-attrs-total-size-tests.cpp"
     "record-slack-names-tests.cpp"
     "slack-carver-tests.cpp"
