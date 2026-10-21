@@ -9,6 +9,7 @@ target_sources(
     "external-mft-support.cpp"
     "external-mft-support.h"
     "external-mft-tests.cpp"
+    "external-mirror-tests.cpp"
     "external-i30-tests.cpp"
     "external-journal-samples.h"
     "external-journal-support.cpp"
