@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 
 #include <ntfs-browser/namespace.h>
@@ -23,7 +24,7 @@ void RunList::Parse(std::span<const BYTE> run_bytes, ULONGLONG vcn_bound,
                     bool recover) {
   std::span<const BYTE> data_run = run_bytes;
   ULONGLONG length = 0;
-  LONGLONG lcn_offset = 0;
+  std::optional<LONGLONG> lcn_offset;
   DecodeCursor cursor{.vcn_bound = vcn_bound};
 
   while (!data_run.empty() && data_run.front() != 0) {
@@ -188,7 +189,8 @@ std::optional<ULONGLONG>
 // FileRecord::ParseAttrs); data_run_offset and the run stream itself are
 // attacker-controlled and otherwise unbounded.
 bool RunList::PickData(std::span<const BYTE>& data_run, ULONGLONG& length,
-                       LONGLONG& lcn_offset, bool recover) noexcept {
+                       std::optional<LONGLONG>& lcn_offset,
+                       bool recover) noexcept {
   // Parse() calls this only while the run list still has bytes.
   assert(!data_run.empty());
 
@@ -221,21 +223,19 @@ bool RunList::PickData(std::span<const BYTE>& data_run, ULONGLONG& length,
   memcpy(&length, data_run.data(), size.length_bytes);
 
   data_run = data_run.subspan(size.length_bytes);
-  if (size.offset_bytes != 0)  // Not Sparse File
-  {
+  // A hole has no offset field at all. An offset field that holds zero is a
+  // real run: at LCN 0 for the first one, else at the LCN of the run before.
+  if (size.offset_bytes != 0) {
     // The size check above leaves at least offsetBytes bytes in dataRun.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    if (static_cast<CHAR>(data_run[size.offset_bytes - 1U]) < 0) {
-      // Negative the number read.
-      lcn_offset = -1;
-    } else {
-      lcn_offset = 0;
-    }
-    memcpy(&lcn_offset, data_run.data(), size.offset_bytes);
+    LONGLONG delta =
+        static_cast<CHAR>(data_run[size.offset_bytes - 1U]) < 0 ? -1 : 0;
+    memcpy(&delta, data_run.data(), size.offset_bytes);
+    lcn_offset = delta;
 
     data_run = data_run.subspan(size.offset_bytes);
   } else {
-    lcn_offset = 0;
+    lcn_offset.reset();
   }
 
   return true;
@@ -244,12 +244,13 @@ bool RunList::PickData(std::span<const BYTE>& data_run, ULONGLONG& length,
 // Applies one decoded run (its length and LCN delta) to the cursor's lcn and
 // vcn, and appends it to the run list. Returns false on an error that recovery
 // tolerates; when strict, the same error throws.
-bool RunList::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
+bool RunList::AppendDataRun(ULONGLONG length,
+                            std::optional<LONGLONG> lcn_offset,
                             DecodeCursor& cursor, bool recover) {
   // lcn is never negative here, so only a positive offset can overflow the
   // sum. It MUST be caught before the addition: signed overflow is UB.
-  if (lcn_offset > 0 &&
-      cursor.lcn > std::numeric_limits<LONGLONG>::max() - lcn_offset) {
+  const LONGLONG delta = lcn_offset.value_or(0);
+  if (delta > 0 && cursor.lcn > std::numeric_limits<LONGLONG>::max() - delta) {
     Log::Recoverable(recover, "DataRun decode error: LCN overflows");
     if (!recover) {
       throw std::runtime_error("Data run LCN overflows.\n");
@@ -257,7 +258,7 @@ bool RunList::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
     return false;
   }
 
-  cursor.lcn += lcn_offset;
+  cursor.lcn += delta;
   if (cursor.lcn < 0) {
     Log::Recoverable(recover, "DataRun decode error 2");
     if (!recover) {
@@ -267,11 +268,12 @@ bool RunList::AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
   }
 
   Log::Debug("Data length = {} clusters, LCN = {}{}", length, cursor.lcn,
-             lcn_offset == 0 ? ", Sparse Data" : "");
+             lcn_offset ? "" : ", Sparse Data");
 
   // Store LCN, Data size (clusters) into list
   Data::RunEntry data_run;
-  data_run.lcn = (lcn_offset == 0) ? std::optional<ULONGLONG>{} : cursor.lcn;
+  data_run.lcn = lcn_offset ? std::optional<ULONGLONG>{cursor.lcn}
+                            : std::optional<ULONGLONG>{};
   data_run.clusters = length;
   data_run.start_vcn = cursor.vcn;
   cursor.vcn += length;

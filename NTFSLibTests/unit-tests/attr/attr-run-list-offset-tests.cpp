@@ -140,9 +140,8 @@ TEMPLATE_TEST_CASE_SIG("A run list of one hole has no extent",
 }
 
 TEMPLATE_TEST_CASE_SIG("A first run at LCN 0 is a real run, not a hole",
-                       "[attr-run-list][regression][!shouldfail]",
-                       ((Cache::Strategy S), S), Cache::Strategy::NoCache,
-                       Cache::Strategy::FullCache) {
+                       "[attr-run-list][regression]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // A one-byte and an eight-byte offset field, both holding zero.
   const unsigned width = GENERATE(1U, 8U);
   CAPTURE(width);
@@ -159,7 +158,7 @@ TEMPLATE_TEST_CASE_SIG("A first run at LCN 0 is a real run, not a hole",
 
 TEMPLATE_TEST_CASE_SIG(
     "A run whose delta is zero repeats the LCN of the run before it",
-    "[attr-run-list][regression][!shouldfail]", ((Cache::Strategy S), S),
+    "[attr-run-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   std::vector<BYTE> runs;
   AppendRun(runs, 1, outward_lcn);

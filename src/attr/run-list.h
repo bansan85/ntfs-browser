@@ -100,9 +100,11 @@ class RunList {
   ULONGLONG clusters_;
 
   [[nodiscard]] static bool PickData(std::span<const BYTE>& data_run,
-                                     ULONGLONG& length, LONGLONG& lcn_offset,
+                                     ULONGLONG& length,
+                                     std::optional<LONGLONG>& lcn_offset,
                                      bool recover) noexcept;
-  [[nodiscard]] bool AppendDataRun(ULONGLONG length, LONGLONG lcn_offset,
+  [[nodiscard]] bool AppendDataRun(ULONGLONG length,
+                                   std::optional<LONGLONG> lcn_offset,
                                    DecodeCursor& cursor, bool recover);
 };  // RunList
 
