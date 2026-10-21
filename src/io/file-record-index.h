@@ -11,6 +11,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/record/carved-name.h>
 
 #include "upcase/upcase.h"
 
@@ -63,6 +64,9 @@ class DirectoryIndex {
   // Finds file_name. upcase is the volume's collation, loaded by the caller.
   [[nodiscard]] std::optional<IndexEntry>
       Find(std::wstring_view file_name, const UpCase::Table& upcase) const;
+  // The names the unused space of the $INDEX_ALLOCATION blocks still holds,
+  // see FileRecord<S>::CarveIndexSlackNames(). Times are UTC, as stored.
+  [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;
 
  private:
   // The record whose index this walks. It MUST outlive this object.

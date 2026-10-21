@@ -2,13 +2,17 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <ntfs-browser/attr/type.h>
@@ -17,6 +21,8 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/record/carved-name.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "attr/index-alloc.h"
 #include "attr/index-block.h"
@@ -25,6 +31,7 @@
 #include "io/file-record-attrs.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "record/slack-carver.h"
 #include "upcase/upcase.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
@@ -40,6 +47,11 @@ constexpr size_t max_index_block_depth = 64;
 // blocks is already far past any real directory's index, so this only ever
 // binds on a forged/damaged $INDEX_ALLOCATION.
 constexpr size_t max_orphan_scan_blocks = 65536;
+
+// Caps the candidates the slack pass keeps: a forged directory of 65536 blocks
+// could hold millions of look-alikes. About 100 MiB of names at most, and far
+// above what the unused space of a real directory yields.
+constexpr size_t max_index_slack_candidates = size_t{1} << 20;
 
 // Logs a name match found by SearchIndexEntries(). The root and the index
 // blocks log under different names.
@@ -91,23 +103,98 @@ OrphanOwner OwnerOf(const FileRecord<S>& record) {
           !record.IsDeleted()};
 }
 
+// Decides whether a name filed under parent_record at parent_sequence belongs
+// to owner's directory. A stale name may be left over from a file already
+// deleted from this directory, or from an earlier directory that used this
+// record: only one still filed under this very directory counts. Same rule as
+// MftTree: a freed directory keeps the entries filed under its sequence from
+// before NTFS bumped it.
+bool IsFiledUnder(ULONGLONG parent_record, WORD parent_sequence,
+                  const OrphanOwner& owner) {
+  return !owner.file_ref ||
+         (parent_record == *owner.file_ref &&
+          Mft::IsSameRecordGeneration(parent_sequence, owner.sequence,
+                                      owner.in_use));
+}
+
 // Decides whether an entry found in an orphaned block is authentic. It MUST be
 // filed under owner's directory. Visibility of the named record is left to
 // IsEntryHidden().
 bool IsOrphanEntryReportable(const IndexEntryView& entry,
                              const OrphanOwner& owner) {
-  // An orphaned block may hold a stale entry left over from a file
-  // already deleted from this directory, or from an earlier directory
-  // that used this record - only report one still filed under this very
-  // directory. Same rule as MftTree: a freed directory keeps the entries
-  // filed under its sequence from before NTFS bumped it.
-  if (owner.file_ref &&
-      (entry.GetParentReference() != *owner.file_ref ||
-       !Mft::IsSameRecordGeneration(entry.GetParentSequenceNumber(),
-                                    owner.sequence, owner.in_use))) {
-    return false;
+  return IsFiledUnder(entry.GetParentReference(),
+                      entry.GetParentSequenceNumber(), owner);
+}
+
+// What the slack pass has found so far in one directory.
+struct SlackFindings {
+  // Names of the entries in the used part of the root and of every block.
+  std::unordered_set<std::wstring> live_names;
+  // Candidates, each reported once. The live names are removed at the end.
+  std::vector<Record::CarvedName> candidates;
+  // Where each candidate sits in candidates, by name: finds a repeat without
+  // comparing with every candidate.
+  std::unordered_multimap<std::wstring, size_t> candidate_by_name;
+  // True once a candidate was refused for lack of room.
+  bool capped{false};
+};
+
+// Whether findings already holds a candidate that says what candidate says.
+bool IsRepeatedCandidate(const SlackFindings& findings,
+                         const Record::CarvedName& candidate) {
+  const auto [first, last] =
+      findings.candidate_by_name.equal_range(candidate.name);
+  return std::any_of(first, last, [&](const auto& seen) {
+    return Record::SameCarvedName(findings.candidates.at(seen.second),
+                                  candidate);
+  });
+}
+
+// Keeps the candidates of one block that name owner's directory and that no
+// earlier candidate repeats. Stops at the cap.
+void KeepSlackCandidates(std::vector<Record::CarvedName> carved,
+                         const OrphanOwner& owner, SlackFindings& findings) {
+  for (Record::CarvedName& candidate : carved) {
+    // The parent is the only proof a candidate belongs to this directory.
+    if (!candidate.parent_known ||
+        !IsFiledUnder(candidate.parent_record, candidate.parent_sequence,
+                      owner) ||
+        IsRepeatedCandidate(findings, candidate)) {
+      continue;
+    }
+    if (findings.candidates.size() >= max_index_slack_candidates) {
+      findings.capped = true;
+      return;
+    }
+    findings.candidate_by_name.emplace(candidate.name,
+                                       findings.candidates.size());
+    findings.candidates.push_back(std::move(candidate));
   }
-  return true;
+}
+
+// Adds the live names of one block to findings, then its slack candidates. A
+// block that fails its checks, or whose entries are damaged, is skipped.
+template <Cache::Strategy S>
+void CarveBlockSlack(Attr::AttrIndexAlloc<S>& alloc, ULONGLONG vcn,
+                     const OrphanOwner& owner, SlackFindings& findings) {
+  Attr::IndexBlock index_block;
+  if (!alloc.ParseIndexBlock(vcn, index_block)) {
+    return;
+  }
+  const std::optional<size_t> used_end = index_block.UsedEnd();
+  if (!used_end) {
+    Log::Info("CarveSlackNames() recovery: index block {} is damaged", vcn);
+    return;
+  }
+  for (const IndexEntryView& entry : index_block) {
+    if (entry.HasName()) {
+      findings.live_names.emplace(entry.GetFilename());
+    }
+  }
+  KeepSlackCandidates(
+      Record::CarveFileNamesFrom(index_block.Bytes(), *used_end,
+                                 Record::CarveSource::IndexSlack),
+      owner, findings);
 }
 
 // Decides whether a normal walk or name lookup skips entry. A named record that
@@ -484,6 +571,58 @@ void Io::DirectoryIndex<S>::ScanOrphanedIndexBlocks(
 
     ReportOrphanedBlock(*alloc, vcn, se_call_back, context);
   }
+}
+
+// Looks for the names of deleted files in the unused space of every valid
+// $INDEX_ALLOCATION block. A deleted entry is not erased: NTFS closes the gap
+// by moving the entries after it, and the tail of the block keeps the old
+// bytes. The root has no such space, since its value ends where its entries
+// do.
+template <Cache::Strategy S>
+std::vector<Record::CarvedName> Io::DirectoryIndex<S>::CarveSlackNames() const {
+  const VolumeOptions& options = record_.GetVolume().GetOptions();
+  const OrphanOwner owner = OwnerOf(record_);
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& alloc_attrs =
+      record_.GetAttr(Attr::Type::IndexAllocation);
+  if (!options.recover_errors || !options.include_deleted || !owner.file_ref ||
+      alloc_attrs.empty()) {
+    return {};
+  }
+
+  SlackFindings findings;
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& roots =
+      record_.GetAttr(Attr::Type::IndexRoot);
+  if (!roots.empty()) {
+    // An index of anything but file names holds no names to carve.
+    const std::vector<IndexEntryView>* root_entries =
+        FileNameIndexRootEntries(*roots.front());
+    if (root_entries == nullptr) {
+      return {};
+    }
+    for (const IndexEntryView& entry : *root_entries) {
+      if (entry.HasName()) {
+        findings.live_names.emplace(entry.GetFilename());
+      }
+    }
+  }
+
+  auto* alloc =
+      static_cast<Attr::AttrIndexAlloc<S>*>(alloc_attrs.front().get());
+  const OrphanScanPlan plan = PlanOrphanScan(*alloc);
+  for (ULONGLONG block_index = 0;
+       block_index < plan.scan_limit && !findings.capped; block_index++) {
+    CarveBlockSlack(*alloc, block_index * plan.clusters_per_block, owner,
+                    findings);
+  }
+
+  std::erase_if(findings.candidates, [&](const Record::CarvedName& candidate) {
+    return findings.live_names.contains(candidate.name);
+  });
+  if (findings.capped) {
+    Log::Info("CarveSlackNames() recovery: stopped at {} candidates",
+              max_index_slack_candidates);
+  }
+  return std::move(findings.candidates);
 }
 
 template class DirectoryIndex<Cache::Strategy::NoCache>;

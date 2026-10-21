@@ -39,4 +39,20 @@ namespace NTFS_BROWSER_NAMESPACE::Record {
 NTFS_BROWSER_EXPORT_TESTS_ONLY std::vector<CarvedName>
     CarveFileNames(std::span<const BYTE> record, size_t marker_offset);
 
+// Same scan over any container whose live part ends at slack_begin, such as an
+// index block with its fixups removed: bytes is the whole container,
+// slack_begin the first leftover byte, and every candidate is stamped with
+// source. Nothing before slack_begin is read as a field, and nothing is
+// assumed about the bytes right at slack_begin: a structure whose start was
+// overwritten by the live part is partial, as in CarveFileNames(). A
+// slack_begin past the end of bytes gives no candidate.
+NTFS_BROWSER_EXPORT_TESTS_ONLY std::vector<CarvedName>
+    CarveFileNamesFrom(std::span<const BYTE> bytes, size_t slack_begin,
+                       CarveSource source);
+
+// Whether two candidates say the same thing, every field included but the
+// source.
+NTFS_BROWSER_EXPORT_TESTS_ONLY bool
+    SameCarvedName(const CarvedName& left, const CarvedName& right) noexcept;
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Record

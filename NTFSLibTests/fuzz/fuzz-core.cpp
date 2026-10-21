@@ -288,6 +288,8 @@ void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
 
   // The names left in the slack: only a recovering volume carves them.
   ReadCarvedNames(file_record.CarveSlackNames());
+  // And the names in the unused space of a directory's index blocks.
+  ReadCarvedNames(file_record.CarveIndexSlackNames());
 
   file_record.TraverseAttrs(
       [](const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& attr, void*, bool*) {

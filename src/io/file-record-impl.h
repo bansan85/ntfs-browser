@@ -91,6 +91,9 @@ class FileRecord<S>::Impl {
   void ClearAttrs() noexcept;
   // See FileRecord<S>::CarveSlackNames().
   [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;
+  // Turns the UTC times of carved, as the carvers report them, into those of
+  // GetFileTime(). Unknown times stay zero.
+  static void ConvertCarvedTimes(std::vector<Record::CarvedName>& carved);
   // Stays here: it reaches the volume's private Impl, which only
   // FileRecord<S> may name. Attributes call it through this Impl.
   void UserCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,

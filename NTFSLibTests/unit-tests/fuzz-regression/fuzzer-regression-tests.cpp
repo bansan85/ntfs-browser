@@ -75,7 +75,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 185>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 188>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -604,6 +604,12 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 185>
          {both_efs_backends, {"MFT scan journal: "}}},
         {"usn_journal_sparse_head",
          {both_efs_backends, {"MFT scan journal: "}}},
+        {"index_slack_dense_names",
+         {both_efs_backends, {"name(s) carved from the index slack"}}},
+        {"index_slack_name_runs_past_block",
+         {both_efs_backends, {"name(s) carved from the index slack"}}},
+        {"index_slack_damaged_blocks",
+         {both_efs_backends, {"name(s) carved from the index slack"}}},
         {"record_slack_dense_names",
          {both_efs_backends, {"name(s) carved from the slack"}}},
         {"record_slack_name_runs_past_record",
@@ -841,6 +847,9 @@ NTFS_REGRESSION_TESTCASE("mft_tree_names_damaged_record_and_duplicate_link")
 NTFS_REGRESSION_TESTCASE("names_filename_zero_length_name")
 NTFS_REGRESSION_TESTCASE("names_index_block_subnode_vcn_too_small")
 NTFS_REGRESSION_TESTCASE("names_upcase_fold_surrogates_and_utf8")
+NTFS_REGRESSION_TESTCASE("index_slack_damaged_blocks")
+NTFS_REGRESSION_TESTCASE("index_slack_dense_names")
+NTFS_REGRESSION_TESTCASE("index_slack_name_runs_past_block")
 NTFS_REGRESSION_TESTCASE("record_slack_dense_names")
 NTFS_REGRESSION_TESTCASE("record_slack_name_runs_past_record")
 NTFS_REGRESSION_TESTCASE("record_slack_stale_terminators")

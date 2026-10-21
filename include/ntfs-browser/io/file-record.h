@@ -143,6 +143,23 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // of GetFileTime().
   [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;
 
+  // Names of deleted files recognised in the unused space of this directory's
+  // $INDEX_ALLOCATION blocks, past each block's end entry, where NTFS leaves
+  // the entries it moved up to close a gap. Each is a candidate, reported apart
+  // from the live entries that TraverseSubEntries() gives: it changes none of
+  // them. A candidate is kept only if its parent reference names this
+  // directory (sequence number included, as for the orphan scan of
+  // TraverseSubEntries()), so a name whose parent bytes were overwritten is
+  // dropped. A name equal to a live entry of this directory, or already found
+  // in another block, is not repeated. A block that fails its integrity checks
+  // is skipped and the others are still carved. Empty unless the volume was
+  // opened with both recover_errors and include_deleted, and for a record with
+  // no $INDEX_ALLOCATION or whose index is not a file-name index. Reads the
+  // blocks like the orphan scan (at most 65536 of them) and nothing in strict
+  // mode. The times are converted like those of GetFileTime(). Call it after
+  // ParseAttrs().
+  [[nodiscard]] std::vector<Record::CarvedName> CarveIndexSlackNames() const;
+
   // With the volume's recover_errors on, also scans every $INDEX_ALLOCATION
   // block the B+ tree walk itself doesn't reach - recovery for a directory
   // whose $INDEX_ROOT or an internal node is corrupt and no longer points at

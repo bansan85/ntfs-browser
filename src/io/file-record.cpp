@@ -596,6 +596,42 @@ std::vector<Record::CarvedName> Io::FileRecord<S>::CarveSlackNames() const {
   return impl_->CarveSlackNames();
 }
 
+// The carvers report UTC, as stored. The times of the file getters are local.
+template <Cache::Strategy S>
+void Io::FileRecord<S>::Impl::ConvertCarvedTimes(
+    std::vector<Record::CarvedName>& carved) {
+  const auto to_local = [](FILETIME& time) {
+    constexpr unsigned dword_bits = 32;
+    const ULONGLONG utc =
+        (static_cast<ULONGLONG>(time.dwHighDateTime) << dword_bits) |
+        time.dwLowDateTime;
+    StdInfoType<S>::UTC2Local(utc, time);
+  };
+  for (Record::CarvedName& name : carved) {
+    // Unknown times stay zero.
+    if (!name.times_known) {
+      continue;
+    }
+    to_local(name.create_time);
+    to_local(name.write_time);
+    to_local(name.change_time);
+    to_local(name.access_time);
+  }
+}
+
+template <Cache::Strategy S>
+std::vector<Record::CarvedName>
+    Io::FileRecord<S>::CarveIndexSlackNames() const {
+  std::vector<Record::CarvedName> carved =
+      DirectoryIndex<S>(*this).CarveSlackNames();
+  Impl::ConvertCarvedTimes(carved);
+  if (!carved.empty()) {
+    Log::Debug("File record {}: {} name(s) carved from the index slack",
+               impl_->file_reference.value_or(0), carved.size());
+  }
+  return carved;
+}
+
 // Carves the bytes after the end marker, patched like the rest of the record,
 // then drops the names this record also holds live.
 template <Cache::Strategy S>
@@ -626,24 +662,7 @@ std::vector<Record::CarvedName>
         });
   });
 
-  // The carver reports UTC, as stored.
-  const auto to_local = [](FILETIME& time) {
-    constexpr unsigned dword_bits = 32;
-    const ULONGLONG utc =
-        (static_cast<ULONGLONG>(time.dwHighDateTime) << dword_bits) |
-        time.dwLowDateTime;
-    StdInfoType<S>::UTC2Local(utc, time);
-  };
-  for (Record::CarvedName& name : carved) {
-    // Unknown times stay zero.
-    if (!name.times_known) {
-      continue;
-    }
-    to_local(name.create_time);
-    to_local(name.write_time);
-    to_local(name.change_time);
-    to_local(name.access_time);
-  }
+  ConvertCarvedTimes(carved);
 
   if (!carved.empty()) {
     Log::Debug("File record {}: {} name(s) carved from the slack",

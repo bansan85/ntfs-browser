@@ -12,7 +12,9 @@ namespace NTFS_BROWSER_NAMESPACE::Record {
 // Where a carved name was found.
 enum class CarveSource : std::uint8_t {
   // The bytes after the attribute end marker of an MFT record.
-  RecordSlack
+  RecordSlack,
+  // The unused space of a valid $INDEX_ALLOCATION block, after its end entry.
+  IndexSlack
 };
 
 // A $FILE_NAME that nothing live describes any more, recognised in leftover

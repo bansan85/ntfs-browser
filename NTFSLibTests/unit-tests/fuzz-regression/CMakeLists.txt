@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "bad-cluster-fuzz-inputs.cpp"
     "fuzzer-regression-tests.cpp"
+    "index-slack-fuzz-inputs.cpp"
     "record-slack-fuzz-inputs.cpp"
     "usn-fuzz-inputs.cpp"
 )

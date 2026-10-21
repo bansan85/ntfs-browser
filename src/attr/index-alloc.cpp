@@ -1,5 +1,6 @@
 #include "attr/index-alloc.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstring>
@@ -182,6 +183,18 @@ bool RejectBlockOnDefect(bool recover, std::string_view defect,
   return true;
 }
 
+// Where the used part of a block ends. entries_end is the end of its end
+// entry. The header's own idea of the used size, when larger, is honoured: the
+// bytes between are not known to be unused. Never past the block.
+size_t UsedEndOf(const Data::IndexBlock& header, size_t block_size,
+                 size_t entries_end) noexcept {
+  constexpr size_t entry_offset_pos = offsetof(Data::IndexBlock, entry_offset);
+  const ULONGLONG declared_end =
+      ULONGLONG{entry_offset_pos} + header.total_entry_size;
+  const ULONGLONG used_end = std::max<ULONGLONG>(entries_end, declared_end);
+  return static_cast<size_t>(std::min<ULONGLONG>(used_end, block_size));
+}
+
 }  // namespace
 
 // Walks the entries of a block that FixupIndexBlock() accepted. They become
@@ -205,6 +218,9 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
                                   .subspan(entry_offset_pos)
                                   .subspan(ib_buf->entry_offset);
   DWORD ie_total = 0;
+  // False once an entry had a defect that recovery let pass: the block then
+  // gives no slack, since where its used part ends is not known.
+  bool clean = true;
 
   while (true) {
     const size_t remaining = cur.size();
@@ -230,9 +246,11 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
     const Data::IndexEntry& aligned_index_entry =
         Data::AlignIndexEntry(ib_class.RealignedStorage(), cur, head.size);
     if (const std::optional<std::string_view> defect =
-            Data::ValidateIndexEntry(aligned_index_entry);
-        defect && RejectBlockOnDefect(recover, *defect, ib_class)) {
-      return false;
+            Data::ValidateIndexEntry(aligned_index_entry)) {
+      if (RejectBlockOnDefect(recover, *defect, ib_class)) {
+        return false;
+      }
+      clean = false;
     }
 
     ib_class.emplace_back(aligned_index_entry);
@@ -240,6 +258,10 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
     if ((head.flags & Data::IndexEntryFlag::Last) ==
         Data::IndexEntryFlag::Last) {
       Log::Trace("Last Index Entry");
+      if (clean) {
+        ib_class.SetUsedEnd(UsedEndOf(*ib_buf, block.size(),
+                                      (block.size() - cur.size()) + head.size));
+      }
       return true;
     }
 

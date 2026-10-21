@@ -13,6 +13,7 @@ target_sources(
     "find-subentry-upcase-tests.cpp"
     "index-block-fixup-tests.cpp"
     "index-block-recursion-depth-tests.cpp"
+    "index-slack-names-tests.cpp"
     "index-root-entry-lifetime-tests.cpp"
     "parse-attrs-total-size-tests.cpp"
     "record-slack-names-tests.cpp"

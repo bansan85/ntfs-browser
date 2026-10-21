@@ -17,6 +17,7 @@ add_library(
   "fake-ntfs-image-bitmap.cpp"
   "fake-ntfs-image-index-blocks.cpp"
   "fake-ntfs-image-index-orphans.cpp"
+  "fake-ntfs-image-index-slack.cpp"
   "fake-ntfs-image-index-root.cpp"
   "fake-ntfs-image-compressed-file.cpp"
   "fake-ntfs-image-compressed-index.cpp"

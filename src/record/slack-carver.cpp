@@ -288,8 +288,32 @@ bool SameTime(const FILETIME& left, const FILETIME& right) noexcept {
          left.dwHighDateTime == right.dwHighDateTime;
 }
 
-// Whether two candidates say the same thing, every field included.
-bool SameCandidate(const CarvedName& left, const CarvedName& right) noexcept {
+// The scan both public entry points share. It steps from scan_begin, rounded
+// up to an even offset, and trusts only the fields at or after trusted_begin.
+std::vector<CarvedName> CarveFrom(std::span<const BYTE> bytes,
+                                  size_t scan_begin, size_t trusted_begin) {
+  std::vector<CarvedName> carved;
+  size_t at = (scan_begin + 1) & ~size_t{1};
+  while (at + shortest_core <= bytes.size()) {
+    std::optional<Found> found = ProbeAt(bytes, at, trusted_begin);
+    if (!found) {
+      at += scan_step;
+      continue;
+    }
+    // A name is at least 4 bytes long: the scan always moves forward.
+    at = found->end;
+    if (std::ranges::none_of(carved, [&](const CarvedName& seen) {
+          return SameCarvedName(seen, found->name);
+        })) {
+      carved.push_back(std::move(found->name));
+    }
+  }
+  return carved;
+}
+
+}  // namespace
+
+bool SameCarvedName(const CarvedName& left, const CarvedName& right) noexcept {
   return left.name == right.name && left.parent_record == right.parent_record &&
          left.parent_sequence == right.parent_sequence &&
          left.parent_known == right.parent_known &&
@@ -301,35 +325,26 @@ bool SameCandidate(const CarvedName& left, const CarvedName& right) noexcept {
          SameTime(left.access_time, right.access_time);
 }
 
-}  // namespace
-
 std::vector<CarvedName> CarveFileNames(std::span<const BYTE> record,
                                        size_t marker_offset) {
-  std::vector<CarvedName> carved;
   if (marker_offset > record.size() ||
       record.size() - marker_offset < end_marker_size) {
-    return carved;
+    return {};
   }
+  return CarveFrom(
+      record, marker_offset + end_marker_size,
+      std::min(marker_offset + live_terminator_size, record.size()));
+}
 
-  // Rounded up to an even offset, the alignment of a name.
-  const size_t scan_begin = (marker_offset + end_marker_size + 1) & ~size_t{1};
-  const size_t trusted_begin =
-      std::min(marker_offset + live_terminator_size, record.size());
-
-  size_t at = scan_begin;
-  while (at + shortest_core <= record.size()) {
-    std::optional<Found> found = ProbeAt(record, at, trusted_begin);
-    if (!found) {
-      at += scan_step;
-      continue;
-    }
-    // A name is at least 4 bytes long: the scan always moves forward.
-    at = found->end;
-    if (std::ranges::none_of(carved, [&](const CarvedName& seen) {
-          return SameCandidate(seen, found->name);
-        })) {
-      carved.push_back(std::move(found->name));
-    }
+std::vector<CarvedName> CarveFileNamesFrom(std::span<const BYTE> bytes,
+                                           size_t slack_begin,
+                                           CarveSource source) {
+  if (slack_begin > bytes.size()) {
+    return {};
+  }
+  std::vector<CarvedName> carved = CarveFrom(bytes, slack_begin, slack_begin);
+  for (CarvedName& name : carved) {
+    name.source = source;
   }
   return carved;
 }

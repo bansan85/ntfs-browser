@@ -1916,4 +1916,39 @@ void PutRecordSlack(std::vector<BYTE>& image, ULONGLONG idx,
 void SetRecordUsedSize(std::vector<BYTE>& image, ULONGLONG idx,
                        DWORD used_size);
 
+// Record number and sequence number of the directory
+// BuildFakeNtfsImageWithIndexBlocks() makes: the root directory.
+inline constexpr ULONGLONG index_slack_directory_record = 5;
+inline constexpr WORD index_slack_directory_sequence = 5;
+
+// One index block as NTFS leaves it after deleting entries: the used entries,
+// the end entry, then stale bytes.
+struct FakeIndexBlock {
+  // The entries of the used part, in order. Each gets its index entry header.
+  // The end entry follows them.
+  std::vector<FakeSlackName> live;
+  // The bytes written right after the end entry, the unused space of the
+  // block. They MAY run to the block's last byte.
+  std::vector<BYTE> slack;
+  // VCN the block header declares.
+  ULONGLONG vcn = 0;
+  // 1 marks a node that has children.
+  BYTE not_leaf = 0;
+};
+
+// The bytes of block as they sit on disk, update sequence fixups applied: a
+// block_size-byte INDX block with its fixup array at 0x28 and its entries at
+// 0x40, as NTFS writes them. Throws std::out_of_range when the entries and
+// the slack do not fit. block_size MUST be a multiple of 512 and at most 5632.
+[[nodiscard]] std::vector<BYTE> BuildFakeIndexBlock(const FakeIndexBlock& block,
+                                                    DWORD block_size);
+
+// Same volume as BuildFakeNtfsImage(), with the root record (#5) replaced by a
+// directory whose $INDEX_ALLOCATION holds blocks, one after the other from VCN
+// 0, each block_size bytes long (a multiple of the cluster size, and the size
+// of every element). $INDEX_ROOT holds only a pointer to VCN 0. The blocks are
+// written as given, so a test can damage them first.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexBlocks(
+    std::span<const std::vector<BYTE>> blocks);
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests
