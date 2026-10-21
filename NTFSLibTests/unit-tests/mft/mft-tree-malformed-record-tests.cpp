@@ -81,6 +81,20 @@ void SetSignature(std::vector<BYTE>& image, ULONGLONG idx,
       signature.data(), signature.size());
 }
 
+// Scans the tree fixture with a scratch record at mft_tree_report_idx, once
+// for each mode, and returns how many records each scan counted as damaged,
+// strict first. The scratch record is placed after edit changed the image.
+template <Cache::Strategy S, typename Edit>
+std::pair<ULONGLONG, ULONGLONG> DamagedCounts(const ScratchRecord& scratch,
+                                              Edit edit) {
+  std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
+  scratch.Place(image, mft_tree_report_idx);
+  edit(image);
+  return {
+      Scan<S>(image, VolumeOptions{.recover_errors = false}).Stats().damaged,
+      Scan<S>(image, VolumeOptions{.recover_errors = true}).Stats().damaged};
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -153,4 +167,63 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK(entry->names.front().parent_record == 5);
     CHECK(tree.GetPath(mft_tree_report_idx) == L"\\short.txt");
   }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A run list that overruns its attribute is one damaged record in either "
+    "mode",
+    "[mft-tree][malformed-record][!shouldfail]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto std_info = ScratchStdInfoBody();
+  const auto name = ScratchFileNameBody(L"cut.bin", root_reference);
+  // Two clusters at LCN 8, in an attribute that declares one.
+  constexpr std::array<BYTE, 4> run_list{0x11, 0x02, 0x08, 0x00};
+  const auto build = [&](ULONGLONG declared_clusters) {
+    ScratchRecord scratch;
+    scratch.Resident(Attr::Type::StandardInformation, std_info)
+        .Resident(Attr::Type::FileName, name)
+        .NonResident(Attr::Type::Data, run_list, declared_clusters, 1024)
+        .End();
+    return scratch;
+  };
+  const auto nothing = [](std::vector<BYTE>&) {};
+
+  // The same record with a declared size that fits its run is not damaged.
+  const auto [sound_strict, sound_recovering] =
+      DamagedCounts<S>(build(2), nothing);
+  CHECK(sound_strict == sound_recovering);
+
+  const auto [strict, recovering] = DamagedCounts<S>(build(1), nothing);
+  CHECK(strict == sound_strict + 1);
+  CHECK(recovering == strict);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A record with one failed sector is one damaged record in either mode",
+    "[mft-tree][malformed-record][!shouldfail]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto std_info = ScratchStdInfoBody();
+  const auto name = ScratchFileNameBody(L"torn.bin", root_reference);
+  ScratchRecord scratch;
+  scratch.Resident(Attr::Type::StandardInformation, std_info)
+      .Resident(Attr::Type::FileName, name)
+      .Resident(Attr::Type::Data, short_content)
+      .End();
+
+  const auto [sound_strict, sound_recovering] =
+      DamagedCounts<S>(scratch, [](std::vector<BYTE>&) {});
+  CHECK(sound_strict == sound_recovering);
+
+  // The last word of the first sector is no longer the update sequence
+  // number.
+  const auto tear = [](std::vector<BYTE>& image) {
+    constexpr std::size_t first_sector_end = 510;
+    image.at(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size +
+             (mft_tree_report_idx *
+              NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size) +
+             first_sector_end) = 0x77;
+  };
+  const auto [strict, recovering] = DamagedCounts<S>(scratch, tear);
+  CHECK(strict == sound_strict + 1);
+  CHECK(recovering == strict);
 }

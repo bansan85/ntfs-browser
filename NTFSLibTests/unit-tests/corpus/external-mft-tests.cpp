@@ -627,6 +627,35 @@ TEST_CASE("Large standalone $MFT files scan alike in every mode and strategy",
   CheckFixture(GENERATE(from_range(large_fixtures)));
 }
 
+TEST_CASE(
+    "Strict and recovering scans of a small $MFT count the same damaged "
+    "records",
+    "[dfir-corpora][integration][mft][!shouldfail]") {
+  const MftFixture fixture = GENERATE(from_range(small_fixtures));
+  CAPTURE(fixture.label);
+  const std::filesystem::path file = RequireCorpusFile(PathOf(fixture));
+  const bool repair = NeedsRepair(fixture);
+  const StandaloneMftScan strict = ScanStandaloneMft(
+      file, Cache::Strategy::NoCache, StrictOptions(), repair);
+  const StandaloneMftScan recovering = ScanStandaloneMft(
+      file, Cache::Strategy::NoCache, RecoveringOptions(), repair);
+  CHECK(strict.tree.Stats().damaged == recovering.tree.Stats().damaged);
+}
+
+TEST_CASE(
+    "Strict and recovering scans of a large $MFT count the same damaged "
+    "records",
+    "[dfir-corpora][integration][mft][slow][!shouldfail]") {
+  const MftFixture fixture = GENERATE(from_range(large_fixtures));
+  CAPTURE(fixture.label);
+  const std::filesystem::path file = RequireCorpusFile(PathOf(fixture));
+  const StandaloneMftScan strict =
+      ScanStandaloneMft(file, Cache::Strategy::NoCache, StrictOptions());
+  const StandaloneMftScan recovering =
+      ScanStandaloneMft(file, Cache::Strategy::NoCache, RecoveringOptions());
+  CHECK(strict.tree.Stats().damaged == recovering.tree.Stats().damaged);
+}
+
 TEST_CASE("A standalone $MFT scans with the default volume options",
           "[dfir-corpora][integration][mft]") {
   const MftFixture fixture = GENERATE(from_range(small_fixtures));
