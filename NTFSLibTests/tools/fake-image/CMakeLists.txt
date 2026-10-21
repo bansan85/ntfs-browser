@@ -21,6 +21,7 @@ add_library(
   "fake-ntfs-image-compressed-file.cpp"
   "fake-ntfs-image-compressed-index.cpp"
   "fake-ntfs-image-efs.cpp"
+  "fake-ntfs-image-slack.cpp"
   "fake-ntfs-image-usn.cpp"
   "file-record-header-edit.h"
 )

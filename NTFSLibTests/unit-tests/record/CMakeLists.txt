@@ -15,6 +15,7 @@ target_sources(
     "index-block-recursion-depth-tests.cpp"
     "index-root-entry-lifetime-tests.cpp"
     "parse-attrs-total-size-tests.cpp"
+    "slack-carver-tests.cpp"
     "traverse-sub-entries-recovery-tests.cpp"
     "volume-options-tests.cpp"
     "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/named-stream-probe.h"

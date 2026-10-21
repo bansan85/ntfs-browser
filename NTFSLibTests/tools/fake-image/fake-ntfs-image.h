@@ -1877,4 +1877,43 @@ struct FakeUsnOptions {
 // bitmap takes the clusters after the image's end too.
 void PutUsnJournal(std::vector<BYTE>& image, const FakeUsnOptions& options);
 
+// One $FILE_NAME structure as it sits in the leftover bytes of a record.
+struct FakeSlackName {
+  std::wstring name;
+  // Record number and sequence number of the parent directory.
+  ULONGLONG parent_record = 39;
+  WORD parent_sequence = 1;
+  // The four times as stored (UTC): created, altered, MFT changed, read. The
+  // default is a day in 2020.
+  std::array<ULONGLONG, 4> times{0x01D68C7C1B2A0000ULL, 0x01D68C7C1B2A0100ULL,
+                                 0x01D68C7C1B2A0200ULL, 0x01D68C7C1B2A0300ULL};
+  DWORD flags = 0x20;
+  BYTE name_space = 1;
+  // Puts the 16-byte header of an index entry before the structure, as the
+  // entries of an $INDEX_ROOT that shrank leave it.
+  bool with_entry_header = false;
+};
+
+// The bytes of a FakeSlackName: the $FILE_NAME, preceded by its index entry
+// header when asked, padded with zeros to a multiple of 8.
+[[nodiscard]] std::vector<BYTE> EncodeSlackName(const FakeSlackName& name);
+
+// Where the attribute walk of record idx ends in an image built on the 26-slot
+// MftTree base: the offset of its end marker inside the record.
+[[nodiscard]] size_t RecordEndMarkerOffset(const std::vector<BYTE>& image,
+                                           ULONGLONG idx);
+
+// Writes bytes into record idx, offset_from_marker bytes after the start of its
+// end marker. The fake records end with a fixup array in bytes 1018 to 1023,
+// and their first sector's check word at bytes 510 and 511 MUST stay zero: a
+// write that reaches the array, leaves the record, or puts a non-zero byte on
+// the check word throws std::out_of_range.
+void PutRecordSlack(std::vector<BYTE>& image, ULONGLONG idx,
+                    size_t offset_from_marker, std::span<const BYTE> bytes);
+
+// Sets the used size in the header of record idx, which NTFS keeps right after
+// the end marker. A hostile volume can forge it.
+void SetRecordUsedSize(std::vector<BYTE>& image, ULONGLONG idx,
+                       DWORD used_size);
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests
