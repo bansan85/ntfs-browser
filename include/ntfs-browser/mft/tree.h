@@ -173,10 +173,14 @@ class NTFS_BROWSER_EXPORT MftTree {
     // a slot is counted here and in none of the counters above, whatever it
     // holds: a freed record, or one that never held a file.
     ULONGLONG skipped{0};
-    // Records with an attribute that failed to parse, counted either way,
-    // and, when recovering, the records kept with sectors that fail their
-    // update sequence check. Dropped unless the volume's recover_errors is on,
-    // which keeps what parsed before the failure.
+    // Records with a defect strict mode rejects: an attribute that failed to
+    // parse, or an update sequence check that failed on some sector. The same
+    // count in both modes, since recovering counts what it salvages. Dropped
+    // unless the volume's recover_errors is on, which keeps what parsed. A
+    // record whose update sequence check failed is also counted in unreadable
+    // when strict, and in in_use, deleted or extensions when recovering. A
+    // freed record not asked for (include_deleted off) has its attributes
+    // unread: only its update sequence check can make it damaged.
     ULONGLONG damaged{0};
     // Kept records that no chain of valid parent references links to the root.
     ULONGLONG unreachable{0};

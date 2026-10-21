@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <exception>
 #include <format>
 #include <string_view>
@@ -27,6 +28,16 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void SilenceCurrentThread() noexcept;
 // Hands one finished line to the library logger.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void Emit(Level level,
                                          std::string_view message) noexcept;
+
+// Counts one salvaged condition on the calling thread. Called by
+// Log::Recoverable() when its caller recovers, whether or not a sink wants the
+// message.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void NoteRecovered() noexcept;
+
+// How many conditions the calling thread has salvaged so far. A caller that
+// needs to know whether a stretch of work salvaged anything compares the value
+// before and after it.
+NTFS_BROWSER_EXPORT_TESTS_ONLY std::uint64_t RecoveredCount() noexcept;
 
 // Formats and emits. A formatting or allocation failure yields a stand-in
 // line instead of a throw: callers include destructors and noexcept
@@ -77,10 +88,15 @@ void Warn(std::format_string<Args...> fmt, Args&&... args) noexcept {
 
 // A salvageable condition: Info when recover is true (recover_errors is on,
 // so the caller salvages), Warn when strict (the caller rejects the item
-// whole). The text is identical either way.
+// whole). The text is identical either way. A call made with recover set is
+// also counted (Detail::RecoveredCount()), so that a record can tell it was
+// salvaged. Only a condition that strict mode rejects belongs here.
 template <class... Args>
 void Recoverable(bool recover, std::format_string<Args...> fmt,
                  Args&&... args) noexcept {
+  if (recover) {
+    Detail::NoteRecovered();
+  }
   Detail::Write(recover ? Level::Info : Level::Warn, fmt,
                 std::forward<Args>(args)...);
 }

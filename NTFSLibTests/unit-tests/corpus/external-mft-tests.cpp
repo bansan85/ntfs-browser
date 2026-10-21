@@ -79,8 +79,8 @@ constexpr std::string_view museum_mft = "Windows/NTFSArtifacts/MFT/";
 // it. A slot counts as unreadable when it has no FILE signature (BAAD and zeros
 // included) or fails its fixup check. A freed record is a base record without
 // the in-use flag. Directories are base records in use with the directory flag.
-// damaged_strict and damaged_recovering are the library's own answer, pinned as
-// it is today: ScanStats::damaged in strict and in recovering mode. salvaged is
+// damaged is the library's own answer, pinned as it is today:
+// ScanStats::damaged, the same in strict and in recovering mode. salvaged is
 // the independent reader's count of freed records that fail the fixup check on
 // one sector only: a recovering scan keeps them as deleted records, and a
 // strict one counts them unreadable.
@@ -97,43 +97,42 @@ struct MftFixture {
   ULONGLONG extensions;
   ULONGLONG unreadable;
   ULONGLONG directories;
-  ULONGLONG damaged_strict;
-  ULONGLONG damaged_recovering;
+  ULONGLONG damaged;
   ULONGLONG salvaged;
 };
 
 // The fixtures that scan in seconds.
 constexpr std::array<MftFixture, 8> small_fixtures = {{
     {"nist-hacking-case", Project::DfirNtfs, "test_data/nist-hacking-case.mft",
-     12'600'320, 1024, 512, 12305, 12180, 3, 121, 1, 767, 0, 0, 0},
+     12'600'320, 1024, 512, 12305, 12180, 3, 121, 1, 767, 0, 0},
     {"4k-large", Project::DfirNtfs, "test_data/4k-large.mft", 1048576, 4096,
-     4096, 256, 36, 0, 0, 220, 9, 0, 0, 0},
+     4096, 256, 36, 0, 0, 220, 9, 0, 0},
     {"orphan", Project::DfirNtfs, "test_data/orphan.mft", 262144, 1024, 4096,
-     256, 36, 4, 0, 216, 11, 0, 0, 0},
+     256, 36, 4, 0, 216, 11, 0, 0},
     {"deleted", Project::DfirNtfs, "test_data/deleted.mft", 262144, 1024, 4096,
-     256, 35, 6, 0, 215, 9, 0, 0, 0},
+     256, 35, 6, 0, 215, 9, 0, 0},
     {"unicode", Project::DfirNtfs, "test_data/unicode.mft", 262144, 1024, 4096,
-     256, 36, 0, 0, 220, 10, 0, 0, 0},
+     256, 36, 0, 0, 220, 10, 0, 0},
     {"mapping_pairs_1", Project::DfirNtfs, "test_data/mapping_pairs_1.mft",
-     262144, 1024, 4096, 256, 41, 2, 0, 213, 10, 0, 0, 0},
+     262144, 1024, 4096, 256, 41, 2, 0, 213, 10, 0, 0},
     {"xw", Project::DfirMuseum, "Unknown/xw/$MFT", 643072, 1024, 2048, 628, 466,
-     149, 1, 12, 31, 13, 16, 10},
+     149, 1, 12, 31, 23, 10},
     {"nist-dfr-16", Project::DfirMuseum, "Unknown/NIST/DFR-16/$MFT", 157696,
-     1024, 512, 154, 117, 0, 0, 37, 50, 0, 0, 0},
+     1024, 512, 154, 117, 0, 0, 37, 50, 0, 0},
 }};
 
 // The fixtures of 50 MB and more: a scan takes seconds in a Release build and
 // up to a minute in a Debug one.
 constexpr std::array<MftFixture, 4> large_fixtures = {{
     {"tdungan", Project::DfirMuseum, "Unknown/tdungan/$MFT", 53'575'680, 1024,
-     4096, 52320, 42754, 9443, 123, 0, 4939, 6, 0, 0},
+     4096, 52320, 42754, 9443, 123, 0, 4939, 6, 0},
     {"stolen-szechuan-2012r2", Project::DfirMuseum,
      "Win2012R2/StolenSzechuan/$MFT", 89'391'104, 1024, 4096, 87296, 85986, 0,
-     1154, 156, 20162, 5, 0, 0},
+     1154, 156, 20162, 5, 0},
     {"rathbun-win10", Project::DfirMuseum, "Win10/RathbunVM/$MFT", 121'634'816,
-     1024, 4096, 118784, 104218, 12107, 2332, 127, 29288, 76, 0, 0},
+     1024, 4096, 118784, 104218, 12107, 2332, 127, 29288, 76, 0},
     {"rathbun-win11", Project::DfirMuseum, "Win11/RathbunVM/$MFT", 104'857'600,
-     1024, 4096, 102400, 98739, 0, 3485, 176, 25147, 92, 0, 0},
+     1024, 4096, 102400, 98739, 0, 3485, 176, 25147, 92, 0},
 }};
 
 std::filesystem::path PathOf(const MftFixture& fixture) {
@@ -575,18 +574,17 @@ void CheckFixture(const MftFixture& fixture) {
   }
   CHECK(CountDirectories(recover_no_cache.tree) == fixture.directories);
 
-  // Strict drops a damaged record, recovering keeps what parses. Recovering
-  // can salvage a record whose attribute list or run list is cut, which a
-  // strict scan counts as damaged: it counts fewer. A standalone $MFT lacks
-  // the clusters of every non-resident $ATTRIBUTE_LIST, so strict mode counts
-  // those records too. Recovering also counts the records it salvages with a
-  // failed fixup, which strict mode counts unreadable.
+  // Both modes count the same damaged records: strict drops them, recovering
+  // keeps what parses, and counts what it salvages. A standalone $MFT lacks
+  // the clusters of every non-resident $ATTRIBUTE_LIST, so both modes count
+  // those records. A record with a failed fixup is damaged too, and strict
+  // mode also counts it unreadable.
   const Mft::MftTree::ScanStats& strict = strict_no_cache.tree.Stats();
   const Mft::MftTree::ScanStats& recover = recover_no_cache.tree.Stats();
-  CHECK(strict.damaged == fixture.damaged_strict);
-  CHECK(recover.damaged == fixture.damaged_recovering);
+  CHECK(strict.damaged == fixture.damaged);
+  CHECK(recover.damaged == fixture.damaged);
   CHECK(strict_no_cache.tree.Entries().size() + strict.damaged ==
-        strict.in_use + strict.deleted);
+        strict.in_use + strict.deleted + fixture.salvaged);
   CHECK(recover_no_cache.tree.Entries().size() ==
         recover.in_use + recover.deleted);
 
@@ -630,7 +628,7 @@ TEST_CASE("Large standalone $MFT files scan alike in every mode and strategy",
 TEST_CASE(
     "Strict and recovering scans of a small $MFT count the same damaged "
     "records",
-    "[dfir-corpora][integration][mft][!shouldfail]") {
+    "[dfir-corpora][integration][mft]") {
   const MftFixture fixture = GENERATE(from_range(small_fixtures));
   CAPTURE(fixture.label);
   const std::filesystem::path file = RequireCorpusFile(PathOf(fixture));
@@ -645,7 +643,7 @@ TEST_CASE(
 TEST_CASE(
     "Strict and recovering scans of a large $MFT count the same damaged "
     "records",
-    "[dfir-corpora][integration][mft][slow][!shouldfail]") {
+    "[dfir-corpora][integration][mft][slow]") {
   const MftFixture fixture = GENERATE(from_range(large_fixtures));
   CAPTURE(fixture.label);
   const std::filesystem::path file = RequireCorpusFile(PathOf(fixture));
@@ -673,7 +671,9 @@ TEST_CASE("A standalone $MFT scans with the default volume options",
   CHECK(std::ranges::all_of(
       scan.tree.Entries(),
       [](const Mft::MftTree::Entry& entry) { return entry.in_use; }));
-  CHECK(scan.tree.Entries().size() + stats.damaged == fixture.in_use);
+  // The records with a failed fixup are damaged and freed: not in-use ones.
+  CHECK(scan.tree.Entries().size() + stats.damaged ==
+        fixture.in_use + fixture.salvaged);
 }
 
 TEST_CASE("A standalone $MFT agrees with its Sleuth Kit listing",

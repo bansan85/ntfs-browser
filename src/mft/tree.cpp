@@ -232,8 +232,9 @@ ULONGLONG ReadRangeEnd(const std::vector<BYTE>& bitmap, ULONGLONG first,
 // Classifies one record slot and, when it is an entry to keep, reads it.
 // Counts the outcome in stats. Returns nullopt for a slot that is not kept:
 // unreadable, an extension, a freed record not asked for, or a damaged one
-// when strict. A record kept with sectors that fail their update sequence
-// check is damaged, counted once whatever else is wrong with it.
+// when strict. A record with a failed update sequence check is damaged in both
+// modes: strict drops it as unreadable, recovering keeps what verifies. It is
+// counted once, whatever else is wrong with it.
 template <Cache::Strategy S>
 std::optional<Mft::MftTree::Entry>
     ReadSlot(Io::FileRecord<S>& file_record, Mft::SlotReader<S>& slots,
@@ -241,9 +242,12 @@ std::optional<Mft::MftTree::Entry>
              Mft::MftTree::ScanStats& stats) {
   if (!slots.ParseFileRecord(file_record, record)) {
     stats.unreadable++;
+    if (file_record.HasFailedFixup()) {
+      stats.damaged++;
+    }
     return std::nullopt;
   }
-  const bool header_damaged = file_record.IsSalvaged();
+  const bool header_damaged = file_record.HasFailedFixup();
   if (header_damaged) {
     stats.damaged++;
   }
@@ -261,12 +265,13 @@ std::optional<Mft::MftTree::Entry>
   }
 
   Mft::MftTree::Entry entry;
-  if (!ReadEntry(file_record, record, entry)) {
+  const bool parsed = ReadEntry(file_record, record, entry);
+  if (!parsed || file_record.IsSalvaged()) {
     if (!header_damaged) {
       stats.damaged++;
     }
     // Strict: a damaged record is dropped, not kept partial.
-    if (!volume.GetOptions().recover_errors) {
+    if (!parsed && !volume.GetOptions().recover_errors) {
       return std::nullopt;
     }
   }

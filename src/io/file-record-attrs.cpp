@@ -235,6 +235,9 @@ bool Io::FileRecord<S>::Impl::AttrParser::Parse(
   impl_.ClearAttrs();
 
   const bool recover = impl_.volume->GetOptions().recover_errors;
+  // What this parse salvages is whatever Log::Recoverable() counts from here
+  // on, the parses of extension records included.
+  const std::uint64_t recovered_before = Log::Detail::RecoveredCount();
   skipped_attr_ = false;
 
   // Visit all attributes
@@ -263,6 +266,7 @@ bool Io::FileRecord<S>::Impl::AttrParser::Parse(
   if (end == WalkEnd::Aborted) {
     // Only a strict parse can fail here.
     static_cast<void>(AttachEfsContext(*impl_.self));
+    impl_.attrs_salvaged = true;
     return false;
   }
 
@@ -270,6 +274,9 @@ bool Io::FileRecord<S>::Impl::AttrParser::Parse(
     impl_.ClearAttrs();
     return false;
   }
+  // Nothing is salvaged when strict: it returned above on any defect.
+  impl_.attrs_salvaged = skipped_attr_ || end != WalkEnd::EndMarker ||
+                         Log::Detail::RecoveredCount() != recovered_before;
   // A skipped attribute is a failed one: false, as when the walk aborted there.
   return !skipped_attr_;
 }

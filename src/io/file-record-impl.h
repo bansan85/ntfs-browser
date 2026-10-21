@@ -94,6 +94,9 @@ class FileRecord<S>::Impl {
   // The last ParseFileRecord() kept a record whose update sequence check
   // failed, or read it from $MFTMirr instead. Only when recovering.
   bool header_salvaged{false};
+  // The last ParseAttrs() salvaged something strict mode rejects. Only when
+  // recovering.
+  bool attrs_salvaged{false};
 
   void ClearAttrs() noexcept;
   // See FileRecord<S>::CarveSlackNames().

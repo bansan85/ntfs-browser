@@ -683,16 +683,16 @@ void AttrNonResident<S>::CheckClusterAllocation() const {
       }
     }
     if (first_free_lcn) {
-      Log::Recoverable(true,
-                       "Record {}: {} clusters of a data stream are free in "
-                       "$Bitmap, from the run at LCN {}",
-                       record, free_clusters, *first_free_lcn);
+      Log::Info(
+          "Record {}: {} clusters of a data stream are free in $Bitmap, from "
+          "the run at LCN {}",
+          record, free_clusters, *first_free_lcn);
     }
     if (first_bad_lcn) {
-      Log::Recoverable(true,
-                       "Record {}: {} clusters of a data stream are marked bad "
-                       "in $BadClus, from the run at LCN {}",
-                       record, bad_clusters, *first_bad_lcn);
+      Log::Info(
+          "Record {}: {} clusters of a data stream are marked bad in "
+          "$BadClus, from the run at LCN {}",
+          record, bad_clusters, *first_bad_lcn);
     }
   } catch (const std::exception& e) {
     Log::Exception(e);

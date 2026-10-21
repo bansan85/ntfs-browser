@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <memory>
@@ -363,7 +364,15 @@ namespace {
 // Set by SilenceCurrentThread(), once per thread that must never log.
 thread_local bool current_thread_silenced = false;
 
+// Salvaged conditions this thread met, see RecoveredCount(). Per thread, so a
+// worker thread of the library never races the caller's count.
+thread_local std::uint64_t recovered_count = 0;
+
 }  // namespace
+
+void NoteRecovered() noexcept { recovered_count++; }
+
+std::uint64_t RecoveredCount() noexcept { return recovered_count; }
 
 void SilenceCurrentThread() noexcept { current_thread_silenced = true; }
 

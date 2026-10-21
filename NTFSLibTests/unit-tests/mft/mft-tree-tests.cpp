@@ -229,7 +229,8 @@ void RunMftTreeDropsUnrecoveredRecord() {
     REQUIRE(volume->IsVolumeOK());
 
     const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
-    CHECK(tree.Stats().damaged == 0);
+    // The record is kept, and counted as damaged all the same.
+    CHECK(tree.Stats().damaged == 1);
     CHECK(tree.Find(attr_name_exceeds_total_size_record_idx) != nullptr);
   }
 }

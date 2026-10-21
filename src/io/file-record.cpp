@@ -180,6 +180,7 @@ void Io::FileRecord<S>::Impl::ClearAttrs() noexcept {
   extension_records.clear();
   realigned_attrs.clear();
   end_marker_offset.reset();
+  attrs_salvaged = false;
 }
 
 // Call user defined Callback routines for an attribute
@@ -369,8 +370,13 @@ bool Io::FileRecord<S>::ParseAttrs() {
 }
 
 template <Cache::Strategy S>
+bool Io::FileRecord<S>::HasFailedFixup() const noexcept {
+  return impl_->failed_fixup;
+}
+
+template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsSalvaged() const noexcept {
-  return impl_->header_salvaged;
+  return impl_->header_salvaged || impl_->attrs_salvaged;
 }
 
 template <Cache::Strategy S>

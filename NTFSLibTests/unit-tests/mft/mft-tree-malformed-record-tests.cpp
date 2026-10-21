@@ -172,7 +172,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG(
     "A run list that overruns its attribute is one damaged record in either "
     "mode",
-    "[mft-tree][malformed-record][!shouldfail]", ((Cache::Strategy S), S),
+    "[mft-tree][malformed-record]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto std_info = ScratchStdInfoBody();
   const auto name = ScratchFileNameBody(L"cut.bin", root_reference);
@@ -200,7 +200,7 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "A record with one failed sector is one damaged record in either mode",
-    "[mft-tree][malformed-record][!shouldfail]", ((Cache::Strategy S), S),
+    "[mft-tree][malformed-record]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto std_info = ScratchStdInfoBody();
   const auto name = ScratchFileNameBody(L"torn.bin", root_reference);
