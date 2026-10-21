@@ -64,13 +64,18 @@ Header::Header(std::span<const BYTE> buffer) : buffer_size(buffer.size()) {
   }
 }
 
-bool Header::PatchUS() noexcept {
+bool Header::PatchUS() noexcept { return PatchSectors(true) == 0; }
+
+size_t Header::PatchUSSalvage() noexcept { return PatchSectors(false); }
+
+size_t Header::PatchSectors(bool stop_at_first_failure) noexcept {
   // The update sequence is patched in place, in the buffer the caller owns.
   // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
   const std::span<WORD> words(
       const_cast<WORD*>(reinterpret_cast<const WORD*>(&GetData()->raw[0])),
       buffer_size / sizeof(WORD));
   // NOLINTEND(cppcoreguidelines-pro-type-const-cast)
+  size_t failed = 0;
   size_t pos = 0;
   for (WORD const value : us_array) {
     // The last word of each sector holds the USN.
@@ -79,15 +84,19 @@ bool Header::PatchUS() noexcept {
     assert(pos < words.size());
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     WORD& sector = words[pos];
+    pos++;
     // USN error. Ignore if already patched (FullCache)
     if (sector != us_number && sector != value) {
-      return false;
+      failed++;
+      if (stop_at_first_failure) {
+        return failed;
+      }
+      continue;
     }
     // Write back correct data
     sector = value;
-    pos++;
   }
-  return true;
+  return failed;
 }
 
 const Attr::HeaderCommon* Header::HeaderCommon() const noexcept {

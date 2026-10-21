@@ -88,6 +88,13 @@ class FileRecord<S>::Impl {
   // Empty when it did not reach one.
   std::optional<size_t> end_marker_offset;
 
+  // The update sequence check of the last ParseFileRecord() failed on at least
+  // one sector, whether the record was then rejected or kept.
+  bool failed_fixup{false};
+  // The last ParseFileRecord() kept a record whose update sequence check
+  // failed, or read it from $MFTMirr instead. Only when recovering.
+  bool header_salvaged{false};
+
   void ClearAttrs() noexcept;
   // See FileRecord<S>::CarveSlackNames().
   [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;

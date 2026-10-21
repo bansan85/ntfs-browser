@@ -79,8 +79,11 @@ constexpr std::string_view museum_mft = "Windows/NTFSArtifacts/MFT/";
 // it. A slot counts as unreadable when it has no FILE signature (BAAD and zeros
 // included) or fails its fixup check. A freed record is a base record without
 // the in-use flag. Directories are base records in use with the directory flag.
-// The last two columns are the library's own answer, pinned as it is today:
-// ScanStats::damaged in strict and in recovering mode.
+// damaged_strict and damaged_recovering are the library's own answer, pinned as
+// it is today: ScanStats::damaged in strict and in recovering mode. salvaged is
+// the independent reader's count of freed records that fail the fixup check on
+// one sector only: a recovering scan keeps them as deleted records, and a
+// strict one counts them unreadable.
 struct MftFixture {
   std::string_view label;
   Project project;
@@ -96,40 +99,41 @@ struct MftFixture {
   ULONGLONG directories;
   ULONGLONG damaged_strict;
   ULONGLONG damaged_recovering;
+  ULONGLONG salvaged;
 };
 
 // The fixtures that scan in seconds.
 constexpr std::array<MftFixture, 8> small_fixtures = {{
     {"nist-hacking-case", Project::DfirNtfs, "test_data/nist-hacking-case.mft",
-     12'600'320, 1024, 512, 12305, 12180, 3, 121, 1, 767, 0, 0},
+     12'600'320, 1024, 512, 12305, 12180, 3, 121, 1, 767, 0, 0, 0},
     {"4k-large", Project::DfirNtfs, "test_data/4k-large.mft", 1048576, 4096,
-     4096, 256, 36, 0, 0, 220, 9, 0, 0},
+     4096, 256, 36, 0, 0, 220, 9, 0, 0, 0},
     {"orphan", Project::DfirNtfs, "test_data/orphan.mft", 262144, 1024, 4096,
-     256, 36, 4, 0, 216, 11, 0, 0},
+     256, 36, 4, 0, 216, 11, 0, 0, 0},
     {"deleted", Project::DfirNtfs, "test_data/deleted.mft", 262144, 1024, 4096,
-     256, 35, 6, 0, 215, 9, 0, 0},
+     256, 35, 6, 0, 215, 9, 0, 0, 0},
     {"unicode", Project::DfirNtfs, "test_data/unicode.mft", 262144, 1024, 4096,
-     256, 36, 0, 0, 220, 10, 0, 0},
+     256, 36, 0, 0, 220, 10, 0, 0, 0},
     {"mapping_pairs_1", Project::DfirNtfs, "test_data/mapping_pairs_1.mft",
-     262144, 1024, 4096, 256, 41, 2, 0, 213, 10, 0, 0},
+     262144, 1024, 4096, 256, 41, 2, 0, 213, 10, 0, 0, 0},
     {"xw", Project::DfirMuseum, "Unknown/xw/$MFT", 643072, 1024, 2048, 628, 466,
-     149, 1, 12, 31, 13, 6},
+     149, 1, 12, 31, 13, 16, 10},
     {"nist-dfr-16", Project::DfirMuseum, "Unknown/NIST/DFR-16/$MFT", 157696,
-     1024, 512, 154, 117, 0, 0, 37, 50, 0, 0},
+     1024, 512, 154, 117, 0, 0, 37, 50, 0, 0, 0},
 }};
 
 // The fixtures of 50 MB and more: a scan takes seconds in a Release build and
 // up to a minute in a Debug one.
 constexpr std::array<MftFixture, 4> large_fixtures = {{
     {"tdungan", Project::DfirMuseum, "Unknown/tdungan/$MFT", 53'575'680, 1024,
-     4096, 52320, 42754, 9443, 123, 0, 4939, 6, 0},
+     4096, 52320, 42754, 9443, 123, 0, 4939, 6, 0, 0},
     {"stolen-szechuan-2012r2", Project::DfirMuseum,
      "Win2012R2/StolenSzechuan/$MFT", 89'391'104, 1024, 4096, 87296, 85986, 0,
-     1154, 156, 20162, 5, 0},
+     1154, 156, 20162, 5, 0, 0},
     {"rathbun-win10", Project::DfirMuseum, "Win10/RathbunVM/$MFT", 121'634'816,
-     1024, 4096, 118784, 104218, 12107, 2332, 127, 29288, 76, 0},
+     1024, 4096, 118784, 104218, 12107, 2332, 127, 29288, 76, 0, 0},
     {"rathbun-win11", Project::DfirMuseum, "Win11/RathbunVM/$MFT", 104'857'600,
-     1024, 4096, 102400, 98739, 0, 3485, 176, 25147, 92, 0},
+     1024, 4096, 102400, 98739, 0, 3485, 176, 25147, 92, 0, 0},
 }};
 
 std::filesystem::path PathOf(const MftFixture& fixture) {
@@ -472,16 +476,20 @@ void CheckFixtureFacts(const MftFixture& fixture,
     CHECK(strict.tree.Find(16) == nullptr);
     CHECK(recovering.tree.Find(16) == nullptr);
   } else if (fixture.label == "xw") {
-    // BAAD records 500 and 565, and the eight records whose fixup check
-    // fails: none is kept in either mode. Record 179 is a freed file whose
-    // attributes are intact, so recovering could have kept it: it does not
-    // (suspected defect 2 of the selection report).
-    for (const ULONGLONG record :
-         {179ULL, 500ULL, 540ULL, 546ULL, 551ULL, 554ULL, 565ULL, 566ULL,
-          567ULL, 568ULL, 586ULL, 616ULL}) {
+    // BAAD records 500 and 565 are kept by no scan. The ten FILE records
+    // whose fixup check fails on one sector are dropped by strict mode and
+    // kept by recovering one, record 179 (a freed file with intact
+    // attributes) among them.
+    for (const ULONGLONG record : {500ULL, 565ULL}) {
       CAPTURE(record);
       CHECK(strict.tree.Find(record) == nullptr);
       CHECK(recovering.tree.Find(record) == nullptr);
+    }
+    for (const ULONGLONG record : {179ULL, 540ULL, 546ULL, 551ULL, 554ULL,
+                                   566ULL, 567ULL, 568ULL, 586ULL, 616ULL}) {
+      CAPTURE(record);
+      CHECK(strict.tree.Find(record) == nullptr);
+      CHECK(recovering.tree.Find(record) != nullptr);
     }
     // Record 432 is an extension of record 485: an extension is no entry.
     CHECK(strict.tree.Find(432) == nullptr);
@@ -550,15 +558,17 @@ void CheckFixture(const MftFixture& fixture) {
   CHECK(
       FirstDifference(recover_no_cache.tree, recover_full_cache.tree).empty());
 
-  // The counts equal the independent reader's, in both modes.
+  // The counts equal the independent reader's. Recovering keeps the freed
+  // records that fail the fixup check on one sector only.
   for (const StandaloneMftScan* scan : {&strict_no_cache, &recover_no_cache}) {
+    const ULONGLONG salvaged = scan == &recover_no_cache ? fixture.salvaged : 0;
     const Mft::MftTree::ScanStats& stats = scan->tree.Stats();
     CHECK(stats.complete);
     CHECK(stats.slots == fixture.slots);
     CHECK(stats.in_use == fixture.in_use);
-    CHECK(stats.deleted == fixture.deleted);
+    CHECK(stats.deleted == fixture.deleted + salvaged);
     CHECK(stats.extensions == fixture.extensions);
-    CHECK(stats.unreadable == fixture.unreadable);
+    CHECK(stats.unreadable == fixture.unreadable - salvaged);
     CHECK(stats.skipped == 0);
     CHECK(stats.in_use + stats.deleted + stats.extensions + stats.unreadable ==
           stats.slots);
@@ -569,14 +579,14 @@ void CheckFixture(const MftFixture& fixture) {
   // can salvage a record whose attribute list or run list is cut, which a
   // strict scan counts as damaged: it counts fewer. A standalone $MFT lacks
   // the clusters of every non-resident $ATTRIBUTE_LIST, so strict mode counts
-  // those records too.
+  // those records too. Recovering also counts the records it salvages with a
+  // failed fixup, which strict mode counts unreadable.
   const Mft::MftTree::ScanStats& strict = strict_no_cache.tree.Stats();
   const Mft::MftTree::ScanStats& recover = recover_no_cache.tree.Stats();
   CHECK(strict.damaged == fixture.damaged_strict);
   CHECK(recover.damaged == fixture.damaged_recovering);
-  CHECK(recover.damaged <= strict.damaged);
   CHECK(strict_no_cache.tree.Entries().size() + strict.damaged ==
-        recover_no_cache.tree.Entries().size());
+        strict.in_use + strict.deleted);
   CHECK(recover_no_cache.tree.Entries().size() ==
         recover.in_use + recover.deleted);
 

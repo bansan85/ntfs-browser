@@ -77,6 +77,12 @@ class NTFS_BROWSER_EXPORT FileRecord {
   [[nodiscard]] bool ParseFileRecord(ULONGLONG file_ref,
                                      std::span<const BYTE> preread);
   [[nodiscard]] bool ParseAttrs();
+  // Whether the parsed record was kept although strict mode would have
+  // rejected it: some of its sectors fail the update sequence check and the
+  // others verify, or its $MFTMirr copy stands in for such a record. The
+  // sectors that fail are left as they are. Always false when recover_errors
+  // is off. What was kept is untrusted.
+  [[nodiscard]] bool IsSalvaged() const noexcept;
   [[nodiscard]] std::optional<ULONGLONG> GetFileReference() const noexcept;
   // Times this record was reused; 0 when no record is parsed.
   [[nodiscard]] WORD GetSequenceNumber() const noexcept;

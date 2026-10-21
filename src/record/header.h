@@ -40,10 +40,24 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY Header {
   virtual ~Header() = default;
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
+  // Patches every sector whose last word verifies, and leaves the others as
+  // they are: their last word is not the update sequence number nor its saved
+  // value, so it is the sector's own, and what it replaced is lost. Returns
+  // how many sectors failed.
+  [[nodiscard]] size_t PatchUSSalvage() noexcept;
+
+  // How many sectors the update sequence array covers.
+  [[nodiscard]] size_t SectorCount() const noexcept { return us_array.size(); }
+
   // Returns nullptr if offset_of_attr doesn't fit in the record buffer.
   [[nodiscard]] const Attr::HeaderCommon* HeaderCommon() const noexcept;
 
   [[nodiscard]] virtual const Data::FileRecordHeader* GetData() const = 0;
+
+ private:
+  // Shared body of PatchUS() and PatchUSSalvage(). Returns how many sectors
+  // failed, or 1 at the first failure when stop_at_first_failure is set.
+  [[nodiscard]] size_t PatchSectors(bool stop_at_first_failure) noexcept;
 };
 
 template <Cache::Strategy S>

@@ -75,22 +75,53 @@ std::optional<LONGLONG> DirectRecordAddress(const NtfsVolume<S>& volume,
   }
 }
 
+// What the checks on a record just read decided.
+enum class HeaderVerdict : BYTE {
+  Rejected,  // The record is unusable.
+  Salvaged,  // Recovering: some sector fails its check, the others verify.
+  Accepted   // The record is whole.
+};
+
 // Checks the magic of a record just read, and patches its update sequence.
-// False if either fails.
+// Strict rejects any sector that fails. Recovering patches the sectors that
+// verify and salvages the record when at least one does: with none, nothing
+// shows the bytes belong to this record. A record that does not carry the FILE
+// magic (a BAAD one, or zeros) is never salvaged. fixup_failed is set when a
+// sector failed its check, whatever the verdict.
 template <Cache::Strategy S>
-bool AcceptRecordHeader(Record::HeaderImpl<S>& header) {
+HeaderVerdict JudgeRecordHeader(Record::HeaderImpl<S>& header, bool recover,
+                                bool& fixup_failed) {
   // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
-  // meets this on every such slot. A caller gets false either way.
+  // meets this on every such slot. A caller gets Rejected either way.
   if (header.GetData()->magic != Data::FileRecordHeader::file_record_magic) {
     Log::Debug("Invalid file record");
-    return false;
+    return HeaderVerdict::Rejected;
   }
 
-  if (!header.PatchUS()) {
-    Log::Warn("Update Sequence Number error");
-    return false;
+  if (!recover) {
+    if (!header.PatchUS()) {
+      fixup_failed = true;
+      Log::Warn("Update Sequence Number error");
+      return HeaderVerdict::Rejected;
+    }
+    return HeaderVerdict::Accepted;
   }
-  return true;
+
+  const size_t failed = header.PatchUSSalvage();
+  if (failed == 0) {
+    return HeaderVerdict::Accepted;
+  }
+  fixup_failed = true;
+  if (failed >= header.SectorCount()) {
+    Log::Warn("Update Sequence Number error: no sector of the record verifies");
+    return HeaderVerdict::Rejected;
+  }
+  Log::Recoverable(
+      true,
+      "Update Sequence Number error: {} of {} sectors do not verify, the "
+      "record is salvaged",
+      failed, header.SectorCount());
+  return HeaderVerdict::Salvaged;
 }
 
 }  // namespace
@@ -270,29 +301,48 @@ bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
     file_record.reset();
   }
 
+  const bool recover = volume->GetOptions().recover_errors;
+  failed_fixup = false;
+  header_salvaged = false;
+
   std::unique_ptr<Record::HeaderImpl<S>> header =
       ReadFileRecord(file_ref, preread);
   const bool read_ok = header != nullptr;
   if (!read_ok) {
     Log::Error("Cannot read file record {}", file_ref);
   }
-  bool accepted = read_ok && AcceptRecordHeader(*header);
+  HeaderVerdict verdict =
+      read_ok ? JudgeRecordHeader(*header, recover, failed_fixup)
+              : HeaderVerdict::Rejected;
 
   // The mirror is the last resort: it may be older than $MFT's own record, as
   // NTFS refreshes it only now and then. The volume reads it only when
   // recovering, and only for the first four records. A caller that supplies
-  // the bytes has no use for another source.
-  if (!accepted && preread.empty()) {
+  // the bytes has no use for another source. It beats a salvaged record, whose
+  // sectors are partly unverified.
+  if (verdict != HeaderVerdict::Accepted && preread.empty()) {
     header.reset();
     header = ReadMirrorRecord(file_ref);
-    if (header && AcceptRecordHeader(*header)) {
-      accepted = true;
+    bool mirror_fixup_failed = false;
+    if (header && JudgeRecordHeader(*header, recover, mirror_fixup_failed) ==
+                      HeaderVerdict::Accepted) {
+      verdict = HeaderVerdict::Accepted;
+      // The record of $MFT was damaged, and a copy stands in for it.
+      header_salvaged = failed_fixup;
       Log::Info(
           "File record {} is unusable in $MFT: using its copy in $MFTMirr, "
           "which may be stale",
           file_ref);
+    } else if (verdict == HeaderVerdict::Salvaged) {
+      // The read of the mirror, if there was one, overwrote the record.
+      header = ReadFileRecord(file_ref, preread);
+      bool again_failed = false;
+      verdict = header ? JudgeRecordHeader(*header, recover, again_failed)
+                       : HeaderVerdict::Rejected;
     }
   }
+  const bool accepted = verdict != HeaderVerdict::Rejected;
+  header_salvaged = header_salvaged || verdict == HeaderVerdict::Salvaged;
 
   if (read_ok || accepted) {
     file_reference = file_ref;
@@ -316,6 +366,11 @@ bool Io::FileRecord<S>::ParseAttrs() {
   // A fresh chain, unrelated to any previous ParseFileRecord() on this object.
   std::unordered_set<ULONGLONG> attr_list_chain;
   return impl_->ParseAttrs(attr_list_chain);
+}
+
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::IsSalvaged() const noexcept {
+  return impl_->header_salvaged;
 }
 
 template <Cache::Strategy S>
