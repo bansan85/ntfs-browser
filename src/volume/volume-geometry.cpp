@@ -29,7 +29,7 @@ constexpr WORD max_sector_size = 4096;
 
 // Largest -log2 of sectors per cluster the BPB encoding may carry: a cluster
 // of 2^12 sectors, far beyond any real volume.
-constexpr int max_sectors_per_cluster_shift = 12;
+constexpr unsigned max_sectors_per_cluster_shift = 12;
 
 // Largest -log2 of a file record or index block size, in bytes.
 constexpr int max_size_shift = 12;
@@ -50,20 +50,26 @@ std::optional<DWORD> DecodeBpbSize(char raw, DWORD cluster_size) {
   return 1U << static_cast<unsigned char>(-raw);
 }
 
+// Largest sectors_per_cluster byte that counts sectors: 0x80, which is 128
+// sectors. Windows writes it for a 64 KiB cluster on 512-byte sectors. As a
+// signed byte it would be -128, a shift the negative encoding does not use.
+constexpr BYTE max_literal_sectors_per_cluster = 0x80;
+
 // Computes the cluster size from the sectors-per-cluster BPB byte, or nullopt
 // when its magnitude is out of range.
-std::optional<DWORD> DecodeClusterSize(char spc, WORD sector_size) {
-  if (spc >= 0) {
-    return sector_size * static_cast<unsigned char>(spc);
+std::optional<DWORD> DecodeClusterSize(BYTE spc, WORD sector_size) {
+  if (spc <= max_literal_sectors_per_cluster) {
+    return sector_size * spc;
   }
-  // Windows 10 1903+ (build 18362) large-cluster encoding: a negative byte
-  // is -log2(sectors per cluster), not a literal sector count, letting a
-  // single BYTE field reach cluster sizes above 255 sectors (up to 2 MiB
-  // at the common 512-byte sector size).
-  if (spc < -max_sectors_per_cluster_shift) {
+  // Windows 10 1903+ (build 18362) large-cluster encoding: a byte above 0x80
+  // is -log2(sectors per cluster) as a signed byte, not a literal sector
+  // count, letting a single BYTE field reach cluster sizes above 128 sectors
+  // (up to 2 MiB at the common 512-byte sector size).
+  const unsigned shift = 256U - spc;
+  if (shift > max_sectors_per_cluster_shift) {
     return std::nullopt;
   }
-  return sector_size * (1U << static_cast<unsigned char>(-spc));
+  return sector_size * (1U << shift);
 }
 
 // Checks the BPB fields NTFS inherits from FAT, which a real volume keeps at
@@ -122,8 +128,8 @@ bool ParseSectorSize(const Data::NtfsBpb& bpb, Geometry& geometry) {
 // not a power of two. The sector size is one, so this means a positive
 // sectors_per_cluster that is not.
 bool ParseClusterSize(const Data::NtfsBpb& bpb, Geometry& geometry) {
-  const std::optional<DWORD> decoded_cluster_size = DecodeClusterSize(
-      static_cast<char>(bpb.sectors_per_cluster), geometry.sector_size);
+  const std::optional<DWORD> decoded_cluster_size =
+      DecodeClusterSize(bpb.sectors_per_cluster, geometry.sector_size);
   if (!decoded_cluster_size) {
     Log::Error("sectors_per_cluster magnitude out of range");
     return false;

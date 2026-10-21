@@ -125,7 +125,8 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("sectors per cluster magnitude beyond 2^12") {
     std::vector<BYTE> image =
         NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
-    Store<BYTE>(image, bpb_sectors_per_cluster_field, 0x80);
+    // -13 is the first exponent beyond 2^12 sectors.
+    Store<BYTE>(image, bpb_sectors_per_cluster_field, 0xF3);
     const NtfsVolume<S> volume(
         std::make_unique<MemoryDiskReader>(std::move(image)));
     CHECK_FALSE(volume.IsVolumeOK());

@@ -69,13 +69,18 @@ struct BootFixture {
 // A boot area the Windows formatter writes: 8 KiB, the BPB then boot code.
 constexpr std::uintmax_t boot_area_file_size = 8192;
 
-// The kept real boot sectors, but the one of 64 KiB clusters.
-constexpr std::array<BootFixture, 6> boot_fixtures = {{
+// The kept real boot sectors. The 64 KiB one has the raw byte 0x80, which
+// means 128 sectors: its $MFT sits at LCN 49 152, the same 3 GiB as the 4 KiB
+// and 128 KiB volumes of the same size, which only 128 sectors give.
+constexpr std::array<BootFixture, 7> boot_fixtures = {{
     {"512-byte clusters", Project::DfirNtfs, "test_data/512.boot",
      boot_sector_bytes, 512, 512, 1024, 4096, 2091007, 356'865'024, 8192, true},
     {"4 KiB clusters", Project::DfirNtfs, "test_data/4k.boot",
      boot_sector_bytes, 512, 4096, 1024, 4096, 124'700'671, 3'221'225'472, 8192,
      true},
+    {"64 KiB clusters", Project::DfirNtfs, "test_data/64k.boot",
+     boot_sector_bytes, 512, 65536, 1024, 4096, 67'102'719, 3'221'225'472,
+     65536, true},
     {"128 KiB clusters", Project::DfirNtfs, "test_data/128k.boot",
      boot_sector_bytes, 512, 131072, 1024, 4096, 67'102'719, 3'221'225'472,
      131072, true},
@@ -89,22 +94,6 @@ constexpr std::array<BootFixture, 6> boot_fixtures = {{
      boot_area_file_size, 512, 4096, 1024, 4096, 22'872'063, 3'221'225'472,
      8192, true},
 }};
-
-// The boot sector of a 64 KiB cluster volume: raw sectors_per_cluster 0x80,
-// which means 128 sectors. Its $MFT sits at LCN 49 152, the same 3 GiB as the
-// 4 KiB and 128 KiB volumes of the same size, which only 128 sectors give.
-constexpr BootFixture boot_64k = {"64 KiB clusters",
-                                  Project::DfirNtfs,
-                                  "test_data/64k.boot",
-                                  boot_sector_bytes,
-                                  512,
-                                  65536,
-                                  1024,
-                                  4096,
-                                  67'102'719,
-                                  3'221'225'472,
-                                  65536,
-                                  true};
 
 std::vector<BYTE> BootSectorOf(const BootFixture& fixture) {
   const std::filesystem::path& root =
@@ -172,16 +161,6 @@ TEST_CASE("Real boot sectors decode to the independent geometry",
   }
   CheckVolumeGetters<Cache::Strategy::NoCache>(fixture, sector);
   CheckVolumeGetters<Cache::Strategy::FullCache>(fixture, sector);
-}
-
-TEST_CASE("A 64 KiB cluster boot sector decodes to the independent geometry",
-          "[dfir-corpora][integration][boot-sector][!shouldfail]") {
-  const std::vector<BYTE> sector = BootSectorOf(boot_64k);
-
-  CheckGeometry(boot_64k, Volume::ParseBootSector(sector, false));
-  CheckGeometry(boot_64k, Volume::ParseBootSector(sector, true));
-  CheckVolumeGetters<Cache::Strategy::NoCache>(boot_64k, sector);
-  CheckVolumeGetters<Cache::Strategy::FullCache>(boot_64k, sector);
 }
 
 TEST_CASE("A real boot sector with one damaged field is rejected or recovered",

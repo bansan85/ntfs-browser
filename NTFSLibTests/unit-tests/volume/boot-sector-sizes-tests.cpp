@@ -207,7 +207,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume checks sectors_per_cluster",
   const VolumeOptions recover{.recover_errors = true};
 
   SECTION("a positive power of two is accepted") {
-    for (const BYTE sectors_per_cluster : {1, 2, 4, 8, 16, 32, 64}) {
+    for (const BYTE sectors_per_cluster : {1, 2, 4, 8, 16, 32, 64, 128}) {
       INFO("sectors_per_cluster = " << static_cast<int>(sectors_per_cluster));
       const Opened opened =
           Open<S>(ImageWithSectorsPerCluster(sectors_per_cluster));
@@ -216,6 +216,14 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume checks sectors_per_cluster",
       // The decoding goes on to the file record size.
       CHECK_THAT(opened.log, ContainsSubstring(file_record_log));
     }
+  }
+
+  SECTION("0x80 counts 128 sectors, not a shift of -128") {
+    const Opened opened = Open<S>(ImageWithSectorsPerCluster(0x80));
+
+    CHECK_THAT(opened.log, ContainsSubstring("Cluster Size = 65536 bytes"));
+    CHECK_THAT(opened.log, !ContainsSubstring(cluster_magnitude_message));
+    CHECK_THAT(opened.log, ContainsSubstring(file_record_log));
   }
 
   SECTION("a positive value that is not a power of two is rejected") {
