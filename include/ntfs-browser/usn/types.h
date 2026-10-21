@@ -54,7 +54,7 @@ inline constexpr std::uint64_t default_max_records = 1638400;
 
 // Removes the limit on the records a volume keeps.
 inline constexpr std::uint64_t unlimited_records =
-    std::numeric_limits<std::uint64_t>::max();
+    (std::numeric_limits<std::uint64_t>::max)();
 
 // One change event, as one journal record states it. The name is the name the
 // file had at the time of the event, and no path.

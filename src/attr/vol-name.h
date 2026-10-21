@@ -7,6 +7,8 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
+#include "internal-export.h"
+
 namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
@@ -18,7 +20,7 @@ struct HeaderCommon;
 namespace Attr {
 
 template <typename Resident, Cache::Strategy S>
-class AttrVolName : public Resident {
+class NTFS_BROWSER_EXPORT_TESTS_ONLY AttrVolName : public Resident {
  public:
   AttrVolName(const HeaderCommon& ahc, const Io::FileRecord<S>& file_record);
   AttrVolName(AttrVolName&& other) noexcept = delete;
