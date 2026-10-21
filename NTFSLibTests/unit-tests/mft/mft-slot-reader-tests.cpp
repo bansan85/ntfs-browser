@@ -366,3 +366,18 @@ TEMPLATE_TEST_CASE_SIG("MftTree reads a large $MFT in far fewer disk reads",
           record_by_record_reads + large_scan_fragments);
   }
 }
+
+TEMPLATE_TEST_CASE_SIG(
+    "A SlotReader over a volume that did not open serves nothing",
+    "[mft][slot-reader]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  // A volume with no boot sector has no record size to divide by.
+  const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
+      std::vector<BYTE>(size_t{64} * 1024, 0)));
+  REQUIRE_FALSE(volume.IsVolumeOK());
+
+  Mft::SlotReader<S> reader(volume);
+  Io::FileRecord<S> record(volume);
+
+  CHECK_FALSE(reader.ParseFileRecord(record, Tests::mft_tree_docs_idx));
+}
