@@ -36,6 +36,8 @@ class FileRecord<S>::Impl::AttrParser {
  private:
   // The Impl whose attributes this fills. It MUST outlive this object.
   Impl& impl_;
+  // Set by the walk when recovering skipped an attribute that failed to parse.
+  bool skipped_attr_{false};
 
   [[nodiscard]] const Attr::HeaderCommon&
       AlignedAttrHeader(std::span<const BYTE> bytes);

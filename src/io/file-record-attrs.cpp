@@ -235,6 +235,7 @@ bool Io::FileRecord<S>::Impl::AttrParser::Parse(
   impl_.ClearAttrs();
 
   const bool recover = impl_.volume->GetOptions().recover_errors;
+  skipped_attr_ = false;
 
   // Visit all attributes
   const Attr::HeaderCommon* first = FirstAttrToWalk();
@@ -269,7 +270,8 @@ bool Io::FileRecord<S>::Impl::AttrParser::Parse(
     impl_.ClearAttrs();
     return false;
   }
-  return true;
+  // A skipped attribute is a failed one: false, as when the walk aborted there.
+  return !skipped_attr_;
 }
 
 // Returns the header of the first attribute to walk, or nullptr when this
@@ -290,8 +292,9 @@ const Attr::HeaderCommon*
 }
 
 // Walks the attribute headers from first to the end marker, parsing each
-// wanted attribute. Stops early at a malformed header, or where VisitAttr
-// fails.
+// wanted attribute. Stops early at a malformed header. Where VisitAttr fails,
+// strict stops and recovering skips that attribute: its header is sound, and
+// its length says where the next one starts.
 template <Cache::Strategy S>
 WalkEnd Io::FileRecord<S>::Impl::AttrParser::WalkAttrHeaders(
     const Attr::HeaderCommon& first,
@@ -315,8 +318,18 @@ WalkEnd Io::FileRecord<S>::Impl::AttrParser::WalkAttrHeaders(
     if (step == AttrWalk::RanOut) {
       return WalkEnd::RanOut;
     }
-    if (step == AttrWalk::Abort || !VisitAttr(cur, head, attr_list_chain)) {
+    if (step == AttrWalk::Abort) {
       return WalkEnd::Aborted;
+    }
+    if (!VisitAttr(cur, head, attr_list_chain)) {
+      if (!impl_.volume->GetOptions().recover_errors) {
+        return WalkEnd::Aborted;
+      }
+      Log::Info(
+          "Attribute 0x{:04X} could not be parsed: skipped, the walk goes on "
+          "after it",
+          static_cast<DWORD>(head.type));
+      skipped_attr_ = true;
     }
 
     data_ptr += head.total_size;

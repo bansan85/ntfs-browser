@@ -202,7 +202,7 @@ TEMPLATE_TEST_CASE_SIG(
 
 TEMPLATE_TEST_CASE_SIG(
     "A $FILE_NAME whose name length overruns its value rejects the record, or "
-    "keeps the attributes before it",
+    "keeps the other attributes",
     "[malformed-record]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const auto std_info = ScratchStdInfoBody();
@@ -225,13 +225,15 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK_FALSE(parsed.attrs_ok);
     CHECK(Count(parsed, Attr::Type::StandardInformation) == 1);
     CHECK(Count(parsed, Attr::Type::FileName) == 0);
+    CHECK(DataBytes(parsed) ==
+          std::vector<BYTE>(file_content.begin(), file_content.end()));
   }
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A $FILE_NAME that fails to parse does not hide the attributes after it",
-    "[malformed-record][!shouldfail]", ((Cache::Strategy S), S),
-    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+    "[malformed-record]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
   const auto std_info = ScratchStdInfoBody();
   const auto broken =
       ScratchFileNameBody(L"x", root_reference, huge_name_length);
