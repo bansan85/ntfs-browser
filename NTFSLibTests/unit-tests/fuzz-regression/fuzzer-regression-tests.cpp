@@ -57,16 +57,6 @@ inline constexpr bool efs_enabled = true;
 inline constexpr bool efs_enabled = false;
 #endif
 
-// Whether the build has both EFS cipher backends, as the build that recorded
-// the bad_clusters_* inputs did. Another build reads the volume in another
-// order, so those inputs replay out of step and their messages do not appear.
-#if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) && defined(_WIN32) && \
-    defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-inline constexpr bool both_efs_backends = true;
-#else
-inline constexpr bool both_efs_backends = false;
-#endif
-
 inline constexpr std::size_t max_expected_messages = 7;
 using MessageList = std::array<std::string_view, max_expected_messages>;
 
@@ -75,7 +65,7 @@ struct ExpectedMessages {
   MessageList messages;
 };
 
-constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 188>
+constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 213>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -565,57 +555,97 @@ constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 188>
         {"alloc_bitmap_short_resident",
          {true, {"$Bitmap is shorter than the volume"}}},
         {"bad_clusters_marked",
-         {both_efs_backends,
-          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+         {true, {"Clusters listed in $BadClus are free in $Bitmap"}}},
         {"bad_clusters_cut_runs", {true, {"DataRun decode error 1: 0x1F"}}},
         {"bad_clusters_past_volume",
-         {both_efs_backends, {"$BadClus names clusters past the volume"}}},
+         {true, {"$BadClus names clusters past the volume"}}},
         {"bad_clusters_overlap",
-         {both_efs_backends,
-          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+         {true, {"Clusters listed in $BadClus are free in $Bitmap"}}},
         {"bad_clusters_out_of_order",
-         {both_efs_backends,
-          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+         {true, {"Clusters listed in $BadClus are free in $Bitmap"}}},
         {"bad_clusters_huge_count",
-         {both_efs_backends,
-          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+         {true, {"Clusters listed in $BadClus are free in $Bitmap"}}},
         {"bad_clusters_no_stream", {true, {"$BadClus is not usable"}}},
         {"bad_clusters_conflicting_flags", {true, {"$BadClus is not usable"}}},
         {"bad_clusters_odd_flags",
-         {both_efs_backends,
-          {"Clusters listed in $BadClus are free in $Bitmap"}}},
+         {true, {"Clusters listed in $BadClus are free in $Bitmap"}}},
         {"usn_journal_forged_length",
-         {both_efs_backends,
-          {"USN journal: no record at offset", "MFT scan journal: "}}},
+         {true, {"USN journal: no record at offset", "MFT scan journal: "}}},
         {"usn_journal_zero_length",
-         {both_efs_backends,
-          {"USN journal: no record at offset", "MFT scan journal: "}}},
+         {true, {"USN journal: no record at offset", "MFT scan journal: "}}},
         {"usn_journal_name_past_record",
-         {both_efs_backends,
-          {"USN journal: no record at offset", "MFT scan journal: "}}},
+         {true, {"USN journal: no record at offset", "MFT scan journal: "}}},
         {"usn_journal_truncated_tail",
-         {both_efs_backends,
-          {"USN journal: no record at offset", "MFT scan journal: "}}},
+         {true, {"USN journal: no record at offset", "MFT scan journal: "}}},
         {"usn_journal_anchor_mismatch",
-         {both_efs_backends,
-          {"USN journal: no record at offset", "MFT scan journal: "}}},
-        {"usn_journal_v4_record", {both_efs_backends, {"MFT scan journal: "}}},
-        {"usn_journal_mixed_versions",
-         {both_efs_backends, {"MFT scan journal: "}}},
-        {"usn_journal_sparse_head",
-         {both_efs_backends, {"MFT scan journal: "}}},
+         {true, {"USN journal: no record at offset", "MFT scan journal: "}}},
+        {"usn_journal_v4_record", {true, {"MFT scan journal: "}}},
+        {"usn_journal_mixed_versions", {true, {"MFT scan journal: "}}},
+        {"usn_journal_sparse_head", {true, {"MFT scan journal: "}}},
         {"index_slack_dense_names",
-         {both_efs_backends, {"name(s) carved from the index slack"}}},
+         {true, {"name(s) carved from the index slack"}}},
         {"index_slack_name_runs_past_block",
-         {both_efs_backends, {"name(s) carved from the index slack"}}},
+         {true, {"name(s) carved from the index slack"}}},
         {"index_slack_damaged_blocks",
-         {both_efs_backends, {"name(s) carved from the index slack"}}},
-        {"record_slack_dense_names",
-         {both_efs_backends, {"name(s) carved from the slack"}}},
+         {true, {"name(s) carved from the index slack"}}},
+        {"record_slack_dense_names", {true, {"name(s) carved from the slack"}}},
         {"record_slack_name_runs_past_record",
-         {both_efs_backends, {"name(s) carved from the slack"}}},
+         {true, {"name(s) carved from the slack"}}},
         {"record_slack_stale_terminators",
-         {both_efs_backends, {"name(s) carved from the slack"}}},
+         {true, {"name(s) carved from the slack"}}},
+        {"usn_tree_annotated",
+         {true,
+          {"MFT scan journal: 13 records, 3 entries annotated, 4 only in the "
+           "journal"}}},
+        {"usn_tree_journal_only_paths",
+         {true,
+          {"MFT scan journal: 6 records, 0 entries annotated, 6 only in the "
+           "journal"}}},
+        {"usn_loader_no_extend_entry",
+         {true, {"USN journal: $Extend has no $UsnJrnl"}}},
+        {"usn_loader_no_journal_record",
+         {true, {"USN journal: $UsnJrnl does not parse"}}},
+        {"usn_loader_no_j_stream",
+         {true, {"USN journal: $UsnJrnl has no $J stream"}}},
+        {"usn_loader_cut_run_list",
+         {true, {"USN journal: the run list of $J is damaged"}}},
+        {"usn_scanner_damaged_names",
+         {true, {"USN journal: stray bytes at offset"}}},
+        {"alloc_scan_deleted_batch",
+         {true,
+          {"MFT scan data: 7 intact, 3 reallocated, 0 unknown, 1 bad",
+           "Clusters listed in $BadClus are free in $Bitmap"}}},
+        {"alloc_scan_live_stream",
+         {true,
+          {"clusters of a data stream are free in $Bitmap, from the run at "
+           "LCN 40",
+           "clusters of a data stream are marked bad in $BadClus, from the "
+           "run at LCN 40"}}},
+        {"mft_bitmap_resident", {true, {"Attribute: Bitmap (Resident)"}}},
+        {"mft_bitmap_non_resident",
+         {true, {"Attribute: Bitmap (NonResident)"}}},
+        {"mft_bitmap_too_short", {true, {"Attribute: Bitmap (Resident)"}}},
+        {"mft_bitmap_lying", {true, {"Attribute: Bitmap (Resident)"}}},
+        {"mft_scan_broken_sectors",
+         {true, {"1 of 2 sectors do not verify, the record is salvaged"}}},
+        {"mft_scan_fragmented", {true, {"MFT scan: 40 slots"}}},
+        {"alloc_bitmap_short_with_bad",
+         {true, {"$Bitmap is shorter than the volume"}}},
+        {"record_slack_name_units",
+         {true, {"1 name(s) carved from the slack"}}},
+        {"record_slack_live_names",
+         {true, {"1 name(s) carved from the slack"}}},
+        {"record_slack_rejected_fields", {false, {}}},
+        {"record_slack_repeated_names",
+         {true, {"5 name(s) carved from the slack"}}},
+        {"index_slack_repeated_names",
+         {true, {"6 name(s) carved from the index slack"}}},
+        {"run_list_empty_run", {true, {"Cluster exceeds DataRun bounds"}}},
+        {"run_list_overflowing_run", {true, {"byte address overflows"}}},
+        {"run_list_cut_after_two_runs",
+         {true, {"DataRun decode error 1: 0x1F"}}},
+        {"usn_journal_adjacent_stretches",
+         {true, {"MFT scan journal: 2 records"}}},
 };
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
@@ -696,6 +726,9 @@ NTFS_REGRESSION_TESTCASE("alloc_bitmap_forged_size")
 NTFS_REGRESSION_TESTCASE("alloc_bitmap_fragmented")
 NTFS_REGRESSION_TESTCASE("alloc_bitmap_huge_volume_claim")
 NTFS_REGRESSION_TESTCASE("alloc_bitmap_short_resident")
+NTFS_REGRESSION_TESTCASE("alloc_bitmap_short_with_bad")
+NTFS_REGRESSION_TESTCASE("alloc_scan_deleted_batch")
+NTFS_REGRESSION_TESTCASE("alloc_scan_live_stream")
 NTFS_REGRESSION_TESTCASE("bad_clusters_conflicting_flags")
 NTFS_REGRESSION_TESTCASE("bad_clusters_cut_runs")
 NTFS_REGRESSION_TESTCASE("bad_clusters_huge_count")
@@ -833,6 +866,10 @@ NTFS_REGRESSION_TESTCASE("invalid_header_common")
 NTFS_REGRESSION_TESTCASE("invalid_offset_of_us")
 NTFS_REGRESSION_TESTCASE("mft_addr_narrowing_error")
 NTFS_REGRESSION_TESTCASE("mft_attribute_list_extension_defects")
+NTFS_REGRESSION_TESTCASE("mft_bitmap_lying")
+NTFS_REGRESSION_TESTCASE("mft_bitmap_non_resident")
+NTFS_REGRESSION_TESTCASE("mft_bitmap_resident")
+NTFS_REGRESSION_TESTCASE("mft_bitmap_too_short")
 NTFS_REGRESSION_TESTCASE("mft_data_extent_chain")
 NTFS_REGRESSION_TESTCASE("mft_data_last_vcn_overflow")
 NTFS_REGRESSION_TESTCASE("mft_data_merged_span_overflow")
@@ -840,6 +877,8 @@ NTFS_REGRESSION_TESTCASE("mft_data_run_cluster_lcn_narrowing_error")
 NTFS_REGRESSION_TESTCASE("mft_data_without_base_extent")
 NTFS_REGRESSION_TESTCASE("mft_huge_scan_stops_at_progress")
 NTFS_REGRESSION_TESTCASE("mft_mirror_same_as_mft")
+NTFS_REGRESSION_TESTCASE("mft_scan_broken_sectors")
+NTFS_REGRESSION_TESTCASE("mft_scan_fragmented")
 NTFS_REGRESSION_TESTCASE("mft_record0_corrupt_mirror_intact")
 NTFS_REGRESSION_TESTCASE("mft_tree_full_cache")
 NTFS_REGRESSION_TESTCASE("mft_tree_huge_real_size")
@@ -850,12 +889,20 @@ NTFS_REGRESSION_TESTCASE("names_upcase_fold_surrogates_and_utf8")
 NTFS_REGRESSION_TESTCASE("index_slack_damaged_blocks")
 NTFS_REGRESSION_TESTCASE("index_slack_dense_names")
 NTFS_REGRESSION_TESTCASE("index_slack_name_runs_past_block")
+NTFS_REGRESSION_TESTCASE("index_slack_repeated_names")
 NTFS_REGRESSION_TESTCASE("record_slack_dense_names")
+NTFS_REGRESSION_TESTCASE("record_slack_live_names")
 NTFS_REGRESSION_TESTCASE("record_slack_name_runs_past_record")
+NTFS_REGRESSION_TESTCASE("record_slack_name_units")
+NTFS_REGRESSION_TESTCASE("record_slack_rejected_fields")
+NTFS_REGRESSION_TESTCASE("record_slack_repeated_names")
 NTFS_REGRESSION_TESTCASE("record_slack_stale_terminators")
 NTFS_REGRESSION_TESTCASE("resident_attr_body_exceeds_bounds")
 NTFS_REGRESSION_TESTCASE("resident_attr_body_out_of_bounds")
 NTFS_REGRESSION_TESTCASE("resident_data_flagged_encrypted")
+NTFS_REGRESSION_TESTCASE("run_list_cut_after_two_runs")
+NTFS_REGRESSION_TESTCASE("run_list_empty_run")
+NTFS_REGRESSION_TESTCASE("run_list_overflowing_run")
 NTFS_REGRESSION_TESTCASE("root_record_deleted_skips_parse_attrs")
 NTFS_REGRESSION_TESTCASE("root_record_parse_failure")
 NTFS_REGRESSION_TESTCASE("sector_size_too_small")
@@ -866,6 +913,7 @@ NTFS_REGRESSION_TESTCASE("traverse_attrs_empty_callback")
 NTFS_REGRESSION_TESTCASE("upcase_run_lcn_at_address_space_limit")
 NTFS_REGRESSION_TESTCASE("upcase_table_read_crosses_64k_blocks")
 NTFS_REGRESSION_TESTCASE("usn_array_exceeds_record_buffer")
+NTFS_REGRESSION_TESTCASE("usn_journal_adjacent_stretches")
 NTFS_REGRESSION_TESTCASE("usn_journal_anchor_mismatch")
 NTFS_REGRESSION_TESTCASE("usn_journal_forged_length")
 NTFS_REGRESSION_TESTCASE("usn_journal_mixed_versions")
@@ -874,6 +922,13 @@ NTFS_REGRESSION_TESTCASE("usn_journal_sparse_head")
 NTFS_REGRESSION_TESTCASE("usn_journal_truncated_tail")
 NTFS_REGRESSION_TESTCASE("usn_journal_v4_record")
 NTFS_REGRESSION_TESTCASE("usn_journal_zero_length")
+NTFS_REGRESSION_TESTCASE("usn_loader_cut_run_list")
+NTFS_REGRESSION_TESTCASE("usn_loader_no_extend_entry")
+NTFS_REGRESSION_TESTCASE("usn_loader_no_j_stream")
+NTFS_REGRESSION_TESTCASE("usn_loader_no_journal_record")
+NTFS_REGRESSION_TESTCASE("usn_scanner_damaged_names")
+NTFS_REGRESSION_TESTCASE("usn_tree_annotated")
+NTFS_REGRESSION_TESTCASE("usn_tree_journal_only_paths")
 NTFS_REGRESSION_TESTCASE("volume_information_minimal_size")
 NTFS_REGRESSION_TESTCASE("volume_dirty_flag_set")
 NTFS_REGRESSION_TESTCASE("volume_information_must_be_resident")

@@ -24,6 +24,7 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/efs/efs.h>
+#include <ntfs-browser/filename.h>
 #include <ntfs-browser/index-entry.h>  // IWYU pragma: keep
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/log/log.h>
@@ -139,6 +140,34 @@ constexpr std::array<VolumeOptions, 3> volume_option_modes{
     VolumeOptions{.include_deleted = true, .recover_errors = true},
     VolumeOptions{.max_cache_bytes = eviction_ceiling}};
 
+// Calls every getter of a directory entry's name, the comparisons included.
+void ReadFilename(const NTFS_BROWSER_NAMESPACE::Filename& name) {
+  ULONGLONG seen = name.GetFileSize() + name.GetAllocatedSize() +
+                   name.GetParentReference() + name.GetParentSequenceNumber() +
+                   name.GetFilename().size();
+  seen += static_cast<ULONGLONG>(name.GetFilePermission());
+  seen += static_cast<ULONGLONG>(name.Compare(L"ABC"));
+  seen += static_cast<ULONGLONG>(name.HasName()) +
+          static_cast<ULONGLONG>(name.IsWin32Name()) +
+          static_cast<ULONGLONG>(name.IsReadOnly()) +
+          static_cast<ULONGLONG>(name.IsHidden()) +
+          static_cast<ULONGLONG>(name.IsSystem()) +
+          static_cast<ULONGLONG>(name.IsArchive()) +
+          static_cast<ULONGLONG>(name.IsDirectory()) +
+          static_cast<ULONGLONG>(name.IsCompressed()) +
+          static_cast<ULONGLONG>(name.IsEncrypted()) +
+          static_cast<ULONGLONG>(name.IsSparse());
+  FILETIME write_time{};
+  FILETIME create_time{};
+  FILETIME access_time{};
+  FILETIME change_time{};
+  name.GetFileTime(&write_time, &create_time, &access_time, &change_time);
+  seen += write_time.dwLowDateTime + create_time.dwLowDateTime +
+          access_time.dwLowDateTime + change_time.dwLowDateTime;
+  // Reading every field is the point: a wild pointer shows up in sanitizers.
+  (void)seen;
+}
+
 // Parses the root file record, then walks its sub entries.
 //
 // Templated on Strategy so the same input drives both NoCache and
@@ -167,7 +196,8 @@ void FuzzRootRecord(const NtfsVolume<S>& volume) {
   // An empty callback is rejected up front, exercising that guard.
   file_record.TraverseAttrs(nullptr, nullptr);
 
-  file_record.TraverseSubEntries([](const IndexEntryView&, void*) {}, nullptr);
+  file_record.TraverseSubEntries(
+      [](const IndexEntryView& entry, void*) { ReadFilename(entry); }, nullptr);
 
   // FindStream() calls GetAttrName() on every named $DATA attribute it
   // walks, regardless of the name passed in.
@@ -210,6 +240,10 @@ constexpr size_t probe_read_bytes = 8192;
 // $UpCase. The root has its own, narrower, parse in FuzzRootRecord().
 constexpr std::array<Mft::Idx, 4> probed_records{
     Mft::Idx::Mft, Mft::Idx::Volume, Mft::Idx::Bitmap, Mft::Idx::UpCase};
+
+// How many records past the metadata ones are parsed and read: the files and
+// folders of a small volume.
+constexpr ULONGLONG probed_user_records = 12;
 
 // Reads the start, then the middle, then the end of one attribute's data.
 template <Cache::Strategy S>
@@ -298,6 +332,36 @@ void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
       nullptr);
 }
 
+// Parses the first records past the metadata ones and reads their data. Runs
+// last, so that it moves the reads of no other probe.
+template <Cache::Strategy S>
+void ProbeUserRecords(const NtfsVolume<S>& volume) {
+  const auto first = static_cast<ULONGLONG>(Mft::Idx::User);
+  for (ULONGLONG record = first; record < first + probed_user_records;
+       ++record) {
+    ProbeRecord(volume, record);
+  }
+}
+
+// A name outside the Basic Multilingual Plane: a surrogate pair in UTF-16.
+constexpr std::wstring_view supplementary_search_name = L"\U0001F41C";
+
+// Looks the root's entries up by a name outside the BMP. Runs last, like
+// ProbeUserRecords().
+template <Cache::Strategy S>
+void ProbeSupplementarySearch(const NtfsVolume<S>& volume) {
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
+  file_record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  if (file_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) &&
+      file_record.ParseAttrs()) {
+    (void)file_record.FindSubEntry(supplementary_search_name);
+  }
+}
+
+// A record number and a name index no volume of the fuzzer has.
+constexpr ULONGLONG absent_record = 0xFFFFFFFFULL;
+constexpr size_t absent_name_index = 1000;
+
 // Rebuilds the namespace from the $MFT. The progress callback lets the scan
 // run to its second call, a few thousand records in, and stops it there: a
 // huge declared $MFT size cannot make the run long.
@@ -314,11 +378,32 @@ void ProbeMftTree(const NtfsVolume<S>& volume) {
        tree.Entries()) {
     (void)tree.IsReachable(entry.record);
     ReadCarvedNames(entry.carved_names);
+    if (entry.usn) {
+      (void)(entry.usn->last_usn + entry.usn->last_reason +
+             entry.usn->all_reasons + entry.usn->record_count);
+    }
+    // The record where the chain of parents breaks, when it does.
+    std::optional<ULONGLONG> lost_ancestor;
     (void)tree.GetPath(entry.record);
+    (void)tree.GetPath(entry.record, &lost_ancestor);
     for (size_t i = 0; i < entry.names.size(); ++i) {
       (void)tree.GetPath(entry.record, i);
+      (void)tree.GetPath(entry.record, i, &lost_ancestor);
     }
   }
+  // Questions about a record and a name the scan does not have.
+  std::optional<ULONGLONG> no_ancestor;
+  (void)tree.IsReachable(absent_record);
+  (void)tree.GetPath(absent_record, &no_ancestor);
+  (void)tree.GetPath(static_cast<ULONGLONG>(Mft::Idx::Root), absent_name_index,
+                     &no_ancestor);
+  // The files only the change journal names, and the path of each.
+  for (size_t i = 0; i < tree.JournalOnly().size(); ++i) {
+    std::optional<ULONGLONG> lost_ancestor;
+    (void)tree.GetJournalPath(i, &lost_ancestor);
+    (void)tree.GetJournalPath(i, nullptr);
+  }
+  (void)tree.GetJournalPath(tree.JournalOnly().size(), nullptr);
 }
 
 // Asks the cluster bitmap about the first, last, middle and an out-of-range
@@ -334,6 +419,17 @@ void ProbeAllocation(const NtfsVolume<S>& volume) {
         std::numeric_limits<ULONGLONG>::max()}) {
     (void)volume.GetClusterState(lcn);
   }
+
+  // The same questions in one batch, in the unsorted order they come.
+  std::array<NTFS_BROWSER_NAMESPACE::Alloc::RangeQuery, 6> queries{{
+      {.lcn = 0, .clusters = 0},
+      {.lcn = total, .clusters = 1},
+      {.lcn = total / 2, .clusters = 3},
+      {.lcn = 0, .clusters = 2},
+      {.lcn = total == 0 ? ULONGLONG{0} : total - 1, .clusters = 4},
+      {.lcn = std::numeric_limits<ULONGLONG>::max(), .clusters = 2},
+  }};
+  volume.GetRangeStates(queries);
 
   // The bad list, and the state of the first extents it names. A hostile list
   // can name millions, so the walk stops early: the queries are the point, not
@@ -416,6 +512,8 @@ void ProbeVolumeApi(NtfsVolume<S>& volume) {
   (void)volume.GetClusterBuffer();
   (void)volume.GetEfsKeyProvider();
   (void)volume.GetEfsCipherBackend();
+  (void)volume.GetCacheStats();
+  volume.MinifyCache();
 
   (void)volume.InstallAttrRawCB(unknown_attr_type, DiscardAttr);
   (void)volume.InstallAttrRawCB(Attr::Type::Data, DiscardAttr);
@@ -448,18 +546,13 @@ void ProbeVolume(NtfsVolume<S>& volume) {
   volume.SetEfsKeyProvider(std::make_shared<PassthroughKeyProvider>());
 
   FuzzRootRecord(volume);
-  // One pass per cipher backend this build has: an unavailable one is
-  // refused and skipped. A build with none still parses the root once, so
-  // the same parse paths run in every configuration.
-  bool probed_root = false;
+  // One pass per cipher backend, whether this build has it or not: a refused
+  // backend leaves the previous one in place. The read order of an input then
+  // does not depend on the build, so a recorded input replays in step on every
+  // configuration.
   for (const Efs::CipherBackend backend :
        {Efs::CipherBackend::CryptoPp, Efs::CipherBackend::BCrypt}) {
-    if (volume.SetEfsCipherBackend(backend)) {
-      ProbeRecord(volume, static_cast<ULONGLONG>(Mft::Idx::Root));
-      probed_root = true;
-    }
-  }
-  if (!probed_root) {
+    (void)volume.SetEfsCipherBackend(backend);
     ProbeRecord(volume, static_cast<ULONGLONG>(Mft::Idx::Root));
   }
   for (const Mft::Idx record : probed_records) {
@@ -469,6 +562,8 @@ void ProbeVolume(NtfsVolume<S>& volume) {
   ProbeAllocation(volume);
   ProbeJournal(volume);
   ProbeVolumeApi(volume);
+  ProbeUserRecords(volume);
+  ProbeSupplementarySearch(volume);
 }
 
 template <Cache::Strategy S>
@@ -506,6 +601,9 @@ void RunBothStrategies(std::span<const BYTE> data, const VolumeOptions& options,
   RunGuarded<Cache::Strategy::FullCache>(data, options, failing_read);
 }
 
+// Stream offset of a range that is not on the 8-byte grid records sit on.
+constexpr ULONGLONG unaligned_range_offset = 3;
+
 // Feeds the input straight to the journal scanner, as the bytes of one range of
 // $J: from each of the eight alignments, whole and then cut in two. A volume
 // seldom reaches the scanner through random bytes, so this is its own probe.
@@ -524,6 +622,11 @@ void FuzzJournalScanner(std::span<const BYTE> data) {
       scanner.Reset();
       scanner.Feed(bytes.first(split), 0, records);
       scanner.Feed(bytes.subspan(split), split, records);
+      scanner.Finish(records);
+
+      // A range that starts off the 8-byte grid of records.
+      scanner.Reset();
+      scanner.Feed(bytes, unaligned_range_offset, records);
       scanner.Finish(records);
     }
     // NOLINTNEXTLINE(bugprone-empty-catch)
