@@ -130,7 +130,7 @@ BitmapLayout PlanBitmap(size_t base_clusters, size_t given_bytes, bool pad,
         RoundUpToCacheBlock(base_clusters + layout.data_clusters + gap);
     layout.bytes = pad ? std::max(given_bytes, (layout.total_clusters + 7) / 8)
                        : given_bytes;
-    const size_t needed = std::max(
+    const size_t needed = std::max<size_t>(
         least_clusters, (layout.bytes + cluster_size - 1) / cluster_size);
     if (needed == layout.data_clusters) {
       return layout;
@@ -188,7 +188,8 @@ void PutClusterBitmap(std::vector<BYTE>& image,
     }
   }
 
-  const size_t first_bytes = std::min(bits.size(), first_part * cluster_size);
+  const size_t first_bytes =
+      std::min<size_t>(bits.size(), first_part * cluster_size);
   std::memcpy(&image.at(layout.first_lcn * cluster_size), bits.data(),
               first_bytes);
   if (second_part != 0 && bits.size() > first_bytes) {
