@@ -581,8 +581,14 @@ void CheckFixture(const MftFixture& fixture) {
   // mode also counts it unreadable.
   const Mft::MftTree::ScanStats& strict = strict_no_cache.tree.Stats();
   const Mft::MftTree::ScanStats& recover = recover_no_cache.tree.Stats();
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
   CHECK(strict.damaged == fixture.damaged);
   CHECK(recover.damaged == fixture.damaged);
+#else
+  // Without decompression, a record with a compressed attribute is damaged too.
+  CHECK(strict.damaged >= fixture.damaged);
+  CHECK(recover.damaged == strict.damaged);
+#endif
   CHECK(strict_no_cache.tree.Entries().size() + strict.damaged ==
         strict.in_use + strict.deleted + fixture.salvaged);
   CHECK(recover_no_cache.tree.Entries().size() ==
@@ -692,6 +698,12 @@ TEST_CASE("A standalone $MFT agrees with its Sleuth Kit listing",
   for (const VolumeOptions& options :
        {StrictOptions(false), RecoveringOptions(false)}) {
     CAPTURE(options.recover_errors);
+#ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
+    // A strict scan drops every record with a compressed attribute.
+    if (fixture.mft == "nist-hacking-case.mft" && !options.recover_errors) {
+      continue;
+    }
+#endif
     const StandaloneMftScan scan =
         ScanStandaloneMft(file, Cache::Strategy::NoCache, options);
     const ListingReport report = CompareWithListing(scan.tree, lines);
@@ -1113,7 +1125,14 @@ TEST_CASE("The run lists of mapping_pairs_1.mft decode to their extents",
     FileRecord<Cache::Strategy::NoCache> record(*volume);
     record.SetAttrMask(Attr::Mask::Data);
     REQUIRE(record.ParseFileRecord(mapping.record));
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
     REQUIRE(record.ParseAttrs());
+#else
+    // A compressed $DATA is rejected, and its record has no extents to read.
+    if (!record.ParseAttrs()) {
+      continue;
+    }
+#endif
     const auto& streams = record.GetAttr(Attr::Type::Data);
     REQUIRE_FALSE(streams.empty());
     const NTFS_BROWSER_NAMESPACE::Alloc::StreamExtents found =

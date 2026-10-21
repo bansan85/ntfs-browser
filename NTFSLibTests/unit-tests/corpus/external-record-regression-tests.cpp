@@ -186,5 +186,12 @@ TEST_CASE(
   CHECK(recovering.parsed);
   CHECK_FALSE(recovering.attrs_ok);
   CHECK(recovering.file_names >= 1);
+#ifndef NTFS_BROWSER_ENABLE_DECOMPRESSION
+  // The $DATA of record 202 is compressed, which is rejected.
+  if (record_number == 202) {
+    CHECK(recovering.data_streams == 0);
+    return;
+  }
+#endif
   CHECK(recovering.data_streams == 1);
 }
