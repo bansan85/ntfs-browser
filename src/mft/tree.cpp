@@ -682,7 +682,7 @@ void Mft::MftTree::Impl::ApplyJournal(const Usn::Journal& journal,
         if (Mft::IsSameRecordGeneration(record.file_sequence, entry.sequence,
                                         entry.in_use)) {
           if (!entry.usn) {
-            entry.usn.emplace();
+            entry.usn = Mft::MftTree::UsnInfo{};
             stats.usn_annotated++;
           }
           NoteRecord(*entry.usn, record);
