@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -30,6 +31,22 @@ struct StandaloneMftScan {
   // The sizes the reader took from the file.
   DWORD record_size{0};
   DWORD cluster_size{0};
+};
+
+// A scratch file, written at construction and removed on scope exit. Its name
+// is unique to the process and to the file: the test processes of a parallel
+// ctest run share one temporary folder.
+class TempFile {
+ public:
+  explicit TempFile(std::span<const BYTE> bytes);
+  TempFile(const TempFile&) = delete;
+  TempFile& operator=(const TempFile&) = delete;
+  ~TempFile();
+
+  [[nodiscard]] const std::filesystem::path& Path() const { return path_; }
+
+ private:
+  std::filesystem::path path_;
 };
 
 // Scans file as the $MFT of a volume (StandaloneMftDiskReader), with the given

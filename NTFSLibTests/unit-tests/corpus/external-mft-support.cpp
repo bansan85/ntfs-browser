@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <random>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -122,6 +123,23 @@ std::uint64_t ParseListingTime(const std::string& text) {
       minute * 60 + second - offset);
 }
 
+// Text that tells this process from every other one running the tests. It is
+// random: a process id would need a platform header, and the 64 bits make a
+// collision impossible in practice.
+const std::string& ProcessTag() {
+  static const std::string tag = [] {
+    std::random_device device;
+    constexpr unsigned dword_bits = 32;
+    const std::uint64_t value =
+        (static_cast<std::uint64_t>(device()) << dword_bits) | device();
+    char text[17] = {};
+    std::snprintf(text, sizeof(text), "%016llx",
+                  static_cast<unsigned long long>(value));
+    return std::string(text);
+  }();
+  return tag;
+}
+
 // Opens file as a standalone $MFT volume of strategy S, and scans it.
 template <Cache::Strategy S>
 StandaloneMftScan ScanWith(const std::filesystem::path& file,
@@ -155,6 +173,22 @@ StandaloneMftScan ScanWith(const std::filesystem::path& file,
 }
 
 }  // namespace
+
+TempFile::TempFile(std::span<const BYTE> bytes) {
+  // One counter per process: two files of one process never share a name.
+  static std::uint64_t counter = 0;
+  path_ = std::filesystem::temp_directory_path() /
+          ("ntfs-browser-mft-test-" + ProcessTag() + "-" +
+           std::to_string(counter++) + ".bin");
+  std::ofstream out(path_, std::ios::binary);
+  out.write(reinterpret_cast<const char*>(bytes.data()),
+            gsl::narrow<std::streamsize>(bytes.size()));
+}
+
+TempFile::~TempFile() {
+  std::error_code error;
+  std::filesystem::remove(path_, error);
+}
 
 StandaloneMftScan ScanStandaloneMft(const std::filesystem::path& file,
                                     Cache::Strategy strategy,

@@ -4,10 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <random>
 #include <set>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -38,6 +36,7 @@ using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
 using NTFS_BROWSER_NAMESPACE::Tests::ScanStandaloneMft;
 using NTFS_BROWSER_NAMESPACE::Tests::StandaloneMftScan;
 using NTFS_BROWSER_NAMESPACE::Tests::StrictOptions;
+using NTFS_BROWSER_NAMESPACE::Tests::TempFile;
 
 // Records from the start of the $MFT that stay intact: the volume metadata
 // files, without which the file does not open as a volume.
@@ -151,32 +150,6 @@ std::vector<BYTE> Corrupt(std::vector<BYTE> bytes, std::size_t record_size,
   }
   return bytes;
 }
-
-// A scratch file removed on scope exit.
-class TempFile {
- public:
-  explicit TempFile(std::span<const BYTE> bytes) {
-    static int counter = 0;
-    path_ = std::filesystem::temp_directory_path() /
-            ("corrupted-mft-test-" + std::to_string(counter++) + ".bin");
-    std::ofstream out(path_, std::ios::binary);
-    out.write(reinterpret_cast<const char*>(bytes.data()),
-              gsl::narrow<std::streamsize>(bytes.size()));
-  }
-
-  TempFile(const TempFile&) = delete;
-  TempFile& operator=(const TempFile&) = delete;
-
-  ~TempFile() {
-    std::error_code error;
-    std::filesystem::remove(path_, error);
-  }
-
-  [[nodiscard]] const std::filesystem::path& Path() const { return path_; }
-
- private:
-  std::filesystem::path path_;
-};
 
 std::set<ULONGLONG> Records(const Mft::MftTree& tree) {
   std::set<ULONGLONG> records;
