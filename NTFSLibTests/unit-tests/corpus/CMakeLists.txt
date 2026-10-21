@@ -4,6 +4,7 @@ target_sources(
     "corpus-test-support.cpp"
     "corpus-test-support.h"
     "dftt-ntfs-tests.cpp"
+    "external-boot-tests.cpp"
     "external-logfile-fixtures-tests.cpp"
     "external-mft-support.cpp"
     "external-mft-support.h"
