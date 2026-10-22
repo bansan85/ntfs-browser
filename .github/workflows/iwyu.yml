@@ -50,10 +50,12 @@ jobs:
             -DNTFS_BROWSER_ENABLE_DECOMPRESSION=ON \
             -DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=ON \
             -DNTFS_BROWSER_ENABLE_EFS_BCRYPT=ON
+      - name: Stub the headers that have no .cpp
+        run: python3 .github/scripts/iwyu-header-stubs.py build .
       - name: iwyu
         run: |
-          python3 "${{ runner.temp }}/iwyu/iwyu_tool.py" -p build/ src NTFSLibTests \
-            >iwyu.log || true
+          python3 "${{ runner.temp }}/iwyu/iwyu_tool.py" -p build/iwyu-db/ \
+            src NTFSLibTests build/iwyu-stubs >iwyu.log || true
           python3 "${{ runner.temp }}/iwyu/fix_includes.py" --nosafe_headers <iwyu.log
       - name: clang-format
         run: |
