@@ -1,4 +1,5 @@
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -41,7 +42,6 @@ TEMPLATE_TEST_CASE_SIG(
 #ifndef _WIN32
 
   #include <filesystem>
-  #include <fstream>
   #include <string>
 
   #include "device-path.h"

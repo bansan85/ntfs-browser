@@ -5,7 +5,6 @@
 // eg. ntfsdir /dev/sda1/Windows
 // eg. ntfsdir ./disk.img/Windows
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
 #include "ntfsdir-core.h"

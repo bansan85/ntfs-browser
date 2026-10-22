@@ -2,13 +2,12 @@
 
 #include <cerrno>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <utility>
 
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/log/log.h>
@@ -18,8 +17,18 @@
 
 #include "device-path.h"
 #include "local-time.h"
+#include "ntfs-browser/attr/mask.h"
+#include "ntfs-browser/cache/strategy.h"
+#include "ntfs-browser/win-types.h"
 #include "text-convert.h"
 #include "tool-support.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 #ifndef _WIN32
   #include "posix-device-disk-reader.h"

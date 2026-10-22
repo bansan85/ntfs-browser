@@ -1,18 +1,16 @@
-#include <ntfs-browser/win-types.h>
-
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <spdlog/sinks/ostream_sink.h>
+#include <spdlog/sinks/sink.h>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/log/spdlog-adapter.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -22,6 +20,15 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

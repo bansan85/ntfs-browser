@@ -1,11 +1,12 @@
 #include <ntfs-browser/win-types.h>
 
-#include <array>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <random>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -14,12 +15,14 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 #include <gsl/narrow>
+#include <gsl/util>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "external-mft-support.h"
 

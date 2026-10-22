@@ -1,29 +1,35 @@
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <memory>
 #include <optional>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/base.h>  // IWYU pragma: keep
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "catch2/catch_message.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

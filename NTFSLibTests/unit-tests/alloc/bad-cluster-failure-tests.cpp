@@ -15,14 +15,12 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

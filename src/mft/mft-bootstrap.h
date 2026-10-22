@@ -2,15 +2,34 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstdint>
 #include <list>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
 #include "mft/extent-map.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+
+}  // namespace Attr
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 

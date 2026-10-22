@@ -5,8 +5,6 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <optional>
-#include <span>
 #include <string_view>
 
 #include <ntfs-browser/disk-reader.h>

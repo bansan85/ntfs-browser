@@ -1,11 +1,18 @@
+#include <array>
 #include <cassert>
+#include <optional>
 #include <span>
 #include <vector>
 
+#include <gsl/narrow>
+
 #include <ntfs-browser/namespace.h>
 
+#include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
+#include "fake-ntfs-image.h"
 #include "lznt1/decompress.h"
+#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

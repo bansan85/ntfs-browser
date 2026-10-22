@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -9,8 +10,9 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
-#include "fake-ntfs-image.h"
+#include "catch2/catch_message.hpp"
 #include "fullcache-walk-support.h"
+#include "ntfs-browser/ntfs-volume.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 

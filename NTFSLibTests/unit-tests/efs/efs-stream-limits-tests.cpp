@@ -1,6 +1,8 @@
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -17,9 +19,12 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "efs-test-support.h"
 #include "efs-tests-support.h"
+#include "efs/fek.h"
 #include "fake-ntfs-image.h"
+#include "ntfs-browser/disk-reader.h"
 #include "scripted-disk-reader.h"
 #include "test-log-sink.h"
 

@@ -8,10 +8,18 @@
 
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 

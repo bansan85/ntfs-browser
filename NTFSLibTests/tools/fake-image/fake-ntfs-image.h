@@ -13,11 +13,18 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
 #include "gap-collation-probe.h"
 #include "named-stream-probe.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Alloc {
+
+struct Extent;
+
+}  // namespace Alloc
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

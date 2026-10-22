@@ -9,8 +9,11 @@
 #include <array>
 #include <cerrno>
 #include <cstdio>
+#include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -25,6 +28,7 @@
 
 #include "device-path.h"
 #include "local-time.h"
+#include "ntfs-browser/cache/strategy.h"
 #include "text-convert.h"
 #include "tool-support.h"
 

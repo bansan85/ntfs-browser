@@ -3,18 +3,14 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cassert>
-#include <memory>
 #include <optional>
 #include <stdexcept>
-#include <utility>
-#include <vector>
 
-#include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>  // IWYU pragma: keep
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/list-chain.h"
 #include "attr/non-resident.h"

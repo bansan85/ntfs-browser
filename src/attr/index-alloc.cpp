@@ -2,10 +2,8 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cstddef>
 #include <cstring>
 #include <limits>
-#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -15,7 +13,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/index-block.h"
 #include "data/file-record-header.h"
@@ -24,6 +22,15 @@
 #include "data/index-entry.h"
 #include "log/ntfs-common.h"
 #include "ntfs-browser/win-types.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

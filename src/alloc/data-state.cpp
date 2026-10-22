@@ -1,6 +1,7 @@
 #include "alloc/data-state.h"
 
 #include <algorithm>
+#include <ranges>
 #include <span>
 
 #include <ntfs-browser/alloc/types.h>

@@ -5,12 +5,15 @@
 #include <optional>
 #include <string>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "device-path.h"
+namespace NtfsDevice {
+
+struct DeviceTarget;
+
+}  // namespace NtfsDevice
 
 namespace NtfsCompare {
 

@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -25,6 +26,22 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+
+}  // namespace Attr
+
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;

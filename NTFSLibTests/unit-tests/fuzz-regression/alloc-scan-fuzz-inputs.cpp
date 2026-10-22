@@ -1,9 +1,10 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -13,13 +14,41 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/flags.h"
-#include "attr/non-resident.h"  // IWYU pragma: keep
+#include "attr/non-resident.h"
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
 #include "log/ntfs-common.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+template <Cache::Strategy S>
+class AttrNonResident;
+
+}  // namespace Attr
+
+namespace Efs {
+
+class Context;
+
+}  // namespace Efs
+
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

@@ -11,6 +11,7 @@
 #include <mutex>
 #include <new>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string_view>
 #include <thread>

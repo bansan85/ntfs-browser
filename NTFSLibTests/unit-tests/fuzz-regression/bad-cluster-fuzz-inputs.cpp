@@ -1,11 +1,12 @@
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "fake-ntfs-image.h"
 #include "fuzz-core.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
 #include "recording-disk-reader.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

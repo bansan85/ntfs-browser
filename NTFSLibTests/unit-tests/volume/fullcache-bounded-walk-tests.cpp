@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -15,8 +16,8 @@
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
 
-#include "fake-ntfs-image.h"
 #include "fullcache-walk-support.h"
+#include "ntfs-browser/ntfs-volume.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 

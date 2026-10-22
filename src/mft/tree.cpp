@@ -21,7 +21,6 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -30,17 +29,32 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/usn/types.h>
 
 #include "alloc/data-state.h"
 #include "attr/file-name.h"
-#include "attr/resident.h"
-#include "io/file-record-attrs.h"
+#include "io/file-record-attr-types.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 #include "mft/slot-reader.h"
 #include "mft/tree-testing.h"
+#include "ntfs-browser/record/carved-name.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+template <typename Resident, Cache::Strategy S>
+class AttrFileName;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

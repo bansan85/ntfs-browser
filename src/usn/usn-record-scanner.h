@@ -3,14 +3,20 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
-#include <cstdint>
 #include <span>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/usn/types.h>
 
 #include "internal-export.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Usn {
+
+struct Record;
+
+}  // namespace Usn
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Usn {
 

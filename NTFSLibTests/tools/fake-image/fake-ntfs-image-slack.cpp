@@ -4,16 +4,16 @@
 #include <cstring>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 
-#include "data/filename-flag.h"
-#include "data/filename-namespace.h"
 #include "data/filename.h"
 #include "fake-ntfs-image-internal.h"
 #include "fake-ntfs-image.h"
+#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

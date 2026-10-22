@@ -1,7 +1,8 @@
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstring>
+#include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -11,9 +12,7 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "data/header-non-resident.h"
@@ -22,9 +21,19 @@
 #include "data/index-entry.h"
 #include "data/index-root.h"
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 #include "nonresident-index-support.h"
-#include "optional-access.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

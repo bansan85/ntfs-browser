@@ -1,12 +1,17 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -18,7 +23,9 @@
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
+#include "external-journal-samples.h"
 #include "external-journal-support.h"
 #include "external-mft-support.h"
 #include "fake-ntfs-image.h"

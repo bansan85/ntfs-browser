@@ -1,15 +1,13 @@
-#include <ntfs-browser/win-types.h>
-
 #include <memory>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/usn/types.h>
 
 #include "alloc-failure-support.h"
 #include "fake-ntfs-image.h"

@@ -5,6 +5,8 @@
 
 #include <ntfs-browser/log/log.h>
 
+#include "ntfs-browser/namespace.h"
+
 namespace NtfsDevice {
 
 // Reports whether arg is a "--log=" argument, in the wide argv a wmain() or

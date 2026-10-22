@@ -1,4 +1,6 @@
 #include <memory>
+#include <string>
+#include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -10,8 +12,10 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/win-types.h"
 #include "test-log-sink.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

@@ -1,6 +1,5 @@
 #include <memory>
 #include <optional>
-#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -18,6 +17,15 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

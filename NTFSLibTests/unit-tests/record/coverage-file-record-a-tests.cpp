@@ -6,6 +6,7 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <utility>
@@ -26,8 +27,6 @@
 
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
-#include "data/filename-namespace.h"
-#include "data/filename.h"
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
 #include "data/index-block.h"
@@ -35,7 +34,20 @@
 #include "data/index-root.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
+#include "gap-collation-probe.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/attr/header-common.h"
+#include "ntfs-browser/attr/type.h"
+#include "ntfs-browser/disk-reader.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {}  // namespace NTFS_BROWSER_NAMESPACE
 

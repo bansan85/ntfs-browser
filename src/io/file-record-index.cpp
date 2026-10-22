@@ -28,11 +28,23 @@
 #include "attr/index-block.h"
 #include "attr/index-root.h"
 #include "attr/resident.h"
-#include "io/file-record-attrs.h"
+#include "io/file-record-attr-types.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 #include "record/slack-carver.h"
 #include "upcase/upcase.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+
+}  // namespace Attr
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

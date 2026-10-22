@@ -21,6 +21,7 @@
 #include "fake-ntfs-image.h"
 #include "fuzz-core.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
 #include "recording-disk-reader.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

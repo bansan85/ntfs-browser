@@ -1,9 +1,9 @@
 #include <ntfs-browser/win-types.h>
 
-#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -20,9 +20,11 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "external-mft-support.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
 
 namespace {
 

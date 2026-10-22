@@ -1,12 +1,24 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/usn/types.h>
 
 #include "internal-export.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 

@@ -1,7 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstring>
+#include <span>
 #include <stdexcept>
 #include <vector>
 

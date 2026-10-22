@@ -10,8 +10,8 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -23,16 +23,20 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/usn/types.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "external-journal-samples.h"
 #include "external-mft-support.h"
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 #include "usn-test-support.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+struct VolumeOptions;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::RealJournal {
 

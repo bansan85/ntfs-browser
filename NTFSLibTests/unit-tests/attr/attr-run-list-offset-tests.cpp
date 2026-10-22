@@ -1,10 +1,8 @@
 #include <ntfs-browser/win-types.h>
 
-#include <array>
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <memory>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -12,9 +10,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <gsl/narrow>
+#include <gsl/util>
 
 #include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
@@ -22,6 +20,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "memory-disk-reader.h"
 #include "scratch-record.h"
 

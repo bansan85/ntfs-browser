@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <optional>
+#include <span>
 #include <string_view>
 
 #include <ntfs-browser/disk-reader.h>

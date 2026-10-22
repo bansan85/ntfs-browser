@@ -6,6 +6,15 @@
 #include "attr/non-resident.h"
 #include "attr/resident.h"
 
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
+
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 template <class Resident, Cache::Strategy S>

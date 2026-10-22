@@ -1,9 +1,9 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstddef>
 #include <cstring>
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -16,12 +16,23 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "attr/std-info.h"
 #include "data/file-record-header.h"
 #include "data/header-resident.h"
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/attr/header-common.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

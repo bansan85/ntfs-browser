@@ -2,8 +2,7 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
-#include <cstring>
+#include <cstddef>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -11,14 +10,10 @@
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include <gsl/narrow>
-
 #include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
@@ -30,19 +25,18 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
-#include "attr/non-resident.h"  // IWYU pragma: keep
-#include "attr/resident.h"
 #include "attr/slot.h"
 #include "attr/vol-info.h"
 #include "attr/vol-name.h"
-#include "data/attribute-list.h"
 #include "data/volume-information.h"
-#include "io/file-reader.h"  // IWYU pragma: keep
-#include "io/file-record-impl.h"
+#include "io/file-reader.h"
+#include "io/file-record-attr-types.h"
 #include "log/ntfs-common.h"
-#include "mft/file-reference.h"
 #include "mft/record-offset.h"
+#include "ntfs-browser/efs/efs.h"
+#include "ntfs-browser/volume-options.h"
 #include "ntfs-volume-impl.h"
 #include "upcase/upcase.h"
 #include "usn/usn-journal-loader.h"
@@ -50,21 +44,40 @@
 #include "volume/volume-geometry.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileReader;
+
+}  // namespace Io
+
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+template <typename Resident, Cache::Strategy S>
+class AttrVolInfo;
+template <typename Resident, Cache::Strategy S>
+class AttrVolName;
+
+}  // namespace Attr
+
+namespace Usn {
+
+struct Journal;
+
+}  // namespace Usn
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IDiskReader;
-
-namespace Efs {
-
-class IEfsKeyProvider;
-
-}  // namespace Efs
 
 namespace Attr {
 
 struct HeaderCommon;
 
 }  // namespace Attr
-struct VolumeOptions;
 
 namespace {
 

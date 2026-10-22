@@ -18,7 +18,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "catch2/catch_message.hpp"
 #include "efs-test-support.h"

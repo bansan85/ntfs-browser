@@ -15,7 +15,6 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "catch2/catch_message.hpp"
-#include "corpus-test-support.h"
 #include "md5-test-support.h"
 #include "nps-ntfs1-test-support.h"
 

@@ -1,6 +1,5 @@
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -18,6 +17,7 @@
 #include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "external-mft-support.h"
 

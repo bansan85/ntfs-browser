@@ -1,12 +1,14 @@
 #include "device-path.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <filesystem>
+#include <iterator>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <utility>
 
 #include "text-convert.h"
 

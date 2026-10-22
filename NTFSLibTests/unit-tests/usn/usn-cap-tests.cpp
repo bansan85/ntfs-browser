@@ -1,8 +1,10 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
-#include <cstring>
-#include <limits>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>

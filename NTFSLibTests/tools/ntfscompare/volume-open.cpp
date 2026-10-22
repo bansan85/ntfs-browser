@@ -9,6 +9,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "console.h"
+#include "device-path.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

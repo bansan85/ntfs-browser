@@ -1,13 +1,31 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
-#include <ntfs-browser/cache/strategy.h>  // IWYU pragma: keep
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 

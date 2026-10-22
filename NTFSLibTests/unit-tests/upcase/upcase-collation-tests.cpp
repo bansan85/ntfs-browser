@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -9,7 +10,6 @@
 
 #include <ntfs-browser/namespace.h>
 
-#include "fake-ntfs-image.h"
 #include "optional-access.h"
 #include "upcase/upcase.h"
 

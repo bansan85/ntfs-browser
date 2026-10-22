@@ -2,8 +2,9 @@
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstring>
+#include <ios>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -12,6 +13,7 @@
 
 #include <ntfs-browser/namespace.h>
 
+#include "catch2/catch_message.hpp"
 #include "efs-test-support.h"
 #include "efs/efs-stream.h"
 #include "efs/fek.h"

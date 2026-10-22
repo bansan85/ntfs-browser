@@ -1,17 +1,15 @@
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstring>
 #include <memory>
-#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
@@ -20,6 +18,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "data/index-block.h"
 #include "data/index-entry.h"
 #include "fake-ntfs-image.h"

@@ -3,10 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <format>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <span>
 #include <string>
 #include <string_view>
@@ -18,15 +18,23 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
+#include "catch2/catch_tostring.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <initializer_list>
 #include <limits>
 
 #include <catch2/catch_test_macros.hpp>

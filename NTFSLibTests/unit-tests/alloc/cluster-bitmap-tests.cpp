@@ -2,12 +2,11 @@
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <utility>

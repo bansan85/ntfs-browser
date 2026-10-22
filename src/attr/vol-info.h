@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <utility>
 
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -15,6 +14,19 @@ namespace Cache {
 enum class Strategy : std::uint8_t;
 
 }  // namespace Cache
+
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
 

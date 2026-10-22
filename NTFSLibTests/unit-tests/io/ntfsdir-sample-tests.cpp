@@ -3,11 +3,11 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <optional>
 #include <random>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -22,6 +22,8 @@
   #include <unistd.h>
 #endif
 
+#include "catch2/catch_message.hpp"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "local-time.h"
 #include "sample-run.h"

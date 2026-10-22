@@ -3,19 +3,37 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <unordered_set>
 #include <vector>
 
 #include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
 #include "io/file-record-attr-types.h"
 #include "io/file-record-impl.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

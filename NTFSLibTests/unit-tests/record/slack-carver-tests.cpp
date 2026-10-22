@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <random>
 #include <span>
@@ -16,6 +15,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
 
+#include "catch2/catch_message.hpp"
 #include "fake-ntfs-image.h"
 #include "record/slack-carver.h"
 

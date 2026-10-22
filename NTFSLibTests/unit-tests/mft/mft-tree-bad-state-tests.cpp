@@ -1,6 +1,5 @@
 #include <ntfs-browser/win-types.h>
 
-#include <array>
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -15,14 +14,13 @@
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "mft/tree-testing.h"
 #include "test-log-sink.h"

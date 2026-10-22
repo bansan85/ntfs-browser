@@ -2,16 +2,28 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <vector>
+
+#include <gsl/narrow>
+#include <gsl/util>
 
 #include <ntfs-browser/namespace.h>
 
+#include "data/file-record-flag.h"
+#include "data/file-record-header.h"
+#include "data/filename-flag.h"
 #include "data/filename.h"
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
+#include "data/index-entry.h"
 #include "data/standard-information.h"
 #include "fake-ntfs-image-internal.h"
+#include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
+#include "ntfs-browser/attr/header-common.h"
+#include "ntfs-browser/attr/type.h"
+#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

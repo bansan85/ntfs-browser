@@ -4,7 +4,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-#include "../data/std-info-permission.h"
+#include "data/std-info-permission.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Data {
 

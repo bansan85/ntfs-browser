@@ -2,10 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstdlib>
 #include <fstream>
-#include <ios>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -17,6 +16,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
+#include "catch2/catch_message.hpp"
 #include "partition-disk-reader.h"
 #include "recording-disk-reader.h"
 #include "sequential-disk-reader.h"

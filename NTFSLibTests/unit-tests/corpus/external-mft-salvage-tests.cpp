@@ -1,12 +1,12 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <memory>
-#include <string_view>
+#include <span>
+#include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -18,11 +18,18 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "external-mft-support.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace {
 

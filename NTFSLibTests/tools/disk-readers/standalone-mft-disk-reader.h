@@ -3,7 +3,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <fstream>
-#include <optional>
 #include <span>
 #include <string>
 #include <string_view>

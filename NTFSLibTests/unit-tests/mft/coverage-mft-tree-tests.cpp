@@ -4,11 +4,11 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/attr/type.h>
@@ -17,7 +17,6 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "volume-tree-support.h"
 

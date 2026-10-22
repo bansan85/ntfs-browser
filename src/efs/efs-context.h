@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>  // IWYU pragma: keep
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 
@@ -17,13 +16,6 @@
 #include "internal-export.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
-
-namespace Attr {
-
-template <Cache::Strategy S>
-class AttrNonResident;
-
-}  // namespace Attr
 
 namespace Efs {
 

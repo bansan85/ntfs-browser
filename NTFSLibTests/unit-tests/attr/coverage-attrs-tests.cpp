@@ -1,30 +1,28 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <span>
+#include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/base.h>  // IWYU pragma: keep
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 
-#include "attr/bitmap.h"
 #include "attr/file-name.h"
-#include "attr/non-resident.h"
 #include "attr/resident.h"
-#include "attr/std-info.h"
 #include "data/attribute-list.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
@@ -38,6 +36,31 @@
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/attr/header-common.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+class AttrResidentFullCache;
+class AttrResidentNoCache;
+template <typename Resident, Cache::Strategy S>
+class AttrFileName;
+
+}  // namespace Attr
+
+namespace Data {
+
+enum class FileRecordFlag : std::uint8_t;
+
+}  // namespace Data
+
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

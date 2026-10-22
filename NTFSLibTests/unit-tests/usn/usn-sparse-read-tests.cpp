@@ -1,6 +1,5 @@
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -9,7 +8,6 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/usn/types.h>
 
 #include "fake-ntfs-image.h"

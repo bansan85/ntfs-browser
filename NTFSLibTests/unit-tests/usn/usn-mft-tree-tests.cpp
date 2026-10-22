@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,8 +13,6 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"

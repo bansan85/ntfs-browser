@@ -19,13 +19,12 @@
 #include <vector>
 
 #include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/filename.h>
-#include <ntfs-browser/index-entry.h>  // IWYU pragma: keep
+#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
@@ -39,7 +38,25 @@
 #include "gap-collation-probe.h"
 #include "looping-disk-reader.h"
 #include "named-stream-probe.h"
+#include "ntfs-browser/disk-reader.h"
 #include "usn/usn-record-scanner.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+struct HeaderCommon;
+template <Cache::Strategy S>
+class AttrBase;
+
+}  // namespace Attr
+
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;

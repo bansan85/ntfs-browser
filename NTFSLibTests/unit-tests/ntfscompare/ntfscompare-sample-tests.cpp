@@ -2,6 +2,7 @@
 #include <fstream>
 #include <random>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -9,14 +10,16 @@
 
 #include <ntfs-browser/namespace.h>
 
+#include "catch2/catch_message.hpp"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "sample-run.h"
+#include "temp-dir.h"
 
 #ifndef _WIN32
   #include <sys/stat.h>
   #include <unistd.h>
 
   #include "fake-ntfs-image.h"
-  #include "temp-dir.h"
 #endif
 
 using Catch::Matchers::ContainsSubstring;

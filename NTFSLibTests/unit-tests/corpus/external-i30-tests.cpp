@@ -1,13 +1,13 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <memory>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -27,6 +27,7 @@
 #include "corpus-test-support.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
 #include "partition-disk-reader.h"
 
 namespace {

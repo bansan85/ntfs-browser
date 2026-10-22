@@ -14,11 +14,11 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "catch2/catch_message.hpp"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"

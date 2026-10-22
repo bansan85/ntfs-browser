@@ -20,7 +20,6 @@
 
 namespace NTFS_BROWSER_NAMESPACE {
 
-class IDiskReader;
 template <Cache::Strategy S>
 class NtfsVolume;
 

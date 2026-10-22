@@ -21,6 +21,8 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
+#include "ntfs-browser/volume-options.h"
 #include "volume-tree-support.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

@@ -3,16 +3,27 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>  // IWYU pragma: keep
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "log/ntfs-common.h"
+#include "ntfs-browser/alloc/types.h"
 #include "utf/utf.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

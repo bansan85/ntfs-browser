@@ -2,15 +2,13 @@
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
-#include <iterator>
-#include <map>
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -34,13 +32,15 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "attr/vol-name.h"
+#include "catch2/catch_message.hpp"
+#include "catch2/catch_tostring.hpp"
 #include "corpus-test-support.h"
 #include "external-mft-support.h"
 #include "io/file-record-attr-types.h"
 #include "md5-test-support.h"
+#include "ntfs-browser/disk-reader.h"
 #include "partition-disk-reader.h"
 #include "standalone-mft-disk-reader.h"
-#include "utf/utf.h"
 #include "volume/volume-geometry.h"
 
 namespace {

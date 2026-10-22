@@ -11,7 +11,6 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
-#include "internal-export.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Record {

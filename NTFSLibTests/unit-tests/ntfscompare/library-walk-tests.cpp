@@ -1,8 +1,12 @@
 #include <algorithm>
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -12,19 +16,24 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "compare-engine.h"
 #include "entry.h"
 #include "fake-ntfs-image.h"
 #include "library-walk.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/win-types.h"
 #include "optional-access.h"
 #include "volume-open.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+struct VolumeOptions;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 #ifndef _WIN32
   #include <fstream>

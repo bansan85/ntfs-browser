@@ -17,6 +17,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_tostring.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image.h"

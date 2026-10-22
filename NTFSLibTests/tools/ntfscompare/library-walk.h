@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -10,25 +11,23 @@
 #include <vector>
 
 #include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "entry.h"
-#include "time-convert.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
 
-namespace Cache {
-
-enum class Strategy : std::uint8_t;
-
-}  // namespace Cache
 template <Cache::Strategy S>
-class NtfsVolume;
+class FileRecord;
 
+}  // namespace Io
 }  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NtfsCompare {

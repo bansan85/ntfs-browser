@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <memory>
-#include <utility>
+#include <span>
+#include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -12,9 +13,11 @@
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "efs-test-support.h"
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
+#include "efs/fek.h"
 #include "efs/sector-cipher.h"
 #include "test-log-sink.h"
 

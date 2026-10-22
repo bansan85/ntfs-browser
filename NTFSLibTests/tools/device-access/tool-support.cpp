@@ -1,6 +1,7 @@
 #include "tool-support.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <string_view>
 

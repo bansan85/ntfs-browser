@@ -1,5 +1,6 @@
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 
 #include <catch2/catch_test_macros.hpp>
@@ -9,9 +10,9 @@
 #include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "log/ntfs-common.h"
 #include "logging-test-support.h"
-#include "test-log-sink.h"
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 using Catch::Matchers::ContainsSubstring;

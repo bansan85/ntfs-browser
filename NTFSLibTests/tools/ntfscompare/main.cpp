@@ -12,6 +12,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -20,6 +21,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 
 #include <gsl/narrow>
 

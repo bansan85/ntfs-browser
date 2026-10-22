@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -25,6 +26,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
+#include "catch2/catch_message.hpp"
 #include "io/file-reader.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"

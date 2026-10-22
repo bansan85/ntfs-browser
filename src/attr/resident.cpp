@@ -14,6 +14,15 @@
 #include "data/header-resident.h"
 #include "ntfs-browser/win-types.h"
 
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
+
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {

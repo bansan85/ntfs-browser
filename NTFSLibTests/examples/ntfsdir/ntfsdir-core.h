@@ -4,8 +4,6 @@
 // cache strategy of the volume they open, so RunNtfsDir is instantiated once
 // per strategy in ntfsdir-core.cpp.
 
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <string>
 

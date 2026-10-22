@@ -4,7 +4,6 @@
 
 #include <cstdint>
 
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -15,6 +14,19 @@ enum class Strategy : std::uint8_t;
 
 }  // namespace Cache
 
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
+
 namespace Attr {
 
 struct HeaderCommon;
@@ -24,12 +36,6 @@ struct HeaderCommon;
 namespace Data {
 
 struct StandardInformation;
-
-}  // namespace Data
-
-namespace Data {
-
-enum class StdInfoPermission : DWORD;
 
 }  // namespace Data
 

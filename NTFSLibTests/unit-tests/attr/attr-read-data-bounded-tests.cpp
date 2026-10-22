@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstring>
 #include <span>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -12,13 +11,21 @@
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/non-resident.h"
 #include "fake-ntfs-image.h"
 #include "nonresident-index-support.h"
 #include "optional-access.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrNonResident;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

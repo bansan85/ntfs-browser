@@ -3,17 +3,40 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
 
-#include "upcase/upcase.h"
+namespace NTFS_BROWSER_NAMESPACE {
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+
+}  // namespace Attr
+
+namespace UpCase {
+
+class Table;
+
+}  // namespace UpCase
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 

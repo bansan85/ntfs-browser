@@ -8,7 +8,6 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -17,9 +16,17 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
 #include "volume-tree-support.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;

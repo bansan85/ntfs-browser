@@ -2,7 +2,9 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <random>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -12,10 +14,10 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/usn/types.h>
 
 #include "alloc-failure-support.h"
+#include "catch2/catch_message.hpp"
 #include "fake-ntfs-image.h"
 #include "usn-test-support.h"
 

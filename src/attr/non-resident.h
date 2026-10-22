@@ -11,12 +11,11 @@
 
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/view.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/run-list.h"
-#include "data/run-entry.h"
 #include "internal-export.h"
+#include "ntfs-browser/alloc/types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -25,6 +24,25 @@ namespace Cache {
 enum class Strategy : std::uint8_t;
 
 }  // namespace Cache
+
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Data {
+
+struct RunEntry;
+
+}  // namespace Data
+
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
+
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Attr {
 

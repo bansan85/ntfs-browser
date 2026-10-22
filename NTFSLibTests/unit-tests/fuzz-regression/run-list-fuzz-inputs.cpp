@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>

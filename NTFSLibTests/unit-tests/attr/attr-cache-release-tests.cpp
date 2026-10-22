@@ -13,18 +13,19 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/base.h>  // IWYU pragma: keep
-#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "efs/fek.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))

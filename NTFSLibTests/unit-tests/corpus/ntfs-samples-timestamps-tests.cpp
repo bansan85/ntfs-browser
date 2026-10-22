@@ -3,10 +3,10 @@
 #include <optional>
 #include <string_view>
 #include <tuple>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -17,10 +17,7 @@
 
 #include "attr/file-name.h"
 #include "attr/resident.h"
-#include "catch2/catch_message.hpp"
-#include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
-#include "optional-access.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 using NTFS_BROWSER_NAMESPACE::IndexEntry;

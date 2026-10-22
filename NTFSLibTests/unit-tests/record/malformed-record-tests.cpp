@@ -1,9 +1,10 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstddef>
 #include <cstring>
 #include <memory>
+#include <optional>
+#include <span>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -11,7 +12,6 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
@@ -19,9 +19,22 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "data/file-record-flag.h"
 #include "memory-disk-reader.h"
 #include "scratch-record.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

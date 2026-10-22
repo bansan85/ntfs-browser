@@ -3,30 +3,18 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string_view>
 #include <vector>
 
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "corpus-test-support.h"
-
-namespace NTFS_BROWSER_NAMESPACE {
-
-namespace Io {
-
-template <Cache::Strategy S>
-class FileRecord;
-
-}  // namespace Io
-
-template <Cache::Strategy S>
-class NtfsVolume;
-
-}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

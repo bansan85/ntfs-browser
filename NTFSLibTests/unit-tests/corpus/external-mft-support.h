@@ -3,13 +3,11 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include <ntfs-browser/cache/strategy.h>

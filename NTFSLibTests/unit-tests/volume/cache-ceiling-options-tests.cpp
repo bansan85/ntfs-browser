@@ -1,6 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -11,8 +12,8 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "fake-ntfs-image.h"
 #include "fullcache-walk-support.h"
+#include "ntfs-browser/ntfs-volume.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 

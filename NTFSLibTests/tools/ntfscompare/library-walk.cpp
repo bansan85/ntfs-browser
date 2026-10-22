@@ -8,6 +8,9 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
+#include "ntfs-browser/index-entry.h"
+#include "time-convert.h"
+
 namespace NtfsCompare {
 
 namespace {

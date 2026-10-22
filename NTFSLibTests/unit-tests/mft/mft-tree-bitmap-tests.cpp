@@ -1,7 +1,9 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <array>
 #include <memory>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -18,6 +20,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 

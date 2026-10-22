@@ -21,6 +21,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "corpus-test-support.h"
 #include "md5-test-support.h"
 #include "optional-access.h"

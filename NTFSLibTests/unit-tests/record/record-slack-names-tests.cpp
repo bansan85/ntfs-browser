@@ -1,8 +1,10 @@
 #include <ntfs-browser/win-types.h>
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <random>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,9 +19,17 @@
 #include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;

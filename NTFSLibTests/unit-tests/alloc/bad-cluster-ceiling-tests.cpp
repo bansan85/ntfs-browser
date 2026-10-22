@@ -1,6 +1,9 @@
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -11,7 +14,6 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-failure-support.h"

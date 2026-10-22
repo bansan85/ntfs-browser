@@ -13,9 +13,15 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "data/ntfs-bpb.h"
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 #include "volume-tree-support.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Tests {
+
+class MemoryDiskReader;
+
+}  // namespace Tests
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

@@ -10,6 +10,14 @@
 
 #include "cache/block-cache.h"
 
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Cache {
+
+class ViewKey;
+
+}  // namespace Cache
+}  // namespace NTFS_BROWSER_NAMESPACE
+
 namespace NTFS_BROWSER_NAMESPACE::Cache {
 
 View::View() noexcept = default;

@@ -2,9 +2,7 @@
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstring>
-#include <initializer_list>
 #include <memory>
 #include <span>
 #include <string>
@@ -27,6 +25,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/filename.h"
@@ -41,6 +40,7 @@
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/attr/header-common.h"
 #include "test-log-sink.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -13,6 +12,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -20,12 +20,12 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
 #include "counting-disk-reader.h"
 #include "standalone-mft-disk-reader.h"
 #include "test-log-sink.h"

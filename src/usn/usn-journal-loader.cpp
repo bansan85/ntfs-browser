@@ -11,11 +11,11 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
@@ -24,12 +24,20 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/usn/types.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "attr/resident.h"
 #include "attr/std-info.h"
 #include "log/ntfs-common.h"
 #include "usn/usn-record-scanner.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Usn {
 

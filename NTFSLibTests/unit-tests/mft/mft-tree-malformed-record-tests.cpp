@@ -1,11 +1,11 @@
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <set>
+#include <span>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -19,7 +19,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "data/file-record-flag.h"
+#include "catch2/catch_message.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "scratch-record.h"

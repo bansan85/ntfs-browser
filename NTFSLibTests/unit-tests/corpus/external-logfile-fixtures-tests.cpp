@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <ios>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -16,6 +16,7 @@
 
 #include <ntfs-browser/namespace.h>
 
+#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 
 namespace {

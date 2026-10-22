@@ -1,6 +1,8 @@
 #include <ntfs-browser/win-types.h>
 
 #include <memory>
+#include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -11,12 +13,18 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
 #include "scripted-disk-reader.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+struct VolumeOptions;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

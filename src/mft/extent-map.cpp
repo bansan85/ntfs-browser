@@ -4,11 +4,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <iterator>
 #include <limits>
 #include <optional>
 #include <span>
-#include <utility>
 #include <vector>
 
 #include <gsl/narrow>
@@ -18,8 +18,19 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
-#include "../attr/non-resident.h"
 #include "../log/ntfs-common.h"
+#include "attr/non-resident.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+template <Cache::Strategy S>
+class AttrNonResident;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

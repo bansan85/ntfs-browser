@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstddef>
 #include <exception>
 #include <memory>
 #include <span>
@@ -11,11 +12,14 @@
 #include <cryptopp/des.h>
 
 #include <ntfs-browser/namespace.h>
+
 // Silences the weak-algorithm notice: MD5 is what the DESX key expansion uses.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
+#include <cryptopp/iterhash.h>
 #include <cryptopp/md5.h>
 #include <cryptopp/modes.h>
+#include <cryptopp/seckey.h>
 
 #include "efs/fek.h"
 #include "efs/sector-cipher.h"

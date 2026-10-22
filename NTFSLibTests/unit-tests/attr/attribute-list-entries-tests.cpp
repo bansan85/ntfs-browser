@@ -2,11 +2,9 @@
 
 #include <array>
 #include <cstddef>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -18,17 +16,21 @@
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "attribute-list-support.h"
+#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
-#include "optional-access.h"
-#include "test-log-sink.h"
+#include "nonresident-index-support.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

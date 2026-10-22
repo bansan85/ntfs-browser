@@ -2,8 +2,10 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -11,13 +13,11 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
 #include "fake-ntfs-image.h"
-#include "test-log-sink.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

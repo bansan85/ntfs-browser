@@ -3,11 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <span>
 #include <string>
 #include <string_view>
@@ -23,15 +22,23 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "catch2/catch_message.hpp"
+#include "catch2/catch_tostring.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
 #include "corpus-test-support.h"
 #include "data/ntfs-bpb.h"
 #include "external-mft-support.h"
 #include "standalone-mft-disk-reader.h"
 #include "test-log-sink.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace {
 

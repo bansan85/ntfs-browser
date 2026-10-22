@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -19,6 +21,7 @@
 #include "catch2/matchers/catch_matchers.hpp"
 #include "fuzz-core.h"
 #include "looping-disk-reader.h"
+#include "ntfs-browser/win-types.h"
 #include "test-log-sink.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink;

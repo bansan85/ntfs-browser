@@ -9,13 +9,13 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
 
-#include "data/filename-flag.h"
 #include "data/filename.h"
 #include "mft/file-reference.h"
 #include "utf/utf.h"

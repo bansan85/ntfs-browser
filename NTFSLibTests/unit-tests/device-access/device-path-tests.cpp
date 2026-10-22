@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "device-path.h"
+#include "ntfs-browser/namespace.h"
 #include "temp-dir.h"
 #include "text-convert.h"
 

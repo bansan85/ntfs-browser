@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -19,11 +20,12 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "nonresident-index-support.h"
+#include "ntfs-browser/attr/base.h"
 #include "test-log-sink.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

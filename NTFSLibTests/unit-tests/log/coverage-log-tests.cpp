@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -9,7 +10,6 @@
 #include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
-#include "logging-test-support.h"
 #include "test-log-sink.h"
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;

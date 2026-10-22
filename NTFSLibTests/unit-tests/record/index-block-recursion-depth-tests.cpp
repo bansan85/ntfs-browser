@@ -19,6 +19,15 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
+
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;

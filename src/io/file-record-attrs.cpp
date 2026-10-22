@@ -3,12 +3,14 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <stdexcept>
@@ -20,31 +22,43 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>  // IWYU pragma: keep
+#include <ntfs-browser/ntfs-volume.h>
 
-#include "attr/bitmap.h"  // IWYU pragma: keep
-#include "attr/data.h"    // IWYU pragma: keep
+#include "attr/bitmap.h"
+#include "attr/data.h"
 #include "attr/file-name.h"
-#include "attr/index-alloc.h"  // IWYU pragma: keep
+#include "attr/index-alloc.h"
 #include "attr/index-root.h"
-#include "attr/list.h"          // IWYU pragma: keep
-#include "attr/non-resident.h"  // IWYU pragma: keep
-#include "attr/resident.h"
+#include "attr/list.h"
+#include "attr/non-resident.h"
+#include "attr/slot.h"
 #include "attr/std-info.h"
-#include "attr/vol-info.h"  // IWYU pragma: keep
-#include "attr/vol-name.h"  // IWYU pragma: keep
+#include "attr/vol-info.h"
+#include "attr/vol-name.h"
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
 #include "io/file-record-efs.h"
 #include "io/file-record-impl.h"
 #include "log/ntfs-common.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+template <Cache::Strategy S>
+class AttrIndexAlloc;
+template <Cache::Strategy S>
+class AttrNonResident;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

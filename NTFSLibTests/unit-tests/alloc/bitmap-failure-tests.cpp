@@ -5,8 +5,6 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
-#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -14,12 +12,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/log/log.h>
-#include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
@@ -27,9 +23,9 @@
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
 #include "alloc/cluster-bitmap.h"
+#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
-#include "test-log-sink.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

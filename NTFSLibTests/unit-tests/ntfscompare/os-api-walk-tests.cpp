@@ -1,8 +1,10 @@
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <random>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include <catch2/catch_test_macros.hpp>
 

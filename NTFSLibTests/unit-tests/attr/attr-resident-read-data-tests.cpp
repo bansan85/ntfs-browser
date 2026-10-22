@@ -21,6 +21,15 @@
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+}  // namespace NTFS_BROWSER_NAMESPACE
+
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;

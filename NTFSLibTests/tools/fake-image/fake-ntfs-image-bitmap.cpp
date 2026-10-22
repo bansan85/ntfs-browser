@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cassert>
-#include <cstddef>
 #include <cstring>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -13,7 +13,10 @@
 #include "data/header-resident.h"
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image-internal.h"
+#include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
+#include "ntfs-browser/attr/type.h"
+#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

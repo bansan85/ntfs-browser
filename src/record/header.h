@@ -22,9 +22,6 @@ struct HeaderCommon;
 
 namespace Record {
 
-template <Cache::Strategy S>
-struct HeaderImpl;
-
 // Validates a file record's header and applies its update sequence fixups.
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY Header {
   WORD us_number{0};

@@ -1,10 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
-#include <filesystem>
 #include <limits>
 #include <memory>
-#include <system_error>
 #include <utility>
 #include <vector>
 

@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <memory>
+#include <ranges>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>

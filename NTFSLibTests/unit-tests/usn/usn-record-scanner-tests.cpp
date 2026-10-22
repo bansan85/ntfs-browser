@@ -1,6 +1,9 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
+#include <optional>
+#include <span>
+#include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -8,6 +11,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/usn/types.h>
 
+#include "catch2/catch_message.hpp"
 #include "fake-ntfs-image.h"
 #include "usn-test-support.h"
 #include "usn/usn-record-scanner.h"

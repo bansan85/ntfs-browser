@@ -12,6 +12,8 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "ntfs-browser/namespace.h"
+
 namespace NtfsFuzz {
 
 // Character type of argv: wchar_t on Windows, char elsewhere.

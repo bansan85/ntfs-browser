@@ -1,12 +1,13 @@
 #include <algorithm>
-#include <cstddef>
 #include <cstring>
+#include <optional>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 
 #include "data/ntfs-bpb.h"
-#include "fake-ntfs-image-internal.h"
+#include "fake-ntfs-image.h"
+#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

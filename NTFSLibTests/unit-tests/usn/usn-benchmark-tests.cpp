@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <format>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -11,7 +12,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -19,7 +19,7 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
+#include "ntfs-browser/log/sink.h"
 #include "test-log-sink.h"
 #include "usn-test-support.h"
 

@@ -1,10 +1,13 @@
+#include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "compare-engine.h"
 #include "entry.h"
+#include "ntfs-browser/win-types.h"
 
 using NtfsCompare::CompareAgainstReference;
 using NtfsCompare::CompareLibraryMethods;

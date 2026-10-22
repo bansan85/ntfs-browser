@@ -1,7 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
-#include <ntfs-browser/namespace.h>
-
 #ifdef _WIN32
 
   #include <catch2/catch_test_macros.hpp>

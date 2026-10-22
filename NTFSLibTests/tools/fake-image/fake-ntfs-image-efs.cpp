@@ -1,15 +1,24 @@
 #include <array>
 #include <cstring>
+#include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
+
+#include <gsl/narrow>
 
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/flags.h"
 #include "data/header-resident.h"
+#include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
+#include "fake-ntfs-image.h"
+#include "ntfs-browser/attr/header-common.h"
+#include "ntfs-browser/attr/type.h"
+#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

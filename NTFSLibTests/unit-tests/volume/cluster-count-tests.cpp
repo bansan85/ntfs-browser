@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <span>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>

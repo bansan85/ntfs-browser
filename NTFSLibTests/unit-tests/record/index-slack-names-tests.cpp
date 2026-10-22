@@ -1,10 +1,11 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
-#include <cstddef>
+#include <array>
 #include <cstring>
 #include <memory>
 #include <random>
+#include <span>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -23,6 +24,7 @@
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "ntfs-browser/disk-reader.h"
 #include "record/slack-carver.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

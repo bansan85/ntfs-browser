@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <span>
 #include <stdexcept>
 #include <vector>
 
