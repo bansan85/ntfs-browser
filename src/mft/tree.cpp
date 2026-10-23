@@ -464,6 +464,24 @@ class MftTree::Impl {
       PathThrough(const Mft::MftTree::Entry& entry,
                   const Mft::MftTree::Name& name,
                   std::optional<ULONGLONG>* lost_ancestor) const;
+
+ private:
+  // The path of a directory through its primary name, as PathThrough() builds
+  // it, and the record where its chain breaks.
+  struct DirectoryPath {
+    std::wstring path;
+    std::optional<ULONGLONG> lost;
+  };
+
+  [[nodiscard]] const DirectoryPath&
+      PathOfDirectory(const Mft::MftTree::Entry& directory,
+                      const Mft::MftTree::Name& primary) const;
+  [[nodiscard]] std::wstring WalkPath(const Mft::MftTree::Entry& entry,
+                                      const Mft::MftTree::Name& name,
+                                      std::optional<ULONGLONG>& lost) const;
+
+  // The directories PathThrough() went through, by record.
+  mutable std::unordered_map<ULONGLONG, DirectoryPath> directory_paths_;
 };
 
 Mft::MftTree::MftTree(const NtfsVolume<Cache::Strategy::NoCache>& volume,
@@ -753,7 +771,9 @@ void Mft::MftTree::Impl::ApplyJournal(const Usn::Journal& journal,
 }
 
 // Joins name and its ancestors' primary names up to the root, or up to the
-// record where the chain of valid parent references breaks.
+// record where the chain of valid parent references breaks. A file's path is
+// its parent's, walked once for all its files, plus its name: a file is never
+// a valid parent, so it cannot sit on the chain above it.
 std::wstring Mft::MftTree::Impl::PathThrough(
     const Mft::MftTree::Entry& entry, const Mft::MftTree::Name& name,
     std::optional<ULONGLONG>* lost_ancestor) const {
@@ -764,11 +784,65 @@ std::wstring Mft::MftTree::Impl::PathThrough(
     return L"\\";
   }
 
+  // A valid parent other than the root is a directory the scan found.
+  const Mft::MftTree::Entry* parent =
+      name.parent_valid && name.parent_record != root_record
+          ? Find(name.parent_record)
+          : nullptr;
+  const Mft::MftTree::Name* parent_name =
+      parent != nullptr ? PrimaryName(*parent) : nullptr;
+
+  std::wstring path;
+  std::optional<ULONGLONG> lost;
+  if (entry.directory && &name == PrimaryName(entry)) {
+    // The path its files reuse.
+    const DirectoryPath& own = PathOfDirectory(entry, name);
+    path = own.path;
+    lost = own.lost;
+  } else if (!entry.directory && parent_name != nullptr) {
+    const DirectoryPath& directory = PathOfDirectory(*parent, *parent_name);
+    path.reserve(directory.path.size() + 1 + name.name.size());
+    path = directory.path;
+    path += L'\\';
+    path += name.name;
+    lost = directory.lost;
+  } else {
+    path = WalkPath(entry, name, lost);
+  }
+
+  if (lost_ancestor != nullptr) {
+    *lost_ancestor = lost;
+  }
+  return path;
+}
+
+// The path of directory through primary, its primary name: walked the first
+// time, then remembered.
+const Mft::MftTree::Impl::DirectoryPath& Mft::MftTree::Impl::PathOfDirectory(
+    const Mft::MftTree::Entry& directory,
+    const Mft::MftTree::Name& primary) const {
+  if (const auto found = directory_paths_.find(directory.record);
+      found != directory_paths_.end()) {
+    return found->second;
+  }
+  DirectoryPath walked;
+  walked.path = WalkPath(directory, primary, walked.lost);
+  return directory_paths_.emplace(directory.record, std::move(walked))
+      .first->second;
+}
+
+// Walks from name up the primary names of entry's ancestors, see
+// PathThrough(). entry is not the root. lost receives the record where the
+// chain breaks, if it does.
+std::wstring
+    Mft::MftTree::Impl::WalkPath(const Mft::MftTree::Entry& entry,
+                                 const Mft::MftTree::Name& name,
+                                 std::optional<ULONGLONG>& lost) const {
   std::vector<const std::wstring*> parts;
   // Guards against a forged chain of parents that loops back on itself.
   std::unordered_set<ULONGLONG> visited{entry.record};
   const Mft::MftTree::Name* current = &name;
-  std::optional<ULONGLONG> lost;
+  lost.reset();
 
   while (true) {
     parts.push_back(&current->name);
@@ -797,10 +871,6 @@ std::wstring Mft::MftTree::Impl::PathThrough(
       path += L'\\';
     }
     path += *part;
-  }
-
-  if (lost_ancestor != nullptr) {
-    *lost_ancestor = lost;
   }
   return path;
 }
