@@ -921,6 +921,36 @@ inline constexpr DWORD mft_tree_report_allocated_size = 40;
 // number over record number 0, so its record number alone is 0.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord();
 
+// Records of BuildFakeNtfsImageWithMftTreeAttributeList(): a base record, and
+// two extension records its $ATTRIBUTE_LIST names, one on each side of it, so
+// a scan meets one before the base record and one after it.
+inline constexpr ULONGLONG mft_tree_list_low_ext_idx = 19;
+inline constexpr ULONGLONG mft_tree_list_base_idx = 21;
+inline constexpr ULONGLONG mft_tree_list_high_ext_idx = 22;
+
+// Size of the resident $DATA mft_tree_list_high_ext_idx holds for the base.
+inline constexpr DWORD mft_tree_list_data_size = 21;
+
+// The record mft_tree_list_high_ext_idx extends.
+enum class FakeListedExtension : std::uint8_t {
+  // The base record, as its list says.
+  Genuine,
+  // The hard-linked file: a record another file reused since the list was
+  // written.
+  Foreign
+};
+
+// Same volume as BuildFakeNtfsImageWithMftTree(), with old.tmp (19), draft.doc
+// (21) and stale.txt (22) replaced by:
+//   19 an extension of 21, holding its name "listed.txt" in the root;
+//   21 "listed.txt", whose own record holds only $STANDARD_INFORMATION and a
+//      resident $ATTRIBUTE_LIST naming 19 for $FILE_NAME, then 22 for
+//      $FILE_NAME and $DATA;
+//   22 an extension of the record high says, holding the hard link
+//      "listed-link.txt" in Docs and a $DATA of mft_tree_list_data_size bytes.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
+    FakeListedExtension high = FakeListedExtension::Genuine);
+
 // Records of BuildFakeNtfsImageWithMftTree() that are in use: $MFT, $Volume,
 // the root, Docs, report.txt, the hard link, NewDir and the extension record.
 // The $BITMAP of BuildFakeNtfsImageWithMftBitmap() marks exactly these.

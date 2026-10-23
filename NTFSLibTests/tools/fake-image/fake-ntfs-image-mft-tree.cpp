@@ -8,10 +8,12 @@
 #include <vector>
 
 #include <gsl/narrow>
+#include <gsl/util>
 
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
+#include "data/attribute-list.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/filename-flag.h"
@@ -190,6 +192,89 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord() {
       MakeFileReference(static_cast<ULONGLONG>(Mft::Idx::Mft), mft_sequence));
 
   PutMftRecord(image, mft_tree_zeroed_idx, record);
+  return image;
+}
+
+namespace {
+
+// Sequence numbers of the records BuildFakeNtfsImageWithMftTreeAttributeList()
+// writes, distinct so that a wrong file reference shows.
+constexpr WORD tree_list_base_sequence = 4;
+constexpr WORD tree_list_extension_sequence = 2;
+
+// One entry of the $ATTRIBUTE_LIST of mft_tree_list_base_idx.
+struct FakeTreeListEntry {
+  Attr::Type type;
+  ULONGLONG record;
+};
+
+// Writes a resident $ATTRIBUTE_LIST of entries at record[offset], each naming
+// its record under tree_list_extension_sequence, and returns its total_size.
+DWORD WriteTreeAttributeList(FakeRecord& record, DWORD offset,
+                             std::span<const FakeTreeListEntry> entries) {
+  constexpr auto entry_size = static_cast<WORD>(AlignAttrSize(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
+  auto& attr = InitResidentAttr(record, offset, Attr::Type::AttributeList);
+  attr.attr_size = gsl::narrow<DWORD>(entry_size * entries.size());
+  attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
+
+  for (size_t i = 0; i < entries.size(); i++) {
+    auto& entry =
+        *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
+            &record.at(offset + attr.attr_offset + (i * entry_size)));
+    entry.attr_type = gsl::at(entries, i).type;
+    entry.record_size = entry_size;
+    entry.name_length = 0;
+    entry.name_offset = 0;
+    entry.start_vcn = 0;
+    entry.base_ref.segment_number = gsl::at(entries, i).record;
+    entry.base_ref.sequence_number = tree_list_extension_sequence;
+    entry.attr_id = 0;
+  }
+  return attr.header.total_size;
+}
+
+}  // namespace
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithMftTreeAttributeList(FakeListedExtension high) {
+  using RecordFlag = NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
+  using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
+
+  std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
+  const ULONGLONG base_ref =
+      MakeFileReference(mft_tree_list_base_idx, tree_list_base_sequence);
+  const ULONGLONG high_base_ref =
+      high == FakeListedExtension::Genuine
+          ? base_ref
+          : MakeFileReference(mft_tree_hard_link_idx, 1);
+  const ULONGLONG docs =
+      MakeFileReference(mft_tree_docs_idx, tree_docs_sequence);
+
+  PutMftRecord(image, mft_tree_list_low_ext_idx,
+               MakeMftTreeRecord(
+                   RecordFlag::InUse, tree_list_extension_sequence,
+                   {{.name = L"listed.txt", .parent_ref = root_file_reference}},
+                   {}, StdInfoPermission::Normal, base_ref));
+
+  FakeRecord base = MakeInUseFileRecord(tree_list_base_sequence);
+  DWORD offset = attr_offset_value;
+  offset +=
+      WriteStandardInformationAttr(base, offset, StdInfoPermission::Normal);
+  const std::array<FakeTreeListEntry, 3> entries{
+      {{.type = Attr::Type::FileName, .record = mft_tree_list_low_ext_idx},
+       {.type = Attr::Type::FileName, .record = mft_tree_list_high_ext_idx},
+       {.type = Attr::Type::Data, .record = mft_tree_list_high_ext_idx}}};
+  offset += WriteTreeAttributeList(base, offset, entries);
+  WriteEndOfAttributesMarker(base, offset);
+  PutMftRecord(image, mft_tree_list_base_idx, base);
+
+  PutMftRecord(
+      image, mft_tree_list_high_ext_idx,
+      MakeMftTreeRecord(RecordFlag::InUse, tree_list_extension_sequence,
+                        {{.name = L"listed-link.txt", .parent_ref = docs}},
+                        mft_tree_list_data_size, StdInfoPermission::Normal,
+                        high_base_ref));
   return image;
 }
 

@@ -90,6 +90,20 @@ constexpr ULONGLONG max_gap_slots = 64;
 // The entry index of a record the scan did not keep.
 constexpr size_t no_entry = std::numeric_limits<size_t>::max();
 
+// Bytes of raw records a scan holds for its second pass at most. Past it, a
+// base record reads its extension records from the disk, one at a time. A big
+// system volume has about 100 000 extension records of 1 KiB: 64 bits leave
+// room for several times that, 32 bits keep most of the address space free.
+constexpr size_t default_max_held_record_bytes =
+    sizeof(void*) >= 8 ? size_t{512} << 20 : size_t{128} << 20;
+
+// The cap a test asked for. nullopt means the default.
+std::optional<size_t> max_held_record_bytes_override;
+
+// Bytes of one block of held records. Records are held in blocks, so holding
+// one more never moves those already held.
+constexpr size_t held_block_bytes = size_t{4} << 20;
+
 // Records the dense index of a tree covers whatever its entries: 2^20 slots
 // are 8 MiB, little next to the entries of a volume that large.
 constexpr size_t dense_index_floor = size_t{1} << 20;
@@ -291,41 +305,157 @@ bool ProgressAllowsRecord(const Mft::MftTree::ScanOptions& options,
          options.progress(record, total);
 }
 
-// Classifies one record slot and, when it is an entry to keep, reads it.
-// Counts the outcome in stats. Returns false for a slot that is not kept:
-// unreadable, an extension, a freed record not asked for, or a damaged one
-// when strict. A record with a failed update sequence check is damaged in both
+// Raw $MFT records a scan holds for its second pass, as the slot reader read
+// them: the extension records it met, and the base records that wait for
+// theirs. Records come in increasing order. Both kinds share one budget,
+// MaxHeldRecordBytes().
+class HeldRecords {
+ public:
+  // A base record that waits for the second pass, with the entry kept in its
+  // place, and what its first header read counted.
+  struct Waiting {
+    ULONGLONG record;
+    size_t entry_index;
+    bool header_damaged;
+    size_t slot;
+  };
+
+  explicit HeldRecords(size_t record_size)
+      : record_size_(record_size),
+        block_slots_(record_size != 0
+                         ? (std::max)(size_t{1}, held_block_bytes / record_size)
+                         : 1),
+        budget_(MaxHeldRecordBytes()) {}
+
+  // Holds extension record. False when bytes is empty or the budget is spent.
+  bool HoldExtension(ULONGLONG record, std::span<const BYTE> bytes) {
+    size_t slot = 0;
+    if (!Store(bytes, slot)) {
+      return false;
+    }
+    extensions_.push_back({.record = record, .slot = slot});
+    return true;
+  }
+
+  // Holds base record for the second pass. False when bytes is empty or the
+  // budget is spent.
+  bool HoldWaiting(ULONGLONG record, std::span<const BYTE> bytes,
+                   size_t entry_index, bool header_damaged) {
+    size_t slot = 0;
+    if (!Store(bytes, slot)) {
+      return false;
+    }
+    waiting_.push_back({.record = record,
+                        .entry_index = entry_index,
+                        .header_damaged = header_damaged,
+                        .slot = slot});
+    return true;
+  }
+
+  // The bytes of extension record, or an empty span when it is not held.
+  [[nodiscard]] std::span<const BYTE> FindExtension(ULONGLONG record) const {
+    const auto found =
+        std::ranges::lower_bound(extensions_, record, {}, &Extension::record);
+    if (found == extensions_.end() || found->record != record) {
+      return {};
+    }
+    return Bytes(found->slot);
+  }
+
+  [[nodiscard]] const std::vector<Waiting>& WaitingRecords() const noexcept {
+    return waiting_;
+  }
+
+  // The bytes held in slot, which Store() gave.
+  [[nodiscard]] std::span<const BYTE> Bytes(size_t slot) const {
+    const std::vector<BYTE>& block = blocks_.at(slot / block_slots_);
+    return std::span<const BYTE>{block}.subspan(
+        (slot % block_slots_) * record_size_, record_size_);
+  }
+
+ private:
+  struct Extension {
+    ULONGLONG record;
+    size_t slot;
+  };
+
+  // Copies bytes, one record, into the next slot. False when bytes is not a
+  // record or the budget is spent.
+  bool Store(std::span<const BYTE> bytes, size_t& slot) {
+    if (bytes.size() != record_size_ || (held_ + 1) * record_size_ > budget_) {
+      return false;
+    }
+    if (held_ % block_slots_ == 0) {
+      blocks_.emplace_back().reserve(block_slots_ * record_size_);
+    }
+    std::vector<BYTE>& block = blocks_.back();
+    block.insert(block.end(), bytes.begin(), bytes.end());
+    slot = held_++;
+    return true;
+  }
+
+  size_t record_size_;
+  // Records in one block.
+  size_t block_slots_;
+  // Bytes this scan may hold.
+  size_t budget_;
+  // Records held so far, both kinds.
+  size_t held_{0};
+  std::vector<std::vector<BYTE>> blocks_;
+  // Sorted by record: the scan meets them in that order.
+  std::vector<Extension> extensions_;
+  std::vector<Waiting> waiting_;
+};
+
+// What one record slot holds, once its header is read.
+enum class SlotKind : BYTE {
+  Dropped,    // Unreadable, or freed and not asked for.
+  Extension,  // An extension record: its base record imports its attributes.
+  Base        // A base record, kept if its attributes allow it.
+};
+
+// Reads the header of one record slot into file_record, and counts it in
+// stats. A record with a failed update sequence check is damaged in both
 // modes: strict drops it as unreadable, recovering keeps what verifies. It is
-// counted once, whatever else is wrong with it. entry, fresh, receives the
-// record, and is meaningless when false is returned.
+// counted once, whatever else is wrong with it: header_damaged tells
+// ReadBaseEntry() it is counted already.
 template <Cache::Strategy S>
-bool ReadSlot(Io::FileRecord<S>& file_record, Mft::SlotReader<S>& slots,
-              const NtfsVolume<S>& volume, ULONGLONG record,
-              Mft::MftTree::ScanStats& stats, Mft::MftTree::Entry& entry) {
+SlotKind ReadSlotHeader(Io::FileRecord<S>& file_record,
+                        Mft::SlotReader<S>& slots, const NtfsVolume<S>& volume,
+                        ULONGLONG record, Mft::MftTree::ScanStats& stats,
+                        bool& header_damaged) {
   if (!slots.ParseFileRecord(file_record, record)) {
     stats.unreadable++;
     if (file_record.HasFailedFixup()) {
       stats.damaged++;
     }
-    return false;
+    return SlotKind::Dropped;
   }
-  const bool header_damaged = file_record.HasFailedFixup();
+  header_damaged = file_record.HasFailedFixup();
   if (header_damaged) {
     stats.damaged++;
   }
   if (file_record.IsExtensionRecord()) {
     stats.extensions++;
-    return false;
+    return SlotKind::Extension;
   }
   if (file_record.IsDeleted()) {
     stats.deleted++;
     if (!volume.GetOptions().include_deleted) {
-      return false;
+      return SlotKind::Dropped;
     }
   } else {
     stats.in_use++;
   }
+  return SlotKind::Base;
+}
 
+// Reads the base record file_record holds into entry, fresh. Returns false for
+// a record not kept, a damaged one when strict: entry is then meaningless.
+template <Cache::Strategy S>
+bool ReadBaseEntry(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
+                   ULONGLONG record, bool header_damaged,
+                   Mft::MftTree::ScanStats& stats, Mft::MftTree::Entry& entry) {
   const bool parsed = ReadEntry(file_record, record, entry);
   if (!parsed || file_record.IsSalvaged()) {
     if (!header_damaged) {
@@ -338,6 +468,28 @@ bool ReadSlot(Io::FileRecord<S>& file_record, Mft::SlotReader<S>& slots,
   }
   AddCarvedNames(file_record, entry, stats);
   return true;
+}
+
+// Removes the entries at indices, sorted, and keeps the others in order.
+void DropEntries(std::vector<Mft::MftTree::Entry>& entries,
+                 const std::vector<size_t>& indices) {
+  if (indices.empty()) {
+    return;
+  }
+  size_t kept = 0;
+  size_t next_drop = 0;
+  for (size_t index = 0; index < entries.size(); index++) {
+    if (next_drop < indices.size() && indices.at(next_drop) == index) {
+      next_drop++;
+      continue;
+    }
+    if (kept != index) {
+      entries.at(kept) = std::move(entries.at(index));
+    }
+    kept++;
+  }
+  entries.erase(std::next(entries.begin(), gsl::narrow<std::ptrdiff_t>(kept)),
+                entries.end());
 }
 
 // The name a record's path goes through by default: the first non-DOS name
@@ -484,6 +636,14 @@ size_t MaxPendingRanges() {
                                           : default_max_pending_ranges;
 }
 
+size_t MaxHeldRecordBytes() {
+  return max_held_record_bytes_override.value_or(default_max_held_record_bytes);
+}
+
+void SetMaxHeldRecordBytesForTests(std::optional<size_t> limit) {
+  max_held_record_bytes_override = limit;
+}
+
 void SetMaxPendingRangesForTests(size_t limit) {
   max_pending_ranges_override = limit;
 }
@@ -511,6 +671,10 @@ class MftTree::Impl {
   template <Cache::Strategy S>
   void Scan(const NtfsVolume<S>& volume,
             const Mft::MftTree::ScanOptions& options);
+  template <Cache::Strategy S>
+  void ReadSlots(const NtfsVolume<S>& volume,
+                 const Mft::MftTree::ScanOptions& options,
+                 const std::optional<std::vector<BYTE>>& bitmap, bool annotate);
   void Link();
   // Files every entry under the parents its valid names give.
   void FileChildren();
@@ -585,32 +749,20 @@ Mft::MftTree& Mft::MftTree::operator=(Mft::MftTree&& other) noexcept = default;
 
 Mft::MftTree::~MftTree() = default;
 
-// Reads the record slots of volume's $MFT through one reused FileRecord, keeps
-// each base record's entry, then links the entries into a tree. With
-// include_deleted off, the slots $MFT's $BITMAP marks free are not read.
+// Reads the record slots of volume's $MFT into entries, in record order,
+// through one reused FileRecord. A base record with an $ATTRIBUTE_LIST waits
+// for a second pass: by then the first one has held every extension record it
+// met, so they come from memory instead of one disk read each.
 template <Cache::Strategy S>
-void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
-                              const Mft::MftTree::ScanOptions& options) {
+void Mft::MftTree::Impl::ReadSlots(
+    const NtfsVolume<S>& volume, const Mft::MftTree::ScanOptions& options,
+    const std::optional<std::vector<BYTE>>& bitmap, bool annotate) {
   const ULONGLONG total = volume.GetRecordsCount();
-  stats.slots = total;
-
-  // A freed record is dropped anyway without include_deleted, so its read is
-  // saved. With it, every slot is read, bitmap or not.
-  const std::optional<std::vector<BYTE>> bitmap =
-      volume.GetOptions().include_deleted ? std::nullopt
-                                          : ReadMftBitmap(volume, total);
-  // An Entry is big: each time the vector grows, it moves them all.
-  if (bitmap) {
-    entries.reserve(gsl::narrow<size_t>(
-        (std::min)(CountUsedSlots(*bitmap, total), max_reserved_entries)));
-  }
-
+  HeldRecords held(volume.GetFileRecordSize());
   Io::FileRecord<S> file_record(volume);
   file_record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
-  // Deleted entries only exist with include_deleted, and the annotation reads
-  // the bitmap: without both, the scan reads what it always did.
-  const bool annotate =
-      volume.GetOptions().include_deleted && options.annotate_data_state;
+  file_record.SetExtensionSource(
+      [&held](ULONGLONG record) { return held.FindExtension(record); });
   DataStateResolver<S> resolver(volume, entries, stats);
   // Reads $MFT in big blocks, not record by record.
   Mft::SlotReader<S> slots(volume);
@@ -632,19 +784,87 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
       slots.Expect(record, range_end);
     }
 
+    bool header_damaged = false;
+    const SlotKind kind = ReadSlotHeader(file_record, slots, volume, record,
+                                         stats, header_damaged);
+    if (kind == SlotKind::Extension) {
+      // Its base record may come later, and then takes it from memory.
+      static_cast<void>(held.HoldExtension(record, slots.HeldSlot(record)));
+      continue;
+    }
+    if (kind == SlotKind::Dropped) {
+      continue;
+    }
+    // Its entry keeps its place, so the entries stay in record order.
+    if (file_record.HasAttrHeader(Attr::Type::AttributeList) &&
+        held.HoldWaiting(record, slots.HeldSlot(record), entries.size(),
+                         header_damaged)) {
+      entries.emplace_back();
+      continue;
+    }
+
     // Filled in place: an Entry is big, and most slots are kept.
     Mft::MftTree::Entry& entry = entries.emplace_back();
-    if (!ReadSlot(file_record, slots, volume, record, stats, entry)) {
+    if (!ReadBaseEntry(file_record, volume, record, header_damaged, stats,
+                       entry)) {
       entries.pop_back();
       continue;
     }
-    IndexEntry(record, entries.size() - 1);
     if (annotate) {
       resolver.Note(file_record, entries.size() - 1);
     }
   }
+
+  std::vector<size_t> dropped;
+  for (const HeldRecords::Waiting& waiting : held.WaitingRecords()) {
+    Mft::MftTree::Entry& entry = entries.at(waiting.entry_index);
+    // The bytes the first pass parsed: the header parses as it did then.
+    if (!file_record.ParseFileRecord(waiting.record,
+                                     held.Bytes(waiting.slot)) ||
+        !ReadBaseEntry(file_record, volume, waiting.record,
+                       waiting.header_damaged, stats, entry)) {
+      dropped.push_back(waiting.entry_index);
+      continue;
+    }
+    if (annotate) {
+      resolver.Note(file_record, waiting.entry_index);
+    }
+  }
   if (annotate) {
     resolver.Flush();
+  }
+  DropEntries(entries, dropped);
+}
+
+// Reads the record slots of volume's $MFT, keeps each base record's entry,
+// then links the entries into a tree. With include_deleted off, the slots
+// $MFT's $BITMAP marks free are not read.
+template <Cache::Strategy S>
+void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
+                              const Mft::MftTree::ScanOptions& options) {
+  const ULONGLONG total = volume.GetRecordsCount();
+  stats.slots = total;
+
+  // A freed record is dropped anyway without include_deleted, so its read is
+  // saved. With it, every slot is read, bitmap or not.
+  const std::optional<std::vector<BYTE>> bitmap =
+      volume.GetOptions().include_deleted ? std::nullopt
+                                          : ReadMftBitmap(volume, total);
+  // An Entry is big: each time the vector grows, it moves them all.
+  if (bitmap) {
+    entries.reserve(gsl::narrow<size_t>(
+        (std::min)(CountUsedSlots(*bitmap, total), max_reserved_entries)));
+  }
+
+  // Deleted entries only exist with include_deleted, and the annotation reads
+  // the bitmap: without both, the scan reads what it always did.
+  const bool annotate =
+      volume.GetOptions().include_deleted && options.annotate_data_state;
+  ReadSlots(volume, options, bitmap, annotate);
+  for (size_t index = 0; index < entries.size(); index++) {
+    // index < entries.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    IndexEntry(entries[index].record, index);
   }
 
   if (options.progress && stats.complete) {

@@ -53,6 +53,10 @@ class NTFS_BROWSER_EXPORT FileRecord {
   using AttrsCallback = std::function<void(const Attr::AttrBase<S>& attr,
                                            void* context, bool* stop)>;
 
+  // The raw bytes of an $MFT record, as $MFT holds them, when the caller
+  // already has them, else an empty span.
+  using RecordSource = std::function<std::span<const BYTE>(ULONGLONG record)>;
+
   explicit FileRecord(const NtfsVolume<S>& volume);
   // Defined out of line, so the move needs Impl complete only in
   // file-record.cpp, not in every other TU that includes this header.
@@ -99,6 +103,14 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // True if the parsed record is an extension record: its base file reference
   // is not 0, sequence number included. False when no record is parsed.
   [[nodiscard]] bool IsExtensionRecord() const noexcept;
+  // Whether the parsed record holds an attribute of type attr_type, going by
+  // the attribute headers alone: nothing is parsed or logged, and a walk that
+  // meets a broken header answers false. False when no record is parsed.
+  [[nodiscard]] bool HasAttrHeader(Attr::Type attr_type) const noexcept;
+  // Where ParseAttrs() takes the extension records its $ATTRIBUTE_LIST names
+  // from. A record the source does not give is read from the disk. The source
+  // MUST outlive the parses that use it.
+  void SetExtensionSource(RecordSource source);
   [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
                                       Attr::RawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;

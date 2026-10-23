@@ -106,6 +106,10 @@ class FileRecord<S>::Impl {
   // to the next, emptied each time, so that a parse does not allocate a set.
   std::unordered_set<ULONGLONG> attr_list_chain;
 
+  // Where ImportAttrListEntry() looks for an extension record before it reads
+  // it from the disk. Empty: always from the disk.
+  typename Io::FileRecord<S>::RecordSource extension_source;
+
   // Where the attribute walk of the last ParseAttrs() met the end marker.
   // Empty when it did not reach one.
   std::optional<size_t> end_marker_offset;

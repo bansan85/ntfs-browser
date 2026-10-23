@@ -5,6 +5,7 @@ target_sources(
     "disk-reader-size-tests.cpp"
     "disk-reader-tests.cpp"
     "file-reader-tests.cpp"
+    "file-record-extension-source-tests.cpp"
     "ntfsdir-sample-tests.cpp"
     "read-ahead-disk-reader-tests.cpp"
     "record-offset-overflow-tests.cpp"

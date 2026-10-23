@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstring>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -19,6 +20,7 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
+#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -431,6 +433,36 @@ bool Io::FileRecord<S>::IsExtensionRecord() const noexcept {
   return impl_->file_record && impl_->file_record->GetData()->ref_to_base != 0;
 }
 
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::HasAttrHeader(Attr::Type attr_type) const noexcept {
+  if (!impl_->file_record) {
+    return false;
+  }
+  const Data::FileRecordHeader* data = impl_->file_record->GetData();
+  const DWORD record_size = impl_->volume->GetFileRecordSize();
+  DWORD data_ptr = data->offset_of_attr;
+  // Each header is read through a copy: its position comes from the disk.
+  while (static_cast<ULONGLONG>(data_ptr) + sizeof(Attr::HeaderCommon) <=
+         record_size) {
+    Attr::HeaderCommon head{};
+    std::memcpy(&head, &data->raw[data_ptr], sizeof(head));
+    if (head.type == Attr::Type::All || head.total_size == 0 ||
+        static_cast<ULONGLONG>(data_ptr) + head.total_size > record_size) {
+      return false;
+    }
+    if (head.type == attr_type) {
+      return true;
+    }
+    data_ptr += head.total_size;
+  }
+  return false;
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetExtensionSource(RecordSource source) {
+  impl_->extension_source = std::move(source);
+}
+
 // Install Attribute raw data CallBack routines for a single File Record
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::InstallAttrRawCB(Attr::Type attr_type,
@@ -491,7 +523,12 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
 
   frnew.impl_->attr_mask = entry_mask;
   frnew.impl_->attr_raw_call_back = attr_raw_call_back;
-  if (!frnew.ParseFileRecord(record_number)) {
+  frnew.impl_->extension_source = extension_source;
+  // An empty span makes ParseFileRecord() read the record from the disk.
+  const std::span<const BYTE> held = extension_source
+                                         ? extension_source(record_number)
+                                         : std::span<const BYTE>{};
+  if (!frnew.ParseFileRecord(record_number, held)) {
     throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
   }
 

@@ -83,6 +83,16 @@ std::span<const BYTE> SlotReader<S>::Slot(Io::FileRecord<S>& file_record,
     return {};
   }
 
+  return HeldSlot(record);
+}
+
+template <Cache::Strategy S>
+std::span<const BYTE> SlotReader<S>::HeldSlot(ULONGLONG record) const {
+  // The tests of Slot(), but without reading a window.
+  if (record < range_first_ || record >= range_last_ ||
+      record < window_first_ || record >= window_last_) {
+    return {};
+  }
   // record lies in [window_first_, window_last_), and window_ holds exactly
   // those slots.
   const size_t offset =

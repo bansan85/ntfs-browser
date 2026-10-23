@@ -73,6 +73,11 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY SlotReader {
   [[nodiscard]] bool ParseFileRecord(Io::FileRecord<S>& file_record,
                                      ULONGLONG record);
 
+  // The raw bytes of slot record, as the window holds them, when the last
+  // ParseFileRecord() of record took it from there. Else an empty span. The
+  // span is valid until the next window is read.
+  [[nodiscard]] std::span<const BYTE> HeldSlot(ULONGLONG record) const;
+
  private:
   // The bytes of slot record, or an empty span when the window does not serve
   // it. Reads the window that holds it when none does yet.

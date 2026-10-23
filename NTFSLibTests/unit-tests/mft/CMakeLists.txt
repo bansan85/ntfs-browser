@@ -10,6 +10,7 @@ target_sources(
     "mft-tree-data-state-batch-tests.cpp"
     "mft-tree-data-state-tests.cpp"
     "mft-slot-reader-tests.cpp"
+    "mft-tree-attribute-list-tests.cpp"
     "mft-tree-bounded-cache-tests.cpp"
     "mft-extent-map-tests.cpp"
     "mft-tree-malformed-record-tests.cpp"

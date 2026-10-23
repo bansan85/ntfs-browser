@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -389,4 +390,33 @@ TEMPLATE_TEST_CASE_SIG(
   Io::FileRecord<S> record(volume);
 
   CHECK_FALSE(reader.ParseFileRecord(record, Tests::mft_tree_docs_idx));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "SlotReader::HeldSlot() gives the raw bytes of a slot its window served",
+    "[mft][slot-reader]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const auto counters = std::make_shared<ReadCounters>();
+  const auto volume = OpenScanVolume<S>(scan_record_count, counters);
+  const std::vector<BYTE> image =
+      Tests::BuildFakeNtfsImageWithFragmentedMftScan(scan_record_count);
+  // Blocks of 16 slots.
+  Mft::SlotReader<S> reader(*volume, size_t{16} * 1024);
+  Io::FileRecord<S> record(*volume);
+
+  // A slot past the system files, read through a window whatever it holds.
+  constexpr ULONGLONG served = 100;
+  static_cast<void>(reader.ParseFileRecord(record, served));
+  const std::span<const BYTE> held = reader.HeldSlot(served);
+  const auto offset =
+      static_cast<std::ptrdiff_t>(Tests::FragmentedMftScanSlotOffset(served));
+  CHECK(std::ranges::equal(
+      held, std::span<const BYTE>{image}.subspan(
+                static_cast<size_t>(offset), Tests::fake_file_record_size)));
+
+  // Past the window, the slot is not held until a window holds it.
+  CHECK(reader.HeldSlot(served + 16).empty());
+  // Below Mft::Idx::User, a slot is read alone, never through a window.
+  REQUIRE(reader.ParseFileRecord(record, 5));
+  CHECK(reader.HeldSlot(5).empty());
 }
