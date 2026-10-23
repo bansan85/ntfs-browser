@@ -127,8 +127,19 @@ struct ReaderPair {
   std::unique_ptr<NtfsDevice::PosixDeviceDiskReader> no_cache;
 };
 
+// Says on stderr why device could not be opened, telling a missing read
+// permission from any other failure.
+void ReportOpenFailure(const std::filesystem::path& device, int error) {
+  if (error == EACCES || error == EPERM) {
+    PrintErr("Cannot read device {}: read access is needed\n",
+             NativeText(device));
+  } else {
+    PrintErr("Cannot open {}\n", NativeText(device));
+  }
+}
+
 // Opens device twice. Returns nothing after saying why on stderr when it
-// cannot, telling a missing read permission from any other failure.
+// cannot.
 std::optional<ReaderPair> OpenReaders(const std::filesystem::path& device) {
   const std::wstring device_wide = NtfsDevice::WideFromPath(device);
   ReaderPair readers{
@@ -137,13 +148,7 @@ std::optional<ReaderPair> OpenReaders(const std::filesystem::path& device) {
   for (NtfsDevice::PosixDeviceDiskReader* reader :
        {readers.full_cache.get(), readers.no_cache.get()}) {
     if (!reader->Open(device_wide)) {
-      const int error = reader->LastError();
-      if (error == EACCES || error == EPERM) {
-        PrintErr("Cannot read device {}: read access is needed\n",
-                 NativeText(device));
-      } else {
-        PrintErr("Cannot open {}\n", NativeText(device));
-      }
+      ReportOpenFailure(device, reader->LastError());
       return std::nullopt;
     }
   }
