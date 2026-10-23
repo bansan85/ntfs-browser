@@ -11,6 +11,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -171,52 +172,89 @@ std::uint64_t UtcMicros(const CivilTime& time) {
   return UtcTicks(time) / ticks_per_microsecond;
 }
 
+// Whether two names of one record link to their parent alike. A strict scan
+// drops the damaged parent of a name, so when strict_left is true the name may
+// be linked to its parent only on the right.
+bool SameParentLink(const Mft::MftTree::Name& left,
+                    const Mft::MftTree::Name& right, bool strict_left) {
+  const bool only_on_right =
+      strict_left && !left.parent_valid && right.parent_valid;
+  return left.parent_valid == right.parent_valid || only_on_right;
+}
+
+// Whether two names of one record agree on everything a name holds.
+bool SameName(const Mft::MftTree::Name& left, const Mft::MftTree::Name& right,
+              bool strict_left) {
+  const auto fields = [](const Mft::MftTree::Name& name) {
+    return std::tie(name.name, name.parent_record, name.parent_sequence,
+                    name.dos_only);
+  };
+  return fields(left) == fields(right) &&
+         SameParentLink(left, right, strict_left);
+}
+
+// Index of the first name two entries of the same name count disagree on.
+std::optional<std::size_t> FirstDifferentName(const Mft::MftTree::Entry& left,
+                                              const Mft::MftTree::Entry& right,
+                                              bool strict_left) {
+  for (std::size_t index = 0; index < left.names.size(); index++) {
+    if (!SameName(left.names.at(index), right.names.at(index), strict_left)) {
+      return index;
+    }
+  }
+  return std::nullopt;
+}
+
+// Whether two entries carry the same four times, as ticks.
+bool SameEntryTimes(const Mft::MftTree::Entry& left,
+                    const Mft::MftTree::Entry& right) {
+  using NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks;
+  return FileTimeToTicks(left.create_time) ==
+             FileTimeToTicks(right.create_time) &&
+         FileTimeToTicks(left.write_time) ==
+             FileTimeToTicks(right.write_time) &&
+         FileTimeToTicks(left.change_time) ==
+             FileTimeToTicks(right.change_time) &&
+         FileTimeToTicks(left.access_time) ==
+             FileTimeToTicks(right.access_time);
+}
+
+// The attribute flags of an entry.
+auto AttributeFlags(const Mft::MftTree::Entry& entry) {
+  return std::tie(entry.read_only, entry.hidden, entry.system, entry.archive,
+                  entry.compressed, entry.encrypted, entry.sparse);
+}
+
 // Names the first field two entries disagree on. Empty when they are equal.
 // strict_left is true when left comes from a strict scan and right from a
-// recovering one: a strict scan drops the damaged parent of a name, so the
-// name may be linked to it only on the right.
+// recovering one (see SameParentLink()).
 std::string FirstDifference(const Mft::MftTree::Entry& left,
                             const Mft::MftTree::Entry& right,
                             bool strict_left = false) {
-  using NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks;
   if (left.record != right.record) {
     return "record";
   }
   if (left.sequence != right.sequence) {
     return "sequence";
   }
-  if (left.in_use != right.in_use || left.directory != right.directory) {
+  if (std::tie(left.in_use, left.directory) !=
+      std::tie(right.in_use, right.directory)) {
     return "flags";
   }
   if (left.names.size() != right.names.size()) {
     return "name count";
   }
-  for (std::size_t index = 0; index < left.names.size(); index++) {
-    const Mft::MftTree::Name& lname = left.names.at(index);
-    const Mft::MftTree::Name& rname = right.names.at(index);
-    const bool link_differs =
-        lname.parent_valid != rname.parent_valid &&
-        !(strict_left && !lname.parent_valid && rname.parent_valid);
-    if (lname.name != rname.name ||
-        lname.parent_record != rname.parent_record ||
-        lname.parent_sequence != rname.parent_sequence ||
-        lname.dos_only != rname.dos_only || link_differs) {
-      return "name " + std::to_string(index);
-    }
+  if (const auto name = FirstDifferentName(left, right, strict_left)) {
+    return "name " + std::to_string(*name);
   }
-  if (left.size != right.size || left.allocated_size != right.allocated_size) {
+  if (std::tie(left.size, left.allocated_size) !=
+      std::tie(right.size, right.allocated_size)) {
     return "size";
   }
-  if (FileTimeToTicks(left.create_time) != FileTimeToTicks(right.create_time) ||
-      FileTimeToTicks(left.write_time) != FileTimeToTicks(right.write_time) ||
-      FileTimeToTicks(left.change_time) != FileTimeToTicks(right.change_time) ||
-      FileTimeToTicks(left.access_time) != FileTimeToTicks(right.access_time)) {
+  if (!SameEntryTimes(left, right)) {
     return "times";
   }
-  if (left.read_only != right.read_only || left.hidden != right.hidden ||
-      left.system != right.system || left.archive != right.archive ||
-      left.compressed != right.compressed ||
-      left.encrypted != right.encrypted || left.sparse != right.sparse) {
+  if (AttributeFlags(left) != AttributeFlags(right)) {
     return "attribute flags";
   }
   if (left.data_state != right.data_state) {
@@ -228,23 +266,19 @@ std::string FirstDifference(const Mft::MftTree::Entry& left,
   return {};
 }
 
+// The counters of a scan.
+auto ScanCounters(const Mft::MftTree::ScanStats& stats) {
+  return std::tie(stats.slots, stats.in_use, stats.deleted, stats.extensions,
+                  stats.unreadable, stats.skipped, stats.damaged,
+                  stats.unreachable, stats.complete, stats.data_intact,
+                  stats.data_reallocated, stats.data_unknown, stats.data_bad);
+}
+
 // Names the first thing two scans disagree on. Empty when they are the same
 // kept records with the same counters.
 std::string FirstDifference(const Mft::MftTree& left,
                             const Mft::MftTree& right) {
-  const Mft::MftTree::ScanStats& lstats = left.Stats();
-  const Mft::MftTree::ScanStats& rstats = right.Stats();
-  if (lstats.slots != rstats.slots || lstats.in_use != rstats.in_use ||
-      lstats.deleted != rstats.deleted ||
-      lstats.extensions != rstats.extensions ||
-      lstats.unreadable != rstats.unreadable ||
-      lstats.skipped != rstats.skipped || lstats.damaged != rstats.damaged ||
-      lstats.unreachable != rstats.unreachable ||
-      lstats.complete != rstats.complete ||
-      lstats.data_intact != rstats.data_intact ||
-      lstats.data_reallocated != rstats.data_reallocated ||
-      lstats.data_unknown != rstats.data_unknown ||
-      lstats.data_bad != rstats.data_bad) {
+  if (ScanCounters(left.Stats()) != ScanCounters(right.Stats())) {
     return "stats";
   }
   if (left.Entries().size() != right.Entries().size()) {
@@ -369,6 +403,78 @@ struct ListingReport {
   }
 };
 
+// Whether entry has a name, other than a DOS alias, whose path is the path of
+// line.
+bool HasListedName(const Mft::MftTree& tree, const Mft::MftTree::Entry& entry,
+                   const FlsLine& line) {
+  for (std::size_t index = 0; index < entry.names.size(); index++) {
+    if (!entry.names.at(index).dos_only &&
+        ListingPath(tree.GetPath(line.record, index)) == line.path) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Notes each field of line that entry, the record it names, disagrees with.
+void CompareLineFields(const Mft::MftTree::Entry& entry, const FlsLine& line,
+                       const std::string& where, ListingReport& report) {
+  const std::array<std::uint64_t, 4> times = {
+      EntryUtcSeconds(entry.write_time), EntryUtcSeconds(entry.access_time),
+      EntryUtcSeconds(entry.change_time), EntryUtcSeconds(entry.create_time)};
+  if (times != line.times) {
+    report.Note(where + "times");
+  }
+  if (line.stream.empty() && entry.directory != (line.kind == "d/d")) {
+    report.Note(where + "kind");
+  }
+  if (line.stream.empty() && line.kind == "r/r" && line.attribute_type == 128 &&
+      entry.size != line.size) {
+    report.Note(where + "size " + std::to_string(entry.size) + " vs " +
+                std::to_string(line.size));
+  }
+}
+
+// Compares one listing line with the tree, and counts it when its name exists.
+void CompareLine(const Mft::MftTree& tree, const FlsLine& line,
+                 ListingReport& report) {
+  const std::string where =
+      std::to_string(line.record) + " " + line.path + ": ";
+
+  const Mft::MftTree::Entry* entry = tree.Find(line.record);
+  if (entry == nullptr) {
+    report.Note(where + "no entry");
+    return;
+  }
+  if (!HasListedName(tree, *entry, line)) {
+    report.Note(where + "no such name");
+    return;
+  }
+  report.checked++;
+  CompareLineFields(*entry, line, where, report);
+}
+
+// Notes each name of the tree, but the root's and the DOS aliases, that no
+// listing line mentions.
+void NoteUnlistedNames(
+    const Mft::MftTree& tree,
+    const std::set<std::pair<ULONGLONG, std::string>>& listed,
+    ListingReport& report) {
+  const ULONGLONG root = static_cast<ULONGLONG>(Mft::Idx::Root);
+  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
+    if (entry.record == root) {
+      continue;
+    }
+    for (std::size_t index = 0; index < entry.names.size(); index++) {
+      if (!entry.names.at(index).dos_only &&
+          !listed.contains(
+              {entry.record, ListingPath(tree.GetPath(entry.record, index))})) {
+        report.Note(std::to_string(entry.record) + ": allocated but unlisted");
+      }
+    }
+  }
+}
+
 // Compares every line of a Sleuth Kit listing with the tree. The tree holds
 // the files in use. Conventions of the listing:
 //   - the `V/V` line is the virtual $OrphanFiles directory, in no record;
@@ -390,56 +496,9 @@ ListingReport CompareWithListing(const Mft::MftTree& tree,
       continue;
     }
     listed.emplace(line.record, line.path);
-    const std::string where =
-        std::to_string(line.record) + " " + line.path + ": ";
-
-    const Mft::MftTree::Entry* entry = tree.Find(line.record);
-    if (entry == nullptr) {
-      report.Note(where + "no entry");
-      continue;
-    }
-    bool named = false;
-    for (std::size_t index = 0; index < entry->names.size(); index++) {
-      named =
-          named || (!entry->names.at(index).dos_only &&
-                    ListingPath(tree.GetPath(line.record, index)) == line.path);
-    }
-    if (!named) {
-      report.Note(where + "no such name");
-      continue;
-    }
-    report.checked++;
-
-    const std::array<std::uint64_t, 4> times = {
-        EntryUtcSeconds(entry->write_time), EntryUtcSeconds(entry->access_time),
-        EntryUtcSeconds(entry->change_time),
-        EntryUtcSeconds(entry->create_time)};
-    if (times != line.times) {
-      report.Note(where + "times");
-    }
-    if (line.stream.empty() && entry->directory != (line.kind == "d/d")) {
-      report.Note(where + "kind");
-    }
-    if (line.stream.empty() && line.kind == "r/r" &&
-        line.attribute_type == 128 && entry->size != line.size) {
-      report.Note(where + "size " + std::to_string(entry->size) + " vs " +
-                  std::to_string(line.size));
-    }
+    CompareLine(tree, line, report);
   }
-
-  const ULONGLONG root = static_cast<ULONGLONG>(Mft::Idx::Root);
-  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
-    if (entry.record == root) {
-      continue;
-    }
-    for (std::size_t index = 0; index < entry.names.size(); index++) {
-      if (!entry.names.at(index).dos_only &&
-          !listed.contains(
-              {entry.record, ListingPath(tree.GetPath(entry.record, index))})) {
-        report.Note(std::to_string(entry.record) + ": allocated but unlisted");
-      }
-    }
-  }
+  NoteUnlistedNames(tree, listed, report);
   return report;
 }
 

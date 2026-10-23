@@ -103,6 +103,44 @@ std::uint64_t ParseTimestamp(const std::string& text) {
          ticks_per_second;
 }
 
+// Sets the field of record that key names, from value. Other keys are ignored.
+void ApplyRecordField(FsutilRecord& record, const std::string& key,
+                      std::string_view value) {
+  if (key == "File name") {
+    record.name = std::string(value);
+    record.has_name = true;
+  } else if (key == "File name length") {
+    record.name_length = ParseUnsigned(value);
+  } else if (key == "Reason") {
+    record.reason = ParseHexFlags(value);
+  } else if (key == "Time stamp") {
+    record.seconds = ParseTimestamp(std::string(value));
+  } else if (key == "File attributes") {
+    record.attributes = ParseHexFlags(value);
+  } else if (key == "File ID") {
+    ParseFileId(value, record.file_id_low, record.file_id_high);
+  } else if (key == "Parent file ID") {
+    ParseFileId(value, record.parent_id_low, record.parent_id_high);
+  } else if (key == "Major version") {
+    record.major_version = static_cast<unsigned>(ParseUnsigned(value));
+  }
+}
+
+// Applies one "key: value" line of the listing. A "Usn" key opens a record.
+// The keys before the first record belong to the header, the others to the
+// last record.
+void ApplyLine(FsutilListing& listing, const std::string& key,
+               std::string_view value) {
+  if (key == "Usn") {
+    listing.records.emplace_back().usn =
+        static_cast<LONGLONG>(ParseUnsigned(value));
+  } else if (!listing.records.empty()) {
+    ApplyRecordField(listing.records.back(), key, value);
+  } else if (key == "Next USN") {
+    listing.next_usn = ParseUnsigned(value);
+  }
+}
+
 }  // namespace
 
 const std::array<Fixture, 5>& Fixtures() {
@@ -209,34 +247,7 @@ FsutilListing ParseFsutilListing(const std::filesystem::path& file) {
     std::string_view value = std::string_view(line).substr(colon + 1);
     value.remove_prefix(std::min(value.find_first_not_of(' '), value.size()));
 
-    if (key == "Usn") {
-      listing.records.emplace_back().usn =
-          static_cast<LONGLONG>(ParseUnsigned(value));
-    } else if (listing.records.empty()) {
-      if (key == "Next USN") {
-        listing.next_usn = ParseUnsigned(value);
-      }
-    } else {
-      FsutilRecord& record = listing.records.back();
-      if (key == "File name") {
-        record.name = std::string(value);
-        record.has_name = true;
-      } else if (key == "File name length") {
-        record.name_length = ParseUnsigned(value);
-      } else if (key == "Reason") {
-        record.reason = ParseHexFlags(value);
-      } else if (key == "Time stamp") {
-        record.seconds = ParseTimestamp(std::string(value));
-      } else if (key == "File attributes") {
-        record.attributes = ParseHexFlags(value);
-      } else if (key == "File ID") {
-        ParseFileId(value, record.file_id_low, record.file_id_high);
-      } else if (key == "Parent file ID") {
-        ParseFileId(value, record.parent_id_low, record.parent_id_high);
-      } else if (key == "Major version") {
-        record.major_version = static_cast<unsigned>(ParseUnsigned(value));
-      }
-    }
+    ApplyLine(listing, key, value);
   }
   return listing;
 }

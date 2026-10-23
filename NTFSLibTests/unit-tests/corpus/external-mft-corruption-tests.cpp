@@ -9,6 +9,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -162,15 +163,16 @@ std::set<ULONGLONG> Records(const Mft::MftTree& tree) {
   return records;
 }
 
+// The counts of a scan that two scans of one file MUST share.
+auto Counters(const Mft::MftTree::ScanStats& stats) {
+  return std::tie(stats.slots, stats.in_use, stats.deleted, stats.extensions,
+                  stats.unreadable, stats.damaged);
+}
+
 // Whether two scans of one file kept the same records and counted alike.
 bool SameScan(const Mft::MftTree& left, const Mft::MftTree& right) {
-  const Mft::MftTree::ScanStats& lstats = left.Stats();
-  const Mft::MftTree::ScanStats& rstats = right.Stats();
-  return lstats.slots == rstats.slots && lstats.in_use == rstats.in_use &&
-         lstats.deleted == rstats.deleted &&
-         lstats.extensions == rstats.extensions &&
-         lstats.unreadable == rstats.unreadable &&
-         lstats.damaged == rstats.damaged && Records(left) == Records(right);
+  return Counters(left.Stats()) == Counters(right.Stats()) &&
+         Records(left) == Records(right);
 }
 
 }  // namespace

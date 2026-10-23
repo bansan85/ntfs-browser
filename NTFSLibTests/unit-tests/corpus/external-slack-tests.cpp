@@ -1,11 +1,13 @@
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <set>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -104,27 +106,31 @@ std::set<ULONGLONG> RecordsWithCarvedNames(const Mft::MftTree& tree) {
   return records;
 }
 
+// Whether two carved names agree on every field but their times.
+bool SameUntimedFields(const Record::CarvedName& a,
+                       const Record::CarvedName& b) {
+  const auto fields = [](const Record::CarvedName& name) {
+    return std::tie(name.name, name.parent_record, name.parent_sequence,
+                    name.parent_known, name.times_known, name.partial,
+                    name.name_space);
+  };
+  return fields(a) == fields(b);
+}
+
+// Whether two carved names carry the same four times, as UTC ticks.
+bool SameTimes(const Record::CarvedName& a, const Record::CarvedName& b) {
+  return EntryUtcTicks(a.create_time) == EntryUtcTicks(b.create_time) &&
+         EntryUtcTicks(a.write_time) == EntryUtcTicks(b.write_time) &&
+         EntryUtcTicks(a.change_time) == EntryUtcTicks(b.change_time) &&
+         EntryUtcTicks(a.access_time) == EntryUtcTicks(b.access_time);
+}
+
 // Whether two lists of carved names say the same thing, field by field.
 bool SameNames(const std::vector<Record::CarvedName>& left,
                const std::vector<Record::CarvedName>& right) {
-  if (left.size() != right.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < left.size(); ++i) {
-    const Record::CarvedName& a = left.at(i);
-    const Record::CarvedName& b = right.at(i);
-    if (a.name != b.name || a.parent_record != b.parent_record ||
-        a.parent_sequence != b.parent_sequence ||
-        a.parent_known != b.parent_known || a.times_known != b.times_known ||
-        a.partial != b.partial || a.name_space != b.name_space ||
-        EntryUtcTicks(a.create_time) != EntryUtcTicks(b.create_time) ||
-        EntryUtcTicks(a.write_time) != EntryUtcTicks(b.write_time) ||
-        EntryUtcTicks(a.change_time) != EntryUtcTicks(b.change_time) ||
-        EntryUtcTicks(a.access_time) != EntryUtcTicks(b.access_time)) {
-      return false;
-    }
-  }
-  return true;
+  return std::ranges::equal(left, right, [](const auto& a, const auto& b) {
+    return SameUntimedFields(a, b) && SameTimes(a, b);
+  });
 }
 
 // $RmMetadata is the one leftover name of $Extend. Its parent reference sits

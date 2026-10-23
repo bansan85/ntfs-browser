@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -102,16 +103,17 @@ void CheckSample(const Usn::Record& got, const JournalSample& want) {
   CHECK(Microseconds(got) == want.utc_microseconds);
 }
 
+// Every field of a record but its time, which needs a conversion first.
+auto UntimedFields(const Usn::Record& record) {
+  return std::tie(record.usn, record.name, record.file_record,
+                  record.file_sequence, record.parent_record,
+                  record.parent_sequence, record.reason, record.file_attributes,
+                  record.major_version);
+}
+
 // Whether two journal records say the same thing.
 bool SameRecord(const Usn::Record& left, const Usn::Record& right) {
-  return left.usn == right.usn && left.name == right.name &&
-         left.file_record == right.file_record &&
-         left.file_sequence == right.file_sequence &&
-         left.parent_record == right.parent_record &&
-         left.parent_sequence == right.parent_sequence &&
-         left.reason == right.reason &&
-         left.file_attributes == right.file_attributes &&
-         left.major_version == right.major_version &&
+  return UntimedFields(left) == UntimedFields(right) &&
          EntryUtcTicks(left.time) == EntryUtcTicks(right.time);
 }
 
