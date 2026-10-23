@@ -2,6 +2,7 @@ target_sources(
   NtfsBrowserTests
   PRIVATE
     "alloc-scan-fuzz-inputs.cpp"
+    "attribute-list-scan-fuzz-inputs.cpp"
     "bad-cluster-fuzz-inputs.cpp"
     "fuzzer-command-line-tests.cpp"
     "fuzzer-expected-messages.h"

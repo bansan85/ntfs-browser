@@ -42,7 +42,7 @@ struct ExpectedMessages {
 
 // The messages each saved regression testcase must log, by file name. The
 // count is the number of saved testcases: a test checks that none is missing.
-inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 213>
+inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 216>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -395,6 +395,14 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 213>
          {decompression_enabled,
           {"Decompressed compression unit 0 into 142 bytes",
            "Compression unit 0 served from cache"}}},
+        {"attribute_list_scan_both_sides",
+         {true, {"Attribute List: 0x0030", "Attribute List: 0x0080"}}},
+        {"attribute_list_scan_foreign_extension",
+         {true,
+          {"Attribute List: record 22 is not an extension of record 21",
+           "Attribute List names a record of another file."}}},
+        {"attribute_list_multi_cluster",
+         {true, {"Attribute List: 0x0010", "Attribute List: 0x0080"}}},
         {"attribute_list_split_attribute",
          {true,
           {"Attribute List ended at offset 0 instead of its declared size 32.",
