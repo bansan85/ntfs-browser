@@ -110,6 +110,19 @@ struct ProbeState {
   bool log_reads{false};
 };
 
+// Whether state makes the read of size bytes at addr fail: it comes from the
+// wrong thread, falls outside the data, or overlaps the failing range.
+bool Refuses(const ProbeState& state, LONGLONG addr, size_t size) {
+  const bool wrong_thread =
+      state.only_this_thread_reads != std::thread::id{} &&
+      state.only_this_thread_reads != std::this_thread::get_id();
+  const bool out_of_range =
+      addr < 0 || static_cast<ULONGLONG>(addr) + size > state.data.size();
+  const bool failing = addr < state.fail_to &&
+                       addr + gsl::narrow<LONGLONG>(size) > state.fail_from;
+  return wrong_thread || out_of_range || failing;
+}
+
 // A random-access reader that records its reads and can hold them back, so a
 // test sets the interleaving instead of timing it.
 class ProbeDiskReader : public IDiskReader {
@@ -147,18 +160,10 @@ class ProbeDiskReader : public IDiskReader {
       state.changed.wait(lock, [&] { return state.gate_open; });
     }
 
-    const bool wrong_thread =
-        state.only_this_thread_reads != std::thread::id{} &&
-        state.only_this_thread_reads != std::this_thread::get_id();
-    const auto start = static_cast<ULONGLONG>(addr.QuadPart);
-    const bool out_of_range =
-        addr.QuadPart < 0 || start + dest.size() > state.data.size();
-    const bool failing =
-        addr.QuadPart < state.fail_to &&
-        addr.QuadPart + gsl::narrow<LONGLONG>(dest.size()) > state.fail_from;
-    const bool ok = !wrong_thread && !out_of_range && !failing;
+    const bool ok = !Refuses(state, addr.QuadPart, dest.size());
     if (ok) {
-      std::copy_n(state.data.begin() + gsl::narrow<std::ptrdiff_t>(start),
+      std::copy_n(state.data.begin() +
+                      gsl::narrow<std::ptrdiff_t>(addr.QuadPart),
                   dest.size(), dest.begin());
     }
 

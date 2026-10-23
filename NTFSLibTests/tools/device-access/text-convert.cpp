@@ -84,6 +84,24 @@ void AppendUtf8(std::string& out, char32_t code_point) {
   }
 }
 
+// Reads the code point at position of wide, and moves position past it. A
+// surrogate pair is one code point, where wchar_t is 16 bits wide.
+char32_t NextCodePoint(std::wstring_view wide, size_t& position) {
+  auto code_point = static_cast<char32_t>(wide.at(position++));
+  // Only a 16-bit wchar_t holds the halves of a pair apart.
+  if constexpr (sizeof(wchar_t) == 2) {
+    if (IsHighSurrogate(code_point) && position < wide.size() &&
+        IsLowSurrogate(static_cast<char32_t>(wide.at(position)))) {
+      const auto low = static_cast<char32_t>(wide.at(position++));
+      code_point =
+          supplementary_base +
+          ((code_point - high_surrogate_first) << surrogate_payload_bits) +
+          (low - low_surrogate_first);
+    }
+  }
+  return code_point;
+}
+
 #ifndef _WIN32
 
 // UTF-8 lead byte of a 1-byte sequence: bit 7 clear.
@@ -109,21 +127,9 @@ std::string WideToUtf8(std::wstring_view wide) {
   std::string out;
   out.reserve(wide.size());
 
-  for (size_t position = 0; position < wide.size(); position++) {
-    auto code_point = static_cast<char32_t>(wide.at(position));
-    // Only a 16-bit wchar_t holds the halves of a pair apart.
-    if constexpr (sizeof(wchar_t) == 2) {
-      if (IsHighSurrogate(code_point) && position + 1 < wide.size() &&
-          IsLowSurrogate(static_cast<char32_t>(wide.at(position + 1)))) {
-        code_point =
-            supplementary_base +
-            ((code_point - high_surrogate_first) << surrogate_payload_bits) +
-            (static_cast<char32_t>(wide.at(position + 1)) -
-             low_surrogate_first);
-        position++;
-      }
-    }
-    AppendUtf8(out, code_point);
+  size_t position = 0;
+  while (position < wide.size()) {
+    AppendUtf8(out, NextCodePoint(wide, position));
   }
 
   return out;

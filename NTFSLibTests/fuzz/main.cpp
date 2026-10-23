@@ -100,6 +100,40 @@ struct ZeroRange {
 
 constexpr std::array<ZeroRange, 3> bpb_zero_ranges{{{14, 7}, {22, 2}, {32, 4}}};
 
+// Fills dest with the next bytes of rng.
+void FillWithRandom(std::mt19937_64& rng, std::span<BYTE> dest) {
+  size_t filled = 0;
+  while (filled < dest.size()) {
+    const uint64_t word = rng();
+    const size_t chunk = std::min(sizeof(word), dest.size() - filled);
+    std::memcpy(dest.data() + filled, &word, chunk);
+    filled += chunk;
+  }
+}
+
+// Overwrites the fields of dest, the first read of a volume, that
+// ParseBootSector() checks. A field that dest is too short to hold is left as
+// it is.
+void PatchBootSector(std::span<BYTE> dest) {
+  if (dest.size() >= bpb_signature_offset + bpb_signature_len) {
+    std::memcpy(dest.data() + bpb_signature_offset, bpb_signature.data(),
+                bpb_signature_len);
+  }
+  if (dest.size() >= bpb_marker_offset + bpb_marker.size()) {
+    std::memcpy(dest.data() + bpb_marker_offset, bpb_marker.data(),
+                bpb_marker.size());
+  }
+  if (dest.size() >= bpb_total_sectors_offset + sizeof(bpb_total_sectors)) {
+    std::memcpy(dest.data() + bpb_total_sectors_offset, &bpb_total_sectors,
+                sizeof(bpb_total_sectors));
+  }
+  for (const ZeroRange& range : bpb_zero_ranges) {
+    if (dest.size() >= range.offset + range.size) {
+      std::memset(dest.data() + range.offset, 0, range.size);
+    }
+  }
+}
+
 // Serves an endless RNG stream, patching a valid boot-sector signature
 // into the first read 95% of the time, so most iterations reach real
 // MFT/attribute parsing instead of rejecting at ParseBootSector().
@@ -109,40 +143,14 @@ SequentialDiskReader::Producer
   const bool inject_signature =
       std::uniform_int_distribution<int>(1, 100)(rng) <= 95;
 
-  return MakeGeneratorProducer([rng, inject_signature,
-                                nth_call = 0](std::span<BYTE> dest) mutable {
-    size_t filled = 0;
-    while (filled < dest.size()) {
-      const uint64_t word = rng();
-      const size_t chunk = std::min(sizeof(word), dest.size() - filled);
-      std::memcpy(dest.data() + filled, &word, chunk);
-      filled += chunk;
-    }
-
-    if (nth_call == 0 && inject_signature &&
-        dest.size() >= bpb_signature_offset + bpb_signature_len) {
-      std::memcpy(dest.data() + bpb_signature_offset, bpb_signature.data(),
-                  bpb_signature_len);
-    }
-    if (nth_call == 0 && inject_signature &&
-        dest.size() >= bpb_marker_offset + bpb_marker.size()) {
-      std::memcpy(dest.data() + bpb_marker_offset, bpb_marker.data(),
-                  bpb_marker.size());
-    }
-    if (nth_call == 0 && inject_signature &&
-        dest.size() >= bpb_total_sectors_offset + sizeof(bpb_total_sectors)) {
-      std::memcpy(dest.data() + bpb_total_sectors_offset, &bpb_total_sectors,
-                  sizeof(bpb_total_sectors));
-    }
-    if (nth_call == 0 && inject_signature) {
-      for (const ZeroRange& range : bpb_zero_ranges) {
-        if (dest.size() >= range.offset + range.size) {
-          std::memset(dest.data() + range.offset, 0, range.size);
+  return MakeGeneratorProducer(
+      [rng, inject_signature, nth_call = 0](std::span<BYTE> dest) mutable {
+        FillWithRandom(rng, dest);
+        if (nth_call == 0 && inject_signature) {
+          PatchBootSector(dest);
         }
-      }
-    }
-    nth_call++;
-  });
+        nth_call++;
+      });
 }
 
 // The two VolumeOptions combinations every seed is run under: strict (both
