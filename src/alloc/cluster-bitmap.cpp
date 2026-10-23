@@ -133,19 +133,18 @@ const ClusterBitmap::Window* ClusterBitmap::Load(ULONGLONG index) {
 }
 
 void ClusterBitmap::ApplyBad(Counts& counts, ULONGLONG first, ULONGLONG last,
-                             const Window* window, ULONGLONG base,
-                             ULONGLONG judged_stop) {
+                             const JudgedBits& judged) {
   if (bad_ == nullptr) {
     return;
   }
   for (const Extent& extent : bad_->Overlapping(first, last)) {
     const ULONGLONG from = std::max(extent.lcn, first);
     const ULONGLONG to = std::min(EndOf(extent), last);
-    const ULONGLONG judged_to = std::min(to, judged_stop);
+    const ULONGLONG judged_to = std::min(to, judged.stop);
     ULONGLONG unjudged_from = from;
-    if (judged_to > from && window != nullptr) {
-      const ULONGLONG set =
-          CountSet(window->bytes, from - base, judged_to - base);
+    if (judged_to > from && judged.window != nullptr) {
+      const ULONGLONG set = CountSet(judged.window->bytes, from - judged.base,
+                                     judged_to - judged.base);
       const ULONGLONG clear = (judged_to - from) - set;
       counts.allocated -= set;
       counts.free -= clear;
@@ -170,7 +169,7 @@ ClusterBitmap::Counts ClusterBitmap::Count(ULONGLONG first, ULONGLONG last) {
     // size of the volume: do not walk it window by window.
     if (bit >= data_bits_) {
       counts.unknown += last - bit;
-      ApplyBad(counts, bit, last, nullptr, 0, bit);
+      ApplyBad(counts, bit, last, JudgedBits{nullptr, 0, bit});
       break;
     }
     const ULONGLONG index = bit / window_bits;
@@ -199,14 +198,15 @@ ClusterBitmap::Counts ClusterBitmap::Count(ULONGLONG first, ULONGLONG last) {
       }
     }
     counts.unknown += stop - std::max(bit, judged_stop);
-    ApplyBad(counts, bit, stop, judged_stop > bit ? &window_ : nullptr, base,
-             judged_stop);
+    ApplyBad(
+        counts, bit, stop,
+        JudgedBits{judged_stop > bit ? &window_ : nullptr, base, judged_stop});
     bit = stop;
 
     // Too many windows failed: the rest of the range is not worth walking.
     if (failed_.size() >= max_failed_windows && bit < last) {
       counts.unknown += last - bit;
-      ApplyBad(counts, bit, last, nullptr, 0, bit);
+      ApplyBad(counts, bit, last, JudgedBits{nullptr, 0, bit});
       break;
     }
   }

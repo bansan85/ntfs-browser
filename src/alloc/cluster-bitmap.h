@@ -98,15 +98,22 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
     size_t valid{0};
   };
 
+  // The part of a range whose bits were read: bits [.., stop) come from
+  // window, whose first bit is base. The rest of the range was not judged, and
+  // window may be null then.
+  struct JudgedBits {
+    const Window* window{nullptr};
+    ULONGLONG base{0};
+    ULONGLONG stop{0};
+  };
+
   // Judges bits [first, last), which lie inside the volume.
   [[nodiscard]] Counts Count(ULONGLONG first, ULONGLONG last);
 
   // Moves the clusters of [first, last) that the bad list names into
-  // counts.bad. Bits [first, judged_stop) were read from window, whose first
-  // bit is base. The rest of the range was not judged, and window may be null
-  // then.
+  // counts.bad. judged says which of those bits were read.
   void ApplyBad(Counts& counts, ULONGLONG first, ULONGLONG last,
-                const Window* window, ULONGLONG base, ULONGLONG judged_stop);
+                const JudgedBits& judged);
 
   // The window of that index, read now if it is not the one held. Null when
   // that window failed earlier and is not held.
