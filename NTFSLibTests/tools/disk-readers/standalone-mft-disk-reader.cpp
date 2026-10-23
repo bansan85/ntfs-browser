@@ -114,6 +114,59 @@ BYTE EncodeBpbSize(DWORD count, DWORD limit) {
   return static_cast<BYTE>(-std::countr_zero(count));
 }
 
+// Undoes the update sequence: the last two bytes of each 512-byte block hold
+// the sequence number on disk, and the real bytes sit in the array. Returns why
+// the record is unusable, or nothing.
+std::optional<std::string_view>
+    UndoUpdateSequence(std::vector<BYTE>& record,
+                       const Data::FileRecordHeader& header) {
+  const size_t array_end =
+      size_t{header.offset_of_us} + size_t{header.size_of_us} * sizeof(WORD);
+  if (header.size_of_us == 0 || array_end > record.size() ||
+      Data::FileRecordHeader::UpdateSequenceBlockCount(record.size(),
+                                                       header.size_of_us) !=
+          record.size() / Data::FileRecordHeader::update_sequence_stride) {
+    return "record 0 has an unusable update sequence array";
+  }
+  WORD sequence_number = 0;
+  std::memcpy(&sequence_number, &record.at(header.offset_of_us),
+              sizeof(sequence_number));
+  for (size_t block = 1;
+       block <= record.size() / Data::FileRecordHeader::update_sequence_stride;
+       block++) {
+    const size_t end_of_block =
+        block * Data::FileRecordHeader::update_sequence_stride - sizeof(WORD);
+    WORD on_disk = 0;
+    std::memcpy(&on_disk, &record.at(end_of_block), sizeof(on_disk));
+    if (on_disk != sequence_number) {
+      return "record 0 fails its update sequence check";
+    }
+    std::memcpy(&record.at(end_of_block),
+                &record.at(header.offset_of_us + block * sizeof(WORD)),
+                sizeof(WORD));
+  }
+  return std::nullopt;
+}
+
+// Puts the update sequence back on a record UndoUpdateSequence() accepted: the
+// real last bytes of each block return to the array, and the sequence number
+// to the block.
+void RedoUpdateSequence(std::vector<BYTE>& record,
+                        const Data::FileRecordHeader& header) {
+  WORD sequence_number = 0;
+  std::memcpy(&sequence_number, &record.at(header.offset_of_us),
+              sizeof(sequence_number));
+  for (size_t block = 1;
+       block <= record.size() / Data::FileRecordHeader::update_sequence_stride;
+       block++) {
+    const size_t end_of_block =
+        block * Data::FileRecordHeader::update_sequence_stride - sizeof(WORD);
+    std::memcpy(&record.at(header.offset_of_us + block * sizeof(WORD)),
+                &record.at(end_of_block), sizeof(WORD));
+    std::memcpy(&record.at(end_of_block), &sequence_number, sizeof(WORD));
+  }
+}
+
 }  // namespace
 
 void StandaloneMftDiskReader::SetRepairDeclaredExtent(bool repair) noexcept {
@@ -150,10 +203,36 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
     return Fail("cannot open the file");
   }
 
+  Data::FileRecordHeader header{};
+  std::vector<BYTE> record;
+  if (!ReadRecordZero(header, record)) {
+    return false;
+  }
+  if (const std::optional<std::string_view> broken =
+          UndoUpdateSequence(record, header)) {
+    return Fail(std::string(*broken));
+  }
+
+  file_record_size_ = gsl::narrow<DWORD>(record.size());
+  if (!MapDataRuns(record)) {
+    return false;
+  }
+  if (!repaired_record_.empty()) {
+    // MapDataRuns() changed record: put its update sequence back.
+    RedoUpdateSequence(record, header);
+    repaired_record_ = std::move(record);
+  }
+  BuildBootSector();
+  return true;
+}
+
+// Reads record 0 from the start of the file: first its header, which declares
+// the record size, then the whole record, update sequence still on it.
+bool StandaloneMftDiskReader::ReadRecordZero(Data::FileRecordHeader& header,
+                                             std::vector<BYTE>& record) {
   if (file_size_ < Data::FileRecordHeader::min_file_record_header_size) {
     return Fail("the file is smaller than a record header");
   }
-  Data::FileRecordHeader header{};
   file_.read(reinterpret_cast<char*>(&header),
              Data::FileRecordHeader::min_file_record_header_size);
   if (!file_) {
@@ -175,7 +254,7 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
     return Fail("the file is smaller than one record");
   }
 
-  std::vector<BYTE> record(record_size);
+  record.resize(record_size);
   file_.clear();
   file_.seekg(0);
   file_.read(reinterpret_cast<char*>(record.data()),
@@ -183,54 +262,6 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
   if (!file_) {
     return Fail("cannot read record 0");
   }
-
-  // Undoes the update sequence: the last two bytes of each 512-byte block hold
-  // the sequence number on disk, and the real bytes sit in the array.
-  const size_t array_end =
-      size_t{header.offset_of_us} + size_t{header.size_of_us} * sizeof(WORD);
-  if (header.size_of_us == 0 || array_end > record.size() ||
-      Data::FileRecordHeader::UpdateSequenceBlockCount(record.size(),
-                                                       header.size_of_us) !=
-          record.size() / Data::FileRecordHeader::update_sequence_stride) {
-    return Fail("record 0 has an unusable update sequence array");
-  }
-  WORD sequence_number = 0;
-  std::memcpy(&sequence_number, &record.at(header.offset_of_us),
-              sizeof(sequence_number));
-  for (size_t block = 1;
-       block <= record.size() / Data::FileRecordHeader::update_sequence_stride;
-       block++) {
-    const size_t end_of_block =
-        block * Data::FileRecordHeader::update_sequence_stride - sizeof(WORD);
-    WORD on_disk = 0;
-    std::memcpy(&on_disk, &record.at(end_of_block), sizeof(on_disk));
-    if (on_disk != sequence_number) {
-      return Fail("record 0 fails its update sequence check");
-    }
-    std::memcpy(&record.at(end_of_block),
-                &record.at(header.offset_of_us + block * sizeof(WORD)),
-                sizeof(WORD));
-  }
-
-  file_record_size_ = record_size;
-  if (!MapDataRuns(record)) {
-    return false;
-  }
-  if (!repaired_record_.empty()) {
-    // MapDataRuns() changed record: put its update sequence back.
-    for (size_t block = 1;
-         block <=
-         record.size() / Data::FileRecordHeader::update_sequence_stride;
-         block++) {
-      const size_t end_of_block =
-          block * Data::FileRecordHeader::update_sequence_stride - sizeof(WORD);
-      std::memcpy(&record.at(header.offset_of_us + block * sizeof(WORD)),
-                  &record.at(end_of_block), sizeof(WORD));
-      std::memcpy(&record.at(end_of_block), &sequence_number, sizeof(WORD));
-    }
-    repaired_record_ = std::move(record);
-  }
-  BuildBootSector();
   return true;
 }
 
@@ -238,14 +269,34 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
 // derives the cluster size from it. Fills runs_, volume_bytes_ and
 // boot_area_bytes_.
 bool StandaloneMftDiskReader::MapDataRuns(std::vector<BYTE>& record) {
-  Data::FileRecordHeader header{};
-  std::memcpy(&header, record.data(),
+  std::optional<DataAttr> data = FindUnnamedData(record);
+  if (!data) {
+    return false;
+  }
+  const std::optional<RunList> list = ParseRunList(record, *data);
+  if (!list) {
+    return false;
+  }
+  RepairDeclaredExtent(record, *data, list->total_clusters);
+  const std::optional<ULONGLONG> cluster =
+      DeriveClusterSize(data->header, list->total_clusters);
+  if (!cluster) {
+    return false;
+  }
+  cluster_size_ = gsl::narrow<DWORD>(*cluster);
+  return BuildRuns(list->runs, *cluster);
+}
+
+// Finds the non-resident unnamed $DATA that starts at VCN 0, and checks that
+// its run list starts inside the attribute.
+std::optional<StandaloneMftDiskReader::DataAttr>
+    StandaloneMftDiskReader::FindUnnamedData(const std::vector<BYTE>& record) {
+  Data::FileRecordHeader record_header{};
+  std::memcpy(&record_header, record.data(),
               Data::FileRecordHeader::min_file_record_header_size);
 
-  size_t pos = header.offset_of_attr;
-  std::optional<Data::HeaderNonResident> data;
-  size_t data_pos = 0;
-  size_t data_end = 0;
+  size_t pos = record_header.offset_of_attr;
+  std::optional<DataAttr> data;
   while (pos + sizeof(Attr::HeaderCommon) <= record.size()) {
     Attr::HeaderCommon common{};
     std::memcpy(&common, &record[pos], sizeof(common));
@@ -254,99 +305,127 @@ bool StandaloneMftDiskReader::MapDataRuns(std::vector<BYTE>& record) {
     }
     if (common.total_size < sizeof(common) ||
         common.total_size > record.size() - pos) {
-      return Fail("an attribute of record 0 overruns the record");
+      Fail("an attribute of record 0 overruns the record");
+      return std::nullopt;
     }
     if (common.type == Attr::Type::Data && common.non_resident != 0 &&
         common.name_length == 0) {
       if (common.total_size < sizeof(Data::HeaderNonResident)) {
-        return Fail("the $DATA header of record 0 is cut");
+        Fail("the $DATA header of record 0 is cut");
+        return std::nullopt;
       }
       Data::HeaderNonResident found{};
       std::memcpy(&found, &record[pos], sizeof(found));
       if (found.start_vcn == 0) {
-        data = found;
-        data_pos = pos;
-        data_end = pos + common.total_size;
+        data = DataAttr{
+            .header = found, .pos = pos, .end = pos + common.total_size};
         break;
       }
     }
     pos += common.total_size;
   }
   if (!data) {
-    return Fail("record 0 has no non-resident unnamed $DATA at VCN 0");
+    Fail("record 0 has no non-resident unnamed $DATA at VCN 0");
+    return std::nullopt;
   }
-  if (data->data_run_offset < sizeof(Data::HeaderNonResident) ||
-      data_pos + data->data_run_offset >= data_end) {
-    return Fail("the run list of record 0 starts outside its attribute");
+  if (data->header.data_run_offset < sizeof(Data::HeaderNonResident) ||
+      data->pos + data->header.data_run_offset >= data->end) {
+    Fail("the run list of record 0 starts outside its attribute");
+    return std::nullopt;
   }
+  return data;
+}
 
-  struct RawRun {
-    std::optional<ULONGLONG> lcn;
-    ULONGLONG clusters;
-  };
-
-  std::vector<RawRun> raw_runs;
-  ULONGLONG total_clusters = 0;
+// Decodes the run list of data. The first run MUST be real: the volume finds
+// $MFT there.
+std::optional<StandaloneMftDiskReader::RunList>
+    StandaloneMftDiskReader::ParseRunList(const std::vector<BYTE>& record,
+                                          const DataAttr& data) {
+  RunList list;
   LONGLONG lcn = 0;
   const std::span<const BYTE> bytes(record);
-  size_t cursor = data_pos + data->data_run_offset;
-  while (cursor < data_end && record[cursor] != 0) {
+  size_t cursor = data.pos + data.header.data_run_offset;
+  while (cursor < data.end && record[cursor] != 0) {
     const BYTE run_header = record[cursor++];
     const unsigned length_bytes = run_header & 0x0FU;
     const unsigned offset_bytes = run_header >> run_offset_shift;
-    const std::span<const BYTE> rest = bytes.subspan(cursor, data_end - cursor);
+    const std::span<const BYTE> rest = bytes.subspan(cursor, data.end - cursor);
     const std::optional<ULONGLONG> length = ReadField(rest, length_bytes);
     if (length_bytes == 0 || !length || *length == 0) {
-      return Fail("a run of record 0 has an invalid length");
+      Fail("a run of record 0 has an invalid length");
+      return std::nullopt;
     }
     cursor += length_bytes;
     const std::optional<ULONGLONG> delta =
-        ReadField(bytes.subspan(cursor, data_end - cursor), offset_bytes);
+        ReadField(bytes.subspan(cursor, data.end - cursor), offset_bytes);
     if (!delta) {
-      return Fail("a run of record 0 has an invalid offset");
+      Fail("a run of record 0 has an invalid offset");
+      return std::nullopt;
     }
     cursor += offset_bytes;
-    if (total_clusters > std::numeric_limits<ULONGLONG>::max() - *length) {
-      return Fail("the runs of record 0 hold too many clusters");
+    if (list.total_clusters > std::numeric_limits<ULONGLONG>::max() - *length) {
+      Fail("the runs of record 0 hold too many clusters");
+      return std::nullopt;
     }
-    total_clusters += *length;
+    list.total_clusters += *length;
     if (offset_bytes == 0) {
-      raw_runs.push_back({.lcn = std::nullopt, .clusters = *length});
+      list.runs.push_back({.lcn = std::nullopt, .clusters = *length});
       continue;
     }
     lcn += SignExtend(*delta, offset_bytes);
     if (lcn < 0) {
-      return Fail("a run of record 0 starts at a negative cluster");
+      Fail("a run of record 0 starts at a negative cluster");
+      return std::nullopt;
     }
-    raw_runs.push_back(
+    list.runs.push_back(
         {.lcn = static_cast<ULONGLONG>(lcn), .clusters = *length});
   }
-  if (raw_runs.empty() || !raw_runs.front().lcn) {
-    return Fail("the first run of record 0's $DATA is missing or sparse");
+  if (list.runs.empty() || !list.runs.front().lcn) {
+    Fail("the first run of record 0's $DATA is missing or sparse");
+    return std::nullopt;
   }
+  return list;
+}
 
-  if (repair_declared_extent_ && data->last_vcn + 1 < total_clusters) {
-    const ULONGLONG last_vcn = total_clusters - 1;
-    std::memcpy(
-        &record.at(data_pos + offsetof(Data::HeaderNonResident, last_vcn)),
-        &last_vcn, sizeof(last_vcn));
-    data->last_vcn = last_vcn;
-    // Not empty from here on: Open() swaps the update sequence back in.
-    repaired_record_.assign(1, 0);
+// When asked to, makes data declare the last VCN its run list reaches, in
+// record and in data.
+void StandaloneMftDiskReader::RepairDeclaredExtent(std::vector<BYTE>& record,
+                                                   DataAttr& data,
+                                                   ULONGLONG total_clusters) {
+  if (!repair_declared_extent_ || data.header.last_vcn + 1 >= total_clusters) {
+    return;
   }
+  const ULONGLONG last_vcn = total_clusters - 1;
+  std::memcpy(
+      &record.at(data.pos + offsetof(Data::HeaderNonResident, last_vcn)),
+      &last_vcn, sizeof(last_vcn));
+  data.header.last_vcn = last_vcn;
+  // Not empty from here on: Open() swaps the update sequence back in.
+  repaired_record_.assign(1, 0);
+}
 
-  // The cluster size is what makes the allocated size a whole cluster count.
-  if (data->alloc_size == 0 || data->alloc_size % total_clusters != 0) {
-    return Fail("the allocated size of $DATA is not a whole cluster count");
+// The cluster size is what makes the allocated size of data a whole cluster
+// count. Returns it, or nothing when it is not a plausible size.
+std::optional<ULONGLONG> StandaloneMftDiskReader::DeriveClusterSize(
+    const Data::HeaderNonResident& data, ULONGLONG total_clusters) {
+  if (data.alloc_size == 0 || data.alloc_size % total_clusters != 0) {
+    Fail("the allocated size of $DATA is not a whole cluster count");
+    return std::nullopt;
   }
-  const ULONGLONG cluster = data->alloc_size / total_clusters;
+  const ULONGLONG cluster = data.alloc_size / total_clusters;
   if (cluster < min_cluster_size || cluster > max_cluster_size ||
       !std::has_single_bit(cluster)) {
-    return Fail("the cluster size " + std::to_string(cluster) +
-                " derived from record 0 is invalid");
+    Fail("the cluster size " + std::to_string(cluster) +
+         " derived from record 0 is invalid");
+    return std::nullopt;
   }
-  cluster_size_ = gsl::narrow<DWORD>(cluster);
+  return cluster;
+}
 
+// Places the real runs of raw_runs in the file, and measures the volume they
+// span: fills runs_, volume_bytes_ and boot_area_bytes_.
+bool StandaloneMftDiskReader::BuildRuns(const std::vector<RawRun>& raw_runs,
+                                        ULONGLONG cluster) {
   ULONGLONG vcn = 0;
   ULONGLONG lowest_byte = std::numeric_limits<ULONGLONG>::max();
   for (const RawRun& raw : raw_runs) {

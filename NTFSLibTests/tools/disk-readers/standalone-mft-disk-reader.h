@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <fstream>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -10,6 +11,9 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+
+#include "data/file-record-header.h"
+#include "data/header-non-resident.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 
@@ -69,13 +73,51 @@ class StandaloneMftDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
     ULONGLONG clusters{0};
   };
 
+  // One run of the run list as record 0 stores it, before the cluster size is
+  // known. A sparse run has no lcn.
+  struct RawRun {
+    std::optional<ULONGLONG> lcn;
+    ULONGLONG clusters;
+  };
+
+  // The decoded run list of $MFT's $DATA.
+  struct RunList {
+    std::vector<RawRun> runs;
+    ULONGLONG total_clusters{0};
+  };
+
+  // $MFT's unnamed $DATA header in record 0, and where it sits in the record.
+  struct DataAttr {
+    Data::HeaderNonResident header;
+    // Offset of the attribute in the record.
+    size_t pos;
+    // Offset of the first byte past the attribute.
+    size_t end;
+  };
+
   // Sets failure_ and returns false.
   bool Fail(std::string reason);
+
+  // Reads record 0 and its header from the open file. record keeps its update
+  // sequence.
+  bool ReadRecordZero(Data::FileRecordHeader& header,
+                      std::vector<BYTE>& record);
 
   // Decodes record 0's $DATA runs into runs_. False when they are unusable.
   // record has its update sequence undone, and may be changed to repair the
   // declared extent.
   bool MapDataRuns(std::vector<BYTE>& record);
+
+  // The stages of MapDataRuns(). Each one sets failure_ when it gives up.
+  std::optional<DataAttr> FindUnnamedData(const std::vector<BYTE>& record);
+  std::optional<RunList> ParseRunList(const std::vector<BYTE>& record,
+                                      const DataAttr& data);
+  void RepairDeclaredExtent(std::vector<BYTE>& record, DataAttr& data,
+                            ULONGLONG total_clusters);
+  std::optional<ULONGLONG>
+      DeriveClusterSize(const Data::HeaderNonResident& data,
+                        ULONGLONG total_clusters);
+  bool BuildRuns(const std::vector<RawRun>& raw_runs, ULONGLONG cluster);
 
   // Builds boot_ from the geometry found.
   void BuildBootSector();
