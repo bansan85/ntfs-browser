@@ -1744,6 +1744,22 @@ inline constexpr std::array<BYTE, 16> attr_list_lifetime_data_content{
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithSplitAttributeListAttribute();
 
+// Entries of the list BuildFakeNtfsImageWithMultiClusterAttributeList() writes,
+// 32 bytes each: 1280 bytes, more than one fake cluster holds.
+inline constexpr size_t multi_cluster_list_entries = 40;
+
+// Where that list lies: two clusters from this LCN, past the $MFT records.
+inline constexpr DWORD multi_cluster_list_lcn = 52;
+inline constexpr DWORD multi_cluster_list_clusters = 2;
+
+// Same volume as BuildFakeNtfsImage(), plus attr_list_lifetime_base_idx with a
+// non-resident $ATTRIBUTE_LIST of multi_cluster_list_entries entries over
+// multi_cluster_list_clusters clusters. Its first entry imports the $DATA of
+// attr_list_lifetime_ext_idx, attr_list_lifetime_data_content. The others
+// name the base record itself.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithMultiClusterAttributeList();
+
 // A malformed attribute written right after the last valid one of a record.
 enum class FakeTrailingDefect : std::uint8_t {
   // total_size is smaller than a resident attribute's own header.

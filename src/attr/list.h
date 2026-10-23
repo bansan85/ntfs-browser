@@ -3,7 +3,10 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstdint>
+#include <optional>
+#include <span>
 #include <unordered_set>
+#include <vector>
 
 #include <ntfs-browser/namespace.h>
 
@@ -57,8 +60,20 @@ class AttrList : public Resident {
   ~AttrList() override;
 
  private:
+  // The clusters of a non-resident list the walk has read, kept so that no
+  // entry reads them again. With no bytes, each read goes to ReadData().
+  struct ListCache {
+    std::vector<BYTE> bytes;
+    // One flag per cluster of bytes.
+    std::vector<bool> loaded;
+  };
+
+  [[nodiscard]] ListCache MakeListCache() const;
+  [[nodiscard]] std::optional<ULONGLONG> ReadListBytes(ULONGLONG offset,
+                                                       std::span<BYTE> out,
+                                                       ListCache& cache) const;
   bool ReadEntryHeader(ULONGLONG offset, Data::AttributeList& entry,
-                       bool recover, bool& truncated);
+                       bool recover, bool& truncated, ListCache& cache);
 };  // AttrList
 
 }  // namespace Attr

@@ -27,9 +27,13 @@ bool CountingDiskReader::Open(std::wstring_view path) {
 
 bool CountingDiskReader::ReadInto(LARGE_INTEGER& addr,
                                   std::span<BYTE> dest) const {
-  calls_.push_back({.kind = Kind::Read,
-                    .offset = static_cast<ULONGLONG>(addr.QuadPart),
-                    .length = dest.size()});
+  const auto offset = static_cast<ULONGLONG>(addr.QuadPart);
+  calls_.push_back(
+      {.kind = Kind::Read, .offset = offset, .length = dest.size()});
+  if (!dest.empty() && offset < fail_last_ &&
+      offset + dest.size() > fail_first_) {
+    return false;
+  }
   return inner_->ReadInto(addr, dest);
 }
 
@@ -58,5 +62,10 @@ size_t CountingDiskReader::ReadsInRange(ULONGLONG first,
 }
 
 void CountingDiskReader::Reset() noexcept { calls_.clear(); }
+
+void CountingDiskReader::FailReadsIn(ULONGLONG first, ULONGLONG last) noexcept {
+  fail_first_ = first;
+  fail_last_ = last;
+}
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

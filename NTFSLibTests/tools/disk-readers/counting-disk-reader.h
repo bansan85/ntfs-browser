@@ -51,9 +51,16 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // Forgets the calls so far.
   void Reset() noexcept;
 
+  // Makes every later read whose byte range touches [first, last) fail. The
+  // read is still recorded.
+  void FailReadsIn(ULONGLONG first, ULONGLONG last) noexcept;
+
  private:
   std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> inner_;
   mutable std::vector<Call> calls_;
+  // The range FailReadsIn() set. Empty when equal.
+  ULONGLONG fail_first_{0};
+  ULONGLONG fail_last_{0};
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

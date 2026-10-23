@@ -364,6 +364,40 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitAttributeListAttribute() {
   return image;
 }
 
+std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterAttributeList() {
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const std::vector<BYTE> list = [] {
+    std::vector<BYTE> bytes(multi_cluster_list_entries * list_entry_size, 0);
+    // The first entry imports the extension's $DATA, the others name the
+    // record itself, as the entries of its own attributes do.
+    for (size_t i = 0; i < multi_cluster_list_entries; i++) {
+      WriteListEntry(
+          &bytes.at(i * list_entry_size),
+          {.type = i == 0 ? Attr::Type::Data : Attr::Type::StandardInformation,
+           .record = i == 0 ? attr_list_lifetime_ext_idx
+                            : attr_list_lifetime_base_idx,
+           .record_size = list_entry_size});
+    }
+    return bytes;
+  }();
+  const std::vector<FakeDataRun> runs{
+      {multi_cluster_list_lcn, multi_cluster_list_clusters}};
+
+  FakeRecord base = MakeInUseFileRecord();
+  DWORD offset = attr_offset_value;
+  offset += WriteNonResidentAttr(
+      base, offset, Attr::Type::AttributeList,
+      {.comp_unit_size = 0, .real_size = list.size(), .runs = runs});
+  WriteEndOfAttributesMarker(base, offset);
+
+  PutMftRecord(image, attr_list_lifetime_base_idx, base);
+  PutMftRecord(image, attr_list_lifetime_ext_idx,
+               MakeLifetimeResidentDataExtensionRecord());
+  LayRunBytes(image, runs, list);
+  return image;
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithSplitDataAndTrailingDefect(
     FakeTrailingDefect defect) {
   std::vector<BYTE> image = BuildFakeNtfsImage();
