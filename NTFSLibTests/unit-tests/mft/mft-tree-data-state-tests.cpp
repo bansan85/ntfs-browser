@@ -19,6 +19,7 @@
 #include "alloc-test-support.h"
 #include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
+#include "mft-tree-state-support.h"
 #include "test-log-sink.h"
 
 using Catch::Matchers::ContainsSubstring;
@@ -27,14 +28,15 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using Support::stale_size;
 using Tests::FakeDataRun;
+using TreeSupport::CheckNoEntryIsAnnotated;
+using TreeSupport::ScannedVolume;
 
 namespace {
-
-// Bytes of the stale stream: four clusters at LCN 40.
-constexpr ULONGLONG stale_size = 4 * Tests::fake_cluster_size;
 
 // The freed stale file's run.
 const std::vector<FakeDataRun> stale_runs{
@@ -74,31 +76,25 @@ Picked Pick(const Mft::MftTree& tree) {
 template <Cache::Strategy S>
 void CheckNothingIsAnnotatedWithoutIncludeDeleted() {
   const std::vector<BYTE> image = Image({});
-  const auto opened =
-      Support::Open<S>(image, VolumeOptions{.include_deleted = false});
+  const ScannedVolume<S> scanned(image,
+                                 VolumeOptions{.include_deleted = false});
 
-  const Mft::MftTree tree(*opened.volume);
-
-  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
-    CHECK_FALSE(entry.data_state);
-  }
-  CHECK(tree.Stats().data_intact == 0);
-  CHECK(tree.Stats().data_reallocated == 0);
-  CHECK(tree.Stats().data_unknown == 0);
-  CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
-                                     image.size()) == 0);
+  CheckNoEntryIsAnnotated(scanned.tree);
+  CHECK(scanned.tree.Stats().data_intact == 0);
+  CHECK(scanned.tree.Stats().data_reallocated == 0);
+  CHECK(scanned.tree.Stats().data_unknown == 0);
+  CHECK(scanned.opened.counter->ReadsInRange(Support::bitmap_data_offset,
+                                             image.size()) == 0);
 }
 
 template <Cache::Strategy S>
 void CheckDeletedEntriesGetTheirState(bool reused) {
   const std::array<FakeDataRun, 1> reused_cluster{
       FakeDataRun{.lcn = 42, .clusters = 1}};
-  const auto opened = Support::Open<S>(
+  const ScannedVolume<S> scanned(
       Image(reused ? std::span<const FakeDataRun>(reused_cluster)
                    : std::span<const FakeDataRun>{}));
-
-  const Mft::MftTree tree(*opened.volume);
-  const Picked picked = Pick(tree);
+  const Picked picked = Pick(scanned.tree);
 
   CHECK(picked.stale == (reused ? DataState::Reallocated : DataState::Intact));
   CHECK(picked.live_file == DataState::Intact);
@@ -109,25 +105,21 @@ void CheckDeletedEntriesGetTheirState(bool reused) {
 template <Cache::Strategy S>
 void CheckTheAnnotationCanBeTurnedOff() {
   const std::vector<BYTE> image = Image({});
-  const auto opened = Support::Open<S>(image);
+  const ScannedVolume<S> scanned(image, Support::DeletedOptions(),
+                                 {.annotate_data_state = false});
 
-  const Mft::MftTree tree(*opened.volume, {.annotate_data_state = false});
-
-  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
-    CHECK_FALSE(entry.data_state);
-  }
-  CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
-                                     image.size()) == 0);
+  CheckNoEntryIsAnnotated(scanned.tree);
+  CHECK(scanned.opened.counter->ReadsInRange(Support::bitmap_data_offset,
+                                             image.size()) == 0);
 }
 
 template <Cache::Strategy S>
 void CheckTheCountersAddUp() {
   const std::array<FakeDataRun, 1> reused_cluster{
       FakeDataRun{.lcn = 41, .clusters = 1}};
-  const auto opened = Support::Open<S>(Image(reused_cluster));
   (void)Tests::TakeCapturedLog();
-
-  const Mft::MftTree tree(*opened.volume);
+  const ScannedVolume<S> scanned(Image(reused_cluster));
+  const Mft::MftTree& tree = scanned.tree;
 
   ULONGLONG intact = 0;
   ULONGLONG reallocated = 0;
@@ -154,21 +146,18 @@ void CheckTheCountersAddUp() {
 template <Cache::Strategy S>
 void CheckAMissingBitmapDoesNotStopTheScan() {
   // No bitmap: record 6 is zero-filled.
-  const auto opened =
-      Support::Open<S>(Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
-          stale_size, stale_runs));
-  const auto without = Support::Open<S>(
-      Tests::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size, stale_runs),
-      VolumeOptions{.include_deleted = true});
+  const std::vector<BYTE> image =
+      Tests::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size, stale_runs);
+  const ScannedVolume<S> annotated(image, Support::DeletedOptions(),
+                                   {.annotate_data_state = true});
+  const ScannedVolume<S> plain(image, Support::DeletedOptions(),
+                               {.annotate_data_state = false});
 
-  const Mft::MftTree tree(*opened.volume, {.annotate_data_state = true});
-  const Mft::MftTree plain(*without.volume, {.annotate_data_state = false});
-
-  CHECK(tree.Entries().size() == plain.Entries().size());
-  const Picked picked = Pick(tree);
+  CHECK(annotated.tree.Entries().size() == plain.tree.Entries().size());
+  const Picked picked = Pick(annotated.tree);
   CHECK(picked.stale == DataState::Unknown);
   CHECK(picked.live_file == DataState::Intact);
-  CHECK(tree.Stats().data_unknown >= 1);
+  CHECK(annotated.tree.Stats().data_unknown >= 1);
 }
 
 }  // namespace

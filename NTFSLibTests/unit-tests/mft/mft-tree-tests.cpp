@@ -97,6 +97,35 @@ std::vector<ULONGLONG>
   return {children.begin(), children.end()};
 }
 
+// The fixture's report.txt: its long and DOS names, the size, flags and times
+// MftTree takes from its $DATA and $STANDARD_INFORMATION.
+void CheckTheReportEntry(const MftTree& tree) {
+  const MftTree::Entry* report = tree.Find(mft_tree_report_idx);
+  REQUIRE(report != nullptr);
+  CHECK(tree.GetPath(mft_tree_report_idx) == L"\\Docs\\report.txt");
+  REQUIRE(report->names.size() == 2);
+  // The REQUIRE above checks that names holds 2 entries.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  CHECK(report->names[1].dos_only);
+  CHECK(report->size == mft_tree_report_data_size);
+  // A resident $DATA's allocated size is its attribute record's own
+  // padded reservation, which exceeds the real data size here.
+  CHECK(report->allocated_size == mft_tree_report_allocated_size);
+  CHECK(report->read_only);
+  CHECK(report->archive);
+  CHECK(report->in_use);
+  CHECK_FALSE(report->directory);
+  // WriteStandardInformationAttr() gives create/write/change/access
+  // distinct on-disk values, so a wrong field wiring (eg. change_time
+  // reading alter_time) would collapse two of these into one.
+  CHECK(FileTimeToTicks(report->change_time) !=
+        FileTimeToTicks(report->write_time));
+  CHECK(FileTimeToTicks(report->change_time) !=
+        FileTimeToTicks(report->create_time));
+  CHECK(FileTimeToTicks(report->change_time) !=
+        FileTimeToTicks(report->access_time));
+}
+
 template <Cache::Strategy S>
 void RunMftTreeRebuildsPaths() {
   // The fixture's deleted records (old.tmp, OldDir, draft.doc, stale.txt)
@@ -111,31 +140,7 @@ void RunMftTreeRebuildsPaths() {
   CHECK(tree.GetPath(mft_tree_docs_idx) == L"\\Docs");
 
   SECTION("A DOS alias stays out of the path and the size comes from $DATA") {
-    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* report =
-        tree.Find(mft_tree_report_idx);
-    REQUIRE(report != nullptr);
-    CHECK(tree.GetPath(mft_tree_report_idx) == L"\\Docs\\report.txt");
-    REQUIRE(report->names.size() == 2);
-    // The REQUIRE above checks that names holds 2 entries.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(report->names[1].dos_only);
-    CHECK(report->size == mft_tree_report_data_size);
-    // A resident $DATA's allocated size is its attribute record's own
-    // padded reservation, which exceeds the real data size here.
-    CHECK(report->allocated_size == mft_tree_report_allocated_size);
-    CHECK(report->read_only);
-    CHECK(report->archive);
-    CHECK(report->in_use);
-    CHECK_FALSE(report->directory);
-    // WriteStandardInformationAttr() gives create/write/change/access
-    // distinct on-disk values, so a wrong field wiring (eg. change_time
-    // reading alter_time) would collapse two of these into one.
-    CHECK(FileTimeToTicks(report->change_time) !=
-          FileTimeToTicks(report->write_time));
-    CHECK(FileTimeToTicks(report->change_time) !=
-          FileTimeToTicks(report->create_time));
-    CHECK(FileTimeToTicks(report->change_time) !=
-          FileTimeToTicks(report->access_time));
+    CheckTheReportEntry(tree);
   }
 
   SECTION("Each hard link has its own path") {

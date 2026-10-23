@@ -111,13 +111,27 @@ std::vector<std::wstring> Describe(const MftTree& tree) {
   return lines;
 }
 
+// The scan of the fixture with a $MFT bitmap of some kind, next to the scan of
+// the plain fixture that has none: the reference the first must agree with.
+template <Cache::Strategy S>
+struct BitmapScans {
+  explicit BitmapScans(FakeMftBitmap kind, const VolumeOptions& options = {})
+      : plain(Open<S>(BuildFakeNtfsImageWithMftTree(), options)),
+        reference(*plain),
+        volume(Open<S>(BuildFakeNtfsImageWithMftBitmap(kind), options)),
+        tree(*volume) {}
+
+  std::unique_ptr<NtfsVolume<S>> plain;
+  MftTree reference;
+  std::unique_ptr<NtfsVolume<S>> volume;
+  MftTree tree;
+};
+
 template <Cache::Strategy S>
 void RunBitmapSkipsFreeSlots(FakeMftBitmap kind) {
-  const auto plain = Open<S>(BuildFakeNtfsImageWithMftTree());
-  const MftTree reference(*plain);
-
-  const auto volume = Open<S>(BuildFakeNtfsImageWithMftBitmap(kind));
-  const MftTree tree(*volume);
+  const BitmapScans<S> scans(kind);
+  const MftTree& tree = scans.tree;
+  const MftTree& reference = scans.reference;
 
   // Every entry the full scan kept in strict mode is still there, identical.
   CHECK(Describe(tree) == Describe(reference));
@@ -142,11 +156,9 @@ void RunBitmapSkipsFreeSlots(FakeMftBitmap kind) {
 
 template <Cache::Strategy S>
 void RunBitmapFallsBackToEverySlot(FakeMftBitmap kind) {
-  const auto plain = Open<S>(BuildFakeNtfsImageWithMftTree());
-  const MftTree reference(*plain);
-
-  const auto volume = Open<S>(BuildFakeNtfsImageWithMftBitmap(kind));
-  const MftTree tree(*volume);
+  const BitmapScans<S> scans(kind);
+  const MftTree& tree = scans.tree;
+  const MftTree& reference = scans.reference;
 
   CHECK(Describe(tree) == Describe(reference));
   const MftTree::ScanStats& stats = tree.Stats();
@@ -159,14 +171,10 @@ void RunBitmapFallsBackToEverySlot(FakeMftBitmap kind) {
 
 template <Cache::Strategy S>
 void RunBitmapIgnoredWithIncludeDeleted(FakeMftBitmap kind) {
-  const VolumeOptions options{.include_deleted = true};
-  const auto plain = Open<S>(BuildFakeNtfsImageWithMftTree(), options);
-  const MftTree reference(*plain);
+  const BitmapScans<S> scans(kind, VolumeOptions{.include_deleted = true});
+  const MftTree& tree = scans.tree;
 
-  const auto volume = Open<S>(BuildFakeNtfsImageWithMftBitmap(kind), options);
-  const MftTree tree(*volume);
-
-  CHECK(Describe(tree) == Describe(reference));
+  CHECK(Describe(tree) == Describe(scans.reference));
   CHECK(tree.Entries().size() == 11);
   const MftTree::ScanStats& stats = tree.Stats();
   CHECK(stats.skipped == 0);

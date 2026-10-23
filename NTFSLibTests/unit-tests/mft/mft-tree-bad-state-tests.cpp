@@ -1,7 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
-#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -22,6 +21,7 @@
 #include "alloc-test-support.h"
 #include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
+#include "mft-tree-state-support.h"
 #include "mft/tree-testing.h"
 #include "test-log-sink.h"
 
@@ -31,14 +31,16 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using Support::stale_size;
 using Tests::FakeDataRun;
+using TreeSupport::CheckNoEntryIsAnnotated;
+using TreeSupport::RequiredEntry;
+using TreeSupport::ScannedVolume;
 
 namespace {
-
-// Bytes of the stale stream: four clusters at LCN 40.
-constexpr ULONGLONG stale_size = 4 * Tests::fake_cluster_size;
 
 // The freed stale file's run.
 const std::vector<FakeDataRun> stale_runs{
@@ -74,24 +76,20 @@ constexpr std::string_view unusable_message = "$BadClus is not usable";
 
 template <Cache::Strategy S>
 void CheckADeletedEntryOnABadClusterIsBad() {
-  const auto opened = Support::Open<S>(Image());
+  const ScannedVolume<S> scanned(Image());
 
-  const Mft::MftTree tree(*opened.volume);
-
-  const Mft::MftTree::Entry* stale = tree.Find(Tests::mft_tree_stale_child_idx);
-  REQUIRE(stale != nullptr);
-  CHECK(stale->data_state == DataState::Bad);
-  const Mft::MftTree::Entry* live = tree.Find(Tests::mft_tree_report_idx);
-  REQUIRE(live != nullptr);
-  CHECK(live->data_state == DataState::Intact);
+  CHECK(
+      RequiredEntry(scanned.tree, Tests::mft_tree_stale_child_idx).data_state ==
+      DataState::Bad);
+  CHECK(RequiredEntry(scanned.tree, Tests::mft_tree_report_idx).data_state ==
+        DataState::Intact);
 }
 
 template <Cache::Strategy S>
 void CheckTheFourCountersAddUpAndReachTheLog() {
-  const auto opened = Support::Open<S>(Image());
   (void)Tests::TakeCapturedLog();
-
-  const Mft::MftTree tree(*opened.volume);
+  const ScannedVolume<S> scanned(Image());
+  const Mft::MftTree& tree = scanned.tree;
 
   ULONGLONG annotated = 0;
   ULONGLONG bad = 0;
@@ -119,64 +117,50 @@ void CheckNoBadListIsLoadedWhenNothingIsAnnotated() {
   const std::vector<BYTE> image = UnusableListImage();
 
   for (const bool include_deleted : {false, true}) {
-    const auto sink = std::make_shared<Support::LevelSink>();
-    const Support::ScopedSink scoped(sink);
-    const auto opened = Support::Open<S>(
-        image, VolumeOptions{.include_deleted = include_deleted});
+    const Support::CapturedLevels log;
+    const ScannedVolume<S> scanned(
+        image, VolumeOptions{.include_deleted = include_deleted},
+        {.annotate_data_state = false});
 
-    const Mft::MftTree tree(*opened.volume, {.annotate_data_state = false});
-
-    for (const Mft::MftTree::Entry& entry : tree.Entries()) {
-      CHECK_FALSE(entry.data_state);
-    }
-    CHECK(tree.Stats().data_bad == 0);
-    CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
-                                       image.size()) == 0);
-    CHECK(sink->Count(unusable_message) == 0);
+    CheckNoEntryIsAnnotated(scanned.tree);
+    CHECK(scanned.tree.Stats().data_bad == 0);
+    CHECK(scanned.opened.counter->ReadsInRange(Support::bitmap_data_offset,
+                                               image.size()) == 0);
+    CHECK(log.Count(unusable_message) == 0);
   }
 }
 
 template <Cache::Strategy S>
 void CheckWithoutIncludeDeletedNoBadListIsLoaded() {
-  const auto sink = std::make_shared<Support::LevelSink>();
-  const Support::ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(UnusableListImage(),
-                                       VolumeOptions{.include_deleted = false});
+  const Support::CapturedLevels log;
+  const ScannedVolume<S> scanned(UnusableListImage(),
+                                 VolumeOptions{.include_deleted = false});
 
-  const Mft::MftTree tree(*opened.volume);
-
-  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
-    CHECK_FALSE(entry.data_state);
-  }
-  CHECK(sink->Count(unusable_message) == 0);
+  CheckNoEntryIsAnnotated(scanned.tree);
+  CHECK(log.Count(unusable_message) == 0);
 }
 
 template <Cache::Strategy S>
 void CheckAnAnnotatedScanLoadsTheBadListOnce() {
-  const auto sink = std::make_shared<Support::LevelSink>();
-  const Support::ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(UnusableListImage());
-
-  const Mft::MftTree tree(*opened.volume);
+  const Support::CapturedLevels log;
+  const ScannedVolume<S> scanned(UnusableListImage());
 
   // The bitmap alone answers: the bad cluster is marked allocated in it.
-  const Mft::MftTree::Entry* stale = tree.Find(Tests::mft_tree_stale_child_idx);
-  REQUIRE(stale != nullptr);
-  CHECK(stale->data_state == DataState::Reallocated);
-  CHECK(sink->Count(unusable_message) == 1);
+  CHECK(
+      RequiredEntry(scanned.tree, Tests::mft_tree_stale_child_idx).data_state ==
+      DataState::Reallocated);
+  CHECK(log.Count(unusable_message) == 1);
 }
 
 template <Cache::Strategy S>
 void CheckAMissingBadListLeavesTheBitmapAlone() {
   // Record 8 is zero-filled: the bitmap alone marks the cluster allocated.
-  const auto opened = Support::Open<S>(Image(false));
+  const ScannedVolume<S> scanned(Image(false));
 
-  const Mft::MftTree tree(*opened.volume);
-
-  const Mft::MftTree::Entry* stale = tree.Find(Tests::mft_tree_stale_child_idx);
-  REQUIRE(stale != nullptr);
-  CHECK(stale->data_state == DataState::Reallocated);
-  CHECK(tree.Stats().data_bad == 0);
+  CHECK(
+      RequiredEntry(scanned.tree, Tests::mft_tree_stale_child_idx).data_state ==
+      DataState::Reallocated);
+  CHECK(scanned.tree.Stats().data_bad == 0);
 }
 
 template <Cache::Strategy S>
