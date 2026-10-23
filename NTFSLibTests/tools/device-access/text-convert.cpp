@@ -1,7 +1,9 @@
 #include "text-convert.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <filesystem>
+#include <iterator>
 #include <string>
 #include <string_view>
 
@@ -126,13 +128,27 @@ constexpr unsigned utf8_cont_mask = 0xC0U;
 std::string WideToUtf8(std::wstring_view wide) {
   std::string out;
   out.reserve(wide.size());
+  AppendAsUtf8(out, wide);
+  return out;
+}
 
-  size_t position = 0;
+// The leading ASCII run, most often the whole text, is copied in one pass.
+void AppendAsUtf8(std::string& out, std::wstring_view wide) {
+  const auto ascii_end = std::ranges::find_if(wide, [](wchar_t unit) {
+    return static_cast<char32_t>(unit) > utf8_max1;
+  });
+  const std::wstring_view ascii = wide.substr(
+      0, static_cast<size_t>(std::distance(wide.begin(), ascii_end)));
+  const size_t start = out.size();
+  out.resize(start + ascii.size());
+  std::ranges::transform(
+      ascii, std::next(out.begin(), gsl::narrow<std::ptrdiff_t>(start)),
+      [](wchar_t unit) { return static_cast<char>(unit); });
+
+  size_t position = ascii.size();
   while (position < wide.size()) {
     AppendUtf8(out, NextCodePoint(wide, position));
   }
-
-  return out;
 }
 
 std::wstring WideFromPath(const std::filesystem::path& path) {

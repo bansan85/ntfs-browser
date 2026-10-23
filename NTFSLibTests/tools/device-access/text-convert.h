@@ -13,6 +13,9 @@ namespace NtfsDevice {
 // ED A0 80. A value above U+10FFFF becomes U+FFFD.
 [[nodiscard]] std::string WideToUtf8(std::wstring_view wide);
 
+// Appends wide to out, encoded as WideToUtf8() does.
+void AppendAsUtf8(std::string& out, std::wstring_view wide);
+
 // Converts a path to the wide string the tools use as a path key. UTF-8 on
 // POSIX, the native wide form on Windows.
 [[nodiscard]] std::wstring WideFromPath(const std::filesystem::path& path);
