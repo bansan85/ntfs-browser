@@ -1,12 +1,16 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <cstddef>
 #include <exception>
 #include <functional>
+#include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -83,6 +87,23 @@ size_t max_pending_ranges_override = 0;
 // at the usual 1 KiB record: a disk seek costs more than reading that much.
 constexpr ULONGLONG max_gap_slots = 64;
 
+// The entry index of a record the scan did not keep.
+constexpr size_t no_entry = std::numeric_limits<size_t>::max();
+
+// Records the dense index of a tree covers whatever its entries: 2^20 slots
+// are 8 MiB, little next to the entries of a volume that large.
+constexpr size_t dense_index_floor = size_t{1} << 20;
+
+// Records the dense index covers per kept entry beyond the floor. Even a
+// $MFT with seven free slots in eight stays dense, and a forged one far
+// sparser falls back to the map instead of growing the index.
+constexpr size_t dense_index_ratio = 8;
+
+// Entries a scan reserves room for at most, from the count the $MFT bitmap
+// gives. 2^20 covers most volumes, and bounds what a forged bitmap makes a
+// scan allocate before it reads a record: about 200 MiB.
+constexpr ULONGLONG max_reserved_entries = ULONGLONG{1} << 20;
+
 // The Filename side of a $FILE_NAME attribute. FileRecord<S> always wraps a
 // $FILE_NAME in the AttrFileName over the resident type that matches S.
 template <Cache::Strategy S>
@@ -107,8 +128,10 @@ bool TryParseAttrs(Io::FileRecord<S>& file_record) {
 template <Cache::Strategy S>
 void AddNames(const Io::FileRecord<S>& file_record,
               Mft::MftTree::Entry& entry) {
-  for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
-       file_record.GetAttr(Attr::Type::FileName)) {
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& attrs =
+      file_record.GetAttr(Attr::Type::FileName);
+  entry.names.reserve(attrs.size());
+  for (const std::unique_ptr<Attr::AttrBase<S>>& attr : attrs) {
     const Filename& filename = AsFilename<S>(*attr);
     const std::wstring_view name = filename.GetFilename();
     if (name.empty()) {
@@ -219,6 +242,23 @@ std::optional<std::vector<BYTE>> ReadMftBitmap(const NtfsVolume<S>& volume,
   return std::nullopt;
 }
 
+// Slots bitmap marks in use among the total it covers.
+ULONGLONG CountUsedSlots(const std::vector<BYTE>& bitmap,
+                         ULONGLONG total) noexcept {
+  ULONGLONG used = 0;
+  for (const BYTE bits : bitmap) {
+    used += static_cast<ULONGLONG>(std::popcount(bits));
+  }
+  // The bits of the last byte past total cover no slot.
+  const auto tail_bits = static_cast<unsigned>(total % bits_per_byte);
+  if (tail_bits != 0 && !bitmap.empty()) {
+    const auto past_total =
+        static_cast<BYTE>(bitmap.back() & ~((1U << tail_bits) - 1U));
+    used -= static_cast<ULONGLONG>(std::popcount(past_total));
+  }
+  return used;
+}
+
 // Whether bitmap marks record as free. The bitmap covers every record the
 // scan visits, so record / 8 is in range.
 bool IsMarkedFree(const std::vector<BYTE>& bitmap, ULONGLONG record) noexcept {
@@ -252,22 +292,22 @@ bool ProgressAllowsRecord(const Mft::MftTree::ScanOptions& options,
 }
 
 // Classifies one record slot and, when it is an entry to keep, reads it.
-// Counts the outcome in stats. Returns nullopt for a slot that is not kept:
+// Counts the outcome in stats. Returns false for a slot that is not kept:
 // unreadable, an extension, a freed record not asked for, or a damaged one
 // when strict. A record with a failed update sequence check is damaged in both
 // modes: strict drops it as unreadable, recovering keeps what verifies. It is
-// counted once, whatever else is wrong with it.
+// counted once, whatever else is wrong with it. entry, fresh, receives the
+// record, and is meaningless when false is returned.
 template <Cache::Strategy S>
-std::optional<Mft::MftTree::Entry>
-    ReadSlot(Io::FileRecord<S>& file_record, Mft::SlotReader<S>& slots,
-             const NtfsVolume<S>& volume, ULONGLONG record,
-             Mft::MftTree::ScanStats& stats) {
+bool ReadSlot(Io::FileRecord<S>& file_record, Mft::SlotReader<S>& slots,
+              const NtfsVolume<S>& volume, ULONGLONG record,
+              Mft::MftTree::ScanStats& stats, Mft::MftTree::Entry& entry) {
   if (!slots.ParseFileRecord(file_record, record)) {
     stats.unreadable++;
     if (file_record.HasFailedFixup()) {
       stats.damaged++;
     }
-    return std::nullopt;
+    return false;
   }
   const bool header_damaged = file_record.HasFailedFixup();
   if (header_damaged) {
@@ -275,18 +315,17 @@ std::optional<Mft::MftTree::Entry>
   }
   if (file_record.IsExtensionRecord()) {
     stats.extensions++;
-    return std::nullopt;
+    return false;
   }
   if (file_record.IsDeleted()) {
     stats.deleted++;
     if (!volume.GetOptions().include_deleted) {
-      return std::nullopt;
+      return false;
     }
   } else {
     stats.in_use++;
   }
 
-  Mft::MftTree::Entry entry;
   const bool parsed = ReadEntry(file_record, record, entry);
   if (!parsed || file_record.IsSalvaged()) {
     if (!header_damaged) {
@@ -294,11 +333,11 @@ std::optional<Mft::MftTree::Entry>
     }
     // Strict: a damaged record is dropped, not kept partial.
     if (!parsed && !volume.GetOptions().recover_errors) {
-      return std::nullopt;
+      return false;
     }
   }
   AddCarvedNames(file_record, entry, stats);
-  return entry;
+  return true;
 }
 
 // The name a record's path goes through by default: the first non-DOS name
@@ -321,6 +360,25 @@ const Mft::MftTree::Name*
     return fallback;
   }
   return entry.names.empty() ? nullptr : &entry.names.front();
+}
+
+// Whether entry.names[index] files entry under its parent. Only a valid,
+// non-DOS name files a record, the root is filed under nothing, and two hard
+// links in one directory file the record there once.
+bool FilesUnderParent(const Mft::MftTree::Entry& entry, size_t index) {
+  const auto files = [&entry](const Mft::MftTree::Name& name) {
+    return name.parent_valid && !name.dos_only && entry.record != root_record;
+  };
+  const Mft::MftTree::Name& name = entry.names.at(index);
+  if (!files(name)) {
+    return false;
+  }
+  return std::ranges::none_of(
+      entry.names.begin(),
+      std::next(entry.names.begin(), gsl::narrow<std::ptrdiff_t>(index)),
+      [&](const Mft::MftTree::Name& earlier) {
+        return files(earlier) && earlier.parent_record == name.parent_record;
+      });
 }
 
 // Gives the entries of one scan their data state. A deleted stream's extents
@@ -433,8 +491,17 @@ void SetMaxPendingRangesForTests(size_t limit) {
 class MftTree::Impl {
  public:
   std::vector<Mft::MftTree::Entry> entries;
-  std::unordered_map<ULONGLONG, size_t> by_record;
-  std::unordered_map<ULONGLONG, std::vector<ULONGLONG>> children;
+  // Index in entries of each kept record, by record number, no_entry for the
+  // others. It ends after the last record it holds. A record that would grow
+  // it past what the entries justify sits in sparse_entries instead.
+  std::vector<size_t> entry_of_record;
+  std::unordered_map<ULONGLONG, size_t> sparse_entries;
+  // The records filed under each entry, through a valid parent reference:
+  // those of entries[i] are children_records[children_first[i]] up to
+  // children_first[i + 1]. A root whose record is lost has its own list.
+  std::vector<size_t> children_first;
+  std::vector<ULONGLONG> children_records;
+  std::vector<ULONGLONG> lost_root_children;
   // Parallel to entries_.
   std::vector<bool> reachable;
   Mft::MftTree::ScanStats stats;
@@ -445,6 +512,12 @@ class MftTree::Impl {
   void Scan(const NtfsVolume<S>& volume,
             const Mft::MftTree::ScanOptions& options);
   void Link();
+  // Files every entry under the parents its valid names give.
+  void FileChildren();
+  // Records that entries[index] holds record.
+  void IndexEntry(ULONGLONG record, size_t index);
+  // Index in entries of record, or nothing when the scan did not keep it.
+  [[nodiscard]] std::optional<size_t> EntryIndex(ULONGLONG record) const;
   template <Cache::Strategy S>
   void ApplyJournalIfComplete(const NtfsVolume<S>& volume);
   void LogScanSummary(bool annotated) const;
@@ -526,6 +599,11 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   const std::optional<std::vector<BYTE>> bitmap =
       volume.GetOptions().include_deleted ? std::nullopt
                                           : ReadMftBitmap(volume, total);
+  // An Entry is big: each time the vector grows, it moves them all.
+  if (bitmap) {
+    entries.reserve(gsl::narrow<size_t>(
+        (std::min)(CountUsedSlots(*bitmap, total), max_reserved_entries)));
+  }
 
   Io::FileRecord<S> file_record(volume);
   file_record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
@@ -554,13 +632,13 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
       slots.Expect(record, range_end);
     }
 
-    std::optional<Mft::MftTree::Entry> entry =
-        ReadSlot(file_record, slots, volume, record, stats);
-    if (!entry) {
+    // Filled in place: an Entry is big, and most slots are kept.
+    Mft::MftTree::Entry& entry = entries.emplace_back();
+    if (!ReadSlot(file_record, slots, volume, record, stats, entry)) {
+      entries.pop_back();
       continue;
     }
-    by_record.emplace(record, entries.size());
-    entries.push_back(std::move(*entry));
+    IndexEntry(record, entries.size() - 1);
     if (annotate) {
       resolver.Note(file_record, entries.size() - 1);
     }
@@ -619,30 +697,17 @@ void Mft::MftTree::Impl::ApplyJournalIfComplete(const NtfsVolume<S>& volume) {
 // parents its valid names give, then marks what the root reaches.
 void Mft::MftTree::Impl::Link() {
   for (Mft::MftTree::Entry& entry : entries) {
-    // Parents this entry is already filed under: two hard links in one
-    // directory still list the record once.
-    std::vector<ULONGLONG> filed_under;
     for (Mft::MftTree::Name& name : entry.names) {
       name.parent_valid = IsValidParent(entry, name);
-      // Only a valid, non-DOS name files a record, and the root is filed
-      // under nothing.
-      if (!name.parent_valid || name.dos_only || entry.record == root_record) {
-        continue;
-      }
-      if (std::ranges::find(filed_under, name.parent_record) !=
-          filed_under.end()) {
-        continue;
-      }
-      filed_under.push_back(name.parent_record);
-      children[name.parent_record].push_back(entry.record);
     }
   }
+  FileChildren();
 
   reachable.assign(entries.size(), false);
-  if (const auto root = by_record.find(root_record); root != by_record.end()) {
-    // by_record_ values index entries_; reachable_ is as long as entries_.
+  if (const std::optional<size_t> root = EntryIndex(root_record)) {
+    // EntryIndex() gives an index of entries; reachable is as long.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    reachable[root->second] = true;
+    reachable[*root] = true;
   }
 
   std::vector<ULONGLONG> pending{root_record};
@@ -650,8 +715,9 @@ void Mft::MftTree::Impl::Link() {
     const ULONGLONG dir = pending.back();
     pending.pop_back();
     for (const ULONGLONG child : Children(dir)) {
-      const size_t index = by_record.at(child);
-      // by_record_ values index entries_; reachable_ is as long as entries_.
+      // Every child is an entry.
+      const size_t index = EntryIndex(child).value();
+      // EntryIndex() gives an index of entries; reachable is as long.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       auto flag = reachable[index];
       if (!flag) {
@@ -663,6 +729,88 @@ void Mft::MftTree::Impl::Link() {
 
   stats.unreachable = static_cast<ULONGLONG>(
       std::count(reachable.begin(), reachable.end(), false));
+}
+
+// Counts the children of each entry, then lays them out in children_records,
+// each entry's run in the order of entries.
+void Mft::MftTree::Impl::FileChildren() {
+  children_first.assign(entries.size() + 1, 0);
+  for (const Mft::MftTree::Entry& entry : entries) {
+    for (size_t i = 0; i < entry.names.size(); i++) {
+      if (!FilesUnderParent(entry, i)) {
+        continue;
+      }
+      // i < entry.names.size() by the loop condition.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      const ULONGLONG parent = entry.names[i].parent_record;
+      if (const std::optional<size_t> index = EntryIndex(parent)) {
+        // EntryIndex() gives an index below entries.size().
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        children_first[*index + 1]++;
+      } else {
+        // Only the root is a valid parent without an entry.
+        lost_root_children.push_back(entry.record);
+      }
+    }
+  }
+  std::partial_sum(children_first.begin(), children_first.end(),
+                   children_first.begin());
+
+  children_records.resize(children_first.back());
+  std::vector<size_t> next(children_first.begin(), children_first.end() - 1);
+  for (const Mft::MftTree::Entry& entry : entries) {
+    for (size_t i = 0; i < entry.names.size(); i++) {
+      if (!FilesUnderParent(entry, i)) {
+        continue;
+      }
+      // i < entry.names.size() by the loop condition.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      const ULONGLONG parent = entry.names[i].parent_record;
+      if (const std::optional<size_t> index = EntryIndex(parent)) {
+        // next is as long as entries, and its values index children_records,
+        // which the counts above sized.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        children_records[next[*index]++] = entry.record;
+      }
+    }
+  }
+}
+
+void Mft::MftTree::Impl::IndexEntry(ULONGLONG record, size_t index) {
+  const ULONGLONG dense_limit =
+      (std::max)(static_cast<ULONGLONG>(dense_index_floor),
+                 static_cast<ULONGLONG>(dense_index_ratio) * entries.size());
+  if (record >= dense_limit) {
+    sparse_entries.emplace(record, index);
+    return;
+  }
+  // record < dense_limit, which is a size_t.
+  const auto slot = static_cast<size_t>(record);
+  if (slot >= entry_of_record.size()) {
+    entry_of_record.resize(slot + 1, no_entry);
+  }
+  // The resize above makes slot an index of entry_of_record.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  entry_of_record[slot] = index;
+}
+
+std::optional<size_t> Mft::MftTree::Impl::EntryIndex(ULONGLONG record) const {
+  if (record < entry_of_record.size()) {
+    // record < entry_of_record.size() was checked above.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const size_t index = entry_of_record[static_cast<size_t>(record)];
+    if (index != no_entry) {
+      return index;
+    }
+  }
+  if (sparse_entries.empty()) {
+    return std::nullopt;
+  }
+  const auto found = sparse_entries.find(record);
+  if (found == sparse_entries.end()) {
+    return std::nullopt;
+  }
+  return found->second;
 }
 
 // Whether name's parent reference, read from child's record, names a
@@ -730,11 +878,10 @@ void Mft::MftTree::Impl::ApplyJournal(const Usn::Journal& journal,
 
   for (const Usn::Record& record : journal.records) {
     if (record.file_reference_high == 0) {
-      const auto found = by_record.find(record.file_record);
-      if (found != by_record.end()) {
-        // by_record maps to indices of entries.
+      if (const std::optional<size_t> index = EntryIndex(record.file_record)) {
+        // EntryIndex() gives an index of entries.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        Mft::MftTree::Entry& entry = entries[found->second];
+        Mft::MftTree::Entry& entry = entries[*index];
         if (Mft::IsSameRecordGeneration(record.file_sequence, entry.sequence,
                                         entry.in_use)) {
           if (!entry.usn) {
@@ -881,20 +1028,28 @@ const std::vector<Mft::MftTree::Entry>& Mft::MftTree::Entries() const noexcept {
 
 // The lookup behind MftTree::Find().
 const Mft::MftTree::Entry* Mft::MftTree::Impl::Find(ULONGLONG record) const {
-  const auto iterator = by_record.find(record);
-  // by_record_ maps to indices of entries_.
+  const std::optional<size_t> index = EntryIndex(record);
+  // EntryIndex() gives an index of entries.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return iterator == by_record.end() ? nullptr : &entries[iterator->second];
+  return index ? &entries[*index] : nullptr;
 }
 
 // The lookup behind MftTree::Children().
 std::span<const ULONGLONG>
     Mft::MftTree::Impl::Children(ULONGLONG dir_record) const {
-  const auto iterator = children.find(dir_record);
-  if (iterator == children.end()) {
-    return {};
+  const std::optional<size_t> index = EntryIndex(dir_record);
+  if (!index) {
+    return dir_record == root_record
+               ? std::span<const ULONGLONG>{lost_root_children}
+               : std::span<const ULONGLONG>{};
   }
-  return iterator->second;
+  // children_first holds one more value than there are entries.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const size_t first = children_first[*index];
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const size_t last = children_first[*index + 1];
+  return std::span<const ULONGLONG>{children_records}.subspan(first,
+                                                              last - first);
 }
 
 const Mft::MftTree::Entry* Mft::MftTree::Find(ULONGLONG record) const {
@@ -906,13 +1061,13 @@ std::span<const ULONGLONG> Mft::MftTree::Children(ULONGLONG dir_record) const {
 }
 
 bool Mft::MftTree::IsReachable(ULONGLONG record) const {
-  const auto iterator = impl_->by_record.find(record);
-  if (iterator == impl_->by_record.end()) {
+  const std::optional<size_t> index = impl_->EntryIndex(record);
+  if (!index) {
     return false;
   }
-  // by_record_ values index entries_; reachable_ is as long as entries_.
+  // EntryIndex() gives an index of entries; reachable is as long.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return impl_->reachable[iterator->second];
+  return impl_->reachable[*index];
 }
 
 std::wstring
