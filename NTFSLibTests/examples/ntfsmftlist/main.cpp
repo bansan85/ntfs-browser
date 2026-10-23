@@ -8,9 +8,12 @@
 
 #include <array>
 #include <cerrno>
+#include <charconv>
 #include <cstdio>
 #include <filesystem>
+#include <format>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <span>
@@ -34,6 +37,9 @@
 
 #ifdef _WIN32
   #include <cwctype>
+
+  #include <fcntl.h>
+  #include <io.h>
 #else
   #include "argv-wide.h"
   #include "posix-device-disk-reader.h"
@@ -58,6 +64,133 @@ constexpr std::wstring_view recover_option = L"--recover";
 // Width of every column before the path, separators included, so an extra
 // hard link's "=" line lines up under the path it follows.
 constexpr int path_column = 63;
+
+// Widths of the record, sequence, DEL, size and hard link columns: wide enough
+// for the values a volume holds, and with the 16 of the date and the 6 of the
+// attributes, plus a space after each, they add up to path_column.
+constexpr size_t record_width = 10;
+constexpr size_t sequence_width = 5;
+constexpr size_t state_width = 3;
+constexpr size_t size_width = 14;
+constexpr size_t links_width = 2;
+
+// Bytes of the listing gathered before stdout gets them. 1 MiB turns a listing
+// of millions of lines into a few dozen writes.
+constexpr size_t output_flush_bytes = size_t{1024} * 1024;
+
+// Digits of the largest ULONGLONG.
+constexpr size_t max_decimal_digits = 20;
+
+#ifdef _WIN32
+// The end of a line of the listing. stdout is binary while it is written, so
+// the listing adds the CR the text mode would: that mode converts a few KiB at
+// a time, and each chunk costs a write.
+constexpr std::string_view line_end = "\r\n";
+#else
+constexpr std::string_view line_end = "\n";
+#endif
+
+// Gathers the listing, and hands it to stdout in big chunks. A chunk ends
+// between two pieces of text, so a console never gets a UTF-8 sequence cut in
+// two. The main line of each entry is built by hand: std::format() would cost
+// more than the rest of the line.
+class Output {
+ public:
+  Output() {
+    buffer_.reserve(output_flush_bytes);
+#ifdef _WIN32
+    fflush(stdout);
+    text_mode_ = _setmode(_fileno(stdout), _O_BINARY);
+#endif
+  }
+
+  Output(const Output&) = delete;
+  Output(Output&&) = delete;
+  Output& operator=(const Output&) = delete;
+  Output& operator=(Output&&) = delete;
+
+  ~Output() {
+    Flush();
+#ifdef _WIN32
+    fflush(stdout);
+    if (text_mode_ != -1) {
+      _setmode(_fileno(stdout), text_mode_);
+    }
+#endif
+  }
+
+  // Appends one piece of the listing, formatted as std::format() does.
+  template <class... Args>
+  void Print(std::format_string<Args...> fmt, Args&&... args) {
+    std::format_to(std::back_inserter(buffer_), fmt,
+                   std::forward<Args>(args)...);
+    FlushIfFull();
+  }
+
+  // Same, then ends the line.
+  template <class... Args>
+  void PrintLine(std::format_string<Args...> fmt, Args&&... args) {
+    std::format_to(std::back_inserter(buffer_), fmt,
+                   std::forward<Args>(args)...);
+    EndLine();
+  }
+
+  void Append(std::string_view text) { buffer_.append(text); }
+
+  // Appends text right-aligned in width columns, or left-aligned.
+  void AppendRight(std::string_view text, size_t width) {
+    Pad(text.size(), width, ' ');
+    buffer_.append(text);
+  }
+
+  void AppendLeft(std::string_view text, size_t width) {
+    buffer_.append(text);
+    Pad(text.size(), width, ' ');
+  }
+
+  // Appends value in decimal, right-aligned in width columns filled with fill.
+  void AppendNumber(ULONGLONG value, size_t width, char fill = ' ') {
+    std::array<char, max_decimal_digits> digits{};
+    const char* end =
+        std::to_chars(digits.data(), digits.data() + digits.size(), value).ptr;
+    const auto length = static_cast<size_t>(end - digits.data());
+    Pad(length, width, fill);
+    buffer_.append(digits.data(), length);
+  }
+
+  // Ends the current line.
+  void EndLine() {
+    buffer_.append(line_end);
+    FlushIfFull();
+  }
+
+  // Writes to stdout what is gathered so far.
+  void Flush() {
+    fwrite(buffer_.data(), 1, buffer_.size(), stdout);
+    buffer_.clear();
+  }
+
+ private:
+  // Appends the fill a text of length characters needs to span width columns.
+  void Pad(size_t length, size_t width, char fill) {
+    if (length < width) {
+      buffer_.append(width - length, fill);
+    }
+  }
+
+  void FlushIfFull() {
+    if (buffer_.size() >= output_flush_bytes) {
+      Flush();
+    }
+  }
+
+  std::string buffer_;
+#ifdef _WIN32
+  // The mode stdout had before, restored once the listing is written. -1 when
+  // it could not be changed.
+  int text_mode_{-1};
+#endif
+};
 
 // Prints command-line usage help.
 void Usage() {
@@ -127,22 +260,25 @@ NtfsDevice::LocalTime LocalWriteTime(const FILETIME& write_time) {
 #endif
 }
 
-// The path of one name of entry, as shown in the listing.
-std::string
-    DisplayPath(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
-                const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
-                std::optional<size_t> name_index) {
+// Replaces out with the path of one name of entry, as shown in the listing.
+void DisplayPath(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+                 const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
+                 std::optional<size_t> name_index, std::string& out) {
+  out.clear();
   std::optional<ULONGLONG> lost;
   const std::wstring path = name_index
                                 ? tree.GetPath(entry.record, *name_index, &lost)
                                 : tree.GetPath(entry.record, &lost);
   if (path.empty()) {
-    return "<no name>";
+    out = "<no name>";
+    return;
   }
   if (lost) {
-    return "<lost #" + std::to_string(*lost) + ">\\" + ToUtf8(path);
+    out += "<lost #";
+    out += std::to_string(*lost);
+    out += ">\\";
   }
-  return ToUtf8(path);
+  NtfsDevice::AppendAsUtf8(out, path);
 }
 
 // The letter of one attribute flag when it is set, '-' when it is not.
@@ -154,15 +290,6 @@ std::string
   return {FlagLetter(entry.read_only, 'R'), FlagLetter(entry.hidden, 'H'),
           FlagLetter(entry.system, 'S'),    FlagLetter(entry.compressed, 'C'),
           FlagLetter(entry.encrypted, 'E'), FlagLetter(entry.sparse, 'P')};
-}
-
-// The size in bytes, or <DIR> for a directory.
-std::string
-    SizeColumn(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry) {
-  if (entry.directory) {
-    return "<DIR>";
-  }
-  return std::to_string(entry.size);
 }
 
 // Counts the names that are hard links, leaving out DOS 8.3 aliases.
@@ -178,30 +305,56 @@ size_t
 }
 
 // Prints the columns of entry, then its path.
-void PrintMainLine(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
+void PrintMainLine(Output& out,
+                   const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                    const std::string& path) {
   const NtfsDevice::LocalTime local_time = LocalWriteTime(entry.write_time);
 
-  printf("%10llu %5u %-3s %14s %04u-%02u-%02u %02u:%02u %s %2zu %s\n",
-         static_cast<unsigned long long>(entry.record), entry.sequence,
-         entry.in_use ? "" : "DEL", SizeColumn(entry).c_str(), local_time.year,
-         local_time.month, local_time.day, local_time.hour, local_time.minute,
-         AttributeColumn(entry).c_str(), CountHardLinks(entry), path.c_str());
+  out.AppendNumber(entry.record, record_width);
+  out.Append(" ");
+  out.AppendNumber(entry.sequence, sequence_width);
+  out.Append(" ");
+  out.AppendLeft(entry.in_use ? "" : "DEL", state_width);
+  out.Append(" ");
+  if (entry.directory) {
+    out.AppendRight("<DIR>", size_width);
+  } else {
+    out.AppendNumber(entry.size, size_width);
+  }
+  out.Append(" ");
+  out.AppendNumber(local_time.year, 4, '0');
+  out.Append("-");
+  out.AppendNumber(local_time.month, 2, '0');
+  out.Append("-");
+  out.AppendNumber(local_time.day, 2, '0');
+  out.Append(" ");
+  out.AppendNumber(local_time.hour, 2, '0');
+  out.Append(":");
+  out.AppendNumber(local_time.minute, 2, '0');
+  out.Append(" ");
+  out.Append(AttributeColumn(entry));
+  out.Append(" ");
+  out.AppendNumber(CountHardLinks(entry), links_width);
+  out.Append(" ");
+  out.Append(path);
+  out.EndLine();
 }
 
 // Prints one "=" line for each hard link whose path differs from path.
-void PrintOtherLinks(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+void PrintOtherLinks(Output& out,
+                     const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
                      const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                      const std::string& path) {
+  std::string other;
   for (size_t i = 0; i < entry.names.size(); i++) {
     // i < entry.names.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (entry.names[i].dos_only) {
       continue;
     }
-    const std::string other = DisplayPath(tree, entry, i);
+    DisplayPath(tree, entry, i, other);
     if (other != path) {
-      printf("%*s= %s\n", path_column, "", other.c_str());
+      out.PrintLine("{:{}}= {}", "", path_column, other);
     }
   }
 }
@@ -263,25 +416,29 @@ std::string TimeText(const FILETIME& time) {
 
 // Prints what the journal knows of an entry, under its listing lines.
 void PrintJournalLine(
-    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::UsnInfo& info) {
-  printf("%*s~ %s %s", path_column, "", TimeText(info.last_time).c_str(),
-         ReasonText(info.last_reason).c_str());
+    Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree::UsnInfo& info) {
+  out.Print("{:{}}~ {} {}", "", path_column, TimeText(info.last_time),
+            ReasonText(info.last_reason));
   if (info.delete_time) {
-    printf(", deleted %s", TimeText(*info.delete_time).c_str());
+    out.Print(", deleted {}", TimeText(*info.delete_time));
   }
-  printf(" (%llu records)\n",
-         static_cast<unsigned long long>(info.record_count));
+  out.PrintLine(" ({} records)", info.record_count);
 }
 
 // Prints one listing line for entry, then one line per other hard link, then
-// what the journal knows of it.
-void PrintEntry(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
-                const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry) {
-  const std::string path = DisplayPath(tree, entry, std::nullopt);
-  PrintMainLine(entry, path);
-  PrintOtherLinks(tree, entry, path);
+// what the journal knows of it. path is scratch space, reused from one entry to
+// the next.
+void PrintEntry(Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+                const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
+                std::string& path) {
+  DisplayPath(tree, entry, std::nullopt, path);
+  PrintMainLine(out, entry, path);
+  // A lone non-DOS name is the one the path above went through.
+  if (CountHardLinks(entry) > 1) {
+    PrintOtherLinks(out, tree, entry, path);
+  }
   if (entry.usn) {
-    PrintJournalLine(*entry.usn);
+    PrintJournalLine(out, *entry.usn);
   }
 }
 
@@ -297,23 +454,24 @@ std::string JournalDisplayPath(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
 }
 
 // Prints the files only the journal names, after the listing.
-void PrintJournalOnly(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree) {
+void PrintJournalOnly(Output& out,
+                      const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree) {
   const auto files = tree.JournalOnly();
   if (files.empty()) {
     return;
   }
-  printf("\nFiles only the journal names: %zu\n", files.size());
-  printf("%10s %5s %-5s %-16s %s\n", "Record", "Seq", "", "Last event",
-         "Path [reasons]");
+  out.EndLine();
+  out.PrintLine("Files only the journal names: {}", files.size());
+  out.PrintLine("{:>10} {:>5} {:<5} {:<16} {}", "Record", "Seq", "",
+                "Last event", "Path [reasons]");
   for (size_t i = 0; i < files.size(); i++) {
     // i < files.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     const auto& file = files[i];
-    printf("%10llu %5u %-5s %-16s %s [%s]\n",
-           static_cast<unsigned long long>(file.record), file.sequence,
-           file.directory ? "<DIR>" : "", TimeText(file.usn.last_time).c_str(),
-           JournalDisplayPath(tree, i).c_str(),
-           ReasonText(file.usn.all_reasons).c_str());
+    out.PrintLine("{:>10} {:>5} {:<5} {:<16} {} [{}]", file.record,
+                  file.sequence, file.directory ? "<DIR>" : "",
+                  TimeText(file.usn.last_time), JournalDisplayPath(tree, i),
+                  ReasonText(file.usn.all_reasons));
   }
 }
 
@@ -410,26 +568,19 @@ bool ShowScanProgress(ULONGLONG done, ULONGLONG total) {
 }
 
 // Prints the scan totals that close the listing.
-void PrintStats(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats) {
-  printf(
-      "\nRecord slots: %llu, in use: %llu, deleted: %llu, extensions: %llu\n",
-      static_cast<unsigned long long>(stats.slots),
-      static_cast<unsigned long long>(stats.in_use),
-      static_cast<unsigned long long>(stats.deleted),
-      static_cast<unsigned long long>(stats.extensions));
-  printf("Unreadable: %llu, damaged: %llu, not linked to the root: %llu\n",
-         static_cast<unsigned long long>(stats.unreadable),
-         static_cast<unsigned long long>(stats.damaged),
-         static_cast<unsigned long long>(stats.unreachable));
+void PrintStats(Output& out,
+                const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats) {
+  out.EndLine();
+  out.PrintLine("Record slots: {}, in use: {}, deleted: {}, extensions: {}",
+                stats.slots, stats.in_use, stats.deleted, stats.extensions);
+  out.PrintLine("Unreadable: {}, damaged: {}, not linked to the root: {}",
+                stats.unreadable, stats.damaged, stats.unreachable);
   if (stats.usn_records != 0) {
-    printf(
-        "Journal: %llu records, %llu files annotated, %llu only in the "
-        "journal, %llu damaged%s\n",
-        static_cast<unsigned long long>(stats.usn_records),
-        static_cast<unsigned long long>(stats.usn_annotated),
-        static_cast<unsigned long long>(stats.usn_journal_only),
-        static_cast<unsigned long long>(stats.usn_damaged),
-        stats.usn_truncated ? " (truncated)" : "");
+    out.PrintLine(
+        "Journal: {} records, {} files annotated, {} only in the journal, {} "
+        "damaged{}",
+        stats.usn_records, stats.usn_annotated, stats.usn_journal_only,
+        stats.usn_damaged, stats.usn_truncated ? " (truncated)" : "");
   }
 }
 
@@ -455,14 +606,16 @@ int ListVolume(const Arguments& args) {
   scan_options.progress = ShowScanProgress;
   const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume, scan_options);
 
-  printf("%10s %5s %-3s %14s %-16s %-6s %2s %s\n", "Record", "Seq", "", "Size",
-         "Last write", "Attrib", "Ln", "Path");
+  Output out;
+  out.PrintLine("{:>10} {:>5} {:<3} {:>14} {:<16} {:<6} {:>2} {}", "Record",
+                "Seq", "", "Size", "Last write", "Attrib", "Ln", "Path");
+  std::string path;
   for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry :
        tree.Entries()) {
-    PrintEntry(tree, entry);
+    PrintEntry(out, tree, entry, path);
   }
-  PrintJournalOnly(tree);
-  PrintStats(tree.Stats());
+  PrintJournalOnly(out, tree);
+  PrintStats(out, tree.Stats());
 
   return 0;
 }
