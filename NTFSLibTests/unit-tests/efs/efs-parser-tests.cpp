@@ -172,7 +172,7 @@ TEMPLATE_TEST_CASE_SIG(
     if (stream.empty()) {
       continue;
     }
-    const Opened<S> opened = Open<S>(
+    const Opened<S> opened = OpenVolume<S>(
         NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithEncryptedFile(
             file),
         fixture.provider);
@@ -381,7 +381,7 @@ TEST_CASE("The cipher backend is selectable per volume, Crypto++ by default",
           "[efs]") {
   const Fixture fixture = MakeFixture(Algorithm::Aes256);
   const Opened<Cache::Strategy::NoCache> opened =
-      Open<Cache::Strategy::NoCache>(fixture.image, fixture.provider);
+      OpenVolume<Cache::Strategy::NoCache>(fixture.image, fixture.provider);
   NtfsVolume<Cache::Strategy::NoCache>& volume = *opened.volume;
 
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP

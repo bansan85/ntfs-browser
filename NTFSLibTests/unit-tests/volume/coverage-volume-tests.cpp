@@ -101,6 +101,20 @@ void ParseVolumeInformation(const NtfsVolume<S>& volume) {
   REQUIRE(volume_record.ParseAttrs());
 }
 
+// Opens image as a volume and reports whether it came up.
+template <Cache::Strategy S>
+bool VolumeOpens(std::vector<BYTE> image) {
+  const NtfsVolume<S> volume(
+      std::make_unique<MemoryDiskReader>(std::move(image)));
+  return volume.IsVolumeOK();
+}
+
+// The fake image whose $MFT DATA is split across an $ATTRIBUTE_LIST.
+std::vector<BYTE> SplitMftImage() {
+  return NTFS_BROWSER_NAMESPACE::Tests::
+      BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -110,10 +124,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
   Store<BYTE>(image, bpb_oem_id_field, 'X');
 
-  const NtfsVolume<S> volume(
-      std::make_unique<MemoryDiskReader>(std::move(image)));
-
-  CHECK_FALSE(volume.IsVolumeOK());
+  CHECK_FALSE(VolumeOpens<S>(std::move(image)));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -124,9 +135,7 @@ TEMPLATE_TEST_CASE_SIG(
     std::vector<BYTE> image =
         NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
     Store<WORD>(image, bpb_bytes_per_sector_field, 1);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK_FALSE(volume.IsVolumeOK());
+    CHECK_FALSE(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("sectors per cluster magnitude beyond 2^12") {
@@ -134,9 +143,7 @@ TEMPLATE_TEST_CASE_SIG(
         NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
     // -13 is the first exponent beyond 2^12 sectors.
     Store<BYTE>(image, bpb_sectors_per_cluster_field, 0xF3);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK_FALSE(volume.IsVolumeOK());
+    CHECK_FALSE(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("file record size below the header and not whole sectors") {
@@ -144,9 +151,7 @@ TEMPLATE_TEST_CASE_SIG(
         NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
     // A -1 exponent in this field means 2^1 bytes.
     Store<BYTE>(image, bpb_clusters_per_file_record_field, 0xFF);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK_FALSE(volume.IsVolumeOK());
+    CHECK_FALSE(VolumeOpens<S>(std::move(image)));
   }
 }
 
@@ -173,9 +178,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume rejects a damaged $Volume record",
     std::vector<BYTE> image =
         NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
     ZeroRecord(image, volume_idx);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK_FALSE(volume.IsVolumeOK());
+    CHECK_FALSE(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("$Volume has no VolumeInformation attribute") {
@@ -186,9 +189,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume rejects a damaged $Volume record",
                      Load<WORD>(image, RecordOffset(volume_idx) +
                                            record_first_attr_field),
                  end_of_attrs_marker);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK_FALSE(volume.IsVolumeOK());
+    CHECK_FALSE(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("volume major version below NTFS 3.0") {
@@ -214,10 +215,7 @@ TEMPLATE_TEST_CASE_SIG(
       image,
       FirstAttr(image, mft_idx, Attr::Type::Data) + attr_name_length_field, 1);
 
-  const NtfsVolume<S> volume(
-      std::make_unique<MemoryDiskReader>(std::move(image)));
-
-  CHECK_FALSE(volume.IsVolumeOK());
+  CHECK_FALSE(VolumeOpens<S>(std::move(image)));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -225,87 +223,66 @@ TEMPLATE_TEST_CASE_SIG(
     "[cov-vol]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   SECTION("attribute list entry of an unknown type stops the scan") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+    std::vector<BYTE> image = SplitMftImage();
     const size_t entry = ResidentBody(
         image, FirstAttr(image, mft_idx, Attr::Type::AttributeList));
     Store<DWORD>(image, entry, invalid_attr_type);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK(volume.IsVolumeOK());
+    CHECK(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("attribute list entry with a zero record length stops the scan") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+    std::vector<BYTE> image = SplitMftImage();
     const size_t entry = ResidentBody(
         image, FirstAttr(image, mft_idx, Attr::Type::AttributeList));
     Store<WORD>(image, entry + list_entry_record_size_field, 0);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK(volume.IsVolumeOK());
+    CHECK(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("extension record that does not parse is dropped") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+    std::vector<BYTE> image = SplitMftImage();
     ZeroRecord(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK(volume.IsVolumeOK());
+    CHECK(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("named extension DATA is rejected") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+    std::vector<BYTE> image = SplitMftImage();
     Store<BYTE>(image,
                 FirstAttr(image,
                           NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
                           Attr::Type::Data) +
                     attr_name_length_field,
                 1);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK(volume.IsVolumeOK());
+    CHECK(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("extension DATA with an inverted VCN range is rejected") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+    std::vector<BYTE> image = SplitMftImage();
     const size_t attr =
         FirstAttr(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
                   Attr::Type::Data);
     const auto lowest = Load<ULONGLONG>(image, attr + attr_lowest_vcn_field);
     REQUIRE(lowest > 0);
     Store<ULONGLONG>(image, attr + attr_highest_vcn_field, lowest - 1);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK(volume.IsVolumeOK());
+    CHECK(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("$MFT attribute list body larger than its record") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+    std::vector<BYTE> image = SplitMftImage();
     Store<DWORD>(image,
                  FirstAttr(image, mft_idx, Attr::Type::AttributeList) +
                      attr_body_size_field,
                  0x10000U);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    static_cast<void>(volume.IsVolumeOK());
+    static_cast<void>(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("extension DATA at a VCN its list entry does not name") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+    std::vector<BYTE> image = SplitMftImage();
     const size_t attr =
         FirstAttr(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
                   Attr::Type::Data);
     Store<ULONGLONG>(image, attr + attr_lowest_vcn_field, unlisted_start_vcn);
     Store<ULONGLONG>(image, attr + attr_highest_vcn_field, unlisted_start_vcn);
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(std::move(image)));
-    CHECK(volume.IsVolumeOK());
+    CHECK(VolumeOpens<S>(std::move(image)));
   }
 }
 
@@ -325,10 +302,7 @@ TEMPLATE_TEST_CASE_SIG(
   Store<ULONGLONG>(image, extents[1] + attr_highest_vcn_field,
                    overlapping_start_vcn);
 
-  const NtfsVolume<S> volume(
-      std::make_unique<MemoryDiskReader>(std::move(image)));
-
-  CHECK(volume.IsVolumeOK());
+  CHECK(VolumeOpens<S>(std::move(image)));
 }
 
 TEST_CASE("NtfsVolume refuses a $MFT read that fails on disk", "[cov-vol]") {

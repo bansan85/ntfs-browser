@@ -182,7 +182,7 @@ void CheckEncryptedFileReadsBack(const Fixture& fixture,
                                  std::uint64_t ceiling) {
   const NTFS_BROWSER_NAMESPACE::VolumeOptions options{.max_cache_bytes =
                                                           ceiling};
-  auto opened = Open<Cache::Strategy::FullCache>(
+  auto opened = OpenVolume<Cache::Strategy::FullCache>(
       fixture.image, fixture.provider, std::nullopt, options);
   const auto& data = OnlyData(*opened.record);
 

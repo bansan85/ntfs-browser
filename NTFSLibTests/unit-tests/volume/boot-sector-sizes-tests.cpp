@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <utility>
@@ -92,6 +93,20 @@ Opened Open(std::vector<BYTE> image, VolumeOptions options = {}) {
           .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
 }
 
+// Every size is rejected with the expected message and not the other one.
+template <Cache::Strategy S>
+void CheckSectorSizesRejected(std::initializer_list<WORD> sector_sizes,
+                              const char* expected, const char* other) {
+  for (const WORD sector_size : sector_sizes) {
+    INFO("bytes_per_sector = " << sector_size);
+    const Opened opened = Open<S>(ImageWithSectorSize(sector_size));
+
+    CHECK_FALSE(opened.ok);
+    CHECK_THAT(opened.log, ContainsSubstring(expected));
+    CHECK_THAT(opened.log, !ContainsSubstring(other));
+  }
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG("NtfsVolume checks the sector size",
@@ -121,36 +136,18 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume checks the sector size",
   }
 
   SECTION("a size below 256 bytes is out of range") {
-    for (const WORD sector_size : {0, 1, 2, 128, 255}) {
-      INFO("bytes_per_sector = " << sector_size);
-      const Opened opened = Open<S>(ImageWithSectorSize(sector_size));
-
-      CHECK_FALSE(opened.ok);
-      CHECK_THAT(opened.log, ContainsSubstring(sector_range_message));
-      CHECK_THAT(opened.log, !ContainsSubstring(sector_power_message));
-    }
+    CheckSectorSizesRejected<S>({0, 1, 2, 128, 255}, sector_range_message,
+                                sector_power_message);
   }
 
   SECTION("a size above 4096 bytes is out of range") {
-    for (const WORD sector_size : {4097, 8192, 65535}) {
-      INFO("bytes_per_sector = " << sector_size);
-      const Opened opened = Open<S>(ImageWithSectorSize(sector_size));
-
-      CHECK_FALSE(opened.ok);
-      CHECK_THAT(opened.log, ContainsSubstring(sector_range_message));
-      CHECK_THAT(opened.log, !ContainsSubstring(sector_power_message));
-    }
+    CheckSectorSizesRejected<S>({4097, 8192, 65535}, sector_range_message,
+                                sector_power_message);
   }
 
   SECTION("a size in range that is not a power of two is rejected") {
-    for (const WORD sector_size : {257, 384, 511, 513, 3000, 4095}) {
-      INFO("bytes_per_sector = " << sector_size);
-      const Opened opened = Open<S>(ImageWithSectorSize(sector_size));
-
-      CHECK_FALSE(opened.ok);
-      CHECK_THAT(opened.log, ContainsSubstring(sector_power_message));
-      CHECK_THAT(opened.log, !ContainsSubstring(sector_range_message));
-    }
+    CheckSectorSizesRejected<S>({257, 384, 511, 513, 3000, 4095},
+                                sector_power_message, sector_range_message);
   }
 
   SECTION("a rejection stops the chain before the cluster size") {

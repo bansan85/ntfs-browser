@@ -85,8 +85,8 @@ TEMPLATE_TEST_CASE_SIG(
   encrypted.file.other_logged_stream_name = L"$TXF_DATA";
 
   const Opened<S> opened =
-      Open<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
-              encrypted.provider);
+      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
+                    encrypted.provider);
 
   CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, file_size) ==
         encrypted.plaintext);
@@ -100,8 +100,8 @@ TEMPLATE_TEST_CASE_SIG("An $EFS stream above 64 KiB is not read",
 
   (void)Tests::TakeCapturedLog();
   const Opened<S> opened =
-      Open<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
-              encrypted.provider);
+      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
+                    encrypted.provider);
 
   CHECK_THAT(Tests::TakeCapturedLog(),
              ContainsSubstring("$EFS stream is too large"));

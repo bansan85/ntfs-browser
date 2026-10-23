@@ -38,6 +38,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 
 namespace {
 
@@ -84,9 +85,9 @@ std::vector<std::vector<BYTE>> ScribbleOverFreedMemory() {
   return blocks;
 }
 
-const std::vector<BYTE> expected_lifetime_content(
-    NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_data_content.begin(),
-    NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_data_content.end());
+const std::vector<BYTE>
+    expected_lifetime_content(Tests::attr_list_lifetime_data_content.begin(),
+                              Tests::attr_list_lifetime_data_content.end());
 
 // Scribbles over freed memory, then checks the lone $DATA of record still
 // reads its expected content.
@@ -104,12 +105,10 @@ void CheckImportedDataReadable(
 
 // Opens attr_list_lifetime_base_idx of the image with link as its extension.
 template <Cache::Strategy S>
-ParsedRecord<S>
-    OpenWithExtensionLink(NTFS_BROWSER_NAMESPACE::Tests::FakeExtensionLink link,
-                          VolumeOptions options = {}) {
-  return OpenRecord<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithExtensionLink(link),
-      NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_base_idx, options);
+ParsedRecord<S> OpenWithExtensionLink(Tests::FakeExtensionLink link,
+                                      VolumeOptions options = {}) {
+  return OpenRecord<S>(Tests::BuildFakeNtfsImageWithExtensionLink(link),
+                       Tests::attr_list_lifetime_base_idx, options);
 }
 
 // Checks a parse: its ParseAttrs() result, and that its log holds message.
@@ -122,15 +121,14 @@ void CheckListParse(const ListParse& outcome, bool parsed,
 
 // Extension links that do not belong to attr_list_lifetime_base_idx's list
 // entry: a reused record, or a record of another file.
-constexpr auto foreign_links =
-    std::to_array<NTFS_BROWSER_NAMESPACE::Tests::FakeExtensionLink>({
-        // Same base, but the record has since been reused (sequence 3 -> 4).
-        {.entry_sequence = 3, .record_sequence = 4, .base_ref = 6},
-        // The record was reused by a live file of its own: no base at all.
-        {.entry_sequence = 3, .record_sequence = 4, .base_ref = 0},
-        // Same sequence, but the record is an extension of another file.
-        {.entry_sequence = 0, .record_sequence = 0, .base_ref = 8},
-    });
+constexpr auto foreign_links = std::to_array<Tests::FakeExtensionLink>({
+    // Same base, but the record has since been reused (sequence 3 -> 4).
+    {.entry_sequence = 3, .record_sequence = 4, .base_ref = 6},
+    // The record was reused by a live file of its own: no base at all.
+    {.entry_sequence = 3, .record_sequence = 4, .base_ref = 0},
+    // Same sequence, but the record is an extension of another file.
+    {.entry_sequence = 0, .record_sequence = 0, .base_ref = 8},
+});
 
 }  // namespace
 
@@ -140,8 +138,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> record =
-      OpenRecord<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                        BuildFakeNtfsImageWithAttributeListShortRead(),
+      OpenRecord<S>(Tests::BuildFakeNtfsImageWithAttributeListShortRead(),
                     static_cast<ULONGLONG>(Mft::Idx::Root),
                     VolumeOptions{.recover_errors = true});
   CHECK(record.record->ParseAttrs());
@@ -153,8 +150,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> record =
-      OpenRecord<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                        BuildFakeNtfsImageWithAttributeListShortRead(),
+      OpenRecord<S>(Tests::BuildFakeNtfsImageWithAttributeListShortRead(),
                     static_cast<ULONGLONG>(Mft::Idx::Root));
   CHECK_FALSE(record.record->ParseAttrs());
 }
@@ -165,10 +161,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::
-          BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
-      NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-      Attr::Mask::IndexRoot, VolumeOptions{.recover_errors = true});
+      Tests::BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
+      Tests::attribute_list_dir_idx, Attr::Mask::IndexRoot,
+      VolumeOptions{.recover_errors = true});
   CHECK(dir.record->ParseAttrs());
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
 }
@@ -179,10 +174,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::
-          BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
-      NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-      Attr::Mask::IndexRoot);
+      Tests::BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
+      Tests::attribute_list_dir_idx, Attr::Mask::IndexRoot);
   CHECK_FALSE(dir.record->ParseAttrs());
 }
 
@@ -192,10 +185,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::
-          BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
-      NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-      Attr::Mask::IndexRoot, VolumeOptions{.recover_errors = true});
+      Tests::BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
+      Tests::attribute_list_dir_idx, Attr::Mask::IndexRoot,
+      VolumeOptions{.recover_errors = true});
   CHECK(dir.record->ParseAttrs());
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
 }
@@ -205,11 +197,9 @@ TEMPLATE_TEST_CASE_SIG(
     "declared size rejects the record by default",
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> dir =
-      OpenListRecord<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                            BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
-                        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-                        Attr::Mask::IndexRoot);
+  const ParsedRecord<S> dir = OpenListRecord<S>(
+      Tests::BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
+      Tests::attribute_list_dir_idx, Attr::Mask::IndexRoot);
   CHECK_FALSE(dir.record->ParseAttrs());
 }
 
@@ -219,9 +209,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> record = OpenRecord<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::
-          BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize(),
-      NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_base_idx,
+      Tests::BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize(),
+      Tests::attr_list_lifetime_base_idx,
       VolumeOptions{.recover_errors = true});
   CHECK_FALSE(record.record->ParseAttrs());
 
@@ -234,9 +223,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> record =
-      OpenRecord<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                        BuildFakeNtfsImageWithSplitAttributeListAttribute(),
-                    NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_base_idx);
+      OpenRecord<S>(Tests::BuildFakeNtfsImageWithSplitAttributeListAttribute(),
+                    Tests::attr_list_lifetime_base_idx);
   REQUIRE(record.record->ParseAttrs());
 
   CheckImportedDataReadable<S>(*record.record);
@@ -247,24 +235,21 @@ TEMPLATE_TEST_CASE_SIG(
     "a split attribute",
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto defect = GENERATE(
-      NTFS_BROWSER_NAMESPACE::Tests::FakeTrailingDefect::UndersizedHeader,
-      NTFS_BROWSER_NAMESPACE::Tests::FakeTrailingDefect::
-          UndersizedCompressedField,
-      NTFS_BROWSER_NAMESPACE::Tests::FakeTrailingDefect::RejectedAttribute);
+  const auto defect =
+      GENERATE(Tests::FakeTrailingDefect::UndersizedHeader,
+               Tests::FakeTrailingDefect::UndersizedCompressedField,
+               Tests::FakeTrailingDefect::RejectedAttribute);
 
   const ParsedRecord<S> record = OpenRecord<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::
-          BuildFakeNtfsImageWithSplitDataAndTrailingDefect(defect),
-      NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_base_idx,
+      Tests::BuildFakeNtfsImageWithSplitDataAndTrailingDefect(defect),
+      Tests::attr_list_lifetime_base_idx,
       VolumeOptions{.recover_errors = true});
   CHECK_FALSE(record.record->ParseAttrs());
 
   // One stream, not its VCN 0 and VCN 1 halves.
   const auto& data = record.record->GetAttr(Attr::Type::Data);
   REQUIRE(data.size() == 1);
-  CHECK(data.front()->GetDataSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+  CHECK(data.front()->GetDataSize() == Tests::fake_cluster_size);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -272,7 +257,7 @@ TEMPLATE_TEST_CASE_SIG(
     "record by default",
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const NTFS_BROWSER_NAMESPACE::Tests::FakeExtensionLink link =
+  const Tests::FakeExtensionLink link =
       foreign_links.at(GENERATE(size_t{0}, size_t{1}, size_t{2}));
 
   const ParsedRecord<S> record = OpenWithExtensionLink<S>(link);
@@ -285,7 +270,7 @@ TEMPLATE_TEST_CASE_SIG(
     "recovering",
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const NTFS_BROWSER_NAMESPACE::Tests::FakeExtensionLink link =
+  const Tests::FakeExtensionLink link =
       foreign_links.at(GENERATE(size_t{0}, size_t{1}, size_t{2}));
 
   const ParsedRecord<S> record =
@@ -299,8 +284,8 @@ TEMPLATE_TEST_CASE_SIG(
     "imports its attribute, sequence numbers included",
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> record = OpenWithExtensionLink<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::genuine_extension_link);
+  const ParsedRecord<S> record =
+      OpenWithExtensionLink<S>(Tests::genuine_extension_link);
   REQUIRE(record.record->ParseAttrs());
 
   const auto& data = record.record->GetAttr(Attr::Type::Data);
@@ -314,15 +299,14 @@ TEMPLATE_TEST_CASE_SIG(
     "attribute imported from an extension record",
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> record = OpenUnparsed<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithExtensionLink(
-          NTFS_BROWSER_NAMESPACE::Tests::genuine_extension_link));
+  const ParsedRecord<S> record =
+      OpenUnparsed<S>(Tests::BuildFakeNtfsImageWithExtensionLink(
+          Tests::genuine_extension_link));
 
   REQUIRE(record.record->InstallAttrRawCB(
       Attr::Type::Data, [](const NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon&,
                            bool& discard) { discard = true; }));
-  REQUIRE(record.record->ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_base_idx));
+  REQUIRE(record.record->ParseFileRecord(Tests::attr_list_lifetime_base_idx));
   REQUIRE(record.record->ParseAttrs());
 
   CHECK(record.record->GetAttr(Attr::Type::Data).empty());
@@ -337,8 +321,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("strict") {
     const ListParse outcome = ParseListLog<S>(
-        NTFS_BROWSER_NAMESPACE::Tests::
-            BuildFakeNtfsImageWithAttributeListShortRead(),
+        Tests::BuildFakeNtfsImageWithAttributeListShortRead(),
         static_cast<ULONGLONG>(Mft::Idx::Root), false, Attr::Mask::All);
     CheckListParse(outcome, false, short_read);
     CHECK_THAT(outcome.log, Catch::Matchers::ContainsSubstring(
@@ -347,8 +330,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("recovering") {
     const ListParse outcome = ParseListLog<S>(
-        NTFS_BROWSER_NAMESPACE::Tests::
-            BuildFakeNtfsImageWithAttributeListShortRead(),
+        Tests::BuildFakeNtfsImageWithAttributeListShortRead(),
         static_cast<ULONGLONG>(Mft::Idx::Root), true, Attr::Mask::All);
     CheckListParse(outcome, true, short_read);
     CHECK(outcome.log.find(truncated_message) == std::string::npos);
@@ -366,10 +348,8 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("strict") {
     const ListParse outcome = ParseListLog<S>(
-        NTFS_BROWSER_NAMESPACE::Tests::
-            BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
-        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx, false,
-        Attr::Mask::IndexRoot);
+        Tests::BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
+        Tests::attribute_list_dir_idx, false, Attr::Mask::IndexRoot);
     CheckListParse(outcome, false, too_small);
     CHECK_THAT(outcome.log, Catch::Matchers::ContainsSubstring(
                                 std::string(truncated_message)));
@@ -378,10 +358,8 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("recovering") {
     CheckListParse(
         ParseListLog<S>(
-            NTFS_BROWSER_NAMESPACE::Tests::
-                BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
-            NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx, true,
-            Attr::Mask::IndexRoot),
+            Tests::BuildFakeNtfsImageWithAttributeListRecordSizeTooSmall(),
+            Tests::attribute_list_dir_idx, true, Attr::Mask::IndexRoot),
         true, too_small);
   }
 }
@@ -395,11 +373,9 @@ TEMPLATE_TEST_CASE_SIG(
       "Attribute List ended at offset 36 instead of its declared size 32.";
 
   SECTION("strict") {
-    const ListParse outcome =
-        ParseListLog<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                            BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
-                        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-                        false, Attr::Mask::IndexRoot);
+    const ListParse outcome = ParseListLog<S>(
+        Tests::BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
+        Tests::attribute_list_dir_idx, false, Attr::Mask::IndexRoot);
     CheckListParse(outcome, false, overshoot);
     CHECK_THAT(outcome.log, Catch::Matchers::ContainsSubstring(
                                 std::string(truncated_message)));
@@ -407,10 +383,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("recovering") {
     CheckListParse(
-        ParseListLog<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                            BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
-                        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-                        true, Attr::Mask::IndexRoot),
+        ParseListLog<S>(
+            Tests::BuildFakeNtfsImageWithAttributeListOffsetMismatch(),
+            Tests::attribute_list_dir_idx, true, Attr::Mask::IndexRoot),
         true, overshoot);
   }
 }
@@ -425,19 +400,17 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("strict") {
     CheckListParse(
-        ParseListLog<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                            BuildFakeNtfsImageWithAttributeListInvalidType(),
-                        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-                        false, Attr::Mask::IndexRoot),
+        ParseListLog<S>(Tests::BuildFakeNtfsImageWithAttributeListInvalidType(),
+                        Tests::attribute_list_dir_idx, false,
+                        Attr::Mask::IndexRoot),
         false, message);
   }
 
   SECTION("recovering") {
     CheckListParse(
-        ParseListLog<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                            BuildFakeNtfsImageWithAttributeListInvalidType(),
-                        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-                        true, Attr::Mask::IndexRoot),
+        ParseListLog<S>(Tests::BuildFakeNtfsImageWithAttributeListInvalidType(),
+                        Tests::attribute_list_dir_idx, true,
+                        Attr::Mask::IndexRoot),
         false, message);
   }
 }
@@ -451,24 +424,21 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("strict") {
     const ParsedRecord<S> dir = OpenListRecord<S>(
-        NTFS_BROWSER_NAMESPACE::Tests::
-            BuildFakeNtfsImageWithAttributeListDuplicateEntry(),
-        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-        Attr::Mask::IndexRoot);
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+        Tests::BuildFakeNtfsImageWithAttributeListDuplicateEntry(),
+        Tests::attribute_list_dir_idx, Attr::Mask::IndexRoot);
+    (void)Tests::TakeCapturedLog();
 
     CHECK(dir.record->ParseAttrs());
     CHECK(dir.record->GetAttr(Attr::Type::IndexRoot).size() == 1);
-    CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+    CHECK_THAT(Tests::TakeCapturedLog(),
                Catch::Matchers::ContainsSubstring(skipped));
   }
 
   SECTION("recovering") {
     CheckListParse(
-        ParseListLog<S>(NTFS_BROWSER_NAMESPACE::Tests::
-                            BuildFakeNtfsImageWithAttributeListDuplicateEntry(),
-                        NTFS_BROWSER_NAMESPACE::Tests::attribute_list_dir_idx,
-                        true, Attr::Mask::IndexRoot),
+        ParseListLog<S>(
+            Tests::BuildFakeNtfsImageWithAttributeListDuplicateEntry(),
+            Tests::attribute_list_dir_idx, true, Attr::Mask::IndexRoot),
         true, skipped);
   }
 }
@@ -484,20 +454,18 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("strict") {
     CheckListParse(
         ParseListLog<S>(
-            NTFS_BROWSER_NAMESPACE::Tests::
+            Tests::
                 BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize(),
-            NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_base_idx, false,
-            Attr::Mask::All),
+            Tests::attr_list_lifetime_base_idx, false, Attr::Mask::All),
         false, message);
   }
 
   SECTION("recovering") {
     CheckListParse(
         ParseListLog<S>(
-            NTFS_BROWSER_NAMESPACE::Tests::
+            Tests::
                 BuildFakeNtfsImageWithAttributeListImportThenZeroRecordSize(),
-            NTFS_BROWSER_NAMESPACE::Tests::attr_list_lifetime_base_idx, true,
-            Attr::Mask::All),
+            Tests::attr_list_lifetime_base_idx, true, Attr::Mask::All),
         false, message);
   }
 }

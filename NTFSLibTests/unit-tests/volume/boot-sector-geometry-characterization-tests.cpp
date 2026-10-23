@@ -37,6 +37,12 @@ std::vector<BYTE> ImageWithBpb(Edit edit) {
   return image;
 }
 
+// The volume opened over BuildFakeNtfsImage() with edit applied to its BPB.
+template <Cache::Strategy S, typename Edit>
+NtfsVolume<S> VolumeWithBpb(Edit edit) {
+  return NtfsVolume<S>(std::make_unique<MemoryDiskReader>(ImageWithBpb(edit)));
+}
+
 // Sectors-per-cluster exponent of the largest cluster, 2 MiB at 512 bytes.
 constexpr int largest_cluster_exponent = -12;
 
@@ -78,8 +84,8 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("a bad NTFS signature leaves every value zero") {
-    const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-        ImageWithBpb([](auto& bpb) { bpb.signature[0] = 'X'; })));
+    const NtfsVolume<S> volume =
+        VolumeWithBpb<S>([](auto& bpb) { bpb.signature[0] = 'X'; });
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetSectorSize() == 0);
@@ -88,8 +94,8 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("a null cluster keeps the sector size and an empty cluster buffer") {
-    const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-        ImageWithBpb([](auto& bpb) { bpb.sectors_per_cluster = 0; })));
+    const NtfsVolume<S> volume =
+        VolumeWithBpb<S>([](auto& bpb) { bpb.sectors_per_cluster = 0; });
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetSectorSize() ==
@@ -101,11 +107,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION(
       "a file record exponent out of range keeps the cluster buffer sized") {
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(ImageWithBpb([](auto& bpb) {
-          bpb.clusters_per_file_record =
-              static_cast<DWORD>(exponent_past_limit);
-        })));
+    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
+      bpb.clusters_per_file_record = static_cast<DWORD>(exponent_past_limit);
+    });
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetSectorSize() ==
@@ -120,10 +124,9 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("a file record above the maximum keeps its decoded size") {
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(ImageWithBpb([](auto& bpb) {
-          bpb.clusters_per_file_record = largest_literal_count;
-        })));
+    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
+      bpb.clusters_per_file_record = largest_literal_count;
+    });
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetFileRecordSize() ==
@@ -133,10 +136,9 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("an index block exponent out of range keeps the file record size") {
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(ImageWithBpb([](auto& bpb) {
-          bpb.clusters_per_index_block = literal_count_past_limit;
-        })));
+    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
+      bpb.clusters_per_index_block = literal_count_past_limit;
+    });
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetFileRecordSize() ==
@@ -146,12 +148,11 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("an overflowing MFT address keeps the decoded block sizes") {
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(ImageWithBpb([](auto& bpb) {
-          bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max() /
-                            NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size +
-                        1;
-        })));
+    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
+      bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max() /
+                        NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size +
+                    1;
+    });
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetFileRecordSize() ==
@@ -162,10 +163,9 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("eight clusters per index block is accepted at its full size") {
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(ImageWithBpb([](auto& bpb) {
-          bpb.clusters_per_index_block = largest_literal_count;
-        })));
+    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
+      bpb.clusters_per_index_block = largest_literal_count;
+    });
 
     CHECK(volume.GetIndexBlockSize() ==
           8 * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
@@ -174,13 +174,12 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("a 2 MiB cluster sizes every value and the cluster buffer") {
     // The image is far smaller than one cluster, so the $MFT read fails and
     // IsVolumeOK() stays false. The decoded values still hold.
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(ImageWithBpb([](auto& bpb) {
-          bpb.sectors_per_cluster = static_cast<BYTE>(largest_cluster_exponent);
-          bpb.clusters_per_file_record =
-              static_cast<DWORD>(one_kib_record_exponent);
-          bpb.clusters_per_index_block = 1;
-        })));
+    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
+      bpb.sectors_per_cluster = static_cast<BYTE>(largest_cluster_exponent);
+      bpb.clusters_per_file_record =
+          static_cast<DWORD>(one_kib_record_exponent);
+      bpb.clusters_per_index_block = 1;
+    });
 
     CHECK(volume.GetClusterSize() == two_mib_cluster_size);
     CHECK(volume.GetClusterBuffer().size() == two_mib_cluster_size);

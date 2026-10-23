@@ -232,6 +232,30 @@ void CheckStrictRejectsRecoveringAccepts(const std::vector<BYTE>& image,
   CHECK(salvaging.record->ParseAttrs());
 }
 
+// The fake image with the $INDEX_ROOT variants.
+std::vector<BYTE> IndexRootImage() {
+  return NTFS_BROWSER_NAMESPACE::Tests::
+      BuildFakeNtfsImageWithIndexRootVariants();
+}
+
+// The fake image with a forged $INDEX_ALLOCATION directory.
+std::vector<BYTE> ForgedBlockImage() {
+  return NTFS_BROWSER_NAMESPACE::Tests::
+      BuildFakeNtfsImageWithForgedIndexBlock();
+}
+
+// The forged directory still parses, but its damaged block hides the entry.
+template <Cache::Strategy S>
+void CheckBlockEntryHidden(std::vector<BYTE> image) {
+  auto parsed = OpenRecord<S>(
+      std::move(image), NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx);
+  REQUIRE(parsed.record->ParseAttrs());
+  CHECK_FALSE(parsed.record
+                  ->FindSubEntry(
+                      NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_name)
+                  .has_value());
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -242,8 +266,7 @@ TEMPLATE_TEST_CASE_SIG(
       NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_dir_idx;
 
   SECTION("entry_offset points past the attribute") {
-    auto image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithIndexRootVariants();
+    auto image = IndexRootImage();
     WriteAt<DWORD>(image,
                    IndexRootBody(image, idx) +
                        offsetof(Data::IndexRoot, entry_offset),
@@ -252,8 +275,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("an entry of size zero") {
-    auto image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithIndexRootVariants();
+    auto image = IndexRootImage();
     WriteAt<WORD>(image,
                   RootFirstEntry(image, IndexRootBody(image, idx)) +
                       offsetof(Data::IndexEntry, size),
@@ -262,8 +284,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("an entry larger than the rest of the attribute") {
-    auto image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithIndexRootVariants();
+    auto image = IndexRootImage();
     WriteAt<WORD>(image,
                   RootFirstEntry(image, IndexRootBody(image, idx)) +
                       offsetof(Data::IndexEntry, size),
@@ -272,8 +293,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("entries that overrun the declared total entry size") {
-    auto image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithIndexRootVariants();
+    auto image = IndexRootImage();
     WriteAt<DWORD>(image,
                    IndexRootBody(image, idx) +
                        offsetof(Data::IndexRoot, total_entry_size),
@@ -282,16 +302,14 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("the last entry lacks its Last flag, so the list runs out") {
-    auto image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithIndexRootVariants();
+    auto image = IndexRootImage();
     const size_t last = RootLastEntry(image, IndexRootBody(image, idx));
     WriteAt<BYTE>(image, last + offsetof(Data::IndexEntry, flags), 0);
     CheckStrictRejectsRecoveringAccepts<S>(image, idx);
   }
 
   SECTION("a resident value shorter than an IndexRoot header") {
-    auto image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithIndexRootVariants();
+    auto image = IndexRootImage();
     WriteAt<DWORD>(image,
                    FindAttr(image, idx, Attr::Type::IndexRoot) +
                        resident_body_size_field,
@@ -301,8 +319,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("a root that is not a FileName index is skipped") {
-    auto image = NTFS_BROWSER_NAMESPACE::Tests::
-        BuildFakeNtfsImageWithIndexRootVariants();
+    auto image = IndexRootImage();
     WriteAt<DWORD>(
         image, IndexRootBody(image, idx) + offsetof(Data::IndexRoot, attr_type),
         static_cast<DWORD>(Attr::Type::StandardInformation));
@@ -322,31 +339,24 @@ TEMPLATE_TEST_CASE_SIG(
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const ULONGLONG idx = NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx;
-  const auto name = NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_name;
 
   SECTION("a sub-node VCN that overflows the byte offset") {
     auto image = ImageWithValidIndexBlock();
     WriteAt<ULONGLONG>(image, RootSubNodeVcnSlot(image, idx), ~ULONGLONG{0});
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("a sub-node VCN that is not on a block boundary") {
     auto image = ImageWithValidIndexBlock();
     WriteAt<ULONGLONG>(image, RootSubNodeVcnSlot(image, idx), 1);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("a block without the INDX magic") {
     auto image = ImageWithValidIndexBlock();
     WriteAt<DWORD>(image,
                    IndexBlockOffset() + offsetof(Data::IndexBlock, magic), 0);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("entry_offset points past the end of the block") {
@@ -354,9 +364,7 @@ TEMPLATE_TEST_CASE_SIG(
     WriteAt<DWORD>(
         image, IndexBlockOffset() + offsetof(Data::IndexBlock, entry_offset),
         0xFFFFFF);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("the last entry lacks its Last flag and fills the block") {
@@ -369,9 +377,7 @@ TEMPLATE_TEST_CASE_SIG(
                        offsetof(Data::IndexBlock, total_entry_size),
                    fill);
     WriteAt<BYTE>(image, entry + offsetof(Data::IndexEntry, flags), 0);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("entries that overrun the block's declared total entry size") {
@@ -379,18 +385,14 @@ TEMPLATE_TEST_CASE_SIG(
     WriteAt<DWORD>(
         image,
         IndexBlockOffset() + offsetof(Data::IndexBlock, total_entry_size), 8);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("an entry whose stream does not fit its size") {
     auto image = ImageWithValidIndexBlock();
     const size_t entry = IndexBlockOffset() + block_entries_offset;
     WriteAt<WORD>(image, entry + offsetof(Data::IndexEntry, stream_size), 4);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("a sub-node entry too small to hold its VCN") {
@@ -399,18 +401,14 @@ TEMPLATE_TEST_CASE_SIG(
     WriteAt<BYTE>(image, entry + offsetof(Data::IndexEntry, flags),
                   static_cast<BYTE>(Data::IndexEntryFlag::SubNode) |
                       last_entry_flag);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("a block whose run points past the end of the image") {
     auto image = ImageWithValidIndexBlock();
     WriteAt<DWORD>(image, FirstRunOffset(image, ForgedAllocAttr(image)) + 2,
                    0x00FFFFFF);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 
   SECTION("an allocation whose size is not a whole number of blocks") {
@@ -419,9 +417,7 @@ TEMPLATE_TEST_CASE_SIG(
         image,
         ForgedAllocAttr(image) + offsetof(Data::HeaderNonResident, real_size),
         test_block_size + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
-    auto parsed = OpenRecord<S>(image, idx);
-    REQUIRE(parsed.record->ParseAttrs());
-    CHECK_FALSE(parsed.record->FindSubEntry(name).has_value());
+    CheckBlockEntryHidden<S>(std::move(image));
   }
 }
 
@@ -432,22 +428,19 @@ TEMPLATE_TEST_CASE_SIG(
   const ULONGLONG idx = NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx;
 
   SECTION("a run header whose length field exceeds 8 bytes") {
-    auto image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock();
+    auto image = ForgedBlockImage();
     WriteAt<BYTE>(image, FirstRunOffset(image, ForgedAllocAttr(image)), 0x4F);
     CheckStrictRejectsRecoveringAccepts<S>(image, idx);
   }
 
   SECTION("a run whose bytes overrun the attribute") {
-    auto image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock();
+    auto image = ForgedBlockImage();
     WriteAt<BYTE>(image, FirstRunOffset(image, ForgedAllocAttr(image)), 0x84);
     CheckStrictRejectsRecoveringAccepts<S>(image, idx);
   }
 
   SECTION("a run whose LCN falls below zero") {
-    auto image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock();
+    auto image = ForgedBlockImage();
     const size_t run = FirstRunOffset(image, ForgedAllocAttr(image));
     // One-byte length (7 clusters) and one-byte negative LCN delta of -128.
     WriteAt<BYTE>(image, run, 0x11);
@@ -458,8 +451,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("a run that extends past the attribute's last VCN") {
-    auto image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock();
+    auto image = ForgedBlockImage();
     WriteAt<ULONGLONG>(image,
                        ForgedAllocAttr(image) +
                            offsetof(Data::HeaderNonResident, last_vcn),
@@ -494,8 +486,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[cov-nri]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   SECTION("a raw data run") {
-    std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock();
+    std::vector<BYTE> image = ForgedBlockImage();
     const size_t attr = ForgedAllocAttr(image);
     constexpr ULONGLONG declared_size = 8192;
     WriteAt<ULONGLONG>(image,

@@ -106,6 +106,17 @@ inline TestEfsEntry TestUser(BYTE seed = 1,
           std::move(wrapped)};
 }
 
+// A key provider that knows one key: the FEK of entry, for algorithm.
+inline std::shared_ptr<TestKeyProvider>
+    ProviderFor(const TestEfsEntry& entry,
+                NTFS_BROWSER_NAMESPACE::Tests::Algorithm algorithm,
+                const std::vector<BYTE>& key) {
+  auto provider = std::make_shared<TestKeyProvider>();
+  provider->Add(entry.thumbprint, entry.wrapped_fek,
+                NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(algorithm, key));
+  return provider;
+}
+
 inline DWORD ClustersFor(size_t bytes) {
   return gsl::narrow<DWORD>(
       (bytes + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size - 1) /
@@ -128,10 +139,7 @@ inline Fixture MakeFixture(Algorithm algorithm,
       NTFS_BROWSER_NAMESPACE::Tests::TestKey(algorithm);
 
   const TestEfsEntry user = TestUser();
-  fixture.provider = std::make_shared<TestKeyProvider>();
-  fixture.provider->Add(
-      user.thumbprint, user.wrapped_fek,
-      NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(algorithm, key));
+  fixture.provider = ProviderFor(user, algorithm, key);
 
   NTFS_BROWSER_NAMESPACE::Tests::FakeEncryptedFile file;
   file.efs_stream =
@@ -159,11 +167,11 @@ struct Opened {
 // defaults to strict; a test of a salvageable condition passes recover_errors.
 // "backend" is nullopt for the volume's default.
 template <Cache::Strategy S>
-Opened<S> Open(std::vector<BYTE> image,
-               std::shared_ptr<IEfsKeyProvider> provider,
-               std::optional<Attr::Mask> mask = std::nullopt,
-               const VolumeOptions& options = {},
-               std::optional<CipherBackend> backend = std::nullopt) {
+Opened<S> OpenVolume(std::vector<BYTE> image,
+                     std::shared_ptr<IEfsKeyProvider> provider,
+                     std::optional<Attr::Mask> mask = std::nullopt,
+                     const VolumeOptions& options = {},
+                     std::optional<CipherBackend> backend = std::nullopt) {
   Opened<S> opened;
   opened.volume = std::make_unique<NtfsVolume<S>>(
       std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(

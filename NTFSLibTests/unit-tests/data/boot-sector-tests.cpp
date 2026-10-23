@@ -184,26 +184,28 @@ std::vector<BYTE> ImageWithBpb(Edit edit) {
   return image;
 }
 
-// Opens reader, and reports whether the volume came up. Returns the log the
-// open wrote.
+// Whether a volume came up, and the log its opening wrote.
+struct Opened {
+  bool ok{false};
+  std::string log;
+};
+
+// Opens reader, and returns whether the volume came up with the log the open
+// wrote.
 template <Cache::Strategy S>
-std::string
-    LogWhenOpened(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
-                  bool& volume_ok) {
+Opened OpenLogged(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader) {
   (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const NtfsVolume<S> volume(std::move(reader));
-  volume_ok = volume.IsVolumeOK();
-  return NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  return {.ok = volume.IsVolumeOK(),
+          .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
 }
 
-// Opens the fake image with edit applied to its boot sector BPB, and returns
-// the log the open wrote.
+// Opens the fake image with edit applied to its boot sector BPB.
 template <Cache::Strategy S, typename Edit>
-std::string LogOfBpbEdit(Edit edit, bool& volume_ok) {
-  return LogWhenOpened<S>(
+Opened OpenWithBpb(Edit edit) {
+  return OpenLogged<S>(
       std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          ImageWithBpb(edit)),
-      volume_ok);
+          ImageWithBpb(edit)));
 }
 
 }  // namespace
@@ -213,17 +215,15 @@ TEMPLATE_TEST_CASE_SIG(
     "serve either one",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = true;
-  const std::string log = LogWhenOpened<S>(
-      std::make_unique<StrictBootReadReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &Always),
-      volume_ok);
+  const Opened opened = OpenLogged<S>(std::make_unique<StrictBootReadReader>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &Always));
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("Cannot read a 4096-byte boot sector, "
-                                    "retrying with 512 bytes"));
-  CHECK_THAT(log, ContainsSubstring("Read boot sector error"));
-  CHECK_THAT(log, !ContainsSubstring("Sector Size = "));
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log,
+             ContainsSubstring("Cannot read a 4096-byte boot sector, "
+                               "retrying with 512 bytes"));
+  CHECK_THAT(opened.log, ContainsSubstring("Read boot sector error"));
+  CHECK_THAT(opened.log, !ContainsSubstring("Sector Size = "));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -231,58 +231,52 @@ TEMPLATE_TEST_CASE_SIG(
     "fallback",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = false;
-  const std::string log = LogWhenOpened<S>(
-      std::make_unique<StrictBootReadReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &AtLeast4Kn),
-      volume_ok);
+  const Opened opened = OpenLogged<S>(std::make_unique<StrictBootReadReader>(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), &AtLeast4Kn));
 
-  CHECK(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("Cannot read a 4096-byte boot sector, "
-                                    "retrying with 512 bytes"));
-  CHECK_THAT(log, ContainsSubstring("Sector Size = 512 bytes"));
+  CHECK(opened.ok);
+  CHECK_THAT(opened.log,
+             ContainsSubstring("Cannot read a 4096-byte boot sector, "
+                               "retrying with 512 bytes"));
+  CHECK_THAT(opened.log, ContainsSubstring("Sector Size = 512 bytes"));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a boot sector without the NTFS signature",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = true;
-  const std::string log =
-      LogOfBpbEdit<S>([](auto& bpb) { bpb.signature[0] = 'X'; }, volume_ok);
+  const Opened opened =
+      OpenWithBpb<S>([](auto& bpb) { bpb.signature[0] = 'X'; });
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("Volume file system is not NTFS"));
-  CHECK_THAT(log, !ContainsSubstring("Sector Size = "));
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log, ContainsSubstring("Volume file system is not NTFS"));
+  CHECK_THAT(opened.log, !ContainsSubstring("Sector Size = "));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a sectors_per_cluster magnitude beyond -12",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) { bpb.sectors_per_cluster = static_cast<BYTE>(-13); },
-      volume_ok);
+  const Opened opened = OpenWithBpb<S>(
+      [](auto& bpb) { bpb.sectors_per_cluster = static_cast<BYTE>(-13); });
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log,
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log,
              ContainsSubstring("sectors_per_cluster magnitude out of range"));
-  CHECK_THAT(log, !ContainsSubstring("Cluster Size = "));
+  CHECK_THAT(opened.log, !ContainsSubstring("Cluster Size = "));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a zero sectors_per_cluster as a null cluster size",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) { bpb.sectors_per_cluster = 0; }, volume_ok);
+  const Opened opened =
+      OpenWithBpb<S>([](auto& bpb) { bpb.sectors_per_cluster = 0; });
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("Cluster Size = 0 bytes"));
-  CHECK_THAT(log, ContainsSubstring("Cluster Size can't be null"));
-  CHECK_THAT(log, !ContainsSubstring("FileRecord Size = "));
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log, ContainsSubstring("Cluster Size = 0 bytes"));
+  CHECK_THAT(opened.log, ContainsSubstring("Cluster Size can't be null"));
+  CHECK_THAT(opened.log, !ContainsSubstring("FileRecord Size = "));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -290,38 +284,33 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("-12 gives a 4096-byte file record") {
-    bool volume_ok = false;
-    const std::string log = LogOfBpbEdit<S>(
-        [](auto& bpb) {
-          bpb.clusters_per_file_record = static_cast<DWORD>(-12);
-        },
-        volume_ok);
+    const Opened opened = OpenWithBpb<S>([](auto& bpb) {
+      bpb.clusters_per_file_record = static_cast<DWORD>(-12);
+    });
 
-    CHECK_THAT(log, ContainsSubstring("FileRecord Size = 4096 bytes"));
-    CHECK_THAT(log, !ContainsSubstring("magnitude out of range"));
+    CHECK_THAT(opened.log, ContainsSubstring("FileRecord Size = 4096 bytes"));
+    CHECK_THAT(opened.log, !ContainsSubstring("magnitude out of range"));
   }
 
   SECTION("-13 is out of range") {
-    bool volume_ok = true;
-    const std::string log = LogOfBpbEdit<S>(
-        [](auto& bpb) {
-          bpb.clusters_per_file_record = static_cast<DWORD>(-13);
-        },
-        volume_ok);
+    const Opened opened = OpenWithBpb<S>([](auto& bpb) {
+      bpb.clusters_per_file_record = static_cast<DWORD>(-13);
+    });
 
-    CHECK_FALSE(volume_ok);
-    CHECK_THAT(log, ContainsSubstring(
-                        "clusters_per_file_record magnitude out of range"));
+    CHECK_FALSE(opened.ok);
+    CHECK_THAT(
+        opened.log,
+        ContainsSubstring("clusters_per_file_record magnitude out of range"));
   }
 
   SECTION("9 clusters is out of range") {
-    bool volume_ok = true;
-    const std::string log = LogOfBpbEdit<S>(
-        [](auto& bpb) { bpb.clusters_per_file_record = 9; }, volume_ok);
+    const Opened opened =
+        OpenWithBpb<S>([](auto& bpb) { bpb.clusters_per_file_record = 9; });
 
-    CHECK_FALSE(volume_ok);
-    CHECK_THAT(log, ContainsSubstring(
-                        "clusters_per_file_record magnitude out of range"));
+    CHECK_FALSE(opened.ok);
+    CHECK_THAT(
+        opened.log,
+        ContainsSubstring("clusters_per_file_record magnitude out of range"));
   }
 }
 
@@ -329,31 +318,29 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a file record that is not a whole number of sectors",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) { bpb.clusters_per_file_record = static_cast<DWORD>(-6); },
-      volume_ok);
+  const Opened opened = OpenWithBpb<S>(
+      [](auto& bpb) { bpb.clusters_per_file_record = static_cast<DWORD>(-6); });
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("FileRecord Size = 64 bytes"));
-  CHECK_THAT(log, ContainsSubstring("FileRecord Size is invalid"));
-  CHECK_THAT(log, !ContainsSubstring("IndexBlock Size = "));
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log, ContainsSubstring("FileRecord Size = 64 bytes"));
+  CHECK_THAT(opened.log, ContainsSubstring("FileRecord Size is invalid"));
+  CHECK_THAT(opened.log, !ContainsSubstring("IndexBlock Size = "));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a file record larger than the maximum",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) { bpb.clusters_per_file_record = 5; }, volume_ok);
+  const Opened opened =
+      OpenWithBpb<S>([](auto& bpb) { bpb.clusters_per_file_record = 5; });
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("FileRecord Size = 5120 bytes"));
-  CHECK_THAT(log, ContainsSubstring(
-                      "FileRecord Size exceeds the maximum supported file "
-                      "record size"));
-  CHECK_THAT(log, !ContainsSubstring("IndexBlock Size = "));
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log, ContainsSubstring("FileRecord Size = 5120 bytes"));
+  CHECK_THAT(
+      opened.log,
+      ContainsSubstring("FileRecord Size exceeds the maximum supported file "
+                        "record size"));
+  CHECK_THAT(opened.log, !ContainsSubstring("IndexBlock Size = "));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -362,14 +349,14 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   for (const BYTE raw : {BYTE{0xF3}, BYTE{9}}) {
     INFO("clusters_per_index_block = " << static_cast<int>(raw));
-    bool volume_ok = true;
-    const std::string log = LogOfBpbEdit<S>(
-        [raw](auto& bpb) { bpb.clusters_per_index_block = raw; }, volume_ok);
+    const Opened opened = OpenWithBpb<S>(
+        [raw](auto& bpb) { bpb.clusters_per_index_block = raw; });
 
-    CHECK_FALSE(volume_ok);
-    CHECK_THAT(log, ContainsSubstring(
-                        "clusters_per_index_block magnitude out of range"));
-    CHECK_THAT(log, !ContainsSubstring("MFT address = "));
+    CHECK_FALSE(opened.ok);
+    CHECK_THAT(
+        opened.log,
+        ContainsSubstring("clusters_per_index_block magnitude out of range"));
+    CHECK_THAT(opened.log, !ContainsSubstring("MFT address = "));
   }
 }
 
@@ -377,42 +364,36 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects an index block that is not a whole number of sectors",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) { bpb.clusters_per_index_block = static_cast<DWORD>(-7); },
-      volume_ok);
+  const Opened opened = OpenWithBpb<S>(
+      [](auto& bpb) { bpb.clusters_per_index_block = static_cast<DWORD>(-7); });
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("IndexBlock Size = 128 bytes"));
-  CHECK_THAT(log, ContainsSubstring("IndexBlock Size is invalid"));
-  CHECK_THAT(log, !ContainsSubstring("MFT address = "));
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log, ContainsSubstring("IndexBlock Size = 128 bytes"));
+  CHECK_THAT(opened.log, ContainsSubstring("IndexBlock Size is invalid"));
+  CHECK_THAT(opened.log, !ContainsSubstring("MFT address = "));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume accepts a whole-sector index block of 512 bytes",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = false;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) { bpb.clusters_per_index_block = static_cast<DWORD>(-9); },
-      volume_ok);
+  const Opened opened = OpenWithBpb<S>(
+      [](auto& bpb) { bpb.clusters_per_index_block = static_cast<DWORD>(-9); });
 
-  CHECK_THAT(log, ContainsSubstring("IndexBlock Size = 512 bytes"));
-  CHECK_THAT(log, !ContainsSubstring("IndexBlock Size is invalid"));
+  CHECK_THAT(opened.log, ContainsSubstring("IndexBlock Size = 512 bytes"));
+  CHECK_THAT(opened.log, !ContainsSubstring("IndexBlock Size is invalid"));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects an MFT address whose byte offset overflows",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) { bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max(); },
-      volume_ok);
+  const Opened opened = OpenWithBpb<S>(
+      [](auto& bpb) { bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max(); });
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("MFT address = 0xFFFFFFFFFFFFFFFF"));
-  CHECK_THAT(log, ContainsSubstring("MFT address is invalid"));
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log, ContainsSubstring("MFT address = 0xFFFFFFFFFFFFFFFF"));
+  CHECK_THAT(opened.log, ContainsSubstring("MFT address is invalid"));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -422,13 +403,12 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // 2^52 clusters of 1024 bytes is 2^62 bytes: just above LONGLONG_MAX / 2,
   // and still within a ULONGLONG.
-  bool volume_ok = true;
-  const std::string log =
-      LogOfBpbEdit<S>([](auto& bpb) { bpb.lcn_mft = 1ULL << 52U; }, volume_ok);
+  const Opened opened =
+      OpenWithBpb<S>([](auto& bpb) { bpb.lcn_mft = 1ULL << 52U; });
 
-  CHECK_FALSE(volume_ok);
-  CHECK_THAT(log, ContainsSubstring("MFT address = 0x4000000000000000"));
-  CHECK_THAT(log, ContainsSubstring("MFT address is invalid"));
+  CHECK_FALSE(opened.ok);
+  CHECK_THAT(opened.log, ContainsSubstring("MFT address = 0x4000000000000000"));
+  CHECK_THAT(opened.log, ContainsSubstring("MFT address is invalid"));
 }
 
 TEMPLATE_TEST_CASE_SIG("NtfsVolume accepts the largest plausible MFT address",
@@ -437,17 +417,14 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume accepts the largest plausible MFT address",
   // (2^52 - 1) clusters of 1024 bytes: the last offset under LONGLONG_MAX / 2.
   // The volume declares the most sectors it can, so the first $MFT record
   // fits in it.
-  bool volume_ok = true;
-  const std::string log = LogOfBpbEdit<S>(
-      [](auto& bpb) {
-        bpb.lcn_mft = (1ULL << 52U) - 1;
-        bpb.total_sectors = std::numeric_limits<ULONGLONG>::max();
-      },
-      volume_ok);
+  const Opened opened = OpenWithBpb<S>([](auto& bpb) {
+    bpb.lcn_mft = (1ULL << 52U) - 1;
+    bpb.total_sectors = std::numeric_limits<ULONGLONG>::max();
+  });
 
-  CHECK_THAT(log, ContainsSubstring("MFT address = 0x3FFFFFFFFFFFFC00"));
-  CHECK_THAT(log, !ContainsSubstring("MFT address is invalid"));
-  CHECK_THAT(log, !ContainsSubstring("First $MFT record lies beyond"));
+  CHECK_THAT(opened.log, ContainsSubstring("MFT address = 0x3FFFFFFFFFFFFC00"));
+  CHECK_THAT(opened.log, !ContainsSubstring("MFT address is invalid"));
+  CHECK_THAT(opened.log, !ContainsSubstring("First $MFT record lies beyond"));
 }
 
 TEMPLATE_TEST_CASE_SIG(
