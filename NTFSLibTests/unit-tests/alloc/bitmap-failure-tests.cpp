@@ -112,7 +112,7 @@ void CheckEveryAnswerIsUnknown(const NtfsVolume<S>& volume, ULONGLONG first,
 template <Cache::Strategy S>
 void CheckNothingIsReadBeforeAQuery() {
   const std::vector<BYTE> image = TreeWithBitmap();
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
   const auto record = Support::ParsedRecord(
       *opened.volume, static_cast<ULONGLONG>(Tests::mft_tree_docs_idx));
 
@@ -128,7 +128,7 @@ void CheckAMissingBitmapIsUnknownAndLoggedOnce(bool recover,
                                                Log::Level expected) {
   // Record 6 is zero-filled in the freed tree.
   const Support::CapturedLevels log;
-  const auto opened = Support::Open<S>(
+  const auto opened = Support::OpenVolume<S>(
       Tests::BuildFakeNtfsImageWithFreedFileTree(),
       VolumeOptions{.include_deleted = true, .recover_errors = recover});
 
@@ -147,14 +147,14 @@ void CheckACutRunList() {
                       .volume_clusters = two_cluster_volume});
 
   SECTION("strict mode rejects the whole bitmap") {
-    const auto opened = Support::Open<S>(image);
+    const auto opened = Support::OpenVolume<S>(image);
 
     CHECK(opened.volume->GetClusterState(40) == ClusterState::Unknown);
     CHECK_FALSE(opened.volume->GetSpaceSummary());
   }
 
   SECTION("recover mode answers the clusters before the cut") {
-    const auto opened = Support::Open<S>(
+    const auto opened = Support::OpenVolume<S>(
         image, VolumeOptions{.include_deleted = true, .recover_errors = true});
 
     CHECK(opened.volume->GetClusterState(39) == ClusterState::Free);
@@ -205,7 +205,7 @@ void CheckAShortBitmapLogsOnce() {
       {.shape = FakeBitmapShape::Resident, .pad_to_volume = false});
 
   const Support::CapturedLevels log;
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
 
   CHECK(opened.volume->GetClusterState(10) == ClusterState::Free);
   CHECK(opened.volume->GetClusterState(40) == ClusterState::Unknown);
@@ -215,7 +215,7 @@ void CheckAShortBitmapLogsOnce() {
 
 template <Cache::Strategy S>
 void CheckAThrowingCallbackIsContained() {
-  const auto opened = Support::Open<S>(TreeWithBitmap());
+  const auto opened = Support::OpenVolume<S>(TreeWithBitmap());
   REQUIRE(opened.volume->InstallAttrRawCB(Attr::Type::Data, &ThrowingCallback));
 
   CheckEveryAnswerIsUnknown(*opened.volume, 40, 2);

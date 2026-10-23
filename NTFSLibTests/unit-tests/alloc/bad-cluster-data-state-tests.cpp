@@ -59,7 +59,7 @@ template <Cache::Strategy S>
 std::optional<DataState>
     StateOfStale(const std::vector<BYTE>& image,
                  const VolumeOptions& options = Support::DeletedOptions()) {
-  const auto opened = Support::Open<S>(image, options);
+  const auto opened = Support::OpenVolume<S>(image, options);
   return Support::ParsedStale(opened)->GetDataState();
 }
 
@@ -107,7 +107,7 @@ void CheckReadingABadStreamIsUnchanged() {
   }
 
   const auto bytes_of = [](const std::vector<BYTE>& image) {
-    const auto opened = Support::Open<S>(image);
+    const auto opened = Support::OpenVolume<S>(image);
     opened.counter->Reset();
     std::vector<BYTE> out = Support::ReadStale(opened);
     // The read is issued on the bad cluster 41, as on any other. A FullCache
@@ -128,7 +128,7 @@ template <Cache::Strategy S>
 void CheckALiveFileIsIntactWithoutAnyRead() {
   std::vector<BYTE> image = StaleImage(one_bad, one_bad);
   Tests::SetRecordInUse(image, Tests::mft_tree_stale_child_idx, true);
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
   const auto record = Support::ParsedStale(opened);
   opened.counter->Reset();
 
@@ -153,7 +153,7 @@ void CheckResidentAndSparseOwnNoCluster() {
   const std::vector<BYTE> image = Support::WithBadClusters(
       Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(), {}),
       one_bad);
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
   const auto record =
       Support::ParsedRecord(*opened.volume, Tests::mft_tree_deleted_file_idx);
   CHECK(record->GetDataState() == DataState::Intact);

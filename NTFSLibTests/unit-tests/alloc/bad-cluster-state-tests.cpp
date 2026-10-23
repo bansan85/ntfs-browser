@@ -59,7 +59,7 @@ Support::Opened<S>
     OpenWith(std::span<const Alloc::Extent> bad,
              std::span<const Alloc::Extent> bad_in_bitmap,
              const VolumeOptions& options = Support::DeletedOptions()) {
-  return Support::Open<S>(ImageWith(bad, bad_in_bitmap), options);
+  return Support::OpenVolume<S>(ImageWith(bad, bad_in_bitmap), options);
 }
 
 // Both lists together, in cluster order.
@@ -175,7 +175,7 @@ void CheckOptionsDoNotChangeTheAnswer() {
   const std::vector<BYTE> image = ImageWith(both, bad_marked);
 
   for (const bool include_deleted : {false, true}) {
-    const auto opened = Support::Open<S>(
+    const auto opened = Support::OpenVolume<S>(
         image, VolumeOptions{.include_deleted = include_deleted});
 
     CHECK(opened.volume->GetClusterState(45) == ClusterState::Bad);

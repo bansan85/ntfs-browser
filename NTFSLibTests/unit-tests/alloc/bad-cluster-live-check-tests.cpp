@@ -77,11 +77,11 @@ const std::vector<FakeDataRun> rest_used{FakeDataRun{.lcn = 40, .clusters = 1},
 template <Cache::Strategy S>
 void CheckABadClusterIsLogged() {
   const auto strict_opened =
-      Support::Open<S>(LiveImage(one_bad, rest_used), strict);
+      Support::OpenVolume<S>(LiveImage(one_bad, rest_used), strict);
   const std::vector<BYTE> expected = ReadStale(strict_opened);
 
   const auto opened =
-      Support::Open<S>(LiveImage(one_bad, rest_used), recovering);
+      Support::OpenVolume<S>(LiveImage(one_bad, rest_used), recovering);
   (void)Tests::TakeCapturedLog();
 
   CHECK(ReadStale(opened) == expected);
@@ -119,7 +119,7 @@ void CheckAHealthyFileIsNotLogged() {
 template <Cache::Strategy S>
 void CheckStrictModeReadsNoBadList() {
   const std::vector<BYTE> image = LiveImage(one_bad, rest_used);
-  const auto opened = Support::Open<S>(image, strict);
+  const auto opened = Support::OpenVolume<S>(image, strict);
   (void)Tests::TakeCapturedLog();
   opened.counter->Reset();
 
@@ -146,7 +146,7 @@ void CheckOneCauseRaisesOneMessage() {
 template <Cache::Strategy S>
 void CheckTheCheckRunsOnce() {
   const auto opened =
-      Support::Open<S>(LiveImage(one_bad, rest_used), recovering);
+      Support::OpenVolume<S>(LiveImage(one_bad, rest_used), recovering);
   const auto record = Support::ParsedStale(opened);
   std::vector<BYTE> out(stale_size);
   const auto* const stream = record->FindStream({});
@@ -173,7 +173,7 @@ void CheckADeletedFileIsNotChecked() {
 template <Cache::Strategy S>
 void CheckTheVolumesOwnMetadataIsNotChecked() {
   const std::vector<BYTE> image = LiveImage(one_bad, rest_used);
-  const auto opened = Support::Open<S>(image, recovering);
+  const auto opened = Support::OpenVolume<S>(image, recovering);
   (void)Tests::TakeCapturedLog();
 
   const auto mft = Support::ParsedRecord(*opened.volume,

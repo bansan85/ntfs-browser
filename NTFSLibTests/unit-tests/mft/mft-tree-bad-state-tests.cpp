@@ -179,7 +179,7 @@ void CheckSeveralFlushesGiveTheSameStates() {
 
   const auto states_with_cap = [&](size_t cap) {
     Mft::SetMaxPendingRangesForTests(cap);
-    const auto opened = Support::Open<S>(image);
+    const auto opened = Support::OpenVolume<S>(image);
     const Mft::MftTree tree(*opened.volume);
     Mft::SetMaxPendingRangesForTests(0);
     std::vector<std::optional<DataState>> states;

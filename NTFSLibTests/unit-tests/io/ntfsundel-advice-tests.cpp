@@ -95,7 +95,7 @@ struct Opened {
 };
 
 Opened Open(const std::vector<BYTE>& image, std::uint64_t reference) {
-  Opened opened{.volume = Support::Open<Cache::Strategy::NoCache>(image),
+  Opened opened{.volume = Support::OpenVolume<Cache::Strategy::NoCache>(image),
                 .record = {}};
   opened.record = NtfsUndel::OpenDeletedFile(*opened.volume.volume, reference);
   REQUIRE(opened.record.error == RecoverError::None);
@@ -225,7 +225,7 @@ TEST_CASE("a freed file whose state is unknown warns and the copy runs",
 TEST_CASE("a freed record with no unnamed stream goes ahead",
           "[undel][advice]") {
   const std::vector<BYTE> image = FourStatesImage();
-  Opened opened{.volume = Support::Open<Cache::Strategy::NoCache>(image),
+  Opened opened{.volume = Support::OpenVolume<Cache::Strategy::NoCache>(image),
                 .record = {}};
   opened.record =
       NtfsUndel::OpenDeletedFile(*opened.volume.volume, freed_dir_ref);

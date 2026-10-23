@@ -56,10 +56,10 @@ std::vector<BYTE> LiveImage(std::span<const FakeDataRun> allocated_runs,
 
 template <Cache::Strategy S>
 void CheckAFreeClusterIsLogged() {
-  const auto strict_opened = Support::Open<S>(LiveImage({}), strict);
+  const auto strict_opened = Support::OpenVolume<S>(LiveImage({}), strict);
   const std::vector<BYTE> expected = ReadStale(strict_opened);
 
-  const auto opened = Support::Open<S>(LiveImage({}), recovering);
+  const auto opened = Support::OpenVolume<S>(LiveImage({}), recovering);
   (void)Tests::TakeCapturedLog();
 
   CHECK(ReadStale(opened) == expected);
@@ -90,7 +90,7 @@ void CheckAHealthyFileIsNotLogged() {
 template <Cache::Strategy S>
 void CheckStrictModeReadsNoBitmap() {
   const std::vector<BYTE> image = LiveImage({});
-  const auto opened = Support::Open<S>(image, strict);
+  const auto opened = Support::OpenVolume<S>(image, strict);
   (void)Tests::TakeCapturedLog();
   opened.counter->Reset();
 
@@ -103,7 +103,7 @@ void CheckStrictModeReadsNoBitmap() {
 
 template <Cache::Strategy S>
 void CheckTheCheckRunsOnce() {
-  const auto opened = Support::Open<S>(LiveImage({}), recovering);
+  const auto opened = Support::OpenVolume<S>(LiveImage({}), recovering);
   const auto record = Support::ParsedStale(opened);
   std::vector<BYTE> out(stale_size);
   const auto* const stream = record->FindStream({});
@@ -130,7 +130,7 @@ void CheckADeletedFileIsNotChecked() {
 template <Cache::Strategy S>
 void CheckTheVolumesOwnMetadataIsNotChecked() {
   const std::vector<BYTE> image = LiveImage({});
-  const auto opened = Support::Open<S>(image, recovering);
+  const auto opened = Support::OpenVolume<S>(image, recovering);
   (void)Tests::TakeCapturedLog();
   opened.counter->Reset();
 

@@ -77,7 +77,7 @@ template <Cache::Strategy S>
 struct CeilingVolume {
   explicit CeilingVolume(
       size_t count, const VolumeOptions& options = Support::DeletedOptions())
-      : opened(Support::Open<S>(Image(Isolated(count)), options)) {}
+      : opened(Support::OpenVolume<S>(Image(Isolated(count)), options)) {}
 
   const CeilingGuard guard{small_ceiling};
   const Support::CapturedLevels log;

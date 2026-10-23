@@ -215,7 +215,7 @@ void CheckDamageIsLoggedOncePerVolume() {
 
   const auto sink = std::make_shared<AllocSupport::LevelSink>();
   const AllocSupport::ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(Support::JournalImage(options));
+  const auto opened = Support::OpenVolume<S>(Support::JournalImage(options));
 
   const Usn::Journal* result = opened.volume->GetUsnJournal();
   REQUIRE(result != nullptr);

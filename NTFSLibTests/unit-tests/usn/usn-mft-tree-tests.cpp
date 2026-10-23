@@ -73,7 +73,7 @@ Mft::MftTree ScanWith(const FakeUsnOptions& options,
                       const VolumeOptions& volume_options,
                       const Mft::MftTree::ScanOptions& scan = {}) {
   const auto opened =
-      Support::Open<S>(Support::JournalImage(options), volume_options);
+      Support::OpenVolume<S>(Support::JournalImage(options), volume_options);
   return Mft::MftTree(*opened.volume, scan);
 }
 
@@ -329,8 +329,8 @@ void CheckJournalOnlyFilesStayOutOfTheEntries() {
 template <Cache::Strategy S>
 void CheckStrictModeIsTheScanWithoutAJournal() {
   const VolumeOptions strict{.include_deleted = true};
-  const auto plain =
-      Support::Open<S>(Tests::BuildFakeNtfsImageWithFreedFileTree(), strict);
+  const auto plain = Support::OpenVolume<S>(
+      Tests::BuildFakeNtfsImageWithFreedFileTree(), strict);
   const Mft::MftTree without(*plain.volume);
   const Mft::MftTree with = ScanWith<S>(MixedJournal(), strict);
 

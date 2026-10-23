@@ -44,7 +44,7 @@ struct Outcome {
 
 template <Cache::Strategy S>
 Outcome<S> ReadJournalOf(const FakeUsnOptions& options) {
-  const auto opened = Support::Open<S>(Support::JournalImage(options));
+  const auto opened = Support::OpenVolume<S>(Support::JournalImage(options));
   opened.counter->Reset();
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
   REQUIRE(journal != nullptr);

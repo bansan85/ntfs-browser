@@ -171,7 +171,7 @@ std::optional<Usn::Journal> ReadJournalOf(std::span<const BYTE> stream,
   std::vector<BYTE> image = UsnSupport::JournalImage(journal_options);
 
   const auto read = [&]<Cache::Strategy S>() -> std::optional<Usn::Journal> {
-    const auto opened = UsnSupport::Open<S>(std::move(image), options);
+    const auto opened = UsnSupport::OpenVolume<S>(std::move(image), options);
     const Usn::Journal* journal = opened.volume->GetUsnJournal();
     if (journal == nullptr) {
       return std::nullopt;

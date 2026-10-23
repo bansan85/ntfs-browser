@@ -56,7 +56,7 @@ std::vector<BYTE> Image(std::span<const Alloc::Extent> bad,
 
 template <Cache::Strategy S>
 std::optional<Alloc::SpaceSummary> SummaryOf(std::vector<BYTE> image) {
-  const auto opened = Support::Open<S>(std::move(image));
+  const auto opened = Support::OpenVolume<S>(std::move(image));
   return opened.volume->GetSpaceSummary();
 }
 
@@ -129,7 +129,7 @@ void CheckAnUnusableBitmapGivesNoReport() {
   // Record 6 is zero-filled in the freed tree: there is no bitmap.
   const std::vector<BYTE> image = Support::WithBadClusters(
       Tests::BuildFakeNtfsImageWithFreedFileTree(), bad_marked);
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
 
   CHECK_FALSE(opened.volume->GetSpaceSummary());
   CHECK(opened.volume->GetClusterState(45) == Alloc::ClusterState::Bad);

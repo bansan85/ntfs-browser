@@ -82,8 +82,8 @@ inline VolumeOptions DeletedOptions() {
 
 // Opens image as a volume whose reader counts every call.
 template <Cache::Strategy S>
-Opened<S> Open(std::vector<BYTE> image,
-               const VolumeOptions& options = DeletedOptions()) {
+Opened<S> OpenVolume(std::vector<BYTE> image,
+                     const VolumeOptions& options = DeletedOptions()) {
   auto counter = std::make_unique<CountingDiskReader>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   Opened<S> opened;
@@ -164,7 +164,7 @@ std::vector<BYTE> ReadStale(const Opened<S>& opened) {
 template <Cache::Strategy S>
 std::string LogOfReadingStale(std::vector<BYTE> image,
                               const VolumeOptions& options) {
-  const auto opened = Open<S>(std::move(image), options);
+  const auto opened = OpenVolume<S>(std::move(image), options);
   (void)TakeCapturedLog();
   (void)ReadStale(opened);
   return TakeCapturedLog();

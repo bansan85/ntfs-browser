@@ -46,7 +46,7 @@ template <Cache::Strategy S>
 std::optional<DataState>
     StateOfStale(const std::vector<BYTE>& image,
                  const VolumeOptions& options = Support::DeletedOptions()) {
-  const auto opened = Support::Open<S>(image, options);
+  const auto opened = Support::OpenVolume<S>(image, options);
   return Support::ParsedStale(opened)->GetDataState();
 }
 
@@ -69,7 +69,7 @@ void CheckAnAllocatedClusterIsReallocated() {
   }
 
   const auto bytes_of = [](const std::vector<BYTE>& image) {
-    return Support::ReadStale(Support::Open<S>(image));
+    return Support::ReadStale(Support::OpenVolume<S>(image));
   };
 
   CHECK(StateOfStale<S>(with) == DataState::Reallocated);
@@ -97,7 +97,7 @@ void CheckResidentDataIsIntact() {
       FakeDataRun{.lcn = 40, .clusters = 4}};
   const std::vector<BYTE> image =
       Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(), reused);
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
   const auto record =
       Support::ParsedRecord(*opened.volume, Tests::mft_tree_deleted_file_idx);
 
@@ -108,7 +108,7 @@ template <Cache::Strategy S>
 void CheckALiveFileIsIntactWithoutTheBitmap() {
   std::vector<BYTE> image = StaleImage(stale_runs);
   Tests::SetRecordInUse(image, Tests::mft_tree_stale_child_idx, true);
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
   const auto record = Support::ParsedStale(opened);
   opened.counter->Reset();
 
@@ -143,7 +143,7 @@ void CheckAnExtentPastTheEndOfTheVolume() {
 
 template <Cache::Strategy S>
 void CheckAStreamThatDoesNotExist() {
-  const auto opened = Support::Open<S>(StaleImage({}));
+  const auto opened = Support::OpenVolume<S>(StaleImage({}));
   const auto record = Support::ParsedStale(opened);
 
   CHECK_FALSE(record->GetDataState(L"no-such-stream"));

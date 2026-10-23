@@ -43,7 +43,7 @@ std::vector<BYTE> ImageFor(FakeBitmapShape shape) {
 template <Cache::Strategy S>
 Support::Opened<S>
     OpenWithShape(FakeBitmapShape shape = FakeBitmapShape::NonResident) {
-  return Support::Open<S>(ImageFor(shape));
+  return Support::OpenVolume<S>(ImageFor(shape));
 }
 
 template <Cache::Strategy S>
@@ -87,7 +87,7 @@ void CheckOptionsDoNotChangeTheAnswer() {
 
   for (const bool include_deleted : {false, true}) {
     for (const bool recover : {false, true}) {
-      const auto opened = Support::Open<S>(
+      const auto opened = Support::OpenVolume<S>(
           image, VolumeOptions{.include_deleted = include_deleted,
                                .recover_errors = recover});
       CHECK(opened.volume->GetClusterState(40) == ClusterState::Allocated);

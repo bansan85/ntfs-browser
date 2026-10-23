@@ -87,7 +87,7 @@ size_t HeldBytes(const Usn::Journal& journal) {
 double MeasureJournal(size_t count) {
   std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
   Tests::PutUsnJournal(image, {.raw_stream = RealisticStream(count)});
-  const auto opened = Support::Open<Cache::Strategy::NoCache>(
+  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
       std::move(image),
       VolumeOptions{.include_deleted = true,
                     .recover_errors = true,
@@ -113,7 +113,7 @@ double MeasureJournal(size_t count) {
 double MeasureMftScan(size_t files) {
   const Tests::FakeManyDeleted many =
       Tests::BuildFakeNtfsImageWithManyDeletedFiles(files, 1);
-  const auto opened = Support::Open<Cache::Strategy::NoCache>(
+  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
       many.image, VolumeOptions{.include_deleted = true});
 
   const auto start = Clock::now();

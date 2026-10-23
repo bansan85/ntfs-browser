@@ -60,7 +60,7 @@ void CheckEveryQueryOnlyReads() {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
   const auto opened =
-      Support::Open<S>(Support::WithBitmap(StaleFile(), allocated));
+      Support::OpenVolume<S>(Support::WithBitmap(StaleFile(), allocated));
 
   CHECK(opened.volume->GetClusterState(40) == Alloc::ClusterState::Allocated);
   CheckTheRestOnlyReads(opened);
@@ -71,7 +71,7 @@ void CheckEveryBadClusterQueryOnlyReads() {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
   const std::vector<Alloc::Extent> bad{{.lcn = 41, .clusters = 1}};
-  const auto opened = Support::Open<S>(Support::WithBadClusters(
+  const auto opened = Support::OpenVolume<S>(Support::WithBadClusters(
       Support::WithBitmap(StaleFile(), Support::WithBadRuns(allocated, bad)),
       bad));
 

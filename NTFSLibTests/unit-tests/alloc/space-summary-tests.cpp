@@ -63,7 +63,7 @@ template <Cache::Strategy S>
 void CheckFreeSpaceIsTheKnownValue() {
   const std::vector<BYTE> image = TreeWithBitmap();
   const ULONGLONG total = image.size() / Tests::fake_cluster_size;
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
 
   const Alloc::SpaceSummary summary = RequiredSummary(*opened.volume);
   CHECK(summary.total_clusters == total);
@@ -79,7 +79,7 @@ void CheckPaddingBitsDoNotCount() {
   std::vector<BYTE> bytes(9, 0x00);
   bytes.at(0) = 0x08;
   bytes.at(8) = 0xFF;
-  const auto opened = Support::Open<S>(TreeWithResidentBitmap(bytes));
+  const auto opened = Support::OpenVolume<S>(TreeWithResidentBitmap(bytes));
 
   const Alloc::SpaceSummary summary = RequiredSummary(*opened.volume);
   CHECK(summary.total_clusters == 64);
@@ -91,7 +91,7 @@ void CheckPaddingBitsDoNotCount() {
 template <Cache::Strategy S>
 void CheckAShortBitmapCountsWhatItCovers() {
   const auto opened =
-      Support::Open<S>(TreeWithResidentBitmap({0x01, 0x00, 0x00, 0x00}));
+      Support::OpenVolume<S>(TreeWithResidentBitmap({0x01, 0x00, 0x00, 0x00}));
 
   const Alloc::SpaceSummary summary = RequiredSummary(*opened.volume);
   CHECK(summary.total_clusters == 64);
@@ -103,14 +103,14 @@ void CheckAShortBitmapCountsWhatItCovers() {
 template <Cache::Strategy S>
 void CheckAMissingBitmapHasNoSummary() {
   const auto opened =
-      Support::Open<S>(Tests::BuildFakeNtfsImageWithFreedFileTree());
+      Support::OpenVolume<S>(Tests::BuildFakeNtfsImageWithFreedFileTree());
 
   CHECK_FALSE(opened.volume->GetSpaceSummary());
 }
 
 template <Cache::Strategy S>
 void CheckTheSummaryIsComputedOnce() {
-  const auto opened = Support::Open<S>(TreeWithBitmap());
+  const auto opened = Support::OpenVolume<S>(TreeWithBitmap());
 
   const auto first = opened.volume->GetSpaceSummary();
   const size_t reads = opened.counter->ReadCount();
@@ -127,7 +127,7 @@ void CheckTheOptionsDoNotChangeTheSummary() {
   const std::vector<BYTE> image = TreeWithBitmap();
   std::optional<ULONGLONG> expected;
   for (const bool include_deleted : {false, true}) {
-    const auto opened = Support::Open<S>(
+    const auto opened = Support::OpenVolume<S>(
         image, VolumeOptions{.include_deleted = include_deleted});
     const auto summary = opened.volume->GetSpaceSummary();
     REQUIRE(summary);

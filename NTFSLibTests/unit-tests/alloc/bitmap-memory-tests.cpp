@@ -57,7 +57,7 @@ void CheckEveryClusterIsAnsweredFromOneWindow() {
   const std::vector<BYTE> bits = Tests::AllocatedBitmapFor(image, allocated);
   // The volume grows to four windows before the bitmap sees it.
   Tests::PutClusterBitmap(image, bits, {.volume_clusters = four_window_volume});
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
 
   size_t answered = 0;
   for (ULONGLONG lcn = 0; lcn < four_window_volume; lcn++) {

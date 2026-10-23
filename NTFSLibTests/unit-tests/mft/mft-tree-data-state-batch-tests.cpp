@@ -93,7 +93,8 @@ struct Scanned {
 };
 
 Scanned Scan(const Fixture& fixture) {
-  const auto opened = Support::Open<Cache::Strategy::NoCache>(fixture.image);
+  const auto opened =
+      Support::OpenVolume<Cache::Strategy::NoCache>(fixture.image);
   const Mft::MftTree tree(*opened.volume);
 
   Scanned scanned;
@@ -169,7 +170,7 @@ TEST_CASE("annotation bitmap reads", "[.benchmark]") {
 
   const auto count_reads = [&](size_t pending_cap) {
     const Overrides overrides(benchmark_window, pending_cap);
-    const auto opened = Support::Open<Cache::Strategy::NoCache>(image);
+    const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(image);
     const Mft::MftTree tree(*opened.volume);
     return opened.counter->ReadsInRange(data_offset, image.size());
   };

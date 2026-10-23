@@ -68,7 +68,7 @@ template <Cache::Strategy S>
 Support::Opened<S> OpenBadMarked(
     const FakeBadClusterOptions& options = {},
     const VolumeOptions& volume_options = Support::DeletedOptions()) {
-  return Support::Open<S>(Image(bad_marked, options), volume_options);
+  return Support::OpenVolume<S>(Image(bad_marked, options), volume_options);
 }
 
 // Byte range of MFT record 8 in an image.
@@ -105,7 +105,7 @@ template <Cache::Strategy S>
 void CheckAnUnusableListFallsBackOnTheBitmap(
     const FakeBadClusterOptions& options, bool record_is_written) {
   const Support::CapturedLevels log;
-  const auto opened = Support::Open<S>(
+  const auto opened = Support::OpenVolume<S>(
       record_is_written ? Image(bad_marked, options) : ImageWithoutList());
 
   CHECK_NOTHROW(opened.volume->GetClusterState(45));
@@ -151,10 +151,10 @@ void CheckACutRunList() {
                                        {.lcn = 52, .clusters = 1}};
   const std::vector<BYTE> image = Image(two, {.cut_run_list = true});
 
-  const auto strict = Support::Open<S>(image);
+  const auto strict = Support::OpenVolume<S>(image);
   CHECK(strict.volume->GetBadClusters() == nullptr);
 
-  const auto recovering = Support::Open<S>(
+  const auto recovering = Support::OpenVolume<S>(
       image, VolumeOptions{.include_deleted = true, .recover_errors = true});
   const Alloc::BadClusters& list = Support::RequiredBadList(*recovering.volume);
   REQUIRE(list.extents.size() == 1);
@@ -169,7 +169,7 @@ void CheckAMissingBitmapKeepsTheBadClusters() {
   // Record 6 is zero-filled: there is no bitmap, but the list is whole.
   const std::vector<BYTE> image = Support::WithBadClusters(
       Tests::BuildFakeNtfsImageWithFreedFileTree(), bad_marked);
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
 
   REQUIRE(opened.volume->GetBadClusters() != nullptr);
   CHECK(opened.volume->GetClusterState(45) == ClusterState::Bad);
@@ -181,7 +181,7 @@ void CheckAMissingBitmapKeepsTheBadClusters() {
 template <Cache::Strategy S>
 void CheckNeitherFileUsable() {
   const auto opened =
-      Support::Open<S>(Tests::BuildFakeNtfsImageWithFreedFileTree());
+      Support::OpenVolume<S>(Tests::BuildFakeNtfsImageWithFreedFileTree());
 
   CHECK(opened.volume->GetBadClusters() == nullptr);
   CHECK(opened.volume->GetClusterState(45) == ClusterState::Unknown);
@@ -239,7 +239,7 @@ void CheckAnImageSmallerThanTheVolume() {
       {.lcn = real_clusters + 5, .clusters = 3}};
   image = Support::WithBadClusters(std::move(image), tail);
 
-  const auto opened = Support::Open<S>(image);
+  const auto opened = Support::OpenVolume<S>(image);
 
   const Alloc::BadClusters& list = Support::RequiredBadList(*opened.volume);
   REQUIRE(list.extents.size() == 1);

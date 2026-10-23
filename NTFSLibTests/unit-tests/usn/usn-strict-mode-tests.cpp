@@ -19,7 +19,7 @@ namespace {
 
 template <Cache::Strategy S>
 void CheckStrictModeReadsNothing(const VolumeOptions& options) {
-  const auto opened = Support::Open<S>(
+  const auto opened = Support::OpenVolume<S>(
       Support::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}}}),
       options);
   opened.counter->Reset();
@@ -32,7 +32,7 @@ void CheckStrictModeReadsNothing(const VolumeOptions& options) {
 
 template <Cache::Strategy S>
 void CheckRecoveryModeReadsTheJournal() {
-  const auto opened = Support::Open<S>(
+  const auto opened = Support::OpenVolume<S>(
       Support::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}}}));
   opened.counter->Reset();
 

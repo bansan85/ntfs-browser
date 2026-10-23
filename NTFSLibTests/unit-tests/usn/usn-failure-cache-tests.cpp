@@ -29,7 +29,7 @@ template <Cache::Strategy S>
 void CheckAnUnreadableStreamIsNullAndNotRetried() {
   const auto sink = std::make_shared<AllocSupport::LevelSink>();
   const AllocSupport::ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(Support::JournalImage(
+  const auto opened = Support::OpenVolume<S>(Support::JournalImage(
       {.records = {FakeUsnRecord{.name = L"a.txt"}}, .unreadable_data = true}));
 
   REQUIRE(opened.volume->GetUsnJournal() == nullptr);
@@ -43,7 +43,7 @@ void CheckAnUnreadableStreamIsNullAndNotRetried() {
 
 template <Cache::Strategy S>
 void CheckAMissingJournalIsNotLookedForAgain() {
-  const auto opened = Support::Open<S>(
+  const auto opened = Support::OpenVolume<S>(
       Support::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}},
                              .omit_extend_entry = true}));
   REQUIRE(opened.volume->GetUsnJournal() == nullptr);
@@ -55,7 +55,7 @@ void CheckAMissingJournalIsNotLookedForAgain() {
 
 template <Cache::Strategy S>
 void CheckTheVolumeKeepsWorkingAfterAFailure() {
-  const auto opened = Support::Open<S>(Support::JournalImage(
+  const auto opened = Support::OpenVolume<S>(Support::JournalImage(
       {.records = {FakeUsnRecord{.name = L"a.txt"}}, .unreadable_data = true}));
   REQUIRE(opened.volume->GetUsnJournal() == nullptr);
 

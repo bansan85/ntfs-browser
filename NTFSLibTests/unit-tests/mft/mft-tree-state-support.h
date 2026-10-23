@@ -24,7 +24,7 @@ struct ScannedVolume {
       std::vector<BYTE> image,
       const VolumeOptions& options = AllocSupport::DeletedOptions(),
       const Mft::MftTree::ScanOptions& scan = {})
-      : opened(AllocSupport::Open<S>(std::move(image), options)),
+      : opened(AllocSupport::OpenVolume<S>(std::move(image), options)),
         tree(*opened.volume, scan) {}
 
   AllocSupport::Opened<S> opened;

@@ -38,7 +38,7 @@ namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::Open;
+using Support::OpenVolume;
 using Tests::FakeSlackName;
 
 namespace {
@@ -94,7 +94,7 @@ Mft::MftTree Scan(const NtfsVolume<S>& volume) {
 
 template <Cache::Strategy S>
 void CheckNamesAreCarvedByTheScan() {
-  const auto opened = Open<S>(ImageWithTwoOldNames(), both_flags);
+  const auto opened = OpenVolume<S>(ImageWithTwoOldNames(), both_flags);
 
   const Mft::MftTree tree = Scan(*opened.volume);
 
@@ -118,8 +118,8 @@ void CheckNamesAreCarvedByTheScan() {
 template <Cache::Strategy S>
 void CheckLiveFieldsAreUntouched() {
   const std::vector<BYTE> plain = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  const auto without = Open<S>(plain, both_flags);
-  const auto with = Open<S>(ImageWithTwoOldNames(), both_flags);
+  const auto without = OpenVolume<S>(plain, both_flags);
+  const auto with = OpenVolume<S>(ImageWithTwoOldNames(), both_flags);
 
   const Mft::MftTree left = Scan(*without.volume);
   const Mft::MftTree right = Scan(*with.volume);
@@ -151,7 +151,7 @@ template <Cache::Strategy S>
 void CheckLiveNamesAreNotRepeated() {
   // The slack holds a copy of each live name of the record, a name of the same
   // record under another parent, and a name that is new.
-  const auto opened = Open<S>(
+  const auto opened = OpenVolume<S>(
       ImageWith(report_record, {Old(L"report.txt"), Old(L"REPORT~1.TXT"),
                                 Old(L"report.txt", 5), Old(L"fresh.txt")}),
       both_flags);
@@ -172,7 +172,7 @@ void CheckAPartialCopyOfALiveNameIsNotRepeated() {
       Tests::EncodeSlackName({.name = L"old.tmp", .with_entry_header = false});
   // The structure starts on the last four bytes of the terminator.
   Tests::PutRecordSlack(image, freed_record, 4, bytes);
-  const auto opened = Open<S>(std::move(image), both_flags);
+  const auto opened = OpenVolume<S>(std::move(image), both_flags);
 
   CHECK(CarveRecord(*opened.volume, freed_record).empty());
 
@@ -180,7 +180,7 @@ void CheckAPartialCopyOfALiveNameIsNotRepeated() {
   std::vector<BYTE> other = Tests::BuildFakeNtfsImageWithFreedFileTree();
   Tests::PutRecordSlack(other, freed_record, 4,
                         Tests::EncodeSlackName({.name = L"old.tm2"}));
-  const auto changed = Open<S>(std::move(other), both_flags);
+  const auto changed = OpenVolume<S>(std::move(other), both_flags);
   const auto carved = CarveRecord(*changed.volume, freed_record);
   REQUIRE(carved.size() == 1);
   CHECK(carved.front().partial);
@@ -192,7 +192,7 @@ void CheckNoFlagCombinationButBothCarves() {
   for (const VolumeOptions& options :
        {VolumeOptions{}, VolumeOptions{.include_deleted = true},
         VolumeOptions{.recover_errors = true}}) {
-    const auto opened = Open<S>(image, options);
+    const auto opened = OpenVolume<S>(image, options);
 
     const Mft::MftTree tree = Scan(*opened.volume);
 
@@ -211,8 +211,8 @@ void CheckSlackNeverCostsARead() {
   for (const VolumeOptions& options :
        {VolumeOptions{}, VolumeOptions{.include_deleted = true},
         VolumeOptions{.recover_errors = true}, both_flags}) {
-    const auto without = Open<S>(plain, options);
-    const auto with = Open<S>(slack, options);
+    const auto without = OpenVolume<S>(plain, options);
+    const auto with = OpenVolume<S>(slack, options);
     without.counter->Reset();
     with.counter->Reset();
 
@@ -267,8 +267,9 @@ TEST_CASE("carving makes no read the scan would not make", "[record][slack]") {
 
 TEST_CASE("both cache strategies carve the same names", "[record][slack]") {
   const std::vector<BYTE> image = ImageWithTwoOldNames();
-  const auto no_cache = Open<Cache::Strategy::NoCache>(image, both_flags);
-  const auto full_cache = Open<Cache::Strategy::FullCache>(image, both_flags);
+  const auto no_cache = OpenVolume<Cache::Strategy::NoCache>(image, both_flags);
+  const auto full_cache =
+      OpenVolume<Cache::Strategy::FullCache>(image, both_flags);
 
   const auto left = CarveRecord(*no_cache.volume, report_record);
   const auto right = CarveRecord(*full_cache.volume, report_record);
@@ -288,7 +289,7 @@ TEST_CASE("both cache strategies carve the same names", "[record][slack]") {
 TEST_CASE("carved times are converted like the other times of the scan",
           "[record][slack]") {
   const FakeSlackName slack = Old(L"older.txt");
-  const auto opened = Open<Cache::Strategy::NoCache>(
+  const auto opened = OpenVolume<Cache::Strategy::NoCache>(
       ImageWith(report_record, {slack}), both_flags);
 
   const auto carved = CarveRecord(*opened.volume, report_record);
@@ -308,7 +309,7 @@ TEST_CASE("carved times are converted like the other times of the scan",
 }
 
 TEST_CASE("the slack of a freed record is carved", "[record][slack]") {
-  const auto opened = Open<Cache::Strategy::NoCache>(
+  const auto opened = OpenVolume<Cache::Strategy::NoCache>(
       ImageWith(freed_record, {Old(L"before-delete.txt")}), both_flags);
 
   const Mft::MftTree tree = Scan(*opened.volume);
@@ -321,7 +322,7 @@ TEST_CASE("the slack of a freed record is carved", "[record][slack]") {
 }
 
 TEST_CASE("a slack of zeros carves nothing", "[record][slack]") {
-  const auto opened = Open<Cache::Strategy::NoCache>(
+  const auto opened = OpenVolume<Cache::Strategy::NoCache>(
       Tests::BuildFakeNtfsImageWithFreedFileTree(), both_flags);
 
   const Mft::MftTree tree = Scan(*opened.volume);
@@ -340,7 +341,7 @@ TEST_CASE("a slack of random bytes carves nothing", "[record][slack]") {
     }
     Tests::PutRecordSlack(image, docs_record, 8, noise);
     const auto opened =
-        Open<Cache::Strategy::NoCache>(std::move(image), both_flags);
+        OpenVolume<Cache::Strategy::NoCache>(std::move(image), both_flags);
 
     INFO("round " << round);
     CHECK(CarveRecord(*opened.volume, docs_record).empty());
@@ -358,7 +359,7 @@ TEST_CASE("slack up to the last byte of a record is carved",
   Tests::PutRecordSlack(image, report_record,
                         fixup_array - bytes.size() - marker, bytes);
   const auto opened =
-      Open<Cache::Strategy::NoCache>(std::move(image), both_flags);
+      OpenVolume<Cache::Strategy::NoCache>(std::move(image), both_flags);
 
   const auto carved = CarveRecord(*opened.volume, report_record);
 
@@ -371,7 +372,7 @@ TEST_CASE("a forged used size does not move the scan", "[record][slack]") {
     std::vector<BYTE> image = ImageWith(report_record, {Old(L"older.txt")});
     Tests::SetRecordUsedSize(image, report_record, used);
     const auto opened =
-        Open<Cache::Strategy::NoCache>(std::move(image), both_flags);
+        OpenVolume<Cache::Strategy::NoCache>(std::move(image), both_flags);
 
     INFO(used);
     const auto carved = CarveRecord(*opened.volume, report_record);
@@ -393,7 +394,7 @@ TEST_CASE("a record whose attributes never end carves nothing",
   Tests::PutRecordSlack(image, report_record, 8, bytes);
   Tests::PutRecordSlack(image, report_record, 0, broken);
   const auto opened =
-      Open<Cache::Strategy::NoCache>(std::move(image), both_flags);
+      OpenVolume<Cache::Strategy::NoCache>(std::move(image), both_flags);
 
   Io::FileRecord<Cache::Strategy::NoCache> file_record(*opened.volume);
   REQUIRE(file_record.ParseFileRecord(report_record));
@@ -404,7 +405,7 @@ TEST_CASE("a record whose attributes never end carves nothing",
 
 TEST_CASE("nothing is carved before the attributes are parsed",
           "[record][slack]") {
-  const auto opened = Open<Cache::Strategy::NoCache>(
+  const auto opened = OpenVolume<Cache::Strategy::NoCache>(
       ImageWith(report_record, {Old(L"older.txt")}), both_flags);
   Io::FileRecord<Cache::Strategy::NoCache> file_record(*opened.volume);
 
@@ -420,7 +421,7 @@ TEST_CASE("nothing is carved before the attributes are parsed",
 
 TEST_CASE("the live getters answer the same before and after carving",
           "[record][slack]") {
-  const auto opened = Open<Cache::Strategy::NoCache>(
+  const auto opened = OpenVolume<Cache::Strategy::NoCache>(
       ImageWith(report_record, {Old(L"older.txt")}), both_flags);
   Io::FileRecord<Cache::Strategy::NoCache> file_record(*opened.volume);
   REQUIRE(file_record.ParseFileRecord(report_record));

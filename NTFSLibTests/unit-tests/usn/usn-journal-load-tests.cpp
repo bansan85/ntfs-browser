@@ -58,7 +58,7 @@ FakeUsnRecord Ghost() {
 
 template <Cache::Strategy S>
 void CheckAFileLostFromTheMftComesBack() {
-  const auto opened = Support::Open<S>(Support::JournalImage(
+  const auto opened = Support::OpenVolume<S>(Support::JournalImage(
       {.records = {Ghost(), {.name = L"second.txt", .file_record = 41}}}));
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
@@ -88,7 +88,7 @@ void CheckAFileLostFromTheMftComesBack() {
 
 template <Cache::Strategy S>
 void CheckTheResultIsOwnedData() {
-  const auto opened = Support::Open<S>(
+  const auto opened = Support::OpenVolume<S>(
       Support::JournalImage({.records = {Ghost(), {.name = L"two.txt"}}}));
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
   REQUIRE(journal != nullptr);
@@ -114,7 +114,7 @@ void CheckTheResultIsOwnedData() {
 
 template <Cache::Strategy S>
 void CheckAFreedJournalRecordIsStillRead() {
-  const auto opened = Support::Open<S>(
+  const auto opened = Support::OpenVolume<S>(
       Support::JournalImage(
           {.records = {Ghost()}, .journal_record_freed = true}),
       VolumeOptions{.include_deleted = false, .recover_errors = true});
@@ -129,7 +129,7 @@ template <Cache::Strategy S>
 void CheckAnAbsentJournalIsNull(const FakeUsnOptions& options) {
   const auto sink = std::make_shared<AllocSupport::LevelSink>();
   const AllocSupport::ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(Support::JournalImage(options));
+  const auto opened = Support::OpenVolume<S>(Support::JournalImage(options));
 
   CHECK(opened.volume->GetUsnJournal() == nullptr);
 
@@ -144,7 +144,7 @@ void CheckAnAbsentJournalIsNull(const FakeUsnOptions& options) {
 
 template <Cache::Strategy S>
 void CheckAJournalWithNoRecordIsEmpty() {
-  const auto opened = Support::Open<S>(Support::JournalImage({}));
+  const auto opened = Support::OpenVolume<S>(Support::JournalImage({}));
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
 
@@ -206,7 +206,7 @@ void CheckADamagedRunListIsReadAsFarAsItGoes() {
   const auto sink = std::make_shared<AllocSupport::LevelSink>();
   const AllocSupport::ScopedSink scoped(sink);
   // The cut drops the run of the second stretch, which follows a hole.
-  const auto opened = Support::Open<S>(Support::JournalImage(
+  const auto opened = Support::OpenVolume<S>(Support::JournalImage(
       {.records = {Ghost()},
        .more_stretches = {{.hole_bytes = Tests::fake_cluster_size,
                            .records = {{.name = L"far.txt",
@@ -223,7 +223,7 @@ void CheckADamagedRunListIsReadAsFarAsItGoes() {
 
 template <Cache::Strategy S>
 void CheckStrictModeLoadsNothing() {
-  const auto opened = Support::Open<S>(
+  const auto opened = Support::OpenVolume<S>(
       Support::JournalImage({.records = {Ghost()}}), VolumeOptions{});
 
   CHECK(Usn::LoadJournal(*opened.volume) == nullptr);

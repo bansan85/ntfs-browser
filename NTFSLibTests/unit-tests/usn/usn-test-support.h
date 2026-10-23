@@ -103,8 +103,8 @@ struct Opened {
 
 // Opens image with options, over a counting reader.
 template <Cache::Strategy S>
-Opened<S> Open(std::vector<BYTE> image,
-               const VolumeOptions& options = RecoverOptions()) {
+Opened<S> OpenVolume(std::vector<BYTE> image,
+                     const VolumeOptions& options = RecoverOptions()) {
   auto counter = std::make_unique<CountingDiskReader>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   Opened<S> opened;
