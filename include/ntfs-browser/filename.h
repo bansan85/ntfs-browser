@@ -44,11 +44,11 @@ class NTFS_BROWSER_EXPORT Filename {
  private:
   // May be NULL for an IndexEntry
   const Data::Filename* filename_{nullptr};
-  // The decoded file name, filled in by GetFilename() so Compare() and
-  // repeat callers can reuse it without redecoding. Owned, not a view into
-  // the on-disk bytes: those are raw UTF-16 code units (WORD), which is not
-  // what wchar_t is made of once it is wider than 16 bits. mutable:
-  // GetFilename() is const, and is the sole writer.
+  // The decoded file name, filled in once by SetFilename() so GetFilename()
+  // and Compare() never decode it again. Owned, not a view into the on-disk
+  // bytes: those are raw UTF-16 code units (WORD), which is not what wchar_t
+  // is made of once it is wider than 16 bits. mutable: GetFilenameWUC(), which
+  // decodes it, is const.
   mutable std::wstring filename_wuc_;
 
   void GetFilenameWUC() const;

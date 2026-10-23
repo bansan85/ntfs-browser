@@ -36,8 +36,25 @@ void Filename::CopyFilename(const Filename& filename,
   filename_wuc_ = filename.filename_wuc_;
 }
 
-// Decodes the file name and caches it in filename_wuc_, for Compare().
-void Filename::GetFilenameWUC() const { (void)GetFilename(); }
+// Decodes the file name into filename_wuc_, once: GetFilename() and Compare()
+// read it from there.
+void Filename::GetFilenameWUC() const {
+  // filename_->name is raw on-disk UTF-16 (WORD, always 16 bits), not
+  // wchar_t (16 bits on Windows, but wider elsewhere): decode rather than
+  // reinterpret_cast, so a name outside the BMP survives intact everywhere.
+  filename_wuc_ = Utf::Utf16ToWide(std::u16string_view(
+      reinterpret_cast<const char16_t*>(&filename_->name[0]),
+      filename_->name_length));
+
+  // Guarded: this runs once per directory entry, and the UTF-8 conversion
+  // below allocates whether or not anything would print it.
+  if (!filename_wuc_.empty() && Log::IsLogged(Log::Level::Debug)) {
+    Log::Debug("File Name: {}", Utf::WideToUtf8(filename_wuc_));
+    Log::Debug("File Permission: {}\t{}{}{}",
+               IsDirectory() ? "Directory" : "File", IsReadOnly() ? 'R' : ' ',
+               IsHidden() ? 'H' : ' ', IsSystem() ? 'S' : ' ');
+  }
+}
 
 int Filename::Compare(std::wstring_view file_name) const noexcept {
   return Compare(file_name, UpCase::Table::BuiltIn());
@@ -122,30 +139,13 @@ bool Filename::IsSparse() const noexcept {
              : false;
 }
 
-// Returns the decoded file name, or an empty view when there is none.
+// Returns the file name SetFilename() decoded, or an empty view when there is
+// none.
 std::wstring_view Filename::GetFilename() const {
   if (filename_ == nullptr) {
     return {};
   }
-
-  // filename_->name is raw on-disk UTF-16 (WORD, always 16 bits), not
-  // wchar_t (16 bits on Windows, but wider elsewhere): decode rather than
-  // reinterpret_cast, so a name outside the BMP survives intact everywhere.
-  filename_wuc_ = Utf::Utf16ToWide(std::u16string_view(
-      reinterpret_cast<const char16_t*>(&filename_->name[0]),
-      filename_->name_length));
-  const std::wstring_view retval = filename_wuc_;
-
-  // Guarded: this runs once per directory entry, and the UTF-8 conversion
-  // below allocates whether or not anything would print it.
-  if (!retval.empty() && Log::IsLogged(Log::Level::Debug)) {
-    Log::Debug("File Name: {}", Utf::WideToUtf8(retval));
-    Log::Debug("File Permission: {}\t{}{}{}",
-               IsDirectory() ? "Directory" : "File", IsReadOnly() ? 'R' : ' ',
-               IsHidden() ? 'H' : ' ', IsSystem() ? 'S' : ' ');
-  }
-
-  return retval;
+  return filename_wuc_;
 }
 
 bool Filename::HasName() const noexcept { return !filename_wuc_.empty(); }
