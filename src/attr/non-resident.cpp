@@ -76,6 +76,25 @@ constexpr ULONGLONG SpannedClusters(const Data::HeaderNonResident& header) {
   return span == std::numeric_limits<ULONGLONG>::max() ? 0 : span + 1;
 }
 
+// The clusters of one kind found in the runs of a stream, and the LCN of the
+// first run that holds some.
+struct ClusterTally {
+  ULONGLONG clusters{0};
+  std::optional<ULONGLONG> first_lcn;
+
+  // Counts the clusters of a run that starts at lcn. A run with none is left
+  // out.
+  void Add(ULONGLONG run_clusters, ULONGLONG lcn) {
+    if (run_clusters == 0) {
+      return;
+    }
+    clusters += run_clusters;
+    if (!first_lcn) {
+      first_lcn = lcn;
+    }
+  }
+};
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -675,35 +694,23 @@ void AttrNonResident<S>::CheckClusterAllocation() const {
     }
     this->volume_.GetRangeStates(queries);
 
-    ULONGLONG free_clusters = 0;
-    ULONGLONG bad_clusters = 0;
-    std::optional<ULONGLONG> first_free_lcn;
-    std::optional<ULONGLONG> first_bad_lcn;
+    ClusterTally free_found;
+    ClusterTally bad_found;
     for (const Alloc::RangeQuery& query : queries) {
-      if (query.free_clusters != 0) {
-        free_clusters += query.free_clusters;
-        if (!first_free_lcn) {
-          first_free_lcn = query.lcn;
-        }
-      }
-      if (query.bad_clusters != 0) {
-        bad_clusters += query.bad_clusters;
-        if (!first_bad_lcn) {
-          first_bad_lcn = query.lcn;
-        }
-      }
+      free_found.Add(query.free_clusters, query.lcn);
+      bad_found.Add(query.bad_clusters, query.lcn);
     }
-    if (first_free_lcn) {
+    if (free_found.first_lcn) {
       Log::Info(
           "Record {}: {} clusters of a data stream are free in $Bitmap, from "
           "the run at LCN {}",
-          record, free_clusters, *first_free_lcn);
+          record, free_found.clusters, *free_found.first_lcn);
     }
-    if (first_bad_lcn) {
+    if (bad_found.first_lcn) {
       Log::Info(
           "Record {}: {} clusters of a data stream are marked bad in "
           "$BadClus, from the run at LCN {}",
-          record, bad_clusters, *first_bad_lcn);
+          record, bad_found.clusters, *bad_found.first_lcn);
     }
   } catch (const std::exception& e) {
     Log::Exception(e);

@@ -258,6 +258,21 @@ bool ParseTotalSectors(const Data::NtfsBpb& bpb, const Geometry& geometry,
   return true;
 }
 
+// Whether the copy of the first $MFT records, read at geometry.mft_mirr_addr,
+// lies inside the volume.
+bool MirrorInsideVolume(const Data::NtfsBpb& bpb, const Geometry& geometry) {
+  // Only a null total_sectors leaves the volume's size unknown.
+  if (bpb.total_sectors == 0) {
+    return true;
+  }
+  const ULONGLONG copy_bytes =
+      mft_mirror_record_count * ULONGLONG{geometry.file_record_size};
+  const ULONGLONG volume_bytes = VolumeBytes(bpb, geometry);
+  // The subtraction cannot wrap, since the first operand is checked first.
+  return geometry.mft_mirr_addr <= volume_bytes &&
+         copy_bytes <= volume_bytes - geometry.mft_mirr_addr;
+}
+
 // Set mft_mirr_addr from the BPB, and decide whether a copy of the first $MFT
 // records can be read there. Never rejects: an unusable address only leaves
 // mft_mirr_usable false.
@@ -275,25 +290,26 @@ void ParseMftMirrorAddress(const Data::NtfsBpb& bpb, Geometry& geometry) {
   // later, like mft_addr.
   constexpr ULONGLONG max_plausible_addr =
       std::numeric_limits<LONGLONG>::max() / 2;
-  const ULONGLONG copy_bytes =
-      mft_mirror_record_count * ULONGLONG{geometry.file_record_size};
-  const ULONGLONG volume_bytes = VolumeBytes(bpb, geometry);
-  // Only a null total_sectors leaves the volume's size unknown. The
-  // subtraction cannot wrap, since the first operand is checked first.
-  const bool inside_volume =
-      bpb.total_sectors == 0 ||
-      (geometry.mft_mirr_addr <= volume_bytes &&
-       copy_bytes <= volume_bytes - geometry.mft_mirr_addr);
 
   // The mirror MUST sit apart from the boot sector (LCN 0) and from $MFT, and
   // fit in the volume, with an address that stays a plausible LONGLONG.
   geometry.mft_mirr_usable = bpb.lcn_mft_mirr != 0 && !overflows &&
                              geometry.mft_mirr_addr <= max_plausible_addr &&
                              geometry.mft_mirr_addr != geometry.mft_addr &&
-                             inside_volume;
+                             MirrorInsideVolume(bpb, geometry);
   if (!geometry.mft_mirr_usable) {
     Log::Debug("No usable $MFTMirr: records 0 to 3 have no fallback copy");
   }
+}
+
+// Validates and sets the geometry fields in turn. The first failure stops the
+// rest, so later fields are neither set nor logged.
+bool ParseGeometryFields(const Data::NtfsBpb& bpb, Geometry& geometry,
+                         bool recover) {
+  return ParseSectorSize(bpb, geometry) && ParseClusterSize(bpb, geometry) &&
+         ParseFileRecordSize(bpb, geometry) &&
+         ParseIndexBlockSize(bpb, geometry) && ParseMftAddress(bpb, geometry) &&
+         ParseTotalSectors(bpb, geometry, recover);
 }
 
 }  // namespace
@@ -322,14 +338,7 @@ BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
     return parse;
   }
 
-  // Each field is validated and logged in turn. The first failure stops the
-  // rest, so later fields are neither set nor logged.
-  parse.ok = ParseSectorSize(bpb, parse.geometry) &&
-             ParseClusterSize(bpb, parse.geometry) &&
-             ParseFileRecordSize(bpb, parse.geometry) &&
-             ParseIndexBlockSize(bpb, parse.geometry) &&
-             ParseMftAddress(bpb, parse.geometry) &&
-             ParseTotalSectors(bpb, parse.geometry, recover);
+  parse.ok = ParseGeometryFields(bpb, parse.geometry, recover);
   if (parse.ok) {
     ParseMftMirrorAddress(bpb, parse.geometry);
     parse.geometry.cluster_count =

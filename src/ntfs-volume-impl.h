@@ -176,6 +176,8 @@ class NtfsVolume<S>::Impl {
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
   [[nodiscard]] bool UseBackupBootSector();
+  [[nodiscard]] bool TryBackupSectorSize(ULONGLONG volume_bytes,
+                                         WORD sector_size);
   [[nodiscard]] std::optional<Cache::ReadResult<S>> ReadBootSector() const;
   [[nodiscard]] bool ParseVolumeRecord(Io::FileRecord<S>& vol);
   [[nodiscard]] bool AcceptVolumeVersion(const Io::FileRecord<S>& vol);

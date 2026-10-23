@@ -241,6 +241,18 @@ bool Io::FileRecord<S>::Impl::ReadDirectRecord(ULONGLONG file_ref) {
   return volume->ReadInto(fr_addr, record_buffer);
 }
 
+// Parses the header of the record held in record_buffer. Null when the header
+// constructor rejects it, as it does a forged record.
+template <Cache::Strategy S>
+std::unique_ptr<Record::HeaderImpl<S>> Io::FileRecord<S>::Impl::ParseHeader() {
+  try {
+    return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
+  } catch (const std::exception& e) {
+    Log::Exception(e);
+    return {};
+  }
+}
+
 // Reads file record fileRef into record_buffer_ and returns its parsed
 // header. Early records (and any record read before $MFT's own DATA
 // attribute is known) come straight from disk at a fixed offset; later
@@ -282,13 +294,7 @@ std::unique_ptr<Record::HeaderImpl<S>>
     }
   }
 
-  try {
-    return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
-  } catch (const std::exception& e) {
-    // The header constructor rejects a forged record on either path.
-    Log::Exception(e);
-    return {};
-  }
+  return ParseHeader();
 }
 
 // Read File Record, verify and patch the US (update sequence)
@@ -312,13 +318,7 @@ std::unique_ptr<Record::HeaderImpl<S>>
     return {};
   }
 
-  try {
-    return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
-  } catch (const std::exception& e) {
-    // The same header constructor check as on the $MFT path.
-    Log::Exception(e);
-    return {};
-  }
+  return ParseHeader();
 }
 
 // The body of ParseFileRecord(), shared with callers that already hold the

@@ -126,14 +126,25 @@ void SplitReference(ULONGLONG reference, ULONGLONG& record,
   sequence = static_cast<WORD>(reference >> Mft::mft_sequence_shift);
 }
 
-// The name of a V2 or V3 record, or nothing when it is not well-formed: it
-// MUST sit inside the record, after the fixed part, on a 2-byte boundary, with
-// an even length, and be valid UTF-16.
+// Whether a name of name_length bytes at name_offset is placed as a V2 or V3
+// record requires: inside the record, after the fixed part, on a 2-byte
+// boundary, with an even length.
+bool IsNamePlacementValid(size_t window_size, size_t fixed_size,
+                          size_t name_offset, size_t name_length) noexcept {
+  const bool aligned = name_offset % sizeof(char16_t) == 0 &&
+                       name_length % sizeof(char16_t) == 0;
+  // The subtraction cannot wrap: name_offset is checked against the size first.
+  const bool inside =
+      name_offset <= window_size && name_length <= window_size - name_offset;
+  return name_offset >= fixed_size && aligned && inside;
+}
+
+// The name of a V2 or V3 record, or nothing when it is not well-formed: its
+// placement MUST be valid and it MUST be valid UTF-16.
 bool ReadName(std::span<const BYTE> window, size_t fixed_size,
               size_t name_offset, size_t name_length, std::wstring& name) {
-  if (name_offset < fixed_size || name_offset % sizeof(char16_t) != 0 ||
-      name_length % sizeof(char16_t) != 0 || name_offset > window.size() ||
-      name_length > window.size() - name_offset) {
+  if (!IsNamePlacementValid(window.size(), fixed_size, name_offset,
+                            name_length)) {
     return false;
   }
   std::u16string units(name_length / sizeof(char16_t), u'\0');

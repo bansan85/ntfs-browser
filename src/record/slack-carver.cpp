@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -127,17 +128,34 @@ bool IsLowSurrogate(char16_t unit) noexcept {
   return unit >= low_surrogate_first && unit <= low_surrogate_last;
 }
 
+bool IsC0Control(char16_t unit) noexcept {
+  constexpr char16_t first_printable = 0x20;
+  return unit < first_printable;
+}
+
+// DEL and the C1 controls (U+007F to U+009F).
+bool IsDeleteOrC1Control(char16_t unit) noexcept {
+  constexpr char16_t delete_char = 0x7F;
+  constexpr char16_t last_c1_control = 0x9F;
+  return unit >= delete_char && unit <= last_c1_control;
+}
+
+bool IsPathSeparator(char16_t unit) noexcept {
+  return unit == u'/' || unit == u'\\';
+}
+
+// The two noncharacters at the end of the Basic Multilingual Plane.
+bool IsNoncharacter(char16_t unit) noexcept {
+  constexpr char16_t noncharacter_low = 0xFFFE;
+  constexpr char16_t noncharacter_high = 0xFFFF;
+  return unit == noncharacter_low || unit == noncharacter_high;
+}
+
 // Whether a name may hold unit: no control character, no path separator, no
 // noncharacter. A surrogate is judged in pairs, by IsValidName().
 bool IsNameUnit(char16_t unit) noexcept {
-  constexpr char16_t first_printable = 0x20;
-  constexpr char16_t delete_char = 0x7F;
-  constexpr char16_t last_c1_control = 0x9F;
-  constexpr char16_t noncharacter_low = 0xFFFE;
-  constexpr char16_t noncharacter_high = 0xFFFF;
-  return unit >= first_printable && unit != delete_char &&
-         !(unit > delete_char && unit <= last_c1_control) && unit != u'/' &&
-         unit != u'\\' && unit != noncharacter_low && unit != noncharacter_high;
+  return !IsC0Control(unit) && !IsDeleteOrC1Control(unit) &&
+         !IsPathSeparator(unit) && !IsNoncharacter(unit);
 }
 
 bool IsPlainTextUnit(char16_t unit) noexcept {
@@ -283,9 +301,11 @@ std::optional<Found> ProbeAt(std::span<const BYTE> record, size_t length_at,
   return found;
 }
 
-bool SameTime(const FILETIME& left, const FILETIME& right) noexcept {
-  return left.dwLowDateTime == right.dwLowDateTime &&
-         left.dwHighDateTime == right.dwHighDateTime;
+// FILETIME has no operator==, so the comparison of two names goes through the
+// 64-bit value.
+ULONGLONG Ticks(const FILETIME& time) noexcept {
+  return (static_cast<ULONGLONG>(time.dwHighDateTime) << dword_bits) |
+         time.dwLowDateTime;
 }
 
 // The scan both public entry points share. It steps from scan_begin, rounded
@@ -314,15 +334,16 @@ std::vector<CarvedName> CarveFrom(std::span<const BYTE> bytes,
 }  // namespace
 
 bool SameCarvedName(const CarvedName& left, const CarvedName& right) noexcept {
-  return left.name == right.name && left.parent_record == right.parent_record &&
-         left.parent_sequence == right.parent_sequence &&
-         left.parent_known == right.parent_known &&
-         left.times_known == right.times_known &&
-         left.name_space == right.name_space && left.partial == right.partial &&
-         SameTime(left.create_time, right.create_time) &&
-         SameTime(left.write_time, right.write_time) &&
-         SameTime(left.change_time, right.change_time) &&
-         SameTime(left.access_time, right.access_time);
+  return std::forward_as_tuple(
+             left.name, left.parent_record, left.parent_sequence,
+             left.parent_known, left.times_known, left.name_space, left.partial,
+             Ticks(left.create_time), Ticks(left.write_time),
+             Ticks(left.change_time), Ticks(left.access_time)) ==
+         std::forward_as_tuple(
+             right.name, right.parent_record, right.parent_sequence,
+             right.parent_known, right.times_known, right.name_space,
+             right.partial, Ticks(right.create_time), Ticks(right.write_time),
+             Ticks(right.change_time), Ticks(right.access_time));
 }
 
 std::vector<CarvedName> CarveFileNames(std::span<const BYTE> record,

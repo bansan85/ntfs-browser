@@ -437,6 +437,9 @@ class MftTree::Impl {
   void Scan(const NtfsVolume<S>& volume,
             const Mft::MftTree::ScanOptions& options);
   void Link();
+  template <Cache::Strategy S>
+  void ApplyJournalIfComplete(const NtfsVolume<S>& volume);
+  void LogScanSummary(bool annotated) const;
   // Gives each entry the journal names its UsnInfo, and, with include_deleted,
   // lists the files it names that no entry accounts for.
   void ApplyJournal(const Usn::Journal& journal, bool include_deleted);
@@ -546,11 +549,19 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
     options.progress(total, total);
   }
 
+  LogScanSummary(annotate);
+  Link();
+  ApplyJournalIfComplete(volume);
+}
+
+// Logs the counters of the scan. The data state counters only mean something
+// when the scan annotated the entries.
+void Mft::MftTree::Impl::LogScanSummary(bool annotated) const {
   Log::Info(
       "MFT scan: {} slots, {} in use, {} deleted, {} unreadable, {} skipped",
       stats.slots, stats.in_use, stats.deleted, stats.unreadable,
       stats.skipped);
-  if (annotate) {
+  if (annotated) {
     Log::Info("MFT scan data: {} intact, {} reallocated, {} unknown, {} bad",
               stats.data_intact, stats.data_reallocated, stats.data_unknown,
               stats.data_bad);
@@ -558,19 +569,26 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   if (stats.carved_names != 0) {
     Log::Info("MFT scan slack: {} names carved", stats.carved_names);
   }
-  Link();
+}
 
+// Annotates the linked entries from the volume's change journal, when
+// recovering and when the scan ran to its end.
+template <Cache::Strategy S>
+void Mft::MftTree::Impl::ApplyJournalIfComplete(const NtfsVolume<S>& volume) {
   // A scan that progress() stopped holds only some records: a file would look
   // lost to the journal that is merely not read yet.
-  if (volume.GetOptions().recover_errors && stats.complete) {
-    if (const Usn::Journal* journal = volume.GetUsnJournal()) {
-      ApplyJournal(*journal, volume.GetOptions().include_deleted);
-      Log::Info(
-          "MFT scan journal: {} records, {} entries annotated, {} only in the "
-          "journal",
-          stats.usn_records, stats.usn_annotated, stats.usn_journal_only);
-    }
+  if (!volume.GetOptions().recover_errors || !stats.complete) {
+    return;
   }
+  const Usn::Journal* journal = volume.GetUsnJournal();
+  if (journal == nullptr) {
+    return;
+  }
+  ApplyJournal(*journal, volume.GetOptions().include_deleted);
+  Log::Info(
+      "MFT scan journal: {} records, {} entries annotated, {} only in the "
+      "journal",
+      stats.usn_records, stats.usn_annotated, stats.usn_journal_only);
 }
 
 // Validates every name's parent reference, files each record under the

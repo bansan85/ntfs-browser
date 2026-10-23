@@ -140,6 +140,8 @@ class FileRecord<S>::Impl {
   // empty to read them. See ParseRecord().
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref, std::span<const BYTE> preread);
+  // The header of record_buffer, see ReadFileRecord() and ReadMirrorRecord().
+  [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>> ParseHeader();
   // Reads the $MFTMirr copy of file_ref into record_buffer. Null when there is
   // no copy to read, or it has no usable header.
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
