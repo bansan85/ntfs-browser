@@ -243,6 +243,14 @@ ULONGLONG ReadRangeEnd(const std::vector<BYTE>& bitmap, ULONGLONG first,
   return last_used + 1;
 }
 
+// Whether the scan goes on at record. Every progress_interval records, the
+// caller follows along through options.progress and may stop the scan.
+bool ProgressAllowsRecord(const Mft::MftTree::ScanOptions& options,
+                          ULONGLONG record, ULONGLONG total) {
+  return !options.progress || record % progress_interval != 0 ||
+         options.progress(record, total);
+}
+
 // Classifies one record slot and, when it is an entry to keep, reads it.
 // Counts the outcome in stats. Returns nullopt for a slot that is not kept:
 // unreadable, an extension, a freed record not asked for, or a damaged one
@@ -514,9 +522,7 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   ULONGLONG range_end = 0;
 
   for (ULONGLONG record = 0; record < total; record++) {
-    // Every progress_interval records, the caller follows along or stops.
-    if (options.progress && record % progress_interval == 0 &&
-        !options.progress(record, total)) {
+    if (!ProgressAllowsRecord(options, record, total)) {
       stats.complete = false;
       break;
     }
