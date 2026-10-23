@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstddef>
-#include <memory>
 #include <random>
 #include <span>
 #include <string>
@@ -19,10 +18,10 @@
 #include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "alloc-test-support.h"
 #include "catch2/catch_message.hpp"
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -36,8 +35,10 @@ namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using Support::Open;
 using Tests::FakeSlackName;
 
 namespace {
@@ -51,25 +52,6 @@ constexpr ULONGLONG freed_record = Tests::mft_tree_deleted_file_idx;
 constexpr size_t slack_room = 280;
 
 const VolumeOptions both_flags{.include_deleted = true, .recover_errors = true};
-
-// A volume over image, whose reader counts every call.
-template <Cache::Strategy S>
-struct Opened {
-  std::unique_ptr<NtfsVolume<S>> volume;
-  // Owned by volume.
-  Tests::CountingDiskReader* counter{nullptr};
-};
-
-template <Cache::Strategy S>
-Opened<S> Open(std::vector<BYTE> image, const VolumeOptions& options) {
-  auto counter = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)));
-  Opened<S> opened;
-  opened.counter = counter.get();
-  opened.volume = std::make_unique<NtfsVolume<S>>(std::move(counter), options);
-  REQUIRE(opened.volume->IsVolumeOK());
-  return opened;
-}
 
 // The fixture with names written into the slack of a record.
 std::vector<BYTE> ImageWith(ULONGLONG record,
@@ -90,6 +72,11 @@ FakeSlackName Old(std::wstring name, ULONGLONG parent = docs_record) {
                        .with_entry_header = true};
 }
 
+// The fixture with two old names of the live file in its slack.
+std::vector<BYTE> ImageWithTwoOldNames() {
+  return ImageWith(report_record, {Old(L"older.txt"), Old(L"oldest.txt")});
+}
+
 // What a file record gives for one record number, with the names it carved.
 template <Cache::Strategy S>
 std::vector<Record::CarvedName> CarveRecord(const NtfsVolume<S>& volume,
@@ -107,9 +94,7 @@ Mft::MftTree Scan(const NtfsVolume<S>& volume) {
 
 template <Cache::Strategy S>
 void CheckNamesAreCarvedByTheScan() {
-  const auto opened =
-      Open<S>(ImageWith(report_record, {Old(L"older.txt"), Old(L"oldest.txt")}),
-              both_flags);
+  const auto opened = Open<S>(ImageWithTwoOldNames(), both_flags);
 
   const Mft::MftTree tree = Scan(*opened.volume);
 
@@ -134,9 +119,7 @@ template <Cache::Strategy S>
 void CheckLiveFieldsAreUntouched() {
   const std::vector<BYTE> plain = Tests::BuildFakeNtfsImageWithFreedFileTree();
   const auto without = Open<S>(plain, both_flags);
-  const auto with =
-      Open<S>(ImageWith(report_record, {Old(L"older.txt"), Old(L"oldest.txt")}),
-              both_flags);
+  const auto with = Open<S>(ImageWithTwoOldNames(), both_flags);
 
   const Mft::MftTree left = Scan(*without.volume);
   const Mft::MftTree right = Scan(*with.volume);
@@ -224,8 +207,7 @@ void CheckNoFlagCombinationButBothCarves() {
 template <Cache::Strategy S>
 void CheckSlackNeverCostsARead() {
   const std::vector<BYTE> plain = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  const std::vector<BYTE> slack =
-      ImageWith(report_record, {Old(L"older.txt"), Old(L"oldest.txt")});
+  const std::vector<BYTE> slack = ImageWithTwoOldNames();
   for (const VolumeOptions& options :
        {VolumeOptions{}, VolumeOptions{.include_deleted = true},
         VolumeOptions{.recover_errors = true}, both_flags}) {
@@ -284,8 +266,7 @@ TEST_CASE("carving makes no read the scan would not make", "[record][slack]") {
 }
 
 TEST_CASE("both cache strategies carve the same names", "[record][slack]") {
-  const std::vector<BYTE> image =
-      ImageWith(report_record, {Old(L"older.txt"), Old(L"oldest.txt")});
+  const std::vector<BYTE> image = ImageWithTwoOldNames();
   const auto no_cache = Open<Cache::Strategy::NoCache>(image, both_flags);
   const auto full_cache = Open<Cache::Strategy::FullCache>(image, both_flags);
 
