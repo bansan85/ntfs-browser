@@ -94,8 +94,12 @@ std::uint64_t ParseTimestamp(const std::string& text) {
                                  &day, &year, &hour, &minute, &second);
   INFO("time stamp: " << text);
   REQUIRE(parsed == 6);
-  return UtcTicks(year, static_cast<unsigned>(month), day, hour, minute,
-                  second) /
+  return UtcTicks({.year = year,
+                   .month = static_cast<unsigned>(month),
+                   .day = day,
+                   .hour = hour,
+                   .minute = minute,
+                   .second = second}) /
          ticks_per_second;
 }
 

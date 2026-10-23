@@ -215,23 +215,34 @@ std::set<ULONGLONG> RecordsWithEmptySlack(const std::vector<BYTE>& bytes,
   return empty;
 }
 
-// A creation time the documentation of dfir_ntfs gives, in UTC.
-std::uint64_t Created(int year, unsigned month, unsigned day, unsigned hour,
-                      unsigned minute, unsigned second, unsigned microsecond) {
-  return UtcTicks(year, month, day, hour, minute, second, microsecond);
-}
-
 }  // namespace
 
 TEST_CASE("slack.mft: record 39 gives its three old directory entries",
           "[corpus][slack][external-mft]") {
   const std::vector<Expected> expected = {
       Complete(L"New Text Document - Copy (3).txt",
-               Created(2019, 2, 18, 14, 11, 58, 61887)),
+               UtcTicks({.year = 2019,
+                         .month = 2,
+                         .day = 18,
+                         .hour = 14,
+                         .minute = 11,
+                         .second = 58,
+                         .microsecond = 61887})),
       Complete(L"New Text Document - Copy.txt",
-               Created(2019, 2, 18, 14, 11, 58, 46259)),
-      Complete(L"New Text Document.txt",
-               Created(2019, 2, 18, 14, 11, 54, 984000))};
+               UtcTicks({.year = 2019,
+                         .month = 2,
+                         .day = 18,
+                         .hour = 14,
+                         .minute = 11,
+                         .second = 58,
+                         .microsecond = 46259})),
+      Complete(L"New Text Document.txt", UtcTicks({.year = 2019,
+                                                   .month = 2,
+                                                   .day = 18,
+                                                   .hour = 14,
+                                                   .minute = 11,
+                                                   .second = 54,
+                                                   .microsecond = 984000}))};
   CheckSlackFixture<Cache::Strategy::NoCache>("slack.mft", "test_folder",
                                               expected);
   CheckSlackFixture<Cache::Strategy::FullCache>("slack.mft", "test_folder",
@@ -244,7 +255,13 @@ TEST_CASE("slack-2.mft: two old names, one of them without its times",
   // attributes. The two identical copies of t3.txt are one candidate.
   const std::vector<Expected> expected = {
       {L"t2.txt", true, false, 0},
-      Complete(L"t3.txt", Created(2020, 9, 17, 15, 34, 29, 193751))};
+      Complete(L"t3.txt", UtcTicks({.year = 2020,
+                                    .month = 9,
+                                    .day = 17,
+                                    .hour = 15,
+                                    .minute = 34,
+                                    .second = 29,
+                                    .microsecond = 193751}))};
   CheckSlackFixture<Cache::Strategy::NoCache>("slack-2.mft", "test", expected);
   CheckSlackFixture<Cache::Strategy::FullCache>("slack-2.mft", "test",
                                                 expected);
@@ -254,7 +271,13 @@ TEST_CASE("slack-3.mft: a name whose parent reference was overwritten",
           "[corpus][slack][external-mft]") {
   const std::vector<Expected> expected = {
       {L"t3.txt", true, false,
-       Micros(Created(2020, 9, 17, 15, 34, 29, 193751))}};
+       Micros(UtcTicks({.year = 2020,
+                        .month = 9,
+                        .day = 17,
+                        .hour = 15,
+                        .minute = 34,
+                        .second = 29,
+                        .microsecond = 193751}))}};
   CheckSlackFixture<Cache::Strategy::NoCache>("slack-3.mft", "test", expected);
   CheckSlackFixture<Cache::Strategy::FullCache>("slack-3.mft", "test",
                                                 expected);

@@ -75,10 +75,19 @@ class TempFile {
 // Same, in 100 ns ticks.
 [[nodiscard]] std::uint64_t EntryUtcTicks(const FILETIME& local_time);
 
-// Ticks since 1601-01-01 UTC of a calendar instant, with microseconds.
-[[nodiscard]] std::uint64_t UtcTicks(int year, unsigned month, unsigned day,
-                                     unsigned hour, unsigned minute,
-                                     unsigned second, unsigned microsecond = 0);
+// A calendar instant in UTC. Fields left out are zero.
+struct CivilTime {
+  int year;
+  unsigned month;
+  unsigned day;
+  unsigned hour{0};
+  unsigned minute{0};
+  unsigned second{0};
+  unsigned microsecond{0};
+};
+
+// Ticks since 1601-01-01 UTC of a calendar instant.
+[[nodiscard]] std::uint64_t UtcTicks(const CivilTime& time);
 
 // One line of a Sleuth Kit `fls -r -p -l` listing, as the dfir_ntfs oracles
 // hold them.

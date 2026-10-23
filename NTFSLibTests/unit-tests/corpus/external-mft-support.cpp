@@ -244,13 +244,13 @@ std::uint64_t EntryUtcSeconds(const FILETIME& local_time) {
   return EntryUtcTicks(local_time) / ticks_per_second;
 }
 
-std::uint64_t UtcTicks(int year, unsigned month, unsigned day, unsigned hour,
-                       unsigned minute, unsigned second, unsigned microsecond) {
-  const std::int64_t days = DaysFromCivil(year, month, day) + days_1601_to_1970;
+std::uint64_t UtcTicks(const CivilTime& time) {
+  const std::int64_t days =
+      DaysFromCivil(time.year, time.month, time.day) + days_1601_to_1970;
   const std::uint64_t seconds = gsl::narrow<std::uint64_t>(
-      days * static_cast<std::int64_t>(seconds_per_day) + hour * 3600 +
-      minute * 60 + second);
-  return seconds * ticks_per_second + microsecond * ticks_per_microsecond;
+      days * static_cast<std::int64_t>(seconds_per_day) + time.hour * 3600 +
+      time.minute * 60 + time.second);
+  return seconds * ticks_per_second + time.microsecond * ticks_per_microsecond;
 }
 
 std::vector<FlsLine> ParseFlsListing(const std::filesystem::path& file) {

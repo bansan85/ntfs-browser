@@ -51,6 +51,7 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+using NTFS_BROWSER_NAMESPACE::Tests::CivilTime;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
 using NTFS_BROWSER_NAMESPACE::Tests::EntryUtcSeconds;
@@ -165,12 +166,9 @@ std::uint64_t EntryUtcMicros(const FILETIME& local_time) {
   return EntryUtcTicks(local_time) / ticks_per_microsecond;
 }
 
-std::uint64_t UtcMicros(int year, unsigned month, unsigned day, unsigned hour,
-                        unsigned minute, unsigned second,
-                        unsigned microsecond) {
+std::uint64_t UtcMicros(const CivilTime& time) {
   constexpr std::uint64_t ticks_per_microsecond = 10;
-  return UtcTicks(year, month, day, hour, minute, second, microsecond) /
-         ticks_per_microsecond;
+  return UtcTicks(time) / ticks_per_microsecond;
 }
 
 // Names the first field two entries disagree on. Empty when they are equal.
@@ -506,20 +504,50 @@ void CheckFixtureFacts(const MftFixture& fixture,
     const Mft::MftTree::Entry* root = recovering.tree.Find(5);
     REQUIRE(root != nullptr);
     CHECK(EntryUtcMicros(root->create_time) ==
-          UtcMicros(2010, 11, 10, 17, 38, 1, 62500));
+          UtcMicros({.year = 2010,
+                     .month = 11,
+                     .day = 10,
+                     .hour = 17,
+                     .minute = 38,
+                     .second = 1,
+                     .microsecond = 62500}));
     CHECK(EntryUtcMicros(root->write_time) ==
-          UtcMicros(2012, 4, 6, 17, 27, 41, 610682));
+          UtcMicros({.year = 2012,
+                     .month = 4,
+                     .day = 6,
+                     .hour = 17,
+                     .minute = 27,
+                     .second = 41,
+                     .microsecond = 610682}));
     CHECK(EntryUtcMicros(root->access_time) ==
-          UtcMicros(2012, 4, 7, 2, 33, 13, 583147));
+          UtcMicros({.year = 2012,
+                     .month = 4,
+                     .day = 7,
+                     .hour = 2,
+                     .minute = 33,
+                     .second = 13,
+                     .microsecond = 583147}));
 
     const Mft::MftTree::Entry* log = recovering.tree.Find(329);
     REQUIRE(log != nullptr);
     CHECK(recovering.tree.GetPath(329) ==
           L"\\Documents and Settings\\RSydow\\Local Settings\\Temp\\vmmsi.log");
     CHECK(EntryUtcMicros(log->create_time) ==
-          UtcMicros(2011, 7, 6, 1, 4, 45, 406250));
+          UtcMicros({.year = 2011,
+                     .month = 7,
+                     .day = 6,
+                     .hour = 1,
+                     .minute = 4,
+                     .second = 45,
+                     .microsecond = 406250}));
     CHECK(EntryUtcMicros(log->write_time) ==
-          UtcMicros(2011, 7, 5, 18, 6, 7, 722625));
+          UtcMicros({.year = 2011,
+                     .month = 7,
+                     .day = 5,
+                     .hour = 18,
+                     .minute = 6,
+                     .second = 7,
+                     .microsecond = 722625}));
 
     CHECK(recovering.tree.GetPath(40000) ==
           L"\\WINDOWS\\$NtServicePackUninstall$\\reg00099");

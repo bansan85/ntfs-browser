@@ -15,11 +15,13 @@
 
 #include "fake-ntfs-image.h"
 #include "fuzz-input-writer.h"
+#include "usn-journal-record.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Tests::FakeUsnOptions;
 using Tests::FakeUsnRecord;
+using Tests::UsnSupport::MakeRecord;
 
 namespace {
 
@@ -37,9 +39,8 @@ constexpr DWORD reason_rename_old = 0x00001000;
 constexpr DWORD reason_rename_new = 0x00002000;
 constexpr DWORD reason_close = 0x80000000;
 
-// FILE_ATTRIBUTE_DIRECTORY and FILE_ATTRIBUTE_ARCHIVE.
+// FILE_ATTRIBUTE_DIRECTORY.
 constexpr DWORD attribute_directory = 0x10;
-constexpr DWORD attribute_archive = 0x20;
 
 // A record number the fixture has no record for, and the first of the numbers
 // the journal-only files use.
@@ -54,52 +55,79 @@ constexpr ULONGLONG time_a = 0x01D87F3C00000100ULL;
 constexpr ULONGLONG time_b = 0x01D87F3C00000200ULL;
 constexpr ULONGLONG time_c = 0x01D87F3C00000300ULL;
 
-// A V2 record of a file named by record and sequence, filed under parent.
-FakeUsnRecord Rec(std::wstring name, ULONGLONG record, WORD sequence,
-                  DWORD reason, ULONGLONG time,
-                  ULONGLONG parent = Tests::mft_tree_docs_idx,
-                  WORD parent_sequence = 1) {
-  return FakeUsnRecord{.name = std::move(name),
-                       .file_record = record,
-                       .file_sequence = sequence,
-                       .parent_record = parent,
-                       .parent_sequence = parent_sequence,
-                       .time = time,
-                       .reason = reason,
-                       .file_attributes = attribute_archive};
-}
-
 // Records that name files the tree has: a live one touched three times, a
 // freed one that was deleted, a rename chain of a file no record holds, the
 // sequence rules, and a reference with a high half.
 FakeUsnOptions Annotated() {
-  FakeUsnRecord wide = Rec(L"wide", Tests::mft_tree_report_idx, report_sequence,
-                           reason_file_create, time_a);
+  FakeUsnRecord wide = MakeRecord({.name = L"wide",
+                                   .record = Tests::mft_tree_report_idx,
+                                   .sequence = report_sequence,
+                                   .reason = reason_file_create,
+                                   .time = time_a});
   wide.major_version = 3;
   wide.file_reference_high = 1;
-  return {.records = {
-              Rec(L"report.txt", Tests::mft_tree_report_idx, report_sequence,
-                  reason_file_create, time_a),
-              Rec(L"report.txt", Tests::mft_tree_report_idx, report_sequence,
-                  reason_data_overwrite, time_b),
-              Rec(L"report.txt", Tests::mft_tree_report_idx, report_sequence,
-                  reason_data_overwrite | reason_close, time_b),
-              Rec(L"old.tmp", Tests::mft_tree_deleted_file_idx, 1,
-                  reason_file_create, time_a),
-              Rec(L"old.tmp", Tests::mft_tree_deleted_file_idx, 1,
-                  reason_file_delete | reason_close, time_c),
-              Rec(L"a.txt", ghost_record, 2, reason_file_create, time_a),
-              Rec(L"a.txt", ghost_record, 2, reason_rename_old, time_b),
-              Rec(L"b.txt", ghost_record, 2, reason_rename_new, time_b),
-              Rec(L"c.txt", ghost_record, 2, reason_rename_new | reason_close,
-                  time_c),
-              Rec(L"zero", Tests::mft_tree_hard_link_idx, 0, reason_file_create,
-                  time_a),
-              Rec(L"older", Tests::mft_tree_report_idx, report_sequence - 1,
-                  reason_file_create, time_b),
-              Rec(L"newer", Tests::mft_tree_report_idx, report_sequence + 1,
-                  reason_file_create, time_c),
-              wide}};
+  return {
+      .records = {MakeRecord({.name = L"report.txt",
+                              .record = Tests::mft_tree_report_idx,
+                              .sequence = report_sequence,
+                              .reason = reason_file_create,
+                              .time = time_a}),
+                  MakeRecord({.name = L"report.txt",
+                              .record = Tests::mft_tree_report_idx,
+                              .sequence = report_sequence,
+                              .reason = reason_data_overwrite,
+                              .time = time_b}),
+                  MakeRecord({.name = L"report.txt",
+                              .record = Tests::mft_tree_report_idx,
+                              .sequence = report_sequence,
+                              .reason = reason_data_overwrite | reason_close,
+                              .time = time_b}),
+                  MakeRecord({.name = L"old.tmp",
+                              .record = Tests::mft_tree_deleted_file_idx,
+                              .sequence = 1,
+                              .reason = reason_file_create,
+                              .time = time_a}),
+                  MakeRecord({.name = L"old.tmp",
+                              .record = Tests::mft_tree_deleted_file_idx,
+                              .sequence = 1,
+                              .reason = reason_file_delete | reason_close,
+                              .time = time_c}),
+                  MakeRecord({.name = L"a.txt",
+                              .record = ghost_record,
+                              .sequence = 2,
+                              .reason = reason_file_create,
+                              .time = time_a}),
+                  MakeRecord({.name = L"a.txt",
+                              .record = ghost_record,
+                              .sequence = 2,
+                              .reason = reason_rename_old,
+                              .time = time_b}),
+                  MakeRecord({.name = L"b.txt",
+                              .record = ghost_record,
+                              .sequence = 2,
+                              .reason = reason_rename_new,
+                              .time = time_b}),
+                  MakeRecord({.name = L"c.txt",
+                              .record = ghost_record,
+                              .sequence = 2,
+                              .reason = reason_rename_new | reason_close,
+                              .time = time_c}),
+                  MakeRecord({.name = L"zero",
+                              .record = Tests::mft_tree_hard_link_idx,
+                              .sequence = 0,
+                              .reason = reason_file_create,
+                              .time = time_a}),
+                  MakeRecord({.name = L"older",
+                              .record = Tests::mft_tree_report_idx,
+                              .sequence = report_sequence - 1,
+                              .reason = reason_file_create,
+                              .time = time_b}),
+                  MakeRecord({.name = L"newer",
+                              .record = Tests::mft_tree_report_idx,
+                              .sequence = report_sequence + 1,
+                              .reason = reason_file_create,
+                              .time = time_c}),
+                  wide}};
 }
 
 // Files only the journal names, each under another kind of parent: a live
@@ -107,27 +135,60 @@ FakeUsnOptions Annotated() {
 // plain file. One of them is a directory itself.
 FakeUsnOptions JournalOnlyPaths() {
   const ULONGLONG first = first_journal_only_record;
-  FakeUsnRecord folder =
-      Rec(L"folder", first + 4, 1, reason_file_create, time_a);
+  FakeUsnRecord folder = MakeRecord({.name = L"folder",
+                                     .record = first + 4,
+                                     .sequence = 1,
+                                     .reason = reason_file_create,
+                                     .time = time_a});
   folder.file_attributes = attribute_directory;
-  return {
-      .records = {
-          Rec(L"in-docs.bin", first, 1, reason_file_create, time_a),
-          Rec(L"in-root.bin", first + 1, 1, reason_file_create, time_a, 5, 5),
-          Rec(L"in-lost.bin", first + 2, 1, reason_file_create, time_a, 99, 1),
-          Rec(L"in-old-dir.bin", first + 3, 1, reason_file_create, time_a,
-              Tests::mft_tree_deleted_dir_idx, 3),
-          Rec(L"in-file.bin", first + 5, 1, reason_file_create, time_a,
-              Tests::mft_tree_report_idx, report_sequence),
-          std::move(folder)}};
+  return {.records = {MakeRecord({.name = L"in-docs.bin",
+                                  .record = first,
+                                  .sequence = 1,
+                                  .reason = reason_file_create,
+                                  .time = time_a}),
+                      MakeRecord({.name = L"in-root.bin",
+                                  .record = first + 1,
+                                  .sequence = 1,
+                                  .reason = reason_file_create,
+                                  .time = time_a,
+                                  .parent = 5,
+                                  .parent_sequence = 5}),
+                      MakeRecord({.name = L"in-lost.bin",
+                                  .record = first + 2,
+                                  .sequence = 1,
+                                  .reason = reason_file_create,
+                                  .time = time_a,
+                                  .parent = 99,
+                                  .parent_sequence = 1}),
+                      MakeRecord({.name = L"in-old-dir.bin",
+                                  .record = first + 3,
+                                  .sequence = 1,
+                                  .reason = reason_file_create,
+                                  .time = time_a,
+                                  .parent = Tests::mft_tree_deleted_dir_idx,
+                                  .parent_sequence = 3}),
+                      MakeRecord({.name = L"in-file.bin",
+                                  .record = first + 5,
+                                  .sequence = 1,
+                                  .reason = reason_file_create,
+                                  .time = time_a,
+                                  .parent = Tests::mft_tree_report_idx,
+                                  .parent_sequence = report_sequence}),
+                      std::move(folder)}};
 }
 
 // A short journal, for the variants that break the way to it.
 FakeUsnOptions ShortJournal() {
-  return {.records = {Rec(L"report.txt", Tests::mft_tree_report_idx,
-                          report_sequence, reason_file_create, time_a),
-                      Rec(L"ghost.bin", ghost_record, 2,
-                          reason_file_delete | reason_close, time_c)}};
+  return {.records = {MakeRecord({.name = L"report.txt",
+                                  .record = Tests::mft_tree_report_idx,
+                                  .sequence = report_sequence,
+                                  .reason = reason_file_create,
+                                  .time = time_a}),
+                      MakeRecord({.name = L"ghost.bin",
+                                  .record = ghost_record,
+                                  .sequence = 2,
+                                  .reason = reason_file_delete | reason_close,
+                                  .time = time_c})}};
 }
 
 // The inputs, one per way a journal meets the tree.
@@ -152,8 +213,11 @@ std::vector<Variant> Variants() {
   FakeUsnOptions cut = ShortJournal();
   cut.more_stretches.push_back(
       {.hole_bytes = Tests::fake_cluster_size,
-       .records = {Rec(L"later.txt", ghost_record + 1, 1, reason_file_create,
-                       time_b)}});
+       .records = {MakeRecord({.name = L"later.txt",
+                               .record = ghost_record + 1,
+                               .sequence = 1,
+                               .reason = reason_file_create,
+                               .time = time_b})}});
   cut.cut_run_list = true;
   variants.push_back({"usn_loader_cut_run_list", std::move(cut)});
   return variants;
@@ -180,10 +244,24 @@ std::vector<BYTE> ScannerStream() {
     }
     stream.insert(stream.end(), bytes.begin(), bytes.end());
   };
-  append(Rec(L"high0", 100, 1, reason_file_create, time_a),
+  append(MakeRecord({.name = L"high0",
+                     .record = 100,
+                     .sequence = 1,
+                     .reason = reason_file_create,
+                     .time = time_a}),
          lone_high_surrogate);
-  append(Rec(L"low00", 101, 1, reason_file_create, time_a), lone_low_surrogate);
-  append(Rec(L"fine0", 102, 1, reason_file_create, time_a), 0);
+  append(MakeRecord({.name = L"low00",
+                     .record = 101,
+                     .sequence = 1,
+                     .reason = reason_file_create,
+                     .time = time_a}),
+         lone_low_surrogate);
+  append(MakeRecord({.name = L"fine0",
+                     .record = 102,
+                     .sequence = 1,
+                     .reason = reason_file_create,
+                     .time = time_a}),
+         0);
   stream.insert(stream.end(), stray_bytes, stray);
   return stream;
 }

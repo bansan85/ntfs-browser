@@ -16,6 +16,7 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
+#include "usn-journal-record.h"
 #include "usn-test-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
@@ -23,6 +24,7 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using Support::MakeRecord;
 using Tests::FakeUsnOptions;
 using Tests::FakeUsnRecord;
 
@@ -36,9 +38,8 @@ constexpr DWORD reason_rename_old = 0x00001000;
 constexpr DWORD reason_rename_new = 0x00002000;
 constexpr DWORD reason_close = 0x80000000;
 
-// FILE_ATTRIBUTE_DIRECTORY and FILE_ATTRIBUTE_ARCHIVE.
+// FILE_ATTRIBUTE_DIRECTORY.
 constexpr DWORD attribute_directory = 0x10;
-constexpr DWORD attribute_archive = 0x20;
 
 // Record numbers of the fixture: report.txt is live, old.tmp is freed, and no
 // record names the ghost.
@@ -52,20 +53,6 @@ constexpr ULONGLONG ghost_record = 40;
 constexpr ULONGLONG time_a = 0x01D87F3C00000100ULL;
 constexpr ULONGLONG time_b = 0x01D87F3C00000200ULL;
 constexpr ULONGLONG time_c = 0x01D87F3C00000300ULL;
-
-FakeUsnRecord Rec(std::wstring name, ULONGLONG record, WORD sequence,
-                  DWORD reason, ULONGLONG time,
-                  ULONGLONG parent = Tests::mft_tree_docs_idx,
-                  WORD parent_sequence = 1) {
-  return FakeUsnRecord{.name = std::move(name),
-                       .file_record = record,
-                       .file_sequence = sequence,
-                       .parent_record = parent,
-                       .parent_sequence = parent_sequence,
-                       .time = time,
-                       .reason = reason,
-                       .file_attributes = attribute_archive};
-}
 
 // The tree of a scan over the fixture with the journal in options.
 template <Cache::Strategy S>
@@ -95,12 +82,21 @@ const Mft::MftTree::JournalOnlyEntry*
 
 // A journal that touches a live file, a freed one, and one no record names.
 FakeUsnOptions MixedJournal() {
-  return {.records = {Rec(L"report.txt", report_record, report_sequence,
-                          reason_file_create, time_a),
-                      Rec(L"old.tmp", deleted_record, 1,
-                          reason_file_delete | reason_close, time_b),
-                      Rec(L"ghost.bin", ghost_record, 2,
-                          reason_file_delete | reason_close, time_c)}};
+  return {.records = {MakeRecord({.name = L"report.txt",
+                                  .record = report_record,
+                                  .sequence = report_sequence,
+                                  .reason = reason_file_create,
+                                  .time = time_a}),
+                      MakeRecord({.name = L"old.tmp",
+                                  .record = deleted_record,
+                                  .sequence = 1,
+                                  .reason = reason_file_delete | reason_close,
+                                  .time = time_b}),
+                      MakeRecord({.name = L"ghost.bin",
+                                  .record = ghost_record,
+                                  .sequence = 2,
+                                  .reason = reason_file_delete | reason_close,
+                                  .time = time_c})}};
 }
 
 template <Cache::Strategy S>
@@ -162,12 +158,21 @@ void CheckTheFourFlagCombinations() {
 template <Cache::Strategy S>
 void CheckUsnInfoFields() {
   const Mft::MftTree tree = ScanWith<S>(
-      {.records = {Rec(L"report.txt", report_record, report_sequence,
-                       reason_file_create, time_a),
-                   Rec(L"report.txt", report_record, report_sequence,
-                       reason_data_overwrite, time_b),
-                   Rec(L"report.txt", report_record, report_sequence,
-                       reason_data_overwrite | reason_close, time_c)}},
+      {.records = {MakeRecord({.name = L"report.txt",
+                               .record = report_record,
+                               .sequence = report_sequence,
+                               .reason = reason_file_create,
+                               .time = time_a}),
+                   MakeRecord({.name = L"report.txt",
+                               .record = report_record,
+                               .sequence = report_sequence,
+                               .reason = reason_data_overwrite,
+                               .time = time_b}),
+                   MakeRecord({.name = L"report.txt",
+                               .record = report_record,
+                               .sequence = report_sequence,
+                               .reason = reason_data_overwrite | reason_close,
+                               .time = time_c})}},
       Support::RecoverOptions());
 
   const Mft::MftTree::Entry* report = tree.Find(report_record);
@@ -187,12 +192,18 @@ template <Cache::Strategy S>
 void CheckTheDeletionTimeOfAFreedFile() {
   // old.tmp is freed under sequence 2: a journal record written while it lived
   // carries sequence 1, the one NTFS bumped on deletion.
-  const Mft::MftTree tree =
-      ScanWith<S>({.records = {Rec(L"old.tmp", deleted_record, 1,
-                                   reason_file_create, time_a),
-                               Rec(L"old.tmp", deleted_record, 1,
-                                   reason_file_delete | reason_close, time_b)}},
-                  Support::RecoverOptions());
+  const Mft::MftTree tree = ScanWith<S>(
+      {.records = {MakeRecord({.name = L"old.tmp",
+                               .record = deleted_record,
+                               .sequence = 1,
+                               .reason = reason_file_create,
+                               .time = time_a}),
+                   MakeRecord({.name = L"old.tmp",
+                               .record = deleted_record,
+                               .sequence = 1,
+                               .reason = reason_file_delete | reason_close,
+                               .time = time_b})}},
+      Support::RecoverOptions());
 
   const Mft::MftTree::Entry* deleted = tree.Find(deleted_record);
   REQUIRE(deleted != nullptr);
@@ -207,15 +218,28 @@ void CheckTheSequenceRules() {
   // In use under sequence 3: sequence 0 claims nothing, 3 is the generation, 2
   // is a file that lived there before, and 4 would be the freed generation,
   // which a live record MUST NOT take.
-  const Mft::MftTree tree = ScanWith<S>(
-      {.records = {Rec(L"zero", link_record, 0, reason_file_create, time_a),
-                   Rec(L"same", report_record, report_sequence,
-                       reason_file_create, time_a),
-                   Rec(L"older", report_record, report_sequence - 1,
-                       reason_file_create, time_b),
-                   Rec(L"newer", report_record, report_sequence + 1,
-                       reason_file_create, time_c)}},
-      Support::RecoverOptions());
+  const Mft::MftTree tree =
+      ScanWith<S>({.records = {MakeRecord({.name = L"zero",
+                                           .record = link_record,
+                                           .sequence = 0,
+                                           .reason = reason_file_create,
+                                           .time = time_a}),
+                               MakeRecord({.name = L"same",
+                                           .record = report_record,
+                                           .sequence = report_sequence,
+                                           .reason = reason_file_create,
+                                           .time = time_a}),
+                               MakeRecord({.name = L"older",
+                                           .record = report_record,
+                                           .sequence = report_sequence - 1,
+                                           .reason = reason_file_create,
+                                           .time = time_b}),
+                               MakeRecord({.name = L"newer",
+                                           .record = report_record,
+                                           .sequence = report_sequence + 1,
+                                           .reason = reason_file_create,
+                                           .time = time_c})}},
+                  Support::RecoverOptions());
 
   const Mft::MftTree::Entry* linked = tree.Find(link_record);
   const Mft::MftTree::Entry* report = tree.Find(report_record);
@@ -234,12 +258,31 @@ void CheckTheSequenceRules() {
 template <Cache::Strategy S>
 void CheckTheNewestNameWins() {
   const Mft::MftTree tree = ScanWith<S>(
-      {.records = {Rec(L"a.txt", ghost_record, 2, reason_file_create, time_a),
-                   Rec(L"a.txt", ghost_record, 2, reason_rename_old, time_b),
-                   Rec(L"b.txt", ghost_record, 2, reason_rename_new, time_b),
-                   Rec(L"b.txt", ghost_record, 2, reason_rename_old, time_c),
-                   Rec(L"c.txt", ghost_record, 2,
-                       reason_rename_new | reason_close, time_c)}},
+      {.records = {MakeRecord({.name = L"a.txt",
+                               .record = ghost_record,
+                               .sequence = 2,
+                               .reason = reason_file_create,
+                               .time = time_a}),
+                   MakeRecord({.name = L"a.txt",
+                               .record = ghost_record,
+                               .sequence = 2,
+                               .reason = reason_rename_old,
+                               .time = time_b}),
+                   MakeRecord({.name = L"b.txt",
+                               .record = ghost_record,
+                               .sequence = 2,
+                               .reason = reason_rename_new,
+                               .time = time_b}),
+                   MakeRecord({.name = L"b.txt",
+                               .record = ghost_record,
+                               .sequence = 2,
+                               .reason = reason_rename_old,
+                               .time = time_c}),
+                   MakeRecord({.name = L"c.txt",
+                               .record = ghost_record,
+                               .sequence = 2,
+                               .reason = reason_rename_new | reason_close,
+                               .time = time_c})}},
       Support::RecoverOptions());
 
   const Mft::MftTree::JournalOnlyEntry* item =
@@ -254,15 +297,38 @@ void CheckTheNewestNameWins() {
 
 template <Cache::Strategy S>
 void CheckJournalOnlyPaths() {
-  FakeUsnRecord in_docs =
-      Rec(L"in-docs.bin", 41, 1, reason_file_create, time_a);
-  FakeUsnRecord in_root =
-      Rec(L"in-root.bin", 42, 1, reason_file_create, time_a, 5, 5);
-  FakeUsnRecord in_lost =
-      Rec(L"in-lost.bin", 43, 1, reason_file_create, time_a, 99, 1);
-  FakeUsnRecord in_freed_dir = Rec(L"in-old-dir.bin", 44, 1, reason_file_create,
-                                   time_a, Tests::mft_tree_deleted_dir_idx, 3);
-  FakeUsnRecord folder = Rec(L"folder", 45, 1, reason_file_create, time_a);
+  FakeUsnRecord in_docs = MakeRecord({.name = L"in-docs.bin",
+                                      .record = 41,
+                                      .sequence = 1,
+                                      .reason = reason_file_create,
+                                      .time = time_a});
+  FakeUsnRecord in_root = MakeRecord({.name = L"in-root.bin",
+                                      .record = 42,
+                                      .sequence = 1,
+                                      .reason = reason_file_create,
+                                      .time = time_a,
+                                      .parent = 5,
+                                      .parent_sequence = 5});
+  FakeUsnRecord in_lost = MakeRecord({.name = L"in-lost.bin",
+                                      .record = 43,
+                                      .sequence = 1,
+                                      .reason = reason_file_create,
+                                      .time = time_a,
+                                      .parent = 99,
+                                      .parent_sequence = 1});
+  FakeUsnRecord in_freed_dir =
+      MakeRecord({.name = L"in-old-dir.bin",
+                  .record = 44,
+                  .sequence = 1,
+                  .reason = reason_file_create,
+                  .time = time_a,
+                  .parent = Tests::mft_tree_deleted_dir_idx,
+                  .parent_sequence = 3});
+  FakeUsnRecord folder = MakeRecord({.name = L"folder",
+                                     .record = 45,
+                                     .sequence = 1,
+                                     .reason = reason_file_create,
+                                     .time = time_a});
   folder.file_attributes = attribute_directory;
 
   const Mft::MftTree tree = ScanWith<S>(
@@ -379,8 +445,11 @@ void CheckACopyKeepsTheJournalOnlyFiles() {
 
 template <Cache::Strategy S>
 void CheckAHighReferenceNeverMatches() {
-  FakeUsnRecord wide =
-      Rec(L"wide", report_record, report_sequence, reason_file_create, time_a);
+  FakeUsnRecord wide = MakeRecord({.name = L"wide",
+                                   .record = report_record,
+                                   .sequence = report_sequence,
+                                   .reason = reason_file_create,
+                                   .time = time_a});
   wide.major_version = 3;
   wide.file_reference_high = 1;
 
@@ -395,12 +464,18 @@ void CheckAHighReferenceNeverMatches() {
 
 template <Cache::Strategy S>
 void CheckJournalOrderBreaksATimeTie() {
-  const Mft::MftTree tree = ScanWith<S>(
-      {.records = {Rec(L"report.txt", report_record, report_sequence,
-                       reason_data_overwrite, time_a),
-                   Rec(L"report.txt", report_record, report_sequence,
-                       reason_close, time_a)}},
-      Support::RecoverOptions());
+  const Mft::MftTree tree =
+      ScanWith<S>({.records = {MakeRecord({.name = L"report.txt",
+                                           .record = report_record,
+                                           .sequence = report_sequence,
+                                           .reason = reason_data_overwrite,
+                                           .time = time_a}),
+                               MakeRecord({.name = L"report.txt",
+                                           .record = report_record,
+                                           .sequence = report_sequence,
+                                           .reason = reason_close,
+                                           .time = time_a})}},
+                  Support::RecoverOptions());
 
   const Mft::MftTree::Entry* report = tree.Find(report_record);
   REQUIRE(report != nullptr);
@@ -411,8 +486,11 @@ void CheckJournalOrderBreaksATimeTie() {
 template <Cache::Strategy S>
 void CheckADamagedRecordDoesNotStopTheScan() {
   const std::vector<BYTE> first =
-      Tests::EncodeUsnRecord(Rec(L"report.txt", report_record, report_sequence,
-                                 reason_file_create, time_a),
+      Tests::EncodeUsnRecord(MakeRecord({.name = L"report.txt",
+                                         .record = report_record,
+                                         .sequence = report_sequence,
+                                         .reason = reason_file_create,
+                                         .time = time_a}),
                              0);
   // The second record's length is forged: the scan skips it and finds the
   // third.
@@ -518,12 +596,25 @@ namespace {
 
 template <Cache::Strategy S>
 void CheckPathsWithoutAnAncestorOutput() {
-  FakeUsnRecord in_docs =
-      Rec(L"in-docs.bin", 41, 1, reason_file_create, time_a);
-  FakeUsnRecord in_root =
-      Rec(L"in-root.bin", 42, 1, reason_file_create, time_a, 5, 5);
-  FakeUsnRecord in_lost =
-      Rec(L"in-lost.bin", 43, 1, reason_file_create, time_a, 99, 1);
+  FakeUsnRecord in_docs = MakeRecord({.name = L"in-docs.bin",
+                                      .record = 41,
+                                      .sequence = 1,
+                                      .reason = reason_file_create,
+                                      .time = time_a});
+  FakeUsnRecord in_root = MakeRecord({.name = L"in-root.bin",
+                                      .record = 42,
+                                      .sequence = 1,
+                                      .reason = reason_file_create,
+                                      .time = time_a,
+                                      .parent = 5,
+                                      .parent_sequence = 5});
+  FakeUsnRecord in_lost = MakeRecord({.name = L"in-lost.bin",
+                                      .record = 43,
+                                      .sequence = 1,
+                                      .reason = reason_file_create,
+                                      .time = time_a,
+                                      .parent = 99,
+                                      .parent_sequence = 1});
 
   Mft::MftTree tree = ScanWith<S>({.records = {in_docs, in_root, in_lost}},
                                   Support::RecoverOptions());
