@@ -3,15 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <optional>
-#include <set>
 #include <span>
 #include <string>
 #include <string_view>
-#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -36,6 +33,7 @@
 #include "catch2/catch_message.hpp"
 #include "catch2/catch_tostring.hpp"
 #include "corpus-test-support.h"
+#include "external-mft-comparison.h"
 #include "external-mft-support.h"
 #include "io/file-record-attr-types.h"
 #include "md5-test-support.h"
@@ -53,12 +51,13 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Tests::CivilTime;
+using NTFS_BROWSER_NAMESPACE::Tests::CompareWithListing;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::EntryUtcSeconds;
 using NTFS_BROWSER_NAMESPACE::Tests::EntryUtcTicks;
+using NTFS_BROWSER_NAMESPACE::Tests::FirstDifference;
 using NTFS_BROWSER_NAMESPACE::Tests::FlsLine;
-using NTFS_BROWSER_NAMESPACE::Tests::ListingPath;
+using NTFS_BROWSER_NAMESPACE::Tests::ListingReport;
 using NTFS_BROWSER_NAMESPACE::Tests::OpenStandaloneMftVolume;
 using NTFS_BROWSER_NAMESPACE::Tests::ParseFlsListing;
 using NTFS_BROWSER_NAMESPACE::Tests::RecoveringOptions;
@@ -172,129 +171,6 @@ std::uint64_t UtcMicros(const CivilTime& time) {
   return UtcTicks(time) / ticks_per_microsecond;
 }
 
-// Whether two names of one record link to their parent alike. A strict scan
-// drops the damaged parent of a name, so when strict_left is true the name may
-// be linked to its parent only on the right.
-bool SameParentLink(const Mft::MftTree::Name& left,
-                    const Mft::MftTree::Name& right, bool strict_left) {
-  const bool only_on_right =
-      strict_left && !left.parent_valid && right.parent_valid;
-  return left.parent_valid == right.parent_valid || only_on_right;
-}
-
-// Whether two names of one record agree on everything a name holds.
-bool SameName(const Mft::MftTree::Name& left, const Mft::MftTree::Name& right,
-              bool strict_left) {
-  const auto fields = [](const Mft::MftTree::Name& name) {
-    return std::tie(name.name, name.parent_record, name.parent_sequence,
-                    name.dos_only);
-  };
-  return fields(left) == fields(right) &&
-         SameParentLink(left, right, strict_left);
-}
-
-// Index of the first name two entries of the same name count disagree on.
-std::optional<std::size_t> FirstDifferentName(const Mft::MftTree::Entry& left,
-                                              const Mft::MftTree::Entry& right,
-                                              bool strict_left) {
-  for (std::size_t index = 0; index < left.names.size(); index++) {
-    if (!SameName(left.names.at(index), right.names.at(index), strict_left)) {
-      return index;
-    }
-  }
-  return std::nullopt;
-}
-
-// Whether two entries carry the same four times, as ticks.
-bool SameEntryTimes(const Mft::MftTree::Entry& left,
-                    const Mft::MftTree::Entry& right) {
-  using NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks;
-  return FileTimeToTicks(left.create_time) ==
-             FileTimeToTicks(right.create_time) &&
-         FileTimeToTicks(left.write_time) ==
-             FileTimeToTicks(right.write_time) &&
-         FileTimeToTicks(left.change_time) ==
-             FileTimeToTicks(right.change_time) &&
-         FileTimeToTicks(left.access_time) ==
-             FileTimeToTicks(right.access_time);
-}
-
-// The attribute flags of an entry.
-auto AttributeFlags(const Mft::MftTree::Entry& entry) {
-  return std::tie(entry.read_only, entry.hidden, entry.system, entry.archive,
-                  entry.compressed, entry.encrypted, entry.sparse);
-}
-
-// Names the first field two entries disagree on. Empty when they are equal.
-// strict_left is true when left comes from a strict scan and right from a
-// recovering one (see SameParentLink()).
-std::string FirstDifference(const Mft::MftTree::Entry& left,
-                            const Mft::MftTree::Entry& right,
-                            bool strict_left = false) {
-  if (left.record != right.record) {
-    return "record";
-  }
-  if (left.sequence != right.sequence) {
-    return "sequence";
-  }
-  if (std::tie(left.in_use, left.directory) !=
-      std::tie(right.in_use, right.directory)) {
-    return "flags";
-  }
-  if (left.names.size() != right.names.size()) {
-    return "name count";
-  }
-  if (const auto name = FirstDifferentName(left, right, strict_left)) {
-    return "name " + std::to_string(*name);
-  }
-  if (std::tie(left.size, left.allocated_size) !=
-      std::tie(right.size, right.allocated_size)) {
-    return "size";
-  }
-  if (!SameEntryTimes(left, right)) {
-    return "times";
-  }
-  if (AttributeFlags(left) != AttributeFlags(right)) {
-    return "attribute flags";
-  }
-  if (left.data_state != right.data_state) {
-    return "data state";
-  }
-  if (left.usn.has_value() != right.usn.has_value()) {
-    return "usn";
-  }
-  return {};
-}
-
-// The counters of a scan.
-auto ScanCounters(const Mft::MftTree::ScanStats& stats) {
-  return std::tie(stats.slots, stats.in_use, stats.deleted, stats.extensions,
-                  stats.unreadable, stats.skipped, stats.damaged,
-                  stats.unreachable, stats.complete, stats.data_intact,
-                  stats.data_reallocated, stats.data_unknown, stats.data_bad);
-}
-
-// Names the first thing two scans disagree on. Empty when they are the same
-// kept records with the same counters.
-std::string FirstDifference(const Mft::MftTree& left,
-                            const Mft::MftTree& right) {
-  if (ScanCounters(left.Stats()) != ScanCounters(right.Stats())) {
-    return "stats";
-  }
-  if (left.Entries().size() != right.Entries().size()) {
-    return "entry count";
-  }
-  for (std::size_t index = 0; index < left.Entries().size(); index++) {
-    const std::string field =
-        FirstDifference(left.Entries().at(index), right.Entries().at(index));
-    if (!field.empty()) {
-      return "record " + std::to_string(left.Entries().at(index).record) +
-             ": " + field;
-    }
-  }
-  return {};
-}
-
 // How many kept entries are in use base directories.
 ULONGLONG CountDirectories(const Mft::MftTree& tree) {
   return gsl::narrow<ULONGLONG>(std::ranges::count_if(
@@ -308,198 +184,6 @@ std::vector<BYTE> Head(const std::filesystem::path& file, std::size_t count) {
   std::vector<BYTE> bytes = NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile(file);
   bytes.resize(std::min(count, bytes.size()));
   return bytes;
-}
-
-// Writes value at offset of bytes, little endian.
-template <typename T>
-void Put(std::vector<BYTE>& bytes, std::size_t offset, T value) {
-  std::memcpy(&bytes.at(offset), &value, sizeof(value));
-}
-
-// Offset of the update sequence array's own offset in a file record header.
-constexpr std::size_t header_offset_of_us = 0x04;
-
-// Offset of its size, in words.
-constexpr std::size_t header_size_of_us = 0x06;
-
-// Offset of the offset of the first attribute.
-constexpr std::size_t header_offset_of_attr = 0x14;
-
-// Offset of the record's allocated size, which is its size on the volume.
-constexpr std::size_t header_alloc_size = 0x1C;
-
-// Where the synthetic records put their update sequence array: right after
-// the 48-byte header.
-constexpr std::size_t update_sequence_at = 0x30;
-
-// Where their first attribute begins: after the 3 words of the array of a
-// 1024-byte record, rounded up to 8 bytes.
-constexpr std::size_t first_attr_at = 0x38;
-
-// A file record header of record_size bytes, with its update sequence array
-// and an end-of-attributes marker, and no attribute. alloc_size is what the
-// header declares, whatever record_size is.
-std::vector<BYTE> MakeEmptyRecord(std::size_t record_size,
-                                  std::uint32_t alloc_size) {
-  std::vector<BYTE> bytes(record_size);
-  Put<std::uint32_t>(bytes, 0, 0x454C4946);
-  Put<std::uint16_t>(bytes, header_offset_of_us, update_sequence_at);
-  Put<std::uint16_t>(bytes, header_size_of_us,
-                     gsl::narrow<std::uint16_t>(record_size / 512 + 1));
-  Put<std::uint16_t>(bytes, header_offset_of_attr, first_attr_at);
-  Put<std::uint32_t>(bytes, header_alloc_size, alloc_size);
-  // The update sequence number is 1, and each block end repeats it.
-  Put<std::uint16_t>(bytes, update_sequence_at, 1);
-  for (std::size_t block = 1; block <= record_size / 512; block++) {
-    Put<std::uint16_t>(bytes, block * 512 - 2, 1);
-  }
-  Put<std::uint32_t>(bytes, first_attr_at, 0xFFFFFFFF);
-  return bytes;
-}
-
-// Cluster size of the $MFT the synthetic record 0 describes: a $MFT of one
-// 1024-byte record, in two 512-byte clusters.
-constexpr DWORD synthetic_cluster_size = 512;
-
-// Cluster where it begins: 16 KiB, beyond the 4 KiB boot area.
-constexpr ULONGLONG synthetic_lcn = 32;
-
-// A 1024-byte record 0 whose only attribute is a non-resident unnamed $DATA of
-// two 512-byte clusters at synthetic_lcn.
-std::vector<BYTE> MakeSyntheticRecord0() {
-  std::vector<BYTE> bytes = MakeEmptyRecord(1024, 1024);
-  constexpr std::size_t attr_size = 0x48;
-  Put<std::uint32_t>(bytes, first_attr_at, 0x80);
-  Put<std::uint32_t>(bytes, first_attr_at + 4, attr_size);
-  // Non-resident, unnamed, run list at 0x40.
-  Put<std::uint8_t>(bytes, first_attr_at + 8, 1);
-  Put<std::uint64_t>(bytes, first_attr_at + 0x10, 0);
-  Put<std::uint64_t>(bytes, first_attr_at + 0x18, 1);
-  Put<std::uint16_t>(bytes, first_attr_at + 0x20, 0x40);
-  Put<std::uint64_t>(bytes, first_attr_at + 0x28, 1024);
-  Put<std::uint64_t>(bytes, first_attr_at + 0x30, 1024);
-  Put<std::uint64_t>(bytes, first_attr_at + 0x38, 1024);
-  // One run: a header byte with a 1-byte length and a 1-byte offset, 2
-  // clusters, cluster synthetic_lcn, then the terminator.
-  Put<std::uint8_t>(bytes, first_attr_at + 0x40, 0x11);
-  Put<std::uint8_t>(bytes, first_attr_at + 0x41, 2);
-  Put<std::uint8_t>(bytes, first_attr_at + 0x42,
-                    gsl::narrow<std::uint8_t>(synthetic_lcn));
-  Put<std::uint32_t>(bytes, first_attr_at + attr_size, 0xFFFFFFFF);
-  return bytes;
-}
-
-// What every field of a listing line says, checked against tree. Collects the
-// first few differences, since a listing holds thousands of lines.
-struct ListingReport {
-  std::size_t checked{0};
-  std::vector<std::string> differences;
-
-  void Note(const std::string& message) {
-    constexpr std::size_t max_notes = 8;
-    if (differences.size() < max_notes) {
-      differences.push_back(message);
-    }
-  }
-};
-
-// Whether entry has a name, other than a DOS alias, whose path is the path of
-// line.
-bool HasListedName(const Mft::MftTree& tree, const Mft::MftTree::Entry& entry,
-                   const FlsLine& line) {
-  for (std::size_t index = 0; index < entry.names.size(); index++) {
-    if (!entry.names.at(index).dos_only &&
-        ListingPath(tree.GetPath(line.record, index)) == line.path) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Notes each field of line that entry, the record it names, disagrees with.
-void CompareLineFields(const Mft::MftTree::Entry& entry, const FlsLine& line,
-                       const std::string& where, ListingReport& report) {
-  const std::array<std::uint64_t, 4> times = {
-      EntryUtcSeconds(entry.write_time), EntryUtcSeconds(entry.access_time),
-      EntryUtcSeconds(entry.change_time), EntryUtcSeconds(entry.create_time)};
-  if (times != line.times) {
-    report.Note(where + "times");
-  }
-  if (line.stream.empty() && entry.directory != (line.kind == "d/d")) {
-    report.Note(where + "kind");
-  }
-  if (line.stream.empty() && line.kind == "r/r" && line.attribute_type == 128 &&
-      entry.size != line.size) {
-    report.Note(where + "size " + std::to_string(entry.size) + " vs " +
-                std::to_string(line.size));
-  }
-}
-
-// Compares one listing line with the tree, and counts it when its name exists.
-void CompareLine(const Mft::MftTree& tree, const FlsLine& line,
-                 ListingReport& report) {
-  const std::string where =
-      std::to_string(line.record) + " " + line.path + ": ";
-
-  const Mft::MftTree::Entry* entry = tree.Find(line.record);
-  if (entry == nullptr) {
-    report.Note(where + "no entry");
-    return;
-  }
-  if (!HasListedName(tree, *entry, line)) {
-    report.Note(where + "no such name");
-    return;
-  }
-  report.checked++;
-  CompareLineFields(*entry, line, where, report);
-}
-
-// Notes each name of the tree, but the root's and the DOS aliases, that no
-// listing line mentions.
-void NoteUnlistedNames(
-    const Mft::MftTree& tree,
-    const std::set<std::pair<ULONGLONG, std::string>>& listed,
-    ListingReport& report) {
-  const ULONGLONG root = static_cast<ULONGLONG>(Mft::Idx::Root);
-  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
-    if (entry.record == root) {
-      continue;
-    }
-    for (std::size_t index = 0; index < entry.names.size(); index++) {
-      if (!entry.names.at(index).dos_only &&
-          !listed.contains(
-              {entry.record, ListingPath(tree.GetPath(entry.record, index))})) {
-        report.Note(std::to_string(entry.record) + ": allocated but unlisted");
-      }
-    }
-  }
-}
-
-// Compares every line of a Sleuth Kit listing with the tree. The tree holds
-// the files in use. Conventions of the listing:
-//   - the `V/V` line is the virtual $OrphanFiles directory, in no record;
-//   - times are the four of $STANDARD_INFORMATION, in the order modification,
-//     access, MFT change, creation, with a whole-second precision;
-//   - the size of an `r/r` line of the unnamed $DATA is the stream's real
-//     size, and the size of a `d/d` line is its index's, so it is not compared;
-//   - a named stream is a line of its own (`file:stream`), and a directory
-//     with only named streams has only those lines;
-//   - a name that is only a DOS 8.3 alias is never listed;
-//   - the root directory is never listed;
-//   - the `*` of a deleted file is not in any of the kept listings.
-ListingReport CompareWithListing(const Mft::MftTree& tree,
-                                 const std::vector<FlsLine>& lines) {
-  ListingReport report;
-  std::set<std::pair<ULONGLONG, std::string>> listed;
-  for (const FlsLine& line : lines) {
-    if (line.kind == "V/V") {
-      continue;
-    }
-    listed.emplace(line.record, line.path);
-    CompareLine(tree, line, report);
-  }
-  NoteUnlistedNames(tree, listed, report);
-  return report;
 }
 
 // The Sleuth Kit listing shipped with a kept $MFT, and how many lines it has.
@@ -828,124 +512,6 @@ TEST_CASE("The boot sector of a standalone $MFT parses to record 0's geometry",
   CHECK_FALSE(parse.geometry.mft_mirr_usable);
   // The volume ends with the last cluster $MFT maps.
   CHECK(reader.Size() == parse.geometry.cluster_count * fixture.cluster_size);
-}
-
-TEST_CASE("A synthetic record 0 opens as a standalone $MFT",
-          "[standalone-mft][synthetic]") {
-  const std::vector<BYTE> record = MakeSyntheticRecord0();
-  const TempFile file(record);
-
-  StandaloneMftDiskReader reader;
-  REQUIRE(reader.Open(file.Path().wstring()));
-  CHECK(reader.Failure().empty());
-  CHECK(reader.FileRecordSize() == 1024);
-  CHECK(reader.ClusterSize() == synthetic_cluster_size);
-  CHECK(reader.FileSize() == 1024);
-  CHECK(reader.Size() == (synthetic_lcn + 2) * synthetic_cluster_size);
-
-  SECTION("byte 0 is a boot sector") {
-    std::vector<BYTE> boot(512);
-    LARGE_INTEGER addr{};
-    REQUIRE(reader.ReadInto(addr, boot));
-    const auto parse =
-        NTFS_BROWSER_NAMESPACE::Volume::ParseBootSector(boot, false);
-    REQUIRE(parse.ok);
-    CHECK(parse.geometry.cluster_size == synthetic_cluster_size);
-    CHECK(parse.geometry.file_record_size == 1024);
-    CHECK(parse.geometry.mft_addr == synthetic_lcn * synthetic_cluster_size);
-  }
-
-  SECTION("the clusters of $DATA are the bytes of the file") {
-    std::vector<BYTE> read(1024);
-    LARGE_INTEGER addr{.QuadPart = gsl::narrow<LONGLONG>(
-                           synthetic_lcn * synthetic_cluster_size)};
-    REQUIRE(reader.ReadInto(addr, read));
-    CHECK(read == record);
-
-    // A read may start inside a run and end in it.
-    std::vector<BYTE> middle(100);
-    addr.QuadPart += 700;
-    REQUIRE(reader.ReadInto(addr, middle));
-    CHECK(std::equal(middle.begin(), middle.end(), record.begin() + 700));
-  }
-
-  SECTION("any other byte fails to read") {
-    std::vector<BYTE> read(16);
-    // Past the end of the last run.
-    LARGE_INTEGER addr{.QuadPart = gsl::narrow<LONGLONG>(
-                           (synthetic_lcn + 2) * synthetic_cluster_size)};
-    CHECK_FALSE(reader.ReadInto(addr, read));
-    // A read that starts in the run and ends outside it.
-    addr.QuadPart -= 8;
-    CHECK_FALSE(reader.ReadInto(addr, read));
-    // Between the boot area and the run.
-    addr.QuadPart = 8192;
-    CHECK_FALSE(reader.ReadInto(addr, read));
-    // Inside the boot area, past the boot sector: zeros.
-    addr.QuadPart = 1024;
-    CHECK(reader.ReadInto(addr, read));
-    CHECK(std::ranges::all_of(read, [](BYTE byte) { return byte == 0; }));
-    addr.QuadPart = -1;
-    CHECK_FALSE(reader.ReadInto(addr, read));
-  }
-}
-
-TEST_CASE("A file that is not a usable first $MFT record is refused",
-          "[standalone-mft][synthetic]") {
-  struct Case {
-    std::string_view label;
-    std::vector<BYTE> bytes;
-  };
-
-  std::vector<BYTE> bad_sequence = MakeSyntheticRecord0();
-  Put<std::uint16_t>(bad_sequence, 510, 0x7777);
-  std::vector<BYTE> short_array = MakeSyntheticRecord0();
-  Put<std::uint16_t>(short_array, header_size_of_us, 2);
-  std::vector<BYTE> array_out_of_record = MakeSyntheticRecord0();
-  Put<std::uint16_t>(array_out_of_record, header_offset_of_us, 0xFFF0);
-  std::vector<BYTE> sparse_first_run = MakeSyntheticRecord0();
-  // A header byte with no offset field makes the run sparse.
-  Put<std::uint8_t>(sparse_first_run, first_attr_at + 0x40, 0x01);
-  std::vector<BYTE> cluster_not_a_power = MakeSyntheticRecord0();
-  Put<std::uint64_t>(cluster_not_a_power, first_attr_at + 0x28, 1536);
-  std::vector<BYTE> magic_baad = MakeSyntheticRecord0();
-  Put<std::uint32_t>(magic_baad, 0, 0x44414142);
-  const std::vector<Case> cases = {
-      {"an empty file", {}},
-      {"fewer bytes than a header", std::vector<BYTE>(47)},
-      {"a zero-filled file", std::vector<BYTE>(4096)},
-      {"a BAAD record 0", magic_baad},
-      {"a record size of 0", MakeEmptyRecord(1024, 0)},
-      {"a record size of 256", MakeEmptyRecord(1024, 256)},
-      {"a record size of 1000", MakeEmptyRecord(1024, 1000)},
-      {"a record size of 1 MiB", MakeEmptyRecord(1024, 1U << 20U)},
-      {"a record size past the file", MakeEmptyRecord(1024, 4096)},
-      {"a record 0 without $DATA", MakeEmptyRecord(1024, 1024)},
-      {"a failed update sequence", bad_sequence},
-      {"an update sequence array too short", short_array},
-      {"an update sequence array outside the record", array_out_of_record},
-      {"a sparse first run", sparse_first_run},
-      {"a cluster size that is not a power of two", cluster_not_a_power},
-  };
-  for (const Case& test : cases) {
-    CAPTURE(test.label);
-    const TempFile file(test.bytes);
-    StandaloneMftDiskReader reader;
-    CHECK_FALSE(reader.Open(file.Path().wstring()));
-    CHECK_FALSE(reader.Failure().empty());
-    CHECK_FALSE(reader.Size().has_value());
-    LARGE_INTEGER addr{};
-    std::vector<BYTE> read(16);
-    CHECK_FALSE(reader.ReadInto(addr, read));
-  }
-}
-
-TEST_CASE("A missing file is refused as a standalone $MFT",
-          "[standalone-mft][synthetic]") {
-  StandaloneMftDiskReader reader;
-  CHECK_FALSE(reader.Open(
-      (std::filesystem::temp_directory_path() / "no-such-mft-file").wstring()));
-  CHECK_FALSE(reader.Failure().empty());
 }
 
 TEST_CASE("A $MFT cut after record 3 or inside a record still scans",
