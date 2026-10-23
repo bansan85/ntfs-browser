@@ -102,6 +102,10 @@ class FileRecord<S>::Impl {
   // another FileRecord's read (eg. NtfsVolume's $MFT record vs. this one).
   std::vector<BYTE> record_buffer;
 
+  // The $ATTRIBUTE_LIST chain of the running ParseAttrs(). Kept from one call
+  // to the next, emptied each time, so that a parse does not allocate a set.
+  std::unordered_set<ULONGLONG> attr_list_chain;
+
   // Where the attribute walk of the last ParseAttrs() met the end marker.
   // Empty when it did not reach one.
   std::optional<size_t> end_marker_offset;

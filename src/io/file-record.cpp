@@ -395,8 +395,8 @@ bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::ParseAttrs() {
   // A fresh chain, unrelated to any previous ParseFileRecord() on this object.
-  std::unordered_set<ULONGLONG> attr_list_chain;
-  return impl_->ParseAttrs(attr_list_chain);
+  impl_->attr_list_chain.clear();
+  return impl_->ParseAttrs(impl_->attr_list_chain);
 }
 
 template <Cache::Strategy S>

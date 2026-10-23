@@ -549,7 +549,11 @@ template <Cache::Strategy S>
 void Io::FileRecord<S>::Impl::AttrParser::MergeAttributeContinuations() {
   for (std::vector<std::unique_ptr<Attr::AttrBase<S>>>& attrs :
        impl_.attr_list) {
-    if (attrs.size() < 2) {
+    // Only non-resident instances merge, and it takes two.
+    if (std::ranges::count_if(
+            attrs, [](const std::unique_ptr<Attr::AttrBase<S>>& attr) {
+              return attr->IsNonResident();
+            }) < 2) {
       continue;
     }
 
