@@ -24,12 +24,10 @@ namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using Support::stale_size;
 using Tests::FakeDataRun;
 
 namespace {
-
-// Bytes of the stale stream: four clusters.
-constexpr ULONGLONG stale_size = 4 * Tests::fake_cluster_size;
 
 // The stale file's one run: four clusters at LCN 40.
 const std::vector<FakeDataRun> stale_runs{
@@ -49,9 +47,7 @@ std::optional<DataState>
     StateOfStale(const std::vector<BYTE>& image,
                  const VolumeOptions& options = Support::DeletedOptions()) {
   const auto opened = Support::Open<S>(image, options);
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
-  return record->GetDataState();
+  return Support::ParsedStale(opened)->GetDataState();
 }
 
 template <Cache::Strategy S>
@@ -69,20 +65,11 @@ void CheckAnAllocatedClusterIsReallocated() {
 
   // Fill the file's clusters, so a read returns something to compare.
   for (std::vector<BYTE>* image : {&without, &with}) {
-    for (size_t i = 0; i < stale_size; i++) {
-      image->at(40 * Tests::fake_cluster_size + i) = static_cast<BYTE>(i * 7);
-    }
+    Support::FillStaleClusters(*image, 7);
   }
 
   const auto bytes_of = [](const std::vector<BYTE>& image) {
-    const auto opened = Support::Open<S>(image);
-    const auto record =
-        Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
-    std::vector<BYTE> out(stale_size);
-    const auto read = record->FindStream({})->ReadData(0, out);
-    REQUIRE(read);
-    REQUIRE(*read == stale_size);
-    return out;
+    return Support::ReadStale(Support::Open<S>(image));
   };
 
   CHECK(StateOfStale<S>(with) == DataState::Reallocated);
@@ -122,8 +109,7 @@ void CheckALiveFileIsIntactWithoutTheBitmap() {
   std::vector<BYTE> image = StaleImage(stale_runs);
   Tests::SetRecordInUse(image, Tests::mft_tree_stale_child_idx, true);
   const auto opened = Support::Open<S>(image);
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
+  const auto record = Support::ParsedStale(opened);
   opened.counter->Reset();
 
   CHECK(record->GetDataState() == DataState::Intact);
@@ -158,8 +144,7 @@ void CheckAnExtentPastTheEndOfTheVolume() {
 template <Cache::Strategy S>
 void CheckAStreamThatDoesNotExist() {
   const auto opened = Support::Open<S>(StaleImage({}));
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
+  const auto record = Support::ParsedStale(opened);
 
   CHECK_FALSE(record->GetDataState(L"no-such-stream"));
 }

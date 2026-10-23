@@ -22,6 +22,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Tests::FakeBitmapOptions;
 using Tests::FakeBitmapShape;
@@ -50,20 +51,26 @@ std::vector<BYTE> TreeWithResidentBitmap(const std::vector<BYTE>& bytes) {
   return image;
 }
 
+// The space summary of volume, which the test cannot go on without.
+template <Cache::Strategy S>
+Alloc::SpaceSummary RequiredSummary(const NtfsVolume<S>& volume) {
+  const std::optional<Alloc::SpaceSummary> summary = volume.GetSpaceSummary();
+  REQUIRE(summary);
+  return *summary;
+}
+
 template <Cache::Strategy S>
 void CheckFreeSpaceIsTheKnownValue() {
   const std::vector<BYTE> image = TreeWithBitmap();
   const ULONGLONG total = image.size() / Tests::fake_cluster_size;
   const auto opened = Support::Open<S>(image);
 
-  const std::optional<Alloc::SpaceSummary> summary =
-      opened.volume->GetSpaceSummary();
-  REQUIRE(summary);
-  CHECK(summary->total_clusters == total);
-  CHECK(summary->free_clusters == total - allocated_in_fixture);
-  CHECK(summary->free_bytes ==
+  const Alloc::SpaceSummary summary = RequiredSummary(*opened.volume);
+  CHECK(summary.total_clusters == total);
+  CHECK(summary.free_clusters == total - allocated_in_fixture);
+  CHECK(summary.free_bytes ==
         (total - allocated_in_fixture) * Tests::fake_cluster_size);
-  CHECK(summary->unknown_clusters == 0);
+  CHECK(summary.unknown_clusters == 0);
 }
 
 template <Cache::Strategy S>
@@ -74,11 +81,10 @@ void CheckPaddingBitsDoNotCount() {
   bytes.at(8) = 0xFF;
   const auto opened = Support::Open<S>(TreeWithResidentBitmap(bytes));
 
-  const auto summary = opened.volume->GetSpaceSummary();
-  REQUIRE(summary);
-  CHECK(summary->total_clusters == 64);
-  CHECK(summary->free_clusters == 63);
-  CHECK(summary->unknown_clusters == 0);
+  const Alloc::SpaceSummary summary = RequiredSummary(*opened.volume);
+  CHECK(summary.total_clusters == 64);
+  CHECK(summary.free_clusters == 63);
+  CHECK(summary.unknown_clusters == 0);
   CHECK(opened.volume->GetClusterState(64) == ClusterState::OutOfRange);
 }
 
@@ -87,12 +93,11 @@ void CheckAShortBitmapCountsWhatItCovers() {
   const auto opened =
       Support::Open<S>(TreeWithResidentBitmap({0x01, 0x00, 0x00, 0x00}));
 
-  const auto summary = opened.volume->GetSpaceSummary();
-  REQUIRE(summary);
-  CHECK(summary->total_clusters == 64);
-  CHECK(summary->free_clusters == 31);
-  CHECK(summary->free_bytes == 31 * Tests::fake_cluster_size);
-  CHECK(summary->unknown_clusters == 32);
+  const Alloc::SpaceSummary summary = RequiredSummary(*opened.volume);
+  CHECK(summary.total_clusters == 64);
+  CHECK(summary.free_clusters == 31);
+  CHECK(summary.free_bytes == 31 * Tests::fake_cluster_size);
+  CHECK(summary.unknown_clusters == 32);
 }
 
 template <Cache::Strategy S>

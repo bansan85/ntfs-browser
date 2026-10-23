@@ -2,13 +2,16 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <memory>
 #include <span>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -17,6 +20,7 @@
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "test-log-sink.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {
@@ -58,6 +62,10 @@ inline constexpr ULONGLONG base_volume_clusters = 64;
 // First byte of the bitmap data in such an image.
 inline constexpr ULONGLONG bitmap_data_offset =
     base_volume_clusters * fake_cluster_size;
+
+// Bytes of the stale stream the freed non-resident fixture keeps: four
+// clusters.
+inline constexpr ULONGLONG stale_size = 4 * fake_cluster_size;
 
 // The volume opened over an image, and the counting reader under it.
 template <Cache::Strategy S>
@@ -124,6 +132,50 @@ std::unique_ptr<Io::FileRecord<S>> ParsedRecord(const NtfsVolume<S>& volume,
   REQUIRE(record->ParseFileRecord(idx));
   REQUIRE(record->ParseAttrs());
   return record;
+}
+
+// The bad list of volume, which the test cannot go on without.
+template <Cache::Strategy S>
+const Alloc::BadClusters& RequiredBadList(const NtfsVolume<S>& volume) {
+  const Alloc::BadClusters* list = volume.GetBadClusters();
+  REQUIRE(list != nullptr);
+  return *list;
+}
+
+// The stale file's record, parsed with its attributes.
+template <Cache::Strategy S>
+std::unique_ptr<Io::FileRecord<S>> ParsedStale(const Opened<S>& opened) {
+  return ParsedRecord(*opened.volume, mft_tree_stale_child_idx);
+}
+
+// Reads the whole stale stream.
+template <Cache::Strategy S>
+std::vector<BYTE> ReadStale(const Opened<S>& opened) {
+  const auto record = ParsedStale(opened);
+  std::vector<BYTE> out(stale_size);
+  const auto read = record->FindStream({})->ReadData(0, out);
+  REQUIRE(read);
+  REQUIRE(*read == stale_size);
+  return out;
+}
+
+// Opens image, reads the whole stale stream, and returns what the library
+// logged from then on.
+template <Cache::Strategy S>
+std::string LogOfReadingStale(std::vector<BYTE> image,
+                              const VolumeOptions& options) {
+  const auto opened = Open<S>(std::move(image), options);
+  (void)TakeCapturedLog();
+  (void)ReadStale(opened);
+  return TakeCapturedLog();
+}
+
+// Fills the stale stream's four clusters, at LCN 40, with a pattern of the
+// given step, so a read returns something to compare.
+inline void FillStaleClusters(std::vector<BYTE>& image, size_t step) {
+  for (size_t i = 0; i < stale_size; i++) {
+    image.at(40 * fake_cluster_size + i) = static_cast<BYTE>(i * step);
+  }
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::AllocSupport

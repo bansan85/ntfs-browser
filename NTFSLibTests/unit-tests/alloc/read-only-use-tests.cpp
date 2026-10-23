@@ -29,25 +29,23 @@ namespace {
 
 using Kind = CountingDiskReader::Kind;
 
-template <Cache::Strategy S>
-void CheckEveryQueryOnlyReads() {
-  const std::vector<FakeDataRun> allocated{
-      FakeDataRun{.lcn = 40, .clusters = 2}};
-  const auto opened = Support::Open<S>(
-      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
-                              4 * Tests::fake_cluster_size,
-                              {FakeDataRun{.lcn = 40, .clusters = 4}}),
-                          allocated));
+// The freed file over four clusters at LCN 40.
+std::vector<BYTE> StaleFile() {
+  return Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
+      4 * Tests::fake_cluster_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
+}
 
-  CHECK(opened.volume->GetClusterState(40) == Alloc::ClusterState::Allocated);
+// Runs the range, summary and data state queries on the volume of StaleFile(),
+// then checks that its reader saw nothing but opens, reads and sizes.
+template <Cache::Strategy S>
+void CheckTheRestOnlyReads(const Support::Opened<S>& opened) {
   CHECK(opened.volume->GetRangeState(30, 20) == Alloc::ClusterState::Allocated);
   std::vector<Alloc::RangeQuery> queries{{.lcn = 10, .clusters = 5},
                                          {.lcn = 41, .clusters = 1}};
   opened.volume->GetRangeStates(queries);
   CHECK(opened.volume->GetSpaceSummary());
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
-  CHECK(record->GetDataState() == Alloc::DataState::Reallocated);
+  CHECK(Support::ParsedStale(opened)->GetDataState() ==
+        Alloc::DataState::Reallocated);
 
   const auto& calls = opened.counter->Calls();
   REQUIRE_FALSE(calls.empty());
@@ -58,34 +56,28 @@ void CheckEveryQueryOnlyReads() {
 }
 
 template <Cache::Strategy S>
+void CheckEveryQueryOnlyReads() {
+  const std::vector<FakeDataRun> allocated{
+      FakeDataRun{.lcn = 40, .clusters = 2}};
+  const auto opened =
+      Support::Open<S>(Support::WithBitmap(StaleFile(), allocated));
+
+  CHECK(opened.volume->GetClusterState(40) == Alloc::ClusterState::Allocated);
+  CheckTheRestOnlyReads(opened);
+}
+
+template <Cache::Strategy S>
 void CheckEveryBadClusterQueryOnlyReads() {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
   const std::vector<Alloc::Extent> bad{{.lcn = 41, .clusters = 1}};
   const auto opened = Support::Open<S>(Support::WithBadClusters(
-      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
-                              4 * Tests::fake_cluster_size,
-                              {FakeDataRun{.lcn = 40, .clusters = 4}}),
-                          Support::WithBadRuns(allocated, bad)),
+      Support::WithBitmap(StaleFile(), Support::WithBadRuns(allocated, bad)),
       bad));
 
   REQUIRE(opened.volume->GetBadClusters() != nullptr);
   CHECK(opened.volume->GetClusterState(41) == Alloc::ClusterState::Bad);
-  CHECK(opened.volume->GetRangeState(30, 20) == Alloc::ClusterState::Allocated);
-  std::vector<Alloc::RangeQuery> queries{{.lcn = 10, .clusters = 5},
-                                         {.lcn = 41, .clusters = 1}};
-  opened.volume->GetRangeStates(queries);
-  CHECK(opened.volume->GetSpaceSummary());
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
-  CHECK(record->GetDataState() == Alloc::DataState::Reallocated);
-
-  const auto& calls = opened.counter->Calls();
-  REQUIRE_FALSE(calls.empty());
-  CHECK(std::ranges::all_of(calls, [](const CountingDiskReader::Call& call) {
-    return call.kind == Kind::Open || call.kind == Kind::Read ||
-           call.kind == Kind::Size;
-  }));
+  CheckTheRestOnlyReads(opened);
 }
 
 }  // namespace

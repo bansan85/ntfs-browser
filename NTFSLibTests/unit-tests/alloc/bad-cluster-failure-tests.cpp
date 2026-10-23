@@ -1,6 +1,5 @@
 #include <ntfs-browser/win-types.h>
 
-#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -32,8 +31,6 @@ namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::LevelSink;
-using Support::ScopedSink;
 using Support::ThrowingCallback;
 using Tests::FakeBadClusterOptions;
 using Tests::FakeDataRun;
@@ -53,14 +50,25 @@ const std::vector<Alloc::Extent> bad_marked{{.lcn = 45, .clusters = 2}};
 // Cluster where every fixture puts $MFT.
 constexpr ULONGLONG fake_mft_lcn = 1;
 
-// The freed tree, a bitmap marking 40, 41 and the bad clusters, and a bad list
-// shaped by options.
+// The freed tree and a bitmap marking 40, 41 and the bad clusters. Record 8
+// is left as the base builds it: zero-filled.
+std::vector<BYTE> ImageWithoutList() {
+  return Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
+                             Support::WithBadRuns(allocated_runs, bad_marked));
+}
+
+// That image with a bad list shaped by options.
 std::vector<BYTE> Image(std::span<const Alloc::Extent> bad,
                         const FakeBadClusterOptions& options = {}) {
-  std::vector<BYTE> image =
-      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
-                          Support::WithBadRuns(allocated_runs, bad_marked));
-  return Support::WithBadClusters(std::move(image), bad, options);
+  return Support::WithBadClusters(ImageWithoutList(), bad, options);
+}
+
+// Opens the image of the bad_marked list, shaped by options.
+template <Cache::Strategy S>
+Support::Opened<S> OpenBadMarked(
+    const FakeBadClusterOptions& options = {},
+    const VolumeOptions& volume_options = Support::DeletedOptions()) {
+  return Support::Open<S>(Image(bad_marked, options), volume_options);
 }
 
 // Byte range of MFT record 8 in an image.
@@ -79,7 +87,7 @@ RecordRange BadClusRecord() {
 
 template <Cache::Strategy S>
 void CheckNothingIsReadBeforeAQuery() {
-  const auto opened = Support::Open<S>(Image(bad_marked));
+  const auto opened = OpenBadMarked<S>();
   const auto record = Support::ParsedRecord(
       *opened.volume, static_cast<ULONGLONG>(Tests::mft_tree_docs_idx));
 
@@ -96,16 +104,9 @@ void CheckNothingIsReadBeforeAQuery() {
 template <Cache::Strategy S>
 void CheckAnUnusableListFallsBackOnTheBitmap(
     const FakeBadClusterOptions& options, bool record_is_written) {
-  const auto sink = std::make_shared<LevelSink>();
-  const ScopedSink scoped(sink);
-  std::vector<BYTE> image = Image(bad_marked, options);
-  if (!record_is_written) {
-    // Record 8 left as the base builds it: zero-filled.
-    image =
-        Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
-                            Support::WithBadRuns(allocated_runs, bad_marked));
-  }
-  const auto opened = Support::Open<S>(image);
+  const Support::CapturedLevels log;
+  const auto opened = Support::Open<S>(
+      record_is_written ? Image(bad_marked, options) : ImageWithoutList());
 
   CHECK_NOTHROW(opened.volume->GetClusterState(45));
   CHECK(opened.volume->GetBadClusters() == nullptr);
@@ -114,14 +115,13 @@ void CheckAnUnusableListFallsBackOnTheBitmap(
   CHECK(opened.volume->GetClusterState(47) == ClusterState::Free);
   CHECK(opened.volume->GetSpaceSummary());
 
-  CHECK(sink->Count(unusable_message) == 1);
-  CHECK(sink->LevelOf(unusable_message) == Log::Level::Warn);
+  CHECK(log.Count(unusable_message) == 1);
+  CHECK(log.LevelOf(unusable_message) == Log::Level::Warn);
 }
 
 template <Cache::Strategy S>
 void CheckAnUnusableListIsNotReadAgain() {
-  const auto opened =
-      Support::Open<S>(Image(bad_marked, {.omit_bad_stream = true}));
+  const auto opened = OpenBadMarked<S>({.omit_bad_stream = true});
   REQUIRE(opened.volume->GetBadClusters() == nullptr);
 
   opened.counter->Reset();
@@ -135,15 +135,14 @@ void CheckAnUnusableListIsNotReadAgain() {
 
 template <Cache::Strategy S>
 void CheckTheLevelFollowsRecoverErrors() {
-  const auto sink = std::make_shared<LevelSink>();
-  const ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(
-      Image(bad_marked, {.omit_bad_stream = true}),
+  const Support::CapturedLevels log;
+  const auto opened = OpenBadMarked<S>(
+      {.omit_bad_stream = true},
       VolumeOptions{.include_deleted = true, .recover_errors = true});
 
   CHECK(opened.volume->GetBadClusters() == nullptr);
-  CHECK(sink->Count(unusable_message) == 1);
-  CHECK(sink->LevelOf(unusable_message) == Log::Level::Info);
+  CHECK(log.Count(unusable_message) == 1);
+  CHECK(log.LevelOf(unusable_message) == Log::Level::Info);
 }
 
 template <Cache::Strategy S>
@@ -157,12 +156,11 @@ void CheckACutRunList() {
 
   const auto recovering = Support::Open<S>(
       image, VolumeOptions{.include_deleted = true, .recover_errors = true});
-  const Alloc::BadClusters* list = recovering.volume->GetBadClusters();
-  REQUIRE(list != nullptr);
-  REQUIRE(list->extents.size() == 1);
-  CHECK(list->extents[0].lcn == 45);
-  CHECK(list->extents[0].clusters == 2);
-  CHECK_FALSE(list->truncated);
+  const Alloc::BadClusters& list = Support::RequiredBadList(*recovering.volume);
+  REQUIRE(list.extents.size() == 1);
+  CHECK(list.extents[0].lcn == 45);
+  CHECK(list.extents[0].clusters == 2);
+  CHECK_FALSE(list.truncated);
   CHECK(recovering.volume->GetClusterState(52) == ClusterState::Free);
 }
 
@@ -195,13 +193,11 @@ template <Cache::Strategy S>
 void CheckOddStreamFlagsChangeNothing() {
   // Compressed, encrypted, both, and none: the list comes from the run list.
   for (const WORD flags : {WORD{0x0001}, WORD{0x4000}, WORD{0x8001}, WORD{0}}) {
-    const auto opened =
-        Support::Open<S>(Image(bad_marked, {.attr_flags = flags}));
+    const auto opened = OpenBadMarked<S>({.attr_flags = flags});
 
-    const Alloc::BadClusters* list = opened.volume->GetBadClusters();
-    REQUIRE(list != nullptr);
-    REQUIRE(list->extents.size() == 1);
-    CHECK(list->extents[0].lcn == 45);
+    const Alloc::BadClusters& list = Support::RequiredBadList(*opened.volume);
+    REQUIRE(list.extents.size() == 1);
+    CHECK(list.extents[0].lcn == 45);
     CHECK(opened.volume->GetClusterState(46) == ClusterState::Bad);
   }
 }
@@ -210,12 +206,10 @@ template <Cache::Strategy S>
 void CheckAForgedSizeChangesNothing() {
   for (const ULONGLONG size :
        {ULONGLONG{0}, ULONGLONG{123}, ULONGLONG{1} << 50}) {
-    const auto opened =
-        Support::Open<S>(Image(bad_marked, {.forged_size = size}));
+    const auto opened = OpenBadMarked<S>({.forged_size = size});
 
-    const Alloc::BadClusters* list = opened.volume->GetBadClusters();
-    REQUIRE(list != nullptr);
-    REQUIRE(list->extents.size() == 1);
+    const Alloc::BadClusters& list = Support::RequiredBadList(*opened.volume);
+    REQUIRE(list.extents.size() == 1);
     CHECK(opened.volume->GetClusterState(45) == ClusterState::Bad);
   }
 }
@@ -224,7 +218,7 @@ template <Cache::Strategy S>
 void CheckAFreedRecordIsStillRead() {
   for (const bool include_deleted : {false, true}) {
     const auto opened =
-        Support::Open<S>(Image(bad_marked, {.record_not_in_use = true}),
+        OpenBadMarked<S>({.record_not_in_use = true},
                          VolumeOptions{.include_deleted = include_deleted});
 
     REQUIRE(opened.volume->GetBadClusters() != nullptr);
@@ -247,18 +241,17 @@ void CheckAnImageSmallerThanTheVolume() {
 
   const auto opened = Support::Open<S>(image);
 
-  const Alloc::BadClusters* list = opened.volume->GetBadClusters();
-  REQUIRE(list != nullptr);
-  REQUIRE(list->extents.size() == 1);
-  CHECK(list->extents[0].lcn == real_clusters - 2);
-  CHECK(list->extents[0].clusters == 2);
+  const Alloc::BadClusters& list = Support::RequiredBadList(*opened.volume);
+  REQUIRE(list.extents.size() == 1);
+  CHECK(list.extents[0].lcn == real_clusters - 2);
+  CHECK(list.extents[0].clusters == 2);
   CHECK(opened.volume->GetClusterState(real_clusters) ==
         ClusterState::OutOfRange);
 }
 
 template <Cache::Strategy S>
 void CheckAThrowingCallbackIsContained() {
-  const auto opened = Support::Open<S>(Image(bad_marked));
+  const auto opened = OpenBadMarked<S>();
   REQUIRE(opened.volume->InstallAttrRawCB(Attr::Type::Data, &ThrowingCallback));
 
   CHECK_NOTHROW(opened.volume->GetBadClusters());

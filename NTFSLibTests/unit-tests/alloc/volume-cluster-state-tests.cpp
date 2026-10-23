@@ -39,9 +39,16 @@ std::vector<BYTE> ImageFor(FakeBitmapShape shape) {
                              allocated_runs, FakeBitmapOptions{.shape = shape});
 }
 
+// Opens the volume whose bitmap has the given shape.
+template <Cache::Strategy S>
+Support::Opened<S>
+    OpenWithShape(FakeBitmapShape shape = FakeBitmapShape::NonResident) {
+  return Support::Open<S>(ImageFor(shape));
+}
+
 template <Cache::Strategy S>
 void CheckStatesMatchBits(FakeBitmapShape shape) {
-  const auto opened = Support::Open<S>(ImageFor(shape));
+  const auto opened = OpenWithShape<S>(shape);
   const auto& volume = *opened.volume;
 
   CHECK(volume.GetClusterState(39) == ClusterState::Free);
@@ -55,7 +62,7 @@ void CheckStatesMatchBits(FakeBitmapShape shape) {
 
 template <Cache::Strategy S>
 void CheckFirstBitmapClusterIsAllocated() {
-  const auto opened = Support::Open<S>(ImageFor(FakeBitmapShape::NonResident));
+  const auto opened = OpenWithShape<S>();
 
   // The bitmap's own cluster follows the 64 clusters of the base image.
   CHECK(opened.volume->GetClusterState(Support::base_volume_clusters) ==
@@ -64,7 +71,7 @@ void CheckFirstBitmapClusterIsAllocated() {
 
 template <Cache::Strategy S>
 void CheckPastTheEndIsOutOfRange() {
-  const auto opened = Support::Open<S>(ImageFor(FakeBitmapShape::NonResident));
+  const auto opened = OpenWithShape<S>();
   const auto& volume = *opened.volume;
 
   CHECK(volume.GetClusterState(1000000) == ClusterState::OutOfRange);
@@ -93,7 +100,7 @@ void CheckOptionsDoNotChangeTheAnswer() {
 
 template <Cache::Strategy S>
 void CheckBatchFillsTheCounts() {
-  const auto opened = Support::Open<S>(ImageFor(FakeBitmapShape::NonResident));
+  const auto opened = OpenWithShape<S>();
 
   std::vector<Alloc::RangeQuery> queries{
       {.lcn = 38, .clusters = 6},

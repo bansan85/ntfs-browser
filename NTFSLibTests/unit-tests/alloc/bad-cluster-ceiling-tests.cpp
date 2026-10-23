@@ -1,7 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
-#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -29,9 +28,8 @@ namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::LevelSink;
-using Support::ScopedSink;
 using Tests::FakeDataRun;
 
 namespace {
@@ -73,57 +71,64 @@ std::vector<BYTE> Image(const std::vector<Alloc::Extent>& bad) {
   return Support::WithBadClusters(std::move(image), bad);
 }
 
+// A volume over a bad list of count isolated extents, opened under the small
+// ceiling with the library's messages captured.
+template <Cache::Strategy S>
+struct CeilingVolume {
+  explicit CeilingVolume(
+      size_t count, const VolumeOptions& options = Support::DeletedOptions())
+      : opened(Support::Open<S>(Image(Isolated(count)), options)) {}
+
+  const CeilingGuard guard{small_ceiling};
+  const Support::CapturedLevels log;
+  Support::Opened<S> opened;
+};
+
 template <Cache::Strategy S>
 void CheckStrictRejectsAListOverTheCeiling() {
-  const CeilingGuard guard(small_ceiling);
-  const auto sink = std::make_shared<LevelSink>();
-  const ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(Image(Isolated(small_ceiling + 1)));
+  const CeilingVolume<S> fixture(small_ceiling + 1);
+  const NtfsVolume<S>& volume = *fixture.opened.volume;
 
-  CHECK(opened.volume->GetBadClusters() == nullptr);
-  CHECK(sink->Count(over_message) == 1);
-  CHECK(sink->Count("$BadClus is not usable") == 1);
+  CHECK(volume.GetBadClusters() == nullptr);
+  CHECK(fixture.log.Count(over_message) == 1);
+  CHECK(fixture.log.Count("$BadClus is not usable") == 1);
   // The bitmap alone answers: the last cluster is allocated, the others free.
-  CHECK(opened.volume->GetClusterState(26) == ClusterState::Allocated);
-  CHECK(opened.volume->GetClusterState(10) == ClusterState::Free);
+  CHECK(volume.GetClusterState(26) == ClusterState::Allocated);
+  CHECK(volume.GetClusterState(10) == ClusterState::Free);
 }
 
 template <Cache::Strategy S>
 void CheckRecoverCutsAListOverTheCeiling() {
-  const CeilingGuard guard(small_ceiling);
-  const auto sink = std::make_shared<LevelSink>();
-  const ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(
-      Image(Isolated(small_ceiling + 1)),
+  const CeilingVolume<S> fixture(
+      small_ceiling + 1,
       VolumeOptions{.include_deleted = true, .recover_errors = true});
+  const NtfsVolume<S>& volume = *fixture.opened.volume;
 
-  const Alloc::BadClusters* list = opened.volume->GetBadClusters();
-  REQUIRE(list != nullptr);
-  CHECK(list->truncated);
-  REQUIRE(list->extents.size() == small_ceiling);
-  CHECK(list->extents.front().lcn == 10);
-  CHECK(list->extents.back().lcn == 24);
-  CHECK(sink->Count(over_message) == 1);
-  CHECK(sink->LevelOf(over_message) == Log::Level::Info);
+  const Alloc::BadClusters& list = Support::RequiredBadList(volume);
+  CHECK(list.truncated);
+  REQUIRE(list.extents.size() == small_ceiling);
+  CHECK(list.extents.front().lcn == 10);
+  CHECK(list.extents.back().lcn == 24);
+  CHECK(fixture.log.Count(over_message) == 1);
+  CHECK(fixture.log.LevelOf(over_message) == Log::Level::Info);
 
-  CHECK(opened.volume->GetClusterState(24) == ClusterState::Bad);
+  CHECK(volume.GetClusterState(24) == ClusterState::Bad);
   // Past the last kept extent the bitmap alone answers.
-  CHECK(opened.volume->GetClusterState(26) == ClusterState::Allocated);
-  CHECK(opened.volume->GetClusterState(25) == ClusterState::Free);
+  CHECK(volume.GetClusterState(26) == ClusterState::Allocated);
+  CHECK(volume.GetClusterState(25) == ClusterState::Free);
 }
 
 template <Cache::Strategy S>
 void CheckAListAtTheCeilingIsWhole() {
-  const CeilingGuard guard(small_ceiling);
   for (const bool recover : {false, true}) {
-    const auto opened = Support::Open<S>(
-        Image(Isolated(small_ceiling)),
+    const CeilingVolume<S> fixture(
+        small_ceiling,
         VolumeOptions{.include_deleted = true, .recover_errors = recover});
 
-    const Alloc::BadClusters* list = opened.volume->GetBadClusters();
-    REQUIRE(list != nullptr);
-    CHECK_FALSE(list->truncated);
-    CHECK(list->extents.size() == small_ceiling);
+    const Alloc::BadClusters& list =
+        Support::RequiredBadList(*fixture.opened.volume);
+    CHECK_FALSE(list.truncated);
+    CHECK(list.extents.size() == small_ceiling);
   }
 }
 

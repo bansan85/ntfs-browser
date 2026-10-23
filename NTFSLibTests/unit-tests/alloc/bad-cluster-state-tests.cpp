@@ -1,7 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <limits>
-#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -54,6 +53,15 @@ std::vector<BYTE> ImageWith(std::span<const Alloc::Extent> bad,
   return Support::WithBadClusters(std::move(image), bad, options);
 }
 
+// Opens the base image with a bad list, over the given volume options.
+template <Cache::Strategy S>
+Support::Opened<S>
+    OpenWith(std::span<const Alloc::Extent> bad,
+             std::span<const Alloc::Extent> bad_in_bitmap,
+             const VolumeOptions& options = Support::DeletedOptions()) {
+  return Support::Open<S>(ImageWith(bad, bad_in_bitmap), options);
+}
+
 // Both lists together, in cluster order.
 std::vector<Alloc::Extent> BothBadLists() {
   std::vector<Alloc::Extent> both = bad_marked;
@@ -63,8 +71,7 @@ std::vector<Alloc::Extent> BothBadLists() {
 
 template <Cache::Strategy S>
 void CheckBadClustersAreBad() {
-  const std::vector<Alloc::Extent> both = BothBadLists();
-  const auto opened = Support::Open<S>(ImageWith(both, bad_marked));
+  const auto opened = OpenWith<S>(BothBadLists(), bad_marked);
   const auto& volume = *opened.volume;
 
   CHECK(volume.GetClusterState(44) == ClusterState::Free);
@@ -94,21 +101,19 @@ constexpr std::string_view disagreement_message =
 
 template <Cache::Strategy S>
 void CheckDisagreementIsLoggedOnce() {
-  const auto sink = std::make_shared<Support::LevelSink>();
-  const Support::ScopedSink scoped(sink);
-  const auto opened = Support::Open<S>(ImageWith(bad_clear, {}));
+  const Support::CapturedLevels log;
+  const auto opened = OpenWith<S>(bad_clear, {});
 
   CHECK(opened.volume->GetClusterState(60) == ClusterState::Bad);
   CHECK(opened.volume->GetClusterState(60) == ClusterState::Bad);
   CHECK(opened.volume->GetRangeState(58, 5) == ClusterState::Bad);
 
-  CHECK(sink->Count(disagreement_message) == 1);
+  CHECK(log.Count(disagreement_message) == 1);
 }
 
 template <Cache::Strategy S>
 void CheckRangesCountTheirBadClusters() {
-  const std::vector<Alloc::Extent> both = BothBadLists();
-  const auto opened = Support::Open<S>(ImageWith(both, bad_marked));
+  const auto opened = OpenWith<S>(BothBadLists(), bad_marked);
 
   std::vector<Alloc::RangeQuery> queries{
       {.lcn = 44, .clusters = 4},   // 45, 46 are bad and marked
@@ -136,12 +141,11 @@ void CheckRangesCountTheirBadClusters() {
 
 template <Cache::Strategy S>
 void CheckAHealthyVolumeHasAnEmptyList() {
-  const auto opened = Support::Open<S>(ImageWith({}, {}));
+  const auto opened = OpenWith<S>({}, {});
 
-  const Alloc::BadClusters* list = opened.volume->GetBadClusters();
-  REQUIRE(list != nullptr);
-  CHECK(list->extents.empty());
-  CHECK_FALSE(list->truncated);
+  const Alloc::BadClusters& list = Support::RequiredBadList(*opened.volume);
+  CHECK(list.extents.empty());
+  CHECK_FALSE(list.truncated);
   CHECK(opened.volume->GetClusterState(45) == ClusterState::Free);
 }
 
@@ -152,18 +156,17 @@ void CheckTheListIsSortedMergedAndClamped() {
                                          {.lcn = 10, .clusters = 3},
                                          {.lcn = 13, .clusters = 2},
                                          {.lcn = 1000, .clusters = 4}};
-  const auto opened = Support::Open<S>(ImageWith(given, {}));
+  const auto opened = OpenWith<S>(given, {});
 
-  const Alloc::BadClusters* list = opened.volume->GetBadClusters();
-  REQUIRE(list != nullptr);
-  REQUIRE(list->extents.size() == 2);
-  CHECK(list->extents[0].lcn == 10);
-  CHECK(list->extents[0].clusters == 5);
-  CHECK(list->extents[1].lcn == 50);
-  CHECK(list->extents[1].clusters == 2);
-  CHECK_FALSE(list->truncated);
-  // The same pointer comes back: the list is read once.
-  CHECK(opened.volume->GetBadClusters() == list);
+  const Alloc::BadClusters& list = Support::RequiredBadList(*opened.volume);
+  REQUIRE(list.extents.size() == 2);
+  CHECK(list.extents[0].lcn == 10);
+  CHECK(list.extents[0].clusters == 5);
+  CHECK(list.extents[1].lcn == 50);
+  CHECK(list.extents[1].clusters == 2);
+  CHECK_FALSE(list.truncated);
+  // The same object comes back: the list is read once.
+  CHECK(&Support::RequiredBadList(*opened.volume) == &list);
 }
 
 template <Cache::Strategy S>
@@ -185,7 +188,7 @@ void CheckOptionsDoNotChangeTheAnswer() {
 
 template <Cache::Strategy S>
 void CheckPastTheEndIsOutOfRange() {
-  const auto opened = Support::Open<S>(ImageWith(bad_marked, bad_marked));
+  const auto opened = OpenWith<S>(bad_marked, bad_marked);
 
   CHECK(opened.volume->GetClusterState(1000000) == ClusterState::OutOfRange);
   CHECK(opened.volume->GetClusterState(std::numeric_limits<ULONGLONG>::max()) ==

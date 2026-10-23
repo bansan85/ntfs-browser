@@ -83,6 +83,26 @@ class ScopedSink {
   std::shared_ptr<LevelSink> sink_;
 };
 
+// A LevelSink that hears the library for as long as it lives.
+class CapturedLevels {
+ public:
+  CapturedLevels() : sink_(std::make_shared<LevelSink>()), scoped_(sink_) {}
+
+  // Lines that hold text.
+  [[nodiscard]] size_t Count(std::string_view text) const {
+    return sink_->Count(text);
+  }
+
+  // Level of the first line that holds text.
+  [[nodiscard]] std::optional<Log::Level> LevelOf(std::string_view text) const {
+    return sink_->LevelOf(text);
+  }
+
+ private:
+  std::shared_ptr<LevelSink> sink_;
+  ScopedSink scoped_;
+};
+
 // A raw attribute callback that throws, as a user callback can.
 inline void ThrowingCallback(const Attr::HeaderCommon& /*header*/,
                              bool& /*discard*/) {

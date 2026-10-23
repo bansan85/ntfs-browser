@@ -32,6 +32,8 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using Support::ReadStale;
+using Support::stale_size;
 using Tests::FakeDataRun;
 
 namespace {
@@ -43,9 +45,6 @@ constexpr const char* bad_message =
 // What the check of feature 005 says about a free cluster.
 constexpr const char* free_message =
     "clusters of a data stream are free in $Bitmap";
-
-// Bytes of the stale stream: four clusters at LCN 40.
-constexpr ULONGLONG stale_size = 4 * Tests::fake_cluster_size;
 
 const VolumeOptions strict{};
 const VolumeOptions recovering{.recover_errors = true};
@@ -60,9 +59,7 @@ std::vector<BYTE> LiveImage(std::span<const Alloc::Extent> bad,
                             bool marked = true, bool in_use = true) {
   std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
       stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
-  for (size_t i = 0; i < stale_size; i++) {
-    image.at(40 * Tests::fake_cluster_size + i) = static_cast<BYTE>(i * 13);
-  }
+  Support::FillStaleClusters(image, 13);
   Tests::SetRecordInUse(image, Tests::mft_tree_stale_child_idx, in_use);
   std::vector<FakeDataRun> in_bitmap(allocated_runs.begin(),
                                      allocated_runs.end());
@@ -76,18 +73,6 @@ std::vector<BYTE> LiveImage(std::span<const Alloc::Extent> bad,
 // The other three clusters of the stale file, allocated in the bitmap.
 const std::vector<FakeDataRun> rest_used{FakeDataRun{.lcn = 40, .clusters = 1},
                                          FakeDataRun{.lcn = 42, .clusters = 2}};
-
-// Reads the whole stale stream.
-template <Cache::Strategy S>
-std::vector<BYTE> ReadStale(const Support::Opened<S>& opened) {
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
-  std::vector<BYTE> out(stale_size);
-  const auto read = record->FindStream({})->ReadData(0, out);
-  REQUIRE(read);
-  REQUIRE(*read == stale_size);
-  return out;
-}
 
 template <Cache::Strategy S>
 void CheckABadClusterIsLogged() {
@@ -113,12 +98,9 @@ void CheckAPartlyBadRunIsLogged() {
                                        {.lcn = 43, .clusters = 1}};
   const std::array<FakeDataRun, 1> middle{
       FakeDataRun{.lcn = 41, .clusters = 2}};
-  const auto opened = Support::Open<S>(LiveImage(two, middle), recovering);
-  (void)Tests::TakeCapturedLog();
+  const std::string log =
+      Support::LogOfReadingStale<S>(LiveImage(two, middle), recovering);
 
-  (void)ReadStale(opened);
-
-  const std::string log = Tests::TakeCapturedLog();
   CHECK_THAT(log, ContainsSubstring(bad_message));
   CHECK_THAT(log, ContainsSubstring("2 clusters"));
 }
@@ -127,12 +109,9 @@ template <Cache::Strategy S>
 void CheckAHealthyFileIsNotLogged() {
   const std::array<FakeDataRun, 1> all_used{
       FakeDataRun{.lcn = 40, .clusters = 4}};
-  const auto opened = Support::Open<S>(LiveImage({}, all_used), recovering);
-  (void)Tests::TakeCapturedLog();
+  const std::string log =
+      Support::LogOfReadingStale<S>(LiveImage({}, all_used), recovering);
 
-  (void)ReadStale(opened);
-
-  const std::string log = Tests::TakeCapturedLog();
   CHECK_THAT(log, !ContainsSubstring(bad_message));
   CHECK_THAT(log, !ContainsSubstring(free_message));
 }
@@ -157,13 +136,9 @@ void CheckStrictModeReadsNoBadList() {
 template <Cache::Strategy S>
 void CheckOneCauseRaisesOneMessage() {
   // The cluster is listed bad and its bit is clear: bad, never also free.
-  const auto opened = Support::Open<S>(
+  const std::string log = Support::LogOfReadingStale<S>(
       LiveImage(one_bad, rest_used, /*marked=*/false), recovering);
-  (void)Tests::TakeCapturedLog();
 
-  (void)ReadStale(opened);
-
-  const std::string log = Tests::TakeCapturedLog();
   CHECK_THAT(log, ContainsSubstring(bad_message));
   CHECK_THAT(log, !ContainsSubstring(free_message));
 }
@@ -172,8 +147,7 @@ template <Cache::Strategy S>
 void CheckTheCheckRunsOnce() {
   const auto opened =
       Support::Open<S>(LiveImage(one_bad, rest_used), recovering);
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
+  const auto record = Support::ParsedStale(opened);
   std::vector<BYTE> out(stale_size);
   const auto* const stream = record->FindStream({});
   (void)Tests::TakeCapturedLog();
@@ -189,14 +163,11 @@ void CheckTheCheckRunsOnce() {
 
 template <Cache::Strategy S>
 void CheckADeletedFileIsNotChecked() {
-  const auto opened = Support::Open<S>(
+  const std::string log = Support::LogOfReadingStale<S>(
       LiveImage(one_bad, rest_used, true, /*in_use=*/false),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
-  (void)Tests::TakeCapturedLog();
 
-  (void)ReadStale(opened);
-
-  CHECK_THAT(Tests::TakeCapturedLog(), !ContainsSubstring(bad_message));
+  CHECK_THAT(log, !ContainsSubstring(bad_message));
 }
 
 template <Cache::Strategy S>

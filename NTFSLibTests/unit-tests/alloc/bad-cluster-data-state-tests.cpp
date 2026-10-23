@@ -27,13 +27,11 @@ namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using Support::stale_size;
 using Tests::FakeBadClusterOptions;
 using Tests::FakeDataRun;
 
 namespace {
-
-// Bytes of the stale stream: four clusters.
-constexpr ULONGLONG stale_size = 4 * Tests::fake_cluster_size;
 
 // The stale file's one run: four clusters at LCN 40.
 const std::vector<FakeDataRun> stale_runs{
@@ -62,9 +60,7 @@ std::optional<DataState>
     StateOfStale(const std::vector<BYTE>& image,
                  const VolumeOptions& options = Support::DeletedOptions()) {
   const auto opened = Support::Open<S>(image, options);
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
-  return record->GetDataState();
+  return Support::ParsedStale(opened)->GetDataState();
 }
 
 template <Cache::Strategy S>
@@ -107,20 +103,13 @@ void CheckReadingABadStreamIsUnchanged() {
       {});
   std::vector<BYTE> with = StaleImage(one_bad, one_bad);
   for (std::vector<BYTE>* image : {&without, &with}) {
-    for (size_t i = 0; i < stale_size; i++) {
-      image->at(40 * Tests::fake_cluster_size + i) = static_cast<BYTE>(i * 7);
-    }
+    Support::FillStaleClusters(*image, 7);
   }
 
   const auto bytes_of = [](const std::vector<BYTE>& image) {
     const auto opened = Support::Open<S>(image);
-    const auto record =
-        Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
     opened.counter->Reset();
-    std::vector<BYTE> out(stale_size);
-    const auto read = record->FindStream({})->ReadData(0, out);
-    REQUIRE(read);
-    REQUIRE(*read == stale_size);
+    std::vector<BYTE> out = Support::ReadStale(opened);
     // The read is issued on the bad cluster 41, as on any other. A FullCache
     // volume has the whole 64 KiB block in memory already, so only NoCache
     // goes to the reader again.
@@ -140,8 +129,7 @@ void CheckALiveFileIsIntactWithoutAnyRead() {
   std::vector<BYTE> image = StaleImage(one_bad, one_bad);
   Tests::SetRecordInUse(image, Tests::mft_tree_stale_child_idx, true);
   const auto opened = Support::Open<S>(image);
-  const auto record =
-      Support::ParsedRecord(*opened.volume, Tests::mft_tree_stale_child_idx);
+  const auto record = Support::ParsedStale(opened);
   opened.counter->Reset();
 
   CHECK(record->GetDataState() == DataState::Intact);

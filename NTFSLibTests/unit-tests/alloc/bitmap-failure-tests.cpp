@@ -36,8 +36,6 @@ namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::LevelSink;
-using Support::ScopedSink;
 using Support::ThrowingCallback;
 using Tests::FakeBitmapOptions;
 using Tests::FakeBitmapShape;
@@ -100,6 +98,17 @@ std::vector<BYTE> TreeWithBitmap(const FakeBitmapOptions& options = {}) {
                              allocated, options);
 }
 
+// Checks that a volume with no usable bitmap answers unknown to everything. It
+// asks for cluster 40 and for the range first and count.
+template <Cache::Strategy S>
+void CheckEveryAnswerIsUnknown(const NtfsVolume<S>& volume, ULONGLONG first,
+                               ULONGLONG count) {
+  CHECK_NOTHROW(volume.GetClusterState(40));
+  CHECK(volume.GetClusterState(40) == ClusterState::Unknown);
+  CHECK(volume.GetRangeState(first, count) == ClusterState::Unknown);
+  CHECK_FALSE(volume.GetSpaceSummary());
+}
+
 template <Cache::Strategy S>
 void CheckNothingIsReadBeforeAQuery() {
   const std::vector<BYTE> image = TreeWithBitmap();
@@ -118,19 +127,15 @@ template <Cache::Strategy S>
 void CheckAMissingBitmapIsUnknownAndLoggedOnce(bool recover,
                                                Log::Level expected) {
   // Record 6 is zero-filled in the freed tree.
-  const auto sink = std::make_shared<LevelSink>();
-  const ScopedSink scoped(sink);
+  const Support::CapturedLevels log;
   const auto opened = Support::Open<S>(
       Tests::BuildFakeNtfsImageWithFreedFileTree(),
       VolumeOptions{.include_deleted = true, .recover_errors = recover});
 
-  CHECK_NOTHROW(opened.volume->GetClusterState(40));
-  CHECK(opened.volume->GetClusterState(40) == ClusterState::Unknown);
-  CHECK(opened.volume->GetRangeState(0, 10) == ClusterState::Unknown);
-  CHECK_FALSE(opened.volume->GetSpaceSummary());
+  CheckEveryAnswerIsUnknown(*opened.volume, 0, 10);
 
-  CHECK(sink->Count(unusable_message) == 1);
-  CHECK(sink->LevelOf(unusable_message) == expected);
+  CHECK(log.Count(unusable_message) == 1);
+  CHECK(log.LevelOf(unusable_message) == expected);
 }
 
 template <Cache::Strategy S>
@@ -165,8 +170,7 @@ void CheckAFailedWindowOnly() {
   const ULONGLONG second_cluster =
       (two_cluster_data_lcn + 1) * Tests::fake_cluster_size;
 
-  const auto sink = std::make_shared<LevelSink>();
-  const ScopedSink scoped(sink);
+  const Support::CapturedLevels log;
   Alloc::SetBitmapWindowBytesForTests(one_cluster_window);
   auto counter = std::make_unique<Tests::CountingDiskReader>(
       std::make_unique<FailingRangeReader>(
@@ -187,7 +191,7 @@ void CheckAFailedWindowOnly() {
   CHECK(reads->ReadsInRange(second_cluster,
                             second_cluster + Tests::fake_cluster_size) ==
         after_first);
-  CHECK(sink->Count(partial_message) == 1);
+  CHECK(log.Count(partial_message) == 1);
 
   Alloc::SetBitmapWindowBytesForTests(0);
 }
@@ -200,14 +204,13 @@ void CheckAShortBitmapLogsOnce() {
       image, four_bytes,
       {.shape = FakeBitmapShape::Resident, .pad_to_volume = false});
 
-  const auto sink = std::make_shared<LevelSink>();
-  const ScopedSink scoped(sink);
+  const Support::CapturedLevels log;
   const auto opened = Support::Open<S>(image);
 
   CHECK(opened.volume->GetClusterState(10) == ClusterState::Free);
   CHECK(opened.volume->GetClusterState(40) == ClusterState::Unknown);
   CHECK(opened.volume->GetClusterState(41) == ClusterState::Unknown);
-  CHECK(sink->Count(short_message) == 1);
+  CHECK(log.Count(short_message) == 1);
 }
 
 template <Cache::Strategy S>
@@ -215,10 +218,7 @@ void CheckAThrowingCallbackIsContained() {
   const auto opened = Support::Open<S>(TreeWithBitmap());
   REQUIRE(opened.volume->InstallAttrRawCB(Attr::Type::Data, &ThrowingCallback));
 
-  CHECK_NOTHROW(opened.volume->GetClusterState(40));
-  CHECK(opened.volume->GetClusterState(40) == ClusterState::Unknown);
-  CHECK(opened.volume->GetRangeState(40, 2) == ClusterState::Unknown);
-  CHECK_FALSE(opened.volume->GetSpaceSummary());
+  CheckEveryAnswerIsUnknown(*opened.volume, 40, 2);
 }
 
 }  // namespace
