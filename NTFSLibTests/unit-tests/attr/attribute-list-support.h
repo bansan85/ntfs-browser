@@ -2,17 +2,30 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "nonresident-index-support.h"
 #include "test-log-sink.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+enum class Mask : DWORD;
+
+}  // namespace Attr
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 

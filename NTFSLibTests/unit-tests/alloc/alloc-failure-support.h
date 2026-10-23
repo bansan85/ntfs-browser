@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -8,12 +9,19 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 
 #include "test-log-sink.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::AllocSupport {
 

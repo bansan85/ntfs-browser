@@ -18,7 +18,6 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
-#include "gap-collation-probe.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
 

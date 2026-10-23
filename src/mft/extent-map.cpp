@@ -18,19 +18,17 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
-#include "../log/ntfs-common.h"
 #include "attr/non-resident.h"
+#include "log/ntfs-common.h"
 
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Attr {
+namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 template <Cache::Strategy S>
 class AttrBase;
 template <Cache::Strategy S>
 class AttrNonResident;
 
-}  // namespace Attr
-}  // namespace NTFS_BROWSER_NAMESPACE
+}  // namespace NTFS_BROWSER_NAMESPACE::Attr
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

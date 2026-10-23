@@ -24,6 +24,7 @@
 #include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "nonresident-index-support.h"
+#include "test-log-sink.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

@@ -2,7 +2,6 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <span>
@@ -11,7 +10,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/usn/types.h>
@@ -21,6 +19,24 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "usn/usn-record-scanner.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+namespace Tests {
+
+class CountingDiskReader;
+class MemoryDiskReader;
+
+}  // namespace Tests
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::UsnSupport {
 

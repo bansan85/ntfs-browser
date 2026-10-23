@@ -9,7 +9,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
@@ -17,6 +16,17 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "memory-disk-reader.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

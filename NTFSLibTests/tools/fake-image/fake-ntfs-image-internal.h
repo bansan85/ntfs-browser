@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
+#include <cstddef>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -10,11 +11,9 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/file-record-flag.h"
-#include "data/file-record-header.h"
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"
 #include "data/index-block.h"
@@ -22,6 +21,20 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "mft/file-reference.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+enum class Type : DWORD;
+
+}  // namespace Attr
+
+namespace Data {
+
+struct FileRecordHeader;
+
+}  // namespace Data
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

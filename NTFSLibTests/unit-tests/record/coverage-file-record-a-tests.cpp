@@ -34,7 +34,6 @@
 #include "data/index-root.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
-#include "gap-collation-probe.h"
 #include "memory-disk-reader.h"
 #include "ntfs-browser/attr/header-common.h"
 #include "ntfs-browser/attr/type.h"

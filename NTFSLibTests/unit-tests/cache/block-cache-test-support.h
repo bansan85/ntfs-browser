@@ -8,6 +8,7 @@
 #include <span>
 
 #include "cache/block-cache.h"
+#include "ntfs-browser/namespace.h"
 
 namespace {
 

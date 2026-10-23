@@ -13,13 +13,16 @@
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
 #include "catch2/matchers/catch_matchers.hpp"
+#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
+#include "memory-disk-reader.h"
 #include "test-log-sink.h"
 
 using Catch::Matchers::ContainsSubstring;

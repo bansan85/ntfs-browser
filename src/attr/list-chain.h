@@ -2,10 +2,11 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
+
+enum class Type : DWORD;
 
 // Width of the Attr::Type field in a chain key. Every Attr::Type fits 16 bits.
 inline constexpr unsigned chain_key_type_bits = 16;

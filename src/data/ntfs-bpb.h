@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>

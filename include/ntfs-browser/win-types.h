@@ -10,10 +10,7 @@
 
 #else
 
-  // Minimal shim for the Windows typedefs this library's API uses.
-  #include <cstddef>
   #include <cstdint>
-  #include <type_traits>
 
 using BYTE = std::uint8_t;
 using WORD = std::uint16_t;

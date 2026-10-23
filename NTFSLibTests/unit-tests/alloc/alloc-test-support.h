@@ -2,16 +2,13 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <memory>
-#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -20,6 +17,37 @@
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Alloc {
+
+struct Extent;
+
+}  // namespace Alloc
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+
+namespace Tests {
+
+class CountingDiskReader;
+class MemoryDiskReader;
+
+}  // namespace Tests
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::AllocSupport {
 

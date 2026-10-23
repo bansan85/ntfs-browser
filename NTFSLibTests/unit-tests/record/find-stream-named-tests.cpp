@@ -19,7 +19,6 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
-#include "named-stream-probe.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

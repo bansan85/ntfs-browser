@@ -16,7 +16,6 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "attr/std-info.h"
 #include "data/file-record-header.h"
 #include "data/header-resident.h"
 #include "data/standard-information.h"

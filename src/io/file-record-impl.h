@@ -13,17 +13,35 @@
 
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
 
 #include "attr/slot.h"
-#include "attr/std-info.h"
-#include "data/file-record-header.h"
 #include "io/file-record-attr-types.h"
 #include "record/header.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+enum class Type : DWORD;
+struct HeaderCommon;
+template <Cache::Strategy S>
+class AttrBase;
+template <typename Resident, Cache::Strategy S>
+class AttrStdInfo;
+
+}  // namespace Attr
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 

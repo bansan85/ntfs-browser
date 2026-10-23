@@ -12,6 +12,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "data/attribute-list.h"
+#include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"

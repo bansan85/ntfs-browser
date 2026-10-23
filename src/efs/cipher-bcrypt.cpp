@@ -7,6 +7,7 @@
 
   #include <ntfs-browser/namespace.h>
 
+  #include "efs/fek.h"
   #include "efs/sector-cipher.h"
   #include "log/ntfs-common.h"
 

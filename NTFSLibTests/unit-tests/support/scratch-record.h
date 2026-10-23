@@ -3,8 +3,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <span>
 #include <string_view>
@@ -24,6 +22,7 @@
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
 #include "data/standard-information.h"
+#include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 

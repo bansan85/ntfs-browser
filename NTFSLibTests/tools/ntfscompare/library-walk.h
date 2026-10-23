@@ -3,7 +3,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -11,7 +10,6 @@
 #include <vector>
 
 #include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
@@ -21,14 +19,18 @@
 
 #include "entry.h"
 
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Io {
+namespace NTFS_BROWSER_NAMESPACE::Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace NTFS_BROWSER_NAMESPACE::Cache
+
+namespace NTFS_BROWSER_NAMESPACE::Io {
 
 template <Cache::Strategy S>
 class FileRecord;
 
-}  // namespace Io
-}  // namespace NTFS_BROWSER_NAMESPACE
+}  // namespace NTFS_BROWSER_NAMESPACE::Io
 
 namespace NtfsCompare {
 

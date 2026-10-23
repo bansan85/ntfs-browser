@@ -4,7 +4,6 @@
 
 #include <span>
 
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 

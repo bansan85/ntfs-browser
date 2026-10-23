@@ -5,21 +5,14 @@
 #include <array>
 #include <memory>
 #include <optional>
-#include <span>
-#include <string_view>
 #include <vector>
 
 #include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs/efs.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc/bad-cluster-list.h"
@@ -27,6 +20,36 @@
 #include "attr/slot.h"
 #include "mft/mft-bootstrap.h"
 #include "volume/volume-geometry.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+class IDiskReader;
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+namespace Io {
+
+template <Cache::Strategy S>
+class FileRecord;
+
+}  // namespace Io
+
+namespace Usn {
+
+struct Journal;
+
+}  // namespace Usn
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 #ifdef _WIN32
   #include <tchar.h>

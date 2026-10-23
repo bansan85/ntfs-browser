@@ -10,7 +10,14 @@
 #include <ntfs-browser/namespace.h>
 
 #include "../internal-export.h"
-#include "efs/fek.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Efs {
+
+class Fek;
+
+}  // namespace Efs
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 

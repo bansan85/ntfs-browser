@@ -20,6 +20,7 @@
 
 #include "alloc-test-support.h"
 #include "catch2/matchers/catch_matchers.hpp"
+#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "test-log-sink.h"
 

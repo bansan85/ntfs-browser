@@ -15,6 +15,7 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
+#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

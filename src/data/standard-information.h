@@ -4,7 +4,13 @@
 
 #include <ntfs-browser/namespace.h>
 
-#include "data/std-info-permission.h"
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Data {
+
+enum class StdInfoPermission : DWORD;
+
+}  // namespace Data
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Data {
 

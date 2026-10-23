@@ -4,8 +4,15 @@
 
 #include <cstddef>
 
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+enum class Type : DWORD;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Data {
 

@@ -4,6 +4,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <optional>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>

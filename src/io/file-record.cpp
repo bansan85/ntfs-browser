@@ -17,6 +17,7 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/alloc/types.h>
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
@@ -35,7 +36,6 @@
 #include "attr/std-info.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
-#include "efs/efs-context.h"
 #include "io/file-record-attr-types.h"
 #include "io/file-record-impl.h"
 #include "io/file-record-index.h"

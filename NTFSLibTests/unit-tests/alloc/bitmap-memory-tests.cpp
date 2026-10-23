@@ -10,10 +10,13 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "alloc-test-support.h"
 #include "alloc/cluster-bitmap.h"
+#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
+#include "memory-disk-reader.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

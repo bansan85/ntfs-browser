@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
 #include "memory-disk-reader.h"

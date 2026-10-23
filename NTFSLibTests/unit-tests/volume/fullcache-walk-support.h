@@ -6,13 +6,11 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>

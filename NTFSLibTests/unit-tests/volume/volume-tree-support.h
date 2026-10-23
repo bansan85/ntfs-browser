@@ -13,13 +13,19 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+namespace Attr {
+
+enum class Type : DWORD;
+
+}  // namespace Attr
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
