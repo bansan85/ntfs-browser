@@ -62,13 +62,7 @@ static_assert(FakeIndexAllocShape{}.declared_block_count ==
 DWORD WriteShapedIndexAllocAttr(FakeRecord& record, DWORD offset,
                                 const FakeIndexAllocShape& shape) {
   auto& alloc_attr =
-      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
-          &record.at(offset));
-  alloc_attr.header.type = Attr::Type::IndexAllocation;
-  alloc_attr.header.non_resident = 1;
-  alloc_attr.header.name_length = 0;
-  alloc_attr.header.flags = 0;
-  alloc_attr.header.id = 0;
+      InitNonResidentAttr(record, offset, Attr::Type::IndexAllocation);
   alloc_attr.start_vcn = shape.start_vcn;
   alloc_attr.last_vcn = shape.last_vcn;
   alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
@@ -107,13 +101,8 @@ DWORD WriteShapedIndexAllocAttr(FakeRecord& record, DWORD offset,
 // mapped one forges the attribute's own real_size (hence GetIndexBlockCount())
 // without changing the data run.
 FakeRecord MakeOrphanedIndexBlocksRootRecord(const FakeIndexAllocShape& shape) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
-                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
   // The sequence its entries' parent references carry.
-  EditFileRecordHeader(record, [](FileRecordHeader& header) {
-    header.seq_no = root_sequence_number;
-  });
+  FakeRecord record = MakeInUseDirectoryRecord(root_sequence_number);
 
   DWORD offset = attr_offset_value;
   // Sole entry: nameless, terminal, pointing at VCN 0 - the only block a
@@ -130,55 +119,14 @@ FakeRecord MakeOrphanedIndexBlocksRootRecord(const FakeIndexAllocShape& shape) {
 void WriteOrphanedIndexLeafBlock(std::vector<BYTE>& image, DWORD vcn,
                                  ULONGLONG mft_ref, ULONGLONG parent_ref,
                                  std::wstring_view name) {
-  const auto name_length = gsl::narrow<BYTE>(name.size());
-  const size_t blocks_offset =
-      static_cast<size_t>(orphaned_blocks_lcn) * cluster_size;
-  const std::span<BYTE> block_start = std::span<BYTE>(image).subspan(
-      blocks_offset + static_cast<size_t>(vcn) * cluster_size);
-  auto& block = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexBlock*>(
-      block_start.data());
-  std::memset(&block, 0, sizeof(block));
-  block.magic = index_block_magic;
-  // Points at the block's own last 6 bytes, so PatchUS() succeeds trivially
-  // without a real fixup array.
-  block.offset_of_us = static_cast<WORD>(cluster_size - us_slot_size);
-  block.size_of_us = 3;
-  block.vcn = vcn;
-  block.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(block_start,
-                sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock))) -
-      reinterpret_cast<BYTE*>(&block.entry_offset));
-  block.not_leaf = 0;
-
-  const std::span<BYTE> body =
-      block_start.subspan(sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock));
-  auto& first_entry =
-      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(body.data());
-  first_entry.mft_index = mft_ref;
-  first_entry.mft_sn = 1;
-
-  auto& fn1 = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
-      &first_entry.stream);
-  fn1.parent_ref = parent_ref;
-  fn1.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
-  fn1.name_length = name_length;
-  fn1.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
-  for (BYTE i = 0; i < name_length; i++) {
-    // nameLength is name.size(), so i < name.size() by the loop condition.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    fn1.name[i] = gsl::narrow<WORD>(name[i]);
-  }
-
-  first_entry.stream_size =
-      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name_length]) -
-                        reinterpret_cast<BYTE*>(&fn1));
-  first_entry.flags = NTFS_BROWSER_NAMESPACE::Data::IndexEntryFlag::Last;
-  first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
-      &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
-      first_entry.stream_size));
-
-  block.total_entry_size = first_entry.size;
-  block.alloc_entry_size = first_entry.size;
+  WriteIndexLeafBlockAt(
+      image, {.offset = (static_cast<size_t>(orphaned_blocks_lcn) + vcn) *
+                        cluster_size,
+              .size = cluster_size,
+              .vcn = vcn,
+              .mft_ref = mft_ref,
+              .parent_ref = parent_ref,
+              .name = name});
 }
 
 // LCN where BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock() writes
@@ -199,13 +147,8 @@ constexpr DWORD multi_cluster_orphan_block_count = 2;
 // block 0, while $INDEX_ALLOCATION covers multi_cluster_orphan_block_count
 // blocks of multi_cluster_orphan_clusters_per_block clusters each.
 FakeRecord MakeMultiClusterOrphanedIndexBlocksRootRecord() {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
-                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
   // The sequence its entries' parent references carry.
-  EditFileRecordHeader(record, [](FileRecordHeader& header) {
-    header.seq_no = root_sequence_number;
-  });
+  FakeRecord record = MakeInUseDirectoryRecord(root_sequence_number);
 
   DWORD offset = attr_offset_value;
   // $INDEX_ROOT: a single sub-node pointer at VCN 0 (block 0).
@@ -236,62 +179,17 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image,
                                      DWORD block_index, ULONGLONG mft_ref,
                                      ULONGLONG parent_ref,
                                      std::wstring_view name) {
-  const auto name_length = gsl::narrow<BYTE>(name.size());
-  const ULONGLONG vcn = static_cast<ULONGLONG>(block_index) *
-                        multi_cluster_orphan_clusters_per_block;
-  const size_t blocks_offset =
-      static_cast<size_t>(multi_cluster_orphan_lcn) * cluster_size;
-  const std::span<BYTE> block_start = std::span<BYTE>(image).subspan(
-      blocks_offset + gsl::narrow<size_t>(vcn) * cluster_size);
-  auto& block = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexBlock*>(
-      block_start.data());
-  std::memset(&block, 0, sizeof(block));
-  block.magic = index_block_magic;
-  // Points the USA at the block's own last (1 + sectors) words, so every
-  // PatchUS() check compares a still-zero byte range to itself and the
-  // whole array trivially self-patches, without a real fixup array - the
-  // multi-sector generalization of the single-cluster fixtures' same trick.
-  const DWORD sectors =
-      multi_cluster_orphan_index_block_size / bytes_per_sector;
-  block.offset_of_us = gsl::narrow<WORD>(multi_cluster_orphan_index_block_size -
-                                         2 * (1 + sectors));
-  block.size_of_us = gsl::narrow<WORD>(1 + sectors);
-  block.vcn = vcn;
-  block.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(block_start,
-                sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock))) -
-      reinterpret_cast<BYTE*>(&block.entry_offset));
-  block.not_leaf = 0;
-
-  const std::span<BYTE> body =
-      block_start.subspan(sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock));
-  auto& first_entry =
-      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(body.data());
-  first_entry.mft_index = mft_ref;
-  first_entry.mft_sn = 1;
-
-  auto& fn1 = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
-      &first_entry.stream);
-  fn1.parent_ref = parent_ref;
-  fn1.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
-  fn1.name_length = name_length;
-  fn1.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
-  for (BYTE i = 0; i < name_length; i++) {
-    // nameLength is name.size(), so i < name.size() by the loop condition.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    fn1.name[i] = gsl::narrow<WORD>(name[i]);
-  }
-
-  first_entry.stream_size =
-      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name_length]) -
-                        reinterpret_cast<BYTE*>(&fn1));
-  first_entry.flags = NTFS_BROWSER_NAMESPACE::Data::IndexEntryFlag::Last;
-  first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
-      &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
-      first_entry.stream_size));
-
-  block.total_entry_size = first_entry.size;
-  block.alloc_entry_size = first_entry.size;
+  WriteIndexLeafBlockAt(
+      image, {.offset = (static_cast<size_t>(multi_cluster_orphan_lcn) +
+                         static_cast<size_t>(block_index) *
+                             multi_cluster_orphan_clusters_per_block) *
+                        cluster_size,
+              .size = multi_cluster_orphan_index_block_size,
+              .vcn = static_cast<ULONGLONG>(block_index) *
+                     multi_cluster_orphan_clusters_per_block,
+              .mft_ref = mft_ref,
+              .parent_ref = parent_ref,
+              .name = name});
 }
 
 // Builds a root-directory replacement, sequence root_sequence_number, whose
@@ -301,12 +199,7 @@ void WriteMultiClusterIndexLeafBlock(std::vector<BYTE>& image,
 FakeRecord MakeDirectoryWithIndexAllocation(
     DWORD ib_size, std::span<const FakeIndexAllocExtent> extents,
     ULONGLONG declared_block_count) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
-                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
-  EditFileRecordHeader(record, [](FileRecordHeader& header) {
-    header.seq_no = root_sequence_number;
-  });
+  FakeRecord record = MakeInUseDirectoryRecord(root_sequence_number);
 
   DWORD offset = attr_offset_value;
   offset += WriteSubNodeIndexRootAttr(
@@ -322,80 +215,6 @@ FakeRecord MakeDirectoryWithIndexAllocation(
 
   WriteEndOfAttributesMarker(record, offset);
   return record;
-}
-
-// Where an index block WriteIndexLeafBlockAt() writes sits, and what it holds.
-struct FakeIndexLeafBlock {
-  // Byte offset of the block in the image.
-  size_t offset;
-  // Size of the block in bytes.
-  DWORD size;
-  // VCN the block header declares.
-  ULONGLONG vcn;
-  // MFT record the block's single leaf entry points to.
-  ULONGLONG mft_ref;
-  // Parent directory reference that entry carries.
-  ULONGLONG parent_ref;
-  // Name of that entry.
-  std::wstring_view name;
-};
-
-// Writes an index block holding one real leaf entry, as spec describes.
-void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
-                           const FakeIndexLeafBlock& spec) {
-  const size_t block_offset = spec.offset;
-  const DWORD block_size = spec.size;
-  const ULONGLONG vcn = spec.vcn;
-  const ULONGLONG mft_ref = spec.mft_ref;
-  const ULONGLONG parent_ref = spec.parent_ref;
-  const std::wstring_view name = spec.name;
-  const std::span<BYTE> block_start =
-      std::span<BYTE>(image).subspan(block_offset);
-  auto& block = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexBlock*>(
-      block_start.data());
-  std::memset(&block, 0, sizeof(block));
-  block.magic = index_block_magic;
-  // Points the USA at the block's own last (1 + sectors) words, so PatchUS()
-  // compares a still-zero range to itself, without a real fixup array.
-  const DWORD sectors = block_size / bytes_per_sector;
-  block.offset_of_us = gsl::narrow<WORD>(block_size - 2 * (1 + sectors));
-  block.size_of_us = gsl::narrow<WORD>(1 + sectors);
-  block.vcn = vcn;
-  block.entry_offset = gsl::narrow<DWORD>(
-      (&gsl::at(block_start,
-                sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock))) -
-      reinterpret_cast<BYTE*>(&block.entry_offset));
-  block.not_leaf = 0;
-
-  const std::span<BYTE> body =
-      block_start.subspan(sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock));
-  auto& first_entry =
-      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexEntry*>(body.data());
-  first_entry.mft_index = mft_ref;
-  first_entry.mft_sn = 1;
-
-  auto& fn1 = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
-      &first_entry.stream);
-  fn1.parent_ref = parent_ref;
-  fn1.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
-  fn1.name_length = gsl::narrow<BYTE>(name.size());
-  fn1.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
-  for (size_t i = 0; i < name.size(); i++) {
-    // nameLength is name.size(), so i < name.size() by the loop condition.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    fn1.name[i] = gsl::narrow<WORD>(name[i]);
-  }
-
-  first_entry.stream_size =
-      gsl::narrow<WORD>(reinterpret_cast<BYTE*>(&fn1.name[name.size()]) -
-                        reinterpret_cast<BYTE*>(&fn1));
-  first_entry.flags = NTFS_BROWSER_NAMESPACE::Data::IndexEntryFlag::Last;
-  first_entry.size = gsl::narrow<WORD>(AlignAttrSize(
-      &first_entry.stream - reinterpret_cast<BYTE*>(&first_entry) +
-      first_entry.stream_size));
-
-  block.total_entry_size = first_entry.size;
-  block.alloc_entry_size = first_entry.size;
 }
 
 // Points the "Orphan" leaf entry (VCN 1) of an orphaned-blocks image at
@@ -425,32 +244,16 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
   // Replace the root directory's (#5) whole record in place.
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t root_offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     static_cast<size_t>(Mft::Idx::Root);
-  const FakeRecord record =
-      MakeOrphanedIndexBlocksRootRecord(FakeIndexAllocShape{});
-  std::memcpy(&image.at(root_offset), record.data(), record.size());
+  PutRootRecord(image,
+                MakeOrphanedIndexBlocksRootRecord(FakeIndexAllocShape{}));
 
   const size_t blocks_offset =
       static_cast<size_t>(orphaned_blocks_lcn) * cluster_size;
   const size_t blocks_bytes =
       static_cast<size_t>(orphaned_blocks_count) * cluster_size;
-  // FullCache always reads a whole 64KiB-aligned block, so the image must
-  // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
-  const size_t blocks_end = blocks_offset + blocks_bytes;
-  const size_t aligned_blocks_end =
-      ((blocks_end + full_cache_read_block_size - 1) /
-       full_cache_read_block_size) *
-      full_cache_read_block_size;
-  if (image.size() < aligned_blocks_end) {
-    image.resize(aligned_blocks_end, 0);
-  }
+  PadToFullCacheRead(image, blocks_offset + blocks_bytes);
 
-  const ULONGLONG root_ref = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG root_ref = root_file_reference;
 
   // VCN 0: reachable through $INDEX_ROOT's own sub-node pointer.
   WriteOrphanedIndexLeafBlock(image, 0, orphaned_block_reachable_mft_ref,
@@ -474,14 +277,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithHugeOrphanScanBlockCount() {
   // Replace the root directory's (#5) $INDEX_ALLOCATION real_size only: the
   // three real blocks (and $INDEX_ROOT's own pointer to VCN 0) stay exactly
   // as BuildFakeNtfsImageWithOrphanedIndexBlocks() wrote them.
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t root_offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     static_cast<size_t>(Mft::Idx::Root);
-  const FakeRecord record =
-      MakeOrphanedIndexBlocksRootRecord(FakeIndexAllocShape{
-          .declared_block_count = huge_orphan_scan_declared_block_count});
-  std::memcpy(&image.at(root_offset), record.data(), record.size());
+  PutRootRecord(image, MakeOrphanedIndexBlocksRootRecord(FakeIndexAllocShape{
+                           .declared_block_count =
+                               huge_orphan_scan_declared_block_count}));
 
   return image;
 }
@@ -492,12 +290,7 @@ std::vector<BYTE>
 
   // Only the root's $INDEX_ALLOCATION changes: the three real blocks, and
   // $INDEX_ROOT's pointer to VCN 0, stay as the base fixture wrote them.
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t root_offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     static_cast<size_t>(Mft::Idx::Root);
-  const FakeRecord record = MakeOrphanedIndexBlocksRootRecord(shape);
-  std::memcpy(&image.at(root_offset), record.data(), record.size());
+  PutRootRecord(image, MakeOrphanedIndexBlocksRootRecord(shape));
 
   return image;
 }
@@ -514,20 +307,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithManyIndexBlocks(DWORD block_count) {
 
   const size_t blocks_offset =
       static_cast<size_t>(orphaned_blocks_lcn) * cluster_size;
-  // FullCache reads whole 64KiB-aligned blocks, so the image must extend
-  // past the last cluster to the next such boundary.
-  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
-  const size_t blocks_end =
-      blocks_offset + static_cast<size_t>(block_count) * cluster_size;
-  const size_t aligned_end = ((blocks_end + full_cache_read_block_size - 1) /
-                              full_cache_read_block_size) *
-                             full_cache_read_block_size;
-  if (image.size() < aligned_end) {
-    image.resize(aligned_end, 0);
-  }
+  PadToFullCacheRead(image, blocks_offset + static_cast<size_t>(block_count) *
+                                                cluster_size);
 
-  const ULONGLONG root_ref = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG root_ref = root_file_reference;
   for (DWORD vcn = 0; vcn < block_count; vcn++) {
     const std::wstring name = ManyIndexBlocksName(vcn);
     WriteIndexLeafBlockAt(
@@ -551,8 +334,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch() {
   const FakeRecord record =
       MakeMftTreeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse,
                         orphaned_block_sequence_mismatch_record_seq, {});
-  PutMftRecord(image, static_cast<DWORD>(mft_lcn) * cluster_size,
-               orphaned_block_sequence_mismatch_target_idx, record);
+  PutMftRecord(image, orphaned_block_sequence_mismatch_target_idx, record);
 
   // Redirect the "Orphan" entry (VCN 1) to name that record instead of
   // orphaned_block_orphan_mft_ref, leaving its mft_sn exactly as
@@ -584,32 +366,16 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock() {
   bpb.clusters_per_index_block =
       static_cast<DWORD>(multi_cluster_orphan_clusters_per_block);
 
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t root_offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     static_cast<size_t>(Mft::Idx::Root);
-  const FakeRecord record = MakeMultiClusterOrphanedIndexBlocksRootRecord();
-  std::memcpy(&image.at(root_offset), record.data(), record.size());
+  PutRootRecord(image, MakeMultiClusterOrphanedIndexBlocksRootRecord());
 
   const size_t blocks_offset =
       static_cast<size_t>(multi_cluster_orphan_lcn) * cluster_size;
   const size_t blocks_bytes =
       static_cast<size_t>(multi_cluster_orphan_block_count) *
       multi_cluster_orphan_index_block_size;
-  // FullCache always reads a whole 64KiB-aligned block, so the image must
-  // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
-  const size_t blocks_end = blocks_offset + blocks_bytes;
-  const size_t aligned_blocks_end =
-      ((blocks_end + full_cache_read_block_size - 1) /
-       full_cache_read_block_size) *
-      full_cache_read_block_size;
-  if (image.size() < aligned_blocks_end) {
-    image.resize(aligned_blocks_end, 0);
-  }
+  PadToFullCacheRead(image, blocks_offset + blocks_bytes);
 
-  const ULONGLONG root_ref = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG root_ref = root_file_reference;
 
   WriteMultiClusterIndexLeafBlock(image, 0, multi_cluster_reachable_mft_ref,
                                   root_ref, multi_cluster_reachable_name);
@@ -635,27 +401,13 @@ std::vector<BYTE> BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks() {
                            .lcn = alloc_lcn}};
   const FakeRecord record = MakeDirectoryWithIndexAllocation(
       index_block_size, extents, sub_cluster_block_names.size());
-  const size_t root_offset = static_cast<size_t>(mft_lcn) * cluster_size +
-                             static_cast<size_t>(fake_file_record_size) *
-                                 static_cast<size_t>(Mft::Idx::Root);
-  std::memcpy(&image.at(root_offset), record.data(), record.size());
+  PutRootRecord(image, record);
 
   const size_t blocks_offset = static_cast<size_t>(alloc_lcn) * cluster_size;
-  // FullCache always reads a whole 64KiB-aligned block, so the image must
-  // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
-  const size_t blocks_end =
-      blocks_offset + sub_cluster_block_names.size() * index_block_size;
-  const size_t aligned_blocks_end =
-      ((blocks_end + full_cache_read_block_size - 1) /
-       full_cache_read_block_size) *
-      full_cache_read_block_size;
-  if (image.size() < aligned_blocks_end) {
-    image.resize(aligned_blocks_end, 0);
-  }
+  PadToFullCacheRead(image, blocks_offset + sub_cluster_block_names.size() *
+                                                index_block_size);
 
-  const ULONGLONG root_ref = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG root_ref = root_file_reference;
   for (size_t i = 0; i < sub_cluster_block_names.size(); i++) {
     WriteIndexLeafBlockAt(image,
                           {.offset = blocks_offset + i * index_block_size,
@@ -683,26 +435,13 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitIndexAllocation() {
                            .lcn = second_lcn}};
   const FakeRecord record = MakeDirectoryWithIndexAllocation(
       cluster_size, extents, split_block_names.size());
-  const size_t root_offset = static_cast<size_t>(mft_lcn) * cluster_size +
-                             static_cast<size_t>(fake_file_record_size) *
-                                 static_cast<size_t>(Mft::Idx::Root);
-  std::memcpy(&image.at(root_offset), record.data(), record.size());
+  PutRootRecord(image, record);
 
-  // FullCache always reads a whole 64KiB-aligned block, so the image must
-  // extend past the blocks' real end or its last read fails outright.
-  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
-  const size_t blocks_end =
-      static_cast<size_t>(second_lcn + split_extent_clusters) * cluster_size;
-  const size_t aligned_blocks_end =
-      ((blocks_end + full_cache_read_block_size - 1) /
-       full_cache_read_block_size) *
-      full_cache_read_block_size;
-  if (image.size() < aligned_blocks_end) {
-    image.resize(aligned_blocks_end, 0);
-  }
+  PadToFullCacheRead(image,
+                     static_cast<size_t>(second_lcn + split_extent_clusters) *
+                         cluster_size);
 
-  const ULONGLONG root_ref = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const ULONGLONG root_ref = root_file_reference;
   for (size_t i = 0; i < split_block_names.size(); i++) {
     const size_t lcn = (i < split_extent_clusters)
                            ? first_lcn + i
@@ -722,11 +461,8 @@ std::vector<BYTE>
     BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(FakeParentLink link) {
   std::vector<BYTE> image = BuildFakeNtfsImageWithOrphanedIndexBlocks();
 
-  const size_t root_offset = static_cast<size_t>(mft_lcn) * cluster_size +
-                             static_cast<size_t>(fake_file_record_size) *
-                                 static_cast<size_t>(Mft::Idx::Root);
   EditFileRecordHeader(
-      std::span(image).subspan(root_offset, fake_file_record_size),
+      MftRecordBytes(image, static_cast<ULONGLONG>(Mft::Idx::Root)),
       [&](FileRecordHeader& header) {
         header.seq_no = link.record_sequence;
         header.flags =

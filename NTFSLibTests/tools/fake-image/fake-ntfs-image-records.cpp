@@ -52,20 +52,34 @@ ULONGLONG&
 
 // Builds a bare file-record header with the given attribute offset and
 // flags.
-FakeRecord
-    MakeRecordHeader(WORD offset_of_attr,
-                     NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags) {
+FakeRecord MakeRecordHeader(WORD offset_of_attr,
+                            NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags,
+                            WORD sequence) {
   FakeRecord record{};
 
   EditFileRecordHeader(record, [&](FileRecordHeader& header) {
     header.magic = FileRecordHeader::file_record_magic;
     header.offset_of_us = offset_of_us_value;
     header.size_of_us = 3;
+    header.seq_no = sequence;
     header.offset_of_attr = offset_of_attr;
     header.flags = flags;
   });
 
   return record;
+}
+
+FakeRecord MakeInUseFileRecord(WORD sequence) {
+  return MakeRecordHeader(attr_offset_value,
+                          NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse,
+                          sequence);
+}
+
+FakeRecord MakeInUseDirectoryRecord(WORD sequence) {
+  return MakeRecordHeader(attr_offset_value,
+                          NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
+                              NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir,
+                          sequence);
 }
 
 // Makes record an extension record: its own sequence number, and the file
@@ -115,18 +129,21 @@ std::vector<WORD> ToUtf16(std::wstring_view text) {
   return units;
 }
 
+void PadToFullCacheRead(std::vector<BYTE>& image, size_t end) {
+  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
+  const size_t aligned_end =
+      ((end + full_cache_read_block_size - 1) / full_cache_read_block_size) *
+      full_cache_read_block_size;
+  if (image.size() < aligned_end) {
+    image.resize(aligned_end, 0);
+  }
+}
+
 // Writes record at byteOffset, growing image to the next 64 KiB boundary -
 // FullCache always reads a whole 64 KiB block, so a short image short-reads.
 void PutRecordAt(std::vector<BYTE>& image, size_t byte_offset,
                  const FakeRecord& record) {
-  constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
-  const size_t needed_end = byte_offset + record.size();
-  const size_t aligned_end = ((needed_end + full_cache_read_block_size - 1) /
-                              full_cache_read_block_size) *
-                             full_cache_read_block_size;
-  if (image.size() < aligned_end) {
-    image.resize(aligned_end, 0);
-  }
+  PadToFullCacheRead(image, byte_offset + record.size());
   std::memcpy(&image.at(byte_offset), record.data(), record.size());
 }
 
@@ -139,21 +156,66 @@ void PutMftRecord(std::vector<BYTE>& image, DWORD mft_addr, ULONGLONG idx,
               record);
 }
 
-// Builds a fake $MFT record whose DATA attribute has a real, non-empty
-// data run of clusters clusters starting at lcn, unlike MakeMftRecord()'s
-// empty one.
-FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+void PutMftRecord(std::vector<BYTE>& image, ULONGLONG idx,
+                  const FakeRecord& record) {
+  PutMftRecord(image, mft_address, idx, record);
+}
 
+void PutRootRecord(std::vector<BYTE>& image, const FakeRecord& record) {
+  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root), record);
+}
+
+std::span<BYTE> MftRecordBytes(std::vector<BYTE>& image, ULONGLONG idx) {
+  const size_t offset =
+      mft_address +
+      static_cast<size_t>(fake_file_record_size) * gsl::narrow<size_t>(idx);
+  return std::span<BYTE>(image).subspan(offset, fake_file_record_size);
+}
+
+NTFS_BROWSER_NAMESPACE::Data::HeaderResident&
+    InitResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type) {
+  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
+      &record.at(offset));
+  attr.header.type = type;
+  attr.header.non_resident = 0;
+  attr.header.name_length = 0;
+  attr.header.flags = 0;
+  attr.header.id = 0;
+  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  return attr;
+}
+
+NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident&
+    InitNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type) {
   auto& attr =
       *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
-          &record.at(attr_offset_value));
-  attr.header.type = Attr::Type::Data;
+          &record.at(offset));
+  attr.header.type = type;
   attr.header.non_resident = 1;
   attr.header.name_length = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
+  return attr;
+}
+
+DWORD WriteSingleRunList(std::span<BYTE> data_run, DWORD clusters, DWORD lcn) {
+  DWORD run_len = 0;
+  // High nibble = LCN offset field size, low nibble = length field size.
+  gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
+  gsl::at(data_run, run_len++) = gsl::narrow<BYTE>(clusters);
+  std::memcpy(&gsl::at(data_run, run_len), &lcn, sizeof(lcn));
+  run_len += sizeof(lcn);
+  gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
+  return run_len;
+}
+
+// Builds a fake $MFT record whose DATA attribute has a real, non-empty
+// data run of clusters clusters starting at lcn, unlike MakeMftRecord()'s
+// empty one.
+FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters) {
+  FakeRecord record = MakeInUseFileRecord();
+
+  auto& attr = InitNonResidentAttr(record, attr_offset_value, Attr::Type::Data);
   attr.start_vcn = 0;
   attr.last_vcn = clusters - 1;
   attr.data_run_offset = static_cast<WORD>(sizeof(attr));
@@ -162,15 +224,9 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters) {
   attr.alloc_size = attr.real_size;
   attr.ini_size = attr.real_size;
 
-  const std::span<BYTE> data_run =
-      std::span<BYTE>(record).subspan(attr_offset_value + attr.data_run_offset);
-  DWORD run_len = 0;
-  // High nibble = LCN offset field size, low nibble = length field size.
-  gsl::at(data_run, run_len++) = run_header4_lcn_bytes;
-  gsl::at(data_run, run_len++) = gsl::narrow<BYTE>(clusters);
-  std::memcpy(&gsl::at(data_run, run_len), &lcn, sizeof(lcn));
-  run_len += sizeof(lcn);
-  gsl::at(data_run, run_len++) = 0x00;  // terminate the run list
+  const DWORD run_len = WriteSingleRunList(
+      std::span<BYTE>(record).subspan(attr_offset_value + attr.data_run_offset),
+      clusters, lcn);
 
   attr.header.total_size = AlignAttrSize(sizeof(attr) + run_len);
 
@@ -184,16 +240,10 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters) {
 DWORD WriteStandardInformationAttr(
     FakeRecord& record, DWORD offset,
     NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission) {
-  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
-      &record.at(offset));
-  attr.header.type = Attr::Type::StandardInformation;
-  attr.header.non_resident = 0;
-  attr.header.name_length = 0;
-  attr.header.flags = 0;
-  attr.header.id = 0;
+  auto& attr =
+      InitResidentAttr(record, offset, Attr::Type::StandardInformation);
   attr.attr_size = static_cast<DWORD>(
       sizeof(NTFS_BROWSER_NAMESPACE::Data::StandardInformation));
-  attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
   auto& std_info =
@@ -212,14 +262,7 @@ DWORD WriteStandardInformationAttr(
 // total_size.
 DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
                         const FakeFileName& name, bool directory) {
-  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
-      &record.at(offset));
-  attr.header.type = Attr::Type::FileName;
-  attr.header.non_resident = 0;
-  attr.header.name_length = 0;
-  attr.header.flags = 0;
-  attr.header.id = 0;
-  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  auto& attr = InitResidentAttr(record, offset, Attr::Type::FileName);
   attr.attr_size = gsl::narrow<DWORD>(
       offsetof(NTFS_BROWSER_NAMESPACE::Data::Filename, name) +
       name.name.size() * sizeof(WORD));
@@ -248,14 +291,7 @@ DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
 // Writes one resident, unnamed $DATA of size zero bytes at record[offset]
 // and returns its total_size.
 DWORD WriteResidentDataAttr(FakeRecord& record, DWORD offset, DWORD size) {
-  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
-      &record.at(offset));
-  attr.header.type = Attr::Type::Data;
-  attr.header.non_resident = 0;
-  attr.header.name_length = 0;
-  attr.header.flags = 0;
-  attr.header.id = 0;
-  attr.attr_offset = static_cast<WORD>(sizeof(attr));
+  auto& attr = InitResidentAttr(record, offset, Attr::Type::Data);
   attr.attr_size = size;
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
   return attr.header.total_size;
@@ -269,11 +305,9 @@ FakeRecord MakeMftTreeRecord(
     std::initializer_list<FakeFileName> names, std::optional<DWORD> data_size,
     NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission,
     ULONGLONG base_ref) {
-  FakeRecord record = MakeRecordHeader(attr_offset_value, flags);
-  EditFileRecordHeader(record, [&](FileRecordHeader& header) {
-    header.seq_no = sequence;
-    header.ref_to_base = base_ref;
-  });
+  FakeRecord record = MakeRecordHeader(attr_offset_value, flags, sequence);
+  EditFileRecordHeader(
+      record, [&](FileRecordHeader& header) { header.ref_to_base = base_ref; });
 
   const bool directory =
       (flags & NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir) ==

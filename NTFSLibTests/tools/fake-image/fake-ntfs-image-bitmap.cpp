@@ -60,13 +60,6 @@ std::vector<BYTE> EncodeOneRun(DWORD lcn, BYTE clusters) {
   return run;
 }
 
-// Bytes the image holds for MFT record idx.
-std::span<BYTE> RecordBytes(std::vector<BYTE>& image, ULONGLONG idx) {
-  const size_t offset = static_cast<size_t>(mft_lcn) * cluster_size +
-                        static_cast<size_t>(fake_file_record_size) * idx;
-  return std::span<BYTE>(image).subspan(offset, fake_file_record_size);
-}
-
 // Sets bit lcn of bitmap.
 void SetBit(std::vector<BYTE>& bitmap, ULONGLONG lcn) {
   bitmap.at(lcn / 8) |= static_cast<BYTE>(1U << (lcn % 8));
@@ -75,8 +68,7 @@ void SetBit(std::vector<BYTE>& bitmap, ULONGLONG lcn) {
 // The record 6 of a bitmap kept inside the record.
 FakeRecord MakeResidentBitmapRecord(std::span<const BYTE> bytes) {
   assert(bytes.size() <= max_resident_bitmap_bytes);
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+  FakeRecord record = MakeInUseFileRecord();
   DWORD offset = attr_offset_value;
   const DWORD data_offset = offset;
   offset +=
@@ -95,8 +87,7 @@ FakeRecord MakeResidentBitmapRecord(std::span<const BYTE> bytes) {
 FakeRecord MakeNonResidentBitmapRecord(ULONGLONG real_size,
                                        const std::vector<FakeDataRun>& runs,
                                        std::vector<BYTE> raw_runs) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+  FakeRecord record = MakeInUseFileRecord();
   DWORD offset = attr_offset_value;
   offset +=
       WriteNonResidentAttr(record, offset, Attr::Type::Data,
@@ -142,13 +133,82 @@ BitmapLayout PlanBitmap(size_t base_clusters, size_t given_bytes, bool pad,
   }
 }
 
+// Where the clusters of a non-resident bitmap sit: one run, or two with one
+// cluster between them.
+struct BitmapParts {
+  size_t first_clusters{0};
+  size_t second_clusters{0};
+  ULONGLONG first_lcn{0};
+  ULONGLONG second_lcn{0};
+};
+
+// Splits the data clusters of layout into the parts of a bitmap that is
+// fragmented, or kept in one run.
+BitmapParts SplitBitmapParts(const BitmapLayout& layout, bool fragmented) {
+  BitmapParts parts;
+  parts.first_clusters =
+      fragmented ? (layout.data_clusters + 1) / 2 : layout.data_clusters;
+  parts.second_clusters = layout.data_clusters - parts.first_clusters;
+  parts.first_lcn = layout.first_lcn;
+  parts.second_lcn = layout.first_lcn + parts.first_clusters + 1;
+  return parts;
+}
+
+// Sets the bits of the clusters the bitmap itself occupies, as on a real
+// volume, the cluster between two parts included.
+void MarkBitmapClusters(std::vector<BYTE>& bits, const BitmapParts& parts,
+                        bool fragmented) {
+  for (size_t i = 0; i < parts.first_clusters; i++) {
+    SetBit(bits, parts.first_lcn + i);
+  }
+  for (size_t i = 0; i < parts.second_clusters; i++) {
+    SetBit(bits, parts.second_lcn + i);
+  }
+  if (fragmented) {
+    SetBit(bits, parts.first_lcn + parts.first_clusters);
+  }
+}
+
+// Writes bits into the clusters of parts, the first part then the second.
+void CopyBitmapBytes(std::vector<BYTE>& image, const std::vector<BYTE>& bits,
+                     const BitmapParts& parts) {
+  const size_t first_bytes =
+      std::min<size_t>(bits.size(), parts.first_clusters * cluster_size);
+  std::memcpy(&image.at(parts.first_lcn * cluster_size), bits.data(),
+              first_bytes);
+  if (parts.second_clusters != 0 && bits.size() > first_bytes) {
+    std::memcpy(&image.at(parts.second_lcn * cluster_size),
+                bits.data() + first_bytes, bits.size() - first_bytes);
+  }
+}
+
+// The runs the record of a bitmap kept in parts maps.
+std::vector<FakeDataRun> BitmapRuns(const BitmapParts& parts) {
+  std::vector<FakeDataRun> runs{
+      {.lcn = parts.first_lcn,
+       .clusters = static_cast<DWORD>(parts.first_clusters)}};
+  if (parts.second_clusters != 0) {
+    runs.push_back({.lcn = parts.second_lcn,
+                    .clusters = static_cast<DWORD>(parts.second_clusters)});
+  }
+  return runs;
+}
+
+// A run list cut short: the first run, then a header byte that no run has.
+std::vector<BYTE> CutRunList(const BitmapParts& parts) {
+  std::vector<BYTE> raw_runs =
+      EncodeOneRun(static_cast<DWORD>(parts.first_lcn),
+                   static_cast<BYTE>(parts.first_clusters));
+  raw_runs.push_back(malformed_run_header);
+  raw_runs.push_back(0x00);
+  return raw_runs;
+}
+
 }  // namespace
 
 void PutClusterBitmap(std::vector<BYTE>& image,
                       std::span<const BYTE> bitmap_bytes,
                       const FakeBitmapOptions& options) {
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-
   const size_t wanted_clusters =
       RoundUpToCacheBlock(static_cast<size_t>(options.volume_clusters));
   if (wanted_clusters * cluster_size > image.size()) {
@@ -156,7 +216,7 @@ void PutClusterBitmap(std::vector<BYTE>& image,
   }
 
   if (options.shape == FakeBitmapShape::Resident) {
-    PutMftRecord(image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::Bitmap),
+    PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Bitmap),
                  MakeResidentBitmapRecord(bitmap_bytes));
     FitVolumeToImage(image);
     return;
@@ -174,54 +234,25 @@ void PutClusterBitmap(std::vector<BYTE>& image,
   std::vector<BYTE> bits(bitmap_bytes.begin(), bitmap_bytes.end());
   bits.resize(layout.bytes, 0);
 
-  // The clusters of the bitmap itself are in use, as on a real volume.
-  const size_t first_part =
-      fragmented ? (layout.data_clusters + 1) / 2 : layout.data_clusters;
-  const size_t second_part = layout.data_clusters - first_part;
-  const ULONGLONG second_lcn = layout.first_lcn + first_part + 1;
+  const BitmapParts parts = SplitBitmapParts(layout, fragmented);
   if (options.pad_to_volume) {
-    for (size_t i = 0; i < first_part; i++) {
-      SetBit(bits, layout.first_lcn + i);
-    }
-    for (size_t i = 0; i < second_part; i++) {
-      SetBit(bits, second_lcn + i);
-    }
-    if (fragmented) {
-      SetBit(bits, layout.first_lcn + first_part);
-    }
+    MarkBitmapClusters(bits, parts, fragmented);
   }
+  CopyBitmapBytes(image, bits, parts);
 
-  const size_t first_bytes =
-      std::min<size_t>(bits.size(), first_part * cluster_size);
-  std::memcpy(&image.at(layout.first_lcn * cluster_size), bits.data(),
-              first_bytes);
-  if (second_part != 0 && bits.size() > first_bytes) {
-    std::memcpy(&image.at(second_lcn * cluster_size), bits.data() + first_bytes,
-                bits.size() - first_bytes);
-  }
-
-  std::vector<FakeDataRun> runs{
-      {.lcn = layout.first_lcn, .clusters = static_cast<DWORD>(first_part)}};
-  if (second_part != 0) {
-    runs.push_back(
-        {.lcn = second_lcn, .clusters = static_cast<DWORD>(second_part)});
-  }
   std::vector<BYTE> raw_runs;
   if (options.shape == FakeBitmapShape::CutRunList) {
-    raw_runs = EncodeOneRun(static_cast<DWORD>(layout.first_lcn),
-                            static_cast<BYTE>(first_part));
-    raw_runs.push_back(malformed_run_header);
-    raw_runs.push_back(0x00);
+    raw_runs = CutRunList(parts);
   }
 
   PutMftRecord(
-      image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::Bitmap),
+      image, static_cast<ULONGLONG>(Mft::Idx::Bitmap),
       MakeNonResidentBitmapRecord(options.forged_size.value_or(bits.size()),
-                                  runs, std::move(raw_runs)));
+                                  BitmapRuns(parts), std::move(raw_runs)));
 }
 
 void SetRecordInUse(std::vector<BYTE>& image, ULONGLONG idx, bool in_use) {
-  EditFileRecordHeader(RecordBytes(image, idx), [in_use](auto& header) {
+  EditFileRecordHeader(MftRecordBytes(image, idx), [in_use](auto& header) {
     using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
     header.flags = in_use ? (header.flags | FileRecordFlag::InUse)
                           : (header.flags & ~FileRecordFlag::InUse);
@@ -254,9 +285,7 @@ FakeManyDeleted BuildFakeNtfsImageWithManyDeletedFiles(size_t count,
 
   // $MFT maps every record slot in one run: records 0 to 15, then the files.
   const size_t records = many_deleted_first_idx + count;
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  FakeRecord mft = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+  FakeRecord mft = MakeInUseFileRecord();
   // Length in two bytes, LCN in one: the run header's nibbles say so.
   const std::vector<BYTE> mft_runs{0x12, static_cast<BYTE>(records & 0xFF),
                                    static_cast<BYTE>(records >> 8),
@@ -270,8 +299,7 @@ FakeManyDeleted BuildFakeNtfsImageWithManyDeletedFiles(size_t count,
        .runs = {{.lcn = mft_lcn, .clusters = static_cast<DWORD>(records)}},
        .overrides = {.raw_runs = mft_runs}});
   WriteEndOfAttributesMarker(mft, offset);
-  PutMftRecord(built.image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::Mft),
-               mft);
+  PutMftRecord(built.image, static_cast<ULONGLONG>(Mft::Idx::Mft), mft);
 
   // The files' data lives past the records, twice as many slots as files so
   // they scatter. 7919 is prime, so the stride visits every slot once.

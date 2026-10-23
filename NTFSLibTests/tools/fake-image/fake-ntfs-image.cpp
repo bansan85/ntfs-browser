@@ -37,17 +37,9 @@ namespace {
 // real_size reports sentinel_record_count fake records, with an empty
 // data run (GetRecordsCount() only reads real_size).
 FakeRecord MakeMftRecord() {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+  FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr =
-      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
-          &record.at(attr_offset_value));
-  attr.header.type = Attr::Type::Data;
-  attr.header.non_resident = 1;
-  attr.header.name_length = 0;
-  attr.header.flags = 0;
-  attr.header.id = 0;
+  auto& attr = InitNonResidentAttr(record, attr_offset_value, Attr::Type::Data);
   attr.start_vcn = 0;
   attr.last_vcn = 0;
   attr.data_run_offset = static_cast<WORD>(sizeof(attr));
@@ -68,18 +60,11 @@ FakeRecord MakeMftRecord() {
 // attrSize bytes, reporting NTFS 3.1. The flags go into the body only when it
 // is large enough to hold them.
 FakeRecord MakeVolumeRecordSized(WORD attr_size, WORD flags = 0) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+  FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
-      &record.at(attr_offset_value));
-  attr.header.type = Attr::Type::VolumeInformation;
-  attr.header.non_resident = 0;
-  attr.header.name_length = 0;
-  attr.header.flags = 0;
-  attr.header.id = 0;
+  auto& attr = InitResidentAttr(record, attr_offset_value,
+                                Attr::Type::VolumeInformation);
   attr.attr_size = attr_size;
-  attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
   auto& vol_info =
@@ -111,16 +96,10 @@ FakeRecord MakeVolumeRecordWithName(std::wstring_view name) {
           &record.at(attr_offset_value));
   const DWORD name_offset = attr_offset_value + vol_info.header.total_size;
 
-  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
-      &record.at(name_offset));
-  attr.header.type = Attr::Type::VolumeName;
-  attr.header.non_resident = 0;
-  attr.header.name_length = 0;
-  attr.header.flags = 0;
+  auto& attr = InitResidentAttr(record, name_offset, Attr::Type::VolumeName);
   attr.header.id = 1;
   const std::vector<WORD> encoded_name = ToUtf16(name);
   attr.attr_size = gsl::narrow<DWORD>(encoded_name.size() * sizeof(WORD));
-  attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
   std::memcpy(&record.at(name_offset + attr.attr_offset), encoded_name.data(),
@@ -133,18 +112,11 @@ FakeRecord MakeVolumeRecordWithName(std::wstring_view name) {
 // Builds a resident $STANDARD_INFORMATION attribute exactly attrSize bytes
 // long, so a fixture can pin it to NTFS 1.2's real minimum size.
 FakeRecord MakeStandardInformationRecordSized(WORD attr_size) {
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+  FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
-      &record.at(attr_offset_value));
-  attr.header.type = Attr::Type::StandardInformation;
-  attr.header.non_resident = 0;
-  attr.header.name_length = 0;
-  attr.header.flags = 0;
-  attr.header.id = 0;
+  auto& attr = InitResidentAttr(record, attr_offset_value,
+                                Attr::Type::StandardInformation);
   attr.attr_size = attr_size;
-  attr.attr_offset = static_cast<WORD>(sizeof(attr));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
   auto& std_info =
@@ -167,11 +139,7 @@ FakeRecord MakeStandardInformationRecordSized(WORD attr_size) {
 
 // Builds a bare root-directory record; ParseFileRecord() never looks at
 // attributes, so an empty one is enough to exercise a second read.
-FakeRecord MakeRootRecord() {
-  return MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse |
-                             NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::Dir);
-}
+FakeRecord MakeRootRecord() { return MakeInUseDirectoryRecord(); }
 
 }  // namespace
 
@@ -200,75 +168,44 @@ std::vector<BYTE> BuildFakeNtfsImage() {
   bpb.total_sectors = image_size / bytes_per_sector;
   std::memcpy(image.data(), &bpb, sizeof(bpb));
 
-  const auto put_record = [&](Mft::Idx idx, const FakeRecord& record) {
-    const size_t offset =
-        mft_addr +
-        static_cast<size_t>(fake_file_record_size) * static_cast<size_t>(idx);
-    std::memcpy(&image.at(offset), record.data(), record.size());
-  };
-  put_record(Mft::Idx::Mft, MakeMftRecord());
-  put_record(Mft::Idx::Volume, MakeVolumeRecord());
-  put_record(Mft::Idx::Root, MakeRootRecord());
+  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), MakeMftRecord());
+  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Volume),
+               MakeVolumeRecord());
+  PutRootRecord(image, MakeRootRecord());
 
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageReplacingRecord(ULONGLONG idx,
+                                                    const FakeRecord& record) {
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+  PutMftRecord(image, idx, record);
   return image;
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation() {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t offset = mft_addr + static_cast<size_t>(fake_file_record_size) *
-                                       static_cast<size_t>(Mft::Idx::Volume);
-  const FakeRecord record =
-      MakeVolumeRecordSized(minimal_volume_information_size);
-  std::memcpy(&image.at(offset), record.data(), record.size());
-
-  return image;
+  return BuildFakeNtfsImageReplacingRecord(
+      static_cast<ULONGLONG>(Mft::Idx::Volume),
+      MakeVolumeRecordSized(minimal_volume_information_size));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithEmptyVolumeInformation() {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t offset = mft_addr + static_cast<size_t>(fake_file_record_size) *
-                                       static_cast<size_t>(Mft::Idx::Volume);
-  const FakeRecord record = MakeVolumeRecordSized(0);
-  std::memcpy(&image.at(offset), record.data(), record.size());
-
-  return image;
+  return BuildFakeNtfsImageReplacingRecord(
+      static_cast<ULONGLONG>(Mft::Idx::Volume), MakeVolumeRecordSized(0));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithVolumeFlags(WORD flags) {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t offset = mft_addr + static_cast<size_t>(fake_file_record_size) *
-                                       static_cast<size_t>(Mft::Idx::Volume);
-  const FakeRecord record = MakeVolumeRecord(flags);
-  std::memcpy(&image.at(offset), record.data(), record.size());
-
-  return image;
+  return BuildFakeNtfsImageReplacingRecord(
+      static_cast<ULONGLONG>(Mft::Idx::Volume), MakeVolumeRecord(flags));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithVolumeName() {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t offset = mft_addr + static_cast<size_t>(fake_file_record_size) *
-                                       static_cast<size_t>(Mft::Idx::Volume);
-  const FakeRecord record = MakeVolumeRecordWithName(fake_volume_name);
-  std::memcpy(&image.at(offset), record.data(), record.size());
-
-  return image;
+  return BuildFakeNtfsImageReplacingRecord(
+      static_cast<ULONGLONG>(Mft::Idx::Volume),
+      MakeVolumeRecordWithName(fake_volume_name));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithDeletedVolumeRecord() {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t offset = mft_addr + static_cast<size_t>(fake_file_record_size) *
-                                       static_cast<size_t>(Mft::Idx::Volume);
-
   // Same $VOLUME_INFORMATION content as BuildFakeNtfsImage(), but with the
   // INUSE flag cleared - a freed record. bypass_deleted_gate_ must still let
   // NtfsVolume::Init() read it.
@@ -277,51 +214,26 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeletedVolumeRecord() {
     header.flags = NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag{};
   });
 
-  std::memcpy(&image.at(offset), record.data(), record.size());
-
-  return image;
+  return BuildFakeNtfsImageReplacingRecord(
+      static_cast<ULONGLONG>(Mft::Idx::Volume), record);
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithLegacyStandardInformation() {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t offset =
-      mft_addr +
-      static_cast<size_t>(fake_file_record_size) *
-          static_cast<size_t>(legacy_standard_information_record_idx);
-  const FakeRecord record =
-      MakeStandardInformationRecordSized(legacy_standard_information_size);
-  std::memcpy(&image.at(offset), record.data(), record.size());
-
-  return image;
+  return BuildFakeNtfsImageReplacingRecord(
+      legacy_standard_information_record_idx,
+      MakeStandardInformationRecordSized(legacy_standard_information_size));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithEmptyStandardInformation() {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t offset =
-      mft_addr +
-      static_cast<size_t>(fake_file_record_size) *
-          static_cast<size_t>(legacy_standard_information_record_idx);
-  const FakeRecord record = MakeStandardInformationRecordSized(0);
-  std::memcpy(&image.at(offset), record.data(), record.size());
-
-  return image;
+  return BuildFakeNtfsImageReplacingRecord(
+      legacy_standard_information_record_idx,
+      MakeStandardInformationRecordSized(0));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithLegacyStandardInformationOnRoot() {
-  std::vector<BYTE> image = BuildFakeNtfsImage();
-
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t offset = mft_addr + static_cast<size_t>(fake_file_record_size) *
-                                       static_cast<size_t>(Mft::Idx::Root);
-  const FakeRecord record =
-      MakeStandardInformationRecordSized(legacy_standard_information_size);
-  std::memcpy(&image.at(offset), record.data(), record.size());
-
-  return image;
+  return BuildFakeNtfsImageReplacingRecord(
+      static_cast<ULONGLONG>(Mft::Idx::Root),
+      MakeStandardInformationRecordSized(legacy_standard_information_size));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord() {

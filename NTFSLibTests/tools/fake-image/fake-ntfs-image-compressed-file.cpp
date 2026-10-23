@@ -22,6 +22,35 @@ namespace {
 // WORD into bytes.
 constexpr BYTE all_bits_set = 0xFF;
 
+// The permission bits of a compressed file.
+NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission CompressedPermission() {
+  return NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
+         NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed;
+}
+
+// The [MS-XCA] section 3.3 worked example's 59 compressed bytes.
+std::vector<BYTE> XcaExampleBytes() {
+  return std::vector<BYTE>(xca_lznt1_example_compressed.begin(),
+                           xca_lznt1_example_compressed.end());
+}
+
+// Root image whose compressed $DATA holds one real cluster, cluster_bytes,
+// then a sparse pad up to a whole compression unit. 1 <
+// compression_unit_clusters real clusters is exactly what marks a unit as
+// compressed rather than stored. comp_unit_size and overrides forge the header.
+std::vector<BYTE> BuildOneClusterCompressedImage(
+    WORD comp_unit_size, const std::vector<BYTE>& cluster_bytes,
+    const FakeNonResidentOverrides& overrides = {}) {
+  const std::vector<FakeDataRun> runs{{compressed_data_lcn, 1},
+                                      {{}, compression_unit_clusters - 1}};
+
+  const FakeRecord record = MakeNonResidentDataRecord(
+      CompressedPermission(), comp_unit_size,
+      xca_lznt1_example_decompressed_size, runs, overrides);
+
+  return BuildCompressionImage(record, runs, cluster_bytes);
+}
+
 }  // namespace
 
 std::vector<BYTE> CompressionFixturePattern(size_t size) {
@@ -36,21 +65,8 @@ std::vector<BYTE> CompressionFixturePattern(size_t size) {
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithCompressedFile() {
-  // One real cluster (the [MS-XCA] section 3.3 worked example's 59
-  // compressed bytes) plus a sparse pad up to a whole compression unit -
-  // 1 < compression_unit_clusters real clusters is exactly what marks a unit
-  // as compressed rather than stored.
-  const std::vector<FakeDataRun> runs{{compressed_data_lcn, 1},
-                                      {{}, compression_unit_clusters - 1}};
-
-  const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, xca_lznt1_example_decompressed_size, runs);
-
-  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
-                                        xca_lznt1_example_compressed.end());
-  return BuildCompressionImage(record, runs, cluster_bytes);
+  return BuildOneClusterCompressedImage(compression_unit_size_shift,
+                                        XcaExampleBytes());
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnit() {
@@ -60,9 +76,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithStoredCompressionUnit() {
       {compressed_data_lcn, compression_unit_clusters}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, compression_unit_size, runs);
+      CompressedPermission(), compression_unit_size_shift,
+      compression_unit_size, runs);
 
   return BuildCompressionImage(
       record, runs, CompressionFixturePattern(compression_unit_size));
@@ -87,8 +102,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterBitmap() {
   const std::vector<FakeDataRun> runs{
       {compressed_data_lcn, multi_cluster_bitmap_clusters}};
 
-  FakeRecord record = MakeRecordHeader(
-      attr_offset_value, NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse);
+  FakeRecord record = MakeInUseFileRecord();
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive);
@@ -128,13 +142,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithSparseThenCompressedUnit() {
                                       {{}, compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, sparse_then_compressed_real_size, runs);
+      CompressedPermission(), compression_unit_size_shift,
+      sparse_then_compressed_real_size, runs);
 
-  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
-                                        xca_lznt1_example_compressed.end());
-  return BuildCompressionImage(record, runs, cluster_bytes);
+  return BuildCompressionImage(record, runs, XcaExampleBytes());
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithHoleBeforeRealCluster() {
@@ -142,13 +153,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithHoleBeforeRealCluster() {
       {{}, 1}, {compressed_data_lcn, 1}, {{}, 2}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, compression_unit_size, runs);
+      CompressedPermission(), compression_unit_size_shift,
+      compression_unit_size, runs);
 
-  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
-                                        xca_lznt1_example_compressed.end());
-  return BuildCompressionImage(record, runs, cluster_bytes);
+  return BuildCompressionImage(record, runs, XcaExampleBytes());
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithFragmentedCompressedFile() {
@@ -159,9 +167,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithFragmentedCompressedFile() {
                                       {{}, compression_unit_clusters - 2}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, fragmented_compressed_payload_size, runs);
+      CompressedPermission(), compression_unit_size_shift,
+      fragmented_compressed_payload_size, runs);
 
   const std::vector<BYTE> payload =
       CompressionFixturePattern(fragmented_compressed_payload_size);
@@ -178,9 +185,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithTrailingPartialCompressionUnit() {
       {compressed_data_lcn, compression_unit_clusters + 1}, {{}, 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift,
+      CompressedPermission(), compression_unit_size_shift,
       trailing_partial_unit_stored_size + trailing_partial_unit_tail_size,
       runs);
 
@@ -196,15 +201,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithTrailingPartialCompressionUnit() {
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithCorruptCompressedUnit() {
-  const std::vector<FakeDataRun> runs{{compressed_data_lcn, 1},
-                                      {{}, compression_unit_clusters - 1}};
-
-  const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, xca_lznt1_example_decompressed_size, runs);
-
-  return BuildCompressionImage(record, runs, MakeCorruptLznt1Chunk());
+  return BuildOneClusterCompressedImage(compression_unit_size_shift,
+                                        MakeCorruptLznt1Chunk());
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithUnmappedCompressionUnit() {
@@ -214,9 +212,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithUnmappedCompressionUnit() {
       {compressed_data_lcn, compression_unit_clusters}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, 2ULL * compression_unit_size, runs,
+      CompressedPermission(), compression_unit_size_shift,
+      2ULL * compression_unit_size, runs,
       {.last_vcn = 2ULL * compression_unit_clusters - 1});
 
   return BuildCompressionImage(
@@ -228,16 +225,13 @@ std::vector<BYTE> BuildFakeNtfsImageWithRealClustersAfterHole() {
       {compressed_data_lcn, 1}, {{}, 1}, {fragmented_compressed_data_lcn, 2}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, compression_unit_size, runs);
+      CompressedPermission(), compression_unit_size_shift,
+      compression_unit_size, runs);
 
   // Content is irrelevant - the layout is rejected before anything is
   // decompressed - but a real LZNT1 stream keeps the fixture honest about
   // being otherwise plausible.
-  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
-                                        xca_lznt1_example_compressed.end());
-  return BuildCompressionImage(record, runs, cluster_bytes);
+  return BuildCompressionImage(record, runs, XcaExampleBytes());
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnit() {
@@ -248,9 +242,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnit() {
       {compressed_data_lcn, 1}, {{}, 2ULL * compression_unit_clusters - 1}};
 
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, 2ULL * compression_unit_size, runs);
+      CompressedPermission(), compression_unit_size_shift,
+      2ULL * compression_unit_size, runs);
 
   return BuildCompressionImage(
       record, runs,
@@ -259,63 +252,25 @@ std::vector<BYTE> BuildFakeNtfsImageWithShortDecompressedUnit() {
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize() {
-  const std::vector<FakeDataRun> runs{{compressed_data_lcn, 1},
-                                      {{}, compression_unit_clusters - 1}};
-
-  const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, xca_lznt1_example_decompressed_size, runs,
+  return BuildOneClusterCompressedImage(
+      compression_unit_size_shift, XcaExampleBytes(),
       {.total_size = compressed_attr_truncated_total_size});
-
-  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
-                                        xca_lznt1_example_compressed.end());
-  return BuildCompressionImage(record, runs, cluster_bytes);
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithCompUnitSizeOutOfRange() {
-  const std::vector<FakeDataRun> runs{{compressed_data_lcn, 1},
-                                      {{}, compression_unit_clusters - 1}};
-
-  const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      comp_unit_size_out_of_range_shift, xca_lznt1_example_decompressed_size,
-      runs);
-
-  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
-                                        xca_lznt1_example_compressed.end());
-  return BuildCompressionImage(record, runs, cluster_bytes);
+  return BuildOneClusterCompressedImage(comp_unit_size_out_of_range_shift,
+                                        XcaExampleBytes());
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithOversizedCompressionUnit() {
-  const std::vector<FakeDataRun> runs{{compressed_data_lcn, 1},
-                                      {{}, compression_unit_clusters - 1}};
-
-  const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      oversized_comp_unit_size_shift, xca_lznt1_example_decompressed_size,
-      runs);
-
-  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
-                                        xca_lznt1_example_compressed.end());
-  return BuildCompressionImage(record, runs, cluster_bytes);
+  return BuildOneClusterCompressedImage(oversized_comp_unit_size_shift,
+                                        XcaExampleBytes());
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithMisalignedCompressedStartVcn() {
-  const std::vector<FakeDataRun> runs{{compressed_data_lcn, 1},
-                                      {{}, compression_unit_clusters - 1}};
-
-  const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, xca_lznt1_example_decompressed_size, runs,
+  return BuildOneClusterCompressedImage(
+      compression_unit_size_shift, XcaExampleBytes(),
       {.start_vcn = misaligned_compressed_start_vcn});
-
-  const std::vector<BYTE> cluster_bytes(xca_lznt1_example_compressed.begin(),
-                                        xca_lznt1_example_compressed.end());
-  return BuildCompressionImage(record, runs, cluster_bytes);
 }
 
 namespace {
@@ -325,16 +280,11 @@ namespace {
 std::vector<BYTE>
     BuildRootWithCompressedDataRuns(const std::vector<FakeDataRun>& runs) {
   const FakeRecord record = MakeNonResidentDataRecord(
-      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive |
-          NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Compressed,
-      compression_unit_size_shift, compression_unit_size, runs);
+      CompressedPermission(), compression_unit_size_shift,
+      compression_unit_size, runs);
 
   std::vector<BYTE> image = BuildFakeNtfsImage();
-  const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
-  const size_t root_offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     static_cast<size_t>(Mft::Idx::Root);
-  std::memcpy(&image.at(root_offset), record.data(), record.size());
+  PutRootRecord(image, record);
   return image;
 }
 

@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -11,6 +12,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/file-record-flag.h"
@@ -32,6 +34,8 @@ enum class Type : DWORD;
 namespace Data {
 
 struct FileRecordHeader;
+struct HeaderNonResident;
+struct HeaderResident;
 
 }  // namespace Data
 }  // namespace NTFS_BROWSER_NAMESPACE
@@ -118,6 +122,19 @@ constexpr ULONGLONG MakeFileReference(ULONGLONG record, WORD sequence) {
 // so a reader that forgets to mask it off a parent_ref sees a wrong number.
 inline constexpr WORD root_sequence_number = 5;
 
+// The file reference entries use to name the root directory (#5) as their
+// parent, carrying root_sequence_number.
+inline constexpr ULONGLONG root_file_reference = MakeFileReference(
+    static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+
+// The root directory's record number alone, with sequence 0: what a parent
+// field holds when a fixture does not care about the generation.
+inline constexpr ULONGLONG bare_root_reference =
+    static_cast<ULONGLONG>(Mft::Idx::Root);
+
+// Byte address of $MFT's first record: $MFT sits at mft_lcn.
+inline constexpr DWORD mft_address = static_cast<DWORD>(mft_lcn) * cluster_size;
+
 // NTFS starts every attribute of a record, and every entry inside one, on an
 // 8-byte boundary; the readers bind structs onto these offsets, so an odd one
 // is a misaligned access.
@@ -133,10 +150,54 @@ constexpr DWORD AlignAttrSize(size_t size) {
                             ~(attr_alignment - 1));
 }
 
-// Builds a bare file-record header with the given attribute offset and
-// flags.
+// Builds a bare file-record header with the given attribute offset, flags and
+// sequence number.
 FakeRecord MakeRecordHeader(WORD offset_of_attr,
-                            NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags);
+                            NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags,
+                            WORD sequence = 0);
+
+// Bare header of an in-use file record, whose attributes start at
+// attr_offset_value.
+FakeRecord MakeInUseFileRecord(WORD sequence = 0);
+
+// Bare header of an in-use directory record, whose attributes start at
+// attr_offset_value.
+FakeRecord MakeInUseDirectoryRecord(WORD sequence = 0);
+
+// Writes record at $MFT slot idx of a BuildFakeNtfsImage() volume, whose
+// $MFT starts at mft_address.
+void PutMftRecord(std::vector<BYTE>& image, ULONGLONG idx,
+                  const FakeRecord& record);
+
+// Replaces the root directory's (#5) whole record.
+void PutRootRecord(std::vector<BYTE>& image, const FakeRecord& record);
+
+// Same volume as BuildFakeNtfsImage(), with MFT record idx replaced by record.
+std::vector<BYTE> BuildFakeNtfsImageReplacingRecord(ULONGLONG idx,
+                                                    const FakeRecord& record);
+
+// The bytes the image holds for MFT record idx.
+std::span<BYTE> MftRecordBytes(std::vector<BYTE>& image, ULONGLONG idx);
+
+// Zero-extends image so it ends on a 64 KiB boundary at or past end.
+// FullCache always reads a whole 64 KiB block, so a shorter image fails its
+// last read outright.
+void PadToFullCacheRead(std::vector<BYTE>& image, size_t end);
+
+// Starts a resident attribute of type at record[offset]: the common header
+// fields, and the value right after the header. The caller sets its sizes.
+NTFS_BROWSER_NAMESPACE::Data::HeaderResident&
+    InitResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type);
+
+// Starts a non-resident attribute of type at record[offset]: the common header
+// fields. The caller sets its VCN range, sizes and run list.
+NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident&
+    InitNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type);
+
+// Writes a run list of one run of clusters clusters at lcn, with the 4-byte
+// LCN encoding, then the terminator, at the start of data_run. Returns the
+// bytes written.
+DWORD WriteSingleRunList(std::span<BYTE> data_run, DWORD clusters, DWORD lcn);
 
 // Makes record an extension record: its own sequence number, and the file
 // reference of the base record it belongs to.
@@ -271,11 +332,68 @@ struct FakeIndexName {
   ULONGLONG real_size = 0;
   ULONGLONG alloc_size = 0;
   ULONGLONG alter_time = 0;
+  // Parent directory reference the entry's $FILE_NAME carries.
+  ULONGLONG parent_ref = bare_root_reference;
+  // Whether the entry carries the Last flag, which ends its node.
+  bool last = false;
+  // The VCN of the sub-node the entry points at. Unset for a leaf entry.
+  std::optional<ULONGLONG> sub_node_vcn;
 };
 
 // Writes "name" as a leaf index entry at "dest" and returns its size in
 // bytes. Entries are packed with no padding, like every other fixture here.
 WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name);
+
+// Writes the terminating entry of a node at dest: no name, no sub-node.
+// Returns its size.
+WORD WriteTerminalEntry(BYTE* dest);
+
+// Writes a nameless entry that points at the sub-node vcn at dest, and ends
+// its node when last is set. Returns its size.
+WORD WriteSubNodeEntry(BYTE* dest, ULONGLONG vcn, bool last);
+
+// Size of the index blocks an $INDEX_ROOT declares.
+struct FakeIndexBlockGeometry {
+  DWORD ib_size = fake_file_record_size;
+  BYTE clusters_per_ib = 1;
+};
+
+// Writes the entries of a node at the start of the span, and returns their
+// total size.
+using IndexEntriesWriter = std::function<DWORD(std::span<BYTE>)>;
+
+// Writes a resident $INDEX_ROOT at record[offset] whose entries write_entries
+// lays down. Returns its total_size.
+DWORD WriteResidentIndexRoot(FakeRecord& record, DWORD offset,
+                             const FakeIndexBlockGeometry& geometry,
+                             const IndexEntriesWriter& write_entries);
+
+// Starts the index block at the start of block_start, of block_size bytes and
+// VCN vcn: its header, with an update sequence array that needs no fixup. The
+// caller writes the entries after the header and sets the entry sizes.
+NTFS_BROWSER_NAMESPACE::Data::IndexBlock&
+    WriteIndexBlockHeader(std::span<BYTE> block_start, DWORD block_size,
+                          ULONGLONG vcn);
+
+// Where an index block WriteIndexLeafBlockAt() writes sits, and what it holds.
+struct FakeIndexLeafBlock {
+  // Byte offset of the block in the image.
+  size_t offset;
+  // Size of the block in bytes.
+  DWORD size;
+  // VCN the block header declares.
+  ULONGLONG vcn;
+  // MFT record the block's single leaf entry points to.
+  ULONGLONG mft_ref;
+  // Parent directory reference that entry carries.
+  ULONGLONG parent_ref;
+  // Name of that entry.
+  std::wstring_view name;
+};
+
+// Writes an index block holding one real leaf entry, as spec describes.
+void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
+                           const FakeIndexLeafBlock& spec);
 
 // Writes one resident $INDEX_ROOT at record[offset]: root_names as leaf
 // entries, then a nameless SUBNODE-only entry. Returns its total_size.
