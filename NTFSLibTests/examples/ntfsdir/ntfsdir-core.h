@@ -11,6 +11,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/volume-options.h>
 
 // Prints command-line usage help.
 void Usage();
@@ -24,33 +25,33 @@ wchar_t Getvolume(wchar_t** ppath);
 // '\' or '"'), and removes that segment from ppath in place.
 std::wstring Getpathname(std::wstring& ppath);
 
-// Totals of the entries Printfile lists.
+// Totals of the entries a listing shows.
 struct Total {
   int files = 0;
   int dirs = 0;
 };
 
-// TraverseSubEntries callback: prints one directory entry and tallies it
-// into context, a Total*.
-void Printfile(const NTFS_BROWSER_NAMESPACE::IndexEntryView& ie, void* context);
-
 // The parsed command line: the --log settings, whether to list every
-// subdirectory, and the one path argument.
+// subdirectory, the volume options (--deleted, --recover), and the one path
+// argument.
 struct Arguments {
   NTFS_BROWSER_NAMESPACE::Log::Config log_config;
   bool recursive = false;
+  NTFS_BROWSER_NAMESPACE::VolumeOptions volume_options;
   wchar_t* path = nullptr;
 };
 
 // Returns nullopt for a malformed --log option, or unless exactly one path
-// is given. The --log and --recursive (-r) options may come before or after
-// the path.
+// is given. The --log, --recursive (-r), --deleted and --recover options may
+// come before or after the path.
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]);
 
 // Lists the directory named on the command line, opening the volume with
 // cache strategy S. The target is a device or image file followed by a
 // directory ("/dev/sda1/Windows", "c:\image.img\Windows"), or on Windows a
 // drive letter ("c:\windows"). With --recursive, every directory below it is
-// listed too, each under a "Directory of" header. Returns the exit code.
+// listed too, each under a "Directory of" header. With --deleted, a deleted
+// entry is marked with * (and ? when its record cannot be read); with
+// --recover, damaged directory data is salvaged. Returns the exit code.
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 int RunNtfsDir(int argc, wchar_t* argv[]);

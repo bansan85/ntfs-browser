@@ -42,7 +42,10 @@ namespace {
 // Stdout of both samples when the arguments are not one path and a --log.
 constexpr std::string_view usage_text =
     R"(Invalid parameter
-Usage: ntfsdir [--log=...] "path"
+Usage: ntfsdir [--recursive] [--deleted] [--recover] [--log=...] "path"
+  --recursive, -r  also list every subdirectory of path
+  --deleted        also list deleted files, marked with *
+  --recover        salvage damaged directory data (? marks a name whose file record cannot be read)
   --log=<console|file>:<off|error|warn|info|debug|trace>[:<path>]
 eg. ntfsdir c:
 eg. ntfsdir c:\windows
@@ -55,7 +58,10 @@ eg. ntfsdir c:\image.img\Windows
 // Stdout of the sample when the arguments are not one path and a --log.
 constexpr std::string_view usage_text =
     R"(Invalid parameter
-Usage: ntfsdir [--log=...] "path"
+Usage: ntfsdir [--recursive] [--deleted] [--recover] [--log=...] "path"
+  --recursive, -r  also list every subdirectory of path
+  --deleted        also list deleted files, marked with *
+  --recover        salvage damaged directory data (? marks a name whose file record cannot be read)
   --log=<console|file>:<off|error|warn|info|debug|trace>[:<path>]
 eg. ntfsdir /dev/sda1
 eg. ntfsdir /dev/sda1/Windows
@@ -124,9 +130,10 @@ struct TempImage final {
 
 // The listing line of an entry of size zero and write time ticks (UTC), as
 // NtfsDir prints it in the host's time zone. Empty where the platform cannot
-// show that time, which leaves the line out.
-std::string ListingLine(std::string_view name, bool directory,
-                        ULONGLONG ticks) {
+// show that time, which leaves the line out. marker is the --deleted column
+// before the name, or empty when the listing has none.
+std::string ListingLine(std::string_view name, bool directory, ULONGLONG ticks,
+                        std::string_view marker = {}) {
   const auto local = NtfsDevice::UtcTicksToLocalTime(ticks);
   if (!local) {
     return {};
@@ -136,7 +143,9 @@ std::string ListingLine(std::string_view name, bool directory,
   snprintf(text, sizeof(text), "%u-%02u-%02u  %02u:%02u\t%s    %s<   >\t",
            local->year, local->month, local->day, local->hour, local->minute,
            directory ? "<DIR>" : "     ", directory ? "\t" : "0\t");
-  return std::string(text) + std::string(name) + "\n";
+  const std::string marker_column =
+      marker.empty() ? std::string() : std::string(marker) + " ";
+  return std::string(text) + marker_column + std::string(name) + "\n";
 }
 
 // The listing of the root of a TempImage: only "Docs", whose index entry has
@@ -145,9 +154,10 @@ std::string RootListing() {
   return ListingLine("Docs", true, 0) + "Files: 0, Directories: 1\n";
 }
 
-// The listing of Docs in a TempImage: one file called name.
-std::string DocsListing(std::string_view name) {
-  return ListingLine(name, false, dump_broken_alter_time) +
+// The listing of Docs in a TempImage: one file called name. marker is the
+// --deleted column, or empty.
+std::string DocsListing(std::string_view name, std::string_view marker = {}) {
+  return ListingLine(name, false, dump_broken_alter_time, marker) +
          "Files: 1, Directories: 0\n";
 }
 
@@ -191,17 +201,62 @@ TEST_CASE("NtfsDir prints usage for a malformed --log option",
   CHECK(run.err.empty());
 }
 
-TEST_CASE("NtfsDir does not take --deleted or --recover",
+TEST_CASE("NtfsDir takes --recover without changing a healthy listing",
+          "[io][sample][characterization]") {
+  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
+  INFO(exe.string());
+  const TempImage image;
+  const SampleRun run =
+      RunDir(exe, {L"--recover", InImage(image.path, L"Docs")});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.out == DocsListing("report.txt"));
+}
+
+TEST_CASE("NtfsDir --deleted adds a marker column to a listing",
+          "[io][sample][characterization]") {
+  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
+  INFO(exe.string());
+  const TempImage image;
+  const SampleRun run =
+      RunDir(exe, {InImage(image.path, L"Docs"), L"--deleted"});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.out == DocsListing("report.txt", " "));
+}
+
+TEST_CASE("NtfsDir --recursive lists every directory under a header",
+          "[io][sample][characterization]") {
+  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
+  INFO(exe.string());
+  const TempImage image;
+  const std::string root = image.path.string();
+  const std::string docs =
+      root + static_cast<char>(Fs::path::preferred_separator) + "Docs";
+
+  for (const std::wstring option : {L"--recursive", L"-r"}) {
+    INFO(Fs::path(option).string());
+    const SampleRun run = RunDir(exe, {option, image.path.wstring()});
+
+    CHECK(run.exit_code == 0);
+    CHECK(run.out ==
+          "\nDirectory of " + root + "\n" + ListingLine("Docs", true, 0) +
+              "\nDirectory of " + docs + "\n" +
+              ListingLine("report.txt", false, dump_broken_alter_time) +
+              "Files: 1, Directories: 1\n");
+  }
+}
+
+TEST_CASE("NtfsDir --recursive starts at the directory it is given",
           "[io][sample][characterization]") {
   const TempImage image;
+  const SampleRun run =
+      RunDir(NTFS_DIR_EXE, {L"-r", InImage(image.path, L"Docs")});
 
-  for (const std::wstring option : {L"--deleted", L"--recover"}) {
-    INFO(Fs::path(option).string());
-    const SampleRun run = RunDir(NTFS_DIR_EXE, {option, image.path.wstring()});
-
-    CHECK(run.exit_code == sample_failure_exit_code);
-    CHECK(run.out == usage_text);
-  }
+  CHECK(run.exit_code == 0);
+  CHECK_THAT(run.out, ContainsSubstring("\nDirectory of "));
+  CHECK_THAT(run.out, ContainsSubstring("report.txt\n"));
+  CHECK_THAT(run.out, ContainsSubstring("Files: 1, Directories: 0\n"));
 }
 
 TEST_CASE("NtfsDir usage names the form of the platform",
