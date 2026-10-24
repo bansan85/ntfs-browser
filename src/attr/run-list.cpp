@@ -2,11 +2,13 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <limits>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
 #include <ntfs-browser/namespace.h>
 
@@ -129,6 +131,33 @@ const Data::RunEntry* RunList::Find(ULONGLONG vcn) const noexcept {
     }
   }
   return nullptr;
+}
+
+std::vector<Alloc::Extent> RunList::ExtentsBetween(ULONGLONG first_vcn,
+                                                   ULONGLONG end_vcn,
+                                                   ULONGLONG max_lcn) const {
+  std::vector<Alloc::Extent> extents;
+  ULONGLONG vcn = first_vcn;
+  while (vcn < end_vcn) {
+    const Data::RunEntry* data_run = Find(vcn);
+    if (data_run == nullptr) {
+      break;
+    }
+    const ULONGLONG clusters =
+        (std::min)(data_run->last_vcn + 1, end_vcn) - vcn;
+    if (data_run->lcn) {
+      const ULONGLONG skipped = vcn - data_run->start_vcn;
+      // The part of the run asked for ends at max_lcn at the latest.
+      if (*data_run->lcn > max_lcn || skipped > max_lcn - *data_run->lcn ||
+          clusters > max_lcn - *data_run->lcn - skipped) {
+        break;
+      }
+      extents.push_back(
+          {.lcn = *data_run->lcn + skipped, .clusters = clusters});
+    }
+    vcn += clusters;
+  }
+  return extents;
 }
 
 // Counts the real (non-sparse) clusters at the start of a compression unit.

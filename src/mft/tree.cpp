@@ -104,6 +104,15 @@ std::optional<size_t> max_held_record_bytes_override;
 // one more never moves those already held.
 constexpr size_t held_block_bytes = size_t{4} << 20;
 
+// $ATTRIBUTE_LIST streams the second pass announces to the reader ahead of the
+// record it parses. The reader reads up to 8 ranges and 16 MiB at once: 64
+// lists keep it busy, and 64 of the largest ones are 16 MiB.
+constexpr size_t max_announced_lists = 64;
+
+// Bytes of one $ATTRIBUTE_LIST announced at most: the largest Windows writes.
+// A forged size announces no more.
+constexpr ULONGLONG max_announced_list_bytes = ULONGLONG{256} * 1024;
+
 // Records the dense index of a tree covers whatever its entries: 2^20 slots
 // are 8 MiB, little next to the entries of a volume that large.
 constexpr size_t dense_index_floor = size_t{1} << 20;
@@ -330,12 +339,14 @@ bool ProgressAllowsRecord(const Mft::MftTree::ScanOptions& options,
 class HeldRecords {
  public:
   // A base record that waits for the second pass, with the entry kept in its
-  // place, and what its first header read counted.
+  // place, what its first header read counted, and the clusters its
+  // $ATTRIBUTE_LIST is read from, if it is not resident.
   struct Waiting {
     ULONGLONG record;
     size_t entry_index;
     bool header_damaged;
     size_t slot;
+    std::vector<Alloc::Extent> list_extents;
   };
 
   explicit HeldRecords(size_t record_size)
@@ -358,7 +369,8 @@ class HeldRecords {
   // Holds base record for the second pass. False when bytes is empty or the
   // budget is spent.
   bool HoldWaiting(ULONGLONG record, std::span<const BYTE> bytes,
-                   size_t entry_index, bool header_damaged) {
+                   size_t entry_index, bool header_damaged,
+                   std::vector<Alloc::Extent> list_extents) {
     size_t slot = 0;
     if (!Store(bytes, slot)) {
       return false;
@@ -366,7 +378,8 @@ class HeldRecords {
     waiting_.push_back({.record = record,
                         .entry_index = entry_index,
                         .header_damaged = header_damaged,
-                        .slot = slot});
+                        .slot = slot,
+                        .list_extents = std::move(list_extents)});
     return true;
   }
 
@@ -423,6 +436,58 @@ class HeldRecords {
   // Sorted by record: the scan meets them in that order.
   std::vector<Extension> extensions_;
   std::vector<Waiting> waiting_;
+};
+
+// Announces to the volume's reader the clusters of the $ATTRIBUTE_LIST streams
+// the second pass reads, max_announced_lists streams ahead of it and in the
+// order it reads them: the disk reads them while the pass parses.
+template <Cache::Strategy S>
+class ListAnnouncer {
+ public:
+  ListAnnouncer(const NtfsVolume<S>& volume,
+                const std::vector<HeldRecords::Waiting>& waiting)
+      : volume_(&volume), waiting_(&waiting) {}
+
+  // Called before the pass parses waiting[index]. Announces the lists that
+  // follow those already announced, until max_announced_lists of them wait
+  // from index on.
+  void Before(size_t index) {
+    for (; passed_ < index; passed_++) {
+      if (!waiting_->at(passed_).list_extents.empty()) {
+        ahead_--;
+      }
+    }
+    for (; next_ < waiting_->size() && ahead_ < max_announced_lists; next_++) {
+      const std::vector<Alloc::Extent>& extents =
+          waiting_->at(next_).list_extents;
+      if (extents.empty()) {
+        continue;
+      }
+      if (!cancelled_) {
+        // A first pass that stopped early leaves blocks announced, which
+        // would be read for nothing, and before the lists.
+        volume_->CancelPrefetch();
+        cancelled_ = true;
+      }
+      const ULONGLONG cluster_size = volume_->GetClusterSize();
+      for (const Alloc::Extent& extent : extents) {
+        volume_->Prefetch(extent.lcn * cluster_size,
+                          extent.clusters * cluster_size);
+      }
+      ahead_++;
+    }
+  }
+
+ private:
+  const NtfsVolume<S>* volume_;
+  const std::vector<HeldRecords::Waiting>* waiting_;
+  // Records the pass parsed.
+  size_t passed_{0};
+  // The first record whose list is not announced.
+  size_t next_{0};
+  // Lists announced among the records from passed_ to next_.
+  size_t ahead_{0};
+  bool cancelled_{false};
 };
 
 // What one record slot holds, once its header is read.
@@ -822,8 +887,9 @@ void Mft::MftTree::Impl::ReadSlots(
     }
     // Its entry keeps its place, so the entries stay in record order.
     if (file_record.HasAttrHeader(Attr::Type::AttributeList) &&
-        held.HoldWaiting(record, slots.HeldSlot(record), entries.size(),
-                         header_damaged)) {
+        held.HoldWaiting(
+            record, slots.HeldSlot(record), entries.size(), header_damaged,
+            file_record.AttributeListExtents(max_announced_list_bytes))) {
       entries.emplace_back();
       continue;
     }
@@ -841,7 +907,12 @@ void Mft::MftTree::Impl::ReadSlots(
   }
 
   std::vector<size_t> dropped;
-  for (const HeldRecords::Waiting& waiting : held.WaitingRecords()) {
+  const std::vector<HeldRecords::Waiting>& waiting_records =
+      held.WaitingRecords();
+  ListAnnouncer<S> announcer(volume, waiting_records);
+  for (size_t index = 0; index < waiting_records.size(); index++) {
+    announcer.Before(index);
+    const HeldRecords::Waiting& waiting = waiting_records.at(index);
     Mft::MftTree::Entry& entry = entries.at(waiting.entry_index);
     // The bytes the first pass parsed: the header parses as it did then.
     if (!file_record.ParseFileRecord(waiting.record,

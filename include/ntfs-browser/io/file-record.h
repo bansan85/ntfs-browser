@@ -107,6 +107,12 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // the attribute headers alone: nothing is parsed or logged, and a walk that
   // meets a broken header answers false. False when no record is parsed.
   [[nodiscard]] bool HasAttrHeader(Attr::Type attr_type) const noexcept;
+  // The clusters ParseAttrs() reads the first max_bytes of the parsed record's
+  // $ATTRIBUTE_LIST from, in the order it reads them. Going by the attribute
+  // header alone, as HasAttrHeader() does: nothing is read. Empty for a
+  // resident or compressed list, or none.
+  [[nodiscard]] std::vector<Alloc::Extent>
+      AttributeListExtents(ULONGLONG max_bytes) const;
   // Where ParseAttrs() takes the extension records its $ATTRIBUTE_LIST names
   // from. A record the source does not give is read from the disk. The source
   // MUST outlive the parses that use it.

@@ -37,6 +37,10 @@ std::vector<Variant> Variants() {
   variants.push_back(
       {"attribute_list_multi_cluster",
        Tests::BuildFakeNtfsImageWithMultiClusterAttributeList()});
+  variants.push_back({"attribute_list_scan_non_resident",
+                      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+                          Tests::FakeListedExtension::Genuine,
+                          Tests::FakeListResidency::NonResident)});
   return variants;
 }
 

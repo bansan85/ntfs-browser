@@ -76,6 +76,13 @@ class RunList {
   // The run holding vcn, or nullptr if no run holds it.
   [[nodiscard]] const Data::RunEntry* Find(ULONGLONG vcn) const noexcept;
 
+  // The real clusters that hold the VCNs from first_vcn to end_vcn
+  // (exclusive), in VCN order, sparse runs left out. Stops at the first VCN no
+  // run holds, and at the first run that reaches past max_lcn.
+  [[nodiscard]] std::vector<Alloc::Extent>
+      ExtentsBetween(ULONGLONG first_vcn, ULONGLONG end_vcn,
+                     ULONGLONG max_lcn) const;
+
   // Real clusters at the start of the compression unit at unit_first_vcn.
   // An empty optional if the unit is not fully mapped, or if a real run
   // follows a hole within the unit.

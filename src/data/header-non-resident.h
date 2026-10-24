@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstring>
+#include <limits>
 #include <span>
 
 #include <ntfs-browser/attr/header-common.h>
@@ -53,6 +54,27 @@ inline constexpr DWORD header_non_resident_base_size =
   std::memcpy(&size, field.subspan(header_non_resident_base_size).data(),
               sizeof(size));
   return size;
+}
+
+// last_vcn minus start_vcn, as an unsigned count. last_vcn is inclusive, so
+// an empty attribute stores it as -1 (all ones) with start_vcn 0: that is
+// the maximum here. An inverted range wraps mod 2^64, as it always has, and
+// is computed here without unsigned overflow.
+[[nodiscard]] constexpr ULONGLONG
+    VcnSpan(const HeaderNonResident& header) noexcept {
+  constexpr ULONGLONG max = (std::numeric_limits<ULONGLONG>::max)();
+  if (header.last_vcn >= header.start_vcn) {
+    return header.last_vcn - header.start_vcn;
+  }
+  return max - (header.start_vcn - header.last_vcn) + 1;
+}
+
+// Clusters an attribute header spans. The maximum span is the empty
+// attribute, so it counts as 0 clusters, not a wrapped count.
+[[nodiscard]] constexpr ULONGLONG
+    SpannedClusters(const HeaderNonResident& header) noexcept {
+  const ULONGLONG span = VcnSpan(header);
+  return span == (std::numeric_limits<ULONGLONG>::max)() ? 0 : span + 1;
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Data

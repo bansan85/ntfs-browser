@@ -7,9 +7,12 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
@@ -24,6 +27,7 @@
 #include "memory-disk-reader.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Data = NTFS_BROWSER_NAMESPACE::Data;
@@ -31,6 +35,9 @@ namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 
 namespace {
+
+// Bytes of a list the tests ask the clusters of: more than any fixture holds.
+constexpr ULONGLONG list_bytes_asked = ULONGLONG{256} * 1024;
 
 // Byte offset of record idx in the fixture: its $MFT starts at cluster 1.
 constexpr size_t RecordOffset(ULONGLONG idx) {
@@ -103,6 +110,64 @@ TEMPLATE_TEST_CASE_SIG(
     Io::FileRecord<S> record(*opened.volume);
     REQUIRE(record.ParseFileRecord(Tests::mft_tree_list_base_idx));
     CHECK_FALSE(record.HasAttrHeader(Attr::Type::AttributeList));
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "FileRecord::AttributeListExtents() maps a non-resident list by its "
+    "header alone",
+    "[file-record]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  SECTION("a list in one cluster") {
+    const CountedVolume<S> opened =
+        OpenCounted<S>(Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+            Tests::FakeListedExtension::Genuine,
+            Tests::FakeListResidency::NonResident));
+    Io::FileRecord<S> record(*opened.volume);
+    CHECK(record.AttributeListExtents(list_bytes_asked).empty());
+    REQUIRE(record.ParseFileRecord(Tests::mft_tree_list_base_idx));
+    opened.reader->Reset();
+
+    const std::vector<Alloc::Extent> extents =
+        record.AttributeListExtents(list_bytes_asked);
+    REQUIRE(extents.size() == 1);
+    CHECK(extents.front().lcn == Tests::mft_tree_list_lcn);
+    CHECK(extents.front().clusters == 1);
+    CHECK(opened.reader->Calls().empty());
+    // The list the extents map is the one ParseAttrs() reads.
+    record.SetAttrMask(Attr::Mask::FileName);
+    REQUIRE(record.ParseAttrs());
+    CHECK(record.GetAttr(Attr::Type::FileName).size() == 2);
+  }
+
+  SECTION("a list over two clusters, asked for in part") {
+    const CountedVolume<S> opened = OpenCounted<S>(
+        Tests::BuildFakeNtfsImageWithMultiClusterAttributeList());
+    Io::FileRecord<S> record(*opened.volume);
+    REQUIRE(record.ParseFileRecord(Tests::attr_list_lifetime_base_idx));
+
+    const auto [bytes, clusters] =
+        GENERATE(table<ULONGLONG, ULONGLONG>({{1, 1},
+                                              {Tests::fake_cluster_size, 1},
+                                              {Tests::fake_cluster_size + 1, 2},
+                                              {list_bytes_asked, 2}}));
+    INFO("bytes asked: " << bytes);
+    const std::vector<Alloc::Extent> extents =
+        record.AttributeListExtents(bytes);
+    REQUIRE(extents.size() == 1);
+    CHECK(extents.front().lcn == Tests::multi_cluster_list_lcn);
+    CHECK(extents.front().clusters == clusters);
+    CHECK(record.AttributeListExtents(0).empty());
+  }
+
+  SECTION("a resident list, or none") {
+    const CountedVolume<S> opened =
+        OpenCounted<S>(Tests::BuildFakeNtfsImageWithMftTreeAttributeList());
+    Io::FileRecord<S> record(*opened.volume);
+    REQUIRE(record.ParseFileRecord(Tests::mft_tree_list_base_idx));
+    CHECK(record.AttributeListExtents(list_bytes_asked).empty());
+    REQUIRE(record.ParseFileRecord(Tests::mft_tree_docs_idx));
+    CHECK(record.AttributeListExtents(list_bytes_asked).empty());
   }
 }
 

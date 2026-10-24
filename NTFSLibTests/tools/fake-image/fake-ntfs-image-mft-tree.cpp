@@ -208,36 +208,42 @@ struct FakeTreeListEntry {
   ULONGLONG record;
 };
 
-// Writes a resident $ATTRIBUTE_LIST of entries at record[offset], each naming
-// its record under tree_list_extension_sequence, and returns its total_size.
-DWORD WriteTreeAttributeList(FakeRecord& record, DWORD offset,
-                             std::span<const FakeTreeListEntry> entries) {
-  constexpr auto entry_size = static_cast<WORD>(AlignAttrSize(
-      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
-  auto& attr = InitResidentAttr(record, offset, Attr::Type::AttributeList);
-  attr.attr_size = gsl::narrow<DWORD>(entry_size * entries.size());
-  attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
+// Bytes of one entry of that list.
+constexpr auto tree_list_entry_size = static_cast<WORD>(AlignAttrSize(
+    NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
 
+// The bytes of an $ATTRIBUTE_LIST of entries, each naming its record under
+// tree_list_extension_sequence.
+std::vector<BYTE> TreeListBytes(std::span<const FakeTreeListEntry> entries) {
+  std::vector<BYTE> bytes(tree_list_entry_size * entries.size(), 0);
   for (size_t i = 0; i < entries.size(); i++) {
-    auto& entry =
-        *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::AttributeList*>(
-            &record.at(offset + attr.attr_offset + (i * entry_size)));
+    NTFS_BROWSER_NAMESPACE::Data::AttributeList entry{};
     entry.attr_type = gsl::at(entries, i).type;
-    entry.record_size = entry_size;
-    entry.name_length = 0;
-    entry.name_offset = 0;
-    entry.start_vcn = 0;
+    entry.record_size = tree_list_entry_size;
     entry.base_ref.segment_number = gsl::at(entries, i).record;
     entry.base_ref.sequence_number = tree_list_extension_sequence;
-    entry.attr_id = 0;
+    std::memcpy(&bytes.at(i * tree_list_entry_size), &entry,
+                NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
   }
+  return bytes;
+}
+
+// Writes a resident $ATTRIBUTE_LIST holding list at record[offset], and
+// returns its total_size.
+DWORD WriteTreeAttributeList(FakeRecord& record, DWORD offset,
+                             const std::vector<BYTE>& list) {
+  auto& attr = InitResidentAttr(record, offset, Attr::Type::AttributeList);
+  attr.attr_size = gsl::narrow<DWORD>(list.size());
+  attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
+  std::memcpy(&record.at(offset + attr.attr_offset), list.data(), list.size());
   return attr.header.total_size;
 }
 
 }  // namespace
 
 std::vector<BYTE>
-    BuildFakeNtfsImageWithMftTreeAttributeList(FakeListedExtension high) {
+    BuildFakeNtfsImageWithMftTreeAttributeList(FakeListedExtension high,
+                                               FakeListResidency list) {
   using RecordFlag = NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
   using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 
@@ -265,9 +271,21 @@ std::vector<BYTE>
       {{.type = Attr::Type::FileName, .record = mft_tree_list_low_ext_idx},
        {.type = Attr::Type::FileName, .record = mft_tree_list_high_ext_idx},
        {.type = Attr::Type::Data, .record = mft_tree_list_high_ext_idx}}};
-  offset += WriteTreeAttributeList(base, offset, entries);
+  const std::vector<BYTE> list_bytes = TreeListBytes(entries);
+  const std::vector<FakeDataRun> list_runs{{mft_tree_list_lcn, 1}};
+  if (list == FakeListResidency::Resident) {
+    offset += WriteTreeAttributeList(base, offset, list_bytes);
+  } else {
+    offset += WriteNonResidentAttr(base, offset, Attr::Type::AttributeList,
+                                   {.comp_unit_size = 0,
+                                    .real_size = list_bytes.size(),
+                                    .runs = list_runs});
+  }
   WriteEndOfAttributesMarker(base, offset);
   PutMftRecord(image, mft_tree_list_base_idx, base);
+  if (list == FakeListResidency::NonResident) {
+    LayRunBytes(image, list_runs, list_bytes);
+  }
 
   PutMftRecord(
       image, mft_tree_list_high_ext_idx,

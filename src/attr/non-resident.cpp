@@ -57,25 +57,6 @@ constexpr WORD max_comp_unit_size_shift = 16;
 // comp_unit_size from over-allocating.
 constexpr ULONGLONG max_compression_unit_size = 1024ULL * 1024ULL;
 
-// last_vcn minus start_vcn, as an unsigned count. last_vcn is inclusive, so
-// an empty attribute stores it as -1 (all ones) with start_vcn 0: that is
-// the maximum here. An inverted range wraps mod 2^64, as it always has, and
-// is computed here without unsigned overflow.
-constexpr ULONGLONG VcnSpan(const Data::HeaderNonResident& header) {
-  constexpr ULONGLONG max = std::numeric_limits<ULONGLONG>::max();
-  if (header.last_vcn >= header.start_vcn) {
-    return header.last_vcn - header.start_vcn;
-  }
-  return max - (header.start_vcn - header.last_vcn) + 1;
-}
-
-// Clusters an attribute header spans. The maximum span is the empty
-// attribute, so it counts as 0 clusters, not a wrapped count.
-constexpr ULONGLONG SpannedClusters(const Data::HeaderNonResident& header) {
-  const ULONGLONG span = VcnSpan(header);
-  return span == std::numeric_limits<ULONGLONG>::max() ? 0 : span + 1;
-}
-
 // The clusters of one kind found in the runs of a stream, and the LCN of the
 // first run that holds some.
 struct ClusterTally {
@@ -102,7 +83,7 @@ AttrNonResident<S>::AttrNonResident(const HeaderCommon& ahc,
                                     const Io::FileRecord<S>& file_record)
     : Attr::AttrBase<S>(ahc, file_record),
       attr_header_nr_(reinterpret_cast<const Data::HeaderNonResident&>(ahc)),
-      runs_(SpannedClusters(attr_header_nr_)),
+      runs_(Data::SpannedClusters(attr_header_nr_)),
       record_deleted_(file_record.IsDeleted()),
       record_number_(file_record.GetFileReference()) {
   // total_size already covers this field (ParseAttrs()); start_vcn must be
@@ -160,7 +141,7 @@ void AttrNonResident<S>::ParseDataRun() {
       attr_header_nr_.data_run_offset < attr_bytes.size()
           ? attr_bytes.subspan(attr_header_nr_.data_run_offset)
           : std::span<const BYTE>{};
-  runs_.Parse(data_run, VcnSpan(attr_header_nr_), recover);
+  runs_.Parse(data_run, Data::VcnSpan(attr_header_nr_), recover);
 }
 
 // Read clusters from disk, or sparse data
@@ -783,29 +764,16 @@ void AttrNonResident<S>::PrefetchExtentData(ULONGLONG offset,
 
   // The clusters that hold a byte of the range, as ReadDataBounded() reads
   // them: the partial ones at both ends included.
-  ULONGLONG vcn = offset / cluster_size;
+  const ULONGLONG vcn = offset / cluster_size;
   const ULONGLONG end_vcn = (offset + length - 1) / cluster_size + 1;
   // The byte address of an LCN MUST NOT wrap, as in ReadClusters().
   const ULONGLONG max_lcn =
       static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) /
       cluster_size;
-  while (vcn < end_vcn) {
-    const Data::RunEntry* data_run = runs_.Find(vcn);
-    if (data_run == nullptr) {
-      return;
-    }
-    const ULONGLONG clusters =
-        (std::min)(data_run->last_vcn + 1, end_vcn) - vcn;
-    if (data_run->lcn) {
-      const ULONGLONG skipped = vcn - data_run->start_vcn;
-      if (*data_run->lcn > max_lcn || skipped > max_lcn - *data_run->lcn ||
-          clusters > max_lcn - *data_run->lcn - skipped) {
-        return;
-      }
-      this->volume_.Prefetch((*data_run->lcn + skipped) * cluster_size,
-                             clusters * cluster_size);
-    }
-    vcn += clusters;
+  for (const Alloc::Extent& extent :
+       runs_.ExtentsBetween(vcn, end_vcn, max_lcn)) {
+    this->volume_.Prefetch(extent.lcn * cluster_size,
+                           extent.clusters * cluster_size);
   }
 }
 

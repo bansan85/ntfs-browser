@@ -940,16 +940,28 @@ enum class FakeListedExtension : std::uint8_t {
   Foreign
 };
 
+// Where the $ATTRIBUTE_LIST of mft_tree_list_base_idx lies.
+enum class FakeListResidency : std::uint8_t {
+  // In the base record.
+  Resident,
+  // In the one cluster mft_tree_list_lcn, past the $MFT.
+  NonResident
+};
+
+// The cluster a non-resident list of mft_tree_list_base_idx lies in.
+inline constexpr DWORD mft_tree_list_lcn = 62;
+
 // Same volume as BuildFakeNtfsImageWithMftTree(), with old.tmp (19), draft.doc
 // (21) and stale.txt (22) replaced by:
 //   19 an extension of 21, holding its name "listed.txt" in the root;
-//   21 "listed.txt", whose own record holds only $STANDARD_INFORMATION and a
-//      resident $ATTRIBUTE_LIST naming 19 for $FILE_NAME, then 22 for
-//      $FILE_NAME and $DATA;
+//   21 "listed.txt", whose own record holds only $STANDARD_INFORMATION and an
+//      $ATTRIBUTE_LIST, where list says, naming 19 for $FILE_NAME, then 22
+//      for $FILE_NAME and $DATA;
 //   22 an extension of the record high says, holding the hard link
 //      "listed-link.txt" in Docs and a $DATA of mft_tree_list_data_size bytes.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
-    FakeListedExtension high = FakeListedExtension::Genuine);
+    FakeListedExtension high = FakeListedExtension::Genuine,
+    FakeListResidency list = FakeListResidency::Resident);
 
 // Records of BuildFakeNtfsImageWithMftTree() that are in use: $MFT, $Volume,
 // the root, Docs, report.txt, the hard link, NewDir and the extension record.

@@ -222,3 +222,34 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK(scan.tree->Stats().damaged == 1);
   }
 }
+
+TEST_CASE(
+    "MftTree announces a non-resident $ATTRIBUTE_LIST before its second pass "
+    "reads it",
+    "[mft][tree][attribute-list][prefetch]") {
+  using Call = Tests::CountingDiskReader::Call;
+  using Kind = Tests::CountingDiskReader::Kind;
+  const CountedScan<Cache::Strategy::NoCache> scan =
+      Scan<Cache::Strategy::NoCache>(
+          Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+              Tests::FakeListedExtension::Genuine,
+              Tests::FakeListResidency::NonResident));
+  const MftTree::Entry* const listed =
+      scan.tree->Find(Tests::mft_tree_list_base_idx);
+  REQUIRE(listed != nullptr);
+  CHECK(listed->names.size() == 2);
+
+  const ULONGLONG list =
+      ULONGLONG{Tests::mft_tree_list_lcn} * Tests::fake_cluster_size;
+  const std::vector<Call>& calls = scan.reader->Calls();
+  const auto read = std::ranges::find_if(calls, [list](const Call& call) {
+    return call.kind == Kind::Read &&
+           call.offset < list + Tests::fake_cluster_size &&
+           list < call.offset + call.length;
+  });
+  REQUIRE(read != calls.end());
+  CHECK(std::any_of(calls.begin(), read, [&read](const Call& call) {
+    return call.kind == Kind::Prefetch && call.offset <= read->offset &&
+           read->offset + read->length <= call.offset + call.length;
+  }));
+}
