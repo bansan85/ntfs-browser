@@ -6,7 +6,9 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
@@ -38,7 +40,8 @@ using namespace NTFS_BROWSER_NAMESPACE;
 
 void Usage() {
   printf("Invalid parameter\n");
-  printf("Usage: ntfsdir [--log=...] \"path\"\n");
+  printf("Usage: ntfsdir [--recursive] [--log=...] \"path\"\n");
+  printf("  --recursive, -r  also list every subdirectory of path\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
 #ifdef _WIN32
   printf("eg. ntfsdir c:\n");
@@ -183,6 +186,83 @@ void PrintLine(const IndexEntryView& ie, const NtfsDevice::LocalTime& time) {
   printf("\n");
 }
 
+// Separates the directory names of a path in the headers of a recursive
+// listing.
+#ifdef _WIN32
+constexpr wchar_t path_separator = L'\\';
+#else
+constexpr wchar_t path_separator = L'/';
+#endif
+
+// What one directory of a recursive listing holds: the tally of its
+// entries, and the subdirectories to enter next.
+struct DirectoryEntries {
+  struct Child {
+    ULONGLONG reference;
+    std::wstring name;
+  };
+
+  Total total;
+  std::vector<Child> children;
+};
+
+// TraverseSubEntries callback of a recursive listing: prints ie like
+// Printfile, and remembers it when it is a listed directory.
+void PrintAndCollect(const IndexEntryView& ie, void* context) {
+  auto& entries = *static_cast<DirectoryEntries*>(context);
+  Printfile(ie, &entries.total);
+  if (IsListed(ie) && ie.IsDirectory()) {
+    entries.children.push_back(
+        {ie.GetFileReference(), std::wstring(ie.GetFilename())});
+  }
+}
+
+// Lists the directory fr holds and every directory below it, depth first.
+// root names that directory in the header of its block. A directory that
+// cannot be read is reported and skipped. Returns the totals of the tree.
+template <Cache::Strategy S>
+Total ListTree(Io::FileRecord<S>& fr, const std::wstring& root) {
+  struct Pending {
+    ULONGLONG reference;
+    std::wstring path;
+  };
+
+  Total tree;
+  std::vector<Pending> pending;
+  std::wstring path = root;
+  while (true) {
+    Say(L"\nDirectory of " + path);
+    DirectoryEntries entries;
+    fr.TraverseSubEntries(PrintAndCollect, &entries);
+    tree.files += entries.total.files;
+    tree.dirs += entries.total.dirs;
+
+    // The stack pops the last pushed first, so push in reverse to list the
+    // subdirectories in index order.
+    for (auto child = entries.children.rbegin();
+         child != entries.children.rend(); ++child) {
+      pending.push_back(
+          {child->reference, path + path_separator + child->name});
+    }
+
+    // Take the next directory that parses, and report the ones that do not.
+    bool entered = false;
+    while (!pending.empty() && !entered) {
+      Pending next = std::move(pending.back());
+      pending.pop_back();
+      entered = fr.ParseFileRecord(next.reference) && fr.ParseAttrs();
+      if (entered) {
+        path = std::move(next.path);
+      } else {
+        Say(L"Cannot read directory " + next.path);
+      }
+    }
+    if (!entered) {
+      return tree;
+    }
+  }
+}
+
 // Moves fr into the subdirectory named pathname. Returns false after
 // printing why it cannot.
 template <Cache::Strategy S>
@@ -235,11 +315,12 @@ bool EnterDirectories(Io::FileRecord<S>& fr, const std::wstring& label,
   }
 }
 
-// Lists the directory path names on volume, which label names in messages.
-// Returns the exit code.
+// Lists the directory path names on volume, which label names in messages
+// and root in the headers of a recursive listing. Returns the exit code.
 template <Cache::Strategy S>
 int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
-             const std::wstring& path) {
+             const std::wstring& path, const std::wstring& root,
+             bool recursive) {
   Io::FileRecord<S> fr(volume);
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
@@ -249,7 +330,11 @@ int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
   }
 
   Total total;
-  fr.TraverseSubEntries(Printfile, &total);
+  if (recursive) {
+    total = ListTree(fr, root);
+  } else {
+    fr.TraverseSubEntries(Printfile, &total);
+  }
   printf("Files: %d, Directories: %d\n", total.files, total.dirs);
   return 0;
 }
@@ -280,7 +365,7 @@ std::unique_ptr<NtfsVolume<S>>
 
 // Lists the directory of an image file or device. Returns the exit code.
 template <Cache::Strategy S>
-int ListDevice(const NtfsDevice::DeviceTarget& target) {
+int ListDevice(const NtfsDevice::DeviceTarget& target, bool recursive) {
   const std::wstring label = NtfsDevice::WideFromPath(target.device);
   const std::unique_ptr<NtfsVolume<S>> volume =
       OpenDeviceVolume<S>(target.device, label);
@@ -291,7 +376,10 @@ int ListDevice(const NtfsDevice::DeviceTarget& target) {
     Say(L"Cannot get NTFS BPB from boot sector of " + label);
     return -1;
   }
-  return ListFrom(*volume, label, target.directory);
+  const std::wstring root = target.directory.empty()
+                                ? label
+                                : label + path_separator + target.directory;
+  return ListFrom(*volume, label, target.directory, root, recursive);
 }
 
 #ifdef _WIN32
@@ -299,7 +387,7 @@ int ListDevice(const NtfsDevice::DeviceTarget& target) {
 // Lists the directory of a drive, from a path such as "c:\windows". Returns
 // the exit code.
 template <Cache::Strategy S>
-int ListDrive(wchar_t* path) {
+int ListDrive(wchar_t* path, bool recursive) {
   const wchar_t volname = Getvolume(&path);
   if (volname == L'\0') {
     Usage();
@@ -312,21 +400,22 @@ int ListDrive(wchar_t* path) {
     Say(L"Cannot get NTFS BPB from boot sector of volume " + label);
     return -1;
   }
-  return ListFrom(volume, label, path);
+  const std::wstring root = label + L':' + path_separator + path;
+  return ListFrom(volume, label, path, root, recursive);
 }
 
 #endif  // _WIN32
 
 // Lists the directory that path names. Returns the exit code.
 template <Cache::Strategy S>
-int ListDirectory(wchar_t* path) {
+int ListDirectory(wchar_t* path, bool recursive) {
   if (const std::optional<NtfsDevice::DeviceTarget> target =
           NtfsDevice::SplitDeviceTarget(path)) {
-    return ListDevice<S>(*target);
+    return ListDevice<S>(*target, recursive);
   }
 
 #ifdef _WIN32
-  return ListDrive<S>(path);
+  return ListDrive<S>(path, recursive);
 #else
   Say(L"Cannot find a device or image file in " + std::wstring(path));
   return -1;
@@ -352,6 +441,15 @@ void Printfile(const IndexEntryView& ie, void* context) {
   }
 }
 
+namespace {
+
+// Reports whether arg asks for a recursive listing.
+bool IsRecursiveOption(std::wstring_view arg) {
+  return arg == L"--recursive" || arg == L"-r";
+}
+
+}  // namespace
+
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
   Arguments args;
   for (int i = 1; i < argc; i++) {
@@ -359,6 +457,8 @@ std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
       if (!NtfsDevice::ParseLogOption(argv[i], args.log_config)) {
         return std::nullopt;
       }
+    } else if (IsRecursiveOption(argv[i])) {
+      args.recursive = true;
     } else if (args.path == nullptr) {
       args.path = argv[i];
     } else {
@@ -384,7 +484,7 @@ int RunNtfsDir(int argc, wchar_t* argv[]) {
     NtfsDevice::ReportLogFileError(args->log_config);
   }
 
-  return ListDirectory<S>(args->path);
+  return ListDirectory<S>(args->path, args->recursive);
 }
 
 template int RunNtfsDir<Cache::Strategy::FullCache>(int argc, wchar_t* argv[]);

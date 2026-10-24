@@ -34,19 +34,23 @@ struct Total {
 // into context, a Total*.
 void Printfile(const NTFS_BROWSER_NAMESPACE::IndexEntryView& ie, void* context);
 
-// The parsed command line: the --log settings and the one path argument.
+// The parsed command line: the --log settings, whether to list every
+// subdirectory, and the one path argument.
 struct Arguments {
   NTFS_BROWSER_NAMESPACE::Log::Config log_config;
+  bool recursive = false;
   wchar_t* path = nullptr;
 };
 
 // Returns nullopt for a malformed --log option, or unless exactly one path
-// is given. The --log option may come before or after the path.
+// is given. The --log and --recursive (-r) options may come before or after
+// the path.
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]);
 
 // Lists the directory named on the command line, opening the volume with
 // cache strategy S. The target is a device or image file followed by a
 // directory ("/dev/sda1/Windows", "c:\image.img\Windows"), or on Windows a
-// drive letter ("c:\windows"). Returns the exit code.
+// drive letter ("c:\windows"). With --recursive, every directory below it is
+// listed too, each under a "Directory of" header. Returns the exit code.
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 int RunNtfsDir(int argc, wchar_t* argv[]);
