@@ -726,6 +726,16 @@ class MftTree::Impl {
   struct DirectoryPath {
     std::wstring path;
     std::optional<ULONGLONG> lost;
+    // Set while PathOfDirectory() builds the path. A chain of parents that
+    // meets it has looped.
+    bool building{false};
+  };
+
+  // One directory whose path PathOfDirectory() builds.
+  struct PendingDirectory {
+    const Mft::MftTree::Entry* entry;
+    const Mft::MftTree::Name* primary;
+    DirectoryPath* path;
   };
 
   [[nodiscard]] const DirectoryPath&
@@ -1198,19 +1208,84 @@ std::wstring Mft::MftTree::Impl::PathThrough(
   return path;
 }
 
-// The path of directory through primary, its primary name: walked the first
-// time, then remembered.
+// The path of directory through primary, its primary name, remembered once
+// built: the path of the first ancestor already known, or of the root or the
+// record where the chain breaks, joined to the names below it. The directories
+// of a chain that loops are walked whole, one by one: each sees the loop close
+// at itself.
 const Mft::MftTree::Impl::DirectoryPath& Mft::MftTree::Impl::PathOfDirectory(
     const Mft::MftTree::Entry& directory,
     const Mft::MftTree::Name& primary) const {
-  if (const auto found = directory_paths_.find(directory.record);
-      found != directory_paths_.end()) {
-    return found->second;
+  const auto [found, added] = directory_paths_.try_emplace(directory.record);
+  DirectoryPath& own = found->second;
+  if (!added && !own.building) {
+    return own;
   }
-  DirectoryPath walked;
-  walked.path = WalkPath(directory, primary, walked.lost);
-  return directory_paths_.emplace(directory.record, std::move(walked))
-      .first->second;
+  if (!added) {
+    // Left building by a call that threw.
+    own.path = WalkPath(directory, primary, own.lost);
+    own.building = false;
+    return own;
+  }
+
+  own.building = true;
+  std::vector<PendingDirectory> pending{{&directory, &primary, &own}};
+  const DirectoryPath* known = nullptr;
+  std::optional<ULONGLONG> lost;
+  bool looped = false;
+  const Mft::MftTree::Name* name = &primary;
+  while (true) {
+    const ULONGLONG parent = name->parent_record;
+    if (!name->parent_valid) {
+      lost = parent;
+      break;
+    }
+    if (parent == root_record) {
+      break;
+    }
+    // parent_valid comes from IsValidParent(), which finds parent in the scan.
+    const Mft::MftTree::Entry* parent_entry = Find(parent);
+    assert(parent_entry != nullptr);
+    const Mft::MftTree::Name* parent_name = PrimaryName(*parent_entry);
+    if (parent_name == nullptr) {
+      lost = parent;
+      break;
+    }
+    const auto [parent_found, parent_added] =
+        directory_paths_.try_emplace(parent);
+    if (!parent_added) {
+      looped = parent_found->second.building;
+      known = &parent_found->second;
+      break;
+    }
+    parent_found->second.building = true;
+    pending.push_back({parent_entry, parent_name, &parent_found->second});
+    name = parent_name;
+  }
+
+  if (looped) {
+    for (const PendingDirectory& item : pending) {
+      item.path->path = WalkPath(*item.entry, *item.primary, item.path->lost);
+      item.path->building = false;
+    }
+    return own;
+  }
+
+  std::wstring path = known != nullptr ? known->path : std::wstring{};
+  if (known != nullptr) {
+    lost = known->lost;
+  }
+  // The names join as WalkPath() joins them, from the top down.
+  for (const PendingDirectory& item : pending | std::views::reverse) {
+    if (!path.empty() || !lost) {
+      path += L'\\';
+    }
+    path += item.primary->name;
+    item.path->path = path;
+    item.path->lost = lost;
+    item.path->building = false;
+  }
+  return own;
 }
 
 // Walks from name up the primary names of entry's ancestors, see

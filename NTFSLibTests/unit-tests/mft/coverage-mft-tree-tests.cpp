@@ -6,16 +6,20 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
@@ -256,4 +260,49 @@ TEST_CASE("MftTree stops a path at a loop of parent references", "[cov-vol]") {
   CHECK(path == L"NewDir\\Docs");
   CHECK_FALSE(
       tree.IsReachable(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx));
+}
+
+TEST_CASE(
+    "MftTree closes a loop of parents at each directory of the loop, "
+    "whatever path is asked first",
+    "[cov-vol]") {
+  constexpr ULONGLONG docs = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx;
+  constexpr ULONGLONG new_dir =
+      NTFS_BROWSER_NAMESPACE::Tests::mft_tree_reused_dir_idx;
+
+  struct Expected {
+    ULONGLONG record;
+    std::wstring_view path;
+    ULONGLONG lost;
+  };
+
+  // OldDir, a freed directory in Docs, and its draft.doc lead into the loop.
+  const std::vector<Expected> expected{
+      {docs, L"NewDir\\Docs", docs},
+      {new_dir, L"Docs\\NewDir", new_dir},
+      {NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_dir_idx,
+       L"NewDir\\Docs\\OldDir", docs},
+      {NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_child_idx,
+       L"NewDir\\Docs\\OldDir\\draft.doc", docs},
+      {NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
+       L"NewDir\\Docs\\report.txt", docs}};
+  const size_t first = GENERATE(0U, 1U, 2U, 3U, 4U);
+  INFO("first record asked: " << expected.at(first).record);
+
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+  NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(image);
+  const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
+      std::make_unique<MemoryDiskReader>(std::move(image)),
+      NTFS_BROWSER_NAMESPACE::VolumeOptions{.include_deleted = true});
+  REQUIRE(volume->IsVolumeOK());
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
+
+  for (size_t i = 0; i < expected.size(); i++) {
+    const Expected& item = expected.at((first + i) % expected.size());
+    INFO("record " << item.record);
+    std::optional<ULONGLONG> lost;
+    CHECK(tree.GetPath(item.record, &lost) == item.path);
+    CHECK(lost == item.lost);
+  }
 }

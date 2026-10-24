@@ -234,8 +234,8 @@ class NTFS_BROWSER_EXPORT MftTree {
   // reaches the root. Otherwise "dir\file", relative to the record where the
   // chain of valid parent references breaks, whose number lostAncestor
   // receives. Empty when the record is not kept or has no name. It remembers
-  // the path of each directory it walks, so a listing of every file walks each
-  // directory once: two calls MUST NOT run at once on one tree.
+  // the path of each directory, built from its parent's, so a listing of every
+  // file builds each one once: two calls MUST NOT run at once on one tree.
   [[nodiscard]] std::wstring
       GetPath(ULONGLONG record,
               std::optional<ULONGLONG>* lost_ancestor = nullptr) const;
