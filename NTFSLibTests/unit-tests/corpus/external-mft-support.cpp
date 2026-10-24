@@ -167,7 +167,10 @@ StandaloneMftScan ScanWith(const std::filesystem::path& file,
   // The scan logs a line per record: do not keep them.
   static_cast<void>(TakeCapturedLog());
   for (const CountingDiskReader::Call& call : reads->Calls()) {
-    scan.largest_read = std::max<std::uint64_t>(scan.largest_read, call.length);
+    if (call.kind == CountingDiskReader::Kind::Read) {
+      scan.largest_read =
+          std::max<std::uint64_t>(scan.largest_read, call.length);
+    }
   }
   return scan;
 }

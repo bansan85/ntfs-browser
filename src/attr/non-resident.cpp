@@ -772,6 +772,43 @@ std::optional<ULONGLONG>
   return ReadDataBounded(offset, buffer, clusters * cluster_size);
 }
 
+template <Cache::Strategy S>
+void AttrNonResident<S>::PrefetchExtentData(ULONGLONG offset,
+                                            ULONGLONG length) const {
+  const ULONGLONG cluster_size = this->GetClusterSize();
+  if (length == 0 || cluster_size == 0 || comp_unit_clusters_ != 0 ||
+      offset > std::numeric_limits<ULONGLONG>::max() - length) {
+    return;
+  }
+
+  // The clusters that hold a byte of the range, as ReadDataBounded() reads
+  // them: the partial ones at both ends included.
+  ULONGLONG vcn = offset / cluster_size;
+  const ULONGLONG end_vcn = (offset + length - 1) / cluster_size + 1;
+  // The byte address of an LCN MUST NOT wrap, as in ReadClusters().
+  const ULONGLONG max_lcn =
+      static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) /
+      cluster_size;
+  while (vcn < end_vcn) {
+    const Data::RunEntry* data_run = runs_.Find(vcn);
+    if (data_run == nullptr) {
+      return;
+    }
+    const ULONGLONG clusters =
+        (std::min)(data_run->last_vcn + 1, end_vcn) - vcn;
+    if (data_run->lcn) {
+      const ULONGLONG skipped = vcn - data_run->start_vcn;
+      if (*data_run->lcn > max_lcn || skipped > max_lcn - *data_run->lcn ||
+          clusters > max_lcn - *data_run->lcn - skipped) {
+        return;
+      }
+      this->volume_.Prefetch((*data_run->lcn + skipped) * cluster_size,
+                             clusters * cluster_size);
+    }
+    vcn += clusters;
+  }
+}
+
 // The runs that map clusters. The list is complete when it reaches the end of
 // the allocated size the first record declares. A shorter list means a run was
 // lost: recover mode stops at a bad run, and an extension record that failed to

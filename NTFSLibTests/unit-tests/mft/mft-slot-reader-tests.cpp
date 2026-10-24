@@ -24,6 +24,7 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "catch2/catch_message.hpp"
+#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "mft/slot-reader.h"
@@ -419,4 +420,186 @@ TEMPLATE_TEST_CASE_SIG(
   // Below Mft::Idx::User, a slot is read alone, never through a window.
   REQUIRE(reader.ParseFileRecord(record, 5));
   CHECK(reader.HeldSlot(5).empty());
+}
+
+namespace {
+
+using HintKind = Tests::CountingDiskReader::Kind;
+using HintCall = Tests::CountingDiskReader::Call;
+
+// A volume over the fixture whose reader records every call, the prefetch
+// hints included.
+template <Cache::Strategy S>
+struct HintedVolume {
+  std::unique_ptr<NtfsVolume<S>> volume;
+  Tests::CountingDiskReader* reader;
+};
+
+template <Cache::Strategy S>
+HintedVolume<S> OpenHintedVolume() {
+  auto reader = std::make_unique<Tests::CountingDiskReader>(
+      std::make_unique<Tests::MemoryDiskReader>(
+          Tests::BuildFakeNtfsImageWithFragmentedMftScan(scan_record_count)));
+  Tests::CountingDiskReader* const counting = reader.get();
+  auto volume = std::make_unique<NtfsVolume<S>>(std::move(reader));
+  REQUIRE(volume->IsVolumeOK());
+  return {std::move(volume), counting};
+}
+
+// Whether call covers the bytes [offset, offset + length).
+bool Covers(const HintCall& call, ULONGLONG offset, ULONGLONG length) {
+  return call.offset <= offset && offset + length <= call.offset + call.length;
+}
+
+// Whether each read of calls lies in a range a hint announced before it.
+bool EveryReadAnnouncedBefore(const std::vector<HintCall>& calls) {
+  for (auto read = calls.begin(); read != calls.end(); ++read) {
+    if (read->kind == HintKind::Read &&
+        std::none_of(calls.begin(), read, [&read](const HintCall& hint) {
+          return hint.kind == HintKind::Prefetch &&
+                 Covers(hint, read->offset, read->length);
+        })) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Whether a read or a hint of calls touches the record of slot.
+bool TouchesSlot(const std::vector<HintCall>& calls, ULONGLONG slot) {
+  const ULONGLONG first = Tests::FragmentedMftScanSlotOffset(slot);
+  return std::ranges::any_of(calls, [first](const HintCall& call) {
+    return (call.kind == HintKind::Read || call.kind == HintKind::Prefetch) &&
+           call.offset < first + Tests::fake_file_record_size &&
+           first < call.offset + call.length;
+  });
+}
+
+}  // namespace
+
+TEMPLATE_TEST_CASE_SIG("SlotReader announces each window before it reads it",
+                       "[mft][slot-reader][prefetch]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const HintedVolume<S> opened = OpenHintedVolume<S>();
+  Io::FileRecord<S> record(*opened.volume);
+  {
+    // Blocks of 16 slots: the plan holds many windows, over five fragments.
+    Mft::SlotReader<S> reader(*opened.volume, size_t{16} * 1024);
+    reader.Expect(static_cast<ULONGLONG>(Mft::Idx::User), scan_record_count);
+    opened.reader->Reset();
+    for (ULONGLONG slot = static_cast<ULONGLONG>(Mft::Idx::User);
+         slot < scan_record_count; slot++) {
+      static_cast<void>(reader.ParseFileRecord(record, slot));
+    }
+
+    const std::vector<HintCall>& calls = opened.reader->Calls();
+    REQUIRE(opened.reader->ReadCount() > 0);
+    CHECK(EveryReadAnnouncedBefore(calls));
+    // The windows after the first one are announced before the first read.
+    const auto first_read =
+        std::ranges::find(calls, HintKind::Read, &HintCall::kind);
+    CHECK(std::count_if(calls.begin(), first_read, [](const HintCall& call) {
+            return call.kind == HintKind::Prefetch;
+          }) > 1);
+  }
+  // The reader withdraws its hints when it goes.
+  CHECK(opened.reader->Calls().back().kind == HintKind::CancelPrefetch);
+}
+
+TEST_CASE(
+    "SlotReader cuts the windows of a range from its first slot, whatever "
+    "slots are asked for",
+    "[mft][slot-reader][prefetch]") {
+  const HintedVolume<Cache::Strategy::NoCache> opened =
+      OpenHintedVolume<Cache::Strategy::NoCache>();
+  Io::FileRecord<Cache::Strategy::NoCache> record(*opened.volume);
+  // Windows of 16 slots: [20, 36), [36, 52), ... and [84, 90).
+  Mft::SlotReader<Cache::Strategy::NoCache> reader(*opened.volume,
+                                                   size_t{16} * 1024);
+  reader.Expect(20, 90);
+  opened.reader->Reset();
+
+  static_cast<void>(reader.ParseFileRecord(record, 41));
+
+  const std::vector<HintCall>& calls = opened.reader->Calls();
+  CHECK(opened.reader->ReadCount() == 1);
+  CHECK(std::ranges::any_of(calls, [](const HintCall& call) {
+    return call.kind == HintKind::Read &&
+           call.offset == Tests::FragmentedMftScanSlotOffset(36) &&
+           call.length == size_t{16} * 1024;
+  }));
+  // The short last window is announced too, and nothing past the range.
+  CHECK(std::ranges::any_of(calls, [](const HintCall& call) {
+    return call.kind == HintKind::Prefetch &&
+           call.offset == Tests::FragmentedMftScanSlotOffset(84) &&
+           call.length == size_t{6} * 1024;
+  }));
+  CHECK_FALSE(TouchesSlot(calls, 90));
+  CHECK_FALSE(TouchesSlot(calls, 19));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "SlotReader reads and announces only the slots of its plan",
+    "[mft][slot-reader][prefetch]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const HintedVolume<S> opened = OpenHintedVolume<S>();
+  Io::FileRecord<S> expected(*opened.volume);
+  Io::FileRecord<S> actual(*opened.volume);
+  SetScanMask(expected);
+  SetScanMask(actual);
+  Mft::SlotReader<S> reader(*opened.volume, size_t{16} * 1024);
+  const std::vector<Mft::SlotRange> plan{{.first = 16, .last = 40},
+                                         {.first = 200, .last = 210},
+                                         {.first = 400, .last = 450}};
+  reader.Plan(plan);
+  opened.reader->Reset();
+
+  for (const Mft::SlotRange& range : plan) {
+    for (ULONGLONG slot = range.first; slot < range.last; slot++) {
+      static_cast<void>(reader.ParseFileRecord(actual, slot));
+    }
+  }
+
+  const std::vector<HintCall> calls = opened.reader->Calls();
+  CHECK(EveryReadAnnouncedBefore(calls));
+  if constexpr (S == Cache::Strategy::NoCache) {
+    // FullCache reads and announces whole blocks of 64 KiB.
+    for (const ULONGLONG outside :
+         {ULONGLONG{60}, ULONGLONG{150}, ULONGLONG{300}, ULONGLONG{399}}) {
+      INFO("slot " << outside);
+      CHECK_FALSE(TouchesSlot(calls, outside));
+    }
+  }
+  // The records served are those FileRecord reads itself.
+  for (const Mft::SlotRange& range : plan) {
+    for (ULONGLONG slot = range.first; slot < range.last; slot += 7) {
+      INFO("slot " << slot);
+      CHECK(ReaderSnapshot(reader, actual, slot) ==
+            ReferenceSnapshot(expected, slot));
+    }
+  }
+}
+
+TEST_CASE("NtfsVolume::PrefetchMftSlots announces one range per fragment",
+          "[mft][slot-reader][prefetch]") {
+  const HintedVolume<Cache::Strategy::NoCache> opened =
+      OpenHintedVolume<Cache::Strategy::NoCache>();
+  opened.reader->Reset();
+
+  // Slots 90 to 109 span the end of the first fragment and the next one.
+  opened.volume->PrefetchMftSlots(90, 20);
+  const std::vector<HintCall>& calls = opened.reader->Calls();
+  REQUIRE(calls.size() == 2);
+  CHECK(calls.at(0).kind == HintKind::Prefetch);
+  CHECK(calls.at(0).offset == Tests::FragmentedMftScanSlotOffset(90));
+  CHECK(calls.at(0).length == size_t{10} * 1024);
+  CHECK(calls.at(1).kind == HintKind::Prefetch);
+  CHECK(calls.at(1).offset == Tests::FragmentedMftScanSlotOffset(100));
+  CHECK(calls.at(1).length == size_t{10} * 1024);
+
+  // The records below Mft::Idx::User sit at a fixed address: no hint.
+  opened.reader->Reset();
+  opened.volume->PrefetchMftSlots(5, 4);
+  opened.volume->PrefetchMftSlots(20, 0);
+  CHECK(opened.reader->Calls().empty());
 }

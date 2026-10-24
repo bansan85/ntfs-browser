@@ -181,6 +181,11 @@ class AttrNonResident : public Attr::AttrBase<S> {
   // the unit tests.
   [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<ULONGLONG>
       ReadExtentData(ULONGLONG offset, const std::span<BYTE>& buffer) const;
+
+  // Announces to the volume the clusters a ReadExtentData() of length bytes at
+  // offset reads, run by run. Reads nothing. A compressed stream reads whole
+  // units, and announces nothing.
+  void PrefetchExtentData(ULONGLONG offset, ULONGLONG length) const;
 };  // AttrNonResident
 
 }  // namespace Attr

@@ -297,6 +297,24 @@ ULONGLONG ReadRangeEnd(const std::vector<BYTE>& bitmap, ULONGLONG first,
   return last_used + 1;
 }
 
+// The ranges of slots the scan reads with a bitmap: each starts at a used slot
+// and ends where ReadRangeEnd() says.
+std::vector<Mft::SlotRange> PlanSlotRanges(const std::vector<BYTE>& bitmap,
+                                           ULONGLONG total) {
+  std::vector<Mft::SlotRange> plan;
+  ULONGLONG record = 0;
+  while (record < total) {
+    if (IsMarkedFree(bitmap, record)) {
+      record++;
+      continue;
+    }
+    const ULONGLONG end = ReadRangeEnd(bitmap, record, total);
+    plan.push_back({.first = record, .last = end});
+    record = end;
+  }
+  return plan;
+}
+
 // Whether the scan goes on at record. Every progress_interval records, the
 // caller follows along through options.progress and may stop the scan.
 bool ProgressAllowsRecord(const Mft::MftTree::ScanOptions& options,
@@ -764,10 +782,11 @@ void Mft::MftTree::Impl::ReadSlots(
   file_record.SetExtensionSource(
       [&held](ULONGLONG record) { return held.FindExtension(record); });
   DataStateResolver<S> resolver(volume, entries, stats);
-  // Reads $MFT in big blocks, not record by record.
+  // Reads $MFT in big blocks, not record by record, and only the used ones.
   Mft::SlotReader<S> slots(volume);
-  // End of the slots the current block read is allowed to cover, bitmap only.
-  ULONGLONG range_end = 0;
+  if (bitmap) {
+    slots.Plan(PlanSlotRanges(*bitmap, total));
+  }
 
   for (ULONGLONG record = 0; record < total; record++) {
     if (!ProgressAllowsRecord(options, record, total)) {
@@ -778,10 +797,6 @@ void Mft::MftTree::Impl::ReadSlots(
     if (bitmap && IsMarkedFree(*bitmap, record)) {
       stats.skipped++;
       continue;
-    }
-    if (bitmap && record >= range_end) {
-      range_end = ReadRangeEnd(*bitmap, record, total);
-      slots.Expect(record, range_end);
     }
 
     bool header_damaged = false;

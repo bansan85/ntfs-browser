@@ -62,6 +62,10 @@ class ExtentMap {
   [[nodiscard]] std::optional<ULONGLONG> ReadData(ULONGLONG offset,
                                                   std::span<BYTE> buffer) const;
 
+  // Announces the disk ranges a ReadData() of length bytes at offset reads,
+  // extent by extent. Reads nothing.
+  void PrefetchData(ULONGLONG offset, ULONGLONG length) const;
+
   // File records that $MFT's declared size and its mapped extents both cover.
   [[nodiscard]] ULONGLONG RecordCount() const noexcept;
 

@@ -92,6 +92,13 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // Reads from addr into dest.
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
 
+  // Announces that length bytes at addr are about to be read, after the bytes
+  // announced before them. A hint the reader MAY act on (see
+  // IDiskReader::Prefetch()): it changes when the bytes are read, not which.
+  void Prefetch(ULONGLONG addr, ULONGLONG length) const;
+  // Forgets what Prefetch() announced and no read used yet.
+  void CancelPrefetch() const;
+
   // Frees every cached block that no Cache::View uses. The volume stays open,
   // and a later read loads the data again. A no-op under NoCache.
   void MinifyCache() const;
@@ -143,6 +150,10 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // from a fixed address instead), when $MFT is not mapped, or on a short read.
   [[nodiscard]] bool ReadMftSlots(ULONGLONG first_ref,
                                   std::span<BYTE> out) const;
+  // Announces the disk ranges a ReadMftSlots() of count slots from first_ref
+  // reads, through $MFT's own extents. Announces nothing where that read would
+  // fail at once.
+  void PrefetchMftSlots(ULONGLONG first_ref, ULONGLONG count) const;
   // Reads out.size() bytes of the $MFTMirr copy of record file_ref. It reads
   // nothing and returns false unless recover_errors is on, the boot sector
   // names a usable $MFTMirr, and file_ref is below 4: the copy holds only

@@ -179,6 +179,30 @@ std::optional<ULONGLONG> ExtentMap<S>::ReadData(ULONGLONG offset,
   return total_read;
 }
 
+template <Cache::Strategy S>
+void ExtentMap<S>::PrefetchData(ULONGLONG offset, ULONGLONG length) const {
+  ULONGLONG current_offset = offset;
+  ULONGLONG remaining = length;
+  while (remaining != 0) {
+    const Extent* extent = FindExtent(current_offset / cluster_size_);
+    if (extent == nullptr) {
+      return;
+    }
+
+    const auto* non_resident =
+        static_cast<const Attr::AttrNonResident<S>*>(extent->attr);
+    const ULONGLONG extent_start_byte = extent->start_vcn * cluster_size_;
+    const ULONGLONG extent_end_byte = (extent->last_vcn + 1) * cluster_size_;
+    const ULONGLONG to_read =
+        (std::min)(remaining, extent_end_byte - current_offset);
+
+    non_resident->PrefetchExtentData(current_offset - extent_start_byte,
+                                     to_read);
+    current_offset += to_read;
+    remaining -= to_read;
+  }
+}
+
 // The count behind NtfsVolume::GetRecordsCount().
 template <Cache::Strategy S>
 ULONGLONG ExtentMap<S>::RecordCount() const noexcept {

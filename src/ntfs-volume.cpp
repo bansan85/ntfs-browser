@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -478,6 +479,16 @@ bool NtfsVolume<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {
   return impl_->volume->ReadInto(addr, dest);
 }
 
+template <Cache::Strategy S>
+void NtfsVolume<S>::Prefetch(ULONGLONG addr, ULONGLONG length) const {
+  impl_->volume->Prefetch(addr, length);
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::CancelPrefetch() const {
+  impl_->volume->CancelPrefetch();
+}
+
 // Install Attribute CallBack routines for the whole Volume
 template <Cache::Strategy S>
 bool NtfsVolume<S>::InstallAttrRawCB(Attr::Type attr_type,
@@ -543,6 +554,24 @@ bool NtfsVolume<S>::ReadMftSlots(ULONGLONG first_ref,
 
   const std::optional<ULONGLONG> len = ReadMftData(*offset, out);
   return len && *len == out.size();
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::PrefetchMftSlots(ULONGLONG first_ref,
+                                     ULONGLONG count) const {
+  if (first_ref < static_cast<ULONGLONG>(Mft::Idx::User) || !HasMftBase() ||
+      count == 0) {
+    return;
+  }
+
+  const std::optional<ULONGLONG> offset =
+      Mft::RecordOffset(GetFileRecordSize(), first_ref);
+  const ULONGLONG record_size = GetFileRecordSize();
+  if (!offset || record_size == 0 ||
+      count > std::numeric_limits<ULONGLONG>::max() / record_size) {
+    return;
+  }
+  impl_->mft.Map().PrefetchData(*offset, count * record_size);
 }
 
 template <Cache::Strategy S>
