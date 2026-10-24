@@ -9,16 +9,20 @@
 #include <array>
 #include <cerrno>
 #include <charconv>
+#include <condition_variable>
 #include <cstdio>
 #include <filesystem>
 #include <format>
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -93,15 +97,23 @@ constexpr std::string_view line_end = "\n";
 // Gathers the listing, and hands it to stdout in big chunks. A chunk ends
 // between two pieces of text, so a console never gets a UTF-8 sequence cut in
 // two. The main line of each entry is built by hand: std::format() would cost
-// more than the rest of the line.
+// more than the rest of the line. A thread of its own writes each chunk while
+// the next one is built: writing a big listing costs about as much as building
+// it.
 class Output {
  public:
   Output() {
     buffer_.reserve(output_flush_bytes);
+    writing_.reserve(output_flush_bytes);
 #ifdef _WIN32
     fflush(stdout);
     text_mode_ = _setmode(_fileno(stdout), _O_BINARY);
 #endif
+    try {
+      writer_ = std::thread([this] { WriteChunks(); });
+    } catch (const std::system_error&) {
+      // Without a thread, Flush() writes each chunk itself.
+    }
   }
 
   Output(const Output&) = delete;
@@ -111,6 +123,7 @@ class Output {
 
   ~Output() {
     Flush();
+    StopWriter();
 #ifdef _WIN32
     fflush(stdout);
     if (text_mode_ != -1) {
@@ -164,13 +177,60 @@ class Output {
     FlushIfFull();
   }
 
-  // Writes to stdout what is gathered so far.
+  // Hands what is gathered so far to the writer, once it has written the
+  // previous chunk.
   void Flush() {
-    fwrite(buffer_.data(), 1, buffer_.size(), stdout);
-    buffer_.clear();
+    if (buffer_.empty()) {
+      return;
+    }
+    if (!writer_.joinable()) {
+      fwrite(buffer_.data(), 1, buffer_.size(), stdout);
+      buffer_.clear();
+      return;
+    }
+
+    std::unique_lock lock{mutex_};
+    written_.wait(lock, [this] { return !chunk_ready_; });
+    // The writer left its buffer empty: it becomes the one to fill.
+    buffer_.swap(writing_);
+    chunk_ready_ = true;
+    lock.unlock();
+    ready_.notify_one();
   }
 
  private:
+  // Body of the writer thread: writes each chunk Flush() hands over, until
+  // StopWriter() and the last chunk are done.
+  void WriteChunks() {
+    std::unique_lock lock{mutex_};
+    for (;;) {
+      ready_.wait(lock, [this] { return chunk_ready_ || stopping_; });
+      if (!chunk_ready_) {
+        return;
+      }
+      // Until chunk_ready_ is cleared, the chunk belongs to this thread alone.
+      lock.unlock();
+      fwrite(writing_.data(), 1, writing_.size(), stdout);
+      writing_.clear();
+      lock.lock();
+      chunk_ready_ = false;
+      written_.notify_one();
+    }
+  }
+
+  // Lets the writer finish the chunk it has, then ends it.
+  void StopWriter() {
+    if (!writer_.joinable()) {
+      return;
+    }
+    {
+      const std::scoped_lock lock{mutex_};
+      stopping_ = true;
+    }
+    ready_.notify_one();
+    writer_.join();
+  }
+
   // Appends the fill a text of length characters needs to span width columns.
   void Pad(size_t length, size_t width, char fill) {
     if (length < width) {
@@ -190,6 +250,19 @@ class Output {
   // it could not be changed.
   int text_mode_{-1};
 #endif
+
+  // Guards everything below but the thread itself.
+  std::mutex mutex_;
+  // Signalled when a chunk waits for the writer, and when it has written one.
+  std::condition_variable ready_;
+  std::condition_variable written_;
+  // The chunk the writer writes, and whether it holds one to write.
+  std::string writing_;
+  bool chunk_ready_{false};
+  bool stopping_{false};
+  // Not joinable when no thread could be had. Declared last: it starts once
+  // everything above is built.
+  std::thread writer_;
 };
 
 // Prints command-line usage help.

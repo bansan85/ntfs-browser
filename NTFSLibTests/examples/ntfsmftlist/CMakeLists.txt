@@ -1,5 +1,10 @@
 add_executable(NtfsMftList WIN32 "main.cpp")
-target_link_libraries(NtfsMftList PRIVATE ${PROJECT_NAME} NtfsDeviceAccess)
+# The listing is written by a thread of its own.
+find_package(Threads REQUIRED)
+target_link_libraries(
+  NtfsMftList
+  PRIVATE ${PROJECT_NAME} NtfsDeviceAccess Threads::Threads
+)
 set_target_properties(NtfsMftList PROPERTIES WIN32_EXECUTABLE 0)
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
