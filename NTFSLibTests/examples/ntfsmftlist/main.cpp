@@ -23,10 +23,12 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -84,6 +86,9 @@ constexpr size_t output_flush_bytes = size_t{1024} * 1024;
 
 // Digits of the largest ULONGLONG.
 constexpr size_t max_decimal_digits = 20;
+
+// The record of the root directory, where a path starts.
+constexpr ULONGLONG root_record = static_cast<ULONGLONG>(Mft::Idx::Root);
 
 #ifdef _WIN32
 // The end of a line of the listing. stdout is binary while it is written, so
@@ -333,26 +338,129 @@ NtfsDevice::LocalTime LocalWriteTime(const FILETIME& write_time) {
 #endif
 }
 
-// Replaces out with the path of one name of entry, as shown in the listing.
-void DisplayPath(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
-                 const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
-                 std::optional<size_t> name_index, std::string& out) {
-  out.clear();
-  std::optional<ULONGLONG> lost;
-  const std::wstring path = name_index
-                                ? tree.GetPath(entry.record, *name_index, &lost)
-                                : tree.GetPath(entry.record, &lost);
-  if (path.empty()) {
-    out = "<no name>";
-    return;
+// The name MftTree::GetPath() goes through when it is given none: the first
+// non-DOS name with a valid parent, else the first non-DOS name, else the
+// first name. Empty when entry has no name.
+std::optional<size_t>
+    PrimaryName(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry) {
+  std::optional<size_t> fallback;
+  for (size_t i = 0; i < entry.names.size(); i++) {
+    // i < entry.names.size() by the loop condition.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& name = entry.names[i];
+    if (name.dos_only) {
+      continue;
+    }
+    if (name.parent_valid) {
+      return i;
+    }
+    if (!fallback) {
+      fallback = i;
+    }
   }
+  if (fallback) {
+    return fallback;
+  }
+  return entry.names.empty() ? std::nullopt : std::optional<size_t>{0};
+}
+
+// Appends the "<lost #N>\" that starts a path relative to the lost record N.
+void AppendLostPrefix(std::string& out, const std::optional<ULONGLONG>& lost) {
   if (lost) {
     out += "<lost #";
     out += std::to_string(*lost);
     out += ">\\";
   }
-  NtfsDevice::AppendAsUtf8(out, path);
 }
+
+// Builds the paths of the listing, the ones MftTree::GetPath() gives, in
+// UTF-8. Converting the whole path of each file costs more than the rest of
+// its line, so the path of each directory is converted once and kept: a file's
+// path is its directory's, plus its own name.
+class DisplayPaths {
+ public:
+  explicit DisplayPaths(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree)
+      : tree_(tree) {}
+
+  // Replaces out with the path of entry through entry.names[name_index], or
+  // through its primary name when name_index is empty, as the listing shows
+  // it.
+  void Display(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
+               std::optional<size_t> name_index, std::string& out) {
+    out.clear();
+    const std::optional<size_t> primary = PrimaryName(entry);
+    const std::optional<size_t> index = name_index ? name_index : primary;
+    if (!index || *index >= entry.names.size()) {
+      out = "<no name>";
+      return;
+    }
+
+    if (entry.directory && index == primary) {
+      const Directory& own = DirectoryOf(entry.record);
+      if (own.path.empty()) {
+        out = "<no name>";
+        return;
+      }
+      AppendLostPrefix(out, own.lost);
+      out += own.path;
+      return;
+    }
+
+    // *index < entry.names.size() was checked above.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& name =
+        entry.names[*index];
+    // A valid parent other than the root is a directory the scan found, whose
+    // path GetPath() gives through its primary name, as it does for its files.
+    const bool through_directory =
+        !entry.directory && entry.record != root_record && name.parent_valid &&
+        name.parent_record != root_record;
+    if (through_directory) {
+      const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* parent =
+          tree_.Find(name.parent_record);
+      if (parent != nullptr && !parent->names.empty()) {
+        const Directory& directory = DirectoryOf(name.parent_record);
+        AppendLostPrefix(out, directory.lost);
+        out += directory.path;
+        out += '\\';
+        NtfsDevice::AppendAsUtf8(out, name.name);
+        return;
+      }
+    }
+
+    std::optional<ULONGLONG> lost;
+    const std::wstring path = tree_.GetPath(entry.record, *index, &lost);
+    if (path.empty()) {
+      out = "<no name>";
+      return;
+    }
+    AppendLostPrefix(out, lost);
+    NtfsDevice::AppendAsUtf8(out, path);
+  }
+
+ private:
+  // The path of a directory through its primary name, and the record where
+  // its chain of valid parent references breaks, if it does.
+  struct Directory {
+    std::optional<ULONGLONG> lost;
+    std::string path;
+  };
+
+  // The path of the directory record, converted the first time.
+  const Directory& DirectoryOf(ULONGLONG record) {
+    if (const auto found = directories_.find(record);
+        found != directories_.end()) {
+      return found->second;
+    }
+    Directory directory;
+    const std::wstring path = tree_.GetPath(record, &directory.lost);
+    NtfsDevice::AppendAsUtf8(directory.path, path);
+    return directories_.emplace(record, std::move(directory)).first->second;
+  }
+
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree_;
+  std::unordered_map<ULONGLONG, Directory> directories_;
+};
 
 // The letter of one attribute flag when it is set, '-' when it is not.
 char FlagLetter(bool set, char letter) { return set ? letter : '-'; }
@@ -414,8 +522,7 @@ void PrintMainLine(Output& out,
 }
 
 // Prints one "=" line for each hard link whose path differs from path.
-void PrintOtherLinks(Output& out,
-                     const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+void PrintOtherLinks(Output& out, DisplayPaths& paths,
                      const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                      const std::string& path) {
   std::string other;
@@ -425,7 +532,7 @@ void PrintOtherLinks(Output& out,
     if (entry.names[i].dos_only) {
       continue;
     }
-    DisplayPath(tree, entry, i, other);
+    paths.Display(entry, i, other);
     if (other != path) {
       out.PrintLine("{:{}}= {}", "", path_column, other);
     }
@@ -501,14 +608,14 @@ void PrintJournalLine(
 // Prints one listing line for entry, then one line per other hard link, then
 // what the journal knows of it. path is scratch space, reused from one entry to
 // the next.
-void PrintEntry(Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+void PrintEntry(Output& out, DisplayPaths& paths,
                 const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                 std::string& path) {
-  DisplayPath(tree, entry, std::nullopt, path);
+  paths.Display(entry, std::nullopt, path);
   PrintMainLine(out, entry, path);
   // A lone non-DOS name is the one the path above went through.
   if (CountHardLinks(entry) > 1) {
-    PrintOtherLinks(out, tree, entry, path);
+    PrintOtherLinks(out, paths, entry, path);
   }
   if (entry.usn) {
     PrintJournalLine(out, *entry.usn);
@@ -682,10 +789,11 @@ int ListVolume(const Arguments& args) {
   Output out;
   out.PrintLine("{:>10} {:>5} {:<3} {:>14} {:<16} {:<6} {:>2} {}", "Record",
                 "Seq", "", "Size", "Last write", "Attrib", "Ln", "Path");
+  DisplayPaths paths(tree);
   std::string path;
   for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry :
        tree.Entries()) {
-    PrintEntry(out, tree, entry, path);
+    PrintEntry(out, paths, entry, path);
   }
   PrintJournalOnly(out, tree);
   PrintStats(out, tree.Stats());

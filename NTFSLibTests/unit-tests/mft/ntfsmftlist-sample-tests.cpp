@@ -20,6 +20,7 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "local-time.h"
+#include "mft-tree-parent-support.h"
 #include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
@@ -159,6 +160,24 @@ TEST_CASE("NtfsMftList --deleted also lists the freed records",
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == WithLocalTimes(deleted_listing));
+}
+
+TEST_CASE("NtfsMftList shows where the chain breaks in the paths under a loop",
+          "[mft][sample][characterization]") {
+  std::vector<BYTE> tree =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+  NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(tree);
+  const TempTreeImage image(tree);
+  const SampleRun run = RunSample({image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK_THAT(run.out, ContainsSubstring("  1 <lost #16>\\NewDir\\Docs\n"));
+  CHECK_THAT(run.out,
+             ContainsSubstring("  1 <lost #16>\\NewDir\\Docs\\report.txt\n"));
+  CHECK_THAT(run.out, ContainsSubstring("  2 \\link-a\n"));
+  CHECK_THAT(run.out,
+             ContainsSubstring("= <lost #16>\\NewDir\\Docs\\link-b\n"));
+  CHECK_THAT(run.out, ContainsSubstring("  1 <lost #23>\\Docs\\NewDir\n"));
 }
 
 TEST_CASE("NtfsMftList --recover on a clean image lists what it lists without",

@@ -19,6 +19,7 @@
 
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+#include "mft-tree-parent-support.h"
 #include "volume-tree-support.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -27,6 +28,10 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::MakeRef;
+using NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::RedirectFileNames;
+using NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::ref_record_mask;
+using NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::root_sequence;
 
 namespace {
 
@@ -39,18 +44,6 @@ constexpr BYTE filename_dos_namespace = 2;
 // Offset of the name length in a $FILE_NAME body (Data::Filename).
 constexpr size_t filename_name_length_field = 64;
 
-// Mask for the 48-bit record number inside a file reference.
-constexpr ULONGLONG ref_record_mask = 0x0000FFFFFFFFFFFFULL;
-
-// Sequence number the MFT tree fixture gives its root directory.
-constexpr ULONGLONG mft_tree_root_sequence = 5;
-
-// Builds a file reference from a record number and a sequence number.
-[[nodiscard]] constexpr ULONGLONG MakeRef(ULONGLONG record,
-                                          ULONGLONG sequence) {
-  return record | (sequence << 48U);
-}
-
 // Repoints the record number of every $FILE_NAME of idx, keeping its sequence.
 void SetFileNameParents(std::vector<BYTE>& image, ULONGLONG idx,
                         ULONGLONG record_number) {
@@ -58,17 +51,6 @@ void SetFileNameParents(std::vector<BYTE>& image, ULONGLONG idx,
     const size_t body = ResidentBody(image, attr);
     const auto ref = Load<ULONGLONG>(image, body);
     Store<ULONGLONG>(image, body, (ref & ~ref_record_mask) | record_number);
-  }
-}
-
-// Writes new_ref over every $FILE_NAME of idx that names from_record.
-void RedirectFileNames(std::vector<BYTE>& image, ULONGLONG idx,
-                       ULONGLONG from_record, ULONGLONG new_ref) {
-  for (const size_t attr : AttrOffsets(image, idx, Attr::Type::FileName)) {
-    const size_t body = ResidentBody(image, attr);
-    if ((Load<ULONGLONG>(image, body) & ref_record_mask) == from_record) {
-      Store<ULONGLONG>(image, body, new_ref);
-    }
   }
 }
 
@@ -226,7 +208,7 @@ TEST_CASE("MftTree files a record once when two of its names share a parent",
   RedirectFileNames(image,
                     NTFS_BROWSER_NAMESPACE::Tests::mft_tree_hard_link_idx,
                     NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
-                    MakeRef(root_idx, mft_tree_root_sequence));
+                    MakeRef(root_idx, root_sequence));
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
@@ -257,20 +239,9 @@ TEST_CASE("MftTree GetPath reports nothing for an unknown record or name",
 }
 
 TEST_CASE("MftTree stops a path at a loop of parent references", "[cov-vol]") {
-  // Sequence numbers the fixture gives Docs and NewDir.
-  constexpr WORD docs_sequence = 1;
-  constexpr WORD new_dir_sequence = 7;
-
   std::vector<BYTE> image =
       NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
-  // Docs and NewDir each name the other as parent, so neither reaches the root.
-  RedirectFileNames(
-      image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx, root_idx,
-      MakeRef(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_reused_dir_idx,
-              new_dir_sequence));
-  RedirectFileNames(
-      image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_reused_dir_idx, root_idx,
-      MakeRef(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx, docs_sequence));
+  NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(image);
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
