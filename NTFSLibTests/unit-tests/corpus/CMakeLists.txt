@@ -22,6 +22,7 @@ target_sources(
     "external-journal-support.h"
     "external-journal-tests.cpp"
     "external-slack-tests.cpp"
+    "nps-ntfs1-ntfsdir-tests.cpp"
     "nps-ntfs1-test-support.cpp"
     "nps-ntfs1-test-support.h"
     "nps-ntfs1-tests.cpp"
