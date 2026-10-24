@@ -53,4 +53,10 @@ std::optional<ULONGLONG> RecordingDiskReader::Size() const {
   return inner_->Size();
 }
 
+void RecordingDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
+  inner_->Prefetch(offset, length);
+}
+
+void RecordingDiskReader::CancelPrefetch() const { inner_->CancelPrefetch(); }
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

@@ -51,7 +51,8 @@ void CheckTheRestOnlyReads(const Support::Opened<S>& opened) {
   REQUIRE_FALSE(calls.empty());
   CHECK(std::ranges::all_of(calls, [](const CountingDiskReader::Call& call) {
     return call.kind == Kind::Open || call.kind == Kind::Read ||
-           call.kind == Kind::Size;
+           call.kind == Kind::Size || call.kind == Kind::Prefetch ||
+           call.kind == Kind::CancelPrefetch;
   }));
 }
 

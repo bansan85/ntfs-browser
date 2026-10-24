@@ -35,6 +35,11 @@ class PosixDeviceDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // kind of file.
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
+  // Asks the kernel to read the range into the page cache ahead of pread(),
+  // where posix_fadvise() exists. The page cache holds what it read, so there
+  // is nothing to cancel.
+  void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
+
   // The errno of the last Open() that failed, 0 after one that succeeded.
   // Callers tell "permission denied" from "no such file" with it, since
   // Open() itself only returns a bool.

@@ -112,6 +112,22 @@ class ReadAheadDiskReader::Impl {
     return inner_ != nullptr ? inner_->Size() : std::nullopt;
   }
 
+  // Passes a hint on to the wrapped reader, which the worker may be reading.
+  void Prefetch(ULONGLONG offset, ULONGLONG length) {
+    const std::scoped_lock inner_lock{inner_mutex_};
+    if (inner_ != nullptr) {
+      inner_->Prefetch(offset, length);
+    }
+  }
+
+  // Passes a cancellation on to the wrapped reader.
+  void CancelPrefetch() {
+    const std::scoped_lock inner_lock{inner_mutex_};
+    if (inner_ != nullptr) {
+      inner_->CancelPrefetch();
+    }
+  }
+
  private:
   using Chunk = ReadAheadChunk;
 
@@ -400,5 +416,11 @@ bool ReadAheadDiskReader::ReadInto(LARGE_INTEGER& addr,
 std::optional<ULONGLONG> ReadAheadDiskReader::Size() const {
   return impl_->Size();
 }
+
+void ReadAheadDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
+  impl_->Prefetch(offset, length);
+}
+
+void ReadAheadDiskReader::CancelPrefetch() const { impl_->CancelPrefetch(); }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

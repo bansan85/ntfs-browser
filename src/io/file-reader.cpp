@@ -95,6 +95,34 @@ std::optional<ULONGLONG> FileReader<S>::Size() const {
   return reader_ ? reader_->Size() : std::nullopt;
 }
 
+template <Cache::Strategy S>
+void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
+  if (!reader_ || length == 0) {
+    return;
+  }
+  if constexpr (S == Cache::Strategy::FullCache) {
+    constexpr auto block = static_cast<ULONGLONG>(read_buffer_size);
+    // The blocks MUST end below the largest address the cache reads at.
+    constexpr auto max_end =
+        static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) - block;
+    if (offset > max_end || length > max_end - offset) {
+      return;
+    }
+    const ULONGLONG first = offset - offset % block;
+    const ULONGLONG last = offset + length + block - 1;
+    reader_->Prefetch(first, last - last % block - first);
+  } else {
+    reader_->Prefetch(offset, length);
+  }
+}
+
+template <Cache::Strategy S>
+void FileReader<S>::CancelPrefetch() const {
+  if (reader_) {
+    reader_->CancelPrefetch();
+  }
+}
+
 template <Cache::Strategy T>
 template <Cache::Strategy Q>
 std::enable_if_t<std::is_same_v<std::integral_constant<Cache::Strategy, Q>,

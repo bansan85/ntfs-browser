@@ -64,6 +64,13 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   // reader is set. Reads nothing.
   [[nodiscard]] std::optional<ULONGLONG> Size() const;
 
+  // Announces to the reader that the bytes [offset, offset + length) are about
+  // to be read. FullCache announces the whole blocks it will read instead.
+  void Prefetch(ULONGLONG offset, ULONGLONG length) const;
+
+  // Forgets what Prefetch() announced and no read used yet.
+  void CancelPrefetch() const;
+
   // NoCache: a span over the reader's own buffer, valid until the next read.
   template <Cache::Strategy S2 = S>
   std::enable_if_t<

@@ -18,12 +18,18 @@ namespace NTFS_BROWSER_NAMESPACE::Tests {
 class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
  public:
   // The operation a recorded call was.
-  enum class Kind : unsigned char { Open, Read, Size };
+  enum class Kind : unsigned char {
+    Open,
+    Read,
+    Size,
+    Prefetch,
+    CancelPrefetch
+  };
 
   // One call the reader received.
   struct Call {
     Kind kind{Kind::Read};
-    // Address and length of a read; 0 for the other calls.
+    // Address and length of a read or a prefetch hint; 0 for the other calls.
     ULONGLONG offset{0};
     ULONGLONG length{0};
   };
@@ -37,6 +43,10 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
                               std::span<BYTE> dest) const override;
 
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
+
+  // Record the hints, and pass them on to the wrapped reader.
+  void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
+  void CancelPrefetch() const override;
 
   // Every call so far, in order.
   [[nodiscard]] const std::vector<Call>& Calls() const noexcept;

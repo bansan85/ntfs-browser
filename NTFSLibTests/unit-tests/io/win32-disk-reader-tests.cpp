@@ -140,6 +140,87 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(reader.ReadInto(inside, dest));
 }
 
+TEMPLATE_TEST_CASE_SIG(
+    "Win32DiskReader reads the same bytes with prefetch hints, whatever they "
+    "are",
+    "[win32-disk-reader][prefetch]",
+    ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
+    NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
+    NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
+  const std::vector<BYTE> content = MakeContent();
+  const TempFile file(content);
+
+  NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader;
+  REQUIRE(reader.Open(file.path.wstring()));
+
+  // Reads the length bytes at offset, and checks them against the file.
+  const auto check_read = [&](size_t offset, size_t length) {
+    INFO("offset " << offset << " length " << length);
+    std::vector<BYTE> dest(length);
+    LARGE_INTEGER addr{.QuadPart = gsl::narrow<LONGLONG>(offset)};
+    REQUIRE(reader.ReadInto(addr, dest));
+    CHECK(std::equal(dest.begin(), dest.end(),
+                     content.begin() + gsl::narrow<std::ptrdiff_t>(offset)));
+  };
+
+  SECTION("reads in the announced order, a range in several pieces") {
+    reader.Prefetch(0, 65536);
+    reader.Prefetch(65536, 65536);
+    reader.Prefetch(unaligned_offset + 131072, unaligned_length);
+    check_read(0, 4096);
+    check_read(4096, 65536 - 4096);
+    check_read(65536, 65536);
+    check_read(unaligned_offset + 131072, unaligned_length);
+  }
+
+  SECTION("a read past the first ranges, then reads of the skipped ones") {
+    reader.Prefetch(0, 4096);
+    reader.Prefetch(8192, 4096);
+    reader.Prefetch(65536, 4096);
+    check_read(65536, 4096);
+    check_read(0, 4096);
+    check_read(8192, 4096);
+  }
+
+  SECTION("reads outside the ranges in between") {
+    reader.Prefetch(65536, 65536);
+    check_read(tiny_offset, 1);
+    check_read(65536 + 100, 1000);
+    check_read(file_size - tail_length, tail_length);
+    check_read(65536 + 2000, 1000);
+  }
+
+  SECTION("reads after the hints are cancelled") {
+    reader.Prefetch(0, 65536);
+    reader.Prefetch(65536, 65536);
+    reader.CancelPrefetch();
+    check_read(0, 65536);
+    check_read(65536, 65536);
+  }
+
+  SECTION("more hints than are kept") {
+    constexpr size_t hints = 2000;
+    constexpr size_t hint_bytes = 64;
+    for (size_t index = 0; index < hints; index++) {
+      reader.Prefetch(index * hint_bytes, hint_bytes);
+    }
+    for (size_t index = 0; index < hints; index++) {
+      check_read(index * hint_bytes, hint_bytes);
+    }
+  }
+
+  SECTION("a range that runs past the end of the file") {
+    reader.Prefetch(file_size - tail_length, 2 * tail_length);
+    check_read(file_size - tail_length, tail_length);
+
+    std::vector<BYTE> dest(2 * tail_length);
+    reader.Prefetch(file_size - tail_length, dest.size());
+    LARGE_INTEGER straddling{
+        .QuadPart = gsl::narrow<LONGLONG>(file_size - tail_length)};
+    CHECK_FALSE(reader.ReadInto(straddling, dest));
+  }
+}
+
 TEMPLATE_TEST_CASE_SIG("Win32DiskReader reports the size of an ordinary file",
                        "[win32-disk-reader]",
                        ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),

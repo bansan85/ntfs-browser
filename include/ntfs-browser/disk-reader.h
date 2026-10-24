@@ -33,6 +33,16 @@ class IDiskReader {
   [[nodiscard]] virtual std::optional<ULONGLONG> Size() const {
     return std::nullopt;
   }
+
+  // Announces that the bytes [offset, offset + length) are about to be read,
+  // after the ranges announced before them. A hint: the reader MAY start
+  // reading them now, so that a later ReadInto() inside the range waits less.
+  // Only when the bytes are read changes, never which bytes a read asks for.
+  // Does nothing by default.
+  virtual void Prefetch(ULONGLONG /*offset*/, ULONGLONG /*length*/) const {}
+
+  // Forgets the ranges Prefetch() announced that no read has used yet.
+  virtual void CancelPrefetch() const {}
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE

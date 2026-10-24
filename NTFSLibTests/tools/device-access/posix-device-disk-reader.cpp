@@ -6,6 +6,7 @@
   #include <cstdint>
   #include <format>
   #include <iostream>
+  #include <limits>
   #include <optional>
   #include <span>
   #include <string>
@@ -77,6 +78,24 @@ std::optional<ULONGLONG> PosixDeviceDiskReader::Size() const {
   }
   #endif
   return std::nullopt;
+}
+
+void PosixDeviceDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
+  #ifdef POSIX_FADV_WILLNEED
+  constexpr auto max_offset =
+      static_cast<ULONGLONG>(std::numeric_limits<off_t>::max());
+  if (fd_ < 0 || offset > max_offset || length > max_offset - offset) {
+    return;
+  }
+  // The kernel starts the reads into the page cache and returns at once. A
+  // failed hint costs nothing: pread() reads the bytes anyway.
+  static_cast<void>(posix_fadvise(fd_, static_cast<off_t>(offset),
+                                  static_cast<off_t>(length),
+                                  POSIX_FADV_WILLNEED));
+  #else
+  static_cast<void>(offset);
+  static_cast<void>(length);
+  #endif
 }
 
 }  // namespace NtfsDevice

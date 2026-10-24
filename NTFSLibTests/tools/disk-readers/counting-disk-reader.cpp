@@ -42,6 +42,17 @@ std::optional<ULONGLONG> CountingDiskReader::Size() const {
   return inner_->Size();
 }
 
+void CountingDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
+  calls_.push_back(
+      {.kind = Kind::Prefetch, .offset = offset, .length = length});
+  inner_->Prefetch(offset, length);
+}
+
+void CountingDiskReader::CancelPrefetch() const {
+  calls_.push_back({.kind = Kind::CancelPrefetch});
+  inner_->CancelPrefetch();
+}
+
 const std::vector<CountingDiskReader::Call>&
     CountingDiskReader::Calls() const noexcept {
   return calls_;

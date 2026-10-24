@@ -57,6 +57,12 @@ class NTFS_BROWSER_EXPORT ReadAheadDiskReader : public IDiskReader {
   // Size of the wrapped reader. It reads nothing, so the read ahead is kept.
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
+  // Passes the hint on to the wrapped reader.
+  void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
+
+  // Passes the cancellation on to the wrapped reader.
+  void CancelPrefetch() const override;
+
  private:
   // Every member and private method, kept out of this header.
   class Impl;
