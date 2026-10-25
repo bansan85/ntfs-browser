@@ -530,7 +530,7 @@ TEST_CASE("a marker at or past the end of the record gives nothing",
   const std::vector<BYTE> record = EmptyRecord();
   for (const size_t marker :
        {record.size() - 4, record.size() - 3, record.size() - 1, record.size(),
-        record.size() + 1, size_t{1} << 40U, ~size_t{0}}) {
+        record.size() + 1, ~size_t{0} / 2, ~size_t{0}}) {
     INFO(marker);
     CHECK(Carve(record, marker).empty());
   }
