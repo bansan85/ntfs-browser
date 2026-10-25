@@ -110,7 +110,29 @@ void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
     }
     const ULONGLONG first = offset - offset % block;
     const ULONGLONG last = offset + length + block - 1;
-    reader_->Prefetch(first, last - last % block - first);
+    const ULONGLONG end = last - last % block;
+    // A range of more blocks than this is announced whole, so a forged length
+    // costs no walk over the cache.
+    constexpr ULONGLONG max_checked_blocks = 4096;
+    if ((end - first) / block > max_checked_blocks) {
+      reader_->Prefetch(first, end - first);
+      return;
+    }
+    // The cache serves a block it holds without a read, so only the other
+    // blocks are announced: a range nothing reads would be read for nothing.
+    std::optional<ULONGLONG> run_start;
+    for (ULONGLONG at = first; at < end; at += block) {
+      const bool cached = cache_->Contains(at / block);
+      if (cached && run_start) {
+        reader_->Prefetch(*run_start, at - *run_start);
+        run_start.reset();
+      } else if (!cached && !run_start) {
+        run_start = at;
+      }
+    }
+    if (run_start) {
+      reader_->Prefetch(*run_start, end - *run_start);
+    }
   } else {
     reader_->Prefetch(offset, length);
   }

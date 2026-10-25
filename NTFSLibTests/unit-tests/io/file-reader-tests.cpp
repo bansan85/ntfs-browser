@@ -27,6 +27,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "catch2/catch_message.hpp"
+#include "counting-disk-reader.h"
 #include "io/file-reader.h"
 #include "memory-disk-reader.h"
 #include "optional-access.h"
@@ -597,4 +598,34 @@ TEMPLATE_TEST_CASE_SIG("A FileReader with no reader ignores a read ahead",
   reader.EnableReadAhead(first_read_size);
 
   CHECK_FALSE(reader.Size().has_value());
+}
+
+TEST_CASE("A FullCache FileReader announces only the blocks it lacks",
+          "[file-reader]") {
+  using NTFS_BROWSER_NAMESPACE::Tests::CountingDiskReader;
+  using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+  constexpr ULONGLONG block = 65536;
+  constexpr size_t blocks = 4;
+
+  auto counting = std::make_unique<CountingDiskReader>(
+      std::make_unique<MemoryDiskReader>(std::vector<BYTE>(blocks * block)));
+  CountingDiskReader& calls = *counting;
+  const NTFS_BROWSER_NAMESPACE::Io::FileReader<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>
+      reader(std::move(counting));
+
+  // The read caches block 1.
+  LARGE_INTEGER addr{.QuadPart = static_cast<LONGLONG>(block)};
+  REQUIRE(reader.Read(addr, tiny_file_size));
+  calls.Reset();
+
+  reader.Prefetch(0, blocks * block);
+
+  // Block 0, then blocks 2 and 3 together.
+  const auto& hints = calls.Calls();
+  REQUIRE(hints.size() == 2);
+  CHECK(hints.at(0).offset == 0);
+  CHECK(hints.at(0).length == block);
+  CHECK(hints.at(1).offset == 2 * block);
+  CHECK(hints.at(1).length == 2 * block);
 }

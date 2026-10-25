@@ -61,6 +61,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY BlockCache {
   // The block at index, or null. A hit counts as a use.
   [[nodiscard]] std::shared_ptr<Block> Find(std::uint64_t index);
 
+  // Whether the block at index is cached. Not a use: the block keeps its place
+  // in the order of eviction.
+  [[nodiscard]] bool Contains(std::uint64_t index) const;
+
   // Adds a block that Find() missed, as the most recently used. An index that
   // is already cached keeps its block, since a cached block never changes.
   void Insert(std::uint64_t index, std::shared_ptr<Block> block);

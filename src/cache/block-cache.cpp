@@ -58,6 +58,10 @@ std::shared_ptr<Block> BlockCache::Find(std::uint64_t index) {
   return found->second.block;
 }
 
+bool BlockCache::Contains(std::uint64_t index) const {
+  return blocks_.contains(index);
+}
+
 void BlockCache::Insert(std::uint64_t index, std::shared_ptr<Block> block) {
   if (blocks_.contains(index)) {
     return;

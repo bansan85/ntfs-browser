@@ -65,7 +65,8 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   [[nodiscard]] std::optional<ULONGLONG> Size() const;
 
   // Announces to the reader that the bytes [offset, offset + length) are about
-  // to be read. FullCache announces the whole blocks it will read instead.
+  // to be read. FullCache announces the whole blocks it will read instead,
+  // and none that its cache holds.
   void Prefetch(ULONGLONG offset, ULONGLONG length) const;
 
   // Forgets what Prefetch() announced and no read used yet.
