@@ -75,7 +75,7 @@ constexpr std::string_view live_listing =
                                                                = \Docs\link-b
         23     7              <DIR> {write} ------  1 \NewDir
 
-Record slots: 26, in use: 7, deleted: 4, extensions: 1
+Record slots: 26, in use: 7, deleted: 4, extensions: 1 (0 reused by others)
 Unreadable: 14, damaged: 0, not linked to the root: 1
 )";
 
@@ -96,7 +96,7 @@ constexpr std::string_view deleted_listing =
         22     2 DEL              0 {write} ------  1 <lost #23>\stale.txt
         23     7              <DIR> {write} ------  1 \NewDir
 
-Record slots: 26, in use: 7, deleted: 4, extensions: 1
+Record slots: 26, in use: 7, deleted: 4, extensions: 1 (0 reused by others)
 Unreadable: 14, damaged: 0, not linked to the root: 2
 )";
 

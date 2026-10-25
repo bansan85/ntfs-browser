@@ -540,6 +540,7 @@ bool ReadBaseEntry(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
                    ULONGLONG record, bool header_damaged,
                    Mft::MftTree::ScanStats& stats, Mft::MftTree::Entry& entry) {
   const bool parsed = ReadEntry(file_record, record, entry);
+  stats.reused_extensions += file_record.GetReusedExtensionCount();
   if (!parsed || file_record.IsSalvaged()) {
     if (!header_damaged) {
       stats.damaged++;

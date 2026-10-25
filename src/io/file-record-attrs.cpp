@@ -247,6 +247,7 @@ bool Io::FileRecord<S>::Impl::AttrParser::Parse(
 
   // Clear previous data
   impl_.ClearAttrs();
+  impl_.reused_extensions.clear();
 
   const bool recover = impl_.volume->GetOptions().recover_errors;
   // What this parse salvages is whatever Log::Recoverable() counts from here

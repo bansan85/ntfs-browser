@@ -948,6 +948,15 @@ enum class FakeListResidency : std::uint8_t {
   NonResident
 };
 
+// Whether the file of mft_tree_list_base_idx was freed.
+enum class FakeListedState : std::uint8_t {
+  // In use, with its extensions.
+  Live,
+  // Freed. NTFS freed its extensions with it, one sequence on each, except a
+  // Foreign high extension: another file reused that slot, so it stays in use.
+  Freed
+};
+
 // The cluster a non-resident list of mft_tree_list_base_idx lies in.
 inline constexpr DWORD mft_tree_list_lcn = 62;
 
@@ -959,9 +968,11 @@ inline constexpr DWORD mft_tree_list_lcn = 62;
 //      for $FILE_NAME and $DATA;
 //   22 an extension of the record high says, holding the hard link
 //      "listed-link.txt" in Docs and a $DATA of mft_tree_list_data_size bytes.
+// listed frees the file: its record and its extensions, see FakeListedState.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
     FakeListedExtension high = FakeListedExtension::Genuine,
-    FakeListResidency list = FakeListResidency::Resident);
+    FakeListResidency list = FakeListResidency::Resident,
+    FakeListedState listed = FakeListedState::Live);
 
 // Records of BuildFakeNtfsImageWithMftTree() that are in use: $MFT, $Volume,
 // the root, Docs, report.txt, the hard link, NewDir and the extension record.

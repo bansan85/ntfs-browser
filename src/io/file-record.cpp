@@ -364,6 +364,7 @@ bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
   const bool recover = volume->GetOptions().recover_errors;
   failed_fixup = false;
   header_salvaged = false;
+  reused_extensions.clear();
 
   std::unique_ptr<Record::HeaderImpl<S>> header =
       ReadFileRecord(file_ref, preread);
@@ -436,6 +437,11 @@ bool Io::FileRecord<S>::HasFailedFixup() const noexcept {
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::IsSalvaged() const noexcept {
   return impl_->header_salvaged || impl_->attrs_salvaged;
+}
+
+template <Cache::Strategy S>
+ULONGLONG Io::FileRecord<S>::GetReusedExtensionCount() const noexcept {
+  return impl_->reused_extensions.size();
 }
 
 template <Cache::Strategy S>
@@ -587,11 +593,31 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
 
   // A record another file reused since the list was written is not
   // this file's extension: its attributes belong to someone else.
-  const bool genuine = Mft::IsGenuineExtensionRecord(
-      sequence_number, frnew.GetSequenceNumber(),
-      frnew.GetBaseRecordReference(), self_ref & Mft::mft_record_number_mask);
+  const bool listing_deleted = self->IsDeleted();
+  const bool genuine =
+      listing_deleted ? Mft::IsGenuineFreedExtensionRecord(
+                            sequence_number, frnew.GetSequenceNumber(),
+                            !frnew.IsDeleted(), frnew.GetBaseRecordReference(),
+                            self_ref & Mft::mft_record_number_mask)
+                      : Mft::IsGenuineExtensionRecord(
+                            sequence_number, frnew.GetSequenceNumber(),
+                            frnew.GetBaseRecordReference(),
+                            self_ref & Mft::mft_record_number_mask);
   if (!genuine) {
     extension_records.pop_back();
+    if (listing_deleted) {
+      // Freeing the file freed its extensions too, so a reused slot is normal.
+      // The list names the same record once per attribute, so log it once.
+      if (std::ranges::find(reused_extensions, record_number) ==
+          reused_extensions.end()) {
+        reused_extensions.push_back(record_number);
+        Log::Debug(
+            "Attribute List: record {} was reused by another file since record "
+            "{} was freed - skipping",
+            record_number, self_ref);
+      }
+      return;
+    }
     Log::Recoverable(recover,
                      "Attribute List: record {} is not an extension of "
                      "record {} (reused or foreign) - skipping",

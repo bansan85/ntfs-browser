@@ -126,7 +126,7 @@ constexpr std::array<MftFixture, 8> small_fixtures = {{
 // up to a minute in a Debug one.
 constexpr std::array<MftFixture, 4> large_fixtures = {{
     {"tdungan", Project::DfirMuseum, "Unknown/tdungan/$MFT", 53'575'680, 1024,
-     4096, 52320, 42754, 9443, 123, 0, 4939, 6, 0},
+     4096, 52320, 42754, 9443, 123, 0, 4939, 1, 0},
     {"stolen-szechuan-2012r2", Project::DfirMuseum,
      "Win2012R2/StolenSzechuan/$MFT", 89'391'104, 1024, 4096, 87296, 85986, 0,
      1154, 156, 20162, 5, 0},

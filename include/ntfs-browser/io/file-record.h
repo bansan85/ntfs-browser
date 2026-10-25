@@ -93,6 +93,10 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // the last ParseAttrs() skipped, cut or kept damaged. Always false when
   // recover_errors is off. What was kept is untrusted.
   [[nodiscard]] bool IsSalvaged() const noexcept;
+  // How many extension records the last ParseAttrs() skipped because another
+  // file reused their slot since this freed record was freed. Zero for a live
+  // record, which keeps such an extension as a defect.
+  [[nodiscard]] ULONGLONG GetReusedExtensionCount() const noexcept;
   [[nodiscard]] std::optional<ULONGLONG> GetFileReference() const noexcept;
   // Times this record was reused; 0 when no record is parsed.
   [[nodiscard]] WORD GetSequenceNumber() const noexcept;

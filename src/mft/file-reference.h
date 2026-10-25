@@ -44,4 +44,16 @@ constexpr bool
          (record_base_ref & mft_record_number_mask) == listing_record_number;
 }
 
+// True if a record named by an $ATTRIBUTE_LIST entry of a freed listing file is
+// an extension of it. NTFS freed the extension with the file and bumped its
+// sequence, so a freed extension may carry the entry's sequence plus one. An
+// extension another file reused still names another base, and fails.
+constexpr bool
+    IsGenuineFreedExtensionRecord(WORD entry_sequence, WORD record_sequence,
+                                  bool record_in_use, ULONGLONG record_base_ref,
+                                  ULONGLONG listing_record_number) noexcept {
+  return (record_base_ref & mft_record_number_mask) == listing_record_number &&
+         IsSameRecordGeneration(entry_sequence, record_sequence, record_in_use);
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Mft

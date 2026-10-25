@@ -201,6 +201,8 @@ namespace {
 // writes, distinct so that a wrong file reference shows.
 constexpr WORD tree_list_base_sequence = 4;
 constexpr WORD tree_list_extension_sequence = 2;
+// The sequence NTFS gives the extensions it frees with their file: one more.
+constexpr WORD tree_freed_extension_sequence = 3;
 
 // One entry of the $ATTRIBUTE_LIST of mft_tree_list_base_idx.
 struct FakeTreeListEntry {
@@ -241,13 +243,13 @@ DWORD WriteTreeAttributeList(FakeRecord& record, DWORD offset,
 
 }  // namespace
 
-std::vector<BYTE>
-    BuildFakeNtfsImageWithMftTreeAttributeList(FakeListedExtension high,
-                                               FakeListResidency list) {
+std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
+    FakeListedExtension high, FakeListResidency list, FakeListedState listed) {
   using RecordFlag = NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
   using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 
   std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
+  const bool freed = listed == FakeListedState::Freed;
   const ULONGLONG base_ref =
       MakeFileReference(mft_tree_list_base_idx, tree_list_base_sequence);
   const ULONGLONG high_base_ref =
@@ -256,14 +258,22 @@ std::vector<BYTE>
           : MakeFileReference(mft_tree_hard_link_idx, 1);
   const ULONGLONG docs =
       MakeFileReference(mft_tree_docs_idx, tree_docs_sequence);
+  // A Foreign extension is another file's record: it keeps its own state.
+  const bool high_freed = freed && high == FakeListedExtension::Genuine;
+  const RecordFlag live_flags = RecordFlag::InUse;
+  const RecordFlag freed_flags{};
 
-  PutMftRecord(image, mft_tree_list_low_ext_idx,
-               MakeMftTreeRecord(
-                   RecordFlag::InUse, tree_list_extension_sequence,
-                   {{.name = L"listed.txt", .parent_ref = root_file_reference}},
-                   {}, StdInfoPermission::Normal, base_ref));
+  PutMftRecord(
+      image, mft_tree_list_low_ext_idx,
+      MakeMftTreeRecord(
+          freed ? freed_flags : live_flags,
+          freed ? tree_freed_extension_sequence : tree_list_extension_sequence,
+          {{.name = L"listed.txt", .parent_ref = root_file_reference}}, {},
+          StdInfoPermission::Normal, base_ref));
 
-  FakeRecord base = MakeInUseFileRecord(tree_list_base_sequence);
+  FakeRecord base =
+      MakeRecordHeader(attr_offset_value, freed ? freed_flags : live_flags,
+                       tree_list_base_sequence);
   DWORD offset = attr_offset_value;
   offset +=
       WriteStandardInformationAttr(base, offset, StdInfoPermission::Normal);
@@ -289,7 +299,9 @@ std::vector<BYTE>
 
   PutMftRecord(
       image, mft_tree_list_high_ext_idx,
-      MakeMftTreeRecord(RecordFlag::InUse, tree_list_extension_sequence,
+      MakeMftTreeRecord(high_freed ? freed_flags : live_flags,
+                        high_freed ? tree_freed_extension_sequence
+                                   : tree_list_extension_sequence,
                         {{.name = L"listed-link.txt", .parent_ref = docs}},
                         mft_tree_list_data_size, StdInfoPermission::Normal,
                         high_base_ref));

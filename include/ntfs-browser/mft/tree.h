@@ -182,6 +182,10 @@ class NTFS_BROWSER_EXPORT MftTree {
     // freed record not asked for (include_deleted off) has its attributes
     // unread: only its update sequence check can make it damaged.
     ULONGLONG damaged{0};
+    // Extension records a freed record's $ATTRIBUTE_LIST names that another
+    // file reused since. Skipped, since their attributes are another file's.
+    // Not a defect, so not counted in damaged.
+    ULONGLONG reused_extensions{0};
     // Kept records that no chain of valid parent references links to the root.
     ULONGLONG unreachable{0};
     // False when progress() stopped the scan early.

@@ -123,6 +123,11 @@ class FileRecord<S>::Impl {
   // The last ParseAttrs() salvaged something strict mode rejects. Only when
   // recovering.
   bool attrs_salvaged{false};
+  // Extension records of a freed listing that another file reused, skipped by
+  // the last ParseAttrs(). Not a defect, so not part of attrs_salvaged. A
+  // record that several entries name is kept once. A vector: it is nearly
+  // always empty, and an empty one allocates nothing.
+  std::vector<ULONGLONG> reused_extensions;
 
   void ClearAttrs() noexcept;
   // See FileRecord<S>::CarveSlackNames().

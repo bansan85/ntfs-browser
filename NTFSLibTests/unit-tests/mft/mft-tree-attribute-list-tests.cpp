@@ -6,6 +6,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -14,6 +15,8 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/log/log.h>
+#include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
@@ -24,11 +27,13 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "mft/tree-testing.h"
+#include "test-log-sink.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 
@@ -115,6 +120,48 @@ bool HasChild(const MftTree& tree, ULONGLONG dir, ULONGLONG record) {
   const std::span<const ULONGLONG> children = tree.Children(dir);
   return std::ranges::find(children, record) != children.end();
 }
+
+// Keeps the level of each message the library logs, the text aside.
+class LevelRecorder final : public Log::ISink {
+ public:
+  [[nodiscard]] bool ShouldLog(Log::Level level) const override {
+    return level != Log::Level::Off;
+  }
+
+  void Write(Log::Level level, std::string_view /*message*/) override {
+    levels_.push_back(level);
+  }
+
+  void Flush() override {}
+
+  [[nodiscard]] bool Logged(Log::Level level) const {
+    return std::ranges::find(levels_, level) != levels_.end();
+  }
+
+ private:
+  std::vector<Log::Level> levels_;
+};
+
+// Makes a LevelRecorder the library's only sink while it lives, and puts the
+// capture sink back after it.
+class RecordLevels {
+ public:
+  RecordLevels() : recorder_(std::make_shared<LevelRecorder>()) {
+    Log::SetSinks({recorder_});
+  }
+
+  RecordLevels(const RecordLevels&) = delete;
+  RecordLevels(RecordLevels&&) = delete;
+  RecordLevels& operator=(const RecordLevels&) = delete;
+  RecordLevels& operator=(RecordLevels&&) = delete;
+
+  ~RecordLevels() { Tests::InstallCaptureSink(); }
+
+  [[nodiscard]] const LevelRecorder& Levels() const { return *recorder_; }
+
+ private:
+  std::shared_ptr<LevelRecorder> recorder_;
+};
 
 }  // namespace
 
@@ -221,6 +268,58 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK(listed->names.front().name == L"listed.txt");
     CHECK(scan.tree->Stats().damaged == 1);
   }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "MftTree imports the extensions of a freed file, freed with it",
+    "[mft][tree][attribute-list]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const VolumeOptions options{.include_deleted = true};
+  const CountedScan<S> scan = Scan<S>(
+      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+          Tests::FakeListedExtension::Genuine,
+          Tests::FakeListResidency::Resident, Tests::FakeListedState::Freed),
+      options);
+
+  const MftTree::Entry* const listed =
+      scan.tree->Find(Tests::mft_tree_list_base_idx);
+  REQUIRE(listed != nullptr);
+  CHECK_FALSE(listed->in_use);
+  // The name comes from one extension, the hard link and the $DATA from the
+  // other.
+  CHECK(listed->names.size() == 2);
+  CHECK(listed->size == Tests::mft_tree_list_data_size);
+  CHECK(scan.tree->Stats().damaged == 0);
+  CHECK(scan.tree->Stats().reused_extensions == 0);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "MftTree skips an extension another file reused since its freed file was "
+    "freed, without a defect",
+    "[mft][tree][attribute-list]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const bool recover = GENERATE(false, true);
+  const VolumeOptions options{.include_deleted = true,
+                              .recover_errors = recover};
+  const std::vector<BYTE> image =
+      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+          Tests::FakeListedExtension::Foreign,
+          Tests::FakeListResidency::Resident, Tests::FakeListedState::Freed);
+
+  const RecordLevels levels;
+  const CountedScan<S> scan = Scan<S>(image, options);
+
+  const MftTree::Entry* const listed =
+      scan.tree->Find(Tests::mft_tree_list_base_idx);
+  REQUIRE(listed != nullptr);
+  // The extension freed with the file is imported; the reused one is not.
+  REQUIRE(listed->names.size() == 1);
+  CHECK(listed->names.front().name == L"listed.txt");
+  CHECK(scan.tree->Stats().damaged == 0);
+  CHECK(scan.tree->Stats().reused_extensions == 1);
+  CHECK_FALSE(levels.Levels().Logged(Log::Level::Warn));
+  CHECK_FALSE(levels.Levels().Logged(Log::Level::Error));
+  CHECK(levels.Levels().Logged(Log::Level::Debug));
 }
 
 TEST_CASE(
