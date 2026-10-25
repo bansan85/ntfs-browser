@@ -21,6 +21,7 @@ add_subdirectory("support")
 add_subdirectory("upcase")
 add_subdirectory("usn")
 add_subdirectory("utf")
+add_subdirectory("util")
 add_subdirectory("volume")
 
 # spdlog: the tests of log/spdlog-adapter.h build spdlog sinks and loggers of

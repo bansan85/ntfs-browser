@@ -21,6 +21,7 @@ target_sources(
     "record-slack-names-tests.cpp"
     "slack-carver-tests.cpp"
     "traverse-sub-entries-recovery-tests.cpp"
+    "update-sequence-words-tests.cpp"
     "volume-options-tests.cpp"
     "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/named-stream-probe.h"
     "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/gap-collation-probe.h"

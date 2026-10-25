@@ -2,9 +2,11 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <array>
+#include <cassert>
 #include <cstddef>
+#include <iterator>
 #include <span>
-#include <vector>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
@@ -22,10 +24,49 @@ struct HeaderCommon;
 
 namespace Record {
 
+// The words of an update sequence array, one per sector of the record. A record
+// holds 4096 bytes at most, so 8 sectors: the words sit in the object, and a
+// header costs the heap no second block.
+class UpdateSequenceWords {
+ public:
+  // Most words an array holds.
+  static constexpr size_t max_words =
+      Data::FileRecordHeader::max_file_record_size /
+      Data::FileRecordHeader::update_sequence_stride;
+
+  // Adds a word. The array MUST NOT be full.
+  void push_back(WORD value) noexcept {
+    assert(size_ < max_words);
+    // The assert above, and the caller, keep size_ below max_words.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    words_[size_++] = value;
+  }
+
+  [[nodiscard]] size_t size() const noexcept { return size_; }
+
+  // The word at index. index MUST be below size().
+  [[nodiscard]] WORD operator[](size_t index) const noexcept {
+    assert(index < size_);
+    // The assert above, and the caller, keep index below max_words.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return words_[index];
+  }
+
+  [[nodiscard]] const WORD* begin() const noexcept { return words_.data(); }
+
+  [[nodiscard]] const WORD* end() const noexcept {
+    return std::next(words_.data(), static_cast<std::ptrdiff_t>(size_));
+  }
+
+ private:
+  std::array<WORD, max_words> words_{};
+  size_t size_{0};
+};
+
 // Validates a file record's header and applies its update sequence fixups.
 struct NTFS_BROWSER_EXPORT_TESTS_ONLY Header {
   WORD us_number{0};
-  std::vector<WORD> us_array;
+  UpdateSequenceWords us_array;
   // Actual buffer size this instance was constructed with.
   size_t buffer_size;
 
@@ -35,6 +76,12 @@ struct NTFS_BROWSER_EXPORT_TESTS_ONLY Header {
   Header(Header&&) = delete;
   Header& operator=(Header&&) = delete;
   virtual ~Header() = default;
+
+  // A header comes from a pool of small blocks kept by the thread, not from
+  // the heap each time: a scan of $MFT makes one for each record.
+  static void* operator new(size_t size);
+  static void operator delete(void* block, size_t size) noexcept;
+
   // Verify US and update sectors
   [[nodiscard]] bool PatchUS() noexcept;
   // Patches every sector whose last word verifies, and leaves the others as

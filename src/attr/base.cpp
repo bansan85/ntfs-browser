@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <span>
 #include <string>
 #include <string_view>
@@ -15,6 +16,7 @@
 #include "log/ntfs-common.h"
 #include "ntfs-browser/alloc/types.h"
 #include "utf/utf.h"
+#include "util/small-pool.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {
@@ -33,6 +35,17 @@ template <Cache::Strategy S>
 Attr::AttrBase<S>::AttrBase(const Attr::HeaderCommon& ahc,
                             const Io::FileRecord<S>& file_record) noexcept
     : volume_(file_record.GetVolume()), attr_header_(ahc) {}
+
+template <Cache::Strategy S>
+void* Attr::AttrBase<S>::operator new(std::size_t size) {
+  return Util::SmallBlockPool::Allocate(size);
+}
+
+template <Cache::Strategy S>
+void Attr::AttrBase<S>::operator delete(void* block,
+                                        std::size_t size) noexcept {
+  Util::SmallBlockPool::Deallocate(block, size);
+}
 
 template <Cache::Strategy S>
 const Attr::HeaderCommon& Attr::AttrBase<S>::GetAttrHeader() const noexcept {

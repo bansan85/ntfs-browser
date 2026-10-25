@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -46,6 +47,12 @@ class NTFS_BROWSER_EXPORT AttrBase {
   AttrBase& operator=(AttrBase&& other) noexcept = delete;
   AttrBase& operator=(const AttrBase& other) = delete;
   virtual ~AttrBase() = default;
+
+  // An attribute comes from a pool of small blocks kept by the thread, not from
+  // the heap each time: a scan of $MFT makes and drops several of them for each
+  // record.
+  static void* operator new(std::size_t size);
+  static void operator delete(void* block, std::size_t size) noexcept;
 
  protected:
   // NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes)

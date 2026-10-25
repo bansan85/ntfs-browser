@@ -39,6 +39,7 @@ set(
   "usn/usn-journal-loader.cpp"
   "usn/usn-record-scanner.cpp"
   "utf/utf.cpp"
+  "util/small-pool.cpp"
   "util/util.cpp"
   "volume/volume-geometry.cpp"
 )
@@ -160,6 +161,7 @@ set(
   "usn/usn-journal-loader.h"
   "usn/usn-record-scanner.h"
   "utf/utf.h"
+  "util/small-pool.h"
   "util/util.h"
   "volume/volume-geometry.h"
   "io/win32-disk-reader.h"

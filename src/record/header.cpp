@@ -12,6 +12,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
+#include "util/small-pool.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Record {
 
@@ -47,8 +48,8 @@ Header::Header(std::span<const BYTE> buffer) : buffer_size(buffer.size()) {
         "Update Sequence Array does not fit within the file record "
         "buffer.");
   }
-  // A wrong size_of_us cannot make the loop below read out of bounds.
-  us_array.reserve(sectors);
+  // A wrong size_of_us cannot make the loop below read out of bounds, nor
+  // make the array overflow: sectors is at most buffer.size() / 512.
   // offset_of_us is not checked for alignment, so read the words as bytes.
   // The array fit check above covers the number and every word after it.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -61,6 +62,14 @@ Header::Header(std::span<const BYTE> buffer) : buffer_size(buffer.size()) {
                 sizeof(value));
     us_array.push_back(value);
   }
+}
+
+void* Header::operator new(size_t size) {
+  return Util::SmallBlockPool::Allocate(size);
+}
+
+void Header::operator delete(void* block, size_t size) noexcept {
+  Util::SmallBlockPool::Deallocate(block, size);
 }
 
 bool Header::PatchUS() noexcept { return PatchSectors(true) == 0; }
