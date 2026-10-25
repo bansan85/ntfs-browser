@@ -27,6 +27,7 @@
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
@@ -62,6 +63,7 @@ class FileRecord;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+using NTFS_BROWSER_NAMESPACE::Io::RecordStanding;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
@@ -696,6 +698,32 @@ void ProbeScanThreads(std::span<const BYTE> data, const VolumeOptions& options,
   }
 }
 
+// Walks the root with the batched walk, over a reader of its own. It reads in
+// another order than the default walk, so a recorded input would not replay in
+// step for the probes after it: this one runs last.
+template <Cache::Strategy S>
+void ProbeStandingWalk(std::span<const BYTE> data, const VolumeOptions& options,
+                       std::optional<size_t> failing_read) {
+  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
+                       options);
+  if (!volume.IsVolumeOK()) {
+    return;
+  }
+  FileRecord<S> root(volume);
+  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  if (!root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) ||
+      !root.ParseAttrs()) {
+    return;
+  }
+  std::uint64_t seen = 0;
+  root.TraverseSubEntriesWithStanding(
+      [](const IndexEntryView& entry, RecordStanding standing, void* context) {
+        *static_cast<std::uint64_t*>(context) +=
+            entry.GetFilename().size() + static_cast<std::uint64_t>(standing);
+      },
+      &seen);
+}
+
 template <Cache::Strategy S>
 void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
               std::optional<size_t> failing_read = {}) {
@@ -703,6 +731,7 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
                        options);
   ProbeVolume(volume);
   ProbeScanThreads<S>(data, options, failing_read);
+  ProbeStandingWalk<S>(data, options, failing_read);
 }
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash

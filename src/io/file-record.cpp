@@ -919,6 +919,12 @@ void Io::FileRecord<S>::TraverseSubEntries(const SubentryCallback& se_call_back,
   DirectoryIndex<S>(*this).Traverse(se_call_back, context);
 }
 
+template <Cache::Strategy S>
+void Io::FileRecord<S>::TraverseSubEntriesWithStanding(
+    const StandingCallback& se_call_back, void* context) const {
+  DirectoryIndex<S>(*this).TraverseWithStanding(se_call_back, context);
+}
+
 // Find a specific Filename from InexRoot described B+ tree
 template <Cache::Strategy S>
 std::optional<IndexEntry>

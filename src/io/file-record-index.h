@@ -72,18 +72,44 @@ struct IndexSearch {
   std::unordered_set<ULONGLONG> visited_vcns;
 };
 
+template <Cache::Strategy S>
+class EntryProber;
+
+// Where a walk of the entries sends them, and how it finds out which ones to
+// hide.
+template <Cache::Strategy S>
+struct WalkTarget {
+  using SubentryCallback = typename FileRecord<S>::SubentryCallback;
+  using StandingCallback = typename FileRecord<S>::StandingCallback;
+
+  // The callback of the default walk, which probes each entry as it comes.
+  // Null in the batched walk.
+  const SubentryCallback* plain{nullptr};
+  // The callback of the batched walk. Null in the default walk.
+  const StandingCallback* standing{nullptr};
+  void* context{nullptr};
+  // Probes the entries of each node together. Set exactly when standing is.
+  EntryProber<S>* prober{nullptr};
+};
+
 // Walks the B+ tree of one directory: its $INDEX_ROOT and $INDEX_ALLOCATION
 // blocks. Short-lived: built over a FileRecord for one call, never stored.
 template <Cache::Strategy S>
 class DirectoryIndex {
  public:
   using SubentryCallback = typename FileRecord<S>::SubentryCallback;
+  using StandingCallback = typename FileRecord<S>::StandingCallback;
 
   explicit DirectoryIndex(const FileRecord<S>& record) noexcept;
 
   // Calls se_call_back for every named entry, in collation order, then for
   // the orphaned blocks when recovery is on.
   void Traverse(const SubentryCallback& se_call_back, void* context) const;
+  // Traverse() with the probes of each index node batched, and the standing of
+  // the named record handed to the callback. See
+  // FileRecord<S>::TraverseSubEntriesWithStanding().
+  void TraverseWithStanding(const StandingCallback& se_call_back,
+                            void* context) const;
   // Finds file_name. upcase is the volume's collation, loaded by the caller.
   [[nodiscard]] std::optional<IndexEntry>
       Find(std::wstring_view file_name, const UpCase::Table& upcase) const;
@@ -106,18 +132,17 @@ class DirectoryIndex {
       SearchIndexEntries(const std::vector<IndexEntryView>& entries,
                          IndexSearch& search, size_t child_depth,
                          bool at_root) const;
-  void TraverseSubNode(ULONGLONG vcn, const SubentryCallback& se_call_back,
-                       void* context,
+  void Walk(WalkTarget<S>& target) const;
+  void Deliver(const IndexEntryView& entry, WalkTarget<S>& target) const;
+  void TraverseSubNode(ULONGLONG vcn, WalkTarget<S>& target,
                        std::unordered_set<ULONGLONG>& visited_vcns,
                        size_t depth) const;
   void ScanOrphanedIndexBlocks(
-      const SubentryCallback& se_call_back, void* context,
-      std::unordered_set<ULONGLONG>& visited_vcns) const;
+      WalkTarget<S>& target, std::unordered_set<ULONGLONG>& visited_vcns) const;
   [[nodiscard]] OrphanScanPlan
       PlanOrphanScan(const Attr::AttrIndexAlloc<S>& alloc) const;
   void ReportOrphanedBlock(Attr::AttrIndexAlloc<S>& alloc, ULONGLONG vcn,
-                           const SubentryCallback& se_call_back,
-                           void* context) const;
+                           WalkTarget<S>& target) const;
 };
 
 }  // namespace Io

@@ -15,6 +15,8 @@ target_sources(
     "scripted-disk-reader.h"
     "test-log-sink.cpp"
     "test-log-sink.h"
+    "walk-comparison.cpp"
+    "walk-comparison.h"
 )
 
 target_include_directories(

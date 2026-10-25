@@ -118,6 +118,13 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void NoteRecovered() noexcept;
 // before and after it.
 NTFS_BROWSER_EXPORT_TESTS_ONLY std::uint64_t RecoveredCount() noexcept;
 
+// Takes back the salvaged conditions the calling thread counted since mark, as
+// End() saw them. A capture that runs on the thread that replays it counts each
+// condition twice, once as it is met and once at the replay: the caller
+// rewinds after the capture, and the replay counts them where they belong.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    ForgetRecoveredSince(const CapturedLog::Mark& mark) noexcept;
+
 // Formats and emits. A formatting or allocation failure yields a stand-in
 // line instead of a throw: callers include destructors and noexcept
 // functions, where a throw would end the process.

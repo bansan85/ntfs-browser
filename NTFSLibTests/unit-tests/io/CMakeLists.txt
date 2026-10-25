@@ -10,6 +10,7 @@ target_sources(
     "ntfsdir-sample-tests.cpp"
     "read-ahead-disk-reader-tests.cpp"
     "record-offset-overflow-tests.cpp"
+    "traverse-standing-tests.cpp"
 )
 
 target_include_directories(

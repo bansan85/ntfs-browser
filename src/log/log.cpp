@@ -378,6 +378,10 @@ void NoteRecovered() noexcept { recovered_count++; }
 
 std::uint64_t RecoveredCount() noexcept { return recovered_count; }
 
+void ForgetRecoveredSince(const CapturedLog::Mark& mark) noexcept {
+  recovered_count = mark.recovered;
+}
+
 void SilenceCurrentThread() noexcept { current_thread_silenced = true; }
 
 bool IsEnabled(Level level) noexcept {

@@ -32,6 +32,7 @@ target_sources(
     "ntfs-samples-support.h"
     "ntfs-samples-timestamps-tests.cpp"
     "scan-threads-tests.cpp"
+    "traverse-standing-corpus-tests.cpp"
 )
 
 target_include_directories(

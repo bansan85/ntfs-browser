@@ -17,6 +17,7 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/export.h>
+#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
 
@@ -44,6 +45,13 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // view is only valid during the call: build an IndexEntry from it to keep it.
   using SubentryCallback =
       std::function<void(const IndexEntryView& index_entry, void* context)>;
+
+  // The callback of TraverseSubEntriesWithStanding(): like SubentryCallback,
+  // with how the record the entry names stands. The view is only valid during
+  // the call.
+  using StandingCallback =
+      std::function<void(const IndexEntryView& index_entry,
+                         RecordStanding standing, void* context)>;
 
   // User defined Callback routine to handle FileRecord parsed attributes
   // Will be called by FileRecord::TraverseAttrs() for each attribute
@@ -221,6 +229,32 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // record it names is still in use under a matching sequence number.
   void TraverseSubEntries(const SubentryCallback& se_call_back,
                           void* context) const;
+
+  // TraverseSubEntries() with the probes of the named records batched, and
+  // their outcome handed to the callback. Gives the same entries in the same
+  // order, hides the same ones, and logs the same lines at the same places,
+  // except for the Trace lines about disk reads, which follow the batched
+  // reads.
+  //
+  // Every entry the walk shows comes with the standing of the record it names,
+  // so the caller need not read that record again. The standing is the probe's
+  // own: Live, Deleted (freed), Reused (in use under another sequence number)
+  // or Unreadable. A walk that hides deleted items shows Live entries, and
+  // Unreadable ones when the volume recovers.
+  //
+  // The probes of one index node (the root, a block, an orphaned block) run
+  // together, sorted by their place in $MFT: neighbouring records are read in
+  // one go, and the reads are announced to the reader first. A record is probed
+  // once per walk, whatever number of entries name it (a DOS alias and its
+  // Win32 name, say), as long as the walk's memo holds it: the memo is bounded,
+  // and a directory past that bound probes some records again. The cost is the
+  // memo (a few dozen bytes per record, 2^18 records at most) and the bytes of
+  // the records of one round, 128 records at most. No entry is copied.
+  // Announced reads that nothing used are withdrawn after each round, so a
+  // caller's own announcements do not survive the call. Not thread safe, like
+  // the rest of the library.
+  void TraverseSubEntriesWithStanding(const StandingCallback& se_call_back,
+                                      void* context) const;
 
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntry(std::wstring_view file_name) const;

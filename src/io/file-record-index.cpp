@@ -19,6 +19,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/record/carved-name.h>
@@ -28,6 +29,7 @@
 #include "attr/index-block.h"
 #include "attr/index-root.h"
 #include "attr/resident.h"
+#include "io/entry-prober.h"
 #include "io/file-record-attr-types.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
@@ -138,6 +140,26 @@ bool IsOrphanEntryReportable(const IndexEntryView& entry,
                       entry.GetParentSequenceNumber(), owner);
 }
 
+// Probes together the records that the entries of one index node name, when
+// the walk is batched. With an owner, only the entries that
+// IsOrphanEntryReportable() accepts: the others are never delivered.
+template <Cache::Strategy S>
+void ProbeNode(const std::vector<IndexEntryView>& entries,
+               WalkTarget<S>& target, const OrphanOwner* owner) {
+  if (target.prober == nullptr) {
+    return;
+  }
+  std::vector<ULONGLONG> records;
+  records.reserve(entries.size());
+  for (const IndexEntryView& entry : entries) {
+    if (entry.HasName() &&
+        (owner == nullptr || IsOrphanEntryReportable(entry, *owner))) {
+      records.push_back(entry.GetFileReference());
+    }
+  }
+  target.prober->ProbeGroup(records);
+}
+
 // What the slack pass has found so far in one directory.
 struct SlackFindings {
   // Names of the entries in the used part of the root and of every block.
@@ -209,18 +231,18 @@ void CarveBlockSlack(Attr::AttrIndexAlloc<S>& alloc, ULONGLONG vcn,
       owner, findings);
 }
 
-// Decides whether a normal walk or name lookup skips entry. A named record that
-// does not parse is damaged, not freed: it is skipped unless recover_errors is
-// on, whatever include_deleted says. With include_deleted off, an entry whose
-// named record is freed, or reused under another sequence number, is hidden,
-// unless the directory is volume metadata (bypass_deleted_gate): its entries
-// name metadata files, which are read whatever include_deleted says.
+// Decides whether a normal walk or name lookup skips entry, given what the
+// probe of the record it names found. A named record that does not parse is
+// damaged, not freed: it is skipped unless recover_errors is on, whatever
+// include_deleted says. With include_deleted off, an entry whose named record
+// is freed, or reused under another sequence number, is hidden, unless the
+// directory is volume metadata (bypass_deleted_gate): its entries name metadata
+// files, which are read whatever include_deleted says.
 template <Cache::Strategy S>
-bool IsEntryHidden(const IndexEntryView& entry, const NtfsVolume<S>& volume,
-                   bool bypass_deleted_gate) {
+bool IsHiddenGiven(const NamedState& named, const IndexEntryView& entry,
+                   const NtfsVolume<S>& volume, bool bypass_deleted_gate) {
   const bool recover = volume.GetOptions().recover_errors;
-  Io::FileRecord<S> named(volume);
-  if (!named.ParseFileRecord(entry.GetFileReference())) {
+  if (!named.parsed) {
     Log::Recoverable(recover, "Entry names record {} that does not parse",
                      entry.GetFileReference());
     return !recover;
@@ -228,8 +250,36 @@ bool IsEntryHidden(const IndexEntryView& entry, const NtfsVolume<S>& volume,
   if (volume.GetOptions().include_deleted || bypass_deleted_gate) {
     return false;
   }
-  return named.IsDeleted() ||
-         named.GetSequenceNumber() != entry.GetSequenceNumber();
+  return named.deleted || named.sequence != entry.GetSequenceNumber();
+}
+
+// Probes the record entry names, then decides as IsHiddenGiven() does.
+template <Cache::Strategy S>
+bool IsEntryHidden(const IndexEntryView& entry, const NtfsVolume<S>& volume,
+                   bool bypass_deleted_gate) {
+  Io::FileRecord<S> named(volume);
+  NamedState state;
+  state.parsed = named.ParseFileRecord(entry.GetFileReference());
+  if (state.parsed) {
+    state.deleted = named.IsDeleted();
+    state.sequence = named.GetSequenceNumber();
+  }
+  return IsHiddenGiven(state, entry, volume, bypass_deleted_gate);
+}
+
+// How the record that entry names stands, as the batched walk reports it to its
+// callback. A reference that carries sequence 0 claims no generation.
+RecordStanding StandingOf(const NamedState& named,
+                          const IndexEntryView& entry) {
+  if (!named.parsed) {
+    return RecordStanding::Unreadable;
+  }
+  if (named.deleted) {
+    return RecordStanding::Deleted;
+  }
+  const bool reused = entry.GetSequenceNumber() != 0 &&
+                      entry.GetSequenceNumber() != named.sequence;
+  return reused ? RecordStanding::Reused : RecordStanding::Live;
 }
 
 }  // namespace
@@ -245,6 +295,48 @@ void Io::DirectoryIndex<S>::Traverse(const SubentryCallback& se_call_back,
                                      void* context) const {
   assert(se_call_back);
 
+  WalkTarget<S> target;
+  target.plain = &se_call_back;
+  target.context = context;
+  Walk(target);
+}
+
+template <Cache::Strategy S>
+void Io::DirectoryIndex<S>::TraverseWithStanding(
+    const StandingCallback& se_call_back, void* context) const {
+  assert(se_call_back);
+
+  EntryProber<S> prober(record_.GetVolume());
+  WalkTarget<S> target;
+  target.standing = &se_call_back;
+  target.context = context;
+  target.prober = &prober;
+  Walk(target);
+}
+
+// Sends entry to the walk's callback, unless the record it names says to hide
+// it. The default walk probes the record now. The batched walk takes the
+// outcome of the probe its node made.
+template <Cache::Strategy S>
+void Io::DirectoryIndex<S>::Deliver(const IndexEntryView& entry,
+                                    WalkTarget<S>& target) const {
+  const NtfsVolume<S>& volume = record_.GetVolume();
+  if (target.prober == nullptr) {
+    if (!IsEntryHidden(entry, volume, record_.BypassesDeletedGate())) {
+      (*target.plain)(entry, target.context);
+    }
+    return;
+  }
+
+  const NamedState named = target.prober->Take(entry.GetFileReference());
+  if (!IsHiddenGiven(named, entry, volume, record_.BypassesDeletedGate())) {
+    (*target.standing)(entry, StandingOf(named, entry), target.context);
+  }
+}
+
+// The walk of Traverse() and TraverseWithStanding(), from the $INDEX_ROOT.
+template <Cache::Strategy S>
+void Io::DirectoryIndex<S>::Walk(WalkTarget<S>& target) const {
   const NtfsVolume<S>& volume = record_.GetVolume();
   const bool recover = volume.GetOptions().recover_errors;
 
@@ -257,7 +349,7 @@ void Io::DirectoryIndex<S>::Traverse(const SubentryCallback& se_call_back,
     // blocks may still exist and hold every entry.
     if (recover) {
       std::unordered_set<ULONGLONG> visited_vcns;
-      ScanOrphanedIndexBlocks(se_call_back, context, visited_vcns);
+      ScanOrphanedIndexBlocks(target, visited_vcns);
     }
     return;
   }
@@ -273,21 +365,20 @@ void Io::DirectoryIndex<S>::Traverse(const SubentryCallback& se_call_back,
 
   std::unordered_set<ULONGLONG> visited_vcns;
 
+  ProbeNode(all_ie, target, nullptr);
   for (const IndexEntryView& index_entry : all_ie) {
     // Visit subnode first
     if (index_entry.IsSubNodePtr()) {
-      TraverseSubNode(index_entry.GetSubNodeVCN(), se_call_back, context,
-                      visited_vcns, 0);
+      TraverseSubNode(index_entry.GetSubNodeVCN(), target, visited_vcns, 0);
     }
 
-    if (index_entry.HasName() &&
-        !IsEntryHidden(index_entry, volume, record_.BypassesDeletedGate())) {
-      se_call_back(index_entry, context);
+    if (index_entry.HasName()) {
+      Deliver(index_entry, target);
     }
   }
 
   if (recover) {
-    ScanOrphanedIndexBlocks(se_call_back, context, visited_vcns);
+    ScanOrphanedIndexBlocks(target, visited_vcns);
   }
 }
 
@@ -451,7 +542,7 @@ template <Cache::Strategy S>
 // The depth limit and the visited-VCN set bound the recursion.
 // NOLINTNEXTLINE(misc-no-recursion)
 void Io::DirectoryIndex<S>::TraverseSubNode(
-    ULONGLONG vcn, const SubentryCallback& se_call_back, void* context,
+    ULONGLONG vcn, WalkTarget<S>& target,
     std::unordered_set<ULONGLONG>& visited_vcns, size_t depth) const {
   if (depth >= max_index_block_depth) {
     Log::Warn("TraverseSubNode() aborting: recursion depth limit exceeded");
@@ -476,17 +567,16 @@ void Io::DirectoryIndex<S>::TraverseSubNode(
     return;
   }
 
+  ProbeNode(index_block, target, nullptr);
   for (const IndexEntryView& index_entry : index_block) {
     if (index_entry.IsSubNodePtr()) {
       // recursive call
-      TraverseSubNode(index_entry.GetSubNodeVCN(), se_call_back, context,
-                      visited_vcns, depth + 1);
+      TraverseSubNode(index_entry.GetSubNodeVCN(), target, visited_vcns,
+                      depth + 1);
     }
 
-    if (index_entry.HasName() &&
-        !IsEntryHidden(index_entry, record_.GetVolume(),
-                       record_.BypassesDeletedGate())) {
-      se_call_back(index_entry, context);
+    if (index_entry.HasName()) {
+      Deliver(index_entry, target);
     }
   }
 }
@@ -528,9 +618,9 @@ OrphanScanPlan Io::DirectoryIndex<S>::PlanOrphanScan(
 // Reports the entries of one orphaned index block that
 // IsOrphanEntryReportable() accepts. A block that fails to parse is skipped.
 template <Cache::Strategy S>
-void Io::DirectoryIndex<S>::ReportOrphanedBlock(
-    Attr::AttrIndexAlloc<S>& alloc, ULONGLONG vcn,
-    const SubentryCallback& se_call_back, void* context) const {
+void Io::DirectoryIndex<S>::ReportOrphanedBlock(Attr::AttrIndexAlloc<S>& alloc,
+                                                ULONGLONG vcn,
+                                                WalkTarget<S>& target) const {
   Attr::IndexBlock index_block;
   if (!alloc.ParseIndexBlock(vcn, index_block)) {
     return;
@@ -540,12 +630,11 @@ void Io::DirectoryIndex<S>::ReportOrphanedBlock(
             vcn);
 
   const OrphanOwner owner = OwnerOf(record_);
-  const NtfsVolume<S>& volume = record_.GetVolume();
 
+  ProbeNode(index_block, target, &owner);
   for (const IndexEntryView& index_entry : index_block) {
-    if (index_entry.HasName() && IsOrphanEntryReportable(index_entry, owner) &&
-        !IsEntryHidden(index_entry, volume, record_.BypassesDeletedGate())) {
-      se_call_back(index_entry, context);
+    if (index_entry.HasName() && IsOrphanEntryReportable(index_entry, owner)) {
+      Deliver(index_entry, target);
     }
   }
 }
@@ -557,8 +646,7 @@ void Io::DirectoryIndex<S>::ReportOrphanedBlock(
 // all - unlike the normal walk, in VCN order rather than collation order.
 template <Cache::Strategy S>
 void Io::DirectoryIndex<S>::ScanOrphanedIndexBlocks(
-    const SubentryCallback& se_call_back, void* context,
-    std::unordered_set<ULONGLONG>& visited_vcns) const {
+    WalkTarget<S>& target, std::unordered_set<ULONGLONG>& visited_vcns) const {
   const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
       record_.GetAttr(Attr::Type::IndexAllocation);
   if (vec.empty()) {
@@ -581,7 +669,7 @@ void Io::DirectoryIndex<S>::ScanOrphanedIndexBlocks(
       continue;
     }
 
-    ReportOrphanedBlock(*alloc, vcn, se_call_back, context);
+    ReportOrphanedBlock(*alloc, vcn, target);
   }
 }
 

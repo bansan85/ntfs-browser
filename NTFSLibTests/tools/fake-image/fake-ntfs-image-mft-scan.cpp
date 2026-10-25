@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include <gsl/util>
+
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
@@ -13,6 +15,8 @@
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/header-resident.h"
+#include "data/index-block.h"
+#include "data/ntfs-bpb.h"
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
 #include "fake-ntfs-image.h"
@@ -246,6 +250,106 @@ void PutScanRecord(std::vector<BYTE>& image, ULONGLONG idx,
       record);
 }
 
+// Multiplier that scatters slots over names. Coprime with
+// indexed_scan_name_modulus, so two slots never share a name.
+constexpr ULONGLONG indexed_scan_name_stride = 37;
+
+// Number of distinct name numbers: four decimal digits.
+constexpr ULONGLONG indexed_scan_name_modulus = 10000;
+
+// Digits of a name number, zero-padded so names sort as numbers.
+constexpr size_t indexed_scan_name_digits = 4;
+
+// Size in bytes of an index block of the indexed scan fixture, and the clusters
+// it spans. Four clusters of 1024 bytes: a block holds a few dozen names.
+constexpr DWORD indexed_scan_block_size = 4096;
+constexpr BYTE indexed_scan_block_clusters = 4;
+
+// LCN of the first index block of the indexed scan fixture. Past every
+// fragment of the $MFT the fixture maps.
+constexpr DWORD indexed_scan_blocks_lcn = 3000;
+
+// The index entry of a slot of the indexed scan fixture, and what it names.
+struct IndexedScanEntry {
+  std::wstring name;
+  FakeIndexName fake;
+};
+
+// Name of the entry that names slot idx. The number scatters the slots: names
+// in collation order name slots in no order.
+std::wstring IndexedScanName(ULONGLONG idx) {
+  std::wstring digits = std::to_wstring((idx * indexed_scan_name_stride) %
+                                        indexed_scan_name_modulus);
+  return L"n" + std::wstring(indexed_scan_name_digits - digits.size(), L'0') +
+         digits;
+}
+
+// The entries of the indexed scan fixture, in collation order. Every slot past
+// the system files has an entry. Some also have an alias entry, and some a
+// stale one that names another sequence number.
+std::vector<IndexedScanEntry> IndexedScanEntries(ULONGLONG record_count) {
+  std::vector<IndexedScanEntry> entries;
+  for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
+       idx < record_count; idx++) {
+    const bool directory = idx % slot_kind_count == 3;
+    entries.push_back(
+        {IndexedScanName(idx), {.mft_ref = idx, .directory = directory}});
+    if (idx % indexed_scan_alias_every == 0) {
+      entries.push_back({L"a" + std::to_wstring(idx),
+                         {.mft_ref = idx, .directory = directory}});
+    }
+    if (idx % indexed_scan_stale_every == 0) {
+      entries.push_back({L"r" + std::to_wstring(idx),
+                         {.mft_ref = idx,
+                          .directory = directory,
+                          .sequence = indexed_scan_stale_sequence}});
+    }
+  }
+  std::ranges::sort(entries, {}, &IndexedScanEntry::name);
+  for (IndexedScanEntry& entry : entries) {
+    entry.fake.name = entry.name;
+  }
+  return entries;
+}
+
+// Writes the entries of one node, each as a name, and the terminating entry
+// after them. A separator carries the VCN of the leaf before it.
+DWORD WriteIndexedScanNode(std::span<BYTE> dest,
+                           std::span<const FakeIndexName> names,
+                           std::optional<ULONGLONG> last_vcn) {
+  DWORD size = 0;
+  for (const FakeIndexName& name : names) {
+    size += WriteFilenameEntry(&gsl::at(dest, size), name);
+  }
+  if (last_vcn) {
+    return size + WriteSubNodeEntry(&gsl::at(dest, size), *last_vcn, true);
+  }
+  return size + WriteTerminalEntry(&gsl::at(dest, size));
+}
+
+// The update sequence number a block of the indexed scan fixture carries.
+constexpr WORD indexed_scan_update_sequence = 1;
+
+// Gives block a real update sequence array: the last word of each sector moves
+// into the array, and the update sequence number takes its place. A block of
+// entries needs it, since entries cross sector ends.
+void ApplyIndexBlockFixup(std::span<BYTE> block) {
+  const auto& header =
+      *reinterpret_cast<const NTFS_BROWSER_NAMESPACE::Data::IndexBlock*>(
+          block.data());
+  const size_t sectors = block.size() / bytes_per_sector;
+  std::memcpy(&gsl::at(block, header.offset_of_us),
+              &indexed_scan_update_sequence, sizeof(WORD));
+  for (size_t sector = 0; sector < sectors; sector++) {
+    const size_t end = (sector + 1) * bytes_per_sector - sizeof(WORD);
+    std::memcpy(
+        &gsl::at(block, header.offset_of_us + (sector + 1) * sizeof(WORD)),
+        &gsl::at(block, end), sizeof(WORD));
+    std::memcpy(&gsl::at(block, end), &indexed_scan_update_sequence,
+                sizeof(WORD));
+  }
+}
+
 }  // namespace
 
 ULONGLONG FragmentedMftScanSlotOffset(ULONGLONG idx,
@@ -299,6 +403,99 @@ std::vector<BYTE>
   }
   PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
                 MakeScanMftRecord(record_count, fragment_clusters));
+  return image;
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithIndexedMftScan(ULONGLONG record_count,
+                                         size_t entries_per_block,
+                                         ULONGLONG fragment_clusters) {
+  std::vector<BYTE> image =
+      BuildFakeNtfsImageWithFragmentedMftScan(record_count, fragment_clusters);
+
+  // The volume's index blocks are as big as the fixture's.
+  auto& bpb =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data());
+  bpb.clusters_per_index_block = indexed_scan_block_clusters;
+
+  const std::vector<IndexedScanEntry> entries =
+      IndexedScanEntries(record_count);
+
+  // The tree has two levels under the root: block 0 holds the separators, and
+  // each leaf block the entries between two of them.
+  std::vector<std::vector<FakeIndexName>> leaves;
+  std::vector<FakeIndexName> separators;
+  for (size_t next = 0; next < entries.size();) {
+    const size_t left = entries.size() - next;
+    // A last leaf of one entry would leave the separator before it with
+    // nothing to separate: the leaf before it takes that entry.
+    const size_t take =
+        left <= entries_per_block + 1 ? left : entries_per_block;
+    std::vector<FakeIndexName>& leaf = leaves.emplace_back();
+    for (size_t i = 0; i < take; i++) {
+      leaf.push_back(entries.at(next + i).fake);
+    }
+    next += take;
+    if (next < entries.size()) {
+      separators.push_back(entries.at(next).fake);
+      next++;
+    }
+  }
+
+  // The VCN of leaf j: block 0 is the separator node, at VCN 0.
+  const auto leaf_vcn = [](size_t leaf) {
+    return static_cast<ULONGLONG>(leaf + 1) * indexed_scan_block_clusters;
+  };
+
+  const size_t block_count = leaves.size() + 1;
+  const size_t blocks_offset =
+      static_cast<size_t>(indexed_scan_blocks_lcn) * cluster_size;
+  PadToFullCacheRead(image,
+                     blocks_offset + block_count * indexed_scan_block_size);
+
+  const auto write_block = [&](size_t block, ULONGLONG vcn,
+                               std::span<const FakeIndexName> names,
+                               std::optional<ULONGLONG> last_vcn) {
+    const std::span<BYTE> bytes = std::span<BYTE>(image).subspan(
+        blocks_offset + block * indexed_scan_block_size,
+        indexed_scan_block_size);
+    auto& header = WriteIndexBlockHeader(bytes, indexed_scan_block_size, vcn);
+    const DWORD size = WriteIndexedScanNode(
+        bytes.subspan(sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock)), names,
+        last_vcn);
+    header.total_entry_size = size;
+    header.alloc_entry_size = size;
+    header.not_leaf = last_vcn ? 1 : 0;
+    ApplyIndexBlockFixup(bytes);
+  };
+
+  // Entry j of the separator node points at leaf j, which holds the names
+  // before it, and the terminating entry points at the last leaf.
+  for (size_t j = 0; j < separators.size(); j++) {
+    separators.at(j).sub_node_vcn = leaf_vcn(j);
+  }
+  write_block(0, 0, separators, leaf_vcn(leaves.size() - 1));
+  for (size_t j = 0; j < leaves.size(); j++) {
+    write_block(j + 1, leaf_vcn(j), leaves.at(j), std::nullopt);
+  }
+
+  FakeRecord root = MakeInUseDirectoryRecord(root_sequence_number);
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      root, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
+  // The root has the one entry that points at the separator node.
+  offset += WriteSubNodeIndexRootAttr(root, offset, indexed_scan_block_size,
+                                      indexed_scan_block_clusters);
+  offset += WriteSingleRunIndexAllocAttr(
+      root, offset,
+      {.start_vcn = 0,
+       .clusters =
+           static_cast<DWORD>(block_count * indexed_scan_block_clusters),
+       .lcn = indexed_scan_blocks_lcn},
+      block_count * indexed_scan_block_size);
+  WriteEndOfAttributesMarker(root, offset);
+  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+                fragment_clusters, root);
   return image;
 }
 

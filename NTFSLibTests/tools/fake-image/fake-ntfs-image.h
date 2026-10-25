@@ -1037,6 +1037,36 @@ inline constexpr ULONGLONG fragmented_mft_scan_fragment_clusters = 100;
     ULONGLONG record_count,
     ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
 
+// Names per index block, and the other numbers that shape the directory of
+// BuildFakeNtfsImageWithIndexedMftScan().
+inline constexpr size_t indexed_scan_entries_per_block = 24;
+
+// Every indexed_scan_alias_every-th slot has a second entry, named
+// "a<slot>", that names the same record: the way a DOS alias does.
+inline constexpr ULONGLONG indexed_scan_alias_every = 5;
+
+// Every indexed_scan_stale_every-th slot has a third entry, named
+// "r<slot>", that names the record under another sequence number.
+inline constexpr ULONGLONG indexed_scan_stale_every = 7;
+
+// The sequence number those stale entries carry. No record has it.
+inline constexpr WORD indexed_scan_stale_sequence = 9;
+
+// Same $MFT as BuildFakeNtfsImageWithFragmentedMftScan(), whose root (#5) is a
+// directory with a real index: each slot past the system files has an entry
+// named "n" and four digits that scatter the slots (names in order name slots
+// in no order), and some have the alias and stale entries above. The entries
+// sit in index blocks of entries_per_block names, under one node of separators
+// that the root points at: the walk reads the root and a few blocks. The
+// entries name the slots as they are: a
+// freed file, a zero-filled slot, a record that fails its update sequence
+// check. record_count MUST be at least Mft::Idx::User, and at most 150 for the
+// default block size, so the separators fit one block.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexedMftScan(
+    ULONGLONG record_count,
+    size_t entries_per_block = indexed_scan_entries_per_block,
+    ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
+
 // Byte offset, in BuildFakeNtfsImageWithFragmentedMftScan()'s image, of the
 // record of $MFT slot idx.
 [[nodiscard]] ULONGLONG FragmentedMftScanSlotOffset(
