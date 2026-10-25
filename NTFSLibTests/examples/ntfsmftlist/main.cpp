@@ -9,6 +9,7 @@
 #include <array>
 #include <cerrno>
 #include <charconv>
+#include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <filesystem>
@@ -66,6 +67,8 @@ constexpr unsigned filetime_epoch_year = 1601;
 constexpr std::wstring_view deleted_option = L"--deleted";
 // Command-line switch that salvages a damaged item instead of rejecting it.
 constexpr std::wstring_view recover_option = L"--recover";
+// Command-line prefix of the switch that sets how many threads scan $MFT.
+constexpr std::wstring_view threads_option = L"--threads=";
 
 // Width of every column before the path, separators included, so an extra
 // hard link's "=" line lines up under the path it follows.
@@ -272,9 +275,14 @@ class Output {
 
 // Prints command-line usage help.
 void Usage() {
-  printf("Usage: ntfsmftlist [--log=...] [--deleted] [--recover] <volume>\n");
+  printf(
+      "Usage: ntfsmftlist [--log=...] [--deleted] [--recover] [--threads=N] "
+      "<volume>\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("  --deleted     also list the records NTFS freed\n");
+  printf(
+      "  --threads=N   threads that parse $MFT, 1 for one; by default the\n");
+  printf("                machine's, on a volume big enough to pay for them\n");
   printf(
       "  --recover     salvage a damaged item instead of rejecting it, and\n");
   printf(
@@ -705,9 +713,33 @@ std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
 struct Arguments {
   Log::Config log_config;
   VolumeOptions volume_options;
+  // Threads that scan $MFT, 0 for the library's choice.
+  unsigned threads = 0;
   // Stays null until the command line names a volume.
   const wchar_t* target = nullptr;
 };
+
+// Reads the thread count of --threads=: one to four decimal digits, from 1 to
+// 4096. False otherwise.
+bool ParseThreads(std::wstring_view text, unsigned& threads) {
+  constexpr unsigned max_threads = 4096;
+  constexpr size_t max_digits = 4;
+  if (text.empty() || text.size() > max_digits) {
+    return false;
+  }
+  unsigned value = 0;
+  for (const wchar_t digit : text) {
+    if (digit < L'0' || digit > L'9') {
+      return false;
+    }
+    value = (value * 10) + static_cast<unsigned>(digit - L'0');
+  }
+  if (value == 0 || value > max_threads) {
+    return false;
+  }
+  threads = value;
+  return true;
+}
 
 // Fills args from the command line. Returns false on an unknown or malformed
 // option, or unless exactly one volume is named.
@@ -728,6 +760,12 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
       args.volume_options.recover_errors = true;
       continue;
     }
+    if (arg.starts_with(threads_option)) {
+      if (!ParseThreads(arg.substr(threads_option.size()), args.threads)) {
+        return false;
+      }
+      continue;
+    }
     if (args.target != nullptr) {
       return false;
     }
@@ -737,15 +775,38 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
 }
 
 // Shows the $MFT scan's progress on stderr, and ends the line when it is done.
-bool ShowScanProgress(ULONGLONG done, ULONGLONG total) {
-  fprintf(stderr, "\rScanning $MFT: %llu / %llu",
-          static_cast<unsigned long long>(done),
-          static_cast<unsigned long long>(total));
-  if (done == total) {
-    fprintf(stderr, "\n");
+// An update takes a write of stderr, which costs milliseconds when that is a
+// file on a busy disk: the line is redrawn a few times a second, not once per
+// call.
+class ScanProgress {
+ public:
+  bool operator()(ULONGLONG done, ULONGLONG total) {
+    const auto now = std::chrono::steady_clock::now();
+    if (done != total && drawn_ && now - last_draw_ < redraw_interval) {
+      return true;
+    }
+    drawn_ = true;
+    last_draw_ = now;
+    // One write per update: stderr is unbuffered, and fprintf() would write it
+    // piece by piece.
+    std::array<char, 80> line{};
+    const int length = snprintf(
+        line.data(), line.size(), "\rScanning $MFT: %llu / %llu%s",
+        static_cast<unsigned long long>(done),
+        static_cast<unsigned long long>(total), done == total ? "\n" : "");
+    if (length > 0) {
+      fwrite(line.data(), 1, static_cast<size_t>(length), stderr);
+    }
+    return true;
   }
-  return true;
-}
+
+ private:
+  // Time between two redraws of the progress line: often enough to look alive.
+  static constexpr std::chrono::milliseconds redraw_interval{100};
+
+  std::chrono::steady_clock::time_point last_draw_;
+  bool drawn_{false};
+};
 
 // Prints the scan totals that close the listing.
 void PrintStats(Output& out,
@@ -786,8 +847,13 @@ int ListVolume(const Arguments& args) {
   }
 
   NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanOptions scan_options;
-  scan_options.progress = ShowScanProgress;
-  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume, scan_options);
+  scan_options.progress = ScanProgress{};
+  scan_options.threads = args.threads;
+  // Never freed: the process ends with the listing, and freeing millions of
+  // entries one by one would take seconds of it. A static keeps it reachable.
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+  static const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree =
+      *new NTFS_BROWSER_NAMESPACE::Mft::MftTree(*volume, scan_options);
 
   Output out;
   out.PrintLine("{:>10} {:>5} {:<3} {:>14} {:<16} {:<6} {:>2} {}", "Record",

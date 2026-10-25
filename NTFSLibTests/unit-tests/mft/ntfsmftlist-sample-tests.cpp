@@ -380,3 +380,103 @@ TEST_CASE("NtfsMftList refuses a directory after the image",
 }
 
 #endif  // !_WIN32
+
+namespace {
+
+// Slots of the busy image the thread tests list: past three chunks of the
+// listing, and past two windows of the scan.
+constexpr ULONGLONG busy_slot_count = 8300;
+
+// Clusters in each fragment of that image, the most one length byte holds.
+constexpr ULONGLONG busy_fragment_clusters = 255;
+
+}  // namespace
+
+TEST_CASE("NtfsMftList lists the same with one thread as with several",
+          "[mft][sample][threads]") {
+  const TempTreeImage image(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithBusyMftScan(
+          busy_slot_count, busy_fragment_clusters));
+  const bool deleted = GENERATE(false, true);
+  const bool recover = GENERATE(false, true);
+  std::vector<std::wstring> options;
+  if (deleted) {
+    options.emplace_back(L"--deleted");
+  }
+  if (recover) {
+    options.emplace_back(L"--recover");
+  }
+  const auto run_with = [&](const std::wstring& threads) {
+    std::vector<std::wstring> args = options;
+    args.push_back(threads);
+    args.push_back(image.path.wstring());
+    return RunSample(args);
+  };
+
+  const SampleRun one = run_with(L"--threads=1");
+  const SampleRun two = run_with(L"--threads=2");
+  const SampleRun many = run_with(L"--threads=8");
+  const SampleRun four = run_with(L"--threads=4");
+
+  INFO("deleted " << deleted << " recover " << recover);
+  REQUIRE(one.exit_code == 0);
+  CHECK(one.out.size() > 100000);
+  CHECK(two.exit_code == 0);
+  CHECK(two.out == one.out);
+  CHECK(many.exit_code == 0);
+  CHECK(many.out == one.out);
+  CHECK(four.exit_code == 0);
+  CHECK(four.out == one.out);
+}
+
+TEST_CASE("NtfsMftList with several threads lists the tree image as with one",
+          "[mft][sample][threads]") {
+  const TempTreeImage image;
+
+  const SampleRun live = RunSample({L"--threads=4", image.path.wstring()});
+  const SampleRun deleted =
+      RunSample({L"--threads=4", L"--deleted", image.path.wstring()});
+
+  CHECK(live.exit_code == 0);
+  CHECK(live.out == WithLocalTimes(live_listing));
+  CHECK(deleted.exit_code == 0);
+  CHECK(deleted.out == WithLocalTimes(deleted_listing));
+}
+
+TEST_CASE("NtfsMftList with several threads keeps the paths under a loop",
+          "[mft][sample][threads]") {
+  std::vector<BYTE> tree =
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+  NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(tree);
+  const TempTreeImage image(tree);
+
+  const SampleRun one = RunSample({L"--threads=1", image.path.wstring()});
+  const SampleRun many = RunSample({L"--threads=4", image.path.wstring()});
+
+  CHECK(many.exit_code == 0);
+  CHECK(many.out == one.out);
+  CHECK_THAT(many.out, ContainsSubstring("  1 <lost #16>\\NewDir\\Docs\n"));
+}
+
+TEST_CASE("NtfsMftList rejects a thread count that is not a number from 1 up",
+          "[mft][sample][threads]") {
+  const TempTreeImage image;
+  for (const std::wstring_view option :
+       {L"--threads=", L"--threads=0", L"--threads=-1", L"--threads=two",
+        L"--threads=5000", L"--threads=1x", L"--threads=00000"}) {
+    const SampleRun run =
+        RunSample({std::wstring(option), image.path.wstring()});
+
+    INFO(Fs::path(std::wstring(option)).string());
+    CHECK(run.exit_code == sample_failure_exit_code);
+    CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsmftlist"));
+  }
+}
+
+TEST_CASE("NtfsMftList usage names the --threads option",
+          "[mft][sample][threads]") {
+  const SampleRun run = RunSample({L"--deleted"});
+
+  CHECK_THAT(run.out, ContainsSubstring("[--threads=N]"));
+  CHECK_THAT(run.out, ContainsSubstring("--threads=N   threads that parse"));
+}
