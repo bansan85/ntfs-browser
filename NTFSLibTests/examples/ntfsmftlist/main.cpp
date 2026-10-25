@@ -8,22 +8,13 @@
 
 #include <array>
 #include <cerrno>
-#include <charconv>
 #include <chrono>
-#include <condition_variable>
 #include <cstdio>
 #include <filesystem>
-#include <format>
-#include <functional>
-#include <iterator>
 #include <memory>
-#include <mutex>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
-#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -39,20 +30,20 @@
 #include "device-path.h"
 #include "local-time.h"
 #include "ntfs-browser/cache/strategy.h"
+#include "output.h"
 #include "text-convert.h"
 #include "tool-support.h"
 
 #ifdef _WIN32
   #include <cwctype>
 
-  #include <fcntl.h>
-  #include <io.h>
 #else
   #include "argv-wide.h"
   #include "posix-device-disk-reader.h"
 #endif
 
 using namespace NTFS_BROWSER_NAMESPACE;
+using NtfsDevice::Output;
 
 namespace {
 
@@ -83,195 +74,8 @@ constexpr size_t state_width = 3;
 constexpr size_t size_width = 14;
 constexpr size_t links_width = 2;
 
-// Bytes of the listing gathered before stdout gets them. 1 MiB turns a listing
-// of millions of lines into a few dozen writes.
-constexpr size_t output_flush_bytes = size_t{1024} * 1024;
-
-// Digits of the largest ULONGLONG.
-constexpr size_t max_decimal_digits = 20;
-
 // The record of the root directory, where a path starts.
 constexpr ULONGLONG root_record = static_cast<ULONGLONG>(Mft::Idx::Root);
-
-#ifdef _WIN32
-// The end of a line of the listing. stdout is binary while it is written, so
-// the listing adds the CR the text mode would: that mode converts a few KiB at
-// a time, and each chunk costs a write.
-constexpr std::string_view line_end = "\r\n";
-#else
-constexpr std::string_view line_end = "\n";
-#endif
-
-// Gathers the listing, and hands it to stdout in big chunks. A chunk ends
-// between two pieces of text, so a console never gets a UTF-8 sequence cut in
-// two. The main line of each entry is built by hand: std::format() would cost
-// more than the rest of the line. A thread of its own writes each chunk while
-// the next one is built: writing a big listing costs about as much as building
-// it.
-class Output {
- public:
-  Output() {
-    buffer_.reserve(output_flush_bytes);
-    writing_.reserve(output_flush_bytes);
-#ifdef _WIN32
-    fflush(stdout);
-    text_mode_ = _setmode(_fileno(stdout), _O_BINARY);
-#endif
-    try {
-      writer_ = std::thread([this] { WriteChunks(); });
-    } catch (const std::system_error&) {
-      // Without a thread, Flush() writes each chunk itself.
-    }
-  }
-
-  Output(const Output&) = delete;
-  Output(Output&&) = delete;
-  Output& operator=(const Output&) = delete;
-  Output& operator=(Output&&) = delete;
-
-  ~Output() {
-    Flush();
-    StopWriter();
-#ifdef _WIN32
-    fflush(stdout);
-    if (text_mode_ != -1) {
-      _setmode(_fileno(stdout), text_mode_);
-    }
-#endif
-  }
-
-  // Appends one piece of the listing, formatted as std::format() does.
-  template <class... Args>
-  void Print(std::format_string<Args...> fmt, Args&&... args) {
-    std::format_to(std::back_inserter(buffer_), fmt,
-                   std::forward<Args>(args)...);
-    FlushIfFull();
-  }
-
-  // Same, then ends the line.
-  template <class... Args>
-  void PrintLine(std::format_string<Args...> fmt, Args&&... args) {
-    std::format_to(std::back_inserter(buffer_), fmt,
-                   std::forward<Args>(args)...);
-    EndLine();
-  }
-
-  void Append(std::string_view text) { buffer_.append(text); }
-
-  // Appends text right-aligned in width columns, or left-aligned.
-  void AppendRight(std::string_view text, size_t width) {
-    Pad(text.size(), width, ' ');
-    buffer_.append(text);
-  }
-
-  void AppendLeft(std::string_view text, size_t width) {
-    buffer_.append(text);
-    Pad(text.size(), width, ' ');
-  }
-
-  // Appends value in decimal, right-aligned in width columns filled with fill.
-  void AppendNumber(ULONGLONG value, size_t width, char fill = ' ') {
-    std::array<char, max_decimal_digits> digits{};
-    const char* end =
-        std::to_chars(digits.data(), digits.data() + digits.size(), value).ptr;
-    const auto length = static_cast<size_t>(end - digits.data());
-    Pad(length, width, fill);
-    buffer_.append(digits.data(), length);
-  }
-
-  // Ends the current line.
-  void EndLine() {
-    buffer_.append(line_end);
-    FlushIfFull();
-  }
-
-  // Hands what is gathered so far to the writer, once it has written the
-  // previous chunk.
-  void Flush() {
-    if (buffer_.empty()) {
-      return;
-    }
-    if (!writer_.joinable()) {
-      fwrite(buffer_.data(), 1, buffer_.size(), stdout);
-      buffer_.clear();
-      return;
-    }
-
-    std::unique_lock lock{mutex_};
-    written_.wait(lock, [this] { return !chunk_ready_; });
-    // The writer left its buffer empty: it becomes the one to fill.
-    buffer_.swap(writing_);
-    chunk_ready_ = true;
-    lock.unlock();
-    ready_.notify_one();
-  }
-
- private:
-  // Body of the writer thread: writes each chunk Flush() hands over, until
-  // StopWriter() and the last chunk are done.
-  void WriteChunks() {
-    std::unique_lock lock{mutex_};
-    for (;;) {
-      ready_.wait(lock, [this] { return chunk_ready_ || stopping_; });
-      if (!chunk_ready_) {
-        return;
-      }
-      // Until chunk_ready_ is cleared, the chunk belongs to this thread alone.
-      lock.unlock();
-      fwrite(writing_.data(), 1, writing_.size(), stdout);
-      writing_.clear();
-      lock.lock();
-      chunk_ready_ = false;
-      written_.notify_one();
-    }
-  }
-
-  // Lets the writer finish the chunk it has, then ends it.
-  void StopWriter() {
-    if (!writer_.joinable()) {
-      return;
-    }
-    {
-      const std::scoped_lock lock{mutex_};
-      stopping_ = true;
-    }
-    ready_.notify_one();
-    writer_.join();
-  }
-
-  // Appends the fill a text of length characters needs to span width columns.
-  void Pad(size_t length, size_t width, char fill) {
-    if (length < width) {
-      buffer_.append(width - length, fill);
-    }
-  }
-
-  void FlushIfFull() {
-    if (buffer_.size() >= output_flush_bytes) {
-      Flush();
-    }
-  }
-
-  std::string buffer_;
-#ifdef _WIN32
-  // The mode stdout had before, restored once the listing is written. -1 when
-  // it could not be changed.
-  int text_mode_{-1};
-#endif
-
-  // Guards everything below but the thread itself.
-  std::mutex mutex_;
-  // Signalled when a chunk waits for the writer, and when it has written one.
-  std::condition_variable ready_;
-  std::condition_variable written_;
-  // The chunk the writer writes, and whether it holds one to write.
-  std::string writing_;
-  bool chunk_ready_{false};
-  bool stopping_{false};
-  // Not joinable when no thread could be had. Declared last: it starts once
-  // everything above is built.
-  std::thread writer_;
-};
 
 // Prints command-line usage help.
 void Usage() {

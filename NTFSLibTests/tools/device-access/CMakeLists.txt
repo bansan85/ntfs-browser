@@ -1,7 +1,7 @@
 # Platform helpers shared by NtfsDir, NtfsMftList and NtfsCompare: a POSIX
-# device reader, UTF-8 <-> wide conversion, local time, device-path splitting
-# and the argv adapter. Portable C++: the POSIX halves sit behind
-# #ifndef _WIN32, the Windows halves behind #ifdef _WIN32.
+# device reader, UTF-8 <-> wide conversion, local time, device-path splitting,
+# the argv adapter and the buffered listing output. Portable C++: the POSIX
+# halves sit behind #ifndef _WIN32, the Windows halves behind #ifdef _WIN32.
 add_library(
   NtfsDeviceAccess
   STATIC
@@ -13,6 +13,8 @@ add_library(
   "driver-names.cpp"
   "local-time.h"
   "local-time.cpp"
+  "output.h"
+  "output.cpp"
   "posix-device-disk-reader.h"
   "posix-device-disk-reader.cpp"
   "text-convert.h"
