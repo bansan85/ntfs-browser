@@ -13,6 +13,7 @@
 
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
@@ -24,6 +25,7 @@
 #include "ntfs-browser/attr/mask.h"
 #include "ntfs-browser/cache/strategy.h"
 #include "ntfs-browser/win-types.h"
+#include "output.h"
 #include "text-convert.h"
 #include "tool-support.h"
 
@@ -130,10 +132,16 @@ namespace {
 constexpr unsigned dword_bits = 32;
 #endif
 
-// Prints message and a newline to stdout.
+// Prints message and a newline to stdout, before the listing starts.
 void Say(const std::wstring& message) {
   NtfsDevice::WriteText(stdout, message);
   printf("\n");
+}
+
+// Prints message and a newline in the listing.
+void Report(NtfsDevice::Output& out, const std::wstring& message) {
+  out.AppendText(message);
+  out.EndLine();
 }
 
 // Reports whether the listing shows ie. Hides system metafiles, DOS alias
@@ -184,24 +192,34 @@ using Marker = char;
 // Prints the modification time, the size or <DIR>, the attribute flags and
 // the name of one entry. time is the entry time in local time. marker is
 // null when the listing has no marker column.
-void PrintLine(const IndexEntryView& ie, const NtfsDevice::LocalTime& time,
+void PrintLine(NtfsDevice::Output& out, const IndexEntryView& ie,
+               const NtfsDevice::LocalTime& time,
                std::optional<Marker> marker) {
-  printf("%u-%02u-%02u  %02u:%02u\t%s    ", time.year, time.month, time.day,
-         time.hour, time.minute, ie.IsDirectory() ? "<DIR>" : "     ");
+  out.AppendNumber(time.year, 0);
+  out.Append("-");
+  out.AppendNumber(time.month, 2, '0');
+  out.Append("-");
+  out.AppendNumber(time.day, 2, '0');
+  out.Append("  ");
+  out.AppendNumber(time.hour, 2, '0');
+  out.Append(":");
+  out.AppendNumber(time.minute, 2, '0');
+  out.Append(ie.IsDirectory() ? "\t<DIR>    " : "\t         ");
 
   if (!ie.IsDirectory()) {
-    printf("%llu\t", static_cast<unsigned long long>(ie.GetFileSize()));
-  } else {
-    printf("\t");
+    out.AppendNumber(ie.GetFileSize(), 0);
   }
-
-  printf("<%c%c%c>\t", ie.IsReadOnly() ? 'R' : ' ', ie.IsHidden() ? 'H' : ' ',
-         ie.IsSystem() ? 'S' : ' ');
+  out.Append("\t<");
+  out.Append(ie.IsReadOnly() ? "R" : " ");
+  out.Append(ie.IsHidden() ? "H" : " ");
+  out.Append(ie.IsSystem() ? "S" : " ");
+  out.Append(">\t");
   if (marker) {
-    printf("%c ", *marker);
+    out.Append(std::string_view(&*marker, 1));
+    out.Append(" ");
   }
-  NtfsDevice::WriteText(stdout, ie.GetFilename());
-  printf("\n");
+  out.AppendText(ie.GetFilename());
+  out.EndLine();
 }
 
 // Separates the directory names of a path in the headers of a recursive
@@ -212,49 +230,22 @@ constexpr wchar_t path_separator = L'\\';
 constexpr wchar_t path_separator = L'/';
 #endif
 
-// How the record an entry names stands.
-enum class Standing : std::uint8_t {
-  Live,
-  // Freed, so the file is deleted.
-  Deleted,
-  // Taken by another file since: the entry is stale, and its content is
-  // not this file's.
-  Reused,
-  Unreadable
-};
-
-// Tells how the record that ie names stands, by reading its header with
-// probe.
-template <Cache::Strategy S>
-Standing Classify(Io::FileRecord<S>& probe, const IndexEntryView& ie) {
-  if (!probe.ParseFileRecord(ie.GetFileReference())) {
-    return Standing::Unreadable;
-  }
-  if (probe.IsDeleted()) {
-    return Standing::Deleted;
-  }
-  // A reference that carries sequence 0 claims no generation.
-  const bool reused = ie.GetSequenceNumber() != 0 &&
-                      ie.GetSequenceNumber() != probe.GetSequenceNumber();
-  return reused ? Standing::Reused : Standing::Live;
-}
-
-// The marker column of an entry with the given standing.
-Marker MarkerOf(Standing standing) {
+// The marker column of an entry whose record stands as given.
+Marker MarkerOf(Io::RecordStanding standing) {
   switch (standing) {
-    case Standing::Live:
+    case Io::RecordStanding::Live:
       return ' ';
-    case Standing::Unreadable:
+    case Io::RecordStanding::Unreadable:
       return '?';
-    case Standing::Deleted:
-    case Standing::Reused:
+    case Io::RecordStanding::Deleted:
+    case Io::RecordStanding::Reused:
       break;
   }
   return '*';
 }
 
-// What one TraverseSubEntries pass over a directory gathers: the tally of
-// its listed entries, and the subdirectories to enter next.
+// What one TraverseSubEntriesWithStanding pass over a directory gathers: the
+// tally of its listed entries, and the subdirectories to enter next.
 template <Cache::Strategy S>
 struct DirectoryEntries {
   struct Child {
@@ -262,33 +253,32 @@ struct DirectoryEntries {
     std::wstring name;
   };
 
-  // Reads the record of each entry, to mark the deleted ones. Null unless the
-  // volume shows deleted items.
-  Io::FileRecord<S>* probe = nullptr;
+  // Where the listing goes.
+  NtfsDevice::Output* out = nullptr;
+  // Whether the listing has a marker column: only a volume that shows deleted
+  // items does.
+  bool marking = false;
   // Whether to collect the subdirectories.
   bool recursive = false;
   Total total;
   std::vector<Child> children;
 };
 
-// TraverseSubEntries callback: prints one entry, and tallies it and, in a
-// recursive listing, collects a subdirectory that is still the entry's own.
+// TraverseSubEntriesWithStanding callback: prints one entry, and tallies it
+// and, in a recursive listing, collects a subdirectory that is still the
+// entry's own.
 template <Cache::Strategy S>
-void VisitEntry(const IndexEntryView& ie, void* context) {
+void VisitEntry(const IndexEntryView& ie, Io::RecordStanding standing,
+                void* context) {
   if (!IsListed(ie)) {
     return;
   }
   auto& entries = *static_cast<DirectoryEntries<S>*>(context);
 
-  Standing standing = Standing::Live;
-  std::optional<Marker> marker;
-  if (entries.probe != nullptr) {
-    standing = Classify(*entries.probe, ie);
-    marker = MarkerOf(standing);
-  }
-
   if (const std::optional<NtfsDevice::LocalTime> time = LocalWriteTime(ie)) {
-    PrintLine(ie, *time, marker);
+    PrintLine(*entries.out, ie, *time,
+              entries.marking ? std::optional<Marker>(MarkerOf(standing))
+                              : std::nullopt);
   }
 
   if (!ie.IsDirectory()) {
@@ -296,7 +286,7 @@ void VisitEntry(const IndexEntryView& ie, void* context) {
     return;
   }
   entries.total.dirs++;
-  if (entries.recursive && standing != Standing::Reused) {
+  if (entries.recursive && standing != Io::RecordStanding::Reused) {
     entries.children.push_back(
         {ie.GetFileReference(), std::wstring(ie.GetFilename())});
   }
@@ -304,10 +294,10 @@ void VisitEntry(const IndexEntryView& ie, void* context) {
 
 // Lists the directory fr holds and every directory below it, depth first.
 // root names that directory in the header of its block. A directory that
-// cannot be read is reported and skipped. probe is null, or marks deleted
-// entries. Returns the totals of the tree.
+// cannot be read is reported and skipped. marking says whether the listing has
+// a marker column. Returns the totals of the tree.
 template <Cache::Strategy S>
-Total ListTree(Io::FileRecord<S>& fr, Io::FileRecord<S>* probe,
+Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
                const std::wstring& root) {
   struct Pending {
     ULONGLONG reference;
@@ -318,11 +308,12 @@ Total ListTree(Io::FileRecord<S>& fr, Io::FileRecord<S>* probe,
   std::vector<Pending> pending;
   std::wstring path = root;
   while (true) {
-    Say(L"\nDirectory of " + path);
+    Report(out, L"\nDirectory of " + path);
     DirectoryEntries<S> entries;
-    entries.probe = probe;
+    entries.out = &out;
+    entries.marking = marking;
     entries.recursive = true;
-    fr.TraverseSubEntries(VisitEntry<S>, &entries);
+    fr.TraverseSubEntriesWithStanding(VisitEntry<S>, &entries);
     tree.files += entries.total.files;
     tree.dirs += entries.total.dirs;
 
@@ -343,7 +334,7 @@ Total ListTree(Io::FileRecord<S>& fr, Io::FileRecord<S>* probe,
       if (entered) {
         path = std::move(next.path);
       } else {
-        Say(L"Cannot read directory " + next.path);
+        Report(out, L"Cannot read directory " + next.path);
       }
     }
     if (!entered) {
@@ -418,22 +409,21 @@ int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
     return -1;
   }
 
-  // Without --deleted every entry names a file that exists, so nothing is
-  // probed and no marker is printed.
-  Io::FileRecord<S> probe(volume);
-  Io::FileRecord<S>* const marking =
-      volume.GetOptions().include_deleted ? &probe : nullptr;
+  // Without --deleted every entry names a file that exists: no marker column.
+  const bool marking = volume.GetOptions().include_deleted;
 
+  NtfsDevice::Output out;
   Total total;
   if (recursive) {
-    total = ListTree(fr, marking, root);
+    total = ListTree(out, fr, marking, root);
   } else {
     DirectoryEntries<S> entries;
-    entries.probe = marking;
-    fr.TraverseSubEntries(VisitEntry<S>, &entries);
+    entries.out = &out;
+    entries.marking = marking;
+    fr.TraverseSubEntriesWithStanding(VisitEntry<S>, &entries);
     total = entries.total;
   }
-  printf("Files: %d, Directories: %d\n", total.files, total.dirs);
+  out.PrintLine("Files: {}, Directories: {}", total.files, total.dirs);
   return 0;
 }
 

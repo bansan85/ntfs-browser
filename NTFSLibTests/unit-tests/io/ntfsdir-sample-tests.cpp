@@ -484,6 +484,24 @@ TEST_CASE("NtfsDir and NtfsDir2 report a log path they cannot open and go on",
                        std::string(volume_open_error));
 }
 
+TEST_CASE("NtfsDir prints a Latin-1 name as the CRT writes it",
+          "[io][sample][characterization]") {
+  const TempImage image(L"caf\u00E9.txt");
+  const SampleRun run = RunDir(NTFS_DIR_EXE, {InImage(image.path, L"Docs")});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.out == DocsListing("caf\xE9.txt"));
+}
+
+TEST_CASE("NtfsDir cuts a name at the first character the code page lacks",
+          "[io][sample][characterization]") {
+  const TempImage image(L"ab\u65E5c.txt");
+  const SampleRun run = RunDir(NTFS_DIR_EXE, {InImage(image.path, L"Docs")});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.out == DocsListing("ab"));
+}
+
 #else
 
 TEST_CASE("NtfsDir reports a path that holds no device or image",
