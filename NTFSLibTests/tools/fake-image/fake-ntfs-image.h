@@ -937,7 +937,10 @@ enum class FakeListedExtension : std::uint8_t {
   Genuine,
   // The hard-linked file: a record another file reused since the list was
   // written.
-  Foreign
+  Foreign,
+  // A file in its own right, with no base: a slot another file reused since
+  // the list was written, as a base record.
+  Base
 };
 
 // Where the $ATTRIBUTE_LIST of mft_tree_list_base_idx lies.
@@ -973,6 +976,11 @@ inline constexpr DWORD mft_tree_list_lcn = 62;
     FakeListedExtension high = FakeListedExtension::Genuine,
     FakeListResidency list = FakeListResidency::Resident,
     FakeListedState listed = FakeListedState::Live);
+
+// BuildFakeNtfsImageWithMftTreeAttributeList() with record 17 (report.txt)
+// replaced by an extension record of record 18, which has no $ATTRIBUTE_LIST: a
+// scan meets it before the record it extends, and nothing will ask for it.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftTreeStrayExtension();
 
 // Records of BuildFakeNtfsImageWithMftTree() that are in use: $MFT, $Volume,
 // the root, Docs, report.txt, the hard link, NewDir and the extension record.

@@ -522,6 +522,11 @@ void Io::FileRecord<S>::SetExtensionSource(RecordSource source) {
   impl_->extension_source = std::move(source);
 }
 
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetBaseSource(BaseSource source) {
+  impl_->base_source = std::move(source);
+}
+
 // Install Attribute raw data CallBack routines for a single File Record
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::InstallAttrRawCB(Attr::Type attr_type,
@@ -542,6 +547,43 @@ template <Cache::Strategy S>
 void Io::FileRecord<S>::ClearAttrRawCB() noexcept {
   for (Attr::RawCallback& callback : impl_->attr_raw_call_back) {
     callback = nullptr;
+  }
+}
+
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::Impl::NamesOtherBase(ULONGLONG record_number,
+                                             ULONGLONG listing_record) const {
+  if (!base_source) {
+    return false;
+  }
+  const std::optional<ULONGLONG> base = base_source(record_number);
+  return base && *base != listing_record;
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::Impl::SkipForeignExtension(ULONGLONG record_number,
+                                                   bool recover) {
+  const ULONGLONG self_ref = file_reference.value_or(0);
+  if (self->IsDeleted()) {
+    // Freeing the file freed its extensions too, so a reused slot is normal.
+    // The list names the same record once per attribute, so log it once.
+    if (std::ranges::find(reused_extensions, record_number) ==
+        reused_extensions.end()) {
+      reused_extensions.push_back(record_number);
+      Log::Debug(
+          "Attribute List: record {} was reused by another file since record "
+          "{} was freed - skipping",
+          record_number, self_ref);
+    }
+    return;
+  }
+  Log::Recoverable(recover,
+                   "Attribute List: record {} is not an extension of "
+                   "record {} (reused or foreign) - skipping",
+                   record_number, self_ref);
+  if (!recover) {
+    throw std::runtime_error(
+        "Attribute List names a record of another file.\n");
   }
 }
 
@@ -575,6 +617,17 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
     return;
   }
 
+  // An empty span makes ParseFileRecord() read the record from the disk,
+  // unless the caller already saw that the slot names another base.
+  const std::span<const BYTE> held = extension_source
+                                         ? extension_source(record_number)
+                                         : std::span<const BYTE>{};
+  if (held.empty() &&
+      NamesOtherBase(record_number, self_ref & Mft::mft_record_number_mask)) {
+    SkipForeignExtension(record_number, recover);
+    return;
+  }
+
   // Owned by this record, not by the caller: the attributes moved into it
   // below keep pointing into frnew's bytes.
   extension_records.emplace_back(*volume);
@@ -583,49 +636,26 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
   frnew.impl_->attr_mask = entry_mask;
   frnew.impl_->attr_raw_call_back = attr_raw_call_back;
   frnew.impl_->extension_source = extension_source;
-  // An empty span makes ParseFileRecord() read the record from the disk.
-  const std::span<const BYTE> held = extension_source
-                                         ? extension_source(record_number)
-                                         : std::span<const BYTE>{};
+  frnew.impl_->base_source = base_source;
   if (!frnew.ParseFileRecord(record_number, held)) {
     throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
   }
 
   // A record another file reused since the list was written is not
   // this file's extension: its attributes belong to someone else.
-  const bool listing_deleted = self->IsDeleted();
   const bool genuine =
-      listing_deleted ? Mft::IsGenuineFreedExtensionRecord(
-                            sequence_number, frnew.GetSequenceNumber(),
-                            !frnew.IsDeleted(), frnew.GetBaseRecordReference(),
-                            self_ref & Mft::mft_record_number_mask)
-                      : Mft::IsGenuineExtensionRecord(
-                            sequence_number, frnew.GetSequenceNumber(),
-                            frnew.GetBaseRecordReference(),
-                            self_ref & Mft::mft_record_number_mask);
+      self->IsDeleted()
+          ? Mft::IsGenuineFreedExtensionRecord(
+                sequence_number, frnew.GetSequenceNumber(), !frnew.IsDeleted(),
+                frnew.GetBaseRecordReference(),
+                self_ref & Mft::mft_record_number_mask)
+          : Mft::IsGenuineExtensionRecord(
+                sequence_number, frnew.GetSequenceNumber(),
+                frnew.GetBaseRecordReference(),
+                self_ref & Mft::mft_record_number_mask);
   if (!genuine) {
     extension_records.pop_back();
-    if (listing_deleted) {
-      // Freeing the file freed its extensions too, so a reused slot is normal.
-      // The list names the same record once per attribute, so log it once.
-      if (std::ranges::find(reused_extensions, record_number) ==
-          reused_extensions.end()) {
-        reused_extensions.push_back(record_number);
-        Log::Debug(
-            "Attribute List: record {} was reused by another file since record "
-            "{} was freed - skipping",
-            record_number, self_ref);
-      }
-      return;
-    }
-    Log::Recoverable(recover,
-                     "Attribute List: record {} is not an extension of "
-                     "record {} (reused or foreign) - skipping",
-                     record_number, self_ref);
-    if (!recover) {
-      throw std::runtime_error(
-          "Attribute List names a record of another file.\n");
-    }
+    SkipForeignExtension(record_number, recover);
     return;
   }
 

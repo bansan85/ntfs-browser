@@ -109,6 +109,9 @@ class FileRecord<S>::Impl {
   // Where ImportAttrListEntry() looks for an extension record before it reads
   // it from the disk. Empty: always from the disk.
   typename Io::FileRecord<S>::RecordSource extension_source;
+  // Which base record a slot names, for a slot extension_source does not hold.
+  // Empty: every such slot is read from the disk.
+  typename Io::FileRecord<S>::BaseSource base_source;
 
   // Where the attribute walk of the last ParseAttrs() met the end marker.
   // Empty when it did not reach one.
@@ -130,6 +133,13 @@ class FileRecord<S>::Impl {
   std::vector<ULONGLONG> reused_extensions;
 
   void ClearAttrs() noexcept;
+  // See ImportAttrListEntry(): whether the caller read slot record_number and
+  // saw that it names a base record other than the listing one.
+  [[nodiscard]] bool NamesOtherBase(ULONGLONG record_number,
+                                    ULONGLONG listing_record) const;
+  // Handles a record an $ATTRIBUTE_LIST entry names that is not an extension
+  // of this one. Throws when strict and this record is in use.
+  void SkipForeignExtension(ULONGLONG record_number, bool recover);
   // See FileRecord<S>::CarveSlackNames().
   [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;
   // Turns the UTC times of carved, as the carvers report them, into those of

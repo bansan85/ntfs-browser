@@ -57,6 +57,11 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // already has them, else an empty span.
   using RecordSource = std::function<std::span<const BYTE>(ULONGLONG record)>;
 
+  // The record number of the base record that slot `record` of $MFT names, as
+  // the caller read it: 0 for a base record. Nothing when the caller did not
+  // read that slot.
+  using BaseSource = std::function<std::optional<ULONGLONG>(ULONGLONG record)>;
+
   explicit FileRecord(const NtfsVolume<S>& volume);
   // Defined out of line, so the move needs Impl complete only in
   // file-record.cpp, not in every other TU that includes this header.
@@ -121,6 +126,14 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // from. A record the source does not give is read from the disk. The source
   // MUST outlive the parses that use it.
   void SetExtensionSource(RecordSource source);
+  // Tells ParseAttrs() which base record the slots of $MFT name, for a slot
+  // the extension source does not hold. A listed record that names another
+  // base is not an extension of this one, whatever its sequence number: it is
+  // skipped like any other foreign record, without a read of the disk. A slot
+  // the source knows nothing about, or that names this record, is read as
+  // usual. The source MUST outlive the parses that use it, and MUST answer as
+  // the disk would: the same bytes were read.
+  void SetBaseSource(BaseSource source);
   [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
                                       Attr::RawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;

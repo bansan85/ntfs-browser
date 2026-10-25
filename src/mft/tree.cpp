@@ -4,6 +4,7 @@
 #include <bit>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <functional>
 #include <iterator>
@@ -91,11 +92,13 @@ constexpr ULONGLONG max_gap_slots = 64;
 constexpr size_t no_entry = std::numeric_limits<size_t>::max();
 
 // Bytes of raw records a scan holds for its second pass at most. Past it, a
-// base record reads its extension records from the disk, one at a time. A big
-// system volume has about 100 000 extension records of 1 KiB: 64 bits leave
-// room for several times that, 32 bits keep most of the address space free.
+// base record is read again in the second pass, and so are the extension
+// records that no longer fit: the pass announces them to the reader ahead of
+// its reads. A system volume of 5 million slots needs about 735 000 held
+// records, 718 MiB: 64 bits keep 1 GiB, 32 bits keep most of their address
+// space free.
 constexpr size_t default_max_held_record_bytes =
-    sizeof(void*) >= 8 ? size_t{512} << 20 : size_t{128} << 20;
+    sizeof(void*) >= 8 ? size_t{1} << 30 : size_t{128} << 20;
 
 // The cap a test asked for. nullopt means the default.
 std::optional<size_t> max_held_record_bytes_override;
@@ -104,10 +107,46 @@ std::optional<size_t> max_held_record_bytes_override;
 // one more never moves those already held.
 constexpr size_t held_block_bytes = size_t{4} << 20;
 
-// $ATTRIBUTE_LIST streams the second pass announces to the reader ahead of the
-// record it parses. The reader reads up to 8 ranges and 16 MiB at once: 64
-// lists keep it busy, and 64 of the largest ones are 16 MiB.
-constexpr size_t max_announced_lists = 64;
+// Waiting records whose reads the second pass announces to the reader ahead of
+// the one it parses. The reader reads up to 8 ranges and 16 MiB at once: 64
+// records keep it busy, and the $ATTRIBUTE_LIST streams of 64 of them are 16
+// MiB at most.
+constexpr size_t max_announced_records = 64;
+
+// Ranges the second pass has announced and not read, at most. The reader keeps
+// 1024 and drops a hint past them, and then no read of it is served: half of
+// that leaves room for the ranges of one record, and the reader looks for the
+// range of a read among the first 64 only, so an announcement is read at once.
+constexpr size_t max_announced_ranges = 512;
+
+// Waiting records between two restarts of the announcements. A range that no
+// read uses stays at the front of the reader's list and blocks the ones behind
+// it, until a read of a later one passes it. A restart bounds the damage of one
+// the pass could not foresee.
+constexpr size_t announce_restart_interval = 1024;
+
+// Extension records the second pass reads at once for one waiting base record,
+// at most: 4096 are 4 MiB. The others are read from the disk, one at a time,
+// when the record asks for them.
+constexpr size_t max_preread_extensions = 4096;
+
+// Records one read of the second pass covers at most, and one announced range:
+// 64 are 64 KiB at the usual 1 KiB per record.
+constexpr size_t max_run_slots = 64;
+
+// Slots of $MFT whose base record number the first pass remembers at most. The
+// numbers take 4 bytes each: 2^26 slots, 64 GiB of $MFT at 1 KiB per record,
+// are 256 MiB. A slot past it keeps its disk read.
+constexpr ULONGLONG max_remembered_slots = ULONGLONG{1} << 26;
+
+// Slots the first pass reserves room for at most, before it knows how many it
+// meets: 2^24 are 64 MiB, and cover 16 GiB of $MFT.
+constexpr ULONGLONG max_reserved_slots = ULONGLONG{1} << 24;
+
+// What SlotBases keeps for a slot the first pass did not read, or whose base is
+// too large for 4 bytes.
+constexpr std::uint32_t unknown_base =
+    (std::numeric_limits<std::uint32_t>::max)();
 
 // Bytes of one $ATTRIBUTE_LIST announced at most: the largest Windows writes.
 // A forged size announces no more.
@@ -332,21 +371,78 @@ bool ProgressAllowsRecord(const Mft::MftTree::ScanOptions& options,
          options.progress(record, total);
 }
 
+// The base record each slot of $MFT named when the first pass read it: 0 for a
+// base record, the base's record number for an extension. A record an
+// $ATTRIBUTE_LIST names, that is not held, and whose slot names another base
+// than the list's own, is not an extension of it: the second pass skips it
+// without reading it again.
+class SlotBases {
+ public:
+  explicit SlotBases(ULONGLONG total) {
+    bases_.reserve(gsl::narrow<size_t>((std::min)(total, max_reserved_slots)));
+  }
+
+  // Remembers that slot record names base. Slots below Mft::Idx::User are
+  // not remembered: the disk reads them, with the $MFTMirr fallback.
+  void Note(ULONGLONG record, ULONGLONG base) {
+    if (record < static_cast<ULONGLONG>(Mft::Idx::User) ||
+        record >= max_remembered_slots) {
+      return;
+    }
+    const auto slot = gsl::narrow<size_t>(record);
+    if (bases_.size() <= slot) {
+      bases_.resize(slot + 1, unknown_base);
+    }
+    // resize() above covers slot.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    bases_[slot] =
+        base < unknown_base ? static_cast<std::uint32_t>(base) : unknown_base;
+  }
+
+  // The base record number slot record named, or nothing when it is unknown.
+  [[nodiscard]] std::optional<ULONGLONG> BaseOf(ULONGLONG record) const {
+    if (record >= bases_.size()) {
+      return std::nullopt;
+    }
+    // record < size() was just checked.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const std::uint32_t base = bases_[gsl::narrow<size_t>(record)];
+    if (base == unknown_base) {
+      return std::nullopt;
+    }
+    return base;
+  }
+
+ private:
+  std::vector<std::uint32_t> bases_;
+};
+
 // Raw $MFT records a scan holds for its second pass, as the slot reader read
-// them: the extension records it met, and the base records that wait for
-// theirs. Records come in increasing order. Both kinds share one budget,
-// MaxHeldRecordBytes().
+// them: the extension records that the waiting base records will ask for, and
+// those base records. Both kinds share one budget, MaxHeldRecordBytes(). A
+// record that does not fit is not held: a base record waits as its number, an
+// extension record is listed with its base, and the second pass announces both
+// to the reader.
+//
+// An extension record is of use to its base record only. A base met before it
+// is known to wait or not. A base met after it is not yet: the extension is
+// held provisionally, and released once the base turns out not to wait.
 class HeldRecords {
  public:
   // A base record that waits for the second pass, with the entry kept in its
-  // place, what its first header read counted, and the clusters its
-  // $ATTRIBUTE_LIST is read from, if it is not resident.
+  // place, and what its first header read counted.
   struct Waiting {
     ULONGLONG record;
     size_t entry_index;
     bool header_damaged;
-    size_t slot;
+    // Where its bytes are held. Nothing when the budget was spent: the second
+    // pass reads the record again.
+    std::optional<size_t> slot;
+    // The clusters its $ATTRIBUTE_LIST is read from, if it is not resident.
     std::vector<Alloc::Extent> list_extents;
+    // Its extension records no slot holds, in increasing order: the second
+    // pass reads them from the disk.
+    std::vector<ULONGLONG> unheld_extensions;
   };
 
   explicit HeldRecords(size_t record_size)
@@ -356,41 +452,90 @@ class HeldRecords {
                          : 1),
         budget_(MaxHeldRecordBytes()) {}
 
-  // Holds extension record. False when bytes is empty or the budget is spent.
-  bool HoldExtension(ULONGLONG record, std::span<const BYTE> bytes) {
-    size_t slot = 0;
-    if (!Store(bytes, slot)) {
-      return false;
+  // Meets extension record, whose base is base_record, with the bytes the slot
+  // reader read. Records MUST come in increasing order.
+  void MeetExtension(ULONGLONG record, ULONGLONG base_record,
+                     std::span<const BYTE> bytes) {
+    if (base_record < record) {
+      if (Waiting* const waiting = FindWaiting(base_record)) {
+        Keep({.record = record, .slot = {}}, bytes, *waiting);
+      }
+      return;
     }
-    extensions_.push_back({.record = record, .slot = slot});
-    return true;
+    // An extension that names itself has no base to ask for it.
+    if (base_record == record) {
+      return;
+    }
+
+    Provisional added{.record = record, .slot = {}};
+    size_t slot = 0;
+    if (Store(bytes, slot)) {
+      added.slot = slot;
+    }
+    pending_[base_record].push_back(added);
   }
 
-  // Holds base record for the second pass. False when bytes is empty or the
-  // budget is spent.
+  // Holds base record for the second pass, with the extension records met
+  // before it that it will ask for. False when bytes is not a record, which
+  // the first pass then parses at once. When the budget is spent, the record
+  // waits without its bytes.
   bool HoldWaiting(ULONGLONG record, std::span<const BYTE> bytes,
                    size_t entry_index, bool header_damaged,
                    std::vector<Alloc::Extent> list_extents) {
-    size_t slot = 0;
-    if (!Store(bytes, slot)) {
+    if (bytes.size() != record_size_) {
       return false;
     }
-    waiting_.push_back({.record = record,
-                        .entry_index = entry_index,
-                        .header_damaged = header_damaged,
-                        .slot = slot,
-                        .list_extents = std::move(list_extents)});
+    Waiting added{.record = record,
+                  .entry_index = entry_index,
+                  .header_damaged = header_damaged,
+                  .slot = {},
+                  .list_extents = std::move(list_extents),
+                  .unheld_extensions = {}};
+    size_t slot = 0;
+    if (Store(bytes, slot)) {
+      added.slot = slot;
+    }
+    for (const Provisional& extension : TakePending(record)) {
+      Keep(extension, {}, added);
+    }
+    waiting_.push_back(std::move(added));
     return true;
+  }
+
+  // Keeps the held extension records met before base_record, which the first
+  // pass parses at once: it asks for them in the middle of the scan.
+  void Confirm(ULONGLONG base_record) {
+    for (const Provisional& extension : TakePending(base_record)) {
+      if (extension.slot) {
+        extensions_.emplace(extension.record, *extension.slot);
+      }
+    }
+  }
+
+  // Releases the extension records met before a base record that precedes
+  // record and did not wait: nothing asks for them.
+  void ReleaseBefore(ULONGLONG record) {
+    while (!pending_.empty() && pending_.begin()->first < record) {
+      Release(pending_.begin()->second);
+      pending_.erase(pending_.begin());
+    }
+  }
+
+  // Ends the first pass: no base record is left to come.
+  void Finish() {
+    for (const auto& [base, extensions] : pending_) {
+      Release(extensions);
+    }
+    pending_.clear();
   }
 
   // The bytes of extension record, or an empty span when it is not held.
   [[nodiscard]] std::span<const BYTE> FindExtension(ULONGLONG record) const {
-    const auto found =
-        std::ranges::lower_bound(extensions_, record, {}, &Extension::record);
-    if (found == extensions_.end() || found->record != record) {
+    const auto found = extensions_.find(record);
+    if (found == extensions_.end()) {
       return {};
     }
-    return Bytes(found->slot);
+    return Bytes(found->second);
   }
 
   [[nodiscard]] const std::vector<Waiting>& WaitingRecords() const noexcept {
@@ -405,23 +550,87 @@ class HeldRecords {
   }
 
  private:
-  struct Extension {
+  // An extension record met before its base record: held, or not for lack of
+  // room.
+  struct Provisional {
     ULONGLONG record;
-    size_t slot;
+    std::optional<size_t> slot;
   };
 
-  // Copies bytes, one record, into the next slot. False when bytes is not a
-  // record or the budget is spent.
+  // The waiting base record record, or null.
+  [[nodiscard]] Waiting* FindWaiting(ULONGLONG record) {
+    const auto found =
+        std::ranges::lower_bound(waiting_, record, {}, &Waiting::record);
+    return found != waiting_.end() && found->record == record ? &*found
+                                                              : nullptr;
+  }
+
+  // Gives waiting the extension record it asks for: from the slot it was held
+  // in, or from the disk if it was not. bytes is that record's, when it is not
+  // held yet.
+  void Keep(const Provisional& extension, std::span<const BYTE> bytes,
+            Waiting& waiting) {
+    std::optional<size_t> slot = extension.slot;
+    if (!slot) {
+      size_t stored = 0;
+      if (Store(bytes, stored)) {
+        slot = stored;
+      }
+    }
+    if (slot) {
+      extensions_.emplace(extension.record, *slot);
+    } else {
+      waiting.unheld_extensions.push_back(extension.record);
+    }
+  }
+
+  // Removes and returns what waits for base_record.
+  std::vector<Provisional> TakePending(ULONGLONG base_record) {
+    const auto found = pending_.find(base_record);
+    if (found == pending_.end()) {
+      return {};
+    }
+    std::vector<Provisional> taken = std::move(found->second);
+    pending_.erase(found);
+    return taken;
+  }
+
+  // Frees the slots of extensions for the next records to reuse.
+  void Release(const std::vector<Provisional>& extensions) {
+    for (const Provisional& extension : extensions) {
+      if (extension.slot) {
+        free_slots_.push_back(*extension.slot);
+        live_--;
+      }
+    }
+  }
+
+  // Copies bytes, one record, into a free slot, or the next one. False when
+  // bytes is not a record or the budget is spent.
   bool Store(std::span<const BYTE> bytes, size_t& slot) {
-    if (bytes.size() != record_size_ || (held_ + 1) * record_size_ > budget_) {
+    if (bytes.size() != record_size_) {
       return false;
     }
-    if (held_ % block_slots_ == 0) {
+    if (!free_slots_.empty()) {
+      slot = free_slots_.back();
+      free_slots_.pop_back();
+      std::vector<BYTE>& block = blocks_.at(slot / block_slots_);
+      const size_t offset = (slot % block_slots_) * record_size_;
+      std::ranges::copy(
+          bytes, std::next(block.begin(), gsl::narrow<std::ptrdiff_t>(offset)));
+      live_++;
+      return true;
+    }
+    if ((live_ + 1) * record_size_ > budget_) {
+      return false;
+    }
+    if (allocated_ % block_slots_ == 0) {
       blocks_.emplace_back().reserve(block_slots_ * record_size_);
     }
     std::vector<BYTE>& block = blocks_.back();
     block.insert(block.end(), bytes.begin(), bytes.end());
-    slot = held_++;
+    slot = allocated_++;
+    live_++;
     return true;
   }
 
@@ -430,71 +639,203 @@ class HeldRecords {
   size_t block_slots_;
   // Bytes this scan may hold.
   size_t budget_;
-  // Records held so far, both kinds.
-  size_t held_{0};
+  // Slots given out so far, free ones included, and slots in use among them.
+  size_t allocated_{0};
+  size_t live_{0};
+  // Slots Release() gave back.
+  std::vector<size_t> free_slots_;
   std::vector<std::vector<BYTE>> blocks_;
+  // The held extension records, by record, and their slot.
+  std::unordered_map<ULONGLONG, size_t> extensions_;
+  // The extension records met before their base record, by that base.
+  std::map<ULONGLONG, std::vector<Provisional>> pending_;
   // Sorted by record: the scan meets them in that order.
-  std::vector<Extension> extensions_;
   std::vector<Waiting> waiting_;
 };
 
-// Announces to the volume's reader the clusters of the $ATTRIBUTE_LIST streams
-// the second pass reads, max_announced_lists streams ahead of it and in the
-// order it reads them: the disk reads them while the pass parses.
+// The extension records the second pass reads for one waiting base record, that
+// the first pass could not hold. It reads them before it parses the record, in
+// increasing order and run by run: that is the order the reader was told, so it
+// serves them from what it read ahead. A record the list names several times
+// is read once. Holds at most max_preread_extensions records.
 template <Cache::Strategy S>
-class ListAnnouncer {
+class UnheldExtensions {
  public:
-  ListAnnouncer(const NtfsVolume<S>& volume,
-                const std::vector<HeldRecords::Waiting>& waiting)
-      : volume_(&volume), waiting_(&waiting) {}
+  explicit UnheldExtensions(const NtfsVolume<S>& volume)
+      : volume_(&volume), record_size_(volume.GetFileRecordSize()) {}
 
-  // Called before the pass parses waiting[index]. Announces the lists that
-  // follow those already announced, until max_announced_lists of them wait
-  // from index on.
+  // Reads the records of the first max_preread_extensions of records, in
+  // increasing order. A run that cannot be read is left out: the record is
+  // then read from the disk when asked for, as when it is not here.
+  void Load(const std::vector<ULONGLONG>& records) {
+    Clear();
+    const size_t count = (std::min)(records.size(), max_preread_extensions);
+    for (size_t first = 0; first < count;) {
+      size_t run = 1;
+      // The run goes on while the next record directly follows, up to its cap.
+      while (first + run < count && run < max_run_slots &&
+             records.at(first + run) == records.at(first) + run) {
+        run++;
+      }
+      Read(records.at(first), run);
+      first += run;
+    }
+  }
+
+  // The bytes of record, or an empty span when it was not loaded.
+  [[nodiscard]] std::span<const BYTE> Find(ULONGLONG record) const {
+    const auto found = offsets_.find(record);
+    if (found == offsets_.end()) {
+      return {};
+    }
+    return std::span<const BYTE>{bytes_}.subspan(found->second, record_size_);
+  }
+
+  // Forgets every record.
+  void Clear() noexcept {
+    bytes_.clear();
+    offsets_.clear();
+  }
+
+ private:
+  // Reads the run records from first on, and remembers them.
+  void Read(ULONGLONG first, size_t run) {
+    const size_t start = bytes_.size();
+    bytes_.resize(start + run * record_size_);
+    const std::span<BYTE> out =
+        std::span<BYTE>{bytes_}.subspan(start, run * record_size_);
+    if (!volume_->ReadMftSlots(first, out)) {
+      bytes_.resize(start);
+      return;
+    }
+    for (size_t i = 0; i < run; i++) {
+      offsets_.emplace(first + i, start + i * record_size_);
+    }
+  }
+
+  const NtfsVolume<S>* volume_;
+  size_t record_size_;
+  std::vector<BYTE> bytes_;
+  std::unordered_map<ULONGLONG, size_t> offsets_;
+};
+
+// Announces to the volume's reader what the second pass reads from the disk, a
+// number of waiting records ahead of it and in the order it reads it: the
+// record when it was not held, its extension records that were not held, and
+// its $ATTRIBUTE_LIST stream. The disk reads them while the pass parses.
+//
+// The reader serves a read only from the first announced ranges, and drops
+// those before the one it serves. A range no read uses, because the pass does
+// not read what was announced, would block every later one. Restart() clears
+// them.
+template <Cache::Strategy S>
+class ReadAnnouncer {
+ public:
+  ReadAnnouncer(const NtfsVolume<S>& volume,
+                const std::vector<HeldRecords::Waiting>& waiting)
+      : volume_(&volume), waiting_(&waiting), ranges_(waiting.size(), 0) {}
+
+  // Called before the pass parses waiting[index]. Announces the records that
+  // follow those already announced, until max_announced_records of them, or
+  // max_announced_ranges ranges, wait from index on.
   void Before(size_t index) {
     for (; passed_ < index; passed_++) {
-      if (!waiting_->at(passed_).list_extents.empty()) {
-        ahead_--;
+      if (ranges_.at(passed_) != 0) {
+        ahead_records_--;
+        ahead_ranges_ -= ranges_.at(passed_);
       }
     }
-    for (; next_ < waiting_->size() && ahead_ < max_announced_lists; next_++) {
-      const std::vector<Alloc::Extent>& extents =
-          waiting_->at(next_).list_extents;
-      if (extents.empty()) {
+    // Another record's reads fit: neither cap is reached.
+    for (; next_ < waiting_->size() && ahead_records_ < max_announced_records &&
+           ahead_ranges_ < max_announced_ranges;
+         next_++) {
+      const HeldRecords::Waiting& waiting = waiting_->at(next_);
+      if (!HasReads(waiting)) {
         continue;
       }
       if (!cancelled_) {
         // A first pass that stopped early leaves blocks announced, which
-        // would be read for nothing, and before the lists.
+        // would be read for nothing, and before these.
         volume_->CancelPrefetch();
         cancelled_ = true;
       }
-      const ULONGLONG cluster_size = volume_->GetClusterSize();
-      for (const Alloc::Extent& extent : extents) {
-        volume_->Prefetch(extent.lcn * cluster_size,
-                          extent.clusters * cluster_size);
-      }
-      ahead_++;
+      const size_t announced = Announce(waiting);
+      ranges_.at(next_) = announced;
+      ahead_records_++;
+      ahead_ranges_ += announced;
     }
   }
 
+  // Withdraws everything announced and starts again at waiting[index]: the
+  // pass did not read what it announced for the record before.
+  void Restart(size_t index) {
+    volume_->CancelPrefetch();
+    std::ranges::fill(ranges_, size_t{0});
+    passed_ = index;
+    next_ = index;
+    ahead_records_ = 0;
+    ahead_ranges_ = 0;
+  }
+
  private:
+  // Whether the pass reads anything for waiting from the disk.
+  [[nodiscard]] static bool HasReads(const HeldRecords::Waiting& waiting) {
+    return !waiting.slot || !waiting.list_extents.empty() ||
+           !waiting.unheld_extensions.empty();
+  }
+
+  // Announces the reads of waiting, in the order the pass makes them, and
+  // returns how many ranges it announced.
+  size_t Announce(const HeldRecords::Waiting& waiting) const {
+    size_t announced = 0;
+    if (!waiting.slot) {
+      volume_->PrefetchMftSlots(waiting.record, 1);
+      announced++;
+    }
+    // Neighbouring records are one read.
+    const std::vector<ULONGLONG>& unheld = waiting.unheld_extensions;
+    const size_t count = (std::min)(unheld.size(), max_preread_extensions);
+    for (size_t first = 0; first < count;) {
+      size_t run = 1;
+      // As in UnheldExtensions::Load(): the same runs, so the same reads.
+      while (first + run < count && run < max_run_slots &&
+             unheld.at(first + run) == unheld.at(first) + run) {
+        run++;
+      }
+      volume_->PrefetchMftSlots(unheld.at(first), run);
+      announced++;
+      first += run;
+    }
+    const ULONGLONG cluster_size = volume_->GetClusterSize();
+    for (const Alloc::Extent& extent : waiting.list_extents) {
+      volume_->Prefetch(extent.lcn * cluster_size,
+                        extent.clusters * cluster_size);
+      announced++;
+    }
+    return announced;
+  }
+
   const NtfsVolume<S>* volume_;
   const std::vector<HeldRecords::Waiting>* waiting_;
+  // The ranges announced for each record, 0 when none or not announced yet.
+  std::vector<size_t> ranges_;
   // Records the pass parsed.
   size_t passed_{0};
-  // The first record whose list is not announced.
+  // The first record whose reads are not announced.
   size_t next_{0};
-  // Lists announced among the records from passed_ to next_.
-  size_t ahead_{0};
+  // Records with reads, and their ranges, announced among those from passed_
+  // to next_.
+  size_t ahead_records_{0};
+  size_t ahead_ranges_{0};
   bool cancelled_{false};
 };
 
 // What one record slot holds, once its header is read.
 enum class SlotKind : BYTE {
-  Dropped,    // Unreadable, or freed and not asked for.
-  Extension,  // An extension record: its base record imports its attributes.
-  Base        // A base record, kept if its attributes allow it.
+  Unreadable,  // Its header does not parse.
+  Dropped,     // Freed and not asked for.
+  Extension,   // An extension record: its base record imports its attributes.
+  Base         // A base record, kept if its attributes allow it.
 };
 
 // Reads the header of one record slot into file_record, and counts it in
@@ -512,7 +853,7 @@ SlotKind ReadSlotHeader(Io::FileRecord<S>& file_record,
     if (file_record.HasFailedFixup()) {
       stats.damaged++;
     }
-    return SlotKind::Dropped;
+    return SlotKind::Unreadable;
   }
   header_damaged = file_record.HasFailedFixup();
   if (header_damaged) {
@@ -845,18 +1186,26 @@ Mft::MftTree::~MftTree() = default;
 
 // Reads the record slots of volume's $MFT into entries, in record order,
 // through one reused FileRecord. A base record with an $ATTRIBUTE_LIST waits
-// for a second pass: by then the first one has held every extension record it
-// met, so they come from memory instead of one disk read each.
+// for a second pass: by then the first one has held the extension records it
+// asks for, so they come from memory instead of one disk read each. What does
+// not fit in memory is read in the second pass, announced to the reader ahead
+// of it.
 template <Cache::Strategy S>
 void Mft::MftTree::Impl::ReadSlots(
     const NtfsVolume<S>& volume, const Mft::MftTree::ScanOptions& options,
     const std::optional<std::vector<BYTE>>& bitmap, bool annotate) {
   const ULONGLONG total = volume.GetRecordsCount();
   HeldRecords held(volume.GetFileRecordSize());
+  SlotBases bases(total);
+  UnheldExtensions<S> unheld(volume);
   Io::FileRecord<S> file_record(volume);
   file_record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
-  file_record.SetExtensionSource(
-      [&held](ULONGLONG record) { return held.FindExtension(record); });
+  file_record.SetExtensionSource([&held, &unheld](ULONGLONG record) {
+    const std::span<const BYTE> bytes = held.FindExtension(record);
+    return bytes.empty() ? unheld.Find(record) : bytes;
+  });
+  file_record.SetBaseSource(
+      [&bases](ULONGLONG record) { return bases.BaseOf(record); });
   DataStateResolver<S> resolver(volume, entries, stats);
   // Reads $MFT in big blocks, not record by record, and only the used ones.
   Mft::SlotReader<S> slots(volume);
@@ -870,6 +1219,7 @@ void Mft::MftTree::Impl::ReadSlots(
       break;
     }
 
+    held.ReleaseBefore(record);
     if (bitmap && IsMarkedFree(*bitmap, record)) {
       stats.skipped++;
       continue;
@@ -878,21 +1228,30 @@ void Mft::MftTree::Impl::ReadSlots(
     bool header_damaged = false;
     const SlotKind kind = ReadSlotHeader(file_record, slots, volume, record,
                                          stats, header_damaged);
+    if (kind == SlotKind::Unreadable) {
+      continue;
+    }
+    bases.Note(record, file_record.GetBaseRecordReference());
     if (kind == SlotKind::Extension) {
       // Its base record may come later, and then takes it from memory.
-      static_cast<void>(held.HoldExtension(record, slots.HeldSlot(record)));
+      held.MeetExtension(record, file_record.GetBaseRecordReference(),
+                         slots.HeldSlot(record));
       continue;
     }
     if (kind == SlotKind::Dropped) {
       continue;
     }
     // Its entry keeps its place, so the entries stay in record order.
-    if (file_record.HasAttrHeader(Attr::Type::AttributeList) &&
+    const bool has_list = file_record.HasAttrHeader(Attr::Type::AttributeList);
+    if (has_list &&
         held.HoldWaiting(
             record, slots.HeldSlot(record), entries.size(), header_damaged,
             file_record.AttributeListExtents(max_announced_list_bytes))) {
       entries.emplace_back();
       continue;
+    }
+    if (has_list) {
+      held.Confirm(record);
     }
 
     // Filled in place: an Entry is big, and most slots are kept.
@@ -907,24 +1266,37 @@ void Mft::MftTree::Impl::ReadSlots(
     }
   }
 
+  held.Finish();
+
   std::vector<size_t> dropped;
   const std::vector<HeldRecords::Waiting>& waiting_records =
       held.WaitingRecords();
-  ListAnnouncer<S> announcer(volume, waiting_records);
+  ReadAnnouncer<S> announcer(volume, waiting_records);
   for (size_t index = 0; index < waiting_records.size(); index++) {
     announcer.Before(index);
     const HeldRecords::Waiting& waiting = waiting_records.at(index);
     Mft::MftTree::Entry& entry = entries.at(waiting.entry_index);
-    // The bytes the first pass parsed: the header parses as it did then.
-    if (!file_record.ParseFileRecord(waiting.record,
-                                     held.Bytes(waiting.slot)) ||
-        !ReadBaseEntry(file_record, volume, waiting.record,
-                       waiting.header_damaged, stats, entry)) {
+    // The bytes the first pass parsed: the header parses as it did then. A
+    // record that was not held is read again, announced to the reader.
+    const bool parsed =
+        waiting.slot ? file_record.ParseFileRecord(waiting.record,
+                                                   held.Bytes(*waiting.slot))
+                     : file_record.ParseFileRecord(waiting.record);
+    // Read even when the record is dropped: the reader was told to.
+    unheld.Load(waiting.unheld_extensions);
+    const bool kept =
+        parsed && ReadBaseEntry(file_record, volume, waiting.record,
+                                waiting.header_damaged, stats, entry);
+    unheld.Clear();
+    if (!kept) {
       dropped.push_back(waiting.entry_index);
       continue;
     }
     if (annotate) {
       resolver.Note(file_record, waiting.entry_index);
+    }
+    if ((index + 1) % announce_restart_interval == 0) {
+      announcer.Restart(index + 1);
     }
   }
   if (annotate) {

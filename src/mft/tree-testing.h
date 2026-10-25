@@ -18,8 +18,9 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void SetMaxPendingRangesForTests(size_t limit);
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t MaxPendingRanges();
 
 // Test hook: caps the bytes of raw records a scan holds for its second pass.
-// A test lowers it to make base records read their extension records from the
-// disk. nullopt restores the default.
+// A test lowers it to make base records wait without their bytes, and
+// extension records go unheld: the second pass then reads them from the disk.
+// nullopt restores the default.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
     SetMaxHeldRecordBytesForTests(std::optional<size_t> limit);
 

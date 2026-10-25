@@ -252,10 +252,12 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
   const bool freed = listed == FakeListedState::Freed;
   const ULONGLONG base_ref =
       MakeFileReference(mft_tree_list_base_idx, tree_list_base_sequence);
-  const ULONGLONG high_base_ref =
-      high == FakeListedExtension::Genuine
-          ? base_ref
-          : MakeFileReference(mft_tree_hard_link_idx, 1);
+  ULONGLONG high_base_ref = base_ref;
+  if (high == FakeListedExtension::Foreign) {
+    high_base_ref = MakeFileReference(mft_tree_hard_link_idx, 1);
+  } else if (high == FakeListedExtension::Base) {
+    high_base_ref = 0;
+  }
   const ULONGLONG docs =
       MakeFileReference(mft_tree_docs_idx, tree_docs_sequence);
   // A Foreign extension is another file's record: it keeps its own state.
@@ -305,6 +307,19 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
                         {{.name = L"listed-link.txt", .parent_ref = docs}},
                         mft_tree_list_data_size, StdInfoPermission::Normal,
                         high_base_ref));
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithMftTreeStrayExtension() {
+  using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
+
+  std::vector<BYTE> image = BuildFakeNtfsImageWithMftTreeAttributeList();
+  PutMftRecord(image, mft_tree_report_idx,
+               MakeMftTreeRecord(
+                   NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
+                   {{.name = L"stray.txt", .parent_ref = root_file_reference}},
+                   {}, StdInfoPermission::Normal,
+                   MakeFileReference(mft_tree_hard_link_idx, 1)));
   return image;
 }
 

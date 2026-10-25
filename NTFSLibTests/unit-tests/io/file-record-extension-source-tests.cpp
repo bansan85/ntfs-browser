@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -20,6 +21,7 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "counting-disk-reader.h"
 #include "data/file-record-header.h"
@@ -27,6 +29,7 @@
 #include "memory-disk-reader.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
@@ -66,11 +69,12 @@ struct CountedVolume {
 };
 
 template <Cache::Strategy S>
-CountedVolume<S> OpenCounted(std::vector<BYTE> image) {
+CountedVolume<S> OpenCounted(std::vector<BYTE> image,
+                             const VolumeOptions& options = {}) {
   auto reader = std::make_unique<Tests::CountingDiskReader>(
       std::make_unique<Tests::MemoryDiskReader>(std::move(image)));
   Tests::CountingDiskReader* const counting = reader.get();
-  auto volume = std::make_unique<NtfsVolume<S>>(std::move(reader));
+  auto volume = std::make_unique<NtfsVolume<S>>(std::move(reader), options);
   REQUIRE(volume->IsVolumeOK());
   return {std::move(volume), counting};
 }
@@ -209,5 +213,57 @@ TEST_CASE("FileRecord::SetExtensionSource() serves extension records",
     CHECK(ReadsOfRecord(*opened.reader, Tests::mft_tree_list_low_ext_idx) == 1);
     CHECK(ReadsOfRecord(*opened.reader, Tests::mft_tree_list_high_ext_idx) ==
           2);
+  }
+}
+
+TEST_CASE("FileRecord::SetBaseSource() spares the read of a foreign slot",
+          "[file-record]") {
+  // The hard-linked file, which the Foreign extension names as its base.
+  constexpr ULONGLONG other_base = Tests::mft_tree_hard_link_idx;
+  const std::vector<BYTE> image =
+      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+          Tests::FakeListedExtension::Foreign);
+  const bool recover = GENERATE(false, true);
+  const CountedVolume<Cache::Strategy::NoCache> opened =
+      OpenCounted<Cache::Strategy::NoCache>(
+          image, VolumeOptions{.recover_errors = recover});
+  Io::FileRecord<Cache::Strategy::NoCache> record(*opened.volume);
+  record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+  record.SetExtensionSource(
+      [](ULONGLONG /*idx*/) { return std::span<const BYTE>{}; });
+
+  SECTION("a slot that names another base is not read") {
+    record.SetBaseSource([](ULONGLONG idx) -> std::optional<ULONGLONG> {
+      if (idx == Tests::mft_tree_list_low_ext_idx) {
+        return Tests::mft_tree_list_base_idx;
+      }
+      return other_base;
+    });
+    REQUIRE(record.ParseFileRecord(Tests::mft_tree_list_base_idx));
+    opened.reader->Reset();
+
+    // The list names a record of another file: strict mode rejects it.
+    CHECK(record.ParseAttrs() == recover);
+    CHECK(ReadsOfRecord(*opened.reader, Tests::mft_tree_list_high_ext_idx) ==
+          0);
+    CHECK(ReadsOfRecord(*opened.reader, Tests::mft_tree_list_low_ext_idx) == 1);
+    if (recover) {
+      CHECK(record.GetAttr(Attr::Type::FileName).size() == 1);
+    }
+  }
+
+  SECTION("a slot that names this record, or none, is read") {
+    const bool known = GENERATE(false, true);
+    record.SetBaseSource([known](ULONGLONG /*idx*/) {
+      return known ? std::optional<ULONGLONG>{Tests::mft_tree_list_base_idx}
+                   : std::nullopt;
+    });
+    REQUIRE(record.ParseFileRecord(Tests::mft_tree_list_base_idx));
+    opened.reader->Reset();
+
+    CHECK(record.ParseAttrs() == recover);
+    // Read as without a source, and found foreign by its own header.
+    CHECK(ReadsOfRecord(*opened.reader, Tests::mft_tree_list_high_ext_idx) ==
+          (recover ? 2 : 1));
   }
 }
