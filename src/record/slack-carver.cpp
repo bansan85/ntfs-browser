@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <optional>
 #include <span>
@@ -61,6 +63,32 @@ constexpr size_t shortest_core = name_offset - name_length_offset + 2;
 
 // Largest namespace byte NTFS writes: Win32 and DOS together.
 constexpr BYTE max_name_space = 3;
+
+// Characters in the longest name: the length byte is one byte.
+constexpr size_t max_name_units = 255;
+
+// Bytes the word-at-a-time search reads at once: four (length, namespace)
+// pairs, one per even offset.
+constexpr size_t search_stride = 8;
+
+// The search tests each 16-bit lane of a word: the low byte is the length and
+// the high byte the namespace, as little-endian memory holds them. These masks
+// pick, per lane, the length byte and the namespace bits above max_name_space.
+// The flags are the bit each test leaves its verdict in.
+constexpr std::uint64_t lane_length_mask = 0x00FF00FF00FF00FFULL;
+constexpr std::uint64_t lane_length_flag = 0x0100010001000100ULL;
+constexpr std::uint64_t lane_name_space_mask = 0x003F003F003F003FULL;
+constexpr std::uint64_t lane_name_space_flag = 0x0040004000400040ULL;
+
+// Moves the namespace bits above max_name_space (bits 10 to 15 of a lane) down
+// to bits 0 to 5.
+constexpr unsigned lane_name_space_shift = 10;
+
+// Distance from the namespace flag (bit 6) to the length flag (bit 8).
+constexpr unsigned lane_flag_alignment = 2;
+
+// Bits in one lane.
+constexpr unsigned lane_bits = 16;
 
 // A partial candidate has lost the start of its structure, so its name alone
 // must carry the proof. Fewer characters match too many random bytes.
@@ -247,6 +275,11 @@ void ReadParent(std::span<const BYTE> record, size_t length_at,
   name.parent_known = true;
 }
 
+// Whether a $FILE_NAME can have these two bytes as its length and namespace.
+bool IsNameHeader(BYTE length, BYTE name_space) noexcept {
+  return length != 0 && name_space <= max_name_space;
+}
+
 // Tests the bytes with a $FILE_NAME length byte at length_at. Nullopt when
 // they are not a candidate. trusted_begin is the first offset of the leftover.
 std::optional<Found> ProbeAt(std::span<const BYTE> record, size_t length_at,
@@ -255,14 +288,18 @@ std::optional<Found> ProbeAt(std::span<const BYTE> record, size_t length_at,
   const BYTE name_space = Load<BYTE>(record, length_at + 1);
   const size_t name_first = length_at + (name_offset - name_length_offset);
   const size_t end = name_first + (length * sizeof(char16_t));
-  if (length == 0 || name_space > max_name_space || end > record.size()) {
+  if (!IsNameHeader(static_cast<BYTE>(length), name_space) ||
+      end > record.size()) {
     return std::nullopt;
   }
 
-  std::u16string units(length, u'\0');
-  std::memcpy(units.data(),
+  // length is one byte: the characters fit a stack buffer, and a candidate
+  // that fails never allocates.
+  std::array<char16_t, max_name_units> unit_buffer{};
+  std::memcpy(unit_buffer.data(),
               record.subspan(name_first, length * sizeof(char16_t)).data(),
               length * sizeof(char16_t));
+  const std::u16string_view units(unit_buffer.data(), length);
   if (!IsValidName(units)) {
     return std::nullopt;
   }
@@ -308,6 +345,48 @@ ULONGLONG Ticks(const FILETIME& time) noexcept {
          time.dwLowDateTime;
 }
 
+// The first even offset from at whose length and namespace bytes pass
+// IsNameHeader(), or bytes.size() when none does before the last offset a
+// candidate can start at. On a little-endian host, a word of four offsets is
+// rejected at once when none of its lanes passes: zeros, 0xFF fill and most
+// binary leftovers.
+size_t FindNameHeader(std::span<const BYTE> bytes, size_t at) noexcept {
+  if (bytes.size() < shortest_core) {
+    return bytes.size();
+  }
+  const size_t last = bytes.size() - shortest_core;
+  if constexpr (std::endian::native == std::endian::little) {
+    while (at <= last && at + search_stride <= bytes.size()) {
+      std::uint64_t word = 0;
+      std::memcpy(&word, bytes.subspan(at, search_stride).data(), sizeof(word));
+      // Bit 8 of a lane: its length byte is not zero. Adding 0xFF to that byte
+      // carries into bit 8 exactly then, and never into the next lane.
+      const std::uint64_t has_length =
+          ((word & lane_length_mask) + lane_length_mask) & lane_length_flag;
+      // Bit 8 of a lane: its namespace byte is above max_name_space. Adding
+      // 0x3F to the bits that can make it so sets bit 6 exactly then.
+      const std::uint64_t name_space_high =
+          (word >> lane_name_space_shift) & lane_name_space_mask;
+      const std::uint64_t bad_name_space =
+          ((name_space_high + lane_name_space_mask) & lane_name_space_flag)
+          << lane_flag_alignment;
+      const std::uint64_t passing = has_length & ~bad_name_space;
+      if (passing != 0) {
+        at += (static_cast<size_t>(std::countr_zero(passing)) / lane_bits) *
+              scan_step;
+        return at <= last ? at : bytes.size();
+      }
+      at += search_stride;
+    }
+  }
+  for (; at <= last; at += scan_step) {
+    if (IsNameHeader(Load<BYTE>(bytes, at), Load<BYTE>(bytes, at + 1))) {
+      return at;
+    }
+  }
+  return bytes.size();
+}
+
 // The scan both public entry points share. It steps from scan_begin, rounded
 // up to an even offset, and trusts only the fields at or after trusted_begin.
 std::vector<CarvedName> CarveFrom(std::span<const BYTE> bytes,
@@ -315,6 +394,10 @@ std::vector<CarvedName> CarveFrom(std::span<const BYTE> bytes,
   std::vector<CarvedName> carved;
   size_t at = (scan_begin + 1) & ~size_t{1};
   while (at + shortest_core <= bytes.size()) {
+    at = FindNameHeader(bytes, at);
+    if (at + shortest_core > bytes.size()) {
+      break;
+    }
     std::optional<Found> found = ProbeAt(bytes, at, trusted_begin);
     if (!found) {
       at += scan_step;

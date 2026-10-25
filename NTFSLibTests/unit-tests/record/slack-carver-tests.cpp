@@ -623,3 +623,66 @@ TEST_CASE("a parent record number that cannot exist is unknown",
     CHECK(carved.front().partial);
   }
 }
+
+TEST_CASE("a zero slack of any length gives no name", "[record][slack]") {
+  for (size_t size = after_terminator; size < after_terminator + 80; ++size) {
+    INFO(size);
+    CHECK(Carve(EmptyRecord(size)).empty());
+  }
+}
+
+TEST_CASE("a name found on any offset of a word and any tail length",
+          "[record][slack]") {
+  constexpr size_t name_bytes = 2 + (5 * sizeof(WORD));
+  for (size_t lane = 0; lane < 8; ++lane) {
+    for (size_t tail = 0; tail < 10; ++tail) {
+      const size_t offset = after_terminator + (lane * 2);
+      std::vector<BYTE> record = EmptyRecord(offset + name_bytes + tail);
+      PutRawName(record, offset, {'a', 'b', 'c', 'd', 'e'});
+
+      const auto carved = Carve(record);
+
+      INFO("lane " << lane << " tail " << tail);
+      REQUIRE(carved.size() == 1);
+      CHECK(carved.front().name == L"abcde");
+      CHECK(carved.front().partial);
+    }
+  }
+}
+
+TEST_CASE("a name header with the last possible start is found",
+          "[record][slack]") {
+  constexpr size_t name_bytes = 2 + (5 * sizeof(WORD));
+  for (size_t extra = 0; extra < 16; extra += 2) {
+    std::vector<BYTE> record =
+        EmptyRecord(after_terminator + extra + name_bytes);
+    PutRawName(record, record.size() - name_bytes, {'l', 'a', 's', 't', '!'});
+
+    const auto carved = Carve(record);
+
+    INFO(extra);
+    REQUIRE(carved.size() == 1);
+    CHECK(carved.front().name == L"last!");
+  }
+}
+
+TEST_CASE("a slack of words that no name header fits gives no name",
+          "[record][slack]") {
+  // Length zero, namespace 4 and above, then every mix of them: no word is a
+  // header, whatever the bytes around it hold.
+  constexpr std::array<std::array<BYTE, 2>, 6> words{
+      {{0, 1}, {5, 4}, {5, 0xFF}, {0, 0}, {9, 0x80}, {0xFF, 7}}};
+  for (size_t first = 0; first < words.size(); ++first) {
+    std::vector<BYTE> record = EmptyRecord(4096);
+    size_t pick = first;
+    for (size_t offset = after_terminator; offset + 1 < record.size();
+         offset += 2) {
+      record.at(offset) = words.at(pick).at(0);
+      record.at(offset + 1) = words.at(pick).at(1);
+      pick = (pick + 1) % words.size();
+    }
+
+    INFO(first);
+    CHECK(Carve(record).empty());
+  }
+}
