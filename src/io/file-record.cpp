@@ -430,6 +430,11 @@ bool Io::FileRecord<S>::ParseAttrs() {
 }
 
 template <Cache::Strategy S>
+void Io::FileRecord<S>::ClearAttrs() noexcept {
+  impl_->ClearAttrs();
+}
+
+template <Cache::Strategy S>
 bool Io::FileRecord<S>::HasFailedFixup() const noexcept {
   return impl_->failed_fixup;
 }

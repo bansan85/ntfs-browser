@@ -368,6 +368,10 @@ thread_local bool current_thread_silenced = false;
 // worker thread of the library never races the caller's count.
 thread_local std::uint64_t recovered_count = 0;
 
+// Where this thread's lines go instead of the sinks, while a CaptureScope
+// lives. Null otherwise.
+thread_local CapturedLog* current_capture = nullptr;
+
 }  // namespace
 
 void NoteRecovered() noexcept { recovered_count++; }
@@ -384,6 +388,11 @@ bool IsEnabled(Level level) noexcept {
   // Off is a threshold, not a message level: no message is written at it.
   if (level == Level::Off) {
     return false;
+  }
+
+  // A capture never asks the sinks, which belong to another thread.
+  if (current_capture != nullptr) {
+    return (current_capture->Levels() & LevelBit(level)) != 0;
   }
 
   try {
@@ -412,6 +421,11 @@ void Emit(Level level, std::string_view message) noexcept {
     return;
   }
 
+  if (current_capture != nullptr) {
+    current_capture->Append(level, message);
+    return;
+  }
+
   try {
     // A copy: a sink may replace the set from inside Write(), which would
     // otherwise invalidate this loop and free the sink that is running.
@@ -434,5 +448,55 @@ void Emit(Level level, std::string_view message) noexcept {
     return;
   }
 }
+
+LevelMask EnabledLevels() noexcept {
+  LevelMask levels = 0;
+  for (const Level level :
+       {Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace}) {
+    if (IsEnabled(level)) {
+      levels |= LevelBit(level);
+    }
+  }
+  return levels;
+}
+
+void CapturedLog::Reset(LevelMask levels) noexcept {
+  text_.clear();
+  lines_.clear();
+  levels_ = levels;
+}
+
+void CapturedLog::Append(Level level, std::string_view message) noexcept {
+  try {
+    text_.append(message);
+    lines_.push_back({.level = level, .end = text_.size()});
+  } catch (...) {
+    // The line is lost, as a failed format loses its own.
+    text_.resize(lines_.empty() ? 0 : lines_.back().end);
+  }
+}
+
+CapturedLog::Mark CapturedLog::End() const noexcept {
+  return {.lines = lines_.size(), .recovered = recovered_count};
+}
+
+void CapturedLog::Replay(const Mark& from, const Mark& to) const noexcept {
+  const size_t last = (std::min)(to.lines, lines_.size());
+  for (size_t index = from.lines; index < last; index++) {
+    // index < last <= lines_.size().
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    const Line& line = lines_[index];
+    const size_t begin = index == 0 ? 0 : lines_.at(index - 1).end;
+    Emit(line.level, std::string_view(text_).substr(begin, line.end - begin));
+  }
+  recovered_count += to.recovered - from.recovered;
+}
+
+CaptureScope::CaptureScope(CapturedLog& log) noexcept
+    : previous_(current_capture) {
+  current_capture = &log;
+}
+
+CaptureScope::~CaptureScope() { current_capture = previous_; }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Log::Detail

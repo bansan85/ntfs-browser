@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <format>
@@ -583,12 +584,125 @@ void ProbeVolume(NtfsVolume<S>& volume) {
   ProbeSupplementarySearch(volume);
 }
 
+// Starting value and multiplier of the 64-bit FNV-1a hash that Digest() uses.
+constexpr std::uint64_t digest_basis = 14'695'981'039'346'656'037ULL;
+constexpr std::uint64_t digest_prime = 1'099'511'628'211ULL;
+
+// A digest of everything the tree says, entries and statistics: two scans of
+// one input that give the same tree give the same digest.
+std::uint64_t Digest(const MftTree& tree) {
+  std::uint64_t digest = digest_basis;
+  const auto mix = [&digest](std::uint64_t value) {
+    digest = (digest ^ value) * digest_prime;
+  };
+  const auto mix_time = [&mix](const FILETIME& time) {
+    mix(time.dwLowDateTime);
+    mix(time.dwHighDateTime);
+  };
+  const auto mix_text = [&mix](std::wstring_view text) {
+    for (const wchar_t unit : text) {
+      mix(static_cast<std::uint64_t>(unit));
+    }
+    mix(text.size());
+  };
+  for (const MftTree::Entry& entry : tree.Entries()) {
+    mix(entry.record);
+    mix(entry.sequence);
+    mix(entry.in_use);
+    mix(entry.directory);
+    mix(entry.size);
+    mix(entry.allocated_size);
+    mix_time(entry.create_time);
+    mix_time(entry.write_time);
+    mix_time(entry.change_time);
+    mix_time(entry.access_time);
+    mix(entry.read_only);
+    mix(entry.hidden);
+    mix(entry.system);
+    mix(entry.archive);
+    mix(entry.compressed);
+    mix(entry.encrypted);
+    mix(entry.sparse);
+    mix(entry.data_state ? static_cast<std::uint64_t>(*entry.data_state) + 1
+                         : 0);
+    for (const MftTree::Name& name : entry.names) {
+      mix_text(name.name);
+      mix(name.parent_record);
+      mix(name.parent_sequence);
+      mix(name.dos_only);
+      mix(name.parent_valid);
+    }
+    for (const NTFS_BROWSER_NAMESPACE::Record::CarvedName& carved :
+         entry.carved_names) {
+      mix_text(carved.name);
+      mix(carved.parent_record);
+      mix(carved.parent_known);
+      mix(carved.times_known);
+      mix(carved.partial);
+      mix(carved.name_space);
+    }
+  }
+  const MftTree::ScanStats& stats = tree.Stats();
+  for (const ULONGLONG count :
+       {stats.slots, stats.in_use, stats.deleted, stats.extensions,
+        stats.unreadable, stats.skipped, stats.damaged, stats.reused_extensions,
+        stats.unreachable, stats.carved_names, stats.data_intact,
+        stats.data_reallocated, stats.data_unknown, stats.data_bad}) {
+    mix(count);
+  }
+  return digest;
+}
+
+// Scans the input with threads threads, as ProbeMftTree() does, and gives the
+// digest of the tree. Nothing when the scan throws: only the fact that it did
+// is worth comparing.
+template <Cache::Strategy S>
+std::optional<std::uint64_t>
+    ScanDigest(std::span<const BYTE> data, const VolumeOptions& options,
+               std::optional<size_t> failing_read, unsigned threads) {
+  try {
+    NtfsVolume<S> volume(
+        std::make_unique<LoopingDiskReader>(data, failing_read), options);
+    if (!volume.IsVolumeOK()) {
+      return std::nullopt;
+    }
+    const MftTree tree(
+        volume, {.progress = [](ULONGLONG done,
+                                ULONGLONG /*total*/) { return done == 0; },
+                 .threads = threads});
+    return Digest(tree);
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+// Number of threads the second scan of ProbeScanThreads() runs with.
+constexpr unsigned probed_scan_threads = 3;
+
+// Scans the input with one thread, then with several, each over a reader of its
+// own: the two MUST give the same tree. The threads change when the records are
+// parsed, never what the scan reads or finds, so a difference is a finding, and
+// ends the process like a crash does. The reads of the main probes are not
+// touched: these readers are the probe's own, and it runs last.
+template <Cache::Strategy S>
+void ProbeScanThreads(std::span<const BYTE> data, const VolumeOptions& options,
+                      std::optional<size_t> failing_read) {
+  const std::optional<std::uint64_t> one =
+      ScanDigest<S>(data, options, failing_read, 1);
+  const std::optional<std::uint64_t> several =
+      ScanDigest<S>(data, options, failing_read, probed_scan_threads);
+  if (one != several) {
+    std::abort();
+  }
+}
+
 template <Cache::Strategy S>
 void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
               std::optional<size_t> failing_read = {}) {
   NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
                        options);
   ProbeVolume(volume);
+  ProbeScanThreads<S>(data, options, failing_read);
 }
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash

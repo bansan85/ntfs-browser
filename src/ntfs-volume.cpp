@@ -604,6 +604,13 @@ void NtfsVolume<S>::ClearAttrRawCB() noexcept {
 }
 
 template <Cache::Strategy S>
+bool NtfsVolume<S>::HasAttrRawCB() const noexcept {
+  return std::ranges::any_of(
+      impl_->attr_raw_call_back,
+      [](const Attr::RawCallback& call_back) { return call_back != nullptr; });
+}
+
+template <Cache::Strategy S>
 void NtfsVolume<S>::SetEfsKeyProvider(
     std::shared_ptr<Efs::IEfsKeyProvider> provider) noexcept {
   impl_->efs.provider = std::move(provider);

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -47,6 +48,14 @@ inline constexpr size_t default_slot_block_bytes = size_t{4} * 1024 * 1024;
 struct SlotRange {
   ULONGLONG first{0};
   ULONGLONG last{0};
+};
+
+// The slots [first, last) of $MFT as one window holds them: bytes is those
+// slots, one file record after the other.
+struct SlotWindow {
+  ULONGLONG first{0};
+  ULONGLONG last{0};
+  std::span<const BYTE> bytes;
 };
 
 // Hands the file records of $MFT to a FileRecord one slot after the other, but
@@ -96,6 +105,13 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY SlotReader {
   [[nodiscard]] bool ParseFileRecord(Io::FileRecord<S>& file_record,
                                      ULONGLONG record);
 
+  // The window that serves slot record, read now when no loaded window does.
+  // Nothing when the window does not serve it, as ParseFileRecord() would read
+  // the record alone: a record below Mft::Idx::User, a slot outside the plan,
+  // a window whose read failed. The read is the one ParseFileRecord() makes, at
+  // the same moment. The bytes are valid until the next window is read.
+  [[nodiscard]] std::optional<SlotWindow> ServeWindow(ULONGLONG record);
+
   // The raw bytes of slot record, as the window holds them, when the last
   // ParseFileRecord() of record took it from there. Else an empty span. The
   // span is valid until the next window is read.
@@ -104,8 +120,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY SlotReader {
  private:
   // The bytes of slot record, or an empty span when the window does not serve
   // it. Reads the window that holds it when none does yet.
-  [[nodiscard]] std::span<const BYTE> Slot(Io::FileRecord<S>& file_record,
-                                           ULONGLONG record);
+  [[nodiscard]] std::span<const BYTE> Slot(ULONGLONG record);
 
   // The index in plan_ of the range that holds record, or plan_.size().
   [[nodiscard]] size_t RangeOf(ULONGLONG record) const;
@@ -117,8 +132,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY SlotReader {
 
   // Reads window, the one range_index holds record in. False when the read
   // fails: the slots of that window are then marked as failed.
-  [[nodiscard]] bool LoadWindow(Io::FileRecord<S>& file_record,
-                                size_t range_index, const SlotRange& window);
+  [[nodiscard]] bool LoadWindow(size_t range_index, const SlotRange& window);
 
   // Announces window unless it was, then the windows after it, up to the
   // prefetch caps.

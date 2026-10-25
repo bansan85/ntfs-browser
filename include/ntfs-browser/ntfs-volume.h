@@ -108,6 +108,9 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
                                       Attr::RawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;
+  // Whether InstallAttrRawCB() installed a callback that ClearAttrRawCB() did
+  // not remove since.
+  [[nodiscard]] bool HasAttrRawCB() const noexcept;
 
   // Sets the source of the keys that decrypt EFS files. A null provider
   // disables decryption altogether, and the default provider with it.

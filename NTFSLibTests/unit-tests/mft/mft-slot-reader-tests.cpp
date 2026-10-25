@@ -603,3 +603,110 @@ TEST_CASE("NtfsVolume::PrefetchMftSlots announces one range per fragment",
   opened.volume->PrefetchMftSlots(20, 0);
   CHECK(opened.reader->Calls().empty());
 }
+
+TEMPLATE_TEST_CASE_SIG(
+    "SlotReader::ServeWindow() gives the window that holds a slot",
+    "[mft][slot-reader]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const auto counters = std::make_shared<ReadCounters>();
+  const auto volume = OpenScanVolume<S>(scan_record_count, counters);
+  const std::vector<BYTE> image =
+      Tests::BuildFakeNtfsImageWithFragmentedMftScan(scan_record_count);
+  // Blocks of 16 slots.
+  Mft::SlotReader<S> reader(*volume, size_t{16} * 1024);
+
+  constexpr ULONGLONG asked = 100;
+  const std::optional<Mft::SlotWindow> window = reader.ServeWindow(asked);
+
+  REQUIRE(window);
+  CHECK(window->first <= asked);
+  CHECK(asked < window->last);
+  CHECK(window->bytes.size() ==
+        (window->last - window->first) * Tests::fake_file_record_size);
+  // The window starts at the slot it says, and holds the bytes of the image.
+  const auto offset =
+      static_cast<size_t>(Tests::FragmentedMftScanSlotOffset(window->first));
+  CHECK(std::ranges::equal(window->bytes.first(Tests::fake_file_record_size),
+                           std::span<const BYTE>{image}.subspan(
+                               offset, Tests::fake_file_record_size)));
+  // HeldSlot() serves the same bytes.
+  CHECK(reader.HeldSlot(asked).data() ==
+        window->bytes
+            .subspan((asked - window->first) * Tests::fake_file_record_size)
+            .data());
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "SlotReader::ServeWindow() reads a window once, as ParseFileRecord() does",
+    "[mft][slot-reader]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const auto served_counters = std::make_shared<ReadCounters>();
+  const auto served_volume =
+      OpenScanVolume<S>(scan_record_count, served_counters);
+  const auto parsed_counters = std::make_shared<ReadCounters>();
+  const auto parsed_volume =
+      OpenScanVolume<S>(scan_record_count, parsed_counters);
+  Mft::SlotReader<S> served(*served_volume, size_t{16} * 1024);
+  Mft::SlotReader<S> parsed(*parsed_volume, size_t{16} * 1024);
+  Io::FileRecord<S> record(*parsed_volume);
+  const size_t opened = served_counters->reads;
+  REQUIRE(opened == parsed_counters->reads);
+
+  for (ULONGLONG slot = 16; slot < 90; slot += 3) {
+    static_cast<void>(served.ServeWindow(slot));
+    static_cast<void>(parsed.ParseFileRecord(record, slot));
+    INFO("slot " << slot);
+    CHECK(served_counters->reads == parsed_counters->reads);
+    CHECK(served_counters->bytes == parsed_counters->bytes);
+  }
+
+  // A slot the window already holds reads nothing.
+  const size_t before = served_counters->reads;
+  const std::optional<Mft::SlotWindow> window = served.ServeWindow(87);
+  REQUIRE(window);
+  CHECK(served.ServeWindow(window->first));
+  CHECK(served_counters->reads == before);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "SlotReader::ServeWindow() serves no slot a window cannot hold",
+    "[mft][slot-reader]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const auto counters = std::make_shared<ReadCounters>();
+  const auto volume = OpenScanVolume<S>(scan_record_count, counters);
+  Mft::SlotReader<S> reader(*volume, size_t{16} * 1024);
+
+  // Records below Mft::Idx::User sit at a fixed address.
+  const size_t reads = counters->reads;
+  CHECK_FALSE(reader.ServeWindow(5));
+  CHECK_FALSE(reader.ServeWindow(0));
+  CHECK(counters->reads == reads);
+
+  // A slot outside the plan is read alone by the caller.
+  reader.Expect(100, 120);
+  CHECK_FALSE(reader.ServeWindow(99));
+  CHECK_FALSE(reader.ServeWindow(120));
+  CHECK(counters->reads == reads);
+  CHECK(reader.ServeWindow(100));
+  CHECK(reader.ServeWindow(119));
+}
+
+TEST_CASE("SlotReader::ServeWindow() does not read again a window that failed",
+          "[mft][slot-reader]") {
+  constexpr Cache::Strategy S = Cache::Strategy::NoCache;
+  const auto counters = std::make_shared<ReadCounters>();
+  const auto volume = OpenScanVolume<S>(scan_record_count, counters);
+  Mft::SlotReader<S> reader(*volume, size_t{16} * 1024);
+  const auto first =
+      static_cast<LONGLONG>(Tests::FragmentedMftScanSlotOffset(40));
+  counters->fail_begin = first;
+  counters->fail_end = first + Tests::fake_file_record_size;
+
+  CHECK_FALSE(reader.ServeWindow(40));
+  const size_t after_failure = counters->reads;
+
+  // The slots of that window are left to the caller, without another read.
+  CHECK_FALSE(reader.ServeWindow(40));
+  CHECK_FALSE(reader.ServeWindow(41));
+  CHECK(counters->reads == after_failure);
+}

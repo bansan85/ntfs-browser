@@ -35,6 +35,16 @@ struct MftScanOptions {
   // deleted file, in sorted batches. False skips both: the scan then reads
   // exactly what it would without this feature.
   bool annotate_data_state{true};
+  // How many threads parse the records of $MFT: the calling thread, and
+  // threads - 1 more. 1 parses on the calling thread alone. 0 lets the scan
+  // choose: it takes the threads of the machine, up to 4, on a volume with
+  // enough slots to pay for them, and one thread on a small one. Whatever the
+  // count, the scan returns the same entries and statistics, reads the same
+  // bytes of the volume in the same order, and logs the same lines in the same
+  // order: a thread never reads the volume or logs on its own. A volume with a
+  // raw attribute callback installed (NtfsVolume::InstallAttrRawCB()) is
+  // scanned by the calling thread alone, since a callback belongs to it.
+  unsigned threads{0};
 };
 
 // Every file of a volume, rebuilt from the parent reference in each MFT

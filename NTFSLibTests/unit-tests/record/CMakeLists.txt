@@ -5,6 +5,7 @@ target_sources(
     "coverage-file-record-b-tests.cpp"
     "file-record-argument-edge-tests.cpp"
     "file-record-characterization-tests.cpp"
+    "file-record-clear-attrs-tests.cpp"
     "file-record-extended-metadata-tests.cpp"
     "file-record-header-coverage-tests.cpp"
     "file-record-header-tests.cpp"

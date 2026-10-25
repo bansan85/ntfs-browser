@@ -86,6 +86,9 @@ class NTFS_BROWSER_EXPORT FileRecord {
   [[nodiscard]] bool ParseFileRecord(ULONGLONG file_ref,
                                      std::span<const BYTE> preread);
   [[nodiscard]] bool ParseAttrs();
+  // Drops the attributes ParseAttrs() parsed, as the next ParseFileRecord()
+  // does first. The parsed header stays.
+  void ClearAttrs() noexcept;
   // Whether the update sequence check of the last ParseFileRecord() failed on
   // at least one sector. Strict: the record was rejected. Recovering: it was
   // rejected if no sector verifies, else it was kept (see IsSalvaged()) with

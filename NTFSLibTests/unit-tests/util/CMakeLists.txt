@@ -1,4 +1,7 @@
-target_sources(NtfsBrowserTests PRIVATE "small-pool-tests.cpp")
+target_sources(
+  NtfsBrowserTests
+  PRIVATE "chunk-pool-tests.cpp" "small-pool-tests.cpp"
+)
 
 target_include_directories(
   NtfsBrowserTests

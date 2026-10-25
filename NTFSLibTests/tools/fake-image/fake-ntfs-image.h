@@ -1025,6 +1025,18 @@ inline constexpr ULONGLONG fragmented_mft_scan_fragment_clusters = 100;
     ULONGLONG record_count,
     ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
 
+// Same volume and layout as BuildFakeNtfsImageWithFragmentedMftScan(), whose
+// slots cycle through ten kinds that between them take every path of a scan:
+//   0 and 5 files in use; 1 a file with a resident $LOGGED_UTILITY_STREAM;
+//   2 and 9 freed files; 3 a directory; 4 a zero-filled slot; 6 a file whose
+//   resident $ATTRIBUTE_LIST names slot 7 for its $FILE_NAME; 7 that extension
+//   record; 8 a file whose update sequence number is wrong.
+// record_count MUST be at least Mft::Idx::User, and a slot of kind 6 MUST NOT
+// be the last one.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithBusyMftScan(
+    ULONGLONG record_count,
+    ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
+
 // Byte offset, in BuildFakeNtfsImageWithFragmentedMftScan()'s image, of the
 // record of $MFT slot idx.
 [[nodiscard]] ULONGLONG FragmentedMftScanSlotOffset(

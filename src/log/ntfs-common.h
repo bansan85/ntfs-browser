@@ -1,10 +1,13 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <format>
+#include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
@@ -25,9 +28,85 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY bool IsEnabled(Level level) noexcept;
 // thread.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void SilenceCurrentThread() noexcept;
 
-// Hands one finished line to the library logger.
+// Hands one finished line to the library logger. On a thread that captures
+// (see CaptureScope), the line goes to the capture instead of the sinks.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void Emit(Level level,
                                          std::string_view message) noexcept;
+
+// One bit per level, to tell which levels a capture keeps. Bit n is set for the
+// level whose value is n.
+using LevelMask = std::uint32_t;
+
+// The bit of level in a LevelMask.
+[[nodiscard]] constexpr LevelMask LevelBit(Level level) noexcept {
+  return LevelMask{1} << static_cast<unsigned>(level);
+}
+
+// The levels IsEnabled() accepts right now, on the calling thread. The library
+// thread that owns the sinks takes it before it starts a worker that captures:
+// a worker MUST NOT ask the sinks itself.
+NTFS_BROWSER_EXPORT_TESTS_ONLY LevelMask EnabledLevels() noexcept;
+
+// The lines a worker thread logged, kept apart from the sinks. The sinks are
+// single-threaded, so a worker of the library captures its messages here and
+// the thread that owns the sinks replays them, in the order of the work they
+// belong to. A capture is read by one thread after the capturing thread is
+// done with it, and the caller MUST order the two (a lock, a join).
+class NTFS_BROWSER_EXPORT_TESTS_ONLY CapturedLog {
+ public:
+  // A place in the log: the lines held so far, and how many salvaged conditions
+  // (RecoveredCount()) the capturing thread had counted by then.
+  struct Mark {
+    size_t lines{0};
+    std::uint64_t recovered{0};
+  };
+
+  // Forgets every line, keeps the memory, and keeps only the levels in levels
+  // from now on.
+  void Reset(LevelMask levels) noexcept;
+
+  // The levels this capture keeps.
+  [[nodiscard]] LevelMask Levels() const noexcept { return levels_; }
+
+  // Adds one line. A line that cannot be stored is dropped: the capture
+  // belongs to logging, which never throws.
+  void Append(Level level, std::string_view message) noexcept;
+
+  // The end of the log, as the capturing thread sees it.
+  [[nodiscard]] Mark End() const noexcept;
+
+  // Sends the lines between two marks to the sinks, in order, and adds the
+  // salvaged conditions counted between them to the calling thread's count.
+  // The calling thread MUST be the one that owns the sinks, and MUST NOT be
+  // capturing.
+  void Replay(const Mark& from, const Mark& to) const noexcept;
+
+ private:
+  // A line held in text_: its level, and where it ends.
+  struct Line {
+    Level level;
+    size_t end;
+  };
+
+  std::string text_;
+  std::vector<Line> lines_;
+  LevelMask levels_{0};
+};
+
+// While one lives, the calling thread captures: IsEnabled() answers from the
+// levels of log, and Emit() appends to it. The sinks are not touched.
+class NTFS_BROWSER_EXPORT_TESTS_ONLY CaptureScope {
+ public:
+  explicit CaptureScope(CapturedLog& log) noexcept;
+  CaptureScope(const CaptureScope&) = delete;
+  CaptureScope& operator=(const CaptureScope&) = delete;
+  CaptureScope(CaptureScope&&) = delete;
+  CaptureScope& operator=(CaptureScope&&) = delete;
+  ~CaptureScope();
+
+ private:
+  CapturedLog* previous_;
+};
 
 // Counts one salvaged condition on the calling thread. Called by
 // Log::Recoverable() when its caller recovers, whether or not a sink wants the

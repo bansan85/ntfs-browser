@@ -1,6 +1,7 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
+    "capture-tests.cpp"
     "coverage-log-tests.cpp"
     "custom-sink-tests.cpp"
     "emit-failure-tests.cpp"

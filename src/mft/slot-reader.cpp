@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -97,7 +98,7 @@ void SlotReader<S>::Expect(ULONGLONG first, ULONGLONG last) {
 template <Cache::Strategy S>
 bool SlotReader<S>::ParseFileRecord(Io::FileRecord<S>& file_record,
                                     ULONGLONG record) {
-  const std::span<const BYTE> bytes = Slot(file_record, record);
+  const std::span<const BYTE> bytes = Slot(record);
   if (bytes.empty()) {
     return file_record.ParseFileRecord(record);
   }
@@ -105,26 +106,34 @@ bool SlotReader<S>::ParseFileRecord(Io::FileRecord<S>& file_record,
 }
 
 template <Cache::Strategy S>
-std::span<const BYTE> SlotReader<S>::Slot(Io::FileRecord<S>& file_record,
-                                          ULONGLONG record) {
-  if (record < first_mapped_slot) {
+std::span<const BYTE> SlotReader<S>::Slot(ULONGLONG record) {
+  if (!ServeWindow(record)) {
     return {};
   }
+  return HeldSlot(record);
+}
+
+template <Cache::Strategy S>
+std::optional<SlotWindow> SlotReader<S>::ServeWindow(ULONGLONG record) {
+  if (record < first_mapped_slot) {
+    return std::nullopt;
+  }
   if (record >= failed_first_ && record < failed_last_) {
-    return {};
+    return std::nullopt;
   }
   if (record < window_first_ || record >= window_last_) {
     const size_t range_index = RangeOf(record);
     if (range_index == plan_.size()) {
-      return {};
+      return std::nullopt;
     }
     const SlotRange window = WindowOf(plan_.at(range_index), record);
-    if (!LoadWindow(file_record, range_index, window)) {
-      return {};
+    if (!LoadWindow(range_index, window)) {
+      return std::nullopt;
     }
   }
 
-  return HeldSlot(record);
+  return SlotWindow{
+      .first = window_first_, .last = window_last_, .bytes = window_};
 }
 
 template <Cache::Strategy S>
@@ -165,8 +174,7 @@ std::span<const BYTE> SlotReader<S>::HeldSlot(ULONGLONG record) const {
 }
 
 template <Cache::Strategy S>
-bool SlotReader<S>::LoadWindow(Io::FileRecord<S>& file_record,
-                               size_t range_index, const SlotRange& window) {
+bool SlotReader<S>::LoadWindow(size_t range_index, const SlotRange& window) {
   AnnounceFrom(range_index, window);
 
   // A failed read leaves no window behind, whatever it wrote.
@@ -174,7 +182,7 @@ bool SlotReader<S>::LoadWindow(Io::FileRecord<S>& file_record,
   window_last_ = 0;
   window_.resize(
       gsl::narrow<size_t>((window.last - window.first) * record_size_));
-  if (!file_record.GetVolume().ReadMftSlots(window.first, window_)) {
+  if (!volume_->ReadMftSlots(window.first, window_)) {
     Log::Debug("Block read of $MFT slots [{}, {}) failed; reading them alone",
                window.first, window.last);
     failed_first_ = window.first;

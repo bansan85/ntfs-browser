@@ -1,8 +1,10 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -17,6 +19,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -45,6 +48,7 @@
 #include "mft/slot-reader.h"
 #include "mft/tree-testing.h"
 #include "ntfs-browser/record/carved-name.h"
+#include "util/chunk-pool.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -102,6 +106,10 @@ constexpr size_t default_max_held_record_bytes =
 
 // The cap a test asked for. nullopt means the default.
 std::optional<size_t> max_held_record_bytes_override;
+
+// Slots the scans of this thread took from the threads that parsed them. Only
+// the thread that owns a scan changes it, and tests are the only readers.
+thread_local size_t slots_parsed_by_threads = 0;
 
 // Bytes of one block of held records. Records are held in blocks, so holding
 // one more never moves those already held.
@@ -166,6 +174,41 @@ constexpr size_t dense_index_ratio = 8;
 // scan allocate before it reads a record: about 200 MiB.
 constexpr ULONGLONG max_reserved_entries = ULONGLONG{1} << 20;
 
+// Slots one chunk of a parsed window holds. A thread takes a chunk at a time:
+// 64 records are about 250 microseconds of work, long enough that taking the
+// next chunk costs nothing, short enough that the threads finish together.
+constexpr size_t parse_chunk_slots = 64;
+
+// Slots below which an automatic thread count stays at one thread: twice the
+// probe, so that threads have as much to parse as the probe did.
+constexpr ULONGLONG default_min_auto_threaded_slots = 131072;
+
+// Slots an automatic scan parses on the calling thread alone before it decides
+// whether threads pay: 16 windows of the usual 4 MiB, about 0.2 seconds of a
+// system volume, long enough for the share of waiting to show.
+constexpr ULONGLONG default_probe_slots = 65536;
+
+// Most of the time of the probe the loading of windows may take for threads to
+// pay. A volume read faster than one thread parses gives windows at once: the
+// load is a copy, about a tenth of the time of a window. A volume read slower
+// makes the scan wait, and a SATA disk takes more than a third.
+constexpr double max_load_share = 0.2;
+
+// The limits a test asked for, and the verdict it imposed on the probe. nullopt
+// means the default, and the measure.
+std::optional<ULONGLONG> min_auto_threaded_slots_override;
+std::optional<ULONGLONG> probe_slots_override;
+std::optional<bool> probe_verdict_override;
+
+// Threads an automatic count takes at most. The calling thread merges the
+// results in record order, and that work does not shrink with more threads:
+// past four, a scan of the whole $MFT of a system volume gains nothing, and the
+// threads that share a core only add CPU time.
+constexpr unsigned max_auto_threads = 4;
+
+// Threads a caller can ask for at most. A forged count cannot start more.
+constexpr unsigned max_scan_threads = 64;
+
 // The Filename side of a $FILE_NAME attribute. FileRecord<S> always wraps a
 // $FILE_NAME in the AttrFileName over the resident type that matches S.
 template <Cache::Strategy S>
@@ -208,14 +251,39 @@ void AddNames(const Io::FileRecord<S>& file_record,
   }
 }
 
+// The counters one record slot adds to the scan's statistics. A slot parsed
+// away from the thread that merges the scan keeps them apart, and they join the
+// statistics when the scan reaches the slot: a slot that is parsed twice is
+// counted once.
+struct RecordCounts {
+  ULONGLONG unreadable{0};
+  ULONGLONG damaged{0};
+  ULONGLONG extensions{0};
+  ULONGLONG deleted{0};
+  ULONGLONG in_use{0};
+  ULONGLONG reused_extensions{0};
+  ULONGLONG carved_names{0};
+};
+
+// Adds counts to stats.
+void AddCounts(Mft::MftTree::ScanStats& stats,
+               const RecordCounts& counts) noexcept {
+  stats.unreadable += counts.unreadable;
+  stats.damaged += counts.damaged;
+  stats.extensions += counts.extensions;
+  stats.deleted += counts.deleted;
+  stats.in_use += counts.in_use;
+  stats.reused_extensions += counts.reused_extensions;
+  stats.carved_names += counts.carved_names;
+}
+
 // Copies the names carved from file_record's slack into entry, and counts them.
 // The record gives none unless the volume recovers and shows deleted items.
 template <Cache::Strategy S>
 void AddCarvedNames(const Io::FileRecord<S>& file_record,
-                    Mft::MftTree::Entry& entry,
-                    Mft::MftTree::ScanStats& stats) {
+                    Mft::MftTree::Entry& entry, RecordCounts& counts) {
   entry.carved_names = file_record.CarveSlackNames();
-  stats.carved_names += entry.carved_names.size();
+  counts.carved_names += entry.carved_names.size();
 }
 
 // Copies record's number, sequence number, liveness and kind into entry.
@@ -838,38 +906,37 @@ enum class SlotKind : BYTE {
   Base         // A base record, kept if its attributes allow it.
 };
 
-// Reads the header of one record slot into file_record, and counts it in
-// stats. A record with a failed update sequence check is damaged in both
-// modes: strict drops it as unreadable, recovering keeps what verifies. It is
-// counted once, whatever else is wrong with it: header_damaged tells
-// ReadBaseEntry() it is counted already.
+// Classifies the record slot file_record holds, and counts it in counts.
+// parsed is the verdict of the header parse. A record with a failed update
+// sequence check is damaged in both modes: strict drops it as unreadable,
+// recovering keeps what verifies. It is counted once, whatever else is wrong
+// with it: header_damaged tells ReadBaseEntry() it is counted already.
 template <Cache::Strategy S>
-SlotKind ReadSlotHeader(Io::FileRecord<S>& file_record,
-                        Mft::SlotReader<S>& slots, const NtfsVolume<S>& volume,
-                        ULONGLONG record, Mft::MftTree::ScanStats& stats,
-                        bool& header_damaged) {
-  if (!slots.ParseFileRecord(file_record, record)) {
-    stats.unreadable++;
+SlotKind ClassifySlot(Io::FileRecord<S>& file_record,
+                      const NtfsVolume<S>& volume, bool parsed,
+                      RecordCounts& counts, bool& header_damaged) {
+  if (!parsed) {
+    counts.unreadable++;
     if (file_record.HasFailedFixup()) {
-      stats.damaged++;
+      counts.damaged++;
     }
     return SlotKind::Unreadable;
   }
   header_damaged = file_record.HasFailedFixup();
   if (header_damaged) {
-    stats.damaged++;
+    counts.damaged++;
   }
   if (file_record.IsExtensionRecord()) {
-    stats.extensions++;
+    counts.extensions++;
     return SlotKind::Extension;
   }
   if (file_record.IsDeleted()) {
-    stats.deleted++;
+    counts.deleted++;
     if (!volume.GetOptions().include_deleted) {
       return SlotKind::Dropped;
     }
   } else {
-    stats.in_use++;
+    counts.in_use++;
   }
   return SlotKind::Base;
 }
@@ -878,20 +945,20 @@ SlotKind ReadSlotHeader(Io::FileRecord<S>& file_record,
 // a record not kept, a damaged one when strict: entry is then meaningless.
 template <Cache::Strategy S>
 bool ReadBaseEntry(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
-                   ULONGLONG record, bool header_damaged,
-                   Mft::MftTree::ScanStats& stats, Mft::MftTree::Entry& entry) {
+                   ULONGLONG record, bool header_damaged, RecordCounts& counts,
+                   Mft::MftTree::Entry& entry) {
   const bool parsed = ReadEntry(file_record, record, entry);
-  stats.reused_extensions += file_record.GetReusedExtensionCount();
+  counts.reused_extensions += file_record.GetReusedExtensionCount();
   if (!parsed || file_record.IsSalvaged()) {
     if (!header_damaged) {
-      stats.damaged++;
+      counts.damaged++;
     }
     // Strict: a damaged record is dropped, not kept partial.
     if (!parsed && !volume.GetOptions().recover_errors) {
       return false;
     }
   }
-  AddCarvedNames(file_record, entry, stats);
+  AddCarvedNames(file_record, entry, counts);
   return true;
 }
 
@@ -958,6 +1025,43 @@ bool FilesUnderParent(const Mft::MftTree::Entry& entry, size_t index) {
       });
 }
 
+// What the data state of one entry waits for, worked out from its record alone,
+// so that a thread other than the scan's can do it. Only the scan's own thread
+// asks the volume.
+struct DataNote {
+  // None: the record has no unnamed $DATA stream, and no state. Known: the
+  // state is settled. Query: the clusters in extents decide it.
+  enum class Kind : BYTE { None, Known, Query };
+  Kind kind{Kind::None};
+  Alloc::DataState state{Alloc::DataState::Unknown};
+  Alloc::StreamExtents extents;
+};
+
+// Works out the DataNote of the unnamed $DATA stream of file_record.
+template <Cache::Strategy S>
+DataNote ComputeDataNote(const Io::FileRecord<S>& file_record) {
+  DataNote note;
+  const Attr::AttrBase<S>* data = file_record.FindStream({});
+  if (data == nullptr) {
+    return note;
+  }
+  note.kind = DataNote::Kind::Known;
+  if (!file_record.IsDeleted()) {
+    note.state = Alloc::DataState::Intact;
+    return note;
+  }
+
+  Alloc::StreamExtents extents = data->GetExtents();
+  if (extents.extents.empty()) {
+    note.state =
+        extents.complete ? Alloc::DataState::Intact : Alloc::DataState::Unknown;
+    return note;
+  }
+  note.kind = DataNote::Kind::Query;
+  note.extents = std::move(extents);
+  return note;
+}
+
 // Gives the entries of one scan their data state. A deleted stream's extents
 // are kept as queries, and resolved against the cluster bitmap in one sorted
 // batch once enough of them wait, and at the end: deleted files sit at random
@@ -971,28 +1075,21 @@ class DataStateResolver {
                     Mft::MftTree::ScanStats& stats)
       : volume_(&volume), entries_(&entries), stats_(&stats) {}
 
-  // Handles the entry at entry_index, which file_record has just filled.
-  void Note(const Io::FileRecord<S>& file_record, size_t entry_index) {
-    const Attr::AttrBase<S>* data = file_record.FindStream({});
-    if (data == nullptr) {
+  // Handles the entry at entry_index, whose record gave note.
+  void Add(size_t entry_index, DataNote note) {
+    if (note.kind == DataNote::Kind::None) {
       return;
     }
-    if (!file_record.IsDeleted()) {
-      Set(entry_index, Alloc::DataState::Intact);
+    if (note.kind == DataNote::Kind::Known) {
+      Set(entry_index, note.state);
       return;
     }
 
-    const Alloc::StreamExtents extents = data->GetExtents();
-    if (extents.extents.empty()) {
-      Set(entry_index, extents.complete ? Alloc::DataState::Intact
-                                        : Alloc::DataState::Unknown);
-      return;
-    }
     waiting_.push_back({.entry_index = entry_index,
                         .first_query = queries_.size(),
-                        .query_count = extents.extents.size(),
-                        .complete = extents.complete});
-    for (const Alloc::Extent& extent : extents.extents) {
+                        .query_count = note.extents.extents.size(),
+                        .complete = note.extents.complete});
+    for (const Alloc::Extent& extent : note.extents.extents) {
       queries_.push_back({.lcn = extent.lcn, .clusters = extent.clusters});
     }
     if (queries_.size() >= MaxPendingRanges()) {
@@ -1054,11 +1151,653 @@ class DataStateResolver {
   std::vector<Waiting> waiting_;
 };
 
+// What one record slot of a window gave, parsed away from the thread that owns
+// the scan and kept until the scan reaches the slot.
+struct SlotOutcome {
+  SlotKind kind{SlotKind::Unreadable};
+  // The update sequence check of the header failed on some sector: the header
+  // is counted already.
+  bool header_damaged{false};
+  // The base record number the slot names: 0 for a base record.
+  ULONGLONG base_reference{0};
+  // The thread that owns the scan MUST parse the slot itself, since it needs
+  // the volume. Nothing else of the outcome counts then, and its log lines are
+  // not replayed.
+  bool needs_scan_thread{false};
+  // A base record with an $ATTRIBUTE_LIST, which the scan holds for its second
+  // pass, and the clusters of that list.
+  bool has_list{false};
+  std::vector<Alloc::Extent> list_extents;
+  // A base record without one: whether it is kept, its entry and its data
+  // state.
+  bool kept{false};
+  Mft::MftTree::Entry entry;
+  DataNote note;
+  RecordCounts counts;
+  // The lines the parse logged, in the capture of the chunk it ran in, and then
+  // the lines its attributes logged when they were dropped. With one thread,
+  // the second kind comes later: when the next slot is parsed.
+  Log::Detail::CapturedLog::Mark log_begin;
+  Log::Detail::CapturedLog::Mark log_end;
+  Log::Detail::CapturedLog::Mark release_end;
+};
+
+// Parses record, whose bytes are one slot of a window, into outcome. It runs on
+// any thread: it never reads the volume, and it logs into the capture of the
+// thread. A record that needs the volume is only marked, for the thread that
+// owns the scan to parse: the key stream of an encrypted file may be
+// non-resident, and the extension records of an $ATTRIBUTE_LIST are read from
+// the disk. file_record MUST NOT resolve an $ATTRIBUTE_LIST.
+template <Cache::Strategy S>
+void ParseWindowSlot(Io::FileRecord<S>& file_record,
+                     const NtfsVolume<S>& volume, ULONGLONG record,
+                     std::span<const BYTE> bytes, bool annotate,
+                     SlotOutcome& outcome) {
+  const bool parsed = file_record.ParseFileRecord(record, bytes);
+  outcome.kind = ClassifySlot(file_record, volume, parsed, outcome.counts,
+                              outcome.header_damaged);
+  if (outcome.kind == SlotKind::Unreadable) {
+    return;
+  }
+  outcome.base_reference = file_record.GetBaseRecordReference();
+  if (outcome.kind != SlotKind::Base) {
+    return;
+  }
+
+  outcome.has_list = file_record.HasAttrHeader(Attr::Type::AttributeList);
+  if (outcome.has_list) {
+    outcome.list_extents =
+        file_record.AttributeListExtents(max_announced_list_bytes);
+    return;
+  }
+  if (file_record.HasAttrHeader(Attr::Type::LoggedUtilityStream)) {
+    outcome.needs_scan_thread = true;
+    return;
+  }
+
+  outcome.kept =
+      ReadBaseEntry(file_record, volume, record, outcome.header_damaged,
+                    outcome.counts, outcome.entry);
+  if (outcome.kept && annotate) {
+    outcome.note = ComputeDataNote(file_record);
+  }
+}
+
+// Parses the slots of one window on several threads, and gives the outcome of
+// each in record order. The window is cut into chunks. The threads take them in
+// order, each with a FileRecord of its own, and a chunk logs into a capture of
+// its own, which the thread that owns the scan replays record by record.
+template <Cache::Strategy S>
+class WindowParser {
+ public:
+  // threads is the number of threads that parse, the calling one included. A
+  // null bitmap parses every slot, else the slots it marks free are left alone.
+  WindowParser(const NtfsVolume<S>& volume, size_t threads,
+               const std::vector<BYTE>* bitmap, bool annotate)
+      : volume_(&volume),
+        record_size_(volume.GetFileRecordSize()),
+        bitmap_(bitmap),
+        annotate_(annotate),
+        pool_(threads - 1) {
+    contexts_.reserve(pool_.Slots());
+    for (size_t slot = 0; slot < pool_.Slots(); slot++) {
+      Io::FileRecord<S>& context =
+          *contexts_.emplace_back(std::make_unique<Io::FileRecord<S>>(volume));
+      context.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+      // Resolving a list reads the volume, which no worker does. A record with
+      // a list never gets to parse its attributes here.
+      context.SetResolveAttrList(false);
+    }
+  }
+
+  // Starts parsing window, after the one before it was ended. The bytes of
+  // window MUST stay as they are until End().
+  void Begin(const Mft::SlotWindow& window) {
+    End();
+    window_ = window;
+    const auto slots = static_cast<size_t>(window.last - window.first);
+    if (outcomes_.size() < slots) {
+      outcomes_.resize(slots);
+    }
+    const size_t chunks = (slots + parse_chunk_slots - 1) / parse_chunk_slots;
+    // The logs of the window before stay as they are: the lines its last slot
+    // logged when its attributes were dropped are replayed with the next slot.
+    log_set_ = 1 - log_set_;
+    std::vector<Log::Detail::CapturedLog>& logs = logs_.at(log_set_);
+    if (logs.size() < chunks) {
+      logs.resize(chunks);
+    }
+    // Asked here, on the thread that owns the sinks: a worker never does.
+    levels_ = Log::Detail::EnabledLevels();
+    waited_chunk_ = no_chunk;
+    active_ = true;
+    pool_.Start(chunks,
+                [this](size_t chunk, size_t slot) { ParseChunk(chunk, slot); });
+  }
+
+  // Waits for the threads that still parse, and drops the chunks not started.
+  void End() {
+    if (active_) {
+      active_ = false;
+      pool_.Finish();
+    }
+  }
+
+  // Whether the window being parsed holds slot record.
+  [[nodiscard]] bool Covers(ULONGLONG record) const noexcept {
+    return active_ && record >= window_.first && record < window_.last;
+  }
+
+  // The outcome of slot record, once its chunk is parsed. record MUST be a slot
+  // of the window that is not marked free. The reference stays valid until the
+  // next Begin().
+  SlotOutcome& Take(ULONGLONG record) {
+    const auto index = static_cast<size_t>(record - window_.first);
+    const size_t chunk = index / parse_chunk_slots;
+    if (chunk != waited_chunk_) {
+      pool_.WaitFor(chunk);
+      waited_chunk_ = chunk;
+    }
+    return outcomes_.at(index);
+  }
+
+  // The log that holds the lines the parse of record logged, which the
+  // outcome marks. It stays valid until the second Begin() after the window.
+  [[nodiscard]] const Log::Detail::CapturedLog& LogOf(ULONGLONG record) const {
+    const auto index = static_cast<size_t>(record - window_.first);
+    return logs_.at(log_set_).at(index / parse_chunk_slots);
+  }
+
+ private:
+  // The chunk number of no chunk.
+  static constexpr size_t no_chunk = (std::numeric_limits<size_t>::max)();
+
+  // Parses the slots of one chunk on thread slot.
+  void ParseChunk(size_t chunk, size_t slot) {
+    Log::Detail::CapturedLog& log = logs_.at(log_set_).at(chunk);
+    log.Reset(levels_);
+    const Log::Detail::CaptureScope capture(log);
+    Io::FileRecord<S>& file_record = *contexts_.at(slot);
+
+    const auto slots = static_cast<size_t>(window_.last - window_.first);
+    const size_t first = chunk * parse_chunk_slots;
+    const size_t last = (std::min)(first + parse_chunk_slots, slots);
+    for (size_t index = first; index < last; index++) {
+      const ULONGLONG record = window_.first + index;
+      if (bitmap_ != nullptr && IsMarkedFree(*bitmap_, record)) {
+        continue;
+      }
+      SlotOutcome& outcome = outcomes_.at(index);
+      outcome = SlotOutcome{};
+      outcome.log_begin = log.End();
+      ParseWindowSlot(file_record, *volume_, record,
+                      window_.bytes.subspan(index * record_size_, record_size_),
+                      annotate_, outcome);
+      outcome.log_end = log.End();
+      // What the attributes log when they are dropped is kept apart: it
+      // belongs after what the scan does with the slot.
+      file_record.ClearAttrs();
+      outcome.release_end = log.End();
+    }
+  }
+
+  const NtfsVolume<S>* volume_;
+  size_t record_size_;
+  const std::vector<BYTE>* bitmap_;
+  bool annotate_;
+  Mft::SlotWindow window_;
+  Log::Detail::LevelMask levels_{0};
+  bool active_{false};
+  // The last chunk Take() waited for, so that a chunk is waited for once.
+  size_t waited_chunk_{no_chunk};
+  std::vector<std::unique_ptr<Io::FileRecord<S>>> contexts_;
+  std::vector<SlotOutcome> outcomes_;
+  // The capture of each chunk, for the window being parsed and for the one
+  // before it.
+  std::array<std::vector<Log::Detail::CapturedLog>, 2> logs_;
+  size_t log_set_{0};
+  // Last: its threads use the members above, so it ends first.
+  Util::ChunkPool pool_;
+};
+
+// The threads the scan parses with. options.threads gives it, except for 0: a
+// volume with enough slots takes the threads of the machine, a small one takes
+// one. A volume with a raw attribute callback takes one whatever is asked.
+template <Cache::Strategy S>
+size_t ScanThreads(const NtfsVolume<S>& volume,
+                   const Mft::MftTree::ScanOptions& options, ULONGLONG total) {
+  if (volume.HasAttrRawCB()) {
+    return 1;
+  }
+  unsigned threads = options.threads;
+  if (threads == 0) {
+    if (total < min_auto_threaded_slots_override.value_or(
+                    default_min_auto_threaded_slots)) {
+      return 1;
+    }
+    threads = (std::min)(std::thread::hardware_concurrency(), max_auto_threads);
+  }
+  return (std::clamp)(threads, 1U, max_scan_threads);
+}
+
+// The two passes over the record slots of $MFT that make the entries of a
+// scan, in record order, through one reused FileRecord. The first pass reads
+// each slot, and keeps the entry of each base record. A base record with an
+// $ATTRIBUTE_LIST waits for the second pass: by then the first one has held the
+// extension records it asks for, so they come from memory instead of one disk
+// read each. What does not fit in memory is read in the second pass, announced
+// to the reader ahead of it.
+//
+// With more than one thread, the first pass has several threads parse the slots
+// of each window, and takes their outcomes in record order. Only the thread
+// that owns the scan reads the volume, logs, and changes the scan: a slot that
+// needs a read is parsed again by it, as it is with one thread.
+template <Cache::Strategy S>
+class SlotScan {
+ public:
+  // entries and stats belong to the caller, and receive the result. bitmap,
+  // when it holds a value, lists the slots in use: the scan leaves the others
+  // alone.
+  SlotScan(const NtfsVolume<S>& volume,
+           const Mft::MftTree::ScanOptions& options,
+           const std::optional<std::vector<BYTE>>& bitmap, bool annotate,
+           std::vector<Mft::MftTree::Entry>& entries,
+           Mft::MftTree::ScanStats& stats)
+      : volume_(&volume),
+        options_(&options),
+        bitmap_(&bitmap),
+        annotate_(annotate),
+        entries_(&entries),
+        stats_(&stats),
+        total_(volume.GetRecordsCount()),
+        held_(volume.GetFileRecordSize()),
+        bases_(total_),
+        unheld_(volume),
+        file_record_(volume),
+        resolver_(volume, entries, stats),
+        slots_(volume) {
+    file_record_.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+    file_record_.SetExtensionSource([this](ULONGLONG record) {
+      const std::span<const BYTE> bytes = held_.FindExtension(record);
+      return bytes.empty() ? unheld_.Find(record) : bytes;
+    });
+    file_record_.SetBaseSource(
+        [this](ULONGLONG record) { return bases_.BaseOf(record); });
+    if (bitmap) {
+      slots_.Plan(PlanSlotRanges(*bitmap, total_));
+    }
+    parse_threads_ = ScanThreads(volume, options, total_);
+    // An explicit count is used from the first window. A count left to the
+    // scan waits for the probe.
+    automatic_ = options.threads == 0;
+  }
+
+  SlotScan(const SlotScan&) = delete;
+  SlotScan& operator=(const SlotScan&) = delete;
+  SlotScan(SlotScan&&) = delete;
+  SlotScan& operator=(SlotScan&&) = delete;
+
+  // The attributes of the last slot a thread parsed are dropped here, as the
+  // scan of one thread drops its own.
+  ~SlotScan() {
+    try {
+      DropLastParsedByThread();
+    }
+    // NOLINTNEXTLINE(bugprone-empty-catch)
+    catch (...) {
+      // A destructor cannot report a failure, and nothing is left to undo.
+    }
+  }
+
+  // Reads the slots in record order, and keeps the entries.
+  void FirstPass() {
+    for (ULONGLONG record = 0; record < total_; record++) {
+      if (!ProgressAllowsRecord(*options_, record, total_)) {
+        stats_->complete = false;
+        break;
+      }
+
+      held_.ReleaseBefore(record);
+      if (*bitmap_ && IsMarkedFree(**bitmap_, record)) {
+        stats_->skipped++;
+        continue;
+      }
+      if (!TakeParsed(record)) {
+        ParseHere(record);
+      }
+    }
+
+    // The threads rest during the second pass, which they have no part in.
+    if (parser_) {
+      parser_->End();
+    }
+    held_.Finish();
+  }
+
+  // Parses the base records that wait for their extension records, and drops
+  // the entries the scan does not keep.
+  void SecondPass() {
+    std::vector<size_t> dropped;
+    const std::vector<HeldRecords::Waiting>& waiting_records =
+        held_.WaitingRecords();
+    ReadAnnouncer<S> announcer(*volume_, waiting_records);
+    for (size_t index = 0; index < waiting_records.size(); index++) {
+      announcer.Before(index);
+      ReplayPendingRelease();
+      const HeldRecords::Waiting& waiting = waiting_records.at(index);
+      Mft::MftTree::Entry& entry = entries_->at(waiting.entry_index);
+      // The bytes the first pass parsed: the header parses as it did then. A
+      // record that was not held is read again, announced to the reader.
+      const bool parsed = waiting.slot
+                              ? file_record_.ParseFileRecord(
+                                    waiting.record, held_.Bytes(*waiting.slot))
+                              : file_record_.ParseFileRecord(waiting.record);
+      // Read even when the record is dropped: the reader was told to.
+      unheld_.Load(waiting.unheld_extensions);
+      RecordCounts counts;
+      const bool kept =
+          parsed && ReadBaseEntry(file_record_, *volume_, waiting.record,
+                                  waiting.header_damaged, counts, entry);
+      AddCounts(*stats_, counts);
+      unheld_.Clear();
+      if (!kept) {
+        dropped.push_back(waiting.entry_index);
+        continue;
+      }
+      if (annotate_) {
+        resolver_.Add(waiting.entry_index, ComputeDataNote(file_record_));
+      }
+      if ((index + 1) % announce_restart_interval == 0) {
+        announcer.Restart(index + 1);
+      }
+    }
+    if (annotate_) {
+      resolver_.Flush();
+    }
+    DropEntries(*entries_, dropped);
+  }
+
+ private:
+  // Takes slot record from the window the threads parse, giving them the window
+  // when the scan reaches it. False when the thread that owns the scan has to
+  // parse the slot: no window serves it, or it needs the volume.
+  bool TakeParsed(ULONGLONG record) {
+    if (parse_threads_ <= 1 || record < serial_until_) {
+      return false;
+    }
+    if (!parser_ || !parser_->Covers(record)) {
+      if (parser_) {
+        // The next window overwrites the bytes the threads parse.
+        parser_->End();
+      }
+      const auto began = std::chrono::steady_clock::now();
+      const std::optional<Mft::SlotWindow> window = slots_.ServeWindow(record);
+      const auto loaded = std::chrono::steady_clock::now();
+      if (!window) {
+        return false;
+      }
+      if (!ThreadsParse(record, began, loaded)) {
+        // This thread parses the window it just loaded.
+        serial_until_ = window->last;
+        return false;
+      }
+      if (!parser_) {
+        parser_.emplace(*volume_, parse_threads_,
+                        *bitmap_ ? &**bitmap_ : nullptr, annotate_);
+      }
+      parser_->Begin(*window);
+    }
+
+    SlotOutcome& outcome = parser_->Take(record);
+    if (outcome.needs_scan_thread) {
+      return false;
+    }
+    slots_parsed_by_threads++;
+    if (outcome.kind == SlotKind::Base && outcome.has_list) {
+      // The window holds the slot in full, so the record waits.
+      if (!held_.HoldWaiting(record, slots_.HeldSlot(record), entries_->size(),
+                             outcome.header_damaged,
+                             std::move(outcome.list_extents))) {
+        return false;
+      }
+      Merge(record, outcome);
+      entries_->emplace_back();
+      LeaveRelease(record, outcome);
+      return true;
+    }
+
+    Merge(record, outcome);
+    if (outcome.kind == SlotKind::Extension) {
+      // Its base record may come later, and then takes it from memory.
+      held_.MeetExtension(record, outcome.base_reference,
+                          slots_.HeldSlot(record));
+    }
+    if (outcome.kind == SlotKind::Base && outcome.kept) {
+      entries_->push_back(std::move(outcome.entry));
+      if (annotate_) {
+        resolver_.Add(entries_->size() - 1, std::move(outcome.note));
+      }
+    }
+    LeaveRelease(record, outcome);
+    return true;
+  }
+
+  // Whether the threads parse the window just loaded for slot record, which
+  // took from began to loaded to load. With an explicit thread count, they
+  // always do. With a count left to the scan, they do once a probe says they
+  // pay: the first probe_slots slots are parsed by this thread alone, and the
+  // time the windows took to load, against the time the probe lasted, tells
+  // whether the volume is read faster than this thread parses. The choice is
+  // made once.
+  bool ThreadsParse(ULONGLONG record,
+                    std::chrono::steady_clock::time_point began,
+                    std::chrono::steady_clock::time_point loaded) {
+    if (!automatic_) {
+      return true;
+    }
+    if (probe_.decided) {
+      return probe_.threads_pay;
+    }
+    if (!probe_.started) {
+      probe_.started = true;
+      probe_.first_slot = record;
+      probe_.began = began;
+    }
+    probe_.load_seconds +=
+        std::chrono::duration<double>(loaded - began).count();
+    if (record - probe_.first_slot <
+        probe_slots_override.value_or(default_probe_slots)) {
+      return false;
+    }
+    probe_.decided = true;
+    probe_.threads_pay = probe_verdict_override.value_or(ScanThreadsPay(
+        probe_.load_seconds,
+        std::chrono::duration<double>(loaded - probe_.began).count()));
+    return probe_.threads_pay;
+  }
+
+  // Makes the scan take what the threads found in slot record: its log lines,
+  // its counters, and the base it names. The slot before it is gone first, so
+  // that what its attributes log comes before the lines of this one.
+  void Merge(ULONGLONG record, const SlotOutcome& outcome) {
+    ReplayPendingRelease();
+    if (parsed_here_) {
+      file_record_.ClearAttrs();
+      parsed_here_ = false;
+    }
+    parser_->LogOf(record).Replay(outcome.log_begin, outcome.log_end);
+    AddCounts(*stats_, outcome.counts);
+    if (outcome.kind != SlotKind::Unreadable) {
+      bases_.Note(record, outcome.base_reference);
+    }
+  }
+
+  // Keeps the lines the attributes of slot record logged when a thread dropped
+  // them, for the next slot to be parsed: one thread drops the attributes of a
+  // slot when it parses the next one.
+  void LeaveRelease(ULONGLONG record, const SlotOutcome& outcome) {
+    if (outcome.release_end.lines > outcome.log_end.lines) {
+      pending_release_ = {.log = &parser_->LogOf(record),
+                          .begin = outcome.log_end,
+                          .end = outcome.release_end,
+                          .slot = record};
+    }
+  }
+
+  // Ends the scan for the attributes LeaveRelease() kept. One thread drops
+  // the attributes of its last slot when its FileRecord goes away, which
+  // does it member by member in the reverse of the order ClearAttrs() uses. To
+  // log them in that order, the slot is parsed again, without a sound, in
+  // file_record_, whose destructor then does it.
+  void DropLastParsedByThread() {
+    if (pending_release_.log == nullptr || !pending_release_.slot) {
+      ReplayPendingRelease();
+      return;
+    }
+    const std::span<const BYTE> bytes = slots_.HeldSlot(*pending_release_.slot);
+    pending_release_.log = nullptr;
+    if (bytes.empty()) {
+      return;
+    }
+    Log::Detail::CapturedLog silent;
+    silent.Reset(0);
+    const Log::Detail::CaptureScope capture(silent);
+    if (file_record_.ParseFileRecord(*pending_release_.slot, bytes)) {
+      static_cast<void>(TryParseAttrs(file_record_));
+    }
+  }
+
+  // Sends the lines LeaveRelease() kept to the sinks.
+  void ReplayPendingRelease() {
+    if (pending_release_.log != nullptr) {
+      pending_release_.log->Replay(pending_release_.begin,
+                                   pending_release_.end);
+      pending_release_.log = nullptr;
+    }
+  }
+
+  // Parses slot record on this thread, and keeps what it gives.
+  void ParseHere(ULONGLONG record) {
+    ReplayPendingRelease();
+    RecordCounts counts;
+    ParseHereInto(record, counts);
+    AddCounts(*stats_, counts);
+  }
+
+  // The body of ParseHere(): counts receives what the slot adds to the
+  // statistics.
+  void ParseHereInto(ULONGLONG record, RecordCounts& counts) {
+    bool header_damaged = false;
+    const bool parsed = slots_.ParseFileRecord(file_record_, record);
+    const SlotKind kind =
+        ClassifySlot(file_record_, *volume_, parsed, counts, header_damaged);
+    if (kind == SlotKind::Unreadable) {
+      return;
+    }
+    bases_.Note(record, file_record_.GetBaseRecordReference());
+    if (kind == SlotKind::Extension) {
+      // Its base record may come later, and then takes it from memory.
+      held_.MeetExtension(record, file_record_.GetBaseRecordReference(),
+                          slots_.HeldSlot(record));
+      return;
+    }
+    if (kind == SlotKind::Dropped) {
+      return;
+    }
+    // Its entry keeps its place, so the entries stay in record order.
+    const bool has_list = file_record_.HasAttrHeader(Attr::Type::AttributeList);
+    if (has_list &&
+        held_.HoldWaiting(
+            record, slots_.HeldSlot(record), entries_->size(), header_damaged,
+            file_record_.AttributeListExtents(max_announced_list_bytes))) {
+      entries_->emplace_back();
+      return;
+    }
+    if (has_list) {
+      held_.Confirm(record);
+    }
+
+    // Filled in place: an Entry is big, and most slots are kept.
+    Mft::MftTree::Entry& entry = entries_->emplace_back();
+    parsed_here_ = true;
+    if (!ReadBaseEntry(file_record_, *volume_, record, header_damaged, counts,
+                       entry)) {
+      entries_->pop_back();
+      return;
+    }
+    if (annotate_) {
+      resolver_.Add(entries_->size() - 1, ComputeDataNote(file_record_));
+    }
+  }
+
+  const NtfsVolume<S>* volume_;
+  const Mft::MftTree::ScanOptions* options_;
+  const std::optional<std::vector<BYTE>>* bitmap_;
+  bool annotate_;
+  std::vector<Mft::MftTree::Entry>* entries_;
+  Mft::MftTree::ScanStats* stats_;
+  ULONGLONG total_;
+  HeldRecords held_;
+  SlotBases bases_;
+  UnheldExtensions<S> unheld_;
+  Io::FileRecord<S> file_record_;
+  DataStateResolver<S> resolver_;
+  // Reads $MFT in big blocks, not record by record, and only the used ones.
+  Mft::SlotReader<S> slots_;
+  // Threads that parse, this one included, and whether the scan chooses when
+  // they start. With one, this thread parses every slot.
+  size_t parse_threads_{1};
+  bool automatic_{false};
+
+  // What the probe of an automatic scan has seen so far.
+  struct Probe {
+    bool started{false};
+    bool decided{false};
+    bool threads_pay{false};
+    ULONGLONG first_slot{0};
+    std::chrono::steady_clock::time_point began;
+    double load_seconds{0};
+  };
+
+  Probe probe_;
+  // The slots before this one are in a window this thread parses itself.
+  ULONGLONG serial_until_{0};
+  // Whether file_record_ holds the attributes of a slot this thread parsed.
+  bool parsed_here_{false};
+
+  // The lines the attributes of the last slot a thread parsed logged when they
+  // were dropped, which no slot has taken its turn to replay yet.
+  struct PendingRelease {
+    const Log::Detail::CapturedLog* log{nullptr};
+    Log::Detail::CapturedLog::Mark begin;
+    Log::Detail::CapturedLog::Mark end;
+    // The slot those attributes belong to.
+    std::optional<ULONGLONG> slot;
+  };
+
+  PendingRelease pending_release_;
+  // Last: its threads read the window of slots_, so they end first.
+  std::optional<WindowParser<S>> parser_;
+};
+
 }  // namespace
 
 size_t MaxPendingRanges() {
   return max_pending_ranges_override != 0 ? max_pending_ranges_override
                                           : default_max_pending_ranges;
+}
+
+void SetAutoThreadLimitsForTests(std::optional<ULONGLONG> min_slots,
+                                 std::optional<ULONGLONG> probe_slots,
+                                 std::optional<bool> verdict) {
+  min_auto_threaded_slots_override = min_slots;
+  probe_slots_override = probe_slots;
+  probe_verdict_override = verdict;
+}
+
+bool ScanThreadsPay(double load_seconds, double elapsed_seconds) noexcept {
+  return elapsed_seconds > 0 &&
+         load_seconds <= max_load_share * elapsed_seconds;
 }
 
 size_t MaxHeldRecordBytes() {
@@ -1067,6 +1806,14 @@ size_t MaxHeldRecordBytes() {
 
 void SetMaxHeldRecordBytesForTests(std::optional<size_t> limit) {
   max_held_record_bytes_override = limit;
+}
+
+size_t SlotsParsedByThreadsForTests(bool reset) noexcept {
+  const size_t count = slots_parsed_by_threads;
+  if (reset) {
+    slots_parsed_by_threads = 0;
+  }
+  return count;
 }
 
 void SetMaxPendingRangesForTests(size_t limit) {
@@ -1184,125 +1931,15 @@ Mft::MftTree& Mft::MftTree::operator=(Mft::MftTree&& other) noexcept = default;
 
 Mft::MftTree::~MftTree() = default;
 
-// Reads the record slots of volume's $MFT into entries, in record order,
-// through one reused FileRecord. A base record with an $ATTRIBUTE_LIST waits
-// for a second pass: by then the first one has held the extension records it
-// asks for, so they come from memory instead of one disk read each. What does
-// not fit in memory is read in the second pass, announced to the reader ahead
-// of it.
+// Reads the record slots of volume's $MFT into entries, in record order, in the
+// two passes of SlotScan.
 template <Cache::Strategy S>
 void Mft::MftTree::Impl::ReadSlots(
     const NtfsVolume<S>& volume, const Mft::MftTree::ScanOptions& options,
     const std::optional<std::vector<BYTE>>& bitmap, bool annotate) {
-  const ULONGLONG total = volume.GetRecordsCount();
-  HeldRecords held(volume.GetFileRecordSize());
-  SlotBases bases(total);
-  UnheldExtensions<S> unheld(volume);
-  Io::FileRecord<S> file_record(volume);
-  file_record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
-  file_record.SetExtensionSource([&held, &unheld](ULONGLONG record) {
-    const std::span<const BYTE> bytes = held.FindExtension(record);
-    return bytes.empty() ? unheld.Find(record) : bytes;
-  });
-  file_record.SetBaseSource(
-      [&bases](ULONGLONG record) { return bases.BaseOf(record); });
-  DataStateResolver<S> resolver(volume, entries, stats);
-  // Reads $MFT in big blocks, not record by record, and only the used ones.
-  Mft::SlotReader<S> slots(volume);
-  if (bitmap) {
-    slots.Plan(PlanSlotRanges(*bitmap, total));
-  }
-
-  for (ULONGLONG record = 0; record < total; record++) {
-    if (!ProgressAllowsRecord(options, record, total)) {
-      stats.complete = false;
-      break;
-    }
-
-    held.ReleaseBefore(record);
-    if (bitmap && IsMarkedFree(*bitmap, record)) {
-      stats.skipped++;
-      continue;
-    }
-
-    bool header_damaged = false;
-    const SlotKind kind = ReadSlotHeader(file_record, slots, volume, record,
-                                         stats, header_damaged);
-    if (kind == SlotKind::Unreadable) {
-      continue;
-    }
-    bases.Note(record, file_record.GetBaseRecordReference());
-    if (kind == SlotKind::Extension) {
-      // Its base record may come later, and then takes it from memory.
-      held.MeetExtension(record, file_record.GetBaseRecordReference(),
-                         slots.HeldSlot(record));
-      continue;
-    }
-    if (kind == SlotKind::Dropped) {
-      continue;
-    }
-    // Its entry keeps its place, so the entries stay in record order.
-    const bool has_list = file_record.HasAttrHeader(Attr::Type::AttributeList);
-    if (has_list &&
-        held.HoldWaiting(
-            record, slots.HeldSlot(record), entries.size(), header_damaged,
-            file_record.AttributeListExtents(max_announced_list_bytes))) {
-      entries.emplace_back();
-      continue;
-    }
-    if (has_list) {
-      held.Confirm(record);
-    }
-
-    // Filled in place: an Entry is big, and most slots are kept.
-    Mft::MftTree::Entry& entry = entries.emplace_back();
-    if (!ReadBaseEntry(file_record, volume, record, header_damaged, stats,
-                       entry)) {
-      entries.pop_back();
-      continue;
-    }
-    if (annotate) {
-      resolver.Note(file_record, entries.size() - 1);
-    }
-  }
-
-  held.Finish();
-
-  std::vector<size_t> dropped;
-  const std::vector<HeldRecords::Waiting>& waiting_records =
-      held.WaitingRecords();
-  ReadAnnouncer<S> announcer(volume, waiting_records);
-  for (size_t index = 0; index < waiting_records.size(); index++) {
-    announcer.Before(index);
-    const HeldRecords::Waiting& waiting = waiting_records.at(index);
-    Mft::MftTree::Entry& entry = entries.at(waiting.entry_index);
-    // The bytes the first pass parsed: the header parses as it did then. A
-    // record that was not held is read again, announced to the reader.
-    const bool parsed =
-        waiting.slot ? file_record.ParseFileRecord(waiting.record,
-                                                   held.Bytes(*waiting.slot))
-                     : file_record.ParseFileRecord(waiting.record);
-    // Read even when the record is dropped: the reader was told to.
-    unheld.Load(waiting.unheld_extensions);
-    const bool kept =
-        parsed && ReadBaseEntry(file_record, volume, waiting.record,
-                                waiting.header_damaged, stats, entry);
-    unheld.Clear();
-    if (!kept) {
-      dropped.push_back(waiting.entry_index);
-      continue;
-    }
-    if (annotate) {
-      resolver.Note(file_record, waiting.entry_index);
-    }
-    if ((index + 1) % announce_restart_interval == 0) {
-      announcer.Restart(index + 1);
-    }
-  }
-  if (annotate) {
-    resolver.Flush();
-  }
-  DropEntries(entries, dropped);
+  SlotScan<S> scan(volume, options, bitmap, annotate, entries, stats);
+  scan.FirstPass();
+  scan.SecondPass();
 }
 
 // Reads the record slots of volume's $MFT, keeps each base record's entry,
@@ -1319,11 +1956,11 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   const std::optional<std::vector<BYTE>> bitmap =
       volume.GetOptions().include_deleted ? std::nullopt
                                           : ReadMftBitmap(volume, total);
-  // An Entry is big: each time the vector grows, it moves them all.
-  if (bitmap) {
-    entries.reserve(gsl::narrow<size_t>(
-        (std::min)(CountUsedSlots(*bitmap, total), max_reserved_entries)));
-  }
+  // An Entry is big: each time the vector grows, it moves them all. Without a
+  // bitmap, the slots are all there is to go by.
+  entries.reserve(gsl::narrow<size_t>(
+      (std::min)(bitmap ? CountUsedSlots(*bitmap, total) : total,
+                 max_reserved_entries)));
 
   // Deleted entries only exist with include_deleted, and the annotation reads
   // the bitmap: without both, the scan reads what it always did.

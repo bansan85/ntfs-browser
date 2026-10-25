@@ -9,6 +9,8 @@ target_sources(
     "optional-access.h"
     "sample-run.cpp"
     "sample-run.h"
+    "scan-comparison.cpp"
+    "scan-comparison.h"
     "scratch-record.h"
     "scripted-disk-reader.h"
     "test-log-sink.cpp"
