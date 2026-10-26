@@ -161,6 +161,22 @@ std::string DocsListing(std::string_view name, std::string_view marker = {}) {
          "Files: 1, Directories: 0\n";
 }
 
+// The line that opens the block of directory in a recursive listing.
+std::string DirectoryHeader(std::string_view directory) {
+  return "\nDirectory of " + std::string(directory) + "\n";
+}
+
+// directory with name below it, as a recursive listing writes a path.
+std::string Below(const std::string& directory, std::string_view name) {
+  return directory + static_cast<char>(Fs::path::preferred_separator) +
+         std::string(name);
+}
+
+// The line a recursive listing writes where it does not enter path.
+std::string SkipLine(std::string_view path) {
+  return "Skipping " + std::string(path) + ": directory already listed\n";
+}
+
 // The path of image with directory after it, in the form the samples take.
 std::wstring InImage(const Fs::path& image, std::wstring_view directory) {
   return image.wstring() + L"/" + std::wstring(directory);
@@ -245,6 +261,63 @@ TEST_CASE("NtfsDir --recursive lists every directory under a header",
               ListingLine("report.txt", false, dump_broken_alter_time) +
               "Files: 1, Directories: 1\n");
   }
+}
+
+TEST_CASE("NtfsDir --recursive enters a directory once when an entry loops",
+          "[io][sample][characterization]") {
+  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
+  INFO(exe.string());
+  const TempImage image(
+      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithDirectoryLoop());
+  const std::string root = image.path.string();
+  const std::string docs = Below(root, "Docs");
+  const std::string sub = Below(docs, "Sub");
+  const std::string back = Below(sub, "Back");
+  const SampleRun run = RunDir(exe, {L"--recursive", image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.out == DirectoryHeader(root) + ListingLine("Docs", true, 0) +
+                       DirectoryHeader(docs) + ListingLine("Sub", true, 0) +
+                       DirectoryHeader(sub) + ListingLine("Back", true, 0) +
+                       SkipLine(back) + "Files: 0, Directories: 3\n");
+}
+
+TEST_CASE(
+    "NtfsDir --recursive --recover skips a stale orphaned entry that loops",
+    "[io][sample][characterization]") {
+  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
+  INFO(exe.string());
+  const TempImage image(NTFS_BROWSER_NAMESPACE::Tests::
+                            BuildFakeNtfsImageWithOrphanedDirectoryLoop());
+  const std::string root = image.path.string();
+  const std::string docs = Below(root, "Docs");
+  const std::string sub = Below(docs, "Sub");
+  const std::string again = Below(sub, "Docs");
+  const SampleRun run =
+      RunDir(exe, {L"--recursive", L"--recover", image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.out == DirectoryHeader(root) + ListingLine("Docs", true, 0) +
+                       DirectoryHeader(docs) + ListingLine("Sub", true, 0) +
+                       DirectoryHeader(sub) + ListingLine("Docs", true, 0) +
+                       SkipLine(again) + "Files: 0, Directories: 3\n");
+}
+
+TEST_CASE("NtfsDir --recursive does not show a stale entry without --recover",
+          "[io][sample][characterization]") {
+  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
+  INFO(exe.string());
+  const TempImage image(NTFS_BROWSER_NAMESPACE::Tests::
+                            BuildFakeNtfsImageWithOrphanedDirectoryLoop());
+  const std::string root = image.path.string();
+  const std::string docs = Below(root, "Docs");
+  const std::string sub = Below(docs, "Sub");
+  const SampleRun run = RunDir(exe, {L"--recursive", image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.out == DirectoryHeader(root) + ListingLine("Docs", true, 0) +
+                       DirectoryHeader(docs) + ListingLine("Sub", true, 0) +
+                       DirectoryHeader(sub) + "Files: 0, Directories: 2\n");
 }
 
 TEST_CASE("NtfsDir --recursive starts at the directory it is given",

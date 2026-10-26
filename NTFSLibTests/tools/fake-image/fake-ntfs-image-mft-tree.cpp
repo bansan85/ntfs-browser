@@ -396,10 +396,6 @@ void SetStdInfoPermission(std::vector<BYTE>& image, ULONGLONG idx,
   std::memcpy(&image.at(permission_offset), &permission, sizeof(permission));
 }
 
-namespace {
-
-// Directory record: $STANDARD_INFORMATION, a $FILE_NAME when name is set, and
-// a resident $INDEX_ROOT listing names.
 FakeRecord MakeIndexedDirRecord(WORD sequence,
                                 const std::optional<FakeFileName>& name,
                                 std::span<const FakeIndexName> names) {
@@ -415,6 +411,8 @@ FakeRecord MakeIndexedDirRecord(WORD sequence,
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }
+
+namespace {
 
 // The root directory record of the freed-file trees, named name and listing
 // names.
@@ -560,6 +558,38 @@ std::vector<BYTE> BuildFakeNtfsImageWithIndexCycle() {
       image, mft_tree_extension_idx,
       MakeMftTreeRecord(FileRecordFlag{}, self_sequence,
                         {{.name = L"self.tmp", .parent_ref = self_ref}}));
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithDirectoryLoop() {
+  // Sequence number Sub carries, where Docs indexes it.
+  constexpr WORD sub_sequence = 7;
+
+  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
+
+  const ULONGLONG docs_ref =
+      MakeFileReference(mft_tree_docs_idx, tree_docs_sequence);
+  const ULONGLONG sub_ref =
+      MakeFileReference(mft_tree_reused_dir_idx, sub_sequence);
+
+  const std::array<FakeIndexName, 1> docs_names{
+      {{.name = L"Sub",
+        .mft_ref = mft_tree_reused_dir_idx,
+        .directory = true,
+        .sequence = sub_sequence,
+        .parent_ref = docs_ref}}};
+  PutMftRecord(image, mft_tree_docs_idx, MakeDocsDirRecord(docs_names));
+
+  const std::array<FakeIndexName, 1> sub_names{{{.name = L"Back",
+                                                 .mft_ref = mft_tree_docs_idx,
+                                                 .directory = true,
+                                                 .sequence = tree_docs_sequence,
+                                                 .parent_ref = sub_ref}}};
+  PutMftRecord(
+      image, mft_tree_reused_dir_idx,
+      MakeIndexedDirRecord(sub_sequence,
+                           FakeFileName{.name = L"Sub", .parent_ref = docs_ref},
+                           sub_names));
   return image;
 }
 

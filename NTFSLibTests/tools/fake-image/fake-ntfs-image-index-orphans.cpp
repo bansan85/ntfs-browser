@@ -19,6 +19,7 @@
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "data/ntfs-bpb.h"
+#include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
@@ -238,6 +239,42 @@ constexpr DWORD sub_cluster_alloc_clusters = 2;
 // all.
 constexpr DWORD split_extent_clusters = 2;
 
+// LCN where BuildFakeNtfsImageWithOrphanedDirectoryLoop() writes its index
+// blocks, kept clear of every other fixture's placement in this file.
+constexpr DWORD orphaned_loop_lcn = 250;
+
+// Index blocks (VCN 0 and 1) that fixture's $INDEX_ALLOCATION maps.
+constexpr DWORD orphaned_loop_block_count = 2;
+
+// Sequence number Sub carries, in its header and where an entry names it.
+constexpr WORD orphaned_loop_sub_sequence = 7;
+
+// Sequence number Docs carries: the one mft_tree_docs_idx has in the base
+// fixture, which the orphaned entry must name to stand as live.
+constexpr WORD orphaned_loop_docs_sequence = 1;
+
+// Sub's record: its $INDEX_ROOT points only at VCN 0, and its
+// $INDEX_ALLOCATION maps orphaned_loop_block_count blocks.
+FakeRecord MakeOrphanedLoopSubRecord(ULONGLONG docs_ref) {
+  FakeRecord record = MakeInUseDirectoryRecord(orphaned_loop_sub_sequence);
+
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
+  offset += WriteFileNameAttr(record, offset,
+                              {.name = L"Sub", .parent_ref = docs_ref}, true);
+  offset += WriteSubNodeIndexRootAttr(record, offset, cluster_size, 1);
+  offset += WriteSingleRunIndexAllocAttr(
+      record, offset,
+      {.start_vcn = 0,
+       .clusters = orphaned_loop_block_count,
+       .lcn = orphaned_loop_lcn},
+      static_cast<ULONGLONG>(orphaned_loop_block_count) * cluster_size);
+
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImageWithOrphanedIndexBlocks() {
@@ -351,6 +388,56 @@ std::vector<BYTE> BuildFakeNtfsImageWithOrphanedEntryZeroRecord() {
   // Record 2 is zero-filled in BuildFakeNtfsImage(), so the redirected entry
   // names a record that never parses.
   RedirectOrphanEntry(image, orphaned_block_sequence_mismatch_target_idx);
+
+  return image;
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithOrphanedDirectoryLoop() {
+  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
+
+  const ULONGLONG docs_ref =
+      MakeFileReference(mft_tree_docs_idx, orphaned_loop_docs_sequence);
+  const ULONGLONG sub_ref =
+      MakeFileReference(mft_tree_reused_dir_idx, orphaned_loop_sub_sequence);
+
+  // Docs indexes Sub alone, as it does after Sub was moved into it.
+  const std::array<FakeIndexName, 1> docs_names{
+      {{.name = L"Sub",
+        .mft_ref = mft_tree_reused_dir_idx,
+        .directory = true,
+        .sequence = orphaned_loop_sub_sequence,
+        .parent_ref = docs_ref}}};
+  PutMftRecord(
+      image, mft_tree_docs_idx,
+      MakeIndexedDirRecord(
+          orphaned_loop_docs_sequence,
+          FakeFileName{.name = L"Docs", .parent_ref = root_file_reference},
+          docs_names));
+  PutMftRecord(image, mft_tree_reused_dir_idx,
+               MakeOrphanedLoopSubRecord(docs_ref));
+
+  const size_t blocks_offset =
+      static_cast<size_t>(orphaned_loop_lcn) * cluster_size;
+  PadToFullCacheRead(image, blocks_offset +
+                                static_cast<size_t>(orphaned_loop_block_count) *
+                                    cluster_size);
+
+  // VCN 0: reachable, and empty but for its terminating entry.
+  auto& empty_block = WriteIndexBlockHeader(
+      std::span<BYTE>(image).subspan(blocks_offset), cluster_size, 0);
+  const WORD terminal_size = WriteTerminalEntry(&image.at(
+      blocks_offset + sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock)));
+  empty_block.total_entry_size = terminal_size;
+  empty_block.alloc_entry_size = terminal_size;
+
+  // VCN 1: orphaned, and still holds the entry of Docs filed under Sub.
+  WriteIndexLeafBlockAt(image, {.offset = blocks_offset + cluster_size,
+                                .size = cluster_size,
+                                .vcn = 1,
+                                .mft_ref = mft_tree_docs_idx,
+                                .parent_ref = sub_ref,
+                                .name = L"Docs",
+                                .directory = true});
 
   return image;
 }

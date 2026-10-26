@@ -389,6 +389,8 @@ struct FakeIndexLeafBlock {
   ULONGLONG parent_ref;
   // Name of that entry.
   std::wstring_view name;
+  // Whether that entry names a directory.
+  bool directory = false;
 };
 
 // Writes an index block holding one real leaf entry, as spec describes.
@@ -459,6 +461,12 @@ DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
 // Writes one resident, unnamed $DATA of size zero bytes at record[offset]
 // and returns its total_size.
 DWORD WriteResidentDataAttr(FakeRecord& record, DWORD offset, DWORD size);
+
+// Directory record of sequence sequence: $STANDARD_INFORMATION, a $FILE_NAME
+// when name is set, and a resident $INDEX_ROOT listing names.
+FakeRecord MakeIndexedDirRecord(WORD sequence,
+                                const std::optional<FakeFileName>& name,
+                                std::span<const FakeIndexName> names);
 
 // Builds one record of BuildFakeNtfsImageWithMftTree(): a header carrying
 // sequence and baseRef, a $STANDARD_INFORMATION, names, and, when dataSize is

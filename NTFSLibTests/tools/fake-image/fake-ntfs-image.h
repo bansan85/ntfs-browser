@@ -868,6 +868,16 @@ inline constexpr std::wstring_view orphaned_block_generation_name =
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(FakeParentLink link);
 
+// Same volume as BuildFakeNtfsImageWithFreedFileTree(), where the live tree is
+// the root (#5), "Docs" (mft_tree_docs_idx) and "Sub"
+// (mft_tree_reused_dir_idx), and Sub holds no live entry. Its $INDEX_ALLOCATION
+// has an empty block at VCN 0, which its $INDEX_ROOT reaches, and an orphaned
+// block at VCN 1. That block keeps Docs's old entry: the name "Docs", filed
+// under Sub, with Docs's sequence number. Docs was moved out of Sub, then Sub
+// into Docs. A recovering scan of Sub finds that entry, and it names a live
+// directory.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithOrphanedDirectoryLoop();
+
 // Record slots BuildFakeNtfsImageWithMftTree()'s $MFT has room for.
 inline constexpr ULONGLONG mft_tree_record_count = 26;
 
@@ -1201,6 +1211,12 @@ inline constexpr std::string_view freed_file_content = "Recovered text.\n";
 // "Self" (mft_tree_zeroed_idx). Self indexes itself as "." and the freed
 // "self.tmp" (mft_tree_extension_idx), so Self's own entry names it as parent.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexCycle();
+
+// Same volume as BuildFakeNtfsImageWithFreedFileTree(), with live directory
+// entries that loop. The root (#5) indexes "Docs" (mft_tree_docs_idx). Docs
+// indexes only "Sub" (mft_tree_reused_dir_idx), and Sub indexes only "Back",
+// which names Docs again: Docs is Back's ancestor.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithDirectoryLoop();
 
 // Same volume as BuildFakeNtfsImageWithFreedFileTree(), with the freed
 // "stale.txt" (22) replaced by one whose unnamed $DATA is non-resident:

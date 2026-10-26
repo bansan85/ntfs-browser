@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -294,8 +295,10 @@ void VisitEntry(const IndexEntryView& ie, Io::RecordStanding standing,
 
 // Lists the directory fr holds and every directory below it, depth first.
 // root names that directory in the header of its block. A directory that
-// cannot be read is reported and skipped. marking says whether the listing has
-// a marker column. Returns the totals of the tree.
+// cannot be read is reported and skipped. So is one already listed: NTFS
+// allows no hard link to a directory, so an entry that leads back to one is a
+// loop or a corruption. marking says whether the listing has a marker column.
+// Returns the totals of the tree.
 template <Cache::Strategy S>
 Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
                const std::wstring& root) {
@@ -307,6 +310,12 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
   Total tree;
   std::vector<Pending> pending;
   std::wstring path = root;
+  // Record numbers of the directories listed so far. An index entry gives a
+  // number with its sequence apart, so a number alone identifies a directory.
+  std::unordered_set<ULONGLONG> listed;
+  if (const std::optional<ULONGLONG> start = fr.GetFileReference()) {
+    listed.insert(*start);
+  }
   while (true) {
     Report(out, L"\nDirectory of " + path);
     DirectoryEntries<S> entries;
@@ -325,13 +334,19 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
           {child->reference, path + path_separator + child->name});
     }
 
-    // Take the next directory that parses, and report the ones that do not.
+    // Take the next directory that is new and parses, and report the ones
+    // that are not.
     bool entered = false;
     while (!pending.empty() && !entered) {
       Pending next = std::move(pending.back());
       pending.pop_back();
+      if (listed.contains(next.reference)) {
+        Report(out, L"Skipping " + next.path + L": directory already listed");
+        continue;
+      }
       entered = fr.ParseFileRecord(next.reference) && fr.ParseAttrs();
       if (entered) {
+        listed.insert(next.reference);
         path = std::move(next.path);
       } else {
         Report(out, L"Cannot read directory " + next.path);

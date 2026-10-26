@@ -190,7 +190,7 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
       &gsl::at(block_start, sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock)),
       {.name = spec.name,
        .mft_ref = spec.mft_ref,
-       .directory = false,
+       .directory = spec.directory,
        .parent_ref = spec.parent_ref,
        .last = true});
   block.total_entry_size = entry_size;
