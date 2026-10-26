@@ -16,6 +16,7 @@ target_sources(
     "mft-tree-list-hint-tests.cpp"
     "mft-tree-malformed-record-tests.cpp"
     "mft-tree-tests.cpp"
+    "name-tree-path-tests.cpp"
     "mft-tree-threads-tests.cpp"
     "ntfsmftlist-sample-tests.cpp"
 )

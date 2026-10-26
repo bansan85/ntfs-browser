@@ -264,6 +264,24 @@ constexpr unsigned max_auto_threads = 4;
 // Threads a caller can ask for at most. A forged count cannot start more.
 constexpr unsigned max_scan_threads = 64;
 
+// Units of path the directory path memo holds at most, in all. A deep chain of
+// directories has paths that grow with its depth, so remembering each one costs
+// memory that grows with its square. 2^26 units is 128 MiB of UTF-16, far above
+// what a real volume of millions of directories needs.
+constexpr size_t default_max_memoized_path_units = size_t{1} << 26;
+
+// The budget a test asked for. Unset means the default.
+std::optional<size_t> max_memoized_path_units_override;
+
+// The most units of path any tree of this thread has held in its memo, since a
+// test last reset it. Read by tests only.
+thread_local size_t peak_memoized_path_units = 0;
+
+// Units a directory path can have and still be memoized. Past a normal path
+// (MAX_PATH is 260), a path is rebuilt each time it is asked for: that costs
+// the length of the path, which the caller pays for anyway.
+constexpr size_t max_memoized_path_length = 1024;
+
 // The Filename side of a $FILE_NAME attribute. FileRecord<S> always wraps a
 // $FILE_NAME in the AttrFileName over the resident type that matches S.
 template <Cache::Strategy S>
@@ -2316,6 +2334,18 @@ size_t SlotsParsedByThreadsForTests(bool reset) noexcept {
   return count;
 }
 
+void SetMaxMemoizedPathUnitsForTests(std::optional<size_t> units) {
+  max_memoized_path_units_override = units;
+}
+
+size_t PeakMemoizedPathUnitsForTests(bool reset) noexcept {
+  const size_t peak = peak_memoized_path_units;
+  if (reset) {
+    peak_memoized_path_units = 0;
+  }
+  return peak;
+}
+
 void SetMaxPendingRangesForTests(size_t limit) {
   max_pending_ranges_override = limit;
 }
@@ -2411,15 +2441,19 @@ class MftTree::Impl {
     DirectoryPath* path;
   };
 
-  [[nodiscard]] const DirectoryPath&
+  [[nodiscard]] DirectoryPath
       PathOfDirectory(const Mft::MftTree::Entry& directory,
                       const Mft::MftTree::Name& primary) const;
+  // Whether a path of length units may join the memo.
+  [[nodiscard]] bool CanMemoize(size_t length) const noexcept;
   [[nodiscard]] std::wstring WalkPath(const Mft::MftTree::Entry& entry,
                                       const Mft::MftTree::Name& name,
                                       std::optional<ULONGLONG>& lost) const;
 
   // The directories PathThrough() went through, by record.
   mutable std::unordered_map<ULONGLONG, DirectoryPath> directory_paths_;
+  // Units of path directory_paths_ holds.
+  mutable size_t memoized_path_units_{0};
 };
 
 Mft::MftTree::MftTree(const NtfsVolume<Cache::Strategy::NoCache>& volume,
@@ -2890,13 +2924,13 @@ std::wstring Mft::MftTree::Impl::PathThrough(
   std::optional<ULONGLONG> lost;
   if (entry.directory && &name == PrimaryName(entry)) {
     // The path its files reuse.
-    const DirectoryPath& own = PathOfDirectory(entry, name);
-    path = own.path;
+    DirectoryPath own = PathOfDirectory(entry, name);
+    path = std::move(own.path);
     lost = own.lost;
   } else if (!entry.directory && parent_name != nullptr) {
-    const DirectoryPath& directory = PathOfDirectory(*parent, *parent_name);
-    path.reserve(directory.path.size() + 1 + name.name.size());
-    path = directory.path;
+    DirectoryPath directory = PathOfDirectory(*parent, *parent_name);
+    path = std::move(directory.path);
+    path.reserve(path.size() + 1 + name.name.size());
     path += L'\\';
     path += name.name;
     lost = directory.lost;
@@ -2911,11 +2945,11 @@ std::wstring Mft::MftTree::Impl::PathThrough(
 }
 
 // The path of directory through primary, its primary name, remembered once
-// built: the path of the first ancestor already known, or of the root or the
-// record where the chain breaks, joined to the names below it. The directories
-// of a chain that loops are walked whole, one by one: each sees the loop close
-// at itself.
-const Mft::MftTree::Impl::DirectoryPath& Mft::MftTree::Impl::PathOfDirectory(
+// built unless it is long or the memo is full: the path of the first ancestor
+// already known, or of the root or the record where the chain breaks, joined to
+// the names below it. The directories of a chain that loops are walked whole,
+// one by one: each sees the loop close at itself.
+Mft::MftTree::Impl::DirectoryPath Mft::MftTree::Impl::PathOfDirectory(
     const Mft::MftTree::Entry& directory,
     const Mft::MftTree::Name& primary) const {
   const auto [found, added] = directory_paths_.try_emplace(directory.record);
@@ -2965,12 +2999,36 @@ const Mft::MftTree::Impl::DirectoryPath& Mft::MftTree::Impl::PathOfDirectory(
     name = parent_name;
   }
 
+  // What the caller gets, taken before settle() can forget the entry of own.
+  DirectoryPath result;
+  // Remembers item's path, or forgets item when the memo cannot hold it.
+  const auto settle = [&](const PendingDirectory& item,
+                          const std::wstring& item_path,
+                          const std::optional<ULONGLONG>& item_lost) {
+    if (item.path == &own) {
+      result.path = item_path;
+      result.lost = item_lost;
+    }
+    if (!CanMemoize(item_path.size())) {
+      directory_paths_.erase(item.entry->record);
+      return;
+    }
+    memoized_path_units_ += item_path.size();
+    peak_memoized_path_units =
+        (std::max)(peak_memoized_path_units, memoized_path_units_);
+    item.path->path = item_path;
+    item.path->lost = item_lost;
+    item.path->building = false;
+  };
+
   if (looped) {
     for (const PendingDirectory& item : pending) {
-      item.path->path = WalkPath(*item.entry, *item.primary, item.path->lost);
-      item.path->building = false;
+      std::optional<ULONGLONG> item_lost;
+      const std::wstring item_path =
+          WalkPath(*item.entry, *item.primary, item_lost);
+      settle(item, item_path, item_lost);
     }
-    return own;
+    return result;
   }
 
   std::wstring path = known != nullptr ? known->path : std::wstring{};
@@ -2983,11 +3041,19 @@ const Mft::MftTree::Impl::DirectoryPath& Mft::MftTree::Impl::PathOfDirectory(
       path += L'\\';
     }
     path += item.primary->name;
-    item.path->path = path;
-    item.path->lost = lost;
-    item.path->building = false;
+    settle(item, path, lost);
   }
-  return own;
+  return result;
+}
+
+// Whether a path of length units may join the memo: it is not long, and the
+// memo has room.
+bool Mft::MftTree::Impl::CanMemoize(size_t length) const noexcept {
+  // A short path, and room left in the budget for it.
+  return length <= max_memoized_path_length &&
+         memoized_path_units_ + length <=
+             max_memoized_path_units_override.value_or(
+                 default_max_memoized_path_units);
 }
 
 // Walks from name up the primary names of entry's ancestors, see

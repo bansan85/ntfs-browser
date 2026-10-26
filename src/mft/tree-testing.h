@@ -19,6 +19,18 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void SetMaxPendingRangesForTests(size_t limit);
 // The cap a scan flushes at: the default, or the value a test set.
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t MaxPendingRanges();
 
+// Test hook: caps the units of path that the directory path memo of a tree
+// holds, in all. A test lowers it to make a small tree meet the cap. nullopt
+// restores the default.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    SetMaxMemoizedPathUnitsForTests(std::optional<size_t> units);
+
+// Test hook: the most units of path that any tree of this thread has held in
+// its directory path memo, since the last call of this function with true. The
+// count is reset when reset is true, after it is read.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t
+    PeakMemoizedPathUnitsForTests(bool reset = false) noexcept;
+
 // Test hook: caps the bytes of raw records a scan holds for its second pass.
 // A test lowers it to make base records wait without their bytes, and
 // extension records go unheld: the second pass then reads them from the disk.

@@ -89,6 +89,16 @@ constexpr size_t links_width = 2;
 // The record of the root directory, where a path starts.
 constexpr ULONGLONG root_record = static_cast<ULONGLONG>(Mft::Idx::Root);
 
+// Bytes of directory path DisplayPaths keeps at most, in all. A chain of
+// directories that runs deep has paths that grow with the depth, so keeping
+// each one costs memory that grows with its square. 64 MiB is far above what a
+// real volume needs.
+constexpr size_t max_kept_path_bytes = size_t{64} << 20;
+
+// Bytes a directory path can have and still be kept. A longer path is built
+// each time it is asked for, which costs no more than printing it.
+constexpr size_t max_kept_path_length = 4096;
+
 // Prints command-line usage help.
 void Usage() {
   printf(
@@ -290,7 +300,8 @@ class DisplayPaths {
     std::string path;
   };
 
-  // The path of the directory record, converted the first time.
+  // The path of the directory record, converted the first time. A path that is
+  // not kept is valid until the next call.
   const Directory& DirectoryOf(ULONGLONG record) {
     if (const auto found = directories_.find(record);
         found != directories_.end()) {
@@ -299,11 +310,22 @@ class DisplayPaths {
     Directory directory;
     const std::wstring path = tree_.GetPath(record, &directory.lost);
     NtfsDevice::AppendAsUtf8(directory.path, path);
+    // A path that is too long, or that the budget has no room for, is not kept.
+    if (directory.path.size() > max_kept_path_length ||
+        kept_bytes_ + directory.path.size() > max_kept_path_bytes) {
+      unkept_ = std::move(directory);
+      return unkept_;
+    }
+    kept_bytes_ += directory.path.size();
     return directories_.emplace(record, std::move(directory)).first->second;
   }
 
   const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree_;
   std::unordered_map<ULONGLONG, Directory> directories_;
+  // Bytes of path directories_ holds.
+  size_t kept_bytes_{0};
+  // The last path DirectoryOf() did not keep.
+  Directory unkept_;
 };
 
 // The letter of one attribute flag when it is set, '-' when it is not.

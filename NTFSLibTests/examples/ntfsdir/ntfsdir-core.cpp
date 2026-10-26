@@ -97,32 +97,24 @@ wchar_t Getvolume(wchar_t** ppath) {
   return volname;
 }
 
-std::wstring Getpathname(std::wstring& ppath) {
-  std::wstring pathname;
-  size_t len = 0;
-  const wchar_t* p = ppath.c_str();
+std::wstring_view Getpathname(std::wstring_view& ppath) {
+  const auto is_separator = [](wchar_t character) {
+    return character == L'\\' || character == L'"';
+  };
 
-  // copy until '\' or " or string ends or buffer full
-  while (*p && len < ppath.length()) {
-    pathname.append(1, *p);
-    len++;
-    p++;
-
-    if (*p == '\\' || *p == '\"') {
-      break;
-    }
+  // The first character belongs to the segment whatever it is.
+  size_t length = ppath.empty() ? 0 : 1;
+  while (length < ppath.size() && !is_separator(ppath[length])) {
+    length++;
   }
+  const std::wstring_view pathname = ppath.substr(0, length);
 
-  // forward to not '\' and not ", or string end
-  while (*p) {
-    if (*p == '\\' || *p == '\"') {
-      p++;
-    } else {
-      break;
-    }
+  size_t next = length;
+  while (next < ppath.size() && is_separator(ppath[next])) {
+    next++;
   }
-
-  ppath = ppath.substr(p - ppath.c_str());
+  // Moves the start of the view: a path of many segments costs no copy.
+  ppath.remove_prefix(next);
   return pathname;
 }
 
@@ -298,18 +290,28 @@ void VisitEntry(const IndexEntryView& ie, Io::RecordStanding standing,
 // cannot be read is reported and skipped. So is one already listed: NTFS
 // allows no hard link to a directory, so an entry that leads back to one is a
 // loop or a corruption. marking says whether the listing has a marker column.
-// Returns the totals of the tree.
+// Returns the totals of the tree. A directory waits as its name and its depth,
+// not as its whole path: the paths of a tree that runs deep grow with its
+// depth, and one for each directory that waits would cost memory that grows
+// with the square of it.
 template <Cache::Strategy S>
 Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
                const std::wstring& root) {
   struct Pending {
     ULONGLONG reference;
-    std::wstring path;
+    std::wstring name;
+    // Levels below the directory the listing starts at.
+    size_t depth;
   };
 
   Total tree;
   std::vector<Pending> pending;
+  // The path of the directory being listed. Its first lengths[d] units are the
+  // path of its ancestor d levels below the start, so the path of the next
+  // directory is its parent's prefix and its own name.
   std::wstring path = root;
+  std::vector<size_t> lengths{root.size()};
+  size_t depth = 0;
   // Record numbers of the directories listed so far. An index entry gives a
   // number with its sequence apart, so a number alone identifies a directory.
   std::unordered_set<ULONGLONG> listed;
@@ -330,8 +332,9 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
     // subdirectories in index order.
     for (auto child = entries.children.rbegin();
          child != entries.children.rend(); ++child) {
-      pending.push_back(
-          {child->reference, path + path_separator + child->name});
+      pending.push_back({.reference = child->reference,
+                         .name = std::move(child->name),
+                         .depth = depth + 1});
     }
 
     // Take the next directory that is new and parses, and report the ones
@@ -340,16 +343,23 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
     while (!pending.empty() && !entered) {
       Pending next = std::move(pending.back());
       pending.pop_back();
+      // Back to the parent's path: a pending directory is never deeper than
+      // one level below the last one listed, and its parent is on the way.
+      lengths.resize(next.depth);
+      path.resize(lengths.back());
+      path += path_separator;
+      path += next.name;
       if (listed.contains(next.reference)) {
-        Report(out, L"Skipping " + next.path + L": directory already listed");
+        Report(out, L"Skipping " + path + L": directory already listed");
         continue;
       }
       entered = fr.ParseFileRecord(next.reference) && fr.ParseAttrs();
       if (entered) {
         listed.insert(next.reference);
-        path = std::move(next.path);
+        lengths.push_back(path.size());
+        depth = next.depth;
       } else {
-        Report(out, L"Cannot read directory " + next.path);
+        Report(out, L"Cannot read directory " + path);
       }
     }
     if (!entered) {
@@ -361,20 +371,20 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
 // Moves fr into the subdirectory named pathname. Returns false after
 // printing why it cannot.
 template <Cache::Strategy S>
-bool EnterSubdirectory(Io::FileRecord<S>& fr, const std::wstring& pathname) {
+bool EnterSubdirectory(Io::FileRecord<S>& fr, std::wstring_view pathname) {
   std::optional<IndexEntry> ie = fr.FindSubEntry(pathname);
   if (!ie) {
-    Say(L"Cannot find directory " + pathname);
+    Say(L"Cannot find directory " + std::wstring(pathname));
     return false;
   }
 
   if (!ie->IsDirectory()) {
-    Say(pathname + L" is not a directory");
+    Say(std::wstring(pathname) + L" is not a directory");
     return false;
   }
 
   if (!fr.ParseFileRecord(ie->GetFileReference())) {
-    Say(L"Cannot read directory " + pathname);
+    Say(L"Cannot read directory " + std::wstring(pathname));
     return false;
   }
   if (!fr.ParseAttrs()) {
@@ -388,7 +398,7 @@ bool EnterSubdirectory(Io::FileRecord<S>& fr, const std::wstring& pathname) {
 // directory path names in turn. Returns false after printing why it cannot.
 template <Cache::Strategy S>
 bool EnterDirectories(Io::FileRecord<S>& fr, const std::wstring& label,
-                      std::wstring path) {
+                      std::wstring_view path) {
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
     Say(L"Cannot read root directory of volume " + label);
     return false;
@@ -399,7 +409,7 @@ bool EnterDirectories(Io::FileRecord<S>& fr, const std::wstring& label,
   }
 
   while (true) {
-    const std::wstring pathname = Getpathname(path);
+    const std::wstring_view pathname = Getpathname(path);
     // An empty segment means the path is used up.
     if (pathname.empty()) {
       return true;

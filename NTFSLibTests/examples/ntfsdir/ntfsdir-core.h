@@ -6,6 +6,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
@@ -22,8 +23,10 @@ void Usage();
 wchar_t Getvolume(wchar_t** ppath);
 
 // Splits off and returns the first path segment of ppath (up to the next
-// '\' or '"'), and removes that segment from ppath in place.
-std::wstring Getpathname(std::wstring& ppath);
+// '\' or '"'), and moves the start of ppath past that segment and the
+// separators after it. Nothing is copied, so a path of tens of thousands of
+// segments costs no more than its length.
+std::wstring_view Getpathname(std::wstring_view& ppath);
 
 // Totals of the entries a listing shows.
 struct Total {
