@@ -10,6 +10,7 @@ add_library(
   "fake-ntfs-image-mft.cpp"
   "fake-ntfs-image-mft-scan.cpp"
   "fake-ntfs-image-mft-tree.cpp"
+  "fake-ntfs-image-name-tree.cpp"
   "fake-ntfs-image-attr-list.cpp"
   "fake-ntfs-image-attr-data.cpp"
   "fake-ntfs-image-backup-boot.cpp"

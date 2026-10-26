@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -2187,5 +2188,91 @@ void PutAccountFile(std::vector<BYTE>& image, ULONGLONG idx,
 
 // Sets the $LogFile sequence number of MFT record idx of an image.
 void SetRecordLsn(std::vector<BYTE>& image, ULONGLONG idx, ULONGLONG lsn);
+
+////////////////////////////////////////////////////////////////////////////
+// A tree of names: BuildFakeNtfsImageWithNameTree()
+////////////////////////////////////////////////////////////////////////////
+
+// MFT record of the first node BuildFakeNtfsImageWithNameTree() writes. The
+// others follow, one record each.
+inline constexpr ULONGLONG name_tree_first_record = 16;
+
+// The parent of a name filed in the root directory (record 5).
+inline constexpr std::size_t name_tree_root =
+    (std::numeric_limits<std::size_t>::max)();
+
+// One name of a node: a $FILE_NAME of its record, and the entry that the index
+// of its parent directory holds.
+struct FakeTreeLink {
+  // The name as the record carries it, in UTF-16 units. It MAY hold what NTFS
+  // keeps and a user rarely sees: an unpaired surrogate, a noncharacter, a
+  // control character, a character past the BMP.
+  std::wstring name;
+  // Index in the node list of the directory the name is filed under, or
+  // name_tree_root.
+  std::size_t parent = name_tree_root;
+  // 0 is a POSIX name (two of them in one directory MAY differ only by case),
+  // 1 a Win32 name, 2 the DOS alias of another name.
+  BYTE name_space = 1;
+};
+
+// One file or directory of the tree, and so one MFT record.
+struct FakeTreeNode {
+  // The names of the record. The first is its primary name. A second one that
+  // is not a DOS alias is a hard link.
+  std::vector<FakeTreeLink> links;
+  bool directory = false;
+  // Whether the record is in use. A freed one carries the sequence number NTFS
+  // gives it on deletion, and no directory index names it, unless keep_entries.
+  bool in_use = true;
+  // Keeps the index entries of a freed node, under the sequence number the
+  // record had before: the stale entries a walk hides unless the volume lists
+  // deleted items.
+  bool keep_entries = false;
+  // Size of the resident $DATA of a file, in bytes. Ignored for a directory,
+  // and for a file with runs.
+  DWORD data_size = 0;
+  // The runs of a non-resident unnamed $DATA, with stream_size bytes of data.
+  // Empty: the $DATA is resident.
+  std::vector<FakeDataRun> runs;
+  ULONGLONG stream_size = 0;
+};
+
+// How BuildFakeNtfsImageWithNameTree() lays the tree out.
+struct FakeNameTreeOptions {
+  // Sorts the entries of every directory in the order of the volume's
+  // collation. Off, they keep the order of the nodes: an index whose order a
+  // search cannot trust.
+  bool collate = true;
+};
+
+// Write time every index entry of the tree reports, as dump_broken_alter_time:
+// far from any change of daylight saving time.
+inline constexpr ULONGLONG name_tree_write_time = 133'497'936'000'000'000;
+
+// Same volume as BuildFakeNtfsImage(), with a record for each of nodes, from
+// name_tree_first_record on, and the directory tree that their links describe,
+// under the root (#5). Every record has its own update sequence array, so a
+// name of the 255 units a $FILE_NAME holds at most fits, and sits across the
+// end of a sector. A directory index is resident while its entries fit the
+// record, and else sits in $INDEX_ALLOCATION blocks of one cluster under a
+// root of separators: that takes the entries of a directory to what the
+// separators fit in the root, and throws std::length_error past it. The
+// entries are in the order of the volume's collation, which equal names
+// (equal when upcased) share: they keep to the order of their code units. A
+// node's links MUST name directories of nodes, and a directory MUST NOT be its
+// own ancestor. The $MFT is one run, so the tree can hold 2^32 - 17 nodes, and
+// the image 4 GiB.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithNameTree(std::span<const FakeTreeNode> nodes,
+                                   const FakeNameTreeOptions& options = {});
+
+// A chain of depth directories under the root, each in the one before, named
+// name_of(level) and holding, in the deepest one, a file named leaf_name. Node
+// i is the directory of level i; the last node is the file.
+[[nodiscard]] std::vector<FakeTreeNode>
+    MakeNameChain(std::size_t depth,
+                  const std::function<std::wstring(std::size_t)>& name_of,
+                  std::wstring leaf_name);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

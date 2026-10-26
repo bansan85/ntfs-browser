@@ -338,6 +338,9 @@ struct FakeIndexName {
   bool last = false;
   // The VCN of the sub-node the entry points at. Unset for a leaf entry.
   std::optional<ULONGLONG> sub_node_vcn;
+  // The namespace the entry's $FILE_NAME carries.
+  NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace name_space =
+      NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
 };
 
 // Writes "name" as a leaf index entry at "dest" and returns its size in

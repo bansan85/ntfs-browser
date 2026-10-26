@@ -40,7 +40,7 @@ WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name) {
                        : NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
   const std::vector<WORD> encoded_name = ToUtf16(name.name);
   filename.name_length = gsl::narrow<BYTE>(encoded_name.size());
-  filename.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
+  filename.name_space = name.name_space;
   for (size_t i = 0; i < encoded_name.size(); i++) {
     filename.name[i] = encoded_name.at(i);
   }

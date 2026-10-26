@@ -263,9 +263,11 @@ DWORD WriteStandardInformationAttr(
 DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
                         const FakeFileName& name, bool directory) {
   auto& attr = InitResidentAttr(record, offset, Attr::Type::FileName);
+  // On-disk units: a character past the BMP takes two, whatever wchar_t is.
+  const std::vector<WORD> units = ToUtf16(name.name);
   attr.attr_size = gsl::narrow<DWORD>(
       offsetof(NTFS_BROWSER_NAMESPACE::Data::Filename, name) +
-      name.name.size() * sizeof(WORD));
+      units.size() * sizeof(WORD));
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
   auto& filename = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(
@@ -277,12 +279,10 @@ DWORD WriteFileNameAttr(FakeRecord& record, DWORD offset,
       (directory ? NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::Directory
                  : NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None) |
       name.extra_flags;
-  filename.name_length = gsl::narrow<BYTE>(name.name.size());
+  filename.name_length = gsl::narrow<BYTE>(units.size());
   filename.name_space = name.name_space;
-  for (size_t i = 0; i < name.name.size(); i++) {
-    // i < name.name.size() by the loop condition.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    filename.name[i] = gsl::narrow<WORD>(name.name[i]);
+  for (size_t i = 0; i < units.size(); i++) {
+    filename.name[i] = units.at(i);
   }
 
   return attr.header.total_size;
