@@ -42,7 +42,7 @@ struct ExpectedMessages {
 
 // The messages each saved regression testcase must log, by file name. The
 // count is the number of saved testcases: a test checks that none is missing.
-inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 221>
+inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 227>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -648,6 +648,30 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 221>
          {true, {"DataRun decode error 1: 0x1F"}}},
         {"usn_journal_adjacent_stretches",
          {true, {"MFT scan journal: 2 records"}}},
+        {"cluster_state_freed_claims",
+         {true,
+          {"MFT scan clusters: 2 files counted, 0 intact, 1 reallocated, 1 "
+           "bad, 0 sparse"}}},
+        {"cluster_state_cut_run_lists",
+         {true,
+          {"MFT scan clusters: 2 files counted, 0 intact, 0 reallocated, 0 "
+           "bad, 0 sparse"}}},
+        {"cluster_state_compressed_map",
+         {true,
+          {"MFT scan clusters: 1 files counted, 0 intact, 1 reallocated, 0 "
+           "bad, 4 sparse"}}},
+        {"cluster_state_extension_claims",
+         {true,
+          {"MFT scan clusters: 1 files counted, 0 intact, 1 reallocated, 0 "
+           "bad, 0 sparse"}}},
+        {"cluster_state_no_bitmap",
+         {true,
+          {"MFT scan clusters: 1 files counted, 0 intact, 0 reallocated, 0 "
+           "bad, 0 sparse"}}},
+        {"cluster_state_streams",
+         {true,
+          {"MFT scan clusters: 2 files counted, 2 intact, 0 reallocated, 0 "
+           "bad, 3 sparse"}}},
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzRegression

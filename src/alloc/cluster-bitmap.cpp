@@ -73,6 +73,55 @@ ULONGLONG EndOf(const Extent& extent) noexcept {
              : extent.lcn + extent.clusters;
 }
 
+// Appends the run [lcn, lcn + clusters) to runs, joined to the last one when it
+// has the same state and ends where this one starts.
+void AppendRun(std::vector<ClusterRun>& runs, ULONGLONG lcn, ULONGLONG clusters,
+               ClusterState state) {
+  if (clusters == 0) {
+    return;
+  }
+  if (!runs.empty() && runs.back().state == state &&
+      runs.back().lcn + runs.back().clusters == lcn) {
+    runs.back().clusters += clusters;
+    return;
+  }
+  runs.push_back({.lcn = lcn, .clusters = clusters, .state = state});
+}
+
+// Appends the runs of bits [first, last) of bytes, which count from the first
+// bit of bytes[0], as clusters from lcn_base + first. last MUST NOT pass the
+// end of bytes.
+void AppendBitRuns(std::vector<ClusterRun>& runs, std::span<const BYTE> bytes,
+                   ULONGLONG first, ULONGLONG last, ULONGLONG lcn_base) {
+  ULONGLONG bit = first;
+  while (bit < last) {
+    const auto byte_at = [&bytes](ULONGLONG at) {
+      return static_cast<unsigned>(bytes[static_cast<size_t>(
+          at)]);  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    };
+    const bool set =
+        ((byte_at(bit / bits_per_byte) >> (bit % bits_per_byte)) & 1U) != 0;
+    const unsigned whole = set ? 0xFFU : 0x00U;
+    ULONGLONG end = bit + 1;
+    while (end < last) {
+      if (end % bits_per_byte == 0 && last - end >= bits_per_byte &&
+          byte_at(end / bits_per_byte) == whole) {
+        end += bits_per_byte;
+        continue;
+      }
+      const bool next =
+          ((byte_at(end / bits_per_byte) >> (end % bits_per_byte)) & 1U) != 0;
+      if (next != set) {
+        break;
+      }
+      end++;
+    }
+    AppendRun(runs, lcn_base + bit, end - bit,
+              set ? ClusterState::Allocated : ClusterState::Free);
+    bit = end;
+  }
+}
+
 }  // namespace
 
 ClusterBitmap::ClusterBitmap(Reader reader, ULONGLONG data_size,
@@ -269,6 +318,113 @@ void ClusterBitmap::StatesInOrder(std::span<RangeQuery> queries) {
     } else {
       query.state = ClusterState::Free;
     }
+  }
+}
+
+void ClusterBitmap::BitRuns(ULONGLONG first, ULONGLONG last,
+                            std::vector<ClusterRun>& runs) {
+  const ULONGLONG window_bits = ULONGLONG{window_bytes_} * bits_per_byte;
+  ULONGLONG bit = first;
+  while (bit < last) {
+    // Past the end of the bitmap nothing can be judged.
+    if (bit >= data_bits_) {
+      AppendRun(runs, bit, last - bit, ClusterState::Unknown);
+      return;
+    }
+    const ULONGLONG index = bit / window_bits;
+    const ULONGLONG base = index * window_bits;
+    const ULONGLONG stop =
+        window_bits > std::numeric_limits<ULONGLONG>::max() - base
+            ? last
+            : std::min(last, base + window_bits);
+
+    const ULONGLONG known_stop = std::min(stop, data_bits_);
+    ULONGLONG judged_stop = bit;
+    if (bit < known_stop) {
+      const Window* window = Load(index);
+      if (window != nullptr) {
+        judged_stop = std::min(known_stop,
+                               base + ULONGLONG{window->valid} * bits_per_byte);
+        if (judged_stop > bit) {
+          AppendBitRuns(runs, window->bytes, bit - base, judged_stop - base,
+                        base);
+        }
+      }
+    }
+    AppendRun(runs, std::max(bit, judged_stop),
+              stop - std::max(bit, judged_stop), ClusterState::Unknown);
+    bit = stop;
+
+    // Too many windows failed: the rest of the range is not worth walking.
+    if (failed_.size() >= max_failed_windows && bit < last) {
+      AppendRun(runs, bit, last - bit, ClusterState::Unknown);
+      return;
+    }
+  }
+}
+
+void ClusterBitmap::OverlayBad(std::vector<ClusterRun>& runs) {
+  if (bad_ == nullptr || runs.empty()) {
+    return;
+  }
+  const ULONGLONG first = runs.front().lcn;
+  const ULONGLONG last = runs.back().lcn + runs.back().clusters;
+  const std::span<const Extent> overlapping = bad_->Overlapping(first, last);
+  if (overlapping.empty()) {
+    return;
+  }
+
+  // Callers keep next_bad below overlapping.size().
+  const auto bad_at = [&overlapping](size_t index) -> const Extent& {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return overlapping[index];
+  };
+  std::vector<ClusterRun> merged;
+  merged.reserve(runs.size() + overlapping.size() * 2);
+  size_t next_bad = 0;
+  for (const ClusterRun& run : runs) {
+    ULONGLONG at = run.lcn;
+    const ULONGLONG run_end = run.lcn + run.clusters;
+    while (at < run_end) {
+      while (next_bad < overlapping.size() && EndOf(bad_at(next_bad)) <= at) {
+        next_bad++;
+      }
+      if (next_bad == overlapping.size() || bad_at(next_bad).lcn >= run_end) {
+        AppendRun(merged, at, run_end - at, run.state);
+        break;
+      }
+      const Extent& bad = bad_at(next_bad);
+      if (bad.lcn > at) {
+        AppendRun(merged, at, bad.lcn - at, run.state);
+        at = bad.lcn;
+      }
+      const ULONGLONG to = std::min(EndOf(bad), run_end);
+      bad_with_clear_bit_ =
+          bad_with_clear_bit_ || run.state == ClusterState::Free;
+      AppendRun(merged, at, to - at, ClusterState::Bad);
+      at = to;
+    }
+  }
+  runs = std::move(merged);
+}
+
+void ClusterBitmap::StateRuns(ULONGLONG lcn, ULONGLONG clusters,
+                              std::vector<ClusterRun>& runs) {
+  runs.clear();
+  if (clusters == 0) {
+    return;
+  }
+  if (lcn >= limit_) {
+    runs.push_back(
+        {.lcn = lcn, .clusters = clusters, .state = ClusterState::OutOfRange});
+    return;
+  }
+  const bool beyond = clusters > limit_ - lcn;
+  const ULONGLONG end = beyond ? limit_ : lcn + clusters;
+  BitRuns(lcn, end, runs);
+  OverlayBad(runs);
+  if (beyond) {
+    AppendRun(runs, end, clusters - (end - lcn), ClusterState::OutOfRange);
   }
 }
 

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/export.h>
@@ -45,6 +46,23 @@ struct MftScanOptions {
   // raw attribute callback installed (NtfsVolume::InstallAttrRawCB()) is
   // scanned by the calling thread alone, since a callback belongs to it.
   unsigned threads{0};
+  // How much of the per-cluster account the scan works out, Off by default. It
+  // only concerns the entries a scan keeps for two reasons: a freed file, when
+  // the volume was opened with include_deleted, and a live file that is damaged
+  // or salvaged (see ScanStats::damaged), when it was opened with
+  // recover_errors. With the volume open with neither, nothing is concerned
+  // and the scan reads what it reads with Off. Otherwise the scan lists the
+  // clusters of every non-resident attribute of every record it reads, those of
+  // the extension records the attribute lists name included, so that it knows
+  // who claims a cluster. It then reads $Bitmap and $BadClus, once, in LCN
+  // order, after the records. Strict mode keeps no record that fails to parse:
+  // with this option on, a defect in an attribute that is only listed does not
+  // make a record fail.
+  Alloc::ClusterAccountLevel cluster_account{Alloc::ClusterAccountLevel::Off};
+  // Whether the scan also reads clusters it presumes intact, and how many, to
+  // tell zeros and NTFS metadata from data (see Alloc::DataCheckMode). It
+  // implies at least ClusterAccountLevel::Counts. Off by default.
+  Alloc::DataCheckMode verify_data{Alloc::DataCheckMode::Off};
 };
 
 // Every file of a volume, rebuilt from the parent reference in each MFT
@@ -205,6 +223,10 @@ class NTFS_BROWSER_EXPORT MftTree {
     ULONGLONG unreachable{0};
     // False when progress() stopped the scan early.
     bool complete{true};
+    // Entries given a ClusterAccount, and the sum of their tallies. Both zero
+    // when the scan did not account for clusters.
+    ULONGLONG cluster_accounts{0};
+    Alloc::ClusterTally clusters;
     // Names carved from record slack, over all entries. Zero unless the volume
     // has both recover_errors and include_deleted on.
     ULONGLONG carved_names{0};
@@ -275,6 +297,15 @@ class NTFS_BROWSER_EXPORT MftTree {
                      std::optional<ULONGLONG>* lost_ancestor = nullptr) const;
   // What the scan met, record slot by record slot.
   [[nodiscard]] const ScanStats& Stats() const noexcept;
+  // How many clusters of the $DATA streams of record are intact, were
+  // rewritten, and so on, and where, in file order, when the scan asked for the
+  // map. Null when the scan did not account for clusters (see
+  // ScanOptions::cluster_account), when the record is not concerned, or when it
+  // has no non-resident $DATA stream. It lives as long as the tree. The
+  // accounts sit apart from the entries, so a scan that does not ask for them
+  // holds nothing more.
+  [[nodiscard]] const Alloc::ClusterAccount*
+      ClusterAccountOf(ULONGLONG record) const;
 
  private:
   class Impl;

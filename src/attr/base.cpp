@@ -115,6 +115,12 @@ Alloc::StreamExtents Attr::AttrBase<S>::GetExtents() const {
   return {};
 }
 
+// Resident data has no run list.
+template <Cache::Strategy S>
+Alloc::StreamLayout Attr::AttrBase<S>::GetLayout() const {
+  return {};
+}
+
 // The whole data, as one range: right for an attribute that has no run list.
 template <Cache::Strategy S>
 Alloc::StreamRanges Attr::AttrBase<S>::GetRealRanges() const {

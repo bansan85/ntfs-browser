@@ -919,6 +919,29 @@ void NtfsVolume<S>::GetRangeStates(std::span<Alloc::RangeQuery> queries) const {
 }
 
 template <Cache::Strategy S>
+void NtfsVolume<S>::GetClusterRuns(ULONGLONG lcn, ULONGLONG clusters,
+                                   std::vector<Alloc::ClusterRun>& runs) const {
+  runs.clear();
+  if (clusters == 0) {
+    return;
+  }
+  Alloc::ClusterBitmap* bitmap = impl_->GetClusterBitmap();
+  if (bitmap != nullptr) {
+    try {
+      bitmap->StateRuns(lcn, clusters, runs);
+      impl_->NoteBitmapHealth();
+      return;
+    } catch (const std::exception& e) {
+      Log::Exception(e);
+    }
+  }
+  // A query nobody answers stays unknown.
+  runs.assign(1, {.lcn = lcn,
+                  .clusters = clusters,
+                  .state = Alloc::ClusterState::Unknown});
+}
+
+template <Cache::Strategy S>
 size_t NtfsVolume<S>::Impl::KeptBitmapBytes() const noexcept {
   return static_cast<size_t>(
       (std::min<ULONGLONG>)(bitmap_keep_bytes,

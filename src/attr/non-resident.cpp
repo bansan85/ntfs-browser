@@ -21,6 +21,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "attr/flags.h"
 #include "data/header-non-resident.h"
 #include "data/run-entry.h"
 #include "log/ntfs-common.h"
@@ -837,6 +838,49 @@ Alloc::StreamRanges AttrNonResident<S>::GetRealRanges() const {
     result.ranges.push_back({.offset = offset, .length = length});
   }
   return result;
+}
+
+// The runs as the list decoded them, shifted to the VCN this instance starts
+// at: a part of a stream that was not merged into its first one keeps its own
+// VCNs. Only the first part of a stream has sizes: a continuation reports
+// everything it maps as written.
+template <Cache::Strategy S>
+Alloc::StreamLayout AttrNonResident<S>::GetLayout() const {
+  Alloc::StreamLayout layout;
+  const ULONGLONG shift = attr_header_nr_.start_vcn;
+  ULONGLONG covered = shift;
+  for (const Data::RunEntry& entry : runs_.Entries()) {
+    if (entry.clusters == 0) {
+      layout.well_formed = false;
+      continue;
+    }
+    if (entry.lcn &&
+        entry.clusters > std::numeric_limits<ULONGLONG>::max() - *entry.lcn) {
+      layout.well_formed = false;
+    }
+    layout.runs.push_back({.vcn = shift + entry.start_vcn,
+                           .clusters = entry.clusters,
+                           .lcn = entry.lcn});
+    covered = shift + entry.last_vcn + 1;
+  }
+  layout.covered_end = covered;
+
+  const ULONGLONG cluster_size = this->GetClusterSize();
+  const bool first_part = attr_header_nr_.start_vcn == 0;
+  layout.data_size = attr_header_nr_.real_size;
+  layout.initialized_size =
+      (std::min)(attr_header_nr_.ini_size, attr_header_nr_.real_size);
+  layout.initialized_clusters = (std::numeric_limits<ULONGLONG>::max)();
+  if (cluster_size != 0 && first_part) {
+    const auto clusters_of = [cluster_size](ULONGLONG bytes) {
+      return bytes / cluster_size + (bytes % cluster_size != 0 ? 1 : 0);
+    };
+    layout.declared_clusters = clusters_of(attr_header_nr_.alloc_size);
+    layout.initialized_clusters = clusters_of(layout.initialized_size);
+  }
+  layout.unit_clusters = comp_unit_clusters_;
+  layout.encrypted = (this->GetAttrFlags() & Attr::flag_encrypted) != 0;
+  return layout;
 }
 
 template <Cache::Strategy S>

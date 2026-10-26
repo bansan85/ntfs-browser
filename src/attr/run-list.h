@@ -73,6 +73,9 @@ class RunList {
   // touching real runs merged.
   [[nodiscard]] VcnRunList RealRanges() const;
 
+  // Every decoded run, sparse ones included, in VCN order.
+  [[nodiscard]] const std::vector<Data::RunEntry>& Entries() const noexcept;
+
   // The run holding vcn, or nullptr if no run holds it.
   [[nodiscard]] const Data::RunEntry* Find(ULONGLONG vcn) const noexcept;
 

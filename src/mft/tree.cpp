@@ -28,6 +28,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
@@ -40,6 +41,8 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/usn/types.h>
 
+#include "alloc/claim-inventory.h"
+#include "alloc/cluster-sweep.h"
 #include "alloc/data-state.h"
 #include "attr/file-name.h"
 #include "io/file-record-attr-types.h"
@@ -1125,6 +1128,18 @@ bool FilesUnderParent(const Mft::MftTree::Entry& entry, size_t index) {
       });
 }
 
+// The claims of the record file_record holds, which ReadBaseEntry() just kept.
+// The record is concerned when it is freed, or damaged: header_damaged says its
+// header was, counts.damaged that something else in it was.
+template <Cache::Strategy S>
+Alloc::RecordClaims ComputeClaims(const Io::FileRecord<S>& file_record,
+                                  ULONGLONG record, bool header_damaged,
+                                  const RecordCounts& counts) {
+  const bool freed = file_record.IsDeleted();
+  return Alloc::CollectClaims(file_record, record, freed,
+                              freed || header_damaged || counts.damaged != 0);
+}
+
 // What the data state of one entry waits for, worked out from its record alone,
 // so that a thread other than the scan's can do it. Only the scan's own thread
 // asks the volume.
@@ -1170,10 +1185,15 @@ DataNote ComputeDataNote(const Io::FileRecord<S>& file_record) {
 template <Cache::Strategy S>
 class DataStateResolver {
  public:
+  // keep_windows leaves the bitmap windows the batches kept to the caller,
+  // who gives them back.
   DataStateResolver(const NtfsVolume<S>& volume,
                     std::vector<Mft::MftTree::Entry>& entries,
-                    Mft::MftTree::ScanStats& stats)
-      : volume_(&volume), entries_(&entries), stats_(&stats) {}
+                    Mft::MftTree::ScanStats& stats, bool keep_windows = false)
+      : volume_(&volume),
+        entries_(&entries),
+        stats_(&stats),
+        keep_windows_(keep_windows) {}
 
   DataStateResolver(const DataStateResolver&) = delete;
   DataStateResolver& operator=(const DataStateResolver&) = delete;
@@ -1182,7 +1202,7 @@ class DataStateResolver {
 
   // Gives back the bitmap windows the batches kept.
   ~DataStateResolver() {
-    if (keeping_) {
+    if (keeping_ && !keep_windows_) {
       volume_->KeepBitmapWindows(0);
     }
   }
@@ -1213,7 +1233,7 @@ class DataStateResolver {
   // back the bitmap windows kept for the batches.
   void Finish() {
     Flush();
-    if (keeping_) {
+    if (keeping_ && !keep_windows_) {
       volume_->KeepBitmapWindows(0);
       keeping_ = false;
     }
@@ -1278,6 +1298,8 @@ class DataStateResolver {
   std::vector<Waiting> waiting_;
   // Whether the volume keeps bitmap windows for this resolver.
   bool keeping_{false};
+  // Whether the windows outlive the resolver, for the cluster sweep.
+  bool keep_windows_{false};
 };
 
 // What one record slot of a window gave, parsed away from the thread that owns
@@ -1303,6 +1325,9 @@ struct SlotOutcome {
   Mft::MftTree::Entry entry;
   DataNote note;
   RecordCounts counts;
+  // The clusters the record claims, when the scan accounts for them and the
+  // entry is kept.
+  Alloc::RecordClaims claims;
   // The lines the parse logged, in the capture of the chunk it ran in, and then
   // the lines its attributes logged when they were dropped. With one thread,
   // the second kind comes later: when the next slot is parsed.
@@ -1320,7 +1345,7 @@ struct SlotOutcome {
 template <Cache::Strategy S>
 void ParseWindowSlot(Io::FileRecord<S>& file_record,
                      const NtfsVolume<S>& volume, ULONGLONG record,
-                     std::span<const BYTE> bytes, bool annotate,
+                     std::span<const BYTE> bytes, bool annotate, bool account,
                      SlotOutcome& outcome) {
   const bool parsed = file_record.ParseFileRecord(record, bytes);
   outcome.kind = ClassifySlot(file_record, volume, parsed, outcome.counts,
@@ -1350,6 +1375,10 @@ void ParseWindowSlot(Io::FileRecord<S>& file_record,
   if (outcome.kept && annotate) {
     outcome.note = ComputeDataNote(file_record);
   }
+  if (outcome.kept && account) {
+    outcome.claims = ComputeClaims(file_record, record, outcome.header_damaged,
+                                   outcome.counts);
+  }
 }
 
 // Parses the slots of one window on several threads, and gives the outcome of
@@ -1362,17 +1391,21 @@ class WindowParser {
   // threads is the number of threads that parse, the calling one included. A
   // null bitmap parses every slot, else the slots it marks free are left alone.
   WindowParser(const NtfsVolume<S>& volume, size_t threads,
-               const std::vector<BYTE>* bitmap, bool annotate)
+               const std::vector<BYTE>* bitmap, bool annotate, bool account)
       : volume_(&volume),
         record_size_(volume.GetFileRecordSize()),
         bitmap_(bitmap),
         annotate_(annotate),
+        account_(account),
         pool_(threads - 1) {
     contexts_.reserve(pool_.Slots());
     for (size_t slot = 0; slot < pool_.Slots(); slot++) {
       Io::FileRecord<S>& context =
           *contexts_.emplace_back(std::make_unique<Io::FileRecord<S>>(volume));
       context.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+      if (account) {
+        context.SetClaimMask(Attr::Mask::All);
+      }
       // Resolving a list reads the volume, which no worker does. A record with
       // a list never gets to parse its attributes here.
       context.SetResolveAttrList(false);
@@ -1461,7 +1494,7 @@ class WindowParser {
       outcome.log_begin = log.End();
       ParseWindowSlot(file_record, *volume_, record,
                       window_.bytes.subspan(index * record_size_, record_size_),
-                      annotate_, outcome);
+                      annotate_, account_, outcome);
       outcome.log_end = log.End();
       // What the attributes log when they are dropped is kept apart: it
       // belongs after what the scan does with the slot.
@@ -1474,6 +1507,7 @@ class WindowParser {
   size_t record_size_;
   const std::vector<BYTE>* bitmap_;
   bool annotate_;
+  bool account_;
   Mft::SlotWindow window_;
   Log::Detail::LevelMask levels_{0};
   bool active_{false};
@@ -1508,17 +1542,22 @@ class WaitingParser {
   // threads is the number of threads that parse, the calling one included.
   // held, bases and waiting MUST NOT change while a batch is parsed.
   WaitingParser(const NtfsVolume<S>& volume, size_t threads,
-                const HeldRecords& held, const SlotBases& bases, bool annotate)
+                const HeldRecords& held, const SlotBases& bases, bool annotate,
+                bool account)
       : volume_(&volume),
         held_(&held),
         waiting_(&held.WaitingRecords()),
         annotate_(annotate),
+        account_(account),
         pool_(threads - 1) {
     contexts_.reserve(pool_.Slots());
     for (size_t slot = 0; slot < pool_.Slots(); slot++) {
       Context& context =
           *contexts_.emplace_back(std::make_unique<Context>(volume));
       context.record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+      if (account) {
+        context.record.SetClaimMask(Attr::Mask::All);
+      }
       context.record.SetExtensionSource(
           [&held](ULONGLONG record) { return held.FindExtension(record); });
       context.record.SetBaseSource(
@@ -1646,12 +1685,17 @@ class WaitingParser {
     if (outcome.kept && annotate_) {
       outcome.note = ComputeDataNote(file_record);
     }
+    if (outcome.kept && account_) {
+      outcome.claims = ComputeClaims(file_record, waiting.record,
+                                     waiting.header_damaged, outcome.counts);
+    }
   }
 
   const NtfsVolume<S>* volume_;
   const HeldRecords* held_;
   const std::vector<HeldRecords::Waiting>* waiting_;
   bool annotate_;
+  bool account_;
   // The batch being parsed: its first waiting record, and its length.
   size_t first_{0};
   size_t count_{0};
@@ -1707,15 +1751,17 @@ class SlotScan {
   // entries and stats belong to the caller, and receive the result. bitmap,
   // when it holds a value, lists the slots in use: the scan leaves the others
   // alone.
+  // account says the scan accounts for clusters, see ScanOptions.
   SlotScan(const NtfsVolume<S>& volume,
            const Mft::MftTree::ScanOptions& options,
            const std::optional<std::vector<BYTE>>& bitmap, bool annotate,
-           std::vector<Mft::MftTree::Entry>& entries,
+           bool account, std::vector<Mft::MftTree::Entry>& entries,
            Mft::MftTree::ScanStats& stats)
       : volume_(&volume),
         options_(&options),
         bitmap_(&bitmap),
         annotate_(annotate),
+        account_(account),
         entries_(&entries),
         stats_(&stats),
         total_(volume.GetRecordsCount()),
@@ -1723,9 +1769,12 @@ class SlotScan {
         bases_(total_),
         unheld_(volume),
         file_record_(volume),
-        resolver_(volume, entries, stats),
+        resolver_(volume, entries, stats, account),
         slots_(volume) {
     file_record_.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+    if (account) {
+      file_record_.SetClaimMask(Attr::Mask::All);
+    }
     file_record_.SetExtensionSource([this](ULONGLONG record) {
       const std::span<const BYTE> bytes = held_.FindExtension(record);
       return bytes.empty() ? unheld_.Find(record) : bytes;
@@ -1786,6 +1835,11 @@ class SlotScan {
   // The clusters of $J, when the scan met the $UsnJrnl record: empty otherwise.
   [[nodiscard]] std::vector<Alloc::Extent> TakeJournalExtents() {
     return std::move(journal_extents_);
+  }
+
+  // The claims of every record the scan kept, empty when it did not account.
+  [[nodiscard]] Alloc::ClaimInventory TakeInventory() {
+    return std::move(inventory_);
   }
 
   // Parses the base records that wait for their extension records, and drops
@@ -1864,6 +1918,10 @@ class SlotScan {
     if (kept && annotate_) {
       resolver_.Add(waiting.entry_index, ComputeDataNote(file_record_));
     }
+    if (kept && account_) {
+      inventory_.Add(ComputeClaims(file_record_, waiting.record,
+                                   waiting.header_damaged, counts));
+    }
     return kept;
   }
 
@@ -1876,7 +1934,7 @@ class SlotScan {
         held_.WaitingRecords();
     if (!waiting_parser_) {
       waiting_parser_.emplace(*volume_, parse_threads_, held_, bases_,
-                              annotate_);
+                              annotate_, account_);
     }
     if (!waiting_parser_->Covers(index)) {
       const size_t batch =
@@ -1905,6 +1963,9 @@ class SlotScan {
       entries_->at(waiting.entry_index) = std::move(outcome.entry);
       if (annotate_) {
         resolver_.Add(waiting.entry_index, std::move(outcome.note));
+      }
+      if (account_) {
+        inventory_.Add(std::move(outcome.claims));
       }
     }
     LeaveRelease(log, outcome, waiting.record, held_.Bytes(*waiting.slot));
@@ -1936,7 +1997,7 @@ class SlotScan {
       }
       if (!parser_) {
         parser_.emplace(*volume_, parse_threads_,
-                        *bitmap_ ? &**bitmap_ : nullptr, annotate_);
+                        *bitmap_ ? &**bitmap_ : nullptr, annotate_, account_);
       }
       parser_->Begin(*window);
     }
@@ -1969,6 +2030,9 @@ class SlotScan {
       entries_->push_back(std::move(outcome.entry));
       if (annotate_) {
         resolver_.Add(entries_->size() - 1, std::move(outcome.note));
+      }
+      if (account_) {
+        inventory_.Add(std::move(outcome.claims));
       }
     }
     LeaveRelease(record, outcome);
@@ -2133,12 +2197,17 @@ class SlotScan {
     if (annotate_) {
       resolver_.Add(entries_->size() - 1, ComputeDataNote(file_record_));
     }
+    if (account_) {
+      inventory_.Add(
+          ComputeClaims(file_record_, record, header_damaged, counts));
+    }
   }
 
   const NtfsVolume<S>* volume_;
   const Mft::MftTree::ScanOptions* options_;
   const std::optional<std::vector<BYTE>>* bitmap_;
   bool annotate_;
+  bool account_;
   std::vector<Mft::MftTree::Entry>* entries_;
   Mft::MftTree::ScanStats* stats_;
   ULONGLONG total_;
@@ -2146,6 +2215,8 @@ class SlotScan {
   SlotBases bases_;
   UnheldExtensions<S> unheld_;
   std::vector<Alloc::Extent> journal_extents_;
+  // The claims of the kept records, when the scan accounts for clusters.
+  Alloc::ClaimInventory inventory_;
   Io::FileRecord<S> file_record_;
   DataStateResolver<S> resolver_;
   // Reads $MFT in big blocks, not record by record, and only the used ones.
@@ -2268,16 +2339,27 @@ class MftTree::Impl {
   Mft::MftTree::ScanStats stats;
   // The files only the journal names, ordered by record, then sequence.
   std::vector<Mft::MftTree::JournalOnlyEntry> journal_only;
+  // The cluster accounts of the concerned entries, ordered by record. Empty
+  // unless the scan accounted for clusters.
+  std::vector<std::pair<ULONGLONG, Alloc::ClusterAccount>> accounts;
 
   template <Cache::Strategy S>
   void Scan(const NtfsVolume<S>& volume,
             const Mft::MftTree::ScanOptions& options);
   // Returns the clusters of $J when the scan met the $UsnJrnl record.
+  // inventory receives the claims of the kept records when account is true.
   template <Cache::Strategy S>
   std::vector<Alloc::Extent>
       ReadSlots(const NtfsVolume<S>& volume,
                 const Mft::MftTree::ScanOptions& options,
-                const std::optional<std::vector<BYTE>>& bitmap, bool annotate);
+                const std::optional<std::vector<BYTE>>& bitmap, bool annotate,
+                bool account, Alloc::ClaimInventory& inventory);
+  // Gives the concerned entries their ClusterAccount, from the claims of the
+  // whole scan.
+  template <Cache::Strategy S>
+  void AccountClusters(const NtfsVolume<S>& volume,
+                       const Mft::MftTree::ScanOptions& options,
+                       Alloc::ClaimInventory& inventory);
   // Announces the clusters of $J to the reader, in the order the loader of the
   // journal reads them. Returns whether it announced any.
   template <Cache::Strategy S>
@@ -2373,11 +2455,59 @@ Mft::MftTree::~MftTree() = default;
 template <Cache::Strategy S>
 std::vector<Alloc::Extent> Mft::MftTree::Impl::ReadSlots(
     const NtfsVolume<S>& volume, const Mft::MftTree::ScanOptions& options,
-    const std::optional<std::vector<BYTE>>& bitmap, bool annotate) {
-  SlotScan<S> scan(volume, options, bitmap, annotate, entries, stats);
+    const std::optional<std::vector<BYTE>>& bitmap, bool annotate, bool account,
+    Alloc::ClaimInventory& inventory) {
+  SlotScan<S> scan(volume, options, bitmap, annotate, account, entries, stats);
   scan.FirstPass();
   scan.SecondPass();
+  inventory = scan.TakeInventory();
   return scan.TakeJournalExtents();
+}
+
+// The level of cluster accounting a scan runs at: what the options ask for, at
+// least Counts when the content check is on, and Off when no entry can be
+// concerned because the volume keeps neither freed nor damaged records.
+template <Cache::Strategy S>
+Alloc::ClusterAccountLevel
+    EffectiveAccountLevel(const NtfsVolume<S>& volume,
+                          const Mft::MftTree::ScanOptions& options) {
+  if (!volume.GetOptions().include_deleted &&
+      !volume.GetOptions().recover_errors) {
+    return Alloc::ClusterAccountLevel::Off;
+  }
+  if (options.cluster_account == Alloc::ClusterAccountLevel::Off &&
+      options.verify_data != Alloc::DataCheckMode::Off) {
+    return Alloc::ClusterAccountLevel::Counts;
+  }
+  return options.cluster_account;
+}
+
+template <Cache::Strategy S>
+void Mft::MftTree::Impl::AccountClusters(
+    const NtfsVolume<S>& volume, const Mft::MftTree::ScanOptions& options,
+    Alloc::ClaimInventory& inventory) {
+  std::vector<Alloc::OwnerAccount> owners = Alloc::AccountClusters(
+      volume, inventory, EffectiveAccountLevel(volume, options),
+      options.verify_data);
+  accounts.reserve(owners.size());
+  for (Alloc::OwnerAccount& owner : owners) {
+    if (!EntryIndex(owner.record)) {
+      continue;
+    }
+    stats.cluster_accounts++;
+    stats.clusters.Add(owner.account.tally);
+    accounts.emplace_back(owner.record, std::move(owner.account));
+  }
+  std::ranges::sort(accounts, {}, &decltype(accounts)::value_type::first);
+  Log::Info(
+      "MFT scan clusters: {} files counted, {} intact, {} reallocated, {} "
+      "bad, {} sparse",
+      stats.cluster_accounts,
+      stats.clusters.Count(Alloc::ClusterCondition::Intact),
+      stats.clusters.Count(Alloc::ClusterCondition::ReallocatedWritten) +
+          stats.clusters.Count(Alloc::ClusterCondition::ReallocatedUnwritten),
+      stats.clusters.Count(Alloc::ClusterCondition::Bad),
+      stats.clusters.Count(Alloc::ClusterCondition::Sparse));
 }
 
 template <Cache::Strategy S>
@@ -2433,12 +2563,26 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   // the bitmap: without both, the scan reads what it always did.
   const bool annotate =
       volume.GetOptions().include_deleted && options.annotate_data_state;
+  const bool account =
+      EffectiveAccountLevel(volume, options) != Alloc::ClusterAccountLevel::Off;
+  // The data states and the sweep both read $Bitmap: the windows the first
+  // reads stay for the second.
+  if (account && annotate) {
+    volume.KeepBitmapWindows(max_kept_bitmap_bytes);
+  }
+  Alloc::ClaimInventory inventory;
   const std::vector<Alloc::Extent> journal_extents =
-      ReadSlots(volume, options, bitmap, annotate);
+      ReadSlots(volume, options, bitmap, annotate, account, inventory);
   for (size_t index = 0; index < entries.size(); index++) {
     // index < entries.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     IndexEntry(entries[index].record, index);
+  }
+  if (account && stats.complete) {
+    AccountClusters(volume, options, inventory);
+  }
+  if (account && annotate) {
+    volume.KeepBitmapWindows(0);
   }
 
   if (options.progress && stats.complete) {
@@ -3007,6 +3151,16 @@ std::wstring Mft::MftTree::GetJournalPath(
     path += L'\\';
   }
   return path + item.name;
+}
+
+const Alloc::ClusterAccount*
+    Mft::MftTree::ClusterAccountOf(ULONGLONG record) const {
+  const auto found =
+      std::ranges::lower_bound(impl_->accounts, record, {},
+                               &decltype(impl_->accounts)::value_type::first);
+  return found != impl_->accounts.end() && found->first == record
+             ? &found->second
+             : nullptr;
 }
 
 const Mft::MftTree::ScanStats& Mft::MftTree::Stats() const noexcept {

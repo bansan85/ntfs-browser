@@ -81,4 +81,24 @@ inline void WriteRecordedScanInput(const std::filesystem::path& path,
       });
 }
 
+// WriteRecorded() for the reads of NtfsFuzz::ProbeClusterAccountOnce(), the
+// scan with the cluster account on that the account probe repeats with one
+// thread and with several. The input is then padded with zeros to the size of
+// the image: the replay reader reports the length of the input as the size of
+// the volume, and the account judges clusters against it, so a shorter input
+// would put the clusters it reads out of the volume.
+inline void WriteRecordedAccountInput(const std::filesystem::path& path,
+                                      std::vector<BYTE> image,
+                                      const VolumeOptions& options) {
+  const std::size_t image_size = image.size();
+  WriteRecorded(
+      path, std::move(image), options,
+      [](std::unique_ptr<IDiskReader> reader, const VolumeOptions& probed) {
+        NtfsFuzz::ProbeClusterAccountOnce(std::move(reader), probed);
+      });
+  if (std::filesystem::file_size(path) < image_size) {
+    std::filesystem::resize_file(path, image_size);
+  }
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzInputs

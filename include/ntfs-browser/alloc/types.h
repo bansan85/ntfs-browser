@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
@@ -102,6 +103,52 @@ struct SpaceSummary {
 struct BadClusters {
   std::vector<Extent> extents;
   bool truncated{false};
+};
+
+// A run of clusters that share one state, as the cluster bitmap and the bad
+// list judge them. See NtfsVolume::GetClusterRuns().
+struct ClusterRun {
+  // First cluster of the run, and its length.
+  ULONGLONG lcn{0};
+  ULONGLONG clusters{0};
+  // What the bitmap and the bad list say of every cluster of the run.
+  ClusterState state{ClusterState::Unknown};
+};
+
+// One run of a stream's run list: the clusters [vcn, vcn + clusters) of the
+// stream, at LCN lcn, or a sparse hole when lcn is empty.
+struct LayoutRun {
+  // First virtual cluster of the run, and its length.
+  ULONGLONG vcn{0};
+  ULONGLONG clusters{0};
+  // First real cluster of the run. Empty for a sparse hole.
+  std::optional<ULONGLONG> lcn;
+};
+
+// How one non-resident attribute maps its clusters: every run of its list in
+// VCN order, sparse holes included, with what the header says of its size.
+// Nothing is read from the disk to build it.
+struct StreamLayout {
+  // The runs that decoded, with absolute VCNs. A zero-length run is left out.
+  std::vector<LayoutRun> runs;
+  // Clusters the allocated size declares, rounded up. 0 on a continuation of
+  // the stream, which the header of its first part describes.
+  ULONGLONG declared_clusters{0};
+  // First VCN past the last decoded run, sparse runs included.
+  ULONGLONG covered_end{0};
+  // Clusters up to the initialized size, rounded up: the VCNs from here on were
+  // never written. The maximum value on a continuation, whose header has no
+  // initialized size.
+  ULONGLONG initialized_clusters{0};
+  // Real and initialized sizes in bytes, from the header.
+  ULONGLONG data_size{0};
+  ULONGLONG initialized_size{0};
+  // Clusters per compression unit. 0 for a stream that is not compressed.
+  ULONGLONG unit_clusters{0};
+  // The attribute carries the encrypted flag.
+  bool encrypted{false};
+  // False when a run had zero length, or overflowed 64 bits.
+  bool well_formed{true};
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Alloc

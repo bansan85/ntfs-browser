@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 
 #include "gap-collation-probe.h"
@@ -2123,5 +2124,52 @@ struct FakeIndexBlock {
 // written as given, so a test can damage them first.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithIndexBlocks(
     std::span<const std::vector<BYTE>> blocks);
+
+// One non-resident attribute of a file written by PutAccountFile().
+struct FakeAccountStream {
+  // The stream's name. Empty: the unnamed stream.
+  std::wstring name;
+  // The attribute's type. Data for a stream, anything else for an attribute
+  // that only owns clusters.
+  Attr::Type type = Attr::Type::Data;
+  // The layout, sparse holes included.
+  std::vector<FakeDataRun> runs;
+  // Keeps only the first cut_after_runs runs on disk, then a byte no run can
+  // start with: a cut list. The header still declares the clusters of all runs.
+  std::optional<std::size_t> cut_after_runs;
+  ULONGLONG real_size = 0;
+  // Initialized size. Nullopt: the same as real_size.
+  std::optional<ULONGLONG> ini_size;
+  // Compression unit shift. Zero: not compressed.
+  WORD comp_unit_size = 0;
+  // Sets the encrypted flag of the attribute header.
+  bool encrypted = false;
+};
+
+// A file record written by PutAccountFile().
+struct FakeAccountFile {
+  // Whether the record is freed. A live record is in use.
+  bool freed = false;
+  // The $LogFile sequence number of the header.
+  ULONGLONG lsn = 0;
+  // The sequence number of the record.
+  WORD sequence = 2;
+  // The non-resident attributes, in order.
+  std::vector<FakeAccountStream> streams;
+  // The record that holds extension_streams, which the record names in a
+  // resident $ATTRIBUTE_LIST. Nullopt: the record has no extension.
+  std::optional<ULONGLONG> extension_idx;
+  // The non-resident attributes the extension record holds, in order.
+  std::vector<FakeAccountStream> extension_streams;
+};
+
+// Writes, at $MFT slot idx of an image built on the 26-slot MftTree base, a
+// file "account<idx>.bin" in Docs that holds the attributes of file. It grows
+// the image when idx lies past its end.
+void PutAccountFile(std::vector<BYTE>& image, ULONGLONG idx,
+                    const FakeAccountFile& file);
+
+// Sets the $LogFile sequence number of MFT record idx of an image.
+void SetRecordLsn(std::vector<BYTE>& image, ULONGLONG idx, ULONGLONG lsn);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

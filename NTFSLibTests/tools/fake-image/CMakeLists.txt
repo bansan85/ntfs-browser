@@ -13,6 +13,7 @@ add_library(
   "fake-ntfs-image-attr-list.cpp"
   "fake-ntfs-image-attr-data.cpp"
   "fake-ntfs-image-backup-boot.cpp"
+  "fake-ntfs-image-account.cpp"
   "fake-ntfs-image-badclus.cpp"
   "fake-ntfs-image-bitmap.cpp"
   "fake-ntfs-image-index-blocks.cpp"

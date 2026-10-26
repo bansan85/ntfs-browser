@@ -103,6 +103,9 @@ class NTFS_BROWSER_EXPORT AttrBase {
   // head costs nothing to ask about. Not complete when a run list is short or
   // damaged, as for GetExtents().
   [[nodiscard]] virtual Alloc::StreamRanges GetRealRanges() const;
+  // The runs of this attribute, sparse holes included, with its sizes. Empty
+  // for a resident attribute. Never reads the disk.
+  [[nodiscard]] virtual Alloc::StreamLayout GetLayout() const;
 };  // AttrBase
 
 }  // namespace Attr

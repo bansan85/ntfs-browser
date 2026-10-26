@@ -240,6 +240,7 @@ void Io::FileRecord<S>::Impl::ClearAttrs() noexcept {
   realigned_attrs.clear();
   end_marker_offset.reset();
   attrs_salvaged = false;
+  claimed_layouts.clear();
 }
 
 // Call user defined Callback routines for an attribute
@@ -478,6 +479,11 @@ WORD Io::FileRecord<S>::GetSequenceNumber() const noexcept {
 }
 
 template <Cache::Strategy S>
+ULONGLONG Io::FileRecord<S>::GetLogSequenceNumber() const noexcept {
+  return impl_->file_record ? impl_->file_record->GetData()->lsn : 0;
+}
+
+template <Cache::Strategy S>
 ULONGLONG Io::FileRecord<S>::GetBaseRecordReference() const noexcept {
   return impl_->file_record ? impl_->file_record->GetData()->ref_to_base &
                                   Mft::mft_record_number_mask
@@ -623,11 +629,16 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
     ULONGLONG record_number, WORD sequence_number, Attr::Type attr_type,
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
   const Attr::Mask entry_mask = Attr::AttrMask(attr_type);
+  // A type that is only claimed is listed, not parsed: nothing about it may
+  // fail the parse of this record.
+  const bool claim_only = !static_cast<bool>(entry_mask & attr_mask) &&
+                          static_cast<bool>(entry_mask & claim_mask);
   // Set by ParseRecord(), which every attribute parse follows.
   const ULONGLONG self_ref = file_reference.value_or(0);
   // Skip contained attributes
   // Skip unwanted attributes
-  if (record_number == self_ref || !static_cast<bool>(entry_mask & attr_mask)) {
+  if (record_number == self_ref ||
+      (!static_cast<bool>(entry_mask & attr_mask) && !claim_only)) {
     return;
   }
 
@@ -647,7 +658,9 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
                                          : std::span<const BYTE>{};
   if (held.empty() &&
       NamesOtherBase(record_number, self_ref & Mft::mft_record_number_mask)) {
-    SkipForeignExtension(record_number, recover);
+    if (!claim_only) {
+      SkipForeignExtension(record_number, recover);
+    }
     return;
   }
   if (held.empty() && self->RefuseRead()) {
@@ -659,12 +672,18 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
   extension_records.emplace_back(*volume);
   Io::FileRecord<S>& frnew = extension_records.back();
 
-  frnew.impl_->attr_mask = entry_mask;
+  frnew.impl_->attr_mask = claim_only ? static_cast<Attr::Mask>(0) : entry_mask;
+  frnew.impl_->claim_mask =
+      claim_only ? entry_mask : static_cast<Attr::Mask>(0);
   frnew.impl_->attr_raw_call_back = attr_raw_call_back;
   frnew.impl_->extension_source = extension_source;
   frnew.impl_->base_source = base_source;
   frnew.impl_->read_refusal = read_refusal;
   if (!frnew.ParseFileRecord(record_number, held)) {
+    if (claim_only) {
+      extension_records.pop_back();
+      return;
+    }
     throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
   }
 
@@ -682,18 +701,26 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
                 self_ref & Mft::mft_record_number_mask);
   if (!genuine) {
     extension_records.pop_back();
-    SkipForeignExtension(record_number, recover);
+    if (!claim_only) {
+      SkipForeignExtension(record_number, recover);
+    }
     return;
   }
 
-  if (!frnew.impl_->ParseAttrs(attr_list_chain)) {
+  if (!frnew.impl_->ParseAttrs(attr_list_chain) && !claim_only) {
     throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
   }
   // An extension of a freed record is freed too, and its own list may be gone.
-  if (frnew.impl_->overwritten_list) {
+  if (frnew.impl_->overwritten_list && !claim_only) {
     self->NoteOverwrittenAttrList();
   }
 
+  if (claim_only) {
+    claimed_layouts.insert(claimed_layouts.end(),
+                           frnew.impl_->claimed_layouts.begin(),
+                           frnew.impl_->claimed_layouts.end());
+    return;
+  }
   // Insert new found AttrList to fr.AttrList
   std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
       frnew.GetAttr(attr_type);
@@ -714,6 +741,17 @@ void Io::FileRecord<S>::SetAttrMask(Attr::Mask mask) noexcept {
   if ((mask & Attr::Mask::Data) == Attr::Mask::Data) {
     impl_->attr_mask |= Attr::Mask::LoggedUtilityStream;
   }
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetClaimMask(Attr::Mask mask) noexcept {
+  impl_->claim_mask = mask;
+}
+
+template <Cache::Strategy S>
+const std::vector<Alloc::StreamLayout>&
+    Io::FileRecord<S>::GetClaimedLayouts() const noexcept {
+  return impl_->claimed_layouts;
 }
 
 template <Cache::Strategy S>

@@ -125,6 +125,10 @@ class NTFS_BROWSER_EXPORT FileRecord {
   [[nodiscard]] std::optional<ULONGLONG> GetFileReference() const noexcept;
   // Times this record was reused; 0 when no record is parsed.
   [[nodiscard]] WORD GetSequenceNumber() const noexcept;
+  // The $LogFile sequence number in the header: NTFS writes it with every
+  // logged change of the record, its freeing included, so of two freed records
+  // the higher one was freed later. 0 when no record is parsed.
+  [[nodiscard]] ULONGLONG GetLogSequenceNumber() const noexcept;
   // Record number of the base record this extension record belongs to. 0 for
   // a base record, or when no record is parsed. Also 0 for an extension of
   // $MFT (record 0): use IsExtensionRecord() to tell the two apart.
@@ -159,6 +163,18 @@ class NTFS_BROWSER_EXPORT FileRecord {
   void ClearAttrRawCB() noexcept;
 
   void SetAttrMask(Attr::Mask mask) noexcept;
+  // Makes ParseAttrs() also list the layout of each non-resident attribute of
+  // the types in mask, in this record and in the extension records its
+  // $ATTRIBUTE_LIST names, without building an attribute for it: no defect in
+  // one changes whether the record parses, what it logs at Warn or Error, or
+  // what the record keeps. A type already in the attribute mask is not listed
+  // here: its attributes give their own GetLayout(). The extension records
+  // such a type needs are read like the others, and are skipped without a word
+  // when one cannot be used. Default: none.
+  void SetClaimMask(Attr::Mask mask) noexcept;
+  // The layouts SetClaimMask() asked for, from the last ParseAttrs().
+  [[nodiscard]] const std::vector<Alloc::StreamLayout>&
+      GetClaimedLayouts() const noexcept;
   // Like SetAttrMask(), but keeps exactly mask: it adds none of the attributes
   // SetAttrMask() always parses. For the volume's own metadata records.
   void SetExactAttrMask(Attr::Mask mask) noexcept;

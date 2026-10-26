@@ -74,6 +74,13 @@ class FileRecord<S>::Impl {
   std::optional<ULONGLONG> file_reference;
   std::array<Attr::RawCallback, Attr::attr_nums> attr_raw_call_back{};
   Attr::Mask attr_mask{Attr::Mask::All};
+  // The types, besides those of attr_mask, whose non-resident attributes the
+  // parse only lists in claimed_layouts: no attribute is built for them, so a
+  // defect in one changes nothing else about the parse. See SetClaimMask().
+  Attr::Mask claim_mask{static_cast<Attr::Mask>(0)};
+  // The layouts of the non-resident attributes of claim_mask, from this record
+  // and from the extension records its $ATTRIBUTE_LIST names.
+  std::vector<Alloc::StreamLayout> claimed_layouts;
 
   // The extension records $ATTRIBUTE_LIST opened. An attribute imported from
   // one keeps a reference into its bytes, so they MUST outlive attr_list_:
@@ -141,6 +148,9 @@ class FileRecord<S>::Impl {
   bool overwritten_list{false};
 
   void ClearAttrs() noexcept;
+  // Lists the layout of the non-resident attribute at ahc in claimed_layouts.
+  // An attribute that cannot be decoded is left out.
+  void ClaimLayout(const Attr::HeaderCommon& ahc);
   // See ImportAttrListEntry(): whether the caller read slot record_number and
   // saw that it names a base record other than the listing one.
   [[nodiscard]] bool NamesOtherBase(ULONGLONG record_number,

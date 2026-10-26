@@ -7,6 +7,7 @@
 #include <span>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/defines.h>
@@ -193,6 +194,17 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // its order. Use it for many ranges at random places. A query the bitmap
   // cannot answer stays Unknown, and does not spoil the others.
   void GetRangeStates(std::span<Alloc::RangeQuery> queries) const;
+
+  // Fills runs with the state of every cluster of [lcn, lcn + clusters), as
+  // maximal runs of one Alloc::ClusterState, in LCN order: Allocated and Free
+  // from the bitmap, Bad from the bad list, which wins over a bit, Unknown
+  // where the bitmap cannot say, OutOfRange past the volume. The same snapshot
+  // rules and the same reads as GetRangeStates(), whose windows it shares: ask
+  // in ascending order to read each window once. An empty range gives no run.
+  // When $Bitmap cannot be used, the clusters are Unknown, the bad ones
+  // excepted.
+  void GetClusterRuns(ULONGLONG lcn, ULONGLONG clusters,
+                      std::vector<Alloc::ClusterRun>& runs) const;
 
   // Keeps up to max_bytes of the cluster bitmap in memory, across the calls
   // that follow, so that a window of it is read once and not once per call of

@@ -1,7 +1,11 @@
 set(
   ${PROJECT_NAME}_SRC
   "alloc/bad-cluster-list.cpp"
+  "alloc/claim-inventory.cpp"
+  "alloc/cluster-account.cpp"
   "alloc/cluster-bitmap.cpp"
+  "alloc/cluster-sweep.cpp"
+  "alloc/content-check.cpp"
   "alloc/data-state.cpp"
   "attr/base.cpp"
   "attr/bitmap.cpp"
@@ -75,6 +79,7 @@ endif()
 
 set(
   ${PROJECT_NAME}_H
+  "../include/ntfs-browser/alloc/cluster-account.h"
   "../include/ntfs-browser/alloc/types.h"
   "../include/ntfs-browser/attr/defines.h"
   "../include/ntfs-browser/attr/header-common.h"
@@ -101,7 +106,10 @@ set(
   "../include/ntfs-browser/usn/types.h"
   "../include/ntfs-browser/volume-options.h"
   "alloc/bad-cluster-list.h"
+  "alloc/claim-inventory.h"
   "alloc/cluster-bitmap.h"
+  "alloc/cluster-sweep.h"
+  "alloc/content-check.h"
   "alloc/data-state.h"
   "attr/flags.h"
   "attr/bitmap.h"

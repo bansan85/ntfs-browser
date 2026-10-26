@@ -70,6 +70,14 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   // read at most once, whatever the order of the array, which keeps its order.
   void StatesInOrder(std::span<RangeQuery> queries);
 
+  // The state of every cluster of [lcn, lcn + clusters), as maximal runs of one
+  // state, in LCN order: Allocated, Free, Unknown (not judged), Bad (the bad
+  // list wins over the bit) and OutOfRange (past the volume). An empty range
+  // gives no run. Handled like a query of StatesInOrder(): a window is read
+  // when the range reaches it, and kept as that says.
+  void StateRuns(ULONGLONG lcn, ULONGLONG clusters,
+                 std::vector<ClusterRun>& runs);
+
   // Free space over the whole volume. Empty when no cluster could be judged.
   // free_bytes saturates when its product with cluster_size overflows.
   [[nodiscard]] std::optional<SpaceSummary> Summary(DWORD cluster_size);
@@ -115,6 +123,13 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
     ULONGLONG base{0};
     ULONGLONG stop{0};
   };
+
+  // Appends the runs of bits [first, last) of the bitmap, bad list left out.
+  // The range lies inside the volume.
+  void BitRuns(ULONGLONG first, ULONGLONG last, std::vector<ClusterRun>& runs);
+
+  // Replaces the runs of [first, last) the bad list names by Bad ones.
+  void OverlayBad(std::vector<ClusterRun>& runs);
 
   // Judges bits [first, last), which lie inside the volume.
   [[nodiscard]] Counts Count(ULONGLONG first, ULONGLONG last);

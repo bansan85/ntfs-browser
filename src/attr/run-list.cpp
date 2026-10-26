@@ -123,6 +123,10 @@ RunList::VcnRunList RunList::RealRanges() const {
   return list;
 }
 
+const std::vector<Data::RunEntry>& RunList::Entries() const noexcept {
+  return runs_;
+}
+
 // Returns the first run whose VCN range holds vcn.
 const Data::RunEntry* RunList::Find(ULONGLONG vcn) const noexcept {
   for (const Data::RunEntry& data_run : runs_) {

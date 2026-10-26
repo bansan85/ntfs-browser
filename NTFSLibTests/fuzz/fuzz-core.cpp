@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
@@ -65,6 +66,7 @@ using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Io::RecordStanding;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
+namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -707,6 +709,95 @@ void ProbeScanThreads(std::span<const BYTE> data, const VolumeOptions& options,
   }
 }
 
+// A digest of the cluster account of every entry of the tree and of the scan:
+// the tally, the map, and the byte ranges the map gives for 4 KiB clusters.
+std::uint64_t AccountDigest(const MftTree& tree) {
+  constexpr ULONGLONG probed_cluster_size = 4096;
+  std::uint64_t digest = digest_basis;
+  const auto mix = [&digest](std::uint64_t value) {
+    digest = (digest ^ value) * digest_prime;
+  };
+  const auto mix_tally = [&mix](const Alloc::ClusterTally& tally) {
+    for (const ULONGLONG count : tally.counts) {
+      mix(count);
+    }
+  };
+  for (const MftTree::Entry& entry : tree.Entries()) {
+    const Alloc::ClusterAccount* const account =
+        tree.ClusterAccountOf(entry.record);
+    if (account == nullptr) {
+      continue;
+    }
+    mix(entry.record);
+    mix_tally(account->tally);
+    for (const Alloc::StreamClusterMap& map : account->streams) {
+      mix(map.name.size());
+      mix(map.data_size);
+      mix(map.initialized_size);
+      for (const Alloc::ClusterPiece& piece : map.pieces) {
+        mix(piece.first_vcn);
+        mix(piece.clusters);
+        mix(piece.lcn.value_or(0));
+        mix(static_cast<std::uint64_t>(piece.condition));
+      }
+      for (const Alloc::StreamByteRange& range :
+           Alloc::ToByteRanges(map, probed_cluster_size)) {
+        mix(range.offset);
+        mix(range.length);
+        mix(range.damaged);
+        mix(range.reads_as_zeros);
+      }
+    }
+  }
+  mix(tree.Stats().cluster_accounts);
+  mix_tally(tree.Stats().clusters);
+  return digest;
+}
+
+// Scans the volume over reader as the probe of ScanThreads does, with the
+// cluster account at its fullest: the map, and a content check of every cluster
+// presumed intact. Gives the digest of the account. Nothing when the scan
+// throws.
+template <Cache::Strategy S>
+std::optional<std::uint64_t> AccountDigestOver(
+    std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+    const VolumeOptions& options, unsigned threads) {
+  try {
+    NtfsVolume<S> volume(std::move(reader), options);
+    if (!volume.IsVolumeOK()) {
+      return std::nullopt;
+    }
+    const MftTree tree(
+        volume, {.progress = [](ULONGLONG done,
+                                ULONGLONG /*total*/) { return done == 0; },
+                 .threads = threads,
+                 .cluster_account = Alloc::ClusterAccountLevel::CountsAndMap,
+                 .verify_data = Alloc::DataCheckMode::Full});
+    return AccountDigest(tree);
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+// Scans the input with the cluster account on, with one thread and then with
+// several, each over a reader of its own: the two accounts MUST be the same, or
+// the process aborts, as ProbeScanThreads() does. A scan that the progress
+// callback stops has no account, so only an input whose $MFT is short reaches
+// the sweep. It reads in an order of its own, so it runs last.
+template <Cache::Strategy S>
+void ProbeClusterAccount(std::span<const BYTE> data,
+                         const VolumeOptions& options,
+                         std::optional<size_t> failing_read) {
+  const std::optional<std::uint64_t> one = AccountDigestOver<S>(
+      std::make_unique<LoopingDiskReader>(data, failing_read), options, 1);
+  const std::optional<std::uint64_t> several = AccountDigestOver<S>(
+      std::make_unique<LoopingDiskReader>(data, failing_read), options,
+      probed_scan_threads);
+  if (one != several) {
+    std::abort();
+  }
+}
+
 // Walks the root with the batched walk, over a reader of its own. It reads in
 // another order than the default walk, so a recorded input would not replay in
 // step for the probes after it: this one runs last.
@@ -741,6 +832,7 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
   ProbeVolume(volume);
   ProbeScanThreads<S>(data, options, failing_read);
   ProbeStandingWalk<S>(data, options, failing_read);
+  ProbeClusterAccount<S>(data, options, failing_read);
 }
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash
@@ -821,6 +913,13 @@ void ProbeScanOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
                    const VolumeOptions& options) {
   static_cast<void>(
       ScanDigestOver<Cache::Strategy::NoCache>(std::move(reader), options, 1));
+}
+
+void ProbeClusterAccountOnce(
+    std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+    const VolumeOptions& options) {
+  static_cast<void>(AccountDigestOver<Cache::Strategy::NoCache>(
+      std::move(reader), options, 1));
 }
 
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,

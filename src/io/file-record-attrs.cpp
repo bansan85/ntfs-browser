@@ -370,6 +370,10 @@ bool Io::FileRecord<S>::Impl::AttrParser::VisitAttr(
   // mask requests that slot.
   if (!Attr::IsValidAttrType(head.type) ||
       !static_cast<bool>(Attr::AttrMask(head.type) & impl_.attr_mask)) {
+    if (Attr::IsValidAttrType(head.type) && head.non_resident != 0 &&
+        static_cast<bool>(Attr::AttrMask(head.type) & impl_.claim_mask)) {
+      impl_.ClaimLayout(AlignedAttrHeader(cur));
+    }
     return true;
   }
 
@@ -575,6 +579,24 @@ void Io::FileRecord<S>::Impl::AttrParser::MergeAttributeContinuations() {
       attrs.erase(attrs.begin() + gsl::narrow<ptrdiff_t>(index));
     }
   }
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::Impl::ClaimLayout(const Attr::HeaderCommon& ahc) {
+  // The attribute is decoded as a real one would be, but nothing it logs or
+  // salvages is the record's: the lines are dropped, and the salvaged
+  // conditions the decode counted are given back.
+  Log::Detail::CapturedLog silent;
+  silent.Reset(0);
+  const Log::Detail::CaptureScope capture(silent);
+  const Log::Detail::CapturedLog::Mark before = silent.End();
+  try {
+    const Attr::AttrNonResident<S> attr(ahc, *self);
+    claimed_layouts.push_back(attr.GetLayout());
+  } catch (const std::exception&) {
+    // An attribute that cannot be decoded owns no cluster we can name.
+  }
+  Log::Detail::ForgetRecoveredSince(before);
 }
 
 template <Cache::Strategy S>
