@@ -181,4 +181,100 @@ bool ShouldRecover(
         NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& record,
     const std::function<bool(const RecoveryCheck&)>& confirm);
 
+// Longest name a file system component holds, in UTF-16 units.
+inline constexpr std::size_t kMaxFileNameUnits = 255;
+
+// Longest path Win32 takes, in UTF-16 units, with the extended-length prefix
+// and the terminator. A longer one cannot be created.
+inline constexpr std::size_t kMaxExtendedPathUnits = 32767;
+
+// Copies of a name tried when it is taken, before the recovery gives up:
+// "name (2)" to "name (9999)".
+inline constexpr unsigned kMaxNameCopies = 9999;
+
+// Turns the name of a recovered file into one Win32 can create and every tool
+// can open again. NTFS keeps names that Win32 refuses or rewrites: a trailing
+// dot or space (dropped), a character of "<>:\"/\\|?*" or below U+0020 (each
+// becomes '_'), a device name such as CON, NUL, COM1 or LPT9, with or without
+// an extension (gets a leading '_'), and an empty name (becomes "_"). A name
+// over kMaxFileNameUnits is cut there, never inside a surrogate pair. A name
+// that needs none of this is returned as it is. An unpaired surrogate is kept:
+// Win32 accepts it.
+std::wstring SafeFileName(std::wstring_view name);
+
+// Why the file a recovery created does not carry the name it was given.
+enum class NameChange : std::uint8_t {
+  // The name is as asked.
+  None,
+  // SafeFileName() changed it: Win32 cannot create the name the record has.
+  Unsafe,
+  // The folder held a file of that name, or one that differs only by case:
+  // a copy number was added, and nothing was overwritten.
+  Taken
+};
+
+// What to do when the folder already holds a file of the name.
+enum class ExistingFile : std::uint8_t {
+  // Overwrite it. The caller has asked the user.
+  Replace,
+  // Keep it, and create "name (2)", "name (3)" and so on.
+  KeepBoth
+};
+
+// Why a recovery file cannot be created.
+enum class CreateError : std::uint8_t {
+  // The path is longer than Win32 takes, even with the extended-length prefix.
+  PathTooLong,
+  // The folder is missing, or cannot be written, or the system refused.
+  Failed,
+  // Every copy of the name up to kMaxNameCopies is taken.
+  NoFreeName
+};
+
+// A file a recovery writes into. It closes when it goes.
+class RecoveryFile {
+ public:
+  RecoveryFile(void* handle, std::wstring path, NameChange change);
+  RecoveryFile(const RecoveryFile&) = delete;
+  RecoveryFile& operator=(const RecoveryFile&) = delete;
+  RecoveryFile(RecoveryFile&& other) noexcept;
+  RecoveryFile& operator=(RecoveryFile&& other) noexcept;
+  ~RecoveryFile();
+
+  // Writes all of chunk. A failed or partial write is a failure.
+  [[nodiscard]] bool Write(std::span<const BYTE> chunk);
+
+  // The path of the file as a user types it: the folder and the final name,
+  // without the extended-length prefix.
+  [[nodiscard]] const std::wstring& Path() const noexcept;
+
+  // Whether the final name is the one that was asked for.
+  [[nodiscard]] NameChange Change() const noexcept;
+
+ private:
+  void Close() noexcept;
+
+  // The Win32 handle, null once closed.
+  void* handle_;
+  std::wstring path_;
+  NameChange change_;
+};
+
+// What CreateRecoveryFile() made, or why it could not.
+struct CreatedFile {
+  std::optional<RecoveryFile> file;
+  CreateError error = CreateError::Failed;
+};
+
+// Creates the file a recovery writes into, named name, in the folder
+// directory. The name goes through SafeFileName() first, and the path through
+// the extended-length form (see ToExtendedLengthPath()), so a path of up to
+// 32 767 units works whatever the LongPathsEnabled switch says. With
+// ExistingFile::KeepBoth, a file that exists is never overwritten. Names that
+// differ only by case are the same name in a folder Win32 reads without regard
+// to case, so two files recovered as "readme" and "README" end as "readme" and
+// "README (2)". The file reports what it did through RecoveryFile::Change().
+CreatedFile CreateRecoveryFile(std::wstring_view directory,
+                               std::wstring_view name, ExistingFile existing);
+
 }  // namespace NtfsUndel

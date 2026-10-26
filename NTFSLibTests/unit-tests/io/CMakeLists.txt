@@ -48,6 +48,7 @@ if(WIN32)
     NtfsBrowserTests
     PRIVATE
       "ntfsundel-advice-tests.cpp"
+      "ntfsundel-file-tests.cpp"
       "ntfsundel-recover-tests.cpp"
       "ntfsundel-search-tests.cpp"
   )

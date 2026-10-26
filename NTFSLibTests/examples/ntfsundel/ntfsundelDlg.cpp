@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <span>
@@ -123,29 +124,6 @@ bool PeekAndPump() {
   return true;
 }
 
-namespace {
-
-using HandlePtr = std::unique_ptr<std::remove_pointer<HANDLE>::type,
-                                  decltype(&::CloseHandle)>;
-
-// Creates the file a recovery writes into, replacing any older one.
-HandlePtr CreateOutputFile(const CString& path) {
-  return HandlePtr(CreateFile(static_cast<const _TCHAR*>(path),
-                              GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
-                   &CloseHandle);
-}
-
-// Writes all of chunk. A failed or partial write is not a success.
-bool WriteChunk(HANDLE file, std::span<const BYTE> chunk) {
-  DWORD written = 0;
-  return WriteFile(file, chunk.data(), gsl::narrow<DWORD>(chunk.size()),
-                   &written, nullptr) != FALSE &&
-         written == chunk.size();
-}
-
-}  // namespace
-
 // Enables or disables the controls that a running search must lock.
 void CNtfsundelDlg::SetSearching(bool searching) {
   SetWindowText(searching ? _T("ntfsundel - Searching ...") : _T("ntfsundel"));
@@ -261,8 +239,10 @@ void CNtfsundelDlg::AddResultRow(const NtfsUndel::DeletedFile& file) {
 // volume the file came from after the warning.
 bool CNtfsundelDlg::ChooseRecoveryPath(const CString& name, _TCHAR volname,
                                        CString& path) {
-  // Save as
-  CFileDialog savedlg(FALSE, nullptr, static_cast<const _TCHAR*>(name));
+  // Save as, under a name Win32 can create.
+  const std::wstring safe_name =
+      NtfsUndel::SafeFileName(static_cast<const _TCHAR*>(name));
+  CFileDialog savedlg(FALSE, nullptr, safe_name.c_str());
   if (savedlg.DoModal() != IDOK) {
     return false;
   }
@@ -319,10 +299,22 @@ void CNtfsundelDlg::OnRecover() {
     return;
   }
 
-  HandlePtr hf = CreateOutputFile(path);
-  if (hf.get() == INVALID_HANDLE_VALUE) {
-    MessageBox(_T("File creation failed"));
+  // The save dialog has asked the user about a file that exists: replace it.
+  const std::filesystem::path chosen(static_cast<const _TCHAR*>(path));
+  NtfsUndel::CreatedFile created = NtfsUndel::CreateRecoveryFile(
+      chosen.parent_path().wstring(), chosen.filename().wstring(),
+      NtfsUndel::ExistingFile::Replace);
+  if (!created.file) {
+    MessageBox(created.error == NtfsUndel::CreateError::PathTooLong
+                   ? _T("File path too long")
+                   : _T("File creation failed"));
     return;
+  }
+  NtfsUndel::RecoveryFile& file = *created.file;
+  if (file.Change() == NtfsUndel::NameChange::Unsafe) {
+    MessageBox((L"Windows cannot create that name. The file is saved as " +
+                file.Path())
+                   .c_str());
   }
 
   const NtfsUndel::CopyResult copied = NtfsUndel::CopyUnnamedData(
@@ -333,9 +325,7 @@ void CNtfsundelDlg::OnRecover() {
                    _T("?"),
                    nullptr, MB_OKCANCEL) != IDCANCEL;
       },
-      [&hf](std::span<const BYTE> chunk) {
-        return WriteChunk(hf.get(), chunk);
-      });
+      [&file](std::span<const BYTE> chunk) { return file.Write(chunk); });
   ReportCopy(copied);
 }
 

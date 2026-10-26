@@ -1,18 +1,23 @@
 #include "ntfsundel-core.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cwctype>
 #include <format>
 #include <map>
 #include <regex>
 #include <set>
+#include <string>
+#include <utility>
 
+#include <gsl/narrow>
 #include <windows.h>
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
@@ -361,6 +366,232 @@ bool ShouldRecover(const Io::FileRecord<Cache::Strategy::NoCache>& record,
                    const std::function<bool(const RecoveryCheck&)>& confirm) {
   const RecoveryCheck check = AssessRecovery(record);
   return check.advice == RecoveryAdvice::Proceed || confirm(check);
+}
+
+namespace {
+
+// Characters Win32 refuses in a file name, besides those below U+0020.
+constexpr std::wstring_view forbidden_name_characters = L"<>:\"/\\|?*";
+
+// First character that is not a control code: the ones below it are refused.
+constexpr wchar_t first_printable = 0x20;
+
+// What replaces a character a name cannot hold, and the name of a recovery
+// whose name is empty once cleaned.
+constexpr wchar_t replacement_character = L'_';
+
+// Device names Win32 reads as the device, with any extension.
+constexpr std::array<std::wstring_view, 4> reserved_device_names{
+    L"CON", L"PRN", L"AUX", L"NUL"};
+
+// Device names that take a digit from 1 to 9: COM1, LPT9.
+constexpr std::array<std::wstring_view, 2> numbered_device_names{L"COM",
+                                                                 L"LPT"};
+
+// The superscript digits (U+00B9, U+00B2, U+00B3) that Win32 also reads as a
+// device number after COM or LPT.
+constexpr std::array<wchar_t, 3> superscript_digits{0x00B9, 0x00B2, 0x00B3};
+
+// The ranges of the UTF-16 high and low surrogates, which make a pair.
+constexpr wchar_t high_surrogate_first = 0xD800;
+constexpr wchar_t high_surrogate_last = 0xDBFF;
+constexpr wchar_t low_surrogate_first = 0xDC00;
+constexpr wchar_t low_surrogate_last = 0xDFFF;
+
+// Units an extension can have for NumberedName() to keep it. A longer tail is
+// not an extension, so the copy number cannot push the name past its limit.
+constexpr std::size_t max_extension_units = 16;
+
+// Reports whether character is a UTF-16 high surrogate.
+bool IsHighSurrogate(wchar_t character) {
+  return character >= high_surrogate_first && character <= high_surrogate_last;
+}
+
+// Reports whether character is a UTF-16 low surrogate.
+bool IsLowSurrogate(wchar_t character) {
+  return character >= low_surrogate_first && character <= low_surrogate_last;
+}
+
+// Cuts name to at most limit units, never between the halves of a surrogate
+// pair.
+void CutToUnits(std::wstring& name, std::size_t limit) {
+  if (name.size() <= limit) {
+    return;
+  }
+  // The cut falls between the two halves of a surrogate pair.
+  const bool splits_pair = limit > 0 && IsHighSurrogate(name.at(limit - 1)) &&
+                           IsLowSurrogate(name.at(limit));
+  name.resize(splits_pair ? limit - 1 : limit);
+}
+
+// Drops the dots and spaces that end name, which Win32 never keeps.
+void StripTrailingDotsAndSpaces(std::wstring& name) {
+  const std::size_t last = name.find_last_not_of(L". ");
+  name.resize(last == std::wstring::npos ? 0 : last + 1);
+}
+
+// Reports whether name is a device name once its extension is dropped. A
+// trailing space before the dot does not hide it, and the case does not
+// matter.
+bool IsReservedDeviceName(std::wstring_view name) {
+  std::wstring base(name.substr(0, name.find(L'.')));
+  StripTrailingDotsAndSpaces(base);
+  std::ranges::transform(base, base.begin(), [](wchar_t character) {
+    return (character >= L'a' && character <= L'z')
+               ? static_cast<wchar_t>(character - L'a' + L'A')
+               : character;
+  });
+
+  if (std::ranges::find(reserved_device_names, base) !=
+      reserved_device_names.end()) {
+    return true;
+  }
+  constexpr std::size_t numbered_length = 4;
+  if (base.size() != numbered_length) {
+    return false;
+  }
+  const std::wstring_view stem = std::wstring_view(base).substr(0, 3);
+  const wchar_t number = base.at(3);
+  // A digit from 1 to 9, or a superscript one.
+  const bool is_digit =
+      (number >= L'1' && number <= L'9') ||
+      std::ranges::find(superscript_digits, number) != superscript_digits.end();
+  return is_digit && std::ranges::find(numbered_device_names, stem) !=
+                         numbered_device_names.end();
+}
+
+// The path of the file called name in directory, with a separator between.
+std::wstring JoinPath(std::wstring_view directory, std::wstring_view name) {
+  std::wstring path(directory);
+  if (!path.empty() && path.back() != L'\\' && path.back() != L'/') {
+    path += L'\\';
+  }
+  path += name;
+  return path;
+}
+
+// name with a copy number before its extension: "a.txt" becomes "a (2).txt".
+// The stem gives up units when the result would pass kMaxFileNameUnits.
+std::wstring NumberedName(const std::wstring& name, unsigned copy) {
+  const std::size_t dot = name.rfind(L'.');
+  // An extension is a short tail after a dot. A dot at the start makes a hidden
+  // file's name, not an extension.
+  const bool has_extension = dot != std::wstring::npos && dot > 0 &&
+                             name.size() - dot <= max_extension_units;
+  std::wstring stem = has_extension ? name.substr(0, dot) : name;
+  const std::wstring extension = has_extension ? name.substr(dot) : L"";
+  const std::wstring suffix = std::format(L" ({})", copy);
+
+  CutToUnits(stem, kMaxFileNameUnits - suffix.size() - extension.size());
+  return stem + suffix + extension;
+}
+
+// Reports whether a failed CREATE_NEW of path says that the name is taken: by
+// a file, or by a folder, or by a file the caller cannot open.
+bool IsNameTaken(const std::wstring& path, DWORD error) {
+  return error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS ||
+         GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+}  // namespace
+
+std::wstring SafeFileName(std::wstring_view name) {
+  std::wstring safe(name);
+  for (wchar_t& character : safe) {
+    if (character < first_printable ||
+        forbidden_name_characters.find(character) != std::wstring_view::npos) {
+      character = replacement_character;
+    }
+  }
+
+  StripTrailingDotsAndSpaces(safe);
+  if (safe.empty()) {
+    safe = std::wstring(1, replacement_character);
+  }
+  if (IsReservedDeviceName(safe)) {
+    safe.insert(safe.begin(), replacement_character);
+  }
+
+  CutToUnits(safe, kMaxFileNameUnits);
+  // The cut can leave a dot or a space at the end.
+  StripTrailingDotsAndSpaces(safe);
+  if (safe.empty()) {
+    safe = std::wstring(1, replacement_character);
+  }
+  return safe;
+}
+
+RecoveryFile::RecoveryFile(void* handle, std::wstring path, NameChange change)
+    : handle_(handle), path_(std::move(path)), change_(change) {}
+
+RecoveryFile::RecoveryFile(RecoveryFile&& other) noexcept
+    : handle_(std::exchange(other.handle_, nullptr)),
+      path_(std::move(other.path_)),
+      change_(other.change_) {}
+
+RecoveryFile& RecoveryFile::operator=(RecoveryFile&& other) noexcept {
+  if (this != &other) {
+    Close();
+    handle_ = std::exchange(other.handle_, nullptr);
+    path_ = std::move(other.path_);
+    change_ = other.change_;
+  }
+  return *this;
+}
+
+RecoveryFile::~RecoveryFile() { Close(); }
+
+// Closes the file, once: a moved-from object has no handle.
+void RecoveryFile::Close() noexcept {
+  if (handle_ != nullptr) {
+    CloseHandle(handle_);
+    handle_ = nullptr;
+  }
+}
+
+bool RecoveryFile::Write(std::span<const BYTE> chunk) {
+  DWORD written = 0;
+  return handle_ != nullptr &&
+         WriteFile(handle_, chunk.data(), gsl::narrow<DWORD>(chunk.size()),
+                   &written, nullptr) != FALSE &&
+         written == chunk.size();
+}
+
+const std::wstring& RecoveryFile::Path() const noexcept { return path_; }
+
+NameChange RecoveryFile::Change() const noexcept { return change_; }
+
+CreatedFile CreateRecoveryFile(std::wstring_view directory,
+                               std::wstring_view name, ExistingFile existing) {
+  const std::wstring safe = SafeFileName(name);
+  const NameChange first_change =
+      safe == name ? NameChange::None : NameChange::Unsafe;
+
+  for (unsigned copy = 1; copy <= kMaxNameCopies; copy++) {
+    const std::wstring candidate = copy == 1 ? safe : NumberedName(safe, copy);
+    const std::wstring path = JoinPath(directory, candidate);
+    const std::wstring extended = Io::ToExtendedLengthPath(path);
+    if (extended.size() >= kMaxExtendedPathUnits) {
+      return {.file = std::nullopt, .error = CreateError::PathTooLong};
+    }
+
+    // No sharing: nothing else may write the file while it is recovered.
+    const DWORD creation =
+        existing == ExistingFile::Replace ? CREATE_ALWAYS : CREATE_NEW;
+    HANDLE handle =
+        CreateFileW(extended.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                    creation, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle != INVALID_HANDLE_VALUE) {
+      return {.file = RecoveryFile(
+                  handle, path, copy == 1 ? first_change : NameChange::Taken),
+              .error = CreateError::Failed};
+    }
+    if (existing == ExistingFile::Replace ||
+        !IsNameTaken(extended, GetLastError())) {
+      return {.file = std::nullopt, .error = CreateError::Failed};
+    }
+  }
+  return {.file = std::nullopt, .error = CreateError::NoFreeName};
 }
 
 }  // namespace NtfsUndel
