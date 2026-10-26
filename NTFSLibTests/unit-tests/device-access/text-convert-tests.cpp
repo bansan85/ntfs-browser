@@ -2,7 +2,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
+
+#include "name-support.h"
 #include "text-convert.h"
+#include "utf/utf.h"
 
 using NtfsDevice::PathFromWide;
 using NtfsDevice::WideFromPath;
@@ -84,4 +88,57 @@ TEST_CASE("Utf8ToWide undoes WideToUtf8", "[device-access][text-convert]") {
   }
 }
 
+TEST_CASE("Utf8ToWide decodes every exotic name back",
+          "[device-access][text-convert]") {
+  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+    INFO(exotic.label);
+    CHECK(Utf8ToWide(exotic.utf8) == exotic.name);
+  }
+}
+
 #endif  // !_WIN32
+
+TEST_CASE("WideToUtf8 writes every exotic name as its UTF-8",
+          "[device-access][text-convert]") {
+  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+    INFO(exotic.label);
+    CHECK(WideToUtf8(exotic.name) == exotic.utf8);
+  }
+}
+
+TEST_CASE("AppendAsUtf8 appends what WideToUtf8 returns",
+          "[device-access][text-convert]") {
+  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+    INFO(exotic.label);
+    std::string out = "before:";
+    NtfsDevice::AppendAsUtf8(out, exotic.name);
+    CHECK(out == "before:" + exotic.utf8);
+  }
+}
+
+TEST_CASE("WideToUtf8 and the library's conversion agree on every name",
+          "[device-access][text-convert]") {
+  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+    INFO(exotic.label);
+    CHECK(WideToUtf8(exotic.name) ==
+          NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(exotic.name));
+  }
+}
+
+TEST_CASE("WideToUtf8 keeps a noncharacter and a U+0000 apart from U+FFFD",
+          "[device-access][text-convert]") {
+  CHECK(WideToUtf8(Unit(0xFFFF)) == "\xEF\xBF\xBF");
+  CHECK(WideToUtf8(Unit(0xFFFE)) == "\xEF\xBF\xBE");
+  CHECK(WideToUtf8(Unit(0xFFFD)) == "\xEF\xBF\xBD");
+  CHECK(WideToUtf8(Unit(0)) == std::string(1, '\0'));
+}
+
+TEST_CASE("PathFromWide and WideFromPath round-trip an astral character",
+          "[device-access][text-convert]") {
+  const std::wstring name = L"\U0001F600" + Unit(0xE000);
+  CHECK(WideFromPath(PathFromWide(name)) == name);
+}

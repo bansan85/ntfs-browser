@@ -10,6 +10,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "catch2/catch_message.hpp"
+#include "name-support.h"
 #include "utf/utf.h"
 
 namespace {
@@ -24,9 +25,6 @@ struct Case {
 }  // namespace
 
 TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]") {
-  // U+FFFD REPLACEMENT CHARACTER, what an unpaired surrogate becomes.
-  const std::string replacement = "\xEF\xBF\xBD";
-
   const std::vector<Case> cases{
       {"ASCII stays one byte", std::wstring{L'A'}, "A"},
       {"U+00E9 is two bytes", std::wstring{static_cast<wchar_t>(0x00E9)},
@@ -36,12 +34,14 @@ TEST_CASE("WideToUtf8 encodes every UTF-16 form", "[utf]") {
       {"a surrogate pair is one four-byte code point",
        std::wstring{static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00)},
        "\xF0\x9F\x98\x80"},
-      {"a lone high surrogate is replaced",
-       std::wstring{static_cast<wchar_t>(0xD83D)}, replacement},
-      {"a lone low surrogate is replaced",
-       std::wstring{static_cast<wchar_t>(0xDE00)}, replacement},
-      {"a high surrogate not followed by a low one is replaced on its own",
-       std::wstring{static_cast<wchar_t>(0xD83D), L'A'}, replacement + "A"},
+      {"a lone high surrogate keeps its 3-byte form",
+       std::wstring{static_cast<wchar_t>(0xD83D)}, "\xED\xA0\xBD"},
+      {"a lone low surrogate keeps its 3-byte form",
+       std::wstring{static_cast<wchar_t>(0xDE00)}, "\xED\xB8\x80"},
+      {"a high surrogate not followed by a low one stays on its own",
+       std::wstring{static_cast<wchar_t>(0xD83D), L'A'},
+       "\xED\xA0\xBD"
+       "A"},
   };
 
   for (const Case& test_case : cases) {
@@ -59,7 +59,7 @@ TEST_CASE("WideToUtf8 replaces a unit that no code point can be", "[utf]") {
                                static_cast<wchar_t>(0xE000)};
 
   CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(above_low) ==
-        replacement + "\xEE\x80\x80");
+        "\xED\xA0\xBD\xEE\x80\x80");
 
   if constexpr (sizeof(wchar_t) > sizeof(char16_t)) {
     // First value past U+10FFFF: only a 32-bit wchar_t can hold it.
@@ -92,4 +92,33 @@ TEST_CASE("Utf16ToWide keeps what is not a surrogate pair", "[utf]") {
           std::wstring{static_cast<wchar_t>(0xD83D),
                        static_cast<wchar_t>(0xDE00)});
   }
+}
+
+TEST_CASE("WideToUtf8 writes every exotic name as its UTF-8", "[utf]") {
+  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+    INFO(exotic.label);
+    CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(exotic.name) == exotic.utf8);
+  }
+}
+
+TEST_CASE("WideToUtf8 keeps names that differ by a surrogate apart", "[utf]") {
+  using NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8;
+  const std::string first =
+      WideToUtf8(std::wstring{static_cast<wchar_t>(0xD800)});
+  const std::string second =
+      WideToUtf8(std::wstring{static_cast<wchar_t>(0xD801)});
+  const std::string replacement =
+      WideToUtf8(std::wstring{static_cast<wchar_t>(0xFFFD)});
+
+  CHECK(first != second);
+  CHECK(first != replacement);
+  CHECK(second != replacement);
+}
+
+TEST_CASE("WideToUtf8 keeps a NUL and the text around it", "[utf]") {
+  const std::wstring name{L'a', L'\0', L'b'};
+
+  CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(name) ==
+        std::string("a\0b", 3));
 }

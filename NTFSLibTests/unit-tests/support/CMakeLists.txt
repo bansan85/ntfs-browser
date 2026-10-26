@@ -7,6 +7,8 @@ target_sources(
     "level-recorder.h"
     "md5-test-support.cpp"
     "md5-test-support.h"
+    "name-support.cpp"
+    "name-support.h"
     "optional-access.h"
     "sample-run.cpp"
     "sample-run.h"

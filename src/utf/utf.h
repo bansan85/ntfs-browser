@@ -9,8 +9,12 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Utf {
 
-// Converts an on-disk name to UTF-8, for logging. An unpaired surrogate
-// becomes U+FFFD, so the result is always well-formed UTF-8.
+// Converts an on-disk name to UTF-8, for logging. A valid surrogate pair
+// becomes one 4-byte sequence. An unpaired surrogate becomes its own 3-byte
+// form (WTF-8: U+D800 is ED A0 80), which NTFS stores as it is, so two names
+// that differ only by one stay distinct. That is not well-formed UTF-8. A
+// value above U+10FFFF becomes U+FFFD. The tools' own conversion
+// (NtfsDevice::WideToUtf8) follows the same rule.
 // wchar_t is 16 bits on Windows and 32 bits elsewhere, and one decoder
 // handles both widths: a unit above 0xFFFF can only be a whole code point,
 // never half of a surrogate pair.

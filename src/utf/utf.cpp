@@ -76,11 +76,6 @@ void AppendUtf8(std::string& out, char32_t code_point) {
       static_cast<char>(continuation_tag | (code_point & continuation_mask)));
 }
 
-// True for a code unit that is one half of a surrogate pair.
-bool IsSurrogate(char32_t unit) noexcept {
-  return unit >= high_surrogate_first && unit <= low_surrogate_last;
-}
-
 // Widens one code unit without sign-extending it: wchar_t is signed on
 // some platforms, and a name's raw bytes may set the top bit.
 template <class CharT>
@@ -113,9 +108,10 @@ std::string ToUtf8(std::basic_string_view<CharT> units) {
       }
     }
 
-    AppendUtf8(out, (IsSurrogate(unit) || unit > max_code_point)
-                        ? replacement_character
-                        : unit);
+    // An unpaired surrogate keeps its own 3-byte form (WTF-8), so two names
+    // that differ only by one stay apart. Only a value past U+10FFFF, which
+    // wchar_t can hold but no code point is, becomes U+FFFD.
+    AppendUtf8(out, unit > max_code_point ? replacement_character : unit);
   }
 
   return out;
