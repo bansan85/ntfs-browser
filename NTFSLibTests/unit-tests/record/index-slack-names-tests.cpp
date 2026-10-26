@@ -548,3 +548,49 @@ TEST_CASE("Index slack of an index that holds no file names is empty",
     CHECK(Carve<decltype(strategy)::value>(image, both_flags).empty());
   });
 }
+
+TEST_CASE(
+    "Index slack keeps a stale name that a live entry spells with another case",
+    "[index-slack][case]") {
+  const std::vector<std::vector<BYTE>> upper_stale{
+      Block({L"report.txt"}, {Old(L"Report.txt")})};
+  const std::vector<std::vector<BYTE>> lower_stale{
+      Block({L"Report.txt"}, {Old(L"report.txt")})};
+
+  CHECK(Names(CarveBlocks(upper_stale)) ==
+        std::vector<std::wstring>{L"Report.txt"});
+  CHECK(Names(CarveBlocks(lower_stale)) ==
+        std::vector<std::wstring>{L"report.txt"});
+}
+
+TEST_CASE(
+    "Index slack keeps a stale name that a live entry of another block "
+    "spells with another case",
+    "[index-slack][case]") {
+  const std::vector<std::vector<BYTE>> blocks{
+      Block({L"first.txt"}, {Old(L"SECOND.TXT")}, 0),
+      Block({L"second.txt"}, {Old(L"First.txt")}, 1)};
+
+  CHECK(Names(CarveBlocks(blocks)) ==
+        std::vector<std::wstring>{L"SECOND.TXT", L"First.txt"});
+}
+
+TEST_CASE("Index slack reports two stale names that differ only by case",
+          "[index-slack][case]") {
+  const std::vector<std::vector<BYTE>> blocks{
+      Block({L"live.txt"}, {Old(L"a.txt"), Old(L"A.txt"), Old(L"a.txt")})};
+
+  CHECK(Names(CarveBlocks(blocks)) ==
+        std::vector<std::wstring>{L"a.txt", L"A.txt"});
+}
+
+TEST_CASE(
+    "Index slack still leaves out the exact spelling of a live entry "
+    "next to one that differs by case",
+    "[index-slack][case]") {
+  const std::vector<std::vector<BYTE>> blocks{
+      Block({L"report.txt", L"Report.txt"},
+            {Old(L"report.txt"), Old(L"REPORT.TXT")})};
+
+  CHECK(Names(CarveBlocks(blocks)) == std::vector<std::wstring>{L"REPORT.TXT"});
+}

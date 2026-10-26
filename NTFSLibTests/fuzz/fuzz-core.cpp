@@ -380,6 +380,53 @@ void ProbeSupplementarySearch(const NtfsVolume<S>& volume) {
   }
 }
 
+// Names of the root the case probe looks up, at most. Each is looked up twice.
+constexpr size_t probed_case_names = 8;
+
+// The distance between a lower-case and an upper-case ASCII letter.
+constexpr wchar_t ascii_case_distance = L'a' - L'A';
+
+// name with the case of every ASCII letter flipped: equal to it once upcased,
+// so a lookup of it has to choose between spellings.
+std::wstring FlippedCase(std::wstring_view name) {
+  std::wstring flipped(name);
+  for (wchar_t& unit : flipped) {
+    if (unit >= L'a' && unit <= L'z') {
+      unit = static_cast<wchar_t>(unit - ascii_case_distance);
+    } else if (unit >= L'A' && unit <= L'Z') {
+      unit = static_cast<wchar_t>(unit + ascii_case_distance);
+    }
+  }
+  return flipped;
+}
+
+// Looks up the first names of the root as they are spelled, and with their case
+// flipped: the second spelling is found only through the rule that picks
+// between names that are equal when upcased. Runs after every other probe, like
+// ProbeSupplementarySearch(), so that it moves the reads of none.
+template <Cache::Strategy S>
+void ProbeCaseSearch(const NtfsVolume<S>& volume) {
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
+  file_record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  if (!file_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) ||
+      !file_record.ParseAttrs()) {
+    return;
+  }
+
+  std::vector<std::wstring> names;
+  file_record.TraverseSubEntries(
+      [&names](const IndexEntryView& entry, void* /*context*/) {
+        if (names.size() < probed_case_names) {
+          names.emplace_back(entry.GetFilename());
+        }
+      },
+      nullptr);
+  for (const std::wstring& name : names) {
+    (void)file_record.FindSubEntry(name);
+    (void)file_record.FindSubEntry(FlippedCase(name));
+  }
+}
+
 // A record number and a name index no volume of the fuzzer has.
 constexpr ULONGLONG absent_record = 0xFFFFFFFFULL;
 constexpr size_t absent_name_index = 1000;
@@ -586,6 +633,7 @@ void ProbeVolume(NtfsVolume<S>& volume) {
   ProbeVolumeApi(volume);
   ProbeUserRecords(volume);
   ProbeSupplementarySearch(volume);
+  ProbeCaseSearch(volume);
 }
 
 // Starting value and multiplier of the 64-bit FNV-1a hash that Digest() uses.

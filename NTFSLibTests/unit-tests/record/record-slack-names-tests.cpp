@@ -440,3 +440,20 @@ TEST_CASE("the live getters answer the same before and after carving",
   CHECK(write_after.dwLowDateTime == write_before.dwLowDateTime);
   CHECK(write_after.dwHighDateTime == write_before.dwHighDateTime);
 }
+
+TEST_CASE(
+    "a carved name that a live name of the record spells with another "
+    "case is still reported",
+    "[record][slack][case]") {
+  // The live name of the record is report.txt, filed under Docs.
+  const auto opened = OpenVolume<Cache::Strategy::NoCache>(
+      ImageWith(report_record,
+                {Old(L"Report.txt"), Old(L"REPORT.TXT"), Old(L"report.txt")}),
+      both_flags);
+
+  const auto carved = CarveRecord(*opened.volume, report_record);
+
+  REQUIRE(carved.size() == 2);
+  CHECK(carved.at(0).name == L"Report.txt");
+  CHECK(carved.at(1).name == L"REPORT.TXT");
+}

@@ -342,5 +342,11 @@ NTFS_REGRESSION_TESTCASE("volume_information_version_below_three")
 NTFS_REGRESSION_TESTCASE("volume_name_must_be_resident")
 NTFS_REGRESSION_TESTCASE("volume_name_resident_present")
 NTFS_REGRESSION_TESTCASE("volume_record_corrupt_mirror_intact")
+NTFS_REGRESSION_TESTCASE("case_twin_root")
+NTFS_REGRESSION_TESTCASE("case_twin_blocks_6")
+NTFS_REGRESSION_TESTCASE("case_twin_blocks_13")
+NTFS_REGRESSION_TESTCASE("case_twin_stale_exact")
+NTFS_REGRESSION_TESTCASE("case_twin_unordered")
+NTFS_REGRESSION_TESTCASE("case_twin_hard_links")
 
 #undef NTFS_REGRESSION_TESTCASE

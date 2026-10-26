@@ -383,7 +383,8 @@ void Io::DirectoryIndex<S>::Walk(WalkTarget<S>& target) const {
 }
 
 // Find a specific Filename from the B+ tree, then, if the name is missing and
-// the volume has no $UpCase table, from every entry.
+// the volume has no $UpCase table, from every entry. An entry spelled exactly
+// as file_name wins over one that differs by case.
 template <Cache::Strategy S>
 std::optional<IndexEntry>
     Io::DirectoryIndex<S>::Find(std::wstring_view file_name,
@@ -399,7 +400,13 @@ std::optional<IndexEntry>
   Log::Debug("FindSubEntry() scans every entry: no $UpCase table");
   Traverse(
       [&](const IndexEntryView& index_entry, void*) {
-        if (!found && index_entry.Compare(file_name, upcase) == 0) {
+        if (index_entry.Compare(file_name, upcase) != 0) {
+          return;
+        }
+        // Only the first entry of each kind counts: an exact one replaces
+        // an equal one, never the other way round.
+        const bool exact = index_entry.GetFilename() == file_name;
+        if (!found || (exact && found->GetFilename() != file_name)) {
           found.emplace(index_entry);
         }
       },
@@ -445,9 +452,17 @@ std::optional<IndexEntry> Io::DirectoryIndex<S>::FindSubEntryInOrder(
     return {};
   }
 
-  IndexSearch search{file_name, upcase, {}};
-  return SearchIndexEntries(*all_ie, search, /*child_depth=*/0,
-                            /*at_root=*/true);
+  IndexSearch search{
+      .file_name = file_name, .upcase = upcase, .visited_vcns = {}};
+  std::optional<IndexEntry> exact =
+      SearchIndexEntries(*all_ie, search, /*child_depth=*/0,
+                         /*at_root=*/true);
+  if (exact || !search.fallback) {
+    return exact;
+  }
+  // No entry is spelled like file_name: the first one equal to it stands in.
+  LogIndexMatch(search.fallback_at_root);
+  return std::move(search.fallback);
 }
 
 // Visit IndexBlocks recursivly to find a specific Filename
@@ -485,8 +500,10 @@ std::optional<IndexEntry>
                             /*at_root=*/false);
 }
 
-// Scans one node's entries in collation order: a match returns a copy, a
-// bigger name is skipped, and a smaller one descends into its sub-node.
+// Scans one node's entries in collation order: an entry spelled like the name
+// returns a copy, an equal one that is spelled otherwise is kept as the
+// fallback and the scan goes on, a bigger name is skipped, and a smaller one
+// descends into its sub-node.
 template <Cache::Strategy S>
 // The depth limit and the visited-VCN set bound the recursion.
 // NOLINTNEXTLINE(misc-no-recursion)
@@ -499,15 +516,31 @@ std::optional<IndexEntry> Io::DirectoryIndex<S>::SearchIndexEntries(
       const int comparison =
           index_entry.Compare(search.file_name, search.upcase);
       if (comparison == 0) {
-        // Names are unique in a directory, so a hidden match ends the search.
-        if (IsEntryHidden(index_entry, record_.GetVolume(),
-                          record_.BypassesDeletedGate())) {
-          return {};
+        // A hidden entry is as good as absent: an entry of another spelling
+        // can still stand for it.
+        const bool hidden = IsEntryHidden(index_entry, record_.GetVolume(),
+                                          record_.BypassesDeletedGate());
+        search.met_equal = true;
+        if (!hidden && index_entry.GetFilename() == search.file_name) {
+          // Must be a copy: the view dies with its node (this FileRecord for
+          // the root), the IndexEntry keeps its own bytes.
+          LogIndexMatch(at_root);
+          return IndexEntry(index_entry);
         }
-        // Must be a copy: the view dies with its node (this FileRecord for
-        // the root), the IndexEntry keeps its own bytes.
-        LogIndexMatch(at_root);
-        return IndexEntry(index_entry);
+        // The entries below this one come first in index order, and a twin
+        // spelled like the name can sit there.
+        if (index_entry.IsSubNodePtr()) {
+          std::optional<IndexEntry> twin =
+              VisitIndexBlock(index_entry.GetSubNodeVCN(), search, child_depth);
+          if (twin) {
+            return twin;
+          }
+        }
+        if (!hidden && !search.fallback) {
+          search.fallback.emplace(index_entry);
+          search.fallback_at_root = at_root;
+        }
+        continue;
       }
       // Just step forward if fileName is bigger than IndexEntry
       if (comparison > 0) {
@@ -528,6 +561,12 @@ std::optional<IndexEntry> Io::DirectoryIndex<S>::SearchIndexEntries(
         VisitIndexBlock(index_entry.GetSubNodeVCN(), search, child_depth);
     if (retval) {
       return retval;
+    }
+    // Every later entry is greater than this one: once an equal entry was met,
+    // kept or hidden, none of their sub-nodes can hold a twin of it. A search
+    // that met nothing equal keeps reading, as it always did.
+    if (search.met_equal) {
+      return {};
     }
   }
 

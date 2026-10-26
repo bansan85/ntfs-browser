@@ -42,7 +42,7 @@ struct ExpectedMessages {
 
 // The messages each saved regression testcase must log, by file name. The
 // count is the number of saved testcases: a test checks that none is missing.
-inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 227>
+inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 233>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -672,6 +672,20 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 227>
          {true,
           {"MFT scan clusters: 2 files counted, 2 intact, 0 reallocated, 0 "
            "bad, 3 sparse"}}},
+        {"case_twin_root",
+         {true, {"FindSubEntry() found entry in Index Root"}}},
+        {"case_twin_blocks_6",
+         {true, {"VisitIndexBlock() found entry in sub-node"}}},
+        {"case_twin_blocks_13",
+         {true, {"VisitIndexBlock() found entry in sub-node"}}},
+        {"case_twin_stale_exact",
+         {true, {"FindSubEntry() found entry in Index Root"}}},
+        {"case_twin_unordered",
+         {true,
+          {"FindSubEntry() scans every entry: no $UpCase table",
+           "FindSubEntry() found entry in Index Root"}}},
+        {"case_twin_hard_links",
+         {true, {"FindSubEntry() found entry in Index Root"}}},
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzRegression

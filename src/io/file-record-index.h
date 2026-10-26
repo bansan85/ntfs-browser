@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
@@ -65,11 +66,22 @@ struct OrphanScanPlan {
 };
 
 // One name lookup down a B+ tree: the name, the volume's collation, and the
-// index block VCNs the walk has already visited.
+// index block VCNs the walk has already visited. The B+ tree collates through
+// $UpCase, so two names that differ only by case are equal keys, and both can
+// sit in one directory (POSIX names, a case-sensitive directory). A lookup
+// takes the entry spelled exactly as file_name when there is one. Otherwise it
+// takes the first equal entry in index order, which is kept in fallback.
 struct IndexSearch {
   std::wstring_view file_name;
   const UpCase::Table& upcase;
   std::unordered_set<ULONGLONG> visited_vcns;
+  // The first visible entry equal to file_name that is not spelled like it.
+  std::optional<IndexEntry> fallback;
+  // Whether that entry sits in the $INDEX_ROOT: only the debug line differs.
+  bool fallback_at_root{false};
+  // Whether an entry equal to file_name was met, hidden or not. Past the
+  // sub-node of the next greater entry, no twin of it can sit.
+  bool met_equal{false};
 };
 
 template <Cache::Strategy S>

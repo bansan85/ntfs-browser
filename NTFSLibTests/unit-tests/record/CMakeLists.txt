@@ -11,6 +11,7 @@ target_sources(
     "file-record-header-tests.cpp"
     "file-record-unparsed-flags-tests.cpp"
     "find-stream-named-tests.cpp"
+    "find-subentry-case-tests.cpp"
     "find-subentry-gap-collation-tests.cpp"
     "find-subentry-upcase-tests.cpp"
     "index-block-fixup-tests.cpp"
