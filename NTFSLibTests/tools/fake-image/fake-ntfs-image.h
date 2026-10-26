@@ -1054,6 +1054,10 @@ inline constexpr ULONGLONG fragmented_mft_scan_fragment_clusters = 100;
     ULONGLONG record_count,
     ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
 
+// LCN of the first cluster that holds a non-resident list of the list scan
+// fixture, one cluster each. Past every fragment of the $MFT the fixture maps.
+inline constexpr ULONGLONG list_scan_lists_lcn = 8000;
+
 // Names per index block, and the other numbers that shape the directory of
 // BuildFakeNtfsImageWithIndexedMftScan().
 inline constexpr size_t indexed_scan_entries_per_block = 24;

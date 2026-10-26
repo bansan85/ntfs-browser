@@ -251,10 +251,6 @@ constexpr WORD list_scan_base_sequence = 4;
 constexpr WORD list_scan_extension_sequence = 2;
 constexpr WORD list_scan_freed_extension_sequence = 3;
 
-// LCN of the first cluster that holds a non-resident list of the list scan
-// fixture. Past every fragment of the $MFT the fixture maps.
-constexpr ULONGLONG list_scan_lists_lcn = 8000;
-
 // One entry of an $ATTRIBUTE_LIST of the list scan fixture: it names the
 // $FILE_NAME of record, under the sequence of a live extension record.
 struct ListScanEntry {

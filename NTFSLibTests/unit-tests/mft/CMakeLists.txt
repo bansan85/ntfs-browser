@@ -13,6 +13,7 @@ target_sources(
     "mft-tree-attribute-list-tests.cpp"
     "mft-tree-bounded-cache-tests.cpp"
     "mft-extent-map-tests.cpp"
+    "mft-tree-list-hint-tests.cpp"
     "mft-tree-malformed-record-tests.cpp"
     "mft-tree-tests.cpp"
     "mft-tree-threads-tests.cpp"

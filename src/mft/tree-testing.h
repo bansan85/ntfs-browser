@@ -48,6 +48,12 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
     SetWaitingBatchRecordsForTests(std::optional<size_t> records);
 
+// Test hook: how many waiting base records with announced reads the second
+// pass parses between two restarts of its announcements. A test lowers it to
+// make a small image restart. 0 is read as 1. nullopt restores the default.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    SetAnnounceRestartIntervalForTests(std::optional<size_t> records);
+
 // Test hook: the volume size and the probe length of a scan that chooses its
 // own thread count, in slots, what the probe decides, and the count of waiting
 // base records from which its second pass takes threads. A test lowers the

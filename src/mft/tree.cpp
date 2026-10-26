@@ -127,11 +127,16 @@ constexpr size_t max_announced_records = 64;
 // range of a read among the first 64 only, so an announcement is read at once.
 constexpr size_t max_announced_ranges = 512;
 
-// Waiting records between two restarts of the announcements. A range that no
-// read uses stays at the front of the reader's list and blocks the ones behind
-// it, until a read of a later one passes it. A restart bounds the damage of one
-// the pass could not foresee.
-constexpr size_t announce_restart_interval = 1024;
+// Waiting records with announced reads between two restarts of the
+// announcements. A range that no read uses stays at the front of the reader's
+// list and blocks the ones behind it, until a read of a later one passes it. A
+// restart bounds the damage of one the pass could not foresee. Records without
+// reads do not count: a restart drops the reads announced ahead, and most
+// waiting records have none.
+constexpr size_t default_announce_restart_interval = 1024;
+
+// The interval a test asked for. nullopt means the default.
+std::optional<size_t> announce_restart_interval_override;
 
 // Extension records the second pass reads at once for one waiting base record,
 // at most: 4096 are 4 MiB. The others are read from the disk, one at a time,
@@ -837,6 +842,7 @@ class ReadAnnouncer {
       if (ranges_.at(passed_) != 0) {
         ahead_records_--;
         ahead_ranges_ -= ranges_.at(passed_);
+        passed_with_reads_++;
       }
     }
     // Another record's reads fit: neither cap is reached.
@@ -860,10 +866,19 @@ class ReadAnnouncer {
     }
   }
 
+  // Whether the pass has passed the restart interval's records with reads
+  // since the last restart.
+  [[nodiscard]] bool RestartDue() const noexcept {
+    return passed_with_reads_ >=
+           (std::max)(size_t{1}, announce_restart_interval_override.value_or(
+                                     default_announce_restart_interval));
+  }
+
   // Withdraws everything announced and starts again at waiting[index]: the
   // pass did not read what it announced for the record before.
   void Restart(size_t index) {
     volume_->CancelPrefetch();
+    passed_with_reads_ = 0;
     std::ranges::fill(ranges_, size_t{0});
     passed_ = index;
     next_ = index;
@@ -913,8 +928,10 @@ class ReadAnnouncer {
   const std::vector<HeldRecords::Waiting>* waiting_;
   // The ranges announced for each record, 0 when none or not announced yet.
   std::vector<size_t> ranges_;
-  // Records the pass parsed.
+  // Records the pass parsed, and those among them that had reads announced,
+  // since the last restart.
   size_t passed_{0};
+  size_t passed_with_reads_{0};
   // The first record whose reads are not announced.
   size_t next_{0};
   // Records with reads, and their ranges, announced among those from passed_
@@ -1689,6 +1706,9 @@ class SlotScan {
     ReadAnnouncer<S> announcer(*volume_, waiting_records);
     const bool on_threads = WaitingParsedByThreads(waiting_records.size());
     for (size_t index = 0; index < waiting_records.size(); index++) {
+      if (announcer.RestartDue()) {
+        announcer.Restart(index);
+      }
       announcer.Before(index);
       ReplayPendingRelease();
       const std::optional<bool> taken =
@@ -1697,10 +1717,6 @@ class SlotScan {
           taken ? *taken : ParseWaitingHere(waiting_records.at(index));
       if (!kept) {
         dropped.push_back(waiting_records.at(index).entry_index);
-        continue;
-      }
-      if ((index + 1) % announce_restart_interval == 0) {
-        announcer.Restart(index + 1);
       }
     }
     // The threads rest while the entries are resolved and dropped.
@@ -2107,6 +2123,10 @@ void SetMaxHeldRecordBytesForTests(std::optional<size_t> limit) {
 
 void SetWaitingBatchRecordsForTests(std::optional<size_t> records) {
   waiting_batch_records_override = records;
+}
+
+void SetAnnounceRestartIntervalForTests(std::optional<size_t> records) {
+  announce_restart_interval_override = records;
 }
 
 size_t WaitingParsedByThreadsForTests(bool reset) noexcept {
