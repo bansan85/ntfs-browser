@@ -63,3 +63,25 @@ TEST_CASE("write the attribute list scan fuzz inputs", "[.write-fuzz-inputs]") {
         VolumeOptions{});
   }
 }
+
+// Writes the saved fuzz inputs that make the thread probe of FuzzTestcase()
+// scan files with an $ATTRIBUTE_LIST in the second pass: the kinds of slot of
+// the list fixture, recorded from the scan itself, since the main probes read
+// in another order. One is strict, the other recovers and shows freed records.
+// Set NTFS_BROWSER_FUZZ_INPUT_DIR as for the test case above.
+TEST_CASE("write the waiting scan fuzz inputs", "[.write-fuzz-inputs]") {
+  const char* const dir = std::getenv("NTFS_BROWSER_FUZZ_INPUT_DIR");
+  if (dir == nullptr) {
+    SKIP("NTFS_BROWSER_FUZZ_INPUT_DIR is not set");
+  }
+
+  // Five turns of the kinds of slot, past the system files.
+  constexpr ULONGLONG slots = 16 + 14 * 5;
+  Tests::FuzzInputs::WriteRecordedScanInput(
+      std::filesystem::path(dir) / "scan_threads_waiting_strict",
+      Tests::BuildFakeNtfsImageWithListMftScan(slots), VolumeOptions{});
+  Tests::FuzzInputs::WriteRecordedScanInput(
+      std::filesystem::path(dir) / "scan_threads_waiting_recovering",
+      Tests::BuildFakeNtfsImageWithListMftScan(slots),
+      VolumeOptions{.include_deleted = true, .recover_errors = true});
+}

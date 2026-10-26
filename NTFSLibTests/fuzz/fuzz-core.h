@@ -48,6 +48,14 @@ void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
 void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
                const NTFS_BROWSER_NAMESPACE::VolumeOptions& options = {});
 
+// Scans the $MFT once with one thread, on a NoCache volume over reader, as
+// the thread probe of FuzzTestcase() does for each input. A recording reader
+// around an image yields the byte stream that probe replays in step: the other
+// probes of an input read in another order. Library exceptions are caught
+// here.
+void ProbeScanOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+                   const NTFS_BROWSER_NAMESPACE::VolumeOptions& options = {});
+
 // Runs the NtfsFuzzerAfl command line. args[0] is the program name, the
 // rest are options and one input file. Usage and errors go to err. Applies
 // any --log option with Log::Configure(), so the library logger's sinks

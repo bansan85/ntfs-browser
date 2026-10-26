@@ -32,18 +32,17 @@ namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzInputs {
 inline constexpr std::size_t boot_sector_read_bytes = 4096;
 inline constexpr std::size_t boot_sector_stream_bytes = 512;
 
-// Writes the saved fuzz input of image to path: the byte stream that
-// NtfsFuzz::ProbeOnce() reads from it under options, in read order and without
-// addresses, with the bytes between the boot sector's 4096-byte read and the
-// reader's 512-byte step cut out (see LoopingDiskReader).
-inline void WriteRecordedInput(const std::filesystem::path& path,
-                               std::vector<BYTE> image,
-                               const VolumeOptions& options) {
+// Writes the saved fuzz input of image to path: the byte stream that probe
+// reads from it under options, in read order and without addresses, with the
+// bytes between the boot sector's 4096-byte read and the reader's 512-byte step
+// cut out (see LoopingDiskReader).
+template <class Probe>
+void WriteRecorded(const std::filesystem::path& path, std::vector<BYTE> image,
+                   const VolumeOptions& options, Probe probe) {
   {
-    NtfsFuzz::ProbeOnce(
-        std::make_unique<RecordingDiskReader>(
-            std::make_unique<MemoryDiskReader>(std::move(image)), path),
-        options);
+    probe(std::make_unique<RecordingDiskReader>(
+              std::make_unique<MemoryDiskReader>(std::move(image)), path),
+          options);
   }
   REQUIRE(std::filesystem::exists(path));
 
@@ -57,6 +56,29 @@ inline void WriteRecordedInput(const std::filesystem::path& path,
                stream.begin() + boot_sector_read_bytes);
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   out.write(stream.data(), static_cast<std::streamsize>(stream.size()));
+}
+
+// WriteRecorded() for the reads of NtfsFuzz::ProbeOnce(), the main probes.
+inline void WriteRecordedInput(const std::filesystem::path& path,
+                               std::vector<BYTE> image,
+                               const VolumeOptions& options) {
+  WriteRecorded(
+      path, std::move(image), options,
+      [](std::unique_ptr<IDiskReader> reader, const VolumeOptions& probed) {
+        NtfsFuzz::ProbeOnce(std::move(reader), probed);
+      });
+}
+
+// WriteRecorded() for the reads of NtfsFuzz::ProbeScanOnce(), the scan that
+// the thread probe repeats with one thread and with several.
+inline void WriteRecordedScanInput(const std::filesystem::path& path,
+                                   std::vector<BYTE> image,
+                                   const VolumeOptions& options) {
+  WriteRecorded(
+      path, std::move(image), options,
+      [](std::unique_ptr<IDiskReader> reader, const VolumeOptions& probed) {
+        NtfsFuzz::ProbeScanOnce(std::move(reader), probed);
+      });
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzInputs

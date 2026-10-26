@@ -42,7 +42,7 @@ struct ExpectedMessages {
 
 // The messages each saved regression testcase must log, by file name. The
 // count is the number of saved testcases: a test checks that none is missing.
-inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 217>
+inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 219>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -628,6 +628,10 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 217>
          {true, {"5 name(s) carved from the slack"}}},
         {"index_slack_repeated_names",
          {true, {"6 name(s) carved from the index slack"}}},
+        {"scan_threads_waiting_recovering",
+         {true, {"Attribute List: 0x0030", "MFT scan: 86 slots"}}},
+        {"scan_threads_waiting_strict",
+         {true, {"Attribute List: 0x0030", "MFT scan: 86 slots"}}},
         {"run_list_empty_run", {true, {"Cluster exceeds DataRun bounds"}}},
         {"run_list_overflowing_run", {true, {"byte address overflows"}}},
         {"run_list_cut_after_two_runs",

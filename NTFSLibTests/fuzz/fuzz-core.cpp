@@ -655,16 +655,15 @@ std::uint64_t Digest(const MftTree& tree) {
   return digest;
 }
 
-// Scans the input with threads threads, as ProbeMftTree() does, and gives the
-// digest of the tree. Nothing when the scan throws: only the fact that it did
-// is worth comparing.
+// Scans the volume over reader with threads threads, as ProbeMftTree() does,
+// and gives the digest of the tree. Nothing when the scan throws: only the fact
+// that it did is worth comparing.
 template <Cache::Strategy S>
 std::optional<std::uint64_t>
-    ScanDigest(std::span<const BYTE> data, const VolumeOptions& options,
-               std::optional<size_t> failing_read, unsigned threads) {
+    ScanDigestOver(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+                   const VolumeOptions& options, unsigned threads) {
   try {
-    NtfsVolume<S> volume(
-        std::make_unique<LoopingDiskReader>(data, failing_read), options);
+    NtfsVolume<S> volume(std::move(reader), options);
     if (!volume.IsVolumeOK()) {
       return std::nullopt;
     }
@@ -676,6 +675,16 @@ std::optional<std::uint64_t>
   } catch (...) {
     return std::nullopt;
   }
+}
+
+// ScanDigestOver() on the input, read in a loop.
+template <Cache::Strategy S>
+std::optional<std::uint64_t>
+    ScanDigest(std::span<const BYTE> data, const VolumeOptions& options,
+               std::optional<size_t> failing_read, unsigned threads) {
+  return ScanDigestOver<S>(
+      std::make_unique<LoopingDiskReader>(data, failing_read), options,
+      threads);
 }
 
 // Number of threads the second scan of ProbeScanThreads() runs with.
@@ -806,6 +815,12 @@ void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
   // NOLINTNEXTLINE(bugprone-empty-catch)
   catch (const std::exception&) {
   }
+}
+
+void ProbeScanOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+                   const VolumeOptions& options) {
+  static_cast<void>(
+      ScanDigestOver<Cache::Strategy::NoCache>(std::move(reader), options, 1));
 }
 
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
