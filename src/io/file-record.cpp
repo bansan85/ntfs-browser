@@ -365,6 +365,7 @@ bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
   failed_fixup = false;
   header_salvaged = false;
   reused_extensions.clear();
+  overwritten_list = false;
 
   std::unique_ptr<Record::HeaderImpl<S>> header =
       ReadFileRecord(file_ref, preread);
@@ -447,6 +448,23 @@ bool Io::FileRecord<S>::IsSalvaged() const noexcept {
 template <Cache::Strategy S>
 ULONGLONG Io::FileRecord<S>::GetReusedExtensionCount() const noexcept {
   return impl_->reused_extensions.size();
+}
+
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::HasOverwrittenAttrList() const noexcept {
+  return impl_->overwritten_list;
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::NoteOverwrittenAttrList() {
+  if (impl_->overwritten_list) {
+    return;
+  }
+  impl_->overwritten_list = true;
+  Log::Debug(
+      "Attribute List: the list of freed record {} was overwritten by another "
+      "file - dropping the rest of it",
+      impl_->file_reference.value_or(0));
 }
 
 template <Cache::Strategy S>
@@ -670,6 +688,10 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
 
   if (!frnew.impl_->ParseAttrs(attr_list_chain)) {
     throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
+  }
+  // An extension of a freed record is freed too, and its own list may be gone.
+  if (frnew.impl_->overwritten_list) {
+    self->NoteOverwrittenAttrList();
   }
 
   // Insert new found AttrList to fr.AttrList

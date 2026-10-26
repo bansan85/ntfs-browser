@@ -85,3 +85,32 @@ TEST_CASE("write the waiting scan fuzz inputs", "[.write-fuzz-inputs]") {
       Tests::BuildFakeNtfsImageWithListMftScan(slots),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
 }
+
+// Writes the saved fuzz inputs where a freed file's non-resident
+// $ATTRIBUTE_LIST holds another file's bytes: an attribute type NTFS does not
+// define, and a cut last entry. The volume recovers and shows freed records,
+// since only then does it read the list. Set NTFS_BROWSER_FUZZ_INPUT_DIR as
+// for the test cases above.
+TEST_CASE("write the overwritten attribute list fuzz inputs",
+          "[.write-fuzz-inputs]") {
+  const char* const dir = std::getenv("NTFS_BROWSER_FUZZ_INPUT_DIR");
+  if (dir == nullptr) {
+    SKIP("NTFS_BROWSER_FUZZ_INPUT_DIR is not set");
+  }
+
+  const VolumeOptions options{.include_deleted = true, .recover_errors = true};
+  Tests::FuzzInputs::WriteRecordedInput(
+      std::filesystem::path(dir) / "attribute_list_overwritten_invalid_type",
+      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+          Tests::FakeListedExtension::Genuine,
+          Tests::FakeListResidency::NonResident, Tests::FakeListedState::Freed,
+          Tests::FakeListBytes::InvalidTypeFirst),
+      options);
+  Tests::FuzzInputs::WriteRecordedInput(
+      std::filesystem::path(dir) / "attribute_list_overwritten_cut_entry",
+      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+          Tests::FakeListedExtension::Genuine,
+          Tests::FakeListResidency::NonResident, Tests::FakeListedState::Freed,
+          Tests::FakeListBytes::CutLastEntry),
+      options);
+}

@@ -960,6 +960,26 @@ enum class FakeListedState : std::uint8_t {
   Freed
 };
 
+// What the bytes of the $ATTRIBUTE_LIST of mft_tree_list_base_idx hold: the
+// list as written, or what another file left there. Every form but Intact
+// leaves entry 0 or entry 1 as a list would have it, so the entries before the
+// garbage are the ones the walk imports.
+enum class FakeListBytes : std::uint8_t {
+  Intact,
+  // Entry 0 has an attribute type NTFS does not define.
+  InvalidTypeFirst,
+  // Entry 1 has an attribute type NTFS does not define.
+  InvalidTypeSecond,
+  // Entry 0 has a record size of 0.
+  ZeroRecordSize,
+  // Entry 0 has a record size under the size of an entry header.
+  RecordSizeBelowHeader,
+  // Entry 0 has a record size that puts the next entry past the list.
+  RecordSizePastEnd,
+  // The list is 8 bytes short: its last entry is cut.
+  CutLastEntry
+};
+
 // The cluster a non-resident list of mft_tree_list_base_idx lies in.
 inline constexpr DWORD mft_tree_list_lcn = 62;
 
@@ -972,10 +992,12 @@ inline constexpr DWORD mft_tree_list_lcn = 62;
 //   22 an extension of the record high says, holding the hard link
 //      "listed-link.txt" in Docs and a $DATA of mft_tree_list_data_size bytes.
 // listed frees the file: its record and its extensions, see FakeListedState.
+// bytes damages the list, see FakeListBytes.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
     FakeListedExtension high = FakeListedExtension::Genuine,
     FakeListResidency list = FakeListResidency::Resident,
-    FakeListedState listed = FakeListedState::Live);
+    FakeListedState listed = FakeListedState::Live,
+    FakeListBytes bytes = FakeListBytes::Intact);
 
 // BuildFakeNtfsImageWithMftTreeAttributeList() with record 17 (report.txt)
 // replaced by an extension record of record 18, which has no $ATTRIBUTE_LIST: a

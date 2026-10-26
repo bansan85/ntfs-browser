@@ -135,6 +135,10 @@ class FileRecord<S>::Impl {
   // record that several entries name is kept once. A vector: it is nearly
   // always empty, and an empty one allocates nothing.
   std::vector<ULONGLONG> reused_extensions;
+  // The last ParseAttrs() dropped an overwritten $ATTRIBUTE_LIST of a freed
+  // record, see FileRecord<S>::HasOverwrittenAttrList(). Not a defect, so not
+  // part of attrs_salvaged.
+  bool overwritten_list{false};
 
   void ClearAttrs() noexcept;
   // See ImportAttrListEntry(): whether the caller read slot record_number and

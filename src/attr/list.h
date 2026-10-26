@@ -73,7 +73,8 @@ class AttrList : public Resident {
                                                        std::span<BYTE> out,
                                                        ListCache& cache) const;
   bool ReadEntryHeader(ULONGLONG offset, Data::AttributeList& entry,
-                       bool recover, bool& truncated, ListCache& cache);
+                       bool recover, bool overwritable, bool& truncated,
+                       ListCache& cache);
 };  // AttrList
 
 }  // namespace Attr

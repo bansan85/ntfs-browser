@@ -617,10 +617,10 @@ void PrintStats(Output& out,
                 const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats) {
   out.EndLine();
   out.PrintLine(
-      "Record slots: {}, in use: {}, deleted: {}, extensions: {} ({} reused by "
-      "others)",
-      stats.slots, stats.in_use, stats.deleted, stats.extensions,
-      stats.reused_extensions);
+      "Record slots: {}, in use: {}, deleted: {} ({} with an overwritten "
+      "attribute list), extensions: {} ({} reused by others)",
+      stats.slots, stats.in_use, stats.deleted, stats.overwritten_lists,
+      stats.extensions, stats.reused_extensions);
   out.PrintLine("Unreadable: {}, damaged: {}, not linked to the root: {}",
                 stats.unreadable, stats.damaged, stats.unreachable);
   if (stats.usn_records != 0) {

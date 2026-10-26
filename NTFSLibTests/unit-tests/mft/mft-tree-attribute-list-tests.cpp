@@ -6,17 +6,17 @@
 #include <optional>
 #include <span>
 #include <string>
-#include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/generators/catch_generators_range.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/log/log.h>
-#include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
@@ -25,9 +25,9 @@
 
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
+#include "level-recorder.h"
 #include "memory-disk-reader.h"
 #include "mft/tree-testing.h"
-#include "test-log-sink.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -165,48 +165,6 @@ bool HasChild(const MftTree& tree, ULONGLONG dir, ULONGLONG record) {
   const std::span<const ULONGLONG> children = tree.Children(dir);
   return std::ranges::find(children, record) != children.end();
 }
-
-// Keeps the level of each message the library logs, the text aside.
-class LevelRecorder final : public Log::ISink {
- public:
-  [[nodiscard]] bool ShouldLog(Log::Level level) const override {
-    return level != Log::Level::Off;
-  }
-
-  void Write(Log::Level level, std::string_view /*message*/) override {
-    levels_.push_back(level);
-  }
-
-  void Flush() override {}
-
-  [[nodiscard]] bool Logged(Log::Level level) const {
-    return std::ranges::find(levels_, level) != levels_.end();
-  }
-
- private:
-  std::vector<Log::Level> levels_;
-};
-
-// Makes a LevelRecorder the library's only sink while it lives, and puts the
-// capture sink back after it.
-class RecordLevels {
- public:
-  RecordLevels() : recorder_(std::make_shared<LevelRecorder>()) {
-    Log::SetSinks({recorder_});
-  }
-
-  RecordLevels(const RecordLevels&) = delete;
-  RecordLevels(RecordLevels&&) = delete;
-  RecordLevels& operator=(const RecordLevels&) = delete;
-  RecordLevels& operator=(RecordLevels&&) = delete;
-
-  ~RecordLevels() { Tests::InstallCaptureSink(); }
-
-  [[nodiscard]] const LevelRecorder& Levels() const { return *recorder_; }
-
- private:
-  std::shared_ptr<LevelRecorder> recorder_;
-};
 
 }  // namespace
 
@@ -352,7 +310,7 @@ TEMPLATE_TEST_CASE_SIG(
           Tests::FakeListedExtension::Foreign,
           Tests::FakeListResidency::Resident, Tests::FakeListedState::Freed);
 
-  const RecordLevels levels;
+  const Tests::RecordLevels levels;
   const CountedScan<S> scan = Scan<S>(image, options);
 
   const MftTree::Entry* const listed =
@@ -515,4 +473,121 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(Summarize(*scan.tree) == expected);
   CHECK(ReadsOfRecord(scan, Tests::mft_tree_list_low_ext_idx) == 1);
   CHECK(ReadsOfRecord(scan, Tests::mft_tree_hard_link_idx) == 1);
+}
+
+namespace {
+
+// Names of the listed file that the walk of its list imports before it meets
+// the damage bytes made.
+size_t NamesBeforeDamage(Tests::FakeListBytes bytes) {
+  switch (bytes) {
+    case Tests::FakeListBytes::Intact:
+      return 2;
+    case Tests::FakeListBytes::InvalidTypeFirst:
+      return 0;
+    case Tests::FakeListBytes::CutLastEntry:
+      return 2;
+    case Tests::FakeListBytes::InvalidTypeSecond:
+    case Tests::FakeListBytes::ZeroRecordSize:
+    case Tests::FakeListBytes::RecordSizeBelowHeader:
+    case Tests::FakeListBytes::RecordSizePastEnd:
+      return 1;
+  }
+  return 0;
+}
+
+// The ways another file can leave a list damaged.
+constexpr auto overwritten_forms = {Tests::FakeListBytes::InvalidTypeFirst,
+                                    Tests::FakeListBytes::InvalidTypeSecond,
+                                    Tests::FakeListBytes::ZeroRecordSize,
+                                    Tests::FakeListBytes::RecordSizeBelowHeader,
+                                    Tests::FakeListBytes::RecordSizePastEnd,
+                                    Tests::FakeListBytes::CutLastEntry};
+
+}  // namespace
+
+TEMPLATE_TEST_CASE_SIG(
+    "MftTree keeps a freed file whose non-resident list another file "
+    "overwrote, without a defect",
+    "[mft][tree][attribute-list]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const bool recover = GENERATE(false, true);
+  const Tests::FakeListBytes bytes = GENERATE(from_range(overwritten_forms));
+  const VolumeOptions options{.include_deleted = true,
+                              .recover_errors = recover};
+  const std::vector<BYTE> image =
+      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+          Tests::FakeListedExtension::Genuine,
+          Tests::FakeListResidency::NonResident, Tests::FakeListedState::Freed,
+          bytes);
+
+  const Tests::RecordLevels levels;
+  const CountedScan<S> scan = Scan<S>(image, options);
+
+  const MftTree::Entry* const listed =
+      scan.tree->Find(Tests::mft_tree_list_base_idx);
+  REQUIRE(listed != nullptr);
+  CHECK_FALSE(listed->in_use);
+  CHECK(listed->names.size() == NamesBeforeDamage(bytes));
+  CHECK(scan.tree->Stats().damaged == 0);
+  CHECK(scan.tree->Stats().overwritten_lists == 1);
+  CHECK_FALSE(levels.Levels().Logged(Log::Level::Warn));
+  CHECK_FALSE(levels.Levels().Logged(Log::Level::Error));
+  CHECK(levels.Levels().Count(Log::Level::Debug, "was overwritten") == 1);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "MftTree reads as much for an overwritten list of a freed file as for the "
+    "same list of a live one",
+    "[mft][tree][attribute-list]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const bool recover = GENERATE(false, true);
+  const Tests::FakeListBytes bytes = GENERATE(from_range(overwritten_forms));
+  const VolumeOptions options{.include_deleted = true,
+                              .recover_errors = recover};
+  const auto reads_of = [&](Tests::FakeListedState state) {
+    const CountedScan<S> scan =
+        Scan<S>(Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+                    Tests::FakeListedExtension::Genuine,
+                    Tests::FakeListResidency::NonResident, state, bytes),
+                options);
+    std::vector<std::tuple<int, ULONGLONG, ULONGLONG>> calls;
+    for (const auto& call : scan.reader->Calls()) {
+      calls.emplace_back(static_cast<int>(call.kind), call.offset, call.length);
+    }
+    return calls;
+  };
+
+  CHECK(reads_of(Tests::FakeListedState::Freed) ==
+        reads_of(Tests::FakeListedState::Live));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "MftTree still counts a damaged list of a live file, or a resident one, as "
+    "a defect",
+    "[mft][tree][attribute-list]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const bool recover = GENERATE(false, true);
+  const VolumeOptions options{.include_deleted = true,
+                              .recover_errors = recover};
+  const auto [residency, state] =
+      GENERATE(std::pair{Tests::FakeListResidency::NonResident,
+                         Tests::FakeListedState::Live},
+               std::pair{Tests::FakeListResidency::Resident,
+                         Tests::FakeListedState::Freed},
+               std::pair{Tests::FakeListResidency::Resident,
+                         Tests::FakeListedState::Live});
+
+  const Tests::RecordLevels levels;
+  const CountedScan<S> scan =
+      Scan<S>(Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
+                  Tests::FakeListedExtension::Genuine, residency, state,
+                  Tests::FakeListBytes::InvalidTypeFirst),
+              options);
+
+  CHECK(scan.tree->Stats().damaged == 1);
+  CHECK(scan.tree->Stats().overwritten_lists == 0);
+  CHECK((scan.tree->Find(Tests::mft_tree_list_base_idx) != nullptr) == recover);
+  CHECK(levels.Levels().Logged(Log::Level::Error));
+  CHECK(levels.Levels().Count(Log::Level::Error, "al_record.attr_type") == 1);
 }

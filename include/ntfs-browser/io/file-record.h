@@ -113,6 +113,15 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // file reused their slot since this freed record was freed. Zero for a live
   // record, which keeps such an extension as a defect.
   [[nodiscard]] ULONGLONG GetReusedExtensionCount() const noexcept;
+  // Whether the last ParseAttrs() dropped the non-resident $ATTRIBUTE_LIST of
+  // this freed record, or of one of its extension records, because its bytes
+  // are not a list: another file took its clusters since the record was freed.
+  // Always false for a live record, and for a resident list, which no other
+  // file can write over.
+  [[nodiscard]] bool HasOverwrittenAttrList() const noexcept;
+  // Called by the $ATTRIBUTE_LIST of this record when it finds itself
+  // overwritten, see HasOverwrittenAttrList(). Logs at Debug, once per parse.
+  void NoteOverwrittenAttrList();
   [[nodiscard]] std::optional<ULONGLONG> GetFileReference() const noexcept;
   // Times this record was reused; 0 when no record is parsed.
   [[nodiscard]] WORD GetSequenceNumber() const noexcept;

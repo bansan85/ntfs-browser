@@ -71,14 +71,26 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   ULONGLONG offset = 0;
   Data::AttributeList al_record{};
   bool truncated = false;
+  // NTFS frees the clusters of a freed record's non-resident list, so another
+  // file may have written over them: garbage there is no defect. A resident
+  // list lies inside the record, which nothing else writes.
+  bool overwritable = false;
+  if constexpr (std::is_same_v<Resident, AttrNonResident<S>>) {
+    overwritable = file_record.IsDeleted();
+  }
 
   // Marks this record's own chain key first, so a cycle back to it is caught.
   attr_list_chain.insert(MakeChainKey(self_ref, Type::AttributeList));
 
   // Under NoCache, each entry read would read its clusters from the disk again.
   ListCache cache = MakeListCache();
-  while (ReadEntryHeader(offset, al_record, recover, truncated, cache)) {
+  while (ReadEntryHeader(offset, al_record, recover, overwritable, truncated,
+                         cache)) {
     if (!Attr::IsValidAttrType(al_record.attr_type)) {
+      if (overwritable) {
+        file_record.NoteOverwrittenAttrList();
+        return;
+      }
       throw std::runtime_error(
           "Attribute List parse error (al_record.attr_type).\n");
     }
@@ -90,6 +102,11 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
         al_record.base_ref.segment_number, al_record.base_ref.sequence_number,
         al_record.attr_type, attr_list_chain, recover);
 
+    if (overwritable &&
+        al_record.record_size < Data::attribute_list_entry_header_size) {
+      file_record.NoteOverwrittenAttrList();
+      return;
+    }
     if (!CheckRecordSize(al_record, recover)) {
       truncated = true;
       break;
@@ -102,12 +119,18 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   // it - not caught by either check above.
   if (!truncated && offset != this->GetDataSize()) {
     truncated = true;
-    Log::Recoverable(recover,
-                     "Attribute List ended at offset {} instead of its "
-                     "declared size {}.",
-                     offset, this->GetDataSize());
+    if (!overwritable) {
+      Log::Recoverable(recover,
+                       "Attribute List ended at offset {} instead of its "
+                       "declared size {}.",
+                       offset, this->GetDataSize());
+    }
   }
 
+  if (truncated && overwritable) {
+    file_record.NoteOverwrittenAttrList();
+    return;
+  }
   if (truncated && !recover) {
     throw std::runtime_error("Attribute List is truncated.\n");
   }
@@ -171,12 +194,13 @@ std::optional<ULONGLONG>
 }
 
 // Reads the header of the entry at offset. Returns false when the walk ends:
-// at a normal end, or at a truncated entry, which sets truncated and is logged.
+// at a normal end, or at a truncated entry, which sets truncated and is logged,
+// unless overwritable: the caller then treats it as an overwritten list.
 template <typename Resident, Cache::Strategy S>
 bool AttrList<Resident, S>::ReadEntryHeader(ULONGLONG offset,
                                             Data::AttributeList& entry,
-                                            bool recover, bool& truncated,
-                                            ListCache& cache) {
+                                            bool recover, bool overwritable,
+                                            bool& truncated, ListCache& cache) {
   const std::optional<ULONGLONG> len = ReadListBytes(
       offset,
       {reinterpret_cast<BYTE*>(&entry), Data::attribute_list_entry_header_size},
@@ -193,11 +217,13 @@ bool AttrList<Resident, S>::ReadEntryHeader(ULONGLONG offset,
   // precisely on the declared size. Anything else here is a truncated entry.
   if (*len != 0 || offset != this->GetDataSize()) {
     truncated = true;
-    Log::Recoverable(
-        recover,
-        "Attribute List: ReadData returned {} bytes, "
-        "expected {} - stopping",
-        *len, static_cast<ULONGLONG>(Data::attribute_list_entry_header_size));
+    if (!overwritable) {
+      Log::Recoverable(
+          recover,
+          "Attribute List: ReadData returned {} bytes, "
+          "expected {} - stopping",
+          *len, static_cast<ULONGLONG>(Data::attribute_list_entry_header_size));
+    }
   }
   return false;
 }

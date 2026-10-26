@@ -13,6 +13,7 @@ target_sources(
     "attr-run-list-tests.cpp"
     "attribute-list-cluster-tests.cpp"
     "attribute-list-entries-tests.cpp"
+    "attribute-list-overwritten-tests.cpp"
     "attribute-list-support.h"
     "attribute-list-tests.cpp"
     "coverage-attrs-tests.cpp"

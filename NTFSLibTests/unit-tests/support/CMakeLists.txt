@@ -4,6 +4,7 @@ target_sources(
     "child-process.cpp"
     "child-process.h"
     "child-process-tests.cpp"
+    "level-recorder.h"
     "md5-test-support.cpp"
     "md5-test-support.h"
     "optional-access.h"

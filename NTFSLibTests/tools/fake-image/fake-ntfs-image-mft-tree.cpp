@@ -230,6 +230,56 @@ std::vector<BYTE> TreeListBytes(std::span<const FakeTreeListEntry> entries) {
   return bytes;
 }
 
+// Damages the entries of list as bytes says, see FakeListBytes.
+void DamageTreeList(std::vector<BYTE>& list, FakeListBytes bytes) {
+  using NTFS_BROWSER_NAMESPACE::Data::AttributeList;
+
+  // Rewrites entry index of list through change.
+  const auto patch = [&list](size_t index, auto change) {
+    AttributeList entry{};
+    std::memcpy(&entry, &list.at(index * tree_list_entry_size),
+                NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
+    change(entry);
+    std::memcpy(&list.at(index * tree_list_entry_size), &entry,
+                NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
+  };
+  // Not a type NTFS defines.
+  constexpr auto undefined_type = static_cast<Attr::Type>(0x12345678);
+  // Past the list: the three entries take 96 bytes.
+  constexpr WORD past_end_record_size = 0x1000;
+  // Under an entry header, but not 0.
+  constexpr WORD below_header_record_size = 4;
+  // Bytes cut off the end of the list, so that its last entry is partial.
+  constexpr size_t cut_bytes = 8;
+
+  switch (bytes) {
+    case FakeListBytes::Intact:
+      break;
+    case FakeListBytes::InvalidTypeFirst:
+      patch(0, [](AttributeList& entry) { entry.attr_type = undefined_type; });
+      break;
+    case FakeListBytes::InvalidTypeSecond:
+      patch(1, [](AttributeList& entry) { entry.attr_type = undefined_type; });
+      break;
+    case FakeListBytes::ZeroRecordSize:
+      patch(0, [](AttributeList& entry) { entry.record_size = 0; });
+      break;
+    case FakeListBytes::RecordSizeBelowHeader:
+      patch(0, [](AttributeList& entry) {
+        entry.record_size = below_header_record_size;
+      });
+      break;
+    case FakeListBytes::RecordSizePastEnd:
+      patch(0, [](AttributeList& entry) {
+        entry.record_size = past_end_record_size;
+      });
+      break;
+    case FakeListBytes::CutLastEntry:
+      list.resize(list.size() - cut_bytes);
+      break;
+  }
+}
+
 // Writes a resident $ATTRIBUTE_LIST holding list at record[offset], and
 // returns its total_size.
 DWORD WriteTreeAttributeList(FakeRecord& record, DWORD offset,
@@ -244,7 +294,8 @@ DWORD WriteTreeAttributeList(FakeRecord& record, DWORD offset,
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
-    FakeListedExtension high, FakeListResidency list, FakeListedState listed) {
+    FakeListedExtension high, FakeListResidency list, FakeListedState listed,
+    FakeListBytes bytes) {
   using RecordFlag = NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
   using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 
@@ -283,7 +334,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
       {{.type = Attr::Type::FileName, .record = mft_tree_list_low_ext_idx},
        {.type = Attr::Type::FileName, .record = mft_tree_list_high_ext_idx},
        {.type = Attr::Type::Data, .record = mft_tree_list_high_ext_idx}}};
-  const std::vector<BYTE> list_bytes = TreeListBytes(entries);
+  std::vector<BYTE> list_bytes = TreeListBytes(entries);
+  DamageTreeList(list_bytes, bytes);
   const std::vector<FakeDataRun> list_runs{{mft_tree_list_lcn, 1}};
   if (list == FakeListResidency::Resident) {
     offset += WriteTreeAttributeList(base, offset, list_bytes);

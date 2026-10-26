@@ -42,7 +42,7 @@ struct ExpectedMessages {
 
 // The messages each saved regression testcase must log, by file name. The
 // count is the number of saved testcases: a test checks that none is missing.
-inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 219>
+inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 221>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -404,6 +404,16 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 219>
         {"attribute_list_scan_non_resident",
          {true,
           {"Data length = 1 clusters, LCN = 62", "Attribute List: 0x0080"}}},
+        {"attribute_list_overwritten_invalid_type",
+         {true,
+          {"Data length = 1 clusters, LCN = 62",
+           "Attribute List: the list of freed record 21 was overwritten by "
+           "another file"}}},
+        {"attribute_list_overwritten_cut_entry",
+         {true,
+          {"Attribute List: 0x0030",
+           "Attribute List: the list of freed record 21 was overwritten by "
+           "another file"}}},
         {"attribute_list_multi_cluster",
          {true, {"Attribute List: 0x0010", "Attribute List: 0x0080"}}},
         {"attribute_list_split_attribute",

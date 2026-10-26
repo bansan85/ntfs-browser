@@ -196,6 +196,11 @@ class NTFS_BROWSER_EXPORT MftTree {
     // file reused since. Skipped, since their attributes are another file's.
     // Not a defect, so not counted in damaged.
     ULONGLONG reused_extensions{0};
+    // Freed records whose non-resident $ATTRIBUTE_LIST holds another file's
+    // bytes: NTFS freed its clusters with the file, and another file took
+    // them. The list is dropped, and the record keeps its base attributes. Not
+    // a defect, so not counted in damaged.
+    ULONGLONG overwritten_lists{0};
     // Kept records that no chain of valid parent references links to the root.
     ULONGLONG unreachable{0};
     // False when progress() stopped the scan early.

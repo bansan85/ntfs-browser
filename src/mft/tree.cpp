@@ -314,6 +314,7 @@ struct RecordCounts {
   ULONGLONG deleted{0};
   ULONGLONG in_use{0};
   ULONGLONG reused_extensions{0};
+  ULONGLONG overwritten_lists{0};
   ULONGLONG carved_names{0};
   // The clusters of the $J stream, for the loader of the journal to read them
   // ahead. Empty for every other slot.
@@ -329,6 +330,7 @@ void AddCounts(Mft::MftTree::ScanStats& stats,
   stats.deleted += counts.deleted;
   stats.in_use += counts.in_use;
   stats.reused_extensions += counts.reused_extensions;
+  stats.overwritten_lists += counts.overwritten_lists;
   stats.carved_names += counts.carved_names;
 }
 
@@ -1043,6 +1045,9 @@ bool ReadBaseEntry(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
                    Mft::MftTree::Entry& entry) {
   const bool parsed = ReadEntry(file_record, record, entry);
   counts.reused_extensions += file_record.GetReusedExtensionCount();
+  if (file_record.HasOverwrittenAttrList()) {
+    counts.overwritten_lists++;
+  }
   if (!parsed || file_record.IsSalvaged()) {
     if (!header_damaged) {
       counts.damaged++;
