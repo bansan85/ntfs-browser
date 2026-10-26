@@ -116,7 +116,7 @@ thread_local size_t slots_parsed_by_threads = 0;
 constexpr size_t held_block_bytes = size_t{4} << 20;
 
 // Waiting records whose reads the second pass announces to the reader ahead of
-// the one it parses. The reader reads up to 8 ranges and 16 MiB at once: 64
+// the one it parses. The reader reads up to 32 ranges and 64 MiB at once: 64
 // records keep it busy, and the $ATTRIBUTE_LIST streams of 64 of them are 16
 // MiB at most.
 constexpr size_t max_announced_records = 64;

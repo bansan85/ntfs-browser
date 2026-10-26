@@ -24,12 +24,20 @@ namespace NTFS_BROWSER_NAMESPACE::Io {
 namespace {
 
 // Reads ahead in flight at once, at most. Measured on a SATA SSD, 4 KiB random
-// reads run at 4 700 a second one at a time, and at 20 400 eight at a time.
-constexpr size_t max_prefetch_reads = 8;
+// reads run at 4 700 a second one at a time, and at 20 400 eight at a time. An
+// $MFT scan of a volume with many free slots announces many small ranges: 32
+// reads keep the disk busy there, where 8 left it idle (a scan of 1.6 GB read
+// in 10.6 s instead of 11.3 s).
+constexpr size_t max_prefetch_reads = 32;
 
-// Bytes the reads ahead hold at most, in flight or waiting to be used: four
-// blocks of an $MFT scan.
-constexpr ULONGLONG max_prefetch_bytes = ULONGLONG{16} * 1024 * 1024;
+// Bytes the reads ahead hold at most, in flight or waiting to be used: sixteen
+// blocks of an $MFT scan. A hard disk reads no faster with more, and a SATA SSD
+// no faster with 128 MiB.
+constexpr ULONGLONG max_prefetch_bytes = ULONGLONG{64} * 1024 * 1024;
+
+// Bytes one announced range holds at most. A longer one is not announced: the
+// aligned read MUST fit a buffer that is worth keeping for the next read.
+constexpr ULONGLONG max_prefetch_range_bytes = ULONGLONG{16} * 1024 * 1024;
 
 // Announced ranges no read has used yet, at most. Past it a hint is dropped: a
 // caller that announces far ahead of its reads would only fill memory.
@@ -176,7 +184,7 @@ void Win32DiskReader::Prefetcher::Announce(ULONGLONG offset, ULONGLONG length) {
   if (offset > (std::numeric_limits<ULONGLONG>::max)() - read_alignment ||
       length >
           (std::numeric_limits<ULONGLONG>::max)() - read_alignment - offset ||
-      AlignUp(offset + length) - AlignDown(offset) > max_prefetch_bytes) {
+      AlignUp(offset + length) - AlignDown(offset) > max_prefetch_range_bytes) {
     return;
   }
   if (!EnsureHandle()) {

@@ -43,7 +43,8 @@ constexpr ULONGLONG first_mapped_slot = static_cast<ULONGLONG>(Idx::User);
 constexpr size_t max_announced_windows = 64;
 
 // Bytes of slots announced ahead of the window read, at most: four default
-// windows, as many as the reader keeps in flight.
+// windows. A deeper announcement, up to 256 MiB, measured no faster on a SATA
+// SSD and a hard disk: the reader's own reads in flight bound the scan.
 constexpr ULONGLONG max_announced_bytes = ULONGLONG{16} * 1024 * 1024;
 
 }  // namespace

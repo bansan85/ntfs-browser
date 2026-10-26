@@ -37,7 +37,7 @@ constexpr size_t max_gap_bytes = size_t{64} * 1024;
 constexpr size_t max_run_bytes = size_t{1} * 1024 * 1024;
 
 // Records probed per round of announce, read and withdraw. The reader keeps at
-// most 8 reads in flight and 1024 ranges announced: a round stays far below.
+// most 32 reads in flight and 1024 ranges announced: a round stays far below.
 constexpr size_t max_chunk_records = 128;
 
 // Records the memo holds before it is emptied: about 15 MiB. A directory
