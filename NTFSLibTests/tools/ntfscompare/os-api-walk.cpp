@@ -16,6 +16,8 @@
 
 #ifdef _WIN32
   #include <windows.h>
+
+  #include <ntfs-browser/io/extended-path.h>
 #else
   #include <dirent.h>
   #include <fcntl.h>
@@ -108,6 +110,7 @@ std::optional<ULONGLONG> AllocatedSize(const std::filesystem::path& file) {
   // uncompressed file it just returns the logical size again, not the
   // allocation. FileStandardInfo::AllocationSize is the one that always
   // reflects clusters actually allocated, compressed or not.
+  // The path is extended (see WalkOsApi()), so the name is opened as spelled.
   const HANDLE file_handle =
       CreateFileW(file.c_str(), FILE_READ_ATTRIBUTES,
                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -174,7 +177,11 @@ void ListDirectory(const Frame& frame, Listing& result,
 const char* OsApiMethodName() noexcept { return "Windows API"; }
 
 Listing WalkOsApi(const std::filesystem::path& root) {
-  return WalkDirectories(root, ListDirectory);
+  // Extended once, here: every path below it inherits the prefix, so a folder
+  // of any depth lists, and a name Win32 cannot open as typed (a trailing dot,
+  // CON, NUL) opens as it is spelled.
+  return WalkDirectories(
+      NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(root), ListDirectory);
 }
 
 #else  // POSIX

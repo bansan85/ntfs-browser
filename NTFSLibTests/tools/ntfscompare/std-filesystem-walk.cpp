@@ -3,10 +3,14 @@
 #include <ntfs-browser/win-types.h>
 
 #include <chrono>
+#include <filesystem>
 #include <optional>
 #include <ratio>
 #include <string>
 #include <system_error>
+
+#include <ntfs-browser/io/extended-path.h>
+#include <ntfs-browser/namespace.h>
 
 #include "console.h"
 #include "time-convert.h"
@@ -52,8 +56,12 @@ std::wstring RelativeKey(const std::filesystem::path& root,
 
 }  // namespace
 
-Listing WalkStdFilesystem(const std::filesystem::path& root) {
+Listing WalkStdFilesystem(const std::filesystem::path& listed_root) {
   Listing result;
+  // Extended, so a folder deeper than 260 units lists on Windows: the standard
+  // library hands the path to Win32 as it is. The keys are relative to it.
+  const std::filesystem::path root =
+      NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(listed_root);
 
   std::error_code error_code;
   const auto options =

@@ -8,6 +8,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -20,6 +21,7 @@
 #include <spdlog/sinks/sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
 
+#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
@@ -262,13 +264,34 @@ std::shared_ptr<ISink> MakeConsoleSink(Level threshold) {
   return std::make_shared<SpdlogTargetSink>(err, out, threshold);
 }
 
+namespace {
+
+// The name spdlog opens for path. On Windows it is extended-length, so a log
+// path of more than 260 units opens. spdlog only creates the missing folders
+// of a path it can split, which an extended path is not for it, so the
+// folders are created here first. A failure to create them shows when the
+// file does not open.
+std::filesystem::path::string_type
+    FileSinkPath(const std::filesystem::path& path) {
+#ifdef _WIN32
+  const std::filesystem::path extended = Io::ToExtendedLengthFsPath(path);
+  std::error_code ignored;
+  std::filesystem::create_directories(extended.parent_path(), ignored);
+  return extended.native();
+#else
+  return path.native();
+#endif
+}
+
+}  // namespace
+
 std::shared_ptr<ISink> MakeFileSink(const std::filesystem::path& path,
                                     Level threshold) {
   try {
     // Appends: a second Configure() with the same path must not wipe what
     // the first one already wrote.
     const auto file = std::make_shared<spdlog::sinks::basic_file_sink_st>(
-        path.native(), false);
+        FileSinkPath(path), false);
     file->set_pattern(std::string(file_pattern));
     return std::make_shared<SpdlogTargetSink>(file, file, threshold);
   } catch (...) {

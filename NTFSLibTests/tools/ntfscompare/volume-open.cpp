@@ -1,10 +1,13 @@
 #include "volume-open.h"
 
 #include <array>
+#include <string>
+#include <string_view>
 #include <system_error>
 #include <utility>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
@@ -18,12 +21,37 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 namespace NtfsCompare {
 
+namespace {
+
+// Starts an extended-length path.
+constexpr std::wstring_view extended_prefix = L"\\\\?\\";
+
+// Starts the extended-length form of a UNC path, which names no drive.
+constexpr std::wstring_view extended_unc_prefix = L"\\\\?\\UNC\\";
+
+// path without its extended-length prefix, so that its root name is the drive
+// letter and a colon. A UNC path keeps it.
+std::filesystem::path WithoutExtendedPrefix(const std::filesystem::path& path) {
+  const std::wstring_view text = path.native();
+  if (text.starts_with(extended_prefix) &&
+      !text.starts_with(extended_unc_prefix)) {
+    return std::filesystem::path(
+        std::wstring(text.substr(extended_prefix.size())));
+  }
+  return path;
+}
+
+}  // namespace
+
 std::optional<VolumeHandles>
     OpenVolumeFor(const std::filesystem::path& target) {
+  // Extended, so a folder deeper than 260 units resolves: the standard
+  // library hands the path to Win32 as it is.
   std::error_code ec;
   const std::filesystem::path canonical =
-      std::filesystem::weakly_canonical(target, ec);
-  if (ec || canonical.root_name().empty()) {
+      WithoutExtendedPrefix(std::filesystem::weakly_canonical(
+          NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(target), ec));
+  if (ec || canonical.root_name().native().size() != 2) {
     PrintErr("Cannot determine a drive letter for {}\n", NativeText(target));
     return std::nullopt;
   }

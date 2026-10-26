@@ -10,6 +10,9 @@
 #include <string_view>
 #include <system_error>
 
+#include <ntfs-browser/io/extended-path.h>
+#include <ntfs-browser/namespace.h>
+
 #include "text-convert.h"
 
 namespace NtfsDevice {
@@ -29,11 +32,13 @@ bool IsSeparator(wchar_t character) {
 #endif
 }
 
-// Reports whether path names something a volume can be read from.
+// Reports whether path names something a volume can be read from. On Windows
+// the path is extended first: the standard library hands it to Win32 as it
+// is, and a path of more than 260 units would not be found.
 bool IsVolumeSource(const std::filesystem::path& path) {
   std::error_code error;
-  const std::filesystem::file_status status =
-      std::filesystem::status(path, error);
+  const std::filesystem::file_status status = std::filesystem::status(
+      NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(path), error);
   if (error) {
     return false;
   }

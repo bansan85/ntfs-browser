@@ -15,6 +15,7 @@
 #include <gsl/narrow>
 #include <winioctl.h>
 
+#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
@@ -342,8 +343,8 @@ bool Win32DiskReader::Open(std::wstring_view path) {
   // What was read ahead belongs to the previous store.
   prefetcher_.reset();
 
-  // A view carries no NUL terminator, and CreateFileW needs one.
-  std::wstring path_z(path);
+  // Extended, so a path of more than 260 units opens.
+  std::wstring path_z = ToExtendedLengthPath(path);
   // SEQUENTIAL_SCAN is only a hint: it asks the cache manager for more
   // read-ahead and earlier eviction of pages already read, so an $MFT scan
   // does not flood the system cache. A random read stays correct.

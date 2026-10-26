@@ -25,6 +25,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
@@ -318,7 +319,10 @@ int Run(int argc, ArgChar** argv) {
 
   const std::filesystem::path target(arguments->target);
   std::error_code error_code;
-  if (!std::filesystem::is_directory(target, error_code)) {
+  // Extended, so a folder deeper than 260 units is found on Windows.
+  if (!std::filesystem::is_directory(
+          NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(target),
+          error_code)) {
     PrintErr("{} is not a directory\n", NativeText(arguments->target));
     return 1;
   }

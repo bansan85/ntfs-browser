@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Embedded in the console tools (NtfsDir, NtfsDir2, NtfsMftList, NtfsCompare).
+  longPathAware lets the process pass a path of more than 260 characters to
+  Win32 as it is, when the LongPathsEnabled registry switch is on. It is not
+  what makes long paths work: the library and the tools prefix a path with
+  \\?\ (Io::ToExtendedLengthPath) at the one place where they open it, and that
+  works with the switch off.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+</assembly>

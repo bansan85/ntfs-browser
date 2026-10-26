@@ -6,6 +6,9 @@ target_link_libraries(
   PRIVATE ${PROJECT_NAME} NtfsDeviceAccess Threads::Threads
 )
 set_target_properties(NtfsMftList PROPERTIES WIN32_EXECUTABLE 0)
+if(WIN32)
+  target_sources(NtfsMftList PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
+endif()
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
     TARGET NtfsMftList

@@ -26,6 +26,9 @@ target_link_libraries(NtfsCompareCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
 
 add_executable(NtfsCompare "main.cpp")
 target_link_libraries(NtfsCompare PRIVATE ${PROJECT_NAME} NtfsCompareCore)
+if(WIN32)
+  target_sources(NtfsCompare PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
+endif()
 
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(

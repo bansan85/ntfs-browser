@@ -6,6 +6,9 @@ target_link_libraries(NtfsDirCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
 
 add_executable(NtfsDir WIN32 "main.cpp")
 target_link_libraries(NtfsDir PRIVATE ${PROJECT_NAME} NtfsDirCore)
+if(WIN32)
+  target_sources(NtfsDir PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
+endif()
 set_target_properties(NtfsDir PROPERTIES WIN32_EXECUTABLE 0)
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
@@ -22,6 +25,7 @@ endif()
 if(WIN32)
   add_executable(NtfsDir2 WIN32 "main2.cpp")
   target_link_libraries(NtfsDir2 PRIVATE ${PROJECT_NAME} NtfsDirCore)
+  target_sources(NtfsDir2 PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
   set_target_properties(NtfsDir2 PROPERTIES WIN32_EXECUTABLE 0)
   if(BUILD_SHARED_LIBS)
     add_custom_command(
