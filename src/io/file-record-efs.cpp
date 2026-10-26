@@ -78,6 +78,11 @@ std::vector<Efs::WrappedFek>
       continue;
     }
 
+    // The stream of a real volume is non-resident: reading it reads the volume.
+    if (attr->IsNonResident() && record.RefuseRead()) {
+      return {};
+    }
+
     const ULONGLONG size = attr->GetDataSize();
     if (size > max_efs_stream_size) {
       Log::Warn("$EFS stream is too large: {} bytes.", size);

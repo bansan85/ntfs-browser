@@ -91,6 +91,10 @@ class FileRecord<S>::Impl {
   // via AttrList.
   bool resolve_attr_list{true};
 
+  // Set by the caller that refuses the volume reads of a parse, and told when
+  // one is refused. Null: the parse reads. See SetReadRefusal().
+  bool* read_refusal{nullptr};
+
   // True bypasses the deleted-record gate in ParseAttrs(): set by
   // NtfsVolume on its own internal FileRecords ($Volume, $MFT, $MFT
   // extension records), so a freed one doesn't take the whole volume down,

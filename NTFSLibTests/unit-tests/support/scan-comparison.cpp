@@ -53,10 +53,12 @@ ScanResult Capture(const NtfsVolume<S>& volume,
   }
 
   static_cast<void>(Mft::SlotsParsedByThreadsForTests(true));
+  static_cast<void>(Mft::WaitingParsedByThreadsForTests(true));
   const Mft::MftTree tree(volume, scan);
 
   ScanResult result;
   result.parsed_by_threads = Mft::SlotsParsedByThreadsForTests(true);
+  result.waiting_by_threads = Mft::WaitingParsedByThreadsForTests(true);
   result.tree = DescribeTree(tree);
   result.log = TakeCapturedLog();
   if (reader != nullptr) {

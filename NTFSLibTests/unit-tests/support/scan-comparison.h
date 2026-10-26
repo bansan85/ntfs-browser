@@ -24,6 +24,8 @@ struct ScanResult {
   std::vector<CountingDiskReader::Call> calls;
   // Slots the scan took from the threads that parsed them.
   size_t parsed_by_threads{0};
+  // Waiting base records of the second pass, taken from the threads too.
+  size_t waiting_by_threads{0};
 };
 
 // Writes every field of every entry, and of the statistics, one entry per

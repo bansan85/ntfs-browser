@@ -428,9 +428,13 @@ std::unique_ptr<Attr::AttrBase<S>>
   switch (ahc.type) {
     // Unresolved, $ATTRIBUTE_LIST is wrapped generically, as the arm below.
     case Attr::Type::AttributeList:
-      return impl_.resolve_attr_list
-                 ? MakeByResidency<Attr::AttrList>(ahc, record, attr_list_chain)
-                 : MakeGeneric(ahc, record);
+      // A non-resident list is read from the volume, which a refusing record
+      // does not do: it keeps the list unresolved.
+      if (!impl_.resolve_attr_list ||
+          (ahc.non_resident != 0 && record.RefuseRead())) {
+        return MakeGeneric(ahc, record);
+      }
+      return MakeByResidency<Attr::AttrList>(ahc, record, attr_list_chain);
 
     case Attr::Type::Data:
       return MakeByResidency<Attr::AttrData>(ahc, record);

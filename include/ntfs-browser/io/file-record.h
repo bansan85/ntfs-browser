@@ -174,6 +174,17 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // False makes a $ATTRIBUTE_LIST be wrapped as a plain attribute, not
   // resolved into the attributes it names.
   void SetResolveAttrList(bool resolve) noexcept;
+  // Makes the parses of this record refuse the reads of the volume that a
+  // $ATTRIBUTE_LIST or an $EFS stream would cause: an extension record the
+  // source does not give, a non-resident list, a non-resident $EFS stream.
+  // What would be read is skipped, and *refused is set. A parse that set it is
+  // incomplete, and its result MUST be thrown away. For a parse on a thread
+  // that MUST NOT touch the volume. refused MUST outlive the parses. Null
+  // reads again.
+  void SetReadRefusal(bool* refused) noexcept;
+  // Called where a parse of this record is about to read the volume. True
+  // when the read is refused: the flag SetReadRefusal() was given is then set.
+  [[nodiscard]] bool RefuseRead() const noexcept;
   void TraverseAttrs(const AttrsCallback& attr_call_back, void* context);
   [[nodiscard]] const std::vector<std::unique_ptr<Attr::AttrBase<S>>>&
       GetAttr(Attr::Type attr_type) const noexcept;

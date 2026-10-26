@@ -4,7 +4,9 @@
 #include <memory>
 #include <string_view>
 #include <utility>
+#include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
@@ -16,6 +18,7 @@
 #include "corpus-test-support.h"
 #include "counting-disk-reader.h"
 #include "external-mft-support.h"
+#include "memory-disk-reader.h"
 #include "nps-ntfs1-test-support.h"
 #include "scan-comparison.h"
 #include "test-log-sink.h"
@@ -80,6 +83,9 @@ TEST_CASE("The NIST hacking case $MFT scans the same whatever the thread count",
   // Over 12 000 slots: three windows, and the last one short.
   CHECK(one.tree.size() > 1000000);
   CHECK(several.parsed_by_threads > 10000);
+  // Its files with an $ATTRIBUTE_LIST, parsed by threads in the second pass.
+  CHECK(several.waiting_by_threads > 0);
+  CHECK(one.waiting_by_threads == 0);
   Tests::CheckSameScan(one, several);
   Tests::CheckSameScan(one, many);
 }
@@ -108,4 +114,34 @@ TEST_CASE("The NPS ntfs1 image scans the same whatever the thread count",
   CHECK_FALSE(one.tree.empty());
   CHECK(many.parsed_by_threads > 0);
   Tests::CheckSameScan(one, many);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A volume with attribute lists scans the same whatever the thread count",
+    "[corpus][threads]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const Fs::path file = Tests::RequireCorpusFile(
+      Tests::DfirNtfsDir() / mft_folder / "ntfs3_attrlist.raw");
+  const std::vector<BYTE> bytes = Tests::ReadCorpusFile(file);
+  const bool include_deleted = GENERATE(false, true);
+  const bool recover = GENERATE(false, true);
+  const VolumeOptions options{.include_deleted = include_deleted,
+                              .recover_errors = recover};
+  const auto scan = [&](unsigned threads) {
+    static_cast<void>(Tests::TakeCapturedLog());
+    auto counting = std::make_unique<Tests::CountingDiskReader>(
+        std::make_unique<Tests::MemoryDiskReader>(bytes));
+    const Tests::CountingDiskReader* const reader = counting.get();
+    const NtfsVolume<S> volume(std::move(counting), options);
+    REQUIRE(volume.IsVolumeOK());
+    return Tests::CaptureScan(volume, reader, threads);
+  };
+
+  const Tests::ScanResult one = scan(1);
+  CHECK_FALSE(one.tree.empty());
+  for (const unsigned threads : {2U, 8U}) {
+    INFO("threads " << threads);
+    const Tests::ScanResult many = scan(threads);
+    Tests::CheckSameScan(one, many);
+  }
 }

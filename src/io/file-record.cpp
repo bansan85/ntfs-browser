@@ -632,6 +632,9 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
     SkipForeignExtension(record_number, recover);
     return;
   }
+  if (held.empty() && self->RefuseRead()) {
+    return;
+  }
 
   // Owned by this record, not by the caller: the attributes moved into it
   // below keep pointing into frnew's bytes.
@@ -642,6 +645,7 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
   frnew.impl_->attr_raw_call_back = attr_raw_call_back;
   frnew.impl_->extension_source = extension_source;
   frnew.impl_->base_source = base_source;
+  frnew.impl_->read_refusal = read_refusal;
   if (!frnew.ParseFileRecord(record_number, held)) {
     throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
   }
@@ -708,6 +712,20 @@ bool Io::FileRecord<S>::BypassesDeletedGate() const noexcept {
 template <Cache::Strategy S>
 void Io::FileRecord<S>::SetResolveAttrList(bool resolve) noexcept {
   impl_->resolve_attr_list = resolve;
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetReadRefusal(bool* refused) noexcept {
+  impl_->read_refusal = refused;
+}
+
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::RefuseRead() const noexcept {
+  if (impl_->read_refusal == nullptr) {
+    return false;
+  }
+  *impl_->read_refusal = true;
+  return true;
 }
 
 // Traverse all Attribute and return CAttr_xxx classes to User Callback routine

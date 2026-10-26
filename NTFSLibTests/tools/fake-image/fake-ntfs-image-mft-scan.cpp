@@ -241,6 +241,80 @@ FakeRecord MakeBusySlotRecord(ULONGLONG idx) {
   }
 }
 
+// How many kinds of slot the list scan fixture cycles through.
+constexpr ULONGLONG list_scan_kind_count = 14;
+
+// Sequence numbers of the list scan fixture: the files with a list, the
+// extension records of a live file, and those of a freed one, which NTFS
+// bumped on deletion.
+constexpr WORD list_scan_base_sequence = 4;
+constexpr WORD list_scan_extension_sequence = 2;
+constexpr WORD list_scan_freed_extension_sequence = 3;
+
+// LCN of the first cluster that holds a non-resident list of the list scan
+// fixture. Past every fragment of the $MFT the fixture maps.
+constexpr ULONGLONG list_scan_lists_lcn = 8000;
+
+// One entry of an $ATTRIBUTE_LIST of the list scan fixture: it names the
+// $FILE_NAME of record, under the sequence of a live extension record.
+struct ListScanEntry {
+  ULONGLONG record;
+  WORD sequence;
+};
+
+// The bytes of an $ATTRIBUTE_LIST made of entry.
+std::vector<BYTE> ListScanBytes(const ListScanEntry& entry) {
+  NTFS_BROWSER_NAMESPACE::Data::AttributeList raw{};
+  raw.attr_type = Attr::Type::FileName;
+  raw.record_size = static_cast<WORD>(AlignAttrSize(
+      NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
+  raw.base_ref.segment_number = entry.record;
+  raw.base_ref.sequence_number = entry.sequence;
+  std::vector<BYTE> bytes(raw.record_size, 0);
+  std::memcpy(bytes.data(), &raw,
+              NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
+  return bytes;
+}
+
+// A file with only a $STANDARD_INFORMATION and an $ATTRIBUTE_LIST of list,
+// resident, or non-resident in run.
+FakeRecord MakeListScanBase(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags,
+                            const std::vector<BYTE>& list,
+                            const std::optional<FakeDataRun>& run) {
+  FakeRecord record =
+      MakeRecordHeader(attr_offset_value, flags, list_scan_base_sequence);
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
+  if (run) {
+    offset += WriteNonResidentAttr(
+        record, offset, Attr::Type::AttributeList,
+        {.comp_unit_size = 0, .real_size = list.size(), .runs = {*run}});
+  } else {
+    auto& attr = InitResidentAttr(record, offset, Attr::Type::AttributeList);
+    attr.attr_size = static_cast<DWORD>(list.size());
+    attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
+    std::memcpy(&record.at(offset + attr.attr_offset), list.data(),
+                list.size());
+    offset += attr.header.total_size;
+  }
+  WriteEndOfAttributesMarker(record, offset);
+  return record;
+}
+
+// The extension record of file base, which holds its name.
+FakeRecord
+    MakeListScanExtension(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags,
+                          WORD sequence, ULONGLONG idx, ULONGLONG base) {
+  const ULONGLONG root = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  return MakeMftTreeRecord(
+      flags, sequence,
+      {{.name = L"listed" + std::to_wstring(idx), .parent_ref = root}}, {},
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal,
+      MakeFileReference(base, list_scan_base_sequence));
+}
+
 // Writes record, the content of $MFT slot idx, in the fragment that holds it.
 void PutScanRecord(std::vector<BYTE>& image, ULONGLONG idx,
                    ULONGLONG fragment_clusters, const FakeRecord& record) {
@@ -400,6 +474,109 @@ std::vector<BYTE>
   for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
        idx < record_count; idx++) {
     PutScanRecord(image, idx, fragment_clusters, MakeBusySlotRecord(idx));
+  }
+  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
+                MakeScanMftRecord(record_count, fragment_clusters));
+  return image;
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithListMftScan(ULONGLONG record_count,
+                                      ULONGLONG fragment_clusters) {
+  using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
+
+  std::vector<BYTE> image = BuildFakeNtfsImage();
+
+  const ULONGLONG root = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+                fragment_clusters,
+                MakeMftTreeRecord(FileRecordFlag::InUse | FileRecordFlag::Dir,
+                                  root_sequence_number,
+                                  {{.name = L".", .parent_ref = root}}));
+  const FileRecordFlag file = FileRecordFlag::InUse;
+  ULONGLONG next_list_lcn = list_scan_lists_lcn;
+  for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
+       idx < record_count; idx++) {
+    const std::wstring name = L"f" + std::to_wstring(idx);
+    // The list of a base record names the slot after it, or before it.
+    const auto base = [&](FileRecordFlag flags, ULONGLONG listed,
+                          WORD sequence) {
+      return MakeListScanBase(flags, ListScanBytes({listed, sequence}),
+                              std::nullopt);
+    };
+    switch (idx % list_scan_kind_count) {
+      case 1:
+        PutScanRecord(image, idx, fragment_clusters,
+                      base(file, idx + 1, list_scan_extension_sequence));
+        break;
+      case 2:
+        PutScanRecord(image, idx, fragment_clusters,
+                      MakeListScanExtension(file, list_scan_extension_sequence,
+                                            idx, idx - 1));
+        break;
+      case 3:
+        PutScanRecord(image, idx, fragment_clusters,
+                      MakeListScanExtension(file, list_scan_extension_sequence,
+                                            idx, idx + 1));
+        break;
+      case 4:
+        PutScanRecord(image, idx, fragment_clusters,
+                      base(file, idx - 1, list_scan_extension_sequence));
+        break;
+      case 5:
+        // Names a file of its own: not an extension of this one.
+        PutScanRecord(image, idx, fragment_clusters, base(file, idx + 1, 1));
+        break;
+      case 7:
+        // Names a zero-filled slot, whose record the scan must read.
+        PutScanRecord(image, idx, fragment_clusters,
+                      base(file, idx + 1, list_scan_extension_sequence));
+        break;
+      case 8:
+        PutScanRecord(image, idx, fragment_clusters, FakeRecord{});
+        break;
+      case 9: {
+        // The list sits in a cluster of its own: reading it reads the volume.
+        const std::vector<BYTE> list =
+            ListScanBytes({idx + 1, list_scan_extension_sequence});
+        const FakeDataRun run{.lcn = next_list_lcn++, .clusters = 1};
+        PutScanRecord(image, idx, fragment_clusters,
+                      MakeListScanBase(file, list, run));
+        LayRunBytes(image, {run}, list);
+        break;
+      }
+      case 10:
+        PutScanRecord(image, idx, fragment_clusters,
+                      MakeListScanExtension(file, list_scan_extension_sequence,
+                                            idx, idx - 1));
+        break;
+      case 11:
+        PutScanRecord(image, idx, fragment_clusters,
+                      base(FileRecordFlag{}, idx + 1,
+                           list_scan_freed_extension_sequence));
+        break;
+      case 12:
+        PutScanRecord(image, idx, fragment_clusters,
+                      MakeListScanExtension(FileRecordFlag{},
+                                            list_scan_freed_extension_sequence,
+                                            idx, idx - 1));
+        break;
+      case 13:
+        PutScanRecord(image, idx, fragment_clusters,
+                      MakeMftTreeRecord(file | FileRecordFlag::Dir, 1,
+                                        {{.name = name, .parent_ref = root}}));
+        break;
+      default:
+        // 0 and 6: files in use. 6 is what the list of 5 names.
+        PutScanRecord(image, idx, fragment_clusters,
+                      MakeMftTreeRecord(
+                          file,
+                          idx % list_scan_kind_count == 6 ? WORD{2} : WORD{1},
+                          {{.name = name, .parent_ref = root}},
+                          static_cast<DWORD>(idx % 100)));
+        break;
+    }
   }
   PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
                 MakeScanMftRecord(record_count, fragment_clusters));

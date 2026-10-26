@@ -1037,6 +1037,23 @@ inline constexpr ULONGLONG fragmented_mft_scan_fragment_clusters = 100;
     ULONGLONG record_count,
     ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
 
+// Same volume and layout as BuildFakeNtfsImageWithFragmentedMftScan(), whose
+// slots cycle through fourteen kinds, most of them files with an
+// $ATTRIBUTE_LIST that the second pass of a scan parses:
+//   0 and 13 a file and a directory; 1 a file whose resident list names slot 2
+//   for its $FILE_NAME, and 2 that extension record; 3 an extension record of
+//   slot 4, which a scan meets first, and 4 the file whose resident list names
+//   slot 3; 5 a file whose resident list names slot 6, a file of its own that
+//   is not an extension of it; 7 a file whose resident list names slot 8, which
+//   is zero-filled, so its record has to be read; 9 a file whose list sits in a
+//   cluster of its own, and 10 its extension record; 11 a freed file whose
+//   resident list names 12, its freed extension record.
+// A slot of the kinds 1, 5, 7, 9 and 11 MUST NOT be the last one, and
+// record_count MUST be at least Mft::Idx::User.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithListMftScan(
+    ULONGLONG record_count,
+    ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
+
 // Names per index block, and the other numbers that shape the directory of
 // BuildFakeNtfsImageWithIndexedMftScan().
 inline constexpr size_t indexed_scan_entries_per_block = 24;

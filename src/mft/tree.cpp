@@ -200,6 +200,32 @@ std::optional<ULONGLONG> min_auto_threaded_slots_override;
 std::optional<ULONGLONG> probe_slots_override;
 std::optional<bool> probe_verdict_override;
 
+// Waiting base records one batch of the second pass holds. The threads parse a
+// batch while the scan's thread merges the one before it in order: 4096
+// outcomes are a few MiB, and a batch is long enough that starting it costs
+// nothing.
+constexpr size_t default_waiting_batch_records = 4096;
+
+// The batch length a test asked for. nullopt means the default.
+std::optional<size_t> waiting_batch_records_override;
+
+// Waiting base records one chunk of a batch holds. A held record takes about 4
+// microseconds: 64 are about 250 microseconds, long enough that taking the
+// next chunk costs nothing, short enough that the threads finish together.
+constexpr size_t waiting_chunk_records = 64;
+
+// Waiting base records below which an automatic thread count keeps the second
+// pass on one thread: 2048 held records take about 8 milliseconds, little
+// more than starting the threads costs.
+constexpr size_t default_min_auto_threaded_waiting = 2048;
+
+// The limit a test asked for. nullopt means the default.
+std::optional<size_t> min_auto_threaded_waiting_override;
+
+// Waiting records the scans of this thread took from the threads that parsed
+// them, in the second pass. Read by tests only, like slots_parsed_by_threads.
+thread_local size_t waiting_parsed_by_threads = 0;
+
 // Threads an automatic count takes at most. The calling thread merges the
 // results in record order, and that work does not shrink with more threads:
 // past four, a scan of the whole $MFT of a system volume gains nothing, and the
@@ -1360,6 +1386,186 @@ class WindowParser {
   Util::ChunkPool pool_;
 };
 
+// Parses the base records that wait for the second pass, on several threads,
+// and gives the outcome of each in waiting order. A batch of waiting records is
+// cut into chunks, as WindowParser does with the slots of a window: a thread
+// takes a chunk at a time with a FileRecord of its own, and a chunk logs into a
+// capture of its own, which the scan's thread replays record by record.
+//
+// A thread reads nothing of the volume. It parses a record whose bytes are held
+// and whose extension records are all held. Its FileRecord refuses a read that
+// a parse would make after all: an extension record not held, a non-resident
+// $ATTRIBUTE_LIST or $EFS stream. The record is then left to the scan's thread,
+// which parses it as the single thread does, reads included. The held records
+// and the bases of the slots are not changed during the second pass, so the
+// threads only read them.
+template <Cache::Strategy S>
+class WaitingParser {
+ public:
+  // threads is the number of threads that parse, the calling one included.
+  // held, bases and waiting MUST NOT change while a batch is parsed.
+  WaitingParser(const NtfsVolume<S>& volume, size_t threads,
+                const HeldRecords& held, const SlotBases& bases, bool annotate)
+      : volume_(&volume),
+        held_(&held),
+        waiting_(&held.WaitingRecords()),
+        annotate_(annotate),
+        pool_(threads - 1) {
+    contexts_.reserve(pool_.Slots());
+    for (size_t slot = 0; slot < pool_.Slots(); slot++) {
+      Context& context =
+          *contexts_.emplace_back(std::make_unique<Context>(volume));
+      context.record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+      context.record.SetExtensionSource(
+          [&held](ULONGLONG record) { return held.FindExtension(record); });
+      context.record.SetBaseSource(
+          [&bases](ULONGLONG record) { return bases.BaseOf(record); });
+      context.record.SetReadRefusal(&context.refused);
+    }
+  }
+
+  // Starts parsing the count waiting records from first on, after the batch
+  // before it was ended.
+  void Begin(size_t first, size_t count) {
+    End();
+    first_ = first;
+    count_ = count;
+    if (outcomes_.size() < count) {
+      outcomes_.resize(count);
+    }
+    const size_t chunks =
+        (count + waiting_chunk_records - 1) / waiting_chunk_records;
+    // The logs of the batch before stay as they are: the lines its last record
+    // logged when its attributes were dropped are replayed with the next one.
+    log_set_ = 1 - log_set_;
+    std::vector<Log::Detail::CapturedLog>& logs = logs_.at(log_set_);
+    if (logs.size() < chunks) {
+      logs.resize(chunks);
+    }
+    // Asked here, on the thread that owns the sinks: a worker never does.
+    levels_ = Log::Detail::EnabledLevels();
+    waited_chunk_ = no_chunk;
+    active_ = true;
+    pool_.Start(chunks,
+                [this](size_t chunk, size_t slot) { ParseChunk(chunk, slot); });
+  }
+
+  // Waits for the threads that still parse, and drops the chunks not started.
+  void End() {
+    if (active_) {
+      active_ = false;
+      pool_.Finish();
+    }
+  }
+
+  // Whether the batch being parsed holds waiting record index.
+  [[nodiscard]] bool Covers(size_t index) const noexcept {
+    return active_ && index >= first_ && index < first_ + count_;
+  }
+
+  // The outcome of waiting record index, once its chunk is parsed. index MUST
+  // be covered. The reference stays valid until the next Begin().
+  SlotOutcome& Take(size_t index) {
+    const size_t chunk = (index - first_) / waiting_chunk_records;
+    if (chunk != waited_chunk_) {
+      pool_.WaitFor(chunk);
+      waited_chunk_ = chunk;
+    }
+    return outcomes_.at(index - first_);
+  }
+
+  // The log that holds the lines the parse of waiting record index logged,
+  // which its outcome marks. It stays valid until the second Begin() after the
+  // batch.
+  [[nodiscard]] const Log::Detail::CapturedLog& LogOf(size_t index) const {
+    return logs_.at(log_set_).at((index - first_) / waiting_chunk_records);
+  }
+
+ private:
+  // The FileRecord of one thread, and whether a parse of it wanted a read.
+  struct Context {
+    explicit Context(const NtfsVolume<S>& volume) : record(volume) {}
+
+    Io::FileRecord<S> record;
+    bool refused{false};
+  };
+
+  // The chunk number of no chunk.
+  static constexpr size_t no_chunk = (std::numeric_limits<size_t>::max)();
+
+  // Parses the records of one chunk on thread slot.
+  void ParseChunk(size_t chunk, size_t slot) {
+    Log::Detail::CapturedLog& log = logs_.at(log_set_).at(chunk);
+    log.Reset(levels_);
+    const Log::Detail::CaptureScope capture(log);
+    Context& context = *contexts_.at(slot);
+
+    const size_t first = chunk * waiting_chunk_records;
+    const size_t last = (std::min)(first + waiting_chunk_records, count_);
+    for (size_t offset = first; offset < last; offset++) {
+      SlotOutcome& outcome = outcomes_.at(offset);
+      outcome = SlotOutcome{};
+      const HeldRecords::Waiting& waiting = waiting_->at(first_ + offset);
+      // Its reads are the scan's thread's, and so is its place in the log.
+      if (!waiting.slot || !waiting.list_extents.empty() ||
+          !waiting.unheld_extensions.empty()) {
+        outcome.needs_scan_thread = true;
+        continue;
+      }
+      context.refused = false;
+      outcome.log_begin = log.End();
+      ParseWaiting(context.record, waiting, outcome);
+      outcome.log_end = log.End();
+      // What the attributes log when they are dropped is kept apart: it
+      // belongs after what the scan does with the record.
+      context.record.ClearAttrs();
+      outcome.release_end = log.End();
+      if (context.refused) {
+        outcome = SlotOutcome{};
+        outcome.needs_scan_thread = true;
+      }
+    }
+  }
+
+  // Parses waiting, whose bytes are held, as the second pass does on the
+  // scan's thread: its header, then its attributes with the extension records
+  // the first pass held.
+  void ParseWaiting(Io::FileRecord<S>& file_record,
+                    const HeldRecords::Waiting& waiting,
+                    SlotOutcome& outcome) const {
+    outcome.kind = SlotKind::Base;
+    const bool parsed = file_record.ParseFileRecord(
+        waiting.record, held_->Bytes(*waiting.slot));
+    outcome.kept =
+        parsed &&
+        ReadBaseEntry(file_record, *volume_, waiting.record,
+                      waiting.header_damaged, outcome.counts, outcome.entry);
+    if (outcome.kept && annotate_) {
+      outcome.note = ComputeDataNote(file_record);
+    }
+  }
+
+  const NtfsVolume<S>* volume_;
+  const HeldRecords* held_;
+  const std::vector<HeldRecords::Waiting>* waiting_;
+  bool annotate_;
+  // The batch being parsed: its first waiting record, and its length.
+  size_t first_{0};
+  size_t count_{0};
+  Log::Detail::LevelMask levels_{0};
+  bool active_{false};
+  // The last chunk Take() waited for, so that a chunk is waited for once.
+  size_t waited_chunk_{no_chunk};
+  std::vector<std::unique_ptr<Context>> contexts_;
+  std::vector<SlotOutcome> outcomes_;
+  // The capture of each chunk, for the batch being parsed and for the one
+  // before it.
+  std::array<std::vector<Log::Detail::CapturedLog>, 2> logs_;
+  size_t log_set_{0};
+  // Last: its threads use the members above, so it ends first.
+  Util::ChunkPool pool_;
+};
+
 // The threads the scan parses with. options.threads gives it, except for 0: a
 // volume with enough slots takes the threads of the machine, a small one takes
 // one. A volume with a raw attribute callback takes one whatever is asked.
@@ -1481,35 +1687,25 @@ class SlotScan {
     const std::vector<HeldRecords::Waiting>& waiting_records =
         held_.WaitingRecords();
     ReadAnnouncer<S> announcer(*volume_, waiting_records);
+    const bool on_threads = WaitingParsedByThreads(waiting_records.size());
     for (size_t index = 0; index < waiting_records.size(); index++) {
       announcer.Before(index);
       ReplayPendingRelease();
-      const HeldRecords::Waiting& waiting = waiting_records.at(index);
-      Mft::MftTree::Entry& entry = entries_->at(waiting.entry_index);
-      // The bytes the first pass parsed: the header parses as it did then. A
-      // record that was not held is read again, announced to the reader.
-      const bool parsed = waiting.slot
-                              ? file_record_.ParseFileRecord(
-                                    waiting.record, held_.Bytes(*waiting.slot))
-                              : file_record_.ParseFileRecord(waiting.record);
-      // Read even when the record is dropped: the reader was told to.
-      unheld_.Load(waiting.unheld_extensions);
-      RecordCounts counts;
+      const std::optional<bool> taken =
+          on_threads ? TakeWaiting(index) : std::nullopt;
       const bool kept =
-          parsed && ReadBaseEntry(file_record_, *volume_, waiting.record,
-                                  waiting.header_damaged, counts, entry);
-      AddCounts(*stats_, counts);
-      unheld_.Clear();
+          taken ? *taken : ParseWaitingHere(waiting_records.at(index));
       if (!kept) {
-        dropped.push_back(waiting.entry_index);
+        dropped.push_back(waiting_records.at(index).entry_index);
         continue;
-      }
-      if (annotate_) {
-        resolver_.Add(waiting.entry_index, ComputeDataNote(file_record_));
       }
       if ((index + 1) % announce_restart_interval == 0) {
         announcer.Restart(index + 1);
       }
+    }
+    // The threads rest while the entries are resolved and dropped.
+    if (waiting_parser_) {
+      waiting_parser_->End();
     }
     if (annotate_) {
       resolver_.Flush();
@@ -1518,6 +1714,88 @@ class SlotScan {
   }
 
  private:
+  // Whether the threads parse the count waiting records of the second pass. An
+  // explicit thread count always has them. A count left to the scan has them
+  // from min_auto_threaded_waiting records on, whatever the first pass found:
+  // the second pass reads next to nothing, so it is bound by the CPU even
+  // where the first one was bound by the volume.
+  [[nodiscard]] bool WaitingParsedByThreads(size_t count) const {
+    if (parse_threads_ <= 1) {
+      return false;
+    }
+    return !automatic_ || count >= min_auto_threaded_waiting_override.value_or(
+                                       default_min_auto_threaded_waiting);
+  }
+
+  // Parses waiting on this thread, with the reads that takes, and keeps what it
+  // gives. True when its entry is kept.
+  bool ParseWaitingHere(const HeldRecords::Waiting& waiting) {
+    Mft::MftTree::Entry& entry = entries_->at(waiting.entry_index);
+    // The bytes the first pass parsed: the header parses as it did then. A
+    // record that was not held is read again, announced to the reader.
+    const bool parsed =
+        waiting.slot ? file_record_.ParseFileRecord(waiting.record,
+                                                    held_.Bytes(*waiting.slot))
+                     : file_record_.ParseFileRecord(waiting.record);
+    parsed_here_ = true;
+    // Read even when the record is dropped: the reader was told to.
+    unheld_.Load(waiting.unheld_extensions);
+    RecordCounts counts;
+    const bool kept =
+        parsed && ReadBaseEntry(file_record_, *volume_, waiting.record,
+                                waiting.header_damaged, counts, entry);
+    AddCounts(*stats_, counts);
+    unheld_.Clear();
+    if (kept && annotate_) {
+      resolver_.Add(waiting.entry_index, ComputeDataNote(file_record_));
+    }
+    return kept;
+  }
+
+  // Takes waiting record index from the batch the threads parse, giving them
+  // the batch when the scan reaches it, and keeps what they found. Nothing when
+  // the scan's thread has to parse the record: it reads the volume. Else
+  // whether its entry is kept.
+  std::optional<bool> TakeWaiting(size_t index) {
+    const std::vector<HeldRecords::Waiting>& waiting_records =
+        held_.WaitingRecords();
+    if (!waiting_parser_) {
+      waiting_parser_.emplace(*volume_, parse_threads_, held_, bases_,
+                              annotate_);
+    }
+    if (!waiting_parser_->Covers(index)) {
+      const size_t batch =
+          (std::max)(size_t{1}, waiting_batch_records_override.value_or(
+                                    default_waiting_batch_records));
+      waiting_parser_->Begin(index,
+                             (std::min)(batch, waiting_records.size() - index));
+    }
+    SlotOutcome& outcome = waiting_parser_->Take(index);
+    if (outcome.needs_scan_thread) {
+      return std::nullopt;
+    }
+    waiting_parsed_by_threads++;
+
+    const HeldRecords::Waiting& waiting = waiting_records.at(index);
+    // The record before is gone first, so that what its attributes log comes
+    // before the lines of this one.
+    if (parsed_here_) {
+      file_record_.ClearAttrs();
+      parsed_here_ = false;
+    }
+    const Log::Detail::CapturedLog& log = waiting_parser_->LogOf(index);
+    log.Replay(outcome.log_begin, outcome.log_end);
+    AddCounts(*stats_, outcome.counts);
+    if (outcome.kept) {
+      entries_->at(waiting.entry_index) = std::move(outcome.entry);
+      if (annotate_) {
+        resolver_.Add(waiting.entry_index, std::move(outcome.note));
+      }
+    }
+    LeaveRelease(log, outcome, waiting.record, held_.Bytes(*waiting.slot));
+    return outcome.kept;
+  }
+
   // Takes slot record from the window the threads parse, giving them the window
   // when the scan reaches it. False when the thread that owns the scan has to
   // parse the slot: no window serves it, or it needs the volume.
@@ -1636,11 +1914,21 @@ class SlotScan {
   // them, for the next slot to be parsed: one thread drops the attributes of a
   // slot when it parses the next one.
   void LeaveRelease(ULONGLONG record, const SlotOutcome& outcome) {
+    LeaveRelease(parser_->LogOf(record), outcome, record, {});
+  }
+
+  // Same for a record in log, whose bytes are held. A record of the second
+  // pass gives them, since no window holds it: held is empty for a slot of the
+  // first pass.
+  void LeaveRelease(const Log::Detail::CapturedLog& log,
+                    const SlotOutcome& outcome, ULONGLONG record,
+                    std::span<const BYTE> held) {
     if (outcome.release_end.lines > outcome.log_end.lines) {
-      pending_release_ = {.log = &parser_->LogOf(record),
+      pending_release_ = {.log = &log,
                           .begin = outcome.log_end,
                           .end = outcome.release_end,
-                          .slot = record};
+                          .slot = record,
+                          .held = held};
     }
   }
 
@@ -1654,7 +1942,9 @@ class SlotScan {
       ReplayPendingRelease();
       return;
     }
-    const std::span<const BYTE> bytes = slots_.HeldSlot(*pending_release_.slot);
+    const std::span<const BYTE> bytes =
+        pending_release_.held.empty() ? slots_.HeldSlot(*pending_release_.slot)
+                                      : pending_release_.held;
     pending_release_.log = nullptr;
     if (bytes.empty()) {
       return;
@@ -1771,13 +2061,18 @@ class SlotScan {
     const Log::Detail::CapturedLog* log{nullptr};
     Log::Detail::CapturedLog::Mark begin;
     Log::Detail::CapturedLog::Mark end;
-    // The slot those attributes belong to.
+    // The slot those attributes belong to, and its bytes when no window of
+    // slots holds them: a waiting record of the second pass.
     std::optional<ULONGLONG> slot;
+    std::span<const BYTE> held;
   };
 
   PendingRelease pending_release_;
   // Last: its threads read the window of slots_, so they end first.
   std::optional<WindowParser<S>> parser_;
+  // Starts with the second pass. Its threads read held_ and bases_, and its
+  // logs may be the ones pending_release_ points at.
+  std::optional<WaitingParser<S>> waiting_parser_;
 };
 
 }  // namespace
@@ -1789,10 +2084,12 @@ size_t MaxPendingRanges() {
 
 void SetAutoThreadLimitsForTests(std::optional<ULONGLONG> min_slots,
                                  std::optional<ULONGLONG> probe_slots,
-                                 std::optional<bool> verdict) {
+                                 std::optional<bool> verdict,
+                                 std::optional<size_t> min_waiting) {
   min_auto_threaded_slots_override = min_slots;
   probe_slots_override = probe_slots;
   probe_verdict_override = verdict;
+  min_auto_threaded_waiting_override = min_waiting;
 }
 
 bool ScanThreadsPay(double load_seconds, double elapsed_seconds) noexcept {
@@ -1806,6 +2103,18 @@ size_t MaxHeldRecordBytes() {
 
 void SetMaxHeldRecordBytesForTests(std::optional<size_t> limit) {
   max_held_record_bytes_override = limit;
+}
+
+void SetWaitingBatchRecordsForTests(std::optional<size_t> records) {
+  waiting_batch_records_override = records;
+}
+
+size_t WaitingParsedByThreadsForTests(bool reset) noexcept {
+  const size_t count = waiting_parsed_by_threads;
+  if (reset) {
+    waiting_parsed_by_threads = 0;
+  }
+  return count;
 }
 
 size_t SlotsParsedByThreadsForTests(bool reset) noexcept {

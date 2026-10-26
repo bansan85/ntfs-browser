@@ -104,6 +104,69 @@ VolumeOptions OptionsOf(bool include_deleted, bool recover) {
                        .recover_errors = recover};
 }
 
+// Slots of the list fixture, and the clusters of each fragment of its $MFT.
+constexpr ULONGLONG list_record_count = 3000;
+constexpr ULONGLONG list_fragment_clusters = 250;
+
+// How many kinds of slot the list fixture cycles through.
+constexpr ULONGLONG list_kind_count = 14;
+
+// The waiting base records of the list fixture whose parse needs no read of the
+// volume, so that a thread takes them: the kinds 1, 4 and 5, and the freed 11
+// when the scan shows freed records. Kind 7 names a slot nothing held, and
+// kind 9 has a non-resident list: the scan's thread parses them.
+size_t ThreadParsableWaiting(bool include_deleted) {
+  size_t count = 0;
+  for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
+       idx < list_record_count; idx++) {
+    const ULONGLONG kind = idx % list_kind_count;
+    if (kind == 1 || kind == 4 || kind == 5 ||
+        (kind == 11 && include_deleted)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+// Sets the budget of held records for one test, and restores the default.
+class HeldBudget {
+ public:
+  explicit HeldBudget(std::optional<size_t> bytes) {
+    Mft::SetMaxHeldRecordBytesForTests(bytes);
+  }
+
+  HeldBudget(const HeldBudget&) = delete;
+  HeldBudget(HeldBudget&&) = delete;
+  HeldBudget& operator=(const HeldBudget&) = delete;
+  HeldBudget& operator=(HeldBudget&&) = delete;
+
+  ~HeldBudget() { Mft::SetMaxHeldRecordBytesForTests(std::nullopt); }
+};
+
+// Sets the length of a batch of the second pass for one test, and restores the
+// default.
+class WaitingBatch {
+ public:
+  explicit WaitingBatch(std::optional<size_t> records) {
+    Mft::SetWaitingBatchRecordsForTests(records);
+  }
+
+  WaitingBatch(const WaitingBatch&) = delete;
+  WaitingBatch(WaitingBatch&&) = delete;
+  WaitingBatch& operator=(const WaitingBatch&) = delete;
+  WaitingBatch& operator=(WaitingBatch&&) = delete;
+
+  ~WaitingBatch() { Mft::SetWaitingBatchRecordsForTests(std::nullopt); }
+};
+
+// Reads of a scan: the calls that read, the hints left out.
+size_t ReadCount(const ScanResult& scan) {
+  return static_cast<size_t>(std::ranges::count_if(
+      scan.calls, [](const Tests::CountingDiskReader::Call& call) {
+        return call.kind == Tests::CountingDiskReader::Kind::Read;
+      }));
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -156,6 +219,98 @@ TEMPLATE_TEST_CASE_SIG(
       ScanWithThreads<S>(image, OptionsOf(include_deleted, recover), 4);
 
   CHECK(many.parsed_by_threads > 0);
+  // The second pass has one waiting record, when the scan shows it. Threads
+  // parse it unless its list is non-resident.
+  const bool waits = listed == Tests::FakeListedState::Live || include_deleted;
+  const bool resident = residency == Tests::FakeListResidency::Resident;
+  CHECK(one.waiting_by_threads == 0);
+  CHECK(many.waiting_by_threads == (waits && resident ? 1U : 0U));
+  CheckSameScan(one, many);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "The second pass of a scan gives the same tree, log and reads whatever "
+    "the thread count",
+    "[mft][tree][threads]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const bool include_deleted = GENERATE(false, true);
+  const bool recover = GENERATE(false, true);
+  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
+      list_record_count, list_fragment_clusters);
+
+  const ScanResult one =
+      ScanWithThreads<S>(image, OptionsOf(include_deleted, recover), 1);
+  CHECK(one.waiting_by_threads == 0);
+  CHECK_FALSE(one.tree.empty());
+
+  for (const unsigned threads : {2U, 3U, 8U}) {
+    INFO("threads " << threads);
+    const ScanResult many =
+        ScanWithThreads<S>(image, OptionsOf(include_deleted, recover), threads);
+    CHECK(many.waiting_by_threads == ThreadParsableWaiting(include_deleted));
+    CheckSameScan(one, many);
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "The second pass of a scan that holds few records gives the same tree, log "
+    "and reads whatever the thread count",
+    "[mft][tree][threads]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const bool include_deleted = GENERATE(false, true);
+  const bool recover = GENERATE(false, true);
+  // None, then a few records: base records and extension records go unheld,
+  // and the second pass reads them. A record is 1024 bytes in the fixture.
+  const size_t budget =
+      GENERATE(size_t{0}, size_t{16} << 10, size_t{256} << 10);
+  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
+      list_record_count, list_fragment_clusters);
+  const HeldBudget held(budget);
+
+  const ScanResult one =
+      ScanWithThreads<S>(image, OptionsOf(include_deleted, recover), 1);
+  const ScanResult many =
+      ScanWithThreads<S>(image, OptionsOf(include_deleted, recover), 4);
+
+  INFO("budget " << budget);
+  CHECK(many.waiting_by_threads <= ThreadParsableWaiting(include_deleted));
+  if (budget == 0) {
+    CHECK(many.waiting_by_threads == 0);
+  }
+  if (budget > 0) {
+    CHECK(many.waiting_by_threads > 0);
+  }
+  CheckSameScan(one, many);
+
+  // The second pass reads what the first did not hold: more reads than a scan
+  // that holds every record does. A FullCache volume already read those blocks.
+  if constexpr (S == Cache::Strategy::NoCache) {
+    const HeldBudget everything(std::nullopt);
+    CHECK(ReadCount(one) > ReadCount(ScanWithThreads<S>(
+                               image, OptionsOf(include_deleted, recover), 1)));
+  }
+}
+
+TEST_CASE(
+    "The second pass of a scan that parses a batch at a time gives the same "
+    "tree, log and reads whatever the length of a batch",
+    "[mft][tree][threads]") {
+  const bool include_deleted = GENERATE(false, true);
+  const bool recover = GENERATE(false, true);
+  // A batch of one record, of a chunk and a bit, and the default.
+  const std::optional<size_t> records =
+      GENERATE(std::optional<size_t>{0}, std::optional<size_t>{70},
+               std::optional<size_t>{});
+  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
+      list_record_count, list_fragment_clusters);
+  const WaitingBatch batch(records);
+
+  const ScanResult one = ScanWithThreads<Cache::Strategy::NoCache>(
+      image, OptionsOf(include_deleted, recover), 1);
+  const ScanResult many = ScanWithThreads<Cache::Strategy::NoCache>(
+      image, OptionsOf(include_deleted, recover), 3);
+
+  CHECK(many.waiting_by_threads == ThreadParsableWaiting(include_deleted));
   CheckSameScan(one, many);
 }
 
@@ -278,8 +433,10 @@ namespace {
 class AutoLimits {
  public:
   AutoLimits(ULONGLONG min_slots, ULONGLONG probe_slots,
-             std::optional<bool> verdict = std::nullopt) {
-    Mft::SetAutoThreadLimitsForTests(min_slots, probe_slots, verdict);
+             std::optional<bool> verdict = std::nullopt,
+             std::optional<size_t> min_waiting = std::nullopt) {
+    Mft::SetAutoThreadLimitsForTests(min_slots, probe_slots, verdict,
+                                     min_waiting);
   }
 
   AutoLimits(const AutoLimits&) = delete;
@@ -369,6 +526,28 @@ TEST_CASE(
       busy_record_count, busy_fragment_clusters);
 
   CHECK(AutomaticScanParsedByThreads<Tests::MemoryDiskReader>(image) == 0);
+}
+
+TEST_CASE(
+    "The second pass of a scan that chooses its threads uses them from the "
+    "waiting count it asks for, whatever the probe says",
+    "[mft][tree][threads]") {
+  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
+      list_record_count, list_fragment_clusters);
+  const auto scan = [&image](size_t min_waiting) {
+    // The probe says no: the first pass parses on this thread alone.
+    const AutoLimits limits(1000, 1000, false, min_waiting);
+    return ScanWithThreads<Cache::Strategy::NoCache>(image,
+                                                     OptionsOf(true, true), 0);
+  };
+
+  const ScanResult threaded = scan(100);
+  CHECK(threaded.parsed_by_threads == 0);
+  CHECK(threaded.waiting_by_threads == ThreadParsableWaiting(true));
+  CHECK(scan(1000000).waiting_by_threads == 0);
+  CheckSameScan(ScanWithThreads<Cache::Strategy::NoCache>(
+                    image, OptionsOf(true, true), 1),
+                threaded);
 }
 
 TEST_CASE("A scan that chooses its threads is the scan of one thread",

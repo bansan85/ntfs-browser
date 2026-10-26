@@ -36,15 +36,29 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t
     SlotsParsedByThreadsForTests(bool reset = false) noexcept;
 
+// Test hook: how many waiting base records the second pass of the scans of this
+// thread took from the threads that parsed them, since the last call of this
+// function with true. A scan with one thread takes none.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t
+    WaitingParsedByThreadsForTests(bool reset = false) noexcept;
+
+// Test hook: how many waiting base records the threads parse in one batch of
+// the second pass. A test lowers it to make a scan meet several batches. 0
+// would make no progress: it is read as 1. nullopt restores the default.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    SetWaitingBatchRecordsForTests(std::optional<size_t> records);
+
 // Test hook: the volume size and the probe length of a scan that chooses its
-// own thread count, in slots, and what the probe decides. A test lowers the
+// own thread count, in slots, what the probe decides, and the count of waiting
+// base records from which its second pass takes threads. A test lowers the
 // sizes to make a small image take the choice, and sets verdict to settle it,
 // since the measure of a probe on a small image is only noise. nullopt
-// restores the default of each: the sizes of a system volume, and the measure.
-NTFS_BROWSER_EXPORT_TESTS_ONLY void
-    SetAutoThreadLimitsForTests(std::optional<ULONGLONG> min_slots,
-                                std::optional<ULONGLONG> probe_slots,
-                                std::optional<bool> verdict = std::nullopt);
+// restores the default of each: the sizes of a system volume, the measure, and
+// the count of a system volume.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void SetAutoThreadLimitsForTests(
+    std::optional<ULONGLONG> min_slots, std::optional<ULONGLONG> probe_slots,
+    std::optional<bool> verdict = std::nullopt,
+    std::optional<size_t> min_waiting = std::nullopt);
 
 // Whether threads would speed a scan up, given what its first windows took:
 // load_seconds spent loading windows, out of elapsed_seconds in all. A scan
