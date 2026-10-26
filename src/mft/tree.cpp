@@ -138,6 +138,20 @@ constexpr size_t default_announce_restart_interval = 1024;
 // The interval a test asked for. nullopt means the default.
 std::optional<size_t> announce_restart_interval_override;
 
+// Extents of $J the scan keeps at most, to announce them: the journal of a
+// volume that was never trimmed can have many, and the loader reads them all.
+// A longer list is cut, and the rest of $J is read without a hint.
+constexpr size_t max_journal_extents = 4096;
+
+// Bytes of one range announced for $J. The reader takes no longer range than
+// 16 MiB, and the loader reads 1 MiB at a time: 4 MiB keeps the reader's reads
+// as large as an $MFT window.
+constexpr ULONGLONG journal_piece_bytes = ULONGLONG{4} * 1024 * 1024;
+
+// Ranges announced for $J at most: 1 GiB, far more than the default journal of
+// 32 MiB. The reader keeps 1024 ranges and drops a hint past them.
+constexpr size_t max_journal_pieces = 256;
+
 // Extension records the second pass reads at once for one waiting base record,
 // at most: 4096 are 4 MiB. The others are read from the disk, one at a time,
 // when the record asks for them.
@@ -285,7 +299,7 @@ void AddNames(const Io::FileRecord<S>& file_record,
 // The counters one record slot adds to the scan's statistics. A slot parsed
 // away from the thread that merges the scan keeps them apart, and they join the
 // statistics when the scan reaches the slot: a slot that is parsed twice is
-// counted once.
+// counted once. The one slot that holds $UsnJrnl also tells where its $J lies.
 struct RecordCounts {
   ULONGLONG unreadable{0};
   ULONGLONG damaged{0};
@@ -294,6 +308,9 @@ struct RecordCounts {
   ULONGLONG in_use{0};
   ULONGLONG reused_extensions{0};
   ULONGLONG carved_names{0};
+  // The clusters of the $J stream, for the loader of the journal to read them
+  // ahead. Empty for every other slot.
+  std::vector<Alloc::Extent> journal_extents;
 };
 
 // Adds counts to stats.
@@ -949,6 +966,33 @@ enum class SlotKind : BYTE {
   Base         // A base record, kept if its attributes allow it.
 };
 
+// The clusters of $J when file_record is the live $UsnJrnl of $Extend, which
+// the loader of the journal reads, and only when it will: the volume recovers.
+// Empty otherwise. Reads nothing: the run list is in the record.
+template <Cache::Strategy S>
+std::vector<Alloc::Extent>
+    JournalExtentsOf(const Io::FileRecord<S>& file_record,
+                     const NtfsVolume<S>& volume,
+                     const Mft::MftTree::Entry& entry) {
+  const auto in_extend = [](const Mft::MftTree::Name& name) {
+    return name.parent_record == static_cast<ULONGLONG>(Mft::Idx::Extend) &&
+           name.name == L"$UsnJrnl";
+  };
+  if (!volume.GetOptions().recover_errors || !entry.in_use ||
+      std::ranges::none_of(entry.names, in_extend)) {
+    return {};
+  }
+  const Attr::AttrBase<S>* const stream = file_record.FindStream(L"$J");
+  if (stream == nullptr) {
+    return {};
+  }
+  std::vector<Alloc::Extent> extents = stream->GetExtents().extents;
+  if (extents.size() > max_journal_extents) {
+    extents.resize(max_journal_extents);
+  }
+  return extents;
+}
+
 // Classifies the record slot file_record holds, and counts it in counts.
 // parsed is the verdict of the header parse. A record with a failed update
 // sequence check is damaged in both modes: strict drops it as unreadable,
@@ -1002,6 +1046,7 @@ bool ReadBaseEntry(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
     }
   }
   AddCarvedNames(file_record, entry, counts);
+  counts.journal_extents = JournalExtentsOf(file_record, volume, entry);
   return true;
 }
 
@@ -1697,6 +1742,11 @@ class SlotScan {
     held_.Finish();
   }
 
+  // The clusters of $J, when the scan met the $UsnJrnl record: empty otherwise.
+  [[nodiscard]] std::vector<Alloc::Extent> TakeJournalExtents() {
+    return std::move(journal_extents_);
+  }
+
   // Parses the base records that wait for their extension records, and drops
   // the entries the scan does not keep.
   void SecondPass() {
@@ -1730,6 +1780,14 @@ class SlotScan {
   }
 
  private:
+  // Adds the counters of one slot to the statistics, and keeps where $J lies.
+  void Merge(const RecordCounts& counts) {
+    AddCounts(*stats_, counts);
+    if (!counts.journal_extents.empty()) {
+      journal_extents_ = counts.journal_extents;
+    }
+  }
+
   // Whether the threads parse the count waiting records of the second pass. An
   // explicit thread count always has them. A count left to the scan has them
   // from min_auto_threaded_waiting records on, whatever the first pass found:
@@ -1760,7 +1818,7 @@ class SlotScan {
     const bool kept =
         parsed && ReadBaseEntry(file_record_, *volume_, waiting.record,
                                 waiting.header_damaged, counts, entry);
-    AddCounts(*stats_, counts);
+    Merge(counts);
     unheld_.Clear();
     if (kept && annotate_) {
       resolver_.Add(waiting.entry_index, ComputeDataNote(file_record_));
@@ -1801,7 +1859,7 @@ class SlotScan {
     }
     const Log::Detail::CapturedLog& log = waiting_parser_->LogOf(index);
     log.Replay(outcome.log_begin, outcome.log_end);
-    AddCounts(*stats_, outcome.counts);
+    Merge(outcome.counts);
     if (outcome.kept) {
       entries_->at(waiting.entry_index) = std::move(outcome.entry);
       if (annotate_) {
@@ -1920,7 +1978,7 @@ class SlotScan {
       parsed_here_ = false;
     }
     parser_->LogOf(record).Replay(outcome.log_begin, outcome.log_end);
-    AddCounts(*stats_, outcome.counts);
+    Merge(outcome.counts);
     if (outcome.kind != SlotKind::Unreadable) {
       bases_.Note(record, outcome.base_reference);
     }
@@ -1987,7 +2045,7 @@ class SlotScan {
     ReplayPendingRelease();
     RecordCounts counts;
     ParseHereInto(record, counts);
-    AddCounts(*stats_, counts);
+    Merge(counts);
   }
 
   // The body of ParseHere(): counts receives what the slot adds to the
@@ -2046,6 +2104,7 @@ class SlotScan {
   HeldRecords held_;
   SlotBases bases_;
   UnheldExtensions<S> unheld_;
+  std::vector<Alloc::Extent> journal_extents_;
   Io::FileRecord<S> file_record_;
   DataStateResolver<S> resolver_;
   // Reads $MFT in big blocks, not record by record, and only the used ones.
@@ -2172,10 +2231,17 @@ class MftTree::Impl {
   template <Cache::Strategy S>
   void Scan(const NtfsVolume<S>& volume,
             const Mft::MftTree::ScanOptions& options);
+  // Returns the clusters of $J when the scan met the $UsnJrnl record.
   template <Cache::Strategy S>
-  void ReadSlots(const NtfsVolume<S>& volume,
-                 const Mft::MftTree::ScanOptions& options,
-                 const std::optional<std::vector<BYTE>>& bitmap, bool annotate);
+  std::vector<Alloc::Extent>
+      ReadSlots(const NtfsVolume<S>& volume,
+                const Mft::MftTree::ScanOptions& options,
+                const std::optional<std::vector<BYTE>>& bitmap, bool annotate);
+  // Announces the clusters of $J to the reader, in the order the loader of the
+  // journal reads them. Returns whether it announced any.
+  template <Cache::Strategy S>
+  bool AnnounceJournal(const NtfsVolume<S>& volume,
+                       const std::vector<Alloc::Extent>& extents) const;
   void Link();
   // Files every entry under the parents its valid names give.
   void FileChildren();
@@ -2183,8 +2249,9 @@ class MftTree::Impl {
   void IndexEntry(ULONGLONG record, size_t index);
   // Index in entries of record, or nothing when the scan did not keep it.
   [[nodiscard]] std::optional<size_t> EntryIndex(ULONGLONG record) const;
+  // announced says whether the scan announced the journal to the reader.
   template <Cache::Strategy S>
-  void ApplyJournalIfComplete(const NtfsVolume<S>& volume);
+  void ApplyJournalIfComplete(const NtfsVolume<S>& volume, bool announced);
   void LogScanSummary(bool annotated) const;
   // Gives each entry the journal names its UsnInfo, and, with include_deleted,
   // lists the files it names that no entry accounts for.
@@ -2263,12 +2330,42 @@ Mft::MftTree::~MftTree() = default;
 // Reads the record slots of volume's $MFT into entries, in record order, in the
 // two passes of SlotScan.
 template <Cache::Strategy S>
-void Mft::MftTree::Impl::ReadSlots(
+std::vector<Alloc::Extent> Mft::MftTree::Impl::ReadSlots(
     const NtfsVolume<S>& volume, const Mft::MftTree::ScanOptions& options,
     const std::optional<std::vector<BYTE>>& bitmap, bool annotate) {
   SlotScan<S> scan(volume, options, bitmap, annotate, entries, stats);
   scan.FirstPass();
   scan.SecondPass();
+  return scan.TakeJournalExtents();
+}
+
+template <Cache::Strategy S>
+bool Mft::MftTree::Impl::AnnounceJournal(
+    const NtfsVolume<S>& volume,
+    const std::vector<Alloc::Extent>& extents) const {
+  const ULONGLONG cluster_size = volume.GetClusterSize();
+  // A byte address MUST fit a LONGLONG, as in ReadClusters().
+  const ULONGLONG max_lcn =
+      cluster_size == 0
+          ? 0
+          : static_cast<ULONGLONG>((std::numeric_limits<LONGLONG>::max)()) /
+                cluster_size;
+  size_t pieces = 0;
+  for (const Alloc::Extent& extent : extents) {
+    if (extent.lcn > max_lcn || extent.clusters > max_lcn - extent.lcn) {
+      return pieces != 0;
+    }
+    const ULONGLONG end = (extent.lcn + extent.clusters) * cluster_size;
+    for (ULONGLONG at = extent.lcn * cluster_size; at < end;
+         at += journal_piece_bytes) {
+      if (pieces == max_journal_pieces) {
+        return true;
+      }
+      pieces++;
+      volume.Prefetch(at, (std::min)(journal_piece_bytes, end - at));
+    }
+  }
+  return pieces != 0;
 }
 
 // Reads the record slots of volume's $MFT, keeps each base record's entry,
@@ -2295,7 +2392,8 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   // the bitmap: without both, the scan reads what it always did.
   const bool annotate =
       volume.GetOptions().include_deleted && options.annotate_data_state;
-  ReadSlots(volume, options, bitmap, annotate);
+  const std::vector<Alloc::Extent> journal_extents =
+      ReadSlots(volume, options, bitmap, annotate);
   for (size_t index = 0; index < entries.size(); index++) {
     // index < entries.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -2306,9 +2404,13 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
     options.progress(total, total);
   }
 
+  // The scan's own hints are withdrawn by now. The reader reads the journal
+  // while the tree is linked, and the loader finds its bytes ready.
+  const bool journal_announced =
+      stats.complete && AnnounceJournal(volume, journal_extents);
   LogScanSummary(annotate);
   Link();
-  ApplyJournalIfComplete(volume);
+  ApplyJournalIfComplete(volume, journal_announced);
 }
 
 // Logs the counters of the scan. The data state counters only mean something
@@ -2331,13 +2433,18 @@ void Mft::MftTree::Impl::LogScanSummary(bool annotated) const {
 // Annotates the linked entries from the volume's change journal, when
 // recovering and when the scan ran to its end.
 template <Cache::Strategy S>
-void Mft::MftTree::Impl::ApplyJournalIfComplete(const NtfsVolume<S>& volume) {
+void Mft::MftTree::Impl::ApplyJournalIfComplete(const NtfsVolume<S>& volume,
+                                                bool announced) {
   // A scan that progress() stopped holds only some records: a file would look
   // lost to the journal that is merely not read yet.
   if (!volume.GetOptions().recover_errors || !stats.complete) {
     return;
   }
   const Usn::Journal* journal = volume.GetUsnJournal();
+  // What the loader did not read of the announced journal is read for nothing.
+  if (announced) {
+    volume.CancelPrefetch();
+  }
   if (journal == nullptr) {
     return;
   }

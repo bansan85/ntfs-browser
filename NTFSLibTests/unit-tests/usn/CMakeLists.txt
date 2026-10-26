@@ -4,6 +4,7 @@ target_sources(
     "usn-benchmark-tests.cpp"
     "usn-cap-tests.cpp"
     "usn-failure-cache-tests.cpp"
+    "usn-journal-hint-tests.cpp"
     "usn-journal-load-tests.cpp"
     "usn-journal-record.h"
     "usn-mft-tree-tests.cpp"
