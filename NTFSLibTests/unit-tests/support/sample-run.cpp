@@ -5,6 +5,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
@@ -40,7 +41,15 @@ SampleRun RunSample(const Fs::path& exe,
   const Fs::path out_path = TempStreamPath("out");
   const Fs::path err_path = TempStreamPath("err");
   SampleRun run;
-  run.exit_code = RunProcessToFiles(exe, args, out_path, err_path);
+  try {
+    run.exit_code = RunProcessToFiles(exe, args, out_path, err_path);
+  } catch (...) {
+    // A child killed for running too long may have written gigabytes.
+    std::error_code ignored;
+    Fs::remove(out_path, ignored);
+    Fs::remove(err_path, ignored);
+    throw;
+  }
   run.out = ReadText(out_path);
   run.err = ReadText(err_path);
   Fs::remove(out_path);

@@ -1,5 +1,6 @@
 #include "child-process.h"
 
+#include <chrono>
 #include <cstdlib>
 #include <stdexcept>
 
@@ -10,7 +11,9 @@
 #ifdef _WIN32
   #include <ntfs-browser/win-types.h>
 #else
+  #include <csignal>
   #include <cstring>
+  #include <thread>
 
   #include <fcntl.h>
   #include <spawn.h>
@@ -32,6 +35,11 @@ namespace {
 
 // Permissions of a redirect file the child's output is created with: rw-r--r--.
 constexpr unsigned redirect_file_mode = 0644;
+
+// How long a child may run before it is killed and the run fails. A hung
+// child would otherwise hang ctest. A minute is far above what a test child
+// needs, so a loaded machine does not trip it.
+constexpr std::chrono::seconds child_time_limit{60};
 
 #ifdef _WIN32
 
@@ -100,14 +108,26 @@ bool StartChild(const Fs::path& exe, const std::vector<std::wstring>& args,
 }
 
 // Waits for the child to exit, closes its handles, and returns its exit code.
+// Kills the child and throws when it outlasts child_time_limit.
 int WaitForChild(PROCESS_INFORMATION& pi) {
-  WaitForSingleObject(pi.hProcess, INFINITE);
+  const DWORD limit_ms = static_cast<DWORD>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(child_time_limit)
+          .count());
+  const bool exited =
+      WaitForSingleObject(pi.hProcess, limit_ms) == WAIT_OBJECT_0;
+  if (!exited) {
+    TerminateProcess(pi.hProcess, 1);
+    WaitForSingleObject(pi.hProcess, INFINITE);
+  }
 
   DWORD exit_code = 0;
   GetExitCodeProcess(pi.hProcess, &exit_code);
 
   CloseHandle(pi.hProcess);
   CloseHandle(pi.hThread);
+  if (!exited) {
+    throw std::runtime_error("child process ran past its time limit");
+  }
   return static_cast<int>(exit_code);
 }
 
@@ -134,6 +154,10 @@ std::vector<char*> ToArgv(std::vector<std::string>& narrow_args) {
   return argv;
 }
 
+// How often WaitForChild() looks whether the child has exited: short enough
+// not to slow a test that spawns many children.
+constexpr std::chrono::milliseconds child_poll_interval{2};
+
 // Starts exe with args, its descriptors set up by actions. Returns
 // posix_spawn's error number, zero on success, and stores the child's pid in
 // pid.
@@ -146,10 +170,19 @@ int StartChild(const Fs::path& exe, const std::vector<std::wstring>& args,
 }
 
 // Waits for the child to exit, and returns its exit code, or -1 if a signal
-// ended it instead.
+// ended it instead. Kills the child and throws when it outlasts
+// child_time_limit.
 int WaitForChild(pid_t pid) {
+  const auto deadline = std::chrono::steady_clock::now() + child_time_limit;
   int status = 0;
-  waitpid(pid, &status, 0);
+  while (waitpid(pid, &status, WNOHANG) == 0) {
+    if (std::chrono::steady_clock::now() >= deadline) {
+      kill(pid, SIGKILL);
+      waitpid(pid, &status, 0);
+      throw std::runtime_error("child process ran past its time limit");
+    }
+    std::this_thread::sleep_for(child_poll_interval);
+  }
   return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
