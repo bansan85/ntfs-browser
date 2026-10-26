@@ -17,6 +17,7 @@
 
 #include "catch2/catch_message.hpp"
 #include "catch2/matchers/catch_matchers.hpp"
+#include "cluster-account-support.h"
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "local-time.h"
@@ -479,4 +480,75 @@ TEST_CASE("NtfsMftList usage names the --threads option",
 
   CHECK_THAT(run.out, ContainsSubstring("[--threads=N]"));
   CHECK_THAT(run.out, ContainsSubstring("--threads=N   threads that parse"));
+}
+
+namespace {
+
+// The tree image with a freed file whose cluster 42 a live file took, and
+// another freed file whose clusters hold zeros.
+std::vector<BYTE> ImageWithClusters() {
+  namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
+  Support::Volume volume;
+  volume.Put(22, Support::Freed(100, Support::Stream({{40, 4}}, 4096)));
+  volume.Put(17, Support::Live(Support::Stream({{42, 1}}, 1024)));
+  volume.allocated = {
+      NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun{.lcn = 42, .clusters = 1}};
+  return volume.Build();
+}
+
+}  // namespace
+
+TEST_CASE("NtfsMftList --clusters counts the clusters of the freed files",
+          "[mft][sample][cluster]") {
+  const TempTreeImage image(ImageWithClusters());
+  const SampleRun plain = RunSample({L"--deleted", image.path.wstring()});
+  const SampleRun counted =
+      RunSample({L"--deleted", L"--clusters", image.path.wstring()});
+
+  CHECK(counted.exit_code == 0);
+  CHECK_THAT(counted.out, ContainsSubstring(
+                              "# clusters: reallocated-written 1, intact 3\n"));
+  CHECK_THAT(counted.out,
+             ContainsSubstring("Clusters of 1 files: reallocated-written 1, "
+                               "intact 3\n"));
+  CHECK_THAT(counted.out, !ContainsSubstring("# stream"));
+  CHECK_THAT(plain.out, !ContainsSubstring("# clusters"));
+  CHECK_THAT(plain.out, !ContainsSubstring("Clusters of"));
+}
+
+TEST_CASE("NtfsMftList --clusters=map gives the byte ranges in file order",
+          "[mft][sample][cluster]") {
+  const TempTreeImage image(ImageWithClusters());
+  const SampleRun run =
+      RunSample({L"--deleted", L"--clusters=map", image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK_THAT(run.out, ContainsSubstring("# stream (unnamed): 0..2048 intact "
+                                        "2048..3072 reallocated-written "
+                                        "3072..4096 intact\n"));
+}
+
+TEST_CASE("NtfsMftList --verify-data reads the clusters presumed intact",
+          "[mft][sample][cluster]") {
+  const TempTreeImage image(ImageWithClusters());
+  const SampleRun sampled =
+      RunSample({L"--deleted", L"--verify-data", image.path.wstring()});
+  const SampleRun full =
+      RunSample({L"--deleted", L"--verify-data=full", image.path.wstring()});
+
+  CHECK(sampled.exit_code == 0);
+  // The image is all zeros: the sample reads the first cluster, the full check
+  // all three the file still holds.
+  CHECK_THAT(sampled.out, ContainsSubstring("# clusters: reallocated-written "
+                                            "1, intact 2, zeroed 1\n"));
+  CHECK_THAT(full.out, ContainsSubstring("# clusters: reallocated-written 1, "
+                                         "zeroed 3\n"));
+}
+
+TEST_CASE("NtfsMftList rejects a malformed cluster option",
+          "[mft][sample][cluster]") {
+  const TempTreeImage image(ImageWithClusters());
+  const SampleRun run = RunSample({L"--clusters=all", image.path.wstring()});
+
+  CHECK(run.exit_code == sample_failure_exit_code);
 }

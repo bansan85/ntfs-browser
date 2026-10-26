@@ -2,7 +2,9 @@
 // from each record's own $FILE_NAME parent reference, not from directory
 // indexes, so files of a directory whose index is lost still show up. With
 // --recover, the change journal ($UsnJrnl) adds what it knows of each file, and
-// lists the files only it names.
+// lists the files only it names. With --clusters, each freed file, and each
+// file that is damaged or salvaged, gets a line that counts its clusters by
+// condition: intact, rewritten by another file, and so on.
 
 #include <ntfs-browser/win-types.h>
 
@@ -19,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
@@ -60,6 +63,15 @@ constexpr std::wstring_view deleted_option = L"--deleted";
 constexpr std::wstring_view recover_option = L"--recover";
 // Command-line prefix of the switch that sets how many threads scan $MFT.
 constexpr std::wstring_view threads_option = L"--threads=";
+// Command-line switch that counts the clusters of the freed and damaged files,
+// and its value that also lists, for each stream, where the damage lies.
+constexpr std::wstring_view clusters_option = L"--clusters";
+constexpr std::wstring_view clusters_map_option = L"--clusters=map";
+// Command-line switch that reads the clusters presumed intact, to see whether
+// they hold zeros or metadata, and its values: one cluster per stream, or all.
+constexpr std::wstring_view verify_option = L"--verify-data";
+constexpr std::wstring_view verify_sample_option = L"--verify-data=sample";
+constexpr std::wstring_view verify_full_option = L"--verify-data=full";
 
 // Width of every column before the path, separators included, so an extra
 // hard link's "=" line lines up under the path it follows.
@@ -81,7 +93,7 @@ constexpr ULONGLONG root_record = static_cast<ULONGLONG>(Mft::Idx::Root);
 void Usage() {
   printf(
       "Usage: ntfsmftlist [--log=...] [--deleted] [--recover] [--threads=N] "
-      "<volume>\n");
+      "[--clusters[=map]] [--verify-data[=sample|full]] <volume>\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("  --deleted     also list the records NTFS freed\n");
   printf(
@@ -95,6 +107,26 @@ void Usage() {
       "                what it knows of a file, and with --deleted the "
       "files\n");
   printf("                only it names follow the listing\n");
+  printf(
+      "  --clusters    count the clusters of each freed file (--deleted) and "
+      "of\n");
+  printf(
+      "                each damaged one (--recover) by condition: a # line "
+      "follows\n");
+  printf(
+      "                it, and the totals close the listing. =map adds, per "
+      "stream,\n");
+  printf(
+      "                the byte ranges in file order with their condition\n");
+  printf(
+      "  --verify-data read the clusters presumed intact, and tell zeros and "
+      "NTFS\n");
+  printf(
+      "                metadata from data: =sample reads the first of each "
+      "stream\n");
+  printf(
+      "                (the default), =full reads them all. Implies "
+      "--clusters\n");
 #ifdef _WIN32
   printf("  <volume>      a drive letter (c:), or a device or image path\n");
 #else
@@ -417,11 +449,45 @@ void PrintJournalLine(
   out.PrintLine(" ({} records)", info.record_count);
 }
 
+// The non-zero counters of tally, as "name count, name count".
+std::string TallyText(const Alloc::ClusterTally& tally) {
+  std::string text;
+  for (size_t i = 0; i < Alloc::cluster_condition_count; i++) {
+    const auto condition = static_cast<Alloc::ClusterCondition>(i);
+    if (tally.Count(condition) == 0) {
+      continue;
+    }
+    text += text.empty() ? "" : ", ";
+    text += Alloc::ConditionName(condition);
+    text += " " + std::to_string(tally.Count(condition));
+  }
+  return text.empty() ? "-" : text;
+}
+
+// Prints what the scan counted of an entry's clusters, and with the map, the
+// byte ranges of each stream in file order.
+void PrintClusterLines(Output& out, const Alloc::ClusterAccount& account,
+                       ULONGLONG cluster_size) {
+  out.PrintLine("{:{}}# clusters: {}", "", path_column,
+                TallyText(account.tally));
+  for (const Alloc::StreamClusterMap& map : account.streams) {
+    out.Print("{:{}}# stream {}:", "", path_column,
+              map.name.empty() ? std::string("(unnamed)") : ToUtf8(map.name));
+    for (const Alloc::StreamByteRange& range :
+         Alloc::ToByteRanges(map, cluster_size)) {
+      out.Print(" {}..{} {}", range.offset, range.offset + range.length,
+                Alloc::ConditionName(range.condition));
+    }
+    out.EndLine();
+  }
+}
+
 // Prints one listing line for entry, then one line per other hard link, then
-// what the journal knows of it. path is scratch space, reused from one entry to
-// the next.
+// what the journal knows of it, then what is known of its clusters. path is
+// scratch space, reused from one entry to the next.
 void PrintEntry(Output& out, DisplayPaths& paths,
                 const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
+                const Alloc::ClusterAccount* account, ULONGLONG cluster_size,
                 std::string& path) {
   paths.Display(entry, std::nullopt, path);
   PrintMainLine(out, entry, path);
@@ -431,6 +497,9 @@ void PrintEntry(Output& out, DisplayPaths& paths,
   }
   if (entry.usn) {
     PrintJournalLine(out, *entry.usn);
+  }
+  if (account != nullptr) {
+    PrintClusterLines(out, *account, cluster_size);
   }
 }
 
@@ -519,6 +588,8 @@ struct Arguments {
   VolumeOptions volume_options;
   // Threads that scan $MFT, 0 for the library's choice.
   unsigned threads = 0;
+  Alloc::ClusterAccountLevel clusters = Alloc::ClusterAccountLevel::Off;
+  Alloc::DataCheckMode verify = Alloc::DataCheckMode::Off;
   // Stays null until the command line names a volume.
   const wchar_t* target = nullptr;
 };
@@ -562,6 +633,18 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
     }
     if (arg == recover_option) {
       args.volume_options.recover_errors = true;
+      continue;
+    }
+    if (arg == clusters_option || arg == clusters_map_option) {
+      args.clusters = arg == clusters_map_option
+                          ? Alloc::ClusterAccountLevel::CountsAndMap
+                          : Alloc::ClusterAccountLevel::Counts;
+      continue;
+    }
+    if (arg == verify_option || arg == verify_sample_option ||
+        arg == verify_full_option) {
+      args.verify = arg == verify_full_option ? Alloc::DataCheckMode::Full
+                                              : Alloc::DataCheckMode::Sample;
       continue;
     }
     if (arg.starts_with(threads_option)) {
@@ -612,9 +695,11 @@ class ScanProgress {
   bool drawn_{false};
 };
 
-// Prints the scan totals that close the listing.
+// Prints the scan totals that close the listing. clusters says the scan
+// counted clusters.
 void PrintStats(Output& out,
-                const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats) {
+                const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats,
+                bool clusters) {
   out.EndLine();
   out.PrintLine(
       "Record slots: {}, in use: {}, deleted: {} ({} with an overwritten "
@@ -629,6 +714,10 @@ void PrintStats(Output& out,
         "damaged{}",
         stats.usn_records, stats.usn_annotated, stats.usn_journal_only,
         stats.usn_damaged, stats.usn_truncated ? " (truncated)" : "");
+  }
+  if (clusters) {
+    out.PrintLine("Clusters of {} files: {}", stats.cluster_accounts,
+                  TallyText(stats.clusters));
   }
 }
 
@@ -653,6 +742,8 @@ int ListVolume(const Arguments& args) {
   NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanOptions scan_options;
   scan_options.progress = ScanProgress{};
   scan_options.threads = args.threads;
+  scan_options.cluster_account = args.clusters;
+  scan_options.verify_data = args.verify;
   // Never freed: the process ends with the listing, and freeing millions of
   // entries one by one would take seconds of it. A static keeps it reachable.
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
@@ -664,12 +755,17 @@ int ListVolume(const Arguments& args) {
                 "Seq", "", "Size", "Last write", "Attrib", "Ln", "Path");
   DisplayPaths paths(tree);
   std::string path;
+  const ULONGLONG cluster_size = volume->GetClusterSize();
+  const bool counted = args.clusters != Alloc::ClusterAccountLevel::Off ||
+                       args.verify != Alloc::DataCheckMode::Off;
   for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry :
        tree.Entries()) {
-    PrintEntry(out, paths, entry, path);
+    PrintEntry(out, paths, entry,
+               counted ? tree.ClusterAccountOf(entry.record) : nullptr,
+               cluster_size, path);
   }
   PrintJournalOnly(out, tree);
-  PrintStats(out, tree.Stats());
+  PrintStats(out, tree.Stats(), counted);
 
   return 0;
 }
