@@ -99,13 +99,21 @@ ClusterState ClusterBitmap::RangeState(ULONGLONG lcn, ULONGLONG clusters) {
 // Reads the window at index unless it is the one held. A failed or short read
 // keeps what came back, and the window is remembered so it is not read again.
 const ClusterBitmap::Window* ClusterBitmap::Load(ULONGLONG index) {
+  // A kept window answers whatever happened when it was read: a short one
+  // keeps the bytes it returned.
+  if (const auto kept = retained_.find(index); kept != retained_.end()) {
+    return &kept->second;
+  }
   if (have_window_ && window_.index == index) {
     return &window_;
   }
   if (failed_.contains(index) || failed_.size() >= max_failed_windows) {
     return nullptr;
   }
+  return ReadWindow(index);
+}
 
+const ClusterBitmap::Window* ClusterBitmap::ReadWindow(ULONGLONG index) {
   const ULONGLONG offset = index * window_bytes_;
   const auto length = static_cast<size_t>(
       std::min<ULONGLONG>(window_bytes_, data_size_ - offset));
@@ -114,7 +122,7 @@ const ClusterBitmap::Window* ClusterBitmap::Load(ULONGLONG index) {
   window_.bytes.assign(length, 0);
   window_.valid = 0;
   have_window_ = true;
-  peak_bytes_held = std::max(peak_bytes_held, window_.bytes.size());
+  peak_bytes_held = std::max(peak_bytes_held, BytesHeld());
 
   std::optional<ULONGLONG> read;
   try {
@@ -129,7 +137,13 @@ const ClusterBitmap::Window* ClusterBitmap::Load(ULONGLONG index) {
     Log::Debug("Cluster bitmap window {} read {} of {} bytes", index,
                window_.valid, length);
   }
-  return &window_;
+
+  if (retained_bytes_ + length > retain_bytes_) {
+    return &window_;
+  }
+  retained_bytes_ += length;
+  have_window_ = false;
+  return &retained_.emplace(index, std::move(window_)).first->second;
 }
 
 void ClusterBitmap::ApplyBad(Counts& counts, ULONGLONG first, ULONGLONG last,
@@ -183,8 +197,9 @@ ClusterBitmap::Counts ClusterBitmap::Count(ULONGLONG first, ULONGLONG last) {
     // Bits past the end of the bitmap cannot be judged.
     const ULONGLONG known_stop = std::min(stop, data_bits_);
     ULONGLONG judged_stop = bit;
+    const Window* window = nullptr;
     if (bit < known_stop) {
-      const Window* window = Load(index);
+      window = Load(index);
       if (window != nullptr) {
         judged_stop = std::min(known_stop,
                                base + ULONGLONG{window->valid} * bits_per_byte);
@@ -200,7 +215,7 @@ ClusterBitmap::Counts ClusterBitmap::Count(ULONGLONG first, ULONGLONG last) {
     counts.unknown += stop - std::max(bit, judged_stop);
     ApplyBad(
         counts, bit, stop,
-        JudgedBits{judged_stop > bit ? &window_ : nullptr, base, judged_stop});
+        JudgedBits{judged_stop > bit ? window : nullptr, base, judged_stop});
     bit = stop;
 
     // Too many windows failed: the rest of the range is not worth walking.
@@ -296,8 +311,16 @@ ClusterBitmap::Status ClusterBitmap::GetStatus() const noexcept {
           .bad_with_clear_bit = bad_with_clear_bit_};
 }
 
+void ClusterBitmap::SetRetention(size_t max_bytes) {
+  retain_bytes_ = max_bytes;
+  if (max_bytes == 0) {
+    retained_.clear();
+    retained_bytes_ = 0;
+  }
+}
+
 size_t ClusterBitmap::BytesHeld() const noexcept {
-  return have_window_ ? window_.bytes.size() : size_t{0};
+  return retained_bytes_ + (have_window_ ? window_.bytes.size() : size_t{0});
 }
 
 void SetBitmapWindowBytesForTests(size_t bytes) {

@@ -150,9 +150,10 @@ TEST_CASE("a small batch cap gives the same states with more flushes",
 
   CHECK(flushed.states == whole.states);
   CHECK(one_by_one.states == whole.states);
-  // Every window has to be read once, which one sorted batch does at best.
-  CHECK(whole.bitmap_reads <= flushed.bitmap_reads);
-  CHECK(whole.bitmap_reads <= one_by_one.bitmap_reads);
+  // The scan keeps the windows its batches read: a later batch reads no window
+  // twice, so the batches together read what one sorted batch does.
+  CHECK(flushed.bitmap_reads == whole.bitmap_reads);
+  CHECK(one_by_one.bitmap_reads == whole.bitmap_reads);
 }
 
 TEST_CASE("annotation bitmap reads", "[.benchmark]") {

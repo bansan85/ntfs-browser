@@ -194,6 +194,16 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // cannot answer stays Unknown, and does not spoil the others.
   void GetRangeStates(std::span<Alloc::RangeQuery> queries) const;
 
+  // Keeps up to max_bytes of the cluster bitmap in memory, across the calls
+  // that follow, so that a window of it is read once and not once per call of
+  // GetRangeStates(). It changes no answer, and none of the reads of the first
+  // call. The default, 0, holds one window at a time and keeps none: a caller
+  // that makes many calls sets it for their duration, and sets 0 after, which
+  // frees what was kept. A window beyond the budget is read again by every call
+  // that needs it, as with 0. A bitmap of 1 MiB covers 32 GiB at 4 KiB per
+  // cluster.
+  void KeepBitmapWindows(ULONGLONG max_bytes) const;
+
   // Free clusters and bytes. Empty only when $Bitmap is unusable. A bitmap
   // shorter than the volume gives the free clusters among those it covers, and
   // counts the rest as unknown_clusters. Padding bits past the last cluster

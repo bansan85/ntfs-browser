@@ -138,6 +138,13 @@ constexpr size_t default_announce_restart_interval = 1024;
 // The interval a test asked for. nullopt means the default.
 std::optional<size_t> announce_restart_interval_override;
 
+// Bytes of the cluster bitmap a scan keeps for its batches of data-state
+// queries, at most. 32 windows of 1 MiB cover 1 TiB at 4 KiB per cluster: a
+// volume up to that size reads its bitmap once per scan, a larger one keeps the
+// first terabyte and reads the rest again for each batch. 32 MiB is small next
+// to the records the scan holds, and the volume gives them back when it ends.
+constexpr ULONGLONG max_kept_bitmap_bytes = ULONGLONG{32} * 1024 * 1024;
+
 // Extents of $J the scan keeps at most, to announce them: the journal of a
 // volume that was never trimmed can have many, and the loader reads them all.
 // A longer list is cut, and the rest of $J is read without a hint.
@@ -1163,6 +1170,18 @@ class DataStateResolver {
                     Mft::MftTree::ScanStats& stats)
       : volume_(&volume), entries_(&entries), stats_(&stats) {}
 
+  DataStateResolver(const DataStateResolver&) = delete;
+  DataStateResolver& operator=(const DataStateResolver&) = delete;
+  DataStateResolver(DataStateResolver&&) = delete;
+  DataStateResolver& operator=(DataStateResolver&&) = delete;
+
+  // Gives back the bitmap windows the batches kept.
+  ~DataStateResolver() {
+    if (keeping_) {
+      volume_->KeepBitmapWindows(0);
+    }
+  }
+
   // Handles the entry at entry_index, whose record gave note.
   void Add(size_t entry_index, DataNote note) {
     if (note.kind == DataNote::Kind::None) {
@@ -1185,11 +1204,26 @@ class DataStateResolver {
     }
   }
 
+  // Resolves the entries still waiting, the last ones of the scan, and gives
+  // back the bitmap windows kept for the batches.
+  void Finish() {
+    Flush();
+    if (keeping_) {
+      volume_->KeepBitmapWindows(0);
+      keeping_ = false;
+    }
+  }
+
   // Resolves every waiting entry. A bitmap that cannot answer leaves them
   // unknown: the scan goes on.
   void Flush() {
     if (waiting_.empty()) {
       return;
+    }
+    // Later batches meet the windows of this one again.
+    if (!keeping_) {
+      volume_->KeepBitmapWindows(max_kept_bitmap_bytes);
+      keeping_ = true;
     }
     volume_->GetRangeStates(queries_);
 
@@ -1237,6 +1271,8 @@ class DataStateResolver {
   Mft::MftTree::ScanStats* stats_;
   std::vector<Alloc::RangeQuery> queries_;
   std::vector<Waiting> waiting_;
+  // Whether the volume keeps bitmap windows for this resolver.
+  bool keeping_{false};
 };
 
 // What one record slot of a window gave, parsed away from the thread that owns
@@ -1774,7 +1810,7 @@ class SlotScan {
       waiting_parser_->End();
     }
     if (annotate_) {
-      resolver_.Flush();
+      resolver_.Finish();
     }
     DropEntries(*entries_, dropped);
   }

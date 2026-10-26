@@ -856,6 +856,7 @@ Alloc::ClusterBitmap* NtfsVolume<S>::Impl::GetClusterBitmap() const {
     }
     if (bitmap) {
       bitmap->SetBadList(bad);
+      bitmap->SetRetention(KeptBitmapBytes());
     }
   }
   return bitmap.get();
@@ -915,6 +916,21 @@ void NtfsVolume<S>::GetRangeStates(std::span<Alloc::RangeQuery> queries) const {
     Log::Exception(e);
   }
   impl_->NoteBitmapHealth();
+}
+
+template <Cache::Strategy S>
+size_t NtfsVolume<S>::Impl::KeptBitmapBytes() const noexcept {
+  return static_cast<size_t>(
+      (std::min<ULONGLONG>)(bitmap_keep_bytes,
+                            (std::numeric_limits<size_t>::max)()));
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::KeepBitmapWindows(ULONGLONG max_bytes) const {
+  impl_->bitmap_keep_bytes = max_bytes;
+  if (impl_->bitmap) {
+    impl_->bitmap->SetRetention(impl_->KeptBitmapBytes());
+  }
 }
 
 template <Cache::Strategy S>

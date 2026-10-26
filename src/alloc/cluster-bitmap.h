@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <optional>
 #include <span>
 #include <unordered_set>
@@ -75,8 +76,16 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
 
   [[nodiscard]] Status GetStatus() const noexcept;
 
-  // Bytes of bitmap the window holds right now.
+  // Bytes of bitmap held right now: the window being read, and the windows
+  // kept by SetRetention().
   [[nodiscard]] size_t BytesHeld() const noexcept;
+
+  // Keeps the windows read, up to max_bytes of them, for the queries that come
+  // later, instead of reading a window again. Once the bytes are spent, the
+  // other windows are read for one query each, as without retention: the kept
+  // ones are the first read, which a sweep in LCN order meets again and again.
+  // 0, the default, keeps nothing and frees what was kept.
+  void SetRetention(size_t max_bytes);
 
  private:
   // Clusters judged in one pass over a range. allocated, free, unknown and bad
@@ -119,6 +128,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   // that window failed earlier and is not held.
   [[nodiscard]] const Window* Load(ULONGLONG index);
 
+  // Reads window index into window_, and keeps it in retained_ when the budget
+  // allows. Returns the window to judge with.
+  [[nodiscard]] const Window* ReadWindow(ULONGLONG index);
+
   Reader reader_;
   ULONGLONG data_size_;
   // Bits the bitmap holds.
@@ -129,6 +142,11 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   bool shorter_than_volume_;
   bool have_window_{false};
   Window window_;
+  // The windows kept for later queries, by index, and their bytes. Never more
+  // than retain_bytes_.
+  std::map<ULONGLONG, Window> retained_;
+  size_t retained_bytes_{0};
+  size_t retain_bytes_{0};
   std::unordered_set<ULONGLONG> failed_;
   const BadClusterList* bad_{nullptr};
   bool bad_with_clear_bit_{false};

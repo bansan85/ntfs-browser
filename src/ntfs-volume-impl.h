@@ -128,6 +128,9 @@ class NtfsVolume<S>::Impl {
   // be read; bitmap_loaded then keeps the failure from being retried.
   mutable std::unique_ptr<Io::FileRecord<S>> bitmap_record;
   mutable std::unique_ptr<Alloc::ClusterBitmap> bitmap;
+  // Bytes of bitmap the caller asked to keep, which the bitmap gets once
+  // loaded.
+  mutable ULONGLONG bitmap_keep_bytes{0};
   mutable std::optional<Alloc::SpaceSummary> summary;
 
   // The EFS key source and cipher backend the caller chose, or the defaults.
@@ -188,6 +191,8 @@ class NtfsVolume<S>::Impl {
   // The cluster bitmap, loaded now if it was not. Null when it is unusable, or
   // while it loads.
   [[nodiscard]] Alloc::ClusterBitmap* GetClusterBitmap() const;
+  // bitmap_keep_bytes, cut to what this build can address.
+  [[nodiscard]] size_t KeptBitmapBytes() const noexcept;
   [[nodiscard]] std::unique_ptr<Alloc::ClusterBitmap> LoadClusterBitmap() const;
   // Logs, once per volume, that the bitmap turned out short or lost a window,
   // and, once per volume, that it calls free a cluster the bad list names.
