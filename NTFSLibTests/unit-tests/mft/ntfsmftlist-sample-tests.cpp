@@ -22,11 +22,13 @@
 #include "fake-ntfs-image.h"
 #include "local-time.h"
 #include "mft-tree-parent-support.h"
+#include "ntfsmftlist-sample-support.h"
 #include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Tests::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
+using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::TempTreeImage;
 namespace Fs = std::filesystem;
 
 namespace {
@@ -115,33 +117,8 @@ constexpr std::string_view missing_volume_error =
 
 // Runs NtfsMftList with args, its stdout and stderr captured apart.
 SampleRun RunSample(const std::vector<std::wstring>& args) {
-  const Fs::path exe(NTFS_MFT_LIST_EXE);
-  REQUIRE(Fs::exists(exe));
-  return NTFS_BROWSER_NAMESPACE::Tests::RunSample(exe, args);
+  return NTFS_BROWSER_NAMESPACE::Tests::MftListSample::RunMftList(args);
 }
-
-// Writes an MFT tree image to a temp file, removed on exit. The default is
-// BuildFakeNtfsImageWithMftTree().
-struct TempTreeImage final {
-  Fs::path path;
-
-  TempTreeImage()
-      : TempTreeImage(
-            NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree()) {}
-
-  explicit TempTreeImage(const std::vector<BYTE>& image)
-      : path(NTFS_BROWSER_NAMESPACE::Tests::WriteFakeNtfsImage(image)) {}
-
-  ~TempTreeImage() {
-    std::error_code ignored;
-    std::filesystem::remove(path, ignored);
-  }
-
-  TempTreeImage(const TempTreeImage&) = delete;
-  TempTreeImage& operator=(const TempTreeImage&) = delete;
-  TempTreeImage(TempTreeImage&&) = delete;
-  TempTreeImage& operator=(TempTreeImage&&) = delete;
-};
 
 }  // namespace
 

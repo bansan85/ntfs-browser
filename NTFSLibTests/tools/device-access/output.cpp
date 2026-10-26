@@ -7,30 +7,15 @@
 #include <thread>
 
 #ifdef _WIN32
-  #include <array>
-  #include <climits>
   #include <cstddef>
-  #include <cwchar>
 
   #include <fcntl.h>
   #include <io.h>
-#else
-  #include "text-convert.h"
 #endif
+
+#include "text-convert.h"
 
 namespace NtfsDevice {
-
-#ifdef _WIN32
-
-namespace {
-
-// The code unit below which every locale of the CRT keeps a character as one
-// byte of the same value: ASCII.
-constexpr wchar_t ascii_limit = 0x80;
-
-}  // namespace
-
-#endif
 
 Output::Output() {
   buffer_.reserve(output_flush_bytes);
@@ -59,24 +44,17 @@ Output::~Output() {
 
 void Output::AppendText(std::wstring_view text) {
 #ifdef _WIN32
-  std::mbstate_t state{};
-  std::array<char, MB_LEN_MAX> bytes{};
-  for (const wchar_t unit : text) {
-    if (unit == L'\n') {
-      buffer_.append(line_end);
-      continue;
-    }
-    if (unit < ascii_limit) {
-      buffer_.push_back(static_cast<char>(unit));
-      continue;
-    }
-    // A character the locale cannot hold ends the text, as it ended fprintf().
-    size_t length = 0;
-    if (wcrtomb_s(&length, bytes.data(), bytes.size(), unit, &state) != 0) {
-      break;
-    }
-    buffer_.append(bytes.data(), length);
+  // stdout is binary here: a line feed in a name becomes the CR LF the text
+  // mode made.
+  size_t start = 0;
+  for (size_t line_feed = text.find(L'\n');
+       line_feed != std::wstring_view::npos;
+       line_feed = text.find(L'\n', start)) {
+    AppendAsUtf8(buffer_, text.substr(start, line_feed - start));
+    buffer_.append(line_end);
+    start = line_feed + 1;
   }
+  AppendAsUtf8(buffer_, text.substr(start));
 #else
   AppendAsUtf8(buffer_, text);
 #endif

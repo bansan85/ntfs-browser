@@ -9,6 +9,8 @@ target_sources(
     "file-reader-tests.cpp"
     "file-record-extension-source-tests.cpp"
     "long-host-path-tests.cpp"
+    "ntfsdir-name-tests.cpp"
+    "ntfsdir-sample-support.h"
     "ntfsdir-sample-tests.cpp"
     "read-ahead-disk-reader-tests.cpp"
     "record-offset-overflow-tests.cpp"

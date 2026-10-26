@@ -14,20 +14,15 @@
 #include <vector>
 
 #include "console.h"
+#include "text-convert.h"
 
 #ifndef _WIN32
   #include "driver-names.h"
-  #include "text-convert.h"
 #endif
 
 namespace NtfsCompare {
 
 namespace {
-
-#ifdef _WIN32
-// First code point past ASCII: Narrow() keeps only below it.
-constexpr wchar_t ascii_limit = 128;
-#endif
 
 // Method name of the merged library reference. Every other method is an OS
 // candidate.
@@ -45,22 +40,10 @@ std::string FormatValue(ULONGLONG value) { return std::to_string(value); }
 std::string FormatValue(bool value) { return value ? "true" : "false"; }
 
 // Narrowing for a report line. Names round-trip correctly through the wide
-// Listing key every method shares; this is display only. Windows keeps to
-// ASCII, since its console code page is not known. Elsewhere a name prints as
+// Listing key every method shares; this is display only. A name prints as
 // UTF-8, like the other tools' output.
 std::string Narrow(const std::wstring& wide) {
-#ifdef _WIN32
-  std::string out;
-  out.reserve(wide.size());
-  for (const wchar_t character : wide) {
-    out.push_back((character > 0 && character < ascii_limit)
-                      ? static_cast<char>(character)
-                      : '?');
-  }
-  return out;
-#else
   return NtfsDevice::WideToUtf8(wide);
-#endif
 }
 
 // Calls visit(member pointer, report name) once per compared Entry field. The

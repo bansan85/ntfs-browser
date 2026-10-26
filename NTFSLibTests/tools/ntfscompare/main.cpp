@@ -38,6 +38,7 @@
 #include "os-api-walk.h"
 #include "std-filesystem-walk.h"
 #include "text-convert.h"
+#include "tool-support.h"
 #include "volume-open.h"
 
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
@@ -303,6 +304,8 @@ int Run(int argc, ArgChar** argv) {
     return 1;
   }
 
+  // Names print as UTF-8: a console shows them right with its code page set.
+  const NtfsDevice::Utf8ConsoleOutput console;
   if (!Log::Configure(arguments->log_config)) {
     PrintErr("Cannot open log file {}\n",
              NativeText(arguments->log_config.file_path));

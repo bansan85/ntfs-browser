@@ -68,11 +68,11 @@ class Output {
 
   void Append(std::string_view text) { buffer_.append(text); }
 
-  // Appends a name or a message, in the encoding WriteText() gives it. On
-  // Windows that is the CRT's wide to multibyte conversion, so a name that
-  // the active code page cannot hold stops where fprintf("%ls") stopped, and
-  // a line feed in it becomes the CR LF the text mode made. Elsewhere it is
-  // UTF-8, whatever the locale.
+  // Appends a name or a message, in the encoding WriteText() gives it: UTF-8,
+  // whatever the locale or the code page, so a name never stops at a character
+  // that the code page lacks. An unpaired surrogate is written in its WTF-8
+  // form (see WideToUtf8()). On Windows a line feed in it becomes the CR LF the
+  // text mode made.
   void AppendText(std::wstring_view text);
 
   // Appends text right-aligned in width columns, or left-aligned.

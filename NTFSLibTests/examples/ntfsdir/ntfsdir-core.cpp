@@ -592,6 +592,8 @@ int RunNtfsDir(int argc, wchar_t* argv[]) {
     return -1;
   }
 
+  // Names print as UTF-8: a console shows them right with its code page set.
+  const NtfsDevice::Utf8ConsoleOutput console;
   if (!Log::Configure(args->log_config)) {
     NtfsDevice::ReportLogFileError(args->log_config);
   }

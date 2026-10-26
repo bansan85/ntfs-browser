@@ -1,5 +1,7 @@
+#include <iostream>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -7,6 +9,7 @@
 
 #include "compare-engine.h"
 #include "entry.h"
+#include "name-support.h"
 #include "ntfs-browser/win-types.h"
 
 using NtfsCompare::CompareAgainstReference;
@@ -410,3 +413,21 @@ TEST_CASE("OsNamesAreComparable needs no mapping for names with a UTF-8 form",
 }
 
 #endif  // !_WIN32
+
+TEST_CASE("PrintReport writes every kind of exotic name as UTF-8",
+          "[ntfscompare][compare][name]") {
+  for (const auto& exotic : NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+    INFO(exotic.label);
+    const Listing reference{{exotic.name, FileEntry(5)}};
+    Report report;
+    CompareAgainstReference("os", reference, Listing{}, report);
+
+    std::ostringstream captured;
+    std::streambuf* const original = std::cout.rdbuf(captured.rdbuf());
+    const bool has_findings = PrintReport(report);
+    std::cout.rdbuf(original);
+
+    CHECK(has_findings);
+    CHECK(captured.str().find(exotic.utf8) != std::string::npos);
+  }
+}

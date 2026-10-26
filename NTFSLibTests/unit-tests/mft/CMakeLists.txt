@@ -18,6 +18,8 @@ target_sources(
     "mft-tree-tests.cpp"
     "name-tree-path-tests.cpp"
     "mft-tree-threads-tests.cpp"
+    "ntfsmftlist-name-tests.cpp"
+    "ntfsmftlist-sample-support.h"
     "ntfsmftlist-sample-tests.cpp"
 )
 

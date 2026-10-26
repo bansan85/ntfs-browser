@@ -5,6 +5,7 @@ target_sources(
   PRIVATE
     "compare-engine-tests.cpp"
     "library-walk-tests.cpp"
+    "name-tests.cpp"
     "ntfscompare-sample-tests.cpp"
     "os-api-walk-tests.cpp"
     "volume-open-tests.cpp"

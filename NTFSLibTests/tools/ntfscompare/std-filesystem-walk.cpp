@@ -13,11 +13,8 @@
 #include <ntfs-browser/namespace.h>
 
 #include "console.h"
+#include "text-convert.h"
 #include "time-convert.h"
-
-#ifndef _WIN32
-  #include "text-convert.h"
-#endif
 
 namespace NtfsCompare {
 

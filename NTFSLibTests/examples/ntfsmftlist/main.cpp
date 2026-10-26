@@ -749,9 +749,8 @@ int ListVolume(const Arguments& args) {
     NtfsDevice::ReportLogFileError(args.log_config);
   }
 
-#ifdef _WIN32
-  SetConsoleOutputCP(CP_UTF8);
-#endif
+  // Names print as UTF-8: a console shows them right with its code page set.
+  const NtfsDevice::Utf8ConsoleOutput console;
 
   const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
       OpenVolume(args.target, args.volume_options);
