@@ -129,7 +129,7 @@ TEST_CASE("the map of an entry has one stream for each $DATA, named ones too",
   Support::ForEachStrategy([](auto strategy) {
     Support::Volume volume;
     FakeAccountFile file = Freed(100, Stream({{40, 2}}, 2 * cluster));
-    Tests::FakeAccountStream named = Stream({{50, 1}}, cluster);
+    FakeAccountStream named = Stream({{50, 1}}, cluster);
     named.name = L"zone";
     file.streams.push_back(named);
     volume.Put(subject, file);
@@ -157,6 +157,9 @@ TEST_CASE("the counts level keeps no map", "[alloc][cluster][map]") {
   });
 }
 
+// Without decompression compiled in, ParseAttrs() rejects the compressed
+// stream, so the record has no account.
+#ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
 TEST_CASE("a damaged compression unit marks all of its clusters",
           "[alloc][cluster][map]") {
   Support::ForEachStrategy([](auto strategy) {
@@ -193,6 +196,7 @@ TEST_CASE("a damaged compression unit marks all of its clusters",
     CheckCovers(pieces, 8);
   });
 }
+#endif  // NTFS_BROWSER_ENABLE_DECOMPRESSION
 
 TEST_CASE("a map turns into byte ranges, clipped at the file size",
           "[alloc][cluster][map]") {

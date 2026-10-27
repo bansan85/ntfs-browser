@@ -657,7 +657,7 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 233>
           {"MFT scan clusters: 2 files counted, 0 intact, 0 reallocated, 0 "
            "bad, 0 sparse"}}},
         {"cluster_state_compressed_map",
-         {true,
+         {decompression_enabled,
           {"MFT scan clusters: 1 files counted, 0 intact, 1 reallocated, 0 "
            "bad, 4 sparse"}}},
         {"cluster_state_extension_claims",
