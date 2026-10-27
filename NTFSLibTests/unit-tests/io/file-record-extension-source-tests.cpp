@@ -219,7 +219,7 @@ TEST_CASE("FileRecord::SetExtensionSource() serves extension records",
 TEST_CASE("FileRecord::SetBaseSource() spares the read of a foreign slot",
           "[file-record]") {
   // The hard-linked file, which the Foreign extension names as its base.
-  constexpr ULONGLONG other_base = Tests::mft_tree_hard_link_idx;
+  static constexpr ULONGLONG other_base = Tests::mft_tree_hard_link_idx;
   const std::vector<BYTE> image =
       Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
           Tests::FakeListedExtension::Foreign);
