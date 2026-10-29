@@ -2,7 +2,9 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
+    "bench-tools-tests.cpp"
     "device-path-tests.cpp"
+    "sparse-capture-tests.cpp"
     "temp-dir.h"
     "text-convert-tests.cpp"
     "tool-support-tests.cpp"

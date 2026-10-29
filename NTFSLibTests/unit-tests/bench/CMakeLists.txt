@@ -1,1 +1,10 @@
-target_sources(NtfsBrowserTests PRIVATE "session-invariance-tests.cpp")
+target_sources(
+  NtfsBrowserTests
+  PRIVATE
+    "kind-and-slice-tests.cpp"
+    "phase-tests.cpp"
+    "read-class-tests.cpp"
+    "read-log-tests.cpp"
+    "replay-tests.cpp"
+    "session-invariance-tests.cpp"
+)
