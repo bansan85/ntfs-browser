@@ -97,8 +97,10 @@ class SparseCapture::Impl {
   bool Grow(std::uint64_t bytes) {
 #ifdef _WIN32
     LARGE_INTEGER current{};
-    if (GetFileSizeEx(handle_, &current) == FALSE ||
-        static_cast<std::uint64_t>(current.QuadPart) >= bytes) {
+    if (GetFileSizeEx(handle_, &current) == FALSE) {
+      return false;
+    }
+    if (static_cast<std::uint64_t>(current.QuadPart) >= bytes) {
       return true;
     }
     LARGE_INTEGER target{};
