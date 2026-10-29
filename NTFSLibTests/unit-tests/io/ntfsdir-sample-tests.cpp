@@ -269,6 +269,18 @@ TEST_CASE("NtfsDir lists the root of an image file",
   CHECK(run.out == RootListing());
 }
 
+TEST_CASE("NtfsDir says nothing on stderr without the benchmark options",
+          "[io][sample][characterization][invariance]") {
+  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
+  INFO(exe.string());
+  const TempImage image;
+  const SampleRun run = RunDir(exe, {image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.err.empty());
+  CHECK(run.out == RootListing());
+}
+
 TEST_CASE("NtfsDir lists a directory of an image file",
           "[io][sample][characterization]") {
   const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));

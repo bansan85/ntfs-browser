@@ -1,6 +1,7 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
+    "bench-session-guard.h"
     "child-process.cpp"
     "child-process.h"
     "child-process-tests.cpp"

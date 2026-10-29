@@ -131,6 +131,16 @@ TEST_CASE("NtfsMftList lists the live records of the MFT tree image",
   CHECK(run.out == WithLocalTimes(live_listing));
 }
 
+TEST_CASE("NtfsMftList writes only its progress line on stderr without options",
+          "[mft][sample][characterization][invariance]") {
+  const TempTreeImage image;
+  const SampleRun run = RunSample({image.path.wstring()});
+
+  CHECK(run.exit_code == 0);
+  CHECK(run.err == "Scanning $MFT: 0 / 26Scanning $MFT: 26 / 26\n");
+  CHECK(run.out == WithLocalTimes(live_listing));
+}
+
 TEST_CASE("NtfsMftList --deleted also lists the freed records",
           "[mft][sample][characterization]") {
   const TempTreeImage image;
