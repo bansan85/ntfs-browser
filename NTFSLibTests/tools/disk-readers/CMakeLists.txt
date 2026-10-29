@@ -14,6 +14,8 @@ add_library(
   "recording-disk-reader.cpp"
   "standalone-mft-disk-reader.h"
   "standalone-mft-disk-reader.cpp"
+  "throttled-disk-reader.h"
+  "throttled-disk-reader.cpp"
 )
 
 # src/ resolves the on-disk layouts standalone-mft-disk-reader.cpp reads and
