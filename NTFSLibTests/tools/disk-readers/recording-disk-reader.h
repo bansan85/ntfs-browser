@@ -37,6 +37,7 @@ class RecordingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // reader, so the trace is the same.
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
   void CancelPrefetch() const override;
+  void SetReadPattern(Tuning::Pattern pattern) const override;
 
  private:
   std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> inner_;

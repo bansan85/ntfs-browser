@@ -48,6 +48,10 @@ void CountingDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
   inner_->Prefetch(offset, length);
 }
 
+void CountingDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
+  inner_->SetReadPattern(pattern);
+}
+
 void CountingDiskReader::CancelPrefetch() const {
   calls_.push_back({.kind = Kind::CancelPrefetch});
   inner_->CancelPrefetch();

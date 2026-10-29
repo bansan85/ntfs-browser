@@ -16,8 +16,9 @@
 
 namespace NtfsDevice {
 
-// Bytes of a listing gathered before stdout gets them. 1 MiB turns a listing of
-// millions of lines into a few dozen writes.
+// Bytes of a listing gathered before stdout gets them, unless the tuning says
+// otherwise (Tuning::OutputTuning). 1 MiB turns a listing of millions of lines
+// into a few dozen writes.
 inline constexpr size_t output_flush_bytes = size_t{1024} * 1024;
 
 // Digits of the largest ULONGLONG.
@@ -42,7 +43,8 @@ inline constexpr std::string_view line_end = "\n";
 // it: the listing goes through this object alone, and ends its own lines.
 class Output {
  public:
-  Output();
+  // flush_bytes is the size of a chunk, see output_flush_bytes.
+  explicit Output(size_t flush_bytes = output_flush_bytes);
   Output(const Output&) = delete;
   Output(Output&&) = delete;
   Output& operator=(const Output&) = delete;
@@ -122,11 +124,12 @@ class Output {
   }
 
   void FlushIfFull() {
-    if (buffer_.size() >= output_flush_bytes) {
+    if (buffer_.size() >= flush_bytes_) {
       Flush();
     }
   }
 
+  size_t flush_bytes_;
   std::string buffer_;
 #ifdef _WIN32
   // The mode stdout had before, restored once the listing is written. -1 when

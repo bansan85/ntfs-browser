@@ -7,12 +7,15 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
+
+#include "bench-options.h"
 
 // Prints command-line usage help.
 void Usage();
@@ -42,11 +45,15 @@ struct Arguments {
   bool recursive = false;
   NTFS_BROWSER_NAMESPACE::VolumeOptions volume_options;
   wchar_t* path = nullptr;
+  // The instrumentation and tuning options (--benchmark, --capture,
+  // --stop-after, --profile, --tune), and the command line as UTF-8.
+  NtfsDevice::BenchOptions bench;
+  std::vector<std::string> command_line;
 };
 
 // Returns nullopt for a malformed --log option, or unless exactly one path
-// is given. The --log, --recursive (-r), --deleted and --recover options may
-// come before or after the path.
+// is given. The --log, --recursive (-r), --deleted, --recover and benchmark
+// options may come before or after the path.
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]);
 
 // Lists the directory named on the command line, opening the volume with

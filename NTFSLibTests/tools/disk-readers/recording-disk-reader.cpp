@@ -59,4 +59,8 @@ void RecordingDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
 
 void RecordingDiskReader::CancelPrefetch() const { inner_->CancelPrefetch(); }
 
+void RecordingDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
+  inner_->SetReadPattern(pattern);
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

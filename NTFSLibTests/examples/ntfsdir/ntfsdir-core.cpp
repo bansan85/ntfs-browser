@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/io/record-standing.h>
@@ -21,6 +22,8 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "bench-options.h"
+#include "bench-session.h"
 #include "device-path.h"
 #include "local-time.h"
 #include "ntfs-browser/attr/mask.h"
@@ -426,6 +429,12 @@ template <Cache::Strategy S>
 int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
              const std::wstring& path, const std::wstring& root,
              bool recursive) {
+  // The listing is printed as the walk goes: the phase holds both.
+  const Bench::PhaseScope walk(Bench::Phase::Walk);
+  if (Bench::StopRequested()) {
+    return 0;
+  }
+  volume.SetReadPattern(Tuning::Pattern::DependentSmall);
   Io::FileRecord<S> fr(volume);
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
@@ -437,7 +446,7 @@ int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
   // Without --deleted every entry names a file that exists: no marker column.
   const bool marking = volume.GetOptions().include_deleted;
 
-  NtfsDevice::Output out;
+  NtfsDevice::Output out(volume.GetOptions().tuning.output.flush_bytes);
   Total total;
   if (recursive) {
     total = ListTree(out, fr, marking, root);
@@ -563,6 +572,17 @@ bool ApplyVolumeOption(std::wstring_view arg, VolumeOptions& options) {
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
   Arguments args;
   for (int i = 1; i < argc; i++) {
+    args.command_line.push_back(NtfsDevice::WideToUtf8(argv[i]));
+    std::string error;
+    const NtfsDevice::OptionResult bench =
+        NtfsDevice::ParseBenchOption(argv[i], args.bench, error);
+    if (bench == NtfsDevice::OptionResult::Malformed) {
+      fprintf(stderr, "%s\n", error.c_str());
+      return std::nullopt;
+    }
+    if (bench == NtfsDevice::OptionResult::Accepted) {
+      continue;
+    }
     if (NtfsDevice::IsLogOption(argv[i])) {
       if (!NtfsDevice::ParseLogOption(argv[i], args.log_config)) {
         return std::nullopt;
@@ -598,7 +618,26 @@ int RunNtfsDir(int argc, wchar_t* argv[]) {
     NtfsDevice::ReportLogFileError(args->log_config);
   }
 
-  return ListDirectory<S>(args->path, args->recursive, args->volume_options);
+  // The profile and --tune settings, before the volume opens: the reader takes
+  // its caps then.
+  VolumeOptions volume_options = args->volume_options;
+  NtfsDevice::AppliedTuning applied;
+  if (const std::string failure = NtfsDevice::ApplyTuning(
+          args->bench, args->path, volume_options, applied);
+      !failure.empty()) {
+    fprintf(stderr, "%s\n", failure.c_str());
+    return -1;
+  }
+  if (!args->bench.profile_path.empty() && !applied.section_found) {
+    fprintf(stderr,
+            "The profile has no section for this disk: defaults used\n");
+  }
+  NtfsDevice::BenchSession session(
+      S == Cache::Strategy::FullCache ? "NtfsDir" : "NtfsDir2",
+      args->command_line, NtfsDevice::WideToUtf8(args->path), args->bench,
+      applied, volume_options);
+
+  return ListDirectory<S>(args->path, args->recursive, volume_options);
 }
 
 template int RunNtfsDir<Cache::Strategy::FullCache>(int argc, wchar_t* argv[]);

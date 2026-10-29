@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <ntfs-browser/alloc/cluster-account.h>
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
@@ -30,6 +31,8 @@
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "bench-options.h"
+#include "bench-session.h"
 #include "device-path.h"
 #include "local-time.h"
 #include "ntfs-browser/cache/strategy.h"
@@ -105,6 +108,7 @@ void Usage() {
       "Usage: ntfsmftlist [--log=...] [--deleted] [--recover] [--threads=N] "
       "[--clusters[=map]] [--verify-data[=sample|full]] <volume>\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
+  printf("%s", std::string(NtfsDevice::BenchUsage()).c_str());
   printf("  --deleted     also list the records NTFS freed\n");
   printf(
       "  --threads=N   threads that parse $MFT, 1 for one; by default the\n");
@@ -614,6 +618,10 @@ struct Arguments {
   Alloc::DataCheckMode verify = Alloc::DataCheckMode::Off;
   // Stays null until the command line names a volume.
   const wchar_t* target = nullptr;
+  // The instrumentation and tuning options, and the command line they came
+  // from as UTF-8, for the summary.
+  NtfsDevice::BenchOptions bench;
+  std::vector<std::string> command_line;
 };
 
 // Reads the thread count of --threads=: one to four decimal digits, from 1 to
@@ -643,6 +651,17 @@ bool ParseThreads(std::wstring_view text, unsigned& threads) {
 bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
   for (int i = 1; i < argc; i++) {
     const std::wstring_view arg(argv[i]);
+    args.command_line.push_back(ToUtf8(arg));
+    std::string error;
+    switch (NtfsDevice::ParseBenchOption(arg, args.bench, error)) {
+      case NtfsDevice::OptionResult::Accepted:
+        continue;
+      case NtfsDevice::OptionResult::Malformed:
+        fprintf(stderr, "%s\n", error.c_str());
+        return false;
+      case NtfsDevice::OptionResult::NotMine:
+        break;
+    }
     if (NtfsDevice::IsLogOption(arg)) {
       if (!NtfsDevice::ParseLogOption(arg, args.log_config)) {
         return false;
@@ -752,12 +771,33 @@ int ListVolume(const Arguments& args) {
   // Names print as UTF-8: a console shows them right with its code page set.
   const NtfsDevice::Utf8ConsoleOutput console;
 
+  // The profile and --tune settings, before the volume opens: the reader takes
+  // its caps then.
+  VolumeOptions volume_options = args.volume_options;
+  NtfsDevice::AppliedTuning applied;
+  if (const std::string failure = NtfsDevice::ApplyTuning(
+          args.bench, args.target, volume_options, applied);
+      !failure.empty()) {
+    fprintf(stderr, "%s\n", failure.c_str());
+    return -1;
+  }
+  if (!args.bench.profile_path.empty() && !applied.section_found) {
+    fprintf(stderr,
+            "The profile has no section for this disk: defaults used\n");
+  }
+  NtfsDevice::BenchSession session("NtfsMftList", args.command_line,
+                                   ToUtf8(args.target), args.bench, applied,
+                                   volume_options);
+
   const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
-      OpenVolume(args.target, args.volume_options);
+      OpenVolume(args.target, volume_options);
   if (!volume || !volume->IsVolumeOK()) {
     fprintf(stderr, "Cannot open %s as an NTFS volume\n",
             ToUtf8(args.target).c_str());
     return -1;
+  }
+  if (NTFS_BROWSER_NAMESPACE::Bench::StopRequested()) {
+    return 0;
   }
 
   NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanOptions scan_options;
@@ -771,7 +811,15 @@ int ListVolume(const Arguments& args) {
   static const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree =
       *new NTFS_BROWSER_NAMESPACE::Mft::MftTree(*volume, scan_options);
 
-  Output out;
+  // The scan was told to stop: there is no tree to print.
+  if (NTFS_BROWSER_NAMESPACE::Bench::StopRequested()) {
+    return 0;
+  }
+
+  // The writer thread is joined when out goes, inside the phase.
+  const NTFS_BROWSER_NAMESPACE::Bench::PhaseScope print_phase(
+      NTFS_BROWSER_NAMESPACE::Bench::Phase::Print);
+  Output out(volume_options.tuning.output.flush_bytes);
   out.PrintLine("{:>10} {:>5} {:<3} {:>14} {:<16} {:<6} {:>2} {}", "Record",
                 "Seq", "", "Size", "Last write", "Attrib", "Ln", "Path");
   DisplayPaths paths(tree);

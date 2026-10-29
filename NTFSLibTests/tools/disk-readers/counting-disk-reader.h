@@ -47,6 +47,8 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // Record the hints, and pass them on to the wrapped reader.
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
   void CancelPrefetch() const override;
+  // Passes the pattern on, and records nothing.
+  void SetReadPattern(Tuning::Pattern pattern) const override;
 
   // Every call so far, in order.
   [[nodiscard]] const std::vector<Call>& Calls() const noexcept;

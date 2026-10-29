@@ -13,13 +13,16 @@
   #include <io.h>
 #endif
 
+#include <ntfs-browser/bench/bench.h>
+
 #include "text-convert.h"
 
 namespace NtfsDevice {
 
-Output::Output() {
-  buffer_.reserve(output_flush_bytes);
-  writing_.reserve(output_flush_bytes);
+Output::Output(size_t flush_bytes)
+    : flush_bytes_(flush_bytes != 0 ? flush_bytes : output_flush_bytes) {
+  buffer_.reserve(flush_bytes_);
+  writing_.reserve(flush_bytes_);
 #ifdef _WIN32
   fflush(stdout);
   text_mode_ = _setmode(_fileno(stdout), _O_BINARY);
@@ -81,6 +84,8 @@ void Output::Flush() {
 }
 
 void Output::WriteChunks() {
+  const NTFS_BROWSER_NAMESPACE::Bench::ThreadScope cpu(
+      NTFS_BROWSER_NAMESPACE::Bench::ThreadRole::OutputWriter);
   std::unique_lock lock{mutex_};
   for (;;) {
     ready_.wait(lock, [this] { return chunk_ready_ || stopping_; });
