@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -43,6 +44,12 @@ class IDiskReader {
 
   // Forgets the ranges Prefetch() announced that no read has used yet.
   virtual void CancelPrefetch() const {}
+
+  // Says which read pattern the reads that follow belong to, so that a reader
+  // MAY switch the depth of its read ahead (see Tuning::ReaderTuning). A hint,
+  // like Prefetch(): it changes when the bytes are read, never which. Does
+  // nothing by default.
+  virtual void SetReadPattern(Tuning::Pattern /*pattern*/) const {}
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE

@@ -26,6 +26,7 @@
 #include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 
+#include "bench/recorder.h"
 #include "log/ntfs-common.h"
 
 // Config::file_path is handed to the file sink as-is. The build defines
@@ -508,6 +509,7 @@ CapturedLog::Mark CapturedLog::End() const noexcept {
 }
 
 void CapturedLog::Replay(const Mark& from, const Mark& to) const noexcept {
+  const Bench::Detail::SliceScope slice(Bench::Slice::LogReplay);
   const size_t last = (std::min)(to.lines, lines_.size());
   for (size_t index = from.lines; index < last; index++) {
     // index < last <= lines_.size().

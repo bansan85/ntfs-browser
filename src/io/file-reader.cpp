@@ -19,7 +19,9 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/read-ahead-disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
+#include "bench/recorder.h"
 #include "cache/block-cache.h"
 #include "cache/view-key.h"
 #include "internal-export.h"
@@ -35,20 +37,27 @@ namespace NTFS_BROWSER_NAMESPACE::Io {
 
 namespace {
 
-// Size of one block read from the disk and cached. 64 KiB amortises the cost
-// of a disk read without holding much more than a cluster run's worth of data.
-constexpr LONGLONG read_buffer_size = LONGLONG{64} * 1024;
+// A block of a cache is at least one sector: a smaller one would be a read
+// the device refuses, and a block of 0 would divide by zero.
+constexpr std::size_t min_block_bytes = 4096;
 
-// read_buffer_size as a size_t, to size a std::span over one cached block.
-constexpr size_t block_bytes_value = static_cast<size_t>(read_buffer_size);
+// Bytes of one block of the cache, from the tuning: Tuning::CacheTuning gives
+// the default, 64 KiB, which amortises the cost of a disk read without holding
+// much more than a cluster run's worth of data.
+std::int64_t BlockBytesOf(const Tuning::Settings& tuning) {
+  return static_cast<std::int64_t>(
+      (std::max)(tuning.cache.block_bytes, min_block_bytes));
+}
 
 // A BlockCache for FullCache only: NoCache keeps none.
 template <Cache::Strategy S>
-std::shared_ptr<Cache::BlockCache> MakeCache(std::uint64_t max_cache_bytes) {
+std::shared_ptr<Cache::BlockCache> MakeCache(std::uint64_t max_cache_bytes,
+                                             std::int64_t block_bytes) {
   if constexpr (S == Cache::Strategy::FullCache) {
-    return std::make_shared<Cache::BlockCache>(block_bytes_value,
+    return std::make_shared<Cache::BlockCache>(static_cast<size_t>(block_bytes),
                                                max_cache_bytes);
   } else {
+    static_cast<void>(block_bytes);
     return nullptr;
   }
 }
@@ -56,18 +65,25 @@ std::shared_ptr<Cache::BlockCache> MakeCache(std::uint64_t max_cache_bytes) {
 }  // namespace
 
 template <Cache::Strategy S>
-FileReader<S>::FileReader(std::uint64_t max_cache_bytes)
-    : cache_(MakeCache<S>(max_cache_bytes)) {}
+FileReader<S>::FileReader(std::uint64_t max_cache_bytes,
+                          const Tuning::Settings& tuning)
+    : block_bytes_(BlockBytesOf(tuning)),
+      reader_caps_(tuning.reader),
+      cache_(MakeCache<S>(max_cache_bytes, block_bytes_)) {}
 
 template <Cache::Strategy S>
 FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader,
-                          std::uint64_t max_cache_bytes)
-    : reader_(std::move(reader)), cache_(MakeCache<S>(max_cache_bytes)) {}
+                          std::uint64_t max_cache_bytes,
+                          const Tuning::Settings& tuning)
+    : reader_(std::move(reader)),
+      block_bytes_(BlockBytesOf(tuning)),
+      reader_caps_(tuning.reader),
+      cache_(MakeCache<S>(max_cache_bytes, block_bytes_)) {}
 
 #ifdef _WIN32
 template <Cache::Strategy S>
 bool FileReader<S>::Open(std::wstring_view volume) {
-  auto reader = std::make_unique<Win32DiskReader>();
+  auto reader = std::make_unique<Win32DiskReader>(reader_caps_);
   if (!reader->Open(volume)) {
     return false;
   }
@@ -78,16 +94,41 @@ bool FileReader<S>::Open(std::wstring_view volume) {
 #endif
 
 template <Cache::Strategy S>
-void FileReader<S>::EnableReadAhead(std::uint64_t chunk_bytes) {
+void FileReader<S>::EnableReadAhead(std::uint64_t chunk_bytes,
+                                    std::size_t window_chunks) {
   if (reader_) {
     reader_ = std::make_unique<ReadAheadDiskReader>(
-        std::move(reader_), ReadAheadOptions{.chunk_bytes = chunk_bytes});
+        std::move(reader_), ReadAheadOptions{.chunk_bytes = chunk_bytes,
+                                             .window_chunks = window_chunks});
   }
 }
 
 template <Cache::Strategy S>
 bool FileReader<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {
-  return reader_->ReadInto(addr, dest);
+  return ReadFromReader(addr, dest);
+}
+
+template <Cache::Strategy S>
+bool FileReader<S>::ReadFromReader(LARGE_INTEGER& addr,
+                                   std::span<BYTE> dest) const {
+  if (!Bench::Detail::Active()) {
+    return reader_->ReadInto(addr, dest);
+  }
+
+  Bench::Detail::ResetReadNote();
+  const std::uint64_t began = Bench::Detail::NowNs();
+  const bool read = reader_->ReadInto(addr, dest);
+  const std::uint64_t ended = Bench::Detail::NowNs();
+  // A negative address is a refused read, and has no place on the disk.
+  if (addr.QuadPart >= 0) {
+    Bench::Detail::RecordRead(static_cast<std::uint64_t>(addr.QuadPart),
+                              dest.size(), began, ended);
+    if (read) {
+      Bench::Detail::CaptureRead(static_cast<std::uint64_t>(addr.QuadPart),
+                                 dest);
+    }
+  }
+  return read;
 }
 
 template <Cache::Strategy S>
@@ -96,14 +137,20 @@ std::optional<ULONGLONG> FileReader<S>::Size() const {
 }
 
 template <Cache::Strategy S>
+void FileReader<S>::Announce(ULONGLONG offset, ULONGLONG length) const {
+  Bench::Detail::RecordPrefetch(offset, length);
+  reader_->Prefetch(offset, length);
+}
+
+template <Cache::Strategy S>
 void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
   if (!reader_ || length == 0) {
     return;
   }
   if constexpr (S == Cache::Strategy::FullCache) {
-    constexpr auto block = static_cast<ULONGLONG>(read_buffer_size);
+    const auto block = static_cast<ULONGLONG>(block_bytes_);
     // The blocks MUST end below the largest address the cache reads at.
-    constexpr auto max_end =
+    const auto max_end =
         static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) - block;
     if (offset > max_end || length > max_end - offset) {
       return;
@@ -115,7 +162,7 @@ void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
     // costs no walk over the cache.
     constexpr ULONGLONG max_checked_blocks = 4096;
     if ((end - first) / block > max_checked_blocks) {
-      reader_->Prefetch(first, end - first);
+      Announce(first, end - first);
       return;
     }
     // The cache serves a block it holds without a read, so only the other
@@ -124,24 +171,33 @@ void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
     for (ULONGLONG at = first; at < end; at += block) {
       const bool cached = cache_->Contains(at / block);
       if (cached && run_start) {
-        reader_->Prefetch(*run_start, at - *run_start);
+        Announce(*run_start, at - *run_start);
         run_start.reset();
       } else if (!cached && !run_start) {
         run_start = at;
       }
     }
     if (run_start) {
-      reader_->Prefetch(*run_start, end - *run_start);
+      Announce(*run_start, end - *run_start);
     }
   } else {
-    reader_->Prefetch(offset, length);
+    Announce(offset, length);
   }
 }
 
 template <Cache::Strategy S>
 void FileReader<S>::CancelPrefetch() const {
   if (reader_) {
+    Bench::Detail::RecordCancel();
     reader_->CancelPrefetch();
+  }
+}
+
+template <Cache::Strategy S>
+void FileReader<S>::SetReadPattern(Tuning::Pattern pattern) const {
+  if (reader_) {
+    Bench::Detail::RecordPattern(pattern);
+    reader_->SetReadPattern(pattern);
   }
 }
 
@@ -156,7 +212,7 @@ std::enable_if_t<std::is_same_v<std::integral_constant<Cache::Strategy, Q>,
     buffer_.resize(length);
   }
 
-  if (!reader_->ReadInto(addr, std::span<BYTE>{buffer_.data(), length})) {
+  if (!ReadFromReader(addr, std::span<BYTE>{buffer_.data(), length})) {
     Log::Error("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
@@ -172,7 +228,7 @@ template <Cache::Strategy S>
 std::optional<Cache::View> FileReader<S>::ReadUncached(LARGE_INTEGER addr,
                                                        DWORD length) const {
   const Cache::BlockCache::Stitched exact = cache_->NewStitched(length);
-  if (!reader_->ReadInto(addr, exact.bytes)) {
+  if (!ReadFromReader(addr, exact.bytes)) {
     Log::Error("Cannot read file at adress {}", addr.QuadPart);
     return {};
   }
@@ -208,27 +264,26 @@ std::enable_if_t<
   const auto get_block =
       [this](LARGE_INTEGER block_addr) -> std::shared_ptr<Cache::Block> {
     return cache_->GetOrLoad(
-        static_cast<std::uint64_t>(block_addr.QuadPart / read_buffer_size),
-        [&](std::span<BYTE> dest) {
-          return reader_->ReadInto(block_addr, dest);
-        });
+        static_cast<std::uint64_t>(block_addr.QuadPart / block_bytes_),
+        [&](std::span<BYTE> dest) { return ReadFromReader(block_addr, dest); });
   };
 
-  const bool crosses_block = addr.QuadPart / read_buffer_size !=
-                             (addr.QuadPart + length - 1) / read_buffer_size;
+  const bool crosses_block = addr.QuadPart / block_bytes_ !=
+                             (addr.QuadPart + length - 1) / block_bytes_;
 
   if (!crosses_block) {
     // Fast path: the request fits in a single block; return a zero-copy view.
-    const LARGE_INTEGER block_addr{
-        .QuadPart = addr.QuadPart - addr.QuadPart % read_buffer_size};
+    const LARGE_INTEGER block_addr{.QuadPart = addr.QuadPart -
+                                               addr.QuadPart % block_bytes_};
     const std::shared_ptr<Cache::Block> block = get_block(block_addr);
     if (!block) {
       return ReadUncached(addr, length);
     }
 
     const std::span<const BYTE> bytes =
-        std::span<const BYTE>{block->bytes.get(), block_bytes_value}.subspan(
-            gsl::narrow<size_t>(addr.QuadPart % read_buffer_size), length);
+        std::span<const BYTE>{block->bytes.get(),
+                              static_cast<size_t>(block_bytes_)}
+            .subspan(gsl::narrow<size_t>(addr.QuadPart % block_bytes_), length);
     Cache::View view{Cache::ViewKey{}, bytes, block, cache_};
     cache_->Trim();
     return view;
@@ -243,20 +298,20 @@ std::enable_if_t<
   DWORD remaining = length;
   while (remaining != 0) {
     const LARGE_INTEGER block_addr{.QuadPart = cur.QuadPart -
-                                               cur.QuadPart % read_buffer_size};
+                                               cur.QuadPart % block_bytes_};
     const std::shared_ptr<Cache::Block> block = get_block(block_addr);
     if (!block) {
       return ReadUncached(addr, length);
     }
 
     const auto offset_in_block =
-        gsl::narrow<DWORD>(cur.QuadPart % read_buffer_size);
+        gsl::narrow<DWORD>(cur.QuadPart % block_bytes_);
     const auto chunk = gsl::narrow<DWORD>(
-        std::min<LONGLONG>(read_buffer_size - offset_in_block, remaining));
+        std::min<LONGLONG>(block_bytes_ - offset_in_block, remaining));
 
     const std::span<const BYTE> block_bytes{block->bytes.get(),
-                                            block_bytes_value};
-    // offsetInBlock is a remainder modulo READ_BUFFER_SIZE = block_bytes.
+                                            static_cast<size_t>(block_bytes_)};
+    // offset_in_block is a remainder modulo the block size = block_bytes.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     memcpy(out.data(), &block_bytes[offset_in_block], chunk);
 

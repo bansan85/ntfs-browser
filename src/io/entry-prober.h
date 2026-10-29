@@ -10,6 +10,7 @@
 
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #include "log/ntfs-common.h"
 
@@ -92,6 +93,8 @@ class EntryProber {
   FileRecord<S> named_;
   // The levels the sinks accept, taken once: a capture MUST NOT ask them.
   Log::Detail::LevelMask levels_;
+  // The gap, run, round and memo sizes of the volume's tuning, taken once.
+  Tuning::ProbeTuning tuning_;
   std::unordered_map<ULONGLONG, Known> known_;
   std::unordered_map<ULONGLONG, Logged> logs_;
   // Where a run read logs, to be dropped: a run that fails is read again

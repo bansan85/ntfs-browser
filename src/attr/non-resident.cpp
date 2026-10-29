@@ -22,6 +22,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/flags.h"
+#include "bench/recorder.h"
 #include "data/header-non-resident.h"
 #include "data/run-entry.h"
 #include "log/ntfs-common.h"
@@ -151,6 +152,7 @@ template <Cache::Strategy S>
 std::optional<Cache::ReadResult<S>>
     AttrNonResident<S>::ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                                      ULONGLONG offset) const {
+  const Bench::Detail::KindScope kind(Bench::ReadKind::Data, true);
   // start_lcn and offset are attacker-controlled. Their sum times the
   // cluster size is a byte address, and MUST NOT wrap past 2^63: a wrapped
   // address is a valid one, so the read would silently hit other clusters.

@@ -149,6 +149,13 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY SlotReader {
   ULONGLONG cluster_slots_;
   // Records in one window: whole clusters.
   ULONGLONG window_slots_;
+  // Windows announced ahead of the one read, at most. A lone used slot makes a
+  // window of one cluster: the cap keeps the reader's queue short then.
+  size_t max_announced_windows_;
+  // Bytes of slots announced ahead of the window read, at most. A deeper
+  // announcement measured no faster on a SATA SSD and a hard disk at the
+  // default of four windows: the reader's own reads in flight bound the scan.
+  ULONGLONG max_announced_bytes_;
 
   std::vector<SlotRange> plan_;
 

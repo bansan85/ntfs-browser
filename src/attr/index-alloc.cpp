@@ -16,6 +16,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/index-block.h"
+#include "bench/recorder.h"
 #include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/index-entry-flag.h"
@@ -124,6 +125,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
       ib_class.AllocIndexBlock(this->GetIndexBlockSize());
 
   // Read one Index Block
+  const Bench::Detail::KindScope kind(Bench::ReadKind::IndexBlock);
   std::optional<ULONGLONG> len = this->ReadData(byte_offset, block);
   if (!len || *len != this->GetIndexBlockSize()) {
     return false;

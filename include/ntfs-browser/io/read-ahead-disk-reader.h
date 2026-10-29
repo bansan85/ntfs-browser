@@ -25,6 +25,9 @@ struct ReadAheadOptions {
   // A caller that asks for more than this per read gets chunks as large as its
   // reads, up to 64 MiB.
   std::uint64_t chunk_bytes{default_read_ahead_bytes};
+  // Chunks the worker keeps read ahead of the caller, at least 1. Two make a
+  // double buffer: the caller works on one while the worker reads the other.
+  std::size_t window_chunks{2};
 };
 
 // Decorates an IDiskReader with read-ahead. When the caller reads forward,
@@ -62,6 +65,9 @@ class NTFS_BROWSER_EXPORT ReadAheadDiskReader : public IDiskReader {
 
   // Passes the cancellation on to the wrapped reader.
   void CancelPrefetch() const override;
+
+  // Passes the read pattern on to the wrapped reader.
+  void SetReadPattern(Tuning::Pattern pattern) const override;
 
  private:
   // Every member and private method, kept out of this header.

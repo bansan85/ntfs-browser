@@ -38,6 +38,7 @@
 #include "attr/run-list.h"
 #include "attr/slot.h"
 #include "attr/std-info.h"
+#include "bench/recorder.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/header-non-resident.h"
@@ -268,6 +269,7 @@ bool Io::FileRecord<S>::Impl::ReadDirectRecord(ULONGLONG file_ref) {
 
   LARGE_INTEGER fr_addr{};
   fr_addr.QuadPart = *addr;
+  const Bench::Detail::KindScope kind(Bench::ReadKind::Boot);
   return volume->ReadInto(fr_addr, record_buffer);
 }
 
@@ -317,6 +319,7 @@ std::unique_ptr<Record::HeaderImpl<S>>
       return {};
     }
 
+    const Bench::Detail::KindScope kind(Bench::ReadKind::Record, true);
     if (std::optional<ULONGLONG> len =
             volume->ReadMftData(*fr_addr, record_buffer);
         !len || *len != volume->GetFileRecordSize()) {

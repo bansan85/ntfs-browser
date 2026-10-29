@@ -32,6 +32,7 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/io/file-record.h>
@@ -39,12 +40,14 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/usn/types.h>
 
 #include "alloc/claim-inventory.h"
 #include "alloc/cluster-sweep.h"
 #include "alloc/data-state.h"
 #include "attr/file-name.h"
+#include "bench/recorder.h"
 #include "io/file-record-attr-types.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
@@ -82,30 +85,18 @@ constexpr ULONGLONG progress_interval = 4096;
 // Bits in one byte of the $MFT bitmap.
 constexpr ULONGLONG bits_per_byte = 8;
 
-// Data-state queries a scan keeps pending before it resolves them. A RangeQuery
-// is 40 bytes, so this is about 10 MiB: enough to batch thousands of files, so
-// the bitmap is read once per batch and not once per file, and small enough to
-// bound the memory of a scan whatever the volume holds.
-constexpr size_t default_max_pending_ranges = 262144;
+// The values Tuning::MftTuning has when nothing sets them: the one source of
+// every default. The caps a test asked for sit on top of them.
+const Tuning::MftTuning& DefaultMft() {
+  static const Tuning::MftTuning defaults;
+  return defaults;
+}
 
 // The cap a test asked for. 0 means the default.
 size_t max_pending_ranges_override = 0;
 
-// Free slots a block read may span between two used ones. 64 slots are 64 KiB
-// at the usual 1 KiB record: a disk seek costs more than reading that much.
-constexpr ULONGLONG max_gap_slots = 64;
-
 // The entry index of a record the scan did not keep.
 constexpr size_t no_entry = std::numeric_limits<size_t>::max();
-
-// Bytes of raw records a scan holds for its second pass at most. Past it, a
-// base record is read again in the second pass, and so are the extension
-// records that no longer fit: the pass announces them to the reader ahead of
-// its reads. A system volume of 5 million slots needs about 735 000 held
-// records, 718 MiB: 64 bits keep 1 GiB, 32 bits keep most of their address
-// space free.
-constexpr size_t default_max_held_record_bytes =
-    sizeof(void*) >= 8 ? size_t{1} << 30 : size_t{128} << 20;
 
 // The cap a test asked for. nullopt means the default.
 std::optional<size_t> max_held_record_bytes_override;
@@ -114,62 +105,17 @@ std::optional<size_t> max_held_record_bytes_override;
 // the thread that owns a scan changes it, and tests are the only readers.
 thread_local size_t slots_parsed_by_threads = 0;
 
-// Bytes of one block of held records. Records are held in blocks, so holding
-// one more never moves those already held.
-constexpr size_t held_block_bytes = size_t{4} << 20;
-
-// Waiting records whose reads the second pass announces to the reader ahead of
-// the one it parses. The reader reads up to 32 ranges and 64 MiB at once: 64
-// records keep it busy, and the $ATTRIBUTE_LIST streams of 64 of them are 16
-// MiB at most.
-constexpr size_t max_announced_records = 64;
-
-// Ranges the second pass has announced and not read, at most. The reader keeps
-// 1024 and drops a hint past them, and then no read of it is served: half of
-// that leaves room for the ranges of one record, and the reader looks for the
-// range of a read among the first 64 only, so an announcement is read at once.
-constexpr size_t max_announced_ranges = 512;
-
-// Waiting records with announced reads between two restarts of the
-// announcements. A range that no read uses stays at the front of the reader's
-// list and blocks the ones behind it, until a read of a later one passes it. A
-// restart bounds the damage of one the pass could not foresee. Records without
-// reads do not count: a restart drops the reads announced ahead, and most
-// waiting records have none.
-constexpr size_t default_announce_restart_interval = 1024;
-
 // The interval a test asked for. nullopt means the default.
 std::optional<size_t> announce_restart_interval_override;
-
-// Bytes of the cluster bitmap a scan keeps for its batches of data-state
-// queries, at most. 32 windows of 1 MiB cover 1 TiB at 4 KiB per cluster: a
-// volume up to that size reads its bitmap once per scan, a larger one keeps the
-// first terabyte and reads the rest again for each batch. 32 MiB is small next
-// to the records the scan holds, and the volume gives them back when it ends.
-constexpr ULONGLONG max_kept_bitmap_bytes = ULONGLONG{32} * 1024 * 1024;
 
 // Extents of $J the scan keeps at most, to announce them: the journal of a
 // volume that was never trimmed can have many, and the loader reads them all.
 // A longer list is cut, and the rest of $J is read without a hint.
 constexpr size_t max_journal_extents = 4096;
 
-// Bytes of one range announced for $J. The reader takes no longer range than
-// 16 MiB, and the loader reads 1 MiB at a time: 4 MiB keeps the reader's reads
-// as large as an $MFT window.
-constexpr ULONGLONG journal_piece_bytes = ULONGLONG{4} * 1024 * 1024;
-
 // Ranges announced for $J at most: 1 GiB, far more than the default journal of
 // 32 MiB. The reader keeps 1024 ranges and drops a hint past them.
 constexpr size_t max_journal_pieces = 256;
-
-// Extension records the second pass reads at once for one waiting base record,
-// at most: 4096 are 4 MiB. The others are read from the disk, one at a time,
-// when the record asks for them.
-constexpr size_t max_preread_extensions = 4096;
-
-// Records one read of the second pass covers at most, and one announced range:
-// 64 are 64 KiB at the usual 1 KiB per record.
-constexpr size_t max_run_slots = 64;
 
 // Slots of $MFT whose base record number the first pass remembers at most. The
 // numbers take 4 bytes each: 2^26 slots, 64 GiB of $MFT at 1 KiB per record,
@@ -203,50 +149,14 @@ constexpr size_t dense_index_ratio = 8;
 // scan allocate before it reads a record: about 200 MiB.
 constexpr ULONGLONG max_reserved_entries = ULONGLONG{1} << 20;
 
-// Slots one chunk of a parsed window holds. A thread takes a chunk at a time:
-// 64 records are about 250 microseconds of work, long enough that taking the
-// next chunk costs nothing, short enough that the threads finish together.
-constexpr size_t parse_chunk_slots = 64;
-
-// Slots below which an automatic thread count stays at one thread: twice the
-// probe, so that threads have as much to parse as the probe did.
-constexpr ULONGLONG default_min_auto_threaded_slots = 131072;
-
-// Slots an automatic scan parses on the calling thread alone before it decides
-// whether threads pay: 16 windows of the usual 4 MiB, about 0.2 seconds of a
-// system volume, long enough for the share of waiting to show.
-constexpr ULONGLONG default_probe_slots = 65536;
-
-// Most of the time of the probe the loading of windows may take for threads to
-// pay. A volume read faster than one thread parses gives windows at once: the
-// load is a copy, about a tenth of the time of a window. A volume read slower
-// makes the scan wait, and a SATA disk takes more than a third.
-constexpr double max_load_share = 0.2;
-
 // The limits a test asked for, and the verdict it imposed on the probe. nullopt
 // means the default, and the measure.
 std::optional<ULONGLONG> min_auto_threaded_slots_override;
 std::optional<ULONGLONG> probe_slots_override;
 std::optional<bool> probe_verdict_override;
 
-// Waiting base records one batch of the second pass holds. The threads parse a
-// batch while the scan's thread merges the one before it in order: 4096
-// outcomes are a few MiB, and a batch is long enough that starting it costs
-// nothing.
-constexpr size_t default_waiting_batch_records = 4096;
-
 // The batch length a test asked for. nullopt means the default.
 std::optional<size_t> waiting_batch_records_override;
-
-// Waiting base records one chunk of a batch holds. A held record takes about 4
-// microseconds: 64 are about 250 microseconds, long enough that taking the
-// next chunk costs nothing, short enough that the threads finish together.
-constexpr size_t waiting_chunk_records = 64;
-
-// Waiting base records below which an automatic thread count keeps the second
-// pass on one thread: 2048 held records take about 8 milliseconds, little
-// more than starting the threads costs.
-constexpr size_t default_min_auto_threaded_waiting = 2048;
 
 // The limit a test asked for. nullopt means the default.
 std::optional<size_t> min_auto_threaded_waiting_override;
@@ -254,12 +164,6 @@ std::optional<size_t> min_auto_threaded_waiting_override;
 // Waiting records the scans of this thread took from the threads that parsed
 // them, in the second pass. Read by tests only, like slots_parsed_by_threads.
 thread_local size_t waiting_parsed_by_threads = 0;
-
-// Threads an automatic count takes at most. The calling thread merges the
-// results in record order, and that work does not shrink with more threads:
-// past four, a scan of the whole $MFT of a system volume gains nothing, and the
-// threads that share a core only add CPU time.
-constexpr unsigned max_auto_threads = 4;
 
 // Threads a caller can ask for at most. A forged count cannot start more.
 constexpr unsigned max_scan_threads = 64;
@@ -480,7 +384,7 @@ bool IsMarkedFree(const std::vector<BYTE>& bitmap, ULONGLONG record) noexcept {
 // first: up to the last used slot before a gap of more than max_gap_slots free
 // ones, or total. The free slots inside are read with it, but not parsed.
 ULONGLONG ReadRangeEnd(const std::vector<BYTE>& bitmap, ULONGLONG first,
-                       ULONGLONG total) noexcept {
+                       ULONGLONG total, ULONGLONG max_gap_slots) noexcept {
   ULONGLONG last_used = first;
   for (ULONGLONG slot = first + 1;
        slot < total && slot - last_used <= max_gap_slots; slot++) {
@@ -494,7 +398,8 @@ ULONGLONG ReadRangeEnd(const std::vector<BYTE>& bitmap, ULONGLONG first,
 // The ranges of slots the scan reads with a bitmap: each starts at a used slot
 // and ends where ReadRangeEnd() says.
 std::vector<Mft::SlotRange> PlanSlotRanges(const std::vector<BYTE>& bitmap,
-                                           ULONGLONG total) {
+                                           ULONGLONG total,
+                                           ULONGLONG max_gap_slots) {
   std::vector<Mft::SlotRange> plan;
   ULONGLONG record = 0;
   while (record < total) {
@@ -502,7 +407,7 @@ std::vector<Mft::SlotRange> PlanSlotRanges(const std::vector<BYTE>& bitmap,
       record++;
       continue;
     }
-    const ULONGLONG end = ReadRangeEnd(bitmap, record, total);
+    const ULONGLONG end = ReadRangeEnd(bitmap, record, total, max_gap_slots);
     plan.push_back({.first = record, .last = end});
     record = end;
   }
@@ -591,12 +496,14 @@ class HeldRecords {
     std::vector<ULONGLONG> unheld_extensions;
   };
 
-  explicit HeldRecords(size_t record_size)
+  // block_bytes is the size of one block of held records, and budget the bytes
+  // held at most.
+  HeldRecords(size_t record_size, size_t block_bytes, size_t budget)
       : record_size_(record_size),
         block_slots_(record_size != 0
-                         ? (std::max)(size_t{1}, held_block_bytes / record_size)
+                         ? (std::max)(size_t{1}, block_bytes / record_size)
                          : 1),
-        budget_(MaxHeldRecordBytes()) {}
+        budget_(budget) {}
 
   // Meets extension record, whose base is base_record, with the bytes the slot
   // reader read. Records MUST come in increasing order.
@@ -803,23 +710,28 @@ class HeldRecords {
 // the first pass could not hold. It reads them before it parses the record, in
 // increasing order and run by run: that is the order the reader was told, so it
 // serves them from what it read ahead. A record the list names several times
-// is read once. Holds at most max_preread_extensions records.
+// is read once. Holds at most MftTuning::max_preread_extensions records.
 template <Cache::Strategy S>
 class UnheldExtensions {
  public:
   explicit UnheldExtensions(const NtfsVolume<S>& volume)
-      : volume_(&volume), record_size_(volume.GetFileRecordSize()) {}
+      : volume_(&volume),
+        record_size_(volume.GetFileRecordSize()),
+        max_preread_(volume.GetOptions().tuning.mft.max_preread_extensions),
+        max_run_(
+            (std::max<size_t>)(1,
+                               volume.GetOptions().tuning.mft.max_run_slots)) {}
 
-  // Reads the records of the first max_preread_extensions of records, in
+  // Reads the records of the first max_preread_ of records, in
   // increasing order. A run that cannot be read is left out: the record is
   // then read from the disk when asked for, as when it is not here.
   void Load(const std::vector<ULONGLONG>& records) {
     Clear();
-    const size_t count = (std::min)(records.size(), max_preread_extensions);
+    const size_t count = (std::min)(records.size(), max_preread_);
     for (size_t first = 0; first < count;) {
       size_t run = 1;
       // The run goes on while the next record directly follows, up to its cap.
-      while (first + run < count && run < max_run_slots &&
+      while (first + run < count && run < max_run_ &&
              records.at(first + run) == records.at(first) + run) {
         run++;
       }
@@ -850,6 +762,7 @@ class UnheldExtensions {
     bytes_.resize(start + run * record_size_);
     const std::span<BYTE> out =
         std::span<BYTE>{bytes_}.subspan(start, run * record_size_);
+    const Bench::Detail::KindScope kind(Bench::ReadKind::ExtensionRecord);
     if (!volume_->ReadMftSlots(first, out)) {
       bytes_.resize(start);
       return;
@@ -861,6 +774,9 @@ class UnheldExtensions {
 
   const NtfsVolume<S>* volume_;
   size_t record_size_;
+  // Records read at once at most, and records in one run at most.
+  size_t max_preread_;
+  size_t max_run_;
   std::vector<BYTE> bytes_;
   std::unordered_map<ULONGLONG, size_t> offsets_;
 };
@@ -879,11 +795,14 @@ class ReadAnnouncer {
  public:
   ReadAnnouncer(const NtfsVolume<S>& volume,
                 const std::vector<HeldRecords::Waiting>& waiting)
-      : volume_(&volume), waiting_(&waiting), ranges_(waiting.size(), 0) {}
+      : volume_(&volume),
+        waiting_(&waiting),
+        tuning_(&volume.GetOptions().tuning.mft),
+        ranges_(waiting.size(), 0) {}
 
   // Called before the pass parses waiting[index]. Announces the records that
   // follow those already announced, until max_announced_records of them, or
-  // max_announced_ranges ranges, wait from index on.
+  // max_announced_ranges ranges, wait from index on (MftTuning).
   void Before(size_t index) {
     for (; passed_ < index; passed_++) {
       if (ranges_.at(passed_) != 0) {
@@ -893,8 +812,9 @@ class ReadAnnouncer {
       }
     }
     // Another record's reads fit: neither cap is reached.
-    for (; next_ < waiting_->size() && ahead_records_ < max_announced_records &&
-           ahead_ranges_ < max_announced_ranges;
+    for (; next_ < waiting_->size() &&
+           ahead_records_ < tuning_->max_announced_records &&
+           ahead_ranges_ < tuning_->max_announced_ranges;
          next_++) {
       const HeldRecords::Waiting& waiting = waiting_->at(next_);
       if (!HasReads(waiting)) {
@@ -918,7 +838,7 @@ class ReadAnnouncer {
   [[nodiscard]] bool RestartDue() const noexcept {
     return passed_with_reads_ >=
            (std::max)(size_t{1}, announce_restart_interval_override.value_or(
-                                     default_announce_restart_interval));
+                                     tuning_->announce_restart_interval));
   }
 
   // Withdraws everything announced and starts again at waiting[index]: the
@@ -950,11 +870,13 @@ class ReadAnnouncer {
     }
     // Neighbouring records are one read.
     const std::vector<ULONGLONG>& unheld = waiting.unheld_extensions;
-    const size_t count = (std::min)(unheld.size(), max_preread_extensions);
+    const size_t count =
+        (std::min)(unheld.size(), tuning_->max_preread_extensions);
+    const size_t max_run = (std::max<size_t>)(1, tuning_->max_run_slots);
     for (size_t first = 0; first < count;) {
       size_t run = 1;
       // As in UnheldExtensions::Load(): the same runs, so the same reads.
-      while (first + run < count && run < max_run_slots &&
+      while (first + run < count && run < max_run &&
              unheld.at(first + run) == unheld.at(first) + run) {
         run++;
       }
@@ -973,6 +895,7 @@ class ReadAnnouncer {
 
   const NtfsVolume<S>* volume_;
   const std::vector<HeldRecords::Waiting>* waiting_;
+  const Tuning::MftTuning* tuning_;
   // The ranges announced for each record, 0 when none or not announced yet.
   std::vector<size_t> ranges_;
   // Records the pass parsed, and those among them that had reads announced,
@@ -1211,7 +1134,12 @@ class DataStateResolver {
       : volume_(&volume),
         entries_(&entries),
         stats_(&stats),
-        keep_windows_(keep_windows) {}
+        keep_windows_(keep_windows),
+        max_pending_(max_pending_ranges_override != 0
+                         ? max_pending_ranges_override
+                         : volume.GetOptions().tuning.mft.max_pending_ranges),
+        kept_bitmap_bytes_(
+            volume.GetOptions().tuning.mft.max_kept_bitmap_bytes) {}
 
   DataStateResolver(const DataStateResolver&) = delete;
   DataStateResolver& operator=(const DataStateResolver&) = delete;
@@ -1242,7 +1170,7 @@ class DataStateResolver {
     for (const Alloc::Extent& extent : note.extents.extents) {
       queries_.push_back({.lcn = extent.lcn, .clusters = extent.clusters});
     }
-    if (queries_.size() >= MaxPendingRanges()) {
+    if (queries_.size() >= max_pending_) {
       Flush();
     }
   }
@@ -1265,10 +1193,14 @@ class DataStateResolver {
     }
     // Later batches meet the windows of this one again.
     if (!keeping_) {
-      volume_->KeepBitmapWindows(max_kept_bitmap_bytes);
+      volume_->KeepBitmapWindows(kept_bitmap_bytes_);
       keeping_ = true;
     }
-    volume_->GetRangeStates(queries_);
+    volume_->SetReadPattern(Tuning::Pattern::ScatteredGrouped);
+    {
+      const Bench::PhaseScope phase(Bench::Phase::DataStateFlush);
+      volume_->GetRangeStates(queries_);
+    }
 
     std::vector<Alloc::ClusterState> states;
     for (const Waiting& entry : waiting_) {
@@ -1318,6 +1250,9 @@ class DataStateResolver {
   bool keeping_{false};
   // Whether the windows outlive the resolver, for the cluster sweep.
   bool keep_windows_{false};
+  // Queries kept before a batch resolves them, and bytes of bitmap kept.
+  size_t max_pending_;
+  ULONGLONG kept_bitmap_bytes_;
 };
 
 // What one record slot of a window gave, parsed away from the thread that owns
@@ -1412,6 +1347,8 @@ class WindowParser {
                const std::vector<BYTE>* bitmap, bool annotate, bool account)
       : volume_(&volume),
         record_size_(volume.GetFileRecordSize()),
+        chunk_slots_((std::max<size_t>)(1, volume.GetOptions()
+                                               .tuning.mft.parse_chunk_slots)),
         bitmap_(bitmap),
         annotate_(annotate),
         account_(account),
@@ -1439,7 +1376,7 @@ class WindowParser {
     if (outcomes_.size() < slots) {
       outcomes_.resize(slots);
     }
-    const size_t chunks = (slots + parse_chunk_slots - 1) / parse_chunk_slots;
+    const size_t chunks = (slots + chunk_slots_ - 1) / chunk_slots_;
     // The logs of the window before stay as they are: the lines its last slot
     // logged when its attributes were dropped are replayed with the next slot.
     log_set_ = 1 - log_set_;
@@ -1473,8 +1410,9 @@ class WindowParser {
   // next Begin().
   SlotOutcome& Take(ULONGLONG record) {
     const auto index = static_cast<size_t>(record - window_.first);
-    const size_t chunk = index / parse_chunk_slots;
+    const size_t chunk = index / chunk_slots_;
     if (chunk != waited_chunk_) {
+      const Bench::Detail::SliceScope wait(Bench::Slice::PoolWait);
       pool_.WaitFor(chunk);
       waited_chunk_ = chunk;
     }
@@ -1485,7 +1423,7 @@ class WindowParser {
   // outcome marks. It stays valid until the second Begin() after the window.
   [[nodiscard]] const Log::Detail::CapturedLog& LogOf(ULONGLONG record) const {
     const auto index = static_cast<size_t>(record - window_.first);
-    return logs_.at(log_set_).at(index / parse_chunk_slots);
+    return logs_.at(log_set_).at(index / chunk_slots_);
   }
 
  private:
@@ -1500,8 +1438,8 @@ class WindowParser {
     Io::FileRecord<S>& file_record = *contexts_.at(slot);
 
     const auto slots = static_cast<size_t>(window_.last - window_.first);
-    const size_t first = chunk * parse_chunk_slots;
-    const size_t last = (std::min)(first + parse_chunk_slots, slots);
+    const size_t first = chunk * chunk_slots_;
+    const size_t last = (std::min)(first + chunk_slots_, slots);
     for (size_t index = first; index < last; index++) {
       const ULONGLONG record = window_.first + index;
       if (bitmap_ != nullptr && IsMarkedFree(*bitmap_, record)) {
@@ -1523,6 +1461,8 @@ class WindowParser {
 
   const NtfsVolume<S>* volume_;
   size_t record_size_;
+  // Slots one chunk holds, from the volume's tuning.
+  size_t chunk_slots_;
   const std::vector<BYTE>* bitmap_;
   bool annotate_;
   bool account_;
@@ -1565,6 +1505,9 @@ class WaitingParser {
       : volume_(&volume),
         held_(&held),
         waiting_(&held.WaitingRecords()),
+        chunk_records_(
+            (std::max<size_t>)(1, volume.GetOptions()
+                                      .tuning.mft.waiting_chunk_records)),
         annotate_(annotate),
         account_(account),
         pool_(threads - 1) {
@@ -1593,8 +1536,7 @@ class WaitingParser {
     if (outcomes_.size() < count) {
       outcomes_.resize(count);
     }
-    const size_t chunks =
-        (count + waiting_chunk_records - 1) / waiting_chunk_records;
+    const size_t chunks = (count + chunk_records_ - 1) / chunk_records_;
     // The logs of the batch before stay as they are: the lines its last record
     // logged when its attributes were dropped are replayed with the next one.
     log_set_ = 1 - log_set_;
@@ -1626,8 +1568,9 @@ class WaitingParser {
   // The outcome of waiting record index, once its chunk is parsed. index MUST
   // be covered. The reference stays valid until the next Begin().
   SlotOutcome& Take(size_t index) {
-    const size_t chunk = (index - first_) / waiting_chunk_records;
+    const size_t chunk = (index - first_) / chunk_records_;
     if (chunk != waited_chunk_) {
+      const Bench::Detail::SliceScope wait(Bench::Slice::PoolWait);
       pool_.WaitFor(chunk);
       waited_chunk_ = chunk;
     }
@@ -1638,7 +1581,7 @@ class WaitingParser {
   // which its outcome marks. It stays valid until the second Begin() after the
   // batch.
   [[nodiscard]] const Log::Detail::CapturedLog& LogOf(size_t index) const {
-    return logs_.at(log_set_).at((index - first_) / waiting_chunk_records);
+    return logs_.at(log_set_).at((index - first_) / chunk_records_);
   }
 
  private:
@@ -1660,8 +1603,8 @@ class WaitingParser {
     const Log::Detail::CaptureScope capture(log);
     Context& context = *contexts_.at(slot);
 
-    const size_t first = chunk * waiting_chunk_records;
-    const size_t last = (std::min)(first + waiting_chunk_records, count_);
+    const size_t first = chunk * chunk_records_;
+    const size_t last = (std::min)(first + chunk_records_, count_);
     for (size_t offset = first; offset < last; offset++) {
       SlotOutcome& outcome = outcomes_.at(offset);
       outcome = SlotOutcome{};
@@ -1712,6 +1655,8 @@ class WaitingParser {
   const NtfsVolume<S>* volume_;
   const HeldRecords* held_;
   const std::vector<HeldRecords::Waiting>* waiting_;
+  // Waiting records one chunk holds, from the volume's tuning.
+  size_t chunk_records_;
   bool annotate_;
   bool account_;
   // The batch being parsed: its first waiting record, and its length.
@@ -1742,11 +1687,13 @@ size_t ScanThreads(const NtfsVolume<S>& volume,
   }
   unsigned threads = options.threads;
   if (threads == 0) {
+    const Tuning::MftTuning& tuning = volume.GetOptions().tuning.mft;
     if (total < min_auto_threaded_slots_override.value_or(
-                    default_min_auto_threaded_slots)) {
+                    tuning.min_auto_threaded_slots)) {
       return 1;
     }
-    threads = (std::min)(std::thread::hardware_concurrency(), max_auto_threads);
+    threads = (std::min)(std::thread::hardware_concurrency(),
+                         tuning.max_auto_threads);
   }
   return (std::clamp)(threads, 1U, max_scan_threads);
 }
@@ -1783,12 +1730,21 @@ class SlotScan {
         entries_(&entries),
         stats_(&stats),
         total_(volume.GetRecordsCount()),
-        held_(volume.GetFileRecordSize()),
+        held_(
+            volume.GetFileRecordSize(),
+            volume.GetOptions().tuning.mft.held_block_bytes,
+            static_cast<size_t>(
+                (std::min<
+                    std::uint64_t>)(max_held_record_bytes_override
+                                        ? *max_held_record_bytes_override
+                                        : volume.GetOptions()
+                                              .tuning.mft.max_held_record_bytes,
+                                    (std::numeric_limits<size_t>::max)()))),
         bases_(total_),
         unheld_(volume),
         file_record_(volume),
         resolver_(volume, entries, stats, account),
-        slots_(volume) {
+        slots_(volume, volume.GetOptions().tuning.mft.window_bytes) {
     file_record_.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
     if (account) {
       file_record_.SetClaimMask(Attr::Mask::All);
@@ -1800,7 +1756,8 @@ class SlotScan {
     file_record_.SetBaseSource(
         [this](ULONGLONG record) { return bases_.BaseOf(record); });
     if (bitmap) {
-      slots_.Plan(PlanSlotRanges(*bitmap, total_));
+      slots_.Plan(PlanSlotRanges(*bitmap, total_,
+                                 volume.GetOptions().tuning.mft.max_gap_slots));
     }
     parse_threads_ = ScanThreads(volume, options, total_);
     // An explicit count is used from the first window. A count left to the
@@ -1910,13 +1867,16 @@ class SlotScan {
     if (parse_threads_ <= 1) {
       return false;
     }
-    return !automatic_ || count >= min_auto_threaded_waiting_override.value_or(
-                                       default_min_auto_threaded_waiting);
+    return !automatic_ ||
+           count >=
+               min_auto_threaded_waiting_override.value_or(
+                   volume_->GetOptions().tuning.mft.min_auto_threaded_waiting);
   }
 
   // Parses waiting on this thread, with the reads that takes, and keeps what it
   // gives. True when its entry is kept.
   bool ParseWaitingHere(const HeldRecords::Waiting& waiting) {
+    const Bench::Detail::SliceScope slice(Bench::Slice::Parse);
     Mft::MftTree::Entry& entry = entries_->at(waiting.entry_index);
     // The bytes the first pass parsed: the header parses as it did then. A
     // record that was not held is read again, announced to the reader.
@@ -1950,6 +1910,7 @@ class SlotScan {
   std::optional<bool> TakeWaiting(size_t index) {
     const std::vector<HeldRecords::Waiting>& waiting_records =
         held_.WaitingRecords();
+    const Bench::Detail::SliceScope slice(Bench::Slice::Merge);
     if (!waiting_parser_) {
       waiting_parser_.emplace(*volume_, parse_threads_, held_, bases_,
                               annotate_, account_);
@@ -1957,7 +1918,8 @@ class SlotScan {
     if (!waiting_parser_->Covers(index)) {
       const size_t batch =
           (std::max)(size_t{1}, waiting_batch_records_override.value_or(
-                                    default_waiting_batch_records));
+                                    volume_->GetOptions()
+                                        .tuning.mft.waiting_batch_records));
       waiting_parser_->Begin(index,
                              (std::min)(batch, waiting_records.size() - index));
     }
@@ -1997,6 +1959,7 @@ class SlotScan {
     if (parse_threads_ <= 1 || record < serial_until_) {
       return false;
     }
+    const Bench::Detail::SliceScope slice(Bench::Slice::Merge);
     if (!parser_ || !parser_->Covers(record)) {
       if (parser_) {
         // The next window overwrites the bytes the threads parse.
@@ -2080,14 +2043,16 @@ class SlotScan {
     }
     probe_.load_seconds +=
         std::chrono::duration<double>(loaded - began).count();
+    const Tuning::MftTuning& tuning = volume_->GetOptions().tuning.mft;
     if (record - probe_.first_slot <
-        probe_slots_override.value_or(default_probe_slots)) {
+        probe_slots_override.value_or(tuning.probe_slots)) {
       return false;
     }
     probe_.decided = true;
     probe_.threads_pay = probe_verdict_override.value_or(ScanThreadsPay(
         probe_.load_seconds,
-        std::chrono::duration<double>(loaded - probe_.began).count()));
+        std::chrono::duration<double>(loaded - probe_.began).count(),
+        static_cast<double>(tuning.max_load_per_mille) / 1000.0));
     return probe_.threads_pay;
   }
 
@@ -2165,6 +2130,7 @@ class SlotScan {
 
   // Parses slot record on this thread, and keeps what it gives.
   void ParseHere(ULONGLONG record) {
+    const Bench::Detail::SliceScope slice(Bench::Slice::Parse);
     ReplayPendingRelease();
     RecordCounts counts;
     ParseHereInto(record, counts);
@@ -2284,7 +2250,7 @@ class SlotScan {
 
 size_t MaxPendingRanges() {
   return max_pending_ranges_override != 0 ? max_pending_ranges_override
-                                          : default_max_pending_ranges;
+                                          : DefaultMft().max_pending_ranges;
 }
 
 void SetAutoThreadLimitsForTests(std::optional<ULONGLONG> min_slots,
@@ -2297,13 +2263,22 @@ void SetAutoThreadLimitsForTests(std::optional<ULONGLONG> min_slots,
   min_auto_threaded_waiting_override = min_waiting;
 }
 
-bool ScanThreadsPay(double load_seconds, double elapsed_seconds) noexcept {
+bool ScanThreadsPay(double load_seconds, double elapsed_seconds,
+                    double max_load_share) noexcept {
   return elapsed_seconds > 0 &&
          load_seconds <= max_load_share * elapsed_seconds;
 }
 
+bool ScanThreadsPay(double load_seconds, double elapsed_seconds) noexcept {
+  return ScanThreadsPay(load_seconds, elapsed_seconds,
+                        static_cast<double>(DefaultMft().max_load_per_mille) /
+                            1000.0);
+}
+
 size_t MaxHeldRecordBytes() {
-  return max_held_record_bytes_override.value_or(default_max_held_record_bytes);
+  return max_held_record_bytes_override.value_or(static_cast<size_t>(
+      (std::min<std::uint64_t>)(DefaultMft().max_held_record_bytes,
+                                (std::numeric_limits<size_t>::max)())));
 }
 
 void SetMaxHeldRecordBytesForTests(std::optional<size_t> limit) {
@@ -2492,8 +2467,16 @@ std::vector<Alloc::Extent> Mft::MftTree::Impl::ReadSlots(
     const std::optional<std::vector<BYTE>>& bitmap, bool annotate, bool account,
     Alloc::ClaimInventory& inventory) {
   SlotScan<S> scan(volume, options, bitmap, annotate, account, entries, stats);
-  scan.FirstPass();
-  scan.SecondPass();
+  {
+    const Bench::PhaseScope phase(Bench::Phase::Pass1);
+    volume.SetReadPattern(Tuning::Pattern::LargeSequential);
+    scan.FirstPass();
+  }
+  if (!Bench::StopRequested()) {
+    const Bench::PhaseScope phase(Bench::Phase::Pass2);
+    volume.SetReadPattern(Tuning::Pattern::ScatteredGrouped);
+    scan.SecondPass();
+  }
   inventory = scan.TakeInventory();
   return scan.TakeJournalExtents();
 }
@@ -2556,18 +2539,21 @@ bool Mft::MftTree::Impl::AnnounceJournal(
           : static_cast<ULONGLONG>((std::numeric_limits<LONGLONG>::max)()) /
                 cluster_size;
   size_t pieces = 0;
+  const ULONGLONG piece_bytes =
+      (std::max<ULONGLONG>)(volume.GetOptions().tuning.mft.journal_piece_bytes,
+                            cluster_size);
   for (const Alloc::Extent& extent : extents) {
     if (extent.lcn > max_lcn || extent.clusters > max_lcn - extent.lcn) {
       return pieces != 0;
     }
     const ULONGLONG end = (extent.lcn + extent.clusters) * cluster_size;
     for (ULONGLONG at = extent.lcn * cluster_size; at < end;
-         at += journal_piece_bytes) {
+         at += piece_bytes) {
       if (pieces == max_journal_pieces) {
         return true;
       }
       pieces++;
-      volume.Prefetch(at, (std::min)(journal_piece_bytes, end - at));
+      volume.Prefetch(at, (std::min)(piece_bytes, end - at));
     }
   }
   return pieces != 0;
@@ -2579,6 +2565,7 @@ bool Mft::MftTree::Impl::AnnounceJournal(
 template <Cache::Strategy S>
 void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
                               const Mft::MftTree::ScanOptions& options) {
+  volume.SetReadPattern(Tuning::Pattern::LargeSequential);
   const ULONGLONG total = volume.GetRecordsCount();
   stats.slots = total;
 
@@ -2602,21 +2589,36 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   // The data states and the sweep both read $Bitmap: the windows the first
   // reads stay for the second.
   if (account && annotate) {
-    volume.KeepBitmapWindows(max_kept_bitmap_bytes);
+    volume.KeepBitmapWindows(
+        volume.GetOptions().tuning.mft.max_kept_bitmap_bytes);
   }
   Alloc::ClaimInventory inventory;
   const std::vector<Alloc::Extent> journal_extents =
       ReadSlots(volume, options, bitmap, annotate, account, inventory);
+  // A run told to stop after a phase leaves a tree that is not complete.
+  if (Bench::StopRequested()) {
+    stats.complete = false;
+    if (account && annotate) {
+      volume.KeepBitmapWindows(0);
+    }
+    return;
+  }
   for (size_t index = 0; index < entries.size(); index++) {
     // index < entries.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     IndexEntry(entries[index].record, index);
   }
   if (account && stats.complete) {
+    const Bench::PhaseScope phase(Bench::Phase::ClusterSweep);
+    volume.SetReadPattern(Tuning::Pattern::LargeSequential);
     AccountClusters(volume, options, inventory);
   }
   if (account && annotate) {
     volume.KeepBitmapWindows(0);
+  }
+  if (Bench::StopRequested()) {
+    stats.complete = false;
+    return;
   }
 
   if (options.progress && stats.complete) {
@@ -2628,7 +2630,14 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   const bool journal_announced =
       stats.complete && AnnounceJournal(volume, journal_extents);
   LogScanSummary(annotate);
-  Link();
+  {
+    const Bench::PhaseScope phase(Bench::Phase::Link);
+    Link();
+  }
+  if (Bench::StopRequested()) {
+    stats.complete = false;
+    return;
+  }
   ApplyJournalIfComplete(volume, journal_announced);
 }
 
@@ -2659,6 +2668,8 @@ void Mft::MftTree::Impl::ApplyJournalIfComplete(const NtfsVolume<S>& volume,
   if (!volume.GetOptions().recover_errors || !stats.complete) {
     return;
   }
+  const Bench::PhaseScope phase(Bench::Phase::JournalLoad);
+  volume.SetReadPattern(Tuning::Pattern::LargeSequential);
   const Usn::Journal* journal = volume.GetUsnJournal();
   // What the loader did not read of the announced journal is read for nothing.
   if (announced) {

@@ -16,7 +16,9 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 
+#include "bench/recorder.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
@@ -26,23 +28,6 @@ namespace {
 // First slot of $MFT that is read through $MFT's extents: below it, a record
 // has a fixed address and is probed alone.
 constexpr ULONGLONG first_mapped_slot = static_cast<ULONGLONG>(Mft::Idx::User);
-
-// Widest hole, in bytes of $MFT, that one read spans between two probed
-// records. 64 KiB is a block of the FullCache: two reads further apart than
-// that never share a block, and a seek costs more than 64 KiB of transfer.
-constexpr size_t max_gap_bytes = size_t{64} * 1024;
-
-// Most bytes of $MFT one read takes, holes included. A group of one directory
-// block rarely reaches it: it bounds a forged one.
-constexpr size_t max_run_bytes = size_t{1} * 1024 * 1024;
-
-// Records probed per round of announce, read and withdraw. The reader keeps at
-// most 32 reads in flight and 1024 ranges announced: a round stays far below.
-constexpr size_t max_chunk_records = 128;
-
-// Records the memo holds before it is emptied: about 15 MiB. A directory
-// beyond it probes again the records it forgot.
-constexpr size_t max_known_records = size_t{1} << 18;
 
 // One read of consecutive slots of $MFT, holes included.
 struct Run {
@@ -57,11 +42,15 @@ struct Run {
 
 template <Cache::Strategy S>
 EntryProber<S>::EntryProber(const NtfsVolume<S>& volume)
-    : volume_(&volume), named_(volume), levels_(Log::Detail::EnabledLevels()) {}
+    : volume_(&volume),
+      named_(volume),
+      levels_(Log::Detail::EnabledLevels()),
+      tuning_(volume.GetOptions().tuning.probe) {}
 
 template <Cache::Strategy S>
 void EntryProber<S>::ProbeGroup(std::span<const ULONGLONG> records) {
-  if (known_.size() >= max_known_records) {
+  volume_->SetReadPattern(Tuning::Pattern::ScatteredGrouped);
+  if (known_.size() >= tuning_.max_known_records) {
     known_.clear();
     logs_.clear();
   }
@@ -74,9 +63,10 @@ void EntryProber<S>::ProbeGroup(std::span<const ULONGLONG> records) {
   pending_.erase(std::ranges::unique(pending_).begin(), pending_.end());
 
   const std::span<const ULONGLONG> all(pending_);
-  for (size_t first = 0; first < all.size(); first += max_chunk_records) {
+  const size_t chunk_records = (std::max<size_t>)(1, tuning_.max_chunk_records);
+  for (size_t first = 0; first < all.size(); first += chunk_records) {
     ProbeChunk(
-        all.subspan(first, (std::min)(max_chunk_records, all.size() - first)));
+        all.subspan(first, (std::min)(chunk_records, all.size() - first)));
   }
 }
 
@@ -109,9 +99,9 @@ void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
 
   std::vector<Run> runs;
   if (mapped) {
-    const ULONGLONG max_gap_slots = max_gap_bytes / record_size;
+    const ULONGLONG max_gap_slots = tuning_.max_gap_bytes / record_size;
     const ULONGLONG max_run_slots =
-        (std::max<ULONGLONG>)(1, max_run_bytes / record_size);
+        (std::max<ULONGLONG>)(1, tuning_.max_run_bytes / record_size);
     for (size_t index = first_run_record; index < chunk.size(); index++) {
       const ULONGLONG slot = chunk[index];
       if (!runs.empty()) {
@@ -149,6 +139,7 @@ void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
     {
       read_log_.Reset(levels_);
       const Log::Detail::CaptureScope scope(read_log_);
+      const Bench::Detail::KindScope kind(Bench::ReadKind::ProbeRun);
       read = volume_->ReadMftSlots(run.first_slot, run_bytes_);
     }
     for (size_t index = run.begin; index < run.end; index++) {

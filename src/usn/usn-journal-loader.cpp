@@ -27,6 +27,7 @@
 
 #include "attr/resident.h"
 #include "attr/std-info.h"
+#include "bench/recorder.h"
 #include "log/ntfs-common.h"
 #include "usn/usn-record-scanner.h"
 
@@ -48,11 +49,6 @@ constexpr std::wstring_view journal_file_name = L"$UsnJrnl";
 
 // Name of the stream that holds the records.
 constexpr std::wstring_view journal_stream_name = L"$J";
-
-// Bytes asked of the stream at a time. 1 MiB is big enough to cost few calls
-// for a journal of hundreds of MiB, and small enough to keep the scan's own
-// buffer and the cut record it carries far below the cache ceiling.
-constexpr size_t read_chunk_bytes = size_t{1} << 20U;
 
 // Bits in a DWORD: where the high half of a FILETIME value starts.
 constexpr unsigned dword_bits = 32;
@@ -119,20 +115,23 @@ struct ReadState {
   Journal journal;
 };
 
-// Reads one range of stream in chunks, through the scanner into the ring.
+// Reads one range of stream in chunks of read_chunk_bytes, through the scanner
+// into the ring. A chunk of 1 MiB (the default of Tuning::UsnTuning) costs few
+// calls for a journal of hundreds of MiB, and keeps the scan's own buffer and
+// the cut record it carries far below the cache ceiling.
 // Returns false when a read failed: that ends the range, the bytes before it
 // were scanned, and the stretch that follows is lost.
 template <Cache::Strategy S>
 bool ReadRange(const Attr::AttrBase<S>& stream, const Alloc::ByteRange& range,
-               ReadState& state) {
+               ReadState& state, size_t read_chunk_bytes) {
   state.scanner.Reset();
   std::vector<BYTE> buffer;
   std::vector<Record> batch;
   bool read_ok = true;
   ULONGLONG done = 0;
   while (done < range.length) {
-    const auto want = static_cast<size_t>(
-        std::min<ULONGLONG>(read_chunk_bytes, range.length - done));
+    const auto want = static_cast<size_t>(std::min<ULONGLONG>(
+        (std::max<size_t>)(read_chunk_bytes, 1), range.length - done));
     buffer.resize(want);
     const std::optional<ULONGLONG> got =
         stream.ReadData(range.offset + done, std::span<BYTE>(buffer));
@@ -155,6 +154,7 @@ bool ReadRange(const Attr::AttrBase<S>& stream, const Alloc::ByteRange& range,
 // fails. A step that throws is the caller's to catch.
 template <Cache::Strategy S>
 std::unique_ptr<Journal> ReadJournal(const NtfsVolume<S>& volume) {
+  const Bench::Detail::KindScope kind(Bench::ReadKind::Journal);
   Io::FileRecord<S> extend(volume);
   extend.SetBypassDeletedGate(true);
   if (!extend.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Extend)) ||
@@ -194,7 +194,8 @@ std::unique_ptr<Journal> ReadJournal(const NtfsVolume<S>& volume) {
                   .journal = {}};
   bool read_failed = false;
   for (const Alloc::ByteRange& range : ranges.ranges) {
-    if (!ReadRange(*stream, range, state)) {
+    if (!ReadRange(*stream, range, state,
+                   volume.GetOptions().tuning.usn.read_chunk_bytes)) {
       read_failed = true;
     }
   }

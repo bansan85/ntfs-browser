@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -10,6 +11,7 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #ifdef _WIN32
   #include <string_view>
@@ -37,15 +39,18 @@ template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
  public:
   // max_cache_bytes is the soft ceiling of the FullCache block cache. NoCache
-  // ignores it.
+  // ignores it. tuning sets the block of the cache and, for Open(), the
+  // read-ahead caps of the reader it opens.
   explicit FileReader(
-      std::uint64_t max_cache_bytes = Cache::default_max_cache_bytes);
+      std::uint64_t max_cache_bytes = Cache::default_max_cache_bytes,
+      const Tuning::Settings& tuning = {});
 
   // Takes ownership of an already-open reader (eg. an in-memory test double)
   // instead of opening a real disk/file via Open().
   explicit FileReader(
       std::unique_ptr<IDiskReader> reader,
-      std::uint64_t max_cache_bytes = Cache::default_max_cache_bytes);
+      std::uint64_t max_cache_bytes = Cache::default_max_cache_bytes,
+      const Tuning::Settings& tuning = {});
 
 #ifdef _WIN32
   // Opens a real disk/file path via Win32DiskReader. Not available outside
@@ -55,7 +60,8 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
 
   // Wraps the reader in an Io::ReadAheadDiskReader with chunks of this many
   // bytes. Call it once the reader is open and before the first read.
-  void EnableReadAhead(std::uint64_t chunk_bytes);
+  void EnableReadAhead(std::uint64_t chunk_bytes,
+                       std::size_t window_chunks = 2);
 
   // Reads from addr into dest.
   bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
@@ -71,6 +77,9 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
 
   // Forgets what Prefetch() announced and no read used yet.
   void CancelPrefetch() const;
+
+  // Tells the reader which read pattern the reads that follow belong to.
+  void SetReadPattern(Tuning::Pattern pattern) const;
 
   // NoCache: a span over the reader's own buffer, valid until the next read.
   template <Cache::Strategy S2 = S>
@@ -100,7 +109,21 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   [[nodiscard]] std::optional<Cache::View> ReadUncached(LARGE_INTEGER addr,
                                                         DWORD length) const;
 
+  // Every read the volume makes goes through here, so that a benchmark session
+  // times it and a capture sink sees its bytes. Without either it is a plain
+  // call of the reader.
+  [[nodiscard]] bool ReadFromReader(LARGE_INTEGER& addr,
+                                    std::span<BYTE> dest) const;
+
+  // Hands one range to the reader as a hint, and logs it for a session.
+  void Announce(ULONGLONG offset, ULONGLONG length) const;
+
   std::unique_ptr<IDiskReader> reader_;
+
+  // Bytes of one cached block, and the read-ahead caps of the reader Open()
+  // makes. Fixed at construction.
+  std::int64_t block_bytes_;
+  std::array<Tuning::ReaderTuning, Tuning::pattern_count> reader_caps_;
 
   // Use only for Cache::Strategy::NoCache.
   mutable std::vector<BYTE> buffer_;

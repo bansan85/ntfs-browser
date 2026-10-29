@@ -489,6 +489,10 @@ size_t BitmapWindowBytes() {
                                     : default_window_bytes;
 }
 
+size_t BitmapWindowBytes(size_t tuned) {
+  return window_bytes_override != 0 ? window_bytes_override : tuned;
+}
+
 size_t PeakBitmapBytesHeld() { return peak_bytes_held; }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Alloc

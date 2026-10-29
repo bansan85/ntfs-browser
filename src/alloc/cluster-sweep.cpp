@@ -17,33 +17,19 @@
 
 #include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/alloc/types.h>
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "alloc/claim-inventory.h"
 #include "alloc/content-check.h"
+#include "bench/recorder.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 
 namespace {
-
-// Bytes one read of the content check covers at most: 4 MiB, as large as a
-// window of $MFT, so that a disk reads at its speed and the buffer stays small.
-constexpr ULONGLONG max_check_read_bytes = ULONGLONG{4} * 1024 * 1024;
-
-// Bytes of clusters nobody asks for that one read of the content check may
-// span between two it wants: a seek costs more than reading 64 KiB.
-constexpr ULONGLONG max_check_gap_bytes = ULONGLONG{64} * 1024;
-
-// Reads the content check has announced to the reader and not made yet, at
-// most. The reader keeps 32 reads in flight.
-constexpr std::size_t max_announced_check_reads = 32;
-
-// Bytes the content check announces ahead of the read it makes: 32 MiB, half
-// of what the reader keeps in flight.
-constexpr ULONGLONG max_announced_check_bytes = ULONGLONG{32} * 1024 * 1024;
 
 // A stretch of one stream that the sweep settled: [vcn, vcn + clusters) at lcn
 // is in one condition. 32 bytes.
@@ -262,7 +248,8 @@ struct CheckEdit {
 };
 
 // The reads of the content check: contiguous targets, cut so that none passes
-// max_check_read_bytes, and merged while the gap between them stays small.
+// CheckTuning::max_read_bytes, and merged while the gap between them stays
+// small.
 struct CheckRead {
   std::size_t first_target{0};
   std::size_t target_count{0};
@@ -298,6 +285,8 @@ class ContentChecker {
       return std::tie(left.lcn, left.index) < std::tie(right.lcn, right.index);
     });
     const std::vector<CheckRead> reads = PlanReads(targets);
+    volume_->SetReadPattern(Tuning::Pattern::LargeData);
+    const Bench::PhaseScope phase(Bench::Phase::ContentCheck);
     std::vector<CheckEdit> edits;
     const ULONGLONG clusters_read = ReadAll(targets, reads, edits);
     Apply(resolved, edits);
@@ -341,7 +330,9 @@ class ContentChecker {
   void Cut(std::vector<CheckTarget>& targets, const Resolved& stretch,
            std::size_t index) const {
     const ULONGLONG per_read =
-        (std::max)(ULONGLONG{1}, max_check_read_bytes / cluster_size_);
+        (std::max)(ULONGLONG{1},
+                   volume_->GetOptions().tuning.check.max_read_bytes /
+                       cluster_size_);
     for (ULONGLONG done = 0; done < stretch.clusters; done += per_read) {
       targets.push_back(
           {.lcn = stretch.lcn + done,
@@ -354,9 +345,10 @@ class ContentChecker {
   // Groups the sorted targets into reads.
   std::vector<CheckRead>
       PlanReads(const std::vector<CheckTarget>& targets) const {
+    const Tuning::CheckTuning& check = volume_->GetOptions().tuning.check;
     const ULONGLONG max_clusters =
-        (std::max)(ULONGLONG{1}, max_check_read_bytes / cluster_size_);
-    const ULONGLONG max_gap = max_check_gap_bytes / cluster_size_;
+        (std::max)(ULONGLONG{1}, check.max_read_bytes / cluster_size_);
+    const ULONGLONG max_gap = check.max_gap_bytes / cluster_size_;
     std::vector<CheckRead> reads;
     for (std::size_t i = 0; i < targets.size(); i++) {
       const CheckTarget& target = targets.at(i);
@@ -384,13 +376,14 @@ class ContentChecker {
   // number current, and returns the next one to announce.
   std::size_t Announce(const std::vector<CheckRead>& reads, std::size_t current,
                        std::size_t announced) const {
+    const Tuning::CheckTuning& check = volume_->GetOptions().tuning.check;
     ULONGLONG bytes = 0;
     for (std::size_t i = current; i < announced; i++) {
       bytes += reads.at(i).clusters * cluster_size_;
     }
     while (announced < reads.size() &&
-           announced - current < max_announced_check_reads &&
-           bytes < max_announced_check_bytes) {
+           announced - current < check.max_announced_reads &&
+           bytes < check.max_announced_bytes) {
       const CheckRead& read = reads.at(announced);
       volume_->Prefetch(read.lcn * cluster_size_,
                         read.clusters * cluster_size_);
@@ -420,6 +413,7 @@ class ContentChecker {
       buffer.resize(static_cast<std::size_t>(read.clusters * cluster_size_));
       LARGE_INTEGER addr{};
       addr.QuadPart = static_cast<LONGLONG>(read.lcn * cluster_size_);
+      const Bench::Detail::KindScope kind(Bench::ReadKind::ContentCheck);
       if (!volume_->ReadInto(addr, buffer)) {
         Log::Debug("Content check: the {} clusters at LCN {} cannot be read",
                    read.clusters, read.lcn);

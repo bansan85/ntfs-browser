@@ -85,4 +85,10 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void SetAutoThreadLimitsForTests(
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY bool
     ScanThreadsPay(double load_seconds, double elapsed_seconds) noexcept;
 
+// Same, with the largest share of elapsed_seconds that loading may take for
+// threads to pay: MftTuning::max_load_per_mille over 1000.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY bool
+    ScanThreadsPay(double load_seconds, double elapsed_seconds,
+                   double max_load_share) noexcept;
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Mft

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <limits>
 #include <memory>
@@ -11,42 +12,21 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <gsl/narrow>
 #include <winioctl.h>
 
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
+#include "bench/recorder.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 
 namespace {
-
-// Reads ahead in flight at once, at most. Measured on a SATA SSD, 4 KiB random
-// reads run at 4 700 a second one at a time, and at 20 400 eight at a time. An
-// $MFT scan of a volume with many free slots announces many small ranges: 32
-// reads keep the disk busy there, where 8 left it idle (a scan of 1.6 GB read
-// in 10.6 s instead of 11.3 s).
-constexpr size_t max_prefetch_reads = 32;
-
-// Bytes the reads ahead hold at most, in flight or waiting to be used: sixteen
-// blocks of an $MFT scan. A hard disk reads no faster with more, and a SATA SSD
-// no faster with 128 MiB.
-constexpr ULONGLONG max_prefetch_bytes = ULONGLONG{64} * 1024 * 1024;
-
-// Bytes one announced range holds at most. A longer one is not announced: the
-// aligned read MUST fit a buffer that is worth keeping for the next read.
-constexpr ULONGLONG max_prefetch_range_bytes = ULONGLONG{16} * 1024 * 1024;
-
-// Announced ranges no read has used yet, at most. Past it a hint is dropped: a
-// caller that announces far ahead of its reads would only fill memory.
-constexpr size_t max_announced_ranges = 1024;
-
-// Announced ranges searched for the one a read falls in. Reads follow the
-// announcements, so the match is near the front.
-constexpr size_t max_match_lookahead = 64;
 
 // Alignment of a read ahead, in offset and length. A device takes only reads
 // of whole sectors: this is a multiple of both sizes in use, 512 and 4096.
@@ -66,12 +46,13 @@ constexpr ULONGLONG AlignUp(ULONGLONG end) noexcept {
 }  // namespace
 
 // Reads the announced ranges ahead, in announcement order, through an
-// overlapped handle of its own. Up to max_prefetch_reads of them are in flight
-// at once, so the disk reads them while the caller works. Every call comes from
-// the caller's thread, so nothing is locked.
+// overlapped handle of its own. Up to ReaderTuning::max_reads of them are in
+// flight at once, so the disk reads them while the caller works. Every call
+// comes from the caller's thread, so nothing is locked.
 class Win32DiskReader::Prefetcher {
  public:
-  explicit Prefetcher(std::wstring path) : path_(std::move(path)) {}
+  Prefetcher(std::wstring path, const ReaderCaps& caps)
+      : path_(std::move(path)), caps_(caps), slots_(MaxReadsOf(caps)) {}
 
   Prefetcher(const Prefetcher&) = delete;
   Prefetcher& operator=(const Prefetcher&) = delete;
@@ -88,7 +69,24 @@ class Win32DiskReader::Prefetcher {
 
   void Cancel();
 
+  // Reads of the slots in flight and not finished. Only a session needs it.
+  [[nodiscard]] std::uint32_t InFlightReads() const { return InFlight(); }
+
+  // Switches the caps to those of pattern. The reads in flight finish whatever
+  // the new caps say, and the ranges waiting start under them.
+  void SetPattern(Tuning::Pattern pattern);
+
  private:
+  // The most reads in flight any pattern allows: the slots are sized once, so
+  // that a read in flight never moves.
+  static size_t MaxReadsOf(const ReaderCaps& caps) {
+    size_t most = 1;
+    for (const Tuning::ReaderTuning& tuning : caps) {
+      most = (std::max)(most, tuning.max_reads);
+    }
+    return most;
+  }
+
   // One read ahead and its buffer, kept for the next read.
   struct Slot {
     OVERLAPPED overlapped{};
@@ -111,6 +109,8 @@ class Win32DiskReader::Prefetcher {
     ULONGLONG offset;
     ULONGLONG length;
     std::optional<size_t> slot;
+    // A read was served from it.
+    bool used{false};
   };
 
   // Opens the handle on first use. False when it cannot be opened, now or
@@ -130,15 +130,27 @@ class Win32DiskReader::Prefetcher {
   // Forgets the first range, and cancels its read.
   void DropFront();
 
+  // Reads of the slots that are in flight and not finished.
+  [[nodiscard]] std::uint32_t InFlight() const;
+
+  // The most reads that may be started at once under the active caps.
+  [[nodiscard]] size_t ReadsCap() const {
+    return (std::min)(active_->max_reads, slots_.size());
+  }
+
   std::wstring path_;
   HandlePtr handle_{INVALID_HANDLE_VALUE, &CloseHandle};
   bool open_failed_{false};
+
+  ReaderCaps caps_;
+  // The caps of the read pattern in force: an element of caps_.
+  const Tuning::ReaderTuning* active_{caps_.data()};
 
   std::deque<Range> ranges_;
   // The ranges at the front of ranges_ whose read started, and their bytes.
   size_t started_{0};
   ULONGLONG started_bytes_{0};
-  std::array<Slot, max_prefetch_reads> slots_{};
+  std::vector<Slot> slots_;
 };
 
 Win32DiskReader::Prefetcher::~Prefetcher() {
@@ -178,14 +190,14 @@ bool Win32DiskReader::Prefetcher::EnsureHandle() {
 }
 
 void Win32DiskReader::Prefetcher::Announce(ULONGLONG offset, ULONGLONG length) {
-  if (length == 0 || ranges_.size() >= max_announced_ranges) {
+  if (length == 0 || ranges_.size() >= active_->max_announced_ranges) {
     return;
   }
   // The aligned read MUST NOT wrap, and MUST fit the cap on its own.
   if (offset > (std::numeric_limits<ULONGLONG>::max)() - read_alignment ||
       length >
           (std::numeric_limits<ULONGLONG>::max)() - read_alignment - offset ||
-      AlignUp(offset + length) - AlignDown(offset) > max_prefetch_range_bytes) {
+      AlignUp(offset + length) - AlignDown(offset) > active_->max_range_bytes) {
     return;
   }
   if (!EnsureHandle()) {
@@ -197,12 +209,12 @@ void Win32DiskReader::Prefetcher::Announce(ULONGLONG offset, ULONGLONG length) {
 }
 
 void Win32DiskReader::Prefetcher::StartReads() {
-  while (started_ < ranges_.size() && started_ < max_prefetch_reads) {
+  while (started_ < ranges_.size() && started_ < ReadsCap()) {
     Range& next = ranges_.at(started_);
     const ULONGLONG bytes =
         AlignUp(next.offset + next.length) - AlignDown(next.offset);
     // The first one always starts: the caller is about to wait for it.
-    if (started_ != 0 && started_bytes_ + bytes > max_prefetch_bytes) {
+    if (started_ != 0 && started_bytes_ + bytes > active_->max_bytes) {
       return;
     }
     StartRead(next);
@@ -212,7 +224,7 @@ void Win32DiskReader::Prefetcher::StartReads() {
 }
 
 void Win32DiskReader::Prefetcher::StartRead(Range& range) {
-  // started_ < max_prefetch_reads, and each started range holds one slot.
+  // started_ < ReadsCap(), and each started range holds one slot.
   const auto free = std::ranges::find_if(
       slots_, [](const Slot& slot) { return !slot.in_use; });
   Slot& slot = *free;
@@ -246,10 +258,31 @@ void Win32DiskReader::Prefetcher::StartRead(Range& range) {
   slot.overlapped.hEvent = slot.event;
   slot.overlapped.Offset = static_cast<DWORD>(slot.start);
   slot.overlapped.OffsetHigh = static_cast<DWORD>(slot.start >> 32U);
+  const std::uint32_t in_flight =
+      Bench::Detail::SessionOn() ? InFlight() + 1 : 0;
   // A read that completes at once still reports through the OVERLAPPED.
   slot.pending = ReadFile(handle_.get(), slot.buffer, gsl::narrow<DWORD>(bytes),
                           nullptr, &slot.overlapped) != FALSE ||
                  GetLastError() == ERROR_IO_PENDING;
+  if (slot.pending) {
+    Bench::Detail::NoteDiskRead(slot.start, bytes, true, in_flight);
+  }
+}
+
+std::uint32_t Win32DiskReader::Prefetcher::InFlight() const {
+  std::uint32_t reading = 0;
+  for (const Slot& slot : slots_) {
+    if (slot.in_use && slot.pending &&
+        !HasOverlappedIoCompleted(&slot.overlapped)) {
+      reading++;
+    }
+  }
+  return reading;
+}
+
+void Win32DiskReader::Prefetcher::SetPattern(Tuning::Pattern pattern) {
+  active_ = &caps_.at(static_cast<size_t>(pattern));
+  StartReads();
 }
 
 DWORD Win32DiskReader::Prefetcher::Wait(Slot& slot) {
@@ -274,9 +307,13 @@ void Win32DiskReader::Prefetcher::DropFront() {
       static_cast<void>(Wait(slot));
     }
     slot.in_use = false;
-    started_--;
-    started_bytes_ -=
+    const ULONGLONG bytes =
         AlignUp(front.offset + front.length) - AlignDown(front.offset);
+    started_--;
+    started_bytes_ -= bytes;
+    if (!front.used) {
+      Bench::Detail::NoteDiskWaste(bytes);
+    }
   }
   ranges_.pop_front();
 }
@@ -288,7 +325,7 @@ bool Win32DiskReader::Prefetcher::Serve(ULONGLONG offset,
   }
 
   const ULONGLONG end = offset + dest.size();
-  const size_t searched = (std::min)(ranges_.size(), max_match_lookahead);
+  const size_t searched = (std::min)(ranges_.size(), active_->match_lookahead);
   size_t match = 0;
   while (match < searched &&
          (offset < ranges_.at(match).offset ||
@@ -299,24 +336,53 @@ bool Win32DiskReader::Prefetcher::Serve(ULONGLONG offset,
     return false;
   }
 
+  // What the read finds on arrival, to tell the caller's wait from the CPU's.
+  // Judged before anything is dropped or started.
+  const bool bench = Bench::Detail::SessionOn();
+  bool had_to_wait = false;
+  bool window_held_back = false;
+  std::uint32_t in_flight = 0;
+  if (bench) {
+    const Range& matched = ranges_.at(match);
+    had_to_wait =
+        !matched.slot ||
+        (slots_.at(*matched.slot).pending &&
+         !HasOverlappedIoCompleted(&slots_.at(*matched.slot).overlapped));
+    window_held_back = started_ < ranges_.size();
+    in_flight = InFlight() + 1;
+  }
+
   // The ranges announced before it were passed over.
   for (size_t dropped = 0; dropped < match; dropped++) {
     DropFront();
   }
   StartReads();
 
-  const Range& range = ranges_.front();
+  Range& range = ranges_.front();
   bool served = false;
+  std::uint64_t wait_ns = 0;
   if (range.slot) {
     Slot& slot = slots_.at(*range.slot);
     const ULONGLONG skip = offset - slot.start;
-    if (skip + dest.size() <= Wait(slot)) {
+    const std::uint64_t waited_from = bench ? Bench::Detail::NowNs() : 0;
+    const DWORD got = Wait(slot);
+    if (bench && had_to_wait) {
+      wait_ns = Bench::Detail::NowNs() - waited_from;
+    }
+    if (skip + dest.size() <= got) {
       std::ranges::copy(
           std::span<const BYTE>{slot.buffer, slot.capacity}.subspan(
               gsl::narrow<size_t>(skip), dest.size()),
           dest.begin());
       served = true;
+      range.used = true;
     }
+  }
+  if (served && bench) {
+    Bench::Detail::NoteRead(had_to_wait        ? Bench::ReadClass::Io
+                            : window_held_back ? Bench::ReadClass::Window
+                                               : Bench::ReadClass::Ready,
+                            wait_ns, in_flight);
   }
 
   // A read up to the end of its range uses it up. A failed one is not tried
@@ -334,8 +400,8 @@ void Win32DiskReader::Prefetcher::Cancel() {
   }
 }
 
-Win32DiskReader::Win32DiskReader()
-    : handle_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)) {}
+Win32DiskReader::Win32DiskReader(const ReaderCaps& caps)
+    : handle_(HandlePtr(INVALID_HANDLE_VALUE, &CloseHandle)), caps_(caps) {}
 
 Win32DiskReader::~Win32DiskReader() = default;
 
@@ -357,7 +423,7 @@ bool Win32DiskReader::Open(std::wstring_view path) {
     return false;
   }
 
-  prefetcher_ = std::make_unique<Prefetcher>(std::move(path_z));
+  prefetcher_ = std::make_unique<Prefetcher>(std::move(path_z), caps_);
   return true;
 }
 
@@ -381,10 +447,23 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr,
   overlapped.Offset = addr.LowPart;
   overlapped.OffsetHigh = gsl::narrow<DWORD>(addr.HighPart);
 
+  const bool bench = Bench::Detail::SessionOn();
+  const std::uint64_t began = bench ? Bench::Detail::NowNs() : 0;
   DWORD len = 0;
-  if (ReadFile(handle_.get(), dest.data(), gsl::narrow<DWORD>(dest.size()),
-               &len, &overlapped) == FALSE ||
-      len != dest.size()) {
+  const bool read =
+      ReadFile(handle_.get(), dest.data(), gsl::narrow<DWORD>(dest.size()),
+               &len, &overlapped) != FALSE &&
+      len == dest.size();
+  if (bench) {
+    // The caller waited for the whole read: nothing announced it.
+    const std::uint32_t in_flight =
+        prefetcher_ != nullptr ? prefetcher_->InFlightReads() + 1 : 1;
+    Bench::Detail::NoteDiskRead(static_cast<std::uint64_t>(addr.QuadPart),
+                                dest.size(), false, in_flight);
+    Bench::Detail::NoteRead(Bench::ReadClass::Plan,
+                            Bench::Detail::NowNs() - began, in_flight);
+  }
+  if (!read) {
     Log::Error("Cannot read file at adress {}", addr.QuadPart);
     return false;
   }
@@ -420,6 +499,12 @@ void Win32DiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
 void Win32DiskReader::CancelPrefetch() const {
   if (prefetcher_ != nullptr) {
     prefetcher_->Cancel();
+  }
+}
+
+void Win32DiskReader::SetReadPattern(Tuning::Pattern pattern) const {
+  if (prefetcher_ != nullptr) {
+    prefetcher_->SetPattern(pattern);
   }
 }
 

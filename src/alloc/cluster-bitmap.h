@@ -175,6 +175,11 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void SetBitmapWindowBytesForTests(size_t bytes);
 // The window size a new bitmap uses: the default, or the value a test set.
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t BitmapWindowBytes();
 
+// Same, with tuned as the default: the window that VolumeOptions::tuning asks
+// for, unless a test set one.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t
+    BitmapWindowBytes(size_t tuned);
+
 // Test hook: the most bytes any bitmap has held since the last reset.
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY size_t PeakBitmapBytesHeld();
 

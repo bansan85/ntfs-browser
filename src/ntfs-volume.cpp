@@ -18,6 +18,7 @@
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
@@ -31,6 +32,7 @@
 #include "attr/slot.h"
 #include "attr/vol-info.h"
 #include "attr/vol-name.h"
+#include "bench/recorder.h"
 #include "data/volume-information.h"
 #include "io/file-reader.h"
 #include "io/file-record-attr-types.h"
@@ -114,6 +116,7 @@ template <Cache::Strategy S>
 std::optional<ULONGLONG> ReadBitmapBytes(const Attr::AttrBase<S>& stream,
                                          DWORD piece, ULONGLONG offset,
                                          std::span<BYTE> out) {
+  const Bench::Detail::KindScope kind(Bench::ReadKind::BitmapWindow);
   try {
     const std::optional<ULONGLONG> whole = stream.ReadData(offset, out);
     if (whole && *whole == out.size()) {
@@ -149,7 +152,8 @@ std::optional<ULONGLONG> ReadBitmapBytes(const Attr::AttrBase<S>& stream,
 template <Cache::Strategy S>
 NtfsVolume<S>::Impl::Impl(NtfsVolume<S>& self, const VolumeOptions& options)
     : self(&self),
-      volume(std::make_unique<Io::FileReader<S>>(options.max_cache_bytes)),
+      volume(std::make_unique<Io::FileReader<S>>(options.max_cache_bytes,
+                                                 options.tuning)),
       mft(self),
       options(options) {}
 
@@ -157,6 +161,7 @@ NtfsVolume<S>::Impl::Impl(NtfsVolume<S>& self, const VolumeOptions& options)
 template <Cache::Strategy S>
 NtfsVolume<S>::NtfsVolume(_TCHAR volume, const VolumeOptions& options)
     : impl_(std::make_unique<Impl>(*this, options)) {
+  const Bench::PhaseScope phase(Bench::Phase::Open);
   if (impl_->OpenVolume(volume)) {
     impl_->Init();
   }
@@ -165,6 +170,7 @@ NtfsVolume<S>::NtfsVolume(_TCHAR volume, const VolumeOptions& options)
 template <Cache::Strategy S>
 NtfsVolume<S>::NtfsVolume(std::wstring_view path, const VolumeOptions& options)
     : impl_(std::make_unique<Impl>(*this, options)) {
+  const Bench::PhaseScope phase(Bench::Phase::Open);
   if (impl_->OpenVolume(path)) {
     impl_->Init();
   }
@@ -175,6 +181,7 @@ template <Cache::Strategy S>
 NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader,
                           const VolumeOptions& options)
     : impl_(std::make_unique<Impl>(*this, options)) {
+  const Bench::PhaseScope phase(Bench::Phase::Open);
   if (impl_->OpenVolume(std::move(reader))) {
     impl_->Init();
   }
@@ -280,7 +287,8 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
   }
 
   if (options.read_ahead_bytes != 0) {
-    volume->EnableReadAhead(options.read_ahead_bytes);
+    volume->EnableReadAhead(options.read_ahead_bytes,
+                            options.tuning.readahead.window_chunks);
   }
   return ParseBootSector();
 }
@@ -289,10 +297,11 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
 // Use an already-open reader (eg. a test double), get BPB
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
-  volume = std::make_unique<Io::FileReader<S>>(std::move(reader),
-                                               options.max_cache_bytes);
+  volume = std::make_unique<Io::FileReader<S>>(
+      std::move(reader), options.max_cache_bytes, options.tuning);
   if (options.read_ahead_bytes != 0) {
-    volume->EnableReadAhead(options.read_ahead_bytes);
+    volume->EnableReadAhead(options.read_ahead_bytes,
+                            options.tuning.readahead.window_chunks);
   }
 
   return ParseBootSector();
@@ -302,6 +311,11 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
 // recovering and that sector is unusable, falls back on the backup boot sector.
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::ParseBootSector() {
+  if (Bench::Enabled()) {
+    if (const std::optional<ULONGLONG> bytes = volume->Size()) {
+      Bench::Detail::NoteVolumeBytes(*bytes);
+    }
+  }
   bool accepted = false;
   {
     // Held until the parse is done: under FullCache it owns the bytes.
@@ -384,6 +398,7 @@ bool NtfsVolume<S>::Impl::TryBackupSectorSize(ULONGLONG volume_bytes,
 template <Cache::Strategy S>
 std::optional<Cache::ReadResult<S>>
     NtfsVolume<S>::Impl::ReadBootSector() const {
+  const Bench::Detail::KindScope kind(Bench::ReadKind::Boot);
   // Smallest sector size NTFS uses. It is also the size of the BPB read.
   constexpr DWORD min_sector_size = 512;
   // Largest sector size NTFS supports (4Kn). Windows opens a volume handle
@@ -482,6 +497,11 @@ bool NtfsVolume<S>::ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const {
 template <Cache::Strategy S>
 void NtfsVolume<S>::Prefetch(ULONGLONG addr, ULONGLONG length) const {
   impl_->volume->Prefetch(addr, length);
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::SetReadPattern(Tuning::Pattern pattern) const {
+  impl_->volume->SetReadPattern(pattern);
 }
 
 template <Cache::Strategy S>
@@ -748,7 +768,8 @@ std::unique_ptr<Alloc::ClusterBitmap>
     return ReadBitmapBytes<S>(*data, piece, offset, out);
   };
   auto loaded = std::make_unique<Alloc::ClusterBitmap>(
-      reader, data_size, cluster_count, Alloc::BitmapWindowBytes());
+      reader, data_size, cluster_count,
+      Alloc::BitmapWindowBytes(options.tuning.alloc.bitmap_window_bytes));
   bitmap_record = std::move(record);
   return loaded;
 }
@@ -851,7 +872,8 @@ Alloc::ClusterBitmap* NtfsVolume<S>::Impl::GetClusterBitmap() const {
             [](ULONGLONG, std::span<BYTE>) -> std::optional<ULONGLONG> {
               return std::nullopt;
             },
-            0, cluster_count, Alloc::BitmapWindowBytes());
+            0, cluster_count,
+            Alloc::BitmapWindowBytes(options.tuning.alloc.bitmap_window_bytes));
       }
     }
     if (bitmap) {

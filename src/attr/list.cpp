@@ -24,6 +24,7 @@
 #include "attr/non-resident.h"
 #include "attr/resident.h"
 #include "attr/slot.h"
+#include "bench/recorder.h"
 #include "data/attribute-list.h"
 #include "log/ntfs-common.h"
 
@@ -161,6 +162,7 @@ template <typename Resident, Cache::Strategy S>
 std::optional<ULONGLONG>
     AttrList<Resident, S>::ReadListBytes(ULONGLONG offset, std::span<BYTE> out,
                                          ListCache& cache) const {
+  const Bench::Detail::KindScope kind(Bench::ReadKind::AttributeList);
   if (cache.bytes.empty()) {
     return this->ReadData(offset, out);
   }

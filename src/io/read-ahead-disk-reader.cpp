@@ -19,6 +19,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/read-ahead-disk-reader.h>
 #include <ntfs-browser/namespace.h>
@@ -36,10 +37,6 @@ constexpr std::uint64_t chunk_alignment = 4096;
 // Ceiling of a chunk, however big the caller's reads are: two of them are held
 // at once.
 constexpr std::uint64_t max_chunk_bytes = 64ULL * 1024 * 1024;
-
-// Chunks read ahead at once. Two make a double buffer: the caller works on one
-// while the worker reads the other.
-constexpr size_t window_chunks = 2;
 
 // Rounds value up to a multiple of chunk_alignment.
 std::uint64_t RoundUp(std::uint64_t value) {
@@ -71,9 +68,9 @@ class ReadAheadDiskReader::Impl {
  public:
   Impl(std::unique_ptr<IDiskReader> inner, const ReadAheadOptions& options)
       : inner_(std::move(inner)),
-        chunk_bytes_(
-            RoundUp(std::min(std::max(options.chunk_bytes, std::uint64_t{1}),
-                             max_chunk_bytes))) {}
+        chunk_bytes_(RoundUp(std::min(
+            std::max(options.chunk_bytes, std::uint64_t{1}), max_chunk_bytes))),
+        window_chunks_((std::max<size_t>)(1, options.window_chunks)) {}
 
   Impl(const Impl&) = delete;
   Impl& operator=(const Impl&) = delete;
@@ -128,6 +125,14 @@ class ReadAheadDiskReader::Impl {
     }
   }
 
+  // Passes the read pattern on to the wrapped reader.
+  void SetReadPattern(Tuning::Pattern pattern) {
+    const std::scoped_lock inner_lock{inner_mutex_};
+    if (inner_ != nullptr) {
+      inner_->SetReadPattern(pattern);
+    }
+  }
+
  private:
   using Chunk = ReadAheadChunk;
 
@@ -174,6 +179,8 @@ class ReadAheadDiskReader::Impl {
   std::unique_ptr<IDiskReader> inner_;
 
   const std::uint64_t chunk_bytes_;
+  // Chunks kept read ahead of the caller.
+  const size_t window_chunks_;
 
   // Guards everything below, and the state of every chunk. Never held while
   // calling the wrapped reader, and never taken while inner_mutex_ is held.
@@ -247,7 +254,7 @@ bool ReadAheadDiskReader::Impl::EnsureWorker() {
 void ReadAheadDiskReader::Impl::TopUp() {
   const std::uint64_t size = ChunkSize();
   bool queued = false;
-  while (window_.size() < window_chunks) {
+  while (window_.size() < window_chunks_) {
     const LONGLONG next = window_.empty()
                               ? last_end_
                               : window_.back()->addr +
@@ -304,6 +311,7 @@ bool ReadAheadDiskReader::Impl::ReadChunk(Chunk& chunk) {
 
 void ReadAheadDiskReader::Impl::WorkerMain() {
   Log::Detail::SilenceCurrentThread();
+  const Bench::ThreadScope cpu(Bench::ThreadRole::ReadAhead);
 
   std::unique_lock lock{mutex_};
   for (;;) {
@@ -422,5 +430,9 @@ void ReadAheadDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
 }
 
 void ReadAheadDiskReader::CancelPrefetch() const { impl_->CancelPrefetch(); }
+
+void ReadAheadDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
+  impl_->SetReadPattern(pattern);
+}
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

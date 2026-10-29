@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Util {
@@ -76,6 +77,7 @@ void ChunkPool::Finish() {
 }
 
 void ChunkPool::RunHelper(size_t slot) {
+  const Bench::ThreadScope cpu(Bench::ThreadRole::PoolWorker);
   std::unique_lock lock{mutex_};
   for (;;) {
     work_ready_.wait(

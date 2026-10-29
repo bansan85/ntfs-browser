@@ -99,6 +99,11 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   void Prefetch(ULONGLONG addr, ULONGLONG length) const;
   // Forgets what Prefetch() announced and no read used yet.
   void CancelPrefetch() const;
+  // Says which read pattern the reads that follow belong to, so that the
+  // reader MAY switch its read-ahead depth to the caps of
+  // VolumeOptions::tuning.reader for that pattern. A hint, like Prefetch():
+  // it changes when the bytes are read, never which.
+  void SetReadPattern(Tuning::Pattern pattern) const;
 
   // Frees every cached block that no Cache::View uses. The volume stays open,
   // and a later read loads the data again. A no-op under NoCache.

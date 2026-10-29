@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <span>
@@ -10,15 +11,21 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
+
+// The read-ahead caps of each read pattern.
+using ReaderCaps = std::array<Tuning::ReaderTuning, Tuning::pattern_count>;
 
 // Production IDiskReader: a real disk/device, or an ordinary file treated
 // the same way (CreateFileW handles both identically). Never used directly
 // outside FileReader<S>::Open(), so it carries no export macro.
 class Win32DiskReader : public IDiskReader {
  public:
-  Win32DiskReader();
+  // caps are the read-ahead caps of each pattern, M1 in force until
+  // SetReadPattern() says otherwise. The defaults are the library's own.
+  explicit Win32DiskReader(const ReaderCaps& caps = {});
   ~Win32DiskReader() override;
   Win32DiskReader(const Win32DiskReader&) = delete;
   Win32DiskReader& operator=(const Win32DiskReader&) = delete;
@@ -42,6 +49,9 @@ class Win32DiskReader : public IDiskReader {
 
   void CancelPrefetch() const override;
 
+  // Switches the read-ahead caps to those of pattern.
+  void SetReadPattern(Tuning::Pattern pattern) const override;
+
  private:
   using HandlePtr =
       std::unique_ptr<std::remove_pointer_t<HANDLE>, decltype(&::CloseHandle)>;
@@ -49,6 +59,7 @@ class Win32DiskReader : public IDiskReader {
   class Prefetcher;
 
   HandlePtr handle_;
+  ReaderCaps caps_;
   // Null until Open() succeeds. Declared after handle_: it goes first.
   std::unique_ptr<Prefetcher> prefetcher_;
 };

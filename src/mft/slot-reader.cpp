@@ -19,6 +19,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
+#include "bench/recorder.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -38,15 +39,6 @@ namespace {
 // address, whether or not $MFT's extents are known.
 constexpr ULONGLONG first_mapped_slot = static_cast<ULONGLONG>(Idx::User);
 
-// Windows announced ahead of the one read, at most. A lone used slot makes a
-// window of one cluster: the cap keeps the reader's queue short then.
-constexpr size_t max_announced_windows = 64;
-
-// Bytes of slots announced ahead of the window read, at most: four default
-// windows. A deeper announcement, up to 256 MiB, measured no faster on a SATA
-// SSD and a hard disk: the reader's own reads in flight bound the scan.
-constexpr ULONGLONG max_announced_bytes = ULONGLONG{16} * 1024 * 1024;
-
 }  // namespace
 
 template <Cache::Strategy S>
@@ -60,6 +52,10 @@ SlotReader<S>::SlotReader(const NtfsVolume<S>& volume, size_t block_bytes)
                                        ? volume.GetClusterSize() / record_size_
                                        : 1)),
       window_slots_(record_size_ != 0 ? block_bytes / record_size_ : 1),
+      max_announced_windows_(
+          (std::max<size_t>)(1, volume.GetOptions()
+                                    .tuning.mft.max_announced_windows)),
+      max_announced_bytes_(volume.GetOptions().tuning.mft.max_announced_bytes),
       plan_{{.first = 0, .last = volume.GetRecordsCount()}} {
   // A window holds whole clusters, at least one, so the windows of a range all
   // start on a cluster boundary.
@@ -177,6 +173,7 @@ std::span<const BYTE> SlotReader<S>::HeldSlot(ULONGLONG record) const {
 template <Cache::Strategy S>
 bool SlotReader<S>::LoadWindow(size_t range_index, const SlotRange& window) {
   AnnounceFrom(range_index, window);
+  const Bench::Detail::KindScope kind(Bench::ReadKind::MftWindow);
 
   // A failed read leaves no window behind, whatever it wrote.
   window_first_ = 0;
@@ -215,8 +212,8 @@ void SlotReader<S>::AnnounceFrom(size_t range_index, const SlotRange& window) {
     announced_any_ = true;
   }
 
-  while (announced_.size() < max_announced_windows &&
-         announced_slots_ * record_size_ < max_announced_bytes) {
+  while (announced_.size() < max_announced_windows_ &&
+         announced_slots_ * record_size_ < max_announced_bytes_) {
     const SlotRange next = NextWindow();
     if (next.first == next.last) {
       return;
