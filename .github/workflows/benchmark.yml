@@ -1,0 +1,64 @@
+---
+name: benchmark
+# Runs only when triggered by hand. The runner has one disk, c:, so the audit of
+# a second volume is not run, and the numbers are those of a shared virtual
+# machine: this job checks that the tooling works end to end. The tuning of a
+# real disk is run locally, with the same script.
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: Runs of each measurement (the script takes 3 for a triage)
+        default: "1"
+jobs:
+  benchmark:
+    runs-on: windows-latest
+    env:
+      BUILD: build/static
+      OUT: benchmark-out
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          lfs: true
+      - name: Build Release
+        run: |
+          cmake --preset static
+          cmake --build $env:BUILD --config Release --parallel `
+            --target NtfsMftList NtfsDir NtfsDir2 NtfsBench
+      - name: Self-test of the searcher
+        # The analytic disk, then the simulated disk of NtfsBench.
+        run: |
+          $bench = (Get-ChildItem -Recurse "$env:BUILD" -Filter NtfsBench.exe |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1).FullName
+          python NTFSLibTests/tools/benchmark/ntfs_benchmark.py --self-test --sim-exe $bench
+      - name: Audit of c:
+        # T_real, T_io and T_cpu for NtfsMftList in its four modes, and one
+        # directory scenario. The listings go to d:, never to the scanned disk.
+        run: |
+          New-Item -ItemType Directory -Force "$env:OUT", "d:\bench-scratch" | Out-Null
+          python NTFSLibTests/tools/benchmark/ntfs_benchmark.py audit `
+            --bin-dir "$env:BUILD" --out-dir "$env:OUT" --volume c: `
+            --scratch c=d:\bench-scratch `
+            --rounds ${{ inputs.rounds }} --threads 1,2 `
+            --dir-scenarios subtree --subtree "Windows\System32\drivers" `
+            --caches fullcache
+      - name: Mini search of the first pass
+        # One pattern, on c:, to exercise the searcher against a real disk.
+        run: |
+          python NTFSLibTests/tools/benchmark/ntfs_benchmark.py search `
+            --bin-dir "$env:BUILD" --out-dir "$env:OUT" --volume c: `
+            --scratch c=d:\bench-scratch `
+            --patterns M1 --profile-out "$env:OUT/profile.json" --label "runner c:"
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark
+          path: |
+            ${{ env.OUT }}/results.json
+            ${{ env.OUT }}/report.md
+            ${{ env.OUT }}/profile.json
+            ${{ env.OUT }}/search-*.csv
