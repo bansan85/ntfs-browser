@@ -29,6 +29,7 @@ On Windows:
 
 - `NtfsDir "C:\Windows"` lists a folder. `NtfsDir C:\image.img\Windows` lists a folder of an image file. `NtfsDir --recursive C:` (or `-r`) lists a folder and every folder below it. `--deleted` adds deleted files, marked with `*`, and `--recover` salvages damaged directory data.
 - `NtfsMftList C:` lists every file of a volume. `--deleted` adds deleted files, and `--recover` salvages damaged entries and reads the change journal (`$UsnJrnl`), which names files the `$MFT` lost. `--threads=N` sets the threads that parse the `$MFT`. `--clusters` counts the clusters of each deleted or damaged file by condition (intact, rewritten, bad...), `--clusters=map` also prints where they lie in the file, and `--verify-data[=sample|full]` reads the clusters presumed intact to tell zeros and NTFS metadata from data.
+- `NtfsDir`, `NtfsDir2` and `NtfsMftList` also take the benchmark options (see Benchmark and tuning).
 - `NtfsUndel` is a graphical tool that finds and recovers deleted files.
 
 On Linux, `NtfsDir` and `NtfsMftList` take a device or an image file. Reading a device needs read access to it.
@@ -127,6 +128,56 @@ To leave features out, or to change the build, add options to the configure step
 - `-DNTFS_BROWSER_ENABLE_DECOMPRESSION=OFF` removes compressed-file support.
 - `-DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=OFF` and `-DNTFS_BROWSER_ENABLE_EFS_BCRYPT=OFF` remove the encryption backends (BCrypt is Windows only).
 - `-DNTFS_BROWSER_BUILD_MFC_APPS=OFF` skips the graphical tools.
+
+## Benchmark and tuning
+
+The tools can time themselves, and the constants of the read path can be tuned for one disk. Both are off by default: with neither, the library reads exactly what it always read.
+
+### What the tools can do
+
+These options work on `NtfsMftList`, `NtfsDir` and `NtfsDir2`:
+
+- `--benchmark[=<path>]` times the run. It writes a JSON summary at `<path>` (`ntfs-benchmark.json` by default) and the log of every read at `<path>.readlog`. The summary has the phases (open, pass1, pass2, flush, sweep, check, link, journal, walk, print) with their wall time and CPU time, the CPU time of each thread, the reads by kind with their size histogram, the sizes the disk saw, the reads in flight, the bytes read ahead and wasted, the seeks, and the serial tail after the last read. Each read that the reader serves is classed: `io` (the caller waited for the disk), `window` (the read was done, and the read-ahead caps held others back), `ready` (done, nothing held back) or `plan` (never announced, so the caller waited).
+- `--capture=<path>` writes every range the run read into a sparse file of the volume's size. Run the tool on that image, with the image in the file cache, and the time is that of the CPU alone.
+- `--stop-after=<phase>` ends the run after a phase, to time that phase alone.
+- `--profile=<path>` sets the tunable constants from a profile (below). `--disk=<key>` takes the section of another disk. `--tune=<name>[@M1..M4]=<value>` sets one constant, after the profile.
+
+Write the listing of a scanned volume to another drive. A listing of 290 MB on the scanned drive changes what is measured.
+
+### NtfsBench and the script
+
+`NtfsBench` is the measuring tool. `NtfsBench replay <readlog> <target>` replays the reads of a run through the production reader, as they were and with every read announced up front: that is the time the disk alone costs. `NtfsBench diskbench <target>` measures the disk in the zone of its `$MFT`: sequential 4 MiB reads and random 4 KiB and 64 KiB reads, at queue depths 1 to 32. `NtfsBench knobs` lists the tunable constants. `purge`, `wake`, `disk-id` and `sample` serve the script. `simulate` scans a synthetic volume through a simulated disk, in microseconds of simulated time.
+
+`NTFSLibTests/tools/benchmark/ntfs_benchmark.py` (Python 3.12, standard library only; an administrator console on Windows) drives it:
+
+```
+python NTFSLibTests/tools/benchmark/ntfs_benchmark.py audit --bin-dir build/static --out-dir out --volume c: --volume e:
+python NTFSLibTests/tools/benchmark/ntfs_benchmark.py search --bin-dir build/static --out-dir out --volume c: --patterns M1,M2 --profile-out profile.json --validate
+python NTFSLibTests/tools/benchmark/ntfs_benchmark.py --self-test
+```
+
+`audit` runs NtfsMftList in its four modes, and ntfsdir on a subtree, a big directory and a deep path, with the cold cache each time. For each it gives T_real (the tool), T_io (the replay), T_cpu (the tool on the captured image) and R = (T_io + T_cpu - T_real) / min(T_io, T_cpu). I/O is the critical path when T_cpu is below T_io and T_real stays within 10 % of T_io. It also samples the disk every 100 ms, sweeps `--threads`, and writes `results.json` and `report.md`. `search` finds the best value of each constant of a read pattern, and writes the profile. `--self-test` checks the searcher on a simulated disk with a known best value. The workflow `benchmark.yml` runs the self-test, an audit of `c:` and a short search on a Windows runner, when started by hand.
+
+### Tunable constants and the profile
+
+`VolumeOptions::tuning` holds the constants. Their defaults are the values the library always had. They fall in three families: depth of the read ahead (it changes when bytes are read, never which), shape of the reads (it changes which bytes are read: window, gap, hole, cache block, memory budgets) and CPU and memory. The guard rails against forged input are never tunable. Shape constants are set by an explicit option only.
+
+A profile is a JSON file with one section per disk, keyed by `"<vendor> <product>|<serial>"`. `common` applies to every read pattern, `M1` (large sequential reads), `M2` (small scattered reads, announced), `M3` (small dependent reads) and `M4` (large data reads) override it:
+
+```json
+{
+  "format": 1,
+  "disks": {
+    "Verbatim Vi560|493633408990154": {
+      "label": "c: SATA SSD",
+      "common": { "mft.window_bytes": 4194304, "reader.max_reads": 32 },
+      "M2": { "reader.max_reads": 16, "mft.max_announced_records": 64 }
+    }
+  }
+}
+```
+
+An unknown key, a value out of range or a constant that a pattern does not serve is refused with a message that names it. `NtfsBench knobs` prints every name with its family, patterns, bounds and default.
 
 ## Documentation
 
