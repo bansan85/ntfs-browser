@@ -258,18 +258,26 @@ struct ListScanEntry {
   WORD sequence;
 };
 
-// The bytes of an $ATTRIBUTE_LIST made of entry.
-std::vector<BYTE> ListScanBytes(const ListScanEntry& entry) {
+// The bytes of an $ATTRIBUTE_LIST made of entries, one after the other.
+std::vector<BYTE> ListScanBytes(std::span<const ListScanEntry> entries) {
   NTFS_BROWSER_NAMESPACE::Data::AttributeList raw{};
   raw.attr_type = Attr::Type::FileName;
   raw.record_size = static_cast<WORD>(AlignAttrSize(
       NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
-  raw.base_ref.segment_number = entry.record;
-  raw.base_ref.sequence_number = entry.sequence;
-  std::vector<BYTE> bytes(raw.record_size, 0);
-  std::memcpy(bytes.data(), &raw,
-              NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
+  std::vector<BYTE> bytes(static_cast<size_t>(raw.record_size) * entries.size(),
+                          0);
+  for (size_t i = 0; i < entries.size(); i++) {
+    raw.base_ref.segment_number = entries[i].record;
+    raw.base_ref.sequence_number = entries[i].sequence;
+    std::memcpy(bytes.data() + (i * raw.record_size), &raw,
+                NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
+  }
   return bytes;
+}
+
+// The bytes of an $ATTRIBUTE_LIST made of entry.
+std::vector<BYTE> ListScanBytes(const ListScanEntry& entry) {
+  return ListScanBytes(std::span<const ListScanEntry>{&entry, 1});
 }
 
 // A file with only a $STANDARD_INFORMATION and an $ATTRIBUTE_LIST of list,
@@ -498,8 +506,8 @@ std::vector<BYTE>
     // The list of a base record names the slot after it, or before it.
     const auto base = [&](FileRecordFlag flags, ULONGLONG listed,
                           WORD sequence) {
-      return MakeListScanBase(flags, ListScanBytes({listed, sequence}),
-                              std::nullopt);
+      return MakeListScanBase(
+          flags, ListScanBytes(ListScanEntry{listed, sequence}), std::nullopt);
     };
     switch (idx % list_scan_kind_count) {
       case 1:
@@ -535,7 +543,7 @@ std::vector<BYTE>
       case 9: {
         // The list sits in a cluster of its own: reading it reads the volume.
         const std::vector<BYTE> list =
-            ListScanBytes({idx + 1, list_scan_extension_sequence});
+            ListScanBytes(ListScanEntry{idx + 1, list_scan_extension_sequence});
         const FakeDataRun run{.lcn = next_list_lcn++, .clusters = 1};
         PutScanRecord(image, idx, fragment_clusters,
                       MakeListScanBase(file, list, run));
@@ -573,6 +581,45 @@ std::vector<BYTE>
                           static_cast<DWORD>(idx % 100)));
         break;
     }
+  }
+  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
+                MakeScanMftRecord(record_count, fragment_clusters));
+  return image;
+}
+
+std::vector<BYTE>
+    BuildFakeNtfsImageWithAdjacentExtensions(ULONGLONG record_count,
+                                             ULONGLONG extension_count,
+                                             ULONGLONG fragment_clusters) {
+  using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
+
+  std::vector<BYTE> image =
+      BuildFakeNtfsImageWithFragmentedMftScan(record_count, fragment_clusters);
+
+  const ULONGLONG root = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+                fragment_clusters,
+                MakeMftTreeRecord(FileRecordFlag::InUse | FileRecordFlag::Dir,
+                                  root_sequence_number,
+                                  {{.name = L".", .parent_ref = root}}));
+  const ULONGLONG first = static_cast<ULONGLONG>(Mft::Idx::User);
+  for (ULONGLONG idx = first; idx < record_count; idx++) {
+    const ULONGLONG at = (idx - first) % (extension_count + 1);
+    if (at != 0) {
+      PutScanRecord(image, idx, fragment_clusters,
+                    MakeListScanExtension(FileRecordFlag::InUse,
+                                          list_scan_extension_sequence, idx,
+                                          idx - at));
+      continue;
+    }
+    std::vector<ListScanEntry> entries;
+    for (ULONGLONG ext = 1; ext <= extension_count; ext++) {
+      entries.push_back({idx + ext, list_scan_extension_sequence});
+    }
+    PutScanRecord(image, idx, fragment_clusters,
+                  MakeListScanBase(FileRecordFlag::InUse,
+                                   ListScanBytes(entries), std::nullopt));
   }
   PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
                 MakeScanMftRecord(record_count, fragment_clusters));

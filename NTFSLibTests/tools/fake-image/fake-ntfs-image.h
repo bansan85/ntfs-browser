@@ -1088,6 +1088,16 @@ inline constexpr ULONGLONG fragmented_mft_scan_fragment_clusters = 100;
     ULONGLONG record_count,
     ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
 
+// Same volume and layout as BuildFakeNtfsImageWithFragmentedMftScan(), whose
+// slots past the system files come in groups of extension_count + 1: a file in
+// use with a resident $ATTRIBUTE_LIST, then its extension_count extension
+// records in the slots right after it. The list names each of them for its
+// $FILE_NAME, so a scan that holds none of them reads a run of neighbouring
+// records. record_count MUST be Mft::Idx::User plus a whole number of groups.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithAdjacentExtensions(
+    ULONGLONG record_count, ULONGLONG extension_count,
+    ULONGLONG fragment_clusters = fragmented_mft_scan_fragment_clusters);
+
 // LCN of the first cluster that holds a non-resident list of the list scan
 // fixture, one cluster each. Past every fragment of the $MFT the fixture maps.
 inline constexpr ULONGLONG list_scan_lists_lcn = 8000;
