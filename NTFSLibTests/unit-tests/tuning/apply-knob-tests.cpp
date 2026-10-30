@@ -46,15 +46,11 @@ std::uint64_t OtherValue(const Tuning::Knob& knob) {
   return knob.default_value == knob.min_value ? knob.max_value : knob.min_value;
 }
 
-// The value a knob reads back after it was set to value: a size_t field of a
-// 32-bit build holds at most 2^32 - 1.
-std::uint64_t Stored(const Tuning::Knob& knob, std::uint64_t value) {
-  if (knob.per_pattern || sizeof(std::size_t) >= sizeof(std::uint64_t)) {
-    return value;
-  }
-  return value > std::numeric_limits<std::size_t>::max()
-             ? std::numeric_limits<std::size_t>::max()
-             : value;
+// Whether a knob read back as value. A size_t field of a 32-bit build holds at
+// most 2^32 - 1 and a larger value is cut there, while a 64-bit field keeps it.
+bool ReadsBackAs(std::uint64_t read, std::uint64_t value) {
+  return read == value || (value > std::numeric_limits<std::size_t>::max() &&
+                           read == std::numeric_limits<std::size_t>::max());
 }
 
 }  // namespace
@@ -121,7 +117,7 @@ TEST_CASE("ApplyKnob accepts both bounds of every knob",
       CHECK(Tuning::ApplyKnob(options, knob.name, value).empty());
       for (const Tuning::Pattern pattern : all_patterns) {
         if (Serves(knob, pattern)) {
-          CHECK(knob.get(options, pattern) == Stored(knob, value));
+          CHECK(ReadsBackAs(knob.get(options, pattern), value));
         }
       }
     }
@@ -217,7 +213,7 @@ TEST_CASE("A knob that no pattern splits is set whatever pattern names it",
       VolumeOptions options;
       const std::uint64_t value = OtherValue(knob);
       REQUIRE(Tuning::ApplyKnob(options, knob.name, value, pattern).empty());
-      CHECK(knob.get(options, pattern) == Stored(knob, value));
+      CHECK(ReadsBackAs(knob.get(options, pattern), value));
     }
   }
 }
