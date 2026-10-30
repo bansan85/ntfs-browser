@@ -75,9 +75,9 @@ TEST_CASE("ParseJson reads every kind of value", "[device-access][json]") {
   REQUIRE(value.kind == Kind::Object);
   REQUIRE(value.members.size() == 3);
   // The members keep the order of the document.
-  CHECK(value.members.at(0).first == "a");
-  CHECK(value.members.at(1).first == "c");
-  CHECK(value.members.at(2).first == "e");
+  CHECK(value.members.at(0).key == "a");
+  CHECK(value.members.at(1).key == "c");
+  CHECK(value.members.at(2).key == "e");
   const JsonValue* const array = value.Find("a");
   REQUIRE(array != nullptr);
   REQUIRE(array->items.size() == 3);

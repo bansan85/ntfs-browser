@@ -4,10 +4,11 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace NtfsDevice {
+
+struct JsonMember;
 
 // A parsed JSON value. The profile and the benchmark summary are small and
 // flat, so this holds a whole document in memory, with no dependency.
@@ -19,12 +20,19 @@ struct JsonValue {
   double number{0};
   std::string text;
   // The members of an object, in document order.
-  std::vector<std::pair<std::string, JsonValue>> members;
+  std::vector<JsonMember> members;
   // The elements of an array.
   std::vector<JsonValue> items;
 
   // The member called key of an object, or null.
   [[nodiscard]] const JsonValue* Find(std::string_view key) const;
+};
+
+// One member of an object. Not a std::pair, which needs a complete JsonValue
+// where the vector above is declared.
+struct JsonMember {
+  std::string key;
+  JsonValue value;
 };
 
 // Parses text as one JSON document. A duplicate key in an object, a trailing

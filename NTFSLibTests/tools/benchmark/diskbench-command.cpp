@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>

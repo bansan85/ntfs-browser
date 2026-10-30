@@ -290,7 +290,7 @@ class Parser {
       if (!ParseValue(member, depth + 1)) {
         return false;
       }
-      value.members.emplace_back(std::move(key), std::move(member));
+      value.members.push_back({std::move(key), std::move(member)});
       SkipSpace();
       if (Consume('}')) {
         return true;
