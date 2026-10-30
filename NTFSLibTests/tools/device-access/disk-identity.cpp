@@ -11,6 +11,8 @@
 
   #include <windows.h>
   #include <winioctl.h>
+
+  #include "device-path.h"
 #else
   #include <filesystem>
   #include <fstream>
@@ -146,6 +148,10 @@ std::string ReadLine(const std::filesystem::path& path) {
 
 std::optional<DiskIdentity> IdentifyDisk(std::wstring_view target) {
 #ifdef _WIN32
+  // A path under a drive letter that names an image is a file, not the drive.
+  if (!target.starts_with(LR"(\\.\)") && SplitDeviceTarget(target)) {
+    return std::nullopt;
+  }
   const std::wstring path = DevicePathOf(target);
   if (path.empty()) {
     return std::nullopt;

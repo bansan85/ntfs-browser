@@ -333,10 +333,48 @@ class SearcherTests(unittest.TestCase):
 
     def test_on_a_plateau_the_value_that_costs_the_least_memory_wins(self):
         searcher, _ = searcher_for(
-            lambda config, run: (100 if config["x"] >= 8 else 200) * MS, {"x": 16}
+            lambda config, run: (100 if config["x"] >= 8 else 200) * MS,
+            {"x": 16},
+            memory_cost=lambda name, value: float(value),
         )
         # 8 to 128 are all as fast: the smallest is taken.
         self.assertEqual(searcher.run(("x",), None), {"x": 8})
+
+    def test_a_knob_with_no_memory_cost_keeps_its_value_on_a_plateau(self):
+        searcher, _ = searcher_for(
+            lambda config, run: (100 if config["x"] >= 8 else 200) * MS, {"x": 16}
+        )
+        self.assertEqual(nb.no_memory_cost("x", 123), 0.0)
+        self.assertEqual(searcher.run(("x",), None), {})
+        self.assertEqual(searcher.config, {"x": 16})
+
+    def test_a_flat_knob_does_not_drift_to_the_bottom_of_its_ladder(self):
+        searcher, evaluator = searcher_for(
+            lambda config, run: 100 * MS, {"gap": 64}, {"gap": (0, 1 << 24)}
+        )
+        self.assertEqual(searcher.run(("gap",), None), {})
+        # The whole ladder was flat, and the search did go down it.
+        self.assertIn(8, {call[0]["gap"] for call in evaluator.calls})
+
+    def test_a_knob_with_no_memory_cost_keeps_the_value_chosen_so_far(self):
+        # 8 is faster than 4, and the values above are as fast as 8: 8 is the
+        # value chosen when the plateau begins, and none costs less.
+        times = {4: 200.0, 8: 100.0, 16: 100.0, 32: 100.0, 64: 100.0, 2: 300.0}
+        searcher, _ = searcher_for(lambda config, run: times[config["x"]] * MS, {"x": 4})
+        self.assertEqual(searcher.run(("x",), None), {"x": 8})
+
+    def test_the_cost_of_a_value_comes_from_the_table_of_ntfsbench(self):
+        table = {
+            "reader.max_bytes": {"memory_unit_bytes": 1},
+            "mft.max_run_slots": {"memory_unit_bytes": 1024},
+            "mft.max_gap_slots": {"memory_unit_bytes": 0},
+        }
+        cost = nb.memory_cost_of(table)
+        self.assertEqual(cost("reader.max_bytes", 5), 5.0)
+        self.assertEqual(cost("mft.max_run_slots", 3), 3072.0)
+        self.assertEqual(cost("mft.max_gap_slots", 1 << 20), 0.0)
+        # The reader's caps carry the pattern.
+        self.assertEqual(cost("reader.max_bytes@M2", 7), 7.0)
 
     def test_the_memory_cost_is_the_callers_to_define(self):
         searcher, _ = searcher_for(
@@ -400,6 +438,154 @@ class SearcherTests(unittest.TestCase):
         # The grid goes first: x is never timed without the grid's choice.
         tuned_x = [config for config, _ in evaluator.calls if "x" in config]
         self.assertTrue(all(config["reads"] == 8 for config in tuned_x))
+
+
+def flat_time(config, run):
+    return 100 * MS
+
+
+def bytes_cost(name, value):
+    return float(value)
+
+
+class SettleCommonTests(unittest.TestCase):
+    """One value of a constant for several patterns, under the 3 % rule."""
+
+    LIMITS = {"x": (1, 1 << 20)}
+
+    def searchers(self, functions, own, default=32, results=None):
+        """Searchers that have found their own value of x, as run() would."""
+        searchers = {}
+        for pattern, function in functions.items():
+            kept = results.setdefault(pattern, nb.ResultsFile(None)) if results is not None else nb.ResultsFile(None)
+            searcher = nb.Searcher(
+                FunctionEvaluator(function), kept, pattern, self.LIMITS,
+                {"x": default, "y": 4},
+            )
+            searcher.config = {"x": own[pattern]}
+            searcher.searched = {"x"}
+            searchers[pattern] = searcher
+        return searchers
+
+    def settle(self, functions, own, default=32, cost=bytes_cost, results=None):
+        searchers = self.searchers(functions, own, default, results)
+        found = {
+            pattern: ({} if own[pattern] == default else {"x": own[pattern]})
+            for pattern in functions
+        }
+        return nb.settle_common(searchers, found, cost), searchers
+
+    @staticmethod
+    def at_least(limit):
+        return lambda config, run: (100.0 if config["x"] >= limit else 300.0) * MS
+
+    @staticmethod
+    def at_most(limit):
+        return lambda config, run: (100.0 if config["x"] <= limit else 300.0) * MS
+
+    def test_a_value_no_pattern_loses_by_is_common_with_the_least_memory(self):
+        settled, _ = self.settle(
+            {"M1": self.at_least(8), "M2": self.at_least(16)}, {"M1": 8, "M2": 16}
+        )
+        # 8 is M1's own, but M2 is three times slower with it.
+        self.assertEqual(settled, {"M1": {"x": 16}, "M2": {"x": 16}})
+        self.assertEqual(nb.split_profile(settled), {"common": {"x": 16}})
+
+    def test_patterns_that_lose_with_each_others_value_keep_their_own(self):
+        settled, _ = self.settle(
+            {"M1": self.at_least(32), "M2": self.at_most(8)},
+            {"M1": 32, "M2": 2},
+            default=16,
+        )
+        self.assertEqual(settled, {"M1": {"x": 32}, "M2": {"x": 2}})
+        self.assertNotIn("common", nb.split_profile(settled))
+
+    def test_a_pattern_that_regresses_by_three_percent_or_less_accepts_the_value(self):
+        def mild(config, run):
+            return (102.9 if config["x"] < 16 else 100.0) * MS
+
+        settled, _ = self.settle({"M1": self.at_least(8), "M2": mild}, {"M1": 8, "M2": 16})
+        self.assertEqual(settled, {"M1": {"x": 8}, "M2": {"x": 8}})
+
+    def test_a_pattern_that_regresses_by_more_than_three_percent_refuses_it(self):
+        def sharp(config, run):
+            return (103.5 if config["x"] < 16 else 100.0) * MS
+
+        settled, _ = self.settle({"M1": self.at_least(8), "M2": sharp}, {"M1": 8, "M2": 16})
+        self.assertEqual(settled, {"M1": {"x": 16}, "M2": {"x": 16}})
+
+    def test_the_default_wins_a_tie_of_cost(self):
+        settled, _ = self.settle(
+            {"M1": flat_time, "M2": flat_time}, {"M1": 16, "M2": 8},
+            cost=lambda name, value: 0.0,
+        )
+        # Nothing to write: the default is common, and within the threshold.
+        self.assertEqual(settled, {"M1": {}, "M2": {}})
+        self.assertEqual(nb.split_profile(settled), {})
+
+    def test_the_least_memory_wins_even_below_the_default(self):
+        settled, _ = self.settle(
+            {"M1": flat_time, "M2": flat_time}, {"M1": 16, "M2": 8}
+        )
+        self.assertEqual(settled, {"M1": {"x": 8}, "M2": {"x": 8}})
+
+    def test_the_default_is_a_candidate_when_both_patterns_moved_up(self):
+        settled, _ = self.settle(
+            {"M1": flat_time, "M2": flat_time}, {"M1": 64, "M2": 128}
+        )
+        self.assertEqual(settled, {"M1": {}, "M2": {}})
+
+    def test_a_value_a_pattern_never_timed_is_timed_for_it(self):
+        _, searchers = self.settle(
+            {"M1": self.at_least(8), "M2": self.at_least(16)}, {"M1": 8, "M2": 16}
+        )
+        calls = searchers["M2"].evaluator.calls
+        # Its own 16 is timed for the baseline, and the candidate 8 is tried.
+        self.assertEqual({call[0]["x"] for call in calls}, {8, 16})
+        for _, run in calls:
+            self.assertLess(run, nb.TRIAGE_RUNS)
+
+    def test_a_second_settling_over_the_same_results_times_nothing(self):
+        results = {}
+        functions = {"M1": self.at_least(8), "M2": self.at_least(16)}
+        own = {"M1": 8, "M2": 16}
+        first, _ = self.settle(functions, own, results=results)
+        second, searchers = self.settle(functions, own, results=results)
+        self.assertEqual(first, second)
+        self.assertEqual(searchers["M1"].evaluator.calls, [])
+        self.assertEqual(searchers["M2"].evaluator.calls, [])
+
+    def test_the_rest_of_the_configuration_of_a_pattern_is_kept(self):
+        searchers = self.searchers(
+            {"M1": flat_time, "M2": flat_time}, {"M1": 8, "M2": 16}
+        )
+        searchers["M1"].config = {"x": 8, "y": 64}
+        nb.settle_common(
+            searchers, {"M1": {"x": 8, "y": 64}, "M2": {"x": 16}}, bytes_cost
+        )
+        calls = searchers["M1"].evaluator.calls
+        self.assertTrue(calls)
+        for config, _ in calls:
+            self.assertEqual(config["y"], 64)
+
+    def test_a_constant_one_pattern_searched_is_left_alone(self):
+        settled, searchers = self.settle({"M1": self.at_least(8)}, {"M1": 8})
+        self.assertEqual(settled, {"M1": {"x": 8}})
+        self.assertEqual(searchers["M1"].evaluator.calls, [])
+
+    def test_the_argument_is_not_changed(self):
+        found = {"M1": {"x": 8}, "M2": {"x": 16}}
+        searchers = self.searchers(
+            {"M1": self.at_least(8), "M2": self.at_least(16)}, {"M1": 8, "M2": 16}
+        )
+        nb.settle_common(searchers, found, bytes_cost)
+        self.assertEqual(found, {"M1": {"x": 8}, "M2": {"x": 16}})
+
+    def test_a_search_leaves_its_choice_and_the_names_it_searched(self):
+        searcher, _ = searcher_for(lambda config, run: 1000 * MS / config["x"], {"x": 4})
+        found = searcher.run(("x",), None)
+        self.assertEqual(searcher.config, found)
+        self.assertEqual(searcher.searched, {"x"})
 
 
 class ResultsFileTests(unittest.TestCase):
@@ -860,6 +1046,14 @@ class SelfTestTests(unittest.TestCase):
                 self.assertIn(name, table, f"{target.pattern} searches {name}")
         for name in ("reader.max_reads", "reader.max_bytes"):
             self.assertIn(name, table)
+        for name, knob in table.items():
+            self.assertGreaterEqual(knob["memory_unit_bytes"], 0, name)
+        # A byte count costs a byte a unit; a gap in slots costs nothing.
+        self.assertEqual(table["reader.max_bytes"]["memory_unit_bytes"], 1)
+        self.assertEqual(table["mft.window_bytes"]["memory_unit_bytes"], 1)
+        self.assertEqual(table["mft.max_gap_slots"]["memory_unit_bytes"], 0)
+        self.assertEqual(table["reader.match_lookahead"]["memory_unit_bytes"], 0)
+        self.assertGreater(table["reader.max_reads"]["memory_unit_bytes"], 1)
         limits, defaults = nb.knob_limits(table, ["reader.max_reads@M1"], "M1")
         self.assertEqual(defaults["reader.max_reads@M1"], table["reader.max_reads"]["default"])
         self.assertEqual(limits["reader.max_reads@M1"][0], table["reader.max_reads"]["min"])

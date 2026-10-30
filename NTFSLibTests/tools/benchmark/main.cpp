@@ -31,12 +31,11 @@
 
 #include "bench-options.h"
 #include "bench-tool.h"
+#include "device-path.h"
 #include "json.h"
 #include "text-convert.h"
 
-#ifdef _WIN32
-  #include <cwctype>
-#else
+#ifndef _WIN32
   #include "argv-wide.h"
   #include "posix-device-disk-reader.h"
 #endif
@@ -130,11 +129,8 @@ std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenReader(
                      NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps) {
 #ifdef _WIN32
   std::wstring path(target);
-  // A lone letter, optionally followed by a colon, names a drive.
-  if ((target.size() == 1 || (target.size() == 2 && target.back() == L':')) &&
-      std::iswalpha(target.front()) != 0) {
-    path =
-        std::wstring(L"\\\\.\\") + static_cast<wchar_t>(target.front()) + L":";
+  if (const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target)) {
+    path = std::wstring(L"\\\\.\\") + *letter + L":";
   }
   std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader =
       NTFS_BROWSER_NAMESPACE::Bench::OpenPlatformReader(path, caps);

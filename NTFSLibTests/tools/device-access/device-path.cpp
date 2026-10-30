@@ -32,18 +32,27 @@ bool IsSeparator(wchar_t character) {
 #endif
 }
 
-// Reports whether path names something a volume can be read from. On Windows
-// the path is extended first: the standard library hands it to Win32 as it
-// is, and a path of more than 260 units would not be found.
-bool IsVolumeSource(const std::filesystem::path& path) {
+// What path is, among the things a volume can be read from: Device for a block
+// device, File for a regular file, Missing for anything else. On Windows the
+// path is extended first: the standard library hands it to Win32 as it is, and
+// a path of more than 260 units would not be found.
+TargetKind VolumeSourceKind(const std::filesystem::path& path) {
   std::error_code error;
   const std::filesystem::file_status status = std::filesystem::status(
       NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(path), error);
   if (error) {
-    return false;
+    return TargetKind::Missing;
   }
-  return std::filesystem::is_regular_file(status) ||
-         std::filesystem::is_block_file(status);
+  if (std::filesystem::is_block_file(status)) {
+    return TargetKind::Device;
+  }
+  return std::filesystem::is_regular_file(status) ? TargetKind::File
+                                                  : TargetKind::Missing;
+}
+
+// Reports whether path names something a volume can be read from.
+bool IsVolumeSource(const std::filesystem::path& path) {
+  return VolumeSourceKind(path) != TargetKind::Missing;
 }
 
 // Position just after the last non-separator character of text, so trailing
@@ -70,7 +79,43 @@ std::wstring NormalizeDirectory(std::wstring_view rest) {
   return directory.substr(first, last - first + 1);
 }
 
+// Whether a character is one of the 26 ASCII letters a drive letter is.
+bool IsAsciiLetter(wchar_t character) {
+  return (character >= L'a' && character <= L'z') ||
+         (character >= L'A' && character <= L'Z');
+}
+
 }  // namespace
+
+std::optional<wchar_t> DriveLetterOf(std::wstring_view target) {
+  if (target.empty() || !IsAsciiLetter(target.front())) {
+    return std::nullopt;
+  }
+  // "c", "c:", "c:\" and "c:/" name the drive; "c:\dir" and "c:img" do not.
+  const bool drive = target.size() == 1 ||
+                     (target.size() == 2 && target.back() == L':') ||
+                     (target.size() == 3 && target[1] == L':' &&
+                      (target[2] == directory_separator || target[2] == L'/'));
+  if (!drive) {
+    return std::nullopt;
+  }
+  return target.front();
+}
+
+TargetKind ClassifyTarget(std::wstring_view target) {
+#ifdef _WIN32
+  if (target.starts_with(LR"(\\.\)")) {
+    return TargetKind::Device;
+  }
+  if (DriveLetterOf(target)) {
+    return TargetKind::Drive;
+  }
+#endif
+  if (target.empty()) {
+    return TargetKind::Missing;
+  }
+  return VolumeSourceKind(PathFromWide(target));
+}
 
 std::optional<DeviceTarget> SplitDeviceTarget(std::wstring_view target) {
   size_t end = EndWithoutSeparators(target);

@@ -18,12 +18,11 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "bench-tool.h"
+#include "device-path.h"
 #include "json.h"
 #include "text-convert.h"
 
 #ifdef _WIN32
-  #include <cwctype>
-
   #include <windows.h>
   #include <winioctl.h>
 #else
@@ -142,10 +141,9 @@ class Device {
  public:
   explicit Device(std::wstring_view target) {
     std::wstring path(target);
-    if ((target.size() == 1 || (target.size() == 2 && target.back() == L':')) &&
-        std::iswalpha(target.front()) != 0) {
-      path = std::wstring(L"\\\\.\\") + static_cast<wchar_t>(target.front()) +
-             L":";
+    if (const std::optional<wchar_t> letter =
+            NtfsDevice::DriveLetterOf(target)) {
+      path = std::wstring(L"\\\\.\\") + *letter + L":";
     }
     handle_ =
         CreateFileW(path.c_str(), GENERIC_READ,
@@ -370,12 +368,10 @@ std::optional<Zone> MftZone(const std::wstring& target) {
   using Volume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>;
 #ifdef _WIN32
-  const bool drive =
-      (target.size() == 1 || (target.size() == 2 && target.back() == L':')) &&
-      std::iswalpha(target.front()) != 0;
+  const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target);
   const std::unique_ptr<Volume> volume =
-      drive ? std::make_unique<Volume>(target.front())
-            : std::make_unique<Volume>(std::wstring_view(target));
+      letter ? std::make_unique<Volume>(*letter)
+             : std::make_unique<Volume>(std::wstring_view(target));
 #else
   auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
   if (!reader->Open(target)) {

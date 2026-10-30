@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <set>
 #include <span>
 #include <string>
@@ -222,4 +223,36 @@ TEST_CASE("A default VolumeOptions keeps the values it had before tuning",
   CHECK(options.max_usn_records ==
         NTFS_BROWSER_NAMESPACE::Usn::default_max_records);
   CHECK(options.max_usn_records == 1638400);
+}
+
+TEST_CASE("Every knob says what its value costs in memory", "[tuning][knobs]") {
+  for (const Tuning::Knob& knob : Tuning::Knobs()) {
+    INFO("knob " << knob.name);
+    const std::string_view name = knob.name;
+    // The largest value the search can try never wraps the cost.
+    if (knob.memory_unit_bytes != 0) {
+      CHECK(knob.max_value <=
+            std::numeric_limits<std::uint64_t>::max() / knob.memory_unit_bytes);
+    }
+    const bool is_gap = name.find("gap") != std::string_view::npos;
+    const bool is_threshold = name.find("min_") != std::string_view::npos ||
+                              name.find("load") != std::string_view::npos ||
+                              name.find("lookahead") != std::string_view::npos;
+    if (is_gap || is_threshold) {
+      CHECK(knob.memory_unit_bytes == 0);
+    } else if (name.ends_with("_bytes") && name != "reader.max_range_bytes") {
+      CHECK(knob.memory_unit_bytes == 1);
+    }
+  }
+  const auto unit = [](std::string_view name) {
+    const Tuning::Knob* const knob = Tuning::FindKnob(name);
+    REQUIRE(knob != nullptr);
+    return knob->memory_unit_bytes;
+  };
+  CHECK(unit("reader.max_bytes") == 1);
+  CHECK(unit("mft.window_bytes") == 1);
+  CHECK(unit("mft.max_gap_slots") == 0);
+  CHECK(unit("mft.announce_restart_interval") == 0);
+  CHECK(unit("mft.max_run_slots") > 1);
+  CHECK(unit("reader.max_reads") > 1);
 }

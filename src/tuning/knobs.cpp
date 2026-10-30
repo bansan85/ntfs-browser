@@ -40,6 +40,30 @@ constexpr std::uint64_t k16m = std::uint64_t{1} << 24U;
 constexpr std::uint64_t k256m = std::uint64_t{1} << 28U;
 constexpr std::uint64_t k1g = std::uint64_t{1} << 30U;
 
+// Values of Knob::memory_unit_bytes: the bytes of memory that one unit of a
+// knob's value holds or has in flight. The units of a count are estimates for
+// the usual volume. They only rank values of one knob, so they need not be
+// exact.
+//
+// The value holds no memory: a gap, a depth of search, a threshold.
+constexpr std::uint32_t no_memory = 0;
+// The value is a number of bytes.
+constexpr std::uint32_t is_bytes = 1;
+// A count of file records of 1 KiB, the usual size.
+constexpr std::uint32_t per_record = 1024;
+// A count of parsed slots or waiting records, each held as an entry with its
+// names and counters until the scan merges it.
+constexpr std::uint32_t per_outcome = 512;
+// A count of list entries (ranges, queries, memo records): a few words each.
+constexpr std::uint32_t per_entry = 64;
+// A count of reads in flight: a read buffer of 1 MiB, the size of the reads
+// that fill the default byte budget of the reader.
+constexpr std::uint32_t per_read = 1U << 20U;
+// A count of blocks or chunks of 4 MiB, the default window of $MFT.
+constexpr std::uint32_t per_large_block = 4U << 20U;
+// A count of threads: the stack and the buffers of a parse thread, about 1 MiB.
+constexpr std::uint32_t per_thread = 1U << 20U;
+
 // value as a T, cut at the largest T holds: a size_t of a 32-bit build is
 // narrower than the 64-bit values a profile gives.
 template <typename T>
@@ -50,10 +74,10 @@ T Clamped(std::uint64_t value) noexcept {
 
 // The knob for a field of VolumeOptions::tuning that no pattern splits. FIELD
 // is the member path below tuning, for example mft.window_bytes.
-#define NTFS_KNOB(NAME, FAMILY, PATTERNS, FIELD, MIN, MAX)                  \
+#define NTFS_KNOB(NAME, FAMILY, PATTERNS, FIELD, MIN, MAX, UNIT)            \
   Knob {                                                                    \
     NAME, Family::FAMILY, PATTERNS, false, MIN, MAX,                        \
-        static_cast<std::uint64_t>(Settings{}.FIELD),                       \
+        static_cast<std::uint64_t>(Settings{}.FIELD), UNIT,                 \
         [](const VolumeOptions& options, Pattern) {                         \
           return static_cast<std::uint64_t>(options.tuning.FIELD);          \
         },                                                                  \
@@ -65,10 +89,10 @@ T Clamped(std::uint64_t value) noexcept {
   }
 
 // The knob for a field of ReaderTuning, kept once per pattern.
-#define NTFS_READER_KNOB(NAME, FIELD, MIN, MAX)                            \
+#define NTFS_READER_KNOB(NAME, FIELD, MIN, MAX, UNIT)                      \
   Knob {                                                                   \
     NAME, Family::PrefetchDepth, all_patterns, true, MIN, MAX,             \
-        static_cast<std::uint64_t>(ReaderTuning{}.FIELD),                  \
+        static_cast<std::uint64_t>(ReaderTuning{}.FIELD), UNIT,            \
         [](const VolumeOptions& options, Pattern pattern) {                \
           return static_cast<std::uint64_t>(                               \
               options.tuning.reader.at(static_cast<std::size_t>(pattern))  \
@@ -83,106 +107,111 @@ T Clamped(std::uint64_t value) noexcept {
   }
 
 // A knob of VolumeOptions itself, outside tuning.
-#define NTFS_OPTION_KNOB(NAME, FAMILY, PATTERNS, FIELD, MIN, MAX)  \
-  Knob {                                                           \
-    NAME, Family::FAMILY, PATTERNS, false, MIN, MAX,               \
-        static_cast<std::uint64_t>(VolumeOptions{}.FIELD),         \
-        [](const VolumeOptions& options, Pattern) {                \
-          return static_cast<std::uint64_t>(options.FIELD);        \
-        },                                                         \
-        [](VolumeOptions& options, Pattern, std::uint64_t value) { \
-          options.FIELD = value;                                   \
-        }                                                          \
+#define NTFS_OPTION_KNOB(NAME, FAMILY, PATTERNS, FIELD, MIN, MAX, UNIT) \
+  Knob {                                                                \
+    NAME, Family::FAMILY, PATTERNS, false, MIN, MAX,                    \
+        static_cast<std::uint64_t>(VolumeOptions{}.FIELD), UNIT,        \
+        [](const VolumeOptions& options, Pattern) {                     \
+          return static_cast<std::uint64_t>(options.FIELD);             \
+        },                                                              \
+        [](VolumeOptions& options, Pattern, std::uint64_t value) {      \
+          options.FIELD = value;                                        \
+        }                                                               \
   }
 
 constexpr std::size_t knob_count = 42;
 
 const std::array<Knob, knob_count>& Table() {
   static const std::array<Knob, knob_count> table{{
-      NTFS_READER_KNOB("reader.max_reads", max_reads, 1, 256),
-      NTFS_READER_KNOB("reader.max_bytes", max_bytes, 4096, huge),
-      NTFS_READER_KNOB("reader.max_range_bytes", max_range_bytes, 4096, huge),
+      NTFS_READER_KNOB("reader.max_reads", max_reads, 1, 256, per_read),
+      NTFS_READER_KNOB("reader.max_bytes", max_bytes, 4096, huge, is_bytes),
+      NTFS_READER_KNOB("reader.max_range_bytes", max_range_bytes, 4096, huge,
+                       no_memory),
       NTFS_READER_KNOB("reader.max_announced_ranges", max_announced_ranges, 1,
-                       k1m),
-      NTFS_READER_KNOB("reader.match_lookahead", match_lookahead, 1, k64k),
+                       k1m, per_entry),
+      NTFS_READER_KNOB("reader.match_lookahead", match_lookahead, 1, k64k,
+                       no_memory),
 
-      NTFS_KNOB("mft.window_bytes", ReadShape, m1, mft.window_bytes, 4096,
-                huge),
-      NTFS_KNOB("mft.max_gap_slots", ReadShape, m1, mft.max_gap_slots, 0, k16m),
+      NTFS_KNOB("mft.window_bytes", ReadShape, m1, mft.window_bytes, 4096, huge,
+                is_bytes),
+      NTFS_KNOB("mft.max_gap_slots", ReadShape, m1, mft.max_gap_slots, 0, k16m,
+                no_memory),
       NTFS_KNOB("mft.max_announced_windows", PrefetchDepth, m1,
-                mft.max_announced_windows, 1, k64k),
+                mft.max_announced_windows, 1, k64k, per_large_block),
       NTFS_KNOB("mft.max_announced_bytes", PrefetchDepth, m1,
-                mft.max_announced_bytes, 4096, huge),
+                mft.max_announced_bytes, 4096, huge, is_bytes),
       NTFS_KNOB("mft.journal_piece_bytes", PrefetchDepth, m1,
-                mft.journal_piece_bytes, 4096, huge),
-      NTFS_KNOB("mft.max_run_slots", ReadShape, m2, mft.max_run_slots, 1, k1m),
+                mft.journal_piece_bytes, 4096, huge, is_bytes),
+      NTFS_KNOB("mft.max_run_slots", ReadShape, m2, mft.max_run_slots, 1, k1m,
+                per_record),
       NTFS_KNOB("mft.max_preread_extensions", ReadShape, m2,
-                mft.max_preread_extensions, 0, k16m),
+                mft.max_preread_extensions, 0, k16m, per_record),
       NTFS_KNOB("mft.max_held_record_bytes", ReadShape, m2,
-                mft.max_held_record_bytes, 0, huge),
+                mft.max_held_record_bytes, 0, huge, is_bytes),
       NTFS_KNOB("mft.max_pending_ranges", ReadShape, m2, mft.max_pending_ranges,
-                1, k256m),
+                1, k256m, per_entry),
       NTFS_KNOB("mft.max_kept_bitmap_bytes", ReadShape, m2,
-                mft.max_kept_bitmap_bytes, 0, huge),
+                mft.max_kept_bitmap_bytes, 0, huge, is_bytes),
       NTFS_KNOB("mft.max_announced_records", PrefetchDepth, m2,
-                mft.max_announced_records, 1, k1m),
+                mft.max_announced_records, 1, k1m, per_record),
       NTFS_KNOB("mft.max_announced_ranges", PrefetchDepth, m2,
-                mft.max_announced_ranges, 1, k1m),
+                mft.max_announced_ranges, 1, k1m, per_entry),
       NTFS_KNOB("mft.announce_restart_interval", PrefetchDepth, m2,
-                mft.announce_restart_interval, 1, k16m),
+                mft.announce_restart_interval, 1, k16m, no_memory),
       NTFS_KNOB("mft.held_block_bytes", CpuMemory, m1 | m2,
-                mft.held_block_bytes, 4096, huge),
+                mft.held_block_bytes, 4096, huge, is_bytes),
       NTFS_KNOB("mft.parse_chunk_slots", CpuMemory, m1, mft.parse_chunk_slots,
-                1, k1m),
+                1, k1m, per_outcome),
       NTFS_KNOB("mft.waiting_chunk_records", CpuMemory, m2,
-                mft.waiting_chunk_records, 1, k1m),
+                mft.waiting_chunk_records, 1, k1m, per_outcome),
       NTFS_KNOB("mft.waiting_batch_records", CpuMemory, m2,
-                mft.waiting_batch_records, 1, k16m),
+                mft.waiting_batch_records, 1, k16m, per_outcome),
       NTFS_KNOB("mft.max_auto_threads", CpuMemory, m1 | m2,
-                mft.max_auto_threads, 1, 64),
+                mft.max_auto_threads, 1, 64, per_thread),
       NTFS_KNOB("mft.min_auto_threaded_slots", CpuMemory, m1,
-                mft.min_auto_threaded_slots, 0, huge),
-      NTFS_KNOB("mft.probe_slots", CpuMemory, m1, mft.probe_slots, 1, huge),
+                mft.min_auto_threaded_slots, 0, huge, no_memory),
+      NTFS_KNOB("mft.probe_slots", CpuMemory, m1, mft.probe_slots, 1, huge,
+                no_memory),
       NTFS_KNOB("mft.max_load_per_mille", CpuMemory, m1, mft.max_load_per_mille,
-                0, 1000),
+                0, 1000, no_memory),
       NTFS_KNOB("mft.min_auto_threaded_waiting", CpuMemory, m2,
-                mft.min_auto_threaded_waiting, 0, huge),
+                mft.min_auto_threaded_waiting, 0, huge, no_memory),
 
       NTFS_KNOB("probe.max_gap_bytes", ReadShape, m2, probe.max_gap_bytes, 0,
-                huge),
+                huge, no_memory),
       NTFS_KNOB("probe.max_run_bytes", ReadShape, m2, probe.max_run_bytes, 4096,
-                huge),
+                huge, is_bytes),
       NTFS_KNOB("probe.max_chunk_records", ReadShape, m2,
-                probe.max_chunk_records, 1, k1m),
+                probe.max_chunk_records, 1, k1m, per_record),
       NTFS_KNOB("probe.max_known_records", ReadShape, m2,
-                probe.max_known_records, 1, k1g),
+                probe.max_known_records, 1, k1g, per_entry),
 
       NTFS_KNOB("cache.block_bytes", ReadShape, m2 | m3, cache.block_bytes,
-                4096, k256m),
+                4096, k256m, is_bytes),
       NTFS_OPTION_KNOB("cache.max_bytes", CpuMemory, m2 | m3, max_cache_bytes,
-                       0, huge),
+                       0, huge, is_bytes),
       NTFS_OPTION_KNOB("readahead.chunk_bytes", ReadShape, m1, read_ahead_bytes,
-                       0, std::uint64_t{1} << 26U),
+                       0, std::uint64_t{1} << 26U, is_bytes),
 
       NTFS_KNOB("readahead.window_chunks", PrefetchDepth, m1,
-                readahead.window_chunks, 1, 64),
+                readahead.window_chunks, 1, 64, per_large_block),
 
       NTFS_KNOB("alloc.bitmap_window_bytes", ReadShape, m2,
-                alloc.bitmap_window_bytes, 4096, huge),
+                alloc.bitmap_window_bytes, 4096, huge, is_bytes),
 
       NTFS_KNOB("check.max_read_bytes", ReadShape, m4, check.max_read_bytes,
-                4096, huge),
+                4096, huge, is_bytes),
       NTFS_KNOB("check.max_gap_bytes", ReadShape, m4, check.max_gap_bytes, 0,
-                huge),
+                huge, no_memory),
       NTFS_KNOB("check.max_announced_reads", PrefetchDepth, m4,
-                check.max_announced_reads, 1, k64k),
+                check.max_announced_reads, 1, k64k, per_large_block),
       NTFS_KNOB("check.max_announced_bytes", PrefetchDepth, m4,
-                check.max_announced_bytes, 4096, huge),
+                check.max_announced_bytes, 4096, huge, is_bytes),
 
       NTFS_KNOB("usn.read_chunk_bytes", ReadShape, m1, usn.read_chunk_bytes,
-                4096, k256m),
+                4096, k256m, is_bytes),
       NTFS_KNOB("output.flush_bytes", CpuMemory, m1 | m2 | m3,
-                output.flush_bytes, 4096, k1g),
+                output.flush_bytes, 4096, k1g, is_bytes),
   }};
   return table;
 }

@@ -891,12 +891,35 @@ class ResultsFile:
                 csv.writer(handle).writerow([pattern, self.encode(config), run, f"{value:.0f}"])
 
 
+def no_memory_cost(name: str, value: int) -> float:
+    """The cost of a knob that is not given one: none, so a plateau keeps its value."""
+    return 0.0
+
+
+def memory_cost_of(table: dict[str, dict]) -> Callable[[str, int], float]:
+    """The memory a value holds, in bytes, from the table of knobs of NtfsBench.
+
+    `memory_unit_bytes` is what one unit of the value holds: 1 for a byte count,
+    0 for a gap or a threshold. A name may carry a "@pattern" suffix.
+    """
+
+    def cost(name: str, value: int) -> float:
+        return float(value) * table[name.split("@")[0]]["memory_unit_bytes"]
+
+    return cost
+
+
 class Searcher:
-    """Finds the best value of each knob, one at a time, from the defaults."""
+    """Finds the best value of each knob, one at a time, from the defaults.
+
+    `memory_cost(name, value)` ranks the values of a plateau. A knob that holds
+    no memory costs 0 for every value, and then a plateau keeps the value the
+    search has at that point: the default, or the one chosen so far.
+    """
 
     def __init__(self, evaluator: Evaluator, results: ResultsFile, pattern: str,
                  limits: dict[str, tuple[int, int]], defaults: dict[str, int],
-                 memory_cost: Callable[[str, int], float] = lambda name, value: float(value)):
+                 memory_cost: Callable[[str, int], float] = no_memory_cost):
         self.evaluator = evaluator
         self.results = results
         self.pattern = pattern
@@ -904,6 +927,9 @@ class Searcher:
         self.defaults = defaults
         self.memory_cost = memory_cost
         self.trace: list[str] = []
+        # What run() settled on, defaults included, and the names it searched.
+        self.config: dict[str, int] = {}
+        self.searched: set[str] = set()
 
     def runs(self, config: dict[str, int], count: int) -> Stats:
         values = []
@@ -921,6 +947,10 @@ class Searcher:
             candidate.median < best.median * (1 - GAIN_THRESHOLD)
             and candidate.high < best.low
         )
+
+    def regresses(self, candidate: Stats, best: Stats) -> bool:
+        """Slower than the best by more than the threshold, at the median."""
+        return candidate.median > best.median * (1 + GAIN_THRESHOLD)
 
     def same(self, candidate: Stats, best: Stats) -> bool:
         """Within the threshold of the best, or overlapping it: a plateau."""
@@ -966,8 +996,9 @@ class Searcher:
                     plateau.append((candidate_value, stats))
                 else:
                     break
-        # On a plateau, the value that costs the least memory.
-        chosen = min(plateau, key=lambda item: (self.memory_cost(name, item[0]), item[0]))[0]
+        # On a plateau, the value that costs the least memory. min() takes the
+        # first of equal costs, and the plateau lists the current value first.
+        chosen = min(plateau, key=lambda item: self.memory_cost(name, item[0]))[0]
         self.trace.append(f"{name}: {chosen} (from {start}, plateau of {len(plateau)})")
         current[name] = chosen
         return current
@@ -1001,8 +1032,11 @@ class Searcher:
         config: dict[str, int] = {}
         if grid:
             config = self.tune_grid(config, *grid)
+            self.searched.update(grid[:2])
         for name in knobs:
             config = self.tune_knob(config, name)
+            self.searched.add(name)
+        self.config = config
         # Only what moved away from the default goes in the profile.
         return {name: value for name, value in config.items() if value != self.defaults.get(name)}
 
@@ -1067,6 +1101,8 @@ def search(args: argparse.Namespace) -> int:
     if disk.get("solid_state") is not None:
         section["solid_state"] = disk["solid_state"]
 
+    cost = memory_cost_of(table)
+    searchers: dict[str, Searcher] = {}
     found: dict[str, dict[str, int]] = {}
     for pattern in args.patterns:
         target = TARGETS[pattern]
@@ -1074,16 +1110,18 @@ def search(args: argparse.Namespace) -> int:
         limits, defaults = knob_limits(table, names, pattern)
         results = ResultsFile(out_dir / f"search-{pattern}.csv")
         searcher = Searcher(ToolEvaluator(runner, target, args.volume, pattern), results,
-                            pattern, limits, defaults)
+                            pattern, limits, defaults, cost)
         log(f"searching {pattern}")
         found[pattern] = searcher.run(
             target.knobs, ("reader.max_reads", "reader.max_bytes", GRID_READS, GRID_BYTES)
         )
+        searchers[pattern] = searcher
         for line in searcher.trace:
             log("  " + line)
 
     # One common value when no pattern regresses by more than the threshold
     # with it, else a section for each pattern.
+    found = settle_common(searchers, found, cost)
     section_values = split_profile(found)
     section.update(section_values)
     profile_path.write_text(json.dumps(profile, indent=2))
@@ -1094,8 +1132,70 @@ def search(args: argparse.Namespace) -> int:
     return 0
 
 
+def settle_common(
+    searchers: dict[str, Searcher],
+    found: dict[str, dict[str, int]],
+    memory_cost: Callable[[str, int], float],
+) -> dict[str, dict[str, int]]:
+    """Gives a constant that several patterns searched one value, when it pays.
+
+    A value is common when no pattern that searched the constant runs more than
+    GAIN_THRESHOLD slower with it than with the value it found for itself, the
+    rest of its configuration kept. The candidates are the values the patterns
+    found, and the default. Of those that pass, the one that holds the least
+    memory wins, and the default wins a tie. A configuration the search never
+    timed is timed now, through the results file, so a resumed search does not
+    repeat it. When no candidate passes, the patterns keep their own values.
+
+    Returns `found` with the common values written into every pattern that
+    searched the constant (or removed from it, when the common value is the
+    default). `split_profile` then groups them.
+    """
+    settled = {pattern: dict(config) for pattern, config in found.items()}
+    # Each pattern's own best is the baseline; the working configuration takes
+    # the common values as they are settled, so that the last check is made on
+    # what the profile will hold.
+    working = {pattern: dict(searcher.config) for pattern, searcher in searchers.items()}
+    baseline: dict[str, Stats] = {}
+    counts: dict[str, int] = {}
+    for searcher in searchers.values():
+        for name in searcher.searched:
+            counts[name] = counts.get(name, 0) + 1
+    for name in sorted(name for name, count in counts.items() if count > 1):
+        users = [pattern for pattern, searcher in searchers.items() if name in searcher.searched]
+        default = searchers[users[0]].defaults[name]
+        candidates = {working[pattern].get(name, default) for pattern in users} | {default}
+        ordered = sorted(candidates, key=lambda v: (memory_cost(name, v), v != default, v))
+        for value in ordered:
+            passes = True
+            for pattern in users:
+                searcher = searchers[pattern]
+                if pattern not in baseline:
+                    baseline[pattern] = searcher.runs(searcher.config, TRIAGE_RUNS)
+                trial = searcher.runs(dict(working[pattern], **{name: value}), TRIAGE_RUNS)
+                if searcher.regresses(trial, baseline[pattern]):
+                    passes = False
+                    break
+            if not passes:
+                continue
+            for pattern in users:
+                working[pattern][name] = value
+                if value == default:
+                    settled[pattern].pop(name, None)
+                else:
+                    settled[pattern][name] = value
+            log(f"  {name}: {value} for {', '.join(users)}")
+            break
+        else:
+            log(f"  {name}: one value for each pattern")
+    return settled
+
+
 def split_profile(found: dict[str, dict[str, int]]) -> dict[str, dict[str, int]]:
-    """Moves a value into 'common' when every searched pattern holds it, equal."""
+    """Moves a value into 'common' when every searched pattern holds it, equal.
+
+    settle_common() makes the patterns agree when the 3 % rule allows it.
+    """
     section: dict[str, dict[str, int]] = {}
     names = {name for config in found.values() for name in config}
     for name in sorted(names):
@@ -1168,9 +1268,10 @@ class AnalyticDisk(Evaluator):
         windows = math.ceil(self.TOTAL / window)
         io = windows * (self.LATENCY + window / self.LANE_RATE) / in_flight
         cpu = self.TOTAL / self.CPU_RATE
-        # Gaps of free slots cost reads of bytes nobody parses.
+        # A wide gap costs reads of bytes nobody parses; none at all cuts a
+        # window into many reads.
         gap = config.get("mft.max_gap_slots", 64)
-        waste = 1 + (0.0002 * gap)
+        waste = 1 + (0.0002 * gap) + 0.5 / (1 + gap)
         return max(io * waste, cpu) + 0.2
 
     def measure(self, config: dict[str, int], run_index: int) -> float:
@@ -1223,7 +1324,11 @@ def self_test(args: argparse.Namespace) -> int:
     defaults = {"mft.window_bytes": 4 << 20, "mft.max_gap_slots": 64,
                 "reader.max_reads": 32, "reader.max_bytes": 64 << 20}
     disk = AnalyticDisk()
-    searcher = Searcher(disk, ResultsFile(None), "M1", limits, defaults)
+    # Bytes cost memory; a gap in slots costs none and keeps its value.
+    memory = {"mft.window_bytes": 1, "mft.max_gap_slots": 0, "reader.max_reads": 1 << 20,
+              "reader.max_bytes": 1}
+    cost = lambda name, value: float(value) * memory[name]  # noqa: E731
+    searcher = Searcher(disk, ResultsFile(None), "M1", limits, defaults, cost)
     found = searcher.run(("mft.window_bytes", "mft.max_gap_slots"),
                          ("reader.max_reads", "reader.max_bytes", GRID_READS, GRID_BYTES))
     tuned = dict(defaults, **found)
@@ -1263,6 +1368,29 @@ def self_test(args: argparse.Namespace) -> int:
     Searcher(Counting(), results, "M1", limits, defaults).run(("mft.window_bytes",), None)
     check(first > 0 and len(calls) == first, "a second search with the same results measures nothing")
 
+    # 4b. A constant that costs no memory keeps its value on a plateau.
+    class Flat(Evaluator):
+        def measure(self, config, run_index):
+            return 1e9
+
+    flat = Searcher(Flat(), ResultsFile(None), "M1", limits, defaults, cost)
+    kept = flat.tune_knob({}, "mft.max_gap_slots")
+    check(kept["mft.max_gap_slots"] == defaults["mft.max_gap_slots"],
+          "a gap that costs no memory keeps its value on a flat plateau "
+          f"({kept['mft.max_gap_slots']})")
+
+    # 4c. One value for a constant two patterns searched, when neither loses 3 %.
+    pair = {name: Searcher(AnalyticDisk(seed), ResultsFile(None), name, limits, defaults, cost)
+            for name, seed in (("M1", 7), ("M2", 11))}
+    own = {name: searcher.run((), ("reader.max_reads", "reader.max_bytes", GRID_READS, GRID_BYTES))
+           for name, searcher in pair.items()}
+    merged = split_profile(settle_common(pair, own, cost))
+    for name, searcher in pair.items():
+        config = dict(defaults, **merged.get("common", {}), **merged.get(name, {}))
+        own_best = searcher.evaluator.seconds(dict(defaults, **own[name]))
+        check(searcher.evaluator.seconds(config) <= own_best * (1 + GAIN_THRESHOLD),
+              f"the common values cost {name} less than {GAIN_THRESHOLD:.0%} of its own best")
+
     # 5. The profile split puts a value that every pattern agrees on in common.
     section = split_profile({"M1": {"reader.max_reads": 16, "mft.window_bytes": 1 << 20},
                              "M2": {"reader.max_reads": 16}})
@@ -1282,7 +1410,8 @@ def self_test(args: argparse.Namespace) -> int:
         big = {"mft.window_bytes": 1 << 20}
         check(sim.measure(small, 0) > sim.measure(big, 0) * 1.5,
               "on the simulated hard disk, a window of 4 KiB is much slower than 1 MiB")
-        found = Searcher(sim, ResultsFile(None), "M1", sim_limits, sim_defaults).run(
+        found = Searcher(sim, ResultsFile(None), "M1", sim_limits, sim_defaults,
+                         lambda name, value: float(value)).run(
             ("mft.window_bytes",), None)
         best = min(sim.measure({"mft.window_bytes": 1 << shift}, 0) for shift in range(12, 23))
         got = sim.measure(dict(found) or {"mft.window_bytes": 4 << 20}, 0)

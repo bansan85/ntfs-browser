@@ -19,13 +19,12 @@
 #include <ntfs-browser/tuning/tuning.h>
 
 #include "bench-tool.h"
+#include "device-path.h"
 #include "disk-identity.h"
 #include "json.h"
 #include "text-convert.h"
 
 #ifdef _WIN32
-  #include <cwctype>
-
   #include <windows.h>
   #include <winioctl.h>
 #else
@@ -89,21 +88,44 @@ bool EnablePrivilege(const wchar_t* name) {
   return ok;
 }
 
-// The \\.\X: path of a drive-letter target, the target itself when it names a
-// device, or empty.
+// The \\.\X: path of a drive target, the target itself when it names a device,
+// or empty.
 std::wstring VolumePath(std::wstring_view target) {
-  if (target.starts_with(L"\\\\.\\")) {
+  if (NtfsDevice::ClassifyTarget(target) == NtfsDevice::TargetKind::Device) {
     return std::wstring(target);
   }
-  if (!target.empty() && std::iswalpha(target.front()) != 0 &&
-      (target.size() == 1 || target[1] == L':')) {
-    return std::wstring(L"\\\\.\\") + static_cast<wchar_t>(target.front()) +
-           L":";
+  if (const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target)) {
+    return std::wstring(L"\\\\.\\") + *letter + L":";
   }
   return {};
 }
 
 #endif
+
+// Says why target is no disk for command, and returns the exit code to stop
+// with: 2 for a file, which names no disk, and 1 for a path that does not
+// exist. Returns 0 for a drive or a device. A path is never taken for the drive
+// its text starts with.
+int RefuseNonDisk(std::string_view command, std::wstring_view target) {
+  const std::string text = NtfsDevice::WideToUtf8(target);
+  switch (NtfsDevice::ClassifyTarget(target)) {
+    case NtfsDevice::TargetKind::Drive:
+    case NtfsDevice::TargetKind::Device:
+      return 0;
+    case NtfsDevice::TargetKind::File:
+      std::fprintf(stderr,
+                   "%.*s needs a drive or a device: %s is a file, which "
+                   "names no disk\n",
+                   static_cast<int>(command.size()), command.data(),
+                   text.c_str());
+      return 2;
+    case NtfsDevice::TargetKind::Missing:
+      break;
+  }
+  std::fprintf(stderr, "Cannot open %s: no such file or device\n",
+               text.c_str());
+  return 1;
+}
 
 }  // namespace
 
@@ -165,12 +187,11 @@ int WakeCommand(const Arguments& args) {
     return 2;
   }
   const std::wstring& target = args.words.front();
+  if (const int refused = RefuseNonDisk("wake", target); refused != 0) {
+    return refused;
+  }
 #ifdef _WIN32
   const std::wstring path = VolumePath(target);
-  if (path.empty()) {
-    std::fprintf(stderr, "wake needs a drive letter or a device\n");
-    return 2;
-  }
   // Unbuffered, so that the read reaches the disk and loads nothing the
   // benchmark reads into the cache.
   const HANDLE handle = CreateFileW(
@@ -225,12 +246,26 @@ int DiskIdCommand(const Arguments& args) {
     std::fprintf(stderr, "disk-id expects <target>\n");
     return 2;
   }
-  const std::optional<NtfsDevice::DiskIdentity> identity =
-      NtfsDevice::IdentifyDisk(args.words.front());
+  const std::wstring& target = args.words.front();
+  // A file names no disk, and the disk that holds it is not the one meant:
+  // the script gives the drive or the device it reads. The answer is "none",
+  // with the reason, so that an image still gets the "*" section of a profile.
+  const NtfsDevice::TargetKind kind = NtfsDevice::ClassifyTarget(target);
+  if (kind == NtfsDevice::TargetKind::Missing) {
+    return RefuseNonDisk("disk-id", target);
+  }
+  std::optional<NtfsDevice::DiskIdentity> identity;
+  if (kind != NtfsDevice::TargetKind::File) {
+    identity = NtfsDevice::IdentifyDisk(target);
+  }
   NtfsDevice::JsonWriter json;
   json.BeginObject();
   json.Field("format", json_format);
   json.Field("found", identity.has_value());
+  if (kind == NtfsDevice::TargetKind::File) {
+    json.Field("reason", std::string_view("a file names no disk: give the "
+                                          "drive or the device that holds it"));
+  }
   if (identity) {
     json.Field("key", identity->key);
     json.Field("vendor", identity->vendor);
@@ -269,6 +304,8 @@ int KnobsCommand(const Arguments& args) {
     json.Field("min", knob.min_value);
     json.Field("max", knob.max_value);
     json.Field("default", knob.default_value);
+    json.Field("memory_unit_bytes",
+               static_cast<std::uint64_t>(knob.memory_unit_bytes));
     json.EndObject();
   }
   json.EndArray();
@@ -519,6 +556,10 @@ int SampleCommand(const Arguments& args) {
   if (malformed || (pid == 0 && seconds == 0 && !until_file)) {
     std::fprintf(stderr, "sample needs --pid, --seconds or --until-file\n");
     return 2;
+  }
+  if (const int refused = RefuseNonDisk("sample", args.words.front());
+      refused != 0) {
+    return refused;
   }
   const DiskCounters counters(args.words.front());
   if (!counters.Ok()) {

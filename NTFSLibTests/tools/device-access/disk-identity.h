@@ -20,8 +20,8 @@ struct DiskIdentity {
 
 // The disk behind target: a drive letter ("c" or "c:", optionally followed by a
 // path), a device ("\\.\PhysicalDrive0", "\\.\C:", "/dev/sda1") or an image
-// file. Nothing for an image file, and for a disk the system does not
-// identify.
+// file. Nothing for an image file, even under a drive letter ("c:\img.bin"),
+// and for a disk the system does not identify.
 [[nodiscard]] std::optional<DiskIdentity>
     IdentifyDisk(std::wstring_view target);
 

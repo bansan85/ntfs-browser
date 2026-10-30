@@ -177,7 +177,7 @@ A profile is a JSON file with one section per disk, keyed by `"<vendor> <product
 }
 ```
 
-An unknown key, a value out of range or a constant that a pattern does not serve is refused with a message that names it. `NtfsBench knobs` prints every name with its family, patterns, bounds and default.
+An unknown key, a value out of range or a constant that a pattern does not serve is refused with a message that names it. `NtfsBench knobs` prints every name with its family, patterns, bounds, default and `memory_unit_bytes` (the bytes of memory one unit of the value holds, 0 for a gap or a threshold), which the search uses to prefer the value that costs the least memory on a plateau.
 
 ## Documentation
 

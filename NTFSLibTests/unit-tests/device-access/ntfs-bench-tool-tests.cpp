@@ -53,8 +53,7 @@ constexpr std::size_t measured_file_bytes = std::size_t{16} << 20U;
 // Results a disk sheet holds: three patterns at six queue depths.
 constexpr std::size_t sheet_results = 18;
 
-// Not a drive letter and not a device, so that no tool takes it for a disk:
-// the tools take a path that starts with a letter and a colon for a drive.
+// Not a drive and not a device, and no such file: no tool takes it for a disk.
 constexpr std::wstring_view absent_target = L"ntfs-bench-test-no-such-target";
 
 SampleRun RunBench(const std::vector<std::wstring>& args) {
@@ -267,6 +266,7 @@ TEST_CASE("NtfsBench knobs lists the tunable constants",
     CHECK(Member(entry, "family").text == Tuning::FamilyName(knob.family));
     CHECK(Count(Member(entry, "min")) == knob.min_value);
     CHECK(Count(Member(entry, "default")) == knob.default_value);
+    CHECK(Count(Member(entry, "memory_unit_bytes")) == knob.memory_unit_bytes);
     CHECK(Member(entry, "per_pattern").boolean == knob.per_pattern);
     CHECK_FALSE(Member(entry, "patterns").items.empty());
     CHECK(Member(entry, "min").number <= Member(entry, "default").number);
@@ -488,7 +488,7 @@ TEST_CASE("NtfsBench commands that need a target refuse a missing one",
       {{L"sample", absent, L"--out=" + dir.Path().wstring() + L"/s.json",
         L"--seconds=1"},
        1,
-       "Cannot read the counters of the disk"},
+       "Cannot open"},
   };
   for (const Case& test : cases) {
     INFO("arguments " << test.args.size() << ", message '" << test.message
@@ -500,23 +500,73 @@ TEST_CASE("NtfsBench commands that need a target refuse a missing one",
   CHECK_FALSE(std::filesystem::exists(dir.Path() / "s.json"));
 }
 
-TEST_CASE("NtfsBench disk-id says that a target that is no disk is none",
+TEST_CASE("NtfsBench disk-id refuses a target that does not exist",
           "[device-access][ntfsbench][sample]") {
-  const SampleRun run = RunBench({L"disk-id", std::wstring(absent_target)});
+  const Tests::TempDir dir;
+  const std::wstring missing_file = (dir.Path() / "absent.img").wstring();
+
+  for (const std::wstring& target :
+       {std::wstring(absent_target), missing_file}) {
+    const SampleRun run = RunBench({L"disk-id", target});
+
+    CHECK(run.exit_code == 1);
+    CHECK(run.out.empty());
+    CHECK_THAT(run.err, ContainsSubstring("Cannot open"));
+  }
+}
+
+TEST_CASE("NtfsBench disk-id names no disk for a file",
+          "[device-access][ntfsbench][sample]") {
+  const Tests::TempDir dir;
+  const std::filesystem::path image = WriteZeros(dir, "disk.img", 4096);
+
+  const SampleRun run = RunBench({L"disk-id", image.wstring()});
 
   REQUIRE(run.exit_code == 0);
   const JsonValue root = Parse(run.out);
   CHECK(Count(Member(root, "format")) == 1);
   CHECK_FALSE(Member(root, "found").boolean);
   CHECK(root.Find("key") == nullptr);
+  CHECK_THAT(Member(root, "reason").text, ContainsSubstring("a file names no"));
 }
 
-TEST_CASE("NtfsBench wake refuses a target that is no disk",
+TEST_CASE("NtfsBench wake refuses what is no disk and acts on no other drive",
           "[device-access][ntfsbench][sample]") {
-  const SampleRun run = RunBench({L"wake", std::wstring(absent_target)});
+  const Tests::TempDir dir;
+  const std::filesystem::path image = WriteZeros(dir, "disk.img", 4096);
 
-  CHECK(run.exit_code != 0);
-  CHECK_FALSE(run.err.empty());
+  // The temp folder sits under a drive letter on Windows: neither path is
+  // read as that drive.
+  const SampleRun file = RunBench({L"wake", image.wstring()});
+  const SampleRun missing =
+      RunBench({L"wake", (dir.Path() / "absent.img").wstring()});
+  const SampleRun nothing = RunBench({L"wake", std::wstring(absent_target)});
+
+  CHECK(file.exit_code == 2);
+  CHECK_THAT(file.err, ContainsSubstring("is a file"));
+  CHECK(missing.exit_code == 1);
+  CHECK_THAT(missing.err, ContainsSubstring("Cannot open"));
+  CHECK(nothing.exit_code == 1);
+  CHECK_THAT(nothing.err, ContainsSubstring("Cannot open"));
+}
+
+TEST_CASE("NtfsBench sample refuses a file and a missing path",
+          "[device-access][ntfsbench][sample]") {
+  const Tests::TempDir dir;
+  const std::filesystem::path image = WriteZeros(dir, "disk.img", 4096);
+  const std::filesystem::path out = dir.Path() / "samples.json";
+
+  const SampleRun file = RunBench(
+      {L"sample", image.wstring(), Option(L"--out", out), L"--seconds=1"});
+  const SampleRun missing =
+      RunBench({L"sample", (dir.Path() / "absent.img").wstring(),
+                Option(L"--out", out), L"--seconds=1"});
+
+  CHECK(file.exit_code == 2);
+  CHECK_THAT(file.err, ContainsSubstring("is a file"));
+  CHECK(missing.exit_code == 1);
+  CHECK_THAT(missing.err, ContainsSubstring("Cannot open"));
+  CHECK_FALSE(std::filesystem::exists(out));
 }
 
 TEST_CASE("NtfsBench diskbench refuses a zone it cannot use",

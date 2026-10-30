@@ -29,6 +29,13 @@ struct Knob {
   std::uint64_t max_value;
   // The value the library has when nothing sets it.
   std::uint64_t default_value;
+  // Bytes of memory one unit of the value holds or has in flight: 1 for a byte
+  // count, 1024 for a count of file records, 0 for a value that holds none (a
+  // gap, a threshold). A search that finds several values equally fast takes
+  // the one with the least value * memory_unit_bytes, and keeps the current one
+  // when that is 0 for all. The unit of a count is an estimate: it ranks the
+  // values of one knob, it is not a measure.
+  std::uint32_t memory_unit_bytes;
   // Reads the knob. pattern is ignored unless per_pattern.
   std::uint64_t (*get)(const VolumeOptions& options, Pattern pattern);
   // Writes the knob. The value MUST be within the bounds.
