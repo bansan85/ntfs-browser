@@ -1,5 +1,6 @@
 #include "output.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <mutex>
 #include <string_view>
@@ -19,10 +20,18 @@
 
 namespace NtfsDevice {
 
+namespace {
+
+// The most a chunk reserves up front. A chunk of 1 GiB, which the tuning
+// allows, would otherwise take 2 GiB at once and fail in a 32-bit process.
+constexpr size_t max_reserved_bytes = size_t{64} * 1024 * 1024;
+
+}  // namespace
+
 Output::Output(size_t flush_bytes)
     : flush_bytes_(flush_bytes != 0 ? flush_bytes : output_flush_bytes) {
-  buffer_.reserve(flush_bytes_);
-  writing_.reserve(flush_bytes_);
+  buffer_.reserve((std::min)(flush_bytes_, max_reserved_bytes));
+  writing_.reserve((std::min)(flush_bytes_, max_reserved_bytes));
 #ifdef _WIN32
   fflush(stdout);
   text_mode_ = _setmode(_fileno(stdout), _O_BINARY);
