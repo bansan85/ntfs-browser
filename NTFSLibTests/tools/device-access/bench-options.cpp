@@ -251,6 +251,12 @@ OptionResult ParseBenchOption(std::wstring_view arg, BenchOptions& options,
     return OptionResult::Accepted;
   }
   if (const auto value = value_of("--benchmark")) {
+    if (value->empty()) {
+      error =
+          "--benchmark= needs a path: write --benchmark alone for the "
+          "default one";
+      return OptionResult::Malformed;
+    }
     options.benchmark = true;
     options.summary_path =
         PathFromWide(arg.substr(std::string_view("--benchmark=").size()));
