@@ -7,6 +7,7 @@ target_sources(
     "bench-tools-tests.cpp"
     "device-path-tests.cpp"
     "json-tests.cpp"
+    "ntfs-bench-tool-tests.cpp"
     "output-tests.cpp"
     "profile-tools-tests.cpp"
     "sparse-capture-tests.cpp"
@@ -20,6 +21,13 @@ target_link_libraries(NtfsBrowserTests PRIVATE NtfsDeviceAccess)
 target_include_directories(
   NtfsBrowserTests
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+# The tests of NtfsBench run the executable (tools/benchmark/).
+add_dependencies(NtfsBrowserTests NtfsBench)
+target_compile_definitions(
+  NtfsBrowserTests
+  PRIVATE NTFS_BENCH_EXE="$<TARGET_FILE:NtfsBench>"
 )
 
 # The POSIX reader, the argv adapter, the Linux driver names and the POSIX

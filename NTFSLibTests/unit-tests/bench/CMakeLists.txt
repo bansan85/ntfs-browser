@@ -7,4 +7,5 @@ target_sources(
     "read-log-tests.cpp"
     "replay-tests.cpp"
     "session-invariance-tests.cpp"
+    "throttled-disk-reader-tests.cpp"
 )

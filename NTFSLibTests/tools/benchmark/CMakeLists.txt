@@ -35,3 +35,23 @@ if(WIN32 AND BUILD_SHARED_LIBS)
     COMMAND_EXPAND_LISTS
   )
 endif()
+
+# The tests of ntfs_benchmark.py (unittest, standard library only). The script
+# needs Python 3.12, so without it the tests are not registered. -I keeps the
+# environment and the current folder out of the interpreter's search path.
+find_package(Python3 3.12 COMPONENTS Interpreter)
+if(Python3_FOUND)
+  add_test(
+    NAME NtfsBenchmarkScript
+    COMMAND
+      Python3::Interpreter -I
+      "${CMAKE_CURRENT_SOURCE_DIR}/test_ntfs_benchmark.py" --bench-exe
+      $<TARGET_FILE:NtfsBench>
+  )
+  set_tests_properties(NtfsBenchmarkScript PROPERTIES TIMEOUT 600)
+else()
+  message(
+    STATUS
+    "Python 3.12 or later not found: the tests of ntfs_benchmark.py are not registered"
+  )
+endif()
