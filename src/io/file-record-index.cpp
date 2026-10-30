@@ -382,6 +382,38 @@ void Io::DirectoryIndex<S>::Walk(WalkTarget<S>& target) const {
   }
 }
 
+template <Cache::Strategy S>
+std::optional<typename Io::DirectoryIndex<S>::RootChildren>
+    Io::DirectoryIndex<S>::RootChildBlocks() const {
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& roots =
+      record_.GetAttr(Attr::Type::IndexRoot);
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& allocs =
+      record_.GetAttr(Attr::Type::IndexAllocation);
+  if (roots.empty() || allocs.empty()) {
+    return std::nullopt;
+  }
+  const std::vector<IndexEntryView>* entries =
+      FileNameIndexRootEntries(*roots.front());
+  if (entries == nullptr) {
+    return std::nullopt;
+  }
+
+  RootChildren children{
+      .alloc = static_cast<Attr::AttrIndexAlloc<S>*>(allocs.front().get()),
+      .vcns = {}};
+  // The walk visits a VCN once, the first time it meets it.
+  std::unordered_set<ULONGLONG> seen;
+  for (const IndexEntryView& entry : *entries) {
+    if (entry.IsSubNodePtr() && seen.insert(entry.GetSubNodeVCN()).second) {
+      children.vcns.push_back(entry.GetSubNodeVCN());
+    }
+  }
+  if (children.vcns.empty()) {
+    return std::nullopt;
+  }
+  return children;
+}
+
 // Find a specific Filename from the B+ tree, then, if the name is missing and
 // the volume has no $UpCase table, from every entry. An entry spelled exactly
 // as file_name wins over one that differs by case.

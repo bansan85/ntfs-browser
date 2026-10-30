@@ -183,6 +183,13 @@ class AttrNonResident : public Attr::AttrBase<S> {
   [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<ULONGLONG>
       ReadExtentData(ULONGLONG offset, const std::span<BYTE>& buffer) const;
 
+  // The runs of real clusters a ReadExtentData() of length bytes at offset
+  // reads, in order, the partial clusters at both ends included. A sparse part
+  // has none, and neither has a compressed stream, which reads whole units.
+  // Reads nothing.
+  [[nodiscard]] std::vector<Alloc::Extent>
+      ExtentsOfRange(ULONGLONG offset, ULONGLONG length) const;
+
   // Announces to the volume the clusters a ReadExtentData() of length bytes at
   // offset reads, run by run. Reads nothing. A compressed stream reads whole
   // units, and announces nothing.

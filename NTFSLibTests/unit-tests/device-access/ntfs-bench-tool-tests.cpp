@@ -44,7 +44,7 @@ constexpr ULONGLONG list_record_count = 3000;
 constexpr ULONGLONG list_fragment_clusters = 250;
 
 // Knobs the library lists: the benchmark script reads the table.
-constexpr std::size_t knob_count = 42;
+constexpr std::size_t knob_count = 44;
 
 // Bytes of the plain file the diskbench tests measure: the least a zone may
 // hold is twice a 4 MiB sequential read.

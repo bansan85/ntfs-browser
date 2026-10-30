@@ -757,12 +757,13 @@ std::optional<ULONGLONG>
 }
 
 template <Cache::Strategy S>
-void AttrNonResident<S>::PrefetchExtentData(ULONGLONG offset,
-                                            ULONGLONG length) const {
+std::vector<Alloc::Extent>
+    AttrNonResident<S>::ExtentsOfRange(ULONGLONG offset,
+                                       ULONGLONG length) const {
   const ULONGLONG cluster_size = this->GetClusterSize();
   if (length == 0 || cluster_size == 0 || comp_unit_clusters_ != 0 ||
       offset > std::numeric_limits<ULONGLONG>::max() - length) {
-    return;
+    return {};
   }
 
   // The clusters that hold a byte of the range, as ReadDataBounded() reads
@@ -773,8 +774,14 @@ void AttrNonResident<S>::PrefetchExtentData(ULONGLONG offset,
   const ULONGLONG max_lcn =
       static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) /
       cluster_size;
-  for (const Alloc::Extent& extent :
-       runs_.ExtentsBetween(vcn, end_vcn, max_lcn)) {
+  return runs_.ExtentsBetween(vcn, end_vcn, max_lcn);
+}
+
+template <Cache::Strategy S>
+void AttrNonResident<S>::PrefetchExtentData(ULONGLONG offset,
+                                            ULONGLONG length) const {
+  const ULONGLONG cluster_size = this->GetClusterSize();
+  for (const Alloc::Extent& extent : ExtentsOfRange(offset, length)) {
     this->volume_.Prefetch(extent.lcn * cluster_size,
                            extent.clusters * cluster_size);
   }

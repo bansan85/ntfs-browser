@@ -16,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -27,6 +28,7 @@
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/log/log.h>
@@ -872,6 +874,87 @@ void ProbeStandingWalk(std::span<const BYTE> data, const VolumeOptions& options,
       &seen);
 }
 
+// Directories the read-ahead probe lists at most, and the window and budget it
+// reads ahead with: a few dozen directories are enough to slide the window.
+constexpr size_t read_ahead_probe_directories = 32;
+constexpr size_t read_ahead_probe_window = 4;
+constexpr std::uint64_t read_ahead_probe_bytes = std::uint64_t{1} << 20U;
+
+// Lists the directories below the root as a recursive listing does, with the
+// read ahead of the next directories on, over a reader of its own. The batches
+// read at addresses that a stream reader ignores, so the bytes they hold are
+// whatever comes next in the input: they MUST be parsed like any other. It
+// runs last, since it reads in another order than every probe before it.
+template <Cache::Strategy S>
+void ProbeDirectoryReadAhead(std::span<const BYTE> data,
+                             const VolumeOptions& options,
+                             std::optional<size_t> failing_read) {
+  VolumeOptions tuned = options;
+  tuned.tuning.walk.read_ahead_dirs = read_ahead_probe_window;
+  tuned.tuning.walk.read_ahead_bytes = read_ahead_probe_bytes;
+  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
+                       tuned);
+  if (!volume.IsVolumeOK()) {
+    return;
+  }
+  FileRecord<S> listing(volume);
+  listing.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  if (!listing.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) ||
+      !listing.ParseAttrs()) {
+    return;
+  }
+  NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S> ahead(volume);
+  ahead.Attach(listing);
+  ahead.Begin();
+
+  std::vector<ULONGLONG> pending;
+  std::unordered_set<ULONGLONG> listed{static_cast<ULONGLONG>(Mft::Idx::Root)};
+  std::vector<ULONGLONG> upcoming;
+  for (size_t directories = 0; directories < read_ahead_probe_directories;
+       directories++) {
+    std::vector<ULONGLONG> children;
+    listing.TraverseSubEntriesWithStanding(
+        [](const IndexEntryView& entry, RecordStanding standing,
+           void* context) {
+          if (entry.IsDirectory() && standing != RecordStanding::Reused) {
+            static_cast<std::vector<ULONGLONG>*>(context)->push_back(
+                entry.GetFileReference());
+          }
+        },
+        &children);
+    if (const std::optional<ULONGLONG> current = listing.GetFileReference()) {
+      ahead.Release(*current);
+    }
+    pending.insert(pending.end(), children.rbegin(), children.rend());
+
+    upcoming.clear();
+    for (auto next = pending.rbegin();
+         next != pending.rend() && upcoming.size() < ahead.Window(); ++next) {
+      if (!listed.contains(*next)) {
+        upcoming.push_back(*next);
+      }
+    }
+    ahead.Plan(upcoming);
+
+    bool entered = false;
+    while (!pending.empty() && !entered) {
+      const ULONGLONG next = pending.back();
+      pending.pop_back();
+      if (!listed.insert(next).second) {
+        ahead.Release(next);
+        continue;
+      }
+      entered = listing.ParseFileRecord(next) && listing.ParseAttrs();
+      if (!entered) {
+        ahead.Release(next);
+      }
+    }
+    if (!entered) {
+      return;
+    }
+  }
+}
+
 template <Cache::Strategy S>
 void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
               std::optional<size_t> failing_read = {}) {
@@ -881,6 +964,7 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
   ProbeScanThreads<S>(data, options, failing_read);
   ProbeStandingWalk<S>(data, options, failing_read);
   ProbeClusterAccount<S>(data, options, failing_read);
+  ProbeDirectoryReadAhead<S>(data, options, failing_read);
 }
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash

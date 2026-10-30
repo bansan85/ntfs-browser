@@ -3,15 +3,18 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <gsl/narrow>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
@@ -38,7 +41,9 @@ namespace NTFS_BROWSER_NAMESPACE::Attr {
 template <Cache::Strategy S>
 AttrIndexAlloc<S>::AttrIndexAlloc(const HeaderCommon& ahc,
                                   const Io::FileRecord<S>& file_record)
-    : AttrNonResident<S>(ahc, file_record) {
+    : AttrNonResident<S>(ahc, file_record),
+      block_source_(file_record.GetIndexBlockSource()),
+      source_directory_(file_record.GetFileReference().value_or(0)) {
   Log::Trace("Attribute: Index Allocation");
 
   // Get total number of Index Blocks
@@ -90,16 +95,20 @@ ULONGLONG AttrIndexAlloc<S>::GetIndexBlockCount() const noexcept {
   return index_block_count_;
 }
 
-// Parse a single Index Block
-// vcn = sub-node pointer read from an Index Entry, on-disk units (see below)
-// ibClass holds the parsed Index Entries
 template <Cache::Strategy S>
-bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
-                                        IndexBlock& ib_class) {
-  // On disk, a sub-node VCN is in clusters when an index block spans a whole
-  // cluster or more, but in index_block_size units when a cluster is too
-  // big to hold one (index_block_size then < cluster_size). Converting it
-  // to a byte offset needs whichever unit is actually in effect.
+void AttrIndexAlloc<S>::SetBlockSource(BlockSource source,
+                                       ULONGLONG directory) {
+  block_source_ = std::move(source);
+  source_directory_ = directory;
+}
+
+// On disk, a sub-node VCN is in clusters when an index block spans a whole
+// cluster or more, but in index_block_size units when a cluster is too big to
+// hold one (index_block_size then < cluster_size). Converting it to a byte
+// offset needs whichever unit is actually in effect.
+template <Cache::Strategy S>
+std::optional<ULONGLONG>
+    AttrIndexAlloc<S>::BlockOffset(const ULONGLONG& vcn) const {
   const DWORD vcn_unit = this->GetIndexBlockSize() >= this->GetClusterSize()
                              ? this->GetClusterSize()
                              : this->GetIndexBlockSize();
@@ -107,7 +116,7 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   // Reject a vcn whose multiply would overflow before it can be compared.
   if (vcn > std::numeric_limits<ULONGLONG>::max() / vcn_unit) {
     Log::Warn("Index Block: sub-node vcn overflows byte offset");
-    return false;
+    return std::nullopt;
   }
 
   const ULONGLONG byte_offset = vcn * vcn_unit;
@@ -117,6 +126,28 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   if (byte_offset % this->GetIndexBlockSize() != 0 ||
       byte_offset / this->GetIndexBlockSize() >= index_block_count_) {
     Log::Warn("Index Block: sub-node vcn out of bounds");
+    return std::nullopt;
+  }
+  return byte_offset;
+}
+
+template <Cache::Strategy S>
+bool AttrIndexAlloc<S>::ReadBlockBytes(ULONGLONG offset,
+                                       std::span<BYTE> out) const {
+  const Bench::Detail::KindScope kind(Bench::ReadKind::IndexBlock);
+  const std::optional<ULONGLONG> len = this->ReadData(offset, out);
+  return len && *len == this->GetIndexBlockSize();
+}
+
+// Parse a single Index Block
+// vcn = sub-node pointer read from an Index Entry, on-disk units (see
+// BlockOffset())
+// ibClass holds the parsed Index Entries
+template <Cache::Strategy S>
+bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
+                                        IndexBlock& ib_class) {
+  const std::optional<ULONGLONG> byte_offset = BlockOffset(vcn);
+  if (!byte_offset) {
     return false;
   }
 
@@ -124,10 +155,17 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   const std::span<BYTE> block =
       ib_class.AllocIndexBlock(this->GetIndexBlockSize());
 
+  // The caller may hold the bytes the read would return.
+  bool read = false;
+  if (block_source_) {
+    const std::span<const BYTE> held = block_source_(source_directory_, vcn);
+    if (held.size() == block.size()) {
+      std::ranges::copy(held, block.begin());
+      read = true;
+    }
+  }
   // Read one Index Block
-  const Bench::Detail::KindScope kind(Bench::ReadKind::IndexBlock);
-  std::optional<ULONGLONG> len = this->ReadData(byte_offset, block);
-  if (!len || *len != this->GetIndexBlockSize()) {
+  if (!read && !ReadBlockBytes(*byte_offset, block)) {
     return false;
   }
 

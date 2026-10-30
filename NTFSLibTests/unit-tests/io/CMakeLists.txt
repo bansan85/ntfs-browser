@@ -1,6 +1,11 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
+    "directory-read-ahead-class-tests.cpp"
+    "directory-read-ahead-gain-tests.cpp"
+    "directory-read-ahead-support.cpp"
+    "directory-read-ahead-support.h"
+    "directory-read-ahead-tests.cpp"
     "disk-read-failure-tests.cpp"
     "disk-reader-prefetch-tests.cpp"
     "disk-reader-size-tests.cpp"
@@ -21,6 +26,9 @@ target_include_directories(
   NtfsBrowserTests
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+
+# The read ahead tests list a fake volume through NtfsDir's own listing code.
+target_link_libraries(NtfsBrowserTests PRIVATE NtfsDirCore)
 
 # NtfsDir runs on Windows and Linux (examples/CMakeLists.txt). NtfsDir2, the
 # same listing over the other cache strategy, is Windows-only.

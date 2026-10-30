@@ -6,6 +6,7 @@
 #include <charconv>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdio>
 #include <format>
 #include <iterator>
 #include <mutex>
@@ -43,8 +44,11 @@ inline constexpr std::string_view line_end = "\n";
 // it: the listing goes through this object alone, and ends its own lines.
 class Output {
  public:
-  // flush_bytes is the size of a chunk, see output_flush_bytes.
-  explicit Output(size_t flush_bytes = output_flush_bytes);
+  // flush_bytes is the size of a chunk, see output_flush_bytes. stream is where
+  // the listing goes: stdout, or a file a test reads back. A stream other than
+  // stdout MUST be binary, as the listing ends its own lines.
+  explicit Output(size_t flush_bytes = output_flush_bytes,
+                  std::FILE* stream = stdout);
   Output(const Output&) = delete;
   Output(Output&&) = delete;
   Output& operator=(const Output&) = delete;
@@ -130,6 +134,7 @@ class Output {
   }
 
   size_t flush_bytes_;
+  std::FILE* stream_;
   std::string buffer_;
 #ifdef _WIN32
   // The mode stdout had before, restored once the listing is written. -1 when

@@ -136,6 +136,21 @@ struct ProbeTuning {
   std::size_t max_known_records{std::size_t{1} << 18U};
 };
 
+// The read ahead of the directories of a recursive listing
+// (Io::DirectoryReadAhead).
+struct WalkTuning {
+  // A: directories read ahead of the one being listed, their records and the
+  // first level of their index blocks together. 0 is off, and the listing then
+  // reads as it always did. Each costs about 8 KiB while held: a record of 1
+  // KiB and one or two index blocks of 4 KiB, the usual size of a directory
+  // that has any.
+  std::size_t read_ahead_dirs{0};
+  // A: bytes of records and index blocks held ahead at most. Past it, nothing
+  // is planned until the listing has used some. 16 MiB holds the next two
+  // thousand directories of the usual size.
+  std::uint64_t read_ahead_bytes{16 * mebibyte};
+};
+
 // The block cache of FullCache, and the block FileReader reads.
 struct CacheTuning {
   // B: bytes of one block read from the disk and cached.
@@ -185,6 +200,7 @@ struct Settings {
   std::array<ReaderTuning, pattern_count> reader{};
   MftTuning mft;
   ProbeTuning probe;
+  WalkTuning walk;
   CacheTuning cache;
   AllocTuning alloc;
   CheckTuning check;

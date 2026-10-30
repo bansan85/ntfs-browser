@@ -162,6 +162,8 @@ python NTFSLibTests/tools/benchmark/ntfs_benchmark.py --self-test
 
 `VolumeOptions::tuning` holds the constants. Their defaults are the values the library always had. They fall in three families: depth of the read ahead (it changes when bytes are read, never which), shape of the reads (it changes which bytes are read: window, gap, hole, cache block, memory budgets) and CPU and memory. The guard rails against forged input are never tunable. Shape constants are set by an explicit option only.
 
+`walk.read_ahead_dirs` and `walk.read_ahead_bytes` (family A, pattern M3) turn on the read ahead of a recursive `ntfsdir -r` listing. With `walk.read_ahead_dirs` at 0, the default, nothing changes. Set, the records and the first level of index blocks of the next directories are read together, sorted by place on the disk and announced first, and held (up to `walk.read_ahead_bytes`) until the listing reaches them. The listing prints and logs what it always did. `ntfs_benchmark.py search --patterns M3 --subtree <folder>` searches both, starting from 0 and trying 1, 2, 4 and 8.
+
 A profile is a JSON file with one section per disk, keyed by `"<vendor> <product>|<serial>"`. `common` applies to every read pattern, `M1` (large sequential reads), `M2` (small scattered reads, announced), `M3` (small dependent reads) and `M4` (large data reads) override it:
 
 ```json

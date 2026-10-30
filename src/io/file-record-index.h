@@ -122,6 +122,21 @@ class DirectoryIndex {
   // FileRecord<S>::TraverseSubEntriesWithStanding().
   void TraverseWithStanding(const StandingCallback& se_call_back,
                             void* context) const;
+
+  // The index blocks the $INDEX_ROOT of the record points to, the first level
+  // of its B+ tree. Nothing when the record has no file-name $INDEX_ROOT or no
+  // $INDEX_ALLOCATION, or when the root points to no block. Reads and logs
+  // nothing.
+  struct RootChildren {
+    // The record's $INDEX_ALLOCATION, valid as long as the record keeps its
+    // attributes.
+    Attr::AttrIndexAlloc<S>* alloc;
+    // The sub-node VCNs of the root's entries, in the order the walk visits
+    // them, each once.
+    std::vector<ULONGLONG> vcns;
+  };
+
+  [[nodiscard]] std::optional<RootChildren> RootChildBlocks() const;
   // Finds file_name. upcase is the volume's collation, loaded by the caller.
   [[nodiscard]] std::optional<IndexEntry>
       Find(std::wstring_view file_name, const UpCase::Table& upcase) const;

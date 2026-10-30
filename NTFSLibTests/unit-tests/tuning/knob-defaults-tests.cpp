@@ -29,7 +29,7 @@ constexpr std::uint64_t mib = kib * kib;
 
 // The number of knobs: one for each field of Tuning::Settings that the library
 // reads, and the two VolumeOptions fields that are tuned with them.
-constexpr size_t knob_count = 42;
+constexpr size_t knob_count = 44;
 
 struct OldConstant {
   std::string_view name;
@@ -71,6 +71,9 @@ constexpr std::array<OldConstant, knob_count> old_constants{{
     {"probe.max_run_bytes", mib},
     {"probe.max_chunk_records", 128},
     {"probe.max_known_records", std::uint64_t{1} << 18U},
+    // The read ahead of a recursive listing: no constant before it, and off.
+    {"walk.read_ahead_dirs", 0},
+    {"walk.read_ahead_bytes", 16 * mib},
     {"cache.block_bytes", 64 * kib},
     {"cache.max_bytes", 256 * mib},
     {"readahead.chunk_bytes", 0},
@@ -97,7 +100,7 @@ std::vector<Tuning::Pattern> ServedPatterns(const Tuning::Knob& knob) {
 
 }  // namespace
 
-TEST_CASE("The knob table lists 42 knobs with unique names",
+TEST_CASE("The knob table lists 44 knobs with unique names",
           "[tuning][knobs][invariance]") {
   const std::span<const Tuning::Knob> knobs = Tuning::Knobs();
 
@@ -199,6 +202,8 @@ TEST_CASE("A default Settings holds the old constants in every field",
   CHECK(settings.probe.max_run_bytes == mib);
   CHECK(settings.probe.max_chunk_records == 128);
   CHECK(settings.probe.max_known_records == (std::uint64_t{1} << 18U));
+  CHECK(settings.walk.read_ahead_dirs == 0);
+  CHECK(settings.walk.read_ahead_bytes == 16 * mib);
   CHECK(settings.cache.block_bytes == 64 * kib);
   CHECK(settings.alloc.bitmap_window_bytes == mib);
   CHECK(settings.check.max_read_bytes == 4 * mib);

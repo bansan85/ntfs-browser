@@ -4,6 +4,7 @@
 // cache strategy of the volume they open, so RunNtfsDir is instantiated once
 // per strategy in ntfsdir-core.cpp.
 
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -13,6 +14,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "bench-options.h"
@@ -65,3 +67,14 @@ std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]);
 // --recover, damaged directory data is salvaged. Returns the exit code.
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 int RunNtfsDir(int argc, wchar_t* argv[]);
+
+// Lists the directory path names on an open volume, which label names in
+// messages and root in the headers of a recursive listing, to stream (stdout,
+// or a binary file a test reads back). The volume's tuning decides whether the
+// next directories of a recursive listing are read ahead. Returns the exit
+// code.
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+int ListFrom(NTFS_BROWSER_NAMESPACE::NtfsVolume<S>& volume,
+             const std::wstring& label, const std::wstring& path,
+             const std::wstring& root, bool recursive,
+             std::FILE* stream = stdout);

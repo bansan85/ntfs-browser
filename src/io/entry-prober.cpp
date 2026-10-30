@@ -19,6 +19,7 @@
 #include <ntfs-browser/tuning/tuning.h>
 
 #include "bench/recorder.h"
+#include "io/mft-runs.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
@@ -28,15 +29,6 @@ namespace {
 // First slot of $MFT that is read through $MFT's extents: below it, a record
 // has a fixed address and is probed alone.
 constexpr ULONGLONG first_mapped_slot = static_cast<ULONGLONG>(Mft::Idx::User);
-
-// One read of consecutive slots of $MFT, holes included.
-struct Run {
-  // The probed records the run serves, as indices of the sorted chunk.
-  size_t begin;
-  size_t end;
-  ULONGLONG first_slot;
-  ULONGLONG last_slot;
-};
 
 }  // namespace
 
@@ -97,33 +89,21 @@ void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
     first_run_record++;
   }
 
-  std::vector<Run> runs;
+  std::vector<MftRun> runs;
   if (mapped) {
-    const ULONGLONG max_gap_slots = tuning_.max_gap_bytes / record_size;
-    const ULONGLONG max_run_slots =
-        (std::max<ULONGLONG>)(1, tuning_.max_run_bytes / record_size);
-    for (size_t index = first_run_record; index < chunk.size(); index++) {
-      const ULONGLONG slot = chunk[index];
-      if (!runs.empty()) {
-        Run& run = runs.back();
-        // The hole between the run and slot is narrow, and the run stays short.
-        if (slot - run.last_slot - 1 <= max_gap_slots &&
-            slot - run.first_slot < max_run_slots) {
-          run.last_slot = slot;
-          run.end = index + 1;
-          continue;
-        }
-      }
-      runs.push_back({.begin = index,
-                      .end = index + 1,
-                      .first_slot = slot,
-                      .last_slot = slot});
+    runs = PlanMftRuns(chunk.subspan(first_run_record),
+                       tuning_.max_gap_bytes / record_size,
+                       tuning_.max_run_bytes / record_size);
+    // The run indices count from the first mapped record.
+    for (MftRun& run : runs) {
+      run.begin += first_run_record;
+      run.end += first_run_record;
     }
     // A forged slot makes the announcement log: the read of the record logs
     // it, at the entry.
     read_log_.Reset(levels_);
     const Log::Detail::CaptureScope scope(read_log_);
-    for (const Run& run : runs) {
+    for (const MftRun& run : runs) {
       volume_->PrefetchMftSlots(run.first_slot,
                                 run.last_slot - run.first_slot + 1);
     }
@@ -132,7 +112,7 @@ void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
   for (size_t index = 0; index < first_run_record; index++) {
     ProbeOne(chunk[index], {});
   }
-  for (const Run& run : runs) {
+  for (const MftRun& run : runs) {
     run_bytes_.resize(gsl::narrow<size_t>(run.last_slot - run.first_slot + 1) *
                       record_size);
     bool read = false;

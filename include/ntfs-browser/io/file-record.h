@@ -70,6 +70,12 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // read that slot.
   using BaseSource = std::function<std::optional<ULONGLONG>(ULONGLONG record)>;
 
+  // The raw bytes of one $INDEX_ALLOCATION block of the directory `directory`,
+  // at sub-node VCN `vcn`, as the walk of that directory asks for it. Empty
+  // when the caller does not hold it.
+  using IndexBlockSource =
+      std::function<std::span<const BYTE>(ULONGLONG directory, ULONGLONG vcn)>;
+
   explicit FileRecord(const NtfsVolume<S>& volume);
   // Defined out of line, so the move needs Impl complete only in
   // file-record.cpp, not in every other TU that includes this header.
@@ -158,6 +164,27 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // usual. The source MUST outlive the parses that use it, and MUST answer as
   // the disk would: the same bytes were read.
   void SetBaseSource(BaseSource source);
+  // Where ParseFileRecord(file_ref) takes the bytes of a record that $MFT maps
+  // before it reads them from the disk. A record the source does not give is
+  // read as usual. The bytes MUST be the ones the disk holds, as ReadMftSlots()
+  // gives them, and the source MUST outlive the parses that use it. Unlike
+  // ParseFileRecord(file_ref, preread), only where the bytes come from changes:
+  // a record with a failed update sequence check, or one read from $MFTMirr,
+  // goes through the same steps and logs the same lines. A record below
+  // Mft::Idx::User is read from its fixed address, and never asked of the
+  // source. Not used for the extension records of $ATTRIBUTE_LIST.
+  void SetRecordSource(RecordSource source);
+  // Where the $INDEX_ALLOCATION attribute that a later ParseAttrs() of this
+  // record builds takes the bytes of its blocks before it reads them from the
+  // disk. A block the source does not give is read as usual, and a block it
+  // gives is parsed as the disk's would be. The source MUST outlive the
+  // attribute. An $INDEX_ALLOCATION that comes from an extension record does
+  // not use it. The source is asked under the number given to
+  // ParseFileRecord().
+  void SetIndexBlockSource(IndexBlockSource source);
+  // The source SetIndexBlockSource() was given, empty when there is none. For
+  // the attributes this record builds.
+  [[nodiscard]] const IndexBlockSource& GetIndexBlockSource() const noexcept;
   [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
                                       Attr::RawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;

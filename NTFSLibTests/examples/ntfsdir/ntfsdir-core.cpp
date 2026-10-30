@@ -1,6 +1,7 @@
 #include "ntfsdir-core.h"
 
 #include <cerrno>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -14,6 +15,7 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/log/log.h>
@@ -288,25 +290,44 @@ void VisitEntry(const IndexEntryView& ie, Io::RecordStanding standing,
   }
 }
 
+// A directory that waits to be listed, as its name and its depth, not as its
+// whole path: the paths of a tree that runs deep grow with its depth, and one
+// for each directory that waits would cost memory that grows with the square
+// of it.
+struct Pending {
+  ULONGLONG reference;
+  std::wstring name;
+  // Levels below the directory the listing starts at.
+  size_t depth;
+};
+
+// Fills upcoming with the record numbers of the next count directories the
+// listing will enter, the next one first: the top of the stack, but the ones
+// already listed, which the listing skips.
+void UpcomingDirectories(const std::vector<Pending>& pending,
+                         const std::unordered_set<ULONGLONG>& listed,
+                         size_t count, std::vector<ULONGLONG>& upcoming) {
+  upcoming.clear();
+  for (auto next = pending.rbegin();
+       next != pending.rend() && upcoming.size() < count; ++next) {
+    if (!listed.contains(next->reference)) {
+      upcoming.push_back(next->reference);
+    }
+  }
+}
+
 // Lists the directory fr holds and every directory below it, depth first.
 // root names that directory in the header of its block. A directory that
 // cannot be read is reported and skipped. So is one already listed: NTFS
 // allows no hard link to a directory, so an entry that leads back to one is a
 // loop or a corruption. marking says whether the listing has a marker column.
-// Returns the totals of the tree. A directory waits as its name and its depth,
-// not as its whole path: the paths of a tree that runs deep grow with its
-// depth, and one for each directory that waits would cost memory that grows
-// with the square of it.
+// Returns the totals of the tree. With walk.read_ahead_dirs set, the records
+// and the first level of index blocks of the next directories are read
+// together ahead of the listing, and fr takes them from there: the lines, their
+// order and the reads that are not held stay as they are.
 template <Cache::Strategy S>
 Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
                const std::wstring& root) {
-  struct Pending {
-    ULONGLONG reference;
-    std::wstring name;
-    // Levels below the directory the listing starts at.
-    size_t depth;
-  };
-
   Total tree;
   std::vector<Pending> pending;
   // The path of the directory being listed. Its first lengths[d] units are the
@@ -321,6 +342,10 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
   if (const std::optional<ULONGLONG> start = fr.GetFileReference()) {
     listed.insert(*start);
   }
+  Io::DirectoryReadAhead<S> ahead(fr.GetVolume());
+  ahead.Attach(fr);
+  ahead.Begin();
+  std::vector<ULONGLONG> upcoming;
   while (true) {
     Report(out, L"\nDirectory of " + path);
     DirectoryEntries<S> entries;
@@ -330,6 +355,10 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
     fr.TraverseSubEntriesWithStanding(VisitEntry<S>, &entries);
     tree.files += entries.total.files;
     tree.dirs += entries.total.dirs;
+    // What was read ahead for this directory is of no use any more.
+    if (const std::optional<ULONGLONG> current = fr.GetFileReference()) {
+      ahead.Release(*current);
+    }
 
     // The stack pops the last pushed first, so push in reverse to list the
     // subdirectories in index order.
@@ -338,6 +367,10 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
       pending.push_back({.reference = child->reference,
                          .name = std::move(child->name),
                          .depth = depth + 1});
+    }
+    if (ahead.Enabled()) {
+      UpcomingDirectories(pending, listed, ahead.Window(), upcoming);
+      ahead.Plan(upcoming);
     }
 
     // Take the next directory that is new and parses, and report the ones
@@ -354,6 +387,7 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
       path += next.name;
       if (listed.contains(next.reference)) {
         Report(out, L"Skipping " + path + L": directory already listed");
+        ahead.Release(next.reference);
         continue;
       }
       entered = fr.ParseFileRecord(next.reference) && fr.ParseAttrs();
@@ -363,6 +397,7 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
         depth = next.depth;
       } else {
         Report(out, L"Cannot read directory " + path);
+        ahead.Release(next.reference);
       }
     }
     if (!entered) {
@@ -423,12 +458,12 @@ bool EnterDirectories(Io::FileRecord<S>& fr, const std::wstring& label,
   }
 }
 
-// Lists the directory path names on volume, which label names in messages
-// and root in the headers of a recursive listing. Returns the exit code.
+}  // namespace
+
 template <Cache::Strategy S>
 int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
-             const std::wstring& path, const std::wstring& root,
-             bool recursive) {
+             const std::wstring& path, const std::wstring& root, bool recursive,
+             std::FILE* stream) {
   // The listing is printed as the walk goes: the phase holds both.
   const Bench::PhaseScope walk(Bench::Phase::Walk);
   if (Bench::StopRequested()) {
@@ -446,7 +481,7 @@ int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
   // Without --deleted every entry names a file that exists: no marker column.
   const bool marking = volume.GetOptions().include_deleted;
 
-  NtfsDevice::Output out(volume.GetOptions().tuning.output.flush_bytes);
+  NtfsDevice::Output out(volume.GetOptions().tuning.output.flush_bytes, stream);
   Total total;
   if (recursive) {
     total = ListTree(out, fr, marking, root);
@@ -460,6 +495,17 @@ int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
   out.PrintLine("Files: {}, Directories: {}", total.files, total.dirs);
   return 0;
 }
+
+template int ListFrom<Cache::Strategy::FullCache>(
+    NtfsVolume<Cache::Strategy::FullCache>& volume, const std::wstring& label,
+    const std::wstring& path, const std::wstring& root, bool recursive,
+    std::FILE* stream);
+template int ListFrom<Cache::Strategy::NoCache>(
+    NtfsVolume<Cache::Strategy::NoCache>& volume, const std::wstring& label,
+    const std::wstring& path, const std::wstring& root, bool recursive,
+    std::FILE* stream);
+
+namespace {
 
 // Opens the device or image file at device, which label names in messages.
 // Returns null after printing why it cannot.

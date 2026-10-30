@@ -28,13 +28,16 @@ constexpr size_t max_reserved_bytes = size_t{64} * 1024 * 1024;
 
 }  // namespace
 
-Output::Output(size_t flush_bytes)
-    : flush_bytes_(flush_bytes != 0 ? flush_bytes : output_flush_bytes) {
+Output::Output(size_t flush_bytes, std::FILE* stream)
+    : flush_bytes_(flush_bytes != 0 ? flush_bytes : output_flush_bytes),
+      stream_(stream) {
   buffer_.reserve((std::min)(flush_bytes_, max_reserved_bytes));
   writing_.reserve((std::min)(flush_bytes_, max_reserved_bytes));
 #ifdef _WIN32
-  fflush(stdout);
-  text_mode_ = _setmode(_fileno(stdout), _O_BINARY);
+  if (stream_ == stdout) {
+    fflush(stdout);
+    text_mode_ = _setmode(_fileno(stdout), _O_BINARY);
+  }
 #endif
   try {
     writer_ = std::thread([this] { WriteChunks(); });
@@ -47,9 +50,11 @@ Output::~Output() {
   Flush();
   StopWriter();
 #ifdef _WIN32
-  fflush(stdout);
-  if (text_mode_ != -1) {
-    _setmode(_fileno(stdout), text_mode_);
+  if (stream_ == stdout) {
+    fflush(stdout);
+    if (text_mode_ != -1) {
+      _setmode(_fileno(stdout), text_mode_);
+    }
   }
 #endif
 }
@@ -78,7 +83,7 @@ void Output::Flush() {
     return;
   }
   if (!writer_.joinable()) {
-    fwrite(buffer_.data(), 1, buffer_.size(), stdout);
+    fwrite(buffer_.data(), 1, buffer_.size(), stream_);
     buffer_.clear();
     return;
   }
@@ -103,7 +108,7 @@ void Output::WriteChunks() {
     }
     // Until chunk_ready_ is cleared, the chunk belongs to this thread alone.
     lock.unlock();
-    fwrite(writing_.data(), 1, writing_.size(), stdout);
+    fwrite(writing_.data(), 1, writing_.size(), stream_);
     writing_.clear();
     lock.lock();
     chunk_ready_ = false;

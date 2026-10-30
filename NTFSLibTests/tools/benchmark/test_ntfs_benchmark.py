@@ -268,6 +268,26 @@ class LadderTests(unittest.TestCase):
         self.assertEqual(self.ladder(1, -1, low=0), [])
         self.assertEqual(self.ladder(2, -1, low=0), [1])
 
+    def off_at_zero(self, start, direction, low=0, high=4096):
+        searcher, _ = searcher_for(lambda c, r: 0, {"x": 0}, {"x": (low, high)})
+        return list(searcher.ladder("x", start, direction))
+
+    def test_a_knob_that_is_off_at_zero_leaves_zero_by_one(self):
+        # The step from 0 to 1 is not a doubling: it is not counted.
+        self.assertEqual(self.off_at_zero(0, +1), [1, 2, 4, 8])
+
+    def test_a_knob_that_is_off_at_zero_goes_down_to_zero_below_one(self):
+        self.assertEqual(self.off_at_zero(4, -1), [2, 1, 0])
+        self.assertEqual(self.off_at_zero(1, -1), [0])
+
+    def test_a_knob_that_is_off_at_zero_has_nothing_below_zero(self):
+        self.assertEqual(self.off_at_zero(0, -1), [])
+
+    def test_a_knob_that_is_off_at_zero_obeys_its_bounds(self):
+        self.assertEqual(self.off_at_zero(0, +1, high=2), [1, 2])
+        self.assertEqual(self.off_at_zero(0, +1, high=0), [])
+        self.assertEqual(self.off_at_zero(1, -1, low=1), [])
+
 
 class SearcherTests(unittest.TestCase):
     def test_a_knob_that_gains_at_each_step_is_pushed_up_the_ladder(self):
@@ -446,6 +466,57 @@ def flat_time(config, run):
 
 def bytes_cost(name, value):
     return float(value)
+
+
+class OffAtZeroSearchTests(unittest.TestCase):
+    """The read ahead of a recursive listing: off at 0, and a budget that only
+    matters once it is on."""
+
+    LIMITS = {"walk.read_ahead_dirs": (0, 4096), "walk.read_ahead_bytes": (65536, 1 << 30)}
+    DEFAULTS = {"walk.read_ahead_dirs": 0, "walk.read_ahead_bytes": 16 << 20}
+
+    def searcher(self, seconds):
+        return searcher_for(
+            lambda config, run: seconds.get(config.get("walk.read_ahead_dirs", 0), 10.0) * 1e9,
+            self.DEFAULTS, self.LIMITS,
+        )
+
+    def test_a_window_that_pays_is_found_from_zero(self):
+        searcher, _ = self.searcher({0: 10.0, 1: 9.0, 2: 7.0, 4: 5.0, 8: 4.0})
+        found = searcher.run(("walk.read_ahead_dirs", "walk.read_ahead_bytes"), None)
+        self.assertEqual(found, {"walk.read_ahead_dirs": 8})
+        self.assertIn("walk.read_ahead_bytes", searcher.searched)
+
+    def test_a_window_that_does_not_pay_stays_off_and_its_budget_is_not_searched(self):
+        searcher, evaluator = self.searcher({0: 1.0, 1: 5.0, 2: 6.0})
+        found = searcher.run(("walk.read_ahead_dirs", "walk.read_ahead_bytes"), None)
+        self.assertEqual(found, {})
+        self.assertNotIn("walk.read_ahead_bytes", searcher.searched)
+        self.assertTrue(all("walk.read_ahead_bytes" not in config for config, _ in evaluator.calls))
+
+    def test_the_search_goes_down_to_zero_from_a_window_that_does_not_pay(self):
+        searcher, _ = self.searcher({0: 1.0, 1: 5.0, 2: 6.0})
+        kept = searcher.tune_knob({"walk.read_ahead_dirs": 1}, "walk.read_ahead_dirs")
+        self.assertEqual(kept["walk.read_ahead_dirs"], 0)
+
+    def test_the_budget_is_tried_when_the_window_is_on_and_keeps_its_value_when_flat(self):
+        searcher, _ = self.searcher({0: 10.0, 8: 1.0})
+        kept = searcher.tune_knob({"walk.read_ahead_dirs": 8}, "walk.read_ahead_bytes")
+        self.assertEqual(kept["walk.read_ahead_bytes"], 16 << 20)
+
+    def test_the_m3_target_searches_the_read_ahead_before_the_cache_block(self):
+        knobs = nb.TARGETS["M3"].knobs
+        self.assertEqual(knobs[:2], ("walk.read_ahead_dirs", "walk.read_ahead_bytes"))
+        self.assertIn("cache.block_bytes", knobs)
+        self.assertEqual(nb.KNOB_NEEDS["walk.read_ahead_bytes"], "walk.read_ahead_dirs")
+
+    def test_the_m3_scenario_lists_a_subtree_recursively(self):
+        target = nb.target_of("M3", "Windows\System32")
+        self.assertEqual(target.scenario.args, ("-r",))
+        self.assertEqual(target.scenario.subpath, "Windows\System32")
+        self.assertEqual(target.scenario.tool, "dir")
+        # The other patterns are left as they are.
+        self.assertIs(nb.target_of("M1", "ignored"), nb.TARGETS["M1"])
 
 
 class SettleCommonTests(unittest.TestCase):
@@ -991,6 +1062,13 @@ class ParserTests(unittest.TestCase):
         ):
             self.assertTrue(callable(parser.parse_args(argv).handler), argv)
 
+    def test_the_search_takes_the_subtree_the_m3_search_lists(self):
+        parser = nb.build_parser()
+        base = ["search", "--bin-dir", "b", "--out-dir", "o", "--volume", "c:",
+                "--profile-out", "p"]
+        self.assertEqual(parser.parse_args(base).subtree, "Windows\System32")
+        self.assertEqual(parser.parse_args(base + ["--subtree", "x\y"]).subtree, "x\y")
+
     def test_the_lists_are_split_at_the_commas(self):
         args = nb.build_parser().parse_args(
             ["audit", "--bin-dir", "b", "--out-dir", "o", "--volume", "c:",
@@ -1040,7 +1118,7 @@ class SelfTestTests(unittest.TestCase):
     def test_the_script_reads_the_knob_table_of_ntfsbench(self):
         self.require_bench()
         table = nb.load_knobs(nb.Tools(Path(BENCH_EXE).parent))
-        self.assertEqual(len(table), 42)
+        self.assertEqual(len(table), 44)
         for target in nb.TARGETS.values():
             for name in target.knobs:
                 self.assertIn(name, table, f"{target.pattern} searches {name}")

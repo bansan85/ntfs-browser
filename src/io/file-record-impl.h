@@ -123,6 +123,12 @@ class FileRecord<S>::Impl {
   // Which base record a slot names, for a slot extension_source does not hold.
   // Empty: every such slot is read from the disk.
   typename Io::FileRecord<S>::BaseSource base_source;
+  // Where ReadFileRecord() looks for the bytes of a record before it reads
+  // them from $MFT. Empty: always from $MFT. See SetRecordSource().
+  typename Io::FileRecord<S>::RecordSource record_source;
+  // Where the $INDEX_ALLOCATION attribute of this record looks for a block
+  // before it reads it. Empty: always from the disk.
+  typename Io::FileRecord<S>::IndexBlockSource index_block_source;
 
   // Where the attribute walk of the last ParseAttrs() met the end marker.
   // Empty when it did not reach one.

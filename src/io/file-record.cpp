@@ -319,6 +319,15 @@ std::unique_ptr<Record::HeaderImpl<S>>
       return {};
     }
 
+    // The caller may hold the bytes the read would return.
+    if (record_source) {
+      const std::span<const BYTE> held = record_source(file_ref);
+      if (held.size() == record_buffer.size()) {
+        std::ranges::copy(held, record_buffer.begin());
+        return ParseHeader();
+      }
+    }
+
     const Bench::Detail::KindScope kind(Bench::ReadKind::Record, true);
     if (std::optional<ULONGLONG> len =
             volume->ReadMftData(*fr_addr, record_buffer);
@@ -557,6 +566,22 @@ void Io::FileRecord<S>::SetExtensionSource(RecordSource source) {
 template <Cache::Strategy S>
 void Io::FileRecord<S>::SetBaseSource(BaseSource source) {
   impl_->base_source = std::move(source);
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetRecordSource(RecordSource source) {
+  impl_->record_source = std::move(source);
+}
+
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetIndexBlockSource(IndexBlockSource source) {
+  impl_->index_block_source = std::move(source);
+}
+
+template <Cache::Strategy S>
+const typename Io::FileRecord<S>::IndexBlockSource&
+    Io::FileRecord<S>::GetIndexBlockSource() const noexcept {
+  return impl_->index_block_source;
 }
 
 // Install Attribute raw data CallBack routines for a single File Record

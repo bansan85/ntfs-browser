@@ -63,6 +63,9 @@ STRAY_READ_BYTES = 16 * 1024 * 1024
 BUSY_TARGET = 0.95
 # Seconds of the read ahead of the constant search, in steps of two.
 LADDER_STEPS = 3
+# A constant that has an effect only when another one is not 0: the search
+# tries it after that one, and not at all while it stays 0.
+KNOB_NEEDS = {"walk.read_ahead_bytes": "walk.read_ahead_dirs"}
 
 
 # ------------------------------------------------------------------ helpers
@@ -836,9 +839,12 @@ TARGETS: dict[str, Target] = {
          "mft.max_preread_extensions", "mft.max_held_record_bytes",
          "mft.waiting_chunk_records"),
     ),
+    # The recursive listing of a subtree: the read ahead of its directories
+    # only acts when it recurses. search() gives the scenario the subtree.
     "M3": Target(
-        "M3", Scenario("dir-deep", "dir"), "none", (), "walk", "walk",
-        ("cache.block_bytes",),
+        "M3", Scenario("dir-subtree", "dir", ("-r",), "", "walk"), "none", (),
+        "walk", "walk",
+        ("walk.read_ahead_dirs", "walk.read_ahead_bytes", "cache.block_bytes"),
     ),
     "M4": Target(
         "M4", Scenario("mftlist", "mftlist"), "deleted", ("--verify-data=full",),
@@ -960,13 +966,34 @@ class Searcher:
         )
 
     def ladder(self, name: str, start: int, direction: int) -> Iterable[int]:
+        """The values tried from `start`, in steps of two, LADDER_STEPS at most.
+
+        A knob that is off at 0 (its default) goes 0, 1, 2, 4 and back 4, 2, 1,
+        0: the step between 0 and 1 is not a doubling and is not counted, since
+        no doubling ever leaves 0.
+        """
         low, high = self.limits[name]
+        off_at_zero = self.defaults[name] == 0
         value = start
-        for _ in range(LADDER_STEPS):
-            value = value * 2 if direction > 0 else value // 2
-            if value < low or value > high or value <= 0:
+        steps = LADDER_STEPS
+        while steps > 0:
+            between_zero_and_one = False
+            if direction > 0:
+                if value == 0:
+                    if not off_at_zero:
+                        return
+                    value, between_zero_and_one = 1, True
+                else:
+                    value *= 2
+            elif value == 1 and off_at_zero:
+                value, between_zero_and_one = 0, True
+            else:
+                value //= 2
+            if value < low or value > high or (value == 0 and not between_zero_and_one):
                 return
             yield value
+            if not between_zero_and_one:
+                steps -= 1
 
     def tune_knob(self, config: dict[str, int], name: str) -> dict[str, int]:
         current = dict(config)
@@ -1034,6 +1061,11 @@ class Searcher:
             config = self.tune_grid(config, *grid)
             self.searched.update(grid[:2])
         for name in knobs:
+            # A constant that only matters when another is on is left alone
+            # while that one is off: its plateau would be the least memory.
+            parent = KNOB_NEEDS.get(name)
+            if parent is not None and config.get(parent, self.defaults.get(parent, 0)) == 0:
+                continue
             config = self.tune_knob(config, name)
             self.searched.add(name)
         self.config = config
@@ -1068,6 +1100,15 @@ class ToolEvaluator(Evaluator):
         if result.exit_code != 0 or wall is None:
             raise SystemExit(f"the run failed ({result.exit_code}): {result.stderr}")
         return float(wall)
+
+
+def target_of(pattern: str, subtree: str) -> Target:
+    """The target of a pattern. M3 lists `subtree` of the volume recursively."""
+    target = TARGETS[pattern]
+    if pattern == "M3":
+        scenario = dataclasses.replace(target.scenario, subpath=subtree)
+        target = dataclasses.replace(target, scenario=scenario)
+    return target
 
 
 def load_knobs(tools: Tools) -> dict[str, dict]:
@@ -1105,7 +1146,7 @@ def search(args: argparse.Namespace) -> int:
     searchers: dict[str, Searcher] = {}
     found: dict[str, dict[str, int]] = {}
     for pattern in args.patterns:
-        target = TARGETS[pattern]
+        target = target_of(pattern, args.subtree)
         names = list(target.knobs) + ["reader.max_reads", "reader.max_bytes"]
         limits, defaults = knob_limits(table, names, pattern)
         results = ResultsFile(out_dir / f"search-{pattern}.csv")
@@ -1379,6 +1420,44 @@ def self_test(args: argparse.Namespace) -> int:
           "a gap that costs no memory keeps its value on a flat plateau "
           f"({kept['mft.max_gap_slots']})")
 
+    # 4b2. A constant that is off at 0 steps 1, 2, 4 up from 0, and 0 below 1.
+    class Staircase(Evaluator):
+        """More directories read ahead is faster up to 8; 0 is fastest from 1."""
+
+        def __init__(self, seconds: dict[int, float]):
+            self.seconds = seconds
+
+        def measure(self, config, run_index):
+            return self.seconds.get(config.get("walk.read_ahead_dirs", 0), 10.0) * 1e9
+
+    off_limits = {"walk.read_ahead_dirs": (0, 4096), "walk.read_ahead_bytes": (65536, 1 << 30)}
+    off_defaults = {"walk.read_ahead_dirs": 0, "walk.read_ahead_bytes": 16 << 20}
+    stairs = Staircase({0: 10.0, 1: 9.0, 2: 7.0, 4: 5.0, 8: 4.0, 16: 4.0})
+    check(list(Searcher(stairs, ResultsFile(None), "M3", off_limits, off_defaults)
+               .ladder("walk.read_ahead_dirs", 0, +1)) == [1, 2, 4, 8],
+          "a constant that is off at 0 goes up 1, 2, 4, 8")
+    check(list(Searcher(stairs, ResultsFile(None), "M3", off_limits, off_defaults)
+               .ladder("walk.read_ahead_dirs", 4, -1)) == [2, 1, 0],
+          "a constant that is off at 0 goes down to 0 below 1")
+    check(list(Searcher(stairs, ResultsFile(None), "M3", limits, defaults)
+               .ladder("mft.max_gap_slots", 1, -1)) == [],
+          "a constant that is not off at 0 never goes down to 0")
+    stepped = Searcher(stairs, ResultsFile(None), "M3", off_limits, off_defaults)
+    found = stepped.run(("walk.read_ahead_dirs", "walk.read_ahead_bytes"), None)
+    check(found.get("walk.read_ahead_dirs") == 8,
+          f"the search leaves 0 for the best window ({found})")
+    check("walk.read_ahead_bytes" in stepped.searched,
+          "the budget of the read ahead is searched once the read ahead is on")
+    worse = Staircase({0: 1.0, 1: 5.0, 2: 6.0, 4: 7.0, 8: 8.0})
+    down = Searcher(worse, ResultsFile(None), "M3", off_limits, off_defaults)
+    kept_off = down.tune_knob({"walk.read_ahead_dirs": 1}, "walk.read_ahead_dirs")
+    check(kept_off["walk.read_ahead_dirs"] == 0,
+          "the search goes down from 1 to 0 when the read ahead does not pay")
+    nothing = Searcher(worse, ResultsFile(None), "M3", off_limits, off_defaults)
+    found = nothing.run(("walk.read_ahead_dirs", "walk.read_ahead_bytes"), None)
+    check(found == {} and "walk.read_ahead_bytes" not in nothing.searched,
+          "the budget is not searched while the read ahead stays off")
+
     # 4c. One value for a constant two patterns searched, when neither loses 3 %.
     pair = {name: Searcher(AnalyticDisk(seed), ResultsFile(None), name, limits, defaults, cost)
             for name, seed in (("M1", 7), ("M2", 11))}
@@ -1468,6 +1547,8 @@ def build_parser() -> argparse.ArgumentParser:
     common(s)
     s.add_argument("--volume", required=True)
     s.add_argument("--patterns", default="M1,M2", type=lambda x: x.split(","))
+    s.add_argument("--subtree", default="Windows\\System32",
+                   help="folder the M3 search lists recursively")
     s.add_argument("--profile-out", required=True)
     s.add_argument("--label")
     s.add_argument("--validate", action="store_true", help="run the full tool in its four modes with the profile")
