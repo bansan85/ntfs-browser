@@ -114,11 +114,94 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
-def warm_file(path: Path) -> None:
-    """Reads a file through, to put it in the system file cache."""
+def allocated_ranges(path: Path) -> list[tuple[int, int]] | None:
+    """(offset, length) of each range of a sparse file that holds data, in
+    order, or None when the platform cannot say.
+
+    A hole read through the file cache reserves its clusters on the drive that
+    holds the file: reading the image of a 500 GB volume fills that drive, and
+    the reads then fail with "no space left". A hole is therefore never read.
+    """
+    size = path.stat().st_size
+    ranges: list[tuple[int, int]] = []
+    if IS_WINDOWS:
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+
+        fsctl_query_allocated_ranges = 0x000940CF
+        error_more_data = 234
+        batch = 4096
+
+        class Range(ctypes.Structure):
+            _fields_ = [("offset", ctypes.c_int64), ("length", ctypes.c_int64)]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.DeviceIoControl.argtypes = [
+            wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD,
+            ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+            ctypes.c_void_p,
+        ]
+        kernel32.DeviceIoControl.restype = wintypes.BOOL
+        with open(path, "rb") as handle:
+            os_handle = msvcrt.get_osfhandle(handle.fileno())
+            cursor = 0
+            while cursor < size:
+                query = Range(cursor, size - cursor)
+                answer = (Range * batch)()
+                returned = wintypes.DWORD(0)
+                ok = kernel32.DeviceIoControl(
+                    os_handle, fsctl_query_allocated_ranges, ctypes.byref(query),
+                    ctypes.sizeof(query), answer, ctypes.sizeof(answer),
+                    ctypes.byref(returned), None,
+                )
+                if not ok and ctypes.get_last_error() != error_more_data:
+                    return None
+                count = returned.value // ctypes.sizeof(Range)
+                if count == 0:
+                    break
+                ranges.extend((answer[i].offset, answer[i].length) for i in range(count))
+                cursor = answer[count - 1].offset + answer[count - 1].length
+        return ranges
+    if not hasattr(os, "SEEK_DATA"):
+        return None
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        cursor = 0
+        while cursor < size:
+            try:
+                start = os.lseek(descriptor, cursor, os.SEEK_DATA)
+            except OSError:
+                break
+            end = os.lseek(descriptor, start, os.SEEK_HOLE)
+            ranges.append((start, end - start))
+            cursor = end
+    finally:
+        os.close(descriptor)
+    return ranges
+
+
+def warm_file(path: Path) -> int:
+    """Reads the data of a file through, to put it in the system file cache.
+
+    Only the ranges that hold data: see allocated_ranges(). Returns the bytes read.
+    """
+    ranges = allocated_ranges(path)
+    total = 0
     with open(path, "rb") as handle:
-        while handle.read(8 << 20):
-            pass
+        if ranges is None:
+            while chunk := handle.read(8 << 20):
+                total += len(chunk)
+            return total
+        for offset, length in ranges:
+            handle.seek(offset)
+            while length > 0:
+                chunk = handle.read(min(length, 8 << 20))
+                if not chunk:
+                    break
+                length -= len(chunk)
+                total += len(chunk)
+    return total
 
 
 def run_json(command: list[str], timeout: float | None = None) -> dict:

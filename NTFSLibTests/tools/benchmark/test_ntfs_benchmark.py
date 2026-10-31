@@ -950,6 +950,51 @@ class SmallFunctionTests(unittest.TestCase):
         self.assertEqual(nb.MODES["deleted"], ["--deleted"])
         self.assertEqual(sorted(nb.MODES["both"]), ["--deleted", "--recover"])
 
+    def make_sparse_file(self, directory: Path) -> tuple[Path, int]:
+        """A sparse file with two pieces of data far apart. Skips if the
+        temp folder cannot hold a sparse file."""
+        path = directory / "image.bin"
+        if not nb.IS_WINDOWS:
+            with open(path, "wb") as handle:
+                handle.write(b"a" * 4096)
+                handle.seek(1 << 30)
+                handle.write(b"b" * 4096)
+            return path, 1 << 30
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+
+        fsctl_set_sparse = 0x000900C4
+        with open(path, "wb") as handle:
+            returned = wintypes.DWORD(0)
+            ok = ctypes.WinDLL("kernel32").DeviceIoControl(
+                wintypes.HANDLE(msvcrt.get_osfhandle(handle.fileno())), fsctl_set_sparse,
+                None, 0, None, 0, ctypes.byref(returned), None,
+            )
+            if not ok:
+                self.skipTest("the temp folder cannot hold a sparse file")
+            handle.write(b"a" * 65536)
+            handle.seek(1 << 30)
+            handle.write(b"b" * 65536)
+        return path, 1 << 30
+
+    def test_allocated_ranges_leave_the_holes_out(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path, second = self.make_sparse_file(Path(folder))
+            ranges = nb.allocated_ranges(path)
+            if ranges is None:
+                self.skipTest("the platform cannot list the ranges")
+            self.assertEqual(ranges[0][0], 0)
+            self.assertEqual(ranges[-1][0] <= second < ranges[-1][0] + ranges[-1][1], True)
+            self.assertLess(sum(length for _, length in ranges), 1 << 20)
+
+    def test_warm_file_reads_the_data_of_a_file_with_holes_and_no_hole(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path, _ = self.make_sparse_file(Path(folder))
+            if nb.allocated_ranges(path) is None:
+                self.skipTest("the platform cannot list the ranges")
+            self.assertLess(nb.warm_file(path), 1 << 20)
+
     def test_the_search_targets_name_knobs_and_phases(self):
         self.assertEqual(sorted(nb.TARGETS), ["M1", "M2", "M3", "M4"])
         for pattern, target in nb.TARGETS.items():
