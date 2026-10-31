@@ -1153,6 +1153,37 @@ class MeasureComboTests(unittest.TestCase):
             self.assertEqual(nb.sha256_of(path, ("in img", "in vol")), nb.sha256_of(plain))
             self.assertNotEqual(nb.sha256_of(path), nb.sha256_of(plain))
 
+    def test_a_drive_root_listing_reads_the_same_as_that_of_its_image(self):
+        image_listing = (
+            b"\r\nDirectory of C:\\tmp\\x.img\r\na\r\n"
+            b"\r\nDirectory of C:\\tmp\\x.img\\Qt\r\nb\r\n"
+        )
+        drive_listing = (
+            b"\r\nDirectory of e:\\\r\na\r\n"
+            b"\r\nDirectory of e:\\\\Qt\r\nb\r\n"
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            image = Path(folder) / "image"
+            image.write_bytes(image_listing)
+            drive = Path(folder) / "drive"
+            drive.write_bytes(drive_listing)
+            self.assertEqual(
+                nb.sha256_of(image, ("C:\\tmp\\x.img", "e:")),
+                nb.sha256_of(drive, ("e:", "e:")),
+            )
+            self.assertNotEqual(nb.sha256_of(image), nb.sha256_of(drive))
+
+    def test_a_folder_listing_needs_no_adjustment_for_a_drive(self):
+        with tempfile.TemporaryDirectory() as folder:
+            image = Path(folder) / "image"
+            image.write_bytes(b"Directory of C:\\tmp\\x.img\\Qt\r\n")
+            drive = Path(folder) / "drive"
+            drive.write_bytes(b"Directory of e:\\Qt\r\n")
+            self.assertEqual(
+                nb.sha256_of(image, ("C:\\tmp\\x.img", "e:")),
+                nb.sha256_of(drive, ("e:", "e:")),
+            )
+
     def test_an_image_listing_that_differs_from_the_capture_is_reported(self):
         entry = self.measure({"real": "same", "capture": "same", "cpu": "other"})
         self.assertFalse(entry["listing_identical"])

@@ -111,6 +111,8 @@ def sha256_of(path: Path, rename: tuple[str, str] | None = None) -> str:
 
     ntfsdir names its target in the listing, so the listing of an image carries
     the path of the image where the listing of the volume carries the volume.
+    The hash of a listing of a drive is also taken with the spelling of the
+    image: rename = (drive, drive) for the volume, (image, drive) for the image.
     """
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -119,8 +121,19 @@ def sha256_of(path: Path, rename: tuple[str, str] | None = None) -> str:
                 digest.update(chunk)
         else:
             old, new = (text.encode() for text in rename)
+            drive = new.endswith(b":")
+            root = b"Directory of " + new
             for line in handle:
-                digest.update(line.replace(old, new) if old in line else line)
+                if old in line:
+                    line = line.replace(old, new)
+                if drive:
+                    # ntfsdir -r heads the root of a drive with a trailing
+                    # backslash and joins its children with two. The root of
+                    # an image has neither.
+                    if line.rstrip(b"\r\n") == root:
+                        line = root + b"\\" + line[len(root) :]
+                    line = line.replace(new + b"\\\\", new + b"\\")
+                digest.update(line)
     return digest.hexdigest()
 
 
@@ -659,7 +672,8 @@ def measure_combo(
             raise SystemExit(f"the capture run failed: {capture.stderr}")
         # A live volume changes between two runs: the image holds what the
         # capture run read, so its listing is the one to compare with.
-        entry["capture_listing_hash"] = sha256_of(capture.stdout)
+        spelled = volume.rstrip("\\/")
+        entry["capture_listing_hash"] = sha256_of(capture.stdout, (spelled, spelled))
         store()
     image_scenario = scenario
     while len(entry["cpu"]) < rounds:
