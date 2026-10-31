@@ -1075,6 +1075,26 @@ class ReportTests(unittest.TestCase):
         self.assertIn("DIFFERENT", nb.render_report(results, None))
 
 
+class MeasureComboTests(unittest.TestCase):
+    def test_the_files_of_a_combination_keep_their_names_from_one_process_to_the_next(self):
+        code = (
+            "import importlib.util,sys;"
+            f"spec=importlib.util.spec_from_file_location('nb',r'{SCRIPT}');"
+            "nb=importlib.util.module_from_spec(spec);sys.modules['nb']=nb;spec.loader.exec_module(nb);"
+            "s=nb.Scenario('mftlist','mftlist');"
+            "print(nb.combo_label(s,'none',nb.combo_key('c:',s,'none',[])))"
+        )
+        names = [
+            subprocess.run(
+                [sys.executable, "-I", "-c", code], capture_output=True, text=True,
+                env=dict(os.environ, PYTHONHASHSEED=seed), check=True,
+            ).stdout
+            for seed in ("1", "2")
+        ]
+        self.assertTrue(names[0].startswith("mftlist-none-"))
+        self.assertEqual(names[0], names[1])
+
+
 class ToolsTests(unittest.TestCase):
     def test_the_tool_is_found_in_a_folder_or_a_build_tree(self):
         with tempfile.TemporaryDirectory() as folder:

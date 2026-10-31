@@ -556,6 +556,15 @@ def combo_key(volume: str, scenario: Scenario, mode: str, extra: list[str]) -> s
     return "|".join([volume, scenario.name, mode, " ".join(extra)])
 
 
+def combo_label(scenario: Scenario, mode: str, key: str) -> str:
+    """Stem of the files of a combination: its image, read log and listings.
+
+    Not hash(): it changes from one process to the next, and a resumed audit
+    would look for its image under another name.
+    """
+    return f"{scenario.name}-{mode}-{hashlib.sha256(key.encode()).hexdigest()[:8]}"
+
+
 def measure_combo(
     runner: Runner,
     scenario: Scenario,
@@ -585,7 +594,7 @@ def measure_combo(
             "busy": None,
         },
     )
-    label_base = f"{scenario.name}-{mode}-{abs(hash(key)) % 10**8}"
+    label_base = combo_label(scenario, mode, key)
     timeout = runner.args.timeout
     target_for_disk = None if Path(volume).is_file() else volume
 
