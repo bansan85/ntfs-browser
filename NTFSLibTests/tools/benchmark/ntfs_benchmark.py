@@ -698,6 +698,12 @@ def measure_combo(
     return entry
 
 
+def threads_option(count: int) -> list[str]:
+    """The option for a thread count of the sweep. 0 is the scan's own choice:
+    NtfsMftList refuses `--threads=0`, so it is no option at all."""
+    return [f"--threads={count}"] if count else []
+
+
 def audit(args: argparse.Namespace) -> int:
     tools = Tools(Path(args.bin_dir), args.config)
     tools.check()
@@ -755,8 +761,10 @@ def audit(args: argparse.Namespace) -> int:
                         log(f"{volume} mftlist {mode} --threads={count}")
                         result = runner.run_tool(
                             scenario, volume, mode, f"threads-{mode}-{count}",
-                            [f"--threads={count}"], True, None, args.timeout,
+                            threads_option(count), True, None, args.timeout,
                         )
+                        if result.exit_code != 0:
+                            raise SystemExit(f"the run failed ({result.exit_code}): {result.stderr}")
                         entry.append(result.wall_s * 1e9)
                         store()
 

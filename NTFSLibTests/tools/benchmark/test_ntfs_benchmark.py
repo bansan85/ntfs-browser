@@ -1189,6 +1189,36 @@ class MeasureComboTests(unittest.TestCase):
         self.assertFalse(entry["listing_identical"])
 
 
+class ThreadSweepTests(unittest.TestCase):
+    def test_a_count_of_zero_leaves_the_choice_to_the_scan(self):
+        self.assertEqual(nb.threads_option(0), [])
+        self.assertEqual(nb.threads_option(4), ["--threads=4"])
+
+    def test_a_failed_run_of_the_sweep_stops_the_audit(self):
+        class Failing:
+            args = types.SimpleNamespace(timeout=1.0, no_cold=True, volume=["c:"], tools=["mftlist"],
+                                         modes=["none"], threads=[0], rounds=1, previous=None,
+                                         no_disk_sheet=True, restart=False, caches=[],
+                                         dir_scenarios=[], subtree="", bigdir="", deep="")
+
+            def __init__(self, tools, out_dir, args):
+                self.tools = tools
+
+            def run_tool(self, *arguments):
+                return nb.RunResult(1.0, 1, None, Path("out"), Path("err"), None)
+
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            unittest.mock.patch.object(nb, "Runner", Failing),
+            unittest.mock.patch.object(nb, "Tools"),
+            unittest.mock.patch.object(nb, "scenarios", return_value=[]),
+        ):
+            args = Failing.args
+            args.bin_dir, args.config, args.out_dir, args.scratch = folder, "Release", folder, []
+            with self.assertRaises(SystemExit):
+                nb.audit(args)
+
+
 class ToolsTests(unittest.TestCase):
     def test_the_tool_is_found_in_a_folder_or_a_build_tree(self):
         with tempfile.TemporaryDirectory() as folder:
