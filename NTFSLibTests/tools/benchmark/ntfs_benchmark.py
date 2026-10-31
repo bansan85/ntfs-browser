@@ -106,11 +106,21 @@ class Stats:
         )
 
 
-def sha256_of(path: Path) -> str:
+def sha256_of(path: Path, rename: tuple[str, str] | None = None) -> str:
+    """SHA-256 of a file. With rename = (old, new), every old in it is read as new.
+
+    ntfsdir names its target in the listing, so the listing of an image carries
+    the path of the image where the listing of the volume carries the volume.
+    """
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
-        while chunk := handle.read(1 << 20):
-            digest.update(chunk)
+        if rename is None:
+            while chunk := handle.read(1 << 20):
+                digest.update(chunk)
+        else:
+            old, new = (text.encode() for text in rename)
+            for line in handle:
+                digest.update(line.replace(old, new) if old in line else line)
     return digest.hexdigest()
 
 
@@ -647,6 +657,10 @@ def measure_combo(
         )
         if capture.exit_code != 0:
             raise SystemExit(f"the capture run failed: {capture.stderr}")
+        # A live volume changes between two runs: the image holds what the
+        # capture run read, so its listing is the one to compare with.
+        entry["capture_listing_hash"] = sha256_of(capture.stdout)
+        store()
     image_scenario = scenario
     while len(entry["cpu"]) < rounds:
         index = len(entry["cpu"])
@@ -661,7 +675,8 @@ def measure_combo(
         entry["cpu"].append(result.wall_s * 1e9)
         if index == 0:
             entry["listing_identical"] = (
-                sha256_of(result.stdout) == entry.get("real_listing_hash")
+                sha256_of(result.stdout, (str(image), volume.rstrip("\\/")))
+                == entry.get("capture_listing_hash")
             )
             entry["stray_disk_bytes"] = bytes_read_during(result.samples)
         store()

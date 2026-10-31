@@ -23,7 +23,9 @@ import re
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
+import unittest.mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -1075,7 +1077,46 @@ class ReportTests(unittest.TestCase):
         self.assertIn("DIFFERENT", nb.render_report(results, None))
 
 
+class FakeRunner:
+    """Stands for Runner: each run writes the listing its label calls for."""
+
+    def __init__(self, folder: Path, listings: dict[str, str]):
+        self.folder = folder
+        self.listings = listings
+        self.args = types.SimpleNamespace(timeout=1.0, no_cold=True)
+        self.tools = types.SimpleNamespace(bench=Path("NtfsBench"))
+
+    def scratch(self, volume):
+        return self.folder
+
+    def run_tool(self, scenario, volume, mode, label, extra, cold, sample_target, timeout):
+        listing = self.folder / f"{label}.out"
+        text = next(text for key, text in self.listings.items() if key in label)
+        listing.write_text(text.format(volume=volume))
+        for option in extra:
+            if option.startswith("--capture="):
+                Path(option.split("=", 1)[1]).write_bytes(b"image")
+        readlog = self.folder / f"{label}.readlog"
+        readlog.write_bytes(b"log")
+        return nb.RunResult(
+            1.0, 0, {"read_log": str(readlog), "run": {"phases": []}}, listing,
+            self.folder / f"{label}.err", None,
+        )
+
+
 class MeasureComboTests(unittest.TestCase):
+    def measure(self, listings):
+        replay = {"runs": [{"mode": "recorded", "wall_ns": 1, "report": {}},
+                           {"mode": "ideal", "wall_ns": 1, "report": {}}]}
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            unittest.mock.patch.object(nb, "run_json", return_value=replay),
+        ):
+            runner = FakeRunner(Path(folder), listings)
+            return nb.measure_combo(
+                runner, nb.Scenario("mftlist", "mftlist"), "c:", "none", [], 1, {}, lambda: None
+            )
+
     def test_the_files_of_a_combination_keep_their_names_from_one_process_to_the_next(self):
         code = (
             "import importlib.util,sys;"
@@ -1093,6 +1134,28 @@ class MeasureComboTests(unittest.TestCase):
         ]
         self.assertTrue(names[0].startswith("mftlist-none-"))
         self.assertEqual(names[0], names[1])
+
+    def test_the_image_listing_is_compared_with_the_capture_not_the_cold_run(self):
+        entry = self.measure({"real": "before", "capture": "after", "cpu": "after"})
+        self.assertTrue(entry["listing_identical"])
+
+    def test_the_path_of_the_image_in_a_listing_is_read_as_the_volume(self):
+        entry = self.measure({"real": "Directory of c:/x", "capture": "Directory of c:/x",
+                              "cpu": "Directory of {volume}/x"})
+        self.assertTrue(entry["listing_identical"])
+
+    def test_sha256_of_renames_only_the_path_it_is_given(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "listing"
+            path.write_bytes(b"in img\nother img\n")
+            plain = Path(folder) / "plain"
+            plain.write_bytes(b"in vol\nother img\n")
+            self.assertEqual(nb.sha256_of(path, ("in img", "in vol")), nb.sha256_of(plain))
+            self.assertNotEqual(nb.sha256_of(path), nb.sha256_of(plain))
+
+    def test_an_image_listing_that_differs_from_the_capture_is_reported(self):
+        entry = self.measure({"real": "same", "capture": "same", "cpu": "other"})
+        self.assertFalse(entry["listing_identical"])
 
 
 class ToolsTests(unittest.TestCase):
