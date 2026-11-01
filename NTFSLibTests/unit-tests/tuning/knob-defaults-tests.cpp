@@ -29,7 +29,7 @@ constexpr std::uint64_t mib = kib * kib;
 
 // The number of knobs: one for each field of Tuning::Settings that the library
 // reads, and the two VolumeOptions fields that are tuned with them.
-constexpr size_t knob_count = 48;
+constexpr size_t knob_count = 49;
 
 struct OldConstant {
   std::string_view name;
@@ -40,8 +40,9 @@ struct OldConstant {
 // each knob. They are written out here and not read from the library, so that
 // a changed default shows as a difference. Two are not old: cache.block_bytes
 // was 64 KiB until the cache took 4 KiB blocks, and cache.max_run_bytes came
-// with that change. walk.record_window_bytes came with the window of $MFT, and
-// the two probe.wide_gap knobs with the wide gap of a hard disk read through
+// with that change. walk.record_window_bytes came with the window of $MFT,
+// walk.record_memo_entries with the memo of record headers, and the two
+// probe.wide_gap knobs with the wide gap of a hard disk read through
 // FullCache, which nothing else uses.
 constexpr std::array<OldConstant, knob_count> old_constants{{
     {"reader.max_reads", 32},
@@ -81,6 +82,7 @@ constexpr std::array<OldConstant, knob_count> old_constants{{
     {"walk.read_ahead_dirs", 64},
     {"walk.read_ahead_bytes", 16 * mib},
     {"walk.record_window_bytes", 4 * mib},
+    {"walk.record_memo_entries", 65536},
     {"cache.block_bytes", 4 * kib},
     {"cache.max_run_bytes", mib},
     {"cache.max_bytes", 256 * mib},
@@ -108,7 +110,7 @@ std::vector<Tuning::Pattern> ServedPatterns(const Tuning::Knob& knob) {
 
 }  // namespace
 
-TEST_CASE("The knob table lists 48 knobs with unique names",
+TEST_CASE("The knob table lists 49 knobs with unique names",
           "[tuning][knobs][invariance]") {
   const std::span<const Tuning::Knob> knobs = Tuning::Knobs();
 
@@ -215,6 +217,7 @@ TEST_CASE("A default Settings holds the old constants in every field",
   CHECK(settings.walk.read_ahead_dirs == 64);
   CHECK(settings.walk.read_ahead_bytes == 16 * mib);
   CHECK(settings.walk.record_window_bytes == 4 * mib);
+  CHECK(settings.walk.record_memo_entries == 65536);
   CHECK(settings.cache.block_bytes == 4 * kib);
   CHECK(settings.cache.max_run_bytes == mib);
   CHECK(settings.alloc.bitmap_window_bytes == mib);

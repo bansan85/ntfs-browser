@@ -27,9 +27,11 @@
 #include <ntfs-browser/tuning/tuning.h>
 
 #include "attr/index-alloc.h"
+#include "attr/index-block.h"
 #include "bench/recorder.h"
 #include "io/file-record-index.h"
 #include "io/mft-runs.h"
+#include "io/record-memo.h"
 #include "io/record-window.h"
 #include "log/ntfs-common.h"
 
@@ -40,6 +42,15 @@ namespace {
 // Smallest block a FullCache reads, as FileReader keeps it: one sector of the
 // largest size NTFS supports.
 constexpr std::size_t min_cache_block_bytes = 4096;
+
+// Levels of a directory's B+ tree that the read ahead goes down: the depth
+// limit of the walk, which never enters a deeper block.
+constexpr std::size_t max_read_levels = 64;
+
+// Share of walk.read_ahead_bytes that the blocks of one directory may hold
+// below the first level: a big directory MUST NOT starve the plan of the next
+// ones.
+constexpr std::uint64_t directory_share_divisor = 4;
 
 // Most refs the set of records that could not be read ahead holds. Past it the
 // set is emptied: a record is then tried again, which costs one read.
@@ -60,7 +71,9 @@ class DirectoryReadAhead<S>::Impl {
         levels_(Log::Detail::EnabledLevels()),
         // A FullCache volume holds what it read in its block cache already.
         window_(S == Cache::Strategy::NoCache ? walk_.record_window_bytes : 0,
-                volume.GetFileRecordSize()) {}
+                volume.GetFileRecordSize()),
+        memo_(S == Cache::Strategy::NoCache ? walk_.record_memo_entries : 0,
+              volume.GetFileRecordSize()) {}
 
   Impl(const Impl&) = delete;
   Impl& operator=(const Impl&) = delete;
@@ -128,6 +141,11 @@ class DirectoryReadAhead<S>::Impl {
   [[nodiscard]] std::span<const BYTE> HeldRecordBytes(ULONGLONG record);
   // The bytes of record in the window, empty when it does not hold them.
   [[nodiscard]] std::span<const BYTE> FindInWindow(ULONGLONG record);
+  // A record that a probe may judge: the window's bytes, or the few bytes of a
+  // probe that the memo kept of it. Empty when neither holds it.
+  [[nodiscard]] std::span<const BYTE> FindForProbe(ULONGLONG record);
+  // Gives a run of $MFT that was read to the window and to the memo.
+  void KeepRun(ULONGLONG first_record, std::span<const BYTE> bytes);
   [[nodiscard]] std::span<const BYTE> HeldBlockBytes(ULONGLONG directory,
                                                      ULONGLONG vcn);
 
@@ -156,8 +174,23 @@ class DirectoryReadAhead<S>::Impl {
                      std::vector<std::unique_ptr<FileRecord<S>>>& owners);
 
   // Reads the blocks of candidates sorted by place on the disk, announced
-  // first, and holds each. Stops at the byte budget.
+  // first, and holds each, then the blocks those name, level by level down to
+  // the leaves. Stops at the byte budget.
   void ReadBlocks(std::span<const Candidate> candidates);
+
+  // Reads and holds the blocks that level names, one level of the trees. A
+  // level below the first stops at a quarter of the byte budget for each
+  // directory. Returns the blocks it held.
+  [[nodiscard]] std::vector<Want> ReadLevel(std::span<const Candidate> level,
+                                            bool below_first);
+
+  // The sub-node VCNs of the held blocks in read: the next level of the trees.
+  // Parses each block as the walk does, and drops what that logs.
+  [[nodiscard]] std::vector<Candidate> ChildrenOf(std::span<const Want> read);
+
+  // The bytes of a held block, without counting the listing as served.
+  [[nodiscard]] std::span<const BYTE> PeekBlockBytes(ULONGLONG directory,
+                                                     ULONGLONG vcn) const;
 
   // Announces the disk range of extent, unless an earlier announcement of the
   // round covers it.
@@ -175,6 +208,9 @@ class DirectoryReadAhead<S>::Impl {
   Log::Detail::LevelMask levels_;
   // The runs of $MFT that the probes and the batches read last.
   RecordWindow window_;
+  // What a probe reads of the records of the runs that went through the window,
+  // for many more of them.
+  RecordMemo memo_;
   FileRecord<S>* listing_{nullptr};
   std::unordered_map<ULONGLONG, HeldDirectory> held_;
   std::uint64_t held_bytes_{0};
@@ -223,6 +259,27 @@ std::span<const BYTE>
 
 template <Cache::Strategy S>
 std::span<const BYTE>
+    DirectoryReadAhead<S>::Impl::FindForProbe(ULONGLONG record) {
+  const std::span<const BYTE> bytes = FindInWindow(record);
+  if (!bytes.empty()) {
+    return bytes;
+  }
+  const std::span<const BYTE> kept = memo_.Find(record);
+  if (!kept.empty()) {
+    stats_.memo_records++;
+  }
+  return kept;
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::KeepRun(ULONGLONG first_record,
+                                          std::span<const BYTE> bytes) {
+  window_.Put(first_record, bytes);
+  memo_.Put(first_record, bytes);
+}
+
+template <Cache::Strategy S>
+std::span<const BYTE>
     DirectoryReadAhead<S>::Impl::HeldBlockBytes(ULONGLONG directory,
                                                 ULONGLONG vcn) {
   const auto held = held_.find(directory);
@@ -251,12 +308,12 @@ void DirectoryReadAhead<S>::Impl::Attach(FileRecord<S>& listing) {
   listing.SetIndexBlockSource([this](ULONGLONG directory, ULONGLONG vcn) {
     return HeldBlockBytes(directory, vcn);
   });
-  if (window_.Enabled()) {
+  if (window_.Enabled() || memo_.Enabled()) {
     listing.SetProbeStore(
-        {.find = [this](ULONGLONG record) { return FindInWindow(record); },
+        {.find = [this](ULONGLONG record) { return FindForProbe(record); },
          .keep =
              [this](ULONGLONG first_record, std::span<const BYTE> bytes) {
-               window_.Put(first_record, bytes);
+               KeepRun(first_record, bytes);
              }});
   }
 }
@@ -486,7 +543,7 @@ std::vector<ULONGLONG> DirectoryReadAhead<S>::Impl::FetchRecords(
         read = volume_->ReadMftSlots(run.first_slot, run_bytes_);
       }
       if (read) {
-        window_.Put(run.first_slot, run_bytes_);
+        KeepRun(run.first_slot, run_bytes_);
       }
       for (std::size_t index = run.begin; index < run.end; index++) {
         const ULONGLONG record = missing_[index];
@@ -574,16 +631,42 @@ void DirectoryReadAhead<S>::Impl::AnnounceExtent(const Alloc::Extent& extent) {
 }
 
 template <Cache::Strategy S>
+std::span<const BYTE>
+    DirectoryReadAhead<S>::Impl::PeekBlockBytes(ULONGLONG directory,
+                                                ULONGLONG vcn) const {
+  const auto held = held_.find(directory);
+  if (held == held_.end()) {
+    return {};
+  }
+  const auto block = held->second.blocks.find(vcn);
+  return block == held->second.blocks.end()
+             ? std::span<const BYTE>{}
+             : std::span<const BYTE>(block->second.bytes);
+}
+
+template <Cache::Strategy S>
 void DirectoryReadAhead<S>::Impl::ReadBlocks(
     std::span<const Candidate> candidates) {
+  std::vector<Candidate> level(candidates.begin(), candidates.end());
+  for (std::size_t depth = 0; !level.empty() && depth < max_read_levels;
+       depth++) {
+    const std::vector<Want> read = ReadLevel(level, depth != 0);
+    level = ChildrenOf(read);
+  }
+}
+
+template <Cache::Strategy S>
+std::vector<typename DirectoryReadAhead<S>::Impl::Want>
+    DirectoryReadAhead<S>::Impl::ReadLevel(std::span<const Candidate> level,
+                                           bool below_first) {
   const DWORD block_size = volume_->GetIndexBlockSize();
   if (block_size == 0 || volume_->GetClusterSize() == 0) {
-    return;
+    return {};
   }
 
   std::vector<Want> wants;
   std::uint64_t planned = 0;
-  for (const Candidate& candidate : candidates) {
+  for (const Candidate& candidate : level) {
     std::vector<Want> own;
     for (const ULONGLONG vcn : candidate.vcns) {
       const auto held = held_.find(candidate.directory);
@@ -606,13 +689,31 @@ void DirectoryReadAhead<S>::Impl::ReadBlocks(
                      .offset = *offset,
                      .extents = std::move(extents)});
     }
+    if (below_first) {
+      // What this directory and the budget have room for: the walk reads the
+      // blocks that do not fit.
+      const auto held = held_.find(candidate.directory);
+      const std::uint64_t share =
+          walk_.read_ahead_bytes / directory_share_divisor;
+      const std::uint64_t kept =
+          held == held_.end() ? 0 : BytesOf(held->second);
+      const std::uint64_t room_directory = share > kept ? share - kept : 0;
+      const std::uint64_t used = held_bytes_ + planned;
+      const std::uint64_t room_total =
+          walk_.read_ahead_bytes > used ? walk_.read_ahead_bytes - used : 0;
+      const std::uint64_t fits =
+          (std::min)(room_directory, room_total) / block_size;
+      if (own.size() > fits) {
+        own.resize(gsl::narrow<std::size_t>(fits));
+      }
+    }
     const std::uint64_t cost = own.size() * std::uint64_t{block_size};
     // A directory whose blocks alone outgrow the budget is left to the walk.
     if (cost > walk_.read_ahead_bytes) {
       continue;
     }
     // The blocks of a directory are read all or none, and planning stops at
-    // the first that does not fit.
+    // the first that does not fit. Below the first level, own was cut to fit.
     if (held_bytes_ + planned + cost > walk_.read_ahead_bytes) {
       break;
     }
@@ -625,10 +726,11 @@ void DirectoryReadAhead<S>::Impl::ReadBlocks(
     return left.extents.front().lcn < right.extents.front().lcn;
   });
 
+  std::vector<Want> held_wants;
   const std::size_t round =
       (std::max<std::size_t>)(1, probe_.max_chunk_records);
   for (std::size_t first = 0; first < wants.size(); first += round) {
-    const std::span<const Want> chunk = std::span<const Want>(wants).subspan(
+    const std::span<Want> chunk = std::span<Want>(wants).subspan(
         first, (std::min)(round, wants.size() - first));
 
     log_.Reset(levels_);
@@ -639,7 +741,7 @@ void DirectoryReadAhead<S>::Impl::ReadBlocks(
       }
     }
     std::vector<BYTE> bytes(block_size);
-    for (const Want& want : chunk) {
+    for (Want& want : chunk) {
       if (!want.alloc->ReadBlockBytes(want.offset, bytes)) {
         continue;
       }
@@ -648,9 +750,47 @@ void DirectoryReadAhead<S>::Impl::ReadBlocks(
       held_bytes_ += bytes.size();
       stats_.peak_held_bytes = (std::max)(stats_.peak_held_bytes, held_bytes_);
       stats_.blocks_read++;
+      held_wants.push_back(std::move(want));
     }
     volume_->CancelPrefetch();
   }
+  return held_wants;
+}
+
+template <Cache::Strategy S>
+std::vector<typename DirectoryReadAhead<S>::Impl::Candidate>
+    DirectoryReadAhead<S>::Impl::ChildrenOf(std::span<const Want> read) {
+  std::vector<Candidate> next;
+  std::unordered_map<ULONGLONG, std::size_t> place;
+  // A VCN is read once, whatever number of blocks name it.
+  std::unordered_map<ULONGLONG, std::unordered_set<ULONGLONG>> seen;
+  for (const Want& want : read) {
+    const auto [at, added] = place.try_emplace(want.directory, next.size());
+    if (added) {
+      next.push_back(
+          {.directory = want.directory, .alloc = want.alloc, .vcns = {}});
+    }
+    Candidate& child = next.at(at->second);
+
+    want.alloc->SetBlockSource(
+        [this](ULONGLONG owner, ULONGLONG vcn) {
+          return PeekBlockBytes(owner, vcn);
+        },
+        want.directory);
+    Attr::IndexBlock block;
+    if (want.alloc->ParseIndexBlock(want.vcn, block)) {
+      for (const IndexEntryView& entry : block) {
+        if (entry.IsSubNodePtr() &&
+            seen[want.directory].insert(entry.GetSubNodeVCN()).second) {
+          child.vcns.push_back(entry.GetSubNodeVCN());
+        }
+      }
+    }
+    want.alloc->SetBlockSource({}, 0);
+  }
+  std::erase_if(next,
+                [](const Candidate& child) { return child.vcns.empty(); });
+  return next;
 }
 
 template <Cache::Strategy S>

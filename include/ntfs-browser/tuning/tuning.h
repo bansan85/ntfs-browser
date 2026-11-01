@@ -10,9 +10,9 @@
 // The constants of the read path that a caller MAY change at run time, and the
 // read patterns they serve. Every field defaults to the value the library had
 // before the field existed, but cache.block_bytes (4 KiB, formerly 64 KiB),
-// walk.read_ahead_dirs (64, formerly 0) and walk.record_window_bytes (4 MiB,
-// new): a default-constructed Settings changes no read, no hint and no log line
-// otherwise.
+// walk.read_ahead_dirs (64, formerly 0), walk.record_window_bytes (4 MiB, new)
+// and walk.record_memo_entries (65 536, new): a default-constructed Settings
+// changes no read, no hint and no log line otherwise.
 //
 // A field belongs to one family:
 //   A (PrefetchDepth): how far ahead the reads are announced or started. It
@@ -159,16 +159,17 @@ struct ProbeTuning {
 // The read ahead of the directories of a recursive listing
 // (Io::DirectoryReadAhead).
 struct WalkTuning {
-  // A: directories read ahead of the one being listed, their records and the
-  // first level of their index blocks together. 0 is off, and the listing then
-  // reads as it always did. Each costs about 8 KiB while held: a record of 1
-  // KiB and one or two index blocks of 4 KiB, the usual size of a directory
-  // that has any. 64 is the knee on a hard disk and on an SSD: 128 to 512 gain
-  // nothing more, and it costs 2 to 4 MiB of peak memory.
+  // A: directories read ahead of the one being listed, their records and
+  // their index blocks together. 0 is off, and the listing then reads as it
+  // always did. Each costs about 8 KiB while held: a record of 1 KiB and one or
+  // two index blocks of 4 KiB, the usual size of a directory that has any. 64
+  // is the knee on a hard disk and on an SSD: 128 to 512 gain nothing more, and
+  // it costs 2 to 4 MiB of peak memory.
   std::size_t read_ahead_dirs{64};
   // A: bytes of records and index blocks held ahead at most. Past it, nothing
   // is planned until the listing has used some. 16 MiB holds the next two
-  // thousand directories of the usual size.
+  // thousand directories of the usual size. A directory holds a quarter of it
+  // at most in the blocks below the first level of its index.
   std::uint64_t read_ahead_bytes{16 * mebibyte};
   // B: bytes of $MFT that the probes of a NoCache listing keep once read, so
   // that the next directory finds the records it shares with them: a hole a
@@ -176,6 +177,11 @@ struct WalkTuning {
   // belongs to the read ahead and is off with it. A FullCache listing has the
   // block cache and keeps none. 0 keeps none.
   std::uint64_t record_window_bytes{4 * mebibyte};
+  // B: records of $MFT whose header a NoCache listing keeps once a probe read
+  // them, 32 bytes each: the neighbours of a probed record, which the window
+  // has dropped by the time a later directory asks for them. The table is
+  // committed as it fills, and 65 536 entries cost 2 MiB at most. 0 keeps none.
+  std::uint64_t record_memo_entries{65536};
 };
 
 // The block cache of FullCache, and the block FileReader reads.

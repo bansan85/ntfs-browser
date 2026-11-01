@@ -466,3 +466,88 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(ahead.GetStats().batches == 2);
   CHECK(ahead.GetStats().records_read == 8 + 5);
 }
+
+TEMPLATE_TEST_CASE_SIG(
+    "The read ahead holds every level of the index of the start directory",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  // The blocks of the root chain, each naming the next one, past the depth
+  // limit of the walk.
+  const auto image = Tests::BuildFakeNtfsImageWithDeepIndexBlockChain();
+  Rig<S> rig(image, {}, 8, large_budget);
+  Io::DirectoryReadAhead<S> ahead(*rig.volume);
+  ahead.Attach(*rig.listing);
+
+  ahead.Begin();
+
+  // The walk enters a block of depth 63 at the deepest, and none below.
+  constexpr std::uint64_t walk_depth_limit = 64;
+  const Io::DirectoryReadAheadStats stats = ahead.GetStats();
+  CHECK(stats.blocks_read == walk_depth_limit);
+  CHECK(stats.held_bytes == walk_depth_limit * rig.volume->GetIndexBlockSize());
+  rig.reads->Reset();
+  (void)ListEntries(*rig.listing);
+  CHECK(ahead.GetStats().blocks_served == stats.blocks_read);
+  // Every block came from the read ahead: the listing read none.
+  CHECK(std::ranges::none_of(
+      rig.reads->Calls(), [](const CountingDiskReader::Call& call) {
+        return call.kind == CountingDiskReader::Kind::Read;
+      }));
+  ahead.Release(static_cast<ULONGLONG>(Mft::Idx::Root));
+  CHECK(ahead.GetStats().held_bytes == 0);
+  CHECK(ahead.GetStats().blocks_unused == 0);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "The read ahead holds a quarter of its budget for the deeper blocks of a "
+    "directory",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto image = Tests::BuildFakeNtfsImageWithDeepIndexBlockChain();
+  std::uint32_t block_size = 0;
+  {
+    Rig<S> rig(image, {}, 8, large_budget);
+    block_size = rig.volume->GetIndexBlockSize();
+  }
+  REQUIRE(block_size > 0);
+
+  // The first block, and room for one more below it.
+  Rig<S> rig(image, {}, 8, 8 * std::uint64_t{block_size});
+  Io::DirectoryReadAhead<S> ahead(*rig.volume);
+  ahead.Attach(*rig.listing);
+
+  ahead.Begin();
+
+  const Io::DirectoryReadAheadStats stats = ahead.GetStats();
+  CHECK(stats.blocks_read == 2);
+  CHECK(stats.held_bytes == 2 * std::uint64_t{block_size});
+  // The listing reads the others itself, and lists what it listed without
+  // the read ahead.
+  CHECK(ListEntries(*rig.listing) == 0);
+  CHECK(ahead.GetStats().blocks_served == 2);
+}
+
+TEST_CASE("The record memo gives the probes of a listing the records it kept",
+          "[io][directory-read-ahead]") {
+  constexpr Cache::Strategy S = Cache::Strategy::NoCache;
+  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::BigDirectoryTree(big_directories));
+  // The window would serve the second listing too: leave it out.
+  VolumeOptions options;
+  options.tuning.walk.record_window_bytes = 0;
+  Rig<S> rig(image, options, 8, large_budget);
+  Io::DirectoryReadAhead<S> ahead(*rig.volume);
+  ahead.Attach(*rig.listing);
+  REQUIRE(rig.listing->ParseFileRecord(BigDirectory(1)));
+  REQUIRE(rig.listing->ParseAttrs());
+
+  rig.reads->Reset();
+  const std::size_t first_entries = ListEntries(*rig.listing);
+  const std::size_t first_reads = rig.reads->Calls().size();
+  const std::uint64_t first_hits = ahead.GetStats().memo_records;
+
+  rig.reads->Reset();
+  CHECK(ListEntries(*rig.listing) == first_entries);
+  CHECK(rig.reads->Calls().size() < first_reads);
+  CHECK(ahead.GetStats().memo_records > first_hits);
+}

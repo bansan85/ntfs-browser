@@ -322,9 +322,9 @@ void UpcomingDirectories(const std::vector<Pending>& pending,
 // allows no hard link to a directory, so an entry that leads back to one is a
 // loop or a corruption. marking says whether the listing has a marker column.
 // Returns the totals of the tree. Unless walk.read_ahead_dirs is 0, the records
-// and the first level of index blocks of the next directories are read
-// together ahead of the listing, and fr takes them from there: the lines, their
-// order and the reads that are not held stay as they are.
+// and the index blocks of the next directories are read together ahead of the
+// listing, and fr takes them from there: the lines, their order and the reads
+// that are not held stay as they are.
 template <Cache::Strategy S>
 Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
                const std::wstring& root) {

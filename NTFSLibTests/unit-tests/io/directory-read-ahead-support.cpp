@@ -274,6 +274,8 @@ std::vector<TreeFixture> Fixtures() {
                       BuildFakeNtfsImageWithOrphanedDirectoryLoop()});
   fixtures.push_back(
       {"orphaned blocks", BuildFakeNtfsImageWithOrphanedIndexBlocks()});
+  fixtures.push_back(
+      {"deep index chain", BuildFakeNtfsImageWithDeepIndexBlockChain()});
   return fixtures;
 }
 

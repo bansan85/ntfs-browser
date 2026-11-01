@@ -38,6 +38,9 @@ struct DirectoryReadAheadStats {
   // Records that the window of Tuning::WalkTuning::record_window_bytes gave
   // in place of a read of $MFT, to the probes, the batches and the listing.
   std::uint64_t window_records{0};
+  // Records that the memo of Tuning::WalkTuning::record_memo_entries gave to a
+  // probe, which had read none of the record's bytes but its header.
+  std::uint64_t memo_records{0};
   // Batches made: each reads the records of the planned directories, then
   // their blocks.
   std::uint64_t batches{0};
@@ -54,11 +57,14 @@ struct DirectoryReadAheadStats {
 // groups them instead. For the directories it is told about, it reads their
 // records together, sorted by place in $MFT, then the blocks the $INDEX_ROOT
 // of each points to (the first level of the B+ tree), sorted by place on the
-// disk, each batch announced to the reader first. It holds the bytes, and the
-// FileRecord the listing parses with takes them from here instead of reading
-// them: nothing else changes. The parse of a held record or block is the parse
-// of one read from the disk, with the same lines logged and the same result.
-// Deeper levels of the tree are read by the walk, as without it.
+// disk, each batch announced to the reader first. It then parses those blocks,
+// as the walk does, and reads the blocks they name in the same way, level by
+// level down to the leaves: the leaves of a big directory lie side by side,
+// and the walk would read them one at a time, each waiting for the last. It
+// holds the bytes, and the FileRecord the listing parses with takes them from
+// here instead of reading them: nothing else changes. The parse of a held
+// record or block is the parse of one read from the disk, with the same lines
+// logged and the same result.
 //
 // It reads nothing the listing would not read, apart from the $MFT slots
 // between two planned records that a run reads across (the gap of
@@ -74,7 +80,10 @@ struct DirectoryReadAheadStats {
 // Tuning::WalkTuning::record_window_bytes, and hands them to the listing's
 // FileRecord (FileRecord::SetProbeStore() and SetRecordSource()). A FullCache
 // volume has its block cache and keeps none. The listing, its log and the
-// reads that are not held do not change.
+// reads that are not held do not change. It also keeps, for many more records
+// than the window holds, the few bytes of a record that a probe reads
+// (Tuning::WalkTuning::record_memo_entries): the neighbours of a probed record
+// come back long after the window dropped them.
 //
 // On by default (Tuning::WalkTuning::read_ahead_dirs is 64). At 0 every member
 // does nothing, and the listing reads as it did before this class.
@@ -103,7 +112,7 @@ class NTFS_BROWSER_EXPORT DirectoryReadAhead {
   // object, and MUST NOT be attached to another read ahead.
   void Attach(FileRecord<S>& listing);
 
-  // Reads ahead the first level of index blocks of the directory the attached
+  // Reads ahead the index blocks, every level, of the directory the attached
   // record holds now, which ParseAttrs() has parsed. For the directory a
   // listing starts at, whose record is already read. Nothing when off, or
   // when nothing is attached.

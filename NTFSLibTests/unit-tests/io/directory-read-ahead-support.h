@@ -51,8 +51,8 @@ inline constexpr std::size_t big_directory_nodes = big_directory_files + 3;
 // Every tree the listing of the read ahead is compared on: wide and deep ones,
 // big directories, case twins, freed directories that keep their entries, a
 // directory two names lead to, a directory whose record does not parse, one
-// whose index block is damaged, and the orphaned blocks of the recovery
-// fixture.
+// whose index block is damaged, the orphaned blocks of the recovery fixture,
+// and a chain of index blocks that runs past the depth limit of the walk.
 [[nodiscard]] std::vector<TreeFixture> Fixtures();
 
 // The four ways to open a volume that decide what a listing shows.

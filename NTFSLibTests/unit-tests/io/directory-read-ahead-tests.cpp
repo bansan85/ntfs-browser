@@ -211,9 +211,11 @@ TEST_CASE("The default read ahead plans rounds of reads on a wide tree",
           "[io][directory-read-ahead]") {
   const std::vector<BYTE> image =
       Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
-  // The window of $MFT spares the probes their rounds: leave it out.
+  // The window of $MFT and the memo spare the probes their rounds: leave them
+  // out.
   VolumeOptions options;
   options.tuning.walk.record_window_bytes = 0;
+  options.tuning.walk.record_memo_entries = 0;
   const ReadAhead::Run given =
       ReadAhead::ListWithDefaultTuning<Cache::Strategy::NoCache>(image,
                                                                  options);
@@ -296,6 +298,90 @@ TEST_CASE(
     };
     CAPTURE(reads(off), reads(on));
     CHECK(on.text == off.text);
+    CHECK(reads(on) < reads(off));
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A recursive listing is the same with a record memo of any size",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
+    for (VolumeOptions options : ReadAhead::AllOptions()) {
+      // The window would serve the probes first: the memo serves them alone.
+      options.tuning.walk.record_window_bytes = 0;
+      VolumeOptions without = options;
+      without.tuning.walk.record_memo_entries = 0;
+      const ReadAhead::Run off = ReadAhead::ListRecursively<S>(
+          fixture.image, without, 64, large_budget);
+
+      // One place, a few that collide, and the default.
+      for (const std::uint64_t entries : {1, 7, 64, 65536}) {
+        INFO(fixture.name << ", include_deleted " << options.include_deleted
+                          << ", recover_errors " << options.recover_errors
+                          << ", memo " << entries << " entries");
+        VolumeOptions with = options;
+        with.tuning.walk.record_memo_entries = entries;
+        const ReadAhead::Run on = ReadAhead::ListRecursively<S>(
+            fixture.image, with, 64, large_budget);
+
+        CHECK(on.exit_code == off.exit_code);
+        CHECK(on.text == off.text);
+        INFO(ReadAhead::FirstDifference(on.log, off.log));
+        CHECK(on.log == off.log);
+      }
+    }
+  }
+}
+
+TEST_CASE("A block cache reads the same whatever the record memo",
+          "[io][directory-read-ahead]") {
+  constexpr Cache::Strategy S = Cache::Strategy::FullCache;
+  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
+    VolumeOptions without;
+    without.tuning.walk.record_memo_entries = 0;
+    const ReadAhead::Run off =
+        ReadAhead::ListRecursively<S>(fixture.image, without, 64, large_budget);
+    const ReadAhead::Run on =
+        ReadAhead::ListWithDefaultTuning<S>(fixture.image, VolumeOptions{});
+
+    INFO(fixture.name);
+    REQUIRE(on.calls.size() == off.calls.size());
+    for (std::size_t index = 0; index < on.calls.size(); index++) {
+      CHECK(on.calls.at(index).kind == off.calls.at(index).kind);
+      CHECK(on.calls.at(index).offset == off.calls.at(index).offset);
+      CHECK(on.calls.at(index).length == off.calls.at(index).length);
+    }
+  }
+}
+
+TEST_CASE("The record memo spares a listing without a cache its reads of $MFT",
+          "[io][directory-read-ahead]") {
+  constexpr Cache::Strategy S = Cache::Strategy::NoCache;
+  const std::vector<std::vector<BYTE>> images{
+      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40)),
+      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::GroupedTree(4, 12))};
+  for (const std::vector<BYTE>& image : images) {
+    // The window would hold the same runs: leave it out.
+    VolumeOptions without;
+    without.tuning.walk.record_window_bytes = 0;
+    without.tuning.walk.record_memo_entries = 0;
+    VolumeOptions with = without;
+    with.tuning.walk.record_memo_entries = 65536;
+    const ReadAhead::Run off =
+        ReadAhead::ListRecursively<S>(image, without, 64, large_budget);
+    const ReadAhead::Run on =
+        ReadAhead::ListRecursively<S>(image, with, 64, large_budget);
+
+    const auto reads = [](const ReadAhead::Run& run) {
+      return std::ranges::count_if(
+          run.calls, [](const CountingDiskReader::Call& call) {
+            return call.kind == CountingDiskReader::Kind::Read;
+          });
+    };
+    CAPTURE(reads(off), reads(on));
+    CHECK(on.text == off.text);
+    CHECK(on.log == off.log);
     CHECK(reads(on) < reads(off));
   }
 }
