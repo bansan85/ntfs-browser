@@ -43,6 +43,24 @@ constexpr ULONGLONG AlignUp(ULONGLONG end) noexcept {
   return AlignDown(end + read_alignment - 1);
 }
 
+// The kind of device a handle names, from its seek penalty. A handle of a
+// plain file refuses the query.
+Tuning::MediaKind QueryMediaKind(HANDLE handle) noexcept {
+  STORAGE_PROPERTY_QUERY query{};
+  query.PropertyId = StorageDeviceSeekPenaltyProperty;
+  query.QueryType = PropertyStandardQuery;
+  DEVICE_SEEK_PENALTY_DESCRIPTOR penalty{};
+  DWORD returned = 0;
+  if (DeviceIoControl(handle, IOCTL_STORAGE_QUERY_PROPERTY, &query,
+                      sizeof(query), &penalty, sizeof(penalty), &returned,
+                      nullptr) == FALSE ||
+      returned < sizeof(penalty)) {
+    return Tuning::MediaKind::Unknown;
+  }
+  return penalty.IncursSeekPenalty != FALSE ? Tuning::MediaKind::Rotational
+                                            : Tuning::MediaKind::SolidState;
+}
+
 }  // namespace
 
 // Reads the announced ranges ahead, in announcement order, through an
@@ -408,6 +426,7 @@ Win32DiskReader::~Win32DiskReader() = default;
 bool Win32DiskReader::Open(std::wstring_view path) {
   // What was read ahead belongs to the previous store.
   prefetcher_.reset();
+  media_kind_ = Tuning::MediaKind::Unknown;
 
   // Extended, so a path of more than 260 units opens.
   std::wstring path_z = ToExtendedLengthPath(path);
@@ -423,9 +442,12 @@ bool Win32DiskReader::Open(std::wstring_view path) {
     return false;
   }
 
+  media_kind_ = QueryMediaKind(handle_.get());
   prefetcher_ = std::make_unique<Prefetcher>(std::move(path_z), caps_);
   return true;
 }
+
+Tuning::MediaKind Win32DiskReader::GetMediaKind() const { return media_kind_; }
 
 bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr,
                                std::span<BYTE> dest) const {

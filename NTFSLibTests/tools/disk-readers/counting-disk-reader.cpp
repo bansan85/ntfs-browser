@@ -42,6 +42,10 @@ std::optional<ULONGLONG> CountingDiskReader::Size() const {
   return inner_->Size();
 }
 
+Tuning::MediaKind CountingDiskReader::GetMediaKind() const {
+  return inner_->GetMediaKind();
+}
+
 void CountingDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
   calls_.push_back(
       {.kind = Kind::Prefetch, .offset = offset, .length = length});

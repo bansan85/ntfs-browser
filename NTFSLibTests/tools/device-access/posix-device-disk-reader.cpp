@@ -22,6 +22,7 @@
     #include <linux/fs.h>
   #endif
 
+  #include "disk-identity.h"
   #include "ntfs-browser/win-types.h"
   #include "text-convert.h"
 
@@ -44,7 +45,21 @@ bool PosixDeviceDiskReader::Open(std::wstring_view path) {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
   fd_ = open(narrow.c_str(), O_RDONLY);
   last_error_ = fd_ >= 0 ? 0 : errno;
+  media_kind_ = NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown;
+  if (fd_ >= 0) {
+    const std::optional<DiskIdentity> disk = IdentifyDisk(path);
+    if (disk && disk->solid_state) {
+      media_kind_ = *disk->solid_state
+                        ? NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::SolidState
+                        : NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Rotational;
+    }
+  }
   return fd_ >= 0;
+}
+
+NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+    PosixDeviceDiskReader::GetMediaKind() const {
+  return media_kind_;
 }
 
 bool PosixDeviceDiskReader::ReadInto(LARGE_INTEGER& addr,

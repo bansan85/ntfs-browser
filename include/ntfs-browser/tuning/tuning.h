@@ -57,6 +57,18 @@ inline constexpr std::size_t pattern_count = 4;
 // The families above.
 enum class Family : std::uint8_t { PrefetchDepth, ReadShape, CpuMemory };
 
+// What kind of device backs a volume, as the device itself says: never
+// measured, so that the reads of a volume do not depend on timing.
+enum class MediaKind : std::uint8_t {
+  // The reader has no device: an image file, a fake, a replay. Reads as a
+  // solid-state disk does.
+  Unknown,
+  // No seek penalty: a flash disk.
+  SolidState,
+  // A seek penalty: a hard disk.
+  Rotational
+};
+
 // How a reader reads ahead. Kept once per pattern, since the best depth of a
 // sequential scan is not that of scattered probes.
 struct ReaderTuning {

@@ -53,6 +53,10 @@ std::optional<ULONGLONG> RecordingDiskReader::Size() const {
   return inner_->Size();
 }
 
+Tuning::MediaKind RecordingDiskReader::GetMediaKind() const {
+  return inner_->GetMediaKind();
+}
+
 void RecordingDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
   inner_->Prefetch(offset, length);
 }

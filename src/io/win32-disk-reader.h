@@ -42,6 +42,11 @@ class Win32DiskReader : public IDiskReader {
   // The length of a disk or volume handle, or the size of an ordinary file.
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
+  // What the device behind the handle says: a volume or a disk reports whether
+  // it incurs a seek penalty. A plain file, or a device that does not answer,
+  // is Unknown. Asked once, at Open().
+  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
+
   // Reads the announced ranges ahead, several at once, through a second,
   // asynchronous handle. The reads run while the caller works: no thread is
   // involved.
@@ -59,6 +64,7 @@ class Win32DiskReader : public IDiskReader {
   class Prefetcher;
 
   HandlePtr handle_;
+  Tuning::MediaKind media_kind_{Tuning::MediaKind::Unknown};
   ReaderCaps caps_;
   // Null until Open() succeeds. Declared after handle_: it goes first.
   std::unique_ptr<Prefetcher> prefetcher_;

@@ -197,6 +197,11 @@ void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
 }
 
 template <Cache::Strategy S>
+Tuning::MediaKind FileReader<S>::GetMediaKind() const {
+  return reader_ ? reader_->GetMediaKind() : Tuning::MediaKind::Unknown;
+}
+
+template <Cache::Strategy S>
 void FileReader<S>::CancelPrefetch() const {
   if (reader_) {
     Bench::Detail::RecordCancel();

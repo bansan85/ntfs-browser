@@ -44,6 +44,9 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
+  // Passes the question on, and records nothing.
+  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
+
   // Record the hints, and pass them on to the wrapped reader.
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
   void CancelPrefetch() const override;

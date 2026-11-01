@@ -35,6 +35,11 @@ class PosixDeviceDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // kind of file.
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
+  // The kind of block device, from sysfs ("rotational"). Unknown for an image
+  // file, or when sysfs does not say.
+  [[nodiscard]] NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+      GetMediaKind() const override;
+
   // Asks the kernel to read the range into the page cache ahead of pread(),
   // where posix_fadvise() exists. The page cache holds what it read, so there
   // is nothing to cancel.
@@ -47,6 +52,8 @@ class PosixDeviceDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 
  private:
   int fd_ = -1;
+  NTFS_BROWSER_NAMESPACE::Tuning::MediaKind media_kind_ =
+      NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown;
   int last_error_ = 0;
 };
 

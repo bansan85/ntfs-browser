@@ -35,6 +35,13 @@ class IDiskReader {
     return std::nullopt;
   }
 
+  // The kind of device behind the store, asked of the device and never
+  // measured. Unknown by default, and for any store that is not a disk or a
+  // volume: an image file, a fake.
+  [[nodiscard]] virtual Tuning::MediaKind GetMediaKind() const {
+    return Tuning::MediaKind::Unknown;
+  }
+
   // Announces that the bytes [offset, offset + length) are about to be read,
   // after the ranges announced before them. A hint: the reader MAY start
   // reading them now, so that a later ReadInto() inside the range waits less.

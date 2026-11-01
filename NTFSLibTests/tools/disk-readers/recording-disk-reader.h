@@ -33,6 +33,9 @@ class RecordingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // same.
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
+  // The kind of device of the wrapped reader. It reads nothing.
+  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
+
   // Pass the hints on to the wrapped reader. A hint reads nothing through this
   // reader, so the trace is the same.
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;

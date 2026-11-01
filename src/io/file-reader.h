@@ -70,6 +70,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   // reader is set. Reads nothing.
   [[nodiscard]] std::optional<ULONGLONG> Size() const;
 
+  // Kind of device behind the reader, Unknown when no reader is set. Reads
+  // nothing.
+  [[nodiscard]] Tuning::MediaKind GetMediaKind() const;
+
   // Announces to the reader that the bytes [offset, offset + length) are about
   // to be read. FullCache announces the whole blocks it will read instead,
   // and none that its cache holds.

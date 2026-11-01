@@ -44,4 +44,10 @@ bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr,
 
 std::optional<ULONGLONG> MemoryDiskReader::Size() const { return data_.size(); }
 
+Tuning::MediaKind MemoryDiskReader::GetMediaKind() const { return kind_; }
+
+void MemoryDiskReader::SetMediaKind(Tuning::MediaKind kind) noexcept {
+  kind_ = kind;
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

@@ -18,6 +18,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/io/read-ahead-disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
 
@@ -25,6 +26,7 @@
 #include "memory-disk-reader.h"
 #include "recording-disk-reader.h"
 
+namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
@@ -175,4 +177,33 @@ TEST_CASE("RecordingDiskReader passes a read pattern on and traces nothing",
   std::vector<Tuning::Pattern> expected = AllPatterns();
   expected.push_back(Tuning::Pattern::LargeData);
   CHECK(with.patterns == expected);
+}
+
+TEST_CASE("The decorators pass the media kind of the reader they wrap",
+          "[tuning][invariance][disk-reader]") {
+  const std::array<Tuning::MediaKind, 3> kinds{Tuning::MediaKind::Unknown,
+                                               Tuning::MediaKind::SolidState,
+                                               Tuning::MediaKind::Rotational};
+  for (const Tuning::MediaKind kind : kinds) {
+    const auto make = [&]() {
+      auto memory =
+          std::make_unique<Tests::MemoryDiskReader>(std::vector<BYTE>(16));
+      memory->SetMediaKind(kind);
+      return memory;
+    };
+
+    const Tests::CountingDiskReader counting(make());
+    CHECK(counting.GetMediaKind() == kind);
+    // Asking reads nothing.
+    CHECK(counting.Calls().empty());
+
+    TempFile trace;
+    const Tests::RecordingDiskReader recording(make(), trace.path);
+    CHECK(recording.GetMediaKind() == kind);
+
+    const Io::ReadAheadDiskReader read_ahead(make());
+    CHECK(read_ahead.GetMediaKind() == kind);
+  }
+  CHECK(Tests::MemoryDiskReader(std::vector<BYTE>(16)).GetMediaKind() ==
+        Tuning::MediaKind::Unknown);
 }

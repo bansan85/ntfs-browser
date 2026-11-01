@@ -93,6 +93,13 @@ std::uint64_t StartedBy(const VolumeOptions& options, size_t count,
 
 }  // namespace
 
+TEST_CASE("A Win32DiskReader over an image file has no media kind",
+          "[tuning][invariance][reader]") {
+  const ImageFile image;
+  const std::unique_ptr<IDiskReader> reader = image.Open({});
+  CHECK(reader->GetMediaKind() == Tuning::MediaKind::Unknown);
+}
+
 TEST_CASE("reader.max_reads sets the reads a Win32DiskReader keeps in flight",
           "[tuning][knob-effect][reader]") {
   const std::uint64_t reads =

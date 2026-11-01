@@ -105,6 +105,12 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // it changes when the bytes are read, never which.
   void SetReadPattern(Tuning::Pattern pattern) const;
 
+  // The kind of device the volume is read from, as the device says: the
+  // probes of a directory walk read across a wider hole on a hard disk. Unknown
+  // for an image file, a fake reader, or a device that does not say. Reads
+  // nothing.
+  [[nodiscard]] Tuning::MediaKind GetMediaKind() const;
+
   // Frees every cached block that no Cache::View uses. The volume stays open,
   // and a later read loads the data again. A no-op under NoCache.
   void MinifyCache() const;

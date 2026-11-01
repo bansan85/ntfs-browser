@@ -505,6 +505,11 @@ void NtfsVolume<S>::SetReadPattern(Tuning::Pattern pattern) const {
 }
 
 template <Cache::Strategy S>
+Tuning::MediaKind NtfsVolume<S>::GetMediaKind() const {
+  return impl_->volume->GetMediaKind();
+}
+
+template <Cache::Strategy S>
 void NtfsVolume<S>::CancelPrefetch() const {
   impl_->volume->CancelPrefetch();
 }

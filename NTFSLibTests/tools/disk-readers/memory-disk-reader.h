@@ -27,8 +27,14 @@ class MemoryDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // The length of the buffer.
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
+  // The kind of device that the reader says it is, Unknown until
+  // SetMediaKind(): a test of a device-dependent choice plays the device.
+  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
+  void SetMediaKind(Tuning::MediaKind kind) noexcept;
+
  private:
   std::vector<BYTE> data_;
+  Tuning::MediaKind kind_{Tuning::MediaKind::Unknown};
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

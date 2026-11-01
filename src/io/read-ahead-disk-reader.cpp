@@ -109,6 +109,13 @@ class ReadAheadDiskReader::Impl {
     return inner_ != nullptr ? inner_->Size() : std::nullopt;
   }
 
+  // Kind of device of the wrapped reader. It reads nothing.
+  Tuning::MediaKind GetMediaKind() {
+    const std::scoped_lock inner_lock{inner_mutex_};
+    return inner_ != nullptr ? inner_->GetMediaKind()
+                             : Tuning::MediaKind::Unknown;
+  }
+
   // Passes a hint on to the wrapped reader, which the worker may be reading.
   void Prefetch(ULONGLONG offset, ULONGLONG length) {
     const std::scoped_lock inner_lock{inner_mutex_};
@@ -423,6 +430,10 @@ bool ReadAheadDiskReader::ReadInto(LARGE_INTEGER& addr,
 
 std::optional<ULONGLONG> ReadAheadDiskReader::Size() const {
   return impl_->Size();
+}
+
+Tuning::MediaKind ReadAheadDiskReader::GetMediaKind() const {
+  return impl_->GetMediaKind();
 }
 
 void ReadAheadDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
