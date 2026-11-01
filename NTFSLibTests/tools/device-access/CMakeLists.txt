@@ -23,6 +23,8 @@ add_library(
   "line-buffer.cpp"
   "local-time.h"
   "local-time.cpp"
+  "ordered-chunks.h"
+  "ordered-chunks.cpp"
   "output.h"
   "output.cpp"
   "posix-device-disk-reader.h"
