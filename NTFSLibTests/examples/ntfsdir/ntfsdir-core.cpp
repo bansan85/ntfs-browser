@@ -321,7 +321,7 @@ void UpcomingDirectories(const std::vector<Pending>& pending,
 // cannot be read is reported and skipped. So is one already listed: NTFS
 // allows no hard link to a directory, so an entry that leads back to one is a
 // loop or a corruption. marking says whether the listing has a marker column.
-// Returns the totals of the tree. With walk.read_ahead_dirs set, the records
+// Returns the totals of the tree. Unless walk.read_ahead_dirs is 0, the records
 // and the first level of index blocks of the next directories are read
 // together ahead of the listing, and fr takes them from there: the lines, their
 // order and the reads that are not held stay as they are.

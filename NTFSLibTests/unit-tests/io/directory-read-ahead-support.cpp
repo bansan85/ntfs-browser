@@ -295,6 +295,17 @@ Run ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
   return ListVolume(volume, reads);
 }
 
+template <Cache::Strategy S>
+Run ListWithDefaultTuning(const std::vector<BYTE>& image,
+                          const VolumeOptions& options) {
+  auto counting = std::make_unique<CountingDiskReader>(
+      std::make_unique<MemoryDiskReader>(image));
+  CountingDiskReader& reads = *counting;
+  NtfsVolume<S> volume(std::move(counting), options);
+  REQUIRE(volume.IsVolumeOK());
+  return ListVolume(volume, reads);
+}
+
 DiskModel HardDiskModel() {
   DiskModel model;
   model.seek_ns = 8000000;
@@ -393,6 +404,10 @@ template Run ListRecursively<Cache::Strategy::NoCache>(
 template Run ListRecursively<Cache::Strategy::FullCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
     std::uint64_t bytes);
+template Run ListWithDefaultTuning<Cache::Strategy::NoCache>(
+    const std::vector<BYTE>& image, const VolumeOptions& options);
+template Run ListWithDefaultTuning<Cache::Strategy::FullCache>(
+    const std::vector<BYTE>& image, const VolumeOptions& options);
 template TimedRun ListOnSimulatedDisk<Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
     std::uint64_t bytes, const DiskModel& model);

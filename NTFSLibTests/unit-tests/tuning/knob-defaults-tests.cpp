@@ -73,8 +73,8 @@ constexpr std::array<OldConstant, knob_count> old_constants{{
     {"probe.max_run_bytes", mib},
     {"probe.max_chunk_records", 128},
     {"probe.max_known_records", std::uint64_t{1} << 18U},
-    // The read ahead of a recursive listing: no constant before it, and off.
-    {"walk.read_ahead_dirs", 0},
+    // The read ahead of a recursive listing: no constant before it, and on.
+    {"walk.read_ahead_dirs", 64},
     {"walk.read_ahead_bytes", 16 * mib},
     {"cache.block_bytes", 4 * kib},
     {"cache.max_run_bytes", mib},
@@ -205,7 +205,7 @@ TEST_CASE("A default Settings holds the old constants in every field",
   CHECK(settings.probe.max_run_bytes == mib);
   CHECK(settings.probe.max_chunk_records == 128);
   CHECK(settings.probe.max_known_records == (std::uint64_t{1} << 18U));
-  CHECK(settings.walk.read_ahead_dirs == 0);
+  CHECK(settings.walk.read_ahead_dirs == 64);
   CHECK(settings.walk.read_ahead_bytes == 16 * mib);
   CHECK(settings.cache.block_bytes == 4 * kib);
   CHECK(settings.cache.max_run_bytes == mib);

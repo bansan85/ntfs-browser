@@ -78,6 +78,12 @@ template <Cache::Strategy S>
                                   VolumeOptions options, std::size_t dirs,
                                   std::uint64_t bytes);
 
+// The same with the walk tuning of options left as it is: what NtfsDir does
+// when it is given no tuning.
+template <Cache::Strategy S>
+[[nodiscard]] Run ListWithDefaultTuning(const std::vector<BYTE>& image,
+                                        const VolumeOptions& options);
+
 // The same, over a simulated disk of model: the time the listing took on its
 // clock, in nanoseconds, with what the disk did.
 struct TimedRun {

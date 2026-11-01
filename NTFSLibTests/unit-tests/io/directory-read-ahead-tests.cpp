@@ -12,6 +12,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "counting-disk-reader.h"
@@ -21,6 +22,7 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Tests::CountingDiskReader;
@@ -159,4 +161,57 @@ TEMPLATE_TEST_CASE_SIG(
       }
     }
   }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A recursive listing reads ahead 64 directories when no tuning is given",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const Tuning::Settings defaults;
+  REQUIRE(defaults.walk.read_ahead_dirs == 64);
+  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
+    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+      INFO(fixture.name << ", include_deleted " << options.include_deleted
+                        << ", recover_errors " << options.recover_errors);
+      const ReadAhead::Run given =
+          ReadAhead::ListWithDefaultTuning<S>(fixture.image, options);
+      const ReadAhead::Run explicit_on = ReadAhead::ListRecursively<S>(
+          fixture.image, options, defaults.walk.read_ahead_dirs,
+          defaults.walk.read_ahead_bytes);
+      const ReadAhead::Run off =
+          ReadAhead::ListRecursively<S>(fixture.image, options, 0, 0);
+
+      // The default is the explicit 64: the same reads, in the same order.
+      CHECK(given.exit_code == explicit_on.exit_code);
+      CHECK(given.text == explicit_on.text);
+      CHECK(given.log == explicit_on.log);
+      REQUIRE(given.calls.size() == explicit_on.calls.size());
+      for (std::size_t index = 0; index < given.calls.size(); index++) {
+        CHECK(given.calls.at(index).kind == explicit_on.calls.at(index).kind);
+        CHECK(given.calls.at(index).offset ==
+              explicit_on.calls.at(index).offset);
+        CHECK(given.calls.at(index).length ==
+              explicit_on.calls.at(index).length);
+      }
+
+      // And what it lists is what the listing without it lists.
+      CHECK(given.exit_code == off.exit_code);
+      CHECK(given.text == off.text);
+      CHECK(given.log == off.log);
+    }
+  }
+}
+
+TEST_CASE("The default read ahead plans rounds of reads on a wide tree",
+          "[io][directory-read-ahead]") {
+  const std::vector<BYTE> image =
+      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
+  const VolumeOptions options;
+  const ReadAhead::Run given =
+      ReadAhead::ListWithDefaultTuning<Cache::Strategy::NoCache>(image,
+                                                                 options);
+  const ReadAhead::Run off =
+      ReadAhead::ListRecursively<Cache::Strategy::NoCache>(image, options, 0,
+                                                           0);
+  CHECK(Rounds(given.calls) > Rounds(off.calls));
 }

@@ -65,9 +65,9 @@ struct DirectoryReadAheadStats {
 // held record and block is released when Release() says the listing is done
 // with its directory, used or not.
 //
-// Off, which is the default (Tuning::WalkTuning::read_ahead_dirs is 0), every
-// member does nothing, and the listing reads as it always did. Not thread
-// safe, like the rest of the library.
+// On by default (Tuning::WalkTuning::read_ahead_dirs is 64). At 0 every member
+// does nothing, and the listing reads as it did before this class.
+// Not thread safe, like the rest of the library.
 template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT DirectoryReadAhead {
  public:
