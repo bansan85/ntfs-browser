@@ -122,7 +122,7 @@ T Clamped(std::uint64_t value) noexcept {
         }                                                               \
   }
 
-constexpr std::size_t knob_count = 45;
+constexpr std::size_t knob_count = 46;
 
 const std::array<Knob, knob_count>& Table() {
   static const std::array<Knob, knob_count> table{{
@@ -193,6 +193,8 @@ const std::array<Knob, knob_count>& Table() {
                 0, 4096, per_directory),
       NTFS_KNOB("walk.read_ahead_bytes", PrefetchDepth, m3,
                 walk.read_ahead_bytes, 64 * 1024, k1g, is_bytes),
+      NTFS_KNOB("walk.record_window_bytes", ReadShape, m3,
+                walk.record_window_bytes, 0, k1g, is_bytes),
 
       NTFS_KNOB("cache.block_bytes", ReadShape, m2 | m3, cache.block_bytes,
                 4096, k256m, is_bytes),

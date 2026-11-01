@@ -35,6 +35,9 @@ struct DirectoryReadAheadStats {
   // Records and blocks released before the listing took them.
   std::uint64_t records_unused{0};
   std::uint64_t blocks_unused{0};
+  // Records that the window of Tuning::WalkTuning::record_window_bytes gave
+  // in place of a read of $MFT, to the probes, the batches and the listing.
+  std::uint64_t window_records{0};
   // Batches made: each reads the records of the planned directories, then
   // their blocks.
   std::uint64_t batches{0};
@@ -64,6 +67,14 @@ struct DirectoryReadAheadStats {
 // block it could not read is not held, and the listing reads it itself. Each
 // held record and block is released when Release() says the listing is done
 // with its directory, used or not.
+//
+// A NoCache volume keeps nothing, so the probes of two directories that sit
+// side by side in $MFT would read the same clusters twice: this class also
+// keeps the runs of $MFT that the probes and its own batches read last, up to
+// Tuning::WalkTuning::record_window_bytes, and hands them to the listing's
+// FileRecord (FileRecord::SetProbeStore() and SetRecordSource()). A FullCache
+// volume has its block cache and keeps none. The listing, its log and the
+// reads that are not held do not change.
 //
 // On by default (Tuning::WalkTuning::read_ahead_dirs is 64). At 0 every member
 // does nothing, and the listing reads as it did before this class.

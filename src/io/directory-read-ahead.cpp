@@ -30,6 +30,7 @@
 #include "bench/recorder.h"
 #include "io/file-record-index.h"
 #include "io/mft-runs.h"
+#include "io/record-window.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
@@ -56,7 +57,10 @@ class DirectoryReadAhead<S>::Impl {
         cache_block_bytes_(
             (std::max)(volume.GetOptions().tuning.cache.block_bytes,
                        min_cache_block_bytes)),
-        levels_(Log::Detail::EnabledLevels()) {}
+        levels_(Log::Detail::EnabledLevels()),
+        // A FullCache volume holds what it read in its block cache already.
+        window_(S == Cache::Strategy::NoCache ? walk_.record_window_bytes : 0,
+                volume.GetFileRecordSize()) {}
 
   Impl(const Impl&) = delete;
   Impl& operator=(const Impl&) = delete;
@@ -122,6 +126,8 @@ class DirectoryReadAhead<S>::Impl {
 
   // The bytes the listing's record asks for, empty when not held.
   [[nodiscard]] std::span<const BYTE> HeldRecordBytes(ULONGLONG record);
+  // The bytes of record in the window, empty when it does not hold them.
+  [[nodiscard]] std::span<const BYTE> FindInWindow(ULONGLONG record);
   [[nodiscard]] std::span<const BYTE> HeldBlockBytes(ULONGLONG directory,
                                                      ULONGLONG vcn);
 
@@ -131,6 +137,9 @@ class DirectoryReadAhead<S>::Impl {
 
   // A record of its own, in which a held record is parsed to find its blocks.
   [[nodiscard]] std::unique_ptr<FileRecord<S>> MakeScratch();
+
+  // Holds a copy of the bytes of the file record record.
+  void Hold(ULONGLONG record, std::span<const BYTE> bytes);
 
   // Reads and holds the records of wanted, then the blocks they point to.
   void ReadAhead(std::span<const ULONGLONG> wanted);
@@ -164,6 +173,8 @@ class DirectoryReadAhead<S>::Impl {
   std::size_t cache_block_bytes_;
   // The levels the sinks accept, taken once: a capture MUST NOT ask them.
   Log::Detail::LevelMask levels_;
+  // The runs of $MFT that the probes and the batches read last.
+  RecordWindow window_;
   FileRecord<S>* listing_{nullptr};
   std::unordered_map<ULONGLONG, HeldDirectory> held_;
   std::uint64_t held_bytes_{0};
@@ -180,6 +191,8 @@ class DirectoryReadAhead<S>::Impl {
   std::unique_ptr<FileRecord<S>> spare_;
   // The bytes of the run being read.
   std::vector<BYTE> run_bytes_;
+  // The records of a round that the window did not hold.
+  std::vector<ULONGLONG> missing_;
   // End of the last announcement of the round, where blocks cannot overlap.
   std::optional<ULONGLONG> announced_end_;
 };
@@ -189,13 +202,23 @@ std::span<const BYTE>
     DirectoryReadAhead<S>::Impl::HeldRecordBytes(ULONGLONG record) {
   const auto held = held_.find(record);
   if (held == held_.end() || held->second.record.empty()) {
-    return {};
+    return FindInWindow(record);
   }
   if (!held->second.record_served) {
     held->second.record_served = true;
     stats_.records_served++;
   }
   return held->second.record;
+}
+
+template <Cache::Strategy S>
+std::span<const BYTE>
+    DirectoryReadAhead<S>::Impl::FindInWindow(ULONGLONG record) {
+  const std::span<const BYTE> bytes = window_.Find(record);
+  if (!bytes.empty()) {
+    stats_.window_records++;
+  }
+  return bytes;
 }
 
 template <Cache::Strategy S>
@@ -228,6 +251,14 @@ void DirectoryReadAhead<S>::Impl::Attach(FileRecord<S>& listing) {
   listing.SetIndexBlockSource([this](ULONGLONG directory, ULONGLONG vcn) {
     return HeldBlockBytes(directory, vcn);
   });
+  if (window_.Enabled()) {
+    listing.SetProbeStore(
+        {.find = [this](ULONGLONG record) { return FindInWindow(record); },
+         .keep =
+             [this](ULONGLONG first_record, std::span<const BYTE> bytes) {
+               window_.Put(first_record, bytes);
+             }});
+  }
 }
 
 template <Cache::Strategy S>
@@ -237,6 +268,7 @@ void DirectoryReadAhead<S>::Impl::Detach() noexcept {
   }
   listing_->SetRecordSource({});
   listing_->SetIndexBlockSource({});
+  listing_->SetProbeStore({});
   for (const auto& attr : listing_->GetAttr(Attr::Type::IndexAllocation)) {
     static_cast<Attr::AttrIndexAlloc<S>*>(attr.get())->SetBlockSource({}, 0);
   }
@@ -394,6 +426,16 @@ void DirectoryReadAhead<S>::Impl::ReadAhead(std::span<const ULONGLONG> wanted) {
 }
 
 template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::Hold(ULONGLONG record,
+                                       std::span<const BYTE> bytes) {
+  HeldDirectory& held = held_[record];
+  held.record.assign(bytes.begin(), bytes.end());
+  held_bytes_ += held.record.size();
+  stats_.peak_held_bytes = (std::max)(stats_.peak_held_bytes, held_bytes_);
+  stats_.records_read++;
+}
+
+template <Cache::Strategy S>
 std::vector<ULONGLONG> DirectoryReadAhead<S>::Impl::FetchRecords(
     std::span<const ULONGLONG> wanted) {
   const DWORD record_size = volume_->GetFileRecordSize();
@@ -406,9 +448,26 @@ std::vector<ULONGLONG> DirectoryReadAhead<S>::Impl::FetchRecords(
     const std::span<const ULONGLONG> chunk =
         std::span<const ULONGLONG>(sorted).subspan(
             first, (std::min)(round, sorted.size() - first));
-    const std::vector<MftRun> runs =
-        PlanMftRuns(chunk, probe_.max_gap_bytes / record_size,
+    // A record that a probe read lately is held from the window.
+    missing_.clear();
+    for (const ULONGLONG record : chunk) {
+      const std::span<const BYTE> bytes = FindInWindow(record);
+      if (bytes.empty()) {
+        missing_.push_back(record);
+      } else {
+        Hold(record, bytes);
+      }
+    }
+    std::vector<MftRun> runs =
+        PlanMftRuns(missing_, probe_.max_gap_bytes / record_size,
                     probe_.max_run_bytes / record_size);
+    // A run that the window keeps is kept whole: the disk reads its clusters
+    // anyway.
+    if (window_.Enabled()) {
+      runs = WidenToClusters(std::move(runs),
+                             volume_->GetClusterSize() / record_size,
+                             static_cast<ULONGLONG>(Mft::Idx::User));
+    }
 
     log_.Reset(levels_);
     for (const MftRun& run : runs) {
@@ -424,8 +483,11 @@ std::vector<ULONGLONG> DirectoryReadAhead<S>::Impl::FetchRecords(
         const Bench::Detail::KindScope kind(Bench::ReadKind::Record);
         read = volume_->ReadMftSlots(run.first_slot, run_bytes_);
       }
+      if (read) {
+        window_.Put(run.first_slot, run_bytes_);
+      }
       for (std::size_t index = run.begin; index < run.end; index++) {
-        const ULONGLONG record = chunk[index];
+        const ULONGLONG record = missing_[index];
         if (!read) {
           if (unreadable_.size() >= max_unreadable_records) {
             unreadable_.clear();
@@ -437,12 +499,7 @@ std::vector<ULONGLONG> DirectoryReadAhead<S>::Impl::FetchRecords(
             gsl::narrow<std::size_t>(record - run.first_slot) * record_size;
         const std::span<const BYTE> bytes =
             std::span<const BYTE>(run_bytes_).subspan(offset, record_size);
-        HeldDirectory& held = held_[record];
-        held.record.assign(bytes.begin(), bytes.end());
-        held_bytes_ += held.record.size();
-        stats_.peak_held_bytes =
-            (std::max)(stats_.peak_held_bytes, held_bytes_);
-        stats_.records_read++;
+        Hold(record, bytes);
       }
     }
     // What nothing read, such as a block the cache already held, is withdrawn.

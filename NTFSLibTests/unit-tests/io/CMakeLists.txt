@@ -18,8 +18,10 @@ target_sources(
     "ntfsdir-name-tests.cpp"
     "ntfsdir-sample-support.h"
     "ntfsdir-sample-tests.cpp"
+    "probe-store-tests.cpp"
     "read-ahead-disk-reader-tests.cpp"
     "record-offset-overflow-tests.cpp"
+    "record-window-tests.cpp"
     "traverse-standing-tests.cpp"
 )
 

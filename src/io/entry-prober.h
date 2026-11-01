@@ -48,8 +48,12 @@ struct NamedState {
 template <Cache::Strategy S>
 class EntryProber {
  public:
-  // volume MUST outlive the prober.
-  explicit EntryProber(const NtfsVolume<S>& volume);
+  // volume MUST outlive the prober. store, when not null, is where the probes
+  // look for a record before they read it, and leave the runs they read: it
+  // MUST outlive the prober too.
+  explicit EntryProber(
+      const NtfsVolume<S>& volume,
+      const typename FileRecord<S>::ProbeStore* store = nullptr);
   EntryProber(const EntryProber&) = delete;
   EntryProber& operator=(const EntryProber&) = delete;
   EntryProber(EntryProber&&) = delete;
@@ -89,6 +93,8 @@ class EntryProber {
   void ProbeOne(ULONGLONG record, std::span<const BYTE> bytes);
 
   const NtfsVolume<S>* volume_;
+  // Where a record may be found, and a run left: null for none.
+  const typename FileRecord<S>::ProbeStore* store_;
   // Reused for every probe, as it clears itself on each parse.
   FileRecord<S> named_;
   // The levels the sinks accept, taken once: a capture MUST NOT ask them.
@@ -102,6 +108,8 @@ class EntryProber {
   Log::Detail::CapturedLog read_log_;
   // The distinct records of the group still to probe.
   std::vector<ULONGLONG> pending_;
+  // The records of a chunk that the store did not give.
+  std::vector<ULONGLONG> missing_;
   // The bytes of the run being probed.
   std::vector<BYTE> run_bytes_;
 };

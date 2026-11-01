@@ -129,6 +129,9 @@ class FileRecord<S>::Impl {
   // Where the $INDEX_ALLOCATION attribute of this record looks for a block
   // before it reads it. Empty: always from the disk.
   typename Io::FileRecord<S>::IndexBlockSource index_block_source;
+  // Where the probes of the batched walk look for a record, and what they do
+  // with a run they read. Empty: they read every record.
+  typename Io::FileRecord<S>::ProbeStore probe_store;
 
   // Where the attribute walk of the last ParseAttrs() met the end marker.
   // Empty when it did not reach one.

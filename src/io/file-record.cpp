@@ -584,6 +584,17 @@ const typename Io::FileRecord<S>::IndexBlockSource&
   return impl_->index_block_source;
 }
 
+template <Cache::Strategy S>
+void Io::FileRecord<S>::SetProbeStore(ProbeStore store) {
+  impl_->probe_store = std::move(store);
+}
+
+template <Cache::Strategy S>
+const typename Io::FileRecord<S>::ProbeStore&
+    Io::FileRecord<S>::GetProbeStore() const noexcept {
+  return impl_->probe_store;
+}
+
 // Install Attribute raw data CallBack routines for a single File Record
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::InstallAttrRawCB(Attr::Type attr_type,

@@ -39,6 +39,11 @@ constexpr std::uint64_t small_budget = 4096;
 // A budget that never binds.
 constexpr std::uint64_t large_budget = std::uint64_t{16} << 20U;
 
+// Values of walk.record_window_bytes the listing is compared on: too small to
+// hold a run, one run, a few, and the default.
+constexpr std::uint64_t window_bytes[] = {1024, 4096, 65536,
+                                          std::uint64_t{4} << 20U};
+
 // A sector of $MFT may be read once more for each round of the read ahead than
 // the listing without it reads it: a run reads across the holes between the
 // records it plans, and the holes of one round are the records of another.
@@ -206,7 +211,9 @@ TEST_CASE("The default read ahead plans rounds of reads on a wide tree",
           "[io][directory-read-ahead]") {
   const std::vector<BYTE> image =
       Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
-  const VolumeOptions options;
+  // The window of $MFT spares the probes their rounds: leave it out.
+  VolumeOptions options;
+  options.tuning.walk.record_window_bytes = 0;
   const ReadAhead::Run given =
       ReadAhead::ListWithDefaultTuning<Cache::Strategy::NoCache>(image,
                                                                  options);
@@ -214,4 +221,81 @@ TEST_CASE("The default read ahead plans rounds of reads on a wide tree",
       ReadAhead::ListRecursively<Cache::Strategy::NoCache>(image, options, 0,
                                                            0);
   CHECK(Rounds(given.calls) > Rounds(off.calls));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "A recursive listing is the same with a record window of any size",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
+    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+      VolumeOptions without = options;
+      without.tuning.walk.record_window_bytes = 0;
+      const ReadAhead::Run off = ReadAhead::ListRecursively<S>(
+          fixture.image, without, 64, large_budget);
+
+      for (const std::uint64_t bytes : window_bytes) {
+        INFO(fixture.name << ", include_deleted " << options.include_deleted
+                          << ", recover_errors " << options.recover_errors
+                          << ", window " << bytes << " bytes");
+        VolumeOptions with = options;
+        with.tuning.walk.record_window_bytes = bytes;
+        const ReadAhead::Run on = ReadAhead::ListRecursively<S>(
+            fixture.image, with, 64, large_budget);
+
+        CHECK(on.exit_code == off.exit_code);
+        CHECK(on.text == off.text);
+        INFO(ReadAhead::FirstDifference(on.log, off.log));
+        CHECK(on.log == off.log);
+      }
+    }
+  }
+}
+
+TEST_CASE("A block cache reads the same whatever the record window",
+          "[io][directory-read-ahead]") {
+  constexpr Cache::Strategy S = Cache::Strategy::FullCache;
+  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
+    VolumeOptions without;
+    without.tuning.walk.record_window_bytes = 0;
+    const ReadAhead::Run off =
+        ReadAhead::ListRecursively<S>(fixture.image, without, 64, large_budget);
+    const ReadAhead::Run on =
+        ReadAhead::ListWithDefaultTuning<S>(fixture.image, VolumeOptions{});
+
+    INFO(fixture.name);
+    REQUIRE(on.calls.size() == off.calls.size());
+    for (std::size_t index = 0; index < on.calls.size(); index++) {
+      CHECK(on.calls.at(index).kind == off.calls.at(index).kind);
+      CHECK(on.calls.at(index).offset == off.calls.at(index).offset);
+      CHECK(on.calls.at(index).length == off.calls.at(index).length);
+    }
+  }
+}
+
+TEST_CASE(
+    "The record window spares a listing without a cache its reads of $MFT",
+    "[io][directory-read-ahead]") {
+  constexpr Cache::Strategy S = Cache::Strategy::NoCache;
+  const std::vector<std::vector<BYTE>> images{
+      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40)),
+      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::GroupedTree(4, 12))};
+  for (const std::vector<BYTE>& image : images) {
+    VolumeOptions without;
+    without.tuning.walk.record_window_bytes = 0;
+    const ReadAhead::Run off =
+        ReadAhead::ListRecursively<S>(image, without, 64, large_budget);
+    const ReadAhead::Run on =
+        ReadAhead::ListWithDefaultTuning<S>(image, VolumeOptions{});
+
+    const auto reads = [](const ReadAhead::Run& run) {
+      return std::ranges::count_if(
+          run.calls, [](const CountingDiskReader::Call& call) {
+            return call.kind == CountingDiskReader::Kind::Read;
+          });
+    };
+    CAPTURE(reads(off), reads(on));
+    CHECK(on.text == off.text);
+    CHECK(reads(on) < reads(off));
+  }
 }

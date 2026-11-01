@@ -9,9 +9,10 @@
 
 // The constants of the read path that a caller MAY change at run time, and the
 // read patterns they serve. Every field defaults to the value the library had
-// before the field existed, but cache.block_bytes (4 KiB, formerly 64 KiB) and
-// walk.read_ahead_dirs (64, formerly 0): a default-constructed Settings changes
-// no read, no hint and no log line otherwise.
+// before the field existed, but cache.block_bytes (4 KiB, formerly 64 KiB),
+// walk.read_ahead_dirs (64, formerly 0) and walk.record_window_bytes (4 MiB,
+// new): a default-constructed Settings changes no read, no hint and no log line
+// otherwise.
 //
 // A field belongs to one family:
 //   A (PrefetchDepth): how far ahead the reads are announced or started. It
@@ -151,6 +152,12 @@ struct WalkTuning {
   // is planned until the listing has used some. 16 MiB holds the next two
   // thousand directories of the usual size.
   std::uint64_t read_ahead_bytes{16 * mebibyte};
+  // B: bytes of $MFT that the probes of a NoCache listing keep once read, so
+  // that the next directory finds the records it shares with them: a hole a
+  // run read across, a directory that was created beside another. The window
+  // belongs to the read ahead and is off with it. A FullCache listing has the
+  // block cache and keeps none. 0 keeps none.
+  std::uint64_t record_window_bytes{4 * mebibyte};
 };
 
 // The block cache of FullCache, and the block FileReader reads.

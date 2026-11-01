@@ -36,4 +36,29 @@ std::vector<MftRun> PlanMftRuns(std::span<const ULONGLONG> slots,
   return runs;
 }
 
+std::vector<MftRun> WidenToClusters(std::vector<MftRun> runs,
+                                    ULONGLONG slots_per_cluster,
+                                    ULONGLONG first_readable_slot) {
+  if (slots_per_cluster < 2) {
+    return runs;
+  }
+  std::vector<MftRun> widened;
+  for (MftRun run : runs) {
+    const ULONGLONG aligned =
+        run.first_slot - (run.first_slot % slots_per_cluster);
+    run.first_slot =
+        (std::max)(aligned, (std::min)(run.first_slot, first_readable_slot));
+    run.last_slot +=
+        slots_per_cluster - 1 - (run.last_slot % slots_per_cluster);
+    if (!widened.empty() && run.first_slot <= widened.back().last_slot + 1) {
+      MftRun& previous = widened.back();
+      previous.last_slot = (std::max)(previous.last_slot, run.last_slot);
+      previous.end = run.end;
+      continue;
+    }
+    widened.push_back(run);
+  }
+  return widened;
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

@@ -76,6 +76,19 @@ class NTFS_BROWSER_EXPORT FileRecord {
   using IndexBlockSource =
       std::function<std::span<const BYTE>(ULONGLONG directory, ULONGLONG vcn)>;
 
+  // Takes the records of one run of $MFT that a probe has just read, from the
+  // slot `first_record` on, `bytes` long. Only valid for the call.
+  using RunSink =
+      std::function<void(ULONGLONG first_record, std::span<const BYTE> bytes)>;
+
+  // What the probes of TraverseSubEntriesWithStanding() may reuse, and where
+  // they leave what they read. `find` answers as a RecordSource does, and an
+  // empty `keep` keeps nothing.
+  struct ProbeStore {
+    RecordSource find;
+    RunSink keep;
+  };
+
   explicit FileRecord(const NtfsVolume<S>& volume);
   // Defined out of line, so the move needs Impl complete only in
   // file-record.cpp, not in every other TU that includes this header.
@@ -185,6 +198,16 @@ class NTFS_BROWSER_EXPORT FileRecord {
   // The source SetIndexBlockSource() was given, empty when there is none. For
   // the attributes this record builds.
   [[nodiscard]] const IndexBlockSource& GetIndexBlockSource() const noexcept;
+  // Where the probes of TraverseSubEntriesWithStanding() take the records of
+  // the entries they judge before they read them from $MFT, and where they
+  // leave each run they read, so that the probes of the next directory find
+  // it. A record that `find` gives is not read, and its bytes MUST be the ones
+  // the disk holds: the walk, its log and its listing do not change, only the
+  // reads do. The functions MUST outlive the walks that use them. Not used by
+  // TraverseSubEntries().
+  void SetProbeStore(ProbeStore store);
+  // The store SetProbeStore() was given, empty when there is none.
+  [[nodiscard]] const ProbeStore& GetProbeStore() const noexcept;
   [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
                                       Attr::RawCallback callback) noexcept;
   void ClearAttrRawCB() noexcept;
