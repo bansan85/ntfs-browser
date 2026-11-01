@@ -8,7 +8,10 @@ the block device. See the README, section "Benchmark", for the method.
 
 Commands:
   audit       T_real, T_io, T_cpu and R for each volume, tool and mode
-  search      the constant search for one pattern; writes the profile
+  search      the constant search; writes the profile. Each pattern tunes its
+              own knobs first, with the reader at its defaults, then the grid
+              of the reader's caps. A knob or a grid that nothing beats is
+              flat: it keeps its value, and nothing of it is written
   disk        the sheet of the disk (NtfsBench diskbench)
   report      renders the Markdown report from the results of audit
   --self-test runs the searcher on a simulated disk with a known optimum
@@ -950,7 +953,8 @@ class Target:
     # Phase whose wall time is the measure, and where the run stops.
     phase: str
     stop_after: str
-    # Knobs tried one at a time, in this order. The reader's caps are
+    # Knobs tried one at a time, in this order, with the reader at its defaults.
+    # The reader's caps are tuned after them, on a grid, as
     # "reader.<name>@<pattern>".
     knobs: tuple[str, ...]
 
@@ -983,7 +987,8 @@ TARGETS: dict[str, Target] = {
     ),
 }
 
-# Reads in flight and bytes in flight: searched on a grid, not apart.
+# Reads in flight and bytes in flight: searched on a grid, not apart, and after
+# the knobs of the pattern: a cap below what the pattern announces hides them.
 GRID_READS = (4, 8, 16, 32, 64)
 GRID_BYTES = tuple(mebibytes << 20 for mebibytes in (16, 32, 64, 128, 256))
 
@@ -1050,6 +1055,14 @@ class Searcher:
     `memory_cost(name, value)` ranks the values of a plateau. A knob that holds
     no memory costs 0 for every value, and then a plateau keeps the value the
     search has at that point: the default, or the one chosen so far.
+
+    A plateau is the values that tie after a real gain. A knob (or the grid)
+    that no candidate beats keeps its current value: it is flat, and nothing
+    of it reaches the profile.
+
+    run() tunes the knobs of the pattern first, with the reader at its
+    defaults, and the grid of the reader's caps last. A cap that is below what
+    the pattern announces would otherwise hide every gain of the announce knobs.
     """
 
     def __init__(self, evaluator: Evaluator, results: ResultsFile, pattern: str,
@@ -1130,6 +1143,7 @@ class Searcher:
         current[name] = start
         best = self.runs(current, TRIAGE_RUNS)
         plateau = [(start, best)]
+        improved = False
         for direction in (+1, -1):
             value = start
             for candidate_value in self.ladder(name, start, direction):
@@ -1148,12 +1162,18 @@ class Searcher:
                     best = stats
                     value = candidate_value
                     plateau = [(candidate_value, stats)]
+                    improved = True
                 elif self.same(stats, best):
                     plateau.append((candidate_value, stats))
                 else:
                     break
-        # On a plateau, the value that costs the least memory. min() takes the
-        # first of equal costs, and the plateau lists the current value first.
+        if not improved:
+            # Flat: every candidate is on the plateau of the current value, so
+            # the cheapest of them would be a number picked by noise.
+            self.trace.append(f"{name}: flat, kept {start} (plateau of {len(plateau)})")
+            return current
+        # After a real gain, the value of the plateau that costs the least
+        # memory. min() takes the first of equal costs, in the order found.
         chosen = min(plateau, key=lambda item: self.memory_cost(name, item[0]))[0]
         self.trace.append(f"{name}: {chosen} (from {start}, plateau of {len(plateau)})")
         current[name] = chosen
@@ -1161,19 +1181,42 @@ class Searcher:
 
     def tune_grid(self, config: dict[str, int], reads_name: str, bytes_name: str,
                   reads: Iterable[int], bytes_: Iterable[int]) -> dict[str, int]:
+        """Times every point of the grid, and keeps the current one if it is flat.
+
+        The current point is the one `config` holds, or the defaults. It is
+        timed even when it is off the grid. When no point beats it, nothing
+        moves. Otherwise the point of the plateau of the best that costs the
+        least memory wins: fewest bytes, then fewest reads.
+        """
+        current = (
+            config.get(reads_name, self.defaults.get(reads_name)),
+            config.get(bytes_name, self.defaults.get(bytes_name)),
+        )
+        points = list(itertools.product(reads, bytes_))
+        if None not in current and current not in points:
+            points.append(current)
         best: tuple[Stats, dict[str, int]] | None = None
         plateau: list[tuple[Stats, dict[str, int]]] = []
-        for count, size in itertools.product(reads, bytes_):
+        timed: list[tuple[tuple[int, int], Stats]] = []
+        for count, size in points:
             trial = dict(config)
             trial[reads_name] = count
             trial[bytes_name] = size
             stats = self.runs(trial, TRIAGE_RUNS)
+            timed.append(((count, size), stats))
             if best is None or self.better(stats, best[0]):
                 best = (stats, trial)
                 plateau = [best]
             elif self.same(stats, best[0]):
                 plateau.append((stats, trial))
         assert best is not None
+        reference = next((stats for point, stats in timed if point == current), None)
+        if reference is not None and not any(self.better(stats, reference) for _, stats in timed):
+            self.trace.append(
+                f"grid {reads_name} x {bytes_name}: flat, kept {current[0]} reads, "
+                f"{current[1] >> 20} MiB"
+            )
+            return dict(config, **{reads_name: current[0], bytes_name: current[1]})
         chosen = min(
             plateau,
             key=lambda item: (item[1][bytes_name], item[1][reads_name]),
@@ -1185,18 +1228,19 @@ class Searcher:
         return chosen
 
     def run(self, knobs: Iterable[str], grid: tuple[str, str, Iterable[int], Iterable[int]] | None) -> dict[str, int]:
+        """Tunes the knobs in order, then the grid; returns what left the defaults."""
         config: dict[str, int] = {}
-        if grid:
-            config = self.tune_grid(config, *grid)
-            self.searched.update(grid[:2])
         for name in knobs:
             # A constant that only matters when another is on is left alone
-            # while that one is off: its plateau would be the least memory.
+            # while that one is off: it would be flat, with nothing to show.
             parent = KNOB_NEEDS.get(name)
             if parent is not None and config.get(parent, self.defaults.get(parent, 0)) == 0:
                 continue
             config = self.tune_knob(config, name)
             self.searched.add(name)
+        if grid:
+            config = self.tune_grid(config, *grid)
+            self.searched.update(grid[:2])
         self.config = config
         # Only what moved away from the default goes in the profile.
         return {name: value for name, value in config.items() if value != self.defaults.get(name)}
@@ -1313,9 +1357,11 @@ def settle_common(
     GAIN_THRESHOLD slower with it than with the value it found for itself, the
     rest of its configuration kept. The candidates are the values the patterns
     found, and the default. Of those that pass, the one that holds the least
-    memory wins, and the default wins a tie. A configuration the search never
-    timed is timed now, through the results file, so a resumed search does not
-    repeat it. When no candidate passes, the patterns keep their own values.
+    memory wins, and the default wins a tie. A value other than the default
+    must also beat the default for at least one pattern (a flat one is not
+    written). A configuration the search never timed is timed now, through the
+    results file, so a resumed search does not repeat it. When no candidate
+    passes, the patterns keep their own values.
 
     Returns `found` with the common values written into every pattern that
     searched the constant (or removed from it, when the common value is the
@@ -1338,6 +1384,9 @@ def settle_common(
         ordered = sorted(candidates, key=lambda v: (memory_cost(name, v), v != default, v))
         for value in ordered:
             passes = True
+            # A value other than the default is written only if some pattern
+            # gains from it: else it is flat, and the default stands.
+            gains = value == default
             for pattern in users:
                 searcher = searchers[pattern]
                 if pattern not in baseline:
@@ -1346,7 +1395,13 @@ def settle_common(
                 if searcher.regresses(trial, baseline[pattern]):
                     passes = False
                     break
+                if not gains:
+                    unmoved = searcher.runs(dict(working[pattern], **{name: default}), TRIAGE_RUNS)
+                    gains = searcher.better(trial, unmoved)
             if not passes:
+                continue
+            if not gains:
+                log(f"  {name}: {value} is flat, not written")
                 continue
             for pattern in users:
                 working[pattern][name] = value
@@ -1519,6 +1574,16 @@ def self_test(args: argparse.Namespace) -> int:
           f"the search does not make the default worse by more than the threshold "
           f"({start:.2f} s to {got:.2f} s)")
 
+    # 2b. From a start that is far from the optimum, the search still moves.
+    poor = dict(defaults, **{"mft.window_bytes": 64 << 10})
+    poor_search = Searcher(disk, ResultsFile(None), "M1", limits, poor, cost)
+    poor_found = poor_search.run(("mft.window_bytes",), None)
+    poor_got = disk.seconds(dict(poor, **poor_found))
+    poor_start = disk.seconds(poor)
+    check(poor_found.get("mft.window_bytes", 0) > 64 << 10 and poor_got < poor_start * 0.9,
+          f"from a window of 64 KiB the search moves to a faster one ({poor_start:.2f} s to "
+          f"{poor_got:.2f} s, {poor_found})")
+
     # 3. It takes the least memory on a plateau: more bytes in flight than the
     #    disk can use is not chosen.
     check(tuned["reader.max_bytes"] <= defaults["reader.max_bytes"] * 2,
@@ -1548,6 +1613,41 @@ def self_test(args: argparse.Namespace) -> int:
     check(kept["mft.max_gap_slots"] == defaults["mft.max_gap_slots"],
           "a gap that costs no memory keeps its value on a flat plateau "
           f"({kept['mft.max_gap_slots']})")
+
+    # 4b1. A flat constant and a flat grid keep their values and write nothing,
+    #      even when a cheaper value exists.
+    flat_search = Searcher(Flat(), ResultsFile(None), "M1", limits, defaults, cost)
+    flat_found = flat_search.run(
+        ("mft.window_bytes",), ("reader.max_reads", "reader.max_bytes", GRID_READS, GRID_BYTES)
+    )
+    check(flat_found == {}, f"a flat disk writes nothing to the profile ({flat_found})")
+    check(any(line.startswith("mft.window_bytes: flat") for line in flat_search.trace)
+          and any(" flat, kept " in line for line in flat_search.trace if line.startswith("grid")),
+          "a flat constant and a flat grid say so in the trace")
+
+    # 4b1b. An announce knob capped by a small reader cap shows only when the
+    #       grid of the reader's caps comes last.
+    class Capped(Evaluator):
+        """In flight: the least of what is announced, the reader's reads and 8."""
+
+        def measure(self, config, run_index):
+            flight = min(config.get("mft.max_announced_windows", 4),
+                         config.get("reader.max_reads", 32), 8)
+            return 1e9 / flight * (1.1 if config.get("reader.max_reads", 32) >= 32 else 1.0)
+
+    capped_limits = dict(limits, **{"mft.max_announced_windows": (1, 1 << 20)})
+    capped_defaults = dict(defaults, **{"mft.max_announced_windows": 4})
+    grid_args = ("reader.max_reads", "reader.max_bytes", GRID_READS, GRID_BYTES)
+    grid_first = Searcher(Capped(), ResultsFile(None), "M1", capped_limits, capped_defaults)
+    narrowed = grid_first.tune_grid({}, *grid_args)
+    narrowed = grid_first.tune_knob(narrowed, "mft.max_announced_windows")
+    grid_last = Searcher(Capped(), ResultsFile(None), "M1", capped_limits, capped_defaults)
+    last_found = grid_last.run(("mft.max_announced_windows",), grid_args)
+    check(narrowed["mft.max_announced_windows"] == 4
+          and last_found.get("mft.max_announced_windows") == 8,
+          "an announce knob hidden by the grid first is found when the grid comes last "
+          f"({narrowed['mft.max_announced_windows']} against "
+          f"{last_found.get('mft.max_announced_windows')})")
 
     # 4b2. A constant that is off at 0 steps 1, 2, 4 up from 0, and 0 below 1.
     class Staircase(Evaluator):
@@ -1672,7 +1772,11 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--restart", action="store_true", help="ignore the results already there")
     a.set_defaults(handler=audit)
 
-    s = sub.add_parser("search", help="the constant search")
+    s = sub.add_parser(
+        "search",
+        help="the constant search: the knobs of a pattern, then the reader's grid; "
+             "a flat knob is not written",
+    )
     common(s)
     s.add_argument("--volume", required=True)
     s.add_argument("--patterns", default="M1,M2", type=lambda x: x.split(","))
