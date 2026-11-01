@@ -460,7 +460,9 @@ std::vector<ULONGLONG> DirectoryReadAhead<S>::Impl::FetchRecords(
     }
     std::vector<MftRun> runs =
         PlanMftRuns(missing_, probe_.max_gap_bytes / record_size,
-                    probe_.max_run_bytes / record_size);
+                    probe_.max_run_bytes / record_size,
+                    WideGapOf(probe_, volume_->GetMediaKind(), record_size,
+                              S == Cache::Strategy::FullCache));
     // A run that the window keeps is kept whole: the disk reads its clusters
     // anyway.
     if (window_.Enabled()) {

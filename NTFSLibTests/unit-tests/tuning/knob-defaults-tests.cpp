@@ -29,7 +29,7 @@ constexpr std::uint64_t mib = kib * kib;
 
 // The number of knobs: one for each field of Tuning::Settings that the library
 // reads, and the two VolumeOptions fields that are tuned with them.
-constexpr size_t knob_count = 46;
+constexpr size_t knob_count = 48;
 
 struct OldConstant {
   std::string_view name;
@@ -40,7 +40,9 @@ struct OldConstant {
 // each knob. They are written out here and not read from the library, so that
 // a changed default shows as a difference. Two are not old: cache.block_bytes
 // was 64 KiB until the cache took 4 KiB blocks, and cache.max_run_bytes came
-// with that change. walk.record_window_bytes came with the window of $MFT.
+// with that change. walk.record_window_bytes came with the window of $MFT, and
+// the two probe.wide_gap knobs with the wide gap of a hard disk read through
+// FullCache, which nothing else uses.
 constexpr std::array<OldConstant, knob_count> old_constants{{
     {"reader.max_reads", 32},
     {"reader.max_bytes", 64 * mib},
@@ -70,6 +72,8 @@ constexpr std::array<OldConstant, knob_count> old_constants{{
     {"mft.max_load_per_mille", 200},
     {"mft.min_auto_threaded_waiting", 2048},
     {"probe.max_gap_bytes", 64 * kib},
+    {"probe.wide_gap_bytes", mib},
+    {"probe.wide_gap_min_share_per_mille", 10},
     {"probe.max_run_bytes", mib},
     {"probe.max_chunk_records", 128},
     {"probe.max_known_records", std::uint64_t{1} << 18U},
@@ -104,7 +108,7 @@ std::vector<Tuning::Pattern> ServedPatterns(const Tuning::Knob& knob) {
 
 }  // namespace
 
-TEST_CASE("The knob table lists 46 knobs with unique names",
+TEST_CASE("The knob table lists 48 knobs with unique names",
           "[tuning][knobs][invariance]") {
   const std::span<const Tuning::Knob> knobs = Tuning::Knobs();
 
@@ -203,6 +207,8 @@ TEST_CASE("A default Settings holds the old constants in every field",
   CHECK(settings.mft.max_load_per_mille == 200);
   CHECK(settings.mft.min_auto_threaded_waiting == 2048);
   CHECK(settings.probe.max_gap_bytes == 64 * kib);
+  CHECK(settings.probe.wide_gap_bytes == mib);
+  CHECK(settings.probe.wide_gap_min_share_per_mille == 10);
   CHECK(settings.probe.max_run_bytes == mib);
   CHECK(settings.probe.max_chunk_records == 128);
   CHECK(settings.probe.max_known_records == (std::uint64_t{1} << 18U));

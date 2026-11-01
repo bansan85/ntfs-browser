@@ -27,6 +27,7 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -50,15 +51,17 @@ struct RootWalk {
   ULONGLONG longest_probe{0};
 };
 
-RootWalk WalkRoot(const std::vector<BYTE>& image,
-                  const VolumeOptions& options) {
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image));
+template <Cache::Strategy S = Cache::Strategy::NoCache>
+RootWalk WalkRoot(const std::vector<BYTE>& image, const VolumeOptions& options,
+                  Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
+  auto memory = std::make_unique<Tests::MemoryDiskReader>(image);
+  memory->SetMediaKind(kind);
+  auto reader = std::make_unique<Tests::CountingDiskReader>(std::move(memory));
   Tests::CountingDiskReader& reads = *reader;
-  const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
+  const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
 
-  FileRecord<Cache::Strategy::NoCache> root(volume);
+  FileRecord<S> root(volume);
   root.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
@@ -84,11 +87,22 @@ RootWalk WalkRoot(const std::vector<BYTE>& image,
   return walk;
 }
 
+// True when two walks made the same calls, in the same order.
+bool SameCalls(const RootWalk& left, const RootWalk& right) {
+  return std::ranges::equal(
+      left.calls, right.calls, [](const Call& a, const Call& b) {
+        return a.kind == b.kind && a.offset == b.offset && a.length == b.length;
+      });
+}
+
 // The entries a walk of every directory shows, in order, with their standing.
-std::vector<Tests::WalkedEntry> Entries(const std::vector<BYTE>& image,
-                                        const VolumeOptions& options) {
-  const NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<Tests::MemoryDiskReader>(image), options);
+template <Cache::Strategy S = Cache::Strategy::NoCache>
+std::vector<Tests::WalkedEntry>
+    Entries(const std::vector<BYTE>& image, const VolumeOptions& options,
+            Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
+  auto memory = std::make_unique<Tests::MemoryDiskReader>(image);
+  memory->SetMediaKind(kind);
+  const NtfsVolume<S> volume(std::move(memory), options);
   REQUIRE(volume.IsVolumeOK());
   return Tests::WalkVolume(volume, true).entries;
 }
@@ -116,6 +130,66 @@ TEST_CASE("probe.max_gap_bytes sets the hole of $MFT a probe reads across",
   CHECK(apart.longest_probe < base.longest_probe);
   CHECK(Entries(Image(), Tuned({}, {{"probe.max_gap_bytes", 0}})) ==
         Entries(Image(), {}));
+}
+
+TEST_CASE(
+    "The probes read across the wide gap on a hard disk through FullCache",
+    "[tuning][knob-effect][probe]") {
+  constexpr auto full = Cache::Strategy::FullCache;
+  // No narrow gap, and a wide one with no density asked for: a device that
+  // honours it reads fewer, longer runs.
+  const VolumeOptions wide =
+      Tuned({}, {{"probe.max_gap_bytes", 0},
+                 {"probe.wide_gap_bytes", 1024 * 1024},
+                 {"probe.wide_gap_min_share_per_mille", 0}});
+  const RootWalk narrow =
+      WalkRoot<full>(Image(), Tuned({}, {{"probe.max_gap_bytes", 0}}));
+  const RootWalk unknown = WalkRoot<full>(Image(), wide);
+  const RootWalk flash =
+      WalkRoot<full>(Image(), wide, Tuning::MediaKind::SolidState);
+  const RootWalk hard =
+      WalkRoot<full>(Image(), wide, Tuning::MediaKind::Rotational);
+
+  CHECK(SameCalls(unknown, narrow));
+  CHECK(SameCalls(flash, narrow));
+  CHECK_FALSE(SameCalls(hard, narrow));
+  CHECK(hard.probe_reads < narrow.probe_reads);
+  CHECK(hard.longest_probe > narrow.longest_probe);
+  CHECK(Entries<full>(Image(), wide, Tuning::MediaKind::Rotational) ==
+        Entries<full>(Image(), {}));
+}
+
+TEST_CASE("The wide gap of a hard disk keeps the density it was asked for",
+          "[tuning][knob-effect][probe]") {
+  constexpr auto full = Cache::Strategy::FullCache;
+  const auto share = [](std::uint64_t per_mille) {
+    return Tuned({}, {{"probe.max_gap_bytes", 0},
+                      {"probe.wide_gap_bytes", 1024 * 1024},
+                      {"probe.wide_gap_min_share_per_mille", per_mille}});
+  };
+  const RootWalk narrow =
+      WalkRoot<full>(Image(), Tuned({}, {{"probe.max_gap_bytes", 0}}));
+  const RootWalk loose =
+      WalkRoot<full>(Image(), share(0), Tuning::MediaKind::Rotational);
+  // Every slot of a run wanted: no hole is crossed.
+  const RootWalk strict =
+      WalkRoot<full>(Image(), share(1000), Tuning::MediaKind::Rotational);
+
+  CHECK(SameCalls(strict, narrow));
+  CHECK(loose.probe_reads < strict.probe_reads);
+}
+
+TEST_CASE("A NoCache walk never reads across the wide gap",
+          "[tuning][knob-effect][probe]") {
+  const VolumeOptions wide =
+      Tuned({}, {{"probe.max_gap_bytes", 0},
+                 {"probe.wide_gap_bytes", 1024 * 1024},
+                 {"probe.wide_gap_min_share_per_mille", 0}});
+  const RootWalk narrow =
+      WalkRoot(Image(), Tuned({}, {{"probe.max_gap_bytes", 0}}));
+  const RootWalk hard = WalkRoot(Image(), wide, Tuning::MediaKind::Rotational);
+
+  CHECK(SameCalls(hard, narrow));
 }
 
 TEST_CASE("probe.max_run_bytes sets the size of one read of probes",
@@ -161,6 +235,19 @@ TEST_CASE("probe.max_known_records sets the memo of probed records",
   CHECK(forgetful.probe_reads > base.probe_reads);
   CHECK(Entries(Image(), Tuned({}, {{"probe.max_known_records", 1}})) ==
         Entries(Image(), {}));
+}
+
+TEST_CASE("A volume reports the kind of device its reader says",
+          "[tuning][knob-effect][probe]") {
+  for (const Tuning::MediaKind kind :
+       {Tuning::MediaKind::Unknown, Tuning::MediaKind::SolidState,
+        Tuning::MediaKind::Rotational}) {
+    auto memory = std::make_unique<Tests::MemoryDiskReader>(Image());
+    memory->SetMediaKind(kind);
+    const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(memory), {});
+    REQUIRE(volume.IsVolumeOK());
+    CHECK(volume.GetMediaKind() == kind);
+  }
 }
 
 TEST_CASE("The probe knobs leave a walk of FullCache as it was",

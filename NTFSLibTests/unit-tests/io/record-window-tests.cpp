@@ -8,11 +8,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #include "io/mft-runs.h"
 #include "io/record-window.h"
 
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
+namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 
 namespace {
 
@@ -179,4 +181,84 @@ TEST_CASE("Runs of $MFT do not widen below the first readable slot",
   CHECK(widened.at(0).last_slot == 63);
   CHECK(widened.at(1).first_slot == 192);
   CHECK(widened.at(1).last_slot == 255);
+}
+
+TEST_CASE("A wide hole is read across only by a run that stays dense",
+          "[io][mft-runs]") {
+  // Slots 0 to 9 are wanted, then 300 and 310: 290 free slots of hole.
+  std::vector<ULONGLONG> slots;
+  for (ULONGLONG slot = 0; slot < 10; slot++) {
+    slots.push_back(slot);
+  }
+  slots.push_back(300);
+  slots.push_back(310);
+
+  // Narrow holes of 2 slots: the far records are alone.
+  CHECK(Io::PlanMftRuns(slots, 2, 1000).size() == 3);
+  // The hole of 290 slots fits the wide gap, but the 11 slots wanted of 301
+  // are 36 per thousand: under 125. 300 and 310 are two of 11: 181.
+  const Io::WideGap eighth{.gap_slots = 400, .min_share_per_mille = 125};
+  const std::vector<Io::MftRun> apart = Io::PlanMftRuns(slots, 2, 1000, eighth);
+  REQUIRE(apart.size() == 2);
+  CHECK(apart.at(0).last_slot == 9);
+  CHECK(apart.at(1).first_slot == 300);
+  // At 30 per thousand the run is dense enough, and takes 300 and 310 too.
+  const Io::WideGap thin{.gap_slots = 400, .min_share_per_mille = 30};
+  const std::vector<Io::MftRun> joined = Io::PlanMftRuns(slots, 2, 1000, thin);
+  REQUIRE(joined.size() == 1);
+  CHECK(joined.at(0).first_slot == 0);
+  CHECK(joined.at(0).last_slot == 310);
+  CHECK(joined.at(0).end == slots.size());
+}
+
+TEST_CASE("A wide hole crossed stays within the dense share and the run cap",
+          "[io][mft-runs]") {
+  // Every fourth slot: 250 per thousand, holes of 3.
+  std::vector<ULONGLONG> slots;
+  for (ULONGLONG slot = 0; slot < 400; slot += 4) {
+    slots.push_back(slot);
+  }
+  // A hole of 3 is wider than 2: only the wide gap joins the records.
+  CHECK(Io::PlanMftRuns(slots, 2, 1000).size() == slots.size());
+  const Io::WideGap quarter{.gap_slots = 8, .min_share_per_mille = 200};
+  CHECK(Io::PlanMftRuns(slots, 2, 1000, quarter).size() == 1);
+  // A demand above the density of the slots cuts the run where the start has
+  // stopped paying for the rest.
+  const Io::WideGap more{.gap_slots = 8, .min_share_per_mille = 300};
+  const size_t cut = Io::PlanMftRuns(slots, 2, 1000, more).size();
+  CHECK(cut > 1);
+  CHECK(cut < slots.size());
+  // The cap on the run still cuts it: 100 slots span at most.
+  const std::vector<Io::MftRun> capped =
+      Io::PlanMftRuns(slots, 2, 100, quarter);
+  REQUIRE(capped.size() == 4);
+  for (const Io::MftRun& run : capped) {
+    CHECK(run.last_slot - run.first_slot + 1 <= 100);
+  }
+}
+
+TEST_CASE("Only a hard disk read through a cache has a wide gap",
+          "[io][mft-runs]") {
+  const Tuning::ProbeTuning probe;
+  const ULONGLONG record = 1024;
+
+  const Io::WideGap hard =
+      Io::WideGapOf(probe, Tuning::MediaKind::Rotational, record, true);
+  CHECK(hard.gap_slots == probe.wide_gap_bytes / record);
+  CHECK(hard.min_share_per_mille == probe.wide_gap_min_share_per_mille);
+  for (const Tuning::MediaKind kind :
+       {Tuning::MediaKind::Unknown, Tuning::MediaKind::SolidState}) {
+    CHECK(Io::WideGapOf(probe, kind, record, true).gap_slots == 0);
+  }
+  // NoCache keeps nothing, and would read a big directory's runs again.
+  CHECK(Io::WideGapOf(probe, Tuning::MediaKind::Rotational, record, false)
+            .gap_slots == 0);
+  // A wide gap that is not wider than the narrow one is no gap.
+  Tuning::ProbeTuning narrow = probe;
+  narrow.wide_gap_bytes = narrow.max_gap_bytes;
+  CHECK(Io::WideGapOf(narrow, Tuning::MediaKind::Rotational, record, true)
+            .gap_slots == 0);
+  CHECK(
+      Io::WideGapOf(probe, Tuning::MediaKind::Rotational, 0, true).gap_slots ==
+      0);
 }

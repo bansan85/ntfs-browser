@@ -1307,7 +1307,7 @@ class SelfTestTests(unittest.TestCase):
     def test_the_script_reads_the_knob_table_of_ntfsbench(self):
         self.require_bench()
         table = nb.load_knobs(nb.Tools(Path(BENCH_EXE).parent))
-        self.assertEqual(len(table), 46)
+        self.assertEqual(len(table), 48)
         for target in nb.TARGETS.values():
             for name in target.knobs:
                 self.assertIn(name, table, f"{target.pattern} searches {name}")

@@ -122,7 +122,7 @@ T Clamped(std::uint64_t value) noexcept {
         }                                                               \
   }
 
-constexpr std::size_t knob_count = 46;
+constexpr std::size_t knob_count = 48;
 
 const std::array<Knob, knob_count>& Table() {
   static const std::array<Knob, knob_count> table{{
@@ -180,11 +180,17 @@ const std::array<Knob, knob_count>& Table() {
       NTFS_KNOB("mft.min_auto_threaded_waiting", CpuMemory, m2,
                 mft.min_auto_threaded_waiting, 0, huge, no_memory),
 
-      NTFS_KNOB("probe.max_gap_bytes", ReadShape, m2, probe.max_gap_bytes, 0,
-                huge, no_memory),
-      NTFS_KNOB("probe.max_run_bytes", ReadShape, m2, probe.max_run_bytes, 4096,
-                huge, is_bytes),
-      NTFS_KNOB("probe.max_chunk_records", ReadShape, m2,
+      // The records that the read ahead of a recursive listing fetches (M3)
+      // are planned with the same gaps and runs as the probes (M2).
+      NTFS_KNOB("probe.max_gap_bytes", ReadShape, m2 | m3, probe.max_gap_bytes,
+                0, huge, no_memory),
+      NTFS_KNOB("probe.wide_gap_bytes", ReadShape, m2 | m3,
+                probe.wide_gap_bytes, 0, huge, no_memory),
+      NTFS_KNOB("probe.wide_gap_min_share_per_mille", ReadShape, m2 | m3,
+                probe.wide_gap_min_share_per_mille, 0, 1000, no_memory),
+      NTFS_KNOB("probe.max_run_bytes", ReadShape, m2 | m3, probe.max_run_bytes,
+                4096, huge, is_bytes),
+      NTFS_KNOB("probe.max_chunk_records", ReadShape, m2 | m3,
                 probe.max_chunk_records, 1, k1m, per_record),
       NTFS_KNOB("probe.max_known_records", ReadShape, m2,
                 probe.max_known_records, 1, k1g, per_entry),

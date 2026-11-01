@@ -142,6 +142,12 @@ struct MftTuning {
 struct ProbeTuning {
   // B: bytes of $MFT a hole may span between two probed records.
   std::size_t max_gap_bytes{64 * kibibyte};
+  // B: the hole a run MAY cross on a hard disk read through FullCache, where a
+  // seek costs about a megabyte of reading (Io::WideGapOf()).
+  std::size_t wide_gap_bytes{mebibyte};
+  // B: wanted records per thousand slots of a run across such a hole. At 5, a
+  // directory of 3 800 scattered files lists 30 % slower; 10 keeps it even.
+  unsigned wide_gap_min_share_per_mille{10};
   // B: bytes of $MFT one read takes at most.
   std::size_t max_run_bytes{mebibyte};
   // B: records probed per round of announce, read and withdraw.

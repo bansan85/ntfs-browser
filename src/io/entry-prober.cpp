@@ -110,7 +110,9 @@ void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
   std::vector<MftRun> runs;
   if (mapped) {
     runs = PlanMftRuns(to_read, tuning_.max_gap_bytes / record_size,
-                       tuning_.max_run_bytes / record_size);
+                       tuning_.max_run_bytes / record_size,
+                       WideGapOf(tuning_, volume_->GetMediaKind(), record_size,
+                                 S == Cache::Strategy::FullCache));
     // A run that is kept is kept whole: the disk reads its clusters anyway.
     if (store_ != nullptr && store_->keep) {
       runs = WidenToClusters(std::move(runs),

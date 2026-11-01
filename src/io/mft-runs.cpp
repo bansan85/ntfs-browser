@@ -11,18 +11,31 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 
+namespace {
+
+// Thousandths in a whole, the unit of WideGap::min_share_per_mille.
+constexpr ULONGLONG per_mille = 1000;
+
+}  // namespace
+
 std::vector<MftRun> PlanMftRuns(std::span<const ULONGLONG> slots,
                                 ULONGLONG max_gap_slots,
-                                ULONGLONG max_run_slots) {
+                                ULONGLONG max_run_slots, const WideGap& wide) {
   max_run_slots = (std::max<ULONGLONG>)(1, max_run_slots);
   std::vector<MftRun> runs;
   for (size_t index = 0; index < slots.size(); index++) {
     const ULONGLONG slot = slots[index];
     if (!runs.empty()) {
       MftRun& run = runs.back();
-      // The hole between the run and slot is narrow, and the run stays short.
-      if (slot - run.last_slot - 1 <= max_gap_slots &&
-          slot - run.first_slot < max_run_slots) {
+      const ULONGLONG hole = slot - run.last_slot - 1;
+      const ULONGLONG span = slot - run.first_slot + 1;
+      const ULONGLONG wanted = index + 1 - run.begin;
+      // A narrow hole, or a wide one that the run is dense enough to cross,
+      // and the run stays short.
+      if ((hole <= max_gap_slots ||
+           (hole <= wide.gap_slots &&
+            wanted * per_mille >= span * wide.min_share_per_mille)) &&
+          span <= max_run_slots) {
         run.last_slot = slot;
         run.end = index + 1;
         continue;
@@ -34,6 +47,16 @@ std::vector<MftRun> PlanMftRuns(std::span<const ULONGLONG> slots,
                     .last_slot = slot});
   }
   return runs;
+}
+
+WideGap WideGapOf(const Tuning::ProbeTuning& probe, Tuning::MediaKind kind,
+                  ULONGLONG record_size, bool cached) noexcept {
+  if (kind != Tuning::MediaKind::Rotational || !cached || record_size == 0 ||
+      probe.wide_gap_bytes <= probe.max_gap_bytes) {
+    return {};
+  }
+  return {.gap_slots = probe.wide_gap_bytes / record_size,
+          .min_share_per_mille = probe.wide_gap_min_share_per_mille};
 }
 
 std::vector<MftRun> WidenToClusters(std::vector<MftRun> runs,
