@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -24,6 +25,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include "line-buffer.h"
 #include "output.h"
 #include "temp-dir.h"
 
@@ -126,21 +128,28 @@ class StdoutToFile final {
 // A piece of 1000 bytes of the listing.
 std::string Piece(char fill) { return std::string(1000, fill); }
 
+// Writes lines of every kind of text the tools print, from number first up to
+// but not including last, through out: an Output or a LineBuffer.
+template <class Sink>
+void FillListing(Sink& out, int first = 0, int last = 300) {
+  for (int i = first; i < last; i++) {
+    out.PrintLine("{:>6} {:<8} #{}", i, "name", i * 37);
+    out.AppendNumber(static_cast<ULONGLONG>(i) * 1001, 12, '0');
+    out.Append(" ");
+    out.AppendRight("right", 9);
+    out.AppendLeft("left", 7);
+    out.AppendText(L"café \xD83D\xDE00 \xD800 end");
+    out.EndLine();
+  }
+}
+
 // Writes a listing of every kind of text the tools print, through an Output
 // of flush_bytes, to the file at path. Returns what the file holds.
 std::string Listing(const std::filesystem::path& path, size_t flush_bytes) {
   StdoutToFile redirect(path);
   {
     Output out(flush_bytes);
-    for (int i = 0; i < 300; i++) {
-      out.PrintLine("{:>6} {:<8} #{}", i, "name", i * 37);
-      out.AppendNumber(static_cast<ULONGLONG>(i) * 1001, 12, '0');
-      out.Append(" ");
-      out.AppendRight("right", 9);
-      out.AppendLeft("left", 7);
-      out.AppendText(L"café \xD83D\xDE00 \xD800 end");
-      out.EndLine();
-    }
+    FillListing(out);
   }
   redirect.Restore();
   return redirect.Content();
@@ -279,4 +288,51 @@ TEST_CASE("Output flushes what is left when it ends, in any chunk size",
     lines++;
   }
   CHECK(lines == 600);
+}
+
+TEST_CASE("A LineBuffer holds the text that an Output writes",
+          "[device-access][output]") {
+  const Tests::TempDir dir;
+  NtfsDevice::LineBuffer buffer;
+
+  FillListing(buffer);
+
+  CHECK(std::string(buffer.Text()) == Listing(dir.Path() / "out.txt", 0));
+}
+
+TEST_CASE("A LineBuffer forgets its text on Clear and builds on",
+          "[device-access][output]") {
+  NtfsDevice::LineBuffer buffer;
+  FillListing(buffer, 0, 10);
+  const std::string first(buffer.Text());
+  REQUIRE_FALSE(first.empty());
+
+  buffer.Clear();
+  CHECK(buffer.Text().empty());
+  FillListing(buffer, 0, 10);
+
+  CHECK(std::string(buffer.Text()) == first);
+}
+
+TEST_CASE("Output writes text built apart as it writes its own",
+          "[device-access][output]") {
+  const size_t flush_bytes = GENERATE(size_t{1}, size_t{700}, size_t{0});
+  INFO("flush_bytes " << flush_bytes);
+  const Tests::TempDir dir;
+  const std::filesystem::path path = dir.Path() / "out.txt";
+  const std::string whole = Listing(path, 0);
+
+  StdoutToFile redirect(path);
+  {
+    Output out(flush_bytes);
+    // Blocks of 40 lines, built apart.
+    for (int first = 0; first < 300; first += 40) {
+      NtfsDevice::LineBuffer block;
+      FillListing(block, first, (std::min)(first + 40, 300));
+      out.AppendBlock(block.Text());
+    }
+  }
+  redirect.Restore();
+
+  CHECK(redirect.Content() == whole);
 }

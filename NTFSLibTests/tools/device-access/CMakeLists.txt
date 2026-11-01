@@ -19,6 +19,8 @@ add_library(
   "driver-names.cpp"
   "json.h"
   "json.cpp"
+  "line-buffer.h"
+  "line-buffer.cpp"
   "local-time.h"
   "local-time.cpp"
   "output.h"

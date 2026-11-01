@@ -2,18 +2,17 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <array>
-#include <charconv>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdio>
 #include <format>
-#include <iterator>
 #include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <utility>
+
+#include "line-buffer.h"
 
 namespace NtfsDevice {
 
@@ -22,27 +21,15 @@ namespace NtfsDevice {
 // into a few dozen writes.
 inline constexpr size_t output_flush_bytes = size_t{1024} * 1024;
 
-// Digits of the largest ULONGLONG.
-inline constexpr size_t max_decimal_digits = 20;
-
-#ifdef _WIN32
-// The end of a line of a listing. stdout is binary while it is written, so the
-// listing adds the CR the text mode would: that mode converts a few KiB at a
-// time, and each chunk costs a write.
-inline constexpr std::string_view line_end = "\r\n";
-#else
-inline constexpr std::string_view line_end = "\n";
-#endif
-
 // Gathers a listing, and hands it to stdout in big chunks. A chunk ends between
-// two pieces of text, so a console never gets a UTF-8 sequence cut in two. The
-// lines are built by hand: std::format() would cost more than the rest of a
-// line. A thread of its own writes each chunk while the next one is built:
-// writing a big listing costs about as much as building it.
+// two pieces of text, so a console never gets a UTF-8 sequence cut in two. A
+// thread of its own writes each chunk while the next one is built: writing a
+// big listing costs about as much as building it. The text is built as a
+// LineBuffer builds it.
 //
 // While one lives, stdout is binary on Windows and nothing else MAY write to
 // it: the listing goes through this object alone, and ends its own lines.
-class Output {
+class Output : public LineBuffer {
  public:
   // flush_bytes is the size of a chunk, see output_flush_bytes. stream is where
   // the listing goes: stdout, or a file a test reads back. A stream other than
@@ -56,55 +43,33 @@ class Output {
   // Writes what is left, and gives stdout back its mode.
   ~Output();
 
-  // Appends one piece of the listing, formatted as std::format() does.
+  // The pieces that end a line, or may cross the size of a chunk, hand the
+  // chunk to the writer when it is full. The others only gather text.
   template <class... Args>
   void Print(std::format_string<Args...> fmt, Args&&... args) {
-    std::format_to(std::back_inserter(buffer_), fmt,
-                   std::forward<Args>(args)...);
+    LineBuffer::Print(fmt, std::forward<Args>(args)...);
     FlushIfFull();
   }
 
-  // Same, then ends the line.
   template <class... Args>
   void PrintLine(std::format_string<Args...> fmt, Args&&... args) {
-    std::format_to(std::back_inserter(buffer_), fmt,
-                   std::forward<Args>(args)...);
-    EndLine();
+    LineBuffer::PrintLine(fmt, std::forward<Args>(args)...);
+    FlushIfFull();
   }
 
-  void Append(std::string_view text) { buffer_.append(text); }
-
-  // Appends a name or a message, in the encoding WriteText() gives it: UTF-8,
-  // whatever the locale or the code page, so a name never stops at a character
-  // that the code page lacks. An unpaired surrogate is written in its WTF-8
-  // form (see WideToUtf8()). On Windows a line feed in it becomes the CR LF the
-  // text mode made.
-  void AppendText(std::wstring_view text);
-
-  // Appends text right-aligned in width columns, or left-aligned.
-  void AppendRight(std::string_view text, size_t width) {
-    Pad(text.size(), width, ' ');
-    buffer_.append(text);
+  void AppendText(std::wstring_view text) {
+    LineBuffer::AppendText(text);
+    FlushIfFull();
   }
 
-  void AppendLeft(std::string_view text, size_t width) {
-    buffer_.append(text);
-    Pad(text.size(), width, ' ');
-  }
-
-  // Appends value in decimal, right-aligned in width columns filled with fill.
-  void AppendNumber(ULONGLONG value, size_t width, char fill = ' ') {
-    std::array<char, max_decimal_digits> digits{};
-    const char* end =
-        std::to_chars(digits.data(), digits.data() + digits.size(), value).ptr;
-    const auto length = static_cast<size_t>(end - digits.data());
-    Pad(length, width, fill);
-    buffer_.append(digits.data(), length);
-  }
-
-  // Ends the current line.
   void EndLine() {
-    buffer_.append(line_end);
+    LineBuffer::EndLine();
+    FlushIfFull();
+  }
+
+  // Appends text made apart, a whole number of lines of a listing.
+  void AppendBlock(std::string_view text) {
+    buffer_.append(text);
     FlushIfFull();
   }
 
@@ -120,13 +85,6 @@ class Output {
   // Lets the writer finish the chunk it has, then ends it.
   void StopWriter();
 
-  // Appends the fill a text of length characters needs to span width columns.
-  void Pad(size_t length, size_t width, char fill) {
-    if (length < width) {
-      buffer_.append(width - length, fill);
-    }
-  }
-
   void FlushIfFull() {
     if (buffer_.size() >= flush_bytes_) {
       Flush();
@@ -135,7 +93,6 @@ class Output {
 
   size_t flush_bytes_;
   std::FILE* stream_;
-  std::string buffer_;
 #ifdef _WIN32
   // The mode stdout had before, restored once the listing is written. -1 when
   // it could not be changed.
