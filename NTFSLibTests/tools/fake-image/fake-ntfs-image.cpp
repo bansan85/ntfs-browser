@@ -160,7 +160,7 @@ std::vector<BYTE> BuildFakeNtfsImage() {
   const size_t records_end =
       mft_addr + static_cast<size_t>(fake_file_record_size) *
                      (static_cast<size_t>(Mft::Idx::Root) + 1);
-  // FullCache always reads a 64 KiB block regardless of length requested.
+  // FullCache reads whole blocks. 64 KiB covers any block size a test sets.
   constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
   const size_t image_size = std::max(records_end, full_cache_read_block_size);
   std::vector<BYTE> image(image_size, 0);

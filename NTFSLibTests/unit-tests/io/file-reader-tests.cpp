@@ -25,6 +25,7 @@
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #include "catch2/catch_message.hpp"
 #include "counting-disk-reader.h"
@@ -179,8 +180,9 @@ using NTFS_BROWSER_NAMESPACE::Io::FileReader;
 
 namespace {
 
-// Size of one FullCache block.
-constexpr size_t cache_block_size = 65536;
+// Size of one FullCache block: the default of the tuning.
+constexpr size_t cache_block_size =
+    NTFS_BROWSER_NAMESPACE::Tuning::Settings{}.cache.block_bytes;
 
 // How far before a block boundary the straddling reads start, and how long
 // they are.
@@ -195,8 +197,8 @@ constexpr size_t pattern_step_a = 7;
 constexpr size_t pattern_step_b = 3;
 
 // Size of the partial block after the first full one, and the small backing
-// store of the single-block test.
-constexpr size_t tail_size = 4096;
+// store of the single-block test: half a block.
+constexpr size_t tail_size = cache_block_size / 2;
 
 // Offset, in the last block, of the repeated read, and the length of the
 // reads inside it.
@@ -210,7 +212,7 @@ constexpr size_t past_end_before = 256;
 
 TEST_CASE(
     "FileReader<FullCache>::Read must not abort/misbehave on a read "
-    "crossing a 64KiB cache block boundary",
+    "crossing a cache block boundary",
     "[file-reader][regression]") {
   // Each byte distinct from its offset, so returned data can be checked
   // exactly.
@@ -226,7 +228,7 @@ TEST_CASE(
           backing);
   const FileReader<Cache::Strategy::FullCache> reader(std::move(reader_double));
 
-  // Straddles the boundary between the first and second 64KiB cache blocks.
+  // Straddles the boundary between the first and second cache blocks.
   LARGE_INTEGER addr{.QuadPart = cache_block_size - straddle_before};
   constexpr DWORD length_value = straddle_length;
 
@@ -247,7 +249,7 @@ TEST_CASE(
 
 TEST_CASE(
     "FileReader<FullCache>::Read reads a range inside the last partial "
-    "64KiB block of the backing store like NoCache does",
+    "block of the backing store like NoCache does",
     "[file-reader][regression]") {
   constexpr size_t block_value = cache_block_size;
   constexpr size_t tail = tail_size;
@@ -316,7 +318,7 @@ TEST_CASE(
 
 TEST_CASE(
     "FileReader<FullCache>::Read reads from a backing store smaller than "
-    "one 64KiB block",
+    "one block",
     "[file-reader][regression]") {
   std::vector<BYTE> backing(tail_size);
   for (size_t i = 0; i < backing.size(); i++) {
@@ -604,7 +606,7 @@ TEST_CASE("A FullCache FileReader announces only the blocks it lacks",
           "[file-reader]") {
   using NTFS_BROWSER_NAMESPACE::Tests::CountingDiskReader;
   using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
-  constexpr ULONGLONG block = 65536;
+  constexpr ULONGLONG block = cache_block_size;
   constexpr size_t blocks = 4;
 
   auto counting = std::make_unique<CountingDiskReader>(

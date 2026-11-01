@@ -122,7 +122,7 @@ T Clamped(std::uint64_t value) noexcept {
         }                                                               \
   }
 
-constexpr std::size_t knob_count = 44;
+constexpr std::size_t knob_count = 45;
 
 const std::array<Knob, knob_count>& Table() {
   static const std::array<Knob, knob_count> table{{
@@ -196,6 +196,8 @@ const std::array<Knob, knob_count>& Table() {
 
       NTFS_KNOB("cache.block_bytes", ReadShape, m2 | m3, cache.block_bytes,
                 4096, k256m, is_bytes),
+      NTFS_KNOB("cache.max_run_bytes", ReadShape, m2 | m3, cache.max_run_bytes,
+                4096, huge, is_bytes),
       NTFS_OPTION_KNOB("cache.max_bytes", CpuMemory, m2 | m3, max_cache_bytes,
                        0, huge, is_bytes),
       NTFS_OPTION_KNOB("readahead.chunk_bytes", ReadShape, m1, read_ahead_bytes,

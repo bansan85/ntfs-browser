@@ -180,8 +180,8 @@ std::vector<BYTE> BuildFakeNtfsImageReplacingRecord(ULONGLONG idx,
 std::span<BYTE> MftRecordBytes(std::vector<BYTE>& image, ULONGLONG idx);
 
 // Zero-extends image so it ends on a 64 KiB boundary at or past end.
-// FullCache always reads a whole 64 KiB block, so a shorter image fails its
-// last read outright.
+// FullCache reads whole blocks, so a shorter image fails its last read
+// outright. 64 KiB is a multiple of any block size a test sets.
 void PadToFullCacheRead(std::vector<BYTE>& image, size_t end);
 
 // Starts a resident attribute of type at record[offset]: the common header
@@ -215,7 +215,7 @@ void WriteEndOfAttributesMarker(FakeRecord& record, DWORD offset);
 std::vector<WORD> ToUtf16(std::wstring_view text);
 
 // Writes record at byteOffset, growing image to the next 64 KiB boundary -
-// FullCache always reads a whole 64 KiB block, so a short image short-reads.
+// FullCache reads whole blocks, so a short image short-reads.
 void PutRecordAt(std::vector<BYTE>& image, size_t byte_offset,
                  const FakeRecord& record);
 

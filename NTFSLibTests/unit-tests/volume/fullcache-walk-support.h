@@ -16,6 +16,7 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "fake-ntfs-image.h"
@@ -23,11 +24,12 @@
 
 namespace {
 
-// Bytes of one FullCache block.
-constexpr std::uint64_t walk_cache_block = 65536;
+// Bytes of one FullCache block: the default of the tuning.
+constexpr std::uint64_t walk_cache_block =
+    NTFS_BROWSER_NAMESPACE::Tuning::Settings{}.cache.block_bytes;
 
-// Blocks of index data the walk image holds, one cluster each: 2 MiB, so 32
-// cache blocks. Well past the small ceilings the tests set.
+// Blocks of index data the walk image holds, one cluster each: 2 MiB, so 512
+// cache blocks of 4 KiB. Well past the small ceilings the tests set.
 constexpr DWORD walk_index_blocks = 2048;
 
 // The soft ceiling of the "tiny" walks: four cache blocks.

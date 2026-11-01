@@ -135,8 +135,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithIndexBlocks(
                                  static_cast<size_t>(Mft::Idx::Root);
   std::memcpy(&image.at(root_offset), record.data(), record.size());
 
-  // FullCache reads whole 64 KiB blocks, so the image must run past the end
-  // of the last index block.
+  // FullCache reads whole blocks, so the image must run past the end of the
+  // last index block. 64 KiB is a multiple of any block size a test sets.
   constexpr size_t read_block_size = size_t{64} * 1024;
   const size_t blocks_offset = static_cast<size_t>(blocks_lcn) * cluster_size;
   const size_t end =

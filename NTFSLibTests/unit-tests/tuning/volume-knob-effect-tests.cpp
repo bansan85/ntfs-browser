@@ -57,8 +57,8 @@ namespace {
 // The smallest block, bitmap window or read a profile may set.
 constexpr std::uint64_t min_bytes = 4096;
 
-// Bytes of a block of the cache by default.
-constexpr std::uint64_t default_block = 65536;
+// A block of the cache larger than the default: its former size.
+constexpr std::uint64_t large_block = 65536;
 
 // Clusters of the volume whose bitmap spans two windows of 4096 bytes.
 constexpr ULONGLONG two_window_clusters = 65536;
@@ -180,9 +180,9 @@ ULONGLONG ReadAheadBase() {
 TEST_CASE("cache.block_bytes sets the block FullCache reads and holds",
           "[tuning][knob-effect][cache]") {
   const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
-  REQUIRE(image.size() >= default_block);
+  REQUIRE(image.size() >= large_block);
   const std::uint64_t block =
-      GENERATE(min_bytes, std::uint64_t{16384}, default_block);
+      GENERATE(min_bytes, std::uint64_t{16384}, large_block);
   INFO("block " << block);
 
   auto reader = std::make_unique<Tests::CountingDiskReader>(
@@ -216,10 +216,49 @@ TEST_CASE("cache.block_bytes sets the block FullCache reads and holds",
   }
 }
 
+TEST_CASE("cache.max_run_bytes sets the most one read of the cache covers",
+          "[tuning][knob-effect][cache]") {
+  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
+  constexpr std::uint64_t blocks = 8;
+  constexpr std::uint64_t first = 4 * min_bytes;
+  REQUIRE(image.size() >= first + (blocks * min_bytes));
+  const std::uint64_t run = GENERATE(min_bytes, 2 * min_bytes, 3 * min_bytes,
+                                     blocks * min_bytes, 16 * min_bytes);
+  INFO("run " << run);
+
+  auto reader = std::make_unique<Tests::CountingDiskReader>(
+      std::make_unique<Tests::MemoryDiskReader>(image));
+  Tests::CountingDiskReader& reads = *reader;
+  const NtfsVolume<Cache::Strategy::FullCache> volume(
+      std::move(reader), Tuned({}, {{"cache.max_run_bytes", run}}));
+  REQUIRE(volume.IsVolumeOK());
+  volume.MinifyCache();
+  reads.Reset();
+
+  LARGE_INTEGER addr{.QuadPart = static_cast<LONGLONG>(first)};
+  const auto view = volume.Read(addr, static_cast<DWORD>(blocks * min_bytes));
+  REQUIRE(view.has_value());
+
+  // Whole runs from the start of the range, the last one shorter.
+  const std::uint64_t total = blocks * min_bytes;
+  const std::uint64_t most = std::min(run, total);
+  const std::uint64_t reads_expected = (total + most - 1) / most;
+  const std::vector<Call> calls =
+      Select(reads.Calls(), Kind::Read, [](const Call&) { return true; });
+  REQUIRE(calls.size() == reads_expected);
+  std::uint64_t at = first;
+  for (const Call& call : calls) {
+    CHECK(call.offset == at);
+    CHECK(call.length <= most);
+    at += call.length;
+  }
+  CHECK(at == first + total);
+}
+
 TEST_CASE("cache.max_bytes sets the memory FullCache keeps once a view ends",
           "[tuning][knob-effect][cache]") {
   const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
-  const std::uint64_t ceiling = GENERATE(std::uint64_t{0}, default_block);
+  const std::uint64_t ceiling = GENERATE(std::uint64_t{0}, large_block);
 
   const NtfsVolume<Cache::Strategy::FullCache> volume(
       std::make_unique<Tests::MemoryDiskReader>(image),

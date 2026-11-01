@@ -29,7 +29,7 @@ constexpr std::uint64_t mib = kib * kib;
 
 // The number of knobs: one for each field of Tuning::Settings that the library
 // reads, and the two VolumeOptions fields that are tuned with them.
-constexpr size_t knob_count = 44;
+constexpr size_t knob_count = 45;
 
 struct OldConstant {
   std::string_view name;
@@ -38,7 +38,9 @@ struct OldConstant {
 
 // The constants the read path had before Tuning::Settings existed, one for
 // each knob. They are written out here and not read from the library, so that
-// a changed default shows as a difference.
+// a changed default shows as a difference. Two are not old: cache.block_bytes
+// was 64 KiB until the cache took 4 KiB blocks, and cache.max_run_bytes came
+// with that change.
 constexpr std::array<OldConstant, knob_count> old_constants{{
     {"reader.max_reads", 32},
     {"reader.max_bytes", 64 * mib},
@@ -74,7 +76,8 @@ constexpr std::array<OldConstant, knob_count> old_constants{{
     // The read ahead of a recursive listing: no constant before it, and off.
     {"walk.read_ahead_dirs", 0},
     {"walk.read_ahead_bytes", 16 * mib},
-    {"cache.block_bytes", 64 * kib},
+    {"cache.block_bytes", 4 * kib},
+    {"cache.max_run_bytes", mib},
     {"cache.max_bytes", 256 * mib},
     {"readahead.chunk_bytes", 0},
     {"readahead.window_chunks", 2},
@@ -100,7 +103,7 @@ std::vector<Tuning::Pattern> ServedPatterns(const Tuning::Knob& knob) {
 
 }  // namespace
 
-TEST_CASE("The knob table lists 44 knobs with unique names",
+TEST_CASE("The knob table lists 45 knobs with unique names",
           "[tuning][knobs][invariance]") {
   const std::span<const Tuning::Knob> knobs = Tuning::Knobs();
 
@@ -204,7 +207,8 @@ TEST_CASE("A default Settings holds the old constants in every field",
   CHECK(settings.probe.max_known_records == (std::uint64_t{1} << 18U));
   CHECK(settings.walk.read_ahead_dirs == 0);
   CHECK(settings.walk.read_ahead_bytes == 16 * mib);
-  CHECK(settings.cache.block_bytes == 64 * kib);
+  CHECK(settings.cache.block_bytes == 4 * kib);
+  CHECK(settings.cache.max_run_bytes == mib);
   CHECK(settings.alloc.bitmap_window_bytes == mib);
   CHECK(settings.check.max_read_bytes == 4 * mib);
   CHECK(settings.check.max_gap_bytes == 64 * kib);

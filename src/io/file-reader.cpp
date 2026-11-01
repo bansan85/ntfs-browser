@@ -42,11 +42,20 @@ namespace {
 constexpr std::size_t min_block_bytes = 4096;
 
 // Bytes of one block of the cache, from the tuning: Tuning::CacheTuning gives
-// the default, 64 KiB, which amortises the cost of a disk read without holding
-// much more than a cluster run's worth of data.
+// the default, 4 KiB, the size of an index block.
 std::int64_t BlockBytesOf(const Tuning::Settings& tuning) {
   return static_cast<std::int64_t>(
       (std::max)(tuning.cache.block_bytes, min_block_bytes));
+}
+
+// Bytes one disk read covers at most when a read spans missing blocks: the
+// tuning, and never under one block.
+std::int64_t MaxRunBytesOf(const Tuning::Settings& tuning,
+                           std::int64_t block_bytes) {
+  const std::size_t wanted =
+      (std::min)(tuning.cache.max_run_bytes,
+                 static_cast<std::size_t>(std::numeric_limits<DWORD>::max()));
+  return (std::max)(static_cast<std::int64_t>(wanted), block_bytes);
 }
 
 // A BlockCache for FullCache only: NoCache keeps none.
@@ -68,6 +77,7 @@ template <Cache::Strategy S>
 FileReader<S>::FileReader(std::uint64_t max_cache_bytes,
                           const Tuning::Settings& tuning)
     : block_bytes_(BlockBytesOf(tuning)),
+      max_run_bytes_(MaxRunBytesOf(tuning, block_bytes_)),
       reader_caps_(tuning.reader),
       cache_(MakeCache<S>(max_cache_bytes, block_bytes_)) {}
 
@@ -77,6 +87,7 @@ FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader,
                           const Tuning::Settings& tuning)
     : reader_(std::move(reader)),
       block_bytes_(BlockBytesOf(tuning)),
+      max_run_bytes_(MaxRunBytesOf(tuning, block_bytes_)),
       reader_caps_(tuning.reader),
       cache_(MakeCache<S>(max_cache_bytes, block_bytes_)) {}
 
@@ -222,7 +233,7 @@ std::enable_if_t<std::is_same_v<std::integral_constant<Cache::Strategy, Q>,
 
 // Reads exactly "length" bytes at "addr" into a buffer that only the returned
 // view owns, bypassing the block cache. FullCache falls back to it when a
-// whole 64KiB block cannot be read: the block may extend past the end of the
+// whole block cannot be read: the block may extend past the end of the
 // medium. The short block MUST NOT be cached as if it were complete.
 template <Cache::Strategy S>
 std::optional<Cache::View> FileReader<S>::ReadUncached(LARGE_INTEGER addr,
@@ -259,13 +270,81 @@ std::enable_if_t<
     return {};
   }
 
+  // The blocks the range needs, and the run of missing ones that one disk read
+  // brings in. The run is cut into blocks as the copy below reaches them, so a
+  // small ceiling never evicts a block before its use.
+  const auto last_index =
+      static_cast<std::uint64_t>((addr.QuadPart + length - 1) / block_bytes_);
+  const auto max_run_blocks =
+      static_cast<std::uint64_t>(max_run_bytes_ / block_bytes_);
+
+  struct Run {
+    std::uint64_t first{0};
+    std::uint64_t count{0};
+    // Kept from one run to the next of the same read, so that its pages are
+    // faulted in once.
+    std::unique_ptr<BYTE[]> bytes;
+    size_t capacity{0};
+    bool failed{false};
+  } run;
+
+  // Reads the missing blocks from index on with one disk read, at most
+  // max_run_blocks of them and none past the range. False when there is only
+  // one, or when the read failed: the block is then read on its own.
+  const auto read_run = [&](std::uint64_t index,
+                            LARGE_INTEGER block_addr) -> bool {
+    std::uint64_t count = 1;
+    while (count < max_run_blocks && index + count <= last_index &&
+           !cache_->Contains(index + count)) {
+      ++count;
+    }
+    if (count == 1 || run.failed) {
+      return false;
+    }
+    const auto run_size = static_cast<size_t>(count * block_bytes_);
+    if (run.capacity < run_size) {
+      // Grown only when this run is longer than any before it in this read.
+      run.capacity = run_size;
+      run.bytes = std::make_unique_for_overwrite<BYTE[]>(run_size);
+    }
+    if (!ReadFromReader(block_addr, {run.bytes.get(), run_size})) {
+      run.failed = true;
+      return false;
+    }
+    run.first = index;
+    run.count = count;
+    return true;
+  };
+
   // Loads the block at block_addr, or returns the cached one. Null when the
   // disk read fails or comes back short: nothing is cached then.
   const auto get_block =
-      [this](LARGE_INTEGER block_addr) -> std::shared_ptr<Cache::Block> {
-    return cache_->GetOrLoad(
-        static_cast<std::uint64_t>(block_addr.QuadPart / block_bytes_),
-        [&](std::span<BYTE> dest) { return ReadFromReader(block_addr, dest); });
+      [&](LARGE_INTEGER block_addr) -> std::shared_ptr<Cache::Block> {
+    const auto index =
+        static_cast<std::uint64_t>(block_addr.QuadPart / block_bytes_);
+    if (std::shared_ptr<Cache::Block> hit = cache_->Find(index)) {
+      return hit;
+    }
+    if (run.count == 0 || index < run.first || index - run.first >= run.count) {
+      if (!read_run(index, block_addr)) {
+        return cache_->GetOrLoad(index, [&](std::span<BYTE> dest) {
+          return ReadFromReader(block_addr, dest);
+        });
+      }
+    }
+    auto block =
+        std::make_shared<Cache::Block>(static_cast<size_t>(block_bytes_));
+    const std::span<const BYTE> source{
+        run.bytes.get(), static_cast<size_t>(run.count * block_bytes_)};
+    const std::span<const BYTE> part =
+        source.subspan(static_cast<size_t>((index - run.first) * block_bytes_),
+                       static_cast<size_t>(block_bytes_));
+    std::ranges::copy(part, block->bytes.get());
+    cache_->Insert(index, block);
+    if (index - run.first + 1 == run.count) {
+      run.count = 0;
+    }
+    return block;
   };
 
   const bool crosses_block = addr.QuadPart / block_bytes_ !=

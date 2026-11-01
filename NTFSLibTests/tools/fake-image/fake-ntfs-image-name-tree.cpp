@@ -457,7 +457,7 @@ std::vector<BYTE>
                  MakeNodeRecord(nodes[node], plans[node]));
   }
 
-  // FullCache reads whole 64 KiB blocks: the image runs past the last block.
+  // FullCache reads whole blocks: the image runs past the last block.
   PadToFullCacheRead(image, (next_lcn + 1) * fake_cluster_size);
   for (const DirectoryPlan& plan : plans) {
     for (std::size_t block = 0; block < plan.groups.size(); block++) {

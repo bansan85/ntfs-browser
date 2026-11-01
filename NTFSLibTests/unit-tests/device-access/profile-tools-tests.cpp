@@ -51,7 +51,7 @@ constexpr std::string_view tuned_profile = R"({
       "common": {"output.flush_bytes": 4096, "probe.max_chunk_records": 2,
                  "mft.window_bytes": 8192},
       "M1": {"reader.max_reads": 3, "mft.max_gap_slots": 4},
-      "M2": {"reader.max_reads": 8, "cache.block_bytes": 4096}
+      "M2": {"reader.max_reads": 8, "cache.block_bytes": 65536}
     },
     "*": {"common": {"mft.window_bytes": 65536}}
   }
@@ -59,10 +59,10 @@ constexpr std::string_view tuned_profile = R"({
 
 // The settings of tuned_profile, in the order a run applies them.
 const std::vector<std::string> tuned_applied{
-    "output.flush_bytes=4096",  "probe.max_chunk_records=2",
-    "mft.window_bytes=8192",    "reader.max_reads@M1=3",
-    "mft.max_gap_slots@M1=4",   "reader.max_reads@M2=8",
-    "cache.block_bytes@M2=4096"};
+    "output.flush_bytes=4096",   "probe.max_chunk_records=2",
+    "mft.window_bytes=8192",     "reader.max_reads@M1=3",
+    "mft.max_gap_slots@M1=4",    "reader.max_reads@M2=8",
+    "cache.block_bytes@M2=65536"};
 
 std::string ReadText(const std::filesystem::path& path) {
   std::ifstream in(path, std::ios::binary);
@@ -236,7 +236,7 @@ TEST_CASE(
     CHECK(Count(Member(tuning, "probe.max_chunk_records")) == 2);
     CHECK(Count(Member(tuning, "mft.window_bytes")) == 8192);
     CHECK(Count(Member(tuning, "mft.max_gap_slots")) == 4);
-    CHECK(Count(Member(tuning, "cache.block_bytes")) == 4096);
+    CHECK(Count(Member(tuning, "cache.block_bytes")) == 65536);
     const JsonValue& max_reads = Member(tuning, "reader.max_reads");
     CHECK(Count(Member(max_reads, "M1")) == 3);
     CHECK(Count(Member(max_reads, "M2")) == 8);
@@ -246,7 +246,7 @@ TEST_CASE(
           Tuning::FindKnob("mft.window_bytes")->default_value);
 
     // The reads they changed. A smaller window reads $MFT in more pieces; a
-    // smaller block reads the cache in more.
+    // larger block reads the cache in fewer.
     if (!tool.dir) {
       CHECK(RequestedReads(summary) > RequestedReads(plain));
     } else if (tool.name == "NtfsDir") {

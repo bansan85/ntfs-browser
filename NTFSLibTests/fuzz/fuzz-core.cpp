@@ -150,9 +150,9 @@ void PatchBpbSignature(std::span<BYTE> data, const BootSectorPatch& patch) {
 // first index block reads. Later reads mostly repeat those code paths.
 constexpr size_t injected_failure_runs = 16;
 
-// Ceiling of the eviction mode: one 64 KiB FullCache block, the smallest that
+// Ceiling of the eviction mode: one 4 KiB FullCache block, the smallest that
 // still caches. Nearly every read then evicts the block before it.
-constexpr std::uint64_t eviction_ceiling = 65536;
+constexpr std::uint64_t eviction_ceiling = 4096;
 
 // The three VolumeOptions combinations every input is run under: strict (both
 // flags off, the default), fully recovering (both on), and strict under a

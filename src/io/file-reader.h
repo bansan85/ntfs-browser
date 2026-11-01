@@ -120,9 +120,11 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
 
   std::unique_ptr<IDiskReader> reader_;
 
-  // Bytes of one cached block, and the read-ahead caps of the reader Open()
-  // makes. Fixed at construction.
+  // Bytes of one cached block, the most one disk read covers when a read
+  // spans several missing blocks, and the read-ahead caps of the reader
+  // Open() makes. Fixed at construction.
   std::int64_t block_bytes_;
+  std::int64_t max_run_bytes_;
   std::array<Tuning::ReaderTuning, Tuning::pattern_count> reader_caps_;
 
   // Use only for Cache::Strategy::NoCache.

@@ -9,8 +9,9 @@
 
 // The constants of the read path that a caller MAY change at run time, and the
 // read patterns they serve. Every field defaults to the value the library had
-// before the field existed: a default-constructed Settings changes no read, no
-// hint and no log line.
+// before the field existed, but cache.block_bytes (4 KiB, formerly 64 KiB): a
+// default-constructed Settings changes no read, no hint and no log line
+// otherwise.
 //
 // A field belongs to one family:
 //   A (PrefetchDepth): how far ahead the reads are announced or started. It
@@ -153,8 +154,16 @@ struct WalkTuning {
 
 // The block cache of FullCache, and the block FileReader reads.
 struct CacheTuning {
-  // B: bytes of one block read from the disk and cached.
-  std::size_t block_bytes{64 * kibibyte};
+  // B: bytes of one block read from the disk and cached. 4 KiB is the size of
+  // an index block and the least a device reads: a walk reads next to nothing
+  // that it does not use, and the cache holds sixteen times as many blocks for
+  // the same memory. A read that spans blocks reads the missing ones together
+  // (max_run_bytes), so a large read does not pay for the small block.
+  std::size_t block_bytes{4 * kibibyte};
+  // B: bytes one disk read covers at most when a read of the cache spans
+  // several missing blocks. 1 MiB reads a file as fast as 4 MiB does, and is
+  // the window of a bitmap or a journal read. Under one block, one block.
+  std::size_t max_run_bytes{mebibyte};
 };
 
 // The cluster bitmap and the bad cluster list.

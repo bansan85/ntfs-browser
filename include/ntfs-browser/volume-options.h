@@ -64,8 +64,9 @@ struct VolumeOptions {
 
   // The constants of the read path that a caller MAY change: read-ahead depth,
   // block and window sizes, gaps, batches and thread thresholds. Every field
-  // defaults to the value the library always had, so leaving it alone changes
-  // no read. The family B fields change which bytes are read: only an explicit
+  // defaults to the value the library had before the field existed, so leaving
+  // it alone changes no read (the cache block, now 4 KiB, was 64 KiB). The
+  // family B fields change which bytes are read: only an explicit
   // option sets them. See Tuning::Settings. Last member, so designated
   // initialisers that stop before it stay valid.
   Tuning::Settings tuning;

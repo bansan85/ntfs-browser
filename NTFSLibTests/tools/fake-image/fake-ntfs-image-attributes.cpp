@@ -209,7 +209,7 @@ FakeRecord MakeIndexAllocationDirRecord(
 void LayRunBytes(std::vector<BYTE>& image, const std::vector<FakeDataRun>& runs,
                  const std::vector<BYTE>& cluster_bytes) {
   // Grow the image so every real run fits, rounded up to FullCache's whole
-  // 64KiB read block.
+  // read blocks (64 KiB covers any block size a test sets).
   size_t highest_end = image.size();
   for (const FakeDataRun& run : runs) {
     if (run.lcn) {

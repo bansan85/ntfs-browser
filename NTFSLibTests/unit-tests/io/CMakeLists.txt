@@ -11,6 +11,7 @@ target_sources(
     "disk-reader-size-tests.cpp"
     "disk-reader-tests.cpp"
     "extended-path-tests.cpp"
+    "file-reader-run-tests.cpp"
     "file-reader-tests.cpp"
     "file-record-extension-source-tests.cpp"
     "long-host-path-tests.cpp"

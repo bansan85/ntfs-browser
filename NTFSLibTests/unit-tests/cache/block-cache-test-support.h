@@ -13,7 +13,7 @@
 namespace {
 
 // Bytes of one block in the BlockCache tests. Small, so a test counts blocks
-// without caring about the 64 KiB of the real reader.
+// without caring about the block size of the real reader.
 constexpr std::size_t cache_test_block = 16;
 
 // Loads block "index" with a fixed fill and returns it.

@@ -15,6 +15,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #include "io/file-reader.h"
 #include "memory-disk-reader.h"
@@ -26,8 +27,9 @@ using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 
 namespace {
 
-// Bytes of one block of FileReader<FullCache>.
-constexpr std::uint64_t view_block = 65536;
+// Bytes of one block of FileReader<FullCache>: the default of the tuning.
+constexpr std::uint64_t view_block =
+    NTFS_BROWSER_NAMESPACE::Tuning::Settings{}.cache.block_bytes;
 
 // Blocks of the backing store: enough for a read to straddle two of them and
 // to leave a third for the reads that must not disturb it.

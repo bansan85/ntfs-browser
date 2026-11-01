@@ -17,6 +17,7 @@
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #include "io/file-reader.h"
 #include "memory-disk-reader.h"
@@ -27,8 +28,9 @@ using FullReader =
 
 namespace {
 
-// Bytes of one block of FileReader<FullCache>.
-constexpr std::uint64_t ceiling_block = 65536;
+// Bytes of one block of FileReader<FullCache>: the default of the tuning.
+constexpr std::uint64_t ceiling_block =
+    NTFS_BROWSER_NAMESPACE::Tuning::Settings{}.cache.block_bytes;
 
 // Blocks of the backing store.
 constexpr std::size_t ceiling_backing_blocks = 4;

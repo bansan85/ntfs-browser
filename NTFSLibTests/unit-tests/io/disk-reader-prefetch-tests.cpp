@@ -17,6 +17,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/read-ahead-disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #include "counting-disk-reader.h"
 #include "io/file-reader.h"
@@ -33,14 +34,22 @@ namespace {
 // Size of the buffer the wrapped reader holds: four cache blocks.
 constexpr size_t buffer_bytes = size_t{256} * 1024;
 
-// A hint inside the second cache block of 64 KiB, and one across the end of the
-// first block.
+// A hint inside a cache block, and one across the end of a block.
 constexpr ULONGLONG inner_hint_offset = 70000;
 constexpr ULONGLONG inner_hint_length = 1000;
 constexpr ULONGLONG straddling_hint_offset = 65000;
 
-// The cache block of FullCache.
-constexpr ULONGLONG block_bytes = ULONGLONG{64} * 1024;
+// The cache block of FullCache: the default of the tuning.
+constexpr ULONGLONG block_bytes =
+    NTFS_BROWSER_NAMESPACE::Tuning::Settings{}.cache.block_bytes;
+
+// The whole blocks that hold [offset, offset + length).
+std::pair<ULONGLONG, ULONGLONG> Widened(ULONGLONG offset, ULONGLONG length) {
+  const ULONGLONG first = offset - (offset % block_bytes);
+  const ULONGLONG end =
+      ((offset + length + block_bytes - 1) / block_bytes) * block_bytes;
+  return {first, end - first};
+}
 
 // A CountingDiskReader over a zeroed buffer, and a pointer to it.
 struct Counted {
@@ -169,8 +178,12 @@ TEST_CASE("FileReader<FullCache> widens a prefetch hint to its cache blocks",
 
   const auto& calls = counting->Calls();
   REQUIRE(calls.size() == 2);
-  CHECK(IsHint(calls.at(0), block_bytes, block_bytes));
-  CHECK(IsHint(calls.at(1), 0, 2 * block_bytes));
+  const auto inner = Widened(inner_hint_offset, inner_hint_length);
+  const auto straddling = Widened(straddling_hint_offset, inner_hint_length);
+  // The straddling hint spans two blocks.
+  CHECK(straddling.second == 2 * block_bytes);
+  CHECK(IsHint(calls.at(0), inner.first, inner.second));
+  CHECK(IsHint(calls.at(1), straddling.first, straddling.second));
 }
 
 TEMPLATE_TEST_CASE_SIG("A FileReader with no reader ignores prefetch hints",
