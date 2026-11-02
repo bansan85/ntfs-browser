@@ -64,6 +64,9 @@ constexpr std::uint32_t per_large_block = 4U << 20U;
 // A count of directories read ahead: a record of 1 KiB and one or two index
 // blocks of 4 KiB, the usual size of a directory that has any.
 constexpr std::uint32_t per_directory = 8192;
+// A count of probe runs announced ahead: the buffer of a run of a few records
+// of $MFT, about 16 KiB.
+constexpr std::uint32_t per_probe_run = 16384;
 // A count of threads: the stack and the buffers of a parse thread, about 1 MiB.
 constexpr std::uint32_t per_thread = 1U << 20U;
 
@@ -122,7 +125,7 @@ T Clamped(std::uint64_t value) noexcept {
         }                                                               \
   }
 
-constexpr std::size_t knob_count = 49;
+constexpr std::size_t knob_count = 51;
 
 const std::array<Knob, knob_count>& Table() {
   static const std::array<Knob, knob_count> table{{
@@ -203,6 +206,10 @@ const std::array<Knob, knob_count>& Table() {
                 walk.record_window_bytes, 0, k1g, is_bytes),
       NTFS_KNOB("walk.record_memo_entries", ReadShape, m3,
                 walk.record_memo_entries, 0, k1m * 4, per_entry),
+      NTFS_KNOB("walk.read_ahead_runs", PrefetchDepth, m3, walk.read_ahead_runs,
+                0, 4096, per_probe_run),
+      NTFS_KNOB("walk.read_ahead_runs_rotational", PrefetchDepth, m3,
+                walk.read_ahead_runs_rotational, 0, 4096, per_probe_run),
 
       NTFS_KNOB("cache.block_bytes", ReadShape, m2 | m3, cache.block_bytes,
                 4096, k256m, is_bytes),

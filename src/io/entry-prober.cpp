@@ -13,7 +13,6 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tuning/tuning.h>
@@ -23,14 +22,6 @@
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
-
-namespace {
-
-// First slot of $MFT that is read through $MFT's extents: below it, a record
-// has a fixed address and is probed alone.
-constexpr ULONGLONG first_mapped_slot = static_cast<ULONGLONG>(Mft::Idx::User);
-
-}  // namespace
 
 template <Cache::Strategy S>
 EntryProber<S>::EntryProber(const NtfsVolume<S>& volume,
@@ -82,57 +73,34 @@ NamedState EntryProber<S>::Take(ULONGLONG record) {
 template <Cache::Strategy S>
 void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
   const DWORD record_size = volume_->GetFileRecordSize();
-  const bool mapped = record_size != 0 && volume_->HasMftBase();
-
-  // The records below first_mapped_slot sort first.
-  size_t first_run_record = 0;
-  while (first_run_record < chunk.size() &&
-         (!mapped || chunk[first_run_record] < first_mapped_slot)) {
-    first_run_record++;
-  }
+  const bool keeps = store_ != nullptr && store_->keep;
+  const ProbeRunRules rules = ProbeRunRulesOf(*volume_, keeps);
 
   // The records that the store gives are probed from its bytes, and the others
   // are read.
-  std::span<const ULONGLONG> to_read = chunk.subspan(first_run_record);
-  if (mapped && store_ != nullptr && store_->find) {
-    missing_.clear();
-    for (const ULONGLONG record : to_read) {
-      const std::span<const BYTE> held = store_->find(record);
-      if (held.size() == record_size) {
-        ProbeOne(record, held);
-      } else {
-        missing_.push_back(record);
-      }
-    }
-    to_read = missing_;
-  }
+  const HeldRecordSource none;
+  const ProbeRunPlan plan =
+      PlanProbeRuns(chunk, rules, store_ != nullptr ? store_->find : none,
+                    [this](ULONGLONG record, std::span<const BYTE> held) {
+                      ProbeOne(record, held);
+                    });
+  const std::span<const ULONGLONG> to_read = plan.to_read;
 
-  std::vector<MftRun> runs;
-  if (mapped) {
-    runs = PlanMftRuns(to_read, tuning_.max_gap_bytes / record_size,
-                       tuning_.max_run_bytes / record_size,
-                       WideGapOf(tuning_, volume_->GetMediaKind(), record_size,
-                                 S == Cache::Strategy::FullCache));
-    // A run that is kept is kept whole: the disk reads its clusters anyway.
-    if (store_ != nullptr && store_->keep) {
-      runs = WidenToClusters(std::move(runs),
-                             volume_->GetClusterSize() / record_size,
-                             first_mapped_slot);
-    }
+  if (rules.mapped) {
     // A forged slot makes the announcement log: the read of the record logs
     // it, at the entry.
     read_log_.Reset(levels_);
     const Log::Detail::CaptureScope scope(read_log_);
-    for (const MftRun& run : runs) {
+    for (const MftRun& run : plan.runs) {
       volume_->PrefetchMftSlots(run.first_slot,
                                 run.last_slot - run.first_slot + 1);
     }
   }
 
-  for (size_t index = 0; index < first_run_record; index++) {
+  for (size_t index = 0; index < plan.alone; index++) {
     ProbeOne(chunk[index], {});
   }
-  for (const MftRun& run : runs) {
+  for (const MftRun& run : plan.runs) {
     run_bytes_.resize(gsl::narrow<size_t>(run.last_slot - run.first_slot + 1) *
                       record_size);
     bool read = false;
@@ -142,7 +110,7 @@ void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
       const Bench::Detail::KindScope kind(Bench::ReadKind::ProbeRun);
       read = volume_->ReadMftSlots(run.first_slot, run_bytes_);
     }
-    if (read && store_ != nullptr && store_->keep) {
+    if (read && keeps) {
       store_->keep(run.first_slot, run_bytes_);
     }
     for (size_t index = run.begin; index < run.end; index++) {
@@ -153,10 +121,13 @@ void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
           read ? std::span<const BYTE>(run_bytes_).subspan(offset, record_size)
                : std::span<const BYTE>());
     }
+    if (store_ != nullptr && store_->ran) {
+      store_->ran(run.first_slot, run.last_slot - run.first_slot + 1);
+    }
   }
 
   // What nothing read, such as a block the cache already held, is withdrawn.
-  if (!runs.empty()) {
+  if (!plan.runs.empty()) {
     volume_->CancelPrefetch();
   }
 }

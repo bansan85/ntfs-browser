@@ -88,6 +88,9 @@ class ThrottledDiskReader final : public IDiskReader {
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
                               std::span<BYTE> dest) const override;
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
+  // Passes the question on: the simulated disk is of the kind the wrapped
+  // reader says.
+  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
   void CancelPrefetch() const override;
   void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;

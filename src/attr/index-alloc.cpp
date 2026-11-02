@@ -155,17 +155,9 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
   const std::span<BYTE> block =
       ib_class.AllocIndexBlock(this->GetIndexBlockSize());
 
-  // The caller may hold the bytes the read would return.
-  bool read = false;
-  if (block_source_) {
-    const std::span<const BYTE> held = block_source_(source_directory_, vcn);
-    if (held.size() == block.size()) {
-      std::ranges::copy(held, block.begin());
-      read = true;
-    }
-  }
-  // Read one Index Block
-  if (!read && !ReadBlockBytes(*byte_offset, block)) {
+  // The caller may hold the bytes the read would return, else read one Index
+  // Block.
+  if (!CopyHeldBlock(vcn, block) && !ReadBlockBytes(*byte_offset, block)) {
     return false;
   }
 
@@ -173,6 +165,37 @@ bool AttrIndexAlloc<S>::ParseIndexBlock(const ULONGLONG& vcn,
     return false;
   }
   return ParseIndexEntries(block, ib_class);
+}
+
+template <Cache::Strategy S>
+bool AttrIndexAlloc<S>::ParseHeldIndexBlock(const ULONGLONG& vcn,
+                                            IndexBlock& ib_class) {
+  if (!block_source_) {
+    return false;
+  }
+  const std::span<BYTE> block =
+      ib_class.AllocIndexBlock(this->GetIndexBlockSize());
+  if (!CopyHeldBlock(vcn, block) || !BlockOffset(vcn)) {
+    return false;
+  }
+  if (!FixupIndexBlock(block)) {
+    return false;
+  }
+  return ParseIndexEntries(block, ib_class);
+}
+
+template <Cache::Strategy S>
+bool AttrIndexAlloc<S>::CopyHeldBlock(const ULONGLONG& vcn,
+                                      std::span<BYTE> block) const {
+  if (!block_source_) {
+    return false;
+  }
+  const std::span<const BYTE> held = block_source_(source_directory_, vcn);
+  if (held.size() != block.size()) {
+    return false;
+  }
+  std::ranges::copy(held, block.begin());
+  return true;
 }
 
 // Checks the block's magic and update sequence array, then writes each

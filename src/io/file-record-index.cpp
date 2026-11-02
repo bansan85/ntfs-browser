@@ -160,6 +160,20 @@ void ProbeNode(const std::vector<IndexEntryView>& entries,
   target.prober->ProbeGroup(records);
 }
 
+// The records that the entries of one index node name: what ProbeNode() hands
+// to the prober, without an owner. Empty when no entry names one.
+std::vector<ULONGLONG>
+    NamedRecordsOf(const std::vector<IndexEntryView>& entries) {
+  std::vector<ULONGLONG> records;
+  records.reserve(entries.size());
+  for (const IndexEntryView& entry : entries) {
+    if (entry.HasName()) {
+      records.push_back(entry.GetFileReference());
+    }
+  }
+  return records;
+}
+
 // What the slack pass has found so far in one directory.
 struct SlackFindings {
   // Names of the entries in the used part of the root and of every block.
@@ -650,6 +664,78 @@ void Io::DirectoryIndex<S>::TraverseSubNode(
       Deliver(index_entry, target);
     }
   }
+}
+
+// Walks the held part of the B+ tree under the block at vcn as
+// TraverseSubNode() does, and adds the records each node names to groups, a
+// node before its children. A block the source does not hold, or that does not
+// parse, stops the descent.
+template <Cache::Strategy S>
+// The depth limit and the visited-VCN set bound the recursion.
+// NOLINTNEXTLINE(misc-no-recursion)
+void Io::DirectoryIndex<S>::CollectProbeGroups(
+    ULONGLONG vcn, std::unordered_set<ULONGLONG>& visited_vcns, size_t depth,
+    std::vector<std::vector<ULONGLONG>>& groups) const {
+  if (depth >= max_index_block_depth || !visited_vcns.insert(vcn).second) {
+    return;
+  }
+
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
+      record_.GetAttr(Attr::Type::IndexAllocation);
+  Attr::IndexBlock index_block;
+  if (vec.empty() || !static_cast<Attr::AttrIndexAlloc<S>*>(vec.front().get())
+                          ->ParseHeldIndexBlock(vcn, index_block)) {
+    return;
+  }
+
+  std::vector<ULONGLONG> records = NamedRecordsOf(index_block);
+  if (!records.empty()) {
+    groups.push_back(std::move(records));
+  }
+  for (const IndexEntryView& index_entry : index_block) {
+    if (index_entry.IsSubNodePtr()) {
+      CollectProbeGroups(index_entry.GetSubNodeVCN(), visited_vcns, depth + 1,
+                         groups);
+    }
+  }
+}
+
+template <Cache::Strategy S>
+std::vector<std::vector<ULONGLONG>>
+    Io::DirectoryIndex<S>::HeldProbeGroups() const {
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& roots =
+      record_.GetAttr(Attr::Type::IndexRoot);
+  if (roots.empty()) {
+    return {};
+  }
+  const std::vector<IndexEntryView>* root_entries =
+      FileNameIndexRootEntries(*roots.front());
+  if (root_entries == nullptr) {
+    return {};
+  }
+
+  // The parse of a held block logs when the block is damaged, and counts what
+  // it salvages: the walk does both when it reaches the block.
+  Log::Detail::CapturedLog discarded;
+  discarded.Reset(0);
+  const Log::Detail::CapturedLog::Mark before = discarded.End();
+  std::vector<std::vector<ULONGLONG>> groups;
+  {
+    const Log::Detail::CaptureScope scope(discarded);
+    std::vector<ULONGLONG> records = NamedRecordsOf(*root_entries);
+    if (!records.empty()) {
+      groups.push_back(std::move(records));
+    }
+    std::unordered_set<ULONGLONG> visited_vcns;
+    for (const IndexEntryView& index_entry : *root_entries) {
+      if (index_entry.IsSubNodePtr()) {
+        CollectProbeGroups(index_entry.GetSubNodeVCN(), visited_vcns, 0,
+                           groups);
+      }
+    }
+  }
+  Log::Detail::ForgetRecoveredSince(before);
+  return groups;
 }
 
 // Works out how the orphan scan walks alloc: the VCN step per block, and how

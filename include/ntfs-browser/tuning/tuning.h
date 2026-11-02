@@ -10,9 +10,9 @@
 // The constants of the read path that a caller MAY change at run time, and the
 // read patterns they serve. Every field defaults to the value the library had
 // before the field existed, but cache.block_bytes (4 KiB, formerly 64 KiB),
-// walk.read_ahead_dirs (64, formerly 0), walk.record_window_bytes (4 MiB, new)
-// and walk.record_memo_entries (65 536, new): a default-constructed Settings
-// changes no read, no hint and no log line otherwise.
+// walk.read_ahead_dirs (64, formerly 0), walk.record_window_bytes (4 MiB, new),
+// walk.record_memo_entries (65 536, new) and walk.read_ahead_runs (64, new): a
+// default-constructed Settings changes no read and no log line otherwise.
 //
 // A field belongs to one family:
 //   A (PrefetchDepth): how far ahead the reads are announced or started. It
@@ -182,6 +182,20 @@ struct WalkTuning {
   // has dropped by the time a later directory asks for them. The table is
   // committed as it fills, and 65 536 entries cost 2 MiB at most. 0 keeps none.
   std::uint64_t record_memo_entries{65536};
+  // A: probe runs of $MFT that the read ahead keeps announced on the reader's
+  // standing lane, at most: the reads that the probes of the held directories
+  // will make, the rest of the directory being listed first, then the held
+  // directories of the stack from the top down. A run that leaves them stays
+  // announced while it is among the next read_ahead_runs. A hint only: it
+  // never changes a byte read. 16, 32, 64 and 128 gained the same on
+  // c:\Windows\System32 -r (13 to 14 %); 64 holds some more memory than 32.
+  // 0 is off, and so is read_ahead_bytes at 0. A device that says it is
+  // rotational takes read_ahead_runs_rotational instead.
+  std::size_t read_ahead_runs{64};
+  // A: the same for a device that says it is rotational. 0, the lane off: on a
+  // hard disk the index blocks wait behind the probes announced far ahead,
+  // and the replay of e:\Qt\6.12.0 -r lost 1 to 7 %.
+  std::size_t read_ahead_runs_rotational{0};
 };
 
 // The block cache of FullCache, and the block FileReader reads.

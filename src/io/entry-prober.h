@@ -84,8 +84,8 @@ class EntryProber {
     Log::Detail::CapturedLog::Mark after;
   };
 
-  // Probes the sorted, distinct records of chunk: announces the reads, then
-  // makes them.
+  // Probes the sorted, distinct records of chunk: plans the reads
+  // (PlanProbeRuns()), announces them, then makes them.
   void ProbeChunk(std::span<const ULONGLONG> chunk);
 
   // Probes one record into the memo. bytes is the record as $MFT holds it, or
@@ -108,8 +108,6 @@ class EntryProber {
   Log::Detail::CapturedLog read_log_;
   // The distinct records of the group still to probe.
   std::vector<ULONGLONG> pending_;
-  // The records of a chunk that the store did not give.
-  std::vector<ULONGLONG> missing_;
   // The bytes of the run being probed.
   std::vector<BYTE> run_bytes_;
 };

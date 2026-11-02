@@ -508,3 +508,35 @@ TEST_CASE("A refusal comes before the knobs after it are applied",
         Tuning::FindKnob("mft.max_run_slots")->default_value);
   CHECK(result.applied.profile_loaded);
 }
+
+TEST_CASE("The counts of runs of the standing lane load from a profile",
+          "[device-access][apply-tuning]") {
+  const Profile profile(R"({"format": 1, "disks": {"*": {
+      "M3": {"walk.read_ahead_runs": 16,
+             "walk.read_ahead_runs_rotational": 4}}}})",
+                        "any");
+
+  const Applied result = profile.Run();
+
+  REQUIRE(result.failure.empty());
+  CHECK(result.options.tuning.walk.read_ahead_runs == 16);
+  CHECK(result.options.tuning.walk.read_ahead_runs_rotational == 4);
+  // The other constants of the walk keep their default.
+  CHECK(result.options.tuning.walk.read_ahead_dirs == 64);
+}
+
+TEST_CASE(
+    "A profile refuses the counts of runs of the standing lane out of "
+    "bounds or for another pattern",
+    "[device-access][apply-tuning]") {
+  const Profile too_many(
+      R"({"format": 1, "disks": {"*": {"M3": {"walk.read_ahead_runs": 4097}}}})",
+      "any");
+  CHECK_THAT(too_many.Failure(), ContainsSubstring("walk.read_ahead_runs"));
+
+  const Profile wrong_pattern(
+      R"({"format": 1, "disks": {"*": {"M1": {"walk.read_ahead_runs_rotational": 4}}}})",
+      "any");
+  CHECK_THAT(wrong_pattern.Failure(),
+             ContainsSubstring("does not serve pattern M1"));
+}

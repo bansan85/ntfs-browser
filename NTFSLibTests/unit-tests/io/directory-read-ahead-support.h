@@ -10,6 +10,7 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "counting-disk-reader.h"
@@ -28,6 +29,13 @@ struct TreeFixture {
 
 // Many sibling directories, each with files and one subdirectory.
 [[nodiscard]] std::vector<FakeTreeNode> WideTree(std::size_t directories);
+
+// Sibling directories of files files each, none of them a directory, then
+// ballast freed records that no index names: a directory, its files and its
+// ballast take files + ballast + 1 records one after the other.
+[[nodiscard]] std::vector<FakeTreeNode> SpacedTree(std::size_t directories,
+                                                   std::size_t files,
+                                                   std::size_t ballast = 0);
 
 // Groups of directories under the root, each group holding per_group small
 // directories with one file each: many small directories, with an index of the
@@ -68,15 +76,18 @@ struct Run {
   // The calls the listing made on the reader, after the volume was open.
   std::vector<CountingDiskReader::Call> calls;
   int exit_code{0};
+  // The conditions the listing salvaged: RecoveredCount() over it.
+  std::uint64_t recovered{0};
 };
 
 // Lists the whole volume of image, recursively, with the options and the read
 // ahead of dirs directories (0 is off) and bytes bytes at most. The reader is
-// in memory.
+// in memory, and says it is a device of the given kind.
 template <Cache::Strategy S>
-[[nodiscard]] Run ListRecursively(const std::vector<BYTE>& image,
-                                  VolumeOptions options, std::size_t dirs,
-                                  std::uint64_t bytes);
+[[nodiscard]] Run
+    ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
+                    std::size_t dirs, std::uint64_t bytes,
+                    Tuning::MediaKind kind = Tuning::MediaKind::Unknown);
 
 // The same with the walk tuning of options left as it is: what NtfsDir does
 // when it is given no tuning.
@@ -96,7 +107,8 @@ template <Cache::Strategy S>
 [[nodiscard]] TimedRun
     ListOnSimulatedDisk(const std::vector<BYTE>& image, VolumeOptions options,
                         std::size_t dirs, std::uint64_t bytes,
-                        const DiskModel& model);
+                        const DiskModel& model,
+                        Tuning::MediaKind kind = Tuning::MediaKind::Unknown);
 
 // A hard disk: a long seek, one lane, as NtfsBench simulates it.
 [[nodiscard]] DiskModel HardDiskModel();

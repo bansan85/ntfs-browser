@@ -590,6 +590,30 @@ class OffAtZeroSearchTests(unittest.TestCase):
         self.assertIn("cache.block_bytes", knobs)
         self.assertEqual(nb.KNOB_NEEDS["walk.read_ahead_bytes"], "walk.read_ahead_dirs")
 
+    def test_the_m3_target_searches_the_counts_of_runs_of_the_standing_lane(self):
+        knobs = nb.TARGETS["M3"].knobs
+        self.assertEqual(knobs.index("walk.read_ahead_runs"), 2)
+        self.assertIn("walk.read_ahead_runs_rotational", knobs)
+        for name in ("walk.read_ahead_runs", "walk.read_ahead_runs_rotational"):
+            self.assertEqual(nb.KNOB_NEEDS[name], "walk.read_ahead_dirs")
+
+    def test_a_disk_is_searched_with_the_count_of_runs_that_serves_it(self):
+        knobs = nb.TARGETS["M3"].knobs
+        solid = nb.knobs_for_disk(knobs, True)
+        self.assertIn("walk.read_ahead_runs", solid)
+        self.assertNotIn("walk.read_ahead_runs_rotational", solid)
+        rotational = nb.knobs_for_disk(knobs, False)
+        self.assertNotIn("walk.read_ahead_runs", rotational)
+        self.assertIn("walk.read_ahead_runs_rotational", rotational)
+        # An image has no disk: the library takes the count for any other kind.
+        unknown = nb.knobs_for_disk(knobs, None)
+        self.assertIn("walk.read_ahead_runs", unknown)
+        self.assertNotIn("walk.read_ahead_runs_rotational", unknown)
+        self.assertEqual(
+            [name for name in solid if not name.startswith("walk.read_ahead_runs")],
+            [name for name in rotational if not name.startswith("walk.read_ahead_runs")],
+        )
+
     def test_the_m3_scenario_lists_a_subtree_recursively(self):
         target = nb.target_of("M3", "Windows\System32")
         self.assertEqual(target.scenario.args, ("-r",))
@@ -1405,7 +1429,7 @@ class SelfTestTests(unittest.TestCase):
     def test_the_script_reads_the_knob_table_of_ntfsbench(self):
         self.require_bench()
         table = nb.load_knobs(nb.Tools(Path(BENCH_EXE).parent))
-        self.assertEqual(len(table), 49)
+        self.assertEqual(len(table), 51)
         for target in nb.TARGETS.values():
             for name in target.knobs:
                 self.assertIn(name, table, f"{target.pattern} searches {name}")

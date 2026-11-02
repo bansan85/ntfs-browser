@@ -3,6 +3,8 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -10,6 +12,19 @@
 #include <ntfs-browser/tuning/tuning.h>
 
 #include "internal-export.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 
@@ -65,5 +80,63 @@ struct WideGap {
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::vector<MftRun>
     WidenToClusters(std::vector<MftRun> runs, ULONGLONG slots_per_cluster,
                     ULONGLONG first_readable_slot);
+
+// What decides the reads of $MFT that the probes of a chunk of records make.
+// EntryProber reads exactly the runs that PlanProbeRuns() plans from it, and
+// whoever announces those reads ahead MUST plan them from the same rules.
+struct ProbeRunRules {
+  // Whether $MFT is readable through its extents. When it is not, nothing is
+  // read in runs and each record is probed alone.
+  bool mapped{false};
+  // Size of a file record in bytes.
+  ULONGLONG record_size{0};
+  // The narrow hole, and the longest run, in slots.
+  ULONGLONG max_gap_slots{0};
+  ULONGLONG max_run_slots{0};
+  WideGap wide;
+  // Slots in a cluster of $MFT when a run that is kept widens to whole
+  // clusters. Under 2: the runs stay as planned.
+  ULONGLONG slots_per_cluster{0};
+  // First slot that is read through $MFT's extents: below it, a record has a
+  // fixed address and is probed alone.
+  ULONGLONG first_mapped_slot{0};
+};
+
+// The rules of the probes of volume. keeps is whether something keeps the runs
+// the probes read (a ProbeStore with a `keep`): a run that is kept is widened
+// to whole clusters.
+template <Cache::Strategy S>
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY ProbeRunRules
+    ProbeRunRulesOf(const NtfsVolume<S>& volume, bool keeps);
+
+// What PlanProbeRuns() decided for one chunk of records.
+struct ProbeRunPlan {
+  // How many records of the chunk, the first ones, are probed alone: those
+  // below the first mapped slot, and all of them when $MFT is not mapped.
+  size_t alone{0};
+  // The records of the chunk that no held copy serves, in slot order. A run
+  // serves them, as indices of this list.
+  std::vector<ULONGLONG> to_read;
+  // The reads of $MFT, in the order they are made.
+  std::vector<MftRun> runs;
+};
+
+// The bytes of a record that something holds, empty when it holds none.
+using HeldRecordSource = std::function<std::span<const BYTE>(ULONGLONG record)>;
+
+// What takes a held record: its number, and its bytes, valid for the call.
+using HeldRecordSink =
+    std::function<void(ULONGLONG record, std::span<const BYTE> bytes)>;
+
+// Plans the reads that the probes of chunk make: sorted, distinct record
+// numbers. A record that find gives, in exactly one record size, is held:
+// held takes it (it MAY be empty) and no run reads it. find is asked once for
+// each record from the first mapped slot on, in order, and not at all when
+// $MFT is not mapped or find is empty. The others are read in runs: narrow and
+// wide holes, then widened to clusters when rules asks. Reads, logs and
+// announces nothing.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY ProbeRunPlan
+    PlanProbeRuns(std::span<const ULONGLONG> chunk, const ProbeRunRules& rules,
+                  const HeldRecordSource& find, const HeldRecordSink& held);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

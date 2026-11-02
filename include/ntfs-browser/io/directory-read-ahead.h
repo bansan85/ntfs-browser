@@ -44,6 +44,17 @@ struct DirectoryReadAheadStats {
   // Batches made: each reads the records of the planned directories, then
   // their blocks.
   std::uint64_t batches{0};
+  // Probe runs of $MFT that the held directories will make, as planned: the
+  // standing lane's queue. Runs announced on the lane, and runs withdrawn from
+  // it before the listing read them. Runs the listing read, as planned. Runs
+  // it read that no plan named. Runs not announced because the record window
+  // already held every record of them.
+  std::uint64_t runs_planned{0};
+  std::uint64_t runs_announced{0};
+  std::uint64_t runs_withdrawn{0};
+  std::uint64_t runs_read{0};
+  std::uint64_t runs_unplanned{0};
+  std::uint64_t runs_window_held{0};
 };
 
 // Reads ahead the directories that a recursive listing will enter next, so that
@@ -84,6 +95,24 @@ struct DirectoryReadAheadStats {
 // than the window holds, the few bytes of a record that a probe reads
 // (Tuning::WalkTuning::record_memo_entries): the neighbours of a probed record
 // come back long after the window dropped them.
+//
+// The probes of a directory read a few runs of $MFT, to tell which entry names
+// a live, a freed or a reused record. Once the index of a held directory is
+// held, this class knows those runs (PlanProbeRuns()), and announces the next
+// Tuning::WalkTuning::read_ahead_runs of them on the reader's standing lane
+// (IDiskReader::PrefetchStanding()), the rest of the directory being listed
+// first, then the held directories of the stack from the top down. The probes
+// of a directory only know their own group, and withdraw what they announced
+// between two groups: the lane keeps the next directories' reads going while
+// the listing waits for one. It refills as each run is read (FileRecord::
+// ProbeStore::ran), withdraws the runs of a directory that Release() frees and
+// every run left when it is destroyed. A run that leaves the first runs stays
+// on the lane while it is among the next read_ahead_runs: the stack of a
+// listing grows and shrinks, and a withdrawal of a read already made costs it
+// twice. A hint: no byte more is read, and the
+// listing, its log and its reads do not change. It is off at 0, and on a
+// device that says it is rotational, where the index blocks wait behind the
+// probes announced far ahead (Tuning::WalkTuning::read_ahead_runs_rotational).
 //
 // On by default (Tuning::WalkTuning::read_ahead_dirs is 64). At 0 every member
 // does nothing, and the listing reads as it did before this class.
@@ -130,7 +159,8 @@ class NTFS_BROWSER_EXPORT DirectoryReadAhead {
   void Plan(std::span<const ULONGLONG> upcoming);
 
   // The listing is done with directory, entered or skipped: frees its record
-  // and its blocks. A directory that is not held is ignored.
+  // and its blocks, and withdraws the probe runs of it that no read took. A
+  // directory that is not held is ignored.
   void Release(ULONGLONG directory);
 
   [[nodiscard]] DirectoryReadAheadStats GetStats() const noexcept;

@@ -14,6 +14,8 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
 
+#include "internal-export.h"
+
 namespace NTFS_BROWSER_NAMESPACE {
 
 namespace Cache {
@@ -107,7 +109,7 @@ struct WalkTarget {
 // Walks the B+ tree of one directory: its $INDEX_ROOT and $INDEX_ALLOCATION
 // blocks. Short-lived: built over a FileRecord for one call, never stored.
 template <Cache::Strategy S>
-class DirectoryIndex {
+class NTFS_BROWSER_EXPORT_TESTS_ONLY DirectoryIndex {
  public:
   using SubentryCallback = typename FileRecord<S>::SubentryCallback;
   using StandingCallback = typename FileRecord<S>::StandingCallback;
@@ -137,6 +139,17 @@ class DirectoryIndex {
   };
 
   [[nodiscard]] std::optional<RootChildren> RootChildBlocks() const;
+  // The records that the batched walk probes for the index it holds, node by
+  // node, in the order Traverse...WithStanding() hands the nodes to the
+  // prober: for each node, the file reference of each named entry, in entry
+  // order, repeats included (a DOS alias and its Win32 name). A node that
+  // names no record gives no group. Holds the $INDEX_ROOT, and the blocks the
+  // $INDEX_ALLOCATION's block source holds (see
+  // FileRecord<S>::SetIndexBlockSource()). A block it does not hold ends the
+  // descent into its subtree, and so does a block that does not parse. The
+  // orphaned blocks of the recovery scan are not part of it. Reads and logs
+  // nothing, and leaves RecoveredCount() as it was.
+  [[nodiscard]] std::vector<std::vector<ULONGLONG>> HeldProbeGroups() const;
   // Finds file_name. upcase is the volume's collation, loaded by the caller.
   [[nodiscard]] std::optional<IndexEntry>
       Find(std::wstring_view file_name, const UpCase::Table& upcase) const;
@@ -159,6 +172,10 @@ class DirectoryIndex {
       SearchIndexEntries(const std::vector<IndexEntryView>& entries,
                          IndexSearch& search, size_t child_depth,
                          bool at_root) const;
+  void CollectProbeGroups(ULONGLONG vcn,
+                          std::unordered_set<ULONGLONG>& visited_vcns,
+                          size_t depth,
+                          std::vector<std::vector<ULONGLONG>>& groups) const;
   void Walk(WalkTarget<S>& target) const;
   void Deliver(const IndexEntryView& entry, WalkTarget<S>& target) const;
   void TraverseSubNode(ULONGLONG vcn, WalkTarget<S>& target,

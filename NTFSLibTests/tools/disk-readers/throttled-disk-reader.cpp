@@ -70,6 +70,10 @@ std::optional<ULONGLONG> ThrottledDiskReader::Size() const {
   return inner_->Size();
 }
 
+Tuning::MediaKind ThrottledDiskReader::GetMediaKind() const {
+  return inner_->GetMediaKind();
+}
+
 ULONGLONG ThrottledDiskReader::AlignedBytes(const Range& range) {
   return AlignUp(range.offset + range.length) - AlignDown(range.offset);
 }

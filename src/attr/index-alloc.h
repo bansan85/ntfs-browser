@@ -68,6 +68,12 @@ class AttrIndexAlloc : public AttrNonResident<S> {
   // replaced by an empty one first.
   void SetBlockSource(BlockSource source, ULONGLONG directory);
 
+  // ParseIndexBlock() for a block that the block source holds, and nothing
+  // else: false when there is no source or it does not hold the block, with no
+  // read. Logs as ParseIndexBlock() does when the held bytes are damaged.
+  [[nodiscard]] bool ParseHeldIndexBlock(const ULONGLONG& vcn,
+                                         IndexBlock& ib_class);
+
   // The byte offset in the stream of the block at sub-node VCN vcn, or nothing
   // when vcn names no block of this attribute. Logs why, as ParseIndexBlock()
   // does.
@@ -88,6 +94,12 @@ class AttrIndexAlloc : public AttrNonResident<S> {
 
   [[nodiscard]] bool PatchUS(std::span<WORD> block, DWORD sectors, WORD usn,
                              std::span<const WORD> usarray);
+
+  // Where ParseIndexBlock() and ParseHeldIndexBlock() find the bytes of the
+  // block at vcn: copied into block when the source holds them. Whether it
+  // did.
+  [[nodiscard]] bool CopyHeldBlock(const ULONGLONG& vcn,
+                                   std::span<BYTE> block) const;
 
   [[nodiscard]] bool FixupIndexBlock(std::span<BYTE> block);
   [[nodiscard]] bool ParseIndexEntries(std::span<BYTE> block,

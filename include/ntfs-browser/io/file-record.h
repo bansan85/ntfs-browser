@@ -81,12 +81,22 @@ class NTFS_BROWSER_EXPORT FileRecord {
   using RunSink =
       std::function<void(ULONGLONG first_record, std::span<const BYTE> bytes)>;
 
+  // Called by a probe after it has read one run of $MFT, from the slot
+  // `first_record` on, `count` records long: the run as it was read, widened
+  // to clusters when the store keeps runs. Called once for each run, whether
+  // the read succeeded or not, in the order the runs are read, after the
+  // records of the run are probed. The run MAY be one that an announcement
+  // named.
+  using RunNote = std::function<void(ULONGLONG first_record, ULONGLONG count)>;
+
   // What the probes of TraverseSubEntriesWithStanding() may reuse, and where
-  // they leave what they read. `find` answers as a RecordSource does, and an
-  // empty `keep` keeps nothing.
+  // they leave what they read. `find` answers as a RecordSource does, an
+  // empty `keep` keeps nothing, and an empty `ran` is never called and costs
+  // nothing. The three work apart: a store MAY set any of them.
   struct ProbeStore {
     RecordSource find;
     RunSink keep;
+    RunNote ran;
   };
 
   explicit FileRecord(const NtfsVolume<S>& volume);

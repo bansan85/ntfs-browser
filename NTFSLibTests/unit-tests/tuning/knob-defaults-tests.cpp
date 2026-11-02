@@ -29,7 +29,7 @@ constexpr std::uint64_t mib = kib * kib;
 
 // The number of knobs: one for each field of Tuning::Settings that the library
 // reads, and the two VolumeOptions fields that are tuned with them.
-constexpr size_t knob_count = 49;
+constexpr size_t knob_count = 51;
 
 struct OldConstant {
   std::string_view name;
@@ -41,7 +41,8 @@ struct OldConstant {
 // a changed default shows as a difference. Two are not old: cache.block_bytes
 // was 64 KiB until the cache took 4 KiB blocks, and cache.max_run_bytes came
 // with that change. walk.record_window_bytes came with the window of $MFT,
-// walk.record_memo_entries with the memo of record headers, and the two
+// walk.record_memo_entries with the memo of record headers, the two
+// walk.read_ahead_runs knobs with the standing lane, and the two
 // probe.wide_gap knobs with the wide gap of a hard disk read through
 // FullCache, which nothing else uses.
 constexpr std::array<OldConstant, knob_count> old_constants{{
@@ -83,6 +84,8 @@ constexpr std::array<OldConstant, knob_count> old_constants{{
     {"walk.read_ahead_bytes", 16 * mib},
     {"walk.record_window_bytes", 4 * mib},
     {"walk.record_memo_entries", 65536},
+    {"walk.read_ahead_runs", 64},
+    {"walk.read_ahead_runs_rotational", 0},
     {"cache.block_bytes", 4 * kib},
     {"cache.max_run_bytes", mib},
     {"cache.max_bytes", 256 * mib},
@@ -110,7 +113,7 @@ std::vector<Tuning::Pattern> ServedPatterns(const Tuning::Knob& knob) {
 
 }  // namespace
 
-TEST_CASE("The knob table lists 49 knobs with unique names",
+TEST_CASE("The knob table lists 51 knobs with unique names",
           "[tuning][knobs][invariance]") {
   const std::span<const Tuning::Knob> knobs = Tuning::Knobs();
 
@@ -218,6 +221,8 @@ TEST_CASE("A default Settings holds the old constants in every field",
   CHECK(settings.walk.read_ahead_bytes == 16 * mib);
   CHECK(settings.walk.record_window_bytes == 4 * mib);
   CHECK(settings.walk.record_memo_entries == 65536);
+  CHECK(settings.walk.read_ahead_runs == 64);
+  CHECK(settings.walk.read_ahead_runs_rotational == 0);
   CHECK(settings.cache.block_bytes == 4 * kib);
   CHECK(settings.cache.max_run_bytes == mib);
   CHECK(settings.alloc.bitmap_window_bytes == mib);
@@ -275,4 +280,31 @@ TEST_CASE("Every knob says what its value costs in memory", "[tuning][knobs]") {
   CHECK(unit("mft.announce_restart_interval") == 0);
   CHECK(unit("mft.max_run_slots") > 1);
   CHECK(unit("reader.max_reads") > 1);
+}
+
+TEST_CASE(
+    "The two counts of runs of the standing lane are family A knobs of "
+    "pattern M3",
+    "[tuning][knobs]") {
+  const Tuning::Pattern m3 = Tuning::Pattern::DependentSmall;
+  const VolumeOptions options;
+  for (const std::string_view name :
+       {"walk.read_ahead_runs", "walk.read_ahead_runs_rotational"}) {
+    INFO("knob " << name);
+    const Tuning::Knob* const knob = Tuning::FindKnob(name);
+    REQUIRE(knob != nullptr);
+    CHECK(knob->family == Tuning::Family::PrefetchDepth);
+    CHECK(ServedPatterns(*knob) == std::vector<Tuning::Pattern>{m3});
+    CHECK_FALSE(knob->per_pattern);
+    CHECK(knob->min_value == 0);
+    CHECK(knob->max_value == 4096);
+    CHECK(knob->memory_unit_bytes > 1);
+  }
+  // On by default for a device of any kind but a rotational one, off for it.
+  CHECK(Tuning::FindKnob("walk.read_ahead_runs")->default_value == 64);
+  CHECK(Tuning::FindKnob("walk.read_ahead_runs")->get(options, m3) == 64);
+  CHECK(Tuning::FindKnob("walk.read_ahead_runs_rotational")->default_value ==
+        0);
+  CHECK(Tuning::FindKnob("walk.read_ahead_runs_rotational")->get(options, m3) ==
+        0);
 }

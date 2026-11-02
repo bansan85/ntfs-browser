@@ -68,7 +68,16 @@ BUSY_TARGET = 0.95
 LADDER_STEPS = 3
 # A constant that has an effect only when another one is not 0: the search
 # tries it after that one, and not at all while it stays 0.
-KNOB_NEEDS = {"walk.read_ahead_bytes": "walk.read_ahead_dirs"}
+KNOB_NEEDS = {
+    "walk.read_ahead_bytes": "walk.read_ahead_dirs",
+    "walk.read_ahead_runs": "walk.read_ahead_dirs",
+    "walk.read_ahead_runs_rotational": "walk.read_ahead_dirs",
+}
+# The standing lane of the read ahead has a count of runs for each kind of disk:
+# the library takes the second on a disk that says it is rotational, and the
+# first on any other. The search tunes the one that serves the disk.
+LANE_RUNS_KNOB = "walk.read_ahead_runs"
+LANE_RUNS_ROTATIONAL_KNOB = "walk.read_ahead_runs_rotational"
 
 
 # ------------------------------------------------------------------ helpers
@@ -977,7 +986,8 @@ TARGETS: dict[str, Target] = {
     "M3": Target(
         "M3", Scenario("dir-subtree", "dir", ("-r",), "", "walk"), "none", (),
         "walk", "walk",
-        ("walk.read_ahead_dirs", "walk.read_ahead_bytes", "cache.block_bytes"),
+        ("walk.read_ahead_dirs", "walk.read_ahead_bytes", LANE_RUNS_KNOB,
+         LANE_RUNS_ROTATIONAL_KNOB, "cache.block_bytes"),
     ),
     "M4": Target(
         "M4", Scenario("mftlist", "mftlist"), "deleted", ("--verify-data=full",),
@@ -1284,6 +1294,14 @@ def target_of(pattern: str, subtree: str) -> Target:
     return target
 
 
+def knobs_for_disk(knobs: Iterable[str], solid_state: bool | None) -> tuple[str, ...]:
+    """The knobs that serve a disk. Of the two counts of runs of the standing lane,
+    a disk known to be rotational takes the second, and one that is not, or
+    that is not known (an image), the first."""
+    unused = LANE_RUNS_KNOB if solid_state is False else LANE_RUNS_ROTATIONAL_KNOB
+    return tuple(name for name in knobs if name != unused)
+
+
 def load_knobs(tools: Tools) -> dict[str, dict]:
     table = run_json([str(tools.bench), "knobs"])["knobs"]
     return {knob["name"]: knob for knob in table}
@@ -1320,14 +1338,15 @@ def search(args: argparse.Namespace) -> int:
     found: dict[str, dict[str, int]] = {}
     for pattern in args.patterns:
         target = target_of(pattern, args.subtree)
-        names = list(target.knobs) + ["reader.max_reads", "reader.max_bytes"]
+        knobs = knobs_for_disk(target.knobs, disk.get("solid_state"))
+        names = list(knobs) + ["reader.max_reads", "reader.max_bytes"]
         limits, defaults = knob_limits(table, names, pattern)
         results = ResultsFile(out_dir / f"search-{pattern}.csv")
         searcher = Searcher(ToolEvaluator(runner, target, args.volume, pattern), results,
                             pattern, limits, defaults, cost)
         log(f"searching {pattern}")
         found[pattern] = searcher.run(
-            target.knobs, ("reader.max_reads", "reader.max_bytes", GRID_READS, GRID_BYTES)
+            knobs, ("reader.max_reads", "reader.max_bytes", GRID_READS, GRID_BYTES)
         )
         searchers[pattern] = searcher
         for line in searcher.trace:

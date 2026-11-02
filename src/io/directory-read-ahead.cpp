@@ -56,6 +56,18 @@ constexpr std::uint64_t directory_share_divisor = 4;
 // set is emptied: a record is then tried again, which costs one read.
 constexpr std::size_t max_unreadable_records = std::size_t{1} << 16U;
 
+// Most probe runs the plans of the held directories hold in all (a guard rail,
+// not a tunable: a run costs 40 bytes, and 8 for each record it reads for). A
+// directory whose runs do not fit is not queued on the standing lane, and its
+// probes read as they did.
+constexpr std::size_t max_planned_runs = std::size_t{1} << 16U;
+
+// How many unread runs of a directory, from the first, a run that the probes
+// have just read is looked for among. The probes read in the order of the plan,
+// so the run is the first one or near it: a bound keeps a read that no plan
+// names from costing the length of the plan.
+constexpr std::size_t run_match_lookahead = 1024;
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -73,7 +85,16 @@ class DirectoryReadAhead<S>::Impl {
         window_(S == Cache::Strategy::NoCache ? walk_.record_window_bytes : 0,
                 volume.GetFileRecordSize()),
         memo_(S == Cache::Strategy::NoCache ? walk_.record_memo_entries : 0,
-              volume.GetFileRecordSize()) {}
+              volume.GetFileRecordSize()),
+        lane_runs_(volume.GetMediaKind() == Tuning::MediaKind::Rotational
+                       ? walk_.read_ahead_runs_rotational
+                       : walk_.read_ahead_runs) {
+    if constexpr (S == Cache::Strategy::FullCache) {
+      overlap_slots_ = volume.GetFileRecordSize() == 0
+                           ? 0
+                           : cache_block_bytes_ / volume.GetFileRecordSize();
+    }
+  }
 
   Impl(const Impl&) = delete;
   Impl& operator=(const Impl&) = delete;
@@ -135,6 +156,35 @@ class DirectoryReadAhead<S>::Impl {
     ULONGLONG offset;
     // The runs of clusters that hold it, in the order a read goes through them.
     std::vector<Alloc::Extent> extents;
+  };
+
+  // One read of $MFT that the probes of a held directory will make.
+  struct PlannedRun {
+    ULONGLONG first_slot;
+    ULONGLONG count;
+    // The refill that last put the run in the target.
+    std::uint64_t stamp{0};
+    // The records it reads for, as a span of RunPlan::wanted.
+    std::uint32_t wanted_begin{0};
+    std::uint32_t wanted_end{0};
+    // Waiting: not on the lane. Announced: on it. Done: read, or not needed.
+    enum class State : std::uint8_t { Waiting, Announced, Done };
+    State state{State::Waiting};
+  };
+
+  // The probe runs of one held directory, in the order the walk reads them.
+  struct RunPlan {
+    std::vector<PlannedRun> runs;
+    // The records the runs read for, run after run.
+    std::vector<ULONGLONG> wanted;
+    // The runs before it are Done.
+    std::size_t cursor{0};
+  };
+
+  // A run the lane should hold, with the plan that owns it.
+  struct Target {
+    const RunPlan* plan;
+    PlannedRun* run;
   };
 
   // The bytes the listing's record asks for, empty when not held.
@@ -199,6 +249,61 @@ class DirectoryReadAhead<S>::Impl {
   // Bytes of the record or block of a directory that is dropped, to free.
   [[nodiscard]] static std::uint64_t BytesOf(const HeldDirectory& held);
 
+  // The batch of Plan(): reads ahead the records and blocks of the directories
+  // of upcoming that are not held.
+  void PlanBatch(std::span<const ULONGLONG> upcoming);
+
+  // Whether the standing lane is in use: a count of runs, a budget that plans
+  // something, and no raw callback.
+  [[nodiscard]] bool LaneOn() const noexcept {
+    return lane_runs_ != 0 && walk_.read_ahead_bytes != 0 &&
+           !volume_->HasAttrRawCB();
+  }
+
+  // The bytes of record that a probe would find in the window or the memo,
+  // without counting the use.
+  [[nodiscard]] std::span<const BYTE> FindQuietly(ULONGLONG record);
+
+  // Whether the reader could take the two runs for overlapping ranges, which
+  // a withdrawal of one would then take with it.
+  [[nodiscard]] bool Overlaps(const PlannedRun& left,
+                              const PlannedRun& right) const noexcept;
+
+  // Whether the window or the memo holds every record that run reads for.
+  [[nodiscard]] bool HoldsRun(const RunPlan& plan, const PlannedRun& run);
+
+  // Plans the probe runs of directory from the held part of its index, which
+  // record holds as a file record that has been parsed. The blocks come from
+  // the held blocks of directory.
+  void PlanRunsOf(ULONGLONG directory, FileRecord<S>& record);
+
+  // What the probes of a directory read, as they will cut it: for each group
+  // of records, in order, the runs of each chunk.
+  [[nodiscard]] RunPlan
+      PlanOf(const std::vector<std::vector<ULONGLONG>>& groups);
+
+  // Makes the standing lane hold the first lane_runs_ runs not read yet, the
+  // rest of the directory being listed first, then order_ in order: announces
+  // those that entered that set. A run that left it stays while it is among
+  // the next lane_runs_: a stack that grows and shrinks pushes runs out of the
+  // first and back in, and a withdrawal costs the read already made and the
+  // read again. The others are withdrawn.
+  void Refill();
+
+  // The probes have read the run from first_slot on, count records long (the
+  // `ran` of the listing's ProbeStore).
+  void RunRead(ULONGLONG first_slot, ULONGLONG count);
+
+  // Sends the hint for run to the reader: announces it on the standing lane,
+  // or withdraws it. Never throws: a hint that fails costs the gain only.
+  void SendHint(const PlannedRun& run, bool announce) noexcept;
+
+  // Withdraws the runs of a plan that were announced, and forgets them.
+  void WithdrawPlan(RunPlan& plan) noexcept;
+
+  // Withdraws every announced run and forgets every plan.
+  void WithdrawAll() noexcept;
+
   const NtfsVolume<S>* volume_;
   Tuning::WalkTuning walk_;
   Tuning::ProbeTuning probe_;
@@ -231,6 +336,29 @@ class DirectoryReadAhead<S>::Impl {
   std::vector<ULONGLONG> missing_;
   // End of the last announcement of the round, where blocks cannot overlap.
   std::optional<ULONGLONG> announced_end_;
+
+  // Probe runs the standing lane keeps announced, at most: the knob that fits
+  // the device. 0 is off.
+  std::size_t lane_runs_;
+  // The probe runs of each held directory that has any, by record number.
+  std::unordered_map<ULONGLONG, RunPlan> plans_;
+  // Runs in all in plans_.
+  std::size_t planned_runs_{0};
+  // Slots that two runs of a FullCache lane must be apart to be sure of
+  // disjoint ranges: a block, since the reader's ranges are widened to blocks.
+  // 0 under NoCache, whose ranges are the runs themselves.
+  ULONGLONG overlap_slots_{0};
+  // The runs on the lane now, in the order they were announced. They point
+  // into plans_, which a plan leaves only through WithdrawPlan().
+  std::vector<PlannedRun*> announced_;
+  // The runs the lane should hold, in order, as Refill() works them out.
+  std::vector<Target> target_;
+  // The count of Refill() calls.
+  std::uint64_t refills_{0};
+  // The directories of the listing's stack that the lane looks at, the next
+  // one first: the top of the stack at the last Plan(), then the directories
+  // that were at the top before and are still planned, in their old order.
+  std::vector<ULONGLONG> order_;
 };
 
 template <Cache::Strategy S>
@@ -308,18 +436,28 @@ void DirectoryReadAhead<S>::Impl::Attach(FileRecord<S>& listing) {
   listing.SetIndexBlockSource([this](ULONGLONG directory, ULONGLONG vcn) {
     return HeldBlockBytes(directory, vcn);
   });
+  // The three parts of the store work apart: a FullCache volume keeps no
+  // window, and gets a store that only notes the runs read.
+  typename FileRecord<S>::ProbeStore store;
   if (window_.Enabled() || memo_.Enabled()) {
-    listing.SetProbeStore(
-        {.find = [this](ULONGLONG record) { return FindForProbe(record); },
-         .keep =
-             [this](ULONGLONG first_record, std::span<const BYTE> bytes) {
-               KeepRun(first_record, bytes);
-             }});
+    store.find = [this](ULONGLONG record) { return FindForProbe(record); };
+    store.keep = [this](ULONGLONG first_record, std::span<const BYTE> bytes) {
+      KeepRun(first_record, bytes);
+    };
+  }
+  if (LaneOn()) {
+    store.ran = [this](ULONGLONG first_slot, ULONGLONG count) {
+      RunRead(first_slot, count);
+    };
+  }
+  if (store.find || store.keep || store.ran) {
+    listing.SetProbeStore(std::move(store));
   }
 }
 
 template <Cache::Strategy S>
 void DirectoryReadAhead<S>::Impl::Detach() noexcept {
+  WithdrawAll();
   if (listing_ == nullptr) {
     return;
   }
@@ -352,6 +490,14 @@ std::uint64_t DirectoryReadAhead<S>::Impl::BytesOf(const HeldDirectory& held) {
 
 template <Cache::Strategy S>
 void DirectoryReadAhead<S>::Impl::Release(ULONGLONG directory) {
+  // A directory whose index sits in its record holds no bytes of its own, and
+  // has a plan all the same.
+  const auto plan = plans_.find(directory);
+  if (plan != plans_.end()) {
+    WithdrawPlan(plan->second);
+    planned_runs_ -= plan->second.runs.size();
+    plans_.erase(plan);
+  }
   const auto held = held_.find(directory);
   if (held == held_.end()) {
     return;
@@ -375,6 +521,25 @@ void DirectoryReadAhead<S>::Impl::Plan(std::span<const ULONGLONG> upcoming) {
       !volume_->HasMftBase()) {
     return;
   }
+  PlanBatch(upcoming);
+  // The stack changed: the lane follows it. A directory that sank below the
+  // window keeps its place under the new ones, and its runs stay announced.
+  const std::size_t window = (std::min)(upcoming.size(), walk_.read_ahead_dirs);
+  std::vector<ULONGLONG> order(
+      upcoming.begin(), upcoming.begin() + gsl::narrow<std::ptrdiff_t>(window));
+  const std::unordered_set<ULONGLONG> top(order.begin(), order.end());
+  std::ranges::copy_if(
+      order_, std::back_inserter(order), [this, &top](ULONGLONG directory) {
+        return plans_.contains(directory) && !top.contains(directory);
+      });
+  order_ = std::move(order);
+  Refill();
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::PlanBatch(
+    std::span<const ULONGLONG> upcoming) {
+  const DWORD record_size = volume_->GetFileRecordSize();
 
   // The directories that wait at the top of the listing's stack.
   const std::size_t window = (std::min)(upcoming.size(), walk_.read_ahead_dirs);
@@ -430,6 +595,10 @@ void DirectoryReadAhead<S>::Impl::Begin() {
   std::optional<typename DirectoryIndex<S>::RootChildren> children =
       DirectoryIndex<S>(*listing_).RootChildBlocks();
   if (!children) {
+    // The index sits in the record: there is no block to read ahead, but the
+    // probes of its entries are known.
+    PlanRunsOf(*directory, *listing_);
+    Refill();
     return;
   }
 
@@ -450,6 +619,7 @@ void DirectoryReadAhead<S>::Impl::Begin() {
   }
   Log::Detail::ForgetRecoveredSince(
       {.lines = 0, .recovered = recovered_before});
+  PlanRunsOf(*directory, *listing_);
 
   // The attributes already exist: they take their source from here on.
   for (const auto& attr : listing_->GetAttr(Attr::Type::IndexAllocation)) {
@@ -460,6 +630,7 @@ void DirectoryReadAhead<S>::Impl::Begin() {
             },
             *directory);
   }
+  Refill();
 }
 
 template <Cache::Strategy S>
@@ -479,6 +650,10 @@ void DirectoryReadAhead<S>::Impl::ReadAhead(std::span<const ULONGLONG> wanted) {
       std::vector<std::unique_ptr<FileRecord<S>>> owners;
       const std::vector<Candidate> candidates = FindCandidates(fetched, owners);
       ReadBlocks(candidates);
+      // Each owner holds the attributes of the candidate of its place.
+      for (std::size_t index = 0; index < candidates.size(); index++) {
+        PlanRunsOf(candidates.at(index).directory, *owners.at(index));
+      }
     }
     // Its attributes log when they are destroyed: that MUST happen here.
     spare_.reset();
@@ -605,6 +780,8 @@ std::vector<typename DirectoryReadAhead<S>::Impl::Candidate>
     std::optional<typename DirectoryIndex<S>::RootChildren> children =
         DirectoryIndex<S>(scratch).RootChildBlocks();
     if (!children) {
+      // No block to read, and the probes of its entries are known.
+      PlanRunsOf(record, scratch);
       continue;
     }
     candidates.push_back({.directory = record,
@@ -799,6 +976,323 @@ std::vector<typename DirectoryReadAhead<S>::Impl::Candidate>
   std::erase_if(next,
                 [](const Candidate& child) { return child.vcns.empty(); });
   return next;
+}
+
+template <Cache::Strategy S>
+std::span<const BYTE>
+    DirectoryReadAhead<S>::Impl::FindQuietly(ULONGLONG record) {
+  const std::span<const BYTE> bytes = window_.Find(record);
+  return bytes.empty() ? memo_.Find(record) : bytes;
+}
+
+template <Cache::Strategy S>
+bool DirectoryReadAhead<S>::Impl::Overlaps(
+    const PlannedRun& left, const PlannedRun& right) const noexcept {
+  // Each run, grown by overlap_slots_ on both sides.
+  return left.first_slot < right.first_slot + right.count + overlap_slots_ &&
+         right.first_slot < left.first_slot + left.count + overlap_slots_;
+}
+
+template <Cache::Strategy S>
+bool DirectoryReadAhead<S>::Impl::HoldsRun(const RunPlan& plan,
+                                           const PlannedRun& run) {
+  if (!window_.Enabled() && !memo_.Enabled()) {
+    return false;
+  }
+  const auto wanted =
+      std::span<const ULONGLONG>(plan.wanted)
+          .subspan(run.wanted_begin, run.wanted_end - run.wanted_begin);
+  return std::ranges::none_of(
+      wanted, [this](ULONGLONG record) { return FindQuietly(record).empty(); });
+}
+
+template <Cache::Strategy S>
+typename DirectoryReadAhead<S>::Impl::RunPlan
+    DirectoryReadAhead<S>::Impl::PlanOf(
+        const std::vector<std::vector<ULONGLONG>>& groups) {
+  // The store of the listing has a `keep` and a `find` exactly when the window
+  // or the memo is on, and EntryProber plans from them.
+  const bool keeps = window_.Enabled() || memo_.Enabled();
+  const ProbeRunRules rules = ProbeRunRulesOf(*volume_, keeps);
+  // The records that the earlier runs of this plan read: the window keeps each
+  // run it is given, so the probes of a later group find them there.
+  std::unordered_set<ULONGLONG> covered;
+  const std::vector<BYTE> stand_in(rules.record_size);
+  HeldRecordSource find;
+  if (keeps) {
+    find = [this, &covered, &stand_in](ULONGLONG record) {
+      return covered.contains(record) ? std::span<const BYTE>(stand_in)
+                                      : FindQuietly(record);
+    };
+  }
+  const HeldRecordSink none;
+
+  RunPlan plan;
+  // What the prober of the walk has probed already: it probes a record once.
+  std::unordered_set<ULONGLONG> known;
+  std::vector<ULONGLONG> pending;
+  const std::size_t round =
+      (std::max<std::size_t>)(1, probe_.max_chunk_records);
+  for (const std::vector<ULONGLONG>& group : groups) {
+    if (known.size() >= probe_.max_known_records) {
+      known.clear();
+    }
+    pending.clear();
+    std::ranges::copy_if(
+        group, std::back_inserter(pending),
+        [&known](ULONGLONG record) { return known.insert(record).second; });
+    std::ranges::sort(pending);
+    for (std::size_t first = 0; first < pending.size(); first += round) {
+      const std::span<const ULONGLONG> chunk =
+          std::span<const ULONGLONG>(pending).subspan(
+              first, (std::min)(round, pending.size() - first));
+      const ProbeRunPlan chunk_plan = PlanProbeRuns(chunk, rules, find, none);
+      for (const MftRun& run : chunk_plan.runs) {
+        PlannedRun planned{.first_slot = run.first_slot,
+                           .count = run.last_slot - run.first_slot + 1};
+        planned.wanted_begin = gsl::narrow<std::uint32_t>(plan.wanted.size());
+        std::ranges::copy(std::span<const ULONGLONG>(chunk_plan.to_read)
+                              .subspan(run.begin, run.end - run.begin),
+                          std::back_inserter(plan.wanted));
+        planned.wanted_end = gsl::narrow<std::uint32_t>(plan.wanted.size());
+        plan.runs.push_back(planned);
+        if (keeps) {
+          for (ULONGLONG slot = run.first_slot; slot <= run.last_slot; slot++) {
+            covered.insert(slot);
+          }
+        }
+      }
+    }
+  }
+  return plan;
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::PlanRunsOf(ULONGLONG directory,
+                                             FileRecord<S>& record) {
+  if (!LaneOn() || plans_.contains(directory)) {
+    return;
+  }
+  try {
+    const auto& allocs = record.GetAttr(Attr::Type::IndexAllocation);
+    auto* const alloc =
+        allocs.empty()
+            ? nullptr
+            : static_cast<Attr::AttrIndexAlloc<S>*>(allocs.front().get());
+    // The held blocks, without counting the listing as served.
+    if (alloc != nullptr) {
+      alloc->SetBlockSource(
+          [this](ULONGLONG owner, ULONGLONG vcn) {
+            return PeekBlockBytes(owner, vcn);
+          },
+          directory);
+    }
+    RunPlan plan = PlanOf(DirectoryIndex<S>(record).HeldProbeGroups());
+    if (alloc != nullptr) {
+      alloc->SetBlockSource({}, 0);
+    }
+    // A plan that does not fit is left out: the probes of that directory read
+    // as they did.
+    if (plan.runs.empty() ||
+        planned_runs_ + plan.runs.size() > max_planned_runs) {
+      return;
+    }
+    planned_runs_ += plan.runs.size();
+    stats_.runs_planned += plan.runs.size();
+    plans_.emplace(directory, std::move(plan));
+  } catch (const std::exception&) {
+    // A plan that fails costs the gain only.
+  }
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::SendHint(const PlannedRun& run,
+                                           bool announce) noexcept {
+  try {
+    // The hint of a forged slot MUST NOT log.
+    log_.Reset(levels_);
+    const Log::Detail::CaptureScope scope(log_);
+    if (announce) {
+      volume_->PrefetchMftSlotsStanding(run.first_slot, run.count);
+    } else {
+      volume_->CancelMftSlotsStanding(run.first_slot, run.count);
+    }
+  } catch (const std::exception&) {
+    // A hint that fails costs the gain only.
+  }
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::WithdrawPlan(RunPlan& plan) noexcept {
+  for (PlannedRun& run : plan.runs) {
+    if (run.state == PlannedRun::State::Announced) {
+      SendHint(run, false);
+      stats_.runs_withdrawn++;
+    }
+    run.state = PlannedRun::State::Done;
+  }
+  std::erase_if(announced_, [](const PlannedRun* run) {
+    return run->state != PlannedRun::State::Announced;
+  });
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::WithdrawAll() noexcept {
+  for (const PlannedRun* const run : announced_) {
+    SendHint(*run, false);
+    stats_.runs_withdrawn++;
+  }
+  announced_.clear();
+  target_.clear();
+  plans_.clear();
+  planned_runs_ = 0;
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::RunRead(ULONGLONG first_slot,
+                                          ULONGLONG count) {
+  if (!LaneOn() || listing_ == nullptr) {
+    return;
+  }
+  const std::optional<ULONGLONG> directory = listing_->GetFileReference();
+  const auto found = directory ? plans_.find(*directory) : plans_.end();
+  if (found == plans_.end()) {
+    stats_.runs_unplanned++;
+    return;
+  }
+  RunPlan& plan = found->second;
+
+  // The probes read in the order of the plan, so the run is the first one
+  // that is not done, or near it, and is the plan's run or a part of it.
+  const std::size_t end =
+      (std::min)(plan.runs.size(), plan.cursor + run_match_lookahead);
+  std::size_t index = plan.cursor;
+  while (index < end) {
+    const PlannedRun& run = plan.runs.at(index);
+    if (run.state != PlannedRun::State::Done && run.first_slot <= first_slot &&
+        first_slot + count <= run.first_slot + run.count) {
+      break;
+    }
+    index++;
+  }
+  if (index == end) {
+    stats_.runs_unplanned++;
+    return;
+  }
+
+  // A run before it was not read: the probes found its records elsewhere, in
+  // the window. The run itself is read, and what a smaller read left of it
+  // is withdrawn. A FullCache reads by blocks and skips those its cache holds:
+  // it may not reach the end of the range, which the reader then keeps.
+  for (std::size_t skipped = plan.cursor; skipped <= index; skipped++) {
+    PlannedRun& run = plan.runs.at(skipped);
+    const bool whole = S == Cache::Strategy::NoCache && skipped == index &&
+                       run.first_slot == first_slot && run.count == count;
+    if (run.state == PlannedRun::State::Announced && !whole) {
+      SendHint(run, false);
+      // The run that was read is not counted as withdrawn unread.
+      stats_.runs_withdrawn += skipped == index ? 0 : 1;
+    }
+    run.state = PlannedRun::State::Done;
+  }
+  stats_.runs_read++;
+  std::erase_if(announced_, [](const PlannedRun* run) {
+    return run->state != PlannedRun::State::Announced;
+  });
+  plan.cursor = index + 1;
+  while (plan.cursor < plan.runs.size() &&
+         plan.runs.at(plan.cursor).state == PlannedRun::State::Done) {
+    plan.cursor++;
+  }
+  Refill();
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::Refill() {
+  if (!LaneOn() || plans_.empty()) {
+    return;
+  }
+  refills_++;
+
+  // The first lane_runs_ runs not read yet: the rest of the directory being
+  // listed, then the directories of order_. The next lane_runs_ stay on the
+  // lane when they are there, and are not announced.
+  target_.clear();
+  std::size_t room = lane_runs_;
+  std::size_t keep_room = lane_runs_;
+  const auto take = [this, &room, &keep_room](ULONGLONG directory) {
+    const auto found = plans_.find(directory);
+    if (found == plans_.end()) {
+      return;
+    }
+    RunPlan& plan = found->second;
+    for (std::size_t index = plan.cursor;
+         index < plan.runs.size() && (room > 0 || keep_room > 0); index++) {
+      PlannedRun& run = plan.runs.at(index);
+      if (run.state == PlannedRun::State::Done) {
+        continue;
+      }
+      run.stamp = refills_;
+      if (room > 0) {
+        target_.push_back({.plan = &plan, .run = &run});
+        room--;
+      } else {
+        keep_room--;
+      }
+    }
+  };
+  std::optional<ULONGLONG> current;
+  if (listing_ != nullptr) {
+    current = listing_->GetFileReference();
+  }
+  if (current) {
+    take(*current);
+  }
+  for (const ULONGLONG directory : order_) {
+    if (room == 0 && keep_room == 0) {
+      break;
+    }
+    if (directory != current) {
+      take(directory);
+    }
+  }
+
+  // The runs that left the target are withdrawn, and may come back.
+  for (PlannedRun* const run : announced_) {
+    if (run->stamp != refills_) {
+      SendHint(*run, false);
+      run->state = PlannedRun::State::Waiting;
+      stats_.runs_withdrawn++;
+    }
+  }
+  std::erase_if(announced_, [](const PlannedRun* run) {
+    return run->state != PlannedRun::State::Announced;
+  });
+
+  // The runs that entered it are announced, but for those whose records the
+  // window holds by now, and for those that overlap a run on the lane: a
+  // withdrawal takes every range that overlaps it, so the ranges on the lane
+  // are kept apart. Such a run waits until the other one is read.
+  for (const Target& entry : target_) {
+    PlannedRun& run = *entry.run;
+    if (run.state != PlannedRun::State::Waiting) {
+      continue;
+    }
+    if (HoldsRun(*entry.plan, run)) {
+      run.state = PlannedRun::State::Done;
+      stats_.runs_window_held++;
+      continue;
+    }
+    if (std::ranges::any_of(announced_, [this, &run](const PlannedRun* other) {
+          return Overlaps(*other, run);
+        })) {
+      continue;
+    }
+    SendHint(run, true);
+    run.state = PlannedRun::State::Announced;
+    announced_.push_back(&run);
+    stats_.runs_announced++;
+  }
 }
 
 template <Cache::Strategy S>

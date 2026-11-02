@@ -23,10 +23,12 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
+#include "log/ntfs-common.h"
 #include "memory-disk-reader.h"
 #include "ntfsdir-core.h"
 #include "test-log-sink.h"
@@ -191,6 +193,7 @@ template <Cache::Strategy S>
 Run ListVolume(NtfsVolume<S>& volume, CountingDiskReader& reads) {
   reads.Reset();
   (void)TakeCapturedLog();
+  const std::uint64_t recovered_before = Log::Detail::RecoveredCount();
 
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /
@@ -203,6 +206,7 @@ Run ListVolume(NtfsVolume<S>& volume, CountingDiskReader& reads) {
   run.text = ReadAndRemove(file, path);
   run.log = WithoutReadLines(TakeCapturedLog());
   run.calls = reads.Calls();
+  run.recovered = Log::Detail::RecoveredCount() - recovered_before;
   return run;
 }
 
@@ -218,6 +222,24 @@ std::vector<FakeTreeNode> WideTree(std::size_t directories) {
     nodes.push_back(File(L"a" + Number(index) + L".txt", dir));
     nodes.push_back(Directory(L"sub" + Number(index), dir));
     nodes.push_back(File(L"b" + Number(index) + L".txt", dir + 2));
+  }
+  return nodes;
+}
+
+std::vector<FakeTreeNode> SpacedTree(std::size_t directories, std::size_t files,
+                                     std::size_t ballast) {
+  std::vector<FakeTreeNode> nodes;
+  for (std::size_t index = 0; index < directories; index++) {
+    const std::size_t dir = nodes.size();
+    nodes.push_back(Directory(L"dir" + Number(index), name_tree_root));
+    for (std::size_t file = 0; file < files; file++) {
+      nodes.push_back(File(L"f" + Number(file) + L".txt", dir));
+    }
+    for (std::size_t freed = 0; freed < ballast; freed++) {
+      FakeTreeNode node = File(L"b" + Number(freed) + L".txt", dir);
+      node.in_use = false;
+      nodes.push_back(std::move(node));
+    }
   }
   return nodes;
 }
@@ -287,9 +309,11 @@ std::vector<VolumeOptions> AllOptions() {
 
 template <Cache::Strategy S>
 Run ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
-                    std::size_t dirs, std::uint64_t bytes) {
-  auto counting = std::make_unique<CountingDiskReader>(
-      std::make_unique<MemoryDiskReader>(image));
+                    std::size_t dirs, std::uint64_t bytes,
+                    Tuning::MediaKind kind) {
+  auto memory = std::make_unique<MemoryDiskReader>(image);
+  memory->SetMediaKind(kind);
+  auto counting = std::make_unique<CountingDiskReader>(std::move(memory));
   CountingDiskReader& reads = *counting;
   NtfsVolume<S> volume(std::move(counting),
                        WithReadAhead(options, dirs, bytes));
@@ -321,10 +345,13 @@ DiskModel HardDiskModel() {
 template <Cache::Strategy S>
 TimedRun ListOnSimulatedDisk(const std::vector<BYTE>& image,
                              VolumeOptions options, std::size_t dirs,
-                             std::uint64_t bytes, const DiskModel& model) {
+                             std::uint64_t bytes, const DiskModel& model,
+                             Tuning::MediaKind kind) {
   SimulatedClock clock;
+  auto memory = std::make_unique<MemoryDiskReader>(image);
+  memory->SetMediaKind(kind);
   auto throttled = std::make_unique<ThrottledDiskReader>(
-      std::make_unique<MemoryDiskReader>(image), model, clock,
+      std::move(memory), model, clock,
       WithReadAhead(options, dirs, bytes).tuning.reader);
   const ThrottledDiskReader& disk = *throttled;
   auto counting = std::make_unique<CountingDiskReader>(std::move(throttled));
@@ -402,19 +429,19 @@ std::vector<std::uint32_t>
 
 template Run ListRecursively<Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes);
+    std::uint64_t bytes, Tuning::MediaKind kind);
 template Run ListRecursively<Cache::Strategy::FullCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes);
+    std::uint64_t bytes, Tuning::MediaKind kind);
 template Run ListWithDefaultTuning<Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, const VolumeOptions& options);
 template Run ListWithDefaultTuning<Cache::Strategy::FullCache>(
     const std::vector<BYTE>& image, const VolumeOptions& options);
 template TimedRun ListOnSimulatedDisk<Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes, const DiskModel& model);
+    std::uint64_t bytes, const DiskModel& model, Tuning::MediaKind kind);
 template TimedRun ListOnSimulatedDisk<Cache::Strategy::FullCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes, const DiskModel& model);
+    std::uint64_t bytes, const DiskModel& model, Tuning::MediaKind kind);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead
