@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <string>
@@ -313,6 +314,67 @@ TEST_CASE("The classes and the disk side of a report add up",
                         report.disk.queue_depth.end(),
                         std::uint64_t{0}) == report.disk.reads);
   CHECK(report.disk.sizes.count == report.disk.reads);
+}
+
+TEST_CASE("The disk reads of the standing lane are counted apart",
+          "[bench][read-class][standing]") {
+  const ImageFile image;
+  const Io::FileReader<Cache::Strategy::NoCache> file(image.Open(Caps{}));
+  std::vector<BYTE> buffer(range_bytes);
+  LARGE_INTEGER addr{.QuadPart = 0};
+
+  Tests::BenchSessionGuard session;
+  // One range of the first queue that is used, two of the lane of which one is
+  // used and one is withdrawn, and one read that nobody announced.
+  file.Prefetch(0, range_bytes);
+  file.PrefetchStanding(4 * range_stride, range_bytes);
+  file.PrefetchStanding(8 * range_stride, range_bytes);
+  std::this_thread::sleep_for(std::chrono::milliseconds{100});
+  REQUIRE(file.ReadInto(addr, buffer));
+  addr.QuadPart = 4 * range_stride;
+  REQUIRE(file.ReadInto(addr, buffer));
+  file.CancelStanding(8 * range_stride, range_bytes);
+  addr.QuadPart = 12 * range_stride;
+  REQUIRE(file.ReadInto(addr, buffer));
+  const Bench::Report report = session.Finish();
+
+  CHECK(report.prefetch_calls == 1);
+  CHECK(report.standing_prefetch_calls == 2);
+  CHECK(report.standing_prefetch_bytes == 2 * range_bytes);
+  CHECK(report.standing_cancel_calls == 1);
+  CHECK(report.cancel_calls == 0);
+
+  const Bench::DiskStat& disk = report.disk;
+  CHECK(disk.prefetch_reads == 1);
+  CHECK(disk.prefetch_bytes == range_bytes);
+  CHECK(disk.standing_reads == 2);
+  CHECK(disk.standing_bytes == 2 * range_bytes);
+  // Only the withdrawn range of the lane was read for nothing.
+  CHECK(disk.wasted_bytes == 0);
+  CHECK(disk.standing_wasted_bytes == range_bytes);
+  // Every read of the disk is in exactly one of the three.
+  CHECK(disk.reads == 4);
+  CHECK(disk.bytes == 4 * range_bytes);
+  CHECK(disk.reads - disk.prefetch_reads - disk.standing_reads == 1);
+  CHECK(report.requested_reads == 3);
+}
+
+TEST_CASE("A withdrawn range of the first queue is not a standing waste",
+          "[bench][read-class][standing]") {
+  const ImageFile image;
+  const Io::FileReader<Cache::Strategy::NoCache> file(image.Open(Caps{}));
+
+  Tests::BenchSessionGuard session;
+  file.Prefetch(0, range_bytes);
+  file.PrefetchStanding(4 * range_stride, range_bytes);
+  file.CancelPrefetch();
+  file.CancelStanding(0, (std::numeric_limits<ULONGLONG>::max)());
+  const Bench::Report report = session.Finish();
+
+  CHECK(report.disk.wasted_bytes == range_bytes);
+  CHECK(report.disk.standing_wasted_bytes == range_bytes);
+  CHECK(report.disk.prefetch_reads == 1);
+  CHECK(report.disk.standing_reads == 1);
 }
 
 #endif  // _WIN32

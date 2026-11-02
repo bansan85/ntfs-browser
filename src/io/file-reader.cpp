@@ -155,6 +155,7 @@ void FileReader<S>::Announce(ULONGLONG offset, ULONGLONG length) const {
 
 template <Cache::Strategy S>
 void FileReader<S>::AnnounceStanding(ULONGLONG offset, ULONGLONG length) const {
+  Bench::Detail::RecordStandingPrefetch(offset, length);
   reader_->PrefetchStanding(offset, length);
 }
 
@@ -248,8 +249,10 @@ void FileReader<S>::CancelStanding(ULONGLONG offset, ULONGLONG length) const {
       const ULONGLONG last = offset + length + block - 1;
       end = last - last % block;
     }
+    Bench::Detail::RecordStandingCancel(first, end - first);
     reader_->CancelStanding(first, end - first);
   } else {
+    Bench::Detail::RecordStandingCancel(offset, length);
     reader_->CancelStanding(offset, length);
   }
 }

@@ -120,6 +120,9 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
   json.Field("prefetch_calls", report.prefetch_calls);
   json.Field("prefetch_bytes", report.prefetch_bytes);
   json.Field("cancel_calls", report.cancel_calls);
+  json.Field("standing_prefetch_calls", report.standing_prefetch_calls);
+  json.Field("standing_prefetch_bytes", report.standing_prefetch_bytes);
+  json.Field("standing_cancel_calls", report.standing_cancel_calls);
   json.Field("events_logged", report.events_logged);
   json.Field("events_dropped", report.events_dropped);
   json.EndObject();
@@ -159,6 +162,9 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
   json.Field("prefetch_reads", disk.prefetch_reads);
   json.Field("prefetch_bytes", disk.prefetch_bytes);
   json.Field("wasted_bytes", disk.wasted_bytes);
+  json.Field("standing_reads", disk.standing_reads);
+  json.Field("standing_bytes", disk.standing_bytes);
+  json.Field("standing_wasted_bytes", disk.standing_wasted_bytes);
   json.Field("seeks", disk.seeks);
   json.Field("seek_bytes", disk.seek_bytes);
   // Bytes the disk read for each byte the callers asked for.

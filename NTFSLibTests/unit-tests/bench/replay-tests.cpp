@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -86,6 +87,14 @@ class ScriptRecorder final : public IDiskReader {
 
   void CancelPrefetch() const override { ops_.emplace_back("C"); }
 
+  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override {
+    ops_.push_back(Describe('S', offset, length));
+  }
+
+  void CancelStanding(ULONGLONG offset, ULONGLONG length) const override {
+    ops_.push_back(Describe('X', offset, length));
+  }
+
   void SetReadPattern(Tuning::Pattern pattern) const override {
     ops_.push_back("T " + std::to_string(static_cast<unsigned>(pattern)));
   }
@@ -133,6 +142,25 @@ Bench::ReadLog HandMadeLog() {
       Event(Bench::EventType::Prefetch, 8192, 100),
       ReadEvent(8192, 100),
       Event(Bench::EventType::PhaseEnd, 0, 1),
+      ReadEvent(12288, 100),
+  };
+  return log;
+}
+
+// Reads with the lane's calls between them: ranges announced on the standing
+// lane, one withdrawn, and the whole lane withdrawn at the end.
+Bench::ReadLog StandingLog() {
+  Bench::ReadLog log;
+  log.events = {
+      Event(Bench::EventType::StandingPrefetch, 4096, 100),
+      Event(Bench::EventType::Prefetch, 0, 100),
+      Event(Bench::EventType::StandingPrefetch, 8192, 100),
+      ReadEvent(0, 100),
+      Event(Bench::EventType::StandingCancel, 4096, 100),
+      ReadEvent(8192, 100),
+      Event(Bench::EventType::Cancel),
+      Event(Bench::EventType::StandingCancel, 0,
+            (std::numeric_limits<std::uint64_t>::max)()),
       ReadEvent(12288, 100),
   };
   return log;
@@ -231,6 +259,90 @@ TEST_CASE("An all-announced replay drops the hints and announces every read",
   CHECK(result.prefetches == 4);
   CHECK(result.cancels == 0);
   CHECK(result.failed_reads == 0);
+}
+
+TEST_CASE("An as-recorded replay sends the standing lane calls in place",
+          "[bench][replay][standing]") {
+  const ScriptRecorder reader(16384);
+
+  const Bench::ReplayResult result = Bench::Replay(reader, StandingLog(), {});
+
+  const std::vector<Op> expected{
+      "S 4096 100",
+      "P 0 100",
+      "S 8192 100",
+      "R 0 100",
+      "X 4096 100",
+      "R 8192 100",
+      "C",
+      "X 0 " + std::to_string((std::numeric_limits<std::uint64_t>::max)()),
+      "R 12288 100"};
+  CHECK(reader.Ops() == expected);
+  CHECK(result.reads == 3);
+  CHECK(result.prefetches == 1);
+  CHECK(result.cancels == 1);
+  CHECK(result.standing_prefetches == 2);
+  CHECK(result.standing_cancels == 2);
+}
+
+TEST_CASE("An as-recorded replay shows the lane calls to a counting reader",
+          "[bench][replay][standing]") {
+  auto counting = std::make_unique<Tests::CountingDiskReader>(
+      std::make_unique<Tests::MemoryDiskReader>(
+          std::vector<BYTE>(16384, BYTE{1})));
+  const Tests::CountingDiskReader* const reader = counting.get();
+
+  static_cast<void>(Bench::Replay(*counting, StandingLog(), {}));
+
+  const std::vector<CallKind> kinds{CallKind::PrefetchStanding,
+                                    CallKind::Prefetch,
+                                    CallKind::PrefetchStanding,
+                                    CallKind::Read,
+                                    CallKind::CancelStanding,
+                                    CallKind::Read,
+                                    CallKind::CancelPrefetch,
+                                    CallKind::CancelStanding,
+                                    CallKind::Read};
+  std::vector<CallKind> seen;
+  for (const Call& call : reader->Calls()) {
+    seen.push_back(call.kind);
+  }
+  CHECK(seen == kinds);
+  CHECK(reader->Calls().at(0).offset == 4096);
+  CHECK(reader->Calls().at(0).length == 100);
+}
+
+TEST_CASE("An all-announced replay drops the standing lane calls",
+          "[bench][replay][standing]") {
+  auto counting = std::make_unique<Tests::CountingDiskReader>(
+      std::make_unique<Tests::MemoryDiskReader>(
+          std::vector<BYTE>(16384, BYTE{1})));
+  const Tests::CountingDiskReader* const reader = counting.get();
+  const Bench::ReplayOptions options{.mode = Bench::ReplayMode::AllAnnounced,
+                                     .announce_ahead = 1};
+
+  const Bench::ReplayResult result =
+      Bench::Replay(*counting, StandingLog(), options);
+
+  for (const Call& call : reader->Calls()) {
+    CHECK(call.kind != CallKind::PrefetchStanding);
+    CHECK(call.kind != CallKind::CancelStanding);
+  }
+  CHECK(result.reads == 3);
+  CHECK(result.standing_prefetches == 0);
+  CHECK(result.standing_cancels == 0);
+  CHECK(result.prefetches == 3);
+  CHECK(result.cancels == 0);
+}
+
+TEST_CASE("A replay of a log with no standing lane call counts none",
+          "[bench][replay][standing]") {
+  const ScriptRecorder reader(16384);
+
+  const Bench::ReplayResult result = Bench::Replay(reader, HandMadeLog(), {});
+
+  CHECK(result.standing_prefetches == 0);
+  CHECK(result.standing_cancels == 0);
 }
 
 TEST_CASE("An all-announced replay keeps the pattern events",

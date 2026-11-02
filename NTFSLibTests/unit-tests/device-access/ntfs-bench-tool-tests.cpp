@@ -7,6 +7,7 @@
 #include <fstream>
 #include <ios>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <set>
 #include <string>
@@ -326,6 +327,49 @@ TEST_CASE("NtfsBench replay gives the reads and the classes of the run",
         Count(Member(as_recorded, "reads")));
   CHECK(Count(Member(Member(Member(as_recorded, "report"), "reads"),
                      "requested")) == Count(Member(as_recorded, "reads")));
+}
+
+TEST_CASE("NtfsBench replay counts the standing lane calls of the log",
+          "[device-access][ntfsbench][sample]") {
+  const RecordedRun recorded;
+  std::string error;
+  std::optional<Bench::ReadLog> log =
+      Bench::LoadReadLog(recorded.log_path, &error);
+  INFO(error);
+  REQUIRE(log.has_value());
+  // Three ranges announced on the lane first, and two withdrawals at the end.
+  std::vector<Bench::LogEvent> events;
+  for (const std::uint64_t offset : {0U, 4096U, 8192U}) {
+    events.push_back({.offset = offset,
+                      .length = 4096,
+                      .type = Bench::EventType::StandingPrefetch});
+  }
+  events.insert(events.end(), log->events.begin(), log->events.end());
+  events.push_back({.offset = 4096,
+                    .length = 4096,
+                    .type = Bench::EventType::StandingCancel});
+  events.push_back({.offset = 0,
+                    .length = (std::numeric_limits<std::uint64_t>::max)(),
+                    .type = Bench::EventType::StandingCancel});
+  log->events = events;
+  const std::filesystem::path with_lane = recorded.dir.Path() / "lane.readlog";
+  REQUIRE(Bench::WriteReadLog(with_lane, *log, &error));
+
+  const SampleRun run =
+      RunBench({L"replay", with_lane.wstring(), recorded.image.path.wstring(),
+                L"--mode=both"});
+
+  REQUIRE(run.exit_code == 0);
+  const JsonValue replay = Parse(run.out);
+  const JsonValue& as_recorded = RunOfMode(replay, "recorded");
+  CHECK(Count(Member(as_recorded, "standing_prefetches")) == 3);
+  CHECK(Count(Member(as_recorded, "standing_cancels")) == 2);
+  CHECK(Count(Member(as_recorded, "failed_reads")) == 0);
+  // Every read announced replaces the announcements of the log, the lane's
+  // included.
+  const JsonValue& ideal = RunOfMode(replay, "ideal");
+  CHECK(Count(Member(ideal, "standing_prefetches")) == 0);
+  CHECK(Count(Member(ideal, "standing_cancels")) == 0);
 }
 
 TEST_CASE("NtfsBench replay with every read announced leaves none to plan",

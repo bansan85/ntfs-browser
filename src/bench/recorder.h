@@ -65,15 +65,26 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void
     NoteRead(ReadClass cls, std::uint64_t wait_ns,
              std::uint32_t queue_depth) noexcept;
 
-// The reader says it issued a read to the disk: a read ahead or a synchronous
-// one. bytes is what the disk is asked for, queue_depth the reads in flight
-// with it.
+// Why a read was issued to the disk.
+enum class DiskReadOrigin : std::uint8_t {
+  // The caller waited for it.
+  Synchronous,
+  // A read ahead of a range of the first queue of announced ranges.
+  ReadAhead,
+  // A read ahead of a range of the standing lane.
+  Standing
+};
+
+// The reader says it issued a read to the disk. bytes is what the disk is
+// asked for, queue_depth the reads in flight with it.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
-    NoteDiskRead(std::uint64_t offset, std::uint64_t bytes, bool prefetch,
-                 std::uint32_t queue_depth) noexcept;
+    NoteDiskRead(std::uint64_t offset, std::uint64_t bytes,
+                 DiskReadOrigin origin, std::uint32_t queue_depth) noexcept;
 
 // The reader says a read ahead of bytes was dropped before any read used it.
-NTFS_BROWSER_EXPORT_TESTS_ONLY void NoteDiskWaste(std::uint64_t bytes) noexcept;
+// standing says the range belonged to the standing lane.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void NoteDiskWaste(std::uint64_t bytes,
+                                                  bool standing) noexcept;
 
 // FileReader says a ReadInto() of the volume ran. ok is its verdict.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void RecordRead(std::uint64_t offset,
@@ -84,6 +95,13 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void RecordRead(std::uint64_t offset,
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
     RecordPrefetch(std::uint64_t offset, std::uint64_t length) noexcept;
 NTFS_BROWSER_EXPORT_TESTS_ONLY void RecordCancel() noexcept;
+
+// FileReader says a range was announced on the standing lane, or an interval
+// withdrawn from it.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    RecordStandingPrefetch(std::uint64_t offset, std::uint64_t length) noexcept;
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    RecordStandingCancel(std::uint64_t offset, std::uint64_t length) noexcept;
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
     RecordPattern(Tuning::Pattern pattern) noexcept;
 

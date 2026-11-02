@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -42,6 +43,20 @@ constexpr ULONGLONG range_stride = 8192;
 
 // The largest offset: an interval that runs to it withdraws everything.
 constexpr ULONGLONG max_offset = (std::numeric_limits<ULONGLONG>::max)();
+
+// The reads, bytes and wasted bytes of the reads ahead of both lanes: these
+// tests check the caps and the matching, which the two lanes share.
+std::uint64_t AheadReads(const Bench::DiskStat& disk) {
+  return disk.prefetch_reads + disk.standing_reads;
+}
+
+std::uint64_t AheadBytes(const Bench::DiskStat& disk) {
+  return disk.prefetch_bytes + disk.standing_bytes;
+}
+
+std::uint64_t AheadWasted(const Bench::DiskStat& disk) {
+  return disk.wasted_bytes + disk.standing_wasted_bytes;
+}
 
 // The byte of the image at index: it depends on its offset, so a shifted read
 // cannot match by accident.
@@ -144,7 +159,7 @@ TEST_CASE("A read inside a standing range is served from it",
   CHECK(WasServed(whole));
   // The caller read nothing itself: the two reads of the disk are the lane's.
   CHECK(report.disk.reads == 2);
-  CHECK(report.disk.prefetch_reads == 2);
+  CHECK(AheadReads(report.disk) == 2);
 }
 
 TEST_CASE("A read outside every standing range is a Plan read",
@@ -185,7 +200,7 @@ TEST_CASE("A read of either lane drops no range of the standing lane",
     CHECK(WasServed(outcome));
   }
   CHECK(report.disk.reads == 4);
-  CHECK(report.disk.wasted_bytes == 0);
+  CHECK(AheadWasted(report.disk) == 0);
 }
 
 TEST_CASE("The first lane is tried before the standing lane",
@@ -207,7 +222,7 @@ TEST_CASE("The first lane is tried before the standing lane",
   CHECK(WasServed(first));
   CHECK(WasServed(lane));
   CHECK(report.disk.reads == 2);
-  CHECK(report.disk.wasted_bytes == 0);
+  CHECK(AheadWasted(report.disk) == 0);
 }
 
 TEST_CASE("CancelPrefetch leaves the standing lane alone",
@@ -229,7 +244,7 @@ TEST_CASE("CancelPrefetch leaves the standing lane alone",
   CHECK(WasServed(second));
   // Only the range of the first lane was read for nothing.
   CHECK(report.disk.reads == 3);
-  CHECK(report.disk.wasted_bytes == range_bytes);
+  CHECK(AheadWasted(report.disk) == range_bytes);
 }
 
 TEST_CASE("CancelStanding withdraws the ranges that overlap the interval",
@@ -280,8 +295,8 @@ TEST_CASE("CancelStanding withdraws the ranges that overlap the interval",
     LetTheDiskRun();
     reader->CancelStanding(0, max_offset);
     const Bench::Report report = session.Finish();
-    CHECK(report.disk.prefetch_reads == 4);
-    CHECK(report.disk.wasted_bytes == 4 * range_bytes);
+    CHECK(AheadReads(report.disk) == 4);
+    CHECK(AheadWasted(report.disk) == 4 * range_bytes);
   }
 }
 
@@ -300,7 +315,7 @@ TEST_CASE("A range of the first lane equal to a standing range is ignored",
 
   CHECK(read.bytes_match);
   CHECK(WasServed(read));
-  CHECK(report.disk.prefetch_reads == 2);
+  CHECK(AheadReads(report.disk) == 2);
 }
 
 TEST_CASE("The standing lane leaves a share of the read slots to the first",
@@ -321,7 +336,9 @@ TEST_CASE("The standing lane leaves a share of the read slots to the first",
     Tests::BenchSessionGuard session;
     AnnounceStanding(*reader, 0, 40);
     const Bench::Report report = session.Finish();
-    CHECK(report.disk.prefetch_reads == lane_reads);
+    CHECK(AheadReads(report.disk) == lane_reads);
+    CHECK(report.disk.standing_reads == lane_reads);
+    CHECK(report.disk.prefetch_reads == 0);
   }
 
   SECTION("the first lane takes the rest, whatever the lane holds") {
@@ -332,7 +349,7 @@ TEST_CASE("The standing lane leaves a share of the read slots to the first",
       reader->Prefetch(RangeAt(index), range_bytes);
     }
     const Bench::Report report = session.Finish();
-    CHECK(report.disk.prefetch_reads == max_reads);
+    CHECK(AheadReads(report.disk) == max_reads);
   }
 }
 
@@ -355,7 +372,7 @@ TEST_CASE("The lane holds at most max_announced_ranges ranges",
   CHECK(ignored.bytes_match);
   CHECK(WasServed(kept));
   CHECK(ignored.note.cls == Bench::ReadClass::Plan);
-  CHECK(report.disk.prefetch_reads == 4);
+  CHECK(AheadReads(report.disk) == 4);
 }
 
 TEST_CASE("A range of the lane over the range cap is not announced",
@@ -372,7 +389,7 @@ TEST_CASE("A range of the lane over the range cap is not announced",
   reader->PrefetchStanding(max_offset - range_bytes, 2 * range_bytes);
   const Bench::Report report = session.Finish();
 
-  CHECK(report.disk.prefetch_reads == 0);
+  CHECK(AheadReads(report.disk) == 0);
 }
 
 TEST_CASE("The lane and the first lane share the bytes in flight",
@@ -391,8 +408,8 @@ TEST_CASE("The lane and the first lane share the bytes in flight",
   reader->PrefetchStanding(RangeAt(40), range_bytes);
   const Bench::Report report = session.Finish();
 
-  CHECK(report.disk.prefetch_reads == 2);
-  CHECK(report.disk.prefetch_bytes == 4 * range_bytes);
+  CHECK(AheadReads(report.disk) == 2);
+  CHECK(AheadBytes(report.disk) == 4 * range_bytes);
 }
 
 TEST_CASE("A lone range over the byte cap still starts on the lane",
@@ -409,7 +426,7 @@ TEST_CASE("A lone range over the byte cap still starts on the lane",
 
   CHECK(read.bytes_match);
   CHECK(WasServed(read));
-  CHECK(report.disk.prefetch_reads == 1);
+  CHECK(AheadReads(report.disk) == 1);
 }
 
 TEST_CASE("The lane starts under the caps of the pattern in force",
@@ -427,7 +444,7 @@ TEST_CASE("The lane starts under the caps of the pattern in force",
 
   // One read in all under the first pattern, and the first lane keeps it: the
   // three ranges start once the caps allow more.
-  CHECK(report.disk.prefetch_reads == 3);
+  CHECK(AheadReads(report.disk) == 3);
 }
 
 TEST_CASE("A lane read that is done is classified like a first lane one",

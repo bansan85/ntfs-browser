@@ -208,11 +208,19 @@ struct KindStat {
 struct DiskStat {
   std::uint64_t reads{0};
   std::uint64_t bytes{0};
-  // Reads that were issued as a read ahead, and their bytes.
+  // Reads that were issued as a read ahead of the first queue of announced
+  // ranges, and their bytes. The reads of the standing lane are not in them.
   std::uint64_t prefetch_reads{0};
   std::uint64_t prefetch_bytes{0};
   // Bytes of reads ahead that no read used before they were dropped.
   std::uint64_t wasted_bytes{0};
+  // The same three for the reads issued as a read ahead of the standing lane
+  // (IDiskReader::PrefetchStanding()). A read of the disk is counted in
+  // reads and bytes, and in exactly one of the synchronous reads, prefetch_*
+  // and standing_*.
+  std::uint64_t standing_reads{0};
+  std::uint64_t standing_bytes{0};
+  std::uint64_t standing_wasted_bytes{0};
   // Reads that did not start where the previous one issued ended, and the sum
   // of the distances.
   std::uint64_t seeks{0};
@@ -245,6 +253,11 @@ struct Report {
   std::uint64_t prefetch_calls{0};
   std::uint64_t prefetch_bytes{0};
   std::uint64_t cancel_calls{0};
+  // The calls of the standing lane that reached the reader: announced ranges
+  // (and their bytes) and withdrawals.
+  std::uint64_t standing_prefetch_calls{0};
+  std::uint64_t standing_prefetch_bytes{0};
+  std::uint64_t standing_cancel_calls{0};
   // Events kept in the log, and those dropped past the cap.
   std::uint64_t events_logged{0};
   std::uint64_t events_dropped{0};
@@ -274,7 +287,12 @@ enum class EventType : std::uint8_t {
   Pattern = 'T',
   // A phase began ('B') or ended ('E'): length holds the Phase.
   PhaseBegin = 'B',
-  PhaseEnd = 'E'
+  PhaseEnd = 'E',
+  // A PrefetchStanding(): a range announced on the standing lane. Version 2.
+  StandingPrefetch = 'S',
+  // A CancelStanding(): the interval withdrawn from the standing lane, where
+  // offset 0 and length UINT64_MAX is the whole lane. Version 2.
+  StandingCancel = 'X'
 };
 
 // One entry of the read log. The file holds them as they are, 48 bytes each,
@@ -350,8 +368,9 @@ NTFS_BROWSER_EXPORT void Start(const SessionOptions& options = {});
     WriteReadLog(const std::filesystem::path& path, const ReadLog& log,
                  std::string* error);
 
-// Reads a file WriteReadLog() wrote. Nothing, with the reason in error, when
-// the file is missing, cut or of another version.
+// Reads a file WriteReadLog() wrote, in version 2 or in version 1 (which has
+// no standing lane events). Nothing, with the reason in error, when the file is
+// missing, cut or of another version.
 [[nodiscard]] NTFS_BROWSER_EXPORT std::optional<ReadLog>
     LoadReadLog(const std::filesystem::path& path, std::string* error);
 
@@ -403,12 +422,14 @@ class NTFS_BROWSER_EXPORT ThreadScope {
 
 // How Replay() issues the announcements.
 enum class ReplayMode : std::uint8_t {
-  // The Prefetch(), CancelPrefetch() and SetReadPattern() calls of the log, in
-  // their place among the reads: the run as it was, with no parsing.
+  // The Prefetch(), CancelPrefetch(), PrefetchStanding(), CancelStanding()
+  // and SetReadPattern() calls of the log, in their place among the reads: the
+  // run as it was, with no parsing.
   AsRecorded,
-  // The announcements of the log are dropped, and every read is announced
-  // ahead of its turn instead, as far as announce_ahead allows: the floor of a
-  // plan that knows every read in advance.
+  // The announcements of the log, the standing lane's included, are dropped,
+  // and every read is announced ahead of its turn instead, as far as
+  // announce_ahead allows: the floor of a plan that knows every read in
+  // advance.
   AllAnnounced
 };
 
@@ -428,6 +449,9 @@ struct ReplayResult {
   std::uint64_t failed_reads{0};
   std::uint64_t prefetches{0};
   std::uint64_t cancels{0};
+  // The standing lane calls made: ranges announced, and withdrawals.
+  std::uint64_t standing_prefetches{0};
+  std::uint64_t standing_cancels{0};
 };
 
 // Replays the reads of log through reader, in order, with nothing between

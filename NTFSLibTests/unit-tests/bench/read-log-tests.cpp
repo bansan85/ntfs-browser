@@ -69,10 +69,14 @@ Bench::ReadLog SampleLog() {
   Bench::ReadLog log;
   log.volume_bytes = 0x123456789ABC;
   log.start_unix_ns = 1'700'000'000'123'456'789;
-  const std::array types{
-      Bench::EventType::Read,       Bench::EventType::Prefetch,
-      Bench::EventType::Cancel,     Bench::EventType::Pattern,
-      Bench::EventType::PhaseBegin, Bench::EventType::PhaseEnd};
+  const std::array types{Bench::EventType::Read,
+                         Bench::EventType::Prefetch,
+                         Bench::EventType::Cancel,
+                         Bench::EventType::Pattern,
+                         Bench::EventType::PhaseBegin,
+                         Bench::EventType::PhaseEnd,
+                         Bench::EventType::StandingPrefetch,
+                         Bench::EventType::StandingCancel};
   for (std::uint64_t index = 0; index < 20; index++) {
     log.events.push_back(MakeEvent(types.at(index % types.size()), index));
   }
@@ -164,7 +168,7 @@ TEST_CASE("A read log file has the documented layout", "[bench][read-log]") {
   std::memcpy(&version, bytes.data() + version_offset, sizeof(version));
   std::memcpy(&size, bytes.data() + event_size_offset, sizeof(size));
   std::memcpy(&count, bytes.data() + count_offset, sizeof(count));
-  CHECK(version == 1);
+  CHECK(version == 2);
   CHECK(size == event_bytes);
   CHECK(count == log.events.size());
 }
@@ -264,11 +268,47 @@ TEST_CASE("A file with another magic is refused", "[bench][read-log]") {
 TEST_CASE("A file of another version is refused", "[bench][read-log]") {
   const Tests::TempDir dir;
   const std::uint32_t version =
-      GENERATE(std::uint32_t{0}, std::uint32_t{2}, std::uint32_t{0xFFFFFFFF});
+      GENERATE(std::uint32_t{0}, std::uint32_t{3}, std::uint32_t{0xFFFFFFFF});
   std::vector<char> bytes = Serialized(dir, SampleLog());
   Patch(bytes, version_offset, version);
 
-  CHECK_THAT(RefusedBecause(dir, bytes), ContainsSubstring("version"));
+  const std::string error = RefusedBecause(dir, bytes);
+  CHECK_THAT(error, ContainsSubstring("version"));
+  // The reason names the version found and the ones this build reads.
+  CHECK_THAT(error, ContainsSubstring(std::to_string(version)));
+  CHECK_THAT(error, ContainsSubstring("1 to 2"));
+}
+
+TEST_CASE("A version 1 read log still loads", "[bench][read-log]") {
+  const Tests::TempDir dir;
+  const Bench::ReadLog log = SampleLog();
+  std::vector<char> bytes = Serialized(dir, log);
+  Patch(bytes, version_offset, std::uint32_t{1});
+  const std::filesystem::path path = dir.Path() / "old.readlog";
+  WriteFile(path, bytes);
+
+  std::string error;
+  const std::optional<Bench::ReadLog> loaded = Bench::LoadReadLog(path, &error);
+
+  REQUIRE(loaded.has_value());
+  CheckSameLog(log, *loaded);
+}
+
+TEST_CASE("The standing lane events keep their letters in the file",
+          "[bench][read-log]") {
+  const Tests::TempDir dir;
+  Bench::ReadLog log;
+  log.events.push_back(MakeEvent(Bench::EventType::StandingPrefetch, 1));
+  log.events.push_back(MakeEvent(Bench::EventType::StandingCancel, 2));
+  const std::vector<char> bytes = Serialized(dir, log);
+
+  // The type is the byte after the five 64-bit fields of an event.
+  constexpr size_t type_offset = 40;
+  REQUIRE(bytes.size() == header_bytes + (2 * event_bytes));
+  CHECK(bytes.at(header_bytes + type_offset) == 'S');
+  CHECK(bytes.at(header_bytes + event_bytes + type_offset) == 'X');
+  CHECK(static_cast<char>(Bench::EventType::Prefetch) == 'P');
+  CHECK(static_cast<char>(Bench::EventType::Cancel) == 'C');
 }
 
 TEST_CASE("A file with another event size is refused", "[bench][read-log]") {

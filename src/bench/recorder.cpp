@@ -221,8 +221,8 @@ void NoteRead(ReadClass cls, std::uint64_t wait_ns,
             .valid = true};
 }
 
-void NoteDiskRead(std::uint64_t offset, std::uint64_t bytes, bool prefetch,
-                  std::uint32_t queue_depth) noexcept {
+void NoteDiskRead(std::uint64_t offset, std::uint64_t bytes,
+                  DiskReadOrigin origin, std::uint32_t queue_depth) noexcept {
   if (!SessionOn()) {
     return;
   }
@@ -230,9 +230,12 @@ void NoteDiskRead(std::uint64_t offset, std::uint64_t bytes, bool prefetch,
   State& state = Get();
   disk.reads++;
   disk.bytes += bytes;
-  if (prefetch) {
+  if (origin == DiskReadOrigin::ReadAhead) {
     disk.prefetch_reads++;
     disk.prefetch_bytes += bytes;
+  } else if (origin == DiskReadOrigin::Standing) {
+    disk.standing_reads++;
+    disk.standing_bytes += bytes;
   }
   Add(disk.sizes, bytes);
   disk.queue_depth.at((std::min)(static_cast<std::size_t>(queue_depth),
@@ -245,9 +248,10 @@ void NoteDiskRead(std::uint64_t offset, std::uint64_t bytes, bool prefetch,
   state.disk_end = offset + bytes;
 }
 
-void NoteDiskWaste(std::uint64_t bytes) noexcept {
+void NoteDiskWaste(std::uint64_t bytes, bool standing) noexcept {
   if (SessionOn()) {
-    Get().report.disk.wasted_bytes += bytes;
+    DiskStat& disk = Get().report.disk;
+    (standing ? disk.standing_wasted_bytes : disk.wasted_bytes) += bytes;
   }
 }
 
@@ -325,6 +329,39 @@ void RecordCancel() noexcept {
   Push(state, {.start_ns = now,
                .end_ns = now,
                .type = EventType::Cancel,
+               .phase = CurrentPhaseIndex(state)});
+}
+
+void RecordStandingPrefetch(std::uint64_t offset,
+                            std::uint64_t length) noexcept {
+  if (!SessionOn()) {
+    return;
+  }
+  State& state = Get();
+  const std::uint64_t now = NowNs();
+  state.report.standing_prefetch_calls++;
+  state.report.standing_prefetch_bytes += length;
+  Push(state, {.start_ns = now,
+               .end_ns = now,
+               .offset = offset,
+               .length = length,
+               .type = EventType::StandingPrefetch,
+               .kind = t_kind,
+               .phase = CurrentPhaseIndex(state)});
+}
+
+void RecordStandingCancel(std::uint64_t offset, std::uint64_t length) noexcept {
+  if (!SessionOn()) {
+    return;
+  }
+  State& state = Get();
+  const std::uint64_t now = NowNs();
+  state.report.standing_cancel_calls++;
+  Push(state, {.start_ns = now,
+               .end_ns = now,
+               .offset = offset,
+               .length = length,
+               .type = EventType::StandingCancel,
                .phase = CurrentPhaseIndex(state)});
 }
 

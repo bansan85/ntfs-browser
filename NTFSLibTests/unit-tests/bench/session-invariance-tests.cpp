@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <format>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -159,6 +160,13 @@ ScriptRun RunScript(const std::vector<BYTE>& image) {
   ReadTo(file, static_cast<LONGLONG>(image.size()) - 50, 50, run);
   ReadTo(file, static_cast<LONGLONG>(image.size()) - 20, 100, run);
   ReadTo(file, 100, 0, run);
+  // The standing lane: a range, a read inside it, a withdrawal of a part of
+  // it, and of the whole lane.
+  file.PrefetchStanding(100000, 5000);
+  file.PrefetchStanding(20000, 100);
+  ReadTo(file, 100100, 40, run);
+  file.CancelStanding(20000, 1);
+  file.CancelStanding(0, (std::numeric_limits<ULONGLONG>::max)());
   file.CancelPrefetch();
 
   run.calls = reader->Calls();
@@ -246,6 +254,8 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(CountKind(plain.calls, Kind::Read) > 0);
   CHECK(CountKind(plain.calls, Kind::Prefetch) > 0);
   CHECK(CountKind(plain.calls, Kind::CancelPrefetch) == 2);
+  CHECK(CountKind(plain.calls, Kind::PrefetchStanding) == 2);
+  CHECK(CountKind(plain.calls, Kind::CancelStanding) == 2);
 
   Tests::BenchSessionGuard session(Bench::SessionOptions{.keep_log = keep_log});
   const ScriptRun measured = RunScript<S>(image);
@@ -259,6 +269,10 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(report.requested_reads == CountKind(plain.calls, Kind::Read));
   CHECK(report.prefetch_calls == CountKind(plain.calls, Kind::Prefetch));
   CHECK(report.cancel_calls == CountKind(plain.calls, Kind::CancelPrefetch));
+  CHECK(report.standing_prefetch_calls ==
+        CountKind(plain.calls, Kind::PrefetchStanding));
+  CHECK(report.standing_cancel_calls ==
+        CountKind(plain.calls, Kind::CancelStanding));
   if (keep_log) {
     CHECK(
         SameCallList(LoggedReads(Bench::TakeReadLog()), ReadsOf(plain.calls)));

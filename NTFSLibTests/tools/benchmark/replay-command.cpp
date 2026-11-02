@@ -115,6 +115,8 @@ int ReplayCommand(const Arguments& args) {
     json.Field("failed_reads", run.result.failed_reads);
     json.Field("prefetches", run.result.prefetches);
     json.Field("cancels", run.result.cancels);
+    json.Field("standing_prefetches", run.result.standing_prefetches);
+    json.Field("standing_cancels", run.result.standing_cancels);
     json.Key("report");
     json.BeginObject();
     NtfsDevice::WriteReportJson(json, run.report);

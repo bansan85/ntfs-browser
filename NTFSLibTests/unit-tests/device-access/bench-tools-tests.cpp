@@ -311,6 +311,18 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
   // A file does not tell its classes: the disk side of the report is there,
   // and empty for the reader of an image on this platform.
   CHECK(Member(Member(run_json, "disk"), "queue_depth").items.size() == 65);
+  // The counters of the standing lane are there, and nothing used the lane.
+  for (const std::string_view name :
+       {"standing_prefetch_calls", "standing_prefetch_bytes",
+        "standing_cancel_calls"}) {
+    INFO("reads." << name);
+    CHECK(Count(Member(reads, name)) == 0);
+  }
+  for (const std::string_view name :
+       {"standing_reads", "standing_bytes", "standing_wasted_bytes"}) {
+    INFO("disk." << name);
+    CHECK(Count(Member(Member(run_json, "disk"), name)) == 0);
+  }
   CHECK(Member(run_json, "main_thread_ns").kind == JsonValue::Kind::Object);
 }
 

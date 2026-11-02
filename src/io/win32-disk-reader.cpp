@@ -176,7 +176,7 @@ class Win32DiskReader::Prefetcher {
 
   // Starts the read of range in a free slot. A read that cannot start leaves
   // the slot with nothing read.
-  void StartRead(Range& range);
+  void StartRead(Range& range, Bench::Detail::DiskReadOrigin origin);
 
   // Waits for the read of slot, and returns the bytes it read.
   DWORD Wait(Slot& slot);
@@ -319,7 +319,7 @@ void Win32DiskReader::Prefetcher::StartReads() {
             active_->max_bytes) {
       break;
     }
-    StartRead(next);
+    StartRead(next, Bench::Detail::DiskReadOrigin::ReadAhead);
     first_.started++;
     first_.started_bytes += bytes;
   }
@@ -340,13 +340,14 @@ void Win32DiskReader::Prefetcher::StartStandingReads() {
             active_->max_bytes) {
       return;
     }
-    StartRead(next);
+    StartRead(next, Bench::Detail::DiskReadOrigin::Standing);
     standing_.started++;
     standing_.started_bytes += bytes;
   }
 }
 
-void Win32DiskReader::Prefetcher::StartRead(Range& range) {
+void Win32DiskReader::Prefetcher::StartRead(
+    Range& range, Bench::Detail::DiskReadOrigin origin) {
   // The reads started are fewer than ReadsCap(), and each started range holds
   // one slot.
   const auto free = std::ranges::find_if(
@@ -389,7 +390,7 @@ void Win32DiskReader::Prefetcher::StartRead(Range& range) {
                           nullptr, &slot.overlapped) != FALSE ||
                  GetLastError() == ERROR_IO_PENDING;
   if (slot.pending) {
-    Bench::Detail::NoteDiskRead(slot.start, bytes, true, in_flight);
+    Bench::Detail::NoteDiskRead(slot.start, bytes, origin, in_flight);
   }
 }
 
@@ -436,7 +437,7 @@ void Win32DiskReader::Prefetcher::Drop(Lane& lane, size_t index) {
     lane.started--;
     lane.started_bytes -= bytes;
     if (!range.used) {
-      Bench::Detail::NoteDiskWaste(bytes);
+      Bench::Detail::NoteDiskWaste(bytes, &lane == &standing_);
     }
   }
   lane.ranges.erase(lane.ranges.begin() + static_cast<std::ptrdiff_t>(index));
@@ -636,8 +637,9 @@ bool Win32DiskReader::ReadInto(LARGE_INTEGER& addr,
     // The caller waited for the whole read: nothing announced it.
     const std::uint32_t in_flight =
         prefetcher_ != nullptr ? prefetcher_->InFlightReads() + 1 : 1;
-    Bench::Detail::NoteDiskRead(static_cast<std::uint64_t>(addr.QuadPart),
-                                dest.size(), false, in_flight);
+    Bench::Detail::NoteDiskRead(
+        static_cast<std::uint64_t>(addr.QuadPart), dest.size(),
+        Bench::Detail::DiskReadOrigin::Synchronous, in_flight);
     Bench::Detail::NoteRead(Bench::ReadClass::Plan,
                             Bench::Detail::NowNs() - began, in_flight);
   }

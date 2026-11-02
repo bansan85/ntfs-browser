@@ -24,8 +24,13 @@ static_assert(std::endian::native == std::endian::little,
 // First bytes of a read log file.
 constexpr std::array<char, 8> log_magic{'N', 'T', 'F', 'S', 'R', 'D', 'L', 'G'};
 
-// Version of the layout below. A change of the layout MUST bump it.
-constexpr std::uint32_t log_version = 1;
+// Version of the layout below. A change of the layout MUST bump it. Version 2
+// adds the event types 'S' and 'X' (the standing lane) and keeps the layout, so
+// a version 1 file still loads.
+constexpr std::uint32_t log_version = 2;
+
+// The oldest version LoadReadLog() accepts.
+constexpr std::uint32_t oldest_readable_version = 1;
 
 // Size of the header, so that the events start on a multiple of 16.
 constexpr std::size_t header_bytes = 64;
@@ -104,8 +109,12 @@ std::optional<ReadLog> LoadReadLog(const std::filesystem::path& path,
   if (!in || header.magic != log_magic) {
     return fail(path.string() + " is not a read log");
   }
-  if (header.version != log_version || header.event_bytes != sizeof(LogEvent)) {
-    return fail(path.string() + " has an unknown read log version");
+  if (header.version < oldest_readable_version ||
+      header.version > log_version || header.event_bytes != sizeof(LogEvent)) {
+    return fail(path.string() + " has an unknown read log version (" +
+                std::to_string(header.version) + ", this build reads " +
+                std::to_string(oldest_readable_version) + " to " +
+                std::to_string(log_version) + ")");
   }
 
   ReadLog log;

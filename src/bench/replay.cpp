@@ -107,6 +107,18 @@ ReplayResult Replay(const IDiskReader& reader, const ReadLog& log,
           result.cancels++;
         }
         break;
+      case EventType::StandingPrefetch:
+        if (!announce) {
+          reader.PrefetchStanding(event.offset, event.length);
+          result.standing_prefetches++;
+        }
+        break;
+      case EventType::StandingCancel:
+        if (!announce) {
+          reader.CancelStanding(event.offset, event.length);
+          result.standing_cancels++;
+        }
+        break;
       case EventType::Pattern:
         if (event.length < Tuning::pattern_count) {
           reader.SetReadPattern(static_cast<Tuning::Pattern>(event.length));
