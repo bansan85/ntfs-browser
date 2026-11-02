@@ -605,6 +605,84 @@ TEST_CASE("NtfsVolume::PrefetchMftSlots announces one range per fragment",
 }
 
 TEMPLATE_TEST_CASE_SIG(
+    "NtfsVolume::PrefetchMftSlotsStanding names the ranges PrefetchMftSlots "
+    "does",
+    "[mft][slot-reader][prefetch][standing]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const HintedVolume<S> opened = OpenHintedVolume<S>();
+
+  struct Slots {
+    ULONGLONG first;
+    ULONGLONG count;
+  };
+
+  // A range inside a fragment, one across the end of a fragment, a long one
+  // across several, and the slots that are never announced.
+  const Slots cases[] = {{.first = 20, .count = 10},
+                         {.first = 90, .count = 20},
+                         {.first = 30, .count = 300},
+                         {.first = 5, .count = 4},
+                         {.first = 20, .count = 0}};
+  for (const Slots& slots : cases) {
+    INFO("slots " << slots.first << " + " << slots.count);
+    opened.reader->Reset();
+    opened.volume->PrefetchMftSlots(slots.first, slots.count);
+    std::vector<std::pair<ULONGLONG, ULONGLONG>> queued;
+    for (const HintCall& call : opened.reader->Calls()) {
+      REQUIRE(call.kind == HintKind::Prefetch);
+      queued.emplace_back(call.offset, call.length);
+    }
+
+    opened.reader->Reset();
+    opened.volume->PrefetchMftSlotsStanding(slots.first, slots.count);
+    std::vector<std::pair<ULONGLONG, ULONGLONG>> standing;
+    for (const HintCall& call : opened.reader->Calls()) {
+      REQUIRE(call.kind == HintKind::PrefetchStanding);
+      standing.emplace_back(call.offset, call.length);
+    }
+
+    CHECK(standing == queued);
+    CHECK(queued.empty() == (slots.first < 16 || slots.count == 0));
+  }
+}
+
+TEST_CASE(
+    "NtfsVolume::PrefetchMftSlotsStanding announces one range per fragment",
+    "[mft][slot-reader][prefetch][standing]") {
+  const HintedVolume<Cache::Strategy::NoCache> opened =
+      OpenHintedVolume<Cache::Strategy::NoCache>();
+  opened.reader->Reset();
+
+  // Slots 90 to 109 span the end of the first fragment and the next one.
+  opened.volume->PrefetchMftSlotsStanding(90, 20);
+  opened.volume->CancelMftSlotsStanding(90, 20);
+  opened.volume->PrefetchMftSlotsStanding(5, 4);
+  opened.volume->CancelMftSlotsStanding(5, 4);
+  opened.volume->PrefetchMftSlotsStanding(20, 0);
+  opened.volume->CancelMftSlotsStanding(20, 0);
+
+  const std::vector<HintCall>& calls = opened.reader->Calls();
+  REQUIRE(calls.size() == 4);
+  const ULONGLONG first = Tests::FragmentedMftScanSlotOffset(90);
+  const ULONGLONG second = Tests::FragmentedMftScanSlotOffset(100);
+  const ULONGLONG length = size_t{10} * 1024;
+  CHECK(calls.at(0).kind == HintKind::PrefetchStanding);
+  CHECK(calls.at(0).offset == first);
+  CHECK(calls.at(0).length == length);
+  CHECK(calls.at(1).kind == HintKind::PrefetchStanding);
+  CHECK(calls.at(1).offset == second);
+  CHECK(calls.at(1).length == length);
+  // The withdrawal names the same ranges, and the records below
+  // Mft::Idx::User, which sit at a fixed address, make no hint.
+  CHECK(calls.at(2).kind == HintKind::CancelStanding);
+  CHECK(calls.at(2).offset == first);
+  CHECK(calls.at(2).length == length);
+  CHECK(calls.at(3).kind == HintKind::CancelStanding);
+  CHECK(calls.at(3).offset == second);
+  CHECK(calls.at(3).length == length);
+}
+
+TEMPLATE_TEST_CASE_SIG(
     "SlotReader::ServeWindow() gives the window that holds a slot",
     "[mft][slot-reader]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {

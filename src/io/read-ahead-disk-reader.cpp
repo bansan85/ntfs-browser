@@ -132,6 +132,21 @@ class ReadAheadDiskReader::Impl {
     }
   }
 
+  // Pass the standing lane's hints on to the wrapped reader.
+  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) {
+    const std::scoped_lock inner_lock{inner_mutex_};
+    if (inner_ != nullptr) {
+      inner_->PrefetchStanding(offset, length);
+    }
+  }
+
+  void CancelStanding(ULONGLONG offset, ULONGLONG length) {
+    const std::scoped_lock inner_lock{inner_mutex_};
+    if (inner_ != nullptr) {
+      inner_->CancelStanding(offset, length);
+    }
+  }
+
   // Passes the read pattern on to the wrapped reader.
   void SetReadPattern(Tuning::Pattern pattern) {
     const std::scoped_lock inner_lock{inner_mutex_};
@@ -441,6 +456,16 @@ void ReadAheadDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
 }
 
 void ReadAheadDiskReader::CancelPrefetch() const { impl_->CancelPrefetch(); }
+
+void ReadAheadDiskReader::PrefetchStanding(ULONGLONG offset,
+                                           ULONGLONG length) const {
+  impl_->PrefetchStanding(offset, length);
+}
+
+void ReadAheadDiskReader::CancelStanding(ULONGLONG offset,
+                                         ULONGLONG length) const {
+  impl_->CancelStanding(offset, length);
+}
 
 void ReadAheadDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
   impl_->SetReadPattern(pattern);

@@ -169,6 +169,14 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   // reads, through $MFT's own extents. Announces nothing where that read would
   // fail at once.
   void PrefetchMftSlots(ULONGLONG first_ref, ULONGLONG count) const;
+  // Announces the same disk ranges as PrefetchMftSlots(), on the standing lane
+  // of the reader (see IDiskReader::PrefetchStanding()): CancelPrefetch() does
+  // not withdraw them. A hint, like Prefetch(): it changes when the bytes are
+  // read, never which.
+  void PrefetchMftSlotsStanding(ULONGLONG first_ref, ULONGLONG count) const;
+  // Withdraws from the standing lane the ranges that overlap the disk ranges a
+  // ReadMftSlots() of count slots from first_ref reads.
+  void CancelMftSlotsStanding(ULONGLONG first_ref, ULONGLONG count) const;
   // Reads out.size() bytes of the $MFTMirr copy of record file_ref. It reads
   // nothing and returns false unless recover_errors is on, the boot sector
   // names a usable $MFTMirr, and file_ref is below 4: the copy holds only

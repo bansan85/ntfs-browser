@@ -45,6 +45,10 @@ class PosixDeviceDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // is nothing to cancel.
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
 
+  // Does what Prefetch() does. The kernel keeps no lane of ranges, so
+  // CancelStanding() has nothing to withdraw and stays the default.
+  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;
+
   // The errno of the last Open() that failed, 0 after one that succeeded.
   // Callers tell "permission denied" from "no such file" with it, since
   // Open() itself only returns a bool.

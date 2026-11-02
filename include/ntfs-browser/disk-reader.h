@@ -52,6 +52,23 @@ class IDiskReader {
   // Forgets the ranges Prefetch() announced that no read has used yet.
   virtual void CancelPrefetch() const {}
 
+  // Announces a range on the standing lane, a second queue of announcements
+  // that outlives the walk of one directory. A hint, like Prefetch(): the
+  // reader MAY start reading the range now, in announcement order, and only
+  // when the bytes are read changes, never which bytes a read asks for.
+  // CancelPrefetch() leaves the standing lane alone, and so does a read that
+  // Prefetch() served: only CancelStanding() withdraws a range from it. A
+  // reader that keeps no such lane ignores the call, as it does by default.
+  virtual void PrefetchStanding(ULONGLONG /*offset*/,
+                                ULONGLONG /*length*/) const {}
+
+  // Withdraws every range of the standing lane that overlaps
+  // [offset, offset + length). A read of a withdrawn range in flight is
+  // cancelled or completes, and its bytes are dropped. A length of 0 overlaps
+  // nothing. Does nothing by default.
+  virtual void CancelStanding(ULONGLONG /*offset*/,
+                              ULONGLONG /*length*/) const {}
+
   // Says which read pattern the reads that follow belong to, so that a reader
   // MAY switch the depth of its read ahead (see Tuning::ReaderTuning). A hint,
   // like Prefetch(): it changes when the bytes are read, never which. Does

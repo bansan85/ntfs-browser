@@ -777,16 +777,6 @@ std::vector<Alloc::Extent>
   return runs_.ExtentsBetween(vcn, end_vcn, max_lcn);
 }
 
-template <Cache::Strategy S>
-void AttrNonResident<S>::PrefetchExtentData(ULONGLONG offset,
-                                            ULONGLONG length) const {
-  const ULONGLONG cluster_size = this->GetClusterSize();
-  for (const Alloc::Extent& extent : ExtentsOfRange(offset, length)) {
-    this->volume_.Prefetch(extent.lcn * cluster_size,
-                           extent.clusters * cluster_size);
-  }
-}
-
 // The runs that map clusters. The list is complete when it reaches the end of
 // the allocated size the first record declares. A shorter list means a run was
 // lost: recover mode stops at a bad run, and an extension record that failed to

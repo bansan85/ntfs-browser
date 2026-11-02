@@ -582,21 +582,46 @@ bool NtfsVolume<S>::ReadMftSlots(ULONGLONG first_ref,
 }
 
 template <Cache::Strategy S>
-void NtfsVolume<S>::PrefetchMftSlots(ULONGLONG first_ref,
-                                     ULONGLONG count) const {
-  if (first_ref < static_cast<ULONGLONG>(Mft::Idx::User) || !HasMftBase() ||
-      count == 0) {
-    return;
+std::vector<Mft::DiskRange>
+    NtfsVolume<S>::Impl::MftSlotRanges(ULONGLONG first_ref,
+                                       ULONGLONG count) const {
+  if (first_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
+      !self->HasMftBase() || count == 0) {
+    return {};
   }
 
   const std::optional<ULONGLONG> offset =
-      Mft::RecordOffset(GetFileRecordSize(), first_ref);
-  const ULONGLONG record_size = GetFileRecordSize();
+      Mft::RecordOffset(self->GetFileRecordSize(), first_ref);
+  const ULONGLONG record_size = self->GetFileRecordSize();
   if (!offset || record_size == 0 ||
       count > std::numeric_limits<ULONGLONG>::max() / record_size) {
-    return;
+    return {};
   }
-  impl_->mft.Map().PrefetchData(*offset, count * record_size);
+  return mft.Map().DiskRangesOf(*offset, count * record_size);
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::PrefetchMftSlots(ULONGLONG first_ref,
+                                     ULONGLONG count) const {
+  for (const Mft::DiskRange& range : impl_->MftSlotRanges(first_ref, count)) {
+    impl_->volume->Prefetch(range.offset, range.length);
+  }
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::PrefetchMftSlotsStanding(ULONGLONG first_ref,
+                                             ULONGLONG count) const {
+  for (const Mft::DiskRange& range : impl_->MftSlotRanges(first_ref, count)) {
+    impl_->volume->PrefetchStanding(range.offset, range.length);
+  }
+}
+
+template <Cache::Strategy S>
+void NtfsVolume<S>::CancelMftSlotsStanding(ULONGLONG first_ref,
+                                           ULONGLONG count) const {
+  for (const Mft::DiskRange& range : impl_->MftSlotRanges(first_ref, count)) {
+    impl_->volume->CancelStanding(range.offset, range.length);
+  }
 }
 
 template <Cache::Strategy S>

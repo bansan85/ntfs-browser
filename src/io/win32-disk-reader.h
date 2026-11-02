@@ -54,6 +54,14 @@ class Win32DiskReader : public IDiskReader {
 
   void CancelPrefetch() const override;
 
+  // Announces a range on the standing lane: a second queue, read ahead under
+  // the same caps as the first, that CancelPrefetch() and the reads of the
+  // first queue leave alone. See IDiskReader::PrefetchStanding().
+  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;
+
+  // Withdraws the ranges of the standing lane that overlap the interval.
+  void CancelStanding(ULONGLONG offset, ULONGLONG length) const override;
+
   // Switches the read-ahead caps to those of pattern.
   void SetReadPattern(Tuning::Pattern pattern) const override;
 

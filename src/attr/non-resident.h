@@ -189,11 +189,6 @@ class AttrNonResident : public Attr::AttrBase<S> {
   // Reads nothing.
   [[nodiscard]] std::vector<Alloc::Extent>
       ExtentsOfRange(ULONGLONG offset, ULONGLONG length) const;
-
-  // Announces to the volume the clusters a ReadExtentData() of length bytes at
-  // offset reads, run by run. Reads nothing. A compressed stream reads whole
-  // units, and announces nothing.
-  void PrefetchExtentData(ULONGLONG offset, ULONGLONG length) const;
 };  // AttrNonResident
 
 }  // namespace Attr

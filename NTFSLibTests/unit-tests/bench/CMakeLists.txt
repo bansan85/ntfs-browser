@@ -8,4 +8,5 @@ target_sources(
     "replay-tests.cpp"
     "session-invariance-tests.cpp"
     "throttled-disk-reader-tests.cpp"
+    "throttled-standing-lane-tests.cpp"
 )

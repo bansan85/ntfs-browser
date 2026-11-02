@@ -69,12 +69,12 @@ struct ThrottleStats {
 };
 
 // Wraps a reader, and makes each read cost what a DiskModel says on a
-// SimulatedClock: ReadInto() waits until the read completes, Prefetch() starts
-// reads ahead under the same caps, windows and matching rules as
-// Io::Win32DiskReader (Tuning::ReaderTuning), so that a change of a cap moves
-// the simulated time the way it moves a real one. The data come from the
-// wrapped reader. The same reads in the same order give the same time. Not
-// thread safe.
+// SimulatedClock: ReadInto() waits until the read completes, Prefetch() and
+// PrefetchStanding() start reads ahead under the same caps, windows, matching
+// rules and share of slots as Io::Win32DiskReader (Tuning::ReaderTuning), so
+// that a change of a cap moves the simulated time the way it moves a real one.
+// The data come from the wrapped reader. The same reads in the same order give
+// the same time. Not thread safe.
 class ThrottledDiskReader final : public IDiskReader {
  public:
   // The reader and the clock MUST outlive this object. caps are the read-ahead
@@ -90,6 +90,8 @@ class ThrottledDiskReader final : public IDiskReader {
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
   void CancelPrefetch() const override;
+  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;
+  void CancelStanding(ULONGLONG offset, ULONGLONG length) const override;
   void SetReadPattern(Tuning::Pattern pattern) const override;
 
   [[nodiscard]] const ThrottleStats& Stats() const noexcept { return stats_; }
@@ -103,15 +105,45 @@ class ThrottledDiskReader final : public IDiskReader {
     bool used;
   };
 
+  // A queue of announced ranges. The reads start in order, so the ranges whose
+  // read started are the first of them.
+  struct Queue {
+    std::deque<Range> ranges;
+    // How many ranges at the front have a read started, and their bytes.
+    std::size_t started{0};
+    ULONGLONG started_bytes{0};
+  };
+
   // Schedules a read of bytes at offset on the disk, issued now. Returns when
   // it completes.
   [[nodiscard]] std::uint64_t Schedule(ULONGLONG offset, ULONGLONG bytes) const;
 
-  // Starts the reads of the announced ranges, within the caps.
+  // Starts the reads of the announced ranges, within the caps: the first queue
+  // first, then the standing lane.
   void StartReads() const;
 
-  // Forgets the first range.
-  void DropFront() const;
+  // Whether a range of length bytes at offset may be announced.
+  [[nodiscard]] bool Admissible(ULONGLONG offset, ULONGLONG length) const;
+
+  // The most reads the standing lane may have started: the first queue keeps
+  // a share of the reads cap for itself.
+  [[nodiscard]] std::size_t StandingCap() const;
+
+  // Forgets the range of queue at index.
+  void Drop(Queue& queue, std::size_t index) const;
+
+  // The index of the first of the first count ranges of queue that holds
+  // [offset, end), or count when none does.
+  [[nodiscard]] static std::size_t FindHolding(const Queue& queue,
+                                               std::size_t count,
+                                               ULONGLONG offset, ULONGLONG end);
+
+  // Waits for the read of the range of queue at index, which holds a read that
+  // ends at end, and uses the range up. The ranges of the first queue before
+  // it are dropped when passed_over is set. False when the read of the range
+  // never started: the caller reads on its own then.
+  [[nodiscard]] bool ServeFrom(Queue& queue, std::size_t index,
+                               bool passed_over, ULONGLONG end) const;
 
   // Bytes of the aligned read a range makes.
   [[nodiscard]] static ULONGLONG AlignedBytes(const Range& range);
@@ -122,9 +154,8 @@ class ThrottledDiskReader final : public IDiskReader {
   std::array<Tuning::ReaderTuning, Tuning::pattern_count> caps_;
 
   mutable const Tuning::ReaderTuning* active_;
-  mutable std::deque<Range> ranges_;
-  mutable std::size_t started_{0};
-  mutable ULONGLONG started_bytes_{0};
+  mutable Queue first_;
+  mutable Queue standing_;
   // When each lane is free, the time the device bandwidth is booked until, and
   // where the last read issued ended.
   mutable std::vector<std::uint64_t> lane_free_;

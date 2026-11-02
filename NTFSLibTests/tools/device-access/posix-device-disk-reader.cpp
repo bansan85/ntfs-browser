@@ -113,6 +113,11 @@ void PosixDeviceDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
   #endif
 }
 
+void PosixDeviceDiskReader::PrefetchStanding(ULONGLONG offset,
+                                             ULONGLONG length) const {
+  Prefetch(offset, length);
+}
+
 }  // namespace NtfsDevice
 
 #endif  // !_WIN32

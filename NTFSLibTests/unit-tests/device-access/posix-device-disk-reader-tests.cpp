@@ -2,6 +2,7 @@
 
 #include <cerrno>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -127,4 +128,26 @@ TEST_CASE("PosixDeviceDiskReader has no size for a file that is not a disk",
   PosixDeviceDiskReader null_device;
   REQUIRE(null_device.Open(L"/dev/null"));
   CHECK_FALSE(null_device.Size().has_value());
+}
+
+TEST_CASE("PosixDeviceDiskReader takes standing hints and reads the same bytes",
+          "[device-access][posix-reader]") {
+  const TempDir dir;
+  const std::string content = Pattern();
+  const std::filesystem::path file = dir.Write("disk.img", content);
+  PosixDeviceDiskReader reader;
+  REQUIRE(reader.Open(WideFromPath(file)));
+
+  // The kernel keeps no lane: the hint is a read ahead, and there is nothing
+  // to withdraw.
+  reader.PrefetchStanding(0, content.size());
+  reader.PrefetchStanding(1000, std::numeric_limits<ULONGLONG>::max());
+  reader.CancelStanding(0, content.size());
+
+  LARGE_INTEGER addr{.QuadPart = 1000};
+  std::vector<BYTE> read(16);
+  REQUIRE(reader.ReadInto(addr, read));
+  for (size_t i = 0; i < read.size(); i++) {
+    CHECK(read[i] == static_cast<BYTE>(content[1000 + i]));
+  }
 }

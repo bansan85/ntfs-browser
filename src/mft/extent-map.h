@@ -31,6 +31,12 @@ class AttrBase;
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 
+// A range of bytes on the disk.
+struct DiskRange {
+  ULONGLONG offset;
+  ULONGLONG length;
+};
+
 // Where $MFT's own unnamed DATA attribute lives on disk: the base extent at
 // VCN 0, and the continuations that map the rest. Records past the base record
 // are read through this map.
@@ -62,9 +68,11 @@ class ExtentMap {
   [[nodiscard]] std::optional<ULONGLONG> ReadData(ULONGLONG offset,
                                                   std::span<BYTE> buffer) const;
 
-  // Announces the disk ranges a ReadData() of length bytes at offset reads,
-  // extent by extent. Reads nothing.
-  void PrefetchData(ULONGLONG offset, ULONGLONG length) const;
+  // The disk ranges a ReadData() of length bytes at offset reads, in order,
+  // run by run. It stops at the first extent that is not mapped. Reads
+  // nothing.
+  [[nodiscard]] std::vector<DiskRange> DiskRangesOf(ULONGLONG offset,
+                                                    ULONGLONG length) const;
 
   // File records that $MFT's declared size and its mapped extents both cover.
   [[nodiscard]] ULONGLONG RecordCount() const noexcept;

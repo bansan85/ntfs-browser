@@ -26,6 +26,11 @@ constexpr std::uint64_t ns_per_second = 1'000'000'000;
 // A read ahead is aligned to this, in offset and length, as a device needs.
 constexpr ULONGLONG alignment = 4096;
 
+// The share of the read slots, as a divisor of the reads cap, that the first
+// queue keeps whatever the standing lane holds, and at least one slot: the
+// value Io::Win32DiskReader uses.
+constexpr std::size_t first_queue_reserve_divisor = 4;
+
 // Bytes in a MiB, to price the consumer's work.
 constexpr std::uint64_t bytes_per_mib = std::uint64_t{1} << 20U;
 
@@ -88,57 +93,175 @@ std::uint64_t ThrottledDiskReader::Schedule(ULONGLONG offset,
 }
 
 void ThrottledDiskReader::StartReads() const {
-  while (started_ < ranges_.size() && started_ < active_->max_reads) {
-    Range& next = ranges_.at(started_);
+  while (first_.started < first_.ranges.size() &&
+         first_.started + standing_.started < active_->max_reads) {
+    Range& next = first_.ranges.at(first_.started);
     const ULONGLONG bytes = AlignedBytes(next);
     // The first one always starts: the caller is about to wait for it.
-    if (started_ != 0 && started_bytes_ + bytes > active_->max_bytes) {
+    if (first_.started != 0 &&
+        first_.started_bytes + standing_.started_bytes + bytes >
+            active_->max_bytes) {
+      break;
+    }
+    next.done_ns = Schedule(AlignDown(next.offset), bytes);
+    first_.started++;
+    first_.started_bytes += bytes;
+  }
+
+  while (standing_.started < standing_.ranges.size() &&
+         standing_.started < StandingCap() &&
+         first_.started + standing_.started < active_->max_reads) {
+    Range& next = standing_.ranges.at(standing_.started);
+    const ULONGLONG bytes = AlignedBytes(next);
+    // The lane stops at the first range that does not fit, so that the reads
+    // start in the order of the announcements. Alone, a range always fits.
+    if (first_.started_bytes + standing_.started_bytes != 0 &&
+        first_.started_bytes + standing_.started_bytes + bytes >
+            active_->max_bytes) {
       return;
     }
     next.done_ns = Schedule(AlignDown(next.offset), bytes);
-    started_++;
-    started_bytes_ += bytes;
+    standing_.started++;
+    standing_.started_bytes += bytes;
   }
 }
 
-void ThrottledDiskReader::DropFront() const {
-  const Range& front = ranges_.front();
-  if (front.done_ns) {
-    started_--;
-    started_bytes_ -= AlignedBytes(front);
-    if (!front.used) {
+std::size_t ThrottledDiskReader::StandingCap() const {
+  const std::size_t cap = active_->max_reads;
+  const std::size_t reserve =
+      (std::max)(std::size_t{1}, cap / first_queue_reserve_divisor);
+  return cap > reserve ? cap - reserve : 0;
+}
+
+void ThrottledDiskReader::Drop(Queue& queue, std::size_t index) const {
+  const Range& range = queue.ranges.at(index);
+  if (range.done_ns) {
+    queue.started--;
+    queue.started_bytes -= AlignedBytes(range);
+    if (!range.used) {
       stats_.wasted_ranges++;
     }
   }
-  ranges_.pop_front();
+  queue.ranges.erase(queue.ranges.begin() + static_cast<std::ptrdiff_t>(index));
 }
 
-void ThrottledDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
+bool ThrottledDiskReader::Admissible(ULONGLONG offset, ULONGLONG length) const {
   constexpr ULONGLONG max_value = (std::numeric_limits<ULONGLONG>::max)();
-  if (length == 0 || ranges_.size() >= active_->max_announced_ranges ||
-      offset > max_value - alignment ||
+  if (offset > max_value - alignment ||
       length > max_value - alignment - offset) {
-    return;
+    return false;
   }
   const Range range{
       .offset = offset, .length = length, .done_ns = {}, .used = false};
-  if (AlignedBytes(range) > active_->max_range_bytes) {
+  return AlignedBytes(range) <= active_->max_range_bytes;
+}
+
+void ThrottledDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
+  if (length == 0 || first_.ranges.size() >= active_->max_announced_ranges ||
+      !Admissible(offset, length)) {
     return;
   }
-  ranges_.push_back(range);
+  // The lane reads it already: a second read would only cost the disk.
+  if (std::ranges::any_of(standing_.ranges, [&](const Range& held) {
+        return held.offset == offset && held.length == length;
+      })) {
+    return;
+  }
+  first_.ranges.push_back(
+      {.offset = offset, .length = length, .done_ns = {}, .used = false});
+  StartReads();
+}
+
+void ThrottledDiskReader::PrefetchStanding(ULONGLONG offset,
+                                           ULONGLONG length) const {
+  if (length == 0 || standing_.ranges.size() >= active_->max_announced_ranges ||
+      !Admissible(offset, length)) {
+    return;
+  }
+  standing_.ranges.push_back(
+      {.offset = offset, .length = length, .done_ns = {}, .used = false});
   StartReads();
 }
 
 void ThrottledDiskReader::CancelPrefetch() const {
-  while (!ranges_.empty()) {
-    DropFront();
+  while (!first_.ranges.empty()) {
+    Drop(first_, 0);
   }
+  // The reads that were freed go to the lane.
+  StartReads();
+}
+
+void ThrottledDiskReader::CancelStanding(ULONGLONG offset,
+                                         ULONGLONG length) const {
+  constexpr ULONGLONG max_value = (std::numeric_limits<ULONGLONG>::max)();
+  if (length == 0) {
+    return;
+  }
+  // An interval that runs past the largest offset is cut there.
+  const ULONGLONG end =
+      length > max_value - offset ? max_value : offset + length;
+  std::size_t index = 0;
+  while (index < standing_.ranges.size()) {
+    const Range& range = standing_.ranges.at(index);
+    const ULONGLONG range_end = range.length > max_value - range.offset
+                                    ? max_value
+                                    : range.offset + range.length;
+    if (range.offset < end && offset < range_end) {
+      Drop(standing_, index);
+    } else {
+      index++;
+    }
+  }
+  StartReads();
 }
 
 void ThrottledDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
   active_ = &caps_.at(static_cast<std::size_t>(pattern));
   StartReads();
   inner_->SetReadPattern(pattern);
+}
+
+std::size_t ThrottledDiskReader::FindHolding(const Queue& queue,
+                                             std::size_t count,
+                                             ULONGLONG offset, ULONGLONG end) {
+  std::size_t match = 0;
+  while (match < count && (offset < queue.ranges.at(match).offset ||
+                           end > queue.ranges.at(match).offset +
+                                     queue.ranges.at(match).length)) {
+    match++;
+  }
+  return match;
+}
+
+bool ThrottledDiskReader::ServeFrom(Queue& queue, std::size_t index,
+                                    bool passed_over, ULONGLONG end) const {
+  if (passed_over) {
+    for (std::size_t dropped = 0; dropped < index; dropped++) {
+      Drop(queue, 0);
+    }
+    index = 0;
+  }
+  StartReads();
+  Range& range = queue.ranges.at(index);
+  // A range of the first queue that could not start before is started by
+  // StartReads() above, because the first range always starts. One of the lane
+  // may stay behind the caps: nothing was read ahead for the caller then.
+  if (&queue == &standing_ && !range.done_ns) {
+    Drop(queue, index);
+    StartReads();
+    return false;
+  }
+
+  const std::uint64_t before = clock_->NowNs();
+  clock_->AdvanceTo(range.done_ns.value_or(before));
+  stats_.wait_ns += clock_->NowNs() - before;
+  stats_.served_reads++;
+  range.used = true;
+  if (end == range.offset + range.length) {
+    Drop(queue, index);
+  }
+  StartReads();
+  return true;
 }
 
 bool ThrottledDiskReader::ReadInto(LARGE_INTEGER& addr,
@@ -149,37 +272,24 @@ bool ThrottledDiskReader::ReadInto(LARGE_INTEGER& addr,
   const auto offset = static_cast<ULONGLONG>(addr.QuadPart);
   const ULONGLONG end = offset + dest.size();
 
-  const std::size_t searched =
-      (std::min)(ranges_.size(), active_->match_lookahead);
-  std::size_t match = 0;
-  while (match < searched &&
-         (offset < ranges_.at(match).offset ||
-          end > ranges_.at(match).offset + ranges_.at(match).length)) {
-    match++;
-  }
-
-  if (!dest.empty() && match < searched) {
-    for (std::size_t dropped = 0; dropped < match; dropped++) {
-      DropFront();
+  if (!dest.empty()) {
+    const std::size_t searched =
+        (std::min)(first_.ranges.size(), active_->match_lookahead);
+    const std::size_t match = FindHolding(first_, searched, offset, end);
+    const std::size_t held =
+        FindHolding(standing_, standing_.ranges.size(), offset, end);
+    bool served = false;
+    if (match < searched) {
+      served = ServeFrom(first_, match, true, end);
+    } else if (held < standing_.ranges.size()) {
+      served = ServeFrom(standing_, held, false, end);
     }
-    StartReads();
-    Range& range = ranges_.front();
-    const std::uint64_t before = clock_->NowNs();
-    // A range that could not start before is started by StartReads() above,
-    // because the first range always starts.
-    clock_->AdvanceTo(range.done_ns.value_or(before));
-    stats_.wait_ns += clock_->NowNs() - before;
-    stats_.served_reads++;
-    range.used = true;
-    if (end == range.offset + range.length) {
-      DropFront();
+    if (!served) {
+      const std::uint64_t before = clock_->NowNs();
+      clock_->AdvanceTo(Schedule(offset, dest.size()));
+      stats_.wait_ns += clock_->NowNs() - before;
+      stats_.unannounced_reads++;
     }
-    StartReads();
-  } else if (!dest.empty()) {
-    const std::uint64_t before = clock_->NowNs();
-    clock_->AdvanceTo(Schedule(offset, dest.size()));
-    stats_.wait_ns += clock_->NowNs() - before;
-    stats_.unannounced_reads++;
   }
 
   clock_->Advance(model_.consume_ns_per_mib * dest.size() / bytes_per_mib);

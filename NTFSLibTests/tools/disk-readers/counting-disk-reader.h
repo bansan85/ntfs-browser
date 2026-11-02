@@ -23,13 +23,16 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
     Read,
     Size,
     Prefetch,
-    CancelPrefetch
+    CancelPrefetch,
+    PrefetchStanding,
+    CancelStanding
   };
 
   // One call the reader received.
   struct Call {
     Kind kind{Kind::Read};
-    // Address and length of a read or a prefetch hint; 0 for the other calls.
+    // Address and length of a read, a prefetch hint or a standing hint; 0 for
+    // the other calls.
     ULONGLONG offset{0};
     ULONGLONG length{0};
   };
@@ -50,6 +53,9 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // Record the hints, and pass them on to the wrapped reader.
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
   void CancelPrefetch() const override;
+  // Record the standing lane's hints, and pass them on.
+  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;
+  void CancelStanding(ULONGLONG offset, ULONGLONG length) const override;
   // Passes the pattern on, and records nothing.
   void SetReadPattern(Tuning::Pattern pattern) const override;
 

@@ -69,6 +69,10 @@ class NTFS_BROWSER_EXPORT ReadAheadDiskReader : public IDiskReader {
   // Passes the cancellation on to the wrapped reader.
   void CancelPrefetch() const override;
 
+  // Pass the standing lane's hints on to the wrapped reader.
+  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;
+  void CancelStanding(ULONGLONG offset, ULONGLONG length) const override;
+
   // Passes the read pattern on to the wrapped reader.
   void SetReadPattern(Tuning::Pattern pattern) const override;
 

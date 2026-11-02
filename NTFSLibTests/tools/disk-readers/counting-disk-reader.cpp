@@ -52,6 +52,20 @@ void CountingDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
   inner_->Prefetch(offset, length);
 }
 
+void CountingDiskReader::PrefetchStanding(ULONGLONG offset,
+                                          ULONGLONG length) const {
+  calls_.push_back(
+      {.kind = Kind::PrefetchStanding, .offset = offset, .length = length});
+  inner_->PrefetchStanding(offset, length);
+}
+
+void CountingDiskReader::CancelStanding(ULONGLONG offset,
+                                        ULONGLONG length) const {
+  calls_.push_back(
+      {.kind = Kind::CancelStanding, .offset = offset, .length = length});
+  inner_->CancelStanding(offset, length);
+}
+
 void CountingDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
   inner_->SetReadPattern(pattern);
 }

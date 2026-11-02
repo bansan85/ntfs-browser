@@ -13,6 +13,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/idx.h>
@@ -180,13 +181,15 @@ std::optional<ULONGLONG> ExtentMap<S>::ReadData(ULONGLONG offset,
 }
 
 template <Cache::Strategy S>
-void ExtentMap<S>::PrefetchData(ULONGLONG offset, ULONGLONG length) const {
+std::vector<DiskRange> ExtentMap<S>::DiskRangesOf(ULONGLONG offset,
+                                                  ULONGLONG length) const {
+  std::vector<DiskRange> ranges;
   ULONGLONG current_offset = offset;
   ULONGLONG remaining = length;
   while (remaining != 0) {
     const Extent* extent = FindExtent(current_offset / cluster_size_);
     if (extent == nullptr) {
-      return;
+      break;
     }
 
     const auto* non_resident =
@@ -196,11 +199,15 @@ void ExtentMap<S>::PrefetchData(ULONGLONG offset, ULONGLONG length) const {
     const ULONGLONG to_read =
         (std::min)(remaining, extent_end_byte - current_offset);
 
-    non_resident->PrefetchExtentData(current_offset - extent_start_byte,
-                                     to_read);
+    for (const Alloc::Extent& run : non_resident->ExtentsOfRange(
+             current_offset - extent_start_byte, to_read)) {
+      ranges.push_back({.offset = run.lcn * cluster_size_,
+                        .length = run.clusters * cluster_size_});
+    }
     current_offset += to_read;
     remaining -= to_read;
   }
+  return ranges;
 }
 
 // The count behind NtfsVolume::GetRecordsCount().

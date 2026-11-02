@@ -63,6 +63,16 @@ void RecordingDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
 
 void RecordingDiskReader::CancelPrefetch() const { inner_->CancelPrefetch(); }
 
+void RecordingDiskReader::PrefetchStanding(ULONGLONG offset,
+                                           ULONGLONG length) const {
+  inner_->PrefetchStanding(offset, length);
+}
+
+void RecordingDiskReader::CancelStanding(ULONGLONG offset,
+                                         ULONGLONG length) const {
+  inner_->CancelStanding(offset, length);
+}
+
 void RecordingDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
   inner_->SetReadPattern(pattern);
 }

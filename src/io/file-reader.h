@@ -82,6 +82,16 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   // Forgets what Prefetch() announced and no read used yet.
   void CancelPrefetch() const;
 
+  // Like Prefetch(), on the reader's standing lane: the same widening to whole
+  // blocks under FullCache, and the same blocks left out. A read of a run of
+  // missing blocks is served when one announced range holds the whole run.
+  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const;
+
+  // Withdraws the standing ranges that overlap [offset, offset + length).
+  // FullCache widens the interval to whole blocks first, as PrefetchStanding()
+  // does.
+  void CancelStanding(ULONGLONG offset, ULONGLONG length) const;
+
   // Tells the reader which read pattern the reads that follow belong to.
   void SetReadPattern(Tuning::Pattern pattern) const;
 
@@ -121,6 +131,13 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
 
   // Hands one range to the reader as a hint, and logs it for a session.
   void Announce(ULONGLONG offset, ULONGLONG length) const;
+
+  // Hands one range to the reader's standing lane.
+  void AnnounceStanding(ULONGLONG offset, ULONGLONG length) const;
+
+  // The body of Prefetch() and PrefetchStanding(): cuts the range into the
+  // runs of blocks to announce, on the standing lane when standing is set.
+  void AnnounceRuns(ULONGLONG offset, ULONGLONG length, bool standing) const;
 
   std::unique_ptr<IDiskReader> reader_;
 

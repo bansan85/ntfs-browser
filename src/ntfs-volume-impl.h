@@ -191,6 +191,12 @@ class NtfsVolume<S>::Impl {
   // The cluster bitmap, loaded now if it was not. Null when it is unusable, or
   // while it loads.
   [[nodiscard]] Alloc::ClusterBitmap* GetClusterBitmap() const;
+  // The disk ranges that a read of count records of $MFT from first_ref
+  // reads, run by run. None where that read would fail at once: a record below
+  // Mft::Idx::User, $MFT not mapped, nothing asked for, or an offset that
+  // overflows.
+  [[nodiscard]] std::vector<Mft::DiskRange>
+      MftSlotRanges(ULONGLONG first_ref, ULONGLONG count) const;
   // bitmap_keep_bytes, cut to what this build can address.
   [[nodiscard]] size_t KeptBitmapBytes() const noexcept;
   [[nodiscard]] std::unique_ptr<Alloc::ClusterBitmap> LoadClusterBitmap() const;

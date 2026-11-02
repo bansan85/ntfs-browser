@@ -154,10 +154,33 @@ void FileReader<S>::Announce(ULONGLONG offset, ULONGLONG length) const {
 }
 
 template <Cache::Strategy S>
+void FileReader<S>::AnnounceStanding(ULONGLONG offset, ULONGLONG length) const {
+  reader_->PrefetchStanding(offset, length);
+}
+
+template <Cache::Strategy S>
 void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
+  AnnounceRuns(offset, length, false);
+}
+
+template <Cache::Strategy S>
+void FileReader<S>::PrefetchStanding(ULONGLONG offset, ULONGLONG length) const {
+  AnnounceRuns(offset, length, true);
+}
+
+template <Cache::Strategy S>
+void FileReader<S>::AnnounceRuns(ULONGLONG offset, ULONGLONG length,
+                                 bool standing) const {
   if (!reader_ || length == 0) {
     return;
   }
+  const auto announce = [&](ULONGLONG at, ULONGLONG count) {
+    if (standing) {
+      AnnounceStanding(at, count);
+    } else {
+      Announce(at, count);
+    }
+  };
   if constexpr (S == Cache::Strategy::FullCache) {
     const auto block = static_cast<ULONGLONG>(block_bytes_);
     // The blocks MUST end below the largest address the cache reads at.
@@ -173,7 +196,7 @@ void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
     // costs no walk over the cache.
     constexpr ULONGLONG max_checked_blocks = 4096;
     if ((end - first) / block > max_checked_blocks) {
-      Announce(first, end - first);
+      announce(first, end - first);
       return;
     }
     // The cache serves a block it holds without a read, so only the other
@@ -182,17 +205,17 @@ void FileReader<S>::Prefetch(ULONGLONG offset, ULONGLONG length) const {
     for (ULONGLONG at = first; at < end; at += block) {
       const bool cached = cache_->Contains(at / block);
       if (cached && run_start) {
-        Announce(*run_start, at - *run_start);
+        announce(*run_start, at - *run_start);
         run_start.reset();
       } else if (!cached && !run_start) {
         run_start = at;
       }
     }
     if (run_start) {
-      Announce(*run_start, end - *run_start);
+      announce(*run_start, end - *run_start);
     }
   } else {
-    Announce(offset, length);
+    announce(offset, length);
   }
 }
 
@@ -206,6 +229,28 @@ void FileReader<S>::CancelPrefetch() const {
   if (reader_) {
     Bench::Detail::RecordCancel();
     reader_->CancelPrefetch();
+  }
+}
+
+template <Cache::Strategy S>
+void FileReader<S>::CancelStanding(ULONGLONG offset, ULONGLONG length) const {
+  if (!reader_ || length == 0) {
+    return;
+  }
+  if constexpr (S == Cache::Strategy::FullCache) {
+    constexpr ULONGLONG max_value = (std::numeric_limits<ULONGLONG>::max)();
+    const auto block = static_cast<ULONGLONG>(block_bytes_);
+    const ULONGLONG first = offset - offset % block;
+    // An interval that runs to the largest offset is cut there.
+    ULONGLONG end = max_value;
+    if (offset <= max_value - (block - 1) &&
+        length <= max_value - (block - 1) - offset) {
+      const ULONGLONG last = offset + length + block - 1;
+      end = last - last % block;
+    }
+    reader_->CancelStanding(first, end - first);
+  } else {
+    reader_->CancelStanding(offset, length);
   }
 }
 
