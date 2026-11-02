@@ -468,6 +468,190 @@ TEMPLATE_TEST_CASE_SIG(
 }
 
 TEMPLATE_TEST_CASE_SIG(
+    "The read ahead reads the next directory alone when it is not held, "
+    "however full the window",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto image =
+      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
+  Rig<S> rig(image, {}, 8, large_budget);
+  Io::DirectoryReadAhead<S> ahead(*rig.volume);
+  ahead.Attach(*rig.listing);
+  // Directory number d of the wide tree is node 4 * d.
+  const auto directory = [](std::size_t number) {
+    return Tests::name_tree_first_record + (4 * number);
+  };
+  std::vector<ULONGLONG> window;
+  for (std::size_t number = 0; number < 8; number++) {
+    window.push_back(directory(number));
+  }
+  ahead.Plan(window);
+  REQUIRE(ahead.GetStats().batches == 1);
+  REQUIRE(ahead.GetStats().records_read == 8);
+
+  // Seven of eight are held, and the one the listing enters next is not: a
+  // batch of that one.
+  ahead.Release(directory(0));
+  ahead.Plan(window);
+  CHECK(ahead.GetStats().batches == 2);
+  CHECK(ahead.GetStats().records_read == 9);
+
+  // It is held now: nothing more to read.
+  ahead.Plan(window);
+  CHECK(ahead.GetStats().batches == 2);
+
+  // Seven held, and the one that is not held comes last: no batch.
+  ahead.Release(directory(1));
+  window = {directory(2), directory(3), directory(4), directory(5),
+            directory(6), directory(7), directory(0), directory(8)};
+  ahead.Plan(window);
+  CHECK(ahead.GetStats().batches == 2);
+  CHECK(ahead.GetStats().records_read == 9);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "The read ahead reads only the next directory when others wait behind it",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto image =
+      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
+  Rig<S> rig(image, {}, 8, large_budget);
+  Io::DirectoryReadAhead<S> ahead(*rig.volume);
+  ahead.Attach(*rig.listing);
+  const auto directory = [](std::size_t number) {
+    return Tests::name_tree_first_record + (4 * number);
+  };
+  std::vector<ULONGLONG> held;
+  for (std::size_t number = 0; number < 4; number++) {
+    held.push_back(directory(number));
+  }
+  ahead.Plan(held);
+  REQUIRE(ahead.GetStats().records_read == 4);
+
+  // Four of eight held is half, which is enough. Three directories that are
+  // not held wait behind the next one, which is not held either: only the next
+  // is read.
+  std::vector<ULONGLONG> window{directory(10), directory(11), directory(12),
+                                directory(13)};
+  window.insert(window.end(), held.begin(), held.end());
+  ahead.Plan(window);
+
+  CHECK(ahead.GetStats().batches == 2);
+  CHECK(ahead.GetStats().records_read == 5);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "The listing takes the blocks of a directory the read ahead read alone",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::BigDirectoryTree(big_directories));
+  Rig<S> rig(image, {}, 8, large_budget);
+  Io::DirectoryReadAhead<S> ahead(*rig.volume);
+  ahead.Attach(*rig.listing);
+  std::vector<ULONGLONG> window;
+  for (std::size_t number = 1; number < big_directories; number++) {
+    window.push_back(BigDirectory(number));
+  }
+  ahead.Plan(window);
+  const Io::DirectoryReadAheadStats before = ahead.GetStats();
+  REQUIRE(before.records_read == big_directories - 1);
+
+  // Five held, and the next directory is the one that is not.
+  window.insert(window.begin(), BigDirectory(0));
+  ahead.Plan(window);
+
+  const Io::DirectoryReadAheadStats planned = ahead.GetStats();
+  CHECK(planned.batches == before.batches + 1);
+  CHECK(planned.records_read == before.records_read + 1);
+  CHECK(planned.blocks_read > before.blocks_read);
+  rig.reads->Reset();
+  REQUIRE(rig.listing->ParseFileRecord(BigDirectory(0)));
+  REQUIRE(rig.listing->ParseAttrs());
+  CHECK(ListEntries(*rig.listing) == ReadAhead::big_directory_files + 1);
+  ahead.Release(BigDirectory(0));
+
+  // The listing read no block of it, only the probes of its entries.
+  const Io::DirectoryReadAheadStats done = ahead.GetStats();
+  CHECK(done.blocks_served - before.blocks_served ==
+        planned.blocks_read - before.blocks_read);
+  CHECK(done.records_served == before.records_served + 1);
+  const ReadAhead::MftSpan mft = ReadAhead::MftSpanOf(image);
+  CHECK(std::ranges::none_of(
+      rig.reads->Calls(), [&](const CountingDiskReader::Call& call) {
+        return call.kind == CountingDiskReader::Kind::Read &&
+               call.offset >= mft.end;
+      }));
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "The read ahead reads the next directory within its budget only",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::BigDirectoryTree(big_directories));
+  std::vector<ULONGLONG> window;
+  for (std::size_t number = 1; number < big_directories; number++) {
+    window.push_back(BigDirectory(number));
+  }
+  std::uint64_t held_bytes = 0;
+  {
+    Rig<S> rig(image, {}, 8, large_budget);
+    Io::DirectoryReadAhead<S> ahead(*rig.volume);
+    ahead.Attach(*rig.listing);
+    ahead.Plan(window);
+    held_bytes = ahead.GetStats().held_bytes;
+  }
+  // Room for what five directories hold, and less than a record more.
+  const std::uint64_t budget = held_bytes + 512;
+  Rig<S> rig(image, {}, 8, budget);
+  Io::DirectoryReadAhead<S> ahead(*rig.volume);
+  ahead.Attach(*rig.listing);
+  ahead.Plan(window);
+  const Io::DirectoryReadAheadStats before = ahead.GetStats();
+  REQUIRE(before.records_read == big_directories - 1);
+
+  window.insert(window.begin(), BigDirectory(0));
+  ahead.Plan(window);
+
+  CHECK(ahead.GetStats().batches == before.batches);
+  CHECK(ahead.GetStats().held_bytes <= budget);
+  CHECK(ahead.GetStats().peak_held_bytes <= budget);
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "The read ahead reads only the record of the next directory under a raw "
+    "attribute callback",
+    "[io][directory-read-ahead]", ((Cache::Strategy S), S),
+    Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::BigDirectoryTree(big_directories));
+  Rig<S> rig(image, {}, 8, large_budget);
+  REQUIRE(rig.volume->InstallAttrRawCB(
+      NTFS_BROWSER_NAMESPACE::Attr::Type::FileName,
+      [](const NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon&, bool& discard) {
+        discard = false;
+      }));
+  Io::DirectoryReadAhead<S> ahead(*rig.volume);
+  ahead.Attach(*rig.listing);
+  std::vector<ULONGLONG> window;
+  for (std::size_t number = 1; number < big_directories; number++) {
+    window.push_back(BigDirectory(number));
+  }
+  ahead.Plan(window);
+  const Io::DirectoryReadAheadStats before = ahead.GetStats();
+  REQUIRE(before.records_read == big_directories - 1);
+  REQUIRE(before.blocks_read == 0);
+
+  window.insert(window.begin(), BigDirectory(0));
+  ahead.Plan(window);
+
+  CHECK(ahead.GetStats().batches == before.batches + 1);
+  CHECK(ahead.GetStats().records_read == before.records_read + 1);
+  CHECK(ahead.GetStats().blocks_read == 0);
+}
+
+TEMPLATE_TEST_CASE_SIG(
     "The read ahead holds every level of the index of the start directory",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {

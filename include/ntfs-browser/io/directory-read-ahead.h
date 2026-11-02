@@ -121,10 +121,12 @@ class NTFS_BROWSER_EXPORT DirectoryReadAhead {
   // Reads ahead the directories upcoming names, the next one first, which are
   // not held yet. They are record numbers, as the listing gives them to
   // ParseFileRecord(). A repeat, or a number below Mft::Idx::User, is left
-  // out. It does nothing while at least half of the first Window() of them are
-  // held, so that a batch reads several directories and not one at a time. It
-  // stops short of Tuning::WalkTuning::read_ahead_bytes: what does not fit
-  // waits for a later call, once Release() has freed some.
+  // out. While at least half of the first Window() of them are held, it reads
+  // nothing, so that a batch reads several directories and not one at a time,
+  // but for one case: when the next directory is not held, a batch of that
+  // directory alone is read, since the listing enters it first. It stops short
+  // of Tuning::WalkTuning::read_ahead_bytes: what does not fit waits for a
+  // later call, once Release() has freed some.
   void Plan(std::span<const ULONGLONG> upcoming);
 
   // The listing is done with directory, entered or skipped: frees its record

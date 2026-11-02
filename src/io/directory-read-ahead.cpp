@@ -389,11 +389,19 @@ void DirectoryReadAhead<S>::Impl::Plan(std::span<const ULONGLONG> upcoming) {
       wanted.push_back(record);
     }
   }
-  // A batch reads several directories at once: it waits until the ones held
-  // ahead are down to the half of the window.
-  const std::size_t low_water = (walk_.read_ahead_dirs + 1) / 2;
-  if (wanted.empty() || held >= low_water) {
+  if (wanted.empty()) {
     return;
+  }
+  // A batch reads several directories at once: it waits until the ones held
+  // ahead are down to the half of the window. But the listing enters the
+  // first one next, and would read it alone: that one is read at once.
+  const std::size_t low_water = (walk_.read_ahead_dirs + 1) / 2;
+  if (held >= low_water) {
+    // One only: more would take directories from the big sorted batches.
+    if (wanted.front() != upcoming.front()) {
+      return;
+    }
+    wanted.resize(1);
   }
 
   // What the budget has room for. A record costs its size.
