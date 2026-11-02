@@ -331,7 +331,7 @@ TEST_CASE("The lane leaves a share of the read slots to the first queue",
   CHECK(reader->Stats().disk_reads == max_reads);
 }
 
-TEST_CASE("The first queue starts before the lane in the freed slots",
+TEST_CASE("The first queue starts before the lane in the freed reads",
           "[bench][throttled][standing]") {
   const Caps caps =
       CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
@@ -343,15 +343,42 @@ TEST_CASE("The first queue starts before the lane in the freed slots",
   for (std::size_t index = 0; index < 3; index++) {
     reader->Prefetch(mib + index * 2 * page, page);
   }
-  // The lane holds 3 slots, the first queue the fourth.
+  // The lane has 3 reads in flight, the first queue the fourth.
   REQUIRE(reader->Stats().disk_reads == 4);
 
-  // A slot of the lane is freed: the first queue, which comes first, gets it.
-  Read(*reader, 0, page);
+  // A read of the lane is withdrawn: the first queue, which comes first, gets
+  // the freed read, and so it does for the next one.
+  reader->CancelStanding(0, page);
   CHECK(reader->Stats().disk_reads == 5);
-  // A slot of the first queue is freed: the lane may not take it.
-  Read(*reader, mib, page);
+  reader->CancelStanding(2 * page, page);
   CHECK(reader->Stats().disk_reads == 6);
+  // The lane has one read in flight and the first queue three: no read is
+  // free for the lane, whose ranges are still waiting.
+  reader->CancelStanding(10 * page, page);
+  CHECK(reader->Stats().disk_reads == 6);
+}
+
+TEST_CASE("A finished read of the lane holds no read in flight",
+          "[bench][throttled][standing]") {
+  const Caps caps =
+      CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
+  Tests::SimulatedClock clock;
+  const auto reader = MakeReader(clock, caps);
+  for (std::size_t index = 0; index < 8; index++) {
+    reader->PrefetchStanding(index * 2 * page, page);
+  }
+  // The lane keeps 3 reads in flight: the first queue keeps the fourth.
+  CHECK(reader->Stats().disk_reads == 3);
+
+  // The three reads finish, and wait for their caller: the lane starts the
+  // next three, then the last two. Nothing was read by the caller.
+  clock.Advance(mib);
+  reader->PrefetchStanding(100 * page, page);
+  CHECK(reader->Stats().disk_reads == 6);
+  clock.Advance(mib);
+  reader->PrefetchStanding(102 * page, page);
+  CHECK(reader->Stats().disk_reads == 9);
+  CHECK(reader->Stats().served_reads == 0);
 }
 
 TEST_CASE("The first queue's slots go to the lane when it is withdrawn",

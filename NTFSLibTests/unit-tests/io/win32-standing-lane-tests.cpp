@@ -41,6 +41,9 @@ constexpr size_t image_bytes = size_t{4} << 20U;
 constexpr ULONGLONG range_bytes = 4096;
 constexpr ULONGLONG range_stride = 8192;
 
+// One MiB, where the small ranges of a test that mixes sizes are put.
+constexpr ULONGLONG mib_offset = ULONGLONG{1} << 20U;
+
 // The largest offset: an interval that runs to it withdraws everything.
 constexpr ULONGLONG max_offset = (std::numeric_limits<ULONGLONG>::max)();
 
@@ -318,9 +321,12 @@ TEST_CASE("A range of the first lane equal to a standing range is ignored",
   CHECK(AheadReads(report.disk) == 2);
 }
 
-TEST_CASE("The standing lane leaves a share of the read slots to the first",
-          "[io][win32-reader][standing]") {
-  // A quarter of the slots, and at least one, stay with the first lane.
+TEST_CASE(
+    "The standing lane leaves a share of the reads in flight to the first",
+    "[io][win32-reader][standing]") {
+  // A quarter of the reads, and at least one, stay with the first lane. The
+  // reads of a file in the system cache finish at once, so the lane may start
+  // more than its share: it never has more in flight.
   const auto row = GENERATE(table<size_t, size_t>(
       {{1, 0}, {2, 1}, {3, 2}, {4, 3}, {8, 6}, {32, 24}}));
   const size_t max_reads = std::get<0>(row);
@@ -331,13 +337,14 @@ TEST_CASE("The standing lane leaves a share of the read slots to the first",
   });
   const ImageFile image;
 
-  SECTION("the lane alone starts the share it may take") {
+  SECTION("the lane alone starts the share it may take, and no more at once") {
     const auto reader = image.Open(caps);
     Tests::BenchSessionGuard session;
     AnnounceStanding(*reader, 0, 40);
     const Bench::Report report = session.Finish();
-    CHECK(AheadReads(report.disk) == lane_reads);
-    CHECK(report.disk.standing_reads == lane_reads);
+    CHECK(AheadReads(report.disk) >= lane_reads);
+    CHECK(AheadReads(report.disk) <= 40);
+    CHECK(report.disk.standing_reads == AheadReads(report.disk));
     CHECK(report.disk.prefetch_reads == 0);
   }
 
@@ -349,8 +356,32 @@ TEST_CASE("The standing lane leaves a share of the read slots to the first",
       reader->Prefetch(RangeAt(index), range_bytes);
     }
     const Bench::Report report = session.Finish();
-    CHECK(AheadReads(report.disk) == max_reads);
+    // The first lane starts the reads that it finds free, however many of the
+    // lane's are done.
+    CHECK(report.disk.prefetch_reads >= max_reads - lane_reads);
+    CHECK(report.disk.prefetch_reads <= max_reads);
   }
+}
+
+TEST_CASE("A finished read of the standing lane holds no read in flight",
+          "[io][win32-reader][standing]") {
+  // Two reads in flight at most, one of them for the lane.
+  const Caps caps =
+      CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 2; });
+  const ImageFile image;
+  std::uint64_t started = 0;
+  for (int attempt = 1; attempt <= 8 && started < 6; attempt++) {
+    const auto reader = image.Open(caps);
+    Tests::BenchSessionGuard session;
+    // Each range starts once the read before it is over, and the finished
+    // reads wait for their caller: six of them in all.
+    for (size_t index = 0; index < 6; index++) {
+      AnnounceStanding(*reader, index, 1);
+      LetTheDiskRun(attempt);
+    }
+    started = session.Finish().disk.standing_reads;
+  }
+  CHECK(started == 6);
 }
 
 TEST_CASE("The lane holds at most max_announced_ranges ranges",
@@ -467,13 +498,13 @@ TEST_CASE("A lane read that is done is classified like a first lane one",
   }
 
   SECTION("done, with a range held back by the caps, is Window") {
-    // Four slots leave three to the lane: the fourth range waits.
-    const Caps caps =
-        CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
+    // The bytes of one range in flight: the second range waits.
+    const Caps caps = CapsWith(
+        [](Tuning::ReaderTuning& tuning) { tuning.max_bytes = range_bytes; });
     Bench::ReadClass seen = Bench::ReadClass::Unclassified;
     for (int attempt = 1; attempt <= 8; attempt++) {
       const auto reader = image.Open(caps);
-      AnnounceStanding(*reader, 0, 4);
+      AnnounceStanding(*reader, 0, 2);
       LetTheDiskRun(attempt);
       seen = ReadAndNote(*reader, RangeAt(0)).note.cls;
       if (seen == Bench::ReadClass::Window) {
@@ -484,11 +515,11 @@ TEST_CASE("A lane read that is done is classified like a first lane one",
   }
 
   SECTION("a range the caps never started is read by the caller") {
-    const Caps caps =
-        CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
+    const Caps caps = CapsWith(
+        [](Tuning::ReaderTuning& tuning) { tuning.max_bytes = range_bytes; });
     const auto reader = image.Open(caps);
-    AnnounceStanding(*reader, 0, 4);
-    const ReadOutcome held_back = ReadAndNote(*reader, RangeAt(3));
+    AnnounceStanding(*reader, 0, 2);
+    const ReadOutcome held_back = ReadAndNote(*reader, RangeAt(1));
     CHECK(held_back.bytes_match);
     CHECK(held_back.note.cls == Bench::ReadClass::Plan);
   }
@@ -533,5 +564,25 @@ TEST_CASE("The bytes equal a plain read, whatever the lanes hold",
       reader->CancelStanding(offset, 30000);
     }
     CHECK(ReadAndNote(*reader, offset, length).bytes_match);
+  }
+}
+
+TEST_CASE("A slot that served a big standing range serves a tiny one next",
+          "[io][win32-reader][standing]") {
+  // Wider than the buffer a slot keeps: the slot gives it back when the lane
+  // is done with it, and the next range gets a buffer of its own size.
+  constexpr ULONGLONG big_range = ULONGLONG{256} * 1024;
+  const ImageFile image;
+  const auto reader = image.Open();
+  Tests::BenchSessionGuard session;
+
+  for (size_t round = 0; round < 4; round++) {
+    reader->PrefetchStanding(round * big_range, big_range);
+    const ReadOutcome big = ReadAndNote(*reader, round * big_range, big_range);
+    reader->PrefetchStanding(mib_offset + RangeAt(round), range_bytes);
+    const ReadOutcome tiny = ReadAndNote(*reader, mib_offset + RangeAt(round));
+    CHECK(big.bytes_match);
+    CHECK(tiny.bytes_match);
+    CHECK(WasServed(tiny));
   }
 }

@@ -71,7 +71,7 @@ struct ThrottleStats {
 // Wraps a reader, and makes each read cost what a DiskModel says on a
 // SimulatedClock: ReadInto() waits until the read completes, Prefetch() and
 // PrefetchStanding() start reads ahead under the same caps, windows, matching
-// rules and share of slots as Io::Win32DiskReader (Tuning::ReaderTuning), so
+// rules and share of reads as Io::Win32DiskReader (Tuning::ReaderTuning), so
 // that a change of a cap moves the simulated time the way it moves a real one.
 // The data come from the wrapped reader. The same reads in the same order give
 // the same time. Not thread safe.
@@ -125,9 +125,14 @@ class ThrottledDiskReader final : public IDiskReader {
   // Whether a range of length bytes at offset may be announced.
   [[nodiscard]] bool Admissible(ULONGLONG offset, ULONGLONG length) const;
 
-  // The most reads the standing lane may have started: the first queue keeps
+  // The most reads the standing lane may have in flight: the first queue keeps
   // a share of the reads cap for itself.
   [[nodiscard]] std::size_t StandingCap() const;
+
+  // Reads of the standing lane that are started and not finished at the time
+  // of the simulated clock. A finished read waits for its caller and costs
+  // only its bytes.
+  [[nodiscard]] std::size_t StandingInFlight() const;
 
   // Forgets the range of queue at index.
   void Drop(Queue& queue, std::size_t index) const;

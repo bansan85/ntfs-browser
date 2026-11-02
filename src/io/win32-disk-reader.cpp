@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -32,11 +33,18 @@ namespace {
 // of whole sectors: this is a multiple of both sizes in use, 512 and 4096.
 constexpr ULONGLONG read_alignment = 4096;
 
-// The share of the read slots, as a divisor of the reads cap, that the first
-// queue keeps whatever the standing lane holds, and at least one slot. A
-// quarter keeps the reads that a caller waits for from ever finding no slot.
-// The gain of the lane hardly moves with a share from none to half.
+// The share of the reads in flight, as a divisor of the reads cap, that the
+// first queue keeps whatever the standing lane holds, and at least one. A
+// quarter keeps the reads that a caller waits for from ever finding the disk
+// queue full of far reads. The gain of the lane hardly moves with a share from
+// none to half.
 constexpr size_t first_queue_reserve_divisor = 4;
+
+// The largest buffer that a slot keeps once the standing lane is done with it.
+// The lane holds up to a hundred slots at a time, so a slot MUST NOT keep the
+// buffer of one big range for the small ranges that follow. 64 KiB is the
+// widest run that the probes of a directory read in the usual case.
+constexpr size_t lane_buffer_keep_bytes = 64 * 1024;
 
 // The offset of the first byte of an aligned read that covers offset.
 constexpr ULONGLONG AlignDown(ULONGLONG offset) noexcept {
@@ -113,8 +121,8 @@ class Win32DiskReader::Prefetcher {
   void SetPattern(Tuning::Pattern pattern);
 
  private:
-  // The most reads in flight any pattern allows: the slots are sized once, so
-  // that a read in flight never moves.
+  // The most reads in flight any pattern allows: the slots the first queue
+  // needs.
   static size_t MaxReadsOf(const ReaderCaps& caps) {
     size_t most = 1;
     for (const Tuning::ReaderTuning& tuning : caps) {
@@ -171,8 +179,12 @@ class Win32DiskReader::Prefetcher {
   void StartReads();
 
   // Starts the reads of the standing lane, in its order, under the caps and the
-  // share of slots it may take.
+  // share of reads in flight it may take.
   void StartStandingReads();
+
+  // Reads of the standing lane that are started and not finished. A finished
+  // read waits for its caller in its slot and costs only its bytes.
+  [[nodiscard]] size_t StandingInFlight() const;
 
   // Starts the read of range in a free slot. A read that cannot start leaves
   // the slot with nothing read.
@@ -197,13 +209,11 @@ class Win32DiskReader::Prefetcher {
   // Reads of the slots that are in flight and not finished.
   [[nodiscard]] std::uint32_t InFlight() const;
 
-  // The most reads that may be started at once under the active caps.
-  [[nodiscard]] size_t ReadsCap() const {
-    return (std::min)(active_->max_reads, slots_.size());
-  }
+  // The most reads that may be in flight at once under the active caps.
+  [[nodiscard]] size_t ReadsCap() const { return active_->max_reads; }
 
-  // The most reads the standing lane may have started: the first queue always
-  // finds its share of the slots free, whatever the lane holds.
+  // The most reads the standing lane may have in flight: the first queue always
+  // finds its share of the reads free, whatever the lane holds.
   [[nodiscard]] size_t StandingCap() const {
     const size_t cap = ReadsCap();
     const size_t reserve =
@@ -221,7 +231,10 @@ class Win32DiskReader::Prefetcher {
 
   Lane first_;
   Lane standing_;
-  std::vector<Slot> slots_;
+  // A deque, so that a slot with a read in flight never moves when one is
+  // added. It starts with one slot for each read in flight and grows by the
+  // finished reads of the standing lane that wait for their caller.
+  std::deque<Slot> slots_;
 };
 
 Win32DiskReader::Prefetcher::~Prefetcher() {
@@ -308,8 +321,9 @@ void Win32DiskReader::Prefetcher::AnnounceStanding(ULONGLONG offset,
 }
 
 void Win32DiskReader::Prefetcher::StartReads() {
+  const size_t lane_in_flight = StandingInFlight();
   while (first_.started < first_.ranges.size() &&
-         first_.started + standing_.started < ReadsCap()) {
+         first_.started + lane_in_flight < ReadsCap()) {
     Range& next = first_.ranges.at(first_.started);
     const ULONGLONG bytes =
         AlignUp(next.offset + next.length) - AlignDown(next.offset);
@@ -326,10 +340,24 @@ void Win32DiskReader::Prefetcher::StartReads() {
   StartStandingReads();
 }
 
+size_t Win32DiskReader::Prefetcher::StandingInFlight() const {
+  size_t reading = 0;
+  for (size_t index = 0; index < standing_.started; index++) {
+    const std::optional<size_t>& held = standing_.ranges.at(index).slot;
+    if (held) {
+      const Slot& slot = slots_.at(*held);
+      if (slot.pending && !HasOverlappedIoCompleted(&slot.overlapped)) {
+        reading++;
+      }
+    }
+  }
+  return reading;
+}
+
 void Win32DiskReader::Prefetcher::StartStandingReads() {
+  size_t in_flight = StandingInFlight();
   while (standing_.started < standing_.ranges.size() &&
-         standing_.started < StandingCap() &&
-         first_.started + standing_.started < ReadsCap()) {
+         in_flight < StandingCap() && first_.started + in_flight < ReadsCap()) {
     Range& next = standing_.ranges.at(standing_.started);
     const ULONGLONG bytes =
         AlignUp(next.offset + next.length) - AlignDown(next.offset);
@@ -343,15 +371,19 @@ void Win32DiskReader::Prefetcher::StartStandingReads() {
     StartRead(next, Bench::Detail::DiskReadOrigin::Standing);
     standing_.started++;
     standing_.started_bytes += bytes;
+    in_flight++;
   }
 }
 
 void Win32DiskReader::Prefetcher::StartRead(
     Range& range, Bench::Detail::DiskReadOrigin origin) {
-  // The reads started are fewer than ReadsCap(), and each started range holds
-  // one slot.
-  const auto free = std::ranges::find_if(
+  // Each started range holds one slot, finished or not.
+  auto free = std::ranges::find_if(
       slots_, [](const Slot& slot) { return !slot.in_use; });
+  if (free == slots_.end()) {
+    slots_.emplace_back();
+    free = std::prev(slots_.end());
+  }
   Slot& slot = *free;
   range.slot = static_cast<size_t>(free - slots_.begin());
   slot.in_use = true;
@@ -432,6 +464,11 @@ void Win32DiskReader::Prefetcher::Drop(Lane& lane, size_t index) {
       static_cast<void>(Wait(slot));
     }
     slot.in_use = false;
+    if (&lane == &standing_ && slot.capacity > lane_buffer_keep_bytes) {
+      VirtualFree(slot.buffer, 0, MEM_RELEASE);
+      slot.buffer = nullptr;
+      slot.capacity = 0;
+    }
     const ULONGLONG bytes =
         AlignUp(range.offset + range.length) - AlignDown(range.offset);
     lane.started--;

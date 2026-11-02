@@ -9,9 +9,12 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string_view>
 #include <utility>
+
+#include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
@@ -26,8 +29,8 @@ constexpr std::uint64_t ns_per_second = 1'000'000'000;
 // A read ahead is aligned to this, in offset and length, as a device needs.
 constexpr ULONGLONG alignment = 4096;
 
-// The share of the read slots, as a divisor of the reads cap, that the first
-// queue keeps whatever the standing lane holds, and at least one slot: the
+// The share of the reads in flight, as a divisor of the reads cap, that the
+// first queue keeps whatever the standing lane holds, and at least one: the
 // value Io::Win32DiskReader uses.
 constexpr std::size_t first_queue_reserve_divisor = 4;
 
@@ -93,8 +96,9 @@ std::uint64_t ThrottledDiskReader::Schedule(ULONGLONG offset,
 }
 
 void ThrottledDiskReader::StartReads() const {
+  const std::size_t lane_in_flight = StandingInFlight();
   while (first_.started < first_.ranges.size() &&
-         first_.started + standing_.started < active_->max_reads) {
+         first_.started + lane_in_flight < active_->max_reads) {
     Range& next = first_.ranges.at(first_.started);
     const ULONGLONG bytes = AlignedBytes(next);
     // The first one always starts: the caller is about to wait for it.
@@ -108,9 +112,10 @@ void ThrottledDiskReader::StartReads() const {
     first_.started_bytes += bytes;
   }
 
+  std::size_t in_flight = StandingInFlight();
   while (standing_.started < standing_.ranges.size() &&
-         standing_.started < StandingCap() &&
-         first_.started + standing_.started < active_->max_reads) {
+         in_flight < StandingCap() &&
+         first_.started + in_flight < active_->max_reads) {
     Range& next = standing_.ranges.at(standing_.started);
     const ULONGLONG bytes = AlignedBytes(next);
     // The lane stops at the first range that does not fit, so that the reads
@@ -123,7 +128,17 @@ void ThrottledDiskReader::StartReads() const {
     next.done_ns = Schedule(AlignDown(next.offset), bytes);
     standing_.started++;
     standing_.started_bytes += bytes;
+    in_flight++;
   }
+}
+
+std::size_t ThrottledDiskReader::StandingInFlight() const {
+  const std::uint64_t now = clock_->NowNs();
+  return gsl::narrow<std::size_t>(std::ranges::count_if(
+      standing_.ranges | std::views::take(standing_.started),
+      [now](const Range& range) {
+        return range.done_ns && *range.done_ns > now;
+      }));
 }
 
 std::size_t ThrottledDiskReader::StandingCap() const {
