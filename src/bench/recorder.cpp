@@ -384,6 +384,12 @@ void NoteVolumeBytes(std::uint64_t bytes) noexcept {
   }
 }
 
+void NoteMediaKind(Tuning::MediaKind kind) noexcept {
+  if (SessionOn()) {
+    Get().report.media_kind = kind;
+  }
+}
+
 void CaptureRead(std::uint64_t offset, std::span<const BYTE> bytes) {
   if ((g_flags.load(std::memory_order_relaxed) & flag_capture) == 0) {
     return;

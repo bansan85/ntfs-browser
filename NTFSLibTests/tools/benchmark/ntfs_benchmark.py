@@ -600,6 +600,19 @@ def combo_label(scenario: Scenario, mode: str, key: str) -> str:
     return f"{scenario.name}-{mode}-{hashlib.sha256(key.encode()).hexdigest()[:8]}"
 
 
+# The --media value of each media_kind a summary reports.
+MEDIA_OPTIONS = {"solid_state": "ssd", "rotational": "hdd", "unknown": "unknown"}
+
+
+def media_option(summary: dict | None) -> list[str]:
+    """The --media option that makes a run use the media kind of `summary`, the
+    summary of a run on the real volume. None for a summary that does not say
+    (a tool older than the option): the run then asks its own device."""
+    kind = ((summary or {}).get("run") or {}).get("media_kind")
+    flag = MEDIA_OPTIONS.get(kind)
+    return [f"--media={flag}"] if flag else []
+
+
 def measure_combo(
     runner: Runner,
     scenario: Scenario,
@@ -688,12 +701,15 @@ def measure_combo(
         entry["capture_listing_hash"] = sha256_of(capture.stdout, (spelled, spelled))
         store()
     image_scenario = scenario
+    # The image sits on another drive, whose kind the tool would read: the runs
+    # on it take the kind the real run used, so that they run its code.
+    image_extra = extra + media_option(entry.get("summary"))
     while len(entry["cpu"]) < rounds:
         index = len(entry["cpu"])
         log(f"  cpu   {index + 1}/{rounds}")
         warm_file(image)
         result = runner.run_tool(
-            image_scenario, str(image), mode, f"{label_base}-cpu{index}", extra,
+            image_scenario, str(image), mode, f"{label_base}-cpu{index}", image_extra,
             False, target_for_disk, timeout,
         )
         if result.exit_code != 0 or result.summary is None:

@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <initializer_list>
 #include <optional>
@@ -11,6 +12,7 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/tuning/tuning.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "bench-options.h"
 
@@ -22,6 +24,39 @@ using NtfsDevice::OptionResult;
 using NtfsDevice::ParseBenchOption;
 
 namespace {
+
+// The variable that makes the tools plan for an unknown device. The tests keep
+// it set, for the tools they run as child processes.
+constexpr const char* no_host_media_variable =
+    "NTFS_BROWSER_NO_HOST_MEDIA_QUERY";
+
+// Gives the variable a value for the scope (empty clears it), then sets it
+// back as the tests keep it. It goes through the C runtime, which the tools
+// read with std::getenv().
+class NoHostMediaScope final {
+ public:
+  explicit NoHostMediaScope(const char* value) { Set(value); }
+
+  NoHostMediaScope(const NoHostMediaScope&) = delete;
+  NoHostMediaScope& operator=(const NoHostMediaScope&) = delete;
+  NoHostMediaScope(NoHostMediaScope&&) = delete;
+  NoHostMediaScope& operator=(NoHostMediaScope&&) = delete;
+
+  ~NoHostMediaScope() { Set("1"); }
+
+ private:
+  static void Set(const char* value) {
+#ifdef _WIN32
+    _putenv_s(no_host_media_variable, value);
+#else
+    if (*value == '\0') {
+      unsetenv(no_host_media_variable);
+    } else {
+      setenv(no_host_media_variable, value, 1);
+    }
+#endif
+  }
+};
 
 // text with each unit cut to a char: the arguments of the tests are ASCII.
 std::string Narrow(std::wstring_view text) {
@@ -248,6 +283,69 @@ TEST_CASE("ParseBenchOption refuses a malformed --tune",
   }
 }
 
+TEST_CASE("ParseBenchOption reads --media", "[device-access][bench-options]") {
+  CHECK_FALSE(BenchOptions{}.media.has_value());
+  CHECK(ParseAll({L"--media=ssd"}).media == Tuning::MediaKind::SolidState);
+  CHECK(ParseAll({L"--media=hdd"}).media == Tuning::MediaKind::Rotational);
+  CHECK(ParseAll({L"--media=unknown"}).media == Tuning::MediaKind::Unknown);
+  // The last one wins, as with the other options.
+  CHECK(ParseAll({L"--media=ssd", L"--media=hdd"}).media ==
+        Tuning::MediaKind::Rotational);
+}
+
+TEST_CASE("ParseBenchOption refuses a --media it does not know",
+          "[device-access][bench-options]") {
+  for (const std::wstring_view arg :
+       {L"--media=", L"--media=floppy", L"--media=SSD", L"--media=nvme"}) {
+    CHECK_THAT(MalformedBecause(arg), ContainsSubstring("ssd, hdd or unknown"));
+  }
+  // Without an equals sign it is not this option.
+  BenchOptions options;
+  CHECK(Parse(L"--media", options).result == OptionResult::NotMine);
+}
+
+TEST_CASE("ApplyTuning puts --media in the volume options",
+          "[device-access][bench-options]") {
+  const NoHostMediaScope cleared("");
+  NTFS_BROWSER_NAMESPACE::VolumeOptions options;
+  NtfsDevice::AppliedTuning applied;
+
+  REQUIRE(
+      NtfsDevice::ApplyTuning(BenchOptions{}, L"image.img", options, applied)
+          .empty());
+  CHECK_FALSE(options.media_kind.has_value());
+
+  REQUIRE(NtfsDevice::ApplyTuning(ParseAll({L"--media=hdd"}), L"image.img",
+                                  options, applied)
+              .empty());
+  CHECK(options.media_kind == Tuning::MediaKind::Rotational);
+}
+
+TEST_CASE("The variable of the tests makes the tools plan for Unknown",
+          "[device-access][bench-options]") {
+  const NoHostMediaScope set("1");
+  NTFS_BROWSER_NAMESPACE::VolumeOptions options;
+  NtfsDevice::AppliedTuning applied;
+
+  REQUIRE(
+      NtfsDevice::ApplyTuning(BenchOptions{}, L"image.img", options, applied)
+          .empty());
+  CHECK(options.media_kind == Tuning::MediaKind::Unknown);
+
+  REQUIRE(NtfsDevice::ApplyTuning(ParseAll({L"--media=ssd"}), L"image.img",
+                                  options, applied)
+              .empty());
+  CHECK(options.media_kind == Tuning::MediaKind::SolidState);
+}
+
+TEST_CASE("MediaKindName names each kind", "[device-access][bench-options]") {
+  CHECK(NtfsDevice::MediaKindName(Tuning::MediaKind::Unknown) == "unknown");
+  CHECK(NtfsDevice::MediaKindName(Tuning::MediaKind::SolidState) ==
+        "solid_state");
+  CHECK(NtfsDevice::MediaKindName(Tuning::MediaKind::Rotational) ==
+        "rotational");
+}
+
 TEST_CASE("The options of a command line add up in order",
           "[device-access][bench-options]") {
   const BenchOptions options = ParseAll(
@@ -286,7 +384,7 @@ TEST_CASE("BenchUsage lists every option", "[device-access][bench-options]") {
 
   for (const std::string_view option :
        {"--benchmark", "--capture", "--stop-after", "--profile", "--disk",
-        "--tune"}) {
+        "--tune", "--media"}) {
     CHECK_THAT(std::string(usage), ContainsSubstring(std::string(option)));
   }
   CHECK(usage.ends_with('\n'));

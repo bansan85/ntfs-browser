@@ -243,6 +243,10 @@ struct Report {
   std::uint64_t last_read_end_ns{0};
   std::uint64_t tail_ns{0};
   std::uint64_t volume_bytes{0};
+  // The kind of device the volume planned its reads for: the option of the
+  // caller when it set one, else what the reader said. Unknown when no
+  // volume opened during the session.
+  Tuning::MediaKind media_kind{Tuning::MediaKind::Unknown};
   // Calls of ReadInto() on the volume and their bytes: the bytes the caller
   // asked for.
   std::uint64_t requested_reads{0};

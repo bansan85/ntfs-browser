@@ -23,6 +23,7 @@
 #include <ntfs-browser/tuning/tuning.h>
 
 #include "bench/recorder.h"
+#include "io/host-media-kind.h"
 #include "log/ntfs-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
@@ -57,22 +58,13 @@ constexpr ULONGLONG AlignUp(ULONGLONG end) noexcept {
   return AlignDown(end + read_alignment - 1);
 }
 
-// The kind of device a handle names, from its seek penalty. A handle of a
-// plain file refuses the query.
-Tuning::MediaKind QueryMediaKind(HANDLE handle) noexcept {
-  STORAGE_PROPERTY_QUERY query{};
-  query.PropertyId = StorageDeviceSeekPenaltyProperty;
-  query.QueryType = PropertyStandardQuery;
-  DEVICE_SEEK_PENALTY_DESCRIPTOR penalty{};
-  DWORD returned = 0;
-  if (DeviceIoControl(handle, IOCTL_STORAGE_QUERY_PROPERTY, &query,
-                      sizeof(query), &penalty, sizeof(penalty), &returned,
-                      nullptr) == FALSE ||
-      returned < sizeof(penalty)) {
-    return Tuning::MediaKind::Unknown;
-  }
-  return penalty.IncursSeekPenalty != FALSE ? Tuning::MediaKind::Rotational
-                                            : Tuning::MediaKind::SolidState;
+// True for the handle of a file, false for a volume or a disk: those answer
+// for themselves, and a volume has no file information.
+bool IsPlainFile(HANDLE handle) noexcept {
+  BY_HANDLE_FILE_INFORMATION info{};
+  return GetFileType(handle) == FILE_TYPE_DISK &&
+         GetFileInformationByHandle(handle, &info) != FALSE &&
+         (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
 }  // namespace
@@ -636,7 +628,12 @@ bool Win32DiskReader::Open(std::wstring_view path) {
     return false;
   }
 
-  media_kind_ = QueryMediaKind(handle_.get());
+  media_kind_ = SeekPenaltyKindOf(handle_.get());
+  // A plain file refuses the query: its volume answers for it.
+  if (ask_host_volume_ && media_kind_ == Tuning::MediaKind::Unknown &&
+      IsPlainFile(handle_.get())) {
+    media_kind_ = QueryHostMediaKind(path_z);
+  }
   prefetcher_ = std::make_unique<Prefetcher>(std::move(path_z), caps_);
   return true;
 }

@@ -281,7 +281,8 @@ bool NtfsVolume<S>::Impl::OpenVolume(_TCHAR volume) {
 // Open an arbitrary device/image path, get volume handle and BPB
 template <Cache::Strategy S>
 bool NtfsVolume<S>::Impl::OpenVolume(std::wstring_view path) {
-  if (!volume->Open(path)) {
+  // A caller that states the media kind has no use for the host volume's.
+  if (!volume->Open(path, !options.media_kind.has_value())) {
     Log::Error("Cannot open volume");
     return false;
   }
@@ -307,6 +308,11 @@ bool NtfsVolume<S>::Impl::OpenVolume(std::unique_ptr<IDiskReader> reader) {
   return ParseBootSector();
 }
 
+template <Cache::Strategy S>
+Tuning::MediaKind NtfsVolume<S>::Impl::EffectiveMediaKind() const {
+  return options.media_kind.value_or(volume->GetMediaKind());
+}
+
 // Read the first sector (boot sector) and derive volume geometry from it. When
 // recovering and that sector is unusable, falls back on the backup boot sector.
 template <Cache::Strategy S>
@@ -315,6 +321,7 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     if (const std::optional<ULONGLONG> bytes = volume->Size()) {
       Bench::Detail::NoteVolumeBytes(*bytes);
     }
+    Bench::Detail::NoteMediaKind(EffectiveMediaKind());
   }
   bool accepted = false;
   {
@@ -506,7 +513,7 @@ void NtfsVolume<S>::SetReadPattern(Tuning::Pattern pattern) const {
 
 template <Cache::Strategy S>
 Tuning::MediaKind NtfsVolume<S>::GetMediaKind() const {
-  return impl_->volume->GetMediaKind();
+  return impl_->EffectiveMediaKind();
 }
 
 template <Cache::Strategy S>

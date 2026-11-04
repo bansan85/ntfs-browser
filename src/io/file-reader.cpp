@@ -93,8 +93,9 @@ FileReader<S>::FileReader(std::unique_ptr<IDiskReader> reader,
 
 #ifdef _WIN32
 template <Cache::Strategy S>
-bool FileReader<S>::Open(std::wstring_view volume) {
+bool FileReader<S>::Open(std::wstring_view volume, bool ask_host_volume) {
   auto reader = std::make_unique<Win32DiskReader>(reader_caps_);
+  reader->SetAskHostVolume(ask_host_volume);
   if (!reader->Open(volume)) {
     return false;
   }

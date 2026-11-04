@@ -1202,9 +1202,11 @@ class ReportTests(unittest.TestCase):
 class FakeRunner:
     """Stands for Runner: each run writes the listing its label calls for."""
 
-    def __init__(self, folder: Path, listings: dict[str, str]):
+    def __init__(self, folder: Path, listings: dict[str, str], media_kind: str | None = None):
         self.folder = folder
         self.listings = listings
+        self.media_kind = media_kind
+        self.extras: dict[str, list[str]] = {}
         self.args = types.SimpleNamespace(timeout=1.0, no_cold=True)
         self.tools = types.SimpleNamespace(bench=Path("NtfsBench"))
 
@@ -1215,29 +1217,60 @@ class FakeRunner:
         listing = self.folder / f"{label}.out"
         text = next(text for key, text in self.listings.items() if key in label)
         listing.write_text(text.format(volume=volume))
+        self.extras[label] = list(extra)
+        run = {"phases": []}
+        if self.media_kind is not None:
+            run["media_kind"] = self.media_kind
         for option in extra:
             if option.startswith("--capture="):
                 Path(option.split("=", 1)[1]).write_bytes(b"image")
         readlog = self.folder / f"{label}.readlog"
         readlog.write_bytes(b"log")
         return nb.RunResult(
-            1.0, 0, {"read_log": str(readlog), "run": {"phases": []}}, listing,
+            1.0, 0, {"read_log": str(readlog), "run": run}, listing,
             self.folder / f"{label}.err", None,
         )
 
 
 class MeasureComboTests(unittest.TestCase):
-    def measure(self, listings):
+    def measure(self, listings, media_kind=None, extras=None):
         replay = {"runs": [{"mode": "recorded", "wall_ns": 1, "report": {}},
                            {"mode": "ideal", "wall_ns": 1, "report": {}}]}
         with (
             tempfile.TemporaryDirectory() as folder,
             unittest.mock.patch.object(nb, "run_json", return_value=replay),
         ):
-            runner = FakeRunner(Path(folder), listings)
-            return nb.measure_combo(
+            runner = FakeRunner(Path(folder), listings, media_kind)
+            entry = nb.measure_combo(
                 runner, nb.Scenario("mftlist", "mftlist"), "c:", "none", [], 1, {}, lambda: None
             )
+            if extras is not None:
+                extras.update(runner.extras)
+            return entry
+
+    def test_the_runs_on_the_image_take_the_media_kind_of_the_real_run(self):
+        for kind, option in (("solid_state", "--media=ssd"), ("rotational", "--media=hdd"),
+                             ("unknown", "--media=unknown")):
+            with self.subTest(kind=kind):
+                extras: dict[str, list[str]] = {}
+                self.measure({"real": "x", "capture": "x", "cpu": "x"}, kind, extras)
+                cpu = [extra for label, extra in extras.items() if "-cpu" in label]
+                self.assertEqual(len(cpu), 1)
+                self.assertIn(option, cpu[0])
+                # The real run and the capture run read the volume itself.
+                others = [extra for label, extra in extras.items() if "-cpu" not in label]
+                self.assertTrue(all(not any(o.startswith("--media=") for o in e) for e in others))
+
+    def test_a_summary_without_a_media_kind_adds_no_option(self):
+        extras: dict[str, list[str]] = {}
+        self.measure({"real": "x", "capture": "x", "cpu": "x"}, None, extras)
+        self.assertTrue(all(not any(o.startswith("--media=") for o in e) for e in extras.values()))
+
+    def test_media_option_reads_the_summary_of_a_run(self):
+        self.assertEqual(nb.media_option({"run": {"media_kind": "rotational"}}), ["--media=hdd"])
+        self.assertEqual(nb.media_option({"run": {}}), [])
+        self.assertEqual(nb.media_option({"run": {"media_kind": "floppy"}}), [])
+        self.assertEqual(nb.media_option(None), [])
 
     def test_the_files_of_a_combination_keep_their_names_from_one_process_to_the_next(self):
         code = (

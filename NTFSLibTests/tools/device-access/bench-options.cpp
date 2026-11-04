@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -37,6 +38,12 @@ constexpr std::uint64_t profile_format = 1;
 // The section of a profile that applies to every disk without a section of its
 // own.
 constexpr std::string_view any_disk = "*";
+
+// Set to any value, the media kind is Unknown unless --media says otherwise,
+// so that no host volume is asked. The unit tests set it for the tools they run
+// as child processes.
+constexpr const char* no_host_media_variable =
+    "NTFS_BROWSER_NO_HOST_MEDIA_QUERY";
 
 // Reads an unsigned decimal number. False for anything else.
 bool ParseUnsigned(std::string_view text, std::uint64_t& value) {
@@ -294,6 +301,20 @@ OptionResult ParseBenchOption(std::wstring_view arg, BenchOptions& options,
     options.disk = std::string(*value);
     return OptionResult::Accepted;
   }
+  if (const auto value = value_of("--media")) {
+    if (*value == "ssd") {
+      options.media = Tuning::MediaKind::SolidState;
+    } else if (*value == "hdd") {
+      options.media = Tuning::MediaKind::Rotational;
+    } else if (*value == "unknown") {
+      options.media = Tuning::MediaKind::Unknown;
+    } else {
+      error = "--media names \"" + std::string(*value) +
+              "\": it is ssd, hdd or unknown";
+      return OptionResult::Malformed;
+    }
+    return OptionResult::Accepted;
+  }
   if (const auto value = value_of("--tune")) {
     TuneSetting tune;
     if (!ParseTune(*value, tune, error)) {
@@ -305,6 +326,18 @@ OptionResult ParseBenchOption(std::wstring_view arg, BenchOptions& options,
   return OptionResult::NotMine;
 }
 
+std::string_view MediaKindName(Tuning::MediaKind kind) {
+  switch (kind) {
+    case Tuning::MediaKind::SolidState:
+      return "solid_state";
+    case Tuning::MediaKind::Rotational:
+      return "rotational";
+    case Tuning::MediaKind::Unknown:
+      break;
+  }
+  return "unknown";
+}
+
 std::string_view BenchUsage() {
   return "  --benchmark[=path]  time the run, write a JSON summary and the "
          "read log (path.readlog)\n"
@@ -313,11 +346,18 @@ std::string_view BenchUsage() {
          "flush, sweep, check, link, journal, walk, print or destroy\n"
          "  --profile=path      set the tunable constants from a profile\n"
          "  --disk=key          take that disk's section of the profile\n"
-         "  --tune=name[@Mk]=v  set one tunable constant, after the profile\n";
+         "  --tune=name[@Mk]=v  set one tunable constant, after the profile\n"
+         "  --media=kind        plan the reads for ssd, hdd or unknown, "
+         "instead of the kind the device says\n";
 }
 
 std::string ApplyTuning(const BenchOptions& bench, std::wstring_view target,
                         VolumeOptions& options, AppliedTuning& applied) {
+  if (bench.media) {
+    options.media_kind = bench.media;
+  } else if (std::getenv(no_host_media_variable) != nullptr) {
+    options.media_kind = Tuning::MediaKind::Unknown;
+  }
   if (!bench.profile_path.empty()) {
     std::string key = bench.disk;
     if (key.empty()) {

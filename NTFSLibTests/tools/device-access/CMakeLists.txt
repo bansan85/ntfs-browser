@@ -17,6 +17,8 @@ add_library(
   "disk-identity.cpp"
   "driver-names.h"
   "driver-names.cpp"
+  "host-media.h"
+  "host-media.cpp"
   "json.h"
   "json.cpp"
   "line-buffer.h"

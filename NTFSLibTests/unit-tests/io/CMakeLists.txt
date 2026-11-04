@@ -57,6 +57,7 @@ if(WIN32)
   target_sources(
     NtfsBrowserTests
     PRIVATE
+      "host-media-kind-tests.cpp"
       "win32-disk-reader-offset-tests.cpp"
       "win32-disk-reader-tests.cpp"
       "win32-standing-lane-tests.cpp"

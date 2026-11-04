@@ -178,6 +178,8 @@ class NtfsVolume<S>::Impl {
 #endif
   [[nodiscard]] bool OpenVolume(std::unique_ptr<IDiskReader> reader);
   [[nodiscard]] bool ParseBootSector();
+  // VolumeOptions::media_kind when set, else what the reader says.
+  [[nodiscard]] Tuning::MediaKind EffectiveMediaKind() const;
   [[nodiscard]] bool UseBackupBootSector();
   [[nodiscard]] bool TryBackupSectorSize(ULONGLONG volume_bytes,
                                          WORD sector_size);

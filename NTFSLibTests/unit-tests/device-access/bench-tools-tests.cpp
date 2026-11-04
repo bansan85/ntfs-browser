@@ -326,6 +326,36 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
   CHECK(Member(run_json, "main_thread_ns").kind == JsonValue::Kind::Object);
 }
 
+TEST_CASE("NtfsMftList --media sets the media kind its summary reports",
+          "[device-access][benchmark][sample]") {
+  const MftListSample::TempTreeImage image(ListImage());
+  const Tests::TempDir dir;
+
+  const auto kind_of = [&](const std::wstring& media) {
+    const std::filesystem::path summary = dir.Path() / "summary.json";
+    std::filesystem::remove(summary);
+    const SampleRun run = MftListSample::RunMftList(
+        {Option(L"--benchmark", summary), media, image.path.wstring()});
+    REQUIRE(run.exit_code == 0);
+    return Member(Member(LoadSummary(summary), "run"), "media_kind").text;
+  };
+
+  CHECK(kind_of(L"--media=hdd") == "rotational");
+  CHECK(kind_of(L"--media=ssd") == "solid_state");
+  CHECK(kind_of(L"--media=unknown") == "unknown");
+}
+
+TEST_CASE("NtfsMftList refuses a --media it does not know",
+          "[device-access][benchmark][sample]") {
+  const MftListSample::TempTreeImage image(ListImage());
+
+  const SampleRun run =
+      MftListSample::RunMftList({L"--media=floppy", image.path.wstring()});
+
+  CHECK(run.exit_code != 0);
+  CHECK_THAT(run.err, ContainsSubstring("--media"));
+}
+
 TEST_CASE("The read log next to a summary is the log of its run",
           "[device-access][benchmark][sample]") {
   const MftListSample::TempTreeImage image(ListImage());

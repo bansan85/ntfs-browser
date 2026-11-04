@@ -61,6 +61,7 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
   json.Field("start_unix_ns", report.start_unix_ns);
   json.Field("wall_ns", report.wall_ns);
   json.Field("volume_bytes", report.volume_bytes);
+  json.Field("media_kind", MediaKindName(report.media_kind));
 
   json.Key("phases");
   json.BeginArray();

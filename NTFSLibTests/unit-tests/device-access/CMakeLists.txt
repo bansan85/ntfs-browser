@@ -40,6 +40,7 @@ if(NOT WIN32)
     PRIVATE
       "argv-wide-tests.cpp"
       "driver-names-tests.cpp"
+      "host-media-tests.cpp"
       "local-time-tests.cpp"
       "posix-device-disk-reader-tests.cpp"
   )

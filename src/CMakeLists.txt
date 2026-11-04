@@ -79,6 +79,7 @@ endif()
 if(WIN32)
   list(
     APPEND ${PROJECT_NAME}_SRC
+    "io/host-media-kind.cpp"
     "io/win32-disk-reader.cpp"
     "efs/key-provider-win.cpp"
   )
@@ -196,6 +197,7 @@ set(
   "util/small-pool.h"
   "util/util.h"
   "volume/volume-geometry.h"
+  "io/host-media-kind.h"
   "io/win32-disk-reader.h"
 )
 

@@ -607,3 +607,68 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK(LeftOnTheLane(rig.reads->Calls()).size() == 1);
   }
 }
+
+TEMPLATE_TEST_CASE_SIG(
+    "VolumeOptions::media_kind decides the standing lane, not the reader",
+    "[io][directory-read-ahead][standing-lane][media-kind]",
+    ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::SpacedTree(directories, files_per_directory));
+
+  SECTION("a rotational statement turns the lane off on a solid state reader") {
+    VolumeOptions options;
+    options.media_kind = Tuning::MediaKind::Rotational;
+    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
+        image, options, 64, large_budget, Tuning::MediaKind::SolidState);
+    CHECK(std::ranges::none_of(run.calls, IsLane));
+  }
+
+  SECTION("a solid state statement turns it on over a rotational reader") {
+    VolumeOptions options;
+    options.media_kind = Tuning::MediaKind::SolidState;
+    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
+        image, options, 64, large_budget, Tuning::MediaKind::Rotational);
+    CHECK(CountOf(run.calls, Kind::PrefetchStanding) > 0);
+  }
+
+  SECTION("an unknown statement is a statement too") {
+    VolumeOptions options;
+    options.media_kind = Tuning::MediaKind::Unknown;
+    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
+        image, options, 64, large_budget, Tuning::MediaKind::Rotational);
+    CHECK(CountOf(run.calls, Kind::PrefetchStanding) > 0);
+  }
+
+  SECTION("no statement leaves the reader's kind") {
+    const ReadAhead::Run run =
+        ReadAhead::ListRecursively<S>(image, VolumeOptions{}, 64, large_budget,
+                                      Tuning::MediaKind::Rotational);
+    CHECK(std::ranges::none_of(run.calls, IsLane));
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG("NtfsVolume::GetMediaKind answers the option first",
+                       "[volume][media-kind]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::SpacedTree(directories, files_per_directory));
+
+  const auto kind_of = [&image](const VolumeOptions& options,
+                                Tuning::MediaKind reader_kind) {
+    auto memory = std::make_unique<Tests::MemoryDiskReader>(image);
+    memory->SetMediaKind(reader_kind);
+    const NtfsVolume<S> volume(std::move(memory), options);
+    REQUIRE(volume.IsVolumeOK());
+    return volume.GetMediaKind();
+  };
+
+  VolumeOptions stated;
+  stated.media_kind = Tuning::MediaKind::SolidState;
+  CHECK(kind_of(VolumeOptions{}, Tuning::MediaKind::Rotational) ==
+        Tuning::MediaKind::Rotational);
+  CHECK(kind_of(stated, Tuning::MediaKind::Rotational) ==
+        Tuning::MediaKind::SolidState);
+  CHECK(kind_of(stated, Tuning::MediaKind::Unknown) ==
+        Tuning::MediaKind::SolidState);
+}

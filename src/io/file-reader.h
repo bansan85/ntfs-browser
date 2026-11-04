@@ -55,7 +55,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
 #ifdef _WIN32
   // Opens a real disk/file path via Win32DiskReader. Not available outside
   // Windows -- construct FileReader from an already-open IDiskReader there.
-  bool Open(std::wstring_view volume);
+  // ask_host_volume false keeps the reader from asking the volume that hosts
+  // an image file for its media kind: a caller that states the kind itself
+  // has no use for the answer.
+  bool Open(std::wstring_view volume, bool ask_host_volume = true);
 #endif
 
   // Wraps the reader in an Io::ReadAheadDiskReader with chunks of this many

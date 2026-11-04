@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 
 #include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/namespace.h>
@@ -61,6 +62,14 @@ struct VolumeOptions {
   // count never truncates. Usn::unlimited_records removes the limit. Last
   // member, so designated initialisers that stop before it stay valid.
   std::uint64_t max_usn_records{Usn::default_max_records};
+
+  // The kind of device the volume is read from, when the caller knows better
+  // than the device: it replaces the answer of the reader, and reads nothing.
+  // Empty (the default) asks the device. An image file takes the kind of the
+  // volume that hosts it, so a run of the same code on a copy of a volume
+  // kept on another drive MUST say the kind of the original. Last member but
+  // tuning, so designated initialisers that stop before it stay valid.
+  std::optional<Tuning::MediaKind> media_kind;
 
   // The constants of the read path that a caller MAY change: read-ahead depth,
   // block and window sizes, gaps, batches and thread thresholds. Every field

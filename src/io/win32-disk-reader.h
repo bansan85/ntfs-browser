@@ -32,6 +32,10 @@ class Win32DiskReader : public IDiskReader {
   Win32DiskReader(Win32DiskReader&&) = delete;
   Win32DiskReader& operator=(Win32DiskReader&&) = delete;
 
+  // Whether Open() asks the volume that hosts a plain file for its media kind
+  // when the file itself does not say. On by default. Call it before Open().
+  void SetAskHostVolume(bool ask) noexcept { ask_host_volume_ = ask; }
+
   bool Open(std::wstring_view path) override;
 
   // Reads from addr into dest: from a range read ahead when one holds those
@@ -73,6 +77,7 @@ class Win32DiskReader : public IDiskReader {
 
   HandlePtr handle_;
   Tuning::MediaKind media_kind_{Tuning::MediaKind::Unknown};
+  bool ask_host_volume_{true};
   ReaderCaps caps_;
   // Null until Open() succeeds. Declared after handle_: it goes first.
   std::unique_ptr<Prefetcher> prefetcher_;

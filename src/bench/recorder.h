@@ -109,6 +109,10 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
     NoteVolumeBytes(std::uint64_t bytes) noexcept;
 
+// NtfsVolume says what kind of device it plans its reads for.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    NoteMediaKind(Tuning::MediaKind kind) noexcept;
+
 // Hands the bytes of a successful read to the capture sink, if one is set.
 NTFS_BROWSER_EXPORT_TESTS_ONLY void CaptureRead(std::uint64_t offset,
                                                 std::span<const BYTE> bytes);

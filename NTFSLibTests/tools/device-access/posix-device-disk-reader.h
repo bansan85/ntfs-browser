@@ -35,8 +35,9 @@ class PosixDeviceDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   // kind of file.
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
-  // The kind of block device, from sysfs ("rotational"). Unknown for an image
-  // file, or when sysfs does not say.
+  // The kind of block device, from sysfs ("rotational"). For an image file, the
+  // kind of the block device that holds its file system. Unknown when sysfs
+  // does not say, as for a file under a network or pseudo file system.
   [[nodiscard]] NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
       GetMediaKind() const override;
 

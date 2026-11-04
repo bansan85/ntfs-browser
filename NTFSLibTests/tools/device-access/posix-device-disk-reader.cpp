@@ -4,6 +4,7 @@
 
   #include <cerrno>
   #include <cstdint>
+  #include <cstdlib>
   #include <format>
   #include <iostream>
   #include <limits>
@@ -20,13 +21,51 @@
 
   #ifdef __linux__
     #include <linux/fs.h>
+    #include <sys/sysmacros.h>
   #endif
 
   #include "disk-identity.h"
+  #include "host-media.h"
   #include "ntfs-browser/win-types.h"
   #include "text-convert.h"
 
 namespace NtfsDevice {
+
+namespace {
+
+using NTFS_BROWSER_NAMESPACE::Tuning::MediaKind;
+
+MediaKind KindOf(bool solid_state) {
+  return solid_state ? MediaKind::SolidState : MediaKind::Rotational;
+}
+
+// A block device says its own kind. An image file says the kind of the disk
+// that holds the file system it sits on, where sysfs knows that disk.
+MediaKind MediaKindOf(int fd, std::wstring_view path) {
+  struct stat info{};
+  if (fstat(fd, &info) != 0) {
+    return MediaKind::Unknown;
+  }
+  if (S_ISREG(info.st_mode)) {
+  #ifdef __linux__
+    // Set by the unit tests, so that the tools they run as child processes ask
+    // no sysfs either.
+    if (std::getenv("NTFS_BROWSER_NO_HOST_MEDIA_QUERY") != nullptr) {
+      return MediaKind::Unknown;
+    }
+    const std::optional<bool> rotational = RotationalOfBlockDevice(
+        major(info.st_dev), minor(info.st_dev), SysfsRoot());
+    return rotational ? KindOf(!*rotational) : MediaKind::Unknown;
+  #else
+    return MediaKind::Unknown;
+  #endif
+  }
+  const std::optional<DiskIdentity> disk = IdentifyDisk(path);
+  return disk && disk->solid_state ? KindOf(*disk->solid_state)
+                                   : MediaKind::Unknown;
+}
+
+}  // namespace
 
 PosixDeviceDiskReader::~PosixDeviceDiskReader() {
   if (fd_ >= 0) {
@@ -47,12 +86,7 @@ bool PosixDeviceDiskReader::Open(std::wstring_view path) {
   last_error_ = fd_ >= 0 ? 0 : errno;
   media_kind_ = NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown;
   if (fd_ >= 0) {
-    const std::optional<DiskIdentity> disk = IdentifyDisk(path);
-    if (disk && disk->solid_state) {
-      media_kind_ = *disk->solid_state
-                        ? NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::SolidState
-                        : NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Rotational;
-    }
+    media_kind_ = MediaKindOf(fd_, path);
   }
   return fd_ >= 0;
 }
