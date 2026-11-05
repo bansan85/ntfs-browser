@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <random>
+#include <set>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -23,9 +24,11 @@
 
 #include "bench-session-guard.h"
 #include "bench/recorder.h"
+#include "io/win32-disk-reader.h"
 #include "temp-dir.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
+namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
@@ -141,6 +144,39 @@ void AnnounceStanding(const IDiskReader& reader, size_t first, size_t count) {
 void LetTheDiskRun(int attempt = 1) {
   std::this_thread::sleep_for(std::chrono::milliseconds{25 * attempt});
 }
+
+// The offsets of the image whose reads the reader is told are not over yet.
+std::set<ULONGLONG>& HeldReads() {
+  static std::set<ULONGLONG> held;
+  return held;
+}
+
+bool HeldReadProbe(const OVERLAPPED& overlapped) {
+  const ULONGLONG offset =
+      (ULONGLONG{overlapped.OffsetHigh} << 32U) | overlapped.Offset;
+  return !HeldReads().contains(offset);
+}
+
+// A file in the system cache answers at once, so no read of it is ever seen in
+// flight. For the life of the guard the reader calls a read in flight for as
+// long as its offset is in HeldReads(); the read itself still finishes.
+class HeldReadsGuard {
+ public:
+  HeldReadsGuard() { HeldReads().clear(); }
+
+  ~HeldReadsGuard() {
+    Io::SetReadDoneProbeForTests(previous_);
+    HeldReads().clear();
+  }
+
+  HeldReadsGuard(const HeldReadsGuard&) = delete;
+  HeldReadsGuard& operator=(const HeldReadsGuard&) = delete;
+  HeldReadsGuard(HeldReadsGuard&&) = delete;
+  HeldReadsGuard& operator=(HeldReadsGuard&&) = delete;
+
+ private:
+  Io::ReadDoneProbe previous_{Io::SetReadDoneProbeForTests(&HeldReadProbe)};
+};
 
 }  // namespace
 
@@ -585,4 +621,226 @@ TEST_CASE("A slot that served a big standing range serves a tiny one next",
     CHECK(tiny.bytes_match);
     CHECK(WasServed(tiny));
   }
+}
+
+TEST_CASE("The reads started do not depend on how the lane counts its own",
+          "[io][win32-reader][standing]") {
+  // At most 16 ranges in each lane: 16 + 16 reads never reach the 32 that may
+  // be in flight, so every range starts whenever the disk answers, and the
+  // counters are a function of the calls alone.
+  const Caps caps = CapsWith(
+      [](Tuning::ReaderTuning& tuning) { tuning.max_announced_ranges = 16; });
+  const ImageFile image;
+  const auto reader = image.Open(caps);
+  Tests::BenchSessionGuard session;
+  std::mt19937 random(2024);
+  // Not a distribution: those are not the same on every library.
+  const auto below = [&random](std::uint32_t bound) {
+    return random() % bound;
+  };
+
+  std::uint64_t served_digest = 0;
+  std::uint64_t reads_served = 0;
+  // The ranges announced so far: most reads fall in one of them.
+  std::vector<ULONGLONG> announced;
+  for (size_t step = 0; step < 600; step++) {
+    const std::uint32_t kind = below(100);
+    if (kind < 40) {
+      announced.push_back(RangeAt(below(64)));
+      reader->PrefetchStanding(announced.back(), range_bytes);
+    } else if (kind < 52) {
+      reader->CancelStanding(RangeAt(below(64)) + below(3) * 512,
+                             1 + below(4) * range_stride);
+    } else if (kind < 64) {
+      announced.push_back(RangeAt(64 + below(32)));
+      reader->Prefetch(announced.back(), range_bytes);
+    } else if (kind < 68) {
+      reader->CancelPrefetch();
+    } else {
+      // Half a range leaves it, a whole one uses it up.
+      const size_t length = below(2) == 0 ? range_bytes / 2 : range_bytes;
+      const ULONGLONG offset =
+          announced.empty() || below(4) == 0
+              ? RangeAt(below(96))
+              : announced.at(
+                    below(static_cast<std::uint32_t>(announced.size())));
+      const ReadOutcome outcome = ReadAndNote(*reader, offset, length);
+      CHECK(outcome.bytes_match);
+      served_digest = (served_digest * 3) + (WasServed(outcome) ? 1 : 0);
+      reads_served += WasServed(outcome) ? 1 : 0;
+    }
+  }
+  const Bench::Report report = session.Finish();
+
+  // Recorded with the reader that counted the lane's reads by visiting every
+  // range it had started.
+  CHECK(reads_served == 50);
+  CHECK(served_digest == 6'341'278'128'170'066'284ULL);
+  CHECK(report.disk.prefetch_reads == 64);
+  CHECK(report.disk.prefetch_bytes == 262144);
+  CHECK(report.disk.wasted_bytes == 249856);
+  CHECK(report.disk.standing_reads == 93);
+  CHECK(report.disk.standing_bytes == 380928);
+  CHECK(report.disk.standing_wasted_bytes == 172032);
+}
+
+TEST_CASE("The lane starts a read as the ones in flight are over",
+          "[io][win32-reader][standing]") {
+  // Four reads in flight at most, three of them for the lane.
+  const Caps caps =
+      CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
+  const ImageFile image;
+  const HeldReadsGuard held;
+  for (size_t index = 0; index < 8; index++) {
+    HeldReads().insert(RangeAt(index));
+  }
+  const auto reader = image.Open(caps);
+  // The reads that the lane starts while step runs.
+  const auto lane_reads = [](const auto& step) {
+    Tests::BenchSessionGuard session;
+    step();
+    return session.Finish().disk.standing_reads;
+  };
+
+  // The reads in flight keep the rest of the lane waiting.
+  CHECK(lane_reads([&] { AnnounceStanding(*reader, 0, 6); }) == 3);
+
+  HeldReads().erase(RangeAt(0));
+  CHECK(lane_reads(
+            [&] { reader->PrefetchStanding(RangeAt(6), range_bytes); }) == 1);
+
+  // Range 3 is still in flight: the lane has room for two reads, and ranges 4
+  // and 5 start.
+  HeldReads().erase(RangeAt(1));
+  HeldReads().erase(RangeAt(2));
+  CHECK(lane_reads([&] { reader->CancelPrefetch(); }) == 2);
+}
+
+TEST_CASE("A withdrawn read in flight leaves its place to the next range",
+          "[io][win32-reader][standing]") {
+  const Caps caps =
+      CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
+  const ImageFile image;
+  const HeldReadsGuard held;
+  for (size_t index = 0; index < 8; index++) {
+    HeldReads().insert(RangeAt(index));
+  }
+  const auto reader = image.Open(caps);
+  Tests::BenchSessionGuard session;
+
+  AnnounceStanding(*reader, 0, 5);
+  // Ranges 0 to 2 are in flight. Withdrawing range 1 frees a place.
+  reader->CancelStanding(RangeAt(1), range_bytes);
+  // The slot of range 1 goes to range 3, and range 4 waits.
+  HeldReads().erase(RangeAt(3));
+  reader->CancelPrefetch();
+  const Bench::Report report = session.Finish();
+  CHECK(report.disk.standing_reads == 5);
+  CHECK(report.disk.standing_wasted_bytes == range_bytes);
+}
+
+TEST_CASE("The reads started are the same whatever is in flight",
+          "[io][win32-reader][standing]") {
+  // What the reader did, recorded with the reader that counted the lane's
+  // reads in flight by visiting every range it had started.
+  struct Recorded {
+    size_t max_reads;
+    std::uint64_t reads_served;
+    std::uint64_t served_digest;
+    std::uint64_t prefetch_reads;
+    std::uint64_t prefetch_bytes;
+    std::uint64_t wasted_bytes;
+    std::uint64_t standing_reads;
+    std::uint64_t standing_bytes;
+    std::uint64_t standing_wasted_bytes;
+  };
+
+  const auto recorded = GENERATE(values<Recorded>({
+      {2, 73, 5'961'208'495'276'488'311ULL, 65, 266240, 258048, 158, 647168,
+       344064},
+      {3, 63, 6'346'597'772'769'804'089ULL, 76, 311296, 307200, 171, 700416,
+       417792},
+      {4, 65, 1'390'544'315'863'034'995ULL, 70, 286720, 278528, 144, 589824,
+       303104},
+      {8, 76, 6'857'536'744'735'337'862ULL, 80, 327680, 327680, 143, 585728,
+       294912},
+      {32, 59, 14'596'878'219'651'475'875ULL, 89, 364544, 364544, 154, 630784,
+       376832},
+  }));
+  const size_t max_reads = recorded.max_reads;
+  INFO("max_reads " << max_reads);
+  // Few reads in flight at once, and enough ranges to fill the lane.
+  const Caps caps = CapsWith([max_reads](Tuning::ReaderTuning& tuning) {
+    tuning.max_reads = max_reads;
+    tuning.max_announced_ranges = 24;
+  });
+  const ImageFile image;
+  const HeldReadsGuard held;
+  const auto reader = image.Open(caps);
+  Tests::BenchSessionGuard session;
+  std::mt19937 random(static_cast<std::uint32_t>(max_reads));
+  const auto below = [&random](std::uint32_t bound) {
+    return random() % bound;
+  };
+
+  std::uint64_t served_digest = 0;
+  std::uint64_t reads_served = 0;
+  std::vector<ULONGLONG> announced;
+  // A read that is over MUST stay over: an offset is held at its first
+  // announcement or never, so that no earlier read at it is called in flight
+  // again.
+  std::set<ULONGLONG> seen;
+  const auto hold = [&seen](ULONGLONG offset, bool wanted) {
+    if (seen.insert(offset).second && wanted) {
+      HeldReads().insert(offset);
+    }
+  };
+  for (size_t step = 0; step < 800; step++) {
+    const std::uint32_t kind = below(100);
+    const ULONGLONG offset = RangeAt(below(48));
+    if (kind < 30) {
+      // Most of the reads are in flight until a later step ends them.
+      hold(offset, below(4) != 0);
+      announced.push_back(offset);
+      reader->PrefetchStanding(offset, range_bytes);
+    } else if (kind < 42) {
+      reader->CancelStanding(offset, 1 + below(4) * range_stride);
+    } else if (kind < 52) {
+      const ULONGLONG first = RangeAt(48 + below(16));
+      hold(first, true);
+      announced.push_back(first);
+      reader->Prefetch(first, range_bytes);
+    } else if (kind < 55) {
+      reader->CancelPrefetch();
+    } else if (kind < 75) {
+      // A read that is over: any one can be, at any step.
+      if (!HeldReads().empty()) {
+        auto victim = HeldReads().begin();
+        std::advance(victim,
+                     below(static_cast<std::uint32_t>(HeldReads().size())));
+        HeldReads().erase(victim);
+      }
+      reader->CancelPrefetch();
+    } else {
+      const size_t length = below(2) == 0 ? range_bytes / 2 : range_bytes;
+      const ULONGLONG at =
+          announced.empty() || below(4) == 0
+              ? offset
+              : announced.at(
+                    below(static_cast<std::uint32_t>(announced.size())));
+      const ReadOutcome outcome = ReadAndNote(*reader, at, length);
+      CHECK(outcome.bytes_match);
+      served_digest = (served_digest * 3) + (WasServed(outcome) ? 1 : 0);
+      reads_served += WasServed(outcome) ? 1 : 0;
+    }
+  }
+  const Bench::Report report = session.Finish();
+  CHECK(reads_served == recorded.reads_served);
+  CHECK(served_digest == recorded.served_digest);
+  CHECK(report.disk.prefetch_reads == recorded.prefetch_reads);
+  CHECK(report.disk.prefetch_bytes == recorded.prefetch_bytes);
+  CHECK(report.disk.wasted_bytes == recorded.wasted_bytes);
+  CHECK(report.disk.standing_reads == recorded.standing_reads);
+  CHECK(report.disk.standing_bytes == recorded.standing_bytes);
+  CHECK(report.disk.standing_wasted_bytes == recorded.standing_wasted_bytes);
 }

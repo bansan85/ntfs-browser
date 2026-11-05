@@ -13,10 +13,22 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
 
+#include "internal-export.h"
+
 namespace NTFS_BROWSER_NAMESPACE::Io {
 
 // The read-ahead caps of each read pattern.
 using ReaderCaps = std::array<Tuning::ReaderTuning, Tuning::pattern_count>;
+
+// Answers whether the read behind overlapped is over.
+using ReadDoneProbe = bool (*)(const OVERLAPPED& overlapped);
+
+// Installs probe as the answer of every reader to whether a read ahead is over
+// (null: ask the system, which is the default) and returns the one it replaces.
+// A file in the system cache answers at once, so a test holds reads in flight
+// with it. A probe MUST NOT revert: a read it called over stays over.
+NTFS_BROWSER_EXPORT_TESTS_ONLY ReadDoneProbe
+    SetReadDoneProbeForTests(ReadDoneProbe probe) noexcept;
 
 // Production IDiskReader: a real disk/device, or an ordinary file treated
 // the same way (CreateFileW handles both identically). Never used directly

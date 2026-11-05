@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -58,6 +60,17 @@ constexpr ULONGLONG AlignUp(ULONGLONG end) noexcept {
   return AlignDown(end + read_alignment - 1);
 }
 
+// The probe a test installed in place of the system's answer, or null.
+std::atomic<ReadDoneProbe> read_done_probe{nullptr};
+
+// Whether the read behind overlapped is over. It never reverts: a read that is
+// over stays over until its slot starts another.
+bool ReadDone(const OVERLAPPED& overlapped) noexcept {
+  const ReadDoneProbe probe = read_done_probe.load(std::memory_order_relaxed);
+  return probe != nullptr ? probe(overlapped)
+                          : HasOverlappedIoCompleted(&overlapped);
+}
+
 // True for the handle of a file, false for a volume or a disk: those answer
 // for themselves, and a volume has no file information.
 bool IsPlainFile(HANDLE handle) noexcept {
@@ -68,6 +81,10 @@ bool IsPlainFile(HANDLE handle) noexcept {
 }
 
 }  // namespace
+
+ReadDoneProbe SetReadDoneProbeForTests(ReadDoneProbe probe) noexcept {
+  return read_done_probe.exchange(probe);
+}
 
 // Reads the announced ranges ahead, in announcement order, through an
 // overlapped handle of its own. Up to ReaderTuning::max_reads of them are in
@@ -175,8 +192,15 @@ class Win32DiskReader::Prefetcher {
   void StartStandingReads();
 
   // Reads of the standing lane that are started and not finished. A finished
-  // read waits for its caller in its slot and costs only its bytes.
-  [[nodiscard]] size_t StandingInFlight() const;
+  // read waits for its caller in its slot and costs only its bytes. It visits
+  // the reads in flight, not every range the lane has started.
+  [[nodiscard]] size_t StandingInFlight();
+
+#ifndef NDEBUG
+  // The same count, by visiting every range the lane has started. It checks
+  // StandingInFlight() in a debug build.
+  [[nodiscard]] size_t StandingInFlightByScan() const;
+#endif
 
   // Starts the read of range in a free slot. A read that cannot start leaves
   // the slot with nothing read.
@@ -223,6 +247,11 @@ class Win32DiskReader::Prefetcher {
 
   Lane first_;
   Lane standing_;
+  // The slots of the lane's reads that were started and not seen finished, at
+  // most StandingCap() of them. A read leaves it when it is seen finished or
+  // waited for, and when its range is dropped, before its slot can be taken by
+  // another read.
+  std::vector<size_t> standing_reading_;
   // A deque, so that a slot with a read in flight never moves when one is
   // added. It starts with one slot for each read in flight and grows by the
   // finished reads of the standing lane that wait for their caller.
@@ -332,19 +361,40 @@ void Win32DiskReader::Prefetcher::StartReads() {
   StartStandingReads();
 }
 
-size_t Win32DiskReader::Prefetcher::StandingInFlight() const {
+size_t Win32DiskReader::Prefetcher::StandingInFlight() {
+#ifndef NDEBUG
+  // A read finishes and never starts again, so the count only falls while
+  // this runs: it lies between the two visits.
+  const size_t before = StandingInFlightByScan();
+#endif
+  // A finished read never reverts to in flight, so it leaves for good.
+  std::erase_if(standing_reading_, [this](size_t held) {
+    const Slot& slot = slots_.at(held);
+    return !slot.pending || ReadDone(slot.overlapped);
+  });
+#ifndef NDEBUG
+  const size_t after = StandingInFlightByScan();
+  assert(after <= standing_reading_.size() &&
+         standing_reading_.size() <= before);
+#endif
+  return standing_reading_.size();
+}
+
+#ifndef NDEBUG
+size_t Win32DiskReader::Prefetcher::StandingInFlightByScan() const {
   size_t reading = 0;
   for (size_t index = 0; index < standing_.started; index++) {
     const std::optional<size_t>& held = standing_.ranges.at(index).slot;
     if (held) {
       const Slot& slot = slots_.at(*held);
-      if (slot.pending && !HasOverlappedIoCompleted(&slot.overlapped)) {
+      if (slot.pending && !ReadDone(slot.overlapped)) {
         reading++;
       }
     }
   }
   return reading;
 }
+#endif
 
 void Win32DiskReader::Prefetcher::StartStandingReads() {
   size_t in_flight = StandingInFlight();
@@ -361,6 +411,9 @@ void Win32DiskReader::Prefetcher::StartStandingReads() {
       return;
     }
     StartRead(next, Bench::Detail::DiskReadOrigin::Standing);
+    if (slots_.at(*next.slot).pending) {
+      standing_reading_.push_back(*next.slot);
+    }
     standing_.started++;
     standing_.started_bytes += bytes;
     in_flight++;
@@ -421,8 +474,7 @@ void Win32DiskReader::Prefetcher::StartRead(
 std::uint32_t Win32DiskReader::Prefetcher::InFlight() const {
   std::uint32_t reading = 0;
   for (const Slot& slot : slots_) {
-    if (slot.in_use && slot.pending &&
-        !HasOverlappedIoCompleted(&slot.overlapped)) {
+    if (slot.in_use && slot.pending && !ReadDone(slot.overlapped)) {
       reading++;
     }
   }
@@ -456,6 +508,10 @@ void Win32DiskReader::Prefetcher::Drop(Lane& lane, size_t index) {
       static_cast<void>(Wait(slot));
     }
     slot.in_use = false;
+    if (&lane == &standing_) {
+      // Before the slot is free for another read.
+      std::erase(standing_reading_, *range.slot);
+    }
     if (&lane == &standing_ && slot.capacity > lane_buffer_keep_bytes) {
       VirtualFree(slot.buffer, 0, MEM_RELEASE);
       slot.buffer = nullptr;
@@ -520,9 +576,8 @@ bool Win32DiskReader::Prefetcher::ServeFrom(Lane& lane, size_t index,
   if (bench) {
     const Range& matched = lane.ranges.at(index);
     had_to_wait =
-        !matched.slot ||
-        (slots_.at(*matched.slot).pending &&
-         !HasOverlappedIoCompleted(&slots_.at(*matched.slot).overlapped));
+        !matched.slot || (slots_.at(*matched.slot).pending &&
+                          !ReadDone(slots_.at(*matched.slot).overlapped));
     window_held_back = lane.started < lane.ranges.size();
     in_flight = InFlight() + 1;
   }
