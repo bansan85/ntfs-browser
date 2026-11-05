@@ -68,6 +68,129 @@ constexpr std::size_t max_planned_runs = std::size_t{1} << 16U;
 // names from costing the length of the plan.
 constexpr std::size_t run_match_lookahead = 1024;
 
+// A set of record numbers in one flat table, which allocates when it grows and
+// not once for each record. PlanOf() inserts millions of them in all.
+class RecordSet {
+ public:
+  [[nodiscard]] std::size_t Size() const noexcept { return size_; }
+
+  // Empties the set. The table keeps its size.
+  void Clear() noexcept {
+    std::ranges::fill(slots_, vacant);
+    size_ = 0;
+    holds_vacant_ = false;
+  }
+
+  // Adds record. Returns false when the set held it already.
+  bool Insert(ULONGLONG record) {
+    // The mark of a free slot is a number too: it is kept apart.
+    if (record == vacant) {
+      if (holds_vacant_) {
+        return false;
+      }
+      holds_vacant_ = true;
+      size_++;
+      return true;
+    }
+    // At most half of the table is used, so a probe always ends.
+    if ((size_ + 1) * 2 > slots_.size()) {
+      Grow();
+    }
+    const std::size_t at = SlotOf(record);
+    if (slots_[at] == record) {
+      return false;
+    }
+    slots_[at] = record;
+    size_++;
+    return true;
+  }
+
+ private:
+  // The mark of a free slot. A record number has 48 bits, so only a forged one
+  // can equal it.
+  static constexpr ULONGLONG vacant = ~ULONGLONG{0};
+
+  // Slots a table starts with, a power of two.
+  static constexpr std::size_t first_capacity = 64;
+
+  // The slot that holds record, or the free one where it would go.
+  [[nodiscard]] std::size_t SlotOf(ULONGLONG record) const noexcept {
+    // 2^64 divided by the golden ratio: it spreads the low bits of a record
+    // number, which are all that differs between the records of a directory.
+    constexpr ULONGLONG golden = 0x9E3779B97F4A7C15ULL;
+    const std::size_t mask = slots_.size() - 1;
+    std::size_t at = static_cast<std::size_t>((record * golden) >> 32U) & mask;
+    while (slots_[at] != vacant && slots_[at] != record) {
+      at = (at + 1) & mask;
+    }
+    return at;
+  }
+
+  // Doubles the table and places the records again.
+  void Grow() {
+    std::vector<ULONGLONG> old = std::move(slots_);
+    slots_.assign((std::max)(first_capacity, old.size() * 2), vacant);
+    for (const ULONGLONG record : old) {
+      if (record != vacant) {
+        slots_[SlotOf(record)] = record;
+      }
+    }
+  }
+
+  std::vector<ULONGLONG> slots_;
+  std::size_t size_{0};
+  bool holds_vacant_{false};
+};
+
+// The slots first to last of $MFT, both included.
+struct SlotInterval {
+  ULONGLONG first;
+  ULONGLONG last;
+};
+
+// The slots of $MFT that the runs of a plan cover, as sorted intervals that
+// neither overlap nor touch. A run covers up to a thousand slots, so a set of
+// the slots cost one allocation for each of them.
+class SlotCover {
+ public:
+  // Whether slot lies in a run added so far.
+  [[nodiscard]] bool Contains(ULONGLONG slot) const noexcept {
+    const auto after = std::ranges::upper_bound(
+        intervals_, slot, {},
+        [](const SlotInterval& span) { return span.first; });
+    return after != intervals_.begin() && std::prev(after)->last >= slot;
+  }
+
+  // Adds runs, in any order. They are left sorted.
+  void Add(std::vector<SlotInterval>& runs) {
+    if (runs.empty()) {
+      return;
+    }
+    const auto by_first = [](const SlotInterval& left,
+                             const SlotInterval& right) {
+      return left.first < right.first;
+    };
+    std::ranges::sort(runs, by_first);
+    merged_.clear();
+    std::ranges::merge(intervals_, runs, std::back_inserter(merged_), by_first);
+    intervals_.clear();
+    for (const SlotInterval& next : merged_) {
+      // The next one overlaps the last kept, or starts right after it.
+      if (!intervals_.empty() && (next.first <= intervals_.back().last ||
+                                  next.first - intervals_.back().last == 1)) {
+        intervals_.back().last = (std::max)(intervals_.back().last, next.last);
+      } else {
+        intervals_.push_back(next);
+      }
+    }
+  }
+
+ private:
+  std::vector<SlotInterval> intervals_;
+  // The merge of intervals_ and the runs being added, kept for its room.
+  std::vector<SlotInterval> merged_;
+};
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -1016,12 +1139,13 @@ typename DirectoryReadAhead<S>::Impl::RunPlan
   const ProbeRunRules rules = ProbeRunRulesOf(*volume_, keeps);
   // The records that the earlier runs of this plan read: the window keeps each
   // run it is given, so the probes of a later group find them there.
-  std::unordered_set<ULONGLONG> covered;
+  SlotCover covered;
+  std::vector<SlotInterval> fresh;
   const std::vector<BYTE> stand_in(rules.record_size);
   HeldRecordSource find;
   if (keeps) {
     find = [this, &covered, &stand_in](ULONGLONG record) {
-      return covered.contains(record) ? std::span<const BYTE>(stand_in)
+      return covered.Contains(record) ? std::span<const BYTE>(stand_in)
                                       : FindQuietly(record);
     };
   }
@@ -1029,18 +1153,18 @@ typename DirectoryReadAhead<S>::Impl::RunPlan
 
   RunPlan plan;
   // What the prober of the walk has probed already: it probes a record once.
-  std::unordered_set<ULONGLONG> known;
+  RecordSet known;
   std::vector<ULONGLONG> pending;
   const std::size_t round =
       (std::max<std::size_t>)(1, probe_.max_chunk_records);
   for (const std::vector<ULONGLONG>& group : groups) {
-    if (known.size() >= probe_.max_known_records) {
-      known.clear();
+    if (known.Size() >= probe_.max_known_records) {
+      known.Clear();
     }
     pending.clear();
     std::ranges::copy_if(
         group, std::back_inserter(pending),
-        [&known](ULONGLONG record) { return known.insert(record).second; });
+        [&known](ULONGLONG record) { return known.Insert(record); });
     std::ranges::sort(pending);
     for (std::size_t first = 0; first < pending.size(); first += round) {
       const std::span<const ULONGLONG> chunk =
@@ -1056,12 +1180,13 @@ typename DirectoryReadAhead<S>::Impl::RunPlan
                           std::back_inserter(plan.wanted));
         planned.wanted_end = gsl::narrow<std::uint32_t>(plan.wanted.size());
         plan.runs.push_back(planned);
-        if (keeps) {
-          for (ULONGLONG slot = run.first_slot; slot <= run.last_slot; slot++) {
-            covered.insert(slot);
-          }
+        if (keeps && run.first_slot <= run.last_slot) {
+          fresh.push_back({.first = run.first_slot, .last = run.last_slot});
         }
       }
+      // The runs of a chunk count for the next chunk, not for its own.
+      covered.Add(fresh);
+      fresh.clear();
     }
   }
   return plan;
