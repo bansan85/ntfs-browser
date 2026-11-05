@@ -9,6 +9,7 @@
         {
             "name": "base",
             "hidden": true,
+            "generator": "Visual Studio 18 2026",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
@@ -95,9 +96,9 @@
             }
         },
         {
-            "name": "vs2022-amd64",
-            "displayName": "Visual Studio Community 2022 Release - amd64",
-            "generator": "Visual Studio 17 2022",
+            "name": "vs2026-amd64",
+            "displayName": "Visual Studio Community 2026 Release - amd64",
+            "generator": "Visual Studio 18 2026",
             "toolset": "host=x64",
             "architecture": "x64",
             "inherits": "base",
@@ -166,9 +167,9 @@
             "inherits": "build-base"
         },
         {
-            "name": "vs2022-amd64",
-            "displayName": "Visual Studio Community 2022 Release - amd64",
-            "configurePreset": "vs2022-amd64",
+            "name": "vs2026-amd64",
+            "displayName": "Visual Studio Community 2026 amd64",
+            "configurePreset": "vs2026-amd64",
             "inherits": "build-base"
         },
         {
@@ -280,6 +281,32 @@
                 {
                     "type": "build",
                     "name": "static-vcpkg"
+                }
+            ]
+        },
+        {
+            "name": "vs2026-amd64",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "vs2026-amd64"
+                },
+                {
+                    "type": "build",
+                    "name": "vs2026-amd64"
+                }
+            ]
+        },
+        {
+            "name": "vs2026-x86",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "vs2026-x86"
+                },
+                {
+                    "type": "build",
+                    "name": "vs2026-x86"
                 }
             ]
         }

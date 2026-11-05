@@ -4,7 +4,7 @@
     {
       "label": "CMake: all presets",
       "type": "shell",
-      "command": "foreach ($p in 'shared','static','no-decompression','efs-cryptopp-only','efs-bcrypt-only','no-efs','shared-vcpkg','static-vcpkg') { cmake --workflow --preset $p; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }",
+      "command": "foreach ($p in 'shared','static','no-decompression','efs-cryptopp-only','efs-bcrypt-only','no-efs','shared-vcpkg','static-vcpkg','vs2026-amd64','vs2026-x86') { cmake --workflow --preset $p; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }",
       "group": "build",
       "problemMatcher": "$msCompile"
     }
