@@ -1,6 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -8,6 +9,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -29,6 +31,7 @@
 #include "attr/index-alloc.h"
 #include "attr/index-block.h"
 #include "bench/recorder.h"
+#include "io/directory-read-ahead-testing.h"
 #include "io/file-record-index.h"
 #include "io/mft-runs.h"
 #include "io/record-memo.h"
@@ -67,6 +70,11 @@ constexpr std::size_t max_planned_runs = std::size_t{1} << 16U;
 // so the run is the first one or near it: a bound keeps a read that no plan
 // names from costing the length of the plan.
 constexpr std::size_t run_match_lookahead = 1024;
+
+// Whether Refill() checks its zone against a fresh one, and the checks that
+// failed. Set by a test, read at each refill.
+std::atomic<bool> verify_lane_zone{false};
+std::atomic<std::size_t> lane_zone_mismatches{0};
 
 // A set of record numbers in one flat table, which allocates when it grows and
 // not once for each record. PlanOf() inserts millions of them in all.
@@ -285,7 +293,7 @@ class DirectoryReadAhead<S>::Impl {
   struct PlannedRun {
     ULONGLONG first_slot;
     ULONGLONG count;
-    // The refill that last put the run in the target.
+    // The generation of the zone that last took the run.
     std::uint64_t stamp{0};
     // The records it reads for, as a span of RunPlan::wanted.
     std::uint32_t wanted_begin{0};
@@ -304,9 +312,9 @@ class DirectoryReadAhead<S>::Impl {
     std::size_t cursor{0};
   };
 
-  // A run the lane should hold, with the plan that owns it.
+  // A run of the zone, with the plan that owns it.
   struct Target {
-    const RunPlan* plan;
+    RunPlan* plan;
     PlannedRun* run;
   };
 
@@ -411,7 +419,23 @@ class DirectoryReadAhead<S>::Impl {
   // the next lane_runs_: a stack that grows and shrinks pushes runs out of the
   // first and back in, and a withdrawal costs the read already made and the
   // read again. The others are withdrawn.
+  // Those 2 * lane_runs_ runs are kept in zone_ between two calls, and only
+  // worked out again when the plans, order_ or the listing changed.
   void Refill();
+
+  // The mutations of plans_ and order_: each one forgets the zone.
+  void SetOrder(std::vector<ULONGLONG> order) noexcept;
+  void AddPlan(ULONGLONG directory, RunPlan plan);
+  void DropPlan(std::unordered_map<ULONGLONG, RunPlan>::iterator plan) noexcept;
+
+  // Forgets zone_ and chain_, which hold pointers into plans_.
+  void ForgetZone() noexcept;
+  // Works the zone out from the start, for the directory current.
+  void RebuildZone(std::optional<ULONGLONG> current);
+  // Takes the runs after the zone in the chain, up to 2 * lane_runs_.
+  void TopUpZone();
+  // Throws when zone_ is not what a fresh walk of the plans gives.
+  void VerifyZone(std::optional<ULONGLONG> current, bool rebuilt) const;
 
   // The probes have read the run from first_slot on, count records long (the
   // `ran` of the listing's ProbeStore).
@@ -474,10 +498,24 @@ class DirectoryReadAhead<S>::Impl {
   // The runs on the lane now, in the order they were announced. They point
   // into plans_, which a plan leaves only through WithdrawPlan().
   std::vector<PlannedRun*> announced_;
-  // The runs the lane should hold, in order, as Refill() works them out.
-  std::vector<Target> target_;
-  // The count of Refill() calls.
-  std::uint64_t refills_{0};
+  // The first 2 * lane_runs_ runs not done, in the order Refill() works them:
+  // the first lane_runs_ are the ones the lane should hold, the others the
+  // ones it may keep. A run that is done leaves it at the next Refill().
+  std::vector<Target> zone_;
+  // The plans the zone is taken from, in order: the plan of the directory
+  // being listed, then those of order_ (a directory twice if order_ lists it
+  // twice). The runs of a plan before its cursor are done.
+  std::vector<RunPlan*> chain_;
+  // Where the zone stopped in the chain: the plan, and the next run in it.
+  std::size_t chain_plan_{0};
+  std::size_t chain_run_{0};
+  // Whether zone_ and chain_ are those of the plans, order_ and the directory
+  // zone_current_. Until one of them changes, the zone only loses runs that
+  // are done, and every run on the lane is in it.
+  bool zone_clean_{false};
+  std::optional<ULONGLONG> zone_current_;
+  // The count of zones built, to tell a run in the zone from one that left.
+  std::uint64_t zone_stamp_{0};
   // The directories of the listing's stack that the lane looks at, the next
   // one first: the top of the stack at the last Plan(), then the directories
   // that were at the top before and are still planned, in their old order.
@@ -554,6 +592,7 @@ void DirectoryReadAhead<S>::Impl::Attach(FileRecord<S>& listing) {
     return;
   }
   listing_ = &listing;
+  ForgetZone();
   listing.SetRecordSource(
       [this](ULONGLONG record) { return HeldRecordBytes(record); });
   listing.SetIndexBlockSource([this](ULONGLONG directory, ULONGLONG vcn) {
@@ -619,7 +658,7 @@ void DirectoryReadAhead<S>::Impl::Release(ULONGLONG directory) {
   if (plan != plans_.end()) {
     WithdrawPlan(plan->second);
     planned_runs_ -= plan->second.runs.size();
-    plans_.erase(plan);
+    DropPlan(plan);
   }
   const auto held = held_.find(directory);
   if (held == held_.end()) {
@@ -655,7 +694,7 @@ void DirectoryReadAhead<S>::Impl::Plan(std::span<const ULONGLONG> upcoming) {
       order_, std::back_inserter(order), [this, &top](ULONGLONG directory) {
         return plans_.contains(directory) && !top.contains(directory);
       });
-  order_ = std::move(order);
+  SetOrder(std::move(order));
   Refill();
 }
 
@@ -1224,7 +1263,7 @@ void DirectoryReadAhead<S>::Impl::PlanRunsOf(ULONGLONG directory,
     }
     planned_runs_ += plan.runs.size();
     stats_.runs_planned += plan.runs.size();
-    plans_.emplace(directory, std::move(plan));
+    AddPlan(directory, std::move(plan));
   } catch (const std::exception&) {
     // A plan that fails costs the gain only.
   }
@@ -1268,7 +1307,7 @@ void DirectoryReadAhead<S>::Impl::WithdrawAll() noexcept {
     stats_.runs_withdrawn++;
   }
   announced_.clear();
-  target_.clear();
+  ForgetZone();
   plans_.clear();
   planned_runs_ = 0;
 }
@@ -1333,72 +1372,163 @@ void DirectoryReadAhead<S>::Impl::RunRead(ULONGLONG first_slot,
 }
 
 template <Cache::Strategy S>
-void DirectoryReadAhead<S>::Impl::Refill() {
-  if (!LaneOn() || plans_.empty()) {
-    return;
-  }
-  refills_++;
+void DirectoryReadAhead<S>::Impl::SetOrder(
+    std::vector<ULONGLONG> order) noexcept {
+  order_ = std::move(order);
+  ForgetZone();
+}
 
-  // The first lane_runs_ runs not read yet: the rest of the directory being
-  // listed, then the directories of order_. The next lane_runs_ stay on the
-  // lane when they are there, and are not announced.
-  target_.clear();
-  std::size_t room = lane_runs_;
-  std::size_t keep_room = lane_runs_;
-  const auto take = [this, &room, &keep_room](ULONGLONG directory) {
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::AddPlan(ULONGLONG directory, RunPlan plan) {
+  plans_.emplace(directory, std::move(plan));
+  ForgetZone();
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::DropPlan(
+    std::unordered_map<ULONGLONG, RunPlan>::iterator plan) noexcept {
+  plans_.erase(plan);
+  ForgetZone();
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::ForgetZone() noexcept {
+  zone_clean_ = false;
+  zone_.clear();
+  chain_.clear();
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::RebuildZone(
+    std::optional<ULONGLONG> current) {
+  ForgetZone();
+  zone_stamp_++;
+  chain_plan_ = 0;
+  chain_run_ = 0;
+  const auto chain = [this](ULONGLONG directory) {
+    const auto found = plans_.find(directory);
+    if (found != plans_.end()) {
+      chain_.push_back(&found->second);
+    }
+  };
+  if (current) {
+    chain(*current);
+  }
+  for (const ULONGLONG directory : order_) {
+    if (directory != current) {
+      chain(directory);
+    }
+  }
+  zone_current_ = current;
+  zone_clean_ = true;
+  TopUpZone();
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::TopUpZone() {
+  while (zone_.size() < 2 * lane_runs_ && chain_plan_ < chain_.size()) {
+    RunPlan& plan = *chain_[chain_plan_];
+    // The runs before the cursor are done, and so are those it jumped over.
+    chain_run_ = (std::max)(chain_run_, plan.cursor);
+    if (chain_run_ >= plan.runs.size()) {
+      chain_plan_++;
+      chain_run_ = 0;
+      continue;
+    }
+    PlannedRun& run = plan.runs.at(chain_run_++);
+    if (run.state != PlannedRun::State::Done) {
+      run.stamp = zone_stamp_;
+      zone_.push_back({.plan = &plan, .run = &run});
+    }
+  }
+}
+
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::VerifyZone(std::optional<ULONGLONG> current,
+                                             bool rebuilt) const {
+  // The zone as a fresh walk of the plans gives it.
+  std::vector<const PlannedRun*> fresh;
+  const auto take = [this, &fresh](ULONGLONG directory) {
     const auto found = plans_.find(directory);
     if (found == plans_.end()) {
       return;
     }
-    RunPlan& plan = found->second;
+    const RunPlan& plan = found->second;
     for (std::size_t index = plan.cursor;
-         index < plan.runs.size() && (room > 0 || keep_room > 0); index++) {
-      PlannedRun& run = plan.runs.at(index);
-      if (run.state == PlannedRun::State::Done) {
-        continue;
-      }
-      run.stamp = refills_;
-      if (room > 0) {
-        target_.push_back({.plan = &plan, .run = &run});
-        room--;
-      } else {
-        keep_room--;
+         index < plan.runs.size() && fresh.size() < 2 * lane_runs_; index++) {
+      if (plan.runs.at(index).state != PlannedRun::State::Done) {
+        fresh.push_back(&plan.runs.at(index));
       }
     }
   };
-  std::optional<ULONGLONG> current;
-  if (listing_ != nullptr) {
-    current = listing_->GetFileReference();
-  }
   if (current) {
     take(*current);
   }
   for (const ULONGLONG directory : order_) {
-    if (room == 0 && keep_room == 0) {
-      break;
-    }
     if (directory != current) {
       take(directory);
     }
   }
-
-  // The runs that left the target are withdrawn, and may come back.
-  for (PlannedRun* const run : announced_) {
-    if (run->stamp != refills_) {
-      SendHint(*run, false);
-      run->state = PlannedRun::State::Waiting;
-      stats_.runs_withdrawn++;
-    }
+  bool same = std::ranges::equal(
+      fresh, zone_, [](const PlannedRun* left, const Target& right) {
+        return left == right.run;
+      });
+  // Without a rebuild, no run of the lane may have left the zone.
+  for (const PlannedRun* const run : announced_) {
+    same = same && (rebuilt || run->stamp == zone_stamp_);
   }
-  std::erase_if(announced_, [](const PlannedRun* run) {
-    return run->state != PlannedRun::State::Announced;
-  });
+  if (!same) {
+    lane_zone_mismatches++;
+    throw std::logic_error("the lane zone differs from a fresh one");
+  }
+}
 
-  // The runs that entered it are announced, but for those whose records the
-  // window holds by now, and for those that overlap a run on the lane: a
-  // withdrawal takes every range that overlaps it, so the ranges on the lane
-  // are kept apart. Such a run waits until the other one is read.
-  for (const Target& entry : target_) {
+template <Cache::Strategy S>
+void DirectoryReadAhead<S>::Impl::Refill() {
+  if (!LaneOn() || plans_.empty()) {
+    return;
+  }
+
+  std::optional<ULONGLONG> current;
+  if (listing_ != nullptr) {
+    current = listing_->GetFileReference();
+  }
+  const bool rebuilt = !zone_clean_ || current != zone_current_;
+  if (rebuilt) {
+    RebuildZone(current);
+  } else {
+    std::erase_if(zone_, [](const Target& entry) {
+      return entry.run->state == PlannedRun::State::Done;
+    });
+    TopUpZone();
+  }
+  if (verify_lane_zone.load(std::memory_order_relaxed)) {
+    VerifyZone(current, rebuilt);
+  }
+
+  // The runs that left the zone are withdrawn, and may come back. Nothing
+  // leaves it but by a rebuild: the zone only loses the runs that are done.
+  if (rebuilt) {
+    for (PlannedRun* const run : announced_) {
+      if (run->stamp != zone_stamp_) {
+        SendHint(*run, false);
+        run->state = PlannedRun::State::Waiting;
+        stats_.runs_withdrawn++;
+      }
+    }
+    std::erase_if(announced_, [](const PlannedRun* run) {
+      return run->state != PlannedRun::State::Announced;
+    });
+  }
+
+  // The first lane_runs_ runs of the zone that wait are announced, but for
+  // those whose records the window holds by now, and for those that overlap a
+  // run on the lane: a withdrawal takes every range that overlaps it, so the
+  // ranges on the lane are kept apart. Such a run waits until the other one is
+  // read.
+  const std::size_t target = (std::min)(zone_.size(), lane_runs_);
+  for (std::size_t index = 0; index < target; index++) {
+    const Target entry = zone_.at(index);
     PlannedRun& run = *entry.run;
     if (run.state != PlannedRun::State::Waiting) {
       continue;
@@ -1418,6 +1548,14 @@ void DirectoryReadAhead<S>::Impl::Refill() {
     announced_.push_back(&run);
     stats_.runs_announced++;
   }
+}
+
+void SetVerifyLaneZoneForTests(bool verify) noexcept {
+  verify_lane_zone = verify;
+}
+
+std::size_t LaneZoneMismatchesForTests() noexcept {
+  return lane_zone_mismatches;
 }
 
 template <Cache::Strategy S>

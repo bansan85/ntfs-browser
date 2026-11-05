@@ -109,6 +109,22 @@ template <Cache::Strategy S>
                     std::size_t dirs, std::uint64_t bytes,
                     Tuning::MediaKind kind = Tuning::MediaKind::Unknown);
 
+// While it lives, every refill of the standing lane works its zone out again
+// and compares it with the one it kept. At the end, it checks that none
+// differed.
+class VerifiedLaneZone {
+ public:
+  VerifiedLaneZone() noexcept;
+  ~VerifiedLaneZone();
+  VerifiedLaneZone(const VerifiedLaneZone&) = delete;
+  VerifiedLaneZone& operator=(const VerifiedLaneZone&) = delete;
+  VerifiedLaneZone(VerifiedLaneZone&&) = delete;
+  VerifiedLaneZone& operator=(VerifiedLaneZone&&) = delete;
+
+ private:
+  std::size_t mismatches_before_;
+};
+
 // What the read ahead did to the reader during one recursive listing.
 struct LaneRun {
   // The standing lane's calls, in order, the withdrawals made when the read

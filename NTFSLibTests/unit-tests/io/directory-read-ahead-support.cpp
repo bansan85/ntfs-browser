@@ -38,6 +38,7 @@
 
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
+#include "io/directory-read-ahead-testing.h"
 #include "log/ntfs-common.h"
 #include "memory-disk-reader.h"
 #include "ntfsdir-core.h"
@@ -45,6 +46,16 @@
 #include "throttled-disk-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead {
+
+VerifiedLaneZone::VerifiedLaneZone() noexcept
+    : mismatches_before_(Io::LaneZoneMismatchesForTests()) {
+  Io::SetVerifyLaneZoneForTests(true);
+}
+
+VerifiedLaneZone::~VerifiedLaneZone() {
+  Io::SetVerifyLaneZoneForTests(false);
+  CHECK(Io::LaneZoneMismatchesForTests() == mismatches_before_);
+}
 
 namespace {
 

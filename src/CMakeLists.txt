@@ -172,6 +172,7 @@ set(
   "io/file-record-efs.h"
   "io/file-record-impl.h"
   "io/file-record-index.h"
+  "io/directory-read-ahead-testing.h"
   "io/entry-prober.h"
   "io/mft-runs.h"
   "io/record-memo.h"

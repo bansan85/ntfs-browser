@@ -574,6 +574,8 @@ TEMPLATE_TEST_CASE_SIG(
   const auto image = Tests::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
 
+  const ReadAhead::VerifiedLaneZone verified;
+
   SECTION("a stack that turns over withdraws nothing within the next runs") {
     Rig<S> rig(image, WithRuns(2));
     Io::DirectoryReadAhead<S> ahead(*rig.volume);

@@ -329,6 +329,7 @@ struct Outcome {
 };
 
 Outcome Run(const Scenario& scenario) {
+  const ReadAhead::VerifiedLaneZone verified;
   const ReadAhead::LaneRun run =
       scenario.full_cache ? ReadAhead::ListForLane<Cache::Strategy::FullCache>(
                                 *scenario.image, scenario.options,
