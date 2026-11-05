@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
@@ -56,6 +57,25 @@ inline constexpr std::size_t big_directory_nodes = big_directory_files + 3;
 [[nodiscard]] std::vector<FakeTreeNode>
     BigDirectoryTree(std::size_t directories);
 
+// Sibling directories of files files each. After each file come ballast freed
+// records that no index names, so the probes of one directory lie ballast + 1
+// records apart.
+[[nodiscard]] std::vector<FakeTreeNode> ScatteredTree(std::size_t directories,
+                                                      std::size_t files,
+                                                      std::size_t ballast);
+
+// A directory tree of the given depth: each directory holds fanout
+// subdirectories and one file, down to depth levels under the root. A listing
+// of it grows and shrinks its stack.
+[[nodiscard]] std::vector<FakeTreeNode> BranchingTree(std::size_t fanout,
+                                                      std::size_t depth);
+
+// Sibling directories of files files each, whose records have a second name in
+// the same directory: a hard link for the even ones, a DOS alias for the odd
+// ones. An index names such a record twice, in one block or in two.
+[[nodiscard]] std::vector<FakeTreeNode> LinkedTree(std::size_t directories,
+                                                   std::size_t files);
+
 // Every tree the listing of the read ahead is compared on: wide and deep ones,
 // big directories, case twins, freed directories that keep their entries, a
 // directory two names lead to, a directory whose record does not parse, one
@@ -88,6 +108,28 @@ template <Cache::Strategy S>
     ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
                     std::size_t dirs, std::uint64_t bytes,
                     Tuning::MediaKind kind = Tuning::MediaKind::Unknown);
+
+// What the read ahead did to the reader during one recursive listing.
+struct LaneRun {
+  // The standing lane's calls, in order, the withdrawals made when the read
+  // ahead was destroyed included.
+  std::vector<CountingDiskReader::Call> lane;
+  // Every other call the listing made on the reader.
+  std::vector<CountingDiskReader::Call> others;
+  // Read just before the read ahead was destroyed.
+  Io::DirectoryReadAheadStats stats;
+};
+
+// Lists the whole volume of image recursively, as ListTree() of NtfsDir does:
+// the same calls on DirectoryReadAhead, in the same order, with the options as
+// they are. The reader is in memory, and says it is a device of the given
+// kind. With raw_callback, the volume has a raw attribute callback, which
+// turns the lane off.
+template <Cache::Strategy S>
+[[nodiscard]] LaneRun
+    ListForLane(const std::vector<BYTE>& image, const VolumeOptions& options,
+                Tuning::MediaKind kind = Tuning::MediaKind::Unknown,
+                bool raw_callback = false);
 
 // The same with the walk tuning of options left as it is: what NtfsDir does
 // when it is given no tuning.

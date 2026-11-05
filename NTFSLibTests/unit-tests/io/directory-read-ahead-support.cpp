@@ -11,16 +11,26 @@
 #include <filesystem>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/attr/defines.h>
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/directory-read-ahead.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/io/record-standing.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tuning/tuning.h>
@@ -273,6 +283,75 @@ std::vector<FakeTreeNode> BigDirectoryTree(std::size_t directories) {
   return nodes;
 }
 
+std::vector<FakeTreeNode> ScatteredTree(std::size_t directories,
+                                        std::size_t files,
+                                        std::size_t ballast) {
+  std::vector<FakeTreeNode> nodes;
+  for (std::size_t index = 0; index < directories; index++) {
+    const std::size_t dir = nodes.size();
+    nodes.push_back(Directory(L"dir" + Number(index), name_tree_root));
+    for (std::size_t file = 0; file < files; file++) {
+      nodes.push_back(File(L"f" + Number(file) + L".txt", dir));
+      for (std::size_t freed = 0; freed < ballast; freed++) {
+        FakeTreeNode node = File(L"b" + Number(freed) + L".txt", dir);
+        node.in_use = false;
+        nodes.push_back(std::move(node));
+      }
+    }
+  }
+  return nodes;
+}
+
+namespace {
+
+// Adds the subdirectories of the directory at parent, and theirs, down to
+// levels more levels.
+void AddBranches(std::vector<FakeTreeNode>& nodes, std::size_t parent,
+                 std::size_t fanout, std::size_t levels) {
+  if (levels == 0) {
+    return;
+  }
+  for (std::size_t branch = 0; branch < fanout; branch++) {
+    const std::size_t dir = nodes.size();
+    nodes.push_back(Directory(L"d" + Number(branch), parent));
+    nodes.push_back(File(L"f.txt", dir));
+    AddBranches(nodes, dir, fanout, levels - 1);
+  }
+}
+
+}  // namespace
+
+std::vector<FakeTreeNode> BranchingTree(std::size_t fanout, std::size_t depth) {
+  std::vector<FakeTreeNode> nodes;
+  AddBranches(nodes, name_tree_root, fanout, depth);
+  return nodes;
+}
+
+std::vector<FakeTreeNode> LinkedTree(std::size_t directories,
+                                     std::size_t files) {
+  std::vector<FakeTreeNode> nodes;
+  for (std::size_t index = 0; index < directories; index++) {
+    const std::size_t dir = nodes.size();
+    nodes.push_back(Directory(L"dir" + Number(index), name_tree_root));
+    for (std::size_t file = 0; file < files; file++) {
+      FakeTreeNode node = File(L"f" + Number(file) + L".txt", dir);
+      if (file % 2 == 0) {
+        // A hard link, which collates far from the first name.
+        node.links.push_back({.name = L"z" + Number(file) + L".txt",
+                              .parent = dir,
+                              .name_space = 1});
+      } else {
+        // The DOS alias of the name, right beside it.
+        node.links.push_back({.name = L"F" + Number(file) + L"~1.TXT",
+                              .parent = dir,
+                              .name_space = 2});
+      }
+      nodes.push_back(std::move(node));
+    }
+  }
+  return nodes;
+}
+
 std::vector<TreeFixture> Fixtures() {
   std::vector<TreeFixture> fixtures;
   const auto add = [&fixtures](std::string name,
@@ -330,6 +409,118 @@ Run ListWithDefaultTuning(const std::vector<BYTE>& image,
   NtfsVolume<S> volume(std::move(counting), options);
   REQUIRE(volume.IsVolumeOK());
   return ListVolume(volume, reads);
+}
+
+namespace {
+
+// The subdirectories a listing of one directory collects, in index order.
+struct LaneChildren {
+  std::vector<ULONGLONG> references;
+};
+
+// TraverseSubEntriesWithStanding callback of ListForLane(): collects the
+// subdirectories the way the visitor of NtfsDir does.
+void CollectChildren(const IndexEntryView& entry, Io::RecordStanding standing,
+                     void* context) {
+  const bool listed =
+      entry.GetFileReference() >= static_cast<ULONGLONG>(Mft::Idx::User) &&
+      entry.IsWin32Name() && !entry.GetFilename().empty();
+  if (listed && entry.IsDirectory() && standing != Io::RecordStanding::Reused) {
+    static_cast<LaneChildren*>(context)->references.push_back(
+        entry.GetFileReference());
+  }
+}
+
+// Keeps every attribute: a callback only has to be there.
+void KeepAttribute(const Attr::HeaderCommon& /*header*/, bool& discard) {
+  discard = false;
+}
+
+// The listing of ListTree() of NtfsDir, without its output: the same walk of
+// the stack and the same calls on ahead.
+template <Cache::Strategy S>
+void WalkStack(Io::FileRecord<S>& fr, Io::DirectoryReadAhead<S>& ahead) {
+  std::vector<ULONGLONG> pending;
+  std::unordered_set<ULONGLONG> listed;
+  if (const std::optional<ULONGLONG> start = fr.GetFileReference()) {
+    listed.insert(*start);
+  }
+  ahead.Attach(fr);
+  ahead.Begin();
+  std::vector<ULONGLONG> upcoming;
+  while (true) {
+    LaneChildren children;
+    fr.TraverseSubEntriesWithStanding(CollectChildren, &children);
+    if (const std::optional<ULONGLONG> current = fr.GetFileReference()) {
+      ahead.Release(*current);
+    }
+    pending.insert(pending.end(), children.references.rbegin(),
+                   children.references.rend());
+    if (ahead.Enabled()) {
+      upcoming.clear();
+      for (auto next = pending.rbegin();
+           next != pending.rend() && upcoming.size() < ahead.Window(); ++next) {
+        if (!listed.contains(*next)) {
+          upcoming.push_back(*next);
+        }
+      }
+      ahead.Plan(upcoming);
+    }
+    bool entered = false;
+    while (!pending.empty() && !entered) {
+      const ULONGLONG next = pending.back();
+      pending.pop_back();
+      if (listed.contains(next)) {
+        ahead.Release(next);
+        continue;
+      }
+      entered = fr.ParseFileRecord(next) && fr.ParseAttrs();
+      if (entered) {
+        listed.insert(next);
+      } else {
+        ahead.Release(next);
+      }
+    }
+    if (!entered) {
+      return;
+    }
+  }
+}
+
+}  // namespace
+
+template <Cache::Strategy S>
+LaneRun ListForLane(const std::vector<BYTE>& image,
+                    const VolumeOptions& options, Tuning::MediaKind kind,
+                    bool raw_callback) {
+  auto memory = std::make_unique<MemoryDiskReader>(image);
+  memory->SetMediaKind(kind);
+  auto counting = std::make_unique<CountingDiskReader>(std::move(memory));
+  CountingDiskReader& reads = *counting;
+  NtfsVolume<S> volume(std::move(counting), options);
+  REQUIRE(volume.IsVolumeOK());
+  if (raw_callback) {
+    REQUIRE(volume.InstallAttrRawCB(Attr::Type::Data, &KeepAttribute));
+  }
+  volume.SetReadPattern(Tuning::Pattern::DependentSmall);
+  Io::FileRecord<S> fr(volume);
+  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  REQUIRE(fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+  REQUIRE(fr.ParseAttrs());
+  reads.Reset();
+
+  LaneRun run;
+  {
+    Io::DirectoryReadAhead<S> ahead(volume);
+    WalkStack(fr, ahead);
+    run.stats = ahead.GetStats();
+  }
+  for (const CountingDiskReader::Call& call : reads.Calls()) {
+    const bool lane = call.kind == CountingDiskReader::Kind::PrefetchStanding ||
+                      call.kind == CountingDiskReader::Kind::CancelStanding;
+    (lane ? run.lane : run.others).push_back(call);
+  }
+  return run;
 }
 
 DiskModel HardDiskModel() {
@@ -437,6 +628,12 @@ template Run ListWithDefaultTuning<Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, const VolumeOptions& options);
 template Run ListWithDefaultTuning<Cache::Strategy::FullCache>(
     const std::vector<BYTE>& image, const VolumeOptions& options);
+template LaneRun ListForLane<Cache::Strategy::NoCache>(
+    const std::vector<BYTE>& image, const VolumeOptions& options,
+    Tuning::MediaKind kind, bool raw_callback);
+template LaneRun ListForLane<Cache::Strategy::FullCache>(
+    const std::vector<BYTE>& image, const VolumeOptions& options,
+    Tuning::MediaKind kind, bool raw_callback);
 template TimedRun ListOnSimulatedDisk<Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
     std::uint64_t bytes, const DiskModel& model, Tuning::MediaKind kind);

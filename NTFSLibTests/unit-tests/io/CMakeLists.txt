@@ -3,6 +3,8 @@ target_sources(
   PRIVATE
     "directory-read-ahead-class-tests.cpp"
     "directory-read-ahead-gain-tests.cpp"
+    "directory-read-ahead-lane-digest-tests.cpp"
+    "directory-read-ahead-lane-digests.inc"
     "directory-read-ahead-lane-tests.cpp"
     "directory-read-ahead-support.cpp"
     "directory-read-ahead-support.h"
