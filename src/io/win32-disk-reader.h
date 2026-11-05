@@ -31,9 +31,9 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY ReadDoneProbe
     SetReadDoneProbeForTests(ReadDoneProbe probe) noexcept;
 
 // Production IDiskReader: a real disk/device, or an ordinary file treated
-// the same way (CreateFileW handles both identically). Never used directly
-// outside FileReader<S>::Open(), so it carries no export macro.
-class Win32DiskReader : public IDiskReader {
+// the same way (CreateFileW handles both identically). The library uses it
+// through FileReader<S>::Open(); the unit tests reach it directly.
+class NTFS_BROWSER_EXPORT_TESTS_ONLY Win32DiskReader : public IDiskReader {
  public:
   // caps are the read-ahead caps of each pattern, M1 in force until
   // SetReadPattern() says otherwise. The defaults are the library's own.
