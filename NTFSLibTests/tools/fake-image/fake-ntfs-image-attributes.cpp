@@ -112,25 +112,24 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
   const std::vector<WORD> encoded_name = ToUtf16(overrides.name);
   assert(encoded_name.size() <= 255 && "on-disk name_length is one byte");
   attr.header.name_length = gsl::narrow<BYTE>(encoded_name.size());
-  attr.header.flags = overrides.flags.value_or(
-      (layout.comp_unit_size != 0)
-          ? NTFS_BROWSER_NAMESPACE::Attr::flag_compressed
-          : static_cast<WORD>(0));
+  const bool compressed = layout.comp_unit_size != 0;
+  const WORD default_flags = compressed
+                                 ? NTFS_BROWSER_NAMESPACE::Attr::flag_compressed
+                                 : static_cast<WORD>(0);
+  attr.header.flags = overrides.flags.value_or(default_flags);
 
   const RunClusters clusters = CountRunClusters(layout.runs);
+  const ULONGLONG vcn_span = clusters.total == 0 ? 0 : clusters.total - 1;
   attr.start_vcn = overrides.start_vcn;
-  attr.last_vcn = overrides.last_vcn.value_or(
-      overrides.start_vcn + ((clusters.total == 0) ? 0 : clusters.total - 1));
+  attr.last_vcn = overrides.last_vcn.value_or(overrides.start_vcn + vcn_span);
   attr.comp_unit_size = layout.comp_unit_size;
   attr.alloc_size = clusters.total * cluster_size;
   attr.real_size = layout.real_size;
   attr.ini_size = overrides.ini_size.value_or(layout.real_size);
 
-  const auto header_size = gsl::narrow<WORD>(
-      sizeof(attr) +
-      ((layout.comp_unit_size != 0)
-           ? NTFS_BROWSER_NAMESPACE::Data::compressed_size_field_size
-           : 0));
+  const size_t extra_header_size =
+      compressed ? NTFS_BROWSER_NAMESPACE::Data::compressed_size_field_size : 0;
+  const auto header_size = gsl::narrow<WORD>(sizeof(attr) + extra_header_size);
   const size_t name_bytes = encoded_name.size() * sizeof(WORD);
   if (name_bytes != 0) {
     attr.header.name_offset = header_size;
@@ -140,7 +139,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
   const auto run_offset = gsl::narrow<WORD>(header_size + name_bytes);
   attr.data_run_offset = run_offset;
 
-  if (layout.comp_unit_size != 0) {
+  if (compressed) {
     // CompressedSize: total allocated size of the attribute's compressed
     // clusters, i.e. everything actually on disk (the sparse padding of each
     // compressed unit excluded).

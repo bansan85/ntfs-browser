@@ -19,6 +19,129 @@ namespace {
 // recurse without bound.
 constexpr std::size_t max_depth = 32;
 
+// The digits of a short decimal, read as an integer.
+struct Mantissa {
+  std::int64_t value{0};
+  int digits{0};
+  // Digits after the dot.
+  int fraction{0};
+  bool after_dot{false};
+};
+
+// Reads digits and at most one dot, up to an exponent mark or the end. The
+// mantissa holds at most 15 digits, so it is an exact double.
+bool ScanMantissa(const char*& p, const char* last, Mantissa& mantissa) {
+  for (; p != last && *p != 'e' && *p != 'E'; ++p) {
+    if (*p == '.') {
+      if (mantissa.after_dot) {
+        return false;
+      }
+      mantissa.after_dot = true;
+      continue;
+    }
+    if (*p < '0' || *p > '9' || ++mantissa.digits > 15) {
+      return false;
+    }
+    mantissa.value = mantissa.value * 10 + (*p - '0');
+    if (mantissa.after_dot) {
+      ++mantissa.fraction;
+    }
+  }
+  // A mantissa needs a digit: "e5" and "1." are not numbers.
+  return mantissa.digits != 0 &&
+         !(mantissa.after_dot && mantissa.fraction == 0);
+}
+
+// Reads the part after the mantissa: nothing, or an exponent mark, a sign and
+// digits. The exponent is capped, so it cannot overflow.
+bool ScanExponent(const char*& p, const char* last, int& exponent) {
+  exponent = 0;
+  if (p == last) {
+    return true;
+  }
+  ++p;
+  bool negative = false;
+  if (p != last && (*p == '+' || *p == '-')) {
+    negative = *p == '-';
+    ++p;
+  }
+  if (p == last) {
+    return false;
+  }
+  for (; p != last; ++p) {
+    if (*p < '0' || *p > '9' || exponent > 100) {
+      return false;
+    }
+    exponent = exponent * 10 + (*p - '0');
+  }
+  if (negative) {
+    exponent = -exponent;
+  }
+  return true;
+}
+
+// A short decimal, -?d+[.d+][(e|E)[+-]d+], whose mantissa has at most 15
+// digits and whose power of ten stays within 10^22. Mantissa and power are
+// exact doubles, so one multiplication or division gives the value from_chars
+// gives: both round correctly. Anything else is left to from_chars.
+bool ParseShortDecimal(const char* first, const char* last, double& out) {
+  const bool negative = first != last && *first == '-';
+  if (negative) {
+    ++first;
+  }
+  if (first == last || *first == '.') {
+    return false;
+  }
+  Mantissa mantissa;
+  const char* p = first;
+  int exponent = 0;
+  if (!ScanMantissa(p, last, mantissa) || !ScanExponent(p, last, exponent)) {
+    return false;
+  }
+  const int power = exponent - mantissa.fraction;
+  if (power < -22 || power > 22) {
+    return false;
+  }
+  double scale = 1.0;
+  for (int i = 0; i < (power < 0 ? -power : power); ++i) {
+    scale *= 10.0;
+  }
+  const double magnitude = static_cast<double>(mantissa.value);
+  out = power < 0 ? magnitude / scale : magnitude * scale;
+  if (negative) {
+    out = -out;
+  }
+  return true;
+}
+
+// Tells whether c can be part of a number.
+bool IsNumberChar(char c) {
+  return c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E' ||
+         (c >= '0' && c <= '9');
+}
+
+// Maps the letter after a backslash to the character it stands for.
+std::optional<char> SimpleEscape(char escape) {
+  switch (escape) {
+    case '"':
+    case '\\':
+    case '/':
+      return escape;
+    case 'b':
+      return '\b';
+    case 'f':
+      return '\f';
+    case 'n':
+      return '\n';
+    case 'r':
+      return '\r';
+    case 't':
+      return '\t';
+    default:
+      return std::nullopt;
+  }
+}
+
 // A recursive-descent parser over one document.
 class Parser {
  public:
@@ -102,82 +225,6 @@ class Parser {
     return false;
   }
 
-  // A short decimal, -?d+[.d+][(e|E)[+-]d+], whose mantissa has at most 15
-  // digits and whose power of ten stays within 10^22. Mantissa and power are
-  // exact doubles, so one multiplication or division gives the value from_chars
-  // gives: both round correctly. Anything else is left to from_chars.
-  static bool ParseShortDecimal(const char* first, const char* last,
-                                double& out) {
-    bool negative = false;
-    if (first != last && *first == '-') {
-      negative = true;
-      ++first;
-    }
-    if (first == last || *first == '.') {
-      return false;
-    }
-    std::int64_t mantissa = 0;
-    int digits = 0;
-    int fraction = 0;
-    bool after_dot = false;
-    const char* p = first;
-    for (; p != last && *p != 'e' && *p != 'E'; ++p) {
-      if (*p == '.') {
-        if (after_dot) {
-          return false;
-        }
-        after_dot = true;
-        continue;
-      }
-      if (*p < '0' || *p > '9' || ++digits > 15) {
-        return false;
-      }
-      mantissa = mantissa * 10 + (*p - '0');
-      if (after_dot) {
-        ++fraction;
-      }
-    }
-    // A mantissa needs a digit: "e5" and "1." are not numbers.
-    if (digits == 0 || (after_dot && fraction == 0)) {
-      return false;
-    }
-    int exponent = 0;
-    if (p != last) {
-      ++p;
-      bool exponent_negative = false;
-      if (p != last && (*p == '+' || *p == '-')) {
-        exponent_negative = *p == '-';
-        ++p;
-      }
-      if (p == last) {
-        return false;
-      }
-      for (; p != last; ++p) {
-        if (*p < '0' || *p > '9' || exponent > 100) {
-          return false;
-        }
-        exponent = exponent * 10 + (*p - '0');
-      }
-      if (exponent_negative) {
-        exponent = -exponent;
-      }
-    }
-    const int power = exponent - fraction;
-    if (power < -22 || power > 22) {
-      return false;
-    }
-    double scale = 1.0;
-    for (int i = 0; i < (power < 0 ? -power : power); ++i) {
-      scale *= 10.0;
-    }
-    const double magnitude = static_cast<double>(mantissa);
-    out = power < 0 ? magnitude / scale : magnitude * scale;
-    if (negative) {
-      out = -out;
-    }
-    return true;
-  }
-
   // nsan cannot follow from_chars into a double: a value past int64 has no
   // shadow, so its store is reported. Only this parse is exempt from the check.
 #if defined(__clang__)
@@ -185,11 +232,7 @@ class Parser {
 #endif
   bool ParseNumber(JsonValue& value) {
     const std::size_t start = position_;
-    while (position_ < text_.size() &&
-           (text_[position_] == '-' || text_[position_] == '+' ||
-            text_[position_] == '.' || text_[position_] == 'e' ||
-            text_[position_] == 'E' ||
-            (text_[position_] >= '0' && text_[position_] <= '9'))) {
+    while (position_ < text_.size() && IsNumberChar(text_[position_])) {
       position_++;
     }
     if (position_ == start) {
@@ -264,6 +307,40 @@ class Parser {
     return true;
   }
 
+  // Reads the escape after a backslash that the caller has consumed.
+  bool ParseEscape(std::string& out) {
+    const char escape = text_[position_++];
+    if (escape == 'u') {
+      return ParseUnicodeEscape(out);
+    }
+    const std::optional<char> simple = SimpleEscape(escape);
+    if (!simple) {
+      return Fail("an unknown escape sits in a string");
+    }
+    out.push_back(*simple);
+    return true;
+  }
+
+  // Reads the digits of a \u escape, and the second one of a surrogate pair.
+  bool ParseUnicodeEscape(std::string& out) {
+    char32_t unit = 0;
+    if (!ParseHex4(unit)) {
+      return false;
+    }
+    if (unit >= 0xD800 && unit <= 0xDBFF) {
+      char32_t low = 0;
+      if (!Consume('\\') || !Consume('u') || !ParseHex4(low) || low < 0xDC00 ||
+          low > 0xDFFF) {
+        return Fail("a high surrogate has no low surrogate");
+      }
+      unit = 0x10000 + ((unit - 0xD800) << 10U) + (low - 0xDC00);
+    } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
+      return Fail("a low surrogate stands alone");
+    }
+    AppendUtf8(out, unit);
+    return true;
+  }
+
   bool ParseString(std::string& out) {
     if (!Consume('"')) {
       return Fail("a string was expected");
@@ -284,48 +361,8 @@ class Parser {
       if (position_ >= text_.size()) {
         break;
       }
-      const char escape = text_[position_++];
-      switch (escape) {
-        case '"':
-        case '\\':
-        case '/':
-          out.push_back(escape);
-          break;
-        case 'b':
-          out.push_back('\b');
-          break;
-        case 'f':
-          out.push_back('\f');
-          break;
-        case 'n':
-          out.push_back('\n');
-          break;
-        case 'r':
-          out.push_back('\r');
-          break;
-        case 't':
-          out.push_back('\t');
-          break;
-        case 'u': {
-          char32_t unit = 0;
-          if (!ParseHex4(unit)) {
-            return false;
-          }
-          if (unit >= 0xD800 && unit <= 0xDBFF) {
-            char32_t low = 0;
-            if (!Consume('\\') || !Consume('u') || !ParseHex4(low) ||
-                low < 0xDC00 || low > 0xDFFF) {
-              return Fail("a high surrogate has no low surrogate");
-            }
-            unit = 0x10000 + ((unit - 0xD800) << 10U) + (low - 0xDC00);
-          } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
-            return Fail("a low surrogate stands alone");
-          }
-          AppendUtf8(out, unit);
-          break;
-        }
-        default:
-          return Fail("an unknown escape sits in a string");
+      if (!ParseEscape(out)) {
+        return false;
       }
     }
     return Fail("a string is not closed");
@@ -402,35 +439,38 @@ class Parser {
   std::string error_;
 };
 
+// The short escape of c, or empty when it has none.
+std::string_view ShortEscape(char c) {
+  switch (c) {
+    case '"':
+      return "\\\"";
+    case '\\':
+      return "\\\\";
+    case '\n':
+      return "\\n";
+    case '\r':
+      return "\\r";
+    case '\t':
+      return "\\t";
+    default:
+      return {};
+  }
+}
+
 // Appends text to out as a JSON string body.
 void AppendEscaped(std::string& out, std::string_view text) {
   constexpr std::array<char, 16> hex{'0', '1', '2', '3', '4', '5', '6', '7',
                                      '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
   for (const char c : text) {
-    switch (c) {
-      case '"':
-        out += "\\\"";
-        break;
-      case '\\':
-        out += "\\\\";
-        break;
-      case '\n':
-        out += "\\n";
-        break;
-      case '\r':
-        out += "\\r";
-        break;
-      case '\t':
-        out += "\\t";
-        break;
-      default:
-        if (static_cast<unsigned char>(c) < 0x20) {
-          out += "\\u00";
-          out.push_back(hex.at(static_cast<unsigned char>(c) >> 4U));
-          out.push_back(hex.at(static_cast<unsigned char>(c) & 0xFU));
-        } else {
-          out.push_back(c);
-        }
+    const std::string_view escape = ShortEscape(c);
+    if (!escape.empty()) {
+      out += escape;
+    } else if (static_cast<unsigned char>(c) < 0x20) {
+      out += "\\u00";
+      out.push_back(hex.at(static_cast<unsigned char>(c) >> 4U));
+      out.push_back(hex.at(static_cast<unsigned char>(c) & 0xFU));
+    } else {
+      out.push_back(c);
     }
   }
 }

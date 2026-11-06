@@ -77,6 +77,20 @@ std::uint64_t Arguments::Unsigned(std::string_view name, std::uint64_t fallback,
   return value;
 }
 
+namespace {
+
+// Stores a "--name" or "--name=value" argument that no bench option took.
+void AddLongOption(const std::wstring& argument, Arguments& parsed) {
+  const std::string text = NtfsDevice::WideToUtf8(argument);
+  const std::size_t equals = text.find('=');
+  parsed.options.emplace_back(
+      text.substr(2,
+                  equals == std::string::npos ? std::string::npos : equals - 2),
+      equals == std::string::npos ? std::string() : text.substr(equals + 1));
+}
+
+}  // namespace
+
 bool ParseArguments(const std::vector<std::wstring>& arguments,
                     Arguments& parsed) {
   for (const std::wstring& argument : arguments) {
@@ -91,16 +105,10 @@ bool ParseArguments(const std::vector<std::wstring>& arguments,
         break;
     }
     if (argument.starts_with(L"--")) {
-      const std::string text = NtfsDevice::WideToUtf8(argument);
-      const std::size_t equals = text.find('=');
-      parsed.options.emplace_back(
-          text.substr(2, equals == std::string::npos ? std::string::npos
-                                                     : equals - 2),
-          equals == std::string::npos ? std::string()
-                                      : text.substr(equals + 1));
-      continue;
+      AddLongOption(argument, parsed);
+    } else {
+      parsed.words.push_back(argument);
     }
-    parsed.words.push_back(argument);
   }
   return true;
 }
@@ -122,7 +130,10 @@ std::optional<NTFS_BROWSER_NAMESPACE::VolumeOptions>
   return options;
 }
 
-std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenReader(
+namespace {
+
+// Opens the reader of the platform on target. Null when it cannot.
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenPlatformDevice(
     std::wstring_view target,
     const std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
                      NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps) {
@@ -131,16 +142,25 @@ std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenReader(
   if (const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target)) {
     path = std::wstring(L"\\\\.\\") + *letter + L":";
   }
-  std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader =
-      NTFS_BROWSER_NAMESPACE::Bench::OpenPlatformReader(path, caps);
+  return NTFS_BROWSER_NAMESPACE::Bench::OpenPlatformReader(path, caps);
 #else
   static_cast<void>(caps);
   auto posix = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
-  std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader;
-  if (posix->Open(target)) {
-    reader = std::move(posix);
+  if (!posix->Open(target)) {
+    return nullptr;
   }
+  return posix;
 #endif
+}
+
+}  // namespace
+
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenReader(
+    std::wstring_view target,
+    const std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
+                     NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps) {
+  std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader =
+      OpenPlatformDevice(target, caps);
   if (!reader) {
     std::fprintf(stderr, "Cannot open %s\n",
                  NtfsDevice::WideToUtf8(target).c_str());
@@ -192,6 +212,24 @@ void Usage() {
       "                  sample the disk counters until the process ends\n");
 }
 
+// A subcommand and the function that runs it.
+struct Subcommand {
+  std::wstring_view name;
+  int (*run)(const Arguments&);
+};
+
+// The subcommands, by name.
+constexpr std::array<Subcommand, 8> subcommands{{
+    {L"replay", ReplayCommand},
+    {L"diskbench", DiskBenchCommand},
+    {L"simulate", SimulateCommand},
+    {L"knobs", KnobsCommand},
+    {L"disk-id", DiskIdCommand},
+    {L"purge", PurgeCommand},
+    {L"wake", WakeCommand},
+    {L"sample", SampleCommand},
+}};
+
 int Run(const std::vector<std::wstring>& arguments) {
   if (arguments.empty()) {
     Usage();
@@ -202,29 +240,10 @@ int Run(const std::vector<std::wstring>& arguments) {
   if (!ParseArguments({arguments.begin() + 1, arguments.end()}, parsed)) {
     return 2;
   }
-  if (command == L"replay") {
-    return ReplayCommand(parsed);
-  }
-  if (command == L"diskbench") {
-    return DiskBenchCommand(parsed);
-  }
-  if (command == L"simulate") {
-    return SimulateCommand(parsed);
-  }
-  if (command == L"knobs") {
-    return KnobsCommand(parsed);
-  }
-  if (command == L"disk-id") {
-    return DiskIdCommand(parsed);
-  }
-  if (command == L"purge") {
-    return PurgeCommand(parsed);
-  }
-  if (command == L"wake") {
-    return WakeCommand(parsed);
-  }
-  if (command == L"sample") {
-    return SampleCommand(parsed);
+  for (const Subcommand& subcommand : subcommands) {
+    if (command == subcommand.name) {
+      return subcommand.run(parsed);
+    }
   }
   Usage();
   return 2;

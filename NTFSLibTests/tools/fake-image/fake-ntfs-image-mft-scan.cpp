@@ -430,6 +430,135 @@ void ApplyIndexBlockFixup(std::span<BYTE> block) {
   }
 }
 
+// Writes slot idx of the list scan fixture. Its kind is idx modulo
+// list_scan_kind_count. A kind with a list in a cluster of its own takes the
+// next free one from next_list_lcn.
+void PutListScanSlot(std::vector<BYTE>& image, ULONGLONG idx,
+                     ULONGLONG fragment_clusters, ULONGLONG& next_list_lcn) {
+  using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
+
+  const ULONGLONG root = MakeFileReference(
+      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+  const FileRecordFlag file = FileRecordFlag::InUse;
+  const std::wstring name = L"f" + std::to_wstring(idx);
+  const auto put = [&](const FakeRecord& record) {
+    PutScanRecord(image, idx, fragment_clusters, record);
+  };
+  // The list of a base record names the slot after it, or before it.
+  const auto base = [&](FileRecordFlag flags, ULONGLONG listed, WORD sequence) {
+    return MakeListScanBase(
+        flags, ListScanBytes(ListScanEntry{listed, sequence}), std::nullopt);
+  };
+  switch (idx % list_scan_kind_count) {
+    case 1:
+      put(base(file, idx + 1, list_scan_extension_sequence));
+      break;
+    case 2:
+      put(MakeListScanExtension(file, list_scan_extension_sequence, idx,
+                                idx - 1));
+      break;
+    case 3:
+      put(MakeListScanExtension(file, list_scan_extension_sequence, idx,
+                                idx + 1));
+      break;
+    case 4:
+      put(base(file, idx - 1, list_scan_extension_sequence));
+      break;
+    case 5:
+      // Names a file of its own: not an extension of this one.
+      put(base(file, idx + 1, 1));
+      break;
+    case 7:
+      // Names a zero-filled slot, whose record the scan must read.
+      put(base(file, idx + 1, list_scan_extension_sequence));
+      break;
+    case 8:
+      put(FakeRecord{});
+      break;
+    case 9: {
+      // The list sits in a cluster of its own: reading it reads the volume.
+      const std::vector<BYTE> list =
+          ListScanBytes(ListScanEntry{idx + 1, list_scan_extension_sequence});
+      const FakeDataRun run{.lcn = next_list_lcn++, .clusters = 1};
+      put(MakeListScanBase(file, list, run));
+      LayRunBytes(image, {run}, list);
+      break;
+    }
+    case 10:
+      put(MakeListScanExtension(file, list_scan_extension_sequence, idx,
+                                idx - 1));
+      break;
+    case 11:
+      put(base(FileRecordFlag{}, idx + 1, list_scan_freed_extension_sequence));
+      break;
+    case 12:
+      put(MakeListScanExtension(
+          FileRecordFlag{}, list_scan_freed_extension_sequence, idx, idx - 1));
+      break;
+    case 13:
+      put(MakeMftTreeRecord(file | FileRecordFlag::Dir, 1,
+                            {{.name = name, .parent_ref = root}}));
+      break;
+    default:
+      // 0 and 6: files in use. 6 is what the list of 5 names.
+      put(MakeMftTreeRecord(
+          file, idx % list_scan_kind_count == 6 ? WORD{2} : WORD{1},
+          {{.name = name, .parent_ref = root}}, static_cast<DWORD>(idx % 100)));
+      break;
+  }
+}
+
+// The leaves of the indexed scan tree, and the separators between them.
+struct IndexedScanTree {
+  std::vector<std::vector<FakeIndexName>> leaves;
+  std::vector<FakeIndexName> separators;
+};
+
+// Cuts the sorted entries into leaves of entries_per_block entries. The entry
+// after a leaf is its separator.
+IndexedScanTree
+    SplitIndexedScanEntries(const std::vector<IndexedScanEntry>& entries,
+                            size_t entries_per_block) {
+  IndexedScanTree tree;
+  for (size_t next = 0; next < entries.size();) {
+    const size_t left = entries.size() - next;
+    // A last leaf of one entry would leave the separator before it with
+    // nothing to separate: the leaf before it takes that entry.
+    const size_t take =
+        left <= entries_per_block + 1 ? left : entries_per_block;
+    std::vector<FakeIndexName>& leaf = tree.leaves.emplace_back();
+    for (size_t i = 0; i < take; i++) {
+      leaf.push_back(entries.at(next + i).fake);
+    }
+    next += take;
+    if (next < entries.size()) {
+      tree.separators.push_back(entries.at(next).fake);
+      next++;
+    }
+  }
+  return tree;
+}
+
+// The root of the indexed scan volume: the one entry that points at the
+// separator node, and the run of block_count index blocks.
+FakeRecord MakeIndexedScanRoot(size_t block_count) {
+  FakeRecord root = MakeInUseDirectoryRecord(root_sequence_number);
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      root, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
+  offset += WriteSubNodeIndexRootAttr(root, offset, indexed_scan_block_size,
+                                      indexed_scan_block_clusters);
+  offset += WriteSingleRunIndexAllocAttr(
+      root, offset,
+      {.start_vcn = 0,
+       .clusters =
+           static_cast<DWORD>(block_count * indexed_scan_block_clusters),
+       .lcn = indexed_scan_blocks_lcn},
+      block_count * indexed_scan_block_size);
+  WriteEndOfAttributesMarker(root, offset);
+  return root;
+}
+
 }  // namespace
 
 ULONGLONG FragmentedMftScanSlotOffset(ULONGLONG idx,
@@ -500,89 +629,10 @@ std::vector<BYTE>
                 MakeMftTreeRecord(FileRecordFlag::InUse | FileRecordFlag::Dir,
                                   root_sequence_number,
                                   {{.name = L".", .parent_ref = root}}));
-  const FileRecordFlag file = FileRecordFlag::InUse;
   ULONGLONG next_list_lcn = list_scan_lists_lcn;
   for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
        idx < record_count; idx++) {
-    const std::wstring name = L"f" + std::to_wstring(idx);
-    // The list of a base record names the slot after it, or before it.
-    const auto base = [&](FileRecordFlag flags, ULONGLONG listed,
-                          WORD sequence) {
-      return MakeListScanBase(
-          flags, ListScanBytes(ListScanEntry{listed, sequence}), std::nullopt);
-    };
-    switch (idx % list_scan_kind_count) {
-      case 1:
-        PutScanRecord(image, idx, fragment_clusters,
-                      base(file, idx + 1, list_scan_extension_sequence));
-        break;
-      case 2:
-        PutScanRecord(image, idx, fragment_clusters,
-                      MakeListScanExtension(file, list_scan_extension_sequence,
-                                            idx, idx - 1));
-        break;
-      case 3:
-        PutScanRecord(image, idx, fragment_clusters,
-                      MakeListScanExtension(file, list_scan_extension_sequence,
-                                            idx, idx + 1));
-        break;
-      case 4:
-        PutScanRecord(image, idx, fragment_clusters,
-                      base(file, idx - 1, list_scan_extension_sequence));
-        break;
-      case 5:
-        // Names a file of its own: not an extension of this one.
-        PutScanRecord(image, idx, fragment_clusters, base(file, idx + 1, 1));
-        break;
-      case 7:
-        // Names a zero-filled slot, whose record the scan must read.
-        PutScanRecord(image, idx, fragment_clusters,
-                      base(file, idx + 1, list_scan_extension_sequence));
-        break;
-      case 8:
-        PutScanRecord(image, idx, fragment_clusters, FakeRecord{});
-        break;
-      case 9: {
-        // The list sits in a cluster of its own: reading it reads the volume.
-        const std::vector<BYTE> list =
-            ListScanBytes(ListScanEntry{idx + 1, list_scan_extension_sequence});
-        const FakeDataRun run{.lcn = next_list_lcn++, .clusters = 1};
-        PutScanRecord(image, idx, fragment_clusters,
-                      MakeListScanBase(file, list, run));
-        LayRunBytes(image, {run}, list);
-        break;
-      }
-      case 10:
-        PutScanRecord(image, idx, fragment_clusters,
-                      MakeListScanExtension(file, list_scan_extension_sequence,
-                                            idx, idx - 1));
-        break;
-      case 11:
-        PutScanRecord(image, idx, fragment_clusters,
-                      base(FileRecordFlag{}, idx + 1,
-                           list_scan_freed_extension_sequence));
-        break;
-      case 12:
-        PutScanRecord(image, idx, fragment_clusters,
-                      MakeListScanExtension(FileRecordFlag{},
-                                            list_scan_freed_extension_sequence,
-                                            idx, idx - 1));
-        break;
-      case 13:
-        PutScanRecord(image, idx, fragment_clusters,
-                      MakeMftTreeRecord(file | FileRecordFlag::Dir, 1,
-                                        {{.name = name, .parent_ref = root}}));
-        break;
-      default:
-        // 0 and 6: files in use. 6 is what the list of 5 names.
-        PutScanRecord(image, idx, fragment_clusters,
-                      MakeMftTreeRecord(
-                          file,
-                          idx % list_scan_kind_count == 6 ? WORD{2} : WORD{1},
-                          {{.name = name, .parent_ref = root}},
-                          static_cast<DWORD>(idx % 100)));
-        break;
-    }
+    PutListScanSlot(image, idx, fragment_clusters, next_list_lcn);
   }
   PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
                 MakeScanMftRecord(record_count, fragment_clusters));
@@ -645,24 +695,9 @@ std::vector<BYTE>
 
   // The tree has two levels under the root: block 0 holds the separators, and
   // each leaf block the entries between two of them.
-  std::vector<std::vector<FakeIndexName>> leaves;
-  std::vector<FakeIndexName> separators;
-  for (size_t next = 0; next < entries.size();) {
-    const size_t left = entries.size() - next;
-    // A last leaf of one entry would leave the separator before it with
-    // nothing to separate: the leaf before it takes that entry.
-    const size_t take =
-        left <= entries_per_block + 1 ? left : entries_per_block;
-    std::vector<FakeIndexName>& leaf = leaves.emplace_back();
-    for (size_t i = 0; i < take; i++) {
-      leaf.push_back(entries.at(next + i).fake);
-    }
-    next += take;
-    if (next < entries.size()) {
-      separators.push_back(entries.at(next).fake);
-      next++;
-    }
-  }
+  IndexedScanTree tree = SplitIndexedScanEntries(entries, entries_per_block);
+  std::vector<std::vector<FakeIndexName>>& leaves = tree.leaves;
+  std::vector<FakeIndexName>& separators = tree.separators;
 
   // The VCN of leaf j: block 0 is the separator node, at VCN 0.
   const auto leaf_vcn = [](size_t leaf) {
@@ -701,23 +736,8 @@ std::vector<BYTE>
     write_block(j + 1, leaf_vcn(j), leaves.at(j), std::nullopt);
   }
 
-  FakeRecord root = MakeInUseDirectoryRecord(root_sequence_number);
-  DWORD offset = attr_offset_value;
-  offset += WriteStandardInformationAttr(
-      root, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
-  // The root has the one entry that points at the separator node.
-  offset += WriteSubNodeIndexRootAttr(root, offset, indexed_scan_block_size,
-                                      indexed_scan_block_clusters);
-  offset += WriteSingleRunIndexAllocAttr(
-      root, offset,
-      {.start_vcn = 0,
-       .clusters =
-           static_cast<DWORD>(block_count * indexed_scan_block_clusters),
-       .lcn = indexed_scan_blocks_lcn},
-      block_count * indexed_scan_block_size);
-  WriteEndOfAttributesMarker(root, offset);
   PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
-                fragment_clusters, root);
+                fragment_clusters, MakeIndexedScanRoot(block_count));
   return image;
 }
 

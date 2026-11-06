@@ -292,6 +292,30 @@ DWORD WriteTreeAttributeList(FakeRecord& record, DWORD offset,
   return attr.header.total_size;
 }
 
+// The base record of the listed file: its $STANDARD_INFORMATION and its
+// $ATTRIBUTE_LIST, resident or on the run list runs.
+FakeRecord
+    MakeListedBaseRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags,
+                         FakeListResidency list,
+                         const std::vector<BYTE>& list_bytes,
+                         const std::vector<FakeDataRun>& list_runs) {
+  FakeRecord base =
+      MakeRecordHeader(attr_offset_value, flags, tree_list_base_sequence);
+  DWORD offset = attr_offset_value;
+  offset += WriteStandardInformationAttr(
+      base, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
+  if (list == FakeListResidency::Resident) {
+    offset += WriteTreeAttributeList(base, offset, list_bytes);
+  } else {
+    offset += WriteNonResidentAttr(base, offset, Attr::Type::AttributeList,
+                                   {.comp_unit_size = 0,
+                                    .real_size = list_bytes.size(),
+                                    .runs = list_runs});
+  }
+  WriteEndOfAttributesMarker(base, offset);
+  return base;
+}
+
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
@@ -325,12 +349,6 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
           {{.name = L"listed.txt", .parent_ref = root_file_reference}}, {},
           StdInfoPermission::Normal, base_ref));
 
-  FakeRecord base =
-      MakeRecordHeader(attr_offset_value, freed ? freed_flags : live_flags,
-                       tree_list_base_sequence);
-  DWORD offset = attr_offset_value;
-  offset +=
-      WriteStandardInformationAttr(base, offset, StdInfoPermission::Normal);
   const std::array<FakeTreeListEntry, 3> entries{
       {{.type = Attr::Type::FileName, .record = mft_tree_list_low_ext_idx},
        {.type = Attr::Type::FileName, .record = mft_tree_list_high_ext_idx},
@@ -338,15 +356,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
   std::vector<BYTE> list_bytes = TreeListBytes(entries);
   DamageTreeList(list_bytes, bytes);
   const std::vector<FakeDataRun> list_runs{{mft_tree_list_lcn, 1}};
-  if (list == FakeListResidency::Resident) {
-    offset += WriteTreeAttributeList(base, offset, list_bytes);
-  } else {
-    offset += WriteNonResidentAttr(base, offset, Attr::Type::AttributeList,
-                                   {.comp_unit_size = 0,
-                                    .real_size = list_bytes.size(),
-                                    .runs = list_runs});
-  }
-  WriteEndOfAttributesMarker(base, offset);
+  const FakeRecord base = MakeListedBaseRecord(freed ? freed_flags : live_flags,
+                                               list, list_bytes, list_runs);
   PutMftRecord(image, mft_tree_list_base_idx, base);
   if (list == FakeListResidency::NonResident) {
     LayRunBytes(image, list_runs, list_bytes);

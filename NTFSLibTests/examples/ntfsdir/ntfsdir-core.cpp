@@ -687,9 +687,9 @@ int RunNtfsDir(int argc, wchar_t* argv[]) {
             "The profile has no section for this disk: defaults used\n");
   }
   NtfsDevice::BenchSession session(
-      S == Cache::Strategy::FullCache ? "NtfsDir" : "NtfsDir2",
-      args->command_line, NtfsDevice::WideToUtf8(args->path), args->bench,
-      applied, volume_options);
+      {S == Cache::Strategy::FullCache ? "NtfsDir" : "NtfsDir2",
+       args->command_line, NtfsDevice::WideToUtf8(args->path)},
+      args->bench, applied, volume_options);
 
   return ListDirectory<S>(args->path, args->recursive, volume_options);
 }

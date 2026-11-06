@@ -536,6 +536,62 @@ class ProcessWatch {
 #endif
 };
 
+// When the sampling of the disk stops.
+struct SamplePlan {
+  std::uint64_t pid{0};
+  std::uint64_t seconds{0};
+  std::uint64_t interval_ms{0};
+  // The file whose appearance ends the sampling: the script creates it when
+  // the process it watches is over, so that sampling starts before the process.
+  std::optional<std::string> until_file;
+};
+
+// Samples the counters every plan.interval_ms until the plan says stop. The
+// last sample is taken after the stop.
+std::vector<DiskSample> CollectSamples(const DiskCounters& counters,
+                                       const SamplePlan& plan) {
+  std::vector<DiskSample> samples;
+  const ProcessWatch watch(plan.pid);
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(plan.seconds);
+  for (;;) {
+    if (const std::optional<DiskSample> sample = counters.Read()) {
+      samples.push_back(*sample);
+    }
+    const bool ended = watch.Ended(plan.interval_ms);
+    std::error_code ignored;
+    const bool stopped =
+        plan.until_file &&
+        std::filesystem::exists(
+            std::filesystem::path(std::u8string(
+                reinterpret_cast<const char8_t*>(plan.until_file->data()),
+                plan.until_file->size())),
+            ignored);
+    const bool timed_out = plan.pid == 0 && plan.seconds != 0 &&
+                           std::chrono::steady_clock::now() >= deadline;
+    if (ended || stopped || timed_out) {
+      if (const std::optional<DiskSample> last = counters.Read()) {
+        samples.push_back(*last);
+      }
+      return samples;
+    }
+  }
+}
+
+// Writes one sample.
+void WriteSample(NtfsDevice::JsonWriter& json, const DiskSample& sample) {
+  json.BeginObject();
+  json.Field("t_unix_ns", sample.t_unix_ns);
+  json.Field("bytes_read", sample.bytes_read);
+  json.Field("read_count", sample.read_count);
+  json.Field("read_time_ns", sample.read_time_ns);
+  json.Field("idle_ns", sample.idle_ns);
+  json.Field("query_ns", sample.query_ns);
+  json.Field("busy_ns", sample.busy_ns);
+  json.Field("queue_depth", static_cast<std::uint64_t>(sample.queue_depth));
+  json.EndObject();
+}
+
 }  // namespace
 
 int SampleCommand(const Arguments& args) {
@@ -553,8 +609,6 @@ int SampleCommand(const Arguments& args) {
       (std::max<std::uint64_t>)(1,
                                 args.Unsigned("interval-ms",
                                               default_interval_ms, malformed));
-  // The file whose appearance ends the sampling: the script creates it when
-  // the process it watches is over, so that sampling starts before the process.
   const std::optional<std::string> until_file = args.Value("until-file");
   if (malformed || (pid == 0 && seconds == 0 && !until_file)) {
     std::fprintf(stderr, "sample needs --pid, --seconds or --until-file\n");
@@ -571,32 +625,11 @@ int SampleCommand(const Arguments& args) {
     return 1;
   }
 
-  std::vector<DiskSample> samples;
-  const ProcessWatch watch(pid);
-  const auto deadline =
-      std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
-  for (;;) {
-    if (const std::optional<DiskSample> sample = counters.Read()) {
-      samples.push_back(*sample);
-    }
-    const bool ended = watch.Ended(interval_ms);
-    std::error_code ignored;
-    const bool stopped =
-        until_file &&
-        std::filesystem::exists(
-            std::filesystem::path(std::u8string(
-                reinterpret_cast<const char8_t*>(until_file->data()),
-                until_file->size())),
-            ignored);
-    const bool timed_out = pid == 0 && seconds != 0 &&
-                           std::chrono::steady_clock::now() >= deadline;
-    if (ended || stopped || timed_out) {
-      if (const std::optional<DiskSample> last = counters.Read()) {
-        samples.push_back(*last);
-      }
-      break;
-    }
-  }
+  const std::vector<DiskSample> samples =
+      CollectSamples(counters, {.pid = pid,
+                                .seconds = seconds,
+                                .interval_ms = interval_ms,
+                                .until_file = until_file});
 
   NtfsDevice::JsonWriter json;
   json.BeginObject();
@@ -607,16 +640,7 @@ int SampleCommand(const Arguments& args) {
   json.Key("samples");
   json.BeginArray();
   for (const DiskSample& sample : samples) {
-    json.BeginObject();
-    json.Field("t_unix_ns", sample.t_unix_ns);
-    json.Field("bytes_read", sample.bytes_read);
-    json.Field("read_count", sample.read_count);
-    json.Field("read_time_ns", sample.read_time_ns);
-    json.Field("idle_ns", sample.idle_ns);
-    json.Field("query_ns", sample.query_ns);
-    json.Field("busy_ns", sample.busy_ns);
-    json.Field("queue_depth", static_cast<std::uint64_t>(sample.queue_depth));
-    json.EndObject();
+    WriteSample(json, sample);
   }
   json.EndArray();
   json.EndObject();

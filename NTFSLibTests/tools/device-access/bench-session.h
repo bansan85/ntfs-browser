@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -30,10 +31,18 @@ void WriteTuningJson(JsonWriter& json,
 // the command line asked for. Does nothing when it asked for nothing.
 class BenchSession {
  public:
-  // tool names the program, arguments are its command line as UTF-8, target is
-  // what it was given to list, and options are the volume options in force.
-  BenchSession(std::string tool, std::vector<std::string> arguments,
-               std::string target, const BenchOptions& bench,
+  // How the summary names a run.
+  struct RunInfo {
+    // The program.
+    std::string tool;
+    // Its command line, as UTF-8.
+    std::vector<std::string> arguments;
+    // What it was given to list.
+    std::string target;
+  };
+
+  // options are the volume options in force.
+  BenchSession(RunInfo run, const BenchOptions& bench,
                const AppliedTuning& applied,
                const NTFS_BROWSER_NAMESPACE::VolumeOptions& options);
   BenchSession(const BenchSession&) = delete;
@@ -51,9 +60,12 @@ class BenchSession {
   void Finish();
 
  private:
-  std::string tool_;
-  std::vector<std::string> arguments_;
-  std::string target_;
+  // The summary of a finished run, as JSON.
+  [[nodiscard]] std::string
+      BuildSummary(const NTFS_BROWSER_NAMESPACE::Bench::Report& report,
+                   const std::filesystem::path& log_path) const;
+
+  RunInfo run_;
   BenchOptions bench_;
   AppliedTuning applied_;
   NTFS_BROWSER_NAMESPACE::VolumeOptions options_;

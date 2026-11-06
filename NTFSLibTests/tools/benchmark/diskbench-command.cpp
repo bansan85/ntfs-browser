@@ -85,6 +85,18 @@ struct Result {
   double max_latency_us{0};
 };
 
+// What one measurement does.
+struct Load {
+  std::string pattern;
+  std::uint32_t queue_depth{0};
+  // Bytes of each read.
+  std::uint64_t bytes{0};
+  // Seconds the measurement runs at most.
+  std::uint64_t seconds{0};
+  // Bytes it reads at most.
+  std::uint64_t max_bytes{0};
+};
+
 // A small, fast, repeatable generator for the random offsets.
 class XorShift {
  public:
@@ -141,6 +153,36 @@ class Cursor {
 
 #ifdef _WIN32
 
+// One read in flight.
+struct Slot {
+  OVERLAPPED overlapped{};
+  BYTE* buffer{nullptr};
+  bool busy{false};
+  Clock::time_point began;
+};
+
+// Gives each slot a buffer of bytes and an event. Returns the events, in the
+// order of the slots.
+std::vector<HANDLE> AllocateSlots(std::vector<Slot>& slots,
+                                  std::uint64_t bytes) {
+  std::vector<HANDLE> events;
+  for (Slot& slot : slots) {
+    slot.buffer = static_cast<BYTE*>(
+        VirtualAlloc(nullptr, bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    slot.overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    events.push_back(slot.overlapped.hEvent);
+  }
+  return events;
+}
+
+// Gives back what AllocateSlots() took.
+void FreeSlots(std::vector<Slot>& slots) {
+  for (Slot& slot : slots) {
+    CloseHandle(slot.overlapped.hEvent);
+    VirtualFree(slot.buffer, 0, MEM_RELEASE);
+  }
+}
+
 // A volume or device opened for overlapped, buffered reads.
 class Device {
  public:
@@ -185,47 +227,24 @@ class Device {
     return std::nullopt;
   }
 
-  // Runs reads of bytes at the offsets the cursor gives, queue_depth in flight
-  // at once, for seconds or until max_bytes are read.
-  Result Measure(std::string pattern, std::uint32_t queue_depth,
-                 std::uint64_t bytes, Cursor cursor, std::uint64_t seconds,
-                 std::uint64_t max_bytes) const {
-    struct Slot {
-      OVERLAPPED overlapped{};
-      BYTE* buffer{nullptr};
-      bool busy{false};
-      Clock::time_point began;
-    };
-
-    std::vector<Slot> slots(queue_depth);
-    std::vector<HANDLE> events;
-    for (Slot& slot : slots) {
-      slot.buffer = static_cast<BYTE*>(VirtualAlloc(
-          nullptr, bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
-      slot.overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-      events.push_back(slot.overlapped.hEvent);
-    }
+  // Runs reads at the offsets the cursor gives, load.queue_depth in flight at
+  // once, for load.seconds or until load.max_bytes are read.
+  Result Measure(const Load& load, Cursor cursor) const {
+    std::vector<Slot> slots(load.queue_depth);
+    const std::vector<HANDLE> events = AllocateSlots(slots, load.bytes);
 
     Result result;
-    result.pattern = std::move(pattern);
-    result.queue_depth = queue_depth;
+    result.pattern = load.pattern;
+    result.queue_depth = load.queue_depth;
     double latency_sum_us = 0;
     const auto start = Clock::now();
-    const auto deadline = start + std::chrono::seconds(seconds);
+    const auto deadline = start + std::chrono::seconds(load.seconds);
     bool issuing = true;
     std::size_t busy = 0;
     const auto issue = [&](Slot& slot) {
-      const std::uint64_t at = cursor.Next();
-      slot.overlapped.Offset = static_cast<DWORD>(at);
-      slot.overlapped.OffsetHigh = static_cast<DWORD>(at >> 32U);
-      ResetEvent(slot.overlapped.hEvent);
-      slot.began = Clock::now();
-      const BOOL ok = ReadFile(handle_, slot.buffer, static_cast<DWORD>(bytes),
-                               nullptr, &slot.overlapped);
-      if (ok == FALSE && GetLastError() != ERROR_IO_PENDING) {
+      if (!IssueRead(slot, cursor, load.bytes)) {
         return false;
       }
-      slot.busy = true;
       busy++;
       return true;
     };
@@ -257,7 +276,7 @@ class Device {
       }
       // The event of a finished slot stays signalled until it is reissued.
       ResetEvent(slot.overlapped.hEvent);
-      if (issuing && Clock::now() < deadline && result.bytes < max_bytes) {
+      if (issuing && Clock::now() < deadline && result.bytes < load.max_bytes) {
         issuing = issue(slot);
       }
     }
@@ -266,14 +285,28 @@ class Device {
     result.mean_latency_us =
         result.reads == 0 ? 0
                           : latency_sum_us / static_cast<double>(result.reads);
-    for (Slot& slot : slots) {
-      CloseHandle(slot.overlapped.hEvent);
-      VirtualFree(slot.buffer, 0, MEM_RELEASE);
-    }
+    FreeSlots(slots);
     return result;
   }
 
  private:
+  // Starts a read of bytes at the next offset of the cursor in the slot.
+  // False when the read cannot start.
+  bool IssueRead(Slot& slot, Cursor& cursor, std::uint64_t bytes) const {
+    const std::uint64_t at = cursor.Next();
+    slot.overlapped.Offset = static_cast<DWORD>(at);
+    slot.overlapped.OffsetHigh = static_cast<DWORD>(at >> 32U);
+    ResetEvent(slot.overlapped.hEvent);
+    slot.began = Clock::now();
+    const BOOL ok = ReadFile(handle_, slot.buffer, static_cast<DWORD>(bytes),
+                             nullptr, &slot.overlapped);
+    if (ok == FALSE && GetLastError() != ERROR_IO_PENDING) {
+      return false;
+    }
+    slot.busy = true;
+    return true;
+  }
+
   HANDLE handle_{INVALID_HANDLE_VALUE};
 };
 
@@ -305,24 +338,22 @@ class Device {
     return end < 0 ? std::nullopt : std::optional<std::uint64_t>(end);
   }
 
-  Result Measure(std::string pattern, std::uint32_t queue_depth,
-                 std::uint64_t bytes, Cursor cursor, std::uint64_t seconds,
-                 std::uint64_t max_bytes) const {
+  Result Measure(const Load& load, Cursor cursor) const {
     Result result;
-    result.pattern = std::move(pattern);
-    result.queue_depth = queue_depth;
+    result.pattern = load.pattern;
+    result.queue_depth = load.queue_depth;
     std::atomic<std::uint64_t> reads{0};
     std::atomic<std::uint64_t> total{0};
     std::atomic<std::uint64_t> latency_ns{0};
     std::atomic<std::uint64_t> max_ns{0};
     std::mutex cursor_mutex;
     const auto start = Clock::now();
-    const auto deadline = start + std::chrono::seconds(seconds);
+    const auto deadline = start + std::chrono::seconds(load.seconds);
     std::vector<std::thread> workers;
-    for (std::uint32_t worker = 0; worker < queue_depth; worker++) {
+    for (std::uint32_t worker = 0; worker < load.queue_depth; worker++) {
       workers.emplace_back([&] {
-        std::vector<char> buffer(bytes);
-        while (Clock::now() < deadline && total.load() < max_bytes) {
+        std::vector<char> buffer(load.bytes);
+        while (Clock::now() < deadline && total.load() < load.max_bytes) {
           std::uint64_t at = 0;
           {
             const std::scoped_lock lock{cursor_mutex};
@@ -368,24 +399,28 @@ class Device {
 
 #endif
 
-// The zone of $MFT in target, from the boot sector and the $MFT record.
-std::optional<Zone> MftZone(const std::wstring& target) {
-  using Volume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
-      NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>;
+using ZoneVolume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
+    NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>;
+
+// Opens target as a volume. Null when a Linux reader cannot open it.
+std::unique_ptr<ZoneVolume> OpenZoneVolume(const std::wstring& target) {
 #ifdef _WIN32
   const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target);
-  const std::unique_ptr<Volume> volume =
-      letter ? std::make_unique<Volume>(*letter)
-             : std::make_unique<Volume>(std::wstring_view(target));
+  return letter ? std::make_unique<ZoneVolume>(*letter)
+                : std::make_unique<ZoneVolume>(std::wstring_view(target));
 #else
   auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
   if (!reader->Open(target)) {
-    return std::nullopt;
+    return nullptr;
   }
-  const std::unique_ptr<Volume> volume =
-      std::make_unique<Volume>(std::move(reader));
+  return std::make_unique<ZoneVolume>(std::move(reader));
 #endif
-  if (!volume->IsVolumeOK()) {
+}
+
+// The zone of $MFT in target, from the boot sector and the $MFT record.
+std::optional<Zone> MftZone(const std::wstring& target) {
+  const std::unique_ptr<ZoneVolume> volume = OpenZoneVolume(target);
+  if (!volume || !volume->IsVolumeOK()) {
     return std::nullopt;
   }
   return Zone{.offset = volume->GetMFTAddr(),
@@ -409,28 +444,10 @@ std::optional<Zone> ParseZone(std::string_view text) {
   return zone;
 }
 
-}  // namespace
-
-int DiskBenchCommand(const Arguments& args) {
-  if (args.words.size() != 1) {
-    std::fprintf(stderr, "diskbench expects <target>\n");
-    return 2;
-  }
-  const std::wstring& target = args.words.front();
-  bool malformed = false;
-  const std::uint64_t seconds =
-      args.Unsigned("seconds", default_seconds, malformed);
-  if (malformed) {
-    return 2;
-  }
-  const Device device(target);
-  if (!device.Ok()) {
-    std::fprintf(stderr, "Cannot open %s\n",
-                 NtfsDevice::WideToUtf8(target).c_str());
-    return 1;
-  }
-
-  const std::string zone_text = args.Value("zone").value_or("mft");
+// Finds the zone to measure: the one --zone names, cut to the device. Returns
+// 0, or the exit code of the command.
+int ResolveZone(const Device& device, const std::wstring& target,
+                const std::string& zone_text, Zone& resolved) {
   std::optional<Zone> zone;
   if (zone_text == "mft") {
     zone = MftZone(target);
@@ -457,17 +474,25 @@ int DiskBenchCommand(const Arguments& args) {
     std::fprintf(stderr, "The zone is too small to measure\n");
     return 1;
   }
-  const std::uint64_t window =
-      std::max(zone->length / zone_share, sequential_bytes * 2);
+  resolved = *zone;
+  return 0;
+}
 
+// Measures the three patterns at each queue depth, in a window of the zone.
+std::vector<Result> MeasureSheet(const Device& device, const Zone& zone,
+                                 std::uint64_t window, std::uint64_t seconds) {
   std::vector<Result> results;
   std::uint64_t seed = 1;
   const auto run = [&](const char* name, std::uint64_t bytes, bool random) {
     for (const std::uint32_t depth : queue_depths) {
       seed++;
-      results.push_back(device.Measure(
-          name, depth, bytes, Cursor(*zone, window, bytes, random, seed * 7919),
-          seconds, window));
+      results.push_back(
+          device.Measure(Load{.pattern = name,
+                              .queue_depth = depth,
+                              .bytes = bytes,
+                              .seconds = seconds,
+                              .max_bytes = window},
+                         Cursor(zone, window, bytes, random, seed * 7919)));
       const Result& last = results.back();
       std::fprintf(stderr, "%-8s QD%-2u %9.1f MB/s %9.0f IOPS\n", name, depth,
                    static_cast<double>(last.bytes) / 1048576.0 / last.seconds,
@@ -477,6 +502,64 @@ int DiskBenchCommand(const Arguments& args) {
   run("seq4m", sequential_bytes, false);
   run("rand4k", small_bytes, true);
   run("rand64k", medium_bytes, true);
+  return results;
+}
+
+// Writes one line of the sheet.
+void WriteResult(NtfsDevice::JsonWriter& json, const Result& result) {
+  json.BeginObject();
+  json.Field("pattern", result.pattern);
+  json.Field("queue_depth", static_cast<std::uint64_t>(result.queue_depth));
+  json.Field("reads", result.reads);
+  json.Field("bytes", result.bytes);
+  json.Key("seconds");
+  json.Number(result.seconds);
+  json.Key("mb_per_s");
+  json.Number(result.seconds == 0 ? 0.0
+                                  : static_cast<double>(result.bytes) /
+                                        1048576.0 / result.seconds);
+  json.Key("iops");
+  json.Number(result.seconds == 0
+                  ? 0.0
+                  : static_cast<double>(result.reads) / result.seconds);
+  json.Key("mean_latency_us");
+  json.Number(result.mean_latency_us);
+  json.Key("max_latency_us");
+  json.Number(result.max_latency_us);
+  json.EndObject();
+}
+
+}  // namespace
+
+int DiskBenchCommand(const Arguments& args) {
+  if (args.words.size() != 1) {
+    std::fprintf(stderr, "diskbench expects <target>\n");
+    return 2;
+  }
+  const std::wstring& target = args.words.front();
+  bool malformed = false;
+  const std::uint64_t seconds =
+      args.Unsigned("seconds", default_seconds, malformed);
+  if (malformed) {
+    return 2;
+  }
+  const Device device(target);
+  if (!device.Ok()) {
+    std::fprintf(stderr, "Cannot open %s\n",
+                 NtfsDevice::WideToUtf8(target).c_str());
+    return 1;
+  }
+
+  Zone zone;
+  if (const int failure =
+          ResolveZone(device, target, args.Value("zone").value_or("mft"), zone);
+      failure != 0) {
+    return failure;
+  }
+  const std::uint64_t window =
+      std::max(zone.length / zone_share, sequential_bytes * 2);
+  const std::vector<Result> results =
+      MeasureSheet(device, zone, window, seconds);
 
   NtfsDevice::JsonWriter json;
   json.BeginObject();
@@ -484,33 +567,14 @@ int DiskBenchCommand(const Arguments& args) {
   json.Field("target", NtfsDevice::WideToUtf8(target));
   json.Key("zone");
   json.BeginObject();
-  json.Field("offset", zone->offset);
-  json.Field("length", zone->length);
+  json.Field("offset", zone.offset);
+  json.Field("length", zone.length);
   json.Field("window", window);
   json.EndObject();
   json.Key("results");
   json.BeginArray();
   for (const Result& result : results) {
-    json.BeginObject();
-    json.Field("pattern", result.pattern);
-    json.Field("queue_depth", static_cast<std::uint64_t>(result.queue_depth));
-    json.Field("reads", result.reads);
-    json.Field("bytes", result.bytes);
-    json.Key("seconds");
-    json.Number(result.seconds);
-    json.Key("mb_per_s");
-    json.Number(result.seconds == 0 ? 0.0
-                                    : static_cast<double>(result.bytes) /
-                                          1048576.0 / result.seconds);
-    json.Key("iops");
-    json.Number(result.seconds == 0
-                    ? 0.0
-                    : static_cast<double>(result.reads) / result.seconds);
-    json.Key("mean_latency_us");
-    json.Number(result.mean_latency_us);
-    json.Key("max_latency_us");
-    json.Number(result.max_latency_us);
-    json.EndObject();
+    WriteResult(json, result);
   }
   json.EndArray();
   json.EndObject();

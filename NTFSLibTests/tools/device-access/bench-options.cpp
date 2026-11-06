@@ -181,6 +181,38 @@ std::string CheckDiskKeys(const JsonValue& disk, const std::string& where) {
   return {};
 }
 
+// Checks the layout of a parsed profile. Every section is checked, the disks
+// the run does not use as well. Empty when the profile is sound.
+std::string CheckProfile(const JsonValue& root, const std::string& file) {
+  if (root.kind != JsonValue::Kind::Object) {
+    return file + ": the profile is not an object";
+  }
+  for (const auto& [name, value] : root.members) {
+    if (name != "format" && name != "disks" && name != "generator") {
+      return file + ": unknown key \"" + name + "\"";
+    }
+  }
+  const JsonValue* format = root.Find("format");
+  if (format == nullptr || format->kind != JsonValue::Kind::Number ||
+      format->number != static_cast<double>(profile_format)) {
+    return file + ": \"format\" MUST be " + std::to_string(profile_format);
+  }
+  const JsonValue* disks = root.Find("disks");
+  if (disks == nullptr || disks->kind != JsonValue::Kind::Object) {
+    return file + ": \"disks\" MUST be an object";
+  }
+  for (const auto& [key, disk] : disks->members) {
+    const std::string where = file + ": disks[\"" + key + "\"]";
+    if (disk.kind != JsonValue::Kind::Object) {
+      return where + " is not an object";
+    }
+    if (std::string failure = CheckDiskKeys(disk, where); !failure.empty()) {
+      return failure;
+    }
+  }
+  return {};
+}
+
 // Loads the profile at path and applies the section of disk_key.
 std::string ApplyProfile(const std::filesystem::path& path,
                          const std::string& disk_key, VolumeOptions& options,
@@ -195,34 +227,11 @@ std::string ApplyProfile(const std::filesystem::path& path,
   if (!root) {
     return file + ": " + error;
   }
-  if (root->kind != JsonValue::Kind::Object) {
-    return file + ": the profile is not an object";
-  }
-  for (const auto& [name, value] : root->members) {
-    if (name != "format" && name != "disks" && name != "generator") {
-      return file + ": unknown key \"" + name + "\"";
-    }
-  }
-  const JsonValue* format = root->Find("format");
-  if (format == nullptr || format->kind != JsonValue::Kind::Number ||
-      format->number != static_cast<double>(profile_format)) {
-    return file + ": \"format\" MUST be " + std::to_string(profile_format);
-  }
-  const JsonValue* disks = root->Find("disks");
-  if (disks == nullptr || disks->kind != JsonValue::Kind::Object) {
-    return file + ": \"disks\" MUST be an object";
-  }
-  // Every section is checked, the disks the run does not use as well.
-  for (const auto& [key, disk] : disks->members) {
-    const std::string where = file + ": disks[\"" + key + "\"]";
-    if (disk.kind != JsonValue::Kind::Object) {
-      return where + " is not an object";
-    }
-    if (std::string failure = CheckDiskKeys(disk, where); !failure.empty()) {
-      return failure;
-    }
+  if (std::string failure = CheckProfile(*root, file); !failure.empty()) {
+    return failure;
   }
 
+  const JsonValue* disks = root->Find("disks");
   applied.profile_loaded = true;
   const JsonValue* section = disks->Find(disk_key);
   std::string used = disk_key;
@@ -239,89 +248,167 @@ std::string ApplyProfile(const std::filesystem::path& path,
                    applied.applied);
 }
 
+// The text after "name=" when text is that option, else nothing.
+std::optional<std::string_view> ValueOf(std::string_view text,
+                                        std::string_view name) {
+  if (text.size() > name.size() && text.starts_with(name) &&
+      text[name.size()] == '=') {
+    return text.substr(name.size() + 1);
+  }
+  return std::nullopt;
+}
+
+// Reads one command-line option. Nothing when the argument is not the option
+// of the handler.
+using OptionHandler = std::optional<OptionResult> (*)(std::wstring_view arg,
+                                                      std::string_view text,
+                                                      BenchOptions& options,
+                                                      std::string& error);
+
+// --benchmark and --benchmark=path.
+std::optional<OptionResult> ParseBenchmarkOption(std::wstring_view arg,
+                                                 std::string_view text,
+                                                 BenchOptions& options,
+                                                 std::string& error) {
+  constexpr std::string_view name = "--benchmark";
+  if (text == name) {
+    options.benchmark = true;
+    return OptionResult::Accepted;
+  }
+  const auto value = ValueOf(text, name);
+  if (!value) {
+    return std::nullopt;
+  }
+  if (value->empty()) {
+    error =
+        "--benchmark= needs a path: write --benchmark alone for the "
+        "default one";
+    return OptionResult::Malformed;
+  }
+  options.benchmark = true;
+  options.summary_path = PathFromWide(arg.substr(name.size() + 1));
+  return OptionResult::Accepted;
+}
+
+// An option whose value is a path, and the field that takes it.
+struct PathOption {
+  std::string_view name;
+  std::string_view missing_message;
+  std::filesystem::path BenchOptions::* field;
+};
+
+// The options of ParsePathOption(), by name.
+constexpr std::array<PathOption, 2> path_options{
+    PathOption{"--capture", "--capture needs a path",
+               &BenchOptions::capture_path},
+    PathOption{"--profile", "--profile needs a path",
+               &BenchOptions::profile_path}};
+
+// --capture=path and --profile=path.
+std::optional<OptionResult> ParsePathOption(std::wstring_view arg,
+                                            std::string_view text,
+                                            BenchOptions& options,
+                                            std::string& error) {
+  for (const PathOption& option : path_options) {
+    const auto value = ValueOf(text, option.name);
+    if (!value) {
+      continue;
+    }
+    if (value->empty()) {
+      error = option.missing_message;
+      return OptionResult::Malformed;
+    }
+    options.*(option.field) = PathFromWide(arg.substr(option.name.size() + 1));
+    return OptionResult::Accepted;
+  }
+  return std::nullopt;
+}
+
+// --stop-after=phase.
+std::optional<OptionResult> ParseStopAfterOption(std::wstring_view /*arg*/,
+                                                 std::string_view text,
+                                                 BenchOptions& options,
+                                                 std::string& error) {
+  const auto value = ValueOf(text, "--stop-after");
+  if (!value) {
+    return std::nullopt;
+  }
+  options.stop_after = Bench::ParsePhase(*value);
+  if (!options.stop_after) {
+    error = "--stop-after names the phase \"" + std::string(*value) +
+            "\": it is open, pass1, pass2, flush, sweep, check, link, "
+            "journal, walk, print or destroy";
+    return OptionResult::Malformed;
+  }
+  return OptionResult::Accepted;
+}
+
+// --disk=key.
+std::optional<OptionResult> ParseDiskOption(std::wstring_view /*arg*/,
+                                            std::string_view text,
+                                            BenchOptions& options,
+                                            std::string& /*error*/) {
+  const auto value = ValueOf(text, "--disk");
+  if (!value) {
+    return std::nullopt;
+  }
+  options.disk = std::string(*value);
+  return OptionResult::Accepted;
+}
+
+// --media=ssd|hdd|unknown.
+std::optional<OptionResult> ParseMediaOption(std::wstring_view /*arg*/,
+                                             std::string_view text,
+                                             BenchOptions& options,
+                                             std::string& error) {
+  const auto value = ValueOf(text, "--media");
+  if (!value) {
+    return std::nullopt;
+  }
+  if (*value == "ssd") {
+    options.media = Tuning::MediaKind::SolidState;
+  } else if (*value == "hdd") {
+    options.media = Tuning::MediaKind::Rotational;
+  } else if (*value == "unknown") {
+    options.media = Tuning::MediaKind::Unknown;
+  } else {
+    error = "--media names \"" + std::string(*value) +
+            "\": it is ssd, hdd or unknown";
+    return OptionResult::Malformed;
+  }
+  return OptionResult::Accepted;
+}
+
+// --tune=name[@Mk]=value.
+std::optional<OptionResult> ParseTuneOption(std::wstring_view /*arg*/,
+                                            std::string_view text,
+                                            BenchOptions& options,
+                                            std::string& error) {
+  const auto value = ValueOf(text, "--tune");
+  if (!value) {
+    return std::nullopt;
+  }
+  TuneSetting tune;
+  if (!ParseTune(*value, tune, error)) {
+    return OptionResult::Malformed;
+  }
+  options.tunes.push_back(std::move(tune));
+  return OptionResult::Accepted;
+}
+
 }  // namespace
 
 OptionResult ParseBenchOption(std::wstring_view arg, BenchOptions& options,
                               std::string& error) {
   const std::string text = WideToUtf8(arg);
-  const auto value_of =
-      [&text](std::string_view name) -> std::optional<std::string_view> {
-    if (text.size() > name.size() && text.starts_with(name) &&
-        text[name.size()] == '=') {
-      return std::string_view(text).substr(name.size() + 1);
+  constexpr std::array<OptionHandler, 6> handlers{
+      ParseBenchmarkOption, ParsePathOption,  ParseStopAfterOption,
+      ParseDiskOption,      ParseMediaOption, ParseTuneOption};
+  for (const OptionHandler handler : handlers) {
+    if (const std::optional<OptionResult> result =
+            handler(arg, text, options, error)) {
+      return *result;
     }
-    return std::nullopt;
-  };
-
-  if (text == "--benchmark") {
-    options.benchmark = true;
-    return OptionResult::Accepted;
-  }
-  if (const auto value = value_of("--benchmark")) {
-    if (value->empty()) {
-      error =
-          "--benchmark= needs a path: write --benchmark alone for the "
-          "default one";
-      return OptionResult::Malformed;
-    }
-    options.benchmark = true;
-    options.summary_path =
-        PathFromWide(arg.substr(std::string_view("--benchmark=").size()));
-    return OptionResult::Accepted;
-  }
-  if (const auto value = value_of("--capture")) {
-    if (value->empty()) {
-      error = "--capture needs a path";
-      return OptionResult::Malformed;
-    }
-    options.capture_path =
-        PathFromWide(arg.substr(std::string_view("--capture=").size()));
-    return OptionResult::Accepted;
-  }
-  if (const auto value = value_of("--stop-after")) {
-    options.stop_after = Bench::ParsePhase(*value);
-    if (!options.stop_after) {
-      error = "--stop-after names the phase \"" + std::string(*value) +
-              "\": it is open, pass1, pass2, flush, sweep, check, link, "
-              "journal, walk, print or destroy";
-      return OptionResult::Malformed;
-    }
-    return OptionResult::Accepted;
-  }
-  if (const auto value = value_of("--profile")) {
-    if (value->empty()) {
-      error = "--profile needs a path";
-      return OptionResult::Malformed;
-    }
-    options.profile_path =
-        PathFromWide(arg.substr(std::string_view("--profile=").size()));
-    return OptionResult::Accepted;
-  }
-  if (const auto value = value_of("--disk")) {
-    options.disk = std::string(*value);
-    return OptionResult::Accepted;
-  }
-  if (const auto value = value_of("--media")) {
-    if (*value == "ssd") {
-      options.media = Tuning::MediaKind::SolidState;
-    } else if (*value == "hdd") {
-      options.media = Tuning::MediaKind::Rotational;
-    } else if (*value == "unknown") {
-      options.media = Tuning::MediaKind::Unknown;
-    } else {
-      error = "--media names \"" + std::string(*value) +
-              "\": it is ssd, hdd or unknown";
-      return OptionResult::Malformed;
-    }
-    return OptionResult::Accepted;
-  }
-  if (const auto value = value_of("--tune")) {
-    TuneSetting tune;
-    if (!ParseTune(*value, tune, error)) {
-      return OptionResult::Malformed;
-    }
-    options.tunes.push_back(std::move(tune));
-    return OptionResult::Accepted;
   }
   return OptionResult::NotMine;
 }

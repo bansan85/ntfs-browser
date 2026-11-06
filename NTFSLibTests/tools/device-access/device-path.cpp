@@ -85,18 +85,27 @@ bool IsAsciiLetter(wchar_t character) {
          (character >= L'A' && character <= L'Z');
 }
 
+// Whether a target that starts with a letter names a drive and nothing more:
+// "c", "c:", "c:\" and "c:/" do; "c:\dir" and "c:img" do not.
+bool IsBareDrive(std::wstring_view target) {
+  switch (target.size()) {
+    case 1:
+      return true;
+    case 2:
+      return target[1] == L':';
+    case 3:
+      return target[1] == L':' &&
+             (target[2] == directory_separator || target[2] == L'/');
+    default:
+      return false;
+  }
+}
+
 }  // namespace
 
 std::optional<wchar_t> DriveLetterOf(std::wstring_view target) {
-  if (target.empty() || !IsAsciiLetter(target.front())) {
-    return std::nullopt;
-  }
-  // "c", "c:", "c:\" and "c:/" name the drive; "c:\dir" and "c:img" do not.
-  const bool drive = target.size() == 1 ||
-                     (target.size() == 2 && target.back() == L':') ||
-                     (target.size() == 3 && target[1] == L':' &&
-                      (target[2] == directory_separator || target[2] == L'/'));
-  if (!drive) {
+  if (target.empty() || !IsAsciiLetter(target.front()) ||
+      !IsBareDrive(target)) {
     return std::nullopt;
   }
   return target.front();

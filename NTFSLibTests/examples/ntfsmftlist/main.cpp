@@ -572,9 +572,9 @@ int ListVolume(const Arguments& args) {
     fprintf(stderr,
             "The profile has no section for this disk: defaults used\n");
   }
-  NtfsDevice::BenchSession session("NtfsMftList", args.command_line,
-                                   ToUtf8(args.target), args.bench, applied,
-                                   volume_options);
+  NtfsDevice::BenchSession session(
+      {"NtfsMftList", args.command_line, ToUtf8(args.target)}, args.bench,
+      applied, volume_options);
 
   const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
       OpenVolume(args.target, volume_options);

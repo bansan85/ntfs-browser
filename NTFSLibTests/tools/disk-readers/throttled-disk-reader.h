@@ -124,6 +124,13 @@ class ThrottledDiskReader final : public IDiskReader {
   // first, then the standing lane.
   void StartReads() const;
 
+  // The first queue's half of StartReads(). The first read always starts: the
+  // caller is about to wait for it.
+  void StartFirstQueue() const;
+
+  // The standing lane's half of StartReads().
+  void StartStandingLane() const;
+
   // Whether a range of length bytes at offset may be announced.
   [[nodiscard]] bool Admissible(ULONGLONG offset, ULONGLONG length) const;
 

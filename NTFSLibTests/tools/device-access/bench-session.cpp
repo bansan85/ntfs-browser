@@ -57,14 +57,8 @@ void WriteByClass(
   json.EndObject();
 }
 
-}  // namespace
-
-void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
-  json.Field("start_unix_ns", report.start_unix_ns);
-  json.Field("wall_ns", report.wall_ns);
-  json.Field("volume_bytes", report.volume_bytes);
-  json.Field("media_kind", MediaKindName(report.media_kind));
-
+// Writes the "phases" array.
+void WritePhases(JsonWriter& json, const Bench::Report& report) {
   json.Key("phases");
   json.BeginArray();
   for (const Bench::PhaseStat& phase : report.phases) {
@@ -81,7 +75,10 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
     json.EndObject();
   }
   json.EndArray();
+}
 
+// Writes the "threads" array and the "process_cpu" object.
+void WriteCpu(JsonWriter& json, const Bench::Report& report) {
   json.Key("threads");
   json.BeginArray();
   for (const Bench::ThreadStat& thread : report.threads) {
@@ -99,7 +96,10 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
   json.Field("user_ns", report.process_user_ns);
   json.Field("kernel_ns", report.process_kernel_ns);
   json.EndObject();
+}
 
+// Writes the "main_thread_ns" object.
+void WriteMainThread(JsonWriter& json, const Bench::Report& report) {
   // The main thread's time in each slice, without the time spent in a nested
   // slice, nor waiting for the disk.
   json.Key("main_thread_ns");
@@ -111,7 +111,10 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
   json.Field("read_wait", report.read_wait_ns);
   json.Field("serial_tail", report.tail_ns);
   json.EndObject();
+}
 
+// Writes the "reads" object: what the callers asked for.
+void WriteReadCounters(JsonWriter& json, const Bench::Report& report) {
   json.Key("reads");
   json.BeginObject();
   json.Field("requested", report.requested_reads);
@@ -129,7 +132,10 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
   json.Field("events_logged", report.events_logged);
   json.Field("events_dropped", report.events_dropped);
   json.EndObject();
+}
 
+// Writes the "classes" object and the "kinds" object.
+void WriteClassesAndKinds(JsonWriter& json, const Bench::Report& report) {
   json.Key("classes");
   json.BeginObject();
   json.Key("reads");
@@ -156,7 +162,10 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
     json.EndObject();
   }
   json.EndObject();
+}
 
+// Writes the "disk" object: what the disk saw.
+void WriteDisk(JsonWriter& json, const Bench::Report& report) {
   json.Key("disk");
   json.BeginObject();
   const Bench::DiskStat& disk = report.disk;
@@ -187,6 +196,22 @@ void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
   json.EndObject();
 }
 
+}  // namespace
+
+void WriteReportJson(JsonWriter& json, const Bench::Report& report) {
+  json.Field("start_unix_ns", report.start_unix_ns);
+  json.Field("wall_ns", report.wall_ns);
+  json.Field("volume_bytes", report.volume_bytes);
+  json.Field("media_kind", MediaKindName(report.media_kind));
+
+  WritePhases(json, report);
+  WriteCpu(json, report);
+  WriteMainThread(json, report);
+  WriteReadCounters(json, report);
+  WriteClassesAndKinds(json, report);
+  WriteDisk(json, report);
+}
+
 void WriteTuningJson(JsonWriter& json,
                      const NTFS_BROWSER_NAMESPACE::VolumeOptions& options) {
   json.BeginObject();
@@ -206,13 +231,10 @@ void WriteTuningJson(JsonWriter& json,
   json.EndObject();
 }
 
-BenchSession::BenchSession(std::string tool, std::vector<std::string> arguments,
-                           std::string target, const BenchOptions& bench,
+BenchSession::BenchSession(RunInfo run, const BenchOptions& bench,
                            const AppliedTuning& applied,
                            const NTFS_BROWSER_NAMESPACE::VolumeOptions& options)
-    : tool_(std::move(tool)),
-      arguments_(std::move(arguments)),
-      target_(std::move(target)),
+    : run_(std::move(run)),
       bench_(bench),
       applied_(applied),
       options_(options) {
@@ -246,41 +268,17 @@ BenchSession::~BenchSession() {
   }
 }
 
-void BenchSession::Finish() {
-  if (!active_) {
-    return;
-  }
-  active_ = false;
-  const Bench::Report report = Bench::Stop();
-  Bench::ReadLog log = Bench::TakeReadLog();
-  Bench::SetCaptureSink(nullptr);
-
-  if (capture_) {
-    if (!capture_->SetSize(report.volume_bytes) || !capture_->Ok()) {
-      std::fprintf(stderr, "Cannot finish the capture file: %s\n",
-                   capture_->Error().c_str());
-    }
-    capture_.reset();
-  }
-  if (!bench_.benchmark) {
-    return;
-  }
-
-  std::string error;
-  std::filesystem::path log_path = bench_.summary_path;
-  log_path += ".readlog";
-  if (!Bench::WriteReadLog(log_path, log, &error)) {
-    std::fprintf(stderr, "%s\n", error.c_str());
-  }
-
+std::string
+    BenchSession::BuildSummary(const Bench::Report& report,
+                               const std::filesystem::path& log_path) const {
   JsonWriter json;
   json.BeginObject();
   json.Field("format", summary_format);
-  json.Field("tool", tool_);
-  json.Field("target", target_);
+  json.Field("tool", run_.tool);
+  json.Field("target", run_.target);
   json.Key("arguments");
   json.BeginArray();
-  for (const std::string& argument : arguments_) {
+  for (const std::string& argument : run_.arguments) {
     json.String(argument);
   }
   json.EndArray();
@@ -311,11 +309,40 @@ void BenchSession::Finish() {
   WriteReportJson(json, report);
   json.EndObject();
   json.EndObject();
+  return json.Take();
+}
 
+void BenchSession::Finish() {
+  if (!active_) {
+    return;
+  }
+  active_ = false;
+  const Bench::Report report = Bench::Stop();
+  Bench::ReadLog log = Bench::TakeReadLog();
+  Bench::SetCaptureSink(nullptr);
+
+  if (capture_) {
+    if (!capture_->SetSize(report.volume_bytes) || !capture_->Ok()) {
+      std::fprintf(stderr, "Cannot finish the capture file: %s\n",
+                   capture_->Error().c_str());
+    }
+    capture_.reset();
+  }
+  if (!bench_.benchmark) {
+    return;
+  }
+
+  std::string error;
+  std::filesystem::path log_path = bench_.summary_path;
+  log_path += ".readlog";
+  if (!Bench::WriteReadLog(log_path, log, &error)) {
+    std::fprintf(stderr, "%s\n", error.c_str());
+  }
+
+  const std::string text = BuildSummary(report, log_path);
   std::ofstream out(
       NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(bench_.summary_path),
       std::ios::binary | std::ios::trunc);
-  const std::string text = json.Take();
   out.write(text.data(), static_cast<std::streamsize>(text.size()));
   if (!out) {
     std::fprintf(stderr, "Cannot write %s\n",

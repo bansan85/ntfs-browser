@@ -59,13 +59,10 @@ Tests::DiskModel HardDisk() {
   return model;
 }
 
-}  // namespace
-
-int SimulateCommand(const Arguments& args) {
-  bool malformed = false;
-  const std::uint64_t records =
-      args.Unsigned("records", default_records, malformed);
-  const std::string kind = args.Value("model").value_or("ssd");
+// The disk model of the command line: the kind's defaults, then each --seek-us,
+// --per-read-us, --single-mbps, --max-mbps, --lanes and --consume-ns-per-mib.
+Tests::DiskModel ModelFromArguments(const Arguments& args,
+                                    const std::string& kind, bool& malformed) {
   Tests::DiskModel model = kind == "hdd" ? HardDisk() : Tests::DiskModel{};
   model.seek_ns =
       args.Unsigned("seek-us", model.seek_ns / ns_per_us, malformed) *
@@ -85,6 +82,28 @@ int SimulateCommand(const Arguments& args) {
       args.Unsigned("lanes", model.lanes, malformed));
   model.consume_ns_per_mib =
       args.Unsigned("consume-ns-per-mib", model.consume_ns_per_mib, malformed);
+  return model;
+}
+
+// Writes the image to the file named by path. False when it cannot be written.
+bool WriteImageFile(const std::string& path, const std::vector<BYTE>& image) {
+  std::ofstream out(
+      std::filesystem::path(std::u8string(
+          reinterpret_cast<const char8_t*>(path.data()), path.size())),
+      std::ios::binary | std::ios::trunc);
+  out.write(reinterpret_cast<const char*>(image.data()),
+            static_cast<std::streamsize>(image.size()));
+  return static_cast<bool>(out);
+}
+
+}  // namespace
+
+int SimulateCommand(const Arguments& args) {
+  bool malformed = false;
+  const std::uint64_t records =
+      args.Unsigned("records", default_records, malformed);
+  const std::string kind = args.Value("model").value_or("ssd");
+  const Tests::DiskModel model = ModelFromArguments(args, kind, malformed);
   if (malformed || (kind != "ssd" && kind != "hdd") ||
       records <
           static_cast<std::uint64_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User) +
@@ -113,13 +132,7 @@ int SimulateCommand(const Arguments& args) {
       Tests::BuildFakeNtfsImageWithListMftScan(records, fragment_clusters);
   // The image as a file: a volume the tools open without a disk.
   if (const std::optional<std::string> path = args.Value("write-image")) {
-    std::ofstream out(
-        std::filesystem::path(std::u8string(
-            reinterpret_cast<const char8_t*>(path->data()), path->size())),
-        std::ios::binary | std::ios::trunc);
-    out.write(reinterpret_cast<const char*>(image.data()),
-              static_cast<std::streamsize>(image.size()));
-    if (!out) {
+    if (!WriteImageFile(*path, image)) {
       std::fprintf(stderr, "Cannot write %s\n", path->c_str());
       return 1;
     }

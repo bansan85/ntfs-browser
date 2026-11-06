@@ -101,6 +101,11 @@ std::uint64_t ThrottledDiskReader::Schedule(ULONGLONG offset,
 }
 
 void ThrottledDiskReader::StartReads() const {
+  StartFirstQueue();
+  StartStandingLane();
+}
+
+void ThrottledDiskReader::StartFirstQueue() const {
   const std::size_t lane_in_flight = StandingInFlight();
   while (first_.started < first_.ranges.size() &&
          first_.started + lane_in_flight < active_->max_reads) {
@@ -116,7 +121,9 @@ void ThrottledDiskReader::StartReads() const {
     first_.started++;
     first_.started_bytes += bytes;
   }
+}
 
+void ThrottledDiskReader::StartStandingLane() const {
   std::size_t in_flight = StandingInFlight();
   while (standing_.started < standing_.ranges.size() &&
          in_flight < StandingCap() &&

@@ -132,6 +132,31 @@ size_t EntrySize(const FakeIndexName& name) {
   return WriteFilenameEntry(scratch.data(), name);
 }
 
+// Files every name of nodes[node] under the plan of its parent. A parent that
+// is not a node of the tree, nor the root, or that is a file, is an error.
+void FileLinks(std::span<const FakeTreeNode> nodes, std::size_t node,
+               std::vector<DirectoryPlan>& plans) {
+  const FakeTreeNode& tree_node = nodes[node];
+  for (const FakeTreeLink& link : tree_node.links) {
+    const std::size_t slot =
+        link.parent == name_tree_root ? nodes.size() : link.parent;
+    if (slot > nodes.size() ||
+        (slot < nodes.size() && !nodes[slot].directory)) {
+      throw std::invalid_argument("a name is filed under a file");
+    }
+    plans[slot].entries.push_back(
+        {.name = link.name,
+         .mft_ref = name_tree_first_record + node,
+         .directory = tree_node.directory,
+         .sequence = tree_sequence,
+         .alter_time = name_tree_write_time,
+         .parent_ref = ReferenceOf(link.parent),
+         .name_space =
+             static_cast<NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace>(
+                 link.name_space)});
+  }
+}
+
 // The entries of every directory, sorted, the root's last. A freed node has
 // none, unless it keeps them: NTFS removes the entries of a record when it
 // frees it.
@@ -139,45 +164,23 @@ std::vector<DirectoryPlan> CollectEntries(std::span<const FakeTreeNode> nodes,
                                           const FakeNameTreeOptions& options) {
   std::vector<DirectoryPlan> plans(nodes.size() + 1);
   for (std::size_t node = 0; node < nodes.size(); node++) {
-    const FakeTreeNode& tree_node = nodes[node];
-    if (!tree_node.in_use && !tree_node.keep_entries) {
-      continue;
-    }
-    for (const FakeTreeLink& link : tree_node.links) {
-      const std::size_t slot =
-          link.parent == name_tree_root ? nodes.size() : link.parent;
-      // The parent is not a node of the tree, and not the root, or it is a
-      // file.
-      if (slot > nodes.size() ||
-          (slot < nodes.size() && !nodes[slot].directory)) {
-        throw std::invalid_argument("a name is filed under a file");
-      }
-      plans[slot].entries.push_back(
-          {.name = link.name,
-           .mft_ref = name_tree_first_record + node,
-           .directory = tree_node.directory,
-           .sequence = tree_sequence,
-           .alter_time = name_tree_write_time,
-           .parent_ref = ReferenceOf(link.parent),
-           .name_space =
-               static_cast<NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace>(
-                   link.name_space)});
+    if (nodes[node].in_use || nodes[node].keep_entries) {
+      FileLinks(nodes, node, plans);
     }
   }
 
   // The collation of the volume, then the order of the code units: the order
   // names that are equal once upcased keep, as NTFS keeps them.
   const UpCase::Table& table = UpCase::Table::BuiltIn();
-  for (DirectoryPlan& plan : plans) {
-    if (!options.collate) {
-      continue;
+  if (options.collate) {
+    for (DirectoryPlan& plan : plans) {
+      std::ranges::stable_sort(
+          plan.entries,
+          [&table](const FakeIndexName& left, const FakeIndexName& right) {
+            const int order = table.Compare(left.name, right.name);
+            return order != 0 ? order < 0 : left.name < right.name;
+          });
     }
-    std::ranges::stable_sort(
-        plan.entries,
-        [&table](const FakeIndexName& left, const FakeIndexName& right) {
-          const int order = table.Compare(left.name, right.name);
-          return order != 0 ? order < 0 : left.name < right.name;
-        });
   }
   return plans;
 }

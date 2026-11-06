@@ -33,6 +33,67 @@ struct Run {
   Bench::Report report;
 };
 
+// How many ranges the ideal plan keeps announced ahead. It keeps half of the
+// reader's range cap: the reader drops a hint past the cap, and the reads would
+// then be unannounced again.
+std::size_t IdealAnnounceAhead(const Tuning::Settings& tuning) {
+  std::size_t ahead = tuning.reader.front().max_announced_ranges;
+  for (const Tuning::ReaderTuning& caps : tuning.reader) {
+    ahead = (std::min)(ahead, caps.max_announced_ranges);
+  }
+  return (std::max<std::size_t>)(1, ahead / 2);
+}
+
+// Replays the log once, from a fresh reader. Nothing when the cache cannot be
+// purged or the target cannot be opened; the reason is printed.
+std::optional<Run> ReplayOnce(const Arguments& args, const Bench::ReadLog& log,
+                              const std::wstring& target,
+                              const Tuning::Settings& tuning, bool ideal,
+                              std::size_t ahead) {
+  if (args.Has("purge")) {
+    std::string message;
+    if (!PurgeSystemCache(message)) {
+      std::fprintf(stderr, "%s\n", message.c_str());
+      return std::nullopt;
+    }
+  }
+  const std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader =
+      OpenReader(target, tuning.reader);
+  if (!reader) {
+    return std::nullopt;
+  }
+  Bench::SessionOptions session;
+  session.keep_log = false;
+  Bench::Start(session);
+  Run run;
+  run.mode = ideal ? "ideal" : "recorded";
+  run.result = Bench::Replay(*reader, log,
+                             {.mode = ideal ? Bench::ReplayMode::AllAnnounced
+                                            : Bench::ReplayMode::AsRecorded,
+                              .announce_ahead = ahead});
+  run.report = Bench::Stop();
+  return run;
+}
+
+// Writes the counts and the report of one replay.
+void WriteRun(NtfsDevice::JsonWriter& json, const Run& run) {
+  json.BeginObject();
+  json.Field("mode", run.mode);
+  json.Field("wall_ns", run.result.wall_ns);
+  json.Field("reads", run.result.reads);
+  json.Field("read_bytes", run.result.read_bytes);
+  json.Field("failed_reads", run.result.failed_reads);
+  json.Field("prefetches", run.result.prefetches);
+  json.Field("cancels", run.result.cancels);
+  json.Field("standing_prefetches", run.result.standing_prefetches);
+  json.Field("standing_cancels", run.result.standing_cancels);
+  json.Key("report");
+  json.BeginObject();
+  NtfsDevice::WriteReportJson(json, run.report);
+  json.EndObject();
+  json.EndObject();
+}
+
 }  // namespace
 
 int ReplayCommand(const Arguments& args) {
@@ -58,42 +119,19 @@ int ReplayCommand(const Arguments& args) {
     return 2;
   }
 
-  // The ideal plan keeps half of the reader's range cap announced: the reader
-  // drops a hint past the cap, and the reads would then be unannounced again.
-  std::size_t ahead = options->tuning.reader.front().max_announced_ranges;
-  for (const Tuning::ReaderTuning& caps : options->tuning.reader) {
-    ahead = (std::min)(ahead, caps.max_announced_ranges);
-  }
-  ahead = (std::max<std::size_t>)(1, ahead / 2);
+  const std::size_t ahead = IdealAnnounceAhead(options->tuning);
 
   std::vector<Run> runs;
   for (const bool ideal : {false, true}) {
     if ((ideal && mode == "recorded") || (!ideal && mode == "ideal")) {
       continue;
     }
-    if (args.Has("purge")) {
-      std::string message;
-      if (!PurgeSystemCache(message)) {
-        std::fprintf(stderr, "%s\n", message.c_str());
-        return 1;
-      }
-    }
-    const std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader =
-        OpenReader(target, options->tuning.reader);
-    if (!reader) {
+    std::optional<Run> run =
+        ReplayOnce(args, *log, target, options->tuning, ideal, ahead);
+    if (!run) {
       return 1;
     }
-    Bench::SessionOptions session;
-    session.keep_log = false;
-    Bench::Start(session);
-    Run run;
-    run.mode = ideal ? "ideal" : "recorded";
-    run.result = Bench::Replay(*reader, *log,
-                               {.mode = ideal ? Bench::ReplayMode::AllAnnounced
-                                              : Bench::ReplayMode::AsRecorded,
-                                .announce_ahead = ahead});
-    run.report = Bench::Stop();
-    runs.push_back(std::move(run));
+    runs.push_back(std::move(*run));
   }
 
   NtfsDevice::JsonWriter json;
@@ -109,21 +147,7 @@ int ReplayCommand(const Arguments& args) {
   json.Key("runs");
   json.BeginArray();
   for (const Run& run : runs) {
-    json.BeginObject();
-    json.Field("mode", run.mode);
-    json.Field("wall_ns", run.result.wall_ns);
-    json.Field("reads", run.result.reads);
-    json.Field("read_bytes", run.result.read_bytes);
-    json.Field("failed_reads", run.result.failed_reads);
-    json.Field("prefetches", run.result.prefetches);
-    json.Field("cancels", run.result.cancels);
-    json.Field("standing_prefetches", run.result.standing_prefetches);
-    json.Field("standing_cancels", run.result.standing_cancels);
-    json.Key("report");
-    json.BeginObject();
-    NtfsDevice::WriteReportJson(json, run.report);
-    json.EndObject();
-    json.EndObject();
+    WriteRun(json, run);
   }
   json.EndArray();
   json.EndObject();
