@@ -53,6 +53,11 @@ constexpr size_t slack_room = 280;
 
 const VolumeOptions both_flags{.include_deleted = true, .recover_errors = true};
 
+// The flag combinations in which no name is carved.
+const std::array<VolumeOptions, 3> flags_without_both{
+    VolumeOptions{}, VolumeOptions{.include_deleted = true},
+    VolumeOptions{.recover_errors = true}};
+
 // The fixture with names written into the slack of a record.
 std::vector<BYTE> ImageWith(ULONGLONG record,
                             const std::vector<FakeSlackName>& names,
@@ -75,6 +80,13 @@ FakeSlackName Old(std::wstring name, ULONGLONG parent = docs_record) {
 // The fixture with two old names of the live file in its slack.
 std::vector<BYTE> ImageWithTwoOldNames() {
   return ImageWith(report_record, {Old(L"older.txt"), Old(L"oldest.txt")});
+}
+
+// The fixture whose slack holds a copy of each live name of the report record,
+// a name of the same record under another parent, and a name that is new.
+std::vector<BYTE> ImageWithLiveNameCopies() {
+  return ImageWith(report_record, {Old(L"report.txt"), Old(L"REPORT~1.TXT"),
+                                   Old(L"report.txt", 5), Old(L"fresh.txt")});
 }
 
 // What a file record gives for one record number, with the names it carved.
@@ -130,6 +142,35 @@ void CheckSameCalls(const Tests::CountingDiskReader& left,
   }
 }
 
+// Checks the two old names the fixture keeps in the slack of the report.
+void CheckTwoOldNamesAreCarved(const Mft::MftTree::Entry& report) {
+  REQUIRE(report.carved_names.size() == 2);
+  CHECK(report.carved_names.at(0).name == L"older.txt");
+  CHECK(report.carved_names.at(1).name == L"oldest.txt");
+  CHECK(report.carved_names.at(0).parent_known);
+  CHECK(report.carved_names.at(0).parent_record == docs_record);
+  CHECK(report.carved_names.at(0).times_known);
+  CHECK_FALSE(report.carved_names.at(0).partial);
+}
+
+// Checks that two scans count the same live and deleted items.
+void CheckSameStats(const Mft::MftTree& left, const Mft::MftTree& right) {
+  CHECK(left.Stats().in_use == right.Stats().in_use);
+  CHECK(left.Stats().deleted == right.Stats().deleted);
+  CHECK(left.Stats().unreachable == right.Stats().unreachable);
+}
+
+// Checks that two scans agree on every entry and on every path.
+void CheckSameEntries(const Mft::MftTree& left, const Mft::MftTree& right) {
+  REQUIRE(left.Entries().size() == right.Entries().size());
+  for (size_t i = 0; i < left.Entries().size(); ++i) {
+    const Mft::MftTree::Entry& a = left.Entries().at(i);
+    const Mft::MftTree::Entry& b = right.Entries().at(i);
+    CheckSameLiveFields(a, b);
+    CHECK(left.GetPath(a.record) == right.GetPath(b.record));
+  }
+}
+
 template <Cache::Strategy S>
 void CheckNamesAreCarvedByTheScan() {
   const auto opened = OpenVolume<S>(ImageWithTwoOldNames(), both_flags);
@@ -138,13 +179,7 @@ void CheckNamesAreCarvedByTheScan() {
 
   const Mft::MftTree::Entry* report = tree.Find(report_record);
   REQUIRE(report != nullptr);
-  REQUIRE(report->carved_names.size() == 2);
-  CHECK(report->carved_names.at(0).name == L"older.txt");
-  CHECK(report->carved_names.at(1).name == L"oldest.txt");
-  CHECK(report->carved_names.at(0).parent_known);
-  CHECK(report->carved_names.at(0).parent_record == docs_record);
-  CHECK(report->carved_names.at(0).times_known);
-  CHECK_FALSE(report->carved_names.at(0).partial);
+  CheckTwoOldNamesAreCarved(*report);
   CHECK(tree.Stats().carved_names == 2);
   CheckNoEntryCarves(tree, report_record);
 }
@@ -158,26 +193,13 @@ void CheckLiveFieldsAreUntouched() {
   const Mft::MftTree left = Scan(*without.volume);
   const Mft::MftTree right = Scan(*with.volume);
 
-  REQUIRE(left.Entries().size() == right.Entries().size());
-  for (size_t i = 0; i < left.Entries().size(); ++i) {
-    const Mft::MftTree::Entry& a = left.Entries().at(i);
-    const Mft::MftTree::Entry& b = right.Entries().at(i);
-    CheckSameLiveFields(a, b);
-    CHECK(left.GetPath(a.record) == right.GetPath(b.record));
-  }
-  CHECK(left.Stats().in_use == right.Stats().in_use);
-  CHECK(left.Stats().deleted == right.Stats().deleted);
-  CHECK(left.Stats().unreachable == right.Stats().unreachable);
+  CheckSameEntries(left, right);
+  CheckSameStats(left, right);
 }
 
 template <Cache::Strategy S>
 void CheckLiveNamesAreNotRepeated() {
-  // The slack holds a copy of each live name of the record, a name of the same
-  // record under another parent, and a name that is new.
-  const auto opened = OpenVolume<S>(
-      ImageWith(report_record, {Old(L"report.txt"), Old(L"REPORT~1.TXT"),
-                                Old(L"report.txt", 5), Old(L"fresh.txt")}),
-      both_flags);
+  const auto opened = OpenVolume<S>(ImageWithLiveNameCopies(), both_flags);
 
   const auto carved = CarveRecord(*opened.volume, report_record);
 
@@ -212,9 +234,7 @@ void CheckAPartialCopyOfALiveNameIsNotRepeated() {
 template <Cache::Strategy S>
 void CheckNoFlagCombinationButBothCarves() {
   const std::vector<BYTE> image = ImageWith(report_record, {Old(L"older.txt")});
-  for (const VolumeOptions& options :
-       {VolumeOptions{}, VolumeOptions{.include_deleted = true},
-        VolumeOptions{.recover_errors = true}}) {
+  for (const VolumeOptions& options : flags_without_both) {
     const auto opened = OpenVolume<S>(image, options);
 
     const Mft::MftTree tree = Scan(*opened.volume);
@@ -225,24 +245,31 @@ void CheckNoFlagCombinationButBothCarves() {
   }
 }
 
+// Checks that a scan reads the same places with and without slack names.
+template <Cache::Strategy S>
+void CheckSlackCostsNoReadWith(const std::vector<BYTE>& plain,
+                               const std::vector<BYTE>& slack,
+                               const VolumeOptions& options) {
+  const auto without = OpenVolume<S>(plain, options);
+  const auto with = OpenVolume<S>(slack, options);
+  without.counter->Reset();
+  with.counter->Reset();
+
+  const Mft::MftTree left = Scan(*without.volume);
+  const Mft::MftTree right = Scan(*with.volume);
+
+  INFO(options.include_deleted << options.recover_errors);
+  CheckSameCalls(*without.counter, *with.counter);
+}
+
 template <Cache::Strategy S>
 void CheckSlackNeverCostsARead() {
   const std::vector<BYTE> plain = Tests::BuildFakeNtfsImageWithFreedFileTree();
   const std::vector<BYTE> slack = ImageWithTwoOldNames();
-  for (const VolumeOptions& options :
-       {VolumeOptions{}, VolumeOptions{.include_deleted = true},
-        VolumeOptions{.recover_errors = true}, both_flags}) {
-    const auto without = OpenVolume<S>(plain, options);
-    const auto with = OpenVolume<S>(slack, options);
-    without.counter->Reset();
-    with.counter->Reset();
-
-    const Mft::MftTree left = Scan(*without.volume);
-    const Mft::MftTree right = Scan(*with.volume);
-
-    INFO(options.include_deleted << options.recover_errors);
-    CheckSameCalls(*without.counter, *with.counter);
+  for (const VolumeOptions& options : flags_without_both) {
+    CheckSlackCostsNoReadWith<S>(plain, slack, options);
   }
+  CheckSlackCostsNoReadWith<S>(plain, slack, both_flags);
 }
 
 }  // namespace

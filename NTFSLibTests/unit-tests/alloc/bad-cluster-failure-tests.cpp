@@ -100,6 +100,24 @@ void CheckNothingIsReadBeforeAQuery() {
   }
 }
 
+// The log holds the unusable list message once, at the given level.
+void CheckUnusableLoggedOnce(const Support::CapturedLevels& log,
+                             Log::Level level) {
+  CHECK(log.Count(unusable_message) == 1);
+  CHECK(log.LevelOf(unusable_message) == level);
+}
+
+// The volume answers from the bitmap alone, as before the bad list existed.
+template <Cache::Strategy S>
+void CheckBitmapAloneAnswers(
+    const NTFS_BROWSER_NAMESPACE::NtfsVolume<S>& volume) {
+  CHECK_NOTHROW(volume.GetClusterState(45));
+  CHECK(volume.GetBadClusters() == nullptr);
+  CHECK(volume.GetClusterState(45) == ClusterState::Allocated);
+  CHECK(volume.GetClusterState(47) == ClusterState::Free);
+  CHECK(volume.GetSpaceSummary());
+}
+
 template <Cache::Strategy S>
 void CheckAnUnusableListFallsBackOnTheBitmap(
     const FakeBadClusterOptions& options, bool record_is_written) {
@@ -107,15 +125,8 @@ void CheckAnUnusableListFallsBackOnTheBitmap(
   const auto opened = Support::OpenVolume<S>(
       record_is_written ? Image(bad_marked, options) : ImageWithoutList());
 
-  CHECK_NOTHROW(opened.volume->GetClusterState(45));
-  CHECK(opened.volume->GetBadClusters() == nullptr);
-  // The bitmap alone says allocated, as before this feature.
-  CHECK(opened.volume->GetClusterState(45) == ClusterState::Allocated);
-  CHECK(opened.volume->GetClusterState(47) == ClusterState::Free);
-  CHECK(opened.volume->GetSpaceSummary());
-
-  CHECK(log.Count(unusable_message) == 1);
-  CHECK(log.LevelOf(unusable_message) == Log::Level::Warn);
+  CheckBitmapAloneAnswers<S>(*opened.volume);
+  CheckUnusableLoggedOnce(log, Log::Level::Warn);
 }
 
 template <Cache::Strategy S>
@@ -140,8 +151,7 @@ void CheckTheLevelFollowsRecoverErrors() {
       VolumeOptions{.include_deleted = true, .recover_errors = true});
 
   CHECK(opened.volume->GetBadClusters() == nullptr);
-  CHECK(log.Count(unusable_message) == 1);
-  CHECK(log.LevelOf(unusable_message) == Log::Level::Info);
+  CheckUnusableLoggedOnce(log, Log::Level::Info);
 }
 
 template <Cache::Strategy S>

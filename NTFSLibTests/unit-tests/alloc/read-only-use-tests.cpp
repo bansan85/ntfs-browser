@@ -36,8 +36,22 @@ std::vector<BYTE> StaleFile() {
       4 * Tests::fake_cluster_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
 }
 
+// Whether a read-only volume may issue this call on its reader.
+bool IsReadOnlyCall(const CountingDiskReader::Call& call) {
+  return call.kind == Kind::Open || call.kind == Kind::Read ||
+         call.kind == Kind::Size || call.kind == Kind::Prefetch ||
+         call.kind == Kind::CancelPrefetch;
+}
+
+// The reader saw nothing but opens, reads, sizes and prefetch hints.
+void CheckOnlyReadOnlyCalls(const CountingDiskReader& counter) {
+  const auto& calls = counter.Calls();
+  REQUIRE_FALSE(calls.empty());
+  CHECK(std::ranges::all_of(calls, IsReadOnlyCall));
+}
+
 // Runs the range, summary and data state queries on the volume of StaleFile(),
-// then checks that its reader saw nothing but opens, reads and sizes.
+// then checks that its reader saw only read-only calls.
 template <Cache::Strategy S>
 void CheckTheRestOnlyReads(const Support::Opened<S>& opened) {
   CHECK(opened.volume->GetRangeState(30, 20) == Alloc::ClusterState::Allocated);
@@ -48,13 +62,7 @@ void CheckTheRestOnlyReads(const Support::Opened<S>& opened) {
   CHECK(Support::ParsedStale(opened)->GetDataState() ==
         Alloc::DataState::Reallocated);
 
-  const auto& calls = opened.counter->Calls();
-  REQUIRE_FALSE(calls.empty());
-  CHECK(std::ranges::all_of(calls, [](const CountingDiskReader::Call& call) {
-    return call.kind == Kind::Open || call.kind == Kind::Read ||
-           call.kind == Kind::Size || call.kind == Kind::Prefetch ||
-           call.kind == Kind::CancelPrefetch;
-  }));
+  CheckOnlyReadOnlyCalls(*opened.counter);
 }
 
 template <Cache::Strategy S>
