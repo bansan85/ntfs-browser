@@ -65,6 +65,8 @@ struct ThrottleStats {
   std::uint64_t wait_ns{0};
   // Announced ranges dropped before any read used them.
   std::uint64_t wasted_ranges{0};
+
+  [[nodiscard]] bool operator==(const ThrottleStats&) const = default;
 };
 
 // Wraps a reader, and makes each read cost what a DiskModel says on a

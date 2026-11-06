@@ -58,6 +58,32 @@ std::size_t Rounds(const std::vector<CountingDiskReader::Call>& calls) {
       }));
 }
 
+// How many more rounds of reads ended by a withdrawal in on than in off.
+std::size_t ExtraRounds(const std::vector<CountingDiskReader::Call>& on,
+                        const std::vector<CountingDiskReader::Call>& off) {
+  return Rounds(on) > Rounds(off) ? Rounds(on) - Rounds(off) : 0;
+}
+
+// The sectors that with reads more often than without. A sector of $MFT may be
+// read extra_reads_in_mft times more.
+std::vector<std::size_t>
+    SectorsReadTooOften(const std::vector<std::uint32_t>& with,
+                        const std::vector<std::uint32_t>& without,
+                        const ReadAhead::MftSpan& mft,
+                        std::size_t extra_reads_in_mft) {
+  std::vector<std::size_t> read_too_often;
+  for (std::size_t sector = 0; sector < with.size(); sector++) {
+    const ULONGLONG at = sector * 512U;
+    const bool in_mft = at >= mft.first && at < mft.end;
+    const std::size_t allowed =
+        without.at(sector) + (in_mft ? extra_reads_in_mft : 0U);
+    if (with.at(sector) > allowed) {
+      read_too_often.push_back(sector);
+    }
+  }
+  return read_too_often;
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -144,19 +170,8 @@ TEMPLATE_TEST_CASE_SIG(
             ReadAhead::SectorReadCounts(on.calls, fixture.image.size());
 
         REQUIRE(with.size() == without.size());
-        const std::size_t extra_reads_in_mft =
-            Rounds(on.calls) > Rounds(off.calls)
-                ? Rounds(on.calls) - Rounds(off.calls)
-                : 0;
-        std::vector<std::size_t> read_too_often;
-        for (std::size_t sector = 0; sector < with.size(); sector++) {
-          const ULONGLONG at = sector * 512U;
-          const bool in_mft = at >= mft.first && at < mft.end;
-          if (with.at(sector) >
-              without.at(sector) + (in_mft ? extra_reads_in_mft : 0U)) {
-            read_too_often.push_back(sector);
-          }
-        }
+        const std::vector<std::size_t> read_too_often = SectorsReadTooOften(
+            with, without, mft, ExtraRounds(on.calls, off.calls));
         const std::size_t first_wrong =
             read_too_often.empty() ? 0 : read_too_often.front();
         INFO("first sector read too often: "

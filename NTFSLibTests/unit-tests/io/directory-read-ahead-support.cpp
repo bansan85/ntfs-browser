@@ -443,14 +443,24 @@ struct LaneChildren {
   std::vector<ULONGLONG> references;
 };
 
+// Whether a listing enters the entry, as the visitor of NtfsDir does: a
+// directory with a Win32 name, not reused, and not a metadata file.
+bool IsListedSubdirectory(const IndexEntryView& entry,
+                          Io::RecordStanding standing) {
+  if (entry.GetFileReference() < static_cast<ULONGLONG>(Mft::Idx::User)) {
+    return false;
+  }
+  if (!entry.IsWin32Name() || entry.GetFilename().empty()) {
+    return false;
+  }
+  return entry.IsDirectory() && standing != Io::RecordStanding::Reused;
+}
+
 // TraverseSubEntriesWithStanding callback of ListForLane(): collects the
 // subdirectories the way the visitor of NtfsDir does.
 void CollectChildren(const IndexEntryView& entry, Io::RecordStanding standing,
                      void* context) {
-  const bool listed =
-      entry.GetFileReference() >= static_cast<ULONGLONG>(Mft::Idx::User) &&
-      entry.IsWin32Name() && !entry.GetFilename().empty();
-  if (listed && entry.IsDirectory() && standing != Io::RecordStanding::Reused) {
+  if (IsListedSubdirectory(entry, standing)) {
     static_cast<LaneChildren*>(context)->references.push_back(
         entry.GetFileReference());
   }
@@ -459,6 +469,45 @@ void CollectChildren(const IndexEntryView& entry, Io::RecordStanding standing,
 // Keeps every attribute: a callback only has to be there.
 void KeepAttribute(const Attr::HeaderCommon& /*header*/, bool& discard) {
   discard = false;
+}
+
+// The first window directories at the top of the stack that are not listed
+// yet, the top first.
+std::vector<ULONGLONG>
+    UpcomingDirectories(const std::vector<ULONGLONG>& pending,
+                        const std::unordered_set<ULONGLONG>& listed,
+                        std::size_t window) {
+  std::vector<ULONGLONG> upcoming;
+  for (auto next = pending.rbegin();
+       next != pending.rend() && upcoming.size() < window; ++next) {
+    if (!listed.contains(*next)) {
+      upcoming.push_back(*next);
+    }
+  }
+  return upcoming;
+}
+
+// Pops the stack down to the next directory that parses, and enters it. A
+// directory that is skipped or does not parse is released. False when the
+// stack ran out.
+template <Cache::Strategy S>
+bool EnterNextDirectory(Io::FileRecord<S>& fr, Io::DirectoryReadAhead<S>& ahead,
+                        std::vector<ULONGLONG>& pending,
+                        std::unordered_set<ULONGLONG>& listed) {
+  while (!pending.empty()) {
+    const ULONGLONG next = pending.back();
+    pending.pop_back();
+    if (listed.contains(next)) {
+      ahead.Release(next);
+      continue;
+    }
+    if (fr.ParseFileRecord(next) && fr.ParseAttrs()) {
+      listed.insert(next);
+      return true;
+    }
+    ahead.Release(next);
+  }
+  return false;
 }
 
 // The listing of ListTree() of NtfsDir, without its output: the same walk of
@@ -472,8 +521,7 @@ void WalkStack(Io::FileRecord<S>& fr, Io::DirectoryReadAhead<S>& ahead) {
   }
   ahead.Attach(fr);
   ahead.Begin();
-  std::vector<ULONGLONG> upcoming;
-  while (true) {
+  do {
     LaneChildren children;
     fr.TraverseSubEntriesWithStanding(CollectChildren, &children);
     if (const std::optional<ULONGLONG> current = fr.GetFileReference()) {
@@ -482,34 +530,9 @@ void WalkStack(Io::FileRecord<S>& fr, Io::DirectoryReadAhead<S>& ahead) {
     pending.insert(pending.end(), children.references.rbegin(),
                    children.references.rend());
     if (ahead.Enabled()) {
-      upcoming.clear();
-      for (auto next = pending.rbegin();
-           next != pending.rend() && upcoming.size() < ahead.Window(); ++next) {
-        if (!listed.contains(*next)) {
-          upcoming.push_back(*next);
-        }
-      }
-      ahead.Plan(upcoming);
+      ahead.Plan(UpcomingDirectories(pending, listed, ahead.Window()));
     }
-    bool entered = false;
-    while (!pending.empty() && !entered) {
-      const ULONGLONG next = pending.back();
-      pending.pop_back();
-      if (listed.contains(next)) {
-        ahead.Release(next);
-        continue;
-      }
-      entered = fr.ParseFileRecord(next) && fr.ParseAttrs();
-      if (entered) {
-        listed.insert(next);
-      } else {
-        ahead.Release(next);
-      }
-    }
-    if (!entered) {
-      return;
-    }
-  }
+  } while (EnterNextDirectory(fr, ahead, pending, listed));
 }
 
 }  // namespace
@@ -561,13 +584,13 @@ DiskModel HardDiskModel() {
 template <Cache::Strategy S>
 TimedRun ListOnSimulatedDisk(const std::vector<BYTE>& image,
                              VolumeOptions options, std::size_t dirs,
-                             std::uint64_t bytes, const DiskModel& model,
-                             Tuning::MediaKind kind) {
+                             std::uint64_t bytes,
+                             const SimulatedDevice& device) {
   SimulatedClock clock;
   auto memory = std::make_unique<MemoryDiskReader>(image);
-  memory->SetMediaKind(kind);
+  memory->SetMediaKind(device.kind);
   auto throttled = std::make_unique<ThrottledDiskReader>(
-      std::move(memory), model, clock,
+      std::move(memory), device.model, clock,
       WithReadAhead(options, dirs, bytes).tuning.reader);
   const ThrottledDiskReader& disk = *throttled;
   auto counting = std::make_unique<CountingDiskReader>(std::move(throttled));
@@ -661,9 +684,9 @@ template LaneRun ListForLane<Cache::Strategy::FullCache>(
     Tuning::MediaKind kind, bool raw_callback);
 template TimedRun ListOnSimulatedDisk<Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes, const DiskModel& model, Tuning::MediaKind kind);
+    std::uint64_t bytes, const SimulatedDevice& device);
 template TimedRun ListOnSimulatedDisk<Cache::Strategy::FullCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes, const DiskModel& model, Tuning::MediaKind kind);
+    std::uint64_t bytes, const SimulatedDevice& device);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead

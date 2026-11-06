@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <catch2/catch_message.hpp>
@@ -84,12 +85,15 @@ Bench::ReadLog SampleLog() {
   return log;
 }
 
+// The fields of an event, to compare them in one expression.
+auto FieldsOf(const Bench::LogEvent& event) {
+  return std::tie(event.start_ns, event.end_ns, event.wait_ns, event.offset,
+                  event.length, event.type, event.kind, event.cls, event.phase,
+                  event.queue_depth);
+}
+
 bool SameEvent(const Bench::LogEvent& left, const Bench::LogEvent& right) {
-  return left.start_ns == right.start_ns && left.end_ns == right.end_ns &&
-         left.wait_ns == right.wait_ns && left.offset == right.offset &&
-         left.length == right.length && left.type == right.type &&
-         left.kind == right.kind && left.cls == right.cls &&
-         left.phase == right.phase && left.queue_depth == right.queue_depth;
+  return FieldsOf(left) == FieldsOf(right);
 }
 
 void CheckSameLog(const Bench::ReadLog& left, const Bench::ReadLog& right) {

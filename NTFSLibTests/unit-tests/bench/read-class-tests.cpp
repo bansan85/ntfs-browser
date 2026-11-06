@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <span>
 #include <string>
 #include <thread>
@@ -147,23 +148,33 @@ void Announce(const IDiskReader& reader, size_t count) {
   }
 }
 
+// The class of the read of the first announced range, once the disk had
+// attempt times 25 ms to finish it. pattern, when given, is the read pattern of
+// the reader.
+Bench::ReadClass ClassOfFirstRange(const ImageFile& image, const Caps& caps,
+                                   size_t announced, int attempt,
+                                   std::optional<Tuning::Pattern> pattern) {
+  const std::unique_ptr<IDiskReader> reader = image.Open(caps);
+  if (pattern.has_value()) {
+    reader->SetReadPattern(*pattern);
+  }
+  Announce(*reader, announced);
+  std::this_thread::sleep_for(std::chrono::milliseconds{25 * attempt});
+  const Bench::Detail::ReadNote note = ReadAndNote(*reader, 0);
+  REQUIRE(note.valid);
+  return note.cls;
+}
+
 // The class of the read of the first announced range, once the disk had time
 // to finish it. A read that is not over yet is an Io read, so the wait grows
 // until the class is the one expected, a few times.
-Bench::ReadClass ClassOfFirstRangeAfterWait(const ImageFile& image,
-                                            const Caps& caps, size_t announced,
-                                            Bench::ReadClass expected) {
+Bench::ReadClass ClassOfFirstRangeAfterWait(
+    const ImageFile& image, const Caps& caps, size_t announced,
+    Bench::ReadClass expected,
+    std::optional<Tuning::Pattern> pattern = std::nullopt) {
   Bench::ReadClass seen = Bench::ReadClass::Unclassified;
-  for (int attempt = 1; attempt <= 8; attempt++) {
-    const std::unique_ptr<IDiskReader> reader = image.Open(caps);
-    Announce(*reader, announced);
-    std::this_thread::sleep_for(std::chrono::milliseconds{25 * attempt});
-    const Bench::Detail::ReadNote note = ReadAndNote(*reader, 0);
-    REQUIRE(note.valid);
-    seen = note.cls;
-    if (seen == expected) {
-      break;
-    }
+  for (int attempt = 1; attempt <= 8 && seen != expected; attempt++) {
+    seen = ClassOfFirstRange(image, caps, announced, attempt, pattern);
   }
   return seen;
 }
@@ -251,18 +262,9 @@ TEST_CASE("The caps by pattern decide which ranges are held back",
   }
 
   SECTION("the second pattern starts both") {
-    Bench::ReadClass seen = Bench::ReadClass::Unclassified;
-    for (int attempt = 1; attempt <= 8; attempt++) {
-      const std::unique_ptr<IDiskReader> reader = image.Open(caps);
-      reader->SetReadPattern(Tuning::Pattern::ScatteredGrouped);
-      Announce(*reader, 2);
-      std::this_thread::sleep_for(std::chrono::milliseconds{25 * attempt});
-      seen = ReadAndNote(*reader, 0).cls;
-      if (seen == Bench::ReadClass::Ready) {
-        break;
-      }
-    }
-    CHECK(seen == Bench::ReadClass::Ready);
+    CHECK(ClassOfFirstRangeAfterWait(image, caps, 2, Bench::ReadClass::Ready,
+                                     Tuning::Pattern::ScatteredGrouped) ==
+          Bench::ReadClass::Ready);
   }
 }
 

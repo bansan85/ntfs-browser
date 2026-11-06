@@ -125,6 +125,126 @@ Io::ProbeRunRules PlainRules() {
           .first_mapped_slot = 16};
 }
 
+// What a run of a given kind of device is, for a strategy.
+struct ProbeVariant {
+  Tuning::MediaKind kind;
+  bool keeps;
+  bool holds_e;
+};
+
+// The first slot a cache is asked for. The blocks that hold the directory's
+// own record are in the cache already, and are neither announced nor read
+// again.
+constexpr ULONGLONG cached_until = 24;
+
+// The slots up to this one are left out of what a strategy is asked for.
+template <Cache::Strategy S>
+ULONGLONG LeftOut() {
+  return S == Cache::Strategy::FullCache ? cached_until : 0;
+}
+
+// The byte ranges that runs cover from left_out on.
+std::vector<Run> WantedRanges(const std::vector<Run>& runs, ULONGLONG mft,
+                              ULONGLONG record_size, ULONGLONG left_out) {
+  std::vector<Run> wanted;
+  for (const auto& [first, count] : runs) {
+    const ULONGLONG from = (std::max)(first, left_out);
+    if (from < first + count) {
+      wanted.emplace_back(mft + (from * record_size),
+                          (first + count - from) * record_size);
+    }
+  }
+  return wanted;
+}
+
+// The bytes of the record at slot_e as the disk has them, when the store holds
+// it.
+std::map<ULONGLONG, std::vector<BYTE>>
+    HeldRecordsOf(const std::vector<BYTE>& image, ULONGLONG mft,
+                  ULONGLONG record_size, bool holds_e) {
+  std::map<ULONGLONG, std::vector<BYTE>> held_records;
+  if (holds_e) {
+    const auto first = image.begin() + static_cast<std::ptrdiff_t>(
+                                           mft + (slot_e * record_size));
+    held_records[slot_e].assign(
+        first, first + static_cast<std::ptrdiff_t>(record_size));
+  }
+  return held_records;
+}
+
+// A cache announces the blocks that hold the runs, so a range only has to be
+// inside what it announced. Without a cache the ranges are the runs.
+template <Cache::Strategy S>
+void CheckAnnounced(const std::vector<Run>& announced,
+                    const std::vector<Run>& wanted) {
+  if constexpr (S == Cache::Strategy::NoCache) {
+    CHECK(announced == wanted);
+  } else {
+    for (const auto& [offset, length] : wanted) {
+      CAPTURE(offset, length);
+      const bool covered =
+          std::ranges::any_of(announced, [offset, length](const Run& hint) {
+            return hint.first <= offset &&
+                   hint.first + hint.second >= offset + length;
+          });
+      CHECK(covered);
+    }
+  }
+}
+
+// Walks the directory of RunTree() over a volume of the variant, and checks
+// that the probes read the runs that PlanProbeRuns plans.
+template <Cache::Strategy S>
+void CheckProbeRuns(const std::vector<BYTE>& image, const ProbeVariant& variant,
+                    const std::vector<Run>& expected_runs) {
+  constexpr ULONGLONG directory = Tests::name_tree_first_record;
+  auto open = ProbeWalk::Open<S>(image, variant.kind);
+  REQUIRE(ProbeWalk::BlocksOf(*open.volume, directory).empty());
+  const ULONGLONG mft = open.volume->GetMFTAddr();
+  const ULONGLONG record_size = open.volume->GetFileRecordSize();
+  const auto held_records =
+      HeldRecordsOf(image, mft, record_size, variant.holds_e);
+
+  const ProbeWalk::DirectoryWalk walk = ProbeWalk::WalkDirectory<S>(
+      open, directory, {.held_records = &held_records, .keeps = variant.keeps});
+  REQUIRE(walk.groups.size() == 1);
+  CHECK(walk.listed.size() == FileSlots().size());
+
+  // One chunk: the records came in one ascending run, each asked once.
+  CHECK(walk.asked == FileSlots());
+
+  // The runs of the plan are the runs the probe read, and noted, in order.
+  const Io::ProbeRunRules rules =
+      Io::ProbeRunRulesOf(*open.volume, variant.keeps);
+  const Io::ProbeRunPlan plan =
+      Io::PlanProbeRuns(FileSlots(), rules,
+                        [&held_records](ULONGLONG slot) {
+                          const auto bytes = held_records.find(slot);
+                          return bytes == held_records.end()
+                                     ? std::span<const BYTE>()
+                                     : std::span<const BYTE>(bytes->second);
+                        },
+                        {});
+  CHECK(RunsOf(plan) == expected_runs);
+  CHECK(walk.ran == expected_runs);
+
+  // They were announced as they were planned.
+  CheckAnnounced<S>(
+      Announced(walk.calls),
+      WantedRanges(expected_runs, mft, record_size, LeftOut<S>()));
+
+  // Every record of every run was read, but the one the store held.
+  for (const ULONGLONG slot : FileSlots()) {
+    const ULONGLONG offset = mft + (slot * record_size);
+    const bool read =
+        open.reads->ReadsInRange(offset, offset + record_size) != 0;
+    CAPTURE(slot);
+    if (slot >= LeftOut<S>()) {
+      CHECK(read == !(variant.holds_e && slot == slot_e));
+    }
+  }
+}
+
 }  // namespace
 
 TEST_CASE("The plan of a chunk reads the records no one holds in runs",
@@ -222,97 +342,9 @@ TEMPLATE_TEST_CASE_SIG("A probe reads the runs that PlanProbeRuns plans",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
       Tests::BuildFakeNtfsImageWithNameTree(RunTree());
-  constexpr ULONGLONG directory = Tests::name_tree_first_record;
-
-  // What a run of a given kind of device is, for this strategy.
-  struct Variant {
-    Tuning::MediaKind kind;
-    bool keeps;
-    bool holds_e;
-  };
-
-  const auto check = [&](const Variant& variant,
-                         const std::vector<Run>& expected_runs) {
-    auto open = ProbeWalk::Open<S>(image, variant.kind);
-    REQUIRE(ProbeWalk::BlocksOf(*open.volume, directory).empty());
-    const ULONGLONG mft = open.volume->GetMFTAddr();
-    const ULONGLONG record_size = open.volume->GetFileRecordSize();
-
-    // The bytes of the record the store holds, as the disk has them.
-    std::map<ULONGLONG, std::vector<BYTE>> held_records;
-    if (variant.holds_e) {
-      const auto first = image.begin() + static_cast<std::ptrdiff_t>(
-                                             mft + (slot_e * record_size));
-      held_records[slot_e].assign(
-          first, first + static_cast<std::ptrdiff_t>(record_size));
-    }
-
-    const ProbeWalk::DirectoryWalk walk = ProbeWalk::WalkDirectory<S>(
-        open, directory,
-        {.held_records = &held_records, .keeps = variant.keeps});
-    REQUIRE(walk.groups.size() == 1);
-    CHECK(walk.listed.size() == FileSlots().size());
-
-    // One chunk: the records came in one ascending run, each asked once.
-    CHECK(walk.asked == FileSlots());
-
-    // The runs of the plan are the runs the probe read, and noted, in order.
-    const Io::ProbeRunRules rules =
-        Io::ProbeRunRulesOf(*open.volume, variant.keeps);
-    const std::vector<ULONGLONG>& slots = FileSlots();
-    const Io::ProbeRunPlan plan =
-        Io::PlanProbeRuns(slots, rules,
-                          [&held_records](ULONGLONG slot) {
-                            const auto bytes = held_records.find(slot);
-                            return bytes == held_records.end()
-                                       ? std::span<const BYTE>()
-                                       : std::span<const BYTE>(bytes->second);
-                          },
-                          {});
-    CHECK(RunsOf(plan) == expected_runs);
-    CHECK(walk.ran == expected_runs);
-
-    // They were announced as they were planned. A cache announces the blocks
-    // that hold them, so the ranges only have to be inside what it announced.
-    const std::vector<Run> announced = Announced(walk.calls);
-    // The blocks that hold the directory's own record are in the cache
-    // already, and are neither announced nor read again: the slots up to
-    // cached_until are left out of what a cache is asked for.
-    constexpr ULONGLONG cached_until = 24;
-    const ULONGLONG left_out =
-        S == Cache::Strategy::FullCache ? cached_until : 0;
-    std::vector<Run> wanted;
-    for (const auto& [first, count] : expected_runs) {
-      const ULONGLONG from = (std::max)(first, left_out);
-      if (from < first + count) {
-        wanted.emplace_back(mft + (from * record_size),
-                            (first + count - from) * record_size);
-      }
-    }
-    if constexpr (S == Cache::Strategy::NoCache) {
-      CHECK(announced == wanted);
-    } else {
-      for (const auto& [offset, length] : wanted) {
-        CAPTURE(offset, length);
-        const bool covered =
-            std::ranges::any_of(announced, [offset, length](const Run& hint) {
-              return hint.first <= offset &&
-                     hint.first + hint.second >= offset + length;
-            });
-        CHECK(covered);
-      }
-    }
-
-    // Every record of every run was read, but the one the store held.
-    for (const ULONGLONG slot : slots) {
-      const ULONGLONG offset = mft + (slot * record_size);
-      const bool read =
-          open.reads->ReadsInRange(offset, offset + record_size) != 0;
-      CAPTURE(slot);
-      if (slot >= left_out) {
-        CHECK(read == !(variant.holds_e && slot == slot_e));
-      }
-    }
+  const auto check = [&image](const ProbeVariant& variant,
+                              const std::vector<Run>& expected_runs) {
+    CheckProbeRuns<S>(image, variant, expected_runs);
   };
 
   SECTION("an unknown device, default gaps") {

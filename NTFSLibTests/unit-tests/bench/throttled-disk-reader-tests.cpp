@@ -110,14 +110,6 @@ struct Outcome {
   Tests::ThrottleStats stats;
 };
 
-bool SameStats(const Tests::ThrottleStats& lhs,
-               const Tests::ThrottleStats& rhs) {
-  return lhs.disk_reads == rhs.disk_reads && lhs.disk_bytes == rhs.disk_bytes &&
-         lhs.served_reads == rhs.served_reads &&
-         lhs.unannounced_reads == rhs.unannounced_reads &&
-         lhs.wait_ns == rhs.wait_ns && lhs.wasted_ranges == rhs.wasted_ranges;
-}
-
 // Announcements, reads of both kinds, a withdrawal and a pattern change.
 Outcome RunScript() {
   Tests::SimulatedClock clock;
@@ -228,7 +220,7 @@ TEST_CASE("The same reads give the same simulated time", "[bench][throttled]") {
 
   CHECK(first.now_ns > 0);
   CHECK(first.now_ns == second.now_ns);
-  CHECK(SameStats(first.stats, second.stats));
+  CHECK(first.stats == second.stats);
   CHECK(first.stats.served_reads > 0);
   CHECK(first.stats.unannounced_reads > 0);
 }
@@ -527,7 +519,7 @@ TEST_CASE("A scan on a simulated disk is repeatable and serves its hints",
 
   CHECK(first.sim_ns > 0);
   CHECK(first.sim_ns == second.sim_ns);
-  CHECK(SameStats(first.stats, second.stats));
+  CHECK(first.stats == second.stats);
   CHECK(first.stats.served_reads > 0);
   CHECK(first.entries > 0);
   // A hard disk with one lane and a long seek is slower than the SSD.

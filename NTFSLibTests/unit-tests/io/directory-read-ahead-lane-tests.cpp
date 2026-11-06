@@ -405,6 +405,30 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(CountOf(rig.reads->Calls(), Kind::CancelStanding) == announced);
 }
 
+namespace {
+
+// Whether a recursive listing of image announces ranges on the standing lane.
+template <Cache::Strategy S>
+bool UsesLane(const std::vector<BYTE>& image, const VolumeOptions& options,
+              std::size_t dirs = 64,
+              Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
+  const ReadAhead::Run run =
+      ReadAhead::ListRecursively<S>(image, options, dirs, large_budget, kind);
+  return CountOf(run.calls, Kind::PrefetchStanding) > 0;
+}
+
+// Whether a recursive listing of image makes no call at all on the lane.
+template <Cache::Strategy S>
+bool LeavesLaneAlone(const std::vector<BYTE>& image,
+                     const VolumeOptions& options, std::size_t dirs = 64,
+                     Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
+  const ReadAhead::Run run =
+      ReadAhead::ListRecursively<S>(image, options, dirs, large_budget, kind);
+  return std::ranges::none_of(run.calls, IsLane);
+}
+
+}  // namespace
+
 TEMPLATE_TEST_CASE_SIG(
     "The read ahead calls the standing lane only when it is on",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
@@ -413,37 +437,27 @@ TEMPLATE_TEST_CASE_SIG(
       ReadAhead::SpacedTree(directories, files_per_directory));
 
   SECTION("with the lane on, a device of an unknown kind uses it") {
-    const ReadAhead::Run run =
-        ReadAhead::ListRecursively<S>(image, VolumeOptions{}, 64, large_budget);
-    CHECK(CountOf(run.calls, Kind::PrefetchStanding) > 0);
+    CHECK(UsesLane<S>(image, VolumeOptions{}));
   }
 
   SECTION("a solid state device uses it") {
-    const ReadAhead::Run run =
-        ReadAhead::ListRecursively<S>(image, VolumeOptions{}, 64, large_budget,
-                                      Tuning::MediaKind::SolidState);
-    CHECK(CountOf(run.calls, Kind::PrefetchStanding) > 0);
+    CHECK(
+        UsesLane<S>(image, VolumeOptions{}, 64, Tuning::MediaKind::SolidState));
   }
 
   SECTION("walk.read_ahead_runs at 0 turns it off") {
     VolumeOptions options;
     options.tuning.walk.read_ahead_runs = 0;
-    const ReadAhead::Run run =
-        ReadAhead::ListRecursively<S>(image, options, 64, large_budget);
-    CHECK(std::ranges::none_of(run.calls, IsLane));
+    CHECK(LeavesLaneAlone<S>(image, options));
   }
 
   SECTION("walk.read_ahead_dirs at 0 turns everything off") {
-    const ReadAhead::Run run =
-        ReadAhead::ListRecursively<S>(image, VolumeOptions{}, 0, large_budget);
-    CHECK(std::ranges::none_of(run.calls, IsLane));
+    CHECK(LeavesLaneAlone<S>(image, VolumeOptions{}, 0));
   }
 
   SECTION("a rotational device does not use it by default") {
-    const ReadAhead::Run run =
-        ReadAhead::ListRecursively<S>(image, VolumeOptions{}, 64, large_budget,
-                                      Tuning::MediaKind::Rotational);
-    CHECK(std::ranges::none_of(run.calls, IsLane));
+    CHECK(LeavesLaneAlone<S>(image, VolumeOptions{}, 64,
+                             Tuning::MediaKind::Rotational));
   }
 
   SECTION(
@@ -451,18 +465,14 @@ TEMPLATE_TEST_CASE_SIG(
       "is set") {
     VolumeOptions options;
     options.tuning.walk.read_ahead_runs_rotational = 16;
-    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
-        image, options, 64, large_budget, Tuning::MediaKind::Rotational);
-    CHECK(CountOf(run.calls, Kind::PrefetchStanding) > 0);
+    CHECK(UsesLane<S>(image, options, 64, Tuning::MediaKind::Rotational));
   }
 
   SECTION("the rotational knob does not serve a device of another kind") {
     VolumeOptions options;
     options.tuning.walk.read_ahead_runs = 0;
     options.tuning.walk.read_ahead_runs_rotational = 16;
-    const ReadAhead::Run run =
-        ReadAhead::ListRecursively<S>(image, options, 64, large_budget);
-    CHECK(std::ranges::none_of(run.calls, IsLane));
+    CHECK(LeavesLaneAlone<S>(image, options));
   }
 
   SECTION("a raw attribute callback turns it off") {

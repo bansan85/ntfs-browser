@@ -99,14 +99,6 @@ Outcome RunScript(const Announce& announce) {
   return {.now_ns = clock.NowNs(), .stats = reader->Stats()};
 }
 
-bool SameStats(const Tests::ThrottleStats& lhs,
-               const Tests::ThrottleStats& rhs) {
-  return lhs.disk_reads == rhs.disk_reads && lhs.disk_bytes == rhs.disk_bytes &&
-         lhs.served_reads == rhs.served_reads &&
-         lhs.unannounced_reads == rhs.unannounced_reads &&
-         lhs.wait_ns == rhs.wait_ns && lhs.wasted_ranges == rhs.wasted_ranges;
-}
-
 }  // namespace
 
 TEST_CASE("The standing lane costs the time that the first queue costs",
@@ -119,7 +111,7 @@ TEST_CASE("The standing lane costs the time that the first queue costs",
          ULONGLONG length) { reader.PrefetchStanding(offset, length); });
 
   CHECK(lane.now_ns == first.now_ns);
-  CHECK(SameStats(lane.stats, first.stats));
+  CHECK(lane.stats == first.stats);
   CHECK(lane.stats.served_reads == 3);
   CHECK(lane.stats.unannounced_reads == 1);
 }
@@ -136,7 +128,7 @@ TEST_CASE("The same standing announcements and reads give the same time",
 
   CHECK(first.now_ns > 0);
   CHECK(first.now_ns == second.now_ns);
-  CHECK(SameStats(first.stats, second.stats));
+  CHECK(first.stats == second.stats);
 }
 
 TEST_CASE("A range announced early on the lane costs less than no hint",

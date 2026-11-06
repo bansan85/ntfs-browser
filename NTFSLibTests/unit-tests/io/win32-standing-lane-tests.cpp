@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <random>
@@ -177,6 +178,79 @@ class HeldReadsGuard {
  private:
   Io::ReadDoneProbe previous_{Io::SetReadDoneProbeForTests(&HeldReadProbe)};
 };
+
+// Drives a reader with calls chosen by a seeded generator, and digests which
+// of its reads were served from an announced range.
+class RandomLaneDriver {
+ public:
+  RandomLaneDriver(const IDiskReader& reader, std::uint32_t seed)
+      : reader_(reader), random_(seed) {}
+
+  // A number below bound. Not a distribution: those are not the same on every
+  // library.
+  std::uint32_t Below(std::uint32_t bound) { return random_() % bound; }
+
+  // Notes an offset that was announced, and gives it back.
+  ULONGLONG Announce(ULONGLONG offset) {
+    announced_.push_back(offset);
+    return offset;
+  }
+
+  // Reads half a range or a whole one, most often at an announced offset, else
+  // at the one that fallback gives.
+  template <typename Fallback>
+  void ReadSomewhere(const Fallback& fallback) {
+    // Half a range leaves it, a whole one uses it up.
+    const size_t length = Below(2) == 0 ? range_bytes / 2 : range_bytes;
+    const bool announced_offset = !announced_.empty() && Below(4) != 0;
+    const ULONGLONG offset =
+        announced_offset ? announced_.at(Below(
+                               static_cast<std::uint32_t>(announced_.size())))
+                         : fallback();
+    const ReadOutcome outcome = ReadAndNote(reader_, offset, length);
+    CHECK(outcome.bytes_match);
+    served_digest_ = (served_digest_ * 3) + (WasServed(outcome) ? 1 : 0);
+    reads_served_ += WasServed(outcome) ? 1 : 0;
+  }
+
+  [[nodiscard]] std::uint64_t ServedDigest() const { return served_digest_; }
+
+  [[nodiscard]] std::uint64_t ReadsServed() const { return reads_served_; }
+
+ private:
+  const IDiskReader& reader_;
+  std::mt19937 random_;
+  // The ranges announced so far: most reads fall in one of them.
+  std::vector<ULONGLONG> announced_;
+  std::uint64_t served_digest_{0};
+  std::uint64_t reads_served_{0};
+};
+
+// Holds a read in flight at the first announcement of its offset, or never. A
+// read that is over MUST stay over, so that no earlier read at the offset is
+// called in flight again.
+class FirstAnnouncementHold {
+ public:
+  void Hold(ULONGLONG offset, bool wanted) {
+    if (seen_.insert(offset).second && wanted) {
+      HeldReads().insert(offset);
+    }
+  }
+
+ private:
+  std::set<ULONGLONG> seen_;
+};
+
+// Ends one held read, chosen at random: any one can be over, at any step.
+void EndOneHeldRead(RandomLaneDriver& driver) {
+  if (HeldReads().empty()) {
+    return;
+  }
+  auto victim = HeldReads().begin();
+  std::advance(victim,
+               driver.Below(static_cast<std::uint32_t>(HeldReads().size())));
+  HeldReads().erase(victim);
+}
 
 }  // namespace
 
@@ -633,49 +707,30 @@ TEST_CASE("The reads started do not depend on how the lane counts its own",
   const ImageFile image;
   const auto reader = image.Open(caps);
   Tests::BenchSessionGuard session;
-  std::mt19937 random(2024);
-  // Not a distribution: those are not the same on every library.
-  const auto below = [&random](std::uint32_t bound) {
-    return random() % bound;
-  };
-
-  std::uint64_t served_digest = 0;
-  std::uint64_t reads_served = 0;
-  // The ranges announced so far: most reads fall in one of them.
-  std::vector<ULONGLONG> announced;
+  RandomLaneDriver driver(*reader, 2024);
   for (size_t step = 0; step < 600; step++) {
-    const std::uint32_t kind = below(100);
+    const std::uint32_t kind = driver.Below(100);
     if (kind < 40) {
-      announced.push_back(RangeAt(below(64)));
-      reader->PrefetchStanding(announced.back(), range_bytes);
+      reader->PrefetchStanding(driver.Announce(RangeAt(driver.Below(64))),
+                               range_bytes);
     } else if (kind < 52) {
-      reader->CancelStanding(RangeAt(below(64)) + below(3) * 512,
-                             1 + below(4) * range_stride);
+      reader->CancelStanding(RangeAt(driver.Below(64)) + driver.Below(3) * 512,
+                             1 + driver.Below(4) * range_stride);
     } else if (kind < 64) {
-      announced.push_back(RangeAt(64 + below(32)));
-      reader->Prefetch(announced.back(), range_bytes);
+      reader->Prefetch(driver.Announce(RangeAt(64 + driver.Below(32))),
+                       range_bytes);
     } else if (kind < 68) {
       reader->CancelPrefetch();
     } else {
-      // Half a range leaves it, a whole one uses it up.
-      const size_t length = below(2) == 0 ? range_bytes / 2 : range_bytes;
-      const ULONGLONG offset =
-          announced.empty() || below(4) == 0
-              ? RangeAt(below(96))
-              : announced.at(
-                    below(static_cast<std::uint32_t>(announced.size())));
-      const ReadOutcome outcome = ReadAndNote(*reader, offset, length);
-      CHECK(outcome.bytes_match);
-      served_digest = (served_digest * 3) + (WasServed(outcome) ? 1 : 0);
-      reads_served += WasServed(outcome) ? 1 : 0;
+      driver.ReadSomewhere([&] { return RangeAt(driver.Below(96)); });
     }
   }
   const Bench::Report report = session.Finish();
 
   // Recorded with the reader that counted the lane's reads by visiting every
   // range it had started.
-  CHECK(reads_served == 50);
-  CHECK(served_digest == 6'341'278'128'170'066'284ULL);
+  CHECK(driver.ReadsServed() == 50);
+  CHECK(driver.ServedDigest() == 6'341'278'128'170'066'284ULL);
   CHECK(report.disk.prefetch_reads == 64);
   CHECK(report.disk.prefetch_bytes == 262144);
   CHECK(report.disk.wasted_bytes == 249856);
@@ -778,65 +833,33 @@ TEST_CASE("The reads started are the same whatever is in flight",
   const HeldReadsGuard held;
   const auto reader = image.Open(caps);
   Tests::BenchSessionGuard session;
-  std::mt19937 random(static_cast<std::uint32_t>(max_reads));
-  const auto below = [&random](std::uint32_t bound) {
-    return random() % bound;
-  };
-
-  std::uint64_t served_digest = 0;
-  std::uint64_t reads_served = 0;
-  std::vector<ULONGLONG> announced;
-  // A read that is over MUST stay over: an offset is held at its first
-  // announcement or never, so that no earlier read at it is called in flight
-  // again.
-  std::set<ULONGLONG> seen;
-  const auto hold = [&seen](ULONGLONG offset, bool wanted) {
-    if (seen.insert(offset).second && wanted) {
-      HeldReads().insert(offset);
-    }
-  };
+  RandomLaneDriver driver(*reader, static_cast<std::uint32_t>(max_reads));
+  FirstAnnouncementHold hold;
   for (size_t step = 0; step < 800; step++) {
-    const std::uint32_t kind = below(100);
-    const ULONGLONG offset = RangeAt(below(48));
+    const std::uint32_t kind = driver.Below(100);
+    const ULONGLONG offset = RangeAt(driver.Below(48));
     if (kind < 30) {
       // Most of the reads are in flight until a later step ends them.
-      hold(offset, below(4) != 0);
-      announced.push_back(offset);
-      reader->PrefetchStanding(offset, range_bytes);
+      hold.Hold(offset, driver.Below(4) != 0);
+      reader->PrefetchStanding(driver.Announce(offset), range_bytes);
     } else if (kind < 42) {
-      reader->CancelStanding(offset, 1 + below(4) * range_stride);
+      reader->CancelStanding(offset, 1 + driver.Below(4) * range_stride);
     } else if (kind < 52) {
-      const ULONGLONG first = RangeAt(48 + below(16));
-      hold(first, true);
-      announced.push_back(first);
-      reader->Prefetch(first, range_bytes);
+      const ULONGLONG first = RangeAt(48 + driver.Below(16));
+      hold.Hold(first, true);
+      reader->Prefetch(driver.Announce(first), range_bytes);
     } else if (kind < 55) {
       reader->CancelPrefetch();
     } else if (kind < 75) {
-      // A read that is over: any one can be, at any step.
-      if (!HeldReads().empty()) {
-        auto victim = HeldReads().begin();
-        std::advance(victim,
-                     below(static_cast<std::uint32_t>(HeldReads().size())));
-        HeldReads().erase(victim);
-      }
+      EndOneHeldRead(driver);
       reader->CancelPrefetch();
     } else {
-      const size_t length = below(2) == 0 ? range_bytes / 2 : range_bytes;
-      const ULONGLONG at =
-          announced.empty() || below(4) == 0
-              ? offset
-              : announced.at(
-                    below(static_cast<std::uint32_t>(announced.size())));
-      const ReadOutcome outcome = ReadAndNote(*reader, at, length);
-      CHECK(outcome.bytes_match);
-      served_digest = (served_digest * 3) + (WasServed(outcome) ? 1 : 0);
-      reads_served += WasServed(outcome) ? 1 : 0;
+      driver.ReadSomewhere([offset] { return offset; });
     }
   }
   const Bench::Report report = session.Finish();
-  CHECK(reads_served == recorded.reads_served);
-  CHECK(served_digest == recorded.served_digest);
+  CHECK(driver.ReadsServed() == recorded.reads_served);
+  CHECK(driver.ServedDigest() == recorded.served_digest);
   CHECK(report.disk.prefetch_reads == recorded.prefetch_reads);
   CHECK(report.disk.prefetch_bytes == recorded.prefetch_bytes);
   CHECK(report.disk.wasted_bytes == recorded.wasted_bytes);

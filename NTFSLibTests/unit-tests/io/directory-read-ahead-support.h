@@ -167,12 +167,18 @@ struct TimedRun {
   ThrottleStats disk;
 };
 
+// The simulated disk of ListOnSimulatedDisk(): what it costs, and the kind of
+// device its reader says it is.
+struct SimulatedDevice {
+  DiskModel model;
+  Tuning::MediaKind kind{Tuning::MediaKind::Unknown};
+};
+
 template <Cache::Strategy S>
 [[nodiscard]] TimedRun
     ListOnSimulatedDisk(const std::vector<BYTE>& image, VolumeOptions options,
                         std::size_t dirs, std::uint64_t bytes,
-                        const DiskModel& model,
-                        Tuning::MediaKind kind = Tuning::MediaKind::Unknown);
+                        const SimulatedDevice& device);
 
 // A hard disk: a long seek, one lane, as NtfsBench simulates it.
 [[nodiscard]] DiskModel HardDiskModel();

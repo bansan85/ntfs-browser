@@ -158,9 +158,202 @@ struct NamedTree {
   bool tight;
 };
 
-// Every scenario. Few and rich trees, each listed under the settings that
-// change which lane calls are made. Each name is unique.
-const std::vector<Scenario>& Scenarios() {
+// Indexes of the trees in `ScenarioSet::named_`.
+enum TreeIndex : std::size_t {
+  grouped,
+  branching,
+  scattered,
+  side_by_side,
+  two_apart,
+  wide,
+  big,
+  spaced,
+  linked
+};
+
+// The record window and the memo, small or off.
+struct Memory {
+  const char* name;
+  std::uint64_t window;
+  std::uint64_t memo;
+};
+
+// Collects the scenarios, each listed under the settings that change which
+// lane calls are made.
+class ScenarioSet {
+ public:
+  explicit ScenarioSet(const Trees& trees)
+      : trees_(trees),
+        named_{{"grouped", &trees.images.at(grouped), false},
+               {"branching", &trees.images.at(branching), false},
+               {"scattered", &trees.images.at(scattered), false},
+               {"side by side", &trees.images.at(side_by_side), true},
+               {"two apart", &trees.images.at(two_apart), true},
+               {"wide directory", &trees.images.at(wide), true},
+               {"big", &trees.images.at(big), false},
+               {"spaced", &trees.images.at(spaced), false},
+               {"linked", &trees.images.at(linked), false}} {}
+
+  std::vector<Scenario> Build() {
+    for (const bool full : {false, true}) {
+      AddDefaults(full);
+      AddRunCounts(full);
+      AddLooseRuns(full);
+      AddKnownRecords(full);
+      AddDirCounts(full);
+    }
+    AddMemory();
+    for (const bool full : {false, true}) {
+      AddFixtures(full);
+    }
+    for (const bool full : {false, true}) {
+      AddDeletedRecover(full);
+    }
+    for (const bool full : {false, true}) {
+      AddLaneOff(full);
+    }
+    return std::move(list_);
+  }
+
+ private:
+  // Adds one scenario, named after its tree, its setting and its strategy.
+  void Add(const std::string& name, const std::vector<BYTE>& image,
+           bool full_cache, const VolumeOptions& options,
+           Tuning::MediaKind kind = Tuning::MediaKind::Unknown,
+           bool raw_callback = false) {
+    list_.push_back({.name = name + "/" + StrategyName(full_cache),
+                     .image = &image,
+                     .full_cache = full_cache,
+                     .options = options,
+                     .kind = kind,
+                     .raw_callback = raw_callback});
+  }
+
+  // The tree at index.
+  const NamedTree& Tree(TreeIndex index) const { return named_.at(index); }
+
+  // The defaults, and the tight probes of the trees that need them.
+  void AddDefaults(bool full) {
+    for (const NamedTree& tree : named_) {
+      Add(tree.name + "/default", *tree.image, full, Tuned({}));
+      if (tree.tight) {
+        Add(tree.name + "/default tight", *tree.image, full,
+            Tuned({.tight = true}));
+      }
+    }
+  }
+
+  // How many runs the lane keeps: fewer than the plans hold, so that the stack
+  // turns over, and more than there are runs at all.
+  void AddRunCounts(bool full) {
+    for (std::size_t index = 0; index <= wide; index++) {
+      const NamedTree& tree = named_.at(index);
+      for (const std::size_t runs : {1U, 2U, 3U, 4096U}) {
+        Add(tree.name + "/runs=" + std::to_string(runs), *tree.image, full,
+            Tuned({.runs = runs, .tight = tree.tight}));
+      }
+    }
+  }
+
+  // Records so close that a block holds both, with the default gap.
+  void AddLooseRuns(bool full) {
+    for (const TreeIndex index : {side_by_side, two_apart}) {
+      Add(Tree(index).name + "/runs=3 loose", *Tree(index).image, full,
+          Tuned({.runs = 3}));
+    }
+  }
+
+  // A record named twice is probed once, until the memory of probed records is
+  // full and starts again.
+  void AddKnownRecords(bool full) {
+    for (const std::uint64_t known : {4U, 64U}) {
+      VolumeOptions options = Tuned({.runs = 3});
+      options.tuning.probe.max_known_records = known;
+      Add("linked/known=" + std::to_string(known), *Tree(linked).image, full,
+          options);
+      options.tuning.probe.max_chunk_records = 4;
+      Add("linked/known=" + std::to_string(known) + " chunks=4",
+          *Tree(linked).image, full, options);
+    }
+  }
+
+  // How many directories are planned.
+  void AddDirCounts(bool full) {
+    for (const TreeIndex index : {grouped, branching, side_by_side}) {
+      const NamedTree& tree = Tree(index);
+      for (const std::size_t dirs : {1U, 4U}) {
+        Add(tree.name + "/dirs=" + std::to_string(dirs), *tree.image, full,
+            Tuned({.runs = 3, .dirs = dirs, .tight = tree.tight}));
+      }
+    }
+  }
+
+  // The record window and the memo, small or off. FullCache keeps neither.
+  void AddMemory() {
+    for (const TreeIndex index : {grouped, branching, side_by_side, wide}) {
+      const NamedTree& tree = Tree(index);
+      for (const Memory& memory :
+           {Memory{"no memo", Knobs{}.window_bytes, 0},
+            Memory{"no window no memo", 0, 0}, Memory{"small window", 8192, 16},
+            Memory{"window 64 KiB", 65536, 16}}) {
+        for (const std::size_t runs : {1U, 3U}) {
+          Add(tree.name + "/" + memory.name + "/runs=" + std::to_string(runs),
+              *tree.image, false,
+              Tuned({.runs = runs,
+                     .window_bytes = memory.window,
+                     .memo_entries = memory.memo,
+                     .tight = index == wide}));
+        }
+      }
+    }
+  }
+
+  // Every tree of the other tests, under each way to open the volume.
+  void AddFixtures(bool full) {
+    for (const ReadAhead::TreeFixture& fixture : trees_.fixtures) {
+      std::size_t mode = 0;
+      for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+        Add(fixture.name + "/mode=" + std::to_string(mode++), fixture.image,
+            full, options);
+      }
+    }
+  }
+
+  // Freed items and recovery, with a lane that holds few runs.
+  void AddDeletedRecover(bool full) {
+    VolumeOptions options = Tuned({.runs = 5, .dirs = 8});
+    options.include_deleted = true;
+    options.recover_errors = true;
+    for (const TreeIndex index : {grouped, branching, scattered}) {
+      Add(Tree(index).name + "/deleted recover", *Tree(index).image, full,
+          options);
+    }
+  }
+
+  // A raw attribute callback turns the lane off. So does a hard disk, unless
+  // its own number of runs says otherwise.
+  void AddLaneOff(bool full) {
+    const std::vector<BYTE>& image = *Tree(grouped).image;
+    Add("grouped/raw callback", image, full, Tuned({}),
+        Tuning::MediaKind::Unknown, true);
+    Add("grouped/rotational", image, full, Tuned({}),
+        Tuning::MediaKind::Rotational);
+    VolumeOptions rotational = Tuned({});
+    rotational.tuning.walk.read_ahead_runs_rotational = 8;
+    Add("grouped/rotational runs=8", image, full, rotational,
+        Tuning::MediaKind::Rotational);
+    Add("scattered/solid state", *Tree(scattered).image, full,
+        Tuned({.runs = 8}), Tuning::MediaKind::SolidState);
+  }
+
+  const Trees& trees_;
+  std::vector<NamedTree> named_;
+  std::vector<Scenario> list_;
+};
+
+// The trees of the scenarios. Few and rich, each listed under the settings that
+// change which lane calls are made. Each scenario name is unique.
+const Trees& ScenarioTrees() {
   static const Trees trees = [] {
     Trees built;
     // Many small directories: the shape of a system volume.
@@ -181,148 +374,13 @@ const std::vector<Scenario>& Scenarios() {
     built.fixtures = ReadAhead::Fixtures();
     return built;
   }();
+  return trees;
+}
 
-  static const std::vector<Scenario> scenarios = [] {
-    std::vector<Scenario> list;
-    const auto add =
-        [&list](const std::string& name, const std::vector<BYTE>& image,
-                bool full_cache, const VolumeOptions& options,
-                Tuning::MediaKind kind = Tuning::MediaKind::Unknown,
-                bool raw_callback = false) {
-          list.push_back({.name = name + "/" + StrategyName(full_cache),
-                          .image = &image,
-                          .full_cache = full_cache,
-                          .options = options,
-                          .kind = kind,
-                          .raw_callback = raw_callback});
-        };
-    const std::vector<NamedTree> named{
-        {"grouped", &trees.images.at(0), false},
-        {"branching", &trees.images.at(1), false},
-        {"scattered", &trees.images.at(2), false},
-        {"side by side", &trees.images.at(3), true},
-        {"two apart", &trees.images.at(4), true},
-        {"wide directory", &trees.images.at(5), true},
-        {"big", &trees.images.at(6), false},
-        {"spaced", &trees.images.at(7), false},
-        {"linked", &trees.images.at(8), false}};
-    constexpr std::size_t grouped = 0;
-    constexpr std::size_t branching = 1;
-    constexpr std::size_t scattered = 2;
-    constexpr std::size_t side_by_side = 3;
-    constexpr std::size_t two_apart = 4;
-    constexpr std::size_t wide = 5;
-    constexpr std::size_t linked = 8;
-
-    for (const bool full : {false, true}) {
-      for (const NamedTree& tree : named) {
-        // The defaults.
-        add(tree.name + "/default", *tree.image, full, Tuned({}));
-        if (tree.tight) {
-          add(tree.name + "/default tight", *tree.image, full,
-              Tuned({.tight = true}));
-        }
-      }
-
-      // How many runs the lane keeps: fewer than the plans hold, so that the
-      // stack turns over, and more than there are runs at all.
-      for (std::size_t index = 0; index <= wide; index++) {
-        const NamedTree& tree = named.at(index);
-        for (const std::size_t runs : {1U, 2U, 3U, 4096U}) {
-          add(tree.name + "/runs=" + std::to_string(runs), *tree.image, full,
-              Tuned({.runs = runs, .tight = tree.tight}));
-        }
-      }
-      // Records so close that a block holds both, with the default gap.
-      for (const std::size_t index : {side_by_side, two_apart}) {
-        add(named.at(index).name + "/runs=3 loose", *named.at(index).image,
-            full, Tuned({.runs = 3}));
-      }
-
-      // A record named twice is probed once, until the memory of probed
-      // records is full and starts again.
-      for (const std::uint64_t known : {4U, 64U}) {
-        VolumeOptions options = Tuned({.runs = 3});
-        options.tuning.probe.max_known_records = known;
-        add("linked/known=" + std::to_string(known), *named.at(linked).image,
-            full, options);
-        options.tuning.probe.max_chunk_records = 4;
-        add("linked/known=" + std::to_string(known) + " chunks=4",
-            *named.at(linked).image, full, options);
-      }
-
-      // How many directories are planned.
-      for (const std::size_t index : {grouped, branching, side_by_side}) {
-        const NamedTree& tree = named.at(index);
-        for (const std::size_t dirs : {1U, 4U}) {
-          add(tree.name + "/dirs=" + std::to_string(dirs), *tree.image, full,
-              Tuned({.runs = 3, .dirs = dirs, .tight = tree.tight}));
-        }
-      }
-    }
-
-    // The record window and the memo, small or off. FullCache keeps neither.
-    struct Memory {
-      const char* name;
-      std::uint64_t window;
-      std::uint64_t memo;
-    };
-    for (const std::size_t index : {grouped, branching, side_by_side, wide}) {
-      const NamedTree& tree = named.at(index);
-      for (const Memory& memory :
-           {Memory{"no memo", Knobs{}.window_bytes, 0},
-            Memory{"no window no memo", 0, 0}, Memory{"small window", 8192, 16},
-            Memory{"window 64 KiB", 65536, 16}}) {
-        for (const std::size_t runs : {1U, 3U}) {
-          add(tree.name + "/" + memory.name + "/runs=" + std::to_string(runs),
-              *tree.image, false,
-              Tuned({.runs = runs,
-                     .window_bytes = memory.window,
-                     .memo_entries = memory.memo,
-                     .tight = index == wide}));
-        }
-      }
-    }
-
-    // Every tree of the other tests, under each way to open the volume.
-    for (const bool full : {false, true}) {
-      for (const ReadAhead::TreeFixture& fixture : trees.fixtures) {
-        std::size_t mode = 0;
-        for (const VolumeOptions& options : ReadAhead::AllOptions()) {
-          add(fixture.name + "/mode=" + std::to_string(mode++), fixture.image,
-              full, options);
-        }
-      }
-    }
-
-    // Freed items and recovery, with a lane that holds few runs.
-    for (const bool full : {false, true}) {
-      VolumeOptions options = Tuned({.runs = 5, .dirs = 8});
-      options.include_deleted = true;
-      options.recover_errors = true;
-      for (const std::size_t index : {grouped, branching, scattered}) {
-        add(named.at(index).name + "/deleted recover", *named.at(index).image,
-            full, options);
-      }
-    }
-
-    // A raw attribute callback turns the lane off. So does a hard disk, unless
-    // its own number of runs says otherwise.
-    for (const bool full : {false, true}) {
-      const std::vector<BYTE>& image = *named.at(grouped).image;
-      add("grouped/raw callback", image, full, Tuned({}),
-          Tuning::MediaKind::Unknown, true);
-      add("grouped/rotational", image, full, Tuned({}),
-          Tuning::MediaKind::Rotational);
-      VolumeOptions rotational = Tuned({});
-      rotational.tuning.walk.read_ahead_runs_rotational = 8;
-      add("grouped/rotational runs=8", image, full, rotational,
-          Tuning::MediaKind::Rotational);
-      add("scattered/solid state", *named.at(scattered).image, full,
-          Tuned({.runs = 8}), Tuning::MediaKind::SolidState);
-    }
-    return list;
-  }();
+// Every scenario.
+const std::vector<Scenario>& Scenarios() {
+  static const std::vector<Scenario> scenarios =
+      ScenarioSet(ScenarioTrees()).Build();
   return scenarios;
 }
 
@@ -367,6 +425,44 @@ const std::vector<Outcome>& Outcomes() {
   return outcomes;
 }
 
+// 1 when condition holds, else 0, to add to a counter.
+std::size_t Count(bool condition) { return condition ? 1 : 0; }
+
+// Whether the lane may run in the scenario: a raw callback and a hard disk
+// turn it off.
+bool LaneExpected(const Scenario& scenario) {
+  return !scenario.raw_callback &&
+         (scenario.kind != Tuning::MediaKind::Rotational ||
+          scenario.options.tuning.walk.read_ahead_runs_rotational != 0);
+}
+
+// How many scenarios reach each path of the lane.
+struct PathCounts {
+  std::size_t with_lane{0};
+  std::size_t withdrawing{0};
+  std::size_t window_held{0};
+  std::size_t unplanned{0};
+  std::size_t kept_back{0};
+  std::size_t longer_than_lane{0};
+  std::size_t most_planned{0};
+
+  void Add(const Scenario& scenario, const Outcome& outcome) {
+    const Io::DirectoryReadAheadStats& stats = outcome.stats;
+    with_lane += Count(!outcome.lane.empty());
+    withdrawing += Count(stats.runs_withdrawn != 0);
+    window_held += Count(stats.runs_window_held != 0);
+    unplanned += Count(stats.runs_unplanned != 0);
+    // Planned runs that the lane never announced: the window held them, or an
+    // overlap kept them off the lane until the other run was read.
+    kept_back +=
+        Count(scenario.full_cache && stats.runs_announced < stats.runs_planned);
+    longer_than_lane += Count(stats.runs_planned >
+                              2 * scenario.options.tuning.walk.read_ahead_runs);
+    most_planned =
+        (std::max)(most_planned, static_cast<std::size_t>(stats.runs_planned));
+  }
+};
+
 }  // namespace
 
 TEST_CASE("The lane calls of every listing are the recorded ones",
@@ -393,48 +489,24 @@ TEST_CASE("The lane calls of every listing are the recorded ones",
 
 TEST_CASE("The pinned listings reach every path of the lane",
           "[io][directory-read-ahead][standing-lane][lane-digest]") {
-  std::size_t with_lane = 0;
-  std::size_t withdrawing = 0;
-  std::size_t window_held = 0;
-  std::size_t unplanned = 0;
-  std::size_t kept_back = 0;
-  std::size_t longer_than_lane = 0;
-  std::size_t most_planned = 0;
+  PathCounts counts;
   for (std::size_t index = 0; index < Scenarios().size(); index++) {
     const Scenario& scenario = Scenarios().at(index);
-    const Io::DirectoryReadAheadStats& stats = Outcomes().at(index).stats;
+    const Outcome& outcome = Outcomes().at(index);
     INFO(scenario.name);
-    const bool lane_expected =
-        !scenario.raw_callback &&
-        (scenario.kind != Tuning::MediaKind::Rotational ||
-         scenario.options.tuning.walk.read_ahead_runs_rotational != 0);
-    if (!lane_expected) {
-      CHECK(Outcomes().at(index).lane.empty());
-      CHECK(stats.runs_planned == 0);
+    if (!LaneExpected(scenario)) {
+      CHECK(outcome.lane.empty());
+      CHECK(outcome.stats.runs_planned == 0);
     }
-    with_lane += Outcomes().at(index).lane.empty() ? 0 : 1;
-    withdrawing += stats.runs_withdrawn != 0 ? 1 : 0;
-    window_held += stats.runs_window_held != 0 ? 1 : 0;
-    unplanned += stats.runs_unplanned != 0 ? 1 : 0;
-    // Planned runs that the lane never announced: the window held them, or an
-    // overlap kept them off the lane until the other run was read.
-    kept_back +=
-        scenario.full_cache && stats.runs_announced < stats.runs_planned ? 1
-                                                                         : 0;
-    longer_than_lane +=
-        stats.runs_planned > 2 * scenario.options.tuning.walk.read_ahead_runs
-            ? 1
-            : 0;
-    most_planned =
-        (std::max)(most_planned, static_cast<std::size_t>(stats.runs_planned));
+    counts.Add(scenario, outcome);
   }
-  CHECK(with_lane > 100);
-  CHECK(withdrawing > 20);
-  CHECK(window_held > 0);
-  CHECK(unplanned > 10);
-  CHECK(kept_back > 0);
-  CHECK(longer_than_lane > 30);
-  CHECK(most_planned >= 100);
+  CHECK(counts.with_lane > 100);
+  CHECK(counts.withdrawing > 20);
+  CHECK(counts.window_held > 0);
+  CHECK(counts.unplanned > 10);
+  CHECK(counts.kept_back > 0);
+  CHECK(counts.longer_than_lane > 30);
+  CHECK(counts.most_planned >= 100);
 }
 
 TEST_CASE("write the lane digests",

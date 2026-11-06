@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -76,7 +77,7 @@ struct CheckScan {
   std::vector<Call> data_calls;
 };
 
-CheckScan ScanCheck(const VolumeOptions& options) {
+std::vector<BYTE> CheckImage() {
   Account::Volume volume;
   volume.bitmap_options.volume_clusters = 400;
   constexpr ULONGLONG bytes = file_clusters * Tests::fake_cluster_size;
@@ -85,8 +86,12 @@ CheckScan ScanCheck(const VolumeOptions& options) {
   volume.Put(
       23, Account::Freed(
               101, Account::Stream({{data_lcn + 20, file_clusters}}, bytes)));
+  return volume.Build();
+}
+
+CheckScan ScanCheck(const VolumeOptions& options) {
   const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> scanned(
-      volume.Build(), options,
+      CheckImage(), options,
       Account::Scan(Alloc::ClusterAccountLevel::Counts,
                     Alloc::DataCheckMode::Full));
   CheckScan scan;
@@ -134,10 +139,35 @@ class WorkerLoggingReader final : public IDiskReader {
   std::shared_ptr<WorkerReads> seen_;
 };
 
+// The reads a worker made, as (offset, length).
+using WorkerReadList = std::vector<std::pair<ULONGLONG, size_t>>;
+
+// Waits until the worker has made expected reads from base on.
+void WaitForWorkerReads(WorkerReads& seen, ULONGLONG base, size_t expected) {
+  std::unique_lock lock{seen.mutex};
+  const auto from_base = [&] {
+    return std::ranges::count_if(
+        seen.reads, [base](const auto& read) { return read.first >= base; });
+  };
+  // A bound on a bug, never a measure of speed.
+  REQUIRE(seen.changed.wait_for(lock, std::chrono::seconds{30}, [&] {
+    return static_cast<size_t>(from_base()) >= expected;
+  }));
+}
+
+// Two forward reads of 1000 bytes of the volume, from base.
+void ReadForwardTwice(const NtfsVolume<Cache::Strategy::NoCache>& volume,
+                      ULONGLONG base) {
+  std::vector<BYTE> dest(1000);
+  LARGE_INTEGER addr{.QuadPart = static_cast<LONGLONG>(base)};
+  REQUIRE(volume.ReadInto(addr, dest));
+  addr.QuadPart += 1000;
+  REQUIRE(volume.ReadInto(addr, dest));
+}
+
 // The reads the read ahead of a volume made from base on, after two forward
 // reads of the caller there, once the worker has made expected of them.
-std::vector<std::pair<ULONGLONG, size_t>>
-    ReadAheadFrom(const VolumeOptions& options, size_t expected) {
+WorkerReadList ReadAheadFrom(const VolumeOptions& options, size_t expected) {
   // The volume, then room for the stream far from what opening it reads.
   std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
   const ULONGLONG base = image.size();
@@ -147,29 +177,13 @@ std::vector<std::pair<ULONGLONG, size_t>>
     NtfsVolume<Cache::Strategy::NoCache> volume(
         std::make_unique<WorkerLoggingReader>(image, seen), options);
     REQUIRE(volume.IsVolumeOK());
-    std::vector<BYTE> dest(1000);
-    LARGE_INTEGER addr{.QuadPart = static_cast<LONGLONG>(base)};
-    REQUIRE(volume.ReadInto(addr, dest));
-    addr.QuadPart += 1000;
-    REQUIRE(volume.ReadInto(addr, dest));
-
-    std::unique_lock lock{seen->mutex};
-    const auto from_base = [&] {
-      return std::ranges::count_if(
-          seen->reads, [base](const auto& read) { return read.first >= base; });
-    };
-    // A bound on a bug, never a measure of speed.
-    REQUIRE(seen->changed.wait_for(lock, std::chrono::seconds{30}, [&] {
-      return static_cast<size_t>(from_base()) >= expected;
-    }));
+    ReadForwardTwice(volume, base);
+    WaitForWorkerReads(*seen, base, expected);
   }
   // The volume is gone and its worker joined: the list is final.
-  std::vector<std::pair<ULONGLONG, size_t>> reads;
-  for (const auto& read : seen->reads) {
-    if (read.first >= base) {
-      reads.push_back(read);
-    }
-  }
+  WorkerReadList reads;
+  std::ranges::copy_if(seen->reads, std::back_inserter(reads),
+                       [base](const auto& read) { return read.first >= base; });
   return reads;
 }
 

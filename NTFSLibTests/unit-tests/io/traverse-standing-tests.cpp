@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <functional>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -101,7 +100,7 @@ WalkResult CheckSameWalk(const std::vector<BYTE>& image,
 // The fixtures a walk is compared on, and a name for each.
 struct Fixture {
   std::string name;
-  std::function<std::vector<BYTE>()> build;
+  std::vector<BYTE> image;
   // Whether every way of opening the fixture lists some entry.
   bool lists_entries = false;
 };
@@ -109,22 +108,19 @@ struct Fixture {
 std::vector<Fixture> Fixtures() {
   using namespace NTFS_BROWSER_NAMESPACE::Tests;
   return {
-      {"indexed scan", [] { return BuildFakeNtfsImageWithIndexedMftScan(100); },
-       true},
+      {"indexed scan", BuildFakeNtfsImageWithIndexedMftScan(100), true},
       {"indexed scan, small blocks",
-       [] { return BuildFakeNtfsImageWithIndexedMftScan(120, 4); }, true},
-      {"indexed scan, one block",
-       [] { return BuildFakeNtfsImageWithIndexedMftScan(20); }, true},
-      {"orphaned blocks",
-       [] { return BuildFakeNtfsImageWithOrphanedIndexBlocks(); }},
+       BuildFakeNtfsImageWithIndexedMftScan(120, 4), true},
+      {"indexed scan, one block", BuildFakeNtfsImageWithIndexedMftScan(20),
+       true},
+      {"orphaned blocks", BuildFakeNtfsImageWithOrphanedIndexBlocks()},
       {"multi-cluster orphaned block",
-       [] { return BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock(); }},
-      {"bad index block entry",
-       [] { return BuildFakeNtfsImageWithBadIndexBlockEntry(); }},
+       BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock()},
+      {"bad index block entry", BuildFakeNtfsImageWithBadIndexBlockEntry()},
       {"malformed index entry",
-       [] { return BuildFakeNtfsImageWithMalformedIndexEntryFilename(); }},
+       BuildFakeNtfsImageWithMalformedIndexEntryFilename()},
       {"huge orphan block count",
-       [] { return BuildFakeNtfsImageWithHugeOrphanScanBlockCount(); }},
+       BuildFakeNtfsImageWithHugeOrphanScanBlockCount()},
   };
 }
 
@@ -211,7 +207,7 @@ TEMPLATE_TEST_CASE_SIG("The batched walk shows what the default walk shows",
     for (const VolumeOptions& options : AllOptions()) {
       INFO(fixture.name << ", include_deleted " << options.include_deleted
                         << ", recover_errors " << options.recover_errors);
-      const WalkResult walk = CheckSameWalk<S>(fixture.build(), options);
+      const WalkResult walk = CheckSameWalk<S>(fixture.image, options);
       if (fixture.lists_entries) {
         CHECK_FALSE(walk.entries.empty());
       }

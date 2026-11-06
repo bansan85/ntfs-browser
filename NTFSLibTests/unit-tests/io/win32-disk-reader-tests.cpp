@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <random>
 #include <span>
 #include <string>
@@ -52,6 +53,12 @@ std::vector<BYTE> MakeContent() {
   return content;
 }
 
+// A byte range of the file, announced or read.
+struct Range {
+  size_t offset;
+  size_t length;
+};
+
 // Deletes its file when it goes out of scope.
 struct TempFile final {
   std::filesystem::path path;
@@ -86,11 +93,6 @@ TEMPLATE_TEST_CASE_SIG(
 
   NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader;
   REQUIRE(reader.Open(file.path.wstring()));
-
-  struct Range {
-    size_t offset;
-    size_t length;
-  };
 
   // A sequential scan first, then jumps backward and forward, then reads that
   // end exactly at the end of the file.
@@ -163,39 +165,44 @@ TEMPLATE_TEST_CASE_SIG(
                      content.begin() + gsl::narrow<std::ptrdiff_t>(offset)));
   };
 
+  const auto announce = [&reader](std::initializer_list<Range> ranges) {
+    for (const Range& range : ranges) {
+      reader.Prefetch(range.offset, range.length);
+    }
+  };
+  const auto check_reads = [&check_read](std::initializer_list<Range> ranges) {
+    for (const Range& range : ranges) {
+      check_read(range.offset, range.length);
+    }
+  };
+
   SECTION("reads in the announced order, a range in several pieces") {
-    reader.Prefetch(0, 65536);
-    reader.Prefetch(65536, 65536);
-    reader.Prefetch(unaligned_offset + 131072, unaligned_length);
-    check_read(0, 4096);
-    check_read(4096, 65536 - 4096);
-    check_read(65536, 65536);
-    check_read(unaligned_offset + 131072, unaligned_length);
+    announce({{0, 65536},
+              {65536, 65536},
+              {unaligned_offset + 131072, unaligned_length}});
+    check_reads({{0, 4096},
+                 {4096, 65536 - 4096},
+                 {65536, 65536},
+                 {unaligned_offset + 131072, unaligned_length}});
   }
 
   SECTION("a read past the first ranges, then reads of the skipped ones") {
-    reader.Prefetch(0, 4096);
-    reader.Prefetch(8192, 4096);
-    reader.Prefetch(65536, 4096);
-    check_read(65536, 4096);
-    check_read(0, 4096);
-    check_read(8192, 4096);
+    announce({{0, 4096}, {8192, 4096}, {65536, 4096}});
+    check_reads({{65536, 4096}, {0, 4096}, {8192, 4096}});
   }
 
   SECTION("reads outside the ranges in between") {
-    reader.Prefetch(65536, 65536);
-    check_read(tiny_offset, 1);
-    check_read(65536 + 100, 1000);
-    check_read(file_size - tail_length, tail_length);
-    check_read(65536 + 2000, 1000);
+    announce({{65536, 65536}});
+    check_reads({{tiny_offset, 1},
+                 {65536 + 100, 1000},
+                 {file_size - tail_length, tail_length},
+                 {65536 + 2000, 1000}});
   }
 
   SECTION("reads after the hints are cancelled") {
-    reader.Prefetch(0, 65536);
-    reader.Prefetch(65536, 65536);
+    announce({{0, 65536}, {65536, 65536}});
     reader.CancelPrefetch();
-    check_read(0, 65536);
-    check_read(65536, 65536);
+    check_reads({{0, 65536}, {65536, 65536}});
   }
 
   SECTION("more hints than are kept") {

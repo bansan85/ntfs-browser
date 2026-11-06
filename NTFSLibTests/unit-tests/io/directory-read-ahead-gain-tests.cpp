@@ -53,9 +53,9 @@ TEMPLATE_TEST_CASE_SIG(
       Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::BigDirectoryTree(6));
 
   const ReadAhead::TimedRun off =
-      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, Tests::DiskModel{});
+      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, {Tests::DiskModel{}});
   const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
-      image, {}, window, large_budget, Tests::DiskModel{});
+      image, {}, window, large_budget, {Tests::DiskModel{}});
 
   CHECK(on.run.text == off.run.text);
   CHECK(on.disk.unannounced_reads < off.disk.unannounced_reads);
@@ -72,9 +72,9 @@ TEMPLATE_TEST_CASE_SIG(
   const Tests::DiskModel hard_disk = ReadAhead::HardDiskModel();
 
   const ReadAhead::TimedRun off =
-      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, hard_disk);
+      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, {hard_disk});
   const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
-      image, {}, window, large_budget, hard_disk);
+      image, {}, window, large_budget, {hard_disk});
 
   CAPTURE(off.elapsed_ns, on.elapsed_ns, off.disk.disk_reads,
           on.disk.disk_reads);
@@ -94,9 +94,9 @@ TEMPLATE_TEST_CASE_SIG(
   const Tests::DiskModel solid_state;
 
   const ReadAhead::TimedRun off =
-      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, solid_state);
+      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, {solid_state});
   const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
-      image, {}, window, large_budget, solid_state);
+      image, {}, window, large_budget, {solid_state});
 
   CAPTURE(off.elapsed_ns, on.elapsed_ns, off.disk.disk_reads,
           on.disk.disk_reads);
@@ -115,9 +115,9 @@ TEMPLATE_TEST_CASE_SIG(
   without_lane.tuning.walk.read_ahead_runs = 0;
 
   const ReadAhead::TimedRun off = ReadAhead::ListOnSimulatedDisk<S>(
-      image, without_lane, window, large_budget, solid_state);
+      image, without_lane, window, large_budget, {solid_state});
   const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
-      image, {}, window, large_budget, solid_state);
+      image, {}, window, large_budget, {solid_state});
 
   CAPTURE(off.elapsed_ns, on.elapsed_ns, off.disk.disk_reads,
           on.disk.disk_reads, off.disk.unannounced_reads,
@@ -138,11 +138,11 @@ TEMPLATE_TEST_CASE_SIG(
   without_lane.tuning.walk.read_ahead_runs = 0;
 
   const ReadAhead::TimedRun off = ReadAhead::ListOnSimulatedDisk<S>(
-      image, without_lane, window, large_budget, hard_disk,
-      Tuning::MediaKind::Rotational);
+      image, without_lane, window, large_budget,
+      {hard_disk, Tuning::MediaKind::Rotational});
   const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
-      image, {}, window, large_budget, hard_disk,
-      Tuning::MediaKind::Rotational);
+      image, {}, window, large_budget,
+      {hard_disk, Tuning::MediaKind::Rotational});
 
   CAPTURE(off.elapsed_ns, on.elapsed_ns);
   CHECK(on.run.text == off.run.text);
