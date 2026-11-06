@@ -78,24 +78,28 @@ std::optional<DWORD> DecodeClusterSize(BYTE spc, WORD sector_size) {
 // message naming each offender, kept when recover is true. not_used3 is
 // not checked: many volumes hold 0x80008000 there.
 bool ParseReservedFields(const Data::NtfsBpb& bpb, bool recover) {
-  const auto all_zero = [](const auto& field) {
-    const auto* bytes = reinterpret_cast<const BYTE*>(&field);
-    return std::ranges::all_of(std::span(bytes, sizeof(field)),
+  // Takes an address and a size, not a reference: the BPB is packed, so a
+  // reference to a WORD field can bind to a misaligned address (UB).
+  const auto all_zero = [](const void* field, std::size_t size) {
+    const auto* bytes = static_cast<const BYTE*>(field);
+    return std::ranges::all_of(std::span(bytes, size),
                                [](BYTE byte) { return byte == 0; });
   };
 
   std::string offenders;
-  const auto note = [&](const auto& field, std::string_view name) {
-    if (!all_zero(field)) {
+  const auto note = [&](const void* field, std::size_t size,
+                        std::string_view name) {
+    if (!all_zero(field, size)) {
       offenders += offenders.empty() ? "" : ", ";
       offenders += name;
     }
   };
-  note(bpb.reserved_sectors, "reserved_sectors (0x0E)");
-  note(bpb.zeros1, "fat_count_and_root_entries (0x10)");
-  note(bpb.not_used1, "small_sectors (0x13)");
-  note(bpb.zeros2, "sectors_per_fat (0x16)");
-  note(bpb.not_used2, "large_sectors (0x20)");
+  note(&bpb.reserved_sectors, sizeof(bpb.reserved_sectors),
+       "reserved_sectors (0x0E)");
+  note(&bpb.zeros1, sizeof(bpb.zeros1), "fat_count_and_root_entries (0x10)");
+  note(&bpb.not_used1, sizeof(bpb.not_used1), "small_sectors (0x13)");
+  note(&bpb.zeros2, sizeof(bpb.zeros2), "sectors_per_fat (0x16)");
+  note(&bpb.not_used2, sizeof(bpb.not_used2), "large_sectors (0x20)");
 
   if (offenders.empty()) {
     return true;

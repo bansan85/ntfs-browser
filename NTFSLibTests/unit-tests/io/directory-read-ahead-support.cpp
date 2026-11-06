@@ -392,9 +392,13 @@ std::vector<TreeFixture> Fixtures() {
 }
 
 std::vector<VolumeOptions> AllOptions() {
-  return {VolumeOptions{}, VolumeOptions{.recover_errors = true},
-          VolumeOptions{.include_deleted = true},
-          VolumeOptions{.include_deleted = true, .recover_errors = true}};
+  std::vector<VolumeOptions> options;
+  options.push_back(VolumeOptions{});
+  options.push_back(VolumeOptions{.recover_errors = true});
+  options.push_back(VolumeOptions{.include_deleted = true});
+  options.push_back(
+      VolumeOptions{.include_deleted = true, .recover_errors = true});
+  return options;
 }
 
 template <Cache::Strategy S>

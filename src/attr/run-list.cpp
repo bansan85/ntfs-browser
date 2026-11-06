@@ -307,10 +307,22 @@ bool RunList::AppendDataRun(ULONGLONG length,
   Data::RunEntry data_run;
   data_run.lcn = lcn_offset ? std::optional<ULONGLONG>{cursor.lcn}
                             : std::optional<ULONGLONG>{};
+  // The VCNs of a run MUST NOT wrap past 2^64.
+  if (length > std::numeric_limits<ULONGLONG>::max() - cursor.vcn) {
+    Log::Recoverable(recover, "DataRun decode error: VCN wraps");
+    if (!recover) {
+      throw std::runtime_error("Data run VCNs wrap past 2^64.\n");
+    }
+    return false;
+  }
+
   data_run.clusters = length;
   data_run.start_vcn = cursor.vcn;
   cursor.vcn += length;
-  data_run.last_vcn = cursor.vcn - 1;
+  // An empty run at VCN 0 has no last VCN: it gets the largest one, past any
+  // bound. The extents report it as incomplete, so it is kept, not rejected.
+  data_run.last_vcn =
+      cursor.vcn == 0 ? std::numeric_limits<ULONGLONG>::max() : cursor.vcn - 1;
 
   if (data_run.last_vcn > cursor.vcn_bound) {
     Log::Recoverable(recover, "DataRun decode error: VCN exceeds bound");

@@ -102,6 +102,87 @@ class Parser {
     return false;
   }
 
+  // A short decimal, -?d+[.d+][(e|E)[+-]d+], whose mantissa has at most 15
+  // digits and whose power of ten stays within 10^22. Mantissa and power are
+  // exact doubles, so one multiplication or division gives the value from_chars
+  // gives: both round correctly. Anything else is left to from_chars.
+  static bool ParseShortDecimal(const char* first, const char* last,
+                                double& out) {
+    bool negative = false;
+    if (first != last && *first == '-') {
+      negative = true;
+      ++first;
+    }
+    if (first == last || *first == '.') {
+      return false;
+    }
+    std::int64_t mantissa = 0;
+    int digits = 0;
+    int fraction = 0;
+    bool after_dot = false;
+    const char* p = first;
+    for (; p != last && *p != 'e' && *p != 'E'; ++p) {
+      if (*p == '.') {
+        if (after_dot) {
+          return false;
+        }
+        after_dot = true;
+        continue;
+      }
+      if (*p < '0' || *p > '9' || ++digits > 15) {
+        return false;
+      }
+      mantissa = mantissa * 10 + (*p - '0');
+      if (after_dot) {
+        ++fraction;
+      }
+    }
+    // A mantissa needs a digit: "e5" and "1." are not numbers.
+    if (digits == 0 || (after_dot && fraction == 0)) {
+      return false;
+    }
+    int exponent = 0;
+    if (p != last) {
+      ++p;
+      bool exponent_negative = false;
+      if (p != last && (*p == '+' || *p == '-')) {
+        exponent_negative = *p == '-';
+        ++p;
+      }
+      if (p == last) {
+        return false;
+      }
+      for (; p != last; ++p) {
+        if (*p < '0' || *p > '9' || exponent > 100) {
+          return false;
+        }
+        exponent = exponent * 10 + (*p - '0');
+      }
+      if (exponent_negative) {
+        exponent = -exponent;
+      }
+    }
+    const int power = exponent - fraction;
+    if (power < -22 || power > 22) {
+      return false;
+    }
+    double scale = 1.0;
+    for (int i = 0; i < (power < 0 ? -power : power); ++i) {
+      scale *= 10.0;
+    }
+    const double magnitude = static_cast<double>(mantissa);
+    out = power < 0 ? magnitude / scale : magnitude * scale;
+    if (negative) {
+      out = -out;
+    }
+    return true;
+  }
+
+  // nsan cannot follow from_chars into a double: a value past int64 has no
+  // shadow, so its store is reported. Only this parse is exempt from the check.
+#if defined(__clang__)
+  __attribute__((no_sanitize("numerical")))
+#endif
   bool ParseNumber(JsonValue& value) {
     const std::size_t start = position_;
     while (position_ < text_.size() &&
@@ -114,9 +195,24 @@ class Parser {
     if (position_ == start) {
       return Fail("a value was expected");
     }
-    double parsed = 0;
     const char* const first = text_.data() + start;
     const char* const last = text_.data() + position_;
+    // A whole number is read as an integer and converted: from_chars writes a
+    // double without the shadow nsan keeps for it, so the conversion is the
+    // store nsan can follow. Profiles hold whole numbers only.
+    std::int64_t whole = 0;
+    const auto [whole_end, whole_error] = std::from_chars(first, last, whole);
+    if (whole_error == std::errc{} && whole_end == last) {
+      value.kind = JsonValue::Kind::Number;
+      value.number = static_cast<double>(whole);
+      return true;
+    }
+    double parsed = 0;
+    if (ParseShortDecimal(first, last, parsed)) {
+      value.kind = JsonValue::Kind::Number;
+      value.number = parsed;
+      return true;
+    }
     const auto [end, error] = std::from_chars(first, last, parsed);
     if (error != std::errc{} || end != last || !std::isfinite(parsed)) {
       position_ = start;

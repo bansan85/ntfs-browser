@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -157,12 +158,14 @@ TEST_CASE("extents are clamped to the volume", "[alloc][bad-list]") {
   }
 
   SECTION("an extent that overflows 64 bits is cut, not wrapped") {
+    // The last five values of 64 bits, so the extent ends past 2^64.
+    constexpr ULONGLONG near_top = std::numeric_limits<ULONGLONG>::max() - 4;
     const auto list = BadClusterList::Build(
-        Stream({{.lcn = ULONGLONG{0} - 5, .clusters = 100}}), 0, true);
+        Stream({{.lcn = near_top, .clusters = 100}}), 0, true);
 
     REQUIRE(list != nullptr);
     REQUIRE(list->Get().extents.size() == 1);
-    CHECK(list->Get().extents.front().lcn == ULONGLONG{0} - 5);
+    CHECK(list->Get().extents.front().lcn == near_top);
     CHECK(list->Get().extents.front().clusters == 4);
   }
 }
@@ -268,7 +271,7 @@ TEST_CASE("a list is found by position", "[alloc][bad-list]") {
   }
 
   SECTION("a range wider than the list counts every cluster once") {
-    CHECK(list->CountIn(0, ULONGLONG{0} - 1) == 1000);
+    CHECK(list->CountIn(0, std::numeric_limits<ULONGLONG>::max()) == 1000);
   }
 
   SECTION("a range cuts an extent") {

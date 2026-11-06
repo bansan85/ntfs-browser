@@ -122,6 +122,10 @@ class RecordSet {
   static constexpr std::size_t first_capacity = 64;
 
   // The slot that holds record, or the free one where it would go.
+#ifdef __clang__
+  // The product wraps on purpose: the hash keeps its high bits mod 2^64.
+  __attribute__((no_sanitize("unsigned-integer-overflow")))
+#endif
   [[nodiscard]] std::size_t SlotOf(ULONGLONG record) const noexcept {
     // 2^64 divided by the golden ratio: it spreads the low bits of a record
     // number, which are all that differs between the records of a directory.

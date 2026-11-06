@@ -165,12 +165,17 @@ constexpr std::array<VolumeOptions, 3> volume_option_modes{
     VolumeOptions{.max_cache_bytes = eviction_ceiling}};
 
 // Calls every getter of a directory entry's name, the comparisons included.
+// The sums below are a sink: they wrap, and nothing reads the result.
+#ifdef __clang__
+__attribute__((no_sanitize("unsigned-integer-overflow")))
+#endif
 void ReadFilename(const NTFS_BROWSER_NAMESPACE::Filename& name) {
   ULONGLONG seen = name.GetFileSize() + name.GetAllocatedSize() +
                    name.GetParentReference() + name.GetParentSequenceNumber() +
                    name.GetFilename().size();
   seen += static_cast<ULONGLONG>(name.GetFilePermission());
-  seen += static_cast<ULONGLONG>(name.Compare(L"ABC"));
+  // XOR, not +: Compare returns a signed value, and the sum must not wrap.
+  seen ^= static_cast<ULONGLONG>(name.Compare(L"ABC"));
   seen += static_cast<ULONGLONG>(name.HasName()) +
           static_cast<ULONGLONG>(name.IsWin32Name()) +
           static_cast<ULONGLONG>(name.IsReadOnly()) +
@@ -642,12 +647,19 @@ void ProbeVolume(NtfsVolume<S>& volume) {
 constexpr std::uint64_t digest_basis = 14'695'981'039'346'656'037ULL;
 constexpr std::uint64_t digest_prime = 1'099'511'628'211ULL;
 
+#ifdef __clang__
+__attribute__((no_sanitize("unsigned-integer-overflow")))
+#endif
+static std::uint64_t FnvStep(std::uint64_t digest, std::uint64_t value) {
+  return (digest ^ value) * digest_prime;
+}
+
 // A digest of everything the tree says, entries and statistics: two scans of
 // one input that give the same tree give the same digest.
 std::uint64_t Digest(const MftTree& tree) {
   std::uint64_t digest = digest_basis;
   const auto mix = [&digest](std::uint64_t value) {
-    digest = (digest ^ value) * digest_prime;
+    digest = FnvStep(digest, value);
   };
   const auto mix_time = [&mix](const FILETIME& time) {
     mix(time.dwLowDateTime);
@@ -765,7 +777,7 @@ std::uint64_t AccountDigest(const MftTree& tree) {
   constexpr ULONGLONG probed_cluster_size = 4096;
   std::uint64_t digest = digest_basis;
   const auto mix = [&digest](std::uint64_t value) {
-    digest = (digest ^ value) * digest_prime;
+    digest = FnvStep(digest, value);
   };
   const auto mix_tally = [&mix](const Alloc::ClusterTally& tally) {
     for (const ULONGLONG count : tally.counts) {

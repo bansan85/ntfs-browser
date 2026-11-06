@@ -116,6 +116,12 @@ TEST_CASE("UtcTicksToLocalTime reaches the FILETIME epoch",
 
   const std::optional<LocalTime> local = UtcTicksToLocalTime(0);
 
+  // A 32-bit std::time_t cannot hold 1601 (off Windows): the conversion refuses
+  // it.
+  if (sizeof(std::time_t) < 8) {
+    CHECK_FALSE(local.has_value());
+    return;
+  }
   REQUIRE(local.has_value());
   CHECK(local->year == 1601);
   CHECK(local->month == 1);

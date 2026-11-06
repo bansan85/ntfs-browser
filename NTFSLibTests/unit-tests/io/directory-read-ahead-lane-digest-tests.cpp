@@ -61,6 +61,10 @@ constexpr std::uint64_t fnv_prime = 0x100000001B3ULL;
 
 // Folds the eight bytes of value into hash, least significant first, so that
 // the digest does not depend on the platform.
+#ifdef __clang__
+// The product wraps on purpose, as FNV does.
+__attribute__((no_sanitize("unsigned-integer-overflow")))
+#endif
 void Fold(std::uint64_t& hash, std::uint64_t value) {
   // Bits in a byte.
   constexpr unsigned byte_bits = 8;

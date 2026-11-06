@@ -44,6 +44,12 @@ ALL_NAMES=(asan asan-shared asan-ptr ubsan tsan msan cfi scudo hwasan nsan)
 
 # -O1 keeps stack traces readable; TySan needs optimisation to emit TBAA.
 BASE_FLAGS="-O1 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls"
+# CI runs on Ubuntu 24.04, whose libstdc++ is GCC 13. A newer GCC installed beside it is
+# picked by clang 23 instead: its headers break the constexpr rules of -D_GLIBCXX_DEBUG.
+GCC_INSTALL_FLAG=""
+if [ -d /usr/lib/gcc/x86_64-linux-gnu/13 ]; then
+  GCC_INSTALL_FLAG="--gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13"
+fi
 
 ASAN_FLAGS="-fsanitize=address,undefined,float-divide-by-zero,local-bounds,vptr -fsanitize-address-use-after-return=always -fno-sanitize-recover=all -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_SANITIZE_STD_ALLOCATOR -D_GLIBCXX_SANITIZE_VECTOR"
 
@@ -55,6 +61,8 @@ ASAN_FLAGS="-fsanitize=address,undefined,float-divide-by-zero,local-bounds,vptr 
 #   end_of_storage - finish (libstdc++) is reported as a pair of unrelated objects.
 # - the ignorelist below: std::less<T*> is the one sanctioned cross-object pointer comparison
 #   (string::_M_disjunct, shared_ptr::owner_before), but libstdc++ builds it on a plain '<'.
+#   std::distance (lower_bound over a table, the unicode width tables) subtracts an end pointer
+#   that is one past a global or stack array: ASan reports it as a pair of unrelated objects.
 ASAN_PTR_FLAGS="-O0 -U_GLIBCXX_SANITIZE_VECTOR -U_GLIBCXX_SANITIZE_STD_ALLOCATOR -fsanitize=pointer-compare,pointer-subtract -fsanitize-ignorelist=$ASAN_IGNORELIST"
 
 mkdir -p "$ROOT" "$LOGS"
@@ -63,8 +71,10 @@ cat >"$IGNORELIST" <<'EOF'
 src:*/3rdparty/*
 src:*/include/c++/*
 EOF
+# The inlined std::distance of a unicode table reports at the caller's file (bits/unicode.h,
+# bits/stl_algobase.h), so the whole libstdc++ is ignored for pointer checks, as in UBSan.
 cat >"$ASAN_IGNORELIST" <<'EOF'
-src:*/bits/stl_function.h
+src:*/include/c++/*
 EOF
 # libstdc++'s make_shared/allocate_shared cast raw storage to T* before the vtable is set.
 cat >"$CFI_IGNORELIST" <<'EOF'
@@ -156,8 +166,8 @@ do_configure() {
     arch_f="-m32 -march=i686"
     arch_cmake=(-DCMAKE_SYSTEM_PROCESSOR=i686)
   fi
-  F="$arch_f $F"
-  [ -n "${LF:-}" ] && LF="$arch_f $LF"
+  F="$arch_f $GCC_INSTALL_FLAG $F"
+  [ -n "${LF:-}" ] && LF="$arch_f $GCC_INSTALL_FLAG $LF"
   cmake -S "$REPO" -B "$(bdir "$n")" -G Ninja -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23 \
     -DCMAKE_AR=/usr/bin/llvm-ar-23 -DCMAKE_AS=/usr/bin/llvm-as-23 -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-23 \

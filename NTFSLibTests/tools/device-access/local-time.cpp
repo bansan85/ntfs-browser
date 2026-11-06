@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <limits>
 #include <optional>
 
 #ifndef _WIN32
@@ -51,6 +52,14 @@ std::optional<LocalTime> UtcTicksToLocalTime(ULONGLONG ticks) {
 #else
   const auto seconds = static_cast<LONGLONG>(ticks / ticks_per_second) -
                        unix_epoch_offset_seconds;
+  // A 32-bit time_t wraps a date before 1970 or after 2038 into another one:
+  // refuse it.
+  if (seconds <
+          static_cast<LONGLONG>(std::numeric_limits<std::time_t>::min()) ||
+      seconds >
+          static_cast<LONGLONG>(std::numeric_limits<std::time_t>::max())) {
+    return std::nullopt;
+  }
   const auto unix_time = static_cast<std::time_t>(seconds);
 
   std::tm local{};
