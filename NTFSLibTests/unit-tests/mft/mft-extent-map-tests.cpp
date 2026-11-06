@@ -133,6 +133,26 @@ void CheckSplitContinuationRefused(std::vector<BYTE> image) {
   CHECK_FALSE(CanReadRecord(*volume, Tests::mft_data_split_target_idx));
 }
 
+// The DATA attribute of the split fixture's continuation record.
+size_t SplitContinuationAttr(const std::vector<BYTE>& image) {
+  return FirstAttr(image, Tests::mft_data_split_ext_idx, Attr::Type::Data);
+}
+
+// The two DATA extents of the two-extents fixture's continuation record.
+std::vector<size_t> TwoExtentsAttrs(const std::vector<BYTE>& image) {
+  std::vector<size_t> extents =
+      AttrOffsets(image, Tests::mft_two_extents_ext_idx, Attr::Type::Data);
+  REQUIRE(extents.size() == 2);
+  return extents;
+}
+
+// Gives the non-resident attribute at attr the VCN range [lowest, highest].
+void SetVcnRange(std::vector<BYTE>& image, size_t attr, ULONGLONG lowest,
+                 ULONGLONG highest) {
+  Store<ULONGLONG>(image, attr + attr_lowest_vcn_field, lowest);
+  Store<ULONGLONG>(image, attr + attr_highest_vcn_field, highest);
+}
+
 // Zeroes the one cluster at lcn.
 void ZeroCluster(std::vector<BYTE>& image, DWORD lcn) {
   const auto begin = static_cast<std::ptrdiff_t>(static_cast<size_t>(lcn) *
@@ -193,18 +213,14 @@ TEMPLATE_TEST_CASE_SIG("$MFT rejects a DATA continuation it cannot map",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("named continuation") {
     std::vector<BYTE> image = SplitImage();
-    Store<BYTE>(
-        image,
-        FirstAttr(image, Tests::mft_data_split_ext_idx, Attr::Type::Data) +
-            attr_name_length_field,
-        1);
+    Store<BYTE>(image, SplitContinuationAttr(image) + attr_name_length_field,
+                1);
     CheckSplitContinuationRefused<S>(std::move(image));
   }
 
   SECTION("inverted VCN range") {
     std::vector<BYTE> image = SplitImage();
-    const size_t attr =
-        FirstAttr(image, Tests::mft_data_split_ext_idx, Attr::Type::Data);
+    const size_t attr = SplitContinuationAttr(image);
     const auto lowest = Load<ULONGLONG>(image, attr + attr_lowest_vcn_field);
     Store<ULONGLONG>(image, attr + attr_highest_vcn_field, lowest - 1);
     CheckSplitContinuationRefused<S>(std::move(image));
@@ -212,10 +228,8 @@ TEMPLATE_TEST_CASE_SIG("$MFT rejects a DATA continuation it cannot map",
 
   SECTION("start VCN its $ATTRIBUTE_LIST entry does not name") {
     std::vector<BYTE> image = SplitImage();
-    const size_t attr =
-        FirstAttr(image, Tests::mft_data_split_ext_idx, Attr::Type::Data);
-    Store<ULONGLONG>(image, attr + attr_lowest_vcn_field, unlisted_start_vcn);
-    Store<ULONGLONG>(image, attr + attr_highest_vcn_field, unlisted_start_vcn);
+    SetVcnRange(image, SplitContinuationAttr(image), unlisted_start_vcn,
+                unlisted_start_vcn);
     CheckSplitContinuationRefused<S>(std::move(image));
   }
 
@@ -230,13 +244,8 @@ TEMPLATE_TEST_CASE_SIG("$MFT rejects a DATA continuation it cannot map",
 
   SECTION("continuation overlapping the extent before it") {
     std::vector<BYTE> image = TwoExtentsImage();
-    const std::vector<size_t> extents =
-        AttrOffsets(image, Tests::mft_two_extents_ext_idx, Attr::Type::Data);
-    REQUIRE(extents.size() == 2);
-    Store<ULONGLONG>(image, extents[1] + attr_lowest_vcn_field,
-                     overlapping_start_vcn);
-    Store<ULONGLONG>(image, extents[1] + attr_highest_vcn_field,
-                     overlapping_start_vcn);
+    SetVcnRange(image, TwoExtentsAttrs(image)[1], overlapping_start_vcn,
+                overlapping_start_vcn);
     // If the overlapping extent were accepted, VCN 16 would read this cluster.
     ZeroCluster(image, Tests::mft_two_extents_second_lcn);
     const auto volume = Mount<S>(std::move(image));
@@ -246,15 +255,11 @@ TEMPLATE_TEST_CASE_SIG("$MFT rejects a DATA continuation it cannot map",
 
   SECTION("continuation overlapping the extent after it") {
     std::vector<BYTE> image = TwoExtentsImage();
-    const std::vector<size_t> extents =
-        AttrOffsets(image, Tests::mft_two_extents_ext_idx, Attr::Type::Data);
-    REQUIRE(extents.size() == 2);
+    const std::vector<size_t> extents = TwoExtentsAttrs(image);
     // The record's first extent is added first, at VCN 32. The second one
     // then reaches VCN 40, past it, and is refused.
-    Store<ULONGLONG>(image, extents[0] + attr_lowest_vcn_field,
-                     Tests::mft_two_extents_second_vcn);
-    Store<ULONGLONG>(image, extents[0] + attr_highest_vcn_field,
-                     Tests::mft_two_extents_second_vcn);
+    SetVcnRange(image, extents[0], Tests::mft_two_extents_second_vcn,
+                Tests::mft_two_extents_second_vcn);
     Store<ULONGLONG>(image, extents[1] + attr_highest_vcn_field,
                      Tests::mft_two_extents_second_vcn + 8);
     const auto volume = Mount<S>(std::move(image));

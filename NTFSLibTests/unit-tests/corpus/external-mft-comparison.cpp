@@ -155,11 +155,10 @@ void NoteUnlistedNames(
   }
 }
 
-}  // namespace
-
-std::string FirstDifference(const Mft::MftTree::Entry& left,
-                            const Mft::MftTree::Entry& right,
-                            bool strict_left) {
+// The first difference in what an entry is: its record, flags and names.
+std::string FirstIdentityDifference(const Mft::MftTree::Entry& left,
+                                    const Mft::MftTree::Entry& right,
+                                    bool strict_left) {
   if (left.record != right.record) {
     return "record";
   }
@@ -176,6 +175,12 @@ std::string FirstDifference(const Mft::MftTree::Entry& left,
   if (const auto name = FirstDifferentName(left, right, strict_left)) {
     return "name " + std::to_string(*name);
   }
+  return {};
+}
+
+// The first difference in what an entry holds: sizes, times and data.
+std::string FirstContentDifference(const Mft::MftTree::Entry& left,
+                                   const Mft::MftTree::Entry& right) {
   if (std::tie(left.size, left.allocated_size) !=
       std::tie(right.size, right.allocated_size)) {
     return "size";
@@ -193,6 +198,18 @@ std::string FirstDifference(const Mft::MftTree::Entry& left,
     return "usn";
   }
   return {};
+}
+
+}  // namespace
+
+std::string FirstDifference(const Mft::MftTree::Entry& left,
+                            const Mft::MftTree::Entry& right,
+                            bool strict_left) {
+  if (std::string field = FirstIdentityDifference(left, right, strict_left);
+      !field.empty()) {
+    return field;
+  }
+  return FirstContentDifference(left, right);
 }
 
 std::string FirstDifference(const Mft::MftTree& left,

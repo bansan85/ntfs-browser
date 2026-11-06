@@ -45,13 +45,18 @@ FakeAccountFile Subject(ULONGLONG lsn = 100) {
   return Freed(lsn, Stream({{40, 4}}, 4 * cluster));
 }
 
+// The freed file, with a valid data length that stops one cluster short.
+FakeAccountFile SubjectWithShortValidData() {
+  FakeAccountFile subject = Subject();
+  subject.streams.front().ini_size = 3 * cluster;
+  return subject;
+}
+
 // A freed file over a live file's cluster, a freed file that was freed later,
 // a bad cluster, and a file's own valid data length that stops short.
 std::vector<BYTE> FreedClaims() {
   Support::Volume volume;
-  FakeAccountFile subject = Subject();
-  subject.streams.front().ini_size = 3 * cluster;
-  volume.Put(22, subject);
+  volume.Put(22, SubjectWithShortValidData());
   volume.Put(23, Freed(200, Stream({{41, 1}}, cluster)));
   volume.Put(17, Live(Stream({{42, 1}}, cluster)));
   volume.allocated = {FakeDataRun{.lcn = 42, .clusters = 2}};

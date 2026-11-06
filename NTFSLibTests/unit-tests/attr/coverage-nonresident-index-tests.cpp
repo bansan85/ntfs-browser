@@ -256,6 +256,24 @@ void CheckBlockEntryHidden(std::vector<BYTE> image) {
                   .has_value());
 }
 
+// Damages the $INDEX_ROOT image with `damage`, then checks strict and
+// recovering parsing.
+template <Cache::Strategy S, typename Damage>
+void CheckRootDamage(ULONGLONG idx, Damage damage) {
+  auto image = IndexRootImage();
+  damage(image);
+  CheckStrictRejectsRecoveringAccepts<S>(image, idx);
+}
+
+// Damages a forged block image holding a valid block with `damage`, then
+// checks that the block hides its entry.
+template <Cache::Strategy S, typename Damage>
+void CheckBlockDamage(Damage damage) {
+  auto image = ImageWithValidIndexBlock();
+  damage(image);
+  CheckBlockEntryHidden<S>(std::move(image));
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -266,46 +284,46 @@ TEMPLATE_TEST_CASE_SIG(
       NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_dir_idx;
 
   SECTION("entry_offset points past the attribute") {
-    auto image = IndexRootImage();
-    WriteAt<DWORD>(image,
-                   IndexRootBody(image, idx) +
-                       offsetof(Data::IndexRoot, entry_offset),
-                   0xFFFFFFF0U);
-    CheckStrictRejectsRecoveringAccepts<S>(image, idx);
+    CheckRootDamage<S>(idx, [&](std::vector<BYTE>& image) {
+      WriteAt<DWORD>(image,
+                     IndexRootBody(image, idx) +
+                         offsetof(Data::IndexRoot, entry_offset),
+                     0xFFFFFFF0U);
+    });
   }
 
   SECTION("an entry of size zero") {
-    auto image = IndexRootImage();
-    WriteAt<WORD>(image,
-                  RootFirstEntry(image, IndexRootBody(image, idx)) +
-                      offsetof(Data::IndexEntry, size),
-                  0);
-    CheckStrictRejectsRecoveringAccepts<S>(image, idx);
+    CheckRootDamage<S>(idx, [&](std::vector<BYTE>& image) {
+      WriteAt<WORD>(image,
+                    RootFirstEntry(image, IndexRootBody(image, idx)) +
+                        offsetof(Data::IndexEntry, size),
+                    0);
+    });
   }
 
   SECTION("an entry larger than the rest of the attribute") {
-    auto image = IndexRootImage();
-    WriteAt<WORD>(image,
-                  RootFirstEntry(image, IndexRootBody(image, idx)) +
-                      offsetof(Data::IndexEntry, size),
-                  0xFFFF);
-    CheckStrictRejectsRecoveringAccepts<S>(image, idx);
+    CheckRootDamage<S>(idx, [&](std::vector<BYTE>& image) {
+      WriteAt<WORD>(image,
+                    RootFirstEntry(image, IndexRootBody(image, idx)) +
+                        offsetof(Data::IndexEntry, size),
+                    0xFFFF);
+    });
   }
 
   SECTION("entries that overrun the declared total entry size") {
-    auto image = IndexRootImage();
-    WriteAt<DWORD>(image,
-                   IndexRootBody(image, idx) +
-                       offsetof(Data::IndexRoot, total_entry_size),
-                   1);
-    CheckStrictRejectsRecoveringAccepts<S>(image, idx);
+    CheckRootDamage<S>(idx, [&](std::vector<BYTE>& image) {
+      WriteAt<DWORD>(image,
+                     IndexRootBody(image, idx) +
+                         offsetof(Data::IndexRoot, total_entry_size),
+                     1);
+    });
   }
 
   SECTION("the last entry lacks its Last flag, so the list runs out") {
-    auto image = IndexRootImage();
-    const size_t last = RootLastEntry(image, IndexRootBody(image, idx));
-    WriteAt<BYTE>(image, last + offsetof(Data::IndexEntry, flags), 0);
-    CheckStrictRejectsRecoveringAccepts<S>(image, idx);
+    CheckRootDamage<S>(idx, [&](std::vector<BYTE>& image) {
+      const size_t last = RootLastEntry(image, IndexRootBody(image, idx));
+      WriteAt<BYTE>(image, last + offsetof(Data::IndexEntry, flags), 0);
+    });
   }
 
   SECTION("a resident value shorter than an IndexRoot header") {
@@ -341,83 +359,84 @@ TEMPLATE_TEST_CASE_SIG(
   const ULONGLONG idx = NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx;
 
   SECTION("a sub-node VCN that overflows the byte offset") {
-    auto image = ImageWithValidIndexBlock();
-    WriteAt<ULONGLONG>(image, RootSubNodeVcnSlot(image, idx), ~ULONGLONG{0});
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([&](std::vector<BYTE>& image) {
+      WriteAt<ULONGLONG>(image, RootSubNodeVcnSlot(image, idx), ~ULONGLONG{0});
+    });
   }
 
   SECTION("a sub-node VCN that is not on a block boundary") {
-    auto image = ImageWithValidIndexBlock();
-    WriteAt<ULONGLONG>(image, RootSubNodeVcnSlot(image, idx), 1);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([&](std::vector<BYTE>& image) {
+      WriteAt<ULONGLONG>(image, RootSubNodeVcnSlot(image, idx), 1);
+    });
   }
 
   SECTION("a block without the INDX magic") {
-    auto image = ImageWithValidIndexBlock();
-    WriteAt<DWORD>(image,
-                   IndexBlockOffset() + offsetof(Data::IndexBlock, magic), 0);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([](std::vector<BYTE>& image) {
+      WriteAt<DWORD>(image,
+                     IndexBlockOffset() + offsetof(Data::IndexBlock, magic), 0);
+    });
   }
 
   SECTION("entry_offset points past the end of the block") {
-    auto image = ImageWithValidIndexBlock();
-    WriteAt<DWORD>(
-        image, IndexBlockOffset() + offsetof(Data::IndexBlock, entry_offset),
-        0xFFFFFF);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([](std::vector<BYTE>& image) {
+      WriteAt<DWORD>(
+          image, IndexBlockOffset() + offsetof(Data::IndexBlock, entry_offset),
+          0xFFFFFF);
+    });
   }
 
   SECTION("the last entry lacks its Last flag and fills the block") {
-    auto image = ImageWithValidIndexBlock();
-    const size_t entry = IndexBlockOffset() + block_entries_offset;
-    const auto fill = static_cast<WORD>(test_block_size - block_entries_offset);
-    WriteAt<WORD>(image, entry + offsetof(Data::IndexEntry, size), fill);
-    WriteAt<DWORD>(image,
-                   IndexBlockOffset() +
-                       offsetof(Data::IndexBlock, total_entry_size),
-                   fill);
-    WriteAt<BYTE>(image, entry + offsetof(Data::IndexEntry, flags), 0);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([](std::vector<BYTE>& image) {
+      const size_t entry = IndexBlockOffset() + block_entries_offset;
+      const auto fill =
+          static_cast<WORD>(test_block_size - block_entries_offset);
+      WriteAt<WORD>(image, entry + offsetof(Data::IndexEntry, size), fill);
+      WriteAt<DWORD>(image,
+                     IndexBlockOffset() +
+                         offsetof(Data::IndexBlock, total_entry_size),
+                     fill);
+      WriteAt<BYTE>(image, entry + offsetof(Data::IndexEntry, flags), 0);
+    });
   }
 
   SECTION("entries that overrun the block's declared total entry size") {
-    auto image = ImageWithValidIndexBlock();
-    WriteAt<DWORD>(
-        image,
-        IndexBlockOffset() + offsetof(Data::IndexBlock, total_entry_size), 8);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([](std::vector<BYTE>& image) {
+      WriteAt<DWORD>(
+          image,
+          IndexBlockOffset() + offsetof(Data::IndexBlock, total_entry_size), 8);
+    });
   }
 
   SECTION("an entry whose stream does not fit its size") {
-    auto image = ImageWithValidIndexBlock();
-    const size_t entry = IndexBlockOffset() + block_entries_offset;
-    WriteAt<WORD>(image, entry + offsetof(Data::IndexEntry, stream_size), 4);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([](std::vector<BYTE>& image) {
+      const size_t entry = IndexBlockOffset() + block_entries_offset;
+      WriteAt<WORD>(image, entry + offsetof(Data::IndexEntry, stream_size), 4);
+    });
   }
 
   SECTION("a sub-node entry too small to hold its VCN") {
-    auto image = ImageWithValidIndexBlock();
-    const size_t entry = IndexBlockOffset() + block_entries_offset;
-    WriteAt<BYTE>(image, entry + offsetof(Data::IndexEntry, flags),
-                  static_cast<BYTE>(Data::IndexEntryFlag::SubNode) |
-                      last_entry_flag);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([](std::vector<BYTE>& image) {
+      const size_t entry = IndexBlockOffset() + block_entries_offset;
+      WriteAt<BYTE>(image, entry + offsetof(Data::IndexEntry, flags),
+                    static_cast<BYTE>(Data::IndexEntryFlag::SubNode) |
+                        last_entry_flag);
+    });
   }
 
   SECTION("a block whose run points past the end of the image") {
-    auto image = ImageWithValidIndexBlock();
-    WriteAt<DWORD>(image, FirstRunOffset(image, ForgedAllocAttr(image)) + 2,
-                   0x00FFFFFF);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([](std::vector<BYTE>& image) {
+      WriteAt<DWORD>(image, FirstRunOffset(image, ForgedAllocAttr(image)) + 2,
+                     0x00FFFFFF);
+    });
   }
 
   SECTION("an allocation whose size is not a whole number of blocks") {
-    auto image = ImageWithValidIndexBlock();
-    WriteAt<ULONGLONG>(
-        image,
-        ForgedAllocAttr(image) + offsetof(Data::HeaderNonResident, real_size),
-        test_block_size + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
-    CheckBlockEntryHidden<S>(std::move(image));
+    CheckBlockDamage<S>([](std::vector<BYTE>& image) {
+      WriteAt<ULONGLONG>(
+          image,
+          ForgedAllocAttr(image) + offsetof(Data::HeaderNonResident, real_size),
+          test_block_size + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+    });
   }
 }
 

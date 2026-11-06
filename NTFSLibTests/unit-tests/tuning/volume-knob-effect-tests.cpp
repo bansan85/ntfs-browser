@@ -160,9 +160,10 @@ void ReadForwardTwice(const NtfsVolume<Cache::Strategy::NoCache>& volume,
                       ULONGLONG base) {
   std::vector<BYTE> dest(1000);
   LARGE_INTEGER addr{.QuadPart = static_cast<LONGLONG>(base)};
-  REQUIRE(volume.ReadInto(addr, dest));
-  addr.QuadPart += 1000;
-  REQUIRE(volume.ReadInto(addr, dest));
+  for (int read = 0; read < 2; read++) {
+    REQUIRE(volume.ReadInto(addr, dest));
+    addr.QuadPart += static_cast<LONGLONG>(dest.size());
+  }
 }
 
 // The reads the read ahead of a volume made from base on, after two forward

@@ -346,6 +346,25 @@ void CheckSurvivors(const Usn::Journal& found, const Usn::Journal& baseline,
   CHECK(UsnsAscend(found.records));
 }
 
+// Checks the survivors of the intact journal after damage to [begin, end) of
+// a stream of stream_size bytes. Returns the records the damage left alone.
+std::vector<const Usn::Record*> CheckSurvivorsOutside(const Usn::Journal& found,
+                                                      std::uint64_t stream_size,
+                                                      std::uint64_t begin,
+                                                      std::uint64_t end) {
+  const Usn::Journal& baseline = IntactServer2012();
+  auto kept = Untouched(baseline, stream_size, begin, end);
+  CheckSurvivors(found, baseline, kept);
+  return kept;
+}
+
+// Overwrites [begin, end) of stream with zeros.
+void ZeroRange(std::vector<BYTE>& stream, std::uint64_t begin,
+               std::uint64_t end) {
+  std::fill(stream.begin() + static_cast<std::ptrdiff_t>(begin),
+            stream.begin() + static_cast<std::ptrdiff_t>(end), BYTE{0});
+}
+
 // The sample of the intact journal at position index of its list of 20.
 const JournalSample& SampleOf(std::size_t index) {
   return RealJournal::FixtureNamed("Server 2012 R2").samples[index];
@@ -356,14 +375,12 @@ const JournalSample& SampleOf(std::size_t index) {
 TEST_CASE("Damage to a real $J loses only the records it touches",
           "[dfir-corpora][integration][usn]") {
   const Fixture& fixture = RealJournal::FixtureNamed("Server 2012 R2");
-  const Usn::Journal& baseline = IntactServer2012();
   std::vector<BYTE> stream = BytesOf(fixture);
   const std::uint64_t size = stream.size();
 
   SECTION("zeros over the start, ending on a record") {
     const JournalSample& first_kept = SampleOf(3);
-    std::fill_n(stream.begin(), static_cast<std::ptrdiff_t>(first_kept.offset),
-                BYTE{0});
+    ZeroRange(stream, 0, first_kept.offset);
 
     const Usn::Journal found = ReadRecovered(stream, 0);
 
@@ -371,18 +388,17 @@ TEST_CASE("Damage to a real $J loses only the records it touches",
     CHECK(found.records.front().usn == first_kept.usn);
     // Zeros are padding, not damage.
     CHECK(found.damaged_records == 0);
-    CheckSurvivors(found, baseline,
-                   Untouched(baseline, size, 0, first_kept.offset));
+    CheckSurvivorsOutside(found, size, 0, first_kept.offset);
   }
 
   SECTION("zeros over the start, ending inside a record") {
     const JournalSample& hit = SampleOf(3);
     const std::uint64_t end = hit.offset + into_record;
-    std::fill_n(stream.begin(), static_cast<std::ptrdiff_t>(end), BYTE{0});
+    ZeroRange(stream, 0, end);
 
     const Usn::Journal found = ReadRecovered(stream, 0);
 
-    CheckSurvivors(found, baseline, Untouched(baseline, size, 0, end));
+    CheckSurvivorsOutside(found, size, 0, end);
     // The record the zeros end in is the only one lost besides the zeroed.
     CHECK(found.records.size() <= fixture.record_count - hit.index - 1);
     CHECK(found.damaged_records >= 1);
@@ -398,8 +414,7 @@ TEST_CASE("Damage to a real $J loses only the records it touches",
 
     const Usn::Journal found = ReadRecovered(tail, head);
 
-    const auto kept = Untouched(baseline, size, 0, head);
-    CheckSurvivors(found, baseline, kept);
+    const auto kept = CheckSurvivorsOutside(found, size, 0, head);
     // Only the record that straddles the cut is lost.
     CHECK(found.records.size() == kept.size());
     CHECK(found.records.front().usn >= static_cast<LONGLONG>(head));
@@ -413,37 +428,30 @@ TEST_CASE("Damage to a real $J loses only the records it touches",
 
     REQUIRE(found.records.size() == hit.index);
     CHECK(found.damaged_records >= 1);
-    CheckSurvivors(found, baseline,
-                   Untouched(baseline, size, hit.offset, size));
+    CheckSurvivorsOutside(found, size, hit.offset, size);
   }
 
   SECTION("zeros over whole records in the middle") {
     const JournalSample& from = SampleOf(6);
     const JournalSample& to = SampleOf(9);
-    std::fill(stream.begin() + static_cast<std::ptrdiff_t>(from.offset),
-              stream.begin() + static_cast<std::ptrdiff_t>(to.offset), BYTE{0});
+    ZeroRange(stream, from.offset, to.offset);
 
     const Usn::Journal found = ReadRecovered(stream, 0);
 
     REQUIRE(found.records.size() ==
             fixture.record_count - (to.index - from.index));
     CHECK(found.damaged_records == 0);
-    CheckSurvivors(found, baseline,
-                   Untouched(baseline, size, from.offset, to.offset));
+    CheckSurvivorsOutside(found, size, from.offset, to.offset);
   }
 
   SECTION("zeros from inside a record to inside another") {
-    const JournalSample& from = SampleOf(6);
-    const JournalSample& to = SampleOf(9);
-    const std::uint64_t begin = from.offset + into_record;
-    const std::uint64_t end = to.offset + into_record;
-    std::fill(stream.begin() + static_cast<std::ptrdiff_t>(begin),
-              stream.begin() + static_cast<std::ptrdiff_t>(end), BYTE{0});
+    const std::uint64_t begin = SampleOf(6).offset + into_record;
+    const std::uint64_t end = SampleOf(9).offset + into_record;
+    ZeroRange(stream, begin, end);
 
     const Usn::Journal found = ReadRecovered(stream, 0);
 
-    const auto kept = Untouched(baseline, size, begin, end);
-    CheckSurvivors(found, baseline, kept);
+    const auto kept = CheckSurvivorsOutside(found, size, begin, end);
     // The two records the zeros cut into are the only ones that may be lost
     // or altered besides those in the zeroed range.
     CHECK(found.records.size() >= kept.size());
