@@ -151,6 +151,20 @@ bool ReadRange(const Attr::AttrBase<S>& stream, const Alloc::ByteRange& range,
   return read_ok;
 }
 
+// Turns what a read gathered into the journal handed out: the kept records,
+// with their times converted, and the counts of the scan.
+std::unique_ptr<Journal> BuildJournal(ReadState& state) {
+  auto journal = std::make_unique<Journal>(std::move(state.journal));
+  journal->records = state.ring.Take();
+  journal->truncated = state.ring.Truncated();
+  journal->damaged_records = state.scanner.DamagedRecords();
+  journal->skipped_records = state.scanner.SkippedRecords();
+  for (Record& item : journal->records) {
+    ConvertTime(item);
+  }
+  return journal;
+}
+
 // Finds $Extend\$UsnJrnl and reads its $J into journal. Null when a step
 // fails. A step that throws is the caller's to catch.
 template <Cache::Strategy S>
@@ -205,15 +219,7 @@ std::unique_ptr<Journal> ReadJournal(const NtfsVolume<S>& volume) {
     return nullptr;
   }
 
-  auto journal = std::make_unique<Journal>(std::move(state.journal));
-  journal->records = state.ring.Take();
-  journal->truncated = state.ring.Truncated();
-  journal->damaged_records = state.scanner.DamagedRecords();
-  journal->skipped_records = state.scanner.SkippedRecords();
-  for (Record& item : journal->records) {
-    ConvertTime(item);
-  }
-  return journal;
+  return BuildJournal(state);
 }
 
 }  // namespace

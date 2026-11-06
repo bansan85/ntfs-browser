@@ -278,6 +278,18 @@ void CountByKindAndClass(Report& report, ReadKind read_kind, ReadClass cls,
   report.class_wait_ns.at(static_cast<std::size_t>(cls)) += wait_ns;
 }
 
+// Counts one read in the innermost open phase, if any.
+void CountInPhase(State& state, std::uint8_t phase, std::uint64_t length,
+                  std::uint64_t wait_ns) noexcept {
+  if (state.stack.empty()) {
+    return;
+  }
+  PhaseStat& stat = state.phases.at(phase);
+  stat.reads++;
+  stat.read_bytes += length;
+  stat.read_wait_ns += wait_ns;
+}
+
 }  // namespace
 
 void RecordRead(std::uint64_t offset, std::uint64_t length,
@@ -301,12 +313,7 @@ void RecordRead(std::uint64_t offset, std::uint64_t length,
 
   CountByKindAndClass(report, t_kind, cls, length, wait_ns);
 
-  if (!state.stack.empty()) {
-    PhaseStat& stat = state.phases.at(phase);
-    stat.reads++;
-    stat.read_bytes += length;
-    stat.read_wait_ns += wait_ns;
-  }
+  CountInPhase(state, phase, length, wait_ns);
 
   Push(state, {.start_ns = start_ns,
                .end_ns = end_ns,

@@ -31,10 +31,12 @@ void LogDecodedName(const Filename& name, const std::wstring& decoded) {
     return;
   }
   Log::Debug("File Name: {}", Utf::WideToUtf8(decoded));
-  Log::Debug("File Permission: {}	{}{}{}",
-             name.IsDirectory() ? "Directory" : "File",
-             name.IsReadOnly() ? 'R' : ' ', name.IsHidden() ? 'H' : ' ',
-             name.IsSystem() ? 'S' : ' ');
+  const char* const kind = name.IsDirectory() ? "Directory" : "File";
+  const char read_only = name.IsReadOnly() ? 'R' : ' ';
+  const char hidden = name.IsHidden() ? 'H' : ' ';
+  const char system = name.IsSystem() ? 'S' : ' ';
+  Log::Debug("File Permission: {}	{}{}{}", kind, read_only, hidden,
+             system);
 }
 
 }  // namespace
@@ -64,14 +66,7 @@ void Filename::GetFilenameWUC() const {
       reinterpret_cast<const char16_t*>(&filename_->name[0]),
       filename_->name_length));
 
-  // Guarded: this runs once per directory entry, and the UTF-8 conversion
-  // below allocates whether or not anything would print it.
-  if (!filename_wuc_.empty() && Log::IsLogged(Log::Level::Debug)) {
-    Log::Debug("File Name: {}", Utf::WideToUtf8(filename_wuc_));
-    Log::Debug("File Permission: {}\t{}{}{}",
-               IsDirectory() ? "Directory" : "File", IsReadOnly() ? 'R' : ' ',
-               IsHidden() ? 'H' : ' ', IsSystem() ? 'S' : ' ');
-  }
+  LogDecodedName(*this, filename_wuc_);
 }
 
 int Filename::Compare(std::wstring_view file_name) const noexcept {

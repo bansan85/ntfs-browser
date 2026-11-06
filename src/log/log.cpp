@@ -436,6 +436,26 @@ bool IsEnabled(Level level) noexcept {
   }
 }
 
+namespace {
+
+// Writes one line to one sink, if that sink wants it, and flushes it. A sink
+// that fails loses the line and nothing else.
+void WriteToSink(ISink& sink, Level level, std::string_view message) noexcept {
+  try {
+    if (sink.ShouldLog(level)) {
+      sink.Write(level, message);
+      // The sinks are never destroyed at exit, so nothing else would
+      // flush a file sink: every line is flushed as it is written.
+      sink.Flush();
+    }
+  } catch (...) {
+    // One failing sink MUST NOT keep the next one from the line.
+    return;
+  }
+}
+
+}  // namespace
+
 void Emit(Level level, std::string_view message) noexcept {
   if (current_thread_silenced) {
     return;
@@ -451,17 +471,7 @@ void Emit(Level level, std::string_view message) noexcept {
     // otherwise invalidate this loop and free the sink that is running.
     const std::vector<std::shared_ptr<ISink>> sinks = EnsureSinks().sinks;
     for (const std::shared_ptr<ISink>& sink : sinks) {
-      try {
-        if (sink->ShouldLog(level)) {
-          sink->Write(level, message);
-          // The sinks are never destroyed at exit, so nothing else would
-          // flush a file sink: every line is flushed as it is written.
-          sink->Flush();
-        }
-      } catch (...) {
-        // One failing sink MUST NOT keep the next one from the line.
-        continue;
-      }
+      WriteToSink(*sink, level, message);
     }
   } catch (...) {
     // Nothing is left to report the failure with, so the line is dropped.
