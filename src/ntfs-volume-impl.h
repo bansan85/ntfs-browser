@@ -6,10 +6,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/efs/efs.h>
@@ -18,10 +16,10 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "alloc/bad-cluster-list.h"
-#include "alloc/cluster-bitmap.h"
+#include "alloc/cluster-map.h"
 #include "attr/slot.h"
 #include "mft/extent-map.h"
+#include "mft/metadata-opener.h"
 #include "mft/mft-bootstrap.h"
 #include "volume/volume-geometry.h"
 
@@ -79,13 +77,6 @@ class Table;
 // Everything NtfsVolume<S> keeps out of its public header: the members, and the
 // private methods that work on them. Only NtfsVolume<S> reaches it, through
 // impl_: other classes use the methods of NtfsVolume<S> that forward to it.
-// ntfs-volume.cpp instantiates this class, but the cluster bitmap and bad list
-// members are defined in ntfs-volume-alloc.cpp: MSVC then warns (C4661) at the
-// class line.
-#ifdef _MSC_VER
-  #pragma warning(push)
-  #pragma warning(disable : 4661)
-#endif
 template <Cache::Strategy S>
 class NtfsVolume<S>::Impl {
  public:
@@ -121,28 +112,15 @@ class NtfsVolume<S>::Impl {
   // from being retried.
   mutable std::unique_ptr<const UpCase::Table> upcase;
 
-  // The bad cluster list ($Bad stream of $BadClus, MFT record 8), loaded on
-  // first use. It is a copy, so no record stays alive for it. bad_list stays
-  // null when $BadClus cannot be read; bad_loaded then keeps the failure from
-  // being retried. Declared before the bitmap, which points to it, so it is
-  // destroyed after it.
-  mutable std::unique_ptr<Alloc::BadClusterList> bad_list;
-
   // The change journal ($UsnJrnl:$J of $Extend), loaded on first use and only
   // with recover_errors on. usn_journal stays null when the journal is absent
   // or unusable; usn_loaded then keeps the failure from being retried.
   mutable std::unique_ptr<Usn::Journal> usn_journal;
 
-  // The cluster bitmap ($Bitmap, MFT record 6), loaded on first use. The record
-  // stays alive for as long as the bitmap reads through its data stream, so it
-  // is declared first and destroyed last. bitmap stays null when $Bitmap cannot
-  // be read; bitmap_loaded then keeps the failure from being retried.
-  mutable std::unique_ptr<Io::FileRecord<S>> bitmap_record;
-  mutable std::unique_ptr<Alloc::ClusterBitmap> bitmap;
-  // Bytes of bitmap the caller asked to keep, which the bitmap gets once
-  // loaded.
-  mutable ULONGLONG bitmap_keep_bytes{0};
-  mutable std::optional<Alloc::SpaceSummary> summary;
+  // What the volume knows about its clusters, built on first use by
+  // Clusters(). It reads through the geometry and the reader, which are final
+  // by then.
+  mutable std::unique_ptr<Alloc::ClusterMap<S>> clusters;
 
   // The EFS key source and cipher backend the caller chose, or the defaults.
   EfsSettings efs;
@@ -150,7 +128,7 @@ class NtfsVolume<S>::Impl {
   mutable std::vector<BYTE> cluster_buffer;
 
   // Boot-sector geometry, as ParseBootSector() decoded it. Read by the
-  // geometry getters, and by Init() and the $UpCase load.
+  // geometry getters, and by Init() and the cluster map.
   Volume::Geometry geometry;
 
   std::array<Attr::RawCallback, Attr::attr_nums> attr_raw_call_back{};
@@ -158,25 +136,10 @@ class NtfsVolume<S>::Impl {
   BYTE version_major{0};
   BYTE version_minor{0};
   mutable bool upcase_loaded{false};
-  mutable bool bitmap_loaded{false};
-  // Set while the bitmap loads: a query made then answers Unknown instead of
-  // loading it again.
-  mutable bool loading_bitmap{false};
-  // Set once a partial or unusable bitmap was logged: that log is once per
-  // volume.
-  mutable bool degraded_logged{false};
-  mutable bool summary_computed{false};
-  mutable bool bad_loaded{false};
   mutable bool usn_loaded{false};
   // Set while the journal loads: a query made then sees no journal instead of
   // loading it again.
   mutable bool loading_usn{false};
-  // Set while the bad list loads: a query made then sees no list instead of
-  // loading it again.
-  mutable bool loading_bad{false};
-  // Set once a bad cluster that the bitmap calls free was logged: that log is
-  // once per volume.
-  mutable bool bad_logged{false};
 
   // Fixed for the volume's lifetime; set by the constructor, read back
   // through GetOptions(). No setter: every component that reads it goes
@@ -191,45 +154,21 @@ class NtfsVolume<S>::Impl {
   [[nodiscard]] bool ParseBootSector();
   // VolumeOptions::media_kind when set, else what the reader says.
   [[nodiscard]] Tuning::MediaKind EffectiveMediaKind() const;
-  [[nodiscard]] bool ParseVolumeRecord(Io::FileRecord<S>& vol);
-  [[nodiscard]] bool AcceptVolumeVersion(const Io::FileRecord<S>& vol);
-  void LogVolumeName(const Io::FileRecord<S>& vol) const;
   void Init();
   [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
-  // Whether the volume is open and $MFT maps the record of a metadata file.
-  [[nodiscard]] bool IsMetadataMapped(ULONGLONG record) const;
-  // Parses a metadata file's record into record, for its $DATA attributes.
-  [[nodiscard]] bool ParseMetadataData(Io::FileRecord<S>& record,
-                                       ULONGLONG index) const;
-  [[nodiscard]] std::unique_ptr<const UpCase::Table> LoadUpCaseTable() const;
-  // The cluster bitmap, loaded now if it was not. Null when it is unusable, or
-  // while it loads.
-  [[nodiscard]] Alloc::ClusterBitmap* GetClusterBitmap() const;
+  // Opens the records of the metadata files. Nothing opens while the volume is
+  // not OK.
+  [[nodiscard]] Mft::MetadataOpener<S> MetadataFiles() const;
+  // The volume's cluster map, built now if it was not.
+  [[nodiscard]] Alloc::ClusterMap<S>& Clusters() const;
   // The disk ranges that a read of count records of $MFT from first_ref
   // reads, run by run. None where that read would fail at once: a record below
   // Mft::Idx::User, $MFT not mapped, nothing asked for, or an offset that
   // overflows.
   [[nodiscard]] std::vector<Mft::DiskRange>
       MftSlotRanges(ULONGLONG first_ref, ULONGLONG count) const;
-  // bitmap_keep_bytes, cut to what this build can address.
-  [[nodiscard]] size_t KeptBitmapBytes() const noexcept;
-  [[nodiscard]] std::unique_ptr<Alloc::ClusterBitmap> LoadClusterBitmap() const;
-  // Logs, once per volume, that the bitmap turned out short or lost a window,
-  // and, once per volume, that it calls free a cluster the bad list names.
-  void NoteBitmapHealth() const;
-  // The bad cluster list, loaded now if it was not. Null when it is unusable,
-  // or while it loads.
-  [[nodiscard]] const Alloc::BadClusterList* GetBadList() const;
-  [[nodiscard]] std::unique_ptr<Alloc::BadClusterList>
-      LoadBadClusterList() const;
-  // The volume's cluster count, cut at the size of the backing store when that
-  // is known. 0 when the boot sector gave none.
-  [[nodiscard]] ULONGLONG UsableClusterCount() const;
   void AttrRawCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                        bool& discard) const;
 };
-#ifdef _MSC_VER
-  #pragma warning(pop)
-#endif
 
 }  // namespace NTFS_BROWSER_NAMESPACE

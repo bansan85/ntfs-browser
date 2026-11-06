@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -12,32 +11,23 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/defines.h>
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/stats.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/cache/view.h>
-#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
 
-#include "alloc/bad-cluster-list.h"
-#include "alloc/cluster-bitmap.h"
+#include "alloc/alloc-loader.h"
 #include "bench/recorder.h"
 #include "io/file-reader.h"
 #include "log/ntfs-common.h"
-#include "mft/extent-map.h"
 #include "mft/record-offset.h"
 #include "ntfs-volume-impl.h"
+#include "upcase/upcase-loader.h"
 #include "upcase/upcase.h"
 #include "usn/usn-journal-loader.h"
 #include "volume/boot-sector-loader.h"
-#include "volume/volume-geometry.h"
+#include "volume/volume-record-loader.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -158,6 +148,58 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
   // Sized from the decoded cluster, even when a later field is rejected.
   cluster_buffer.resize(geometry.cluster_size);
   return parse.ok;
+}
+
+// Verify NTFS volume version (must >= 3.0) and locate $MFT's Data attribute
+template <Cache::Strategy S>
+void NtfsVolume<S>::Impl::Init() {
+  const Volume::VolumeRecordParse record =
+      Volume::VolumeRecordLoader<S>(*self).Load();
+  version_major = record.version_major;
+  version_minor = record.version_minor;
+  if (!record.ok || !mft.ParseRecord()) {
+    return;
+  }
+  const Attr::AttrBase<S>* base_extent = mft.FindBaseExtent();
+  if (base_extent == nullptr) {
+    return;
+  }
+
+  // The cluster geometry is known only now, after the boot sector parse.
+  mft.MapExtents(*base_extent, geometry.cluster_size,
+                 geometry.file_record_size);
+
+  // Reported OK only once the base extent is actually set.
+  volume_ok = true;
+}
+
+template <Cache::Strategy S>
+Mft::MetadataOpener<S> NtfsVolume<S>::Impl::MetadataFiles() const {
+  return Mft::MetadataOpener<S>(*self, volume_ok ? &mft.Map() : nullptr);
+}
+
+template <Cache::Strategy S>
+Alloc::ClusterMap<S>& NtfsVolume<S>::Impl::Clusters() const {
+  if (!clusters) {
+    clusters = std::make_unique<Alloc::ClusterMap<S>>(
+        Alloc::AllocLoader<S>(MetadataFiles(), *volume, geometry, options),
+        options.recover_errors, geometry.cluster_size);
+  }
+  return *clusters;
+}
+
+// Loads $UpCase on first use. A failure is cached: the built-in mapping
+// answers every later call.
+template <Cache::Strategy S>
+const UpCase::Table& NtfsVolume<S>::Impl::GetUpCaseTable() const {
+  if (!upcase_loaded) {
+    upcase_loaded = true;
+    upcase = UpCase::TableLoader<S>(MetadataFiles()).Load();
+    if (!upcase) {
+      Log::Info("$UpCase is not usable: names collate by the built-in mapping");
+    }
+  }
+  return upcase ? *upcase : UpCase::Table::BuiltIn();
 }
 
 // Check if Volume is successfully opened
@@ -455,83 +497,28 @@ Alloc::ClusterState NtfsVolume<S>::GetRangeState(ULONGLONG lcn,
 
 template <Cache::Strategy S>
 void NtfsVolume<S>::GetRangeStates(std::span<Alloc::RangeQuery> queries) const {
-  // A query nobody answers stays unknown.
-  for (Alloc::RangeQuery& query : queries) {
-    query.state = Alloc::ClusterState::Unknown;
-    query.allocated_clusters = 0;
-    query.free_clusters = 0;
-    query.bad_clusters = 0;
-  }
-
-  Alloc::ClusterBitmap* bitmap = impl_->GetClusterBitmap();
-  if (bitmap == nullptr) {
-    return;
-  }
-  try {
-    bitmap->StatesInOrder(queries);
-  } catch (const std::exception& e) {
-    Log::Exception(e);
-  }
-  impl_->NoteBitmapHealth();
+  impl_->Clusters().States(queries);
 }
 
 template <Cache::Strategy S>
 void NtfsVolume<S>::GetClusterRuns(ULONGLONG lcn, ULONGLONG clusters,
                                    std::vector<Alloc::ClusterRun>& runs) const {
-  runs.clear();
-  if (clusters == 0) {
-    return;
-  }
-  Alloc::ClusterBitmap* bitmap = impl_->GetClusterBitmap();
-  if (bitmap != nullptr) {
-    try {
-      bitmap->StateRuns(lcn, clusters, runs);
-      impl_->NoteBitmapHealth();
-      return;
-    } catch (const std::exception& e) {
-      Log::Exception(e);
-    }
-  }
-  // A query nobody answers stays unknown.
-  runs.assign(1, {.lcn = lcn,
-                  .clusters = clusters,
-                  .state = Alloc::ClusterState::Unknown});
+  impl_->Clusters().Runs(lcn, clusters, runs);
 }
 
 template <Cache::Strategy S>
 void NtfsVolume<S>::KeepBitmapWindows(ULONGLONG max_bytes) const {
-  impl_->bitmap_keep_bytes = max_bytes;
-  if (impl_->bitmap) {
-    impl_->bitmap->SetRetention(impl_->KeptBitmapBytes());
-  }
+  impl_->Clusters().KeepWindows(max_bytes);
 }
 
 template <Cache::Strategy S>
 std::optional<Alloc::SpaceSummary> NtfsVolume<S>::GetSpaceSummary() const {
-  if (!impl_->summary_computed) {
-    impl_->summary_computed = true;
-    Alloc::ClusterBitmap* bitmap = impl_->GetClusterBitmap();
-    if (bitmap != nullptr) {
-      try {
-        impl_->summary = bitmap->Summary(impl_->geometry.cluster_size);
-      } catch (const std::exception& e) {
-        Log::Exception(e);
-      }
-      impl_->NoteBitmapHealth();
-    }
-  }
-  return impl_->summary;
+  return impl_->Clusters().Summary();
 }
 
 template <Cache::Strategy S>
 const Alloc::BadClusters* NtfsVolume<S>::GetBadClusters() const {
-  try {
-    const Alloc::BadClusterList* list = impl_->GetBadList();
-    return list != nullptr ? &list->Get() : nullptr;
-  } catch (const std::exception& e) {
-    Log::Exception(e);
-    return nullptr;
-  }
+  return impl_->Clusters().Bad();
 }
 
 // Loads the change journal on first use. Strict mode returns null before any
