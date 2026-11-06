@@ -176,19 +176,31 @@ class FileRecord<S>::Impl {
   // Handles a record an $ATTRIBUTE_LIST entry names that is not an extension
   // of this one. Throws when strict and this record is in use.
   void SkipForeignExtension(ULONGLONG record_number, bool recover);
+  // See FileRecord<S>::HasAttrHeader().
+  [[nodiscard]] bool HasAttrHeader(Attr::Type attr_type) const noexcept;
+  // See FileRecord<S>::AttributeListExtents().
+  [[nodiscard]] std::vector<Alloc::Extent>
+      AttributeListExtents(ULONGLONG max_bytes) const;
+
+  // An extension record that an $ATTRIBUTE_LIST entry names, and what the
+  // entry asks of it. claim_only: the type is listed, not parsed.
+  struct ExtensionRequest {
+    ULONGLONG record_number;
+    Attr::Type attr_type;
+    bool claim_only;
+  };
+
   // Decides whether ImportAttrListEntry() opens the record its entry names,
   // and sets held to the bytes the caller already has for it (empty: read it).
   [[nodiscard]] bool
-      WantsExtension(ULONGLONG record_number, Attr::Type attr_type,
-                     bool claim_only,
+      WantsExtension(const ExtensionRequest& request,
                      std::unordered_set<ULONGLONG>& attr_list_chain,
                      bool recover, std::span<const BYTE>& held);
   // Opens the extension record of an entry and parses its header. Null when a
   // claim-only record cannot be parsed. See ImportAttrListEntry().
-  [[nodiscard]] Io::FileRecord<S>* OpenExtension(ULONGLONG record_number,
-                                                 Attr::Type attr_type,
-                                                 bool claim_only,
-                                                 std::span<const BYTE> held);
+  [[nodiscard]] Io::FileRecord<S>*
+      OpenExtension(const ExtensionRequest& request,
+                    std::span<const BYTE> held);
   // Whether extension is still the extension record the entry of sequence
   // number sequence_number meant, and not a slot another file reused.
   [[nodiscard]] bool IsGenuineExtension(const Io::FileRecord<S>& extension,

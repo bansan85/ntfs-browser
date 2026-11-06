@@ -1,9 +1,5 @@
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
-#include <array>
-#include <cstring>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -28,12 +24,9 @@
 
 #include "alloc/data-state.h"
 #include "attr/file-name.h"
-#include "attr/run-list.h"
 #include "attr/slot.h"
 #include "attr/std-info.h"
 #include "data/file-record-flag.h"
-#include "data/file-record-header.h"
-#include "data/header-non-resident.h"
 #include "io/file-record-attr-types.h"
 #include "io/file-record-impl.h"
 #include "io/file-record-index.h"
@@ -76,49 +69,6 @@ namespace {
 // The $STANDARD_INFORMATION wrapper of strategy S.
 template <Cache::Strategy S>
 using StdInfoType = Attr::AttrStdInfo<ResidentOf<S>, S>;
-
-// Offset in record of its first attribute header of type attr_type, going by
-// the headers alone. Empty when there is none, or when a header before it is
-// broken.
-std::optional<DWORD> FindAttrHeader(const Data::FileRecordHeader& record,
-                                    DWORD record_size,
-                                    Attr::Type attr_type) noexcept {
-  DWORD data_ptr = record.offset_of_attr;
-  // Each header is read through a copy: its position comes from the disk.
-  while (static_cast<ULONGLONG>(data_ptr) + sizeof(Attr::HeaderCommon) <=
-         record_size) {
-    Attr::HeaderCommon head{};
-    std::memcpy(&head, &record.raw[data_ptr], sizeof(head));
-    if (head.type == Attr::Type::All || head.total_size == 0 ||
-        static_cast<ULONGLONG>(data_ptr) + head.total_size > record_size) {
-      return std::nullopt;
-    }
-    if (head.type == attr_type) {
-      return data_ptr;
-    }
-    data_ptr += head.total_size;
-  }
-  return std::nullopt;
-}
-
-// The non-resident header of the attribute at offset at of the record. Empty
-// unless it is a whole, uncompressed list that maps its bytes from VCN 0.
-std::optional<Data::HeaderNonResident>
-    ReadListHeader(const Data::FileRecordHeader& record, DWORD at,
-                   DWORD record_size) {
-  if (record_size - at < sizeof(Data::HeaderNonResident)) {
-    return std::nullopt;
-  }
-  Data::HeaderNonResident header{};
-  std::memcpy(&header, &record.raw[at], sizeof(header));
-  if (header.header.non_resident == 0 ||
-      header.header.total_size < sizeof(header) ||
-      Data::HasCompressedSizeField(header) || header.start_vcn != 0 ||
-      header.data_run_offset >= header.header.total_size) {
-    return std::nullopt;
-  }
-  return header;
-}
 
 }  // namespace
 
@@ -281,48 +231,13 @@ bool Io::FileRecord<S>::IsExtensionRecord() const noexcept {
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::HasAttrHeader(Attr::Type attr_type) const noexcept {
-  return impl_->file_record &&
-         FindAttrHeader(*impl_->file_record->GetData(),
-                        impl_->volume->GetFileRecordSize(), attr_type)
-             .has_value();
+  return impl_->HasAttrHeader(attr_type);
 }
 
 template <Cache::Strategy S>
 std::vector<Alloc::Extent>
     Io::FileRecord<S>::AttributeListExtents(ULONGLONG max_bytes) const {
-  const ULONGLONG cluster_size = impl_->volume->GetClusterSize();
-  if (!impl_->file_record || max_bytes == 0 || cluster_size == 0) {
-    return {};
-  }
-  const Data::FileRecordHeader& data = *impl_->file_record->GetData();
-  const std::optional<DWORD> at = FindAttrHeader(
-      data, impl_->volume->GetFileRecordSize(), Attr::Type::AttributeList);
-  if (!at) {
-    return {};
-  }
-  const std::optional<Data::HeaderNonResident> header =
-      ReadListHeader(data, *at, impl_->volume->GetFileRecordSize());
-  if (!header) {
-    return {};
-  }
-
-  // FindAttrHeader() checked that the attribute lies in the record.
-  const std::span<const BYTE> run_bytes =
-      std::span<const BYTE>{&data.raw[*at], header->header.total_size}.subspan(
-          header->data_run_offset);
-  Attr::RunList runs(Data::SpannedClusters(*header));
-  // Recovering: a damaged run list gives the runs before the damage, and is
-  // logged as recovered, not as an error. ParseAttrs() judges it.
-  runs.Parse(run_bytes, Data::VcnSpan(*header), true);
-
-  const ULONGLONG size = (std::min)(header->real_size, max_bytes);
-  const ULONGLONG end_vcn =
-      size / cluster_size + (size % cluster_size != 0 ? 1 : 0);
-  // The byte address of a cluster MUST fit a LONGLONG, as in ReadClusters().
-  const ULONGLONG max_lcn =
-      static_cast<ULONGLONG>((std::numeric_limits<LONGLONG>::max)()) /
-      cluster_size;
-  return runs.ExtentsBetween(0, end_vcn, max_lcn);
+  return impl_->AttributeListExtents(max_bytes);
 }
 
 template <Cache::Strategy S>

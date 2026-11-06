@@ -425,30 +425,39 @@ class ContentChecker {
     return announced;
   }
 
-  // Makes the reads, in order, and classifies every cluster of every target.
-  ULONGLONG ReadAll(const std::vector<CheckTarget>& targets,
-                    const std::vector<CheckRead>& reads,
-                    std::vector<CheckEdit>& edits) {
+  // Reads the clusters of read into buffer. False when their addresses do not
+  // fit a LONGLONG, or when the read fails.
+  bool ReadClusters(const CheckRead& read, std::vector<BYTE>& buffer) const {
     // A byte address MUST fit a LONGLONG.
     const ULONGLONG max_lcn =
         static_cast<ULONGLONG>((std::numeric_limits<LONGLONG>::max)()) /
         cluster_size_;
+    if (read.lcn > max_lcn || read.clusters > max_lcn - read.lcn) {
+      return false;
+    }
+    buffer.resize(static_cast<std::size_t>(read.clusters * cluster_size_));
+    LARGE_INTEGER addr{};
+    addr.QuadPart = static_cast<LONGLONG>(read.lcn * cluster_size_);
+    const Bench::Detail::KindScope kind(Bench::ReadKind::ContentCheck);
+    if (!volume_->ReadInto(addr, buffer)) {
+      Log::Debug("Content check: the {} clusters at LCN {} cannot be read",
+                 read.clusters, read.lcn);
+      return false;
+    }
+    return true;
+  }
+
+  // Makes the reads, in order, and classifies every cluster of every target.
+  ULONGLONG ReadAll(const std::vector<CheckTarget>& targets,
+                    const std::vector<CheckRead>& reads,
+                    std::vector<CheckEdit>& edits) {
     std::vector<BYTE> buffer;
     ULONGLONG clusters_read = 0;
     std::size_t announced = 0;
     for (std::size_t r = 0; r < reads.size(); r++) {
       announced = Announce(reads, r, announced);
       const CheckRead& read = reads.at(r);
-      if (read.lcn > max_lcn || read.clusters > max_lcn - read.lcn) {
-        continue;
-      }
-      buffer.resize(static_cast<std::size_t>(read.clusters * cluster_size_));
-      LARGE_INTEGER addr{};
-      addr.QuadPart = static_cast<LONGLONG>(read.lcn * cluster_size_);
-      const Bench::Detail::KindScope kind(Bench::ReadKind::ContentCheck);
-      if (!volume_->ReadInto(addr, buffer)) {
-        Log::Debug("Content check: the {} clusters at LCN {} cannot be read",
-                   read.clusters, read.lcn);
+      if (!ReadClusters(read, buffer)) {
         continue;
       }
       clusters_read += read.clusters;

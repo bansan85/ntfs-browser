@@ -1,29 +1,85 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <cstring>
+#include <limits>
 #include <list>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
+#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/list-chain.h"
+#include "attr/run-list.h"
 #include "attr/slot.h"
+#include "data/file-record-header.h"
+#include "data/header-non-resident.h"
 #include "io/file-record-impl.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
+
+namespace {
+
+// Offset in record of its first attribute header of type attr_type, going by
+// the headers alone. Empty when there is none, or when a header before it is
+// broken.
+std::optional<DWORD> FindAttrHeader(const Data::FileRecordHeader& record,
+                                    DWORD record_size,
+                                    Attr::Type attr_type) noexcept {
+  DWORD data_ptr = record.offset_of_attr;
+  // Each header is read through a copy: its position comes from the disk.
+  while (static_cast<ULONGLONG>(data_ptr) + sizeof(Attr::HeaderCommon) <=
+         record_size) {
+    Attr::HeaderCommon head{};
+    std::memcpy(&head, &record.raw[data_ptr], sizeof(head));
+    if (head.type == Attr::Type::All || head.total_size == 0 ||
+        static_cast<ULONGLONG>(data_ptr) + head.total_size > record_size) {
+      return std::nullopt;
+    }
+    if (head.type == attr_type) {
+      return data_ptr;
+    }
+    data_ptr += head.total_size;
+  }
+  return std::nullopt;
+}
+
+// The non-resident header of the attribute at offset at of the record. Empty
+// unless it is a whole, uncompressed list that maps its bytes from VCN 0.
+std::optional<Data::HeaderNonResident>
+    ReadListHeader(const Data::FileRecordHeader& record, DWORD at,
+                   DWORD record_size) {
+  if (record_size - at < sizeof(Data::HeaderNonResident)) {
+    return std::nullopt;
+  }
+  Data::HeaderNonResident header{};
+  std::memcpy(&header, &record.raw[at], sizeof(header));
+  if (header.header.non_resident == 0 ||
+      header.header.total_size < sizeof(header) ||
+      Data::HasCompressedSizeField(header) || header.start_vcn != 0 ||
+      header.data_run_offset >= header.header.total_size) {
+    return std::nullopt;
+  }
+  return header;
+}
+
+}  // namespace
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::Impl::NamesOtherBase(ULONGLONG record_number,
@@ -68,9 +124,10 @@ void Io::FileRecord<S>::Impl::SkipForeignExtension(ULONGLONG record_number,
 // resolved in this chain, a slot of another base and a refused read.
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::Impl::WantsExtension(
-    ULONGLONG record_number, Attr::Type attr_type, bool claim_only,
+    const ExtensionRequest& request,
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover,
     std::span<const BYTE>& held) {
+  const auto [record_number, attr_type, claim_only] = request;
   const Attr::Mask entry_mask = Attr::AttrMask(attr_type);
   // Set by ParseRecord(), which every attribute parse follows.
   const ULONGLONG self_ref = file_reference.value_or(0);
@@ -109,9 +166,10 @@ bool Io::FileRecord<S>::Impl::WantsExtension(
 // into its bytes. Null when a claim-only record cannot be parsed; throws when
 // a wanted one cannot.
 template <Cache::Strategy S>
-Io::FileRecord<S>* Io::FileRecord<S>::Impl::OpenExtension(
-    ULONGLONG record_number, Attr::Type attr_type, bool claim_only,
-    std::span<const BYTE> held) {
+Io::FileRecord<S>*
+    Io::FileRecord<S>::Impl::OpenExtension(const ExtensionRequest& request,
+                                           std::span<const BYTE> held) {
+  const auto [record_number, attr_type, claim_only] = request;
   const Attr::Mask entry_mask = Attr::AttrMask(attr_type);
   extension_records.emplace_back(*volume);
   Io::FileRecord<S>& frnew = extension_records.back();
@@ -160,13 +218,12 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
   const bool claim_only = !static_cast<bool>(entry_mask & attr_mask) &&
                           static_cast<bool>(entry_mask & claim_mask);
   std::span<const BYTE> held;
-  if (!WantsExtension(record_number, attr_type, claim_only, attr_list_chain,
-                      recover, held)) {
+  const ExtensionRequest request{record_number, attr_type, claim_only};
+  if (!WantsExtension(request, attr_list_chain, recover, held)) {
     return;
   }
 
-  Io::FileRecord<S>* const opened =
-      OpenExtension(record_number, attr_type, claim_only, held);
+  Io::FileRecord<S>* const opened = OpenExtension(request, held);
   if (opened == nullptr) {
     return;
   }
@@ -203,6 +260,52 @@ void Io::FileRecord<S>::Impl::ImportAttrListEntry(
   vec.clear();
 }
 
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::Impl::HasAttrHeader(
+    Attr::Type attr_type) const noexcept {
+  return file_record && FindAttrHeader(*file_record->GetData(),
+                                       volume->GetFileRecordSize(), attr_type)
+                            .has_value();
+}
+
+template <Cache::Strategy S>
+std::vector<Alloc::Extent>
+    Io::FileRecord<S>::Impl::AttributeListExtents(ULONGLONG max_bytes) const {
+  const ULONGLONG cluster_size = volume->GetClusterSize();
+  if (!file_record || max_bytes == 0 || cluster_size == 0) {
+    return {};
+  }
+  const Data::FileRecordHeader& data = *file_record->GetData();
+  const std::optional<DWORD> at = FindAttrHeader(
+      data, volume->GetFileRecordSize(), Attr::Type::AttributeList);
+  if (!at) {
+    return {};
+  }
+  const std::optional<Data::HeaderNonResident> header =
+      ReadListHeader(data, *at, volume->GetFileRecordSize());
+  if (!header) {
+    return {};
+  }
+
+  // FindAttrHeader() checked that the attribute lies in the record.
+  const std::span<const BYTE> run_bytes =
+      std::span<const BYTE>{&data.raw[*at], header->header.total_size}.subspan(
+          header->data_run_offset);
+  Attr::RunList runs(Data::SpannedClusters(*header));
+  // Recovering: a damaged run list gives the runs before the damage, and is
+  // logged as recovered, not as an error. ParseAttrs() judges it.
+  runs.Parse(run_bytes, Data::VcnSpan(*header), true);
+
+  const ULONGLONG size = (std::min)(header->real_size, max_bytes);
+  const ULONGLONG end_vcn =
+      size / cluster_size + (size % cluster_size != 0 ? 1 : 0);
+  // The byte address of a cluster MUST fit a LONGLONG, as in ReadClusters().
+  const ULONGLONG max_lcn =
+      static_cast<ULONGLONG>((std::numeric_limits<LONGLONG>::max)()) /
+      cluster_size;
+  return runs.ExtentsBetween(0, end_vcn, max_lcn);
+}
+
 template bool FileRecord<Cache::Strategy::NoCache>::Impl::NamesOtherBase(
     ULONGLONG record_number, ULONGLONG listing_record) const;
 template bool FileRecord<Cache::Strategy::FullCache>::Impl::NamesOtherBase(
@@ -218,5 +321,16 @@ template void FileRecord<Cache::Strategy::NoCache>::Impl::ImportAttrListEntry(
 template void FileRecord<Cache::Strategy::FullCache>::Impl::ImportAttrListEntry(
     ULONGLONG record_number, WORD sequence_number, Attr::Type attr_type,
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover);
+
+template bool FileRecord<Cache::Strategy::NoCache>::Impl::HasAttrHeader(
+    Attr::Type attr_type) const noexcept;
+template bool FileRecord<Cache::Strategy::FullCache>::Impl::HasAttrHeader(
+    Attr::Type attr_type) const noexcept;
+template std::vector<Alloc::Extent>
+    FileRecord<Cache::Strategy::NoCache>::Impl::AttributeListExtents(
+        ULONGLONG max_bytes) const;
+template std::vector<Alloc::Extent>
+    FileRecord<Cache::Strategy::FullCache>::Impl::AttributeListExtents(
+        ULONGLONG max_bytes) const;
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

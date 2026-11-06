@@ -159,6 +159,45 @@ class RunBlockLoader {
   bool failed_{false};
 };
 
+// Reads like reader.ReadInto(), and tells the bench recorder when the read
+// began, ended and what it covered.
+bool RecordedRead(IDiskReader& reader, LARGE_INTEGER& addr,
+                  std::span<BYTE> dest) {
+  Bench::Detail::ResetReadNote();
+  const std::uint64_t began = Bench::Detail::NowNs();
+  const bool read = reader.ReadInto(addr, dest);
+  const std::uint64_t ended = Bench::Detail::NowNs();
+  // A negative address is a refused read, and has no place on the disk.
+  if (addr.QuadPart >= 0) {
+    Bench::Detail::RecordRead(static_cast<std::uint64_t>(addr.QuadPart),
+                              dest.size(), began, ended);
+    if (read) {
+      Bench::Detail::CaptureRead(static_cast<std::uint64_t>(addr.QuadPart),
+                                 dest);
+    }
+  }
+  return read;
+}
+
+// Copies the part of the range at cur that block holds to the front of out,
+// then moves out, cur and remaining past it.
+void CopyBlockPart(const Cache::Block& block, std::int64_t block_bytes,
+                   std::span<BYTE>& out, LARGE_INTEGER& cur, DWORD& remaining) {
+  const auto offset_in_block = gsl::narrow<DWORD>(cur.QuadPart % block_bytes);
+  const auto chunk = gsl::narrow<DWORD>(
+      std::min<LONGLONG>(block_bytes - offset_in_block, remaining));
+
+  const std::span<const BYTE> bytes{block.bytes.get(),
+                                    static_cast<size_t>(block_bytes)};
+  // offset_in_block is a remainder modulo the block size = block_bytes.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  memcpy(out.data(), &bytes[offset_in_block], chunk);
+
+  out = out.subspan(chunk);
+  cur.QuadPart += chunk;
+  remaining -= chunk;
+}
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -214,21 +253,7 @@ bool FileReader<S>::ReadFromReader(LARGE_INTEGER& addr,
   if (!Bench::Detail::Active()) {
     return reader_->ReadInto(addr, dest);
   }
-
-  Bench::Detail::ResetReadNote();
-  const std::uint64_t began = Bench::Detail::NowNs();
-  const bool read = reader_->ReadInto(addr, dest);
-  const std::uint64_t ended = Bench::Detail::NowNs();
-  // A negative address is a refused read, and has no place on the disk.
-  if (addr.QuadPart >= 0) {
-    Bench::Detail::RecordRead(static_cast<std::uint64_t>(addr.QuadPart),
-                              dest.size(), began, ended);
-    if (read) {
-      Bench::Detail::CaptureRead(static_cast<std::uint64_t>(addr.QuadPart),
-                                 dest);
-    }
-  }
-  return read;
+  return RecordedRead(*reader_, addr, dest);
 }
 
 template <Cache::Strategy S>
@@ -472,20 +497,7 @@ std::enable_if_t<
       return ReadUncached(addr, length);
     }
 
-    const auto offset_in_block =
-        gsl::narrow<DWORD>(cur.QuadPart % block_bytes_);
-    const auto chunk = gsl::narrow<DWORD>(
-        std::min<LONGLONG>(block_bytes_ - offset_in_block, remaining));
-
-    const std::span<const BYTE> block_bytes{block->bytes.get(),
-                                            static_cast<size_t>(block_bytes_)};
-    // offset_in_block is a remainder modulo the block size = block_bytes.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    memcpy(out.data(), &block_bytes[offset_in_block], chunk);
-
-    out = out.subspan(chunk);
-    cur.QuadPart += chunk;
-    remaining -= chunk;
+    CopyBlockPart(*block, block_bytes_, out, cur, remaining);
     // The block is copied: it is free to go if the read outgrows the ceiling.
     cache_->Trim();
   }

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -295,6 +296,37 @@ RecordStanding StandingOf(const NamedState& named,
   const bool reused = entry.GetSequenceNumber() != 0 &&
                       entry.GetSequenceNumber() != named.sequence;
   return reused ? RecordStanding::Reused : RecordStanding::Live;
+}
+
+// What a scan of one node does with an entry when it looks for a name.
+enum class SearchStep : std::uint8_t {
+  // The entry equals the name.
+  Equal,
+  // Neither the entry nor anything below it can be the name.
+  Skip,
+  // The name sorts before a leaf entry: it is not in the index.
+  NotFound,
+  // The name sorts before the entry, or the entry has no name: its sub-node is
+  // worth a visit.
+  Descend
+};
+
+// Compares the entry with the name searched. The index is in collation order,
+// so the result tells whether the name can still be at or below the entry.
+SearchStep StepFor(const IndexEntryView& entry, const IndexSearch& search) {
+  if (entry.HasName()) {
+    const int comparison = entry.Compare(search.file_name, search.upcase);
+    if (comparison == 0) {
+      return SearchStep::Equal;
+    }
+    if (comparison > 0) {
+      return SearchStep::Skip;
+    }
+    if (!entry.IsSubNodePtr()) {
+      return SearchStep::NotFound;
+    }
+  }
+  return entry.IsSubNodePtr() ? SearchStep::Descend : SearchStep::Skip;
 }
 
 }  // namespace
@@ -594,43 +626,33 @@ std::optional<IndexEntry> Io::DirectoryIndex<S>::SearchIndexEntries(
     const std::vector<IndexEntryView>& entries, IndexSearch& search,
     size_t child_depth, bool at_root) const {
   for (const IndexEntryView& index_entry : entries) {
-    if (index_entry.HasName()) {
-      // Compare name
-      const int comparison =
-          index_entry.Compare(search.file_name, search.upcase);
-      if (comparison == 0) {
-        std::optional<IndexEntry> found =
-            MatchEqualEntry(index_entry, search, child_depth, at_root);
-        if (found) {
+    switch (StepFor(index_entry, search)) {
+      case SearchStep::Equal:
+        if (std::optional<IndexEntry> found =
+                MatchEqualEntry(index_entry, search, child_depth, at_root)) {
           return found;
         }
-        continue;
-      }
-      // Just step forward if fileName is bigger than IndexEntry
-      if (comparison > 0) {
-        continue;
-      }
-      // fileName is smaller than a leaf entry: not found
-      if (!index_entry.IsSubNodePtr()) {
-        return {};
-      }
-    }
+        break;
 
-    // Only a sub-node pointer is worth a visit from here on.
-    if (!index_entry.IsSubNodePtr()) {
-      continue;
-    }
-    // Search in SubNode (IndexBlock), recursive call
-    std::optional<IndexEntry> retval =
-        VisitIndexBlock(index_entry.GetSubNodeVCN(), search, child_depth);
-    if (retval) {
-      return retval;
-    }
-    // Every later entry is greater than this one: once an equal entry was met,
-    // kept or hidden, none of their sub-nodes can hold a twin of it. A search
-    // that met nothing equal keeps reading, as it always did.
-    if (search.met_equal) {
-      return {};
+      case SearchStep::Skip:
+        break;
+
+      case SearchStep::NotFound:
+        return {};
+
+      case SearchStep::Descend:
+        // Search in SubNode (IndexBlock), recursive call
+        if (std::optional<IndexEntry> retval = VisitIndexBlock(
+                index_entry.GetSubNodeVCN(), search, child_depth)) {
+          return retval;
+        }
+        // Every later entry is greater than this one: once an equal entry was
+        // met, kept or hidden, none of their sub-nodes can hold a twin of it. A
+        // search that met nothing equal keeps reading, as it always did.
+        if (search.met_equal) {
+          return {};
+        }
+        break;
     }
   }
 
