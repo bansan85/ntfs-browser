@@ -255,6 +255,23 @@ bool CNtfsundelDlg::ChooseRecoveryPath(const CString& name, _TCHAR volname,
                   nullptr, MB_OKCANCEL) == IDCANCEL));
 }
 
+namespace {
+
+// What to tell the user when the record of a deleted file could not be
+// opened, or null when it could.
+const _TCHAR* OpenFailureText(NtfsUndel::RecoverError error) {
+  switch (error) {
+    case NtfsUndel::RecoverError::RecordParse:
+      return _T("File Record parse error");
+    case NtfsUndel::RecoverError::AttributeParse:
+      return _T("File Record attribute parse error");
+    default:
+      return nullptr;
+  }
+}
+
+}  // namespace
+
 void CNtfsundelDlg::OnRecover() {
   ULONGLONG ref = 0;
   CString fn;
@@ -270,12 +287,8 @@ void CNtfsundelDlg::OnRecover() {
                                               {.include_deleted = true});
   const NtfsUndel::OpenedRecord opened =
       NtfsUndel::OpenDeletedFile(volume, ref);
-  if (opened.error == NtfsUndel::RecoverError::RecordParse) {
-    MessageBox(_T("File Record parse error"));
-    return;
-  }
-  if (opened.error == NtfsUndel::RecoverError::AttributeParse) {
-    MessageBox(_T("File Record attribute parse error"));
+  if (const _TCHAR* const failure = OpenFailureText(opened.error)) {
+    MessageBox(failure);
     return;
   }
 

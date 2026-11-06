@@ -232,7 +232,8 @@ Run ListVolume(NtfsVolume<S>& volume, CountingDiskReader& reads) {
   REQUIRE(file != nullptr);
 
   Run run;
-  run.exit_code = ListFrom<S>(volume, L"image", L"", L"image", true, file);
+  run.exit_code = ListFrom<S>(
+      volume, {.label = L"image", .path = L"", .root = L"image"}, true, file);
   run.text = ReadAndRemove(file, path);
   run.log = WithoutReadLines(TakeCapturedLog());
   run.calls = reads.Calls();

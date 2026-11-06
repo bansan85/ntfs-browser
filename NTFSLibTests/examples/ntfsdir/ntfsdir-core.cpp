@@ -315,6 +315,52 @@ void UpcomingDirectories(const std::vector<Pending>& pending,
   }
 }
 
+// Where a recursive listing stands: the directories that wait, and the path of
+// the one being listed.
+struct TreeWalk {
+  std::vector<Pending> pending;
+  // The path of the directory being listed. Its first lengths[d] units are the
+  // path of its ancestor d levels below the start, so the path of the next
+  // directory is its parent's prefix and its own name.
+  std::wstring path;
+  std::vector<size_t> lengths;
+  size_t depth = 0;
+  // Record numbers of the directories listed so far. An index entry gives a
+  // number with its sequence apart, so a number alone identifies a directory.
+  std::unordered_set<ULONGLONG> listed;
+};
+
+// Makes fr the next pending directory that is new and parses, and reports the
+// ones that are not. Returns false when none is left.
+template <Cache::Strategy S>
+bool EnterNextDirectory(NtfsDevice::Output& out, Io::FileRecord<S>& fr,
+                        Io::DirectoryReadAhead<S>& ahead, TreeWalk& walk) {
+  while (!walk.pending.empty()) {
+    Pending next = std::move(walk.pending.back());
+    walk.pending.pop_back();
+    // Back to the parent's path: a pending directory is never deeper than
+    // one level below the last one listed, and its parent is on the way.
+    walk.lengths.resize(next.depth);
+    walk.path.resize(walk.lengths.back());
+    walk.path += path_separator;
+    walk.path += next.name;
+    if (walk.listed.contains(next.reference)) {
+      Report(out, L"Skipping " + walk.path + L": directory already listed");
+      ahead.Release(next.reference);
+      continue;
+    }
+    if (fr.ParseFileRecord(next.reference) && fr.ParseAttrs()) {
+      walk.listed.insert(next.reference);
+      walk.lengths.push_back(walk.path.size());
+      walk.depth = next.depth;
+      return true;
+    }
+    Report(out, L"Cannot read directory " + walk.path);
+    ahead.Release(next.reference);
+  }
+  return false;
+}
+
 // Lists the directory fr holds and every directory below it, depth first.
 // root names that directory in the header of its block. A directory that
 // cannot be read is reported and skipped. So is one already listed: NTFS
@@ -328,25 +374,18 @@ template <Cache::Strategy S>
 Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
                const std::wstring& root) {
   Total tree;
-  std::vector<Pending> pending;
-  // The path of the directory being listed. Its first lengths[d] units are the
-  // path of its ancestor d levels below the start, so the path of the next
-  // directory is its parent's prefix and its own name.
-  std::wstring path = root;
-  std::vector<size_t> lengths{root.size()};
-  size_t depth = 0;
-  // Record numbers of the directories listed so far. An index entry gives a
-  // number with its sequence apart, so a number alone identifies a directory.
-  std::unordered_set<ULONGLONG> listed;
+  TreeWalk walk;
+  walk.path = root;
+  walk.lengths = {root.size()};
   if (const std::optional<ULONGLONG> start = fr.GetFileReference()) {
-    listed.insert(*start);
+    walk.listed.insert(*start);
   }
   Io::DirectoryReadAhead<S> ahead(fr.GetVolume());
   ahead.Attach(fr);
   ahead.Begin();
   std::vector<ULONGLONG> upcoming;
-  while (true) {
-    Report(out, L"\nDirectory of " + path);
+  do {
+    Report(out, L"\nDirectory of " + walk.path);
     DirectoryEntries<S> entries;
     entries.out = &out;
     entries.marking = marking;
@@ -363,46 +402,16 @@ Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
     // subdirectories in index order.
     for (auto child = entries.children.rbegin();
          child != entries.children.rend(); ++child) {
-      pending.push_back({.reference = child->reference,
-                         .name = std::move(child->name),
-                         .depth = depth + 1});
+      walk.pending.push_back({.reference = child->reference,
+                              .name = std::move(child->name),
+                              .depth = walk.depth + 1});
     }
     if (ahead.Enabled()) {
-      UpcomingDirectories(pending, listed, ahead.Window(), upcoming);
+      UpcomingDirectories(walk.pending, walk.listed, ahead.Window(), upcoming);
       ahead.Plan(upcoming);
     }
-
-    // Take the next directory that is new and parses, and report the ones
-    // that are not.
-    bool entered = false;
-    while (!pending.empty() && !entered) {
-      Pending next = std::move(pending.back());
-      pending.pop_back();
-      // Back to the parent's path: a pending directory is never deeper than
-      // one level below the last one listed, and its parent is on the way.
-      lengths.resize(next.depth);
-      path.resize(lengths.back());
-      path += path_separator;
-      path += next.name;
-      if (listed.contains(next.reference)) {
-        Report(out, L"Skipping " + path + L": directory already listed");
-        ahead.Release(next.reference);
-        continue;
-      }
-      entered = fr.ParseFileRecord(next.reference) && fr.ParseAttrs();
-      if (entered) {
-        listed.insert(next.reference);
-        lengths.push_back(path.size());
-        depth = next.depth;
-      } else {
-        Report(out, L"Cannot read directory " + path);
-        ahead.Release(next.reference);
-      }
-    }
-    if (!entered) {
-      return tree;
-    }
-  }
+  } while (EnterNextDirectory(out, fr, ahead, walk));
+  return tree;
 }
 
 // Moves fr into the subdirectory named pathname. Returns false after
@@ -460,8 +469,7 @@ bool EnterDirectories(Io::FileRecord<S>& fr, const std::wstring& label,
 }  // namespace
 
 template <Cache::Strategy S>
-int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
-             const std::wstring& path, const std::wstring& root, bool recursive,
+int ListFrom(NtfsVolume<S>& volume, const ListTarget& target, bool recursive,
              std::FILE* stream) {
   // The listing is printed as the walk goes: the phase holds both.
   const Bench::PhaseScope walk(Bench::Phase::Walk);
@@ -473,7 +481,7 @@ int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
   fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (!EnterDirectories(fr, label, path)) {
+  if (!EnterDirectories(fr, target.label, target.path)) {
     return -1;
   }
 
@@ -483,7 +491,7 @@ int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
   NtfsDevice::Output out(volume.GetOptions().tuning.output.flush_bytes, stream);
   Total total;
   if (recursive) {
-    total = ListTree(out, fr, marking, root);
+    total = ListTree(out, fr, marking, target.root);
   } else {
     DirectoryEntries<S> entries;
     entries.out = &out;
@@ -496,13 +504,11 @@ int ListFrom(NtfsVolume<S>& volume, const std::wstring& label,
 }
 
 template int ListFrom<Cache::Strategy::FullCache>(
-    NtfsVolume<Cache::Strategy::FullCache>& volume, const std::wstring& label,
-    const std::wstring& path, const std::wstring& root, bool recursive,
-    std::FILE* stream);
+    NtfsVolume<Cache::Strategy::FullCache>& volume, const ListTarget& target,
+    bool recursive, std::FILE* stream);
 template int ListFrom<Cache::Strategy::NoCache>(
-    NtfsVolume<Cache::Strategy::NoCache>& volume, const std::wstring& label,
-    const std::wstring& path, const std::wstring& root, bool recursive,
-    std::FILE* stream);
+    NtfsVolume<Cache::Strategy::NoCache>& volume, const ListTarget& target,
+    bool recursive, std::FILE* stream);
 
 namespace {
 
@@ -547,7 +553,9 @@ int ListDevice(const NtfsDevice::DeviceTarget& target, bool recursive,
   const std::wstring root = target.directory.empty()
                                 ? label
                                 : label + path_separator + target.directory;
-  return ListFrom(*volume, label, target.directory, root, recursive);
+  return ListFrom(*volume,
+                  {.label = label, .path = target.directory, .root = root},
+                  recursive);
 }
 
 #ifdef _WIN32
@@ -569,7 +577,8 @@ int ListDrive(wchar_t* path, bool recursive, const VolumeOptions& options) {
     return -1;
   }
   const std::wstring root = label + L':' + path_separator + path;
-  return ListFrom(volume, label, path, root, recursive);
+  return ListFrom(volume, {.label = label, .path = path, .root = root},
+                  recursive);
 }
 
 #endif  // _WIN32

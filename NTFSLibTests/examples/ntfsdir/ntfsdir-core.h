@@ -68,13 +68,20 @@ std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]);
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 int RunNtfsDir(int argc, wchar_t* argv[]);
 
-// Lists the directory path names on an open volume, which label names in
-// messages and root in the headers of a recursive listing, to stream (stdout,
-// or a binary file a test reads back). The volume's tuning decides whether the
-// next directories of a recursive listing are read ahead. Returns the exit
-// code.
+// What a listing names: the directory and the headers that show it.
+struct ListTarget {
+  // The volume in messages.
+  std::wstring label;
+  // The directory to list, relative to the root of the volume.
+  std::wstring path;
+  // The directory in the headers of a recursive listing.
+  std::wstring root;
+};
+
+// Lists the directory target.path on an open volume, to stream (stdout, or a
+// binary file a test reads back). The volume's tuning decides whether the next
+// directories of a recursive listing are read ahead. Returns the exit code.
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 int ListFrom(NTFS_BROWSER_NAMESPACE::NtfsVolume<S>& volume,
-             const std::wstring& label, const std::wstring& path,
-             const std::wstring& root, bool recursive,
+             const ListTarget& target, bool recursive,
              std::FILE* stream = stdout);
