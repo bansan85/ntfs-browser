@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -14,7 +15,6 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "log/ntfs-common.h"
-#include "ntfs-browser/alloc/types.h"
 #include "utf/utf.h"
 #include "util/small-pool.h"
 

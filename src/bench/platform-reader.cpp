@@ -3,9 +3,14 @@
 #include <string_view>
 
 #include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
+
+namespace NtfsBrowser {
+
+class IDiskReader;
+
+}  // namespace NtfsBrowser
 
 #ifdef _WIN32
   #include "io/win32-disk-reader.h"

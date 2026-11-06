@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
@@ -20,7 +21,6 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "catch2/catch_message.hpp"
 #include "efs-test-support.h"
 #include "efs-tests-support.h"
 #include "efs/efs-stream.h"

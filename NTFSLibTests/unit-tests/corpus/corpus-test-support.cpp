@@ -10,13 +10,13 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/catch_message.hpp"
 #include "partition-disk-reader.h"
 #include "recording-disk-reader.h"
 #include "sequential-disk-reader.h"

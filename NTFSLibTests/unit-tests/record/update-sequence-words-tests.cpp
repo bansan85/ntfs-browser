@@ -5,6 +5,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
+
 #include "record/header.h"
 
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;

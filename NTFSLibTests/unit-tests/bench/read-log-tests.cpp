@@ -1,25 +1,26 @@
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <ios>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>

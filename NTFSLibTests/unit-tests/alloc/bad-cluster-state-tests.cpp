@@ -18,7 +18,6 @@
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

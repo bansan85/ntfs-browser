@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <iterator>
+#include <ranges>
 #include <string>
 #include <string_view>
 

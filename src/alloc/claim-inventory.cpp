@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -20,6 +21,15 @@
 #include <ntfs-browser/namespace.h>
 
 #include "attr/slot.h"
+
+namespace NtfsBrowser {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrBase;
+
+}  // namespace Attr
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 

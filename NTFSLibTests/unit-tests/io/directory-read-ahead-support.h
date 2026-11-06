@@ -4,11 +4,9 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
@@ -17,6 +15,14 @@
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "throttled-disk-reader.h"
+
+namespace NtfsBrowser {
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+}  // namespace NtfsBrowser
 
 // What the tests of the read ahead of a recursive listing share: the trees they
 // list, and a run of the listing of NtfsDir over a fake volume.

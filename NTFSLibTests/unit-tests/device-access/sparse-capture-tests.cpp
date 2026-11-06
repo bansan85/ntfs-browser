@@ -4,19 +4,20 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <ios>
 #include <iterator>
 #include <memory>
+#include <span>
 #include <string>
-#include <system_error>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 
 #include "bench-session-guard.h"
 #include "fake-ntfs-image.h"

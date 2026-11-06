@@ -13,9 +13,9 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "fullcache-walk-support.h"
-#include "ntfs-browser/ntfs-volume.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 

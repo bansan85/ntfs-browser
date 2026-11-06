@@ -43,9 +43,6 @@ class Table;
 
 namespace NTFS_BROWSER_NAMESPACE {
 
-class IndexEntry;
-class IndexEntryView;
-
 namespace Attr {
 
 template <Cache::Strategy S>

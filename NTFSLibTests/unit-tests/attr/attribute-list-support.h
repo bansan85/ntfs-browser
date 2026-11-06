@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -10,6 +11,8 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "fake-ntfs-image.h"
+#include "memory-disk-reader.h"
 #include "nonresident-index-support.h"
 #include "test-log-sink.h"
 

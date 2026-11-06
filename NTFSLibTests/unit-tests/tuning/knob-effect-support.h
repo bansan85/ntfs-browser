@@ -5,18 +5,19 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tuning/knobs.h>
@@ -27,6 +28,14 @@
 #include "memory-disk-reader.h"
 #include "scan-comparison.h"
 #include "test-log-sink.h"
+
+namespace NtfsBrowser {
+namespace Tuning {
+
+enum class Pattern : std::uint8_t;
+
+}  // namespace Tuning
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::KnobEffect {
 

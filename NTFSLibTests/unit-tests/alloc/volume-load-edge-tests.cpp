@@ -11,13 +11,13 @@
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "alloc-test-support.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/disk-reader.h"
 #include "scripted-disk-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE {

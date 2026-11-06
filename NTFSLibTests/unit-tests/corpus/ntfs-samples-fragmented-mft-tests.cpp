@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <initializer_list>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
@@ -10,7 +11,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "catch2/catch_message.hpp"
+#include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

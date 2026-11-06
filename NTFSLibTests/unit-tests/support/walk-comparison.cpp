@@ -20,6 +20,13 @@
 
 #include "test-log-sink.h"
 
+namespace NtfsBrowser {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
+
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 namespace {

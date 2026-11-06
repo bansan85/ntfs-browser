@@ -10,6 +10,7 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
@@ -22,7 +23,6 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/attr/header-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

@@ -5,16 +5,18 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <ios>
 #include <iterator>
-#include <numeric>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/bench/bench.h>

@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
@@ -16,7 +17,6 @@
 
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 
 namespace {

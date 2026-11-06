@@ -6,14 +6,18 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+#include <ntfs-browser/namespace.h>
 
 #include "bench-options.h"
-#include "json.h"
+
+namespace NtfsDevice {
+
+class JsonWriter;
+
+}  // namespace NtfsDevice
 
 namespace NtfsBenchTool {
 

@@ -3,13 +3,14 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
+#include <functional>
 #include <limits>
 #include <optional>
-#include <ranges>
 #include <span>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -21,6 +22,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #include "alloc/claim-inventory.h"
 #include "alloc/content-check.h"

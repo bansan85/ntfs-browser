@@ -1,7 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
-#include <cstddef>
 #include <optional>
 #include <span>
 #include <string>
@@ -12,12 +11,11 @@
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
-#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "test-log-sink.h"
 

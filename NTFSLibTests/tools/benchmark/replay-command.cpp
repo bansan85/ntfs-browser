@@ -1,15 +1,17 @@
 #include <algorithm>
-#include <cstddef>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "bench-session.h"
 #include "bench-tool.h"

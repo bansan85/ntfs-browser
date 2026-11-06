@@ -2,14 +2,17 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -28,6 +31,13 @@
 #include "level-recorder.h"
 #include "memory-disk-reader.h"
 #include "mft/tree-testing.h"
+
+namespace NtfsBrowser {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;

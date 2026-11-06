@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <ntfs-browser/bench/bench.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 

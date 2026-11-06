@@ -9,13 +9,13 @@
 #include <unordered_map>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/run-list.h"
 #include "internal-export.h"
-#include "ntfs-browser/alloc/types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

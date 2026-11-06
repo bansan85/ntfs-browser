@@ -15,10 +15,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tuning/tuning.h>
@@ -29,6 +28,23 @@
 #include "log/ntfs-common.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
+
+namespace NtfsBrowser {
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+
+namespace Io {
+
+enum class RecordStanding : std::uint8_t;
+
+}  // namespace Io
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 // What the tests of the probes of a directory walk share: a volume over a
 // counting reader, the blocks of a directory's index, and a walk that notes

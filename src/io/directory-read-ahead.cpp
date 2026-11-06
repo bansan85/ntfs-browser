@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -18,9 +19,12 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/alloc/types.h>
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
@@ -37,6 +41,18 @@
 #include "io/record-memo.h"
 #include "io/record-window.h"
 #include "log/ntfs-common.h"
+
+namespace NtfsBrowser {
+namespace Attr {
+
+template <Cache::Strategy S>
+class AttrIndexAlloc;
+
+}  // namespace Attr
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

@@ -5,20 +5,31 @@
 #include <algorithm>
 #include <cstddef>
 #include <format>
+#include <optional>
+#include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/record/carved-name.h>
 
 #include "counting-disk-reader.h"
 #include "mft/tree-testing.h"
 #include "test-log-sink.h"
+
+namespace NtfsBrowser {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

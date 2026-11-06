@@ -1,6 +1,5 @@
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -8,9 +7,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
+
 #include "device-path.h"
 #include "long-path-support.h"
-#include "ntfs-browser/namespace.h"
 #include "temp-dir.h"
 #include "text-convert.h"
 

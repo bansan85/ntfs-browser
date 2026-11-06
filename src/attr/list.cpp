@@ -15,6 +15,7 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>

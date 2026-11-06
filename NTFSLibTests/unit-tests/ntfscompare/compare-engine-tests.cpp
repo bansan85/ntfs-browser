@@ -1,3 +1,5 @@
+#include <ntfs-browser/win-types.h>
+
 #include <iostream>
 #include <optional>
 #include <set>
@@ -5,12 +7,14 @@
 #include <string>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include <ntfs-browser/namespace.h>
 
 #include "compare-engine.h"
 #include "entry.h"
 #include "name-support.h"
-#include "ntfs-browser/win-types.h"
 
 using NtfsCompare::CompareAgainstReference;
 using NtfsCompare::CompareLibraryMethods;

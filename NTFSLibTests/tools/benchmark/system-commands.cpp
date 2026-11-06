@@ -3,18 +3,22 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstddef>
+#include <compare>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
 #include <vector>
 
+#include <sys/types.h>
+
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/knobs.h>
 #include <ntfs-browser/tuning/tuning.h>
 
@@ -32,7 +36,6 @@
   #include <sstream>
 
   #include <fcntl.h>
-  #include <sys/stat.h>
   #include <unistd.h>
 #endif
 

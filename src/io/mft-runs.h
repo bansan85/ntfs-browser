@@ -9,9 +9,17 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "internal-export.h"
+
+namespace NtfsBrowser {
+namespace Tuning {
+
+enum class MediaKind : std::uint8_t;
+struct ProbeTuning;
+
+}  // namespace Tuning
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE {
 

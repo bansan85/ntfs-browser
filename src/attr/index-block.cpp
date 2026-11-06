@@ -1,10 +1,11 @@
 #include "data/index-block.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <ntfs-browser/namespace.h>
 
 #include "attr/index-block.h"
 #include "log/ntfs-common.h"
-#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

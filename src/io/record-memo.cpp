@@ -3,7 +3,6 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>

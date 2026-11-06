@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstddef>
 #include <limits>
 #include <optional>
 #include <span>

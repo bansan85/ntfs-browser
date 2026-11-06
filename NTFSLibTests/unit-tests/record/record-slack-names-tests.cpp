@@ -2,25 +2,24 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <random>
 #include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
-#include "catch2/catch_message.hpp"
-#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 
 namespace NTFS_BROWSER_NAMESPACE {

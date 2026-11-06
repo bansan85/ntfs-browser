@@ -14,6 +14,8 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
@@ -36,7 +38,6 @@
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/attr/header-common.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

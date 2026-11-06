@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"

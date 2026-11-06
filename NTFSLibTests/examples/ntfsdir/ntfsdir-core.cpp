@@ -1,8 +1,8 @@
 #include "ntfsdir-core.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <cerrno>
-#include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -13,7 +13,9 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/bench/bench.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
@@ -21,16 +23,13 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "bench-options.h"
 #include "bench-session.h"
 #include "device-path.h"
 #include "local-time.h"
-#include "ntfs-browser/attr/mask.h"
-#include "ntfs-browser/cache/strategy.h"
-#include "ntfs-browser/win-types.h"
 #include "output.h"
 #include "text-convert.h"
 #include "tool-support.h"

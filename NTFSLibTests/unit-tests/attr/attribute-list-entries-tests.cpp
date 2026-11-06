@@ -10,9 +10,12 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
+#include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -21,7 +24,6 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "attribute-list-support.h"
-#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "nonresident-index-support.h"
 #include "test-log-sink.h"

@@ -12,7 +12,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "ntfs-browser/namespace.h"
+#include <ntfs-browser/namespace.h>
+
 #include "posix-device-disk-reader.h"
 #include "temp-dir.h"
 #include "text-convert.h"

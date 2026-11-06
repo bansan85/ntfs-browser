@@ -17,7 +17,9 @@
 
 #include "attr/file-name.h"
 #include "attr/resident.h"
+#include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
+#include "optional-access.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 using NTFS_BROWSER_NAMESPACE::IndexEntry;

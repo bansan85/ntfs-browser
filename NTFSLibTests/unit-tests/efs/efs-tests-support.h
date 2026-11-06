@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <optional>

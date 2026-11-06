@@ -1,3 +1,5 @@
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -13,7 +15,6 @@
 #include "data/filename.h"
 #include "fake-ntfs-image-internal.h"
 #include "fake-ntfs-image.h"
-#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

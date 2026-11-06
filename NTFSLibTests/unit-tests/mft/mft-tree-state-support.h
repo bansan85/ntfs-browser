@@ -2,17 +2,26 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
+
+namespace NtfsBrowser {
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+struct VolumeOptions;
+
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport {
 

@@ -2,7 +2,6 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <unordered_map>

@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -10,13 +9,12 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/knobs.h>
 #include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

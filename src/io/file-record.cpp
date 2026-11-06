@@ -2,12 +2,12 @@
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <cstring>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -24,6 +24,7 @@
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/index-entry.h>
@@ -31,6 +32,8 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/record/carved-name.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "alloc/data-state.h"
 #include "attr/file-name.h"
@@ -48,8 +51,6 @@
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 #include "mft/record-offset.h"
-#include "ntfs-browser/record/carved-name.h"
-#include "ntfs-browser/volume-options.h"
 #include "record/slack-carver.h"
 #include "utf/utf.h"
 
@@ -60,7 +61,6 @@ class NtfsVolume;
 
 namespace Attr {
 
-struct HeaderCommon;
 template <Cache::Strategy S>
 class AttrBase;
 template <typename Resident, Cache::Strategy S>

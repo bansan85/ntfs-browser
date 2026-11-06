@@ -1,3 +1,5 @@
+#include <ntfs-browser/win-types.h>
+
 #include <cstring>
 #include <optional>
 #include <span>
@@ -8,6 +10,9 @@
 #include <gsl/narrow>
 #include <gsl/util>
 
+#include <ntfs-browser/attr/header-common.h>
+#include <ntfs-browser/attr/type.h>
+#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/file-record-flag.h"
@@ -21,9 +26,6 @@
 #include "fake-ntfs-image-internal.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
-#include "ntfs-browser/attr/header-common.h"
-#include "ntfs-browser/attr/type.h"
-#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

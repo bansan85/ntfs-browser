@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
@@ -17,7 +18,6 @@
 #include <ntfs-browser/usn/types.h>
 
 #include "alloc-failure-support.h"
-#include "catch2/catch_message.hpp"
 #include "fake-ntfs-image.h"
 #include "usn-test-support.h"
 

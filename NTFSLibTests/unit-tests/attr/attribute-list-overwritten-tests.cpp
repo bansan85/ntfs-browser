@@ -1,5 +1,4 @@
-#include <ntfs-browser/win-types.h>
-
+#include <cstddef>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -11,7 +10,6 @@
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>

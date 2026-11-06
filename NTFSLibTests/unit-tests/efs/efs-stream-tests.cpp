@@ -12,8 +12,10 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
@@ -22,13 +24,12 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/catch_message.hpp"
-#include "catch2/matchers/catch_matchers.hpp"
 #include "efs-test-support.h"
 #include "efs-tests-support.h"
 #include "efs/fek.h"

@@ -1,23 +1,28 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
 #include "cluster-account-support.h"
 #include "fake-ntfs-image.h"
 #include "mft-tree-state-support.h"
+
+namespace NtfsBrowser {
+
+struct VolumeOptions;
+
+}  // namespace NtfsBrowser
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;

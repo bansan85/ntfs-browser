@@ -3,25 +3,32 @@
 #include <algorithm>
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tuning/tuning.h>
 
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "io/mft-runs.h"
 #include "probe-walk-support.h"
+
+namespace NtfsBrowser {
+
+class IndexEntryView;
+
+}  // namespace NtfsBrowser
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;

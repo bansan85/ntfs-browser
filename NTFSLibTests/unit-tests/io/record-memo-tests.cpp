@@ -1,14 +1,12 @@
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <span>
 #include <string>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 

@@ -13,7 +13,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-#include "child-process.h"
+#include "../support/child-process.h"
 #include "test-log-sink.h"
 
 namespace Fs = std::filesystem;

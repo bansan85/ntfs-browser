@@ -24,9 +24,13 @@
     #include <sys/sysmacros.h>
   #endif
 
+  #include <ntfs-browser/win-types.h>
+
+  #include <ntfs-browser/namespace.h>
+  #include <ntfs-browser/tuning/tuning.h>
+
   #include "disk-identity.h"
   #include "host-media.h"
-  #include "ntfs-browser/win-types.h"
   #include "text-convert.h"
 
 namespace NtfsDevice {

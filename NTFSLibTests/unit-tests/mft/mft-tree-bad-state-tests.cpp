@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/alloc/types.h>
@@ -19,7 +20,6 @@
 
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
-#include "catch2/matchers/catch_matchers.hpp"
 #include "fake-ntfs-image.h"
 #include "mft-tree-state-support.h"
 #include "mft/tree-testing.h"

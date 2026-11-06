@@ -3,13 +3,13 @@
 #include <system_error>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/catch_message.hpp"
-#include "catch2/matchers/catch_matchers.hpp"
 #include "sample-run.h"
 #include "temp-dir.h"
 

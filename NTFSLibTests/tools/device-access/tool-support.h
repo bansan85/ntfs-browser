@@ -4,8 +4,7 @@
 #include <string_view>
 
 #include <ntfs-browser/log/log.h>
-
-#include "ntfs-browser/namespace.h"
+#include <ntfs-browser/namespace.h>
 
 namespace NtfsDevice {
 

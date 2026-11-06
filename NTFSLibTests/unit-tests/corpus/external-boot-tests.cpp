@@ -12,6 +12,7 @@
 #include <string_view>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
@@ -21,7 +22,6 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "data/ntfs-bpb.h"
 #include "memory-disk-reader.h"

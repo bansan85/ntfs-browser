@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
@@ -25,7 +26,6 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/catch_message.hpp"
 #include "counting-disk-reader.h"
 #include "standalone-mft-disk-reader.h"
 #include "test-log-sink.h"

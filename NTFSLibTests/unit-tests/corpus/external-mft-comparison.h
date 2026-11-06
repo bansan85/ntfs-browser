@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -9,7 +7,13 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
-#include "external-mft-support.h"
+namespace NtfsBrowser {
+namespace Tests {
+
+struct FlsLine;
+
+}  // namespace Tests
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

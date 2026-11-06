@@ -5,22 +5,23 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "counting-disk-reader.h"
@@ -30,6 +31,20 @@
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
 #include "throttled-disk-reader.h"
+
+namespace NtfsBrowser {
+
+class IndexEntryView;
+
+namespace Io {
+
+enum class RecordStanding : std::uint8_t;
+
+}  // namespace Io
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;

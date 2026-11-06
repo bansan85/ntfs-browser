@@ -19,7 +19,6 @@
 
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
-#include "counting-disk-reader.h"
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image.h"
 

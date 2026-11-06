@@ -10,9 +10,9 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include "catch2/matchers/catch_matchers.hpp"
 #include "logging-test-support.h"
 
 using Catch::Matchers::ContainsSubstring;

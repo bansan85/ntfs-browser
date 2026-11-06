@@ -4,7 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
+#include <system_error>
 
 #ifdef _WIN32
   #include <cwctype>

@@ -12,14 +12,16 @@
 #include <array>
 #include <cerrno>
 #include <chrono>
-#include <cstddef>
+#include <compare>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -28,11 +30,13 @@
 
 #include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/bench/bench.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -41,7 +45,6 @@
 #include "device-path.h"
 #include "line-buffer.h"
 #include "local-time.h"
-#include "ntfs-browser/cache/strategy.h"
 #include "ordered-chunks.h"
 #include "output.h"
 #include "text-convert.h"

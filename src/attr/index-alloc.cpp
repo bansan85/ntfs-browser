@@ -1,9 +1,10 @@
 #include "attr/index-alloc.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -13,6 +14,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
@@ -25,7 +27,6 @@
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "log/ntfs-common.h"
-#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

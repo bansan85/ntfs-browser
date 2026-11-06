@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstddef>
-#include <new>
 
 #include <ntfs-browser/namespace.h>
 

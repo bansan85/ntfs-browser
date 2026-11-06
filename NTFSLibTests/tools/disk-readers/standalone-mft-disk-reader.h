@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <fstream>
 #include <optional>
 #include <span>
@@ -12,8 +13,15 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
-#include "data/file-record-header.h"
 #include "data/header-non-resident.h"
+
+namespace NtfsBrowser {
+namespace Data {
+
+struct FileRecordHeader;
+
+}  // namespace Data
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

@@ -1,6 +1,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -16,7 +17,6 @@
 #include "alloc/cluster-bitmap.h"
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

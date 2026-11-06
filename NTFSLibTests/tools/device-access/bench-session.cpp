@@ -1,12 +1,15 @@
 #include "bench-session.h"
 
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -14,10 +17,9 @@
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/tuning/knobs.h>
 #include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
 
-#include "disk-identity.h"
 #include "json.h"
+#include "sparse-capture.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

@@ -9,12 +9,13 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <random>
+#include <span>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <unordered_set>
 #include <utility>
@@ -22,10 +23,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/defines.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
@@ -44,6 +45,14 @@
 #include "ntfsdir-core.h"
 #include "test-log-sink.h"
 #include "throttled-disk-reader.h"
+
+namespace NtfsBrowser {
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead {
 

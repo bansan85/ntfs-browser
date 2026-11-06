@@ -5,13 +5,14 @@
 #include <vector>
 
 #include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/volume-options.h>
+#include <ntfs-browser/namespace.h>
 
 #include "bench-options.h"
-#include "json.h"
-#include "sparse-capture.h"
 
 namespace NtfsDevice {
+
+class JsonWriter;
+class SparseCapture;
 
 // Writes report as the "run" members of an object the caller opened: the
 // phases, the threads, the reads by kind and class, and the disk's side. The

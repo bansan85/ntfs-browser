@@ -4,8 +4,9 @@
 // on the disk, which can lag what NTFS caches by hours.
 
 #include <algorithm>
+#include <array>
 #include <chrono>
-#include <cstddef>
+#include <compare>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
@@ -13,9 +14,12 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
+#include <sys/types.h>
+
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "bench-tool.h"

@@ -1,3 +1,5 @@
+#include <ntfs-browser/win-types.h>
+
 #include <array>
 #include <cassert>
 #include <optional>
@@ -12,7 +14,6 @@
 #include "fake-ntfs-image-internal.h"
 #include "fake-ntfs-image.h"
 #include "lznt1/decompress.h"
-#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

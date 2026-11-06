@@ -8,7 +8,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -21,6 +20,7 @@
 #include <spdlog/sinks/sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
 
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/log/sink.h>

@@ -5,18 +5,17 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <tuple>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/catch_message.hpp"
-#include "catch2/matchers/catch_matchers.hpp"
 #include "cluster-account-support.h"
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"

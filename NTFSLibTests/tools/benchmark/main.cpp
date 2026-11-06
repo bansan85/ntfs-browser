@@ -9,6 +9,7 @@
 //   sample    samples the disk counters until a process ends
 // The Python script drives them; each prints JSON.
 
+#include <array>
 #include <charconv>
 #include <cstdint>
 #include <cstdio>
@@ -22,11 +23,9 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "bench-options.h"

@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>

@@ -1,5 +1,7 @@
+#include <ntfs-browser/win-types.h>
+
 #include <array>
-#include <cstring>
+#include <cstddef>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -8,23 +10,15 @@
 #include <gsl/narrow>
 #include <gsl/util>
 
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
-#include "data/file-record-flag.h"
-#include "data/filename.h"
-#include "data/header-resident.h"
 #include "data/index-block.h"
-#include "data/index-entry-flag.h"
-#include "data/index-entry.h"
-#include "data/index-root.h"
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
 #include "fake-ntfs-image.h"
 #include "gap-collation-probe.h"
-#include "ntfs-browser/attr/header-common.h"
-#include "ntfs-browser/attr/type.h"
-#include "ntfs-browser/win-types.h"
 #include "upcase/upcase.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {

@@ -17,6 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
@@ -27,7 +28,6 @@
 #include "corpus-test-support.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/disk-reader.h"
 #include "partition-disk-reader.h"
 
 namespace {

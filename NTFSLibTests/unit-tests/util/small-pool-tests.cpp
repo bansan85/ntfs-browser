@@ -1,10 +1,11 @@
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <thread>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <ntfs-browser/namespace.h>
 
 #include "util/small-pool.h"
 

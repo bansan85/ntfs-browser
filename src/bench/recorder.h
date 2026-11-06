@@ -3,14 +3,21 @@
 #include <ntfs-browser/win-types.h>
 
 #include <atomic>
-#include <cstddef>
 #include <cstdint>
+#include <span>
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "internal-export.h"
+
+namespace NtfsBrowser {
+namespace Tuning {
+
+enum class MediaKind : std::uint8_t;
+
+}  // namespace Tuning
+}  // namespace NtfsBrowser
 
 // The hooks that the read path calls. Every one is inline and starts with a
 // test of one atomic flag, so that a run without a session pays a load and a

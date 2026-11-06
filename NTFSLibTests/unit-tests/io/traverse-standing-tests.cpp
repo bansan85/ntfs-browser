@@ -5,17 +5,19 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/mft/idx.h>
@@ -23,12 +25,19 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/matchers/catch_matchers.hpp"
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
 #include "walk-comparison.h"
+
+namespace NtfsBrowser {
+
+class IndexEntryView;
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;

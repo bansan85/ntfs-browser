@@ -3,9 +3,10 @@
 #include <algorithm>
 #include <cstdio>
 #include <mutex>
-#include <string_view>
 #include <system_error>
 #include <thread>
+
+#include <ntfs-browser/namespace.h>
 
 #ifdef _WIN32
   #include <cstddef>

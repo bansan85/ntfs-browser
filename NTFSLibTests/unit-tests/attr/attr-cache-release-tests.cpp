@@ -16,6 +16,7 @@
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
@@ -25,7 +26,6 @@
 #include "efs/fek.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/disk-reader.h"
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))

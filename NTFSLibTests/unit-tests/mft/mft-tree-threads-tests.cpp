@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
-#include <format>
-#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -16,12 +14,11 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-#include <ntfs-browser/attr/defines.h>
-#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
@@ -37,6 +34,14 @@
 #include "mft/tree-testing.h"
 #include "scan-comparison.h"
 #include "test-log-sink.h"
+
+namespace NtfsBrowser {
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+}  // namespace NtfsBrowser
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;

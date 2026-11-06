@@ -8,6 +8,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
 
 #include "alloc-failure-support.h"
 #include "fake-ntfs-image.h"

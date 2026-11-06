@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>

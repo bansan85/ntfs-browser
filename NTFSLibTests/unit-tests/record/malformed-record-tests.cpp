@@ -7,6 +7,7 @@
 #include <span>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -19,7 +20,6 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/catch_message.hpp"
 #include "data/file-record-flag.h"
 #include "memory-disk-reader.h"
 #include "scratch-record.h"

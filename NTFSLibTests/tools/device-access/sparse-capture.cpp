@@ -1,5 +1,7 @@
 #include "sparse-capture.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -7,6 +9,10 @@
 #include <memory>
 #include <span>
 #include <string>
+
+#include <sys/types.h>
+
+#include <ntfs-browser/io/extended-path.h>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -16,8 +22,6 @@
   #include <sys/stat.h>
   #include <unistd.h>
 #endif
-
-#include <ntfs-browser/io/extended-path.h>
 
 namespace NtfsDevice {
 

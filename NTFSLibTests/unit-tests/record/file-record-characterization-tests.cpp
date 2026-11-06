@@ -12,9 +12,11 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
+#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -25,7 +27,6 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/matchers/catch_matchers.hpp"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/filename.h"
@@ -40,7 +41,6 @@
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/attr/header-common.h"
 #include "test-log-sink.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

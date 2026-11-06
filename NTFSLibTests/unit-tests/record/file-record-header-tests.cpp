@@ -8,6 +8,7 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
@@ -15,7 +16,6 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/matchers/catch_matchers.hpp"
 #include "data/file-record-header.h"
 #include "file-record-header-edit.h"
 #include "record/header.h"

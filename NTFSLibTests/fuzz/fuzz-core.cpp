@@ -25,6 +25,7 @@
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/index-entry.h>
@@ -37,13 +38,13 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/record/carved-name.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "gap-collation-probe.h"
 #include "looping-disk-reader.h"
 #include "named-stream-probe.h"
-#include "ntfs-browser/disk-reader.h"
 #include "usn/usn-record-scanner.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -54,13 +55,6 @@ template <Cache::Strategy S>
 class AttrBase;
 
 }  // namespace Attr
-
-namespace Io {
-
-template <Cache::Strategy S>
-class FileRecord;
-
-}  // namespace Io
 }  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;

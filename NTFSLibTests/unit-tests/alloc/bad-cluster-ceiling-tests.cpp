@@ -19,8 +19,14 @@
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
 #include "alloc/bad-cluster-list.h"
-#include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
+
+namespace NtfsBrowser {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

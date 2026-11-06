@@ -19,7 +19,6 @@
 #include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
 #include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

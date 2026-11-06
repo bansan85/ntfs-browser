@@ -5,10 +5,10 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <span>
 #include <string>
 
 #include <ntfs-browser/bench/bench.h>
+#include <ntfs-browser/namespace.h>
 
 namespace NtfsDevice {
 
@@ -40,6 +40,7 @@ class SparseCapture final : public NTFS_BROWSER_NAMESPACE::Bench::ICaptureSink {
  private:
   // Platform handle, hidden behind the pointer.
   class Impl;
+
   std::unique_ptr<Impl> impl_;
   std::string error_;
 };

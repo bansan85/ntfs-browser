@@ -23,6 +23,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/read-ahead-disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tuning/tuning.h>
 
 #include "log/ntfs-common.h"
 

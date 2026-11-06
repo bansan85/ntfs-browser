@@ -1,10 +1,10 @@
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <optional>
 #include <span>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -27,6 +27,13 @@
 #include "data/file-record-header.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
+
+namespace NtfsBrowser {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;

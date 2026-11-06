@@ -1,3 +1,5 @@
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <filesystem>
 #include <memory>
@@ -25,7 +27,6 @@
 #include "fake-ntfs-image.h"
 #include "library-walk.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/win-types.h"
 #include "optional-access.h"
 #include "volume-open.h"
 

@@ -1,9 +1,6 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <condition_variable>
-#include <cstddef>
 #include <cstdio>
 #include <format>
 #include <mutex>

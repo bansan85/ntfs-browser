@@ -1,3 +1,5 @@
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <filesystem>
 #include <optional>
@@ -7,17 +9,18 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/catch_message.hpp"
-#include "catch2/matchers/catch_matchers.hpp"
+#include "frozen/bits/elsa_std.h"
+#include "frozen/unordered_map.h"
 #include "fuzz-core.h"
 #include "fuzzer-expected-messages.h"
 #include "looping-disk-reader.h"
-#include "ntfs-browser/win-types.h"
 #include "test-log-sink.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;

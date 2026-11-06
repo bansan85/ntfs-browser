@@ -7,17 +7,16 @@
 #include <stdexcept>
 #include <string>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/catch_message.hpp"
-#include "catch2/matchers/catch_matchers.hpp"
 #include "log/ntfs-common.h"
 #include "logging-test-support.h"
-#include "test-log-sink.h"
 
 namespace Fs = std::filesystem;
 using Catch::Matchers::ContainsSubstring;

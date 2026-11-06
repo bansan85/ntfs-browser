@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <cstdint>
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -15,6 +15,7 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tuning/tuning.h>

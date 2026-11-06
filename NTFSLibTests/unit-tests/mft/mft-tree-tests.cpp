@@ -12,12 +12,14 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <spdlog/sinks/ostream_sink.h>
 #include <spdlog/sinks/sink.h>
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/log/spdlog-adapter.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
@@ -25,7 +27,6 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/matchers/catch_matchers.hpp"
 #include "corpus-test-support.h"
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image.h"

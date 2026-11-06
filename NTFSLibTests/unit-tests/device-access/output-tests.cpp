@@ -1,14 +1,13 @@
 #include <algorithm>
 #include <chrono>
-#include <cstddef>
+#include <compare>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <ios>
 #include <iterator>
 #include <string>
-#include <string_view>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -22,8 +21,13 @@
   #include <unistd.h>
 #endif
 
+#include <ntfs-browser/win-types.h>
+
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+
+#include <ntfs-browser/namespace.h>
 
 #include "line-buffer.h"
 #include "output.h"

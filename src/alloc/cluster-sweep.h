@@ -5,11 +5,23 @@
 #include <vector>
 
 #include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
-#include "alloc/claim-inventory.h"
 #include "internal-export.h"
+
+namespace NtfsBrowser {
+namespace Alloc {
+
+struct ClaimInventory;
+
+}  // namespace Alloc
+
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE {
 

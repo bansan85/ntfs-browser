@@ -1,5 +1,7 @@
 #include "attr/resident.h"
 
+#include <ntfs-browser/win-types.h>
+
 #include <cstring>
 #include <span>
 #include <stdexcept>
@@ -12,7 +14,6 @@
 #include <ntfs-browser/namespace.h>
 
 #include "data/header-resident.h"
-#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

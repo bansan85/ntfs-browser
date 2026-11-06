@@ -1,27 +1,30 @@
 #include <ntfs-browser/win-types.h>
 
-#include <array>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "memory-disk-reader.h"
 #include "nps-ntfs1-test-support.h"
 #include "walk-comparison.h"
+
+namespace NtfsBrowser {
+
+class IDiskReader;
+
+}  // namespace NtfsBrowser
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;

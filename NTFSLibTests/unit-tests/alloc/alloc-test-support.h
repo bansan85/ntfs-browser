@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <string>
@@ -11,7 +12,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -21,6 +21,14 @@
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
 #include "test-log-sink.h"
+
+namespace NtfsBrowser {
+namespace Alloc {
+
+struct BadClusters;
+
+}  // namespace Alloc
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {

@@ -54,8 +54,6 @@ template <Cache::Strategy S>
 class AttrBase;
 template <Cache::Strategy S>
 class AttrIndexAlloc;
-template <Cache::Strategy S>
-class AttrNonResident;
 
 }  // namespace Attr
 }  // namespace NTFS_BROWSER_NAMESPACE

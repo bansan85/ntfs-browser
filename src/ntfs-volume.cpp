@@ -22,13 +22,17 @@
 #include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
+#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
+#include "attr/resident.h"
 #include "attr/slot.h"
 #include "attr/vol-info.h"
 #include "attr/vol-name.h"
@@ -37,9 +41,8 @@
 #include "io/file-reader.h"
 #include "io/file-record-attr-types.h"
 #include "log/ntfs-common.h"
+#include "mft/extent-map.h"
 #include "mft/record-offset.h"
-#include "ntfs-browser/efs/efs.h"
-#include "ntfs-browser/volume-options.h"
 #include "ntfs-volume-impl.h"
 #include "upcase/upcase.h"
 #include "usn/usn-journal-loader.h"

@@ -16,6 +16,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
 

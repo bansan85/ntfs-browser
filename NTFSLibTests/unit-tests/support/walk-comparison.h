@@ -2,14 +2,19 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <compare>
 #include <string>
 #include <vector>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
+
+namespace NtfsBrowser {
+
+template <Cache::Strategy S>
+class NtfsVolume;
+
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

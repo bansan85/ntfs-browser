@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
@@ -19,7 +20,6 @@
 #include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "catch2/catch_message.hpp"
 #include "corpus-test-support.h"
 #include "external-mft-support.h"
 

@@ -7,16 +7,17 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "counting-disk-reader.h"
@@ -24,6 +25,17 @@
 #include "knob-effect-support.h"
 #include "memory-disk-reader.h"
 #include "walk-comparison.h"
+
+namespace NtfsBrowser {
+
+class IndexEntryView;
+
+namespace Io {
+
+enum class RecordStanding : std::uint8_t;
+
+}  // namespace Io
+}  // namespace NtfsBrowser
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;

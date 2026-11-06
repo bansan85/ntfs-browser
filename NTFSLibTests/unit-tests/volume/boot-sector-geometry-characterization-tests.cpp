@@ -13,6 +13,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 
 #include "data/ntfs-bpb.h"
+#include "fake-ntfs-image.h"
 #include "volume-tree-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE {

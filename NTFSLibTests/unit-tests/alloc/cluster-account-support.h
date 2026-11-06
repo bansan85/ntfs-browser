@@ -2,7 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <memory>
+#include <span>
 #include <type_traits>
 #include <utility>
 #include <vector>

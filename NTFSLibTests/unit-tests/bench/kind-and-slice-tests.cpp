@@ -1,20 +1,22 @@
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <numeric>
 #include <optional>
 #include <span>
-#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/generators/catch_generators.hpp>
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/bench/bench.h>
@@ -32,7 +34,6 @@
 #include "fake-ntfs-image.h"
 #include "io/file-reader.h"
 #include "memory-disk-reader.h"
-#include "test-log-sink.h"
 #include "walk-comparison.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

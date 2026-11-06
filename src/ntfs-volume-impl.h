@@ -3,6 +3,8 @@
 #include <ntfs-browser/win-types.h>
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -13,11 +15,13 @@
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
 #include "attr/slot.h"
+#include "mft/extent-map.h"
 #include "mft/mft-bootstrap.h"
 #include "volume/volume-geometry.h"
 

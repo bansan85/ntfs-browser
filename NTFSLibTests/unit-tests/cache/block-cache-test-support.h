@@ -7,8 +7,9 @@
 #include <memory>
 #include <span>
 
+#include <ntfs-browser/namespace.h>
+
 #include "cache/block-cache.h"
-#include "ntfs-browser/namespace.h"
 
 namespace {
 

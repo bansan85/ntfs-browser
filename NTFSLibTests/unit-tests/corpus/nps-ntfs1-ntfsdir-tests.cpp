@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -13,7 +11,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/catch_message.hpp"
+#include "corpus-test-support.h"
 #include "nps-ntfs1-test-support.h"
 #include "sample-run.h"
 

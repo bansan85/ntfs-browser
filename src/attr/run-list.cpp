@@ -10,11 +10,11 @@
 #include <stdexcept>
 #include <vector>
 
+#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/run-entry.h"
 #include "log/ntfs-common.h"
-#include "ntfs-browser/alloc/types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

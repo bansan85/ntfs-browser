@@ -2,16 +2,22 @@
 
 #include <ntfs-browser/win-types.h>
 
-#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
+
+namespace NtfsBrowser {
+namespace Cache {
+
+enum class Strategy : std::uint8_t;
+
+}  // namespace Cache
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE {
 

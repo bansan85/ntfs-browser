@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -12,7 +13,9 @@
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_tostring.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 #include <gsl/narrow>
@@ -22,6 +25,7 @@
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
@@ -30,14 +34,11 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "attr/vol-name.h"
-#include "catch2/catch_message.hpp"
-#include "catch2/catch_tostring.hpp"
 #include "corpus-test-support.h"
 #include "external-mft-comparison.h"
 #include "external-mft-support.h"
 #include "io/file-record-attr-types.h"
 #include "md5-test-support.h"
-#include "ntfs-browser/disk-reader.h"
 #include "partition-disk-reader.h"
 #include "standalone-mft-disk-reader.h"
 #include "volume/volume-geometry.h"

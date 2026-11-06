@@ -14,6 +14,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
@@ -24,7 +25,6 @@
 #include "counting-disk-reader.h"
 #include "fake-ntfs-image.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/disk-reader.h"
 #include "record/slack-carver.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

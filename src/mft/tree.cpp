@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
-#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
@@ -40,6 +39,7 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/usn/types.h>
 
@@ -53,7 +53,6 @@
 #include "mft/file-reference.h"
 #include "mft/slot-reader.h"
 #include "mft/tree-testing.h"
-#include "ntfs-browser/record/carved-name.h"
 #include "util/chunk-pool.h"
 
 namespace NTFS_BROWSER_NAMESPACE {

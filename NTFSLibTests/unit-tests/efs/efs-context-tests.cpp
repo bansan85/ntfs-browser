@@ -8,12 +8,12 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 
-#include "catch2/matchers/catch_matchers.hpp"
 #include "efs-test-support.h"
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"

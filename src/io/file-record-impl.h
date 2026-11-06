@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <list>
 #include <memory>
 #include <optional>
@@ -20,6 +21,14 @@
 #include "attr/slot.h"
 #include "io/file-record-attr-types.h"
 #include "record/header.h"
+
+namespace NtfsBrowser {
+namespace Alloc {
+
+struct StreamLayout;
+
+}  // namespace Alloc
+}  // namespace NtfsBrowser
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

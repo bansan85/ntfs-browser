@@ -1,6 +1,7 @@
 #include "child-process.h"
 
 #include <chrono>
+#include <compare>
 #include <cstdlib>
 #include <stdexcept>
 

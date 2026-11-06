@@ -12,12 +12,16 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/file-record-flag.h"
+#include "data/file-record-header.h"
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"
+#include "data/header-non-resident.h"
+#include "data/header-resident.h"
 #include "data/index-block.h"
 #include "data/index-entry.h"
 #include "data/std-info-permission.h"
@@ -34,8 +38,6 @@ enum class Type : DWORD;
 namespace Data {
 
 struct FileRecordHeader;
-struct HeaderNonResident;
-struct HeaderResident;
 
 }  // namespace Data
 }  // namespace NTFS_BROWSER_NAMESPACE

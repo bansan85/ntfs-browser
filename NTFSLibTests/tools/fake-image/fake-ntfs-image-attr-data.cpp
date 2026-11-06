@@ -1,13 +1,16 @@
+#include <ntfs-browser/win-types.h>
+
 #include <array>
 #include <cstring>
 #include <limits>
 #include <optional>
-#include <span>
 #include <utility>
 #include <vector>
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/attr/header-common.h>
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
@@ -19,9 +22,6 @@
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
 #include "named-stream-probe.h"
-#include "ntfs-browser/attr/header-common.h"
-#include "ntfs-browser/attr/type.h"
-#include "ntfs-browser/win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

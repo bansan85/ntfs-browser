@@ -9,10 +9,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <ctime>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -20,13 +22,19 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+namespace NtfsBrowser {
+namespace Tuning {
+
+enum class MediaKind : std::uint8_t;
+
+}  // namespace Tuning
+}  // namespace NtfsBrowser
 
 #ifdef _WIN32
   #include <windows.h>
 #else
   #include <sys/resource.h>
-  #include <time.h>
 #endif
 
 namespace NTFS_BROWSER_NAMESPACE::Bench {

@@ -16,8 +16,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
+#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
@@ -34,10 +37,8 @@
 #include "data/index-root.h"
 #include "fake-ntfs-image.h"
 #include "file-record-header-edit.h"
+#include "gap-collation-probe.h"
 #include "memory-disk-reader.h"
-#include "ntfs-browser/attr/header-common.h"
-#include "ntfs-browser/attr/type.h"
-#include "ntfs-browser/disk-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

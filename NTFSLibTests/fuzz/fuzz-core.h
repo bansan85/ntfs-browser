@@ -10,9 +10,8 @@
 #include <vector>
 
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "ntfs-browser/namespace.h"
 
 namespace NtfsFuzz {
 

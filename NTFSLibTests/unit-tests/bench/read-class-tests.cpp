@@ -1,17 +1,14 @@
 #include <ntfs-browser/win-types.h>
 
-#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <filesystem>
-#include <limits>
 #include <memory>
 #include <numeric>
+#include <span>
 #include <string>
 #include <thread>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
