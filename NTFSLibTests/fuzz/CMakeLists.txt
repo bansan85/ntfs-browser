@@ -27,6 +27,8 @@ add_library(
   "looping-disk-reader.cpp"
   "named-stream-probe.h"
   "gap-collation-probe.h"
+  "scan-probes.h"
+  "scan-probes.cpp"
 )
 
 target_link_libraries(NtfsFuzzCore PUBLIC ${PROJECT_NAME})

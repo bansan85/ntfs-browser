@@ -4,7 +4,6 @@
 
 #include <array>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <format>
@@ -16,11 +15,9 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
@@ -29,9 +26,7 @@
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
@@ -45,6 +40,7 @@
 #include "gap-collation-probe.h"
 #include "looping-disk-reader.h"
 #include "named-stream-probe.h"
+#include "scan-probes.h"
 #include "usn/usn-record-scanner.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -60,9 +56,7 @@ class AttrBase;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-using NTFS_BROWSER_NAMESPACE::Io::RecordStanding;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -635,330 +629,6 @@ void ProbeVolume(NtfsVolume<S>& volume) {
   ProbeUserRecords(volume);
   ProbeSupplementarySearch(volume);
   ProbeCaseSearch(volume);
-}
-
-// Starting value and multiplier of the 64-bit FNV-1a hash that Digest() uses.
-constexpr std::uint64_t digest_basis = 14'695'981'039'346'656'037ULL;
-constexpr std::uint64_t digest_prime = 1'099'511'628'211ULL;
-
-#ifdef __clang__
-__attribute__((no_sanitize("unsigned-integer-overflow")))
-#endif
-static std::uint64_t FnvStep(std::uint64_t digest, std::uint64_t value) {
-  return (digest ^ value) * digest_prime;
-}
-
-// A digest of everything the tree says, entries and statistics: two scans of
-// one input that give the same tree give the same digest.
-std::uint64_t Digest(const MftTree& tree) {
-  std::uint64_t digest = digest_basis;
-  const auto mix = [&digest](std::uint64_t value) {
-    digest = FnvStep(digest, value);
-  };
-  const auto mix_time = [&mix](const FILETIME& time) {
-    mix(time.dwLowDateTime);
-    mix(time.dwHighDateTime);
-  };
-  const auto mix_text = [&mix](std::wstring_view text) {
-    for (const wchar_t unit : text) {
-      mix(static_cast<std::uint64_t>(unit));
-    }
-    mix(text.size());
-  };
-  for (const MftTree::Entry& entry : tree.Entries()) {
-    mix(entry.record);
-    mix(entry.sequence);
-    mix(entry.in_use);
-    mix(entry.directory);
-    mix(entry.size);
-    mix(entry.allocated_size);
-    mix_time(entry.create_time);
-    mix_time(entry.write_time);
-    mix_time(entry.change_time);
-    mix_time(entry.access_time);
-    mix(entry.read_only);
-    mix(entry.hidden);
-    mix(entry.system);
-    mix(entry.archive);
-    mix(entry.compressed);
-    mix(entry.encrypted);
-    mix(entry.sparse);
-    mix(entry.data_state ? static_cast<std::uint64_t>(*entry.data_state) + 1
-                         : 0);
-    for (const MftTree::Name& name : entry.names) {
-      mix_text(name.name);
-      mix(name.parent_record);
-      mix(name.parent_sequence);
-      mix(name.dos_only);
-      mix(name.parent_valid);
-    }
-    for (const NTFS_BROWSER_NAMESPACE::Record::CarvedName& carved :
-         entry.carved_names) {
-      mix_text(carved.name);
-      mix(carved.parent_record);
-      mix(carved.parent_known);
-      mix(carved.times_known);
-      mix(carved.partial);
-      mix(carved.name_space);
-    }
-  }
-  const MftTree::ScanStats& stats = tree.Stats();
-  for (const ULONGLONG count :
-       {stats.slots, stats.in_use, stats.deleted, stats.extensions,
-        stats.unreadable, stats.skipped, stats.damaged, stats.reused_extensions,
-        stats.unreachable, stats.carved_names, stats.data_intact,
-        stats.data_reallocated, stats.data_unknown, stats.data_bad}) {
-    mix(count);
-  }
-  return digest;
-}
-
-// Scans the volume over reader with threads threads, as ProbeMftTree() does,
-// and gives the digest of the tree. Nothing when the scan throws: only the fact
-// that it did is worth comparing.
-template <Cache::Strategy S>
-std::optional<std::uint64_t>
-    ScanDigestOver(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
-                   const VolumeOptions& options, unsigned threads) {
-  try {
-    NtfsVolume<S> volume(std::move(reader), options);
-    if (!volume.IsVolumeOK()) {
-      return std::nullopt;
-    }
-    const MftTree tree(
-        volume, {.progress = [](ULONGLONG done,
-                                ULONGLONG /*total*/) { return done == 0; },
-                 .threads = threads});
-    return Digest(tree);
-  } catch (...) {
-    return std::nullopt;
-  }
-}
-
-// ScanDigestOver() on the input, read in a loop.
-template <Cache::Strategy S>
-std::optional<std::uint64_t>
-    ScanDigest(std::span<const BYTE> data, const VolumeOptions& options,
-               std::optional<size_t> failing_read, unsigned threads) {
-  return ScanDigestOver<S>(
-      std::make_unique<LoopingDiskReader>(data, failing_read), options,
-      threads);
-}
-
-// Number of threads the second scan of ProbeScanThreads() runs with.
-constexpr unsigned probed_scan_threads = 3;
-
-// Scans the input with one thread, then with several, each over a reader of its
-// own: the two MUST give the same tree. The threads change when the records are
-// parsed, never what the scan reads or finds, so a difference is a finding, and
-// ends the process like a crash does. The reads of the main probes are not
-// touched: these readers are the probe's own, and it runs last.
-template <Cache::Strategy S>
-void ProbeScanThreads(std::span<const BYTE> data, const VolumeOptions& options,
-                      std::optional<size_t> failing_read) {
-  const std::optional<std::uint64_t> one =
-      ScanDigest<S>(data, options, failing_read, 1);
-  const std::optional<std::uint64_t> several =
-      ScanDigest<S>(data, options, failing_read, probed_scan_threads);
-  if (one != several) {
-    std::abort();
-  }
-}
-
-// A digest of the cluster account of every entry of the tree and of the scan:
-// the tally, the map, and the byte ranges the map gives for 4 KiB clusters.
-std::uint64_t AccountDigest(const MftTree& tree) {
-  constexpr ULONGLONG probed_cluster_size = 4096;
-  std::uint64_t digest = digest_basis;
-  const auto mix = [&digest](std::uint64_t value) {
-    digest = FnvStep(digest, value);
-  };
-  const auto mix_tally = [&mix](const Alloc::ClusterTally& tally) {
-    for (const ULONGLONG count : tally.counts) {
-      mix(count);
-    }
-  };
-  for (const MftTree::Entry& entry : tree.Entries()) {
-    const Alloc::ClusterAccount* const account =
-        tree.ClusterAccountOf(entry.record);
-    if (account == nullptr) {
-      continue;
-    }
-    mix(entry.record);
-    mix_tally(account->tally);
-    for (const Alloc::StreamClusterMap& map : account->streams) {
-      mix(map.name.size());
-      mix(map.data_size);
-      mix(map.initialized_size);
-      for (const Alloc::ClusterPiece& piece : map.pieces) {
-        mix(piece.first_vcn);
-        mix(piece.clusters);
-        mix(piece.lcn.value_or(0));
-        mix(static_cast<std::uint64_t>(piece.condition));
-      }
-      for (const Alloc::StreamByteRange& range :
-           Alloc::ToByteRanges(map, probed_cluster_size)) {
-        mix(range.offset);
-        mix(range.length);
-        mix(range.damaged);
-        mix(range.reads_as_zeros);
-      }
-    }
-  }
-  mix(tree.Stats().cluster_accounts);
-  mix_tally(tree.Stats().clusters);
-  return digest;
-}
-
-// Scans the volume over reader as the probe of ScanThreads does, with the
-// cluster account at its fullest: the map, and a content check of every cluster
-// presumed intact. Gives the digest of the account. Nothing when the scan
-// throws.
-template <Cache::Strategy S>
-std::optional<std::uint64_t> AccountDigestOver(
-    std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
-    const VolumeOptions& options, unsigned threads) {
-  try {
-    NtfsVolume<S> volume(std::move(reader), options);
-    if (!volume.IsVolumeOK()) {
-      return std::nullopt;
-    }
-    const MftTree tree(
-        volume, {.progress = [](ULONGLONG done,
-                                ULONGLONG /*total*/) { return done == 0; },
-                 .threads = threads,
-                 .cluster_account = Alloc::ClusterAccountLevel::CountsAndMap,
-                 .verify_data = Alloc::DataCheckMode::Full});
-    return AccountDigest(tree);
-  } catch (...) {
-    return std::nullopt;
-  }
-}
-
-// Scans the input with the cluster account on, with one thread and then with
-// several, each over a reader of its own: the two accounts MUST be the same, or
-// the process aborts, as ProbeScanThreads() does. A scan that the progress
-// callback stops has no account, so only an input whose $MFT is short reaches
-// the sweep. It reads in an order of its own, so it runs last.
-template <Cache::Strategy S>
-void ProbeClusterAccount(std::span<const BYTE> data,
-                         const VolumeOptions& options,
-                         std::optional<size_t> failing_read) {
-  const std::optional<std::uint64_t> one = AccountDigestOver<S>(
-      std::make_unique<LoopingDiskReader>(data, failing_read), options, 1);
-  const std::optional<std::uint64_t> several = AccountDigestOver<S>(
-      std::make_unique<LoopingDiskReader>(data, failing_read), options,
-      probed_scan_threads);
-  if (one != several) {
-    std::abort();
-  }
-}
-
-// Walks the root with the batched walk, over a reader of its own. It reads in
-// another order than the default walk, so a recorded input would not replay in
-// step for the probes after it: this one runs last.
-template <Cache::Strategy S>
-void ProbeStandingWalk(std::span<const BYTE> data, const VolumeOptions& options,
-                       std::optional<size_t> failing_read) {
-  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
-                       options);
-  if (!volume.IsVolumeOK()) {
-    return;
-  }
-  FileRecord<S> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (!root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) ||
-      !root.ParseAttrs()) {
-    return;
-  }
-  std::uint64_t seen = 0;
-  root.TraverseSubEntriesWithStanding(
-      [](const IndexEntryView& entry, RecordStanding standing, void* context) {
-        *static_cast<std::uint64_t*>(context) +=
-            entry.GetFilename().size() + static_cast<std::uint64_t>(standing);
-      },
-      &seen);
-}
-
-// Directories the read-ahead probe lists at most, and the window and budget it
-// reads ahead with: a few dozen directories are enough to slide the window.
-constexpr size_t read_ahead_probe_directories = 32;
-constexpr size_t read_ahead_probe_window = 4;
-constexpr std::uint64_t read_ahead_probe_bytes = std::uint64_t{1} << 20U;
-
-// Lists the directories below the root as a recursive listing does, with the
-// read ahead of the next directories on, over a reader of its own. The batches
-// read at addresses that a stream reader ignores, so the bytes they hold are
-// whatever comes next in the input: they MUST be parsed like any other. It
-// runs last, since it reads in another order than every probe before it.
-template <Cache::Strategy S>
-void ProbeDirectoryReadAhead(std::span<const BYTE> data,
-                             const VolumeOptions& options,
-                             std::optional<size_t> failing_read) {
-  VolumeOptions tuned = options;
-  tuned.tuning.walk.read_ahead_dirs = read_ahead_probe_window;
-  tuned.tuning.walk.read_ahead_bytes = read_ahead_probe_bytes;
-  NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
-                       tuned);
-  if (!volume.IsVolumeOK()) {
-    return;
-  }
-  FileRecord<S> listing(volume);
-  listing.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (!listing.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) ||
-      !listing.ParseAttrs()) {
-    return;
-  }
-  NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S> ahead(volume);
-  ahead.Attach(listing);
-  ahead.Begin();
-
-  std::vector<ULONGLONG> pending;
-  std::unordered_set<ULONGLONG> listed{static_cast<ULONGLONG>(Mft::Idx::Root)};
-  std::vector<ULONGLONG> upcoming;
-  for (size_t directories = 0; directories < read_ahead_probe_directories;
-       directories++) {
-    std::vector<ULONGLONG> children;
-    listing.TraverseSubEntriesWithStanding(
-        [](const IndexEntryView& entry, RecordStanding standing,
-           void* context) {
-          if (entry.IsDirectory() && standing != RecordStanding::Reused) {
-            static_cast<std::vector<ULONGLONG>*>(context)->push_back(
-                entry.GetFileReference());
-          }
-        },
-        &children);
-    if (const std::optional<ULONGLONG> current = listing.GetFileReference()) {
-      ahead.Release(*current);
-    }
-    pending.insert(pending.end(), children.rbegin(), children.rend());
-
-    upcoming.clear();
-    for (auto next = pending.rbegin();
-         next != pending.rend() && upcoming.size() < ahead.Window(); ++next) {
-      if (!listed.contains(*next)) {
-        upcoming.push_back(*next);
-      }
-    }
-    ahead.Plan(upcoming);
-
-    bool entered = false;
-    while (!pending.empty() && !entered) {
-      const ULONGLONG next = pending.back();
-      pending.pop_back();
-      if (!listed.insert(next).second) {
-        ahead.Release(next);
-        continue;
-      }
-      entered = listing.ParseFileRecord(next) && listing.ParseAttrs();
-      if (!entered) {
-        ahead.Release(next);
-      }
-    }
-    if (!entered) {
-      return;
-    }
-  }
 }
 
 template <Cache::Strategy S>
