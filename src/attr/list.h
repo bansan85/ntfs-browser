@@ -68,13 +68,23 @@ class AttrList : public Resident {
     std::vector<bool> loaded;
   };
 
+  // The state of one walk over the entries of the list.
+  struct ListWalk {
+    ListCache cache;
+    // Salvage conditions instead of rejecting the list.
+    bool recover;
+    // Garbage in the list is no defect: another file may have overwritten it.
+    bool overwritable;
+    // The walk ended at a truncated entry or off the declared size.
+    bool truncated{false};
+  };
+
   [[nodiscard]] ListCache MakeListCache() const;
   [[nodiscard]] std::optional<ULONGLONG> ReadListBytes(ULONGLONG offset,
                                                        std::span<BYTE> out,
                                                        ListCache& cache) const;
   bool ReadEntryHeader(ULONGLONG offset, Data::AttributeList& entry,
-                       bool recover, bool overwritable, bool& truncated,
-                       ListCache& cache);
+                       ListWalk& walk);
 };  // AttrList
 
 }  // namespace Attr

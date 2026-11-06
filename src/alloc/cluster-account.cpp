@@ -1,6 +1,8 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <limits>
 #include <vector>
 
@@ -10,71 +12,37 @@
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 
 bool IsDamaged(ClusterCondition condition) noexcept {
-  switch (condition) {
-    case ClusterCondition::Intact:
-    case ClusterCondition::IntactChecked:
-    case ClusterCondition::Consistent:
-    case ClusterCondition::Sparse:
-    case ClusterCondition::NeverWritten:
-      return false;
-    case ClusterCondition::Invalid:
-    case ClusterCondition::Bad:
-    case ClusterCondition::ReallocatedWritten:
-    case ClusterCondition::ReallocatedUnwritten:
-    case ClusterCondition::OverwrittenThenFreed:
-    case ClusterCondition::Contested:
-    case ClusterCondition::AllocatedUnknownOwner:
-    case ClusterCondition::Unknown:
-    case ClusterCondition::LostWithUnit:
-    case ClusterCondition::FreeButClaimed:
-    case ClusterCondition::CrossLinked:
-    case ClusterCondition::Zeroed:
-    case ClusterCondition::OverwrittenByMetadata:
-      return true;
-  }
-  return true;
+  // The conditions that mean the content can be read as the file wrote it.
+  constexpr std::array<ClusterCondition, 5> undamaged{
+      ClusterCondition::Intact, ClusterCondition::IntactChecked,
+      ClusterCondition::Consistent, ClusterCondition::Sparse,
+      ClusterCondition::NeverWritten};
+  return std::ranges::find(undamaged, condition) == undamaged.end();
 }
 
 const char* ConditionName(ClusterCondition condition) noexcept {
-  switch (condition) {
-    case ClusterCondition::Invalid:
-      return "invalid";
-    case ClusterCondition::Bad:
-      return "bad";
-    case ClusterCondition::NeverWritten:
-      return "never-written";
-    case ClusterCondition::ReallocatedWritten:
-      return "reallocated-written";
-    case ClusterCondition::ReallocatedUnwritten:
-      return "reallocated-unwritten";
-    case ClusterCondition::OverwrittenThenFreed:
-      return "overwritten-then-freed";
-    case ClusterCondition::Contested:
-      return "contested";
-    case ClusterCondition::AllocatedUnknownOwner:
-      return "allocated-unknown-owner";
-    case ClusterCondition::Unknown:
-      return "unknown";
-    case ClusterCondition::Intact:
-      return "intact";
-    case ClusterCondition::LostWithUnit:
-      return "lost-with-unit";
-    case ClusterCondition::Consistent:
-      return "consistent";
-    case ClusterCondition::FreeButClaimed:
-      return "free-but-claimed";
-    case ClusterCondition::CrossLinked:
-      return "cross-linked";
-    case ClusterCondition::Sparse:
-      return "sparse";
-    case ClusterCondition::Zeroed:
-      return "zeroed";
-    case ClusterCondition::OverwrittenByMetadata:
-      return "overwritten-by-metadata";
-    case ClusterCondition::IntactChecked:
-      return "intact-checked";
-  }
-  return "unknown";
+  // Indexed by the value of the condition, so in the order of the enum.
+  constexpr std::array<const char*, cluster_condition_count> names{
+      "invalid",
+      "bad",
+      "never-written",
+      "reallocated-written",
+      "reallocated-unwritten",
+      "overwritten-then-freed",
+      "contested",
+      "allocated-unknown-owner",
+      "unknown",
+      "intact",
+      "lost-with-unit",
+      "consistent",
+      "free-but-claimed",
+      "cross-linked",
+      "sparse",
+      "zeroed",
+      "overwritten-by-metadata",
+      "intact-checked"};
+  const auto index = static_cast<std::size_t>(condition);
+  return index < names.size() ? names.at(index) : "unknown";
 }
 
 std::vector<StreamByteRange> ToByteRanges(const StreamClusterMap& map,

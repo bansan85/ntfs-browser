@@ -72,7 +72,6 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   const bool recover = file_record.GetVolume().GetOptions().recover_errors;
   ULONGLONG offset = 0;
   Data::AttributeList al_record{};
-  bool truncated = false;
   // NTFS frees the clusters of a freed record's non-resident list, so another
   // file may have written over them: garbage there is no defect. A resident
   // list lies inside the record, which nothing else writes.
@@ -85,9 +84,10 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   attr_list_chain.insert(MakeChainKey(self_ref, Type::AttributeList));
 
   // Under NoCache, each entry read would read its clusters from the disk again.
-  ListCache cache = MakeListCache();
-  while (ReadEntryHeader(offset, al_record, recover, overwritable, truncated,
-                         cache)) {
+  ListWalk walk{.cache = MakeListCache(),
+                .recover = recover,
+                .overwritable = overwritable};
+  while (ReadEntryHeader(offset, al_record, walk)) {
     if (!Attr::IsValidAttrType(al_record.attr_type)) {
       if (overwritable) {
         file_record.NoteOverwrittenAttrList();
@@ -110,7 +110,7 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
       return;
     }
     if (!CheckRecordSize(al_record, recover)) {
-      truncated = true;
+      walk.truncated = true;
       break;
     }
     offset += al_record.record_size;
@@ -119,8 +119,8 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   // A resident list's normal end (ReadData returning nullopt) can still land
   // past its own declared size, when the last entry's record_size overshoots
   // it - not caught by either check above.
-  if (!truncated && offset != this->GetDataSize()) {
-    truncated = true;
+  if (!walk.truncated && offset != this->GetDataSize()) {
+    walk.truncated = true;
     if (!overwritable) {
       Log::Recoverable(recover,
                        "Attribute List ended at offset {} instead of its "
@@ -129,11 +129,11 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
     }
   }
 
-  if (truncated && overwritable) {
+  if (walk.truncated && overwritable) {
     file_record.NoteOverwrittenAttrList();
     return;
   }
-  if (truncated && !recover) {
+  if (walk.truncated && !recover) {
     throw std::runtime_error("Attribute List is truncated.\n");
   }
 }
@@ -202,12 +202,11 @@ std::optional<ULONGLONG>
 template <typename Resident, Cache::Strategy S>
 bool AttrList<Resident, S>::ReadEntryHeader(ULONGLONG offset,
                                             Data::AttributeList& entry,
-                                            bool recover, bool overwritable,
-                                            bool& truncated, ListCache& cache) {
+                                            ListWalk& walk) {
   const std::optional<ULONGLONG> len = ReadListBytes(
       offset,
       {reinterpret_cast<BYTE*>(&entry), Data::attribute_list_entry_header_size},
-      cache);
+      walk.cache);
   if (!len) {
     // A resident list's normal end: ReadData returns nullopt at offset >= size.
     return false;
@@ -219,10 +218,10 @@ bool AttrList<Resident, S>::ReadEntryHeader(ULONGLONG offset,
   // A non-resident list's normal end is this exact zero-byte read, landing
   // precisely on the declared size. Anything else here is a truncated entry.
   if (*len != 0 || offset != this->GetDataSize()) {
-    truncated = true;
-    if (!overwritable) {
+    walk.truncated = true;
+    if (!walk.overwritable) {
       Log::Recoverable(
-          recover,
+          walk.recover,
           "Attribute List: ReadData returned {} bytes, "
           "expected {} - stopping",
           *len, static_cast<ULONGLONG>(Data::attribute_list_entry_header_size));

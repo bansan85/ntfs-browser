@@ -56,52 +56,85 @@ struct Active {
   bool unwritten{false};
 };
 
-// The condition of a cluster of a freed stream, claimed by claim, while the
-// claims in active cover it and the bitmap says state.
-ClusterCondition FreedCondition(const Active& claim,
-                                std::span<const Active> active,
-                                ClusterState state) noexcept {
+// What the other claimants of a cluster say of a freed claim.
+struct Rivals {
+  // A live record claims the cluster within its valid data length.
+  bool live_written{false};
+  // A live record claims it, written or not.
+  bool live_any{false};
+  // A freed record claims it, within its valid data length, and was freed
+  // later.
+  bool freed_later{false};
+  // A freed record claims it, and the sequence numbers cannot order the two.
+  bool freed_unordered{false};
+
+  // The condition the rivals impose, if any.
+  [[nodiscard]] std::optional<ClusterCondition> Verdict() const noexcept {
+    if (live_written) {
+      return ClusterCondition::ReallocatedWritten;
+    }
+    if (live_any) {
+      return ClusterCondition::ReallocatedUnwritten;
+    }
+    if (freed_later) {
+      return ClusterCondition::OverwrittenThenFreed;
+    }
+    if (freed_unordered) {
+      return ClusterCondition::Contested;
+    }
+    return std::nullopt;
+  }
+};
+
+// The claimants of active other than claim's own record, as Rivals.
+Rivals SurveyRivals(const Active& claim,
+                    std::span<const Active> active) noexcept {
+  Rivals rivals;
+  for (const Active& other : active) {
+    if (other.owner == claim.owner) {
+      continue;
+    }
+    if (!other.freed) {
+      rivals.live_any = true;
+      rivals.live_written = rivals.live_written || !other.unwritten;
+    } else if (!other.unwritten) {
+      // Without two sequence numbers that differ, nothing orders the two.
+      if (other.lsn == claim.lsn || other.lsn == 0 || claim.lsn == 0) {
+        rivals.freed_unordered = true;
+      } else if (other.lsn > claim.lsn) {
+        rivals.freed_later = true;
+      }
+    }
+  }
+  return rivals;
+}
+
+// The condition the bitmap alone settles for any claim: a cluster that is
+// outside the volume or listed bad.
+std::optional<ClusterCondition>
+    UnreachableCondition(ClusterState state) noexcept {
   if (state == ClusterState::OutOfRange) {
     return ClusterCondition::Invalid;
   }
   if (state == ClusterState::Bad) {
     return ClusterCondition::Bad;
   }
+  return std::nullopt;
+}
+
+// The condition of a cluster of a freed stream, claimed by claim, while the
+// claims in active cover it and the bitmap says state.
+ClusterCondition FreedCondition(const Active& claim,
+                                std::span<const Active> active,
+                                ClusterState state) noexcept {
+  if (const auto unreachable = UnreachableCondition(state)) {
+    return *unreachable;
+  }
   if (claim.unwritten) {
     return ClusterCondition::NeverWritten;
   }
-
-  bool live_written = false;
-  bool live_any = false;
-  bool freed_later = false;
-  bool freed_unordered = false;
-  for (const Active& other : active) {
-    if (other.owner == claim.owner) {
-      continue;
-    }
-    if (!other.freed) {
-      live_any = true;
-      live_written = live_written || !other.unwritten;
-    } else if (!other.unwritten) {
-      // Without two sequence numbers that differ, nothing orders the two.
-      if (other.lsn == claim.lsn || other.lsn == 0 || claim.lsn == 0) {
-        freed_unordered = true;
-      } else if (other.lsn > claim.lsn) {
-        freed_later = true;
-      }
-    }
-  }
-  if (live_written) {
-    return ClusterCondition::ReallocatedWritten;
-  }
-  if (live_any) {
-    return ClusterCondition::ReallocatedUnwritten;
-  }
-  if (freed_later) {
-    return ClusterCondition::OverwrittenThenFreed;
-  }
-  if (freed_unordered) {
-    return ClusterCondition::Contested;
+  if (const auto rival = SurveyRivals(claim, active).Verdict()) {
+    return *rival;
   }
   if (state == ClusterState::Allocated) {
     return ClusterCondition::AllocatedUnknownOwner;
@@ -116,11 +149,8 @@ ClusterCondition FreedCondition(const Active& claim,
 ClusterCondition LiveCondition(const Active& claim,
                                std::span<const Active> active,
                                ClusterState state) noexcept {
-  if (state == ClusterState::OutOfRange) {
-    return ClusterCondition::Invalid;
-  }
-  if (state == ClusterState::Bad) {
-    return ClusterCondition::Bad;
+  if (const auto unreachable = UnreachableCondition(state)) {
+    return *unreachable;
   }
   const bool cross_linked =
       std::ranges::any_of(active, [&claim](const Active& other) {
@@ -686,21 +716,7 @@ class Assembler {
       return;
     }
 
-    std::vector<ClusterPiece> pieces = std::move(PiecesOf(account));
-    for (const VcnRange& range : stream.sparse) {
-      pieces.push_back({.first_vcn = range.vcn,
-                        .clusters = range.clusters,
-                        .lcn = std::nullopt,
-                        .condition = ClusterCondition::Sparse});
-    }
-    for (const VcnRange& range : stream.invalid) {
-      pieces.push_back({.first_vcn = range.vcn,
-                        .clusters = range.clusters,
-                        .lcn = std::nullopt,
-                        .condition = ClusterCondition::Invalid});
-    }
-    std::ranges::stable_sort(pieces, {}, &ClusterPiece::first_vcn);
-    pieces = FillGaps(pieces, stream.span);
+    std::vector<ClusterPiece> pieces = CompletePieces(account, stream);
     if (stream.unit_clusters != 0) {
       pieces =
           MarkBrokenUnits(pieces, BrokenUnits(pieces, stream.unit_clusters));
@@ -717,6 +733,28 @@ class Assembler {
                               .data_size = stream.data_size,
                               .initialized_size = stream.initialized_size,
                               .pieces = Merge(pieces)});
+  }
+
+  // The pieces of a stream that cover [0, span) in VCN order: the settled
+  // stretches, its holes and invalid ranges, and an Invalid piece for each gap
+  // left.
+  std::vector<ClusterPiece> CompletePieces(std::uint32_t account,
+                                           const AccountStream& stream) {
+    std::vector<ClusterPiece> pieces = std::move(PiecesOf(account));
+    for (const VcnRange& range : stream.sparse) {
+      pieces.push_back({.first_vcn = range.vcn,
+                        .clusters = range.clusters,
+                        .lcn = std::nullopt,
+                        .condition = ClusterCondition::Sparse});
+    }
+    for (const VcnRange& range : stream.invalid) {
+      pieces.push_back({.first_vcn = range.vcn,
+                        .clusters = range.clusters,
+                        .lcn = std::nullopt,
+                        .condition = ClusterCondition::Invalid});
+    }
+    std::ranges::stable_sort(pieces, {}, &ClusterPiece::first_vcn);
+    return FillGaps(pieces, stream.span);
   }
 
   // Adds an Invalid piece wherever pieces, sorted by VCN, leave a gap in

@@ -39,26 +39,34 @@ namespace {
 // none of them.
 constexpr std::wstring_view bad_stream_name = L"$Bad";
 
-// Appends the claims of one run part, [vcn, vcn + clusters) at lcn, to out. A
-// part longer than a claim holds is cut: what is left is noted in account,
-// when the stream has one.
-void AppendPart(std::vector<Claim>& out, std::uint32_t stream, ULONGLONG lcn,
-                ULONGLONG vcn, ULONGLONG clusters, bool unwritten,
-                AccountStream* account) {
-  if (clusters == 0) {
+// One part of a run: [vcn, vcn + clusters) at lcn.
+struct RunPart {
+  ULONGLONG lcn;
+  ULONGLONG vcn;
+  ULONGLONG clusters;
+  // The part lies past the initialized size: allocated, never written.
+  bool unwritten;
+};
+
+// Appends the claims of one run part to out. A part longer than a claim holds
+// is cut: what is left is noted in account, when the stream has one.
+void AppendPart(std::vector<Claim>& out, std::uint32_t stream,
+                const RunPart& part, AccountStream* account) {
+  if (part.clusters == 0) {
     return;
   }
-  const ULONGLONG held = (std::min)(clusters, max_claim_clusters);
-  out.push_back({.lcn = lcn,
-                 .vcn = vcn,
-                 .clusters_and_flags = static_cast<std::uint32_t>(held) |
-                                       (unwritten ? claim_unwritten_bit : 0U),
-                 .stream = stream});
+  const ULONGLONG held = (std::min)(part.clusters, max_claim_clusters);
+  out.push_back(
+      {.lcn = part.lcn,
+       .vcn = part.vcn,
+       .clusters_and_flags = static_cast<std::uint32_t>(held) |
+                             (part.unwritten ? claim_unwritten_bit : 0U),
+       .stream = stream});
   if (account != nullptr) {
     account->real_clusters += held;
-    if (clusters > held) {
+    if (part.clusters > held) {
       account->invalid.push_back(
-          {.vcn = vcn + held, .clusters = clusters - held});
+          {.vcn = part.vcn + held, .clusters = part.clusters - held});
     }
   }
 }
@@ -86,10 +94,18 @@ void AppendClaims(const StreamLayout& layout, std::uint32_t stream,
     const ULONGLONG run_end = run.vcn + run.clusters;
     const ULONGLONG written_end =
         (std::min)((std::max)(layout.initialized_clusters, run.vcn), run_end);
-    AppendPart(out, stream, *run.lcn, run.vcn, written_end - run.vcn, false,
+    AppendPart(out, stream,
+               {.lcn = *run.lcn,
+                .vcn = run.vcn,
+                .clusters = written_end - run.vcn,
+                .unwritten = false},
                account);
-    AppendPart(out, stream, *run.lcn + (written_end - run.vcn), written_end,
-               run_end - written_end, true, account);
+    AppendPart(out, stream,
+               {.lcn = *run.lcn + (written_end - run.vcn),
+                .vcn = written_end,
+                .clusters = run_end - written_end,
+                .unwritten = true},
+               account);
   }
 }
 
