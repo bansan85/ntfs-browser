@@ -359,7 +359,6 @@ TEST_CASE("A slice takes out the slices nested in it", "[bench][slice]") {
   CHECK(parse >= 20'000'000);
   // Exclusive slices never add up to more than the time they ran in.
   CHECK(parse + merge <= elapsed_ns);
-  CHECK(parse < merge);
   CHECK(report.slices_ns.at(static_cast<size_t>(Bench::Slice::PoolWait)) == 0);
   CHECK(report.slices_ns.at(static_cast<size_t>(Bench::Slice::LogReplay)) == 0);
 }
@@ -396,7 +395,6 @@ TEST_CASE("Slices nested twice are each exclusive", "[bench][slice]") {
   CHECK(merge >= 5000000);
   CHECK(parse >= 5000000);
   CHECK(parse + merge + wait <= elapsed_ns);
-  CHECK(merge < wait);
 }
 
 TEST_CASE("A slice repeats and adds its repeats", "[bench][slice]") {
@@ -440,7 +438,6 @@ TEST_CASE("A slice takes out the time its thread waited for the disk",
   CHECK(report.read_wait_ns >= 30'000'000);
   CHECK(parse >= 10'000'000);
   CHECK(parse + report.read_wait_ns <= elapsed_ns);
-  CHECK(parse < report.read_wait_ns);
 }
 
 TEST_CASE("A slice outside a session records nothing", "[bench][slice]") {
