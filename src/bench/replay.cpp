@@ -8,7 +8,8 @@
 #include <span>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
+#include <ntfs-browser/bench/replay.h>
+#include <ntfs-browser/bench/types.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>

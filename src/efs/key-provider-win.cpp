@@ -1,5 +1,7 @@
 #ifdef _WIN32
 
+  #include "efs/key-provider-win.h"
+
   #include <ntfs-browser/win-types.h>
 
   #include <filesystem>
@@ -158,44 +160,32 @@ class PrivateKey final {
   }
 };
 
-// Unwraps FEKs with the keys of the certificates in one store.
-class StoreKeyProvider final : public IEfsKeyProvider {
- public:
-  explicit StoreKeyProvider(HCERTSTORE store) noexcept : store_(store) {}
+}  // namespace
 
-  ~StoreKeyProvider() override { CertCloseStore(store_, 0); }
+StoreKeyProvider::StoreKeyProvider(void* store) noexcept : store_(store) {}
 
-  StoreKeyProvider(StoreKeyProvider&& other) noexcept = delete;
-  StoreKeyProvider(const StoreKeyProvider& other) = delete;
-  StoreKeyProvider& operator=(StoreKeyProvider&& other) noexcept = delete;
-  StoreKeyProvider& operator=(const StoreKeyProvider& other) = delete;
+StoreKeyProvider::~StoreKeyProvider() { CertCloseStore(store_, 0); }
 
-  std::optional<std::vector<BYTE>>
-      UnwrapFek(std::span<const BYTE> thumbprint,
-                std::span<const BYTE> wrapped_fek) const override {
-    CRYPT_HASH_BLOB hash{gsl::narrow<DWORD>(thumbprint.size()),
-                         const_cast<BYTE*>(thumbprint.data())};
-    const CertPtr cert(CertFindCertificateInStore(store_, cert_encoding, 0,
-                                                  CERT_FIND_SHA1_HASH, &hash,
-                                                  nullptr),
-                       &CertFreeCertificateContext);
-    if (!cert) {
-      return std::nullopt;
-    }
-
-    const PrivateKey key(*cert);
-    if (!key.IsValid()) {
-      Log::Debug("The certificate has no usable private key.");
-      return std::nullopt;
-    }
-    return key.Decrypt(wrapped_fek);
+std::optional<std::vector<BYTE>>
+    StoreKeyProvider::UnwrapFek(std::span<const BYTE> thumbprint,
+                                std::span<const BYTE> wrapped_fek) const {
+  CRYPT_HASH_BLOB hash{gsl::narrow<DWORD>(thumbprint.size()),
+                       const_cast<BYTE*>(thumbprint.data())};
+  const CertPtr cert(CertFindCertificateInStore(store_, cert_encoding, 0,
+                                                CERT_FIND_SHA1_HASH, &hash,
+                                                nullptr),
+                     &CertFreeCertificateContext);
+  if (!cert) {
+    return std::nullopt;
   }
 
- private:
-  HCERTSTORE store_;
-};
-
-}  // namespace
+  const PrivateKey key(*cert);
+  if (!key.IsValid()) {
+    Log::Debug("The certificate has no usable private key.");
+    return std::nullopt;
+  }
+  return key.Decrypt(wrapped_fek);
+}
 
 std::shared_ptr<IEfsKeyProvider> MakeCertStoreKeyProvider() {
   HCERTSTORE store = CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0,

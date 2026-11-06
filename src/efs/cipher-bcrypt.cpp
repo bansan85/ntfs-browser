@@ -1,6 +1,12 @@
 #ifdef _WIN32
 
+  #include "efs/cipher-bcrypt.h"
+
   #include <ntfs-browser/win-types.h>
+
+  #include <memory>
+  #include <span>
+  #include <string_view>
 
   #include <bcrypt.h>
   #include <gsl/narrow>
@@ -13,71 +19,54 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 
+BCryptDecryptor::~BCryptDecryptor() {
+  if (key_ != nullptr) {
+    BCryptDestroyKey(key_);
+  }
+  if (alg_ != nullptr) {
+    BCryptCloseAlgorithmProvider(alg_, 0);
+  }
+}
+
+bool BCryptDecryptor::Init(const wchar_t* algorithm_id,
+                           std::span<const BYTE> key, size_t block_size) {
+  block_size_ = block_size;
+  if (!BCRYPT_SUCCESS(
+          BCryptOpenAlgorithmProvider(&alg_, algorithm_id, nullptr, 0))) {
+    return false;
+  }
+
+  // BCrypt wants the chaining mode as a wide string, terminator included.
+  constexpr std::wstring_view cbc = BCRYPT_CHAIN_MODE_CBC;
+  if (!BCRYPT_SUCCESS(BCryptSetProperty(
+          alg_, BCRYPT_CHAINING_MODE,
+          reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(cbc.data())),
+          static_cast<ULONG>((cbc.size() + 1) * sizeof(wchar_t)), 0))) {
+    return false;
+  }
+
+  return BCRYPT_SUCCESS(BCryptGenerateSymmetricKey(
+      alg_, &key_, nullptr, 0, const_cast<PUCHAR>(key.data()),
+      gsl::narrow<ULONG>(key.size()), 0));
+}
+
+bool BCryptDecryptor::DecryptSector(ULONGLONG offset,
+                                    std::span<BYTE> sector) const {
+  if (sector.size() != sector_size) {
+    return false;
+  }
+
+  // BCrypt advances the IV it is given, so it gets a copy.
+  std::array<BYTE, max_block_size> iv = MakeSectorIv(offset, block_size_);
+  ULONG produced = 0;
+  const NTSTATUS status = BCryptDecrypt(
+      key_, sector.data(), static_cast<ULONG>(sector.size()), nullptr,
+      iv.data(), gsl::narrow<ULONG>(block_size_), sector.data(),
+      static_cast<ULONG>(sector.size()), &produced, 0);
+  return BCRYPT_SUCCESS(status) && produced == sector.size();
+}
+
 namespace {
-
-// BCrypt in CBC mode, restarted with a fresh IV per sector. Owns its
-// algorithm provider and key handles.
-class BCryptDecryptor final : public SectorDecryptor {
- public:
-  BCryptDecryptor() = default;
-  BCryptDecryptor(BCryptDecryptor&& other) noexcept = delete;
-  BCryptDecryptor(const BCryptDecryptor& other) = delete;
-  BCryptDecryptor& operator=(BCryptDecryptor&& other) noexcept = delete;
-  BCryptDecryptor& operator=(const BCryptDecryptor& other) = delete;
-
-  ~BCryptDecryptor() override {
-    if (key_ != nullptr) {
-      BCryptDestroyKey(key_);
-    }
-    if (alg_ != nullptr) {
-      BCryptCloseAlgorithmProvider(alg_, 0);
-    }
-  }
-
-  // Opens the algorithm in CBC mode and imports the key. Returns false if
-  // BCrypt refuses either.
-  [[nodiscard]] bool Init(LPCWSTR algorithm_id, std::span<const BYTE> key,
-                          size_t block_size) {
-    block_size_ = block_size;
-    if (!BCRYPT_SUCCESS(
-            BCryptOpenAlgorithmProvider(&alg_, algorithm_id, nullptr, 0))) {
-      return false;
-    }
-
-    // BCrypt wants the chaining mode as a wide string, terminator included.
-    constexpr std::wstring_view cbc = BCRYPT_CHAIN_MODE_CBC;
-    if (!BCRYPT_SUCCESS(BCryptSetProperty(
-            alg_, BCRYPT_CHAINING_MODE,
-            reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(cbc.data())),
-            static_cast<ULONG>((cbc.size() + 1) * sizeof(wchar_t)), 0))) {
-      return false;
-    }
-
-    return BCRYPT_SUCCESS(BCryptGenerateSymmetricKey(
-        alg_, &key_, nullptr, 0, const_cast<PUCHAR>(key.data()),
-        gsl::narrow<ULONG>(key.size()), 0));
-  }
-
-  bool DecryptSector(ULONGLONG offset, std::span<BYTE> sector) const override {
-    if (sector.size() != sector_size) {
-      return false;
-    }
-
-    // BCrypt advances the IV it is given, so it gets a copy.
-    std::array<BYTE, max_block_size> iv = MakeSectorIv(offset, block_size_);
-    ULONG produced = 0;
-    const NTSTATUS status = BCryptDecrypt(
-        key_, sector.data(), static_cast<ULONG>(sector.size()), nullptr,
-        iv.data(), gsl::narrow<ULONG>(block_size_), sector.data(),
-        static_cast<ULONG>(sector.size()), &produced, 0);
-    return BCRYPT_SUCCESS(status) && produced == sector.size();
-  }
-
- private:
-  BCRYPT_ALG_HANDLE alg_{nullptr};
-  BCRYPT_KEY_HANDLE key_{nullptr};
-  size_t block_size_{0};
-};
 
 // The AES block size, in bytes.
 constexpr size_t aes_block_size = 16;

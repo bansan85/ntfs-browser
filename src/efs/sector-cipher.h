@@ -4,20 +4,9 @@
 
 #include <array>
 #include <cstddef>
-#include <memory>
 #include <span>
 
 #include <ntfs-browser/namespace.h>
-
-#include "../internal-export.h"
-
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Efs {
-
-class Fek;
-
-}  // namespace Efs
-}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 
@@ -84,18 +73,5 @@ class SectorDecryptor {
   [[nodiscard]] virtual bool DecryptSector(ULONGLONG offset,
                                            std::span<BYTE> sector) const = 0;
 };
-
-#ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
-// The Crypto++ backend. Null if the key is unusable.
-[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::unique_ptr<SectorDecryptor>
-    MakeCryptoPpDecryptor(const Fek& fek);
-#endif
-
-#if defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
-// The BCrypt backend. Null if the key is unusable, or for DESX, which BCrypt
-// does not have.
-[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::unique_ptr<SectorDecryptor>
-    MakeBCryptDecryptor(const Fek& fek);
-#endif
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Efs

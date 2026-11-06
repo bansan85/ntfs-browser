@@ -1,3 +1,5 @@
+#include "efs/cipher-cryptopp.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>

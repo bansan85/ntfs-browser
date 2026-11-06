@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
+#include <ntfs-browser/bench/read-log.h>
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 

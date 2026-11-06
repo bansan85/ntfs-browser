@@ -9,6 +9,8 @@
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 
+#include "efs/cipher-bcrypt.h"
+#include "efs/cipher-cryptopp.h"
 #include "efs/fek.h"
 #include "log/ntfs-common.h"
 #include "util/util.h"

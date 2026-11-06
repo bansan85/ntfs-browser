@@ -23,6 +23,8 @@
 
 #include "efs-test-support.h"
 #include "efs-tests-support.h"
+#include "efs/cipher-bcrypt.h"
+#include "efs/cipher-cryptopp.h"
 #include "efs/efs-stream.h"
 #include "efs/fek.h"
 #include "efs/sector-cipher.h"

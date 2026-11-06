@@ -2,7 +2,7 @@
 #include <memory>
 #include <string_view>
 
-#include <ntfs-browser/bench/bench.h>
+#include <ntfs-browser/bench/platform-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
 
