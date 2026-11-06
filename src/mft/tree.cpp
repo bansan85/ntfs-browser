@@ -1,15 +1,13 @@
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
-#include <cstddef>
 #include <memory>
 #include <optional>
-#include <utility>
+#include <span>
 #include <vector>
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
@@ -17,13 +15,16 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tuning/tuning.h>
+#include <ntfs-browser/usn/types.h>
 
 #include "alloc/claim-inventory.h"
-#include "alloc/cluster-sweep.h"
 #include "log/ntfs-common.h"
-#include "mft/slot-entry.h"
+#include "mft/cluster-accounts.h"
+#include "mft/entry-links.h"
+#include "mft/entry-table.h"
+#include "mft/journal-annotator.h"
+#include "mft/path-builder.h"
 #include "mft/slot-scan.h"
-#include "mft/tree-impl.h"
 #include "mft/used-slots.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
@@ -34,24 +35,6 @@ namespace {
 // gives. 2^20 covers most volumes, and bounds what a forged bitmap makes a
 // scan allocate before it reads a record: about 200 MiB.
 constexpr ULONGLONG max_reserved_entries = ULONGLONG{1} << 20;
-
-// The level of cluster accounting a scan runs at: what the options ask for, at
-// least Counts when the content check is on, and Off when no entry can be
-// concerned because the volume keeps neither freed nor damaged records.
-template <Cache::Strategy S>
-Alloc::ClusterAccountLevel
-    EffectiveAccountLevel(const NtfsVolume<S>& volume,
-                          const Mft::MftTree::ScanOptions& options) {
-  if (!volume.GetOptions().include_deleted &&
-      !volume.GetOptions().recover_errors) {
-    return Alloc::ClusterAccountLevel::Off;
-  }
-  if (options.cluster_account == Alloc::ClusterAccountLevel::Off &&
-      options.verify_data != Alloc::DataCheckMode::Off) {
-    return Alloc::ClusterAccountLevel::Counts;
-  }
-  return options.cluster_account;
-}
 
 // The optional work a scan of volume does for each entry.
 template <Cache::Strategy S>
@@ -96,6 +79,44 @@ class KeptBitmapWindows {
 
 }  // namespace
 
+// The state of a tree: its entries and how they link. Each piece is a class of
+// its own: the table of entries, their links, the paths, the cluster accounts
+// and the journal.
+class Mft::MftTree::Impl {
+ public:
+  EntryTable table;
+  EntryLinks links;
+  PathBuilder paths;
+  ClusterAccounts accounts;
+  Mft::MftTree::ScanStats stats;
+  // The files only the journal names, ordered by record, then sequence.
+  std::vector<Mft::MftTree::JournalOnlyEntry> journal_only;
+
+  // Reads the record slots of volume's $MFT, keeps each base record's entry,
+  // then links the entries into a tree. With include_deleted off, the slots
+  // $MFT's $BITMAP marks free are not read.
+  template <Cache::Strategy S>
+  void Scan(const NtfsVolume<S>& volume,
+            const Mft::MftTree::ScanOptions& options);
+
+ private:
+  // Reads the slots into the table, indexes them and accounts for clusters.
+  // Returns the clusters of $J when the scan met the $UsnJrnl record, or
+  // nothing when a run told to stop after a phase ended the scan.
+  template <Cache::Strategy S>
+  std::optional<std::vector<Alloc::Extent>>
+      ReadEntries(const NtfsVolume<S>& volume, const SlotScanInput& input);
+  // Annotates the linked entries from the volume's change journal, when
+  // recovering and when the scan ran to its end. announced says whether the
+  // scan announced the journal to the reader.
+  template <Cache::Strategy S>
+  void ApplyJournalIfComplete(const NtfsVolume<S>& volume, bool announced);
+  // Logs the counters of the scan. The data state counters only mean something
+  // when the scan annotated the entries.
+  void LogScanSummary(bool annotated) const;
+  void LogJournalSummary() const;
+};
+
 Mft::MftTree::MftTree(const NtfsVolume<Cache::Strategy::NoCache>& volume,
                       const Mft::MftTree::ScanOptions& options)
     : impl_(std::make_unique<Impl>()) {
@@ -124,9 +145,6 @@ Mft::MftTree& Mft::MftTree::operator=(Mft::MftTree&& other) noexcept = default;
 
 Mft::MftTree::~MftTree() = default;
 
-// Reads the record slots of volume's $MFT, keeps each base record's entry,
-// then links the entries into a tree. With include_deleted off, the slots
-// $MFT's $BITMAP marks free are not read.
 template <Cache::Strategy S>
 void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
                               const Mft::MftTree::ScanOptions& options) {
@@ -141,7 +159,7 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
                                           : ReadMftBitmap(volume, total);
   // An Entry is big: each time the vector grows, it moves them all. Without a
   // bitmap, the slots are all there is to go by.
-  entries.reserve(gsl::narrow<size_t>(
+  table.Entries().reserve(gsl::narrow<size_t>(
       (std::min)(bitmap ? CountUsedSlots(*bitmap, total) : total,
                  max_reserved_entries)));
 
@@ -163,7 +181,7 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   LogScanSummary(features.annotate);
   {
     const Bench::PhaseScope phase(Bench::Phase::Link);
-    Link();
+    stats.unreachable = links.Link(table);
   }
   if (Bench::StopRequested()) {
     stats.complete = false;
@@ -181,21 +199,19 @@ std::optional<std::vector<Alloc::Extent>>
   const KeptBitmapWindows<S> kept_windows(volume, input.features);
   Alloc::ClaimInventory inventory;
   std::vector<Alloc::Extent> journal_extents =
-      ScanSlots(volume, input, entries, stats, inventory);
+      ScanSlots(volume, input, table.Entries(), stats, inventory);
   // A run told to stop after a phase leaves a tree that is not complete.
   if (Bench::StopRequested()) {
     stats.complete = false;
     return std::nullopt;
   }
-  for (size_t index = 0; index < entries.size(); index++) {
-    // index < entries.size() by the loop condition.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    IndexEntry(entries[index].record, index);
-  }
+  table.IndexAll();
   if (input.features.account && stats.complete) {
     const Bench::PhaseScope phase(Bench::Phase::ClusterSweep);
     volume.SetReadPattern(Tuning::Pattern::LargeSequential);
-    AccountClusters(volume, input.options, inventory);
+    accounts.Account(volume, input.options, inventory, table);
+    stats.cluster_accounts = accounts.Count();
+    stats.clusters = accounts.Tally();
   }
   if (Bench::StopRequested()) {
     stats.complete = false;
@@ -205,39 +221,28 @@ std::optional<std::vector<Alloc::Extent>>
 }
 
 template <Cache::Strategy S>
-void Mft::MftTree::Impl::AccountClusters(
-    const NtfsVolume<S>& volume, const Mft::MftTree::ScanOptions& options,
-    Alloc::ClaimInventory& inventory) {
-  std::vector<Alloc::OwnerAccount> owners = Alloc::AccountClusters(
-      volume, inventory, EffectiveAccountLevel(volume, options),
-      options.verify_data);
-  accounts.reserve(owners.size());
-  for (Alloc::OwnerAccount& owner : owners) {
-    if (!EntryIndex(owner.record)) {
-      continue;
-    }
-    stats.cluster_accounts++;
-    stats.clusters.Add(owner.account.tally);
-    accounts.emplace_back(owner.record, std::move(owner.account));
+void Mft::MftTree::Impl::ApplyJournalIfComplete(const NtfsVolume<S>& volume,
+                                                bool announced) {
+  // A scan that progress() stopped holds only some records: a file would look
+  // lost to the journal that is merely not read yet.
+  if (!volume.GetOptions().recover_errors || !stats.complete) {
+    return;
   }
-  std::ranges::sort(accounts, {}, &decltype(accounts)::value_type::first);
-  LogClusterSummary();
+  const Bench::PhaseScope phase(Bench::Phase::JournalLoad);
+  volume.SetReadPattern(Tuning::Pattern::LargeSequential);
+  const Usn::Journal* journal = volume.GetUsnJournal();
+  // What the loader did not read of the announced journal is read for nothing.
+  if (announced) {
+    volume.CancelPrefetch();
+  }
+  if (journal == nullptr) {
+    return;
+  }
+  journal_only = JournalAnnotator(table, volume.GetOptions().include_deleted)
+                     .Apply(*journal, stats);
+  LogJournalSummary();
 }
 
-void Mft::MftTree::Impl::LogClusterSummary() const {
-  Log::Info(
-      "MFT scan clusters: {} files counted, {} intact, {} reallocated, {} "
-      "bad, {} sparse",
-      stats.cluster_accounts,
-      stats.clusters.Count(Alloc::ClusterCondition::Intact),
-      stats.clusters.Count(Alloc::ClusterCondition::ReallocatedWritten) +
-          stats.clusters.Count(Alloc::ClusterCondition::ReallocatedUnwritten),
-      stats.clusters.Count(Alloc::ClusterCondition::Bad),
-      stats.clusters.Count(Alloc::ClusterCondition::Sparse));
-}
-
-// Logs the counters of the scan. The data state counters only mean something
-// when the scan annotated the entries.
 void Mft::MftTree::Impl::LogScanSummary(bool annotated) const {
   Log::Info(
       "MFT scan: {} slots, {} in use, {} deleted, {} unreadable, {} skipped",
@@ -251,6 +256,111 @@ void Mft::MftTree::Impl::LogScanSummary(bool annotated) const {
   if (stats.carved_names != 0) {
     Log::Info("MFT scan slack: {} names carved", stats.carved_names);
   }
+}
+
+void Mft::MftTree::Impl::LogJournalSummary() const {
+  Log::Info(
+      "MFT scan journal: {} records, {} entries annotated, {} only in the "
+      "journal",
+      stats.usn_records, stats.usn_annotated, stats.usn_journal_only);
+}
+
+const std::vector<Mft::MftTree::Entry>& Mft::MftTree::Entries() const noexcept {
+  return impl_->table.Entries();
+}
+
+const Mft::MftTree::Entry* Mft::MftTree::Find(ULONGLONG record) const {
+  return impl_->table.Find(record);
+}
+
+std::span<const ULONGLONG> Mft::MftTree::Children(ULONGLONG dir_record) const {
+  return impl_->links.Children(impl_->table, dir_record);
+}
+
+bool Mft::MftTree::IsReachable(ULONGLONG record) const {
+  const std::optional<size_t> index = impl_->table.IndexOf(record);
+  return index && impl_->links.IsReachable(*index);
+}
+
+std::span<const Mft::MftTree::JournalOnlyEntry>
+    Mft::MftTree::JournalOnly() const noexcept {
+  return impl_->journal_only;
+}
+
+const Alloc::ClusterAccount*
+    Mft::MftTree::ClusterAccountOf(ULONGLONG record) const {
+  return impl_->accounts.Find(record);
+}
+
+const Mft::MftTree::ScanStats& Mft::MftTree::Stats() const noexcept {
+  return impl_->stats;
+}
+
+std::wstring
+    Mft::MftTree::GetPath(ULONGLONG record,
+                          std::optional<ULONGLONG>* lost_ancestor) const {
+  const Mft::MftTree::Entry* entry = impl_->table.Find(record);
+  const Mft::MftTree::Name* name =
+      entry != nullptr ? PrimaryName(*entry) : nullptr;
+  if (name == nullptr) {
+    if (lost_ancestor != nullptr) {
+      lost_ancestor->reset();
+    }
+    return {};
+  }
+  return impl_->paths.PathThrough(impl_->table, *entry, *name, lost_ancestor);
+}
+
+std::wstring
+    Mft::MftTree::GetPath(ULONGLONG record, size_t name_index,
+                          std::optional<ULONGLONG>* lost_ancestor) const {
+  const Mft::MftTree::Entry* entry = impl_->table.Find(record);
+  if (entry == nullptr || name_index >= entry->names.size()) {
+    if (lost_ancestor != nullptr) {
+      lost_ancestor->reset();
+    }
+    return {};
+  }
+  // nameIndex < names.size() was checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  return impl_->paths.PathThrough(impl_->table, *entry,
+                                  entry->names[name_index], lost_ancestor);
+}
+
+std::wstring Mft::MftTree::GetJournalPath(
+    size_t index, std::optional<ULONGLONG>* lost_ancestor) const {
+  if (lost_ancestor != nullptr) {
+    lost_ancestor->reset();
+  }
+  if (index >= impl_->journal_only.size()) {
+    return {};
+  }
+  // index is checked above.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const Mft::MftTree::JournalOnlyEntry& item = impl_->journal_only[index];
+
+  if (!item.parent_valid) {
+    if (lost_ancestor != nullptr) {
+      *lost_ancestor = item.parent_record;
+    }
+    return item.name;
+  }
+  // The root is always a valid parent, even when its own record is lost.
+  if (item.parent_record == root_record) {
+    return L"\\" + item.name;
+  }
+
+  std::wstring path = GetPath(item.parent_record, lost_ancestor);
+  if (path.empty()) {
+    if (lost_ancestor != nullptr) {
+      *lost_ancestor = item.parent_record;
+    }
+    return item.name;
+  }
+  if (path.back() != L'\\') {
+    path += L'\\';
+  }
+  return path + item.name;
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Mft
