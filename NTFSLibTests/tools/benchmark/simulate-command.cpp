@@ -96,6 +96,25 @@ bool WriteImageFile(const std::string& path, const std::vector<BYTE>& image) {
   return static_cast<bool>(out);
 }
 
+// The synthetic volume holds damaged records on purpose, and the library says
+// so: a log line costs no simulated time, but would bury the JSON.
+void SilenceLibraryLog() {
+  NTFS_BROWSER_NAMESPACE::Log::Config quiet;
+  quiet.console_level = NTFS_BROWSER_NAMESPACE::Log::Level::Off;
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Log::Configure(quiet));
+}
+
+// Writes the counters of the simulated disk, as fields of the open object.
+void WriteThrottleStats(NtfsDevice::JsonWriter& json,
+                        const Tests::ThrottleStats& stats) {
+  json.Field("disk_reads", stats.disk_reads);
+  json.Field("disk_bytes", stats.disk_bytes);
+  json.Field("served_reads", stats.served_reads);
+  json.Field("unannounced_reads", stats.unannounced_reads);
+  json.Field("wait_ns", stats.wait_ns);
+  json.Field("wasted_ranges", stats.wasted_ranges);
+}
+
 }  // namespace
 
 int SimulateCommand(const Arguments& args) {
@@ -122,11 +141,7 @@ int SimulateCommand(const Arguments& args) {
   options.include_deleted = args.Has("deleted");
   options.recover_errors = args.Has("recover");
 
-  // The synthetic volume holds damaged records on purpose, and the library
-  // says so: a log line costs no simulated time, but would bury the JSON.
-  NTFS_BROWSER_NAMESPACE::Log::Config quiet;
-  quiet.console_level = NTFS_BROWSER_NAMESPACE::Log::Level::Off;
-  static_cast<void>(NTFS_BROWSER_NAMESPACE::Log::Configure(quiet));
+  SilenceLibraryLog();
 
   std::vector<BYTE> image =
       Tests::BuildFakeNtfsImageWithListMftScan(records, fragment_clusters);
@@ -163,12 +178,7 @@ int SimulateCommand(const Arguments& args) {
   json.Field("records", records);
   json.Field("entries", static_cast<std::uint64_t>(tree.Entries().size()));
   json.Field("sim_ns", clock.NowNs());
-  json.Field("disk_reads", stats.disk_reads);
-  json.Field("disk_bytes", stats.disk_bytes);
-  json.Field("served_reads", stats.served_reads);
-  json.Field("unannounced_reads", stats.unannounced_reads);
-  json.Field("wait_ns", stats.wait_ns);
-  json.Field("wasted_ranges", stats.wasted_ranges);
+  WriteThrottleStats(json, stats);
   json.EndObject();
   return EmitJson(args, json);
 }

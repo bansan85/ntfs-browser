@@ -91,6 +91,12 @@ RunClusters CountRunClusters(const std::vector<FakeDataRun>& runs) {
   return count;
 }
 
+// Copies count bytes from source into the record, at offset.
+void PutBytes(FakeRecord& record, size_t offset, const void* source,
+              size_t count) {
+  std::memcpy(&record.at(offset), source, count);
+}
+
 // Writes the run list of layout at the start of dest: the hand-encoded
 // overrides.raw_runs when there are some, else the encoding of layout.runs.
 // Returns the byte count written.
@@ -133,8 +139,7 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
   const size_t name_bytes = encoded_name.size() * sizeof(WORD);
   if (name_bytes != 0) {
     attr.header.name_offset = header_size;
-    std::memcpy(&record.at(offset + header_size), encoded_name.data(),
-                name_bytes);
+    PutBytes(record, offset + header_size, encoded_name.data(), name_bytes);
   }
   const auto run_offset = gsl::narrow<WORD>(header_size + name_bytes);
   attr.data_run_offset = run_offset;
@@ -144,8 +149,8 @@ DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
     // clusters, i.e. everything actually on disk (the sparse padding of each
     // compressed unit excluded).
     const ULONGLONG compressed_size = clusters.real * cluster_size;
-    std::memcpy(&record.at(offset + sizeof(attr)), &compressed_size,
-                sizeof(compressed_size));
+    PutBytes(record, offset + sizeof(attr), &compressed_size,
+             sizeof(compressed_size));
   }
 
   const DWORD run_len = WriteRunList(

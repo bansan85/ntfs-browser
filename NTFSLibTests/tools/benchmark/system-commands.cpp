@@ -546,6 +546,16 @@ struct SamplePlan {
   std::optional<std::string> until_file;
 };
 
+// Tells whether the file named by the UTF-8 path exists.
+bool FileExists(const std::string& utf8_path) {
+  std::error_code ignored;
+  return std::filesystem::exists(
+      std::filesystem::path(
+          std::u8string(reinterpret_cast<const char8_t*>(utf8_path.data()),
+                        utf8_path.size())),
+      ignored);
+}
+
 // Samples the counters every plan.interval_ms until the plan says stop. The
 // last sample is taken after the stop.
 std::vector<DiskSample> CollectSamples(const DiskCounters& counters,
@@ -559,14 +569,7 @@ std::vector<DiskSample> CollectSamples(const DiskCounters& counters,
       samples.push_back(*sample);
     }
     const bool ended = watch.Ended(plan.interval_ms);
-    std::error_code ignored;
-    const bool stopped =
-        plan.until_file &&
-        std::filesystem::exists(
-            std::filesystem::path(std::u8string(
-                reinterpret_cast<const char8_t*>(plan.until_file->data()),
-                plan.until_file->size())),
-            ignored);
+    const bool stopped = plan.until_file && FileExists(*plan.until_file);
     const bool timed_out = plan.pid == 0 && plan.seconds != 0 &&
                            std::chrono::steady_clock::now() >= deadline;
     if (ended || stopped || timed_out) {

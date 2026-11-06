@@ -140,6 +140,10 @@ class ThrottledDiskReader final : public IDiskReader {
   // a share of the reads cap for itself.
   [[nodiscard]] std::size_t StandingCap() const;
 
+  // Tells whether a read of the given aligned size fits, on top of the bytes
+  // both queues have started, in the bytes cap.
+  [[nodiscard]] bool FitsBytesCap(ULONGLONG bytes) const;
+
   // Reads of the standing lane that are started and not finished at the time
   // of the simulated clock. A finished read waits for its caller and costs
   // only its bytes.

@@ -402,20 +402,27 @@ class Device {
 using ZoneVolume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
     NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>;
 
-// Opens target as a volume. Null when a Linux reader cannot open it.
-std::unique_ptr<ZoneVolume> OpenZoneVolume(const std::wstring& target) {
 #ifdef _WIN32
+
+// Opens target as a volume: a drive letter or a device path.
+std::unique_ptr<ZoneVolume> OpenZoneVolume(const std::wstring& target) {
   const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target);
   return letter ? std::make_unique<ZoneVolume>(*letter)
                 : std::make_unique<ZoneVolume>(std::wstring_view(target));
+}
+
 #else
+
+// Opens target as a volume. Null when the Linux reader cannot open it.
+std::unique_ptr<ZoneVolume> OpenZoneVolume(const std::wstring& target) {
   auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
   if (!reader->Open(target)) {
     return nullptr;
   }
   return std::make_unique<ZoneVolume>(std::move(reader));
-#endif
 }
+
+#endif
 
 // The zone of $MFT in target, from the boot sector and the $MFT record.
 std::optional<Zone> MftZone(const std::wstring& target) {
@@ -444,6 +451,20 @@ std::optional<Zone> ParseZone(std::string_view text) {
   return zone;
 }
 
+// Cuts zone to the device. Without a zone, the whole device is the zone, or the
+// first gigabyte when its size is unknown.
+Zone FitZoneToDevice(std::optional<Zone> zone,
+                     std::optional<std::uint64_t> size) {
+  if (!zone) {
+    zone = Zone{.offset = 0, .length = size.value_or(std::uint64_t{1} << 30U)};
+  }
+  if (size) {
+    zone->length =
+        std::min(zone->length, *size > zone->offset ? *size - zone->offset : 0);
+  }
+  return *zone;
+}
+
 // Finds the zone to measure: the one --zone names, cut to the device. Returns
 // 0, or the exit code of the command.
 int ResolveZone(const Device& device, const std::wstring& target,
@@ -462,19 +483,11 @@ int ResolveZone(const Device& device, const std::wstring& target,
       return 2;
     }
   }
-  const std::optional<std::uint64_t> size = device.Size();
-  if (!zone) {
-    zone = Zone{.offset = 0, .length = size.value_or(std::uint64_t{1} << 30U)};
-  }
-  if (size) {
-    zone->length =
-        std::min(zone->length, *size > zone->offset ? *size - zone->offset : 0);
-  }
-  if (zone->length < sequential_bytes * 2) {
+  resolved = FitZoneToDevice(zone, device.Size());
+  if (resolved.length < sequential_bytes * 2) {
     std::fprintf(stderr, "The zone is too small to measure\n");
     return 1;
   }
-  resolved = *zone;
   return 0;
 }
 

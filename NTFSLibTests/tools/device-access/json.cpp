@@ -116,30 +116,21 @@ bool ParseShortDecimal(const char* first, const char* last, double& out) {
 
 // Tells whether c can be part of a number.
 bool IsNumberChar(char c) {
-  return c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E' ||
-         (c >= '0' && c <= '9');
+  return (c >= '0' && c <= '9') ||
+         std::string_view("-+.eE").find(c) != std::string_view::npos;
 }
 
 // Maps the letter after a backslash to the character it stands for.
 std::optional<char> SimpleEscape(char escape) {
-  switch (escape) {
-    case '"':
-    case '\\':
-    case '/':
-      return escape;
-    case 'b':
-      return '\b';
-    case 'f':
-      return '\f';
-    case 'n':
-      return '\n';
-    case 'r':
-      return '\r';
-    case 't':
-      return '\t';
-    default:
-      return std::nullopt;
+  // Letters that may follow a backslash, and the characters they stand for.
+  // Both strings list the same escapes in the same order.
+  constexpr std::string_view kLetters = "\"\\/bfnrt";
+  constexpr std::string_view kMeanings = "\"\\/\b\f\n\r\t";
+  const std::size_t index = kLetters.find(escape);
+  if (index == std::string_view::npos) {
+    return std::nullopt;
   }
+  return kMeanings[index];
 }
 
 // A recursive-descent parser over one document.
@@ -329,15 +320,23 @@ class Parser {
     }
     if (unit >= 0xD800 && unit <= 0xDBFF) {
       char32_t low = 0;
-      if (!Consume('\\') || !Consume('u') || !ParseHex4(low) || low < 0xDC00 ||
-          low > 0xDFFF) {
-        return Fail("a high surrogate has no low surrogate");
+      if (!ParseLowSurrogate(low)) {
+        return false;
       }
       unit = 0x10000 + ((unit - 0xD800) << 10U) + (low - 0xDC00);
     } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
       return Fail("a low surrogate stands alone");
     }
     AppendUtf8(out, unit);
+    return true;
+  }
+
+  // Reads the \uXXXX escape that must follow a high surrogate.
+  bool ParseLowSurrogate(char32_t& low) {
+    if (!Consume('\\') || !Consume('u') || !ParseHex4(low) || low < 0xDC00 ||
+        low > 0xDFFF) {
+      return Fail("a high surrogate has no low surrogate");
+    }
     return true;
   }
 

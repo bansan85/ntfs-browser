@@ -132,26 +132,38 @@ std::optional<NTFS_BROWSER_NAMESPACE::VolumeOptions>
 
 namespace {
 
-// Opens the reader of the platform on target. Null when it cannot.
+#ifdef _WIN32
+
+// Opens the reader of Windows on target: a drive letter or a device path. Null
+// when it cannot.
 std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenPlatformDevice(
     std::wstring_view target,
     const std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
                      NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps) {
-#ifdef _WIN32
   std::wstring path(target);
   if (const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target)) {
     path = std::wstring(L"\\\\.\\") + *letter + L":";
   }
   return NTFS_BROWSER_NAMESPACE::Bench::OpenPlatformReader(path, caps);
+}
+
 #else
+
+// Opens the reader of Linux on target. Null when it cannot. The caps apply to
+// the Windows reader only.
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenPlatformDevice(
+    std::wstring_view target,
+    const std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
+                     NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps) {
   static_cast<void>(caps);
   auto posix = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
   if (!posix->Open(target)) {
     return nullptr;
   }
   return posix;
-#endif
 }
+
+#endif
 
 }  // namespace
 

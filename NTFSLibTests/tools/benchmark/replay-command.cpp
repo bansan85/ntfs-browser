@@ -48,8 +48,7 @@ std::size_t IdealAnnounceAhead(const Tuning::Settings& tuning) {
 // purged or the target cannot be opened; the reason is printed.
 std::optional<Run> ReplayOnce(const Arguments& args, const Bench::ReadLog& log,
                               const std::wstring& target,
-                              const Tuning::Settings& tuning, bool ideal,
-                              std::size_t ahead) {
+                              const Tuning::Settings& tuning, bool ideal) {
   if (args.Has("purge")) {
     std::string message;
     if (!PurgeSystemCache(message)) {
@@ -70,7 +69,7 @@ std::optional<Run> ReplayOnce(const Arguments& args, const Bench::ReadLog& log,
   run.result = Bench::Replay(*reader, log,
                              {.mode = ideal ? Bench::ReplayMode::AllAnnounced
                                             : Bench::ReplayMode::AsRecorded,
-                              .announce_ahead = ahead});
+                              .announce_ahead = IdealAnnounceAhead(tuning)});
   run.report = Bench::Stop();
   return run;
 }
@@ -119,15 +118,13 @@ int ReplayCommand(const Arguments& args) {
     return 2;
   }
 
-  const std::size_t ahead = IdealAnnounceAhead(options->tuning);
-
   std::vector<Run> runs;
   for (const bool ideal : {false, true}) {
     if ((ideal && mode == "recorded") || (!ideal && mode == "ideal")) {
       continue;
     }
     std::optional<Run> run =
-        ReplayOnce(args, *log, target, options->tuning, ideal, ahead);
+        ReplayOnce(args, *log, target, options->tuning, ideal);
     if (!run) {
       return 1;
     }

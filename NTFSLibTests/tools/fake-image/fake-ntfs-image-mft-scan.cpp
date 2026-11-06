@@ -430,20 +430,16 @@ void ApplyIndexBlockFixup(std::span<BYTE> block) {
   }
 }
 
-// Writes slot idx of the list scan fixture. Its kind is idx modulo
-// list_scan_kind_count. A kind with a list in a cluster of its own takes the
-// next free one from next_list_lcn.
-void PutListScanSlot(std::vector<BYTE>& image, ULONGLONG idx,
-                     ULONGLONG fragment_clusters, ULONGLONG& next_list_lcn) {
+// Makes the record of slot idx of the list scan fixture, for every kind that
+// holds its list inside the record. The kind is idx modulo
+// list_scan_kind_count.
+FakeRecord MakeListScanSlotRecord(ULONGLONG idx) {
   using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
 
   const ULONGLONG root = MakeFileReference(
       static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
   const FileRecordFlag file = FileRecordFlag::InUse;
   const std::wstring name = L"f" + std::to_wstring(idx);
-  const auto put = [&](const FakeRecord& record) {
-    PutScanRecord(image, idx, fragment_clusters, record);
-  };
   // The list of a base record names the slot after it, or before it.
   const auto base = [&](FileRecordFlag flags, ULONGLONG listed, WORD sequence) {
     return MakeListScanBase(
@@ -451,61 +447,63 @@ void PutListScanSlot(std::vector<BYTE>& image, ULONGLONG idx,
   };
   switch (idx % list_scan_kind_count) {
     case 1:
-      put(base(file, idx + 1, list_scan_extension_sequence));
-      break;
+      return base(file, idx + 1, list_scan_extension_sequence);
     case 2:
-      put(MakeListScanExtension(file, list_scan_extension_sequence, idx,
-                                idx - 1));
-      break;
+      return MakeListScanExtension(file, list_scan_extension_sequence, idx,
+                                   idx - 1);
     case 3:
-      put(MakeListScanExtension(file, list_scan_extension_sequence, idx,
-                                idx + 1));
-      break;
+      return MakeListScanExtension(file, list_scan_extension_sequence, idx,
+                                   idx + 1);
     case 4:
-      put(base(file, idx - 1, list_scan_extension_sequence));
-      break;
+      return base(file, idx - 1, list_scan_extension_sequence);
     case 5:
       // Names a file of its own: not an extension of this one.
-      put(base(file, idx + 1, 1));
-      break;
+      return base(file, idx + 1, 1);
     case 7:
       // Names a zero-filled slot, whose record the scan must read.
-      put(base(file, idx + 1, list_scan_extension_sequence));
-      break;
+      return base(file, idx + 1, list_scan_extension_sequence);
     case 8:
-      put(FakeRecord{});
-      break;
-    case 9: {
-      // The list sits in a cluster of its own: reading it reads the volume.
-      const std::vector<BYTE> list =
-          ListScanBytes(ListScanEntry{idx + 1, list_scan_extension_sequence});
-      const FakeDataRun run{.lcn = next_list_lcn++, .clusters = 1};
-      put(MakeListScanBase(file, list, run));
-      LayRunBytes(image, {run}, list);
-      break;
-    }
+      return FakeRecord{};
     case 10:
-      put(MakeListScanExtension(file, list_scan_extension_sequence, idx,
-                                idx - 1));
-      break;
+      return MakeListScanExtension(file, list_scan_extension_sequence, idx,
+                                   idx - 1);
     case 11:
-      put(base(FileRecordFlag{}, idx + 1, list_scan_freed_extension_sequence));
-      break;
+      return base(FileRecordFlag{}, idx + 1,
+                  list_scan_freed_extension_sequence);
     case 12:
-      put(MakeListScanExtension(
-          FileRecordFlag{}, list_scan_freed_extension_sequence, idx, idx - 1));
-      break;
+      return MakeListScanExtension(
+          FileRecordFlag{}, list_scan_freed_extension_sequence, idx, idx - 1);
     case 13:
-      put(MakeMftTreeRecord(file | FileRecordFlag::Dir, 1,
-                            {{.name = name, .parent_ref = root}}));
-      break;
+      return MakeMftTreeRecord(file | FileRecordFlag::Dir, 1,
+                               {{.name = name, .parent_ref = root}});
     default:
       // 0 and 6: files in use. 6 is what the list of 5 names.
-      put(MakeMftTreeRecord(
+      return MakeMftTreeRecord(
           file, idx % list_scan_kind_count == 6 ? WORD{2} : WORD{1},
-          {{.name = name, .parent_ref = root}}, static_cast<DWORD>(idx % 100)));
-      break;
+          {{.name = name, .parent_ref = root}}, static_cast<DWORD>(idx % 100));
   }
+}
+
+// The kind of slot whose list sits in a cluster of its own.
+constexpr ULONGLONG list_scan_own_cluster_kind = 9;
+
+// Writes slot idx of the list scan fixture. The kind with a list in a cluster
+// of its own takes the next free one from next_list_lcn.
+void PutListScanSlot(std::vector<BYTE>& image, ULONGLONG idx,
+                     ULONGLONG fragment_clusters, ULONGLONG& next_list_lcn) {
+  if (idx % list_scan_kind_count != list_scan_own_cluster_kind) {
+    PutScanRecord(image, idx, fragment_clusters, MakeListScanSlotRecord(idx));
+    return;
+  }
+  // Reading the list reads the volume.
+  const std::vector<BYTE> list =
+      ListScanBytes(ListScanEntry{idx + 1, list_scan_extension_sequence});
+  const FakeDataRun run{.lcn = next_list_lcn++, .clusters = 1};
+  PutScanRecord(
+      image, idx, fragment_clusters,
+      MakeListScanBase(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse,
+                       list, run));
+  LayRunBytes(image, {run}, list);
 }
 
 // The leaves of the indexed scan tree, and the separators between them.

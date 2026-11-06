@@ -112,9 +112,7 @@ void ThrottledDiskReader::StartFirstQueue() const {
     Range& next = first_.ranges.at(first_.started);
     const ULONGLONG bytes = AlignedBytes(next);
     // The first one always starts: the caller is about to wait for it.
-    if (first_.started != 0 &&
-        first_.started_bytes + standing_.started_bytes + bytes >
-            active_->max_bytes) {
+    if (first_.started != 0 && !FitsBytesCap(bytes)) {
       break;
     }
     next.done_ns = Schedule(AlignDown(next.offset), bytes);
@@ -133,8 +131,7 @@ void ThrottledDiskReader::StartStandingLane() const {
     // The lane stops at the first range that does not fit, so that the reads
     // start in the order of the announcements. Alone, a range always fits.
     if (first_.started_bytes + standing_.started_bytes != 0 &&
-        first_.started_bytes + standing_.started_bytes + bytes >
-            active_->max_bytes) {
+        !FitsBytesCap(bytes)) {
       return;
     }
     next.done_ns = Schedule(AlignDown(next.offset), bytes);
@@ -158,6 +155,11 @@ std::size_t ThrottledDiskReader::StandingCap() const {
   const std::size_t reserve =
       (std::max)(std::size_t{1}, cap / first_queue_reserve_divisor);
   return cap > reserve ? cap - reserve : 0;
+}
+
+bool ThrottledDiskReader::FitsBytesCap(ULONGLONG bytes) const {
+  return first_.started_bytes + standing_.started_bytes + bytes <=
+         active_->max_bytes;
 }
 
 void ThrottledDiskReader::Drop(Queue& queue, std::size_t index) const {

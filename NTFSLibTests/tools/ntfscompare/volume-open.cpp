@@ -164,19 +164,27 @@ void ReportOpenFailure(const std::filesystem::path& device, int error) {
   }
 }
 
+// Opens device once. Returns null after saying why on stderr when it cannot.
+std::unique_ptr<NtfsDevice::PosixDeviceDiskReader>
+    OpenReader(const std::filesystem::path& device) {
+  auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
+  if (!reader->Open(NtfsDevice::WideFromPath(device))) {
+    ReportOpenFailure(device, reader->LastError());
+    return nullptr;
+  }
+  return reader;
+}
+
 // Opens device twice. Returns nothing after saying why on stderr when it
 // cannot.
 std::optional<ReaderPair> OpenReaders(const std::filesystem::path& device) {
-  const std::wstring device_wide = NtfsDevice::WideFromPath(device);
-  ReaderPair readers{
-      .full_cache = std::make_unique<NtfsDevice::PosixDeviceDiskReader>(),
-      .no_cache = std::make_unique<NtfsDevice::PosixDeviceDiskReader>()};
-  for (NtfsDevice::PosixDeviceDiskReader* reader :
-       {readers.full_cache.get(), readers.no_cache.get()}) {
-    if (!reader->Open(device_wide)) {
-      ReportOpenFailure(device, reader->LastError());
-      return std::nullopt;
-    }
+  ReaderPair readers{.full_cache = OpenReader(device)};
+  if (!readers.full_cache) {
+    return std::nullopt;
+  }
+  readers.no_cache = OpenReader(device);
+  if (!readers.no_cache) {
+    return std::nullopt;
   }
   return readers;
 }
