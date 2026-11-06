@@ -166,6 +166,9 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY DirectoryIndex {
   [[nodiscard]] std::optional<IndexEntry>
       VisitIndexBlock(ULONGLONG vcn, IndexSearch& search, size_t depth) const;
   [[nodiscard]] std::optional<IndexEntry>
+      MatchEqualEntry(const IndexEntryView& index_entry, IndexSearch& search,
+                      size_t child_depth, bool at_root) const;
+  [[nodiscard]] std::optional<IndexEntry>
       SearchIndexEntries(const std::vector<IndexEntryView>& entries,
                          IndexSearch& search, size_t child_depth,
                          bool at_root) const;

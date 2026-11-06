@@ -71,6 +71,94 @@ std::shared_ptr<Cache::BlockCache> MakeCache(std::uint64_t max_cache_bytes,
   }
 }
 
+// Loads the blocks of one FullCache read. A block that the cache lacks comes
+// in with the missing blocks after it, up to the end of the range, in one disk
+// read. The run is cut into blocks as the copy reaches them, so a small
+// ceiling never evicts a block before its use.
+template <typename ReadFn>
+class RunBlockLoader {
+ public:
+  RunBlockLoader(Cache::BlockCache& cache, std::int64_t block_bytes,
+                 std::int64_t max_run_bytes, std::uint64_t last_index,
+                 ReadFn read)
+      : cache_(cache),
+        block_bytes_(block_bytes),
+        max_run_blocks_(
+            static_cast<std::uint64_t>(max_run_bytes / block_bytes)),
+        last_index_(last_index),
+        read_(read) {}
+
+  // Loads the block at block_addr, or returns the cached one. Null when the
+  // disk read fails or comes back short: nothing is cached then.
+  std::shared_ptr<Cache::Block> Get(LARGE_INTEGER block_addr) {
+    const auto index =
+        static_cast<std::uint64_t>(block_addr.QuadPart / block_bytes_);
+    if (std::shared_ptr<Cache::Block> hit = cache_.Find(index)) {
+      return hit;
+    }
+    const bool in_run = run_count_ != 0 && index >= run_first_ &&
+                        index - run_first_ < run_count_;
+    if (!in_run && !ReadRun(index, block_addr)) {
+      return cache_.GetOrLoad(
+          index, [&](std::span<BYTE> dest) { return read_(block_addr, dest); });
+    }
+    auto block =
+        std::make_shared<Cache::Block>(static_cast<size_t>(block_bytes_));
+    const std::span<const BYTE> source{
+        run_bytes_.get(), static_cast<size_t>(run_count_ * block_bytes_)};
+    const std::span<const BYTE> part =
+        source.subspan(static_cast<size_t>((index - run_first_) * block_bytes_),
+                       static_cast<size_t>(block_bytes_));
+    std::ranges::copy(part, block->bytes.get());
+    cache_.Insert(index, block);
+    if (index - run_first_ + 1 == run_count_) {
+      run_count_ = 0;
+    }
+    return block;
+  }
+
+ private:
+  // Reads the missing blocks from index on with one disk read, at most
+  // max_run_blocks_ of them and none past the range. False when there is only
+  // one, or when the read failed: the block is then read on its own.
+  bool ReadRun(std::uint64_t index, LARGE_INTEGER block_addr) {
+    std::uint64_t count = 1;
+    while (count < max_run_blocks_ && index + count <= last_index_ &&
+           !cache_.Contains(index + count)) {
+      ++count;
+    }
+    if (count == 1 || failed_) {
+      return false;
+    }
+    const auto run_size = static_cast<size_t>(count * block_bytes_);
+    if (run_capacity_ < run_size) {
+      // Grown only when this run is longer than any before it in this read.
+      run_capacity_ = run_size;
+      run_bytes_ = std::make_unique_for_overwrite<BYTE[]>(run_size);
+    }
+    if (!read_(block_addr, {run_bytes_.get(), run_size})) {
+      failed_ = true;
+      return false;
+    }
+    run_first_ = index;
+    run_count_ = count;
+    return true;
+  }
+
+  Cache::BlockCache& cache_;
+  std::int64_t block_bytes_;
+  std::uint64_t max_run_blocks_;
+  std::uint64_t last_index_;
+  ReadFn read_;
+  std::uint64_t run_first_{0};
+  std::uint64_t run_count_{0};
+  // Kept from one run to the next of the same read, so that its pages are
+  // faulted in once.
+  std::unique_ptr<BYTE[]> run_bytes_;
+  size_t run_capacity_{0};
+  bool failed_{false};
+};
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -176,13 +264,6 @@ void FileReader<S>::AnnounceRuns(ULONGLONG offset, ULONGLONG length,
   if (!reader_ || length == 0) {
     return;
   }
-  const auto announce = [&](ULONGLONG at, ULONGLONG count) {
-    if (standing) {
-      AnnounceStanding(at, count);
-    } else {
-      Announce(at, count);
-    }
-  };
   if constexpr (S == Cache::Strategy::FullCache) {
     const auto block = static_cast<ULONGLONG>(block_bytes_);
     // The blocks MUST end below the largest address the cache reads at.
@@ -198,26 +279,44 @@ void FileReader<S>::AnnounceRuns(ULONGLONG offset, ULONGLONG length,
     // costs no walk over the cache.
     constexpr ULONGLONG max_checked_blocks = 4096;
     if ((end - first) / block > max_checked_blocks) {
-      announce(first, end - first);
+      AnnounceOne(first, end - first, standing);
       return;
     }
-    // The cache serves a block it holds without a read, so only the other
-    // blocks are announced: a range nothing reads would be read for nothing.
-    std::optional<ULONGLONG> run_start;
-    for (ULONGLONG at = first; at < end; at += block) {
-      const bool cached = cache_->Contains(at / block);
-      if (cached && run_start) {
-        announce(*run_start, at - *run_start);
-        run_start.reset();
-      } else if (!cached && !run_start) {
-        run_start = at;
-      }
-    }
-    if (run_start) {
-      announce(*run_start, end - *run_start);
-    }
+    AnnounceUncachedBlocks(first, end, standing);
   } else {
-    announce(offset, length);
+    AnnounceOne(offset, length, standing);
+  }
+}
+
+template <Cache::Strategy S>
+void FileReader<S>::AnnounceOne(ULONGLONG offset, ULONGLONG length,
+                                bool standing) const {
+  if (standing) {
+    AnnounceStanding(offset, length);
+  } else {
+    Announce(offset, length);
+  }
+}
+
+// The cache serves a block it holds without a read, so only the other blocks
+// of [first, end) are announced: a range nothing reads would be read for
+// nothing. FullCache only, with first and end on block boundaries.
+template <Cache::Strategy S>
+void FileReader<S>::AnnounceUncachedBlocks(ULONGLONG first, ULONGLONG end,
+                                           bool standing) const {
+  const auto block = static_cast<ULONGLONG>(block_bytes_);
+  std::optional<ULONGLONG> run_start;
+  for (ULONGLONG at = first; at < end; at += block) {
+    const bool cached = cache_->Contains(at / block);
+    if (cached && run_start) {
+      AnnounceOne(*run_start, at - *run_start, standing);
+      run_start.reset();
+    } else if (!cached && !run_start) {
+      run_start = at;
+    }
+  }
+  if (run_start) {
+    AnnounceOne(*run_start, end - *run_start, standing);
   }
 }
 
@@ -325,80 +424,16 @@ std::enable_if_t<
   }
 
   // The blocks the range needs, and the run of missing ones that one disk read
-  // brings in. The run is cut into blocks as the copy below reaches them, so a
-  // small ceiling never evicts a block before its use.
+  // brings in.
   const auto last_index =
       static_cast<std::uint64_t>((addr.QuadPart + length - 1) / block_bytes_);
-  const auto max_run_blocks =
-      static_cast<std::uint64_t>(max_run_bytes_ / block_bytes_);
-
-  struct Run {
-    std::uint64_t first{0};
-    std::uint64_t count{0};
-    // Kept from one run to the next of the same read, so that its pages are
-    // faulted in once.
-    std::unique_ptr<BYTE[]> bytes;
-    size_t capacity{0};
-    bool failed{false};
-  } run;
-
-  // Reads the missing blocks from index on with one disk read, at most
-  // max_run_blocks of them and none past the range. False when there is only
-  // one, or when the read failed: the block is then read on its own.
-  const auto read_run = [&](std::uint64_t index,
-                            LARGE_INTEGER block_addr) -> bool {
-    std::uint64_t count = 1;
-    while (count < max_run_blocks && index + count <= last_index &&
-           !cache_->Contains(index + count)) {
-      ++count;
-    }
-    if (count == 1 || run.failed) {
-      return false;
-    }
-    const auto run_size = static_cast<size_t>(count * block_bytes_);
-    if (run.capacity < run_size) {
-      // Grown only when this run is longer than any before it in this read.
-      run.capacity = run_size;
-      run.bytes = std::make_unique_for_overwrite<BYTE[]>(run_size);
-    }
-    if (!ReadFromReader(block_addr, {run.bytes.get(), run_size})) {
-      run.failed = true;
-      return false;
-    }
-    run.first = index;
-    run.count = count;
-    return true;
+  const auto read = [this](LARGE_INTEGER& at, std::span<BYTE> dest) {
+    return ReadFromReader(at, dest);
   };
-
-  // Loads the block at block_addr, or returns the cached one. Null when the
-  // disk read fails or comes back short: nothing is cached then.
-  const auto get_block =
-      [&](LARGE_INTEGER block_addr) -> std::shared_ptr<Cache::Block> {
-    const auto index =
-        static_cast<std::uint64_t>(block_addr.QuadPart / block_bytes_);
-    if (std::shared_ptr<Cache::Block> hit = cache_->Find(index)) {
-      return hit;
-    }
-    if (run.count == 0 || index < run.first || index - run.first >= run.count) {
-      if (!read_run(index, block_addr)) {
-        return cache_->GetOrLoad(index, [&](std::span<BYTE> dest) {
-          return ReadFromReader(block_addr, dest);
-        });
-      }
-    }
-    auto block =
-        std::make_shared<Cache::Block>(static_cast<size_t>(block_bytes_));
-    const std::span<const BYTE> source{
-        run.bytes.get(), static_cast<size_t>(run.count * block_bytes_)};
-    const std::span<const BYTE> part =
-        source.subspan(static_cast<size_t>((index - run.first) * block_bytes_),
-                       static_cast<size_t>(block_bytes_));
-    std::ranges::copy(part, block->bytes.get());
-    cache_->Insert(index, block);
-    if (index - run.first + 1 == run.count) {
-      run.count = 0;
-    }
-    return block;
+  RunBlockLoader loader{*cache_, block_bytes_, max_run_bytes_, last_index,
+                        read};
+  const auto get_block = [&loader](LARGE_INTEGER block_addr) {
+    return loader.Get(block_addr);
   };
 
   const bool crosses_block = addr.QuadPart / block_bytes_ !=

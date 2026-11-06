@@ -547,6 +547,42 @@ std::optional<IndexEntry>
                             /*at_root=*/false);
 }
 
+// An entry of the node that is equal to the name. Returns a copy of it when it
+// is spelled exactly like the name, or the twin found below it. Otherwise
+// keeps it as the fallback, unless it is hidden, and returns nothing.
+template <Cache::Strategy S>
+// The depth limit and the visited-VCN set bound the recursion.
+// NOLINTNEXTLINE(misc-no-recursion)
+std::optional<IndexEntry> Io::DirectoryIndex<S>::MatchEqualEntry(
+    const IndexEntryView& index_entry, IndexSearch& search, size_t child_depth,
+    bool at_root) const {
+  // A hidden entry is as good as absent: an entry of another spelling can
+  // still stand for it.
+  const bool hidden = IsEntryHidden(index_entry, record_.GetVolume(),
+                                    record_.BypassesDeletedGate());
+  search.met_equal = true;
+  if (!hidden && index_entry.GetFilename() == search.file_name) {
+    // Must be a copy: the view dies with its node (this FileRecord for the
+    // root), the IndexEntry keeps its own bytes.
+    LogIndexMatch(at_root);
+    return IndexEntry(index_entry);
+  }
+  // The entries below this one come first in index order, and a twin spelled
+  // like the name can sit there.
+  if (index_entry.IsSubNodePtr()) {
+    std::optional<IndexEntry> twin =
+        VisitIndexBlock(index_entry.GetSubNodeVCN(), search, child_depth);
+    if (twin) {
+      return twin;
+    }
+  }
+  if (!hidden && !search.fallback) {
+    search.fallback.emplace(index_entry);
+    search.fallback_at_root = at_root;
+  }
+  return {};
+}
+
 // Scans one node's entries in collation order: an entry spelled like the name
 // returns a copy, an equal one that is spelled otherwise is kept as the
 // fallback and the scan goes on, a bigger name is skipped, and a smaller one
@@ -563,29 +599,10 @@ std::optional<IndexEntry> Io::DirectoryIndex<S>::SearchIndexEntries(
       const int comparison =
           index_entry.Compare(search.file_name, search.upcase);
       if (comparison == 0) {
-        // A hidden entry is as good as absent: an entry of another spelling
-        // can still stand for it.
-        const bool hidden = IsEntryHidden(index_entry, record_.GetVolume(),
-                                          record_.BypassesDeletedGate());
-        search.met_equal = true;
-        if (!hidden && index_entry.GetFilename() == search.file_name) {
-          // Must be a copy: the view dies with its node (this FileRecord for
-          // the root), the IndexEntry keeps its own bytes.
-          LogIndexMatch(at_root);
-          return IndexEntry(index_entry);
-        }
-        // The entries below this one come first in index order, and a twin
-        // spelled like the name can sit there.
-        if (index_entry.IsSubNodePtr()) {
-          std::optional<IndexEntry> twin =
-              VisitIndexBlock(index_entry.GetSubNodeVCN(), search, child_depth);
-          if (twin) {
-            return twin;
-          }
-        }
-        if (!hidden && !search.fallback) {
-          search.fallback.emplace(index_entry);
-          search.fallback_at_root = at_root;
+        std::optional<IndexEntry> found =
+            MatchEqualEntry(index_entry, search, child_depth, at_root);
+        if (found) {
+          return found;
         }
         continue;
       }

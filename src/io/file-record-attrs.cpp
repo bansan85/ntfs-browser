@@ -115,6 +115,20 @@ std::unique_ptr<Attr::AttrBase<S>> MakeGeneric(const Attr::HeaderCommon& ahc,
   return std::make_unique<ResidentOf<S>>(ahc, record);
 }
 
+// Wraps $ATTRIBUTE_LIST, resolved when resolve is set. Unresolved, it is
+// wrapped generically. A non-resident list is read from the volume, which a
+// refusing record does not do: it keeps the list unresolved.
+template <Cache::Strategy S>
+std::unique_ptr<Attr::AttrBase<S>>
+    MakeAttributeList(const Attr::HeaderCommon& ahc, FileRecord<S>& record,
+                      bool resolve,
+                      std::unordered_set<ULONGLONG>& attr_list_chain) {
+  if (!resolve || (ahc.non_resident != 0 && record.RefuseRead())) {
+    return MakeGeneric(ahc, record);
+  }
+  return MakeByResidency<Attr::AttrList>(ahc, record, attr_list_chain);
+}
+
 // Wraps INDEX_ALLOCATION, which is always non-resident on disk. Rejects a
 // resident header first, before its bytes get reinterpreted as one.
 template <Cache::Strategy S>
@@ -429,15 +443,9 @@ std::unique_ptr<Attr::AttrBase<S>>
   }
 
   switch (ahc.type) {
-    // Unresolved, $ATTRIBUTE_LIST is wrapped generically, as the arm below.
     case Attr::Type::AttributeList:
-      // A non-resident list is read from the volume, which a refusing record
-      // does not do: it keeps the list unresolved.
-      if (!impl_.resolve_attr_list ||
-          (ahc.non_resident != 0 && record.RefuseRead())) {
-        return MakeGeneric(ahc, record);
-      }
-      return MakeByResidency<Attr::AttrList>(ahc, record, attr_list_chain);
+      return MakeAttributeList(ahc, record, impl_.resolve_attr_list,
+                               attr_list_chain);
 
     case Attr::Type::Data:
       return MakeByResidency<Attr::AttrData>(ahc, record);

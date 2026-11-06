@@ -3,20 +3,14 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
-#include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
-#include <ranges>
 #include <span>
-#include <stdexcept>
-#include <string>
 #include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#include <gsl/narrow>
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
@@ -24,24 +18,19 @@
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/record/carved-name.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "alloc/data-state.h"
 #include "attr/file-name.h"
-#include "attr/list-chain.h"
 #include "attr/run-list.h"
 #include "attr/slot.h"
 #include "attr/std-info.h"
-#include "bench/recorder.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/header-non-resident.h"
@@ -50,8 +39,6 @@
 #include "io/file-record-index.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
-#include "mft/record-offset.h"
-#include "record/slack-carver.h"
 #include "utf/utf.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -114,74 +101,23 @@ std::optional<DWORD> FindAttrHeader(const Data::FileRecordHeader& record,
   return std::nullopt;
 }
 
-// Byte offset of record file_ref when $MFT is taken as one continuous disk
-// run. Empty when the offset does not fit a LONGLONG.
-template <Cache::Strategy S>
-std::optional<LONGLONG> DirectRecordAddress(const NtfsVolume<S>& volume,
-                                            ULONGLONG file_ref) {
-  const std::optional<ULONGLONG> offset =
-      Mft::RecordOffset(volume.GetFileRecordSize(), file_ref);
-  if (!offset) {
+// The non-resident header of the attribute at offset at of the record. Empty
+// unless it is a whole, uncompressed list that maps its bytes from VCN 0.
+std::optional<Data::HeaderNonResident>
+    ReadListHeader(const Data::FileRecordHeader& record, DWORD at,
+                   DWORD record_size) {
+  if (record_size - at < sizeof(Data::HeaderNonResident)) {
     return std::nullopt;
   }
-
-  try {
-    return gsl::narrow<LONGLONG>(volume.GetMFTAddr() + *offset);
-  } catch (const std::exception& e) {
-    // fileRef is attacker-controlled and unbounded, so this sum can
-    // still overflow a LONGLONG even with mft_addr_ validated.
-    Log::Exception(e);
+  Data::HeaderNonResident header{};
+  std::memcpy(&header, &record.raw[at], sizeof(header));
+  if (header.header.non_resident == 0 ||
+      header.header.total_size < sizeof(header) ||
+      Data::HasCompressedSizeField(header) || header.start_vcn != 0 ||
+      header.data_run_offset >= header.header.total_size) {
     return std::nullopt;
   }
-}
-
-// What the checks on a record just read decided.
-enum class HeaderVerdict : BYTE {
-  Rejected,  // The record is unusable.
-  Salvaged,  // Recovering: some sector fails its check, the others verify.
-  Accepted   // The record is whole.
-};
-
-// Checks the magic of a record just read, and patches its update sequence.
-// Strict rejects any sector that fails. Recovering patches the sectors that
-// verify and salvages the record when at least one does: with none, nothing
-// shows the bytes belong to this record. A record that does not carry the FILE
-// magic (a BAAD one, or zeros) is never salvaged. fixup_failed is set when a
-// sector failed its check, whatever the verdict.
-template <Cache::Strategy S>
-HeaderVerdict JudgeRecordHeader(Record::HeaderImpl<S>& header, bool recover,
-                                bool& fixup_failed) {
-  // Debug, not warning: a slot NTFS never used has no magic, so an MFT scan
-  // meets this on every such slot. A caller gets Rejected either way.
-  if (header.GetData()->magic != Data::FileRecordHeader::file_record_magic) {
-    Log::Debug("Invalid file record");
-    return HeaderVerdict::Rejected;
-  }
-
-  if (!recover) {
-    if (!header.PatchUS()) {
-      fixup_failed = true;
-      Log::Warn("Update Sequence Number error");
-      return HeaderVerdict::Rejected;
-    }
-    return HeaderVerdict::Accepted;
-  }
-
-  const size_t failed = header.PatchUSSalvage();
-  if (failed == 0) {
-    return HeaderVerdict::Accepted;
-  }
-  fixup_failed = true;
-  if (failed >= header.SectorCount()) {
-    Log::Warn("Update Sequence Number error: no sector of the record verifies");
-    return HeaderVerdict::Rejected;
-  }
-  Log::Recoverable(
-      true,
-      "Update Sequence Number error: {} of {} sectors do not verify, the "
-      "record is salvaged",
-      failed, header.SectorCount());
-  return HeaderVerdict::Salvaged;
+  return header;
 }
 
 }  // namespace
@@ -258,87 +194,6 @@ void Io::FileRecord<S>::Impl::UserCallBack(DWORD att_type,
   }
 }
 
-// Reads file record file_ref straight from disk, at a fixed offset from
-// mft_addr, into record_buffer. False if the read fails.
-template <Cache::Strategy S>
-bool Io::FileRecord<S>::Impl::ReadDirectRecord(ULONGLONG file_ref) {
-  const std::optional<LONGLONG> addr = DirectRecordAddress(*volume, file_ref);
-  if (!addr) {
-    return false;
-  }
-
-  LARGE_INTEGER fr_addr{};
-  fr_addr.QuadPart = *addr;
-  const Bench::Detail::KindScope kind(Bench::ReadKind::Boot);
-  return volume->ReadInto(fr_addr, record_buffer);
-}
-
-// Parses the header of the record held in record_buffer. Null when the header
-// constructor rejects it, as it does a forged record.
-template <Cache::Strategy S>
-std::unique_ptr<Record::HeaderImpl<S>> Io::FileRecord<S>::Impl::ParseHeader() {
-  try {
-    return std::make_unique<Record::HeaderImpl<S>>(record_buffer);
-  } catch (const std::exception& e) {
-    Log::Exception(e);
-    return {};
-  }
-}
-
-// Reads file record fileRef into record_buffer_ and returns its parsed
-// header. Early records (and any record read before $MFT's own DATA
-// attribute is known) come straight from disk at a fixed offset; later
-// records go through $MFT's DATA attribute, since $MFT itself may be
-// fragmented across the disk. A non-empty preread replaces the read.
-template <Cache::Strategy S>
-std::unique_ptr<Record::HeaderImpl<S>>
-    Io::FileRecord<S>::Impl::ReadFileRecord(ULONGLONG file_ref,
-                                            std::span<const BYTE> preread) {
-  if (record_buffer.size() != volume->GetFileRecordSize()) {
-    record_buffer.resize(volume->GetFileRecordSize());
-  }
-
-  if (!preread.empty()) {
-    // The header patches the update sequence in place, so it works on a copy.
-    if (preread.size() != record_buffer.size()) {
-      return {};
-    }
-    std::ranges::copy(preread, record_buffer.begin());
-  } else if (file_ref < static_cast<ULONGLONG>(Mft::Idx::User) ||
-             !volume->HasMftBase()) {
-    if (!ReadDirectRecord(file_ref)) {
-      return {};
-    }
-  } else {
-    // May be fragmented $MFT, and its DATA attribute itself may be split
-    // across extension records - ReadData() picks whichever instance
-    // covers this offset.
-    const std::optional<ULONGLONG> fr_addr =
-        Mft::RecordOffset(volume->GetFileRecordSize(), file_ref);
-    if (!fr_addr) {
-      return {};
-    }
-
-    // The caller may hold the bytes the read would return.
-    if (record_source) {
-      const std::span<const BYTE> held = record_source(file_ref);
-      if (held.size() == record_buffer.size()) {
-        std::ranges::copy(held, record_buffer.begin());
-        return ParseHeader();
-      }
-    }
-
-    const Bench::Detail::KindScope kind(Bench::ReadKind::Record, true);
-    if (std::optional<ULONGLONG> len =
-            volume->ReadMftData(*fr_addr, record_buffer);
-        !len || *len != volume->GetFileRecordSize()) {
-      return {};
-    }
-  }
-
-  return ParseHeader();
-}
-
 // Read File Record, verify and patch the US (update sequence)
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::ParseFileRecord(ULONGLONG file_ref) {
@@ -349,89 +204,6 @@ template <Cache::Strategy S>
 bool Io::FileRecord<S>::ParseFileRecord(ULONGLONG file_ref,
                                         std::span<const BYTE> preread) {
   return impl_->ParseRecord(file_ref, preread);
-}
-
-// Reads the $MFTMirr copy of file_ref into record_buffer. Null when there is
-// no copy to read, or it has no usable header.
-template <Cache::Strategy S>
-std::unique_ptr<Record::HeaderImpl<S>>
-    Io::FileRecord<S>::Impl::ReadMirrorRecord(ULONGLONG file_ref) {
-  if (!volume->ReadMftMirrorRecord(file_ref, record_buffer)) {
-    return {};
-  }
-
-  return ParseHeader();
-}
-
-// The body of ParseFileRecord(), shared with callers that already hold the
-// record's bytes.
-template <Cache::Strategy S>
-bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
-                                          std::span<const BYTE> preread) {
-  // Clear previous data
-  ClearAttrs();
-  if (file_record) {
-    file_record.reset();
-  }
-
-  const bool recover = volume->GetOptions().recover_errors;
-  failed_fixup = false;
-  header_salvaged = false;
-  reused_extensions.clear();
-  overwritten_list = false;
-
-  std::unique_ptr<Record::HeaderImpl<S>> header =
-      ReadFileRecord(file_ref, preread);
-  const bool read_ok = header != nullptr;
-  if (!read_ok) {
-    Log::Error("Cannot read file record {}", file_ref);
-  }
-  HeaderVerdict verdict =
-      read_ok ? JudgeRecordHeader(*header, recover, failed_fixup)
-              : HeaderVerdict::Rejected;
-
-  // The mirror is the last resort: it may be older than $MFT's own record, as
-  // NTFS refreshes it only now and then. The volume reads it only when
-  // recovering, and only for the first four records. A caller that supplies
-  // the bytes has no use for another source. It beats a salvaged record, whose
-  // sectors are partly unverified.
-  if (verdict != HeaderVerdict::Accepted && preread.empty()) {
-    header.reset();
-    header = ReadMirrorRecord(file_ref);
-    bool mirror_fixup_failed = false;
-    if (header && JudgeRecordHeader(*header, recover, mirror_fixup_failed) ==
-                      HeaderVerdict::Accepted) {
-      verdict = HeaderVerdict::Accepted;
-      // The record of $MFT was damaged, and a copy stands in for it.
-      header_salvaged = failed_fixup;
-      Log::Info(
-          "File record {} is unusable in $MFT: using its copy in $MFTMirr, "
-          "which may be stale",
-          file_ref);
-    } else if (verdict == HeaderVerdict::Salvaged) {
-      // The read of the mirror, if there was one, overwrote the record.
-      header = ReadFileRecord(file_ref, preread);
-      bool again_failed = false;
-      verdict = header ? JudgeRecordHeader(*header, recover, again_failed)
-                       : HeaderVerdict::Rejected;
-    }
-  }
-  const bool accepted = verdict != HeaderVerdict::Rejected;
-  header_salvaged = header_salvaged || verdict == HeaderVerdict::Salvaged;
-
-  if (read_ok || accepted) {
-    file_reference = file_ref;
-  } else {
-    file_reference = {};
-  }
-  if (!accepted) {
-    return false;
-  }
-
-  Log::Debug("File Record {} Found", file_ref);
-  file_record = std::move(header);
-
-  return true;
 }
 
 // Parse all the attributes in a File Record
@@ -523,32 +295,27 @@ std::vector<Alloc::Extent>
     return {};
   }
   const Data::FileRecordHeader& data = *impl_->file_record->GetData();
-  const DWORD record_size = impl_->volume->GetFileRecordSize();
-  const std::optional<DWORD> at =
-      FindAttrHeader(data, record_size, Attr::Type::AttributeList);
-  if (!at || record_size - *at < sizeof(Data::HeaderNonResident)) {
+  const std::optional<DWORD> at = FindAttrHeader(
+      data, impl_->volume->GetFileRecordSize(), Attr::Type::AttributeList);
+  if (!at) {
     return {};
   }
-  Data::HeaderNonResident header{};
-  std::memcpy(&header, &data.raw[*at], sizeof(header));
-  // Only a whole, uncompressed, non-resident list maps its bytes from VCN 0.
-  if (header.header.non_resident == 0 ||
-      header.header.total_size < sizeof(header) ||
-      Data::HasCompressedSizeField(header) || header.start_vcn != 0 ||
-      header.data_run_offset >= header.header.total_size) {
+  const std::optional<Data::HeaderNonResident> header =
+      ReadListHeader(data, *at, impl_->volume->GetFileRecordSize());
+  if (!header) {
     return {};
   }
 
   // FindAttrHeader() checked that the attribute lies in the record.
   const std::span<const BYTE> run_bytes =
-      std::span<const BYTE>{&data.raw[*at], header.header.total_size}.subspan(
-          header.data_run_offset);
-  Attr::RunList runs(Data::SpannedClusters(header));
+      std::span<const BYTE>{&data.raw[*at], header->header.total_size}.subspan(
+          header->data_run_offset);
+  Attr::RunList runs(Data::SpannedClusters(*header));
   // Recovering: a damaged run list gives the runs before the damage, and is
   // logged as recovered, not as an error. ParseAttrs() judges it.
-  runs.Parse(run_bytes, Data::VcnSpan(header), true);
+  runs.Parse(run_bytes, Data::VcnSpan(*header), true);
 
-  const ULONGLONG size = (std::min)(header.real_size, max_bytes);
+  const ULONGLONG size = (std::min)(header->real_size, max_bytes);
   const ULONGLONG end_vcn =
       size / cluster_size + (size % cluster_size != 0 ? 1 : 0);
   // The byte address of a cluster MUST fit a LONGLONG, as in ReadClusters().
@@ -619,154 +386,11 @@ void Io::FileRecord<S>::ClearAttrRawCB() noexcept {
 }
 
 template <Cache::Strategy S>
-bool Io::FileRecord<S>::Impl::NamesOtherBase(ULONGLONG record_number,
-                                             ULONGLONG listing_record) const {
-  if (!base_source) {
-    return false;
-  }
-  const std::optional<ULONGLONG> base = base_source(record_number);
-  return base && *base != listing_record;
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::Impl::SkipForeignExtension(ULONGLONG record_number,
-                                                   bool recover) {
-  const ULONGLONG self_ref = file_reference.value_or(0);
-  if (self->IsDeleted()) {
-    // Freeing the file freed its extensions too, so a reused slot is normal.
-    // The list names the same record once per attribute, so log it once.
-    if (std::ranges::find(reused_extensions, record_number) ==
-        reused_extensions.end()) {
-      reused_extensions.push_back(record_number);
-      Log::Debug(
-          "Attribute List: record {} was reused by another file since record "
-          "{} was freed - skipping",
-          record_number, self_ref);
-    }
-    return;
-  }
-  Log::Recoverable(recover,
-                   "Attribute List: record {} is not an extension of "
-                   "record {} (reused or foreign) - skipping",
-                   record_number, self_ref);
-  if (!recover) {
-    throw std::runtime_error(
-        "Attribute List names a record of another file.\n");
-  }
-}
-
-template <Cache::Strategy S>
 void Io::FileRecord<S>::ImportAttrListEntry(
     ULONGLONG record_number, WORD sequence_number, Attr::Type attr_type,
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
   impl_->ImportAttrListEntry(record_number, sequence_number, attr_type,
                              attr_list_chain, recover);
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::Impl::ImportAttrListEntry(
-    ULONGLONG record_number, WORD sequence_number, Attr::Type attr_type,
-    std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
-  const Attr::Mask entry_mask = Attr::AttrMask(attr_type);
-  // A type that is only claimed is listed, not parsed: nothing about it may
-  // fail the parse of this record.
-  const bool claim_only = !static_cast<bool>(entry_mask & attr_mask) &&
-                          static_cast<bool>(entry_mask & claim_mask);
-  // Set by ParseRecord(), which every attribute parse follows.
-  const ULONGLONG self_ref = file_reference.value_or(0);
-  // Skip contained attributes
-  // Skip unwanted attributes
-  if (record_number == self_ref ||
-      (!static_cast<bool>(entry_mask & attr_mask) && !claim_only)) {
-    return;
-  }
-
-  if (!attr_list_chain.insert(Attr::MakeChainKey(record_number, attr_type))
-           .second) {
-    Log::Info(
-        "Attribute List: record {}, type 0x{:04x} already resolved in "
-        "this chain, skipping",
-        record_number, static_cast<DWORD>(attr_type));
-    return;
-  }
-
-  // An empty span makes ParseFileRecord() read the record from the disk,
-  // unless the caller already saw that the slot names another base.
-  const std::span<const BYTE> held = extension_source
-                                         ? extension_source(record_number)
-                                         : std::span<const BYTE>{};
-  if (held.empty() &&
-      NamesOtherBase(record_number, self_ref & Mft::mft_record_number_mask)) {
-    if (!claim_only) {
-      SkipForeignExtension(record_number, recover);
-    }
-    return;
-  }
-  if (held.empty() && self->RefuseRead()) {
-    return;
-  }
-
-  // Owned by this record, not by the caller: the attributes moved into it
-  // below keep pointing into frnew's bytes.
-  extension_records.emplace_back(*volume);
-  Io::FileRecord<S>& frnew = extension_records.back();
-
-  frnew.impl_->attr_mask = claim_only ? static_cast<Attr::Mask>(0) : entry_mask;
-  frnew.impl_->claim_mask =
-      claim_only ? entry_mask : static_cast<Attr::Mask>(0);
-  frnew.impl_->attr_raw_call_back = attr_raw_call_back;
-  frnew.impl_->extension_source = extension_source;
-  frnew.impl_->base_source = base_source;
-  frnew.impl_->read_refusal = read_refusal;
-  if (!frnew.ParseFileRecord(record_number, held)) {
-    if (claim_only) {
-      extension_records.pop_back();
-      return;
-    }
-    throw std::runtime_error("Attribute List parse error (ParseFileRecord).\n");
-  }
-
-  // A record another file reused since the list was written is not
-  // this file's extension: its attributes belong to someone else.
-  const bool genuine =
-      self->IsDeleted()
-          ? Mft::IsGenuineFreedExtensionRecord(
-                sequence_number, frnew.GetSequenceNumber(), !frnew.IsDeleted(),
-                frnew.GetBaseRecordReference(),
-                self_ref & Mft::mft_record_number_mask)
-          : Mft::IsGenuineExtensionRecord(
-                sequence_number, frnew.GetSequenceNumber(),
-                frnew.GetBaseRecordReference(),
-                self_ref & Mft::mft_record_number_mask);
-  if (!genuine) {
-    extension_records.pop_back();
-    if (!claim_only) {
-      SkipForeignExtension(record_number, recover);
-    }
-    return;
-  }
-
-  if (!frnew.impl_->ParseAttrs(attr_list_chain) && !claim_only) {
-    throw std::runtime_error("Attribute List parse error (ParseAttrs).\n");
-  }
-  // An extension of a freed record is freed too, and its own list may be gone.
-  if (frnew.impl_->overwritten_list && !claim_only) {
-    self->NoteOverwrittenAttrList();
-  }
-
-  if (claim_only) {
-    claimed_layouts.insert(claimed_layouts.end(),
-                           frnew.impl_->claimed_layouts.begin(),
-                           frnew.impl_->claimed_layouts.end());
-    return;
-  }
-  // Insert new found AttrList to fr.AttrList
-  std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      frnew.GetAttr(attr_type);
-  for (std::unique_ptr<Attr::AttrBase<S>>& veci : vec) {
-    attr_list.at(Attr::AttrIndex(attr_type)).push_back(std::move(veci));
-  }
-  vec.clear();
 }
 
 // Choose attributes to handle, unwanted attributes will be discarded silently
@@ -955,79 +579,10 @@ std::vector<Record::CarvedName> Io::FileRecord<S>::CarveSlackNames() const {
   return impl_->CarveSlackNames();
 }
 
-// The carvers report UTC, as stored. The times of the file getters are local.
-template <Cache::Strategy S>
-void Io::FileRecord<S>::Impl::ConvertCarvedTimes(
-    std::vector<Record::CarvedName>& carved) {
-  const auto to_local = [](FILETIME& time) {
-    constexpr unsigned dword_bits = 32;
-    const ULONGLONG utc =
-        (static_cast<ULONGLONG>(time.dwHighDateTime) << dword_bits) |
-        time.dwLowDateTime;
-    StdInfoType<S>::UTC2Local(utc, time);
-  };
-  for (Record::CarvedName& name : carved) {
-    // Unknown times stay zero.
-    if (!name.times_known) {
-      continue;
-    }
-    to_local(name.create_time);
-    to_local(name.write_time);
-    to_local(name.change_time);
-    to_local(name.access_time);
-  }
-}
-
 template <Cache::Strategy S>
 std::vector<Record::CarvedName>
     Io::FileRecord<S>::CarveIndexSlackNames() const {
-  std::vector<Record::CarvedName> carved =
-      DirectoryIndex<S>(*this).CarveSlackNames();
-  Impl::ConvertCarvedTimes(carved);
-  if (!carved.empty()) {
-    Log::Debug("File record {}: {} name(s) carved from the index slack",
-               impl_->file_reference.value_or(0), carved.size());
-  }
-  return carved;
-}
-
-// Carves the bytes after the end marker, patched like the rest of the record,
-// then drops the names this record also holds live.
-template <Cache::Strategy S>
-std::vector<Record::CarvedName>
-    Io::FileRecord<S>::Impl::CarveSlackNames() const {
-  const VolumeOptions& options = volume->GetOptions();
-  if (!options.recover_errors || !options.include_deleted || !file_record ||
-      !end_marker_offset) {
-    return {};
-  }
-
-  const std::span<const BYTE> bytes(file_record->GetData()->raw,
-                                    file_record->buffer_size);
-  std::vector<Record::CarvedName> carved =
-      Record::CarveFileNames(bytes, *end_marker_offset);
-
-  const auto& live_names =
-      std::get<Attr::AttrIndex(Attr::Type::FileName)>(attr_list);
-  std::erase_if(carved, [&live_names](const Record::CarvedName& candidate) {
-    return std::ranges::any_of(
-        live_names, [&candidate](const std::unique_ptr<Attr::AttrBase<S>>& fn) {
-          const Filename& live =
-              *static_cast<const Attr::AttrFileName<ResidentOf<S>, S>*>(
-                  fn.get());
-          return live.GetFilename() == candidate.name &&
-                 (!candidate.parent_known ||
-                  live.GetParentReference() == candidate.parent_record);
-        });
-  });
-
-  ConvertCarvedTimes(carved);
-
-  if (!carved.empty()) {
-    Log::Debug("File record {}: {} name(s) carved from the slack",
-               file_reference.value_or(0), carved.size());
-  }
-  return carved;
+  return impl_->CarveIndexSlackNames();
 }
 
 template <Cache::Strategy S>

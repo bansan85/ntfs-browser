@@ -176,8 +176,27 @@ class FileRecord<S>::Impl {
   // Handles a record an $ATTRIBUTE_LIST entry names that is not an extension
   // of this one. Throws when strict and this record is in use.
   void SkipForeignExtension(ULONGLONG record_number, bool recover);
+  // Decides whether ImportAttrListEntry() opens the record its entry names,
+  // and sets held to the bytes the caller already has for it (empty: read it).
+  [[nodiscard]] bool
+      WantsExtension(ULONGLONG record_number, Attr::Type attr_type,
+                     bool claim_only,
+                     std::unordered_set<ULONGLONG>& attr_list_chain,
+                     bool recover, std::span<const BYTE>& held);
+  // Opens the extension record of an entry and parses its header. Null when a
+  // claim-only record cannot be parsed. See ImportAttrListEntry().
+  [[nodiscard]] Io::FileRecord<S>* OpenExtension(ULONGLONG record_number,
+                                                 Attr::Type attr_type,
+                                                 bool claim_only,
+                                                 std::span<const BYTE> held);
+  // Whether extension is still the extension record the entry of sequence
+  // number sequence_number meant, and not a slot another file reused.
+  [[nodiscard]] bool IsGenuineExtension(const Io::FileRecord<S>& extension,
+                                        WORD sequence_number) const;
   // See FileRecord<S>::CarveSlackNames().
   [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;
+  // See FileRecord<S>::CarveIndexSlackNames().
+  [[nodiscard]] std::vector<Record::CarvedName> CarveIndexSlackNames() const;
   // Turns the UTC times of carved, as the carvers report them, into those of
   // GetFileTime(). Unknown times stay zero.
   static void ConvertCarvedTimes(std::vector<Record::CarvedName>& carved);
@@ -199,6 +218,9 @@ class FileRecord<S>::Impl {
   // empty to read them. See ParseRecord().
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
       ReadFileRecord(ULONGLONG file_ref, std::span<const BYTE> preread);
+  // Fills record_buffer with record file_ref through $MFT's DATA attribute,
+  // see ReadFileRecord().
+  [[nodiscard]] bool ReadRecordFromMft(ULONGLONG file_ref);
   // The header of record_buffer, see ReadFileRecord() and ReadMirrorRecord().
   [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>> ParseHeader();
   // Reads the $MFTMirr copy of file_ref into record_buffer. Null when there is

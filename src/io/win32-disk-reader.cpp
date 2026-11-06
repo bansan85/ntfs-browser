@@ -222,6 +222,42 @@ class Win32DiskReader::Prefetcher {
   [[nodiscard]] bool ServeFrom(Lane& lane, size_t index, bool passed_over,
                                ULONGLONG offset, std::span<BYTE> dest);
 
+  // What a read finds on arrival at its range, to tell the caller's wait from
+  // the CPU's.
+  struct Arrival {
+    // The read of the range was in flight, or not started.
+    bool had_to_wait{false};
+    // Announced ranges were held back by the caps.
+    bool window_held_back{false};
+    // The reads in flight, this one included.
+    std::uint32_t in_flight{0};
+
+    [[nodiscard]] Bench::ReadClass Class() const {
+      if (had_to_wait) {
+        return Bench::ReadClass::Io;
+      }
+      return window_held_back ? Bench::ReadClass::Window
+                              : Bench::ReadClass::Ready;
+    }
+  };
+
+  // What the read of the range of lane at index finds. Judged before anything
+  // is dropped or started.
+  [[nodiscard]] Arrival JudgeArrival(const Lane& lane, size_t index) const;
+
+  // Copies the bytes at offset out of slot, whose read returned got bytes.
+  // False when the read did not return them all.
+  [[nodiscard]] static bool CopyOut(const Slot& slot, DWORD got,
+                                    ULONGLONG offset, std::span<BYTE> dest);
+
+  // The bytes the aligned read of range covers.
+  [[nodiscard]] static ULONGLONG AlignedBytes(const Range& range) {
+    return AlignUp(range.offset + range.length) - AlignDown(range.offset);
+  }
+
+  // Starts the read of the next range of the standing lane, which takes bytes.
+  void StartStandingRead(Range& next, ULONGLONG bytes);
+
   // Reads of the slots that are in flight and not finished.
   [[nodiscard]] std::uint32_t InFlight() const;
 
@@ -346,8 +382,7 @@ void Win32DiskReader::Prefetcher::StartReads() {
   while (first_.started < first_.ranges.size() &&
          first_.started + lane_in_flight < ReadsCap()) {
     Range& next = first_.ranges.at(first_.started);
-    const ULONGLONG bytes =
-        AlignUp(next.offset + next.length) - AlignDown(next.offset);
+    const ULONGLONG bytes = AlignedBytes(next);
     // The first one always starts: the caller is about to wait for it.
     if (first_.started != 0 &&
         first_.started_bytes + standing_.started_bytes + bytes >
@@ -401,8 +436,7 @@ void Win32DiskReader::Prefetcher::StartStandingReads() {
   while (standing_.started < standing_.ranges.size() &&
          in_flight < StandingCap() && first_.started + in_flight < ReadsCap()) {
     Range& next = standing_.ranges.at(standing_.started);
-    const ULONGLONG bytes =
-        AlignUp(next.offset + next.length) - AlignDown(next.offset);
+    const ULONGLONG bytes = AlignedBytes(next);
     // The lane stops at the first range that does not fit, so that the reads
     // start in the order of the announcements. Alone, a range always fits.
     if (first_.started_bytes + standing_.started_bytes != 0 &&
@@ -410,14 +444,19 @@ void Win32DiskReader::Prefetcher::StartStandingReads() {
             active_->max_bytes) {
       return;
     }
-    StartRead(next, Bench::Detail::DiskReadOrigin::Standing);
-    if (slots_.at(*next.slot).pending) {
-      standing_reading_.push_back(*next.slot);
-    }
-    standing_.started++;
-    standing_.started_bytes += bytes;
+    StartStandingRead(next, bytes);
     in_flight++;
   }
+}
+
+void Win32DiskReader::Prefetcher::StartStandingRead(Range& next,
+                                                    ULONGLONG bytes) {
+  StartRead(next, Bench::Detail::DiskReadOrigin::Standing);
+  if (slots_.at(*next.slot).pending) {
+    standing_reading_.push_back(*next.slot);
+  }
+  standing_.started++;
+  standing_.started_bytes += bytes;
 }
 
 void Win32DiskReader::Prefetcher::StartRead(
@@ -517,8 +556,7 @@ void Win32DiskReader::Prefetcher::Drop(Lane& lane, size_t index) {
       slot.buffer = nullptr;
       slot.capacity = 0;
     }
-    const ULONGLONG bytes =
-        AlignUp(range.offset + range.length) - AlignDown(range.offset);
+    const ULONGLONG bytes = AlignedBytes(range);
     lane.started--;
     lane.started_bytes -= bytes;
     if (!range.used) {
@@ -562,25 +600,37 @@ bool Win32DiskReader::Prefetcher::Serve(ULONGLONG offset,
   return false;
 }
 
+Win32DiskReader::Prefetcher::Arrival
+    Win32DiskReader::Prefetcher::JudgeArrival(const Lane& lane,
+                                              size_t index) const {
+  const Range& matched = lane.ranges.at(index);
+  return {.had_to_wait =
+              !matched.slot || (slots_.at(*matched.slot).pending &&
+                                !ReadDone(slots_.at(*matched.slot).overlapped)),
+          .window_held_back = lane.started < lane.ranges.size(),
+          .in_flight = InFlight() + 1};
+}
+
+bool Win32DiskReader::Prefetcher::CopyOut(const Slot& slot, DWORD got,
+                                          ULONGLONG offset,
+                                          std::span<BYTE> dest) {
+  const ULONGLONG skip = offset - slot.start;
+  if (skip + dest.size() > got) {
+    return false;
+  }
+  std::ranges::copy(std::span<const BYTE>{slot.buffer, slot.capacity}.subspan(
+                        gsl::narrow<size_t>(skip), dest.size()),
+                    dest.begin());
+  return true;
+}
+
 bool Win32DiskReader::Prefetcher::ServeFrom(Lane& lane, size_t index,
                                             bool passed_over, ULONGLONG offset,
                                             std::span<BYTE> dest) {
   const ULONGLONG end = offset + dest.size();
 
-  // What the read finds on arrival, to tell the caller's wait from the CPU's.
-  // Judged before anything is dropped or started.
   const bool bench = Bench::Detail::SessionOn();
-  bool had_to_wait = false;
-  bool window_held_back = false;
-  std::uint32_t in_flight = 0;
-  if (bench) {
-    const Range& matched = lane.ranges.at(index);
-    had_to_wait =
-        !matched.slot || (slots_.at(*matched.slot).pending &&
-                          !ReadDone(slots_.at(*matched.slot).overlapped));
-    window_held_back = lane.started < lane.ranges.size();
-    in_flight = InFlight() + 1;
-  }
+  const Arrival arrival = bench ? JudgeArrival(lane, index) : Arrival{};
 
   // The ranges of the first queue announced before it were passed over.
   if (passed_over) {
@@ -596,26 +646,16 @@ bool Win32DiskReader::Prefetcher::ServeFrom(Lane& lane, size_t index,
   std::uint64_t wait_ns = 0;
   if (range.slot) {
     Slot& slot = slots_.at(*range.slot);
-    const ULONGLONG skip = offset - slot.start;
     const std::uint64_t waited_from = bench ? Bench::Detail::NowNs() : 0;
     const DWORD got = Wait(slot);
-    if (bench && had_to_wait) {
+    if (bench && arrival.had_to_wait) {
       wait_ns = Bench::Detail::NowNs() - waited_from;
     }
-    if (skip + dest.size() <= got) {
-      std::ranges::copy(
-          std::span<const BYTE>{slot.buffer, slot.capacity}.subspan(
-              gsl::narrow<size_t>(skip), dest.size()),
-          dest.begin());
-      served = true;
-      range.used = true;
-    }
+    served = CopyOut(slot, got, offset, dest);
+    range.used = range.used || served;
   }
   if (served && bench) {
-    Bench::Detail::NoteRead(had_to_wait        ? Bench::ReadClass::Io
-                            : window_held_back ? Bench::ReadClass::Window
-                                               : Bench::ReadClass::Ready,
-                            wait_ns, in_flight);
+    Bench::Detail::NoteRead(arrival.Class(), wait_ns, arrival.in_flight);
   }
 
   // A read up to the end of its range uses it up. A failed one is not tried

@@ -143,6 +143,13 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
   // runs of blocks to announce, on the standing lane when standing is set.
   void AnnounceRuns(ULONGLONG offset, ULONGLONG length, bool standing) const;
 
+  // Announces one range on the first queue, or on the standing lane.
+  void AnnounceOne(ULONGLONG offset, ULONGLONG length, bool standing) const;
+
+  // Announces the runs of [first, end) that the cache lacks.
+  void AnnounceUncachedBlocks(ULONGLONG first, ULONGLONG end,
+                              bool standing) const;
+
   std::unique_ptr<IDiskReader> reader_;
 
   // Bytes of one cached block, the most one disk read covers when a read
