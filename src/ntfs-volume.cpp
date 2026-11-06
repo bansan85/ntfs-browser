@@ -8,22 +8,18 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <string>
 #include <string_view>
-#include <tuple>
 #include <utility>
 #include <vector>
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/defines.h>
-#include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/efs/efs.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -32,84 +28,23 @@
 
 #include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
-#include "attr/resident.h"
-#include "attr/slot.h"
-#include "attr/vol-info.h"
-#include "attr/vol-name.h"
 #include "bench/recorder.h"
-#include "data/volume-information.h"
 #include "io/file-reader.h"
-#include "io/file-record-attr-types.h"
 #include "log/ntfs-common.h"
 #include "mft/extent-map.h"
 #include "mft/record-offset.h"
 #include "ntfs-volume-impl.h"
 #include "upcase/upcase.h"
 #include "usn/usn-journal-loader.h"
-#include "utf/utf.h"
+#include "volume/boot-sector-loader.h"
 #include "volume/volume-geometry.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
-namespace Io {
-
-template <Cache::Strategy S>
-class FileReader;
-
-}  // namespace Io
-
-namespace Attr {
-
-template <Cache::Strategy S>
-class AttrBase;
-template <typename Resident, Cache::Strategy S>
-class AttrVolInfo;
-template <typename Resident, Cache::Strategy S>
-class AttrVolName;
-
-}  // namespace Attr
-
-namespace Usn {
-
-struct Journal;
-
-}  // namespace Usn
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE {
-
-class IDiskReader;
-
-namespace Attr {
-
-struct HeaderCommon;
-
-}  // namespace Attr
 
 namespace {
 
-// AttrVolName pads its buffer with a terminator that its view still
-// covers. UTF-8 has no terminator convention, so the padding must go
-// before converting, or it becomes a NUL byte inside the log line.
-std::wstring_view TrimTrailingNuls(std::wstring_view name) noexcept {
-  while (!name.empty() && name.back() == L'\0') {
-    name.remove_suffix(1);
-  }
-  return name;
-}
-
 // Length of a Win32 volume device path, NUL excluded: \\.\C:
 constexpr size_t volume_path_length = 6;
-
-// Sector sizes the backup boot sector is tried with, most common first. The
-// copy sits in the volume's last sector, whose size is not known yet.
-constexpr std::array<WORD, 4> backup_sector_sizes{512, 4096, 1024, 2048};
-
-// Bytes of a boot sector, whatever the sector size. It is also the smallest
-// candidate sector size, so every backup read holds a whole boot sector.
-constexpr WORD boot_sector_bytes = 512;
-
-// Largest backup candidate read: the biggest sector size tried.
-constexpr WORD backup_read_max_bytes = 4096;
 
 }  // namespace
 
@@ -153,76 +88,6 @@ NtfsVolume<S>::NtfsVolume(std::unique_ptr<IDiskReader> reader,
 
 template <Cache::Strategy S>
 NtfsVolume<S>::~NtfsVolume() = default;
-
-// Parses $Volume's VolumeInformation and VolumeName. False when the record does
-// not parse or has no VolumeInformation.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::ParseVolumeRecord(Io::FileRecord<S>& vol) {
-  vol.SetBypassDeletedGate(true);
-  vol.SetAttrMask(Attr::Mask::VolumeName | Attr::Mask::VolumeInformation);
-  if (!vol.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Volume)) ||
-      !vol.ParseAttrs()) {
-    return false;
-  }
-  return !vol.GetAttr(Attr::Type::VolumeInformation).empty();
-}
-
-// Reads the NTFS version from $VOLUME_INFORMATION and logs it, with a warning
-// if the volume is dirty. False below 3.0, the NT4 era. Needs
-// ParseVolumeRecord() to have passed first.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::AcceptVolumeVersion(const Io::FileRecord<S>& vol) {
-  const auto* info =
-      reinterpret_cast<const Attr::AttrVolInfo<Io::ResidentOf<S>, S>*>(
-          vol.GetAttr(Attr::Type::VolumeInformation).front().get());
-  std::tie(version_major, version_minor) = info->GetVersion();
-  Log::Info("NTFS volume version: {}.{}", version_major, version_minor);
-  if ((info->GetFlags() & Data::volume_dirty_flag) != 0) {
-    Log::Warn(
-        "NTFS volume was not unmounted cleanly: its journal was not "
-        "replayed, so the data read may be stale");
-  }
-  return version_major >= 3;
-}
-
-// Logs $Volume's name, if it has a VolumeName attribute.
-template <Cache::Strategy S>
-void NtfsVolume<S>::Impl::LogVolumeName(const Io::FileRecord<S>& vol) const {
-  const auto& names = vol.GetAttr(Attr::Type::VolumeName);
-  if (names.empty()) {
-    return;
-  }
-  const auto* name =
-      reinterpret_cast<const Attr::AttrVolName<Io::ResidentOf<S>, S>*>(
-          names.front().get());
-  Log::Info("NTFS volume name: {}",
-            Utf::WideToUtf8(TrimTrailingNuls(name->GetName())));
-}
-
-// Verify NTFS volume version (must >= 3.0) and locate $MFT's Data attribute
-template <Cache::Strategy S>
-void NtfsVolume<S>::Impl::Init() {
-  Io::FileRecord<S> vol(*self);
-  if (!ParseVolumeRecord(vol) || !AcceptVolumeVersion(vol)) {
-    return;
-  }
-  LogVolumeName(vol);
-
-  if (!mft.ParseRecord()) {
-    return;
-  }
-  const Attr::AttrBase<S>* base_extent = mft.FindBaseExtent();
-  if (base_extent == nullptr) {
-    return;
-  }
-
-  // The cluster geometry is known only now, after the boot sector parse.
-  mft.MapExtents(*base_extent, geometry.cluster_size,
-                 geometry.file_record_size);
-
-  // Reported OK only once the base extent is actually set.
-  volume_ok = true;
-}
 
 #ifdef _WIN32
 // Open a volume ('a' - 'z', 'A' - 'Z'), get volume handle and BPB
@@ -287,106 +152,12 @@ bool NtfsVolume<S>::Impl::ParseBootSector() {
     }
     Bench::Detail::NoteMediaKind(EffectiveMediaKind());
   }
-  bool accepted = false;
-  {
-    // Held until the parse is done: under FullCache it owns the bytes.
-    const std::optional<Cache::ReadResult<S>> bpb_buffer = ReadBootSector();
-    if (!bpb_buffer) {
-      Log::Error("Read boot sector error");
-    } else {
-      const Volume::BootSectorParse parse =
-          Volume::ParseBootSector(*bpb_buffer, options.recover_errors);
-      geometry = parse.geometry;
-      // Sized from the decoded cluster, even when a later field is rejected.
-      cluster_buffer.resize(geometry.cluster_size);
-      accepted = parse.ok;
-    }
-  }
-  return accepted || (options.recover_errors && UseBackupBootSector());
-}
-
-// Looks for the copy of the boot sector that NTFS keeps in the last sector of
-// the volume, and adopts its geometry when it parses. Only a volume that fills
-// its whole backing store ends there: a partition larger than its file system
-// puts the copy before the end. Each candidate is read apart from the block
-// cache, so that FullCache does not ask for a 64 KiB block that runs past the
-// end. False, with the geometry untouched, when no candidate fits.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::UseBackupBootSector() {
-  const std::optional<ULONGLONG> volume_bytes = volume->Size();
-  if (!volume_bytes || *volume_bytes < boot_sector_bytes) {
-    Log::Info(
-        "Cannot try the backup boot sector: the size of the volume is unknown "
-        "or too small");
-    return false;
-  }
-
-  for (const WORD sector_size : backup_sector_sizes) {
-    if (TryBackupSectorSize(*volume_bytes, sector_size)) {
-      return true;
-    }
-  }
-
-  Log::Info("No usable backup boot sector");
-  return false;
-}
-
-// Reads the last sector_size bytes of a backing store of volume_bytes, and
-// adopts them as the boot sector when they parse with that same sector size.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::TryBackupSectorSize(ULONGLONG volume_bytes,
-                                              WORD sector_size) {
-  // The store MUST hold whole sectors, and the read MUST fit in it. The read
-  // then starts on a sector boundary, which a raw device requires.
-  if (volume_bytes % sector_size != 0 || volume_bytes < sector_size ||
-      !std::in_range<LONGLONG>(volume_bytes - sector_size)) {
-    return false;
-  }
-
-  LARGE_INTEGER addr{};
-  addr.QuadPart = static_cast<LONGLONG>(volume_bytes - sector_size);
-  std::array<BYTE, backup_read_max_bytes> copy{};
-  const std::span<BYTE> buffer{copy.data(), sector_size};
-  if (!volume->ReadInto(addr, buffer)) {
-    return false;
-  }
-
-  const Volume::BootSectorParse parse = Volume::ParseBootSector(
-      buffer.first<boot_sector_bytes>(), /*recover=*/true);
-  // A copy that declares another sector size was not read at its own
-  // boundary: it is garbage for this candidate.
-  if (!parse.ok || parse.geometry.sector_size != sector_size) {
-    return false;
-  }
+  const Volume::BootSectorParse parse =
+      Volume::BootSectorLoader<S>(*volume, options.recover_errors).Load();
   geometry = parse.geometry;
+  // Sized from the decoded cluster, even when a later field is rejected.
   cluster_buffer.resize(geometry.cluster_size);
-  Log::Info("Boot sector is unusable: using the backup boot sector at 0x{:X}",
-            addr.QuadPart);
-  return true;
-}
-
-// Read the boot sector, retrying with 512 bytes when the 4096-byte read fails.
-template <Cache::Strategy S>
-std::optional<Cache::ReadResult<S>>
-    NtfsVolume<S>::Impl::ReadBootSector() const {
-  const Bench::Detail::KindScope kind(Bench::ReadKind::Boot);
-  // Smallest sector size NTFS uses. It is also the size of the BPB read.
-  constexpr DWORD min_sector_size = 512;
-  // Largest sector size NTFS supports (4Kn). Windows opens a volume handle
-  // unbuffered, and then only accepts a read length that is a whole number
-  // of the device's sectors.
-  constexpr DWORD max_sector_size = 4096;
-  LARGE_INTEGER fr_addr{.QuadPart = 0};
-  std::optional<Cache::ReadResult<S>> bpb_buffer =
-      volume->Read(fr_addr, max_sector_size);
-  if (!bpb_buffer) {
-    // A backing file shorter than max_sector_size cannot serve that read.
-    Log::Warn("Cannot read a {}-byte boot sector, retrying with {} bytes",
-              max_sector_size, min_sector_size);
-    fr_addr.QuadPart = 0;
-    bpb_buffer = volume->Read(fr_addr, min_sector_size);
-  }
-  return bpb_buffer;
+  return parse.ok;
 }
 
 // Check if Volume is successfully opened
@@ -667,71 +438,6 @@ bool NtfsVolume<S>::SetEfsCipherBackend(Efs::CipherBackend backend) noexcept {
 template <Cache::Strategy S>
 Efs::CipherBackend NtfsVolume<S>::GetEfsCipherBackend() const noexcept {
   return impl_->efs.backend;
-}
-
-// Whether the volume is open and $MFT maps the record of a metadata file.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::IsMetadataMapped(ULONGLONG record) const {
-  const DWORD record_size = geometry.file_record_size;
-  return volume_ok &&
-         mft.Map().IsRangeMapped(record * record_size, record_size);
-}
-
-// Parses record as MFT record number index, with its $DATA attributes only.
-// Like the volume's other metadata reads, it MUST NOT depend on
-// include_deleted.
-template <Cache::Strategy S>
-bool NtfsVolume<S>::Impl::ParseMetadataData(Io::FileRecord<S>& record,
-                                            ULONGLONG index) const {
-  record.SetBypassDeletedGate(true);
-  record.SetAttrMask(Attr::Mask::Data);
-  return record.ParseFileRecord(index) && record.ParseAttrs();
-}
-
-// Reads $UpCase (MFT record 10). Null when it is missing or unusable.
-template <Cache::Strategy S>
-std::unique_ptr<const UpCase::Table>
-    NtfsVolume<S>::Impl::LoadUpCaseTable() const {
-  const auto upcase_record = static_cast<ULONGLONG>(Mft::Idx::UpCase);
-  if (!IsMetadataMapped(upcase_record)) {
-    return {};
-  }
-
-  Io::FileRecord<S> record(*self);
-  if (!ParseMetadataData(record, upcase_record)) {
-    return {};
-  }
-
-  const Attr::AttrBase<S>* data = record.FindStream({});
-  if (data == nullptr || data->GetDataSize() < UpCase::Table::byte_count) {
-    return {};
-  }
-
-  std::vector<BYTE> bytes(UpCase::Table::byte_count);
-  const std::optional<ULONGLONG> len = data->ReadData(0, bytes);
-  if (!len || *len != bytes.size()) {
-    return {};
-  }
-
-  std::optional<UpCase::Table> table = UpCase::Table::FromBytes(bytes);
-  if (!table) {
-    return {};
-  }
-  return std::make_unique<const UpCase::Table>(std::move(*table));
-}
-
-// Loads $UpCase on first use. A failure is cached: the built-in mapping
-// answers every later call.
-template <Cache::Strategy S>
-const UpCase::Table& NtfsVolume<S>::Impl::GetUpCaseTable() const {
-  if (!upcase_loaded) {
-    upcase_loaded = true;
-    upcase = LoadUpCaseTable();
-    if (!upcase) {
-      Log::Info("$UpCase is not usable: names collate by the built-in mapping");
-    }
-  }
-  return upcase ? *upcase : UpCase::Table::BuiltIn();
 }
 
 template <Cache::Strategy S>

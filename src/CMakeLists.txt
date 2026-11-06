@@ -63,6 +63,7 @@ set(
   "mft/waiting-reads.cpp"
   "ntfs-volume.cpp"
   "ntfs-volume-alloc.cpp"
+  "ntfs-volume-metadata.cpp"
   "record/header.cpp"
   "record/slack-carver.cpp"
   "tuning/knobs.cpp"
@@ -73,6 +74,7 @@ set(
   "util/chunk-pool.cpp"
   "util/small-pool.cpp"
   "util/util.cpp"
+  "volume/boot-sector-loader.cpp"
   "volume/volume-geometry.cpp"
 )
 
@@ -225,6 +227,7 @@ set(
   "util/chunk-pool.h"
   "util/small-pool.h"
   "util/util.h"
+  "volume/boot-sector-loader.h"
   "volume/volume-geometry.h"
   "io/host-media-kind.h"
   "io/win32-disk-reader.h"
