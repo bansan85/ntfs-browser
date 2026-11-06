@@ -216,17 +216,15 @@ class ScenarioSet {
   }
 
  private:
-  // Adds one scenario, named after its tree, its setting and its strategy.
-  void Add(const std::string& name, const std::vector<BYTE>& image,
-           bool full_cache, const VolumeOptions& options,
-           Tuning::MediaKind kind = Tuning::MediaKind::Unknown,
-           bool raw_callback = false) {
-    list_.push_back({.name = name + "/" + StrategyName(full_cache),
-                     .image = &image,
-                     .full_cache = full_cache,
-                     .options = options,
-                     .kind = kind,
-                     .raw_callback = raw_callback});
+  // Adds one scenario, named after its tree, its setting and its strategy. The
+  // caller MAY set the media kind or the raw callback on the result.
+  Scenario& Add(const std::string& name, const std::vector<BYTE>& image,
+                bool full_cache, const VolumeOptions& options) {
+    return list_.emplace_back(
+        Scenario{.name = name + "/" + StrategyName(full_cache),
+                 .image = &image,
+                 .full_cache = full_cache,
+                 .options = options});
   }
 
   // The tree at index.
@@ -334,16 +332,16 @@ class ScenarioSet {
   // its own number of runs says otherwise.
   void AddLaneOff(bool full) {
     const std::vector<BYTE>& image = *Tree(grouped).image;
-    Add("grouped/raw callback", image, full, Tuned({}),
-        Tuning::MediaKind::Unknown, true);
-    Add("grouped/rotational", image, full, Tuned({}),
-        Tuning::MediaKind::Rotational);
+    Add("grouped/raw callback", image, full, Tuned({})).raw_callback = true;
+    Add("grouped/rotational", image, full, Tuned({})).kind =
+        Tuning::MediaKind::Rotational;
     VolumeOptions rotational = Tuned({});
     rotational.tuning.walk.read_ahead_runs_rotational = 8;
-    Add("grouped/rotational runs=8", image, full, rotational,
-        Tuning::MediaKind::Rotational);
+    Add("grouped/rotational runs=8", image, full, rotational).kind =
+        Tuning::MediaKind::Rotational;
     Add("scattered/solid state", *Tree(scattered).image, full,
-        Tuned({.runs = 8}), Tuning::MediaKind::SolidState);
+        Tuned({.runs = 8}))
+        .kind = Tuning::MediaKind::SolidState;
   }
 
   const Trees& trees_;

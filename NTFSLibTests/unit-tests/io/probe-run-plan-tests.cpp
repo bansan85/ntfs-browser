@@ -245,23 +245,57 @@ void CheckProbeRuns(const std::vector<BYTE>& image, const ProbeVariant& variant,
   }
 }
 
+// A chunk with a record below the first mapped slot, then the files.
+std::vector<ULONGLONG> ChunkWithFixedRecord() {
+  return {5, slot_a, slot_b, slot_c, slot_d, slot_e, slot_f};
+}
+
+// The plan of a chunk when no store holds any record.
+Io::ProbeRunPlan PlanNothingHeld(std::span<const ULONGLONG> chunk,
+                                 const Io::ProbeRunRules& rules) {
+  return Io::PlanProbeRuns(chunk, rules, {}, {});
+}
+
+// The plan of a chunk when no store holds any record. The records the planner
+// asked the store for are appended to asked.
+Io::ProbeRunPlan PlanNotingTheQuestions(std::span<const ULONGLONG> chunk,
+                                        const Io::ProbeRunRules& rules,
+                                        std::vector<ULONGLONG>& asked) {
+  return Io::PlanProbeRuns(chunk, rules,
+                           [&asked](ULONGLONG record) {
+                             asked.push_back(record);
+                             return std::span<const BYTE>();
+                           },
+                           {});
+}
+
+// The plan of a chunk when the store holds the given bytes for the record at
+// slot_e. The records handed to the held sink are appended to held.
+Io::ProbeRunPlan PlanHoldingSlotE(std::span<const ULONGLONG> chunk,
+                                  const Io::ProbeRunRules& rules,
+                                  std::span<const BYTE> bytes,
+                                  std::vector<ULONGLONG>& held) {
+  return Io::PlanProbeRuns(
+      chunk, rules,
+      [bytes](ULONGLONG record) {
+        return record == slot_e ? bytes : std::span<const BYTE>();
+      },
+      [&held](ULONGLONG record, std::span<const BYTE> held_bytes) {
+        CHECK(held_bytes.size() == Tests::fake_file_record_size);
+        held.push_back(record);
+      });
+}
+
 }  // namespace
 
 TEST_CASE("The plan of a chunk reads the records no one holds in runs",
           "[io][probe-run-plan]") {
-  const std::vector<ULONGLONG> chunk{5,      slot_a, slot_b, slot_c,
-                                     slot_d, slot_e, slot_f};
+  const std::vector<ULONGLONG> chunk = ChunkWithFixedRecord();
   Io::ProbeRunRules rules = PlainRules();
 
   SECTION("narrow holes only") {
     std::vector<ULONGLONG> asked;
-    const Io::ProbeRunPlan plan =
-        Io::PlanProbeRuns(chunk, rules,
-                          [&asked](ULONGLONG record) {
-                            asked.push_back(record);
-                            return std::span<const BYTE>();
-                          },
-                          {});
+    const Io::ProbeRunPlan plan = PlanNotingTheQuestions(chunk, rules, asked);
     // Record 5 has a fixed address: it is probed alone, and never asked for.
     CHECK(plan.alone == 1);
     CHECK(asked == FileSlots());
@@ -277,23 +311,16 @@ TEST_CASE("The plan of a chunk reads the records no one holds in runs",
 
   SECTION("a hard disk crosses the wide hole") {
     rules.wide = {.gap_slots = 1024, .min_share_per_mille = 10};
-    const Io::ProbeRunPlan plan = Io::PlanProbeRuns(chunk, rules, {}, {});
-    CHECK(RunsOf(plan) == std::vector<Run>{{17, 108}, {1325, 1}});
+
+    CHECK(RunsOf(PlanNothingHeld(chunk, rules)) ==
+          std::vector<Run>{{17, 108}, {1325, 1}});
   }
 
   SECTION("a record the store holds is not read") {
     const std::vector<BYTE> bytes(Tests::fake_file_record_size);
     std::vector<ULONGLONG> held;
-    const Io::ProbeRunPlan plan = Io::PlanProbeRuns(
-        chunk, rules,
-        [&bytes](ULONGLONG record) {
-          return record == slot_e ? std::span<const BYTE>(bytes)
-                                  : std::span<const BYTE>();
-        },
-        [&held](ULONGLONG record, std::span<const BYTE> held_bytes) {
-          CHECK(held_bytes.size() == Tests::fake_file_record_size);
-          held.push_back(record);
-        });
+    const Io::ProbeRunPlan plan = PlanHoldingSlotE(chunk, rules, bytes, held);
+
     CHECK(held == std::vector<ULONGLONG>{slot_e});
     CHECK(plan.to_read ==
           std::vector<ULONGLONG>{slot_a, slot_b, slot_c, slot_d, slot_f});
@@ -302,36 +329,31 @@ TEST_CASE("The plan of a chunk reads the records no one holds in runs",
 
   SECTION("bytes of another size are not a held record") {
     const std::vector<BYTE> shorter(Tests::fake_file_record_size - 1);
-    const Io::ProbeRunPlan plan = Io::PlanProbeRuns(
-        chunk, rules,
-        [&shorter](ULONGLONG) { return std::span<const BYTE>(shorter); }, {});
-    CHECK(plan.to_read == FileSlots());
+    std::vector<ULONGLONG> held;
+
+    CHECK(PlanHoldingSlotE(chunk, rules, shorter, held).to_read == FileSlots());
   }
 
   SECTION("a kept run is widened to whole clusters") {
     rules.slots_per_cluster = 4;
-    const Io::ProbeRunPlan plan = Io::PlanProbeRuns(chunk, rules, {}, {});
-    CHECK(RunsOf(plan) == std::vector<Run>{{16, 8}, {124, 4}, {1324, 4}});
+
+    CHECK(RunsOf(PlanNothingHeld(chunk, rules)) ==
+          std::vector<Run>{{16, 8}, {124, 4}, {1324, 4}});
   }
 
   SECTION("an $MFT that is not mapped is probed record by record") {
     rules.mapped = false;
-    bool asked = false;
-    const Io::ProbeRunPlan plan =
-        Io::PlanProbeRuns(chunk, rules,
-                          [&asked](ULONGLONG) {
-                            asked = true;
-                            return std::span<const BYTE>();
-                          },
-                          {});
+    std::vector<ULONGLONG> asked;
+    const Io::ProbeRunPlan plan = PlanNotingTheQuestions(chunk, rules, asked);
+
     CHECK(plan.alone == chunk.size());
     CHECK(plan.to_read.empty());
     CHECK(plan.runs.empty());
-    CHECK_FALSE(asked);
+    CHECK(asked.empty());
   }
 
   SECTION("an empty chunk plans nothing") {
-    const Io::ProbeRunPlan plan = Io::PlanProbeRuns({}, rules, {}, {});
+    const Io::ProbeRunPlan plan = PlanNothingHeld({}, rules);
     CHECK(plan.alone == 0);
     CHECK(plan.runs.empty());
   }

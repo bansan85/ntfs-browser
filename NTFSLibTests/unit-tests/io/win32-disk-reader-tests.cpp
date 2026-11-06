@@ -81,6 +81,45 @@ struct TempFile final {
   ~TempFile() { std::filesystem::remove(path); }
 };
 
+// A reader opened on a temporary file, with the content it was written from.
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+class PrefetchFixture final {
+  std::vector<BYTE> content_;
+  TempFile file_;
+
+ public:
+  PrefetchFixture() : content_(MakeContent()), file_(content_) {
+    REQUIRE(reader.Open(file_.path.wstring()));
+  }
+
+  // Announces every range to the reader.
+  void Announce(std::initializer_list<Range> ranges) {
+    for (const Range& range : ranges) {
+      reader.Prefetch(range.offset, range.length);
+    }
+  }
+
+  // Reads the length bytes at offset, and checks them against the file.
+  void CheckRead(size_t offset, size_t length) {
+    INFO("offset " << offset << " length " << length);
+    std::vector<BYTE> dest(length);
+    LARGE_INTEGER addr{.QuadPart = gsl::narrow<LONGLONG>(offset)};
+    REQUIRE(reader.ReadInto(addr, dest));
+    CHECK(std::equal(dest.begin(), dest.end(),
+                     content_.begin() + gsl::narrow<std::ptrdiff_t>(offset)));
+  }
+
+  // Reads each range in turn, and checks it against the file.
+  void CheckReads(std::initializer_list<Range> ranges) {
+    for (const Range& range : ranges) {
+      CheckRead(range.offset, range.length);
+    }
+  }
+
+  // Declared after the file: it closes the file before the file is deleted.
+  NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader;
+};
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -149,82 +188,57 @@ TEMPLATE_TEST_CASE_SIG(
     ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
     NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
     NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
-  const std::vector<BYTE> content = MakeContent();
-  const TempFile file(content);
-
-  NTFS_BROWSER_NAMESPACE::Io::FileReader<S> reader;
-  REQUIRE(reader.Open(file.path.wstring()));
-
-  // Reads the length bytes at offset, and checks them against the file.
-  const auto check_read = [&](size_t offset, size_t length) {
-    INFO("offset " << offset << " length " << length);
-    std::vector<BYTE> dest(length);
-    LARGE_INTEGER addr{.QuadPart = gsl::narrow<LONGLONG>(offset)};
-    REQUIRE(reader.ReadInto(addr, dest));
-    CHECK(std::equal(dest.begin(), dest.end(),
-                     content.begin() + gsl::narrow<std::ptrdiff_t>(offset)));
-  };
-
-  const auto announce = [&reader](std::initializer_list<Range> ranges) {
-    for (const Range& range : ranges) {
-      reader.Prefetch(range.offset, range.length);
-    }
-  };
-  const auto check_reads = [&check_read](std::initializer_list<Range> ranges) {
-    for (const Range& range : ranges) {
-      check_read(range.offset, range.length);
-    }
-  };
+  PrefetchFixture<S> fixture;
 
   SECTION("reads in the announced order, a range in several pieces") {
-    announce({{0, 65536},
-              {65536, 65536},
-              {unaligned_offset + 131072, unaligned_length}});
-    check_reads({{0, 4096},
-                 {4096, 65536 - 4096},
-                 {65536, 65536},
-                 {unaligned_offset + 131072, unaligned_length}});
+    fixture.Announce({{0, 65536},
+                      {65536, 65536},
+                      {unaligned_offset + 131072, unaligned_length}});
+    fixture.CheckReads({{0, 4096},
+                        {4096, 65536 - 4096},
+                        {65536, 65536},
+                        {unaligned_offset + 131072, unaligned_length}});
   }
 
   SECTION("a read past the first ranges, then reads of the skipped ones") {
-    announce({{0, 4096}, {8192, 4096}, {65536, 4096}});
-    check_reads({{65536, 4096}, {0, 4096}, {8192, 4096}});
+    fixture.Announce({{0, 4096}, {8192, 4096}, {65536, 4096}});
+    fixture.CheckReads({{65536, 4096}, {0, 4096}, {8192, 4096}});
   }
 
   SECTION("reads outside the ranges in between") {
-    announce({{65536, 65536}});
-    check_reads({{tiny_offset, 1},
-                 {65536 + 100, 1000},
-                 {file_size - tail_length, tail_length},
-                 {65536 + 2000, 1000}});
+    fixture.Announce({{65536, 65536}});
+    fixture.CheckReads({{tiny_offset, 1},
+                        {65536 + 100, 1000},
+                        {file_size - tail_length, tail_length},
+                        {65536 + 2000, 1000}});
   }
 
   SECTION("reads after the hints are cancelled") {
-    announce({{0, 65536}, {65536, 65536}});
-    reader.CancelPrefetch();
-    check_reads({{0, 65536}, {65536, 65536}});
+    fixture.Announce({{0, 65536}, {65536, 65536}});
+    fixture.reader.CancelPrefetch();
+    fixture.CheckReads({{0, 65536}, {65536, 65536}});
   }
 
   SECTION("more hints than are kept") {
     constexpr size_t hints = 2000;
     constexpr size_t hint_bytes = 64;
     for (size_t index = 0; index < hints; index++) {
-      reader.Prefetch(index * hint_bytes, hint_bytes);
+      fixture.reader.Prefetch(index * hint_bytes, hint_bytes);
     }
     for (size_t index = 0; index < hints; index++) {
-      check_read(index * hint_bytes, hint_bytes);
+      fixture.CheckRead(index * hint_bytes, hint_bytes);
     }
   }
 
   SECTION("a range that runs past the end of the file") {
-    reader.Prefetch(file_size - tail_length, 2 * tail_length);
-    check_read(file_size - tail_length, tail_length);
+    fixture.reader.Prefetch(file_size - tail_length, 2 * tail_length);
+    fixture.CheckRead(file_size - tail_length, tail_length);
 
     std::vector<BYTE> dest(2 * tail_length);
-    reader.Prefetch(file_size - tail_length, dest.size());
+    fixture.reader.Prefetch(file_size - tail_length, dest.size());
     LARGE_INTEGER straddling{
         .QuadPart = gsl::narrow<LONGLONG>(file_size - tail_length)};
-    CHECK_FALSE(reader.ReadInto(straddling, dest));
+    CHECK_FALSE(fixture.reader.ReadInto(straddling, dest));
   }
 }
 
