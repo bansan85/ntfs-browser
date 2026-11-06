@@ -79,6 +79,13 @@ class Table;
 // Everything NtfsVolume<S> keeps out of its public header: the members, and the
 // private methods that work on them. Only NtfsVolume<S> reaches it, through
 // impl_: other classes use the methods of NtfsVolume<S> that forward to it.
+// ntfs-volume.cpp instantiates this class, but the cluster bitmap and bad list
+// members are defined in ntfs-volume-alloc.cpp: MSVC then warns (C4661) at the
+// class line.
+#ifdef _MSC_VER
+  #pragma warning(push)
+  #pragma warning(disable : 4661)
+#endif
 template <Cache::Strategy S>
 class NtfsVolume<S>::Impl {
  public:
@@ -193,6 +200,11 @@ class NtfsVolume<S>::Impl {
   void LogVolumeName(const Io::FileRecord<S>& vol) const;
   void Init();
   [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
+  // Whether the volume is open and $MFT maps the record of a metadata file.
+  [[nodiscard]] bool IsMetadataMapped(ULONGLONG record) const;
+  // Parses a metadata file's record into record, for its $DATA attributes.
+  [[nodiscard]] bool ParseMetadataData(Io::FileRecord<S>& record,
+                                       ULONGLONG index) const;
   [[nodiscard]] std::unique_ptr<const UpCase::Table> LoadUpCaseTable() const;
   // The cluster bitmap, loaded now if it was not. Null when it is unusable, or
   // while it loads.
@@ -220,5 +232,8 @@ class NtfsVolume<S>::Impl {
   void AttrRawCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                        bool& discard) const;
 };
+#ifdef _MSC_VER
+  #pragma warning(pop)
+#endif
 
 }  // namespace NTFS_BROWSER_NAMESPACE

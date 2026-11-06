@@ -62,6 +62,7 @@ set(
   "mft/used-slots.cpp"
   "mft/waiting-reads.cpp"
   "ntfs-volume.cpp"
+  "ntfs-volume-alloc.cpp"
   "record/header.cpp"
   "record/slack-carver.cpp"
   "tuning/knobs.cpp"
