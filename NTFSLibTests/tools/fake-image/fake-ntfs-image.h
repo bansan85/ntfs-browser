@@ -992,6 +992,18 @@ enum class FakeListBytes : std::uint8_t {
   CutLastEntry
 };
 
+// How many $FILE_NAME attributes of the listed file the walk of its list
+// imports before it meets the damage that bytes made.
+inline size_t FakeListNamesBeforeDamage(FakeListBytes bytes) {
+  if (bytes == FakeListBytes::InvalidTypeFirst) {
+    return 0;
+  }
+  if (bytes == FakeListBytes::Intact || bytes == FakeListBytes::CutLastEntry) {
+    return 2;
+  }
+  return 1;
+}
+
 // The cluster a non-resident list of mft_tree_list_base_idx lies in.
 inline constexpr DWORD mft_tree_list_lcn = 62;
 

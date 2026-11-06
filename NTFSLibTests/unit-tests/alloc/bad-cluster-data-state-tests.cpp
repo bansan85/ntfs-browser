@@ -38,19 +38,26 @@ const std::vector<FakeDataRun> stale_runs{
 // One bad cluster inside the stale file's run.
 const std::vector<Alloc::Extent> one_bad{{.lcn = 41, .clusters = 1}};
 
-// The freed stale file on stale_runs (or runs), a bitmap that marks allocated
-// plus the bad clusters named in marked (as NTFS does), and a bad list.
+// The shape of the freed stale file: its runs, its real size and the options
+// of its bad list.
+struct StaleFile {
+  std::vector<FakeDataRun> runs = stale_runs;
+  ULONGLONG real_size = stale_size;
+  FakeBadClusterOptions options = {};
+};
+
+// The freed stale file (shaped by file), a bitmap that marks allocated plus
+// the bad clusters named in marked (as NTFS does), and a bad list.
 std::vector<BYTE> StaleImage(std::span<const Alloc::Extent> bad,
                              std::span<const Alloc::Extent> marked,
                              std::span<const FakeDataRun> allocated = {},
-                             const std::vector<FakeDataRun>& runs = stale_runs,
-                             ULONGLONG real_size = stale_size,
-                             const FakeBadClusterOptions& options = {}) {
+                             const StaleFile& file = {}) {
   std::vector<FakeDataRun> in_bitmap(allocated.begin(), allocated.end());
-  std::vector<BYTE> image = Support::WithBitmap(
-      Tests::BuildFakeNtfsImageWithFreedNonResidentFile(real_size, runs),
-      Support::WithBadRuns(std::move(in_bitmap), marked));
-  return Support::WithBadClusters(std::move(image), bad, options);
+  std::vector<BYTE> image =
+      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
+                              file.real_size, file.runs),
+                          Support::WithBadRuns(std::move(in_bitmap), marked));
+  return Support::WithBadClusters(std::move(image), bad, file.options);
 }
 
 template <Cache::Strategy S>
@@ -84,8 +91,9 @@ void CheckBadOutranksAnExtentPastTheVolume() {
   const std::vector<FakeDataRun> runs{FakeDataRun{.lcn = 40, .clusters = 2},
                                       FakeDataRun{.lcn = 5000, .clusters = 2}};
 
-  CHECK(StateOfStale<S>(StaleImage(one_bad, one_bad, {}, runs,
-                                   4 * Tests::fake_cluster_size)) ==
+  CHECK(StateOfStale<S>(StaleImage(
+            one_bad, one_bad, {},
+            {.runs = runs, .real_size = 4 * Tests::fake_cluster_size})) ==
         DataState::Bad);
 }
 
@@ -144,8 +152,9 @@ void CheckResidentAndSparseOwnNoCluster() {
 
   // Clusters 45 to 47 are bad, but the stream's hole sits at those positions
   // only: it owns no cluster, so it cannot be bad.
-  CHECK(StateOfStale<S>(StaleImage(bad_in_the_hole, bad_in_the_hole, {}, runs,
-                                   7 * Tests::fake_cluster_size)) ==
+  CHECK(StateOfStale<S>(StaleImage(
+            bad_in_the_hole, bad_in_the_hole, {},
+            {.runs = runs, .real_size = 7 * Tests::fake_cluster_size})) ==
         DataState::Intact);
 
   const std::vector<BYTE> image = Support::WithBadClusters(
@@ -182,11 +191,11 @@ void CheckACutBadListInRecoverMode() {
   const VolumeOptions recover{.include_deleted = true, .recover_errors = true};
 
   // Strict mode rejects the list whole: the bitmap alone answers.
-  CHECK(StateOfStale<S>(StaleImage(two, two, {}, stale_runs, stale_size,
-                                   cut)) == DataState::Reallocated);
+  CHECK(StateOfStale<S>(StaleImage(two, two, {}, {.options = cut})) ==
+        DataState::Reallocated);
   // Recover mode keeps the extent that parsed.
-  CHECK(StateOfStale<S>(StaleImage(two, {}, {}, stale_runs, stale_size, cut),
-                        recover) == DataState::Bad);
+  CHECK(StateOfStale<S>(StaleImage(two, {}, {}, {.options = cut}), recover) ==
+        DataState::Bad);
 }
 
 }  // namespace

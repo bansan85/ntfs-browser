@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <array>
 #include <cstddef>
 #include <limits>
 #include <memory>
@@ -106,6 +107,36 @@ Opened Open(std::vector<BYTE> image, VolumeOptions options = {}) {
           .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
 }
 
+// A total_sectors value, named by what it checks.
+struct TotalSectorsCase {
+  const char* name;
+  ULONGLONG total_sectors;
+};
+
+const std::array<TotalSectorsCase, 5> accepted_totals{{
+    {"a volume that ends exactly with the first $MFT record is accepted",
+     sectors_to_first_record_end},
+    {"the largest total_sectors does not overflow the byte count",
+     std::numeric_limits<ULONGLONG>::max()},
+    // 2^55 sectors of 512 bytes is 2^64 bytes, which wraps to 0.
+    {"a byte count that wraps to zero is not taken for an empty volume",
+     1ULL << 55U},
+    // (2^55 + 2) sectors of 512 bytes wraps to 1024 bytes, below the record.
+    {"a byte count that wraps to a small value is not taken for it",
+     (1ULL << 55U) + 2},
+    // The BPB declares far more sectors than the 64 KiB the image holds.
+    {"an image truncated below total_sectors is still accepted", 1ULL << 30U},
+}};
+
+// A total_sectors value a strict volume rejects as ending before the first
+// $MFT record. Sizes and addresses are whole sectors: a sector is the smallest
+// step.
+const std::array<TotalSectorsCase, 2> rejected_totals{{
+    {"a volume that ends one sector short of it is rejected",
+     sectors_to_first_record_end - 1},
+    {"a volume that ends before the $MFT address is rejected", 1},
+}};
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG("NtfsVolume checks total_sectors",
@@ -170,52 +201,22 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume checks total_sectors",
     CHECK_THAT(opened.log, ContainsSubstring(beyond_message));
   }
 
-  SECTION("a volume that ends exactly with the first $MFT record is accepted") {
-    const Opened opened =
-        Open<S>(ImageWithTotalSectors(sectors_to_first_record_end));
+  for (const TotalSectorsCase& total : accepted_totals) {
+    DYNAMIC_SECTION(total.name) {
+      const Opened opened = Open<S>(ImageWithTotalSectors(total.total_sectors));
 
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
+      CHECK(opened.ok);
+      CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
+    }
   }
 
-  SECTION("a volume that ends one sector short of it is rejected") {
-    // Sizes and addresses are whole sectors: a sector is the smallest step.
-    const Opened strict =
-        Open<S>(ImageWithTotalSectors(sectors_to_first_record_end - 1));
+  for (const TotalSectorsCase& total : rejected_totals) {
+    DYNAMIC_SECTION(total.name) {
+      const Opened opened = Open<S>(ImageWithTotalSectors(total.total_sectors));
 
-    CHECK_FALSE(strict.ok);
-    CHECK_THAT(strict.log, ContainsSubstring(beyond_message));
-  }
-
-  SECTION("a volume that ends before the $MFT address is rejected") {
-    const Opened opened = Open<S>(ImageWithTotalSectors(1));
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(beyond_message));
-  }
-
-  SECTION("the largest total_sectors does not overflow the byte count") {
-    const Opened opened =
-        Open<S>(ImageWithTotalSectors(std::numeric_limits<ULONGLONG>::max()));
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
-  }
-
-  SECTION("a byte count that wraps to zero is not taken for an empty volume") {
-    // 2^55 sectors of 512 bytes is 2^64 bytes, which wraps to 0.
-    const Opened opened = Open<S>(ImageWithTotalSectors(1ULL << 55U));
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
-  }
-
-  SECTION("a byte count that wraps to a small value is not taken for it") {
-    // (2^55 + 2) sectors of 512 bytes wraps to 1024 bytes, below the record.
-    const Opened opened = Open<S>(ImageWithTotalSectors((1ULL << 55U) + 2));
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
+      CHECK_FALSE(opened.ok);
+      CHECK_THAT(opened.log, ContainsSubstring(beyond_message));
+    }
   }
 
   SECTION("the largest plausible MFT address does not overflow the sum") {
@@ -238,14 +239,6 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume checks total_sectors",
 
     CHECK_THAT(short_by_one.log, ContainsSubstring(beyond_message));
     CHECK_THAT(exact.log, !ContainsSubstring(beyond_message));
-  }
-
-  SECTION("an image truncated below total_sectors is still accepted") {
-    // The BPB declares far more sectors than the 64 KiB the image holds.
-    const Opened opened = Open<S>(ImageWithTotalSectors(1ULL << 30U));
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
   }
 
   SECTION("an invalid MFT address is still reported by its own message") {

@@ -207,6 +207,94 @@ constexpr std::uint64_t max_scan_read = std::uint64_t{4} * 1024 * 1024;
 // Ceiling of the FullCache of every scan, as external-mft-support.cpp sets it.
 constexpr std::uint64_t cache_ceiling = std::uint64_t{8} * 1024 * 1024;
 
+// Checks the records of the xw fixture that its own documentation singles out.
+void CheckXwFacts(const StandaloneMftScan& strict,
+                  const StandaloneMftScan& recovering) {
+  // BAAD records 500 and 565 are kept by no scan. The ten FILE records
+  // whose fixup check fails on one sector are dropped by strict mode and
+  // kept by recovering one, record 179 (a freed file with intact
+  // attributes) among them.
+  for (const ULONGLONG record : {500ULL, 565ULL}) {
+    CAPTURE(record);
+    CHECK(strict.tree.Find(record) == nullptr);
+    CHECK(recovering.tree.Find(record) == nullptr);
+  }
+  for (const ULONGLONG record : {179ULL, 540ULL, 546ULL, 551ULL, 554ULL, 566ULL,
+                                 567ULL, 568ULL, 586ULL, 616ULL}) {
+    CAPTURE(record);
+    CHECK(strict.tree.Find(record) == nullptr);
+    CHECK(recovering.tree.Find(record) != nullptr);
+  }
+  // Record 432 is an extension of record 485: an extension is no entry.
+  CHECK(strict.tree.Find(432) == nullptr);
+  CHECK(recovering.tree.Find(432) == nullptr);
+  // Records with no end marker, or with one past the used size, are kept
+  // when recovering and dropped by strict mode.
+  for (const ULONGLONG record : {180ULL, 202ULL, 442ULL, 485ULL, 612ULL}) {
+    CAPTURE(record);
+    CHECK(strict.tree.Find(record) == nullptr);
+    CHECK(recovering.tree.Find(record) != nullptr);
+  }
+}
+
+// Checks the times and paths of the tdungan fixture, from its documentation.
+void CheckTdunganFacts(const StandaloneMftScan& strict,
+                       const StandaloneMftScan& recovering) {
+  // Times are those of the raw FILETIMEs, in UTC. The documented values stop
+  // at the microsecond: the last digit of a tick is dropped.
+  const Mft::MftTree::Entry* root = recovering.tree.Find(5);
+  REQUIRE(root != nullptr);
+  CHECK(EntryUtcMicros(root->create_time) == UtcMicros({.year = 2010,
+                                                        .month = 11,
+                                                        .day = 10,
+                                                        .hour = 17,
+                                                        .minute = 38,
+                                                        .second = 1,
+                                                        .microsecond = 62500}));
+  CHECK(EntryUtcMicros(root->write_time) == UtcMicros({.year = 2012,
+                                                       .month = 4,
+                                                       .day = 6,
+                                                       .hour = 17,
+                                                       .minute = 27,
+                                                       .second = 41,
+                                                       .microsecond = 610682}));
+  CHECK(EntryUtcMicros(root->access_time) ==
+        UtcMicros({.year = 2012,
+                   .month = 4,
+                   .day = 7,
+                   .hour = 2,
+                   .minute = 33,
+                   .second = 13,
+                   .microsecond = 583147}));
+
+  const Mft::MftTree::Entry* log = recovering.tree.Find(329);
+  REQUIRE(log != nullptr);
+  CHECK(recovering.tree.GetPath(329) ==
+        L"\\Documents and Settings\\RSydow\\Local Settings\\Temp\\vmmsi.log");
+  CHECK(EntryUtcMicros(log->create_time) == UtcMicros({.year = 2011,
+                                                       .month = 7,
+                                                       .day = 6,
+                                                       .hour = 1,
+                                                       .minute = 4,
+                                                       .second = 45,
+                                                       .microsecond = 406250}));
+  CHECK(EntryUtcMicros(log->write_time) == UtcMicros({.year = 2011,
+                                                      .month = 7,
+                                                      .day = 5,
+                                                      .hour = 18,
+                                                      .minute = 6,
+                                                      .second = 7,
+                                                      .microsecond = 722625}));
+
+  CHECK(recovering.tree.GetPath(40000) ==
+        L"\\WINDOWS\\$NtServicePackUninstall$\\reg00099");
+  // Record 17863 has the NTFS 3.0 short header (fixup array at 0x2A). It is
+  // an extension of record 19866: no entry of its own, and its base is kept.
+  CHECK(strict.tree.Find(17863) == nullptr);
+  CHECK(recovering.tree.Find(17863) == nullptr);
+  CHECK(recovering.tree.Find(19866) != nullptr);
+}
+
 // Checks what only one fixture has: the names, paths and times its own
 // documentation gives, from the scans that found them.
 void CheckFixtureFacts(const MftFixture& fixture,
@@ -217,89 +305,9 @@ void CheckFixtureFacts(const MftFixture& fixture,
     CHECK(strict.tree.Find(16) == nullptr);
     CHECK(recovering.tree.Find(16) == nullptr);
   } else if (fixture.label == "xw") {
-    // BAAD records 500 and 565 are kept by no scan. The ten FILE records
-    // whose fixup check fails on one sector are dropped by strict mode and
-    // kept by recovering one, record 179 (a freed file with intact
-    // attributes) among them.
-    for (const ULONGLONG record : {500ULL, 565ULL}) {
-      CAPTURE(record);
-      CHECK(strict.tree.Find(record) == nullptr);
-      CHECK(recovering.tree.Find(record) == nullptr);
-    }
-    for (const ULONGLONG record : {179ULL, 540ULL, 546ULL, 551ULL, 554ULL,
-                                   566ULL, 567ULL, 568ULL, 586ULL, 616ULL}) {
-      CAPTURE(record);
-      CHECK(strict.tree.Find(record) == nullptr);
-      CHECK(recovering.tree.Find(record) != nullptr);
-    }
-    // Record 432 is an extension of record 485: an extension is no entry.
-    CHECK(strict.tree.Find(432) == nullptr);
-    CHECK(recovering.tree.Find(432) == nullptr);
-    // Records with no end marker, or with one past the used size, are kept
-    // when recovering and dropped by strict mode.
-    for (const ULONGLONG record : {180ULL, 202ULL, 442ULL, 485ULL, 612ULL}) {
-      CAPTURE(record);
-      CHECK(strict.tree.Find(record) == nullptr);
-      CHECK(recovering.tree.Find(record) != nullptr);
-    }
+    CheckXwFacts(strict, recovering);
   } else if (fixture.label == "tdungan") {
-    // Times are those of the raw FILETIMEs, in UTC. The documented values stop
-    // at the microsecond: the last digit of a tick is dropped.
-    const Mft::MftTree::Entry* root = recovering.tree.Find(5);
-    REQUIRE(root != nullptr);
-    CHECK(EntryUtcMicros(root->create_time) ==
-          UtcMicros({.year = 2010,
-                     .month = 11,
-                     .day = 10,
-                     .hour = 17,
-                     .minute = 38,
-                     .second = 1,
-                     .microsecond = 62500}));
-    CHECK(EntryUtcMicros(root->write_time) ==
-          UtcMicros({.year = 2012,
-                     .month = 4,
-                     .day = 6,
-                     .hour = 17,
-                     .minute = 27,
-                     .second = 41,
-                     .microsecond = 610682}));
-    CHECK(EntryUtcMicros(root->access_time) ==
-          UtcMicros({.year = 2012,
-                     .month = 4,
-                     .day = 7,
-                     .hour = 2,
-                     .minute = 33,
-                     .second = 13,
-                     .microsecond = 583147}));
-
-    const Mft::MftTree::Entry* log = recovering.tree.Find(329);
-    REQUIRE(log != nullptr);
-    CHECK(recovering.tree.GetPath(329) ==
-          L"\\Documents and Settings\\RSydow\\Local Settings\\Temp\\vmmsi.log");
-    CHECK(EntryUtcMicros(log->create_time) ==
-          UtcMicros({.year = 2011,
-                     .month = 7,
-                     .day = 6,
-                     .hour = 1,
-                     .minute = 4,
-                     .second = 45,
-                     .microsecond = 406250}));
-    CHECK(EntryUtcMicros(log->write_time) ==
-          UtcMicros({.year = 2011,
-                     .month = 7,
-                     .day = 5,
-                     .hour = 18,
-                     .minute = 6,
-                     .second = 7,
-                     .microsecond = 722625}));
-
-    CHECK(recovering.tree.GetPath(40000) ==
-          L"\\WINDOWS\\$NtServicePackUninstall$\\reg00099");
-    // Record 17863 has the NTFS 3.0 short header (fixup array at 0x2A). It is
-    // an extension of record 19866: no entry of its own, and its base is kept.
-    CHECK(strict.tree.Find(17863) == nullptr);
-    CHECK(recovering.tree.Find(17863) == nullptr);
-    CHECK(recovering.tree.Find(19866) != nullptr);
+    CheckTdunganFacts(strict, recovering);
   }
 }
 

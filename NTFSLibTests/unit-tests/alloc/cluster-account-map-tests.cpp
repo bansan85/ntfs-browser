@@ -272,6 +272,19 @@ TEST_CASE("a never written range of a scanned file reads as zeros, not damage",
   });
 }
 
+namespace {
+
+// The conditions that say a cluster is not damaged.
+bool IsFine(ClusterCondition condition) {
+  return condition == ClusterCondition::Intact ||
+         condition == ClusterCondition::IntactChecked ||
+         condition == ClusterCondition::Consistent ||
+         condition == ClusterCondition::Sparse ||
+         condition == ClusterCondition::NeverWritten;
+}
+
+}  // namespace
+
 TEST_CASE("every condition has its own name and a verdict",
           "[alloc][cluster][map]") {
   std::vector<std::string> names;
@@ -282,13 +295,8 @@ TEST_CASE("every condition has its own name and a verdict",
     CHECK(std::ranges::find(names, name) == names.end());
     names.push_back(name);
 
-    const bool fine = condition == ClusterCondition::Intact ||
-                      condition == ClusterCondition::IntactChecked ||
-                      condition == ClusterCondition::Consistent ||
-                      condition == ClusterCondition::Sparse ||
-                      condition == ClusterCondition::NeverWritten;
     INFO(name);
-    CHECK(Alloc::IsDamaged(condition) == !fine);
+    CHECK(Alloc::IsDamaged(condition) == !IsFine(condition));
   }
   CHECK(Alloc::ClusterTally{}.Empty());
   Alloc::ClusterTally tally;

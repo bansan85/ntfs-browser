@@ -295,8 +295,10 @@ void CheckTheNewestNameWins() {
   CHECK(SameTime(item->usn.last_time, time_c));
 }
 
-template <Cache::Strategy S>
-void CheckJournalOnlyPaths() {
+// Files only the journal names (records 41 to 45), each under another kind of
+// parent: a live directory, the root, a record that does not exist, a freed
+// directory and a plain file. The last one is a directory itself.
+FakeUsnOptions JournalOnlyPathsJournal() {
   FakeUsnRecord in_docs = MakeRecord({.name = L"in-docs.bin",
                                       .record = 41,
                                       .sequence = 1,
@@ -331,9 +333,13 @@ void CheckJournalOnlyPaths() {
                                      .time = time_a});
   folder.file_attributes = attribute_directory;
 
-  const Mft::MftTree tree = ScanWith<S>(
-      {.records = {in_docs, in_root, in_lost, in_freed_dir, folder}},
-      Support::RecoverOptions());
+  return {.records = {in_docs, in_root, in_lost, in_freed_dir, folder}};
+}
+
+template <Cache::Strategy S>
+void CheckJournalOnlyPaths() {
+  const Mft::MftTree tree =
+      ScanWith<S>(JournalOnlyPathsJournal(), Support::RecoverOptions());
 
   REQUIRE(tree.JournalOnly().size() == 5);
   const auto* docs_item = FindJournalOnly(tree, 41, 1);

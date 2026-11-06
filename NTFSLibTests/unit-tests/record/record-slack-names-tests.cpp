@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <random>
 #include <span>
 #include <string>
@@ -91,6 +92,44 @@ Mft::MftTree Scan(const NtfsVolume<S>& volume) {
   return Mft::MftTree(volume);
 }
 
+// Checks that no entry of the tree carved a name, but for the entry of the
+// record that is excepted, if any.
+void CheckNoEntryCarves(const Mft::MftTree& tree,
+                        std::optional<ULONGLONG> except = std::nullopt) {
+  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
+    if (entry.record != except) {
+      CHECK(entry.carved_names.empty());
+    }
+  }
+}
+
+// Checks that two scans of the same record agree on every live field.
+void CheckSameLiveFields(const Mft::MftTree::Entry& a,
+                         const Mft::MftTree::Entry& b) {
+  INFO("record " << a.record);
+  CHECK(a.record == b.record);
+  CHECK(a.sequence == b.sequence);
+  CHECK(a.in_use == b.in_use);
+  CHECK(a.size == b.size);
+  CHECK(a.allocated_size == b.allocated_size);
+  CHECK(a.names.size() == b.names.size());
+  for (size_t n = 0; n < a.names.size(); ++n) {
+    CHECK(a.names.at(n).name == b.names.at(n).name);
+    CHECK(a.names.at(n).parent_record == b.names.at(n).parent_record);
+    CHECK(a.names.at(n).parent_valid == b.names.at(n).parent_valid);
+  }
+}
+
+// Checks that two readers saw the same reads, at the same places.
+void CheckSameCalls(const Tests::CountingDiskReader& left,
+                    const Tests::CountingDiskReader& right) {
+  REQUIRE(left.ReadCount() == right.ReadCount());
+  for (size_t i = 0; i < left.Calls().size(); ++i) {
+    CHECK(left.Calls().at(i).offset == right.Calls().at(i).offset);
+    CHECK(left.Calls().at(i).length == right.Calls().at(i).length);
+  }
+}
+
 template <Cache::Strategy S>
 void CheckNamesAreCarvedByTheScan() {
   const auto opened = OpenVolume<S>(ImageWithTwoOldNames(), both_flags);
@@ -107,11 +146,7 @@ void CheckNamesAreCarvedByTheScan() {
   CHECK(report->carved_names.at(0).times_known);
   CHECK_FALSE(report->carved_names.at(0).partial);
   CHECK(tree.Stats().carved_names == 2);
-  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
-    if (entry.record != report_record) {
-      CHECK(entry.carved_names.empty());
-    }
-  }
+  CheckNoEntryCarves(tree, report_record);
 }
 
 template <Cache::Strategy S>
@@ -127,18 +162,7 @@ void CheckLiveFieldsAreUntouched() {
   for (size_t i = 0; i < left.Entries().size(); ++i) {
     const Mft::MftTree::Entry& a = left.Entries().at(i);
     const Mft::MftTree::Entry& b = right.Entries().at(i);
-    INFO("record " << a.record);
-    CHECK(a.record == b.record);
-    CHECK(a.sequence == b.sequence);
-    CHECK(a.in_use == b.in_use);
-    CHECK(a.size == b.size);
-    CHECK(a.allocated_size == b.allocated_size);
-    CHECK(a.names.size() == b.names.size());
-    for (size_t n = 0; n < a.names.size(); ++n) {
-      CHECK(a.names.at(n).name == b.names.at(n).name);
-      CHECK(a.names.at(n).parent_record == b.names.at(n).parent_record);
-      CHECK(a.names.at(n).parent_valid == b.names.at(n).parent_valid);
-    }
+    CheckSameLiveFields(a, b);
     CHECK(left.GetPath(a.record) == right.GetPath(b.record));
   }
   CHECK(left.Stats().in_use == right.Stats().in_use);
@@ -196,9 +220,7 @@ void CheckNoFlagCombinationButBothCarves() {
     const Mft::MftTree tree = Scan(*opened.volume);
 
     CHECK(tree.Stats().carved_names == 0);
-    for (const Mft::MftTree::Entry& entry : tree.Entries()) {
-      CHECK(entry.carved_names.empty());
-    }
+    CheckNoEntryCarves(tree);
     CHECK(CarveRecord(*opened.volume, report_record).empty());
   }
 }
@@ -219,13 +241,7 @@ void CheckSlackNeverCostsARead() {
     const Mft::MftTree right = Scan(*with.volume);
 
     INFO(options.include_deleted << options.recover_errors);
-    REQUIRE(without.counter->ReadCount() == with.counter->ReadCount());
-    for (size_t i = 0; i < without.counter->Calls().size(); ++i) {
-      CHECK(without.counter->Calls().at(i).offset ==
-            with.counter->Calls().at(i).offset);
-      CHECK(without.counter->Calls().at(i).length ==
-            with.counter->Calls().at(i).length);
-    }
+    CheckSameCalls(*without.counter, *with.counter);
   }
 }
 

@@ -123,6 +123,67 @@ bool CaptureIsASubsetOf(const std::vector<BYTE>& capture,
   return true;
 }
 
+// Checks the phases of a listing: each ran, in the order of the scan.
+void CheckListingPhases(const JsonValue& run_json) {
+  for (const std::string_view name :
+       {"open", "pass1", "pass2", "link", "print"}) {
+    INFO("phase " << name);
+    const JsonValue* const phase = PhaseNamed(run_json, name);
+    REQUIRE(phase != nullptr);
+    CHECK(Count(Member(*phase, "count")) >= 1);
+    CHECK(Count(Member(*phase, "wall_ns")) > 0);
+  }
+  CHECK(PhaseNamed(run_json, "walk") == nullptr);
+  const std::uint64_t pass1_end =
+      Count(Member(*PhaseNamed(run_json, "pass1"), "last_end_ns"));
+  const std::uint64_t pass2_begin =
+      Count(Member(*PhaseNamed(run_json, "pass2"), "first_begin_ns"));
+  const std::uint64_t print_begin =
+      Count(Member(*PhaseNamed(run_json, "print"), "first_begin_ns"));
+  CHECK(pass1_end <= pass2_begin);
+  CHECK(pass2_begin <= print_begin);
+  CHECK(Count(Member(*PhaseNamed(run_json, "pass1"), "reads")) > 0);
+}
+
+// Checks that the reads of the kinds add up to the reads requested, and that
+// the sizes and classes of each kind add up to its reads.
+void CheckKindsAddUpTo(const JsonValue& kinds, std::uint64_t requested) {
+  std::uint64_t kind_reads = 0;
+  for (const auto& [name, kind] : kinds.members) {
+    INFO("kind " << name);
+    kind_reads += Count(Member(kind, "reads"));
+    const JsonValue& sizes = Member(kind, "sizes");
+    CHECK(Count(Member(sizes, "count")) == Count(Member(kind, "reads")));
+    CHECK(Member(sizes, "buckets").items.size() == 40);
+    std::uint64_t class_total = 0;
+    for (const auto& [class_name, count] : Member(kind, "classes").members) {
+      class_total += Count(count);
+    }
+    CHECK(class_total == Count(Member(kind, "reads")));
+  }
+  CHECK(kind_reads == requested);
+  CHECK(Count(Member(Member(kinds, "mft_window"), "reads")) > 0);
+  CHECK(Count(Member(Member(kinds, "boot"), "reads")) > 0);
+  CHECK(Count(Member(Member(kinds, "attribute_list"), "reads")) > 0);
+}
+
+// Checks that the counters of the standing lane are there, and that nothing
+// used the lane.
+void CheckStandingLaneIsIdle(const JsonValue& run_json,
+                             const JsonValue& reads) {
+  for (const std::string_view name :
+       {"standing_prefetch_calls", "standing_prefetch_bytes",
+        "standing_cancel_calls"}) {
+    INFO("reads." << name);
+    CHECK(Count(Member(reads, name)) == 0);
+  }
+  for (const std::string_view name :
+       {"standing_reads", "standing_bytes", "standing_wasted_bytes"}) {
+    INFO("disk." << name);
+    CHECK(Count(Member(Member(run_json, "disk"), name)) == 0);
+  }
+}
+
 }  // namespace
 
 TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
@@ -248,25 +309,7 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
   CHECK(Count(Member(run_json, "wall_ns")) > 0);
   CHECK(Count(Member(run_json, "volume_bytes")) == ListImage().size());
 
-  // The phases of a listing, in the order they ran.
-  for (const std::string_view name :
-       {"open", "pass1", "pass2", "link", "print"}) {
-    INFO("phase " << name);
-    const JsonValue* const phase = PhaseNamed(run_json, name);
-    REQUIRE(phase != nullptr);
-    CHECK(Count(Member(*phase, "count")) >= 1);
-    CHECK(Count(Member(*phase, "wall_ns")) > 0);
-  }
-  CHECK(PhaseNamed(run_json, "walk") == nullptr);
-  const std::uint64_t pass1_end =
-      Count(Member(*PhaseNamed(run_json, "pass1"), "last_end_ns"));
-  const std::uint64_t pass2_begin =
-      Count(Member(*PhaseNamed(run_json, "pass2"), "first_begin_ns"));
-  const std::uint64_t print_begin =
-      Count(Member(*PhaseNamed(run_json, "print"), "first_begin_ns"));
-  CHECK(pass1_end <= pass2_begin);
-  CHECK(pass2_begin <= print_begin);
-  CHECK(Count(Member(*PhaseNamed(run_json, "pass1"), "reads")) > 0);
+  CheckListingPhases(run_json);
 
   // The threads: the main one, first.
   const JsonValue& threads = Member(run_json, "threads");
@@ -281,24 +324,7 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
   CHECK(Count(Member(reads, "events_logged")) >= requested);
   CHECK(Count(Member(reads, "events_dropped")) == 0);
 
-  const JsonValue& kinds = Member(run_json, "kinds");
-  std::uint64_t kind_reads = 0;
-  for (const auto& [name, kind] : kinds.members) {
-    INFO("kind " << name);
-    kind_reads += Count(Member(kind, "reads"));
-    const JsonValue& sizes = Member(kind, "sizes");
-    CHECK(Count(Member(sizes, "count")) == Count(Member(kind, "reads")));
-    CHECK(Member(sizes, "buckets").items.size() == 40);
-    std::uint64_t class_total = 0;
-    for (const auto& [class_name, count] : Member(kind, "classes").members) {
-      class_total += Count(count);
-    }
-    CHECK(class_total == Count(Member(kind, "reads")));
-  }
-  CHECK(kind_reads == requested);
-  CHECK(Count(Member(Member(kinds, "mft_window"), "reads")) > 0);
-  CHECK(Count(Member(Member(kinds, "boot"), "reads")) > 0);
-  CHECK(Count(Member(Member(kinds, "attribute_list"), "reads")) > 0);
+  CheckKindsAddUpTo(Member(run_json, "kinds"), requested);
 
   const JsonValue& classes = Member(run_json, "classes");
   for (const std::string_view name :
@@ -313,18 +339,7 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
   // A file does not tell its classes: the disk side of the report is there,
   // and empty for the reader of an image on this platform.
   CHECK(Member(Member(run_json, "disk"), "queue_depth").items.size() == 65);
-  // The counters of the standing lane are there, and nothing used the lane.
-  for (const std::string_view name :
-       {"standing_prefetch_calls", "standing_prefetch_bytes",
-        "standing_cancel_calls"}) {
-    INFO("reads." << name);
-    CHECK(Count(Member(reads, name)) == 0);
-  }
-  for (const std::string_view name :
-       {"standing_reads", "standing_bytes", "standing_wasted_bytes"}) {
-    INFO("disk." << name);
-    CHECK(Count(Member(Member(run_json, "disk"), name)) == 0);
-  }
+  CheckStandingLaneIsIdle(run_json, reads);
   CHECK(Member(run_json, "main_thread_ns").kind == JsonValue::Kind::Object);
 }
 

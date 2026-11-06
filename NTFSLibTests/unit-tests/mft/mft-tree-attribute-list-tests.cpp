@@ -487,25 +487,6 @@ TEMPLATE_TEST_CASE_SIG(
 
 namespace {
 
-// Names of the listed file that the walk of its list imports before it meets
-// the damage bytes made.
-size_t NamesBeforeDamage(Tests::FakeListBytes bytes) {
-  switch (bytes) {
-    case Tests::FakeListBytes::Intact:
-      return 2;
-    case Tests::FakeListBytes::InvalidTypeFirst:
-      return 0;
-    case Tests::FakeListBytes::CutLastEntry:
-      return 2;
-    case Tests::FakeListBytes::InvalidTypeSecond:
-    case Tests::FakeListBytes::ZeroRecordSize:
-    case Tests::FakeListBytes::RecordSizeBelowHeader:
-    case Tests::FakeListBytes::RecordSizePastEnd:
-      return 1;
-  }
-  return 0;
-}
-
 // The ways another file can leave a list damaged.
 constexpr auto overwritten_forms = {Tests::FakeListBytes::InvalidTypeFirst,
                                     Tests::FakeListBytes::InvalidTypeSecond,
@@ -538,7 +519,7 @@ TEMPLATE_TEST_CASE_SIG(
       scan.tree->Find(Tests::mft_tree_list_base_idx);
   REQUIRE(listed != nullptr);
   CHECK_FALSE(listed->in_use);
-  CHECK(listed->names.size() == NamesBeforeDamage(bytes));
+  CHECK(listed->names.size() == Tests::FakeListNamesBeforeDamage(bytes));
   CHECK(scan.tree->Stats().damaged == 0);
   CHECK(scan.tree->Stats().overwritten_lists == 1);
   CHECK_FALSE(levels.Levels().Logged(Log::Level::Warn));

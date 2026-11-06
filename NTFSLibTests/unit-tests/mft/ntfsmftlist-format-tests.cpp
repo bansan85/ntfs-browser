@@ -65,6 +65,28 @@ constexpr std::size_t wide_deeper = wide_tops + wide_tops * wide_subs;
 // Nodes of the wide tree that come before its files.
 constexpr std::size_t wide_first_file = wide_deeper + 1;
 
+// File number n of the wide tree, in subdirectory sub of top: a hard link
+// every 13th, a freed file that held clusters every 7th, and a file in the deep
+// directory every 97th.
+FakeTreeNode WideFile(std::size_t n, std::size_t top, std::size_t sub) {
+  FakeTreeNode file;
+  file.links.push_back(
+      {.name = L"file" + std::to_wstring(n),
+       .parent = n % 97 == 0 ? wide_deeper : FirstSub(top) + sub});
+  if (n % 13 == 0) {
+    file.links.push_back({.name = L"link" + std::to_wstring(n),
+                          .parent = FirstSub(top) + (sub + 1) % wide_subs});
+  }
+  if (n % 7 == 0) {
+    file.in_use = false;
+    file.runs = {FakeDataRun{.lcn = 4 + n % 5, .clusters = 2}};
+    file.stream_size = 2048;
+  } else {
+    file.data_size = static_cast<DWORD>(n % 100);
+  }
+  return file;
+}
+
 // A tree wide enough to span many chunks, with what a listing has to carry
 // through them: hard links, freed files that held clusters, a file in a deep
 // directory, and a directory with two names.
@@ -90,23 +112,7 @@ std::vector<FakeTreeNode> WideTree() {
   for (std::size_t top = 0; top < wide_tops; top++) {
     for (std::size_t sub = 0; sub < wide_subs; sub++) {
       for (std::size_t i = 0; i < wide_files; i++, n++) {
-        FakeTreeNode file;
-        file.links.push_back(
-            {.name = L"file" + std::to_wstring(n),
-             .parent = n % 97 == 0 ? wide_deeper : FirstSub(top) + sub});
-        if (n % 13 == 0) {
-          file.links.push_back(
-              {.name = L"link" + std::to_wstring(n),
-               .parent = FirstSub(top) + (sub + 1) % wide_subs});
-        }
-        if (n % 7 == 0) {
-          file.in_use = false;
-          file.runs = {FakeDataRun{.lcn = 4 + n % 5, .clusters = 2}};
-          file.stream_size = 2048;
-        } else {
-          file.data_size = static_cast<DWORD>(n % 100);
-        }
-        nodes.push_back(std::move(file));
+        nodes.push_back(WideFile(n, top, sub));
       }
     }
   }

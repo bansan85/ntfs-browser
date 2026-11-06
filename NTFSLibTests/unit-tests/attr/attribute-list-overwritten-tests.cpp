@@ -36,24 +36,6 @@ constexpr auto overwritten_forms = {Tests::FakeListBytes::InvalidTypeFirst,
                                     Tests::FakeListBytes::RecordSizePastEnd,
                                     Tests::FakeListBytes::CutLastEntry};
 
-// $FILE_NAME attributes of the listed file that the walk of its list imports
-// before it meets the damage bytes made.
-size_t NamesBeforeDamage(Tests::FakeListBytes bytes) {
-  switch (bytes) {
-    case Tests::FakeListBytes::Intact:
-    case Tests::FakeListBytes::CutLastEntry:
-      return 2;
-    case Tests::FakeListBytes::InvalidTypeFirst:
-      return 0;
-    case Tests::FakeListBytes::InvalidTypeSecond:
-    case Tests::FakeListBytes::ZeroRecordSize:
-    case Tests::FakeListBytes::RecordSizeBelowHeader:
-    case Tests::FakeListBytes::RecordSizePastEnd:
-      return 1;
-  }
-  return 0;
-}
-
 // The listed file of the fixture, with its list in the state and residency
 // asked for, whose attributes are not parsed yet.
 template <Cache::Strategy S>
@@ -86,7 +68,7 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(opened.record->HasOverwrittenAttrList());
   CHECK(opened.record->GetAttr(Attr::Type::StandardInformation).size() == 1);
   CHECK(opened.record->GetAttr(Attr::Type::FileName).size() ==
-        NamesBeforeDamage(bytes));
+        Tests::FakeListNamesBeforeDamage(bytes));
   CHECK_FALSE(opened.record->IsSalvaged());
   CHECK_FALSE(levels.Levels().Logged(Log::Level::Warn));
   CHECK_FALSE(levels.Levels().Logged(Log::Level::Error));

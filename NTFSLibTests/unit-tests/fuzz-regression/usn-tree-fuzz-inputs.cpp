@@ -1,9 +1,11 @@
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -55,10 +57,61 @@ constexpr ULONGLONG time_a = 0x01D87F3C00000100ULL;
 constexpr ULONGLONG time_b = 0x01D87F3C00000200ULL;
 constexpr ULONGLONG time_c = 0x01D87F3C00000300ULL;
 
-// Records that name files the tree has: a live one touched three times, a
-// freed one that was deleted, a rename chain of a file no record holds, the
-// sequence rules, and a reference with a high half.
-FakeUsnOptions Annotated() {
+// A live file touched three times, and a freed one that was deleted.
+std::vector<FakeUsnRecord> LiveAndFreedHistory() {
+  return {MakeRecord({.name = L"report.txt",
+                      .record = Tests::mft_tree_report_idx,
+                      .sequence = report_sequence,
+                      .reason = reason_file_create,
+                      .time = time_a}),
+          MakeRecord({.name = L"report.txt",
+                      .record = Tests::mft_tree_report_idx,
+                      .sequence = report_sequence,
+                      .reason = reason_data_overwrite,
+                      .time = time_b}),
+          MakeRecord({.name = L"report.txt",
+                      .record = Tests::mft_tree_report_idx,
+                      .sequence = report_sequence,
+                      .reason = reason_data_overwrite | reason_close,
+                      .time = time_b}),
+          MakeRecord({.name = L"old.tmp",
+                      .record = Tests::mft_tree_deleted_file_idx,
+                      .sequence = 1,
+                      .reason = reason_file_create,
+                      .time = time_a}),
+          MakeRecord({.name = L"old.tmp",
+                      .record = Tests::mft_tree_deleted_file_idx,
+                      .sequence = 1,
+                      .reason = reason_file_delete | reason_close,
+                      .time = time_c})};
+}
+
+// A rename chain of a file no record holds.
+std::vector<FakeUsnRecord> RenameChain() {
+  return {MakeRecord({.name = L"a.txt",
+                      .record = ghost_record,
+                      .sequence = 2,
+                      .reason = reason_file_create,
+                      .time = time_a}),
+          MakeRecord({.name = L"a.txt",
+                      .record = ghost_record,
+                      .sequence = 2,
+                      .reason = reason_rename_old,
+                      .time = time_b}),
+          MakeRecord({.name = L"b.txt",
+                      .record = ghost_record,
+                      .sequence = 2,
+                      .reason = reason_rename_new,
+                      .time = time_b}),
+          MakeRecord({.name = L"c.txt",
+                      .record = ghost_record,
+                      .sequence = 2,
+                      .reason = reason_rename_new | reason_close,
+                      .time = time_c})};
+}
+
+// The sequence rules, and a reference with a high half.
+std::vector<FakeUsnRecord> SequenceRules() {
   FakeUsnRecord wide = MakeRecord({.name = L"wide",
                                    .record = Tests::mft_tree_report_idx,
                                    .sequence = report_sequence,
@@ -66,68 +119,32 @@ FakeUsnOptions Annotated() {
                                    .time = time_a});
   wide.major_version = 3;
   wide.file_reference_high = 1;
-  return {
-      .records = {MakeRecord({.name = L"report.txt",
-                              .record = Tests::mft_tree_report_idx,
-                              .sequence = report_sequence,
-                              .reason = reason_file_create,
-                              .time = time_a}),
-                  MakeRecord({.name = L"report.txt",
-                              .record = Tests::mft_tree_report_idx,
-                              .sequence = report_sequence,
-                              .reason = reason_data_overwrite,
-                              .time = time_b}),
-                  MakeRecord({.name = L"report.txt",
-                              .record = Tests::mft_tree_report_idx,
-                              .sequence = report_sequence,
-                              .reason = reason_data_overwrite | reason_close,
-                              .time = time_b}),
-                  MakeRecord({.name = L"old.tmp",
-                              .record = Tests::mft_tree_deleted_file_idx,
-                              .sequence = 1,
-                              .reason = reason_file_create,
-                              .time = time_a}),
-                  MakeRecord({.name = L"old.tmp",
-                              .record = Tests::mft_tree_deleted_file_idx,
-                              .sequence = 1,
-                              .reason = reason_file_delete | reason_close,
-                              .time = time_c}),
-                  MakeRecord({.name = L"a.txt",
-                              .record = ghost_record,
-                              .sequence = 2,
-                              .reason = reason_file_create,
-                              .time = time_a}),
-                  MakeRecord({.name = L"a.txt",
-                              .record = ghost_record,
-                              .sequence = 2,
-                              .reason = reason_rename_old,
-                              .time = time_b}),
-                  MakeRecord({.name = L"b.txt",
-                              .record = ghost_record,
-                              .sequence = 2,
-                              .reason = reason_rename_new,
-                              .time = time_b}),
-                  MakeRecord({.name = L"c.txt",
-                              .record = ghost_record,
-                              .sequence = 2,
-                              .reason = reason_rename_new | reason_close,
-                              .time = time_c}),
-                  MakeRecord({.name = L"zero",
-                              .record = Tests::mft_tree_hard_link_idx,
-                              .sequence = 0,
-                              .reason = reason_file_create,
-                              .time = time_a}),
-                  MakeRecord({.name = L"older",
-                              .record = Tests::mft_tree_report_idx,
-                              .sequence = report_sequence - 1,
-                              .reason = reason_file_create,
-                              .time = time_b}),
-                  MakeRecord({.name = L"newer",
-                              .record = Tests::mft_tree_report_idx,
-                              .sequence = report_sequence + 1,
-                              .reason = reason_file_create,
-                              .time = time_c}),
-                  wide}};
+  return {MakeRecord({.name = L"zero",
+                      .record = Tests::mft_tree_hard_link_idx,
+                      .sequence = 0,
+                      .reason = reason_file_create,
+                      .time = time_a}),
+          MakeRecord({.name = L"older",
+                      .record = Tests::mft_tree_report_idx,
+                      .sequence = report_sequence - 1,
+                      .reason = reason_file_create,
+                      .time = time_b}),
+          MakeRecord({.name = L"newer",
+                      .record = Tests::mft_tree_report_idx,
+                      .sequence = report_sequence + 1,
+                      .reason = reason_file_create,
+                      .time = time_c}),
+          std::move(wide)};
+}
+
+// Records that name files the tree has: a live one touched three times, a
+// freed one that was deleted, a rename chain of a file no record holds, the
+// sequence rules, and a reference with a high half.
+FakeUsnOptions Annotated() {
+  FakeUsnOptions options{.records = LiveAndFreedHistory()};
+  std::ranges::move(RenameChain(), std::back_inserter(options.records));
+  std::ranges::move(SequenceRules(), std::back_inserter(options.records));
+  return options;
 }
 
 // Files only the journal names, each under another kind of parent: a live

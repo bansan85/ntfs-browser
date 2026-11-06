@@ -77,6 +77,15 @@ bool InLists(const Call& call) {
   return call.offset >= Tests::list_scan_lists_lcn * Tests::fake_cluster_size;
 }
 
+// How many announcements of the non-resident lists calls hold.
+size_t ListHints(const std::vector<Call>& calls) {
+  size_t hints = 0;
+  for (const Call& call : calls) {
+    hints += call.kind == Kind::Prefetch && InLists(call) ? 1U : 0U;
+  }
+  return hints;
+}
+
 }  // namespace
 
 TEST_CASE("The second pass announces each list it reads before it reads it",
@@ -133,13 +142,7 @@ TEST_CASE("The second pass restarts its announcements after a number of lists",
           "[mft][tree][prefetch]") {
   const VolumeOptions options{.include_deleted = true, .recover_errors = true};
   const size_t interval = GENERATE(size_t{40}, size_t{100});
-  const size_t default_hints = [&] {
-    size_t hints = 0;
-    for (const Call& call : ScanCalls(options, 1)) {
-      hints += call.kind == Kind::Prefetch && InLists(call) ? 1U : 0U;
-    }
-    return hints;
-  }();
+  const size_t default_hints = ListHints(ScanCalls(options, 1));
 
   const IntervalOverride restart(interval);
   size_t hints = 0;
