@@ -1,9 +1,12 @@
+#include "io/slack-name-carver.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <memory>
+#include <optional>
 #include <span>
-#include <tuple>
 #include <vector>
 
 #include <ntfs-browser/attr/base.h>
@@ -17,37 +20,31 @@
 #include <ntfs-browser/volume-options.h>
 
 #include "attr/file-name.h"
-#include "attr/slot.h"
 #include "attr/std-info.h"
 #include "io/file-record-attr-types.h"
-#include "io/file-record-impl.h"
 #include "io/file-record-index.h"
 #include "log/ntfs-common.h"
+#include "record/header.h"
 #include "record/slack-carver.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 
-namespace {
-
-// The $STANDARD_INFORMATION wrapper of strategy S.
 template <Cache::Strategy S>
-using StdInfoType = Attr::AttrStdInfo<ResidentOf<S>, S>;
+SlackNameCarver<S>::SlackNameCarver(
+    const FileRecord<S>& record,
+    std::optional<ULONGLONG> file_reference) noexcept
+    : record_(record), file_reference_(file_reference) {}
 
-}  // namespace
-
-// The carvers report UTC, as stored. The times of the file getters are local.
 template <Cache::Strategy S>
-void Io::FileRecord<S>::Impl::ConvertCarvedTimes(
-    std::vector<Record::CarvedName>& carved) {
+void SlackNameCarver<S>::ConvertTimes(std::vector<Record::CarvedName>& carved) {
   const auto to_local = [](FILETIME& time) {
     constexpr unsigned dword_bits = 32;
     const ULONGLONG utc =
         (static_cast<ULONGLONG>(time.dwHighDateTime) << dword_bits) |
         time.dwLowDateTime;
-    StdInfoType<S>::UTC2Local(utc, time);
+    Attr::AttrStdInfo<ResidentOf<S>, S>::UTC2Local(utc, time);
   };
   for (Record::CarvedName& name : carved) {
-    // Unknown times stay zero.
     if (!name.times_known) {
       continue;
     }
@@ -58,24 +55,22 @@ void Io::FileRecord<S>::Impl::ConvertCarvedTimes(
   }
 }
 
-// Carves the bytes after the end marker, patched like the rest of the record,
-// then drops the names this record also holds live.
 template <Cache::Strategy S>
-std::vector<Record::CarvedName>
-    Io::FileRecord<S>::Impl::CarveSlackNames() const {
-  const VolumeOptions& options = volume->GetOptions();
-  if (!options.recover_errors || !options.include_deleted || !file_record ||
-      !end_marker_offset) {
+std::vector<Record::CarvedName> SlackNameCarver<S>::FromRecord(
+    const Record::HeaderImpl<S>* header,
+    std::optional<size_t> end_marker_offset) const {
+  const VolumeOptions& options = record_.GetVolume().GetOptions();
+  if (!options.recover_errors || !options.include_deleted ||
+      header == nullptr || !end_marker_offset) {
     return {};
   }
 
-  const std::span<const BYTE> bytes(file_record->GetData()->raw,
-                                    file_record->buffer_size);
+  const std::span<const BYTE> bytes(header->GetData()->raw,
+                                    header->buffer_size);
   std::vector<Record::CarvedName> carved =
       Record::CarveFileNames(bytes, *end_marker_offset);
 
-  const auto& live_names =
-      std::get<Attr::AttrIndex(Attr::Type::FileName)>(attr_list);
+  const auto& live_names = record_.GetAttr(Attr::Type::FileName);
   std::erase_if(carved, [&live_names](const Record::CarvedName& candidate) {
     return std::ranges::any_of(
         live_names, [&candidate](const std::unique_ptr<Attr::AttrBase<S>>& fn) {
@@ -88,41 +83,28 @@ std::vector<Record::CarvedName>
         });
   });
 
-  ConvertCarvedTimes(carved);
+  ConvertTimes(carved);
 
   if (!carved.empty()) {
     Log::Debug("File record {}: {} name(s) carved from the slack",
-               file_reference.value_or(0), carved.size());
+               file_reference_.value_or(0), carved.size());
   }
   return carved;
 }
 
-// The names carved from the slack of the index blocks, with the times of the
-// file getters.
 template <Cache::Strategy S>
-std::vector<Record::CarvedName>
-    Io::FileRecord<S>::Impl::CarveIndexSlackNames() const {
+std::vector<Record::CarvedName> SlackNameCarver<S>::FromIndex() const {
   std::vector<Record::CarvedName> carved =
-      DirectoryIndex<S>(*self).CarveSlackNames();
-  ConvertCarvedTimes(carved);
+      DirectoryIndex<S>(record_).CarveSlackNames();
+  ConvertTimes(carved);
   if (!carved.empty()) {
     Log::Debug("File record {}: {} name(s) carved from the index slack",
-               file_reference.value_or(0), carved.size());
+               file_reference_.value_or(0), carved.size());
   }
   return carved;
 }
 
-template void FileRecord<Cache::Strategy::NoCache>::Impl::ConvertCarvedTimes(
-    std::vector<Record::CarvedName>& carved);
-template void FileRecord<Cache::Strategy::FullCache>::Impl::ConvertCarvedTimes(
-    std::vector<Record::CarvedName>& carved);
-template std::vector<Record::CarvedName>
-    FileRecord<Cache::Strategy::NoCache>::Impl::CarveSlackNames() const;
-template std::vector<Record::CarvedName>
-    FileRecord<Cache::Strategy::FullCache>::Impl::CarveSlackNames() const;
-template std::vector<Record::CarvedName>
-    FileRecord<Cache::Strategy::NoCache>::Impl::CarveIndexSlackNames() const;
-template std::vector<Record::CarvedName>
-    FileRecord<Cache::Strategy::FullCache>::Impl::CarveIndexSlackNames() const;
+template class SlackNameCarver<Cache::Strategy::NoCache>;
+template class SlackNameCarver<Cache::Strategy::FullCache>;
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

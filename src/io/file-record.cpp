@@ -11,16 +11,12 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/attr/defines.h>
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/filename.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/record/carved-name.h>
 
 #include "alloc/data-state.h"
 #include "attr/file-name.h"
@@ -28,8 +24,12 @@
 #include "attr/std-info.h"
 #include "data/file-record-flag.h"
 #include "io/file-record-attr-types.h"
+#include "io/file-record-extensions.h"
 #include "io/file-record-impl.h"
 #include "io/file-record-index.h"
+#include "io/raw-attr-headers.h"
+#include "io/record-loader.h"
+#include "io/slack-name-carver.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
 #include "utf/utf.h"
@@ -96,6 +96,31 @@ bool Io::FileRecord<S>::Impl::StdInfoFlag(bool (StdInfoType<S>::*flag)()
                                               const noexcept) const noexcept {
   const StdInfoType<S>* std_info = StdInfo();
   return std_info != nullptr && (std_info->*flag)();
+}
+
+// The body of ParseFileRecord(), shared with callers that already hold the
+// record's bytes.
+template <Cache::Strategy S>
+bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
+                                          std::span<const BYTE> preread) {
+  // Clear previous data
+  ClearAttrs();
+  file_record.reset();
+  reused_extensions.clear();
+  overwritten_list = false;
+
+  typename RecordLoader<S>::Loaded loaded =
+      RecordLoader<S>(*volume, record_buffer, record_source)
+          .Load(file_ref, preread);
+  failed_fixup = loaded.failed_fixup;
+  header_salvaged = loaded.salvaged;
+  if (loaded.read_ok || loaded.accepted) {
+    file_reference = file_ref;
+  } else {
+    file_reference = {};
+  }
+  file_record = std::move(loaded.header);
+  return loaded.accepted;
 }
 
 template <Cache::Strategy S>
@@ -231,13 +256,21 @@ bool Io::FileRecord<S>::IsExtensionRecord() const noexcept {
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::HasAttrHeader(Attr::Type attr_type) const noexcept {
-  return impl_->HasAttrHeader(attr_type);
+  return impl_->file_record &&
+         RawAttrHeaders(*impl_->file_record->GetData(),
+                        impl_->volume->GetFileRecordSize())
+             .Has(attr_type);
 }
 
 template <Cache::Strategy S>
 std::vector<Alloc::Extent>
     Io::FileRecord<S>::AttributeListExtents(ULONGLONG max_bytes) const {
-  return impl_->AttributeListExtents(max_bytes);
+  if (!impl_->file_record) {
+    return {};
+  }
+  return RawAttrHeaders(*impl_->file_record->GetData(),
+                        impl_->volume->GetFileRecordSize())
+      .AttributeListExtents(impl_->volume->GetClusterSize(), max_bytes);
 }
 
 template <Cache::Strategy S>
@@ -304,8 +337,8 @@ template <Cache::Strategy S>
 void Io::FileRecord<S>::ImportAttrListEntry(
     ULONGLONG record_number, WORD sequence_number, Attr::Type attr_type,
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
-  impl_->ImportAttrListEntry(record_number, sequence_number, attr_type,
-                             attr_list_chain, recover);
+  typename Impl::ExtensionImporter importer(*impl_, attr_list_chain, recover);
+  importer.Import(record_number, sequence_number, attr_type);
 }
 
 // Choose attributes to handle, unwanted attributes will be discarded silently
@@ -491,13 +524,14 @@ void Io::FileRecord<S>::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
 
 template <Cache::Strategy S>
 std::vector<Record::CarvedName> Io::FileRecord<S>::CarveSlackNames() const {
-  return impl_->CarveSlackNames();
+  return SlackNameCarver<S>(*this, impl_->file_reference)
+      .FromRecord(impl_->file_record.get(), impl_->end_marker_offset);
 }
 
 template <Cache::Strategy S>
 std::vector<Record::CarvedName>
     Io::FileRecord<S>::CarveIndexSlackNames() const {
-  return impl_->CarveIndexSlackNames();
+  return SlackNameCarver<S>(*this, impl_->file_reference).FromIndex();
 }
 
 template <Cache::Strategy S>

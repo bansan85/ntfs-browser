@@ -16,7 +16,6 @@
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/record/carved-name.h>
 
 #include "attr/slot.h"
 #include "io/file-record-attr-types.h"
@@ -59,7 +58,8 @@ namespace Io {
 // Everything FileRecord<S> keeps out of its public header: the members, and the
 // private methods that work on them. Only FileRecord<S> reaches it, through
 // impl_: other classes use the methods of FileRecord<S> that forward to it.
-// AttrParser, nested here, fills the attribute lists it holds.
+// AttrParser and ExtensionImporter, nested here, fill the attribute lists it
+// holds.
 // file-record.cpp instantiates this class, but ParseAttrs() and AttrParser are
 // defined in file-record-attrs.cpp: MSVC then warns (C4661) at the class line.
 #ifdef _MSC_VER
@@ -73,6 +73,8 @@ class FileRecord<S>::Impl {
 
   // Defined in file-record-attrs.h, see AttrParser::Parse().
   class AttrParser;
+  // Defined in file-record-extensions.h, see ExtensionImporter::Import().
+  class ExtensionImporter;
 
   // The FileRecord this belongs to. Attributes are built over it, and private
   // methods that need a public one go through it. A pointer, not a reference:
@@ -126,14 +128,14 @@ class FileRecord<S>::Impl {
   // to the next, emptied each time, so that a parse does not allocate a set.
   std::unordered_set<ULONGLONG> attr_list_chain;
 
-  // Where ImportAttrListEntry() looks for an extension record before it reads
-  // it from the disk. Empty: always from the disk.
+  // Where ExtensionImporter looks for an extension record before it reads it
+  // from the disk. Empty: always from the disk.
   typename Io::FileRecord<S>::RecordSource extension_source;
   // Which base record a slot names, for a slot extension_source does not hold.
   // Empty: every such slot is read from the disk.
   typename Io::FileRecord<S>::BaseSource base_source;
-  // Where ReadFileRecord() looks for the bytes of a record before it reads
-  // them from $MFT. Empty: always from $MFT. See SetRecordSource().
+  // Where RecordLoader looks for the bytes of a record before it reads them
+  // from $MFT. Empty: always from $MFT. See SetRecordSource().
   typename Io::FileRecord<S>::RecordSource record_source;
   // Where the $INDEX_ALLOCATION attribute of this record looks for a block
   // before it reads it. Empty: always from the disk.
@@ -169,76 +171,13 @@ class FileRecord<S>::Impl {
   // Lists the layout of the non-resident attribute at ahc in claimed_layouts.
   // An attribute that cannot be decoded is left out.
   void ClaimLayout(const Attr::HeaderCommon& ahc);
-  // See ImportAttrListEntry(): whether the caller read slot record_number and
-  // saw that it names a base record other than the listing one.
-  [[nodiscard]] bool NamesOtherBase(ULONGLONG record_number,
-                                    ULONGLONG listing_record) const;
-  // Handles a record an $ATTRIBUTE_LIST entry names that is not an extension
-  // of this one. Throws when strict and this record is in use.
-  void SkipForeignExtension(ULONGLONG record_number, bool recover);
-  // See FileRecord<S>::HasAttrHeader().
-  [[nodiscard]] bool HasAttrHeader(Attr::Type attr_type) const noexcept;
-  // See FileRecord<S>::AttributeListExtents().
-  [[nodiscard]] std::vector<Alloc::Extent>
-      AttributeListExtents(ULONGLONG max_bytes) const;
-
-  // An extension record that an $ATTRIBUTE_LIST entry names, and what the
-  // entry asks of it. claim_only: the type is listed, not parsed.
-  struct ExtensionRequest {
-    ULONGLONG record_number;
-    Attr::Type attr_type;
-    bool claim_only;
-  };
-
-  // Decides whether ImportAttrListEntry() opens the record its entry names,
-  // and sets held to the bytes the caller already has for it (empty: read it).
-  [[nodiscard]] bool
-      WantsExtension(const ExtensionRequest& request,
-                     std::unordered_set<ULONGLONG>& attr_list_chain,
-                     bool recover, std::span<const BYTE>& held);
-  // Opens the extension record of an entry and parses its header. Null when a
-  // claim-only record cannot be parsed. See ImportAttrListEntry().
-  [[nodiscard]] Io::FileRecord<S>*
-      OpenExtension(const ExtensionRequest& request,
-                    std::span<const BYTE> held);
-  // Whether extension is still the extension record the entry of sequence
-  // number sequence_number meant, and not a slot another file reused.
-  [[nodiscard]] bool IsGenuineExtension(const Io::FileRecord<S>& extension,
-                                        WORD sequence_number) const;
-  // See FileRecord<S>::CarveSlackNames().
-  [[nodiscard]] std::vector<Record::CarvedName> CarveSlackNames() const;
-  // See FileRecord<S>::CarveIndexSlackNames().
-  [[nodiscard]] std::vector<Record::CarvedName> CarveIndexSlackNames() const;
-  // Turns the UTC times of carved, as the carvers report them, into those of
-  // GetFileTime(). Unknown times stay zero.
-  static void ConvertCarvedTimes(std::vector<Record::CarvedName>& carved);
   // Stays here: it reaches the volume's private Impl, which only
   // FileRecord<S> may name. Attributes call it through this Impl.
   void UserCallBack(DWORD att_type, const Attr::HeaderCommon& ahc,
                     bool& discard);
-  // See FileRecord<S>::ImportAttrListEntry().
-  void ImportAttrListEntry(ULONGLONG record_number, WORD sequence_number,
-                           Attr::Type attr_type,
-                           std::unordered_set<ULONGLONG>& attr_list_chain,
-                           bool recover);
   // Parses the attributes of this record, see AttrParser::Parse(). Defined in
   // file-record-attrs.cpp.
   [[nodiscard]] bool ParseAttrs(std::unordered_set<ULONGLONG>& attr_list_chain);
-  // Reads file_ref at its fixed offset from mft_addr, see ReadFileRecord().
-  [[nodiscard]] bool ReadDirectRecord(ULONGLONG file_ref);
-  // preread is the bytes of record file_ref when the caller already has them,
-  // empty to read them. See ParseRecord().
-  [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
-      ReadFileRecord(ULONGLONG file_ref, std::span<const BYTE> preread);
-  // Fills record_buffer with record file_ref through $MFT's DATA attribute,
-  // see ReadFileRecord().
-  [[nodiscard]] bool ReadRecordFromMft(ULONGLONG file_ref);
-  // The header of record_buffer, see ReadFileRecord() and ReadMirrorRecord().
-  [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>> ParseHeader();
-  // Reads the $MFTMirr copy of file_ref into record_buffer. Null when there is
-  // no copy to read, or it has no usable header.
-  [[nodiscard]] std::unique_ptr<Record::HeaderImpl<S>>
-      ReadMirrorRecord(ULONGLONG file_ref);
   // ParseFileRecord() with the record's bytes optionally supplied by the
   // caller: they are copied, so they may be reused right after.
   [[nodiscard]] bool ParseRecord(ULONGLONG file_ref,
