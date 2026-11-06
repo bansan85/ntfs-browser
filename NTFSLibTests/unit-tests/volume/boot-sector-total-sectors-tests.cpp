@@ -3,30 +3,16 @@
 #include <array>
 #include <cstddef>
 #include <limits>
-#include <memory>
-#include <string>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
 
-#include "data/ntfs-bpb.h"
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
-#include "test-log-sink.h"
+#include "boot-sector-support.h"
 
-using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::NtfsVolume;
-using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 namespace {
@@ -69,42 +55,19 @@ constexpr ULONGLONG largest_record_end_sectors =
     (largest_mft_addr + NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size) /
     NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector;
 
-// BuildFakeNtfsImage() with edit applied to its boot sector BPB.
-template <typename Edit>
-std::vector<BYTE> ImageWithBpb(Edit edit) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
-  edit(*reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data()));
-  return image;
-}
-
 // Image whose total_sectors is the given value.
-std::vector<BYTE> ImageWithTotalSectors(ULONGLONG total_sectors) {
-  return ImageWithBpb(
+BootImageMaker WithTotalSectors(ULONGLONG total_sectors) {
+  return EditedBpb(
       [total_sectors](auto& bpb) { bpb.total_sectors = total_sectors; });
 }
 
 // Image whose $MFT sits at largest_lcn_mft and whose total_sectors is the
 // given value.
-std::vector<BYTE> ImageWithLargestMft(ULONGLONG total_sectors) {
-  return ImageWithBpb([total_sectors](auto& bpb) {
+BootImageMaker WithLargestMft(ULONGLONG total_sectors) {
+  return EditedBpb([total_sectors](auto& bpb) {
     bpb.lcn_mft = largest_lcn_mft;
     bpb.total_sectors = total_sectors;
   });
-}
-
-// What opening an image logged, and whether the volume came up.
-struct Opened {
-  bool ok{false};
-  std::string log;
-};
-
-template <Cache::Strategy S>
-Opened Open(std::vector<BYTE> image, VolumeOptions options = {}) {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
-  const NtfsVolume<S> volume(
-      std::make_unique<MemoryDiskReader>(std::move(image)), options);
-  return {.ok = volume.IsVolumeOK(),
-          .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
 }
 
 // A total_sectors value, named by what it checks.
@@ -137,13 +100,101 @@ const std::array<TotalSectorsCase, 2> rejected_totals{{
     {"a volume that ends before the $MFT address is rejected", 1},
 }};
 
+// Scenarios on a null total_sectors and on one that ends before the $MFT.
+std::vector<BootScenario> NullAndShortScenarios() {
+  return {
+      {.name = "a valid image is accepted and logs no total_sectors message",
+       .image = UntouchedImage(),
+       .ok = true,
+       .contains = {"Total sectors = 128"},
+       .absent = {null_message, beyond_message}},
+      {.name = "strict mode rejects a null total_sectors",
+       .image = WithTotalSectors(0),
+       .ok = false,
+       .contains = {null_message},
+       .absent = {invalid_address_message}},
+      {.name = "recover mode accepts a null total_sectors",
+       .image = WithTotalSectors(0),
+       .recover = true,
+       .ok = true,
+       .contains = {null_message},
+       .absent = {beyond_message}},
+      {.name = "strict mode rejects a first $MFT record past the volume",
+       .image = WithTotalSectors(sectors_to_first_record_end - 1),
+       .ok = false,
+       .contains = {beyond_message},
+       .absent = {null_message, invalid_address_message}},
+      {.name = "recover mode accepts a first $MFT record past the volume",
+       .image = WithTotalSectors(sectors_to_first_record_end - 1),
+       .recover = true,
+       .ok = true,
+       .contains = {beyond_message}},
+      {.name = "the checks run last, after the MFT address",
+       .image = WithTotalSectors(0),
+       .recover = true,
+       .in_order = {mft_address_message, total_sectors_message, null_message}},
+      {.name = "a rejected volume keeps the decoded geometry",
+       .image = WithTotalSectors(0),
+       .ok = false,
+       .geometry = FakeGeometry()},
+  };
+}
+
+// Scenarios on the largest addresses and sizes the check can meet.
+std::vector<BootScenario> LargestMftScenarios() {
+  return {
+      {.name = "the largest plausible MFT address does not overflow the sum: "
+               "accepted",
+       .image = WithLargestMft(std::numeric_limits<ULONGLONG>::max()),
+       .contains = {"MFT address = 0x3FFFFFFFFFFFFC00"},
+       .absent = {beyond_message}},
+      {.name = "the largest plausible MFT address does not overflow the sum: "
+               "rejected",
+       .image = WithLargestMft(2),
+       .ok = false,
+       .contains = {beyond_message}},
+      {.name = "the largest MFT record is checked to the sector: short by one",
+       .image = WithLargestMft(largest_record_end_sectors - 1),
+       .contains = {beyond_message}},
+      {.name = "the largest MFT record is checked to the sector: exact",
+       .image = WithLargestMft(largest_record_end_sectors),
+       .absent = {beyond_message}},
+      {.name = "an invalid MFT address is still reported by its own message",
+       .image = EditedBpb([](auto& bpb) {
+         bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max();
+         bpb.total_sectors = 0;
+       }),
+       .ok = false,
+       .contains = {invalid_address_message},
+       .absent = {null_message, total_sectors_message}},
+  };
+}
+
+std::vector<BootScenario> TotalSectorsScenarios() {
+  std::vector<BootScenario> scenarios = NullAndShortScenarios();
+  for (const BootScenario& scenario : LargestMftScenarios()) {
+    scenarios.push_back(scenario);
+  }
+  for (const TotalSectorsCase& total : accepted_totals) {
+    scenarios.push_back({.name = total.name,
+                         .image = WithTotalSectors(total.total_sectors),
+                         .ok = true,
+                         .absent = {beyond_message}});
+  }
+  for (const TotalSectorsCase& total : rejected_totals) {
+    scenarios.push_back({.name = total.name,
+                         .image = WithTotalSectors(total.total_sectors),
+                         .ok = false,
+                         .contains = {beyond_message}});
+  }
+  return scenarios;
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG("NtfsVolume checks total_sectors",
                        "[ntfs-volume][boot-sector]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const VolumeOptions recover{.recover_errors = true};
-
   SECTION("the fake image declares the sectors it holds") {
     const std::vector<BYTE> image =
         NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
@@ -156,124 +207,5 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume checks total_sectors",
           image.size());
   }
 
-  SECTION("a valid image is accepted and logs no total_sectors message") {
-    const Opened opened =
-        Open<S>(NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring("Total sectors = 128"));
-    CHECK_THAT(opened.log, !ContainsSubstring(null_message));
-    CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
-  }
-
-  SECTION("strict mode rejects a null total_sectors") {
-    const Opened opened = Open<S>(ImageWithTotalSectors(0));
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(null_message));
-    CHECK_THAT(opened.log, !ContainsSubstring(invalid_address_message));
-  }
-
-  SECTION("recover mode accepts a null total_sectors") {
-    const Opened opened = Open<S>(ImageWithTotalSectors(0), recover);
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(null_message));
-    // A null count already says everything: no second message.
-    CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
-  }
-
-  SECTION("strict mode rejects a first $MFT record past the volume") {
-    const Opened opened =
-        Open<S>(ImageWithTotalSectors(sectors_to_first_record_end - 1));
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(beyond_message));
-    CHECK_THAT(opened.log, !ContainsSubstring(null_message));
-    CHECK_THAT(opened.log, !ContainsSubstring(invalid_address_message));
-  }
-
-  SECTION("recover mode accepts a first $MFT record past the volume") {
-    const Opened opened = Open<S>(
-        ImageWithTotalSectors(sectors_to_first_record_end - 1), recover);
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(beyond_message));
-  }
-
-  for (const TotalSectorsCase& total : accepted_totals) {
-    DYNAMIC_SECTION(total.name) {
-      const Opened opened = Open<S>(ImageWithTotalSectors(total.total_sectors));
-
-      CHECK(opened.ok);
-      CHECK_THAT(opened.log, !ContainsSubstring(beyond_message));
-    }
-  }
-
-  for (const TotalSectorsCase& total : rejected_totals) {
-    DYNAMIC_SECTION(total.name) {
-      const Opened opened = Open<S>(ImageWithTotalSectors(total.total_sectors));
-
-      CHECK_FALSE(opened.ok);
-      CHECK_THAT(opened.log, ContainsSubstring(beyond_message));
-    }
-  }
-
-  SECTION("the largest plausible MFT address does not overflow the sum") {
-    const Opened accepted =
-        Open<S>(ImageWithLargestMft(std::numeric_limits<ULONGLONG>::max()));
-    const Opened rejected = Open<S>(ImageWithLargestMft(2));
-
-    CHECK_THAT(accepted.log,
-               ContainsSubstring("MFT address = 0x3FFFFFFFFFFFFC00"));
-    CHECK_THAT(accepted.log, !ContainsSubstring(beyond_message));
-    CHECK_THAT(rejected.log, ContainsSubstring(beyond_message));
-    CHECK_FALSE(rejected.ok);
-  }
-
-  SECTION("the largest MFT record is checked to the sector") {
-    const Opened short_by_one =
-        Open<S>(ImageWithLargestMft(largest_record_end_sectors - 1));
-    const Opened exact =
-        Open<S>(ImageWithLargestMft(largest_record_end_sectors));
-
-    CHECK_THAT(short_by_one.log, ContainsSubstring(beyond_message));
-    CHECK_THAT(exact.log, !ContainsSubstring(beyond_message));
-  }
-
-  SECTION("an invalid MFT address is still reported by its own message") {
-    const Opened opened = Open<S>(ImageWithBpb([](auto& bpb) {
-      bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max();
-      bpb.total_sectors = 0;
-    }));
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(invalid_address_message));
-    CHECK_THAT(opened.log, !ContainsSubstring(null_message));
-    CHECK_THAT(opened.log, !ContainsSubstring(total_sectors_message));
-  }
-
-  SECTION("the checks run last, after the MFT address") {
-    const Opened opened = Open<S>(ImageWithTotalSectors(0), recover);
-
-    const std::size_t address = opened.log.find(mft_address_message);
-    const std::size_t total = opened.log.find(total_sectors_message);
-    const std::size_t null_check = opened.log.find(null_message);
-    REQUIRE(address != std::string::npos);
-    REQUIRE(total != std::string::npos);
-    REQUIRE(null_check != std::string::npos);
-    CHECK(address < total);
-    CHECK(total < null_check);
-  }
-
-  SECTION("a rejected volume keeps the decoded geometry") {
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
-    const NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(ImageWithTotalSectors(0)));
-
-    CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetSectorSize() ==
-          NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
-    CHECK(volume.GetMFTAddr() == fake_mft_addr);
-  }
+  RunBootScenarios<S>(TotalSectorsScenarios());
 }

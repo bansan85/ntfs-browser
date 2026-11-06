@@ -1,8 +1,11 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
+#include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -63,6 +66,138 @@ constexpr DWORD largest_literal_count = 8;
 // 2 MiB: the cluster that largest_cluster_exponent gives at 512-byte sectors.
 constexpr DWORD two_mib_cluster_size = 2U * 1024U * 1024U;
 
+// The values a case expects from the volume getters. A field left empty is
+// not checked.
+struct ExpectedGeometry {
+  std::optional<ULONGLONG> sector_size;
+  std::optional<ULONGLONG> cluster_size;
+  std::optional<ULONGLONG> file_record_size;
+  std::optional<ULONGLONG> index_block_size;
+  std::optional<ULONGLONG> mft_addr;
+  std::optional<ULONGLONG> cluster_buffer_size;
+};
+
+// A BPB edit and the geometry the volume keeps after it.
+struct GeometryCase {
+  std::string name;
+  std::function<void(NTFS_BROWSER_NAMESPACE::Data::NtfsBpb&)> edit;
+  std::optional<bool> ok;
+  ExpectedGeometry expected;
+};
+
+// The value the getter returned, when the case names one.
+void CheckGeometryField(const char* field,
+                        const std::optional<ULONGLONG>& expected,
+                        ULONGLONG actual) {
+  if (expected) {
+    INFO(field);
+    CHECK(actual == *expected);
+  }
+}
+
+template <Cache::Strategy S>
+void CheckGeometry(const NtfsVolume<S>& volume,
+                   const ExpectedGeometry& expected) {
+  CheckGeometryField("sector size", expected.sector_size,
+                     volume.GetSectorSize());
+  CheckGeometryField("cluster size", expected.cluster_size,
+                     volume.GetClusterSize());
+  CheckGeometryField("file record size", expected.file_record_size,
+                     volume.GetFileRecordSize());
+  CheckGeometryField("index block size", expected.index_block_size,
+                     volume.GetIndexBlockSize());
+  CheckGeometryField("MFT address", expected.mft_addr, volume.GetMFTAddr());
+  CheckGeometryField("cluster buffer size", expected.cluster_buffer_size,
+                     volume.GetClusterBuffer().size());
+}
+
+std::vector<GeometryCase> GeometryCases() {
+  using NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector;
+  using NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+  using NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+  return {
+      {.name = "a bad NTFS signature leaves every value zero",
+       .edit = [](auto& bpb) { bpb.signature[0] = 'X'; },
+       .ok = false,
+       .expected = {.sector_size = 0,
+                    .cluster_size = 0,
+                    .cluster_buffer_size = 0}},
+      {.name = "a null cluster keeps the sector size and an empty cluster "
+               "buffer",
+       .edit = [](auto& bpb) { bpb.sectors_per_cluster = 0; },
+       .ok = false,
+       .expected = {.sector_size = fake_bytes_per_sector,
+                    .cluster_size = 0,
+                    .file_record_size = 0,
+                    .cluster_buffer_size = 0}},
+      {.name = "a file record exponent out of range keeps the cluster buffer "
+               "sized",
+       .edit =
+           [](auto& bpb) {
+             bpb.clusters_per_file_record =
+                 static_cast<DWORD>(exponent_past_limit);
+           },
+       .ok = false,
+       .expected = {.sector_size = fake_bytes_per_sector,
+                    .cluster_size = fake_cluster_size,
+                    .file_record_size = 0,
+                    .index_block_size = 0,
+                    .mft_addr = 0,
+                    .cluster_buffer_size = fake_cluster_size}},
+      {.name = "a file record above the maximum keeps its decoded size",
+       .edit =
+           [](auto& bpb) {
+             bpb.clusters_per_file_record = largest_literal_count;
+           },
+       .ok = false,
+       .expected = {.file_record_size = 8 * fake_cluster_size,
+                    .index_block_size = 0,
+                    .mft_addr = 0}},
+      {.name = "an index block exponent out of range keeps the file record "
+               "size",
+       .edit =
+           [](auto& bpb) {
+             bpb.clusters_per_index_block = literal_count_past_limit;
+           },
+       .ok = false,
+       .expected = {.file_record_size = fake_file_record_size,
+                    .index_block_size = 0,
+                    .mft_addr = 0}},
+      {.name = "an overflowing MFT address keeps the decoded block sizes",
+       .edit =
+           [](auto& bpb) {
+             bpb.lcn_mft =
+                 std::numeric_limits<ULONGLONG>::max() / fake_cluster_size + 1;
+           },
+       .ok = false,
+       .expected = {.file_record_size = fake_file_record_size,
+                    .index_block_size = fake_cluster_size,
+                    .mft_addr = std::numeric_limits<ULONGLONG>::max()}},
+      {.name = "eight clusters per index block is accepted at its full size",
+       .edit =
+           [](auto& bpb) {
+             bpb.clusters_per_index_block = largest_literal_count;
+           },
+       .expected = {.index_block_size = 8 * fake_cluster_size}},
+      // The image is far smaller than one cluster, so the $MFT read fails and
+      // IsVolumeOK() stays false. The decoded values still hold.
+      {.name = "a 2 MiB cluster sizes every value and the cluster buffer",
+       .edit =
+           [](auto& bpb) {
+             bpb.sectors_per_cluster =
+                 static_cast<BYTE>(largest_cluster_exponent);
+             bpb.clusters_per_file_record =
+                 static_cast<DWORD>(one_kib_record_exponent);
+             bpb.clusters_per_index_block = 1;
+           },
+       .expected = {.cluster_size = two_mib_cluster_size,
+                    .file_record_size = 1024,
+                    .index_block_size = two_mib_cluster_size,
+                    .mft_addr = two_mib_cluster_size,
+                    .cluster_buffer_size = two_mib_cluster_size}},
+  };
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -76,116 +211,22 @@ TEMPLATE_TEST_CASE_SIG(
         NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), 0, 1, refused));
 
     CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetSectorSize() == 0);
-    CHECK(volume.GetClusterSize() == 0);
-    CHECK(volume.GetFileRecordSize() == 0);
-    CHECK(volume.GetIndexBlockSize() == 0);
-    CHECK(volume.GetMFTAddr() == 0);
-    CHECK(volume.GetClusterBuffer().empty());
+    CheckGeometry(volume, {.sector_size = 0,
+                           .cluster_size = 0,
+                           .file_record_size = 0,
+                           .index_block_size = 0,
+                           .mft_addr = 0,
+                           .cluster_buffer_size = 0});
   }
 
-  SECTION("a bad NTFS signature leaves every value zero") {
-    const NtfsVolume<S> volume =
-        VolumeWithBpb<S>([](auto& bpb) { bpb.signature[0] = 'X'; });
+  for (const GeometryCase& geometry_case : GeometryCases()) {
+    DYNAMIC_SECTION(geometry_case.name) {
+      const NtfsVolume<S> volume = VolumeWithBpb<S>(geometry_case.edit);
 
-    CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetSectorSize() == 0);
-    CHECK(volume.GetClusterSize() == 0);
-    CHECK(volume.GetClusterBuffer().empty());
-  }
-
-  SECTION("a null cluster keeps the sector size and an empty cluster buffer") {
-    const NtfsVolume<S> volume =
-        VolumeWithBpb<S>([](auto& bpb) { bpb.sectors_per_cluster = 0; });
-
-    CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetSectorSize() ==
-          NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
-    CHECK(volume.GetClusterSize() == 0);
-    CHECK(volume.GetFileRecordSize() == 0);
-    CHECK(volume.GetClusterBuffer().empty());
-  }
-
-  SECTION(
-      "a file record exponent out of range keeps the cluster buffer sized") {
-    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
-      bpb.clusters_per_file_record = static_cast<DWORD>(exponent_past_limit);
-    });
-
-    CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetSectorSize() ==
-          NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
-    CHECK(volume.GetClusterSize() ==
-          NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
-    CHECK(volume.GetFileRecordSize() == 0);
-    CHECK(volume.GetIndexBlockSize() == 0);
-    CHECK(volume.GetMFTAddr() == 0);
-    CHECK(volume.GetClusterBuffer().size() ==
-          NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
-  }
-
-  SECTION("a file record above the maximum keeps its decoded size") {
-    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
-      bpb.clusters_per_file_record = largest_literal_count;
-    });
-
-    CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetFileRecordSize() ==
-          8 * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
-    CHECK(volume.GetIndexBlockSize() == 0);
-    CHECK(volume.GetMFTAddr() == 0);
-  }
-
-  SECTION("an index block exponent out of range keeps the file record size") {
-    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
-      bpb.clusters_per_index_block = literal_count_past_limit;
-    });
-
-    CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetFileRecordSize() ==
-          NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size);
-    CHECK(volume.GetIndexBlockSize() == 0);
-    CHECK(volume.GetMFTAddr() == 0);
-  }
-
-  SECTION("an overflowing MFT address keeps the decoded block sizes") {
-    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
-      bpb.lcn_mft = std::numeric_limits<ULONGLONG>::max() /
-                        NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size +
-                    1;
-    });
-
-    CHECK_FALSE(volume.IsVolumeOK());
-    CHECK(volume.GetFileRecordSize() ==
-          NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size);
-    CHECK(volume.GetIndexBlockSize() ==
-          NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
-    CHECK(volume.GetMFTAddr() == std::numeric_limits<ULONGLONG>::max());
-  }
-
-  SECTION("eight clusters per index block is accepted at its full size") {
-    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
-      bpb.clusters_per_index_block = largest_literal_count;
-    });
-
-    CHECK(volume.GetIndexBlockSize() ==
-          8 * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
-  }
-
-  SECTION("a 2 MiB cluster sizes every value and the cluster buffer") {
-    // The image is far smaller than one cluster, so the $MFT read fails and
-    // IsVolumeOK() stays false. The decoded values still hold.
-    const NtfsVolume<S> volume = VolumeWithBpb<S>([](auto& bpb) {
-      bpb.sectors_per_cluster = static_cast<BYTE>(largest_cluster_exponent);
-      bpb.clusters_per_file_record =
-          static_cast<DWORD>(one_kib_record_exponent);
-      bpb.clusters_per_index_block = 1;
-    });
-
-    CHECK(volume.GetClusterSize() == two_mib_cluster_size);
-    CHECK(volume.GetClusterBuffer().size() == two_mib_cluster_size);
-    CHECK(volume.GetFileRecordSize() == 1024);
-    CHECK(volume.GetIndexBlockSize() == two_mib_cluster_size);
-    CHECK(volume.GetMFTAddr() == two_mib_cluster_size);
+      if (geometry_case.ok) {
+        CHECK(volume.IsVolumeOK() == *geometry_case.ok);
+      }
+      CheckGeometry(volume, geometry_case.expected);
+    }
   }
 }

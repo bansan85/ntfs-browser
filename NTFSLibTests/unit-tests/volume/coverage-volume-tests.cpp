@@ -116,6 +116,18 @@ std::vector<BYTE> SplitMftImage() {
       BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
 }
 
+// Offset of the first entry of the split $MFT's $ATTRIBUTE_LIST body.
+size_t FirstListEntry(const std::vector<BYTE>& image) {
+  return ResidentBody(image,
+                      FirstAttr(image, mft_idx, Attr::Type::AttributeList));
+}
+
+// Offset of the DATA attribute in the split $MFT's extension record.
+size_t ExtensionData(const std::vector<BYTE>& image) {
+  return FirstAttr(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
+                   Attr::Type::Data);
+}
+
 }  // namespace
 
 TEMPLATE_TEST_CASE_SIG(
@@ -225,17 +237,13 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   SECTION("attribute list entry of an unknown type stops the scan") {
     std::vector<BYTE> image = SplitMftImage();
-    const size_t entry = ResidentBody(
-        image, FirstAttr(image, mft_idx, Attr::Type::AttributeList));
-    Store<DWORD>(image, entry, invalid_attr_type);
+    Store<DWORD>(image, FirstListEntry(image), invalid_attr_type);
     CHECK(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("attribute list entry with a zero record length stops the scan") {
     std::vector<BYTE> image = SplitMftImage();
-    const size_t entry = ResidentBody(
-        image, FirstAttr(image, mft_idx, Attr::Type::AttributeList));
-    Store<WORD>(image, entry + list_entry_record_size_field, 0);
+    Store<WORD>(image, FirstListEntry(image) + list_entry_record_size_field, 0);
     CHECK(VolumeOpens<S>(std::move(image)));
   }
 
@@ -247,20 +255,13 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("named extension DATA is rejected") {
     std::vector<BYTE> image = SplitMftImage();
-    Store<BYTE>(image,
-                FirstAttr(image,
-                          NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
-                          Attr::Type::Data) +
-                    attr_name_length_field,
-                1);
+    Store<BYTE>(image, ExtensionData(image) + attr_name_length_field, 1);
     CHECK(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("extension DATA with an inverted VCN range is rejected") {
     std::vector<BYTE> image = SplitMftImage();
-    const size_t attr =
-        FirstAttr(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
-                  Attr::Type::Data);
+    const size_t attr = ExtensionData(image);
     const auto lowest = Load<ULONGLONG>(image, attr + attr_lowest_vcn_field);
     REQUIRE(lowest > 0);
     Store<ULONGLONG>(image, attr + attr_highest_vcn_field, lowest - 1);
@@ -278,9 +279,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("extension DATA at a VCN its list entry does not name") {
     std::vector<BYTE> image = SplitMftImage();
-    const size_t attr =
-        FirstAttr(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
-                  Attr::Type::Data);
+    const size_t attr = ExtensionData(image);
     Store<ULONGLONG>(image, attr + attr_lowest_vcn_field, unlisted_start_vcn);
     Store<ULONGLONG>(image, attr + attr_highest_vcn_field, unlisted_start_vcn);
     CHECK(VolumeOpens<S>(std::move(image)));

@@ -2,34 +2,19 @@
 
 #include <array>
 #include <cstddef>
-#include <memory>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_tostring.hpp>
-#include <catch2/matchers/catch_matchers.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
 
-#include "data/ntfs-bpb.h"
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
-#include "test-log-sink.h"
+#include "boot-sector-support.h"
 
-using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::NtfsVolume;
-using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
-namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using Bpb = NTFS_BROWSER_NAMESPACE::Data::NtfsBpb;
+namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 namespace {
 
@@ -69,38 +54,160 @@ static_assert(offsetof(Bpb, zeros2) == 0x16);
 static_assert(offsetof(Bpb, not_used2) == 0x20);
 static_assert(offsetof(Bpb, not_used3) == 0x24);
 
-// BuildFakeNtfsImage() with edit applied to its boot sector BPB.
-template <typename Edit>
-std::vector<BYTE> ImageWithBpb(Edit edit) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
-  edit(*reinterpret_cast<Bpb*>(image.data()));
-  return image;
+// Message of the signature check, which runs before everything else.
+constexpr const char* not_ntfs_message = "Volume file system is not NTFS";
+
+// Message of the sector size check, which stays a hard error.
+constexpr const char* sector_size_message = "Sector Size must be";
+
+// Adds the scenarios of one region, strict and recovering.
+void AddRegionScenarios(std::vector<BootScenario>& scenarios,
+                        const ZeroRegion& region) {
+  const std::string name(region.name);
+  scenarios.push_back({.name = "strict mode rejects each region before "
+                               "decoding the geometry: " +
+                               name,
+                       .image = ByteSetAt(region.offset),
+                       .ok = false,
+                       .geometry = BootGeometry{},
+                       .contains = {reserved_message, name},
+                       .absent = {geometry_message}});
+  scenarios.push_back({.name = "recover mode accepts each region and decodes "
+                               "the geometry: " +
+                               name,
+                       .image = ByteSetAt(region.offset),
+                       .recover = true,
+                       .ok = true,
+                       .geometry = FakeGeometry(),
+                       .contains = {reserved_message, name, geometry_message},
+                       .in_order = {reserved_message, geometry_message}});
+  for (size_t byte = 0; byte < region.size; ++byte) {
+    scenarios.push_back(
+        {.name = "strict mode rejects each single byte of each region: " +
+                 name + " byte " + std::to_string(byte),
+         .image = ByteSetAt(region.offset + byte),
+         .ok = false,
+         .contains = {name}});
+  }
 }
 
-// Image whose boot sector byte at the given offset holds 0xFF.
-std::vector<BYTE> ImageWithByteSet(size_t offset) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
-  image.at(offset) = 0xFF;
-  return image;
+// Adds a scenario for each BPB field the check leaves alone.
+void AddUncheckedScenarios(std::vector<BootScenario>& scenarios) {
+  constexpr std::array<size_t, 5> unchecked{
+      offsetof(Bpb, media_descriptor), offsetof(Bpb, sectors_per_track),
+      offsetof(Bpb, number_of_heads),  offsetof(Bpb, hidden_sectors),
+      offsetof(Bpb, not_used3),
+  };
+  for (const size_t offset : unchecked) {
+    scenarios.push_back(
+        {.name = "each unchecked field is accepted on its own: offset " +
+                 std::to_string(offset),
+         .image = ByteSetAt(offset),
+         .ok = true,
+         .absent = {reserved_message}});
+  }
 }
 
-// What opening an image logged, and whether the volume came up.
-struct Opened {
-  bool ok{false};
-  WORD sector_size{0};
-  DWORD cluster_size{0};
-  std::string log;
-};
+// Scenarios that open one edited image.
+void AddEditedScenarios(std::vector<BootScenario>& scenarios) {
+  scenarios.push_back(
+      {.name = "a one-bit value is enough to reject",
+       .image = EditedBpb([](Bpb& bpb) { bpb.reserved_sectors = 1; }),
+       .ok = false,
+       .contains = {reserved_message}});
+  scenarios.push_back(
+      {.name = "one message names every offending region",
+       .image = EditedBpb([](Bpb& bpb) {
+         bpb.reserved_sectors = 1;
+         bpb.not_used1 = 1;
+         bpb.not_used2 = 1;
+       }),
+       .ok = false,
+       .contains = {"reserved_sectors (0x0E)", "small_sectors (0x13)",
+                    "large_sectors (0x20)"},
+       .absent = {"sectors_per_fat", "fat_count_and_root_entries"},
+       .once = reserved_message});
+  scenarios.push_back(
+      {.name = "recover mode logs the message once for "
+               "several regions",
+       .image = EditedBpb([](Bpb& bpb) {
+         bpb.zeros2 = 0xFFFF;
+         bpb.not_used2 = 0xFFFFFFFF;
+       }),
+       .recover = true,
+       .ok = true,
+       .contains = {"sectors_per_fat (0x16)", "large_sectors (0x20)"}});
+  scenarios.push_back(
+      {.name = "fields real volumes fill in are accepted silently",
+       .image = EditedBpb([](Bpb& bpb) {
+         bpb.media_descriptor = 0xF8;
+         bpb.sectors_per_track = 63;
+         bpb.number_of_heads = 255;
+         bpb.hidden_sectors = 2048;
+         bpb.not_used3 = 0x80008000;
+       }),
+       .ok = true,
+       .absent = {reserved_message}});
+}
 
-template <Cache::Strategy S>
-Opened Open(std::vector<BYTE> image, VolumeOptions options = {}) {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
-  const NtfsVolume<S> volume(
-      std::make_unique<MemoryDiskReader>(std::move(image)), options);
-  return {.ok = volume.IsVolumeOK(),
-          .sector_size = volume.GetSectorSize(),
-          .cluster_size = volume.GetClusterSize(),
-          .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
+// Scenarios on the order of the boot sector checks.
+void AddOrderScenarios(std::vector<BootScenario>& scenarios) {
+  const auto marker_and_reserved = EditedBpb([](Bpb& bpb) {
+    bpb.x_aa = 0;
+    bpb.reserved_sectors = 1;
+  });
+  scenarios.push_back(
+      {.name = "a missing marker is reported before the reserved fields",
+       .image = marker_and_reserved,
+       .ok = false,
+       .contains = {marker_message},
+       .absent = {reserved_message}});
+  scenarios.push_back(
+      {.name = "recover mode reports the marker, then the reserved fields",
+       .image = marker_and_reserved,
+       .recover = true,
+       .ok = true,
+       .in_order = {marker_message, reserved_message, geometry_message}});
+  scenarios.push_back({.name = "a bad signature is still reported first",
+                       .image = EditedBpb([](Bpb& bpb) {
+                         bpb.signature[0] = 'X';
+                         bpb.reserved_sectors = 1;
+                       }),
+                       .recover = true,
+                       .ok = false,
+                       .contains = {not_ntfs_message},
+                       .absent = {reserved_message}});
+  scenarios.push_back(
+      {.name = "a bad sector size is still rejected in recover mode",
+       .image = EditedBpb([](Bpb& bpb) {
+         bpb.bytes_per_sector = 3;
+         bpb.reserved_sectors = 1;
+       }),
+       .recover = true,
+       .ok = false,
+       .contains = {reserved_message, sector_size_message}});
+}
+
+std::vector<BootScenario> ReservedFieldsScenarios() {
+  std::vector<BootScenario> scenarios{
+      {.name = "a valid image is accepted and logs no reserved fields message",
+       .image = UntouchedImage(),
+       .ok = true,
+       .contains = {geometry_message},
+       .absent = {reserved_message}},
+      {.name = "recover mode keeps a valid image silent",
+       .image = UntouchedImage(),
+       .recover = true,
+       .ok = true,
+       .absent = {reserved_message}},
+  };
+  for (const ZeroRegion& region : zero_regions) {
+    AddRegionScenarios(scenarios, region);
+  }
+  AddUncheckedScenarios(scenarios);
+  AddEditedScenarios(scenarios);
+  AddOrderScenarios(scenarios);
+  return scenarios;
 }
 
 }  // namespace
@@ -108,188 +215,5 @@ Opened Open(std::vector<BYTE> image, VolumeOptions options = {}) {
 TEMPLATE_TEST_CASE_SIG("NtfsVolume checks the BPB reserved fields are zero",
                        "[ntfs-volume][boot-sector]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const VolumeOptions recover{.recover_errors = true};
-
-  SECTION("a valid image is accepted and logs no reserved fields message") {
-    const Opened opened =
-        Open<S>(NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, !ContainsSubstring(reserved_message));
-    CHECK_THAT(opened.log, ContainsSubstring(geometry_message));
-  }
-
-  SECTION("recover mode keeps a valid image silent") {
-    const Opened opened =
-        Open<S>(NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), recover);
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, !ContainsSubstring(reserved_message));
-  }
-
-  SECTION("strict mode rejects each region before decoding the geometry") {
-    for (const ZeroRegion& region : zero_regions) {
-      DYNAMIC_SECTION(region.name) {
-        const Opened opened = Open<S>(ImageWithByteSet(region.offset));
-
-        CHECK_FALSE(opened.ok);
-        CHECK_THAT(opened.log, ContainsSubstring(reserved_message));
-        CHECK_THAT(opened.log, ContainsSubstring(std::string(region.name)));
-        CHECK_THAT(opened.log, !ContainsSubstring(geometry_message));
-        CHECK(opened.sector_size == 0);
-        CHECK(opened.cluster_size == 0);
-      }
-    }
-  }
-
-  SECTION("strict mode rejects each single byte of each region") {
-    for (const ZeroRegion& region : zero_regions) {
-      for (size_t byte = 0; byte < region.size; ++byte) {
-        DYNAMIC_SECTION(region.name << " byte " << byte) {
-          const Opened opened = Open<S>(ImageWithByteSet(region.offset + byte));
-
-          CHECK_FALSE(opened.ok);
-          CHECK_THAT(opened.log, ContainsSubstring(std::string(region.name)));
-        }
-      }
-    }
-  }
-
-  SECTION("a one-bit value is enough to reject") {
-    const Opened opened =
-        Open<S>(ImageWithBpb([](Bpb& bpb) { bpb.reserved_sectors = 1; }));
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(reserved_message));
-  }
-
-  SECTION("recover mode accepts each region and decodes the geometry") {
-    for (const ZeroRegion& region : zero_regions) {
-      DYNAMIC_SECTION(region.name) {
-        const Opened opened = Open<S>(ImageWithByteSet(region.offset), recover);
-
-        CHECK(opened.ok);
-        CHECK(opened.sector_size ==
-              NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
-        CHECK(opened.cluster_size ==
-              NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
-        CHECK_THAT(opened.log, ContainsSubstring(reserved_message));
-        CHECK_THAT(opened.log, ContainsSubstring(std::string(region.name)));
-        CHECK_THAT(opened.log, ContainsSubstring(geometry_message));
-        // The check is reported first, before any geometry line.
-        CHECK(opened.log.find(reserved_message) <
-              opened.log.find(geometry_message));
-      }
-    }
-  }
-
-  SECTION("one message names every offending region") {
-    const Opened opened = Open<S>(ImageWithBpb([](Bpb& bpb) {
-      bpb.reserved_sectors = 1;
-      bpb.not_used1 = 1;
-      bpb.not_used2 = 1;
-    }));
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring("reserved_sectors (0x0E)"));
-    CHECK_THAT(opened.log, ContainsSubstring("small_sectors (0x13)"));
-    CHECK_THAT(opened.log, ContainsSubstring("large_sectors (0x20)"));
-    CHECK_THAT(opened.log, !ContainsSubstring("sectors_per_fat"));
-    CHECK_THAT(opened.log, !ContainsSubstring("fat_count_and_root_entries"));
-    // One message, not one per region.
-    const size_t first = opened.log.find(reserved_message);
-    REQUIRE(first != std::string::npos);
-    CHECK(opened.log.find(reserved_message, first + 1) == std::string::npos);
-  }
-
-  SECTION("recover mode logs the message once for several regions") {
-    const Opened opened = Open<S>(ImageWithBpb([](Bpb& bpb) {
-                                    bpb.zeros2 = 0xFFFF;
-                                    bpb.not_used2 = 0xFFFFFFFF;
-                                  }),
-                                  recover);
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring("sectors_per_fat (0x16)"));
-    CHECK_THAT(opened.log, ContainsSubstring("large_sectors (0x20)"));
-  }
-
-  SECTION("fields real volumes fill in are accepted silently") {
-    const Opened opened = Open<S>(ImageWithBpb([](Bpb& bpb) {
-      bpb.media_descriptor = 0xF8;
-      bpb.sectors_per_track = 63;
-      bpb.number_of_heads = 255;
-      bpb.hidden_sectors = 2048;
-      bpb.not_used3 = 0x80008000;
-    }));
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, !ContainsSubstring(reserved_message));
-  }
-
-  SECTION("each unchecked field is accepted on its own") {
-    constexpr std::array<size_t, 5> unchecked{
-        offsetof(Bpb, media_descriptor), offsetof(Bpb, sectors_per_track),
-        offsetof(Bpb, number_of_heads),  offsetof(Bpb, hidden_sectors),
-        offsetof(Bpb, not_used3),
-    };
-    for (const size_t offset : unchecked) {
-      DYNAMIC_SECTION("offset " << offset) {
-        const Opened opened = Open<S>(ImageWithByteSet(offset));
-
-        CHECK(opened.ok);
-        CHECK_THAT(opened.log, !ContainsSubstring(reserved_message));
-      }
-    }
-  }
-
-  SECTION("a missing marker is reported before the reserved fields") {
-    const Opened opened = Open<S>(ImageWithBpb([](Bpb& bpb) {
-      bpb.x_aa = 0;
-      bpb.reserved_sectors = 1;
-    }));
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(marker_message));
-    CHECK_THAT(opened.log, !ContainsSubstring(reserved_message));
-  }
-
-  SECTION("recover mode reports the marker, then the reserved fields") {
-    const Opened opened = Open<S>(ImageWithBpb([](Bpb& bpb) {
-                                    bpb.x_aa = 0;
-                                    bpb.reserved_sectors = 1;
-                                  }),
-                                  recover);
-
-    CHECK(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(marker_message));
-    CHECK_THAT(opened.log, ContainsSubstring(reserved_message));
-    CHECK(opened.log.find(marker_message) < opened.log.find(reserved_message));
-    CHECK(opened.log.find(reserved_message) <
-          opened.log.find(geometry_message));
-  }
-
-  SECTION("a bad signature is still reported first") {
-    const Opened opened = Open<S>(ImageWithBpb([](Bpb& bpb) {
-                                    bpb.signature[0] = 'X';
-                                    bpb.reserved_sectors = 1;
-                                  }),
-                                  recover);
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring("Volume file system is not NTFS"));
-    CHECK_THAT(opened.log, !ContainsSubstring(reserved_message));
-  }
-
-  SECTION("a bad sector size is still rejected in recover mode") {
-    const Opened opened = Open<S>(ImageWithBpb([](Bpb& bpb) {
-                                    bpb.bytes_per_sector = 3;
-                                    bpb.reserved_sectors = 1;
-                                  }),
-                                  recover);
-
-    CHECK_FALSE(opened.ok);
-    CHECK_THAT(opened.log, ContainsSubstring(reserved_message));
-    CHECK_THAT(opened.log, ContainsSubstring("Sector Size must be"));
-  }
+  RunBootScenarios<S>(ReservedFieldsScenarios());
 }

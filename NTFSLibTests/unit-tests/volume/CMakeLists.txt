@@ -6,6 +6,7 @@ target_sources(
     "boot-sector-marker-tests.cpp"
     "boot-sector-reserved-fields-tests.cpp"
     "boot-sector-sizes-tests.cpp"
+    "boot-sector-support.h"
     "boot-sector-total-sectors-tests.cpp"
     "cache-ceiling-options-tests.cpp"
     "cluster-count-tests.cpp"
