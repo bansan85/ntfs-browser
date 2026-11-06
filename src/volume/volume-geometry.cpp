@@ -278,6 +278,23 @@ bool MirrorInsideVolume(const Data::NtfsBpb& bpb, const Geometry& geometry) {
          copy_bytes <= volume_bytes - geometry.mft_mirr_addr;
 }
 
+// Whether a copy of the first $MFT records can be read at
+// geometry.mft_mirr_addr. overflows says that address wrapped.
+bool MirrorUsable(const Data::NtfsBpb& bpb, const Geometry& geometry,
+                  bool overflows) {
+  // Leaves headroom for the per-record byte offset added to mft_mirr_addr
+  // later, like mft_addr.
+  constexpr ULONGLONG max_plausible_addr =
+      std::numeric_limits<LONGLONG>::max() / 2;
+
+  // The mirror MUST sit apart from the boot sector (LCN 0) and from $MFT, and
+  // fit in the volume, with an address that stays a plausible LONGLONG.
+  return bpb.lcn_mft_mirr != 0 && !overflows &&
+         geometry.mft_mirr_addr <= max_plausible_addr &&
+         geometry.mft_mirr_addr != geometry.mft_addr &&
+         MirrorInsideVolume(bpb, geometry);
+}
+
 // Set mft_mirr_addr from the BPB, and decide whether a copy of the first $MFT
 // records can be read there. Never rejects: an unusable address only leaves
 // mft_mirr_usable false.
@@ -291,17 +308,7 @@ void ParseMftMirrorAddress(const Data::NtfsBpb& bpb, Geometry& geometry) {
                                      : bpb.lcn_mft_mirr * geometry.cluster_size;
   Log::Info("MFTMirr address = 0x{:016X}", geometry.mft_mirr_addr);
 
-  // Leaves headroom for the per-record byte offset added to mft_mirr_addr
-  // later, like mft_addr.
-  constexpr ULONGLONG max_plausible_addr =
-      std::numeric_limits<LONGLONG>::max() / 2;
-
-  // The mirror MUST sit apart from the boot sector (LCN 0) and from $MFT, and
-  // fit in the volume, with an address that stays a plausible LONGLONG.
-  geometry.mft_mirr_usable = bpb.lcn_mft_mirr != 0 && !overflows &&
-                             geometry.mft_mirr_addr <= max_plausible_addr &&
-                             geometry.mft_mirr_addr != geometry.mft_addr &&
-                             MirrorInsideVolume(bpb, geometry);
+  geometry.mft_mirr_usable = MirrorUsable(bpb, geometry, overflows);
   if (!geometry.mft_mirr_usable) {
     Log::Debug("No usable $MFTMirr: records 0 to 3 have no fallback copy");
   }

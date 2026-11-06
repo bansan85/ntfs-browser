@@ -263,6 +263,23 @@ void NoteDiskWaste(std::uint64_t bytes, bool standing) noexcept {
   }
 }
 
+namespace {
+
+// Counts one read under its kind and its class.
+void CountByKindAndClass(Report& report, ReadKind read_kind, ReadClass cls,
+                         std::uint64_t length, std::uint64_t wait_ns) noexcept {
+  KindStat& kind = report.kinds.at(static_cast<std::size_t>(read_kind));
+  kind.reads++;
+  kind.bytes += length;
+  kind.wait_ns += wait_ns;
+  Add(kind.sizes, length);
+  kind.by_class.at(static_cast<std::size_t>(cls))++;
+  report.class_reads.at(static_cast<std::size_t>(cls))++;
+  report.class_wait_ns.at(static_cast<std::size_t>(cls)) += wait_ns;
+}
+
+}  // namespace
+
 void RecordRead(std::uint64_t offset, std::uint64_t length,
                 std::uint64_t start_ns, std::uint64_t end_ns) noexcept {
   if (!SessionOn()) {
@@ -282,14 +299,7 @@ void RecordRead(std::uint64_t offset, std::uint64_t length,
   report.read_wait_ns += wait_ns;
   state.last_read_end = (std::max)(state.last_read_end, end_ns);
 
-  KindStat& kind = report.kinds.at(static_cast<std::size_t>(t_kind));
-  kind.reads++;
-  kind.bytes += length;
-  kind.wait_ns += wait_ns;
-  Add(kind.sizes, length);
-  kind.by_class.at(static_cast<std::size_t>(cls))++;
-  report.class_reads.at(static_cast<std::size_t>(cls))++;
-  report.class_wait_ns.at(static_cast<std::size_t>(cls)) += wait_ns;
+  CountByKindAndClass(report, t_kind, cls, length, wait_ns);
 
   if (!state.stack.empty()) {
     PhaseStat& stat = state.phases.at(phase);

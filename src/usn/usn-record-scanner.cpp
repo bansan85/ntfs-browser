@@ -227,24 +227,16 @@ void RecordScanner::Drain(std::vector<Record>& out, bool last) {
     }
 
     const auto header = ReadAt<UsnRecordCommon>(window, 0);
-    if (!PlausibleHeader(header)) {
-      fail(offset);
-      pos += word_size;
-      continue;
+    const bool plausible = PlausibleHeader(header);
+    const bool whole = plausible && header.record_length <= window.size();
+    // The rest of the record is not in yet: keep the bytes for the next
+    // Feed(). At the end of the range it never will be.
+    if (plausible && !whole && !last) {
+      break;
     }
-    if (header.record_length > window.size()) {
-      // The rest of the record is not in yet: keep the bytes for the next
-      // Feed(). At the end of the range it never will be.
-      if (!last) {
-        break;
-      }
-      fail(offset);
-      pos += word_size;
-      continue;
-    }
-
     const size_t length =
-        DecodeRecord(window.first(header.record_length), offset, out);
+        whole ? DecodeRecord(window.first(header.record_length), offset, out)
+              : 0;
     if (length == 0) {
       fail(offset);
       pos += word_size;

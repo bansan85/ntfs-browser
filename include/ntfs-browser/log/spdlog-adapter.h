@@ -13,6 +13,8 @@
 // A logger the consumer already owns:
 //   Log::SetSinks({Log::MakeSpdlogLogger(spdlog::default_logger())});
 
+#include <array>
+#include <cstddef>
 #include <memory>
 #include <string_view>
 #include <utility>
@@ -30,21 +32,12 @@ namespace NTFS_BROWSER_NAMESPACE::Log::Adapter {
 
 // spdlog counterpart of a library level.
 inline spdlog::level::level_enum ToSpdlog(Level level) noexcept {
-  switch (level) {
-    case Level::Error:
-      return spdlog::level::err;
-    case Level::Warn:
-      return spdlog::level::warn;
-    case Level::Info:
-      return spdlog::level::info;
-    case Level::Debug:
-      return spdlog::level::debug;
-    case Level::Trace:
-      return spdlog::level::trace;
-    case Level::Off:
-      break;
-  }
-  return spdlog::level::off;
+  // Indexed by the value of the level, so in the order of the enum.
+  constexpr std::array<spdlog::level::level_enum, 6> mapped{
+      spdlog::level::off,  spdlog::level::err,   spdlog::level::warn,
+      spdlog::level::info, spdlog::level::debug, spdlog::level::trace};
+  const auto index = static_cast<std::size_t>(level);
+  return index < mapped.size() ? mapped.at(index) : spdlog::level::off;
 }
 
 // Forwards the library's messages to one spdlog sink.

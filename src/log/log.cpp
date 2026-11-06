@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -59,21 +60,12 @@ constexpr std::string_view file_target = "file";
 
 // spdlog counterpart of a public level.
 spdlog::level::level_enum ToSpdlog(Log::Level level) noexcept {
-  switch (level) {
-    case Log::Level::Error:
-      return spdlog::level::err;
-    case Log::Level::Warn:
-      return spdlog::level::warn;
-    case Log::Level::Info:
-      return spdlog::level::info;
-    case Log::Level::Debug:
-      return spdlog::level::debug;
-    case Log::Level::Trace:
-      return spdlog::level::trace;
-    case Log::Level::Off:
-      break;
-  }
-  return spdlog::level::off;
+  // Indexed by the value of the level, so in the order of the enum.
+  constexpr std::array<spdlog::level::level_enum, 6> mapped{
+      spdlog::level::off,  spdlog::level::err,   spdlog::level::warn,
+      spdlog::level::info, spdlog::level::debug, spdlog::level::trace};
+  const auto index = static_cast<std::size_t>(level);
+  return index < mapped.size() ? mapped.at(index) : spdlog::level::off;
 }
 
 // Writes to spdlog sinks. Warn and the more severe levels go to severe,

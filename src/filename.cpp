@@ -21,6 +21,24 @@
 
 namespace NTFS_BROWSER_NAMESPACE {
 
+namespace {
+
+// Logs the decoded name and its attributes at Debug.
+void LogDecodedName(const Filename& name, const std::wstring& decoded) {
+  // Guarded: this runs once per directory entry, and the UTF-8 conversion
+  // below allocates whether or not anything would print it.
+  if (decoded.empty() || !Log::IsLogged(Log::Level::Debug)) {
+    return;
+  }
+  Log::Debug("File Name: {}", Utf::WideToUtf8(decoded));
+  Log::Debug("File Permission: {}	{}{}{}",
+             name.IsDirectory() ? "Directory" : "File",
+             name.IsReadOnly() ? 'R' : ' ', name.IsHidden() ? 'H' : ' ',
+             name.IsSystem() ? 'S' : ' ');
+}
+
+}  // namespace
+
 void Filename::SetFilename(const Data::Filename& filename) {
   filename_ = &filename;
 
