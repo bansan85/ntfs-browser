@@ -1,4 +1,12 @@
-add_executable(NtfsMftList WIN32 "main.cpp")
+add_executable(
+  NtfsMftList
+  WIN32
+  "arguments.h"
+  "arguments.cpp"
+  "display-paths.h"
+  "display-paths.cpp"
+  "main.cpp"
+)
 # The listing is written by a thread of its own.
 find_package(Threads REQUIRED)
 target_link_libraries(
