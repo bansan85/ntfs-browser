@@ -1,7 +1,8 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
+#include <cstdio>
 #include <format>
 #include <optional>
 #include <string>
@@ -12,8 +13,11 @@
 #include <ntfs-browser/example/ntfsattr/ntfsattr-core.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/tool-support.h>
+#include <ntfs-browser/tool/device-access/volume-target.h>
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
@@ -43,9 +47,12 @@ const std::array<std::wstring_view, kAttrNameCount> AttrNames = {
     L"NULL",
     L"LOGGED_UTILITY_STREAM"};
 
-// Name the drive-only path resolves to. The root directory lists itself as
-// "." in its index.
+// Name the empty path resolves to. The root directory lists itself as "." in
+// its index.
 constexpr std::wstring_view kRootEntry = L".";
+
+// Bytes in one row of the dump.
+constexpr std::size_t kRowBytes = 16;
 
 // Record handle the walk parses into.
 using Record = Io::FileRecord<Cache::Strategy::FullCache>;
@@ -53,12 +60,13 @@ using Record = Io::FileRecord<Cache::Strategy::FullCache>;
 // Message of a failed step, or nullopt when the step went through.
 using Failure = std::optional<std::wstring>;
 
-// Formats one 16-byte row: hex, then the text column. Bytes under 0x20 show as
-// '.'.
-std::wstring FormatRow(const std::array<BYTE, 16>& row) {
+// Formats one row of count bytes: hex, then the text column. A byte outside
+// the printable ASCII range shows as '.'. The hex of missing bytes is blank.
+std::wstring FormatRow(const std::array<BYTE, kRowBytes>& row,
+                       std::size_t count) {
   std::wstring line;
   for (std::size_t j = 0; j < row.size(); ++j) {
-    line += std::format(L"{:02X}", row[j]);
+    line += j < count ? std::format(L"{:02X}", row[j]) : std::wstring(2, L' ');
     if (j == 7) {
       line += L" - ";
     } else if (j == 15) {
@@ -67,18 +75,18 @@ std::wstring FormatRow(const std::array<BYTE, 16>& row) {
       line += L' ';
     }
   }
-  for (const BYTE byte : row) {
-    line += static_cast<wchar_t>(byte < 0x20 ? '.' : byte);
+  for (std::size_t j = 0; j < count; ++j) {
+    line +=
+        static_cast<wchar_t>(row[j] >= 0x20 && row[j] < 0x7F ? row[j] : '.');
   }
   return line;
 }
 
 // The heading of an attribute: its type name, then its stream name in
-// parentheses when it has one. Each line ends in CRLF.
+// parentheses when it has one. The line ends in LF.
 std::wstring
     AttrHeading(const Attr::AttrBase<Cache::Strategy::FullCache>& attr) {
-  std::wstring heading = L"\r\n";
-  heading += AttrTypeName(attr.GetAttrType());
+  std::wstring heading = AttrTypeName(attr.GetAttrType());
 
   const std::wstring_view attrname = attr.GetAttrName();
   if (!attrname.empty()) {
@@ -86,48 +94,28 @@ std::wstring
     heading += attrname;
     heading += L')';
   }
-  heading += L"\r\n";
+  heading += L"\n";
   return heading;
 }
 
 // Traverse callback: appends one attribute's heading and raw header to the
-// std::wstring that context points to.
+// std::wstring that context points to. A blank line sets each attribute apart
+// from the one before.
 void PrintAttr(const Attr::AttrBase<Cache::Strategy::FullCache>& attr,
                void* context, bool* /* stop*/) {
   auto* dump = static_cast<std::wstring*>(context);
+  if (!dump->empty()) {
+    *dump += L"\n";
+  }
   *dump += AttrHeading(attr);
   AppendData(*dump, reinterpret_cast<const BYTE*>(&attr.GetAttrHeader()),
              attr.GetAttrTotalSize());
 }
 
-// The directory names on path, in order. The drive and the last component are
-// left out.
-std::vector<std::wstring_view> DirectoryNames(std::wstring_view path) {
-  std::vector<std::wstring_view> names;
-  std::size_t dirs = path.find(L'\\');
-  if (dirs == std::wstring_view::npos) {
-    return names;
-  }
-
-  std::size_t dire = path.find(L'\\', dirs + 1);
-  while (dire != std::wstring_view::npos) {
-    names.push_back(path.substr(dirs + 1, dire - dirs - 1));
-    dirs = dire;
-    dire = path.find(L'\\', dirs + 1);
-  }
-  return names;
-}
-
-// The last component of path, which names the entry to dump. A drive-only
-// path names the root directory.
-std::wstring_view EntryName(std::wstring_view path) {
-  const std::size_t last = path.rfind(L'\\');
-  const std::wstring_view name =
-      last == std::wstring_view::npos ? path : path.substr(last + 1);
-  if (name.size() == 2 && name.find(L':') != std::wstring_view::npos) {
-    return kRootEntry;
-  }
-  return name;
+// The name of the entry to dump: the last part of path. The root directory
+// lists itself as kRootEntry.
+std::wstring_view EntryName(const std::vector<std::wstring_view>& parts) {
+  return parts.empty() ? kRootEntry : parts.back();
 }
 
 // Parses the root directory, with only the index attributes a walk needs.
@@ -150,7 +138,7 @@ Failure OpenRoot(Record& fr) {
 Failure EnterDirectory(Record& fr, std::wstring_view name) {
   const std::optional<IndexEntry> ie = fr.FindSubEntry(name);
   if (!ie) {
-    return L"File not found\n";
+    return L"File not found";
   }
   if (!fr.ParseFileRecord(ie->GetFileReference())) {
     return L"Cannot read root directory of volume";
@@ -165,7 +153,7 @@ Failure EnterDirectory(Record& fr, std::wstring_view name) {
 Failure OpenEntry(Record& fr, std::wstring_view name) {
   const std::optional<IndexEntry> ie = fr.FindSubEntry(name);
   if (!ie) {
-    return L"File not found\n";
+    return L"File not found";
   }
   if (!fr.ParseFileRecord(ie->GetFileReference())) {
     return L"Cannot read file";
@@ -186,24 +174,13 @@ DumpResult Failed(std::wstring_view message) {
 }  // namespace
 
 void AppendData(std::wstring& lines, const BYTE* data, std::uint32_t datalen) {
-  // Zero bytes: datalen - 1 would wrap and the row loop would read past data.
-  if (datalen == 0) {
-    return;
+  for (std::size_t offset = 0; offset < datalen; offset += kRowBytes) {
+    const std::size_t count =
+        std::min<std::size_t>(kRowBytes, datalen - offset);
+    std::array<BYTE, kRowBytes> row{};
+    std::copy_n(data + offset, count, row.begin());
+    lines += FormatRow(row, count) + L"\n";
   }
-
-  std::uint32_t i = 0;
-  for (i = 0; i < ((datalen - 1U) >> 4); i++) {
-    std::array<BYTE, 16> row{};
-    std::memcpy(row.data(), data + static_cast<std::size_t>(i) * 16, 16);
-    lines += FormatRow(row) + L"\r\n";
-  }
-
-  // The last row may be short. The missing bytes print as 0xFF.
-  std::array<BYTE, 16> row{};
-  row.fill(0xFF);
-  std::memcpy(row.data(), data + static_cast<std::size_t>(i) * 16,
-              datalen - i * 16);
-  lines += FormatRow(row) + L"\r\n";
 }
 
 std::wstring AttrTypeName(NTFS_BROWSER_NAMESPACE::Attr::Type type) {
@@ -222,11 +199,16 @@ std::wstring TargetPath(std::wstring_view picked, bool directory) {
   if (!directory) {
     return std::wstring(picked);
   }
-  const std::size_t slash = picked.rfind(L'\\');
-  if (slash == std::wstring_view::npos) {
-    return {};
+  const std::vector<std::wstring_view> parts =
+      Tool::DeviceAccess::SplitInsidePath(picked);
+  std::wstring parent;
+  for (std::size_t i = 0; i + 1 < parts.size(); ++i) {
+    if (i != 0) {
+      parent += L'\\';
+    }
+    parent += parts[i];
   }
-  return std::wstring(picked.substr(0, slash));
+  return parent;
 }
 
 DumpResult DumpAttributes(NtfsVolume<Cache::Strategy::FullCache>& volume,
@@ -240,19 +222,113 @@ DumpResult DumpAttributes(NtfsVolume<Cache::Strategy::FullCache>& volume,
     return Failed(*error);
   }
 
-  for (const std::wstring_view name : DirectoryNames(path)) {
-    if (const Failure error = EnterDirectory(fr, name)) {
+  const std::vector<std::wstring_view> parts =
+      Tool::DeviceAccess::SplitInsidePath(path);
+  for (std::size_t i = 0; i + 1 < parts.size(); ++i) {
+    if (const Failure error = EnterDirectory(fr, parts[i])) {
       return Failed(*error);
     }
   }
 
-  if (const Failure error = OpenEntry(fr, EntryName(path))) {
+  if (const Failure error = OpenEntry(fr, EntryName(parts))) {
     return Failed(*error);
   }
 
   DumpResult result;
   fr.TraverseAttrs(PrintAttr, &result.dump);
   return result;
+}
+
+std::string UsageText() {
+  std::string usage =
+      "Usage: ntfsattr [--directory] [--deleted] [--recover] [--log=...] "
+      "\"target\"\n"
+      "Dumps the raw header of every attribute of a file or directory.\n"
+      "  --directory, -d  dump the directory that holds target instead\n";
+  usage += Tool::DeviceAccess::CommonOptionsUsage();
+  usage +=
+      "target is an image file or a device, followed by the path inside the "
+      "volume";
+#ifdef _WIN32
+  usage += ", or a drive path.\n";
+  usage += "eg. ntfsattr c:\\windows\\notepad.exe\n";
+  usage += "eg. ntfsattr --directory c:\\windows\\notepad.exe\n";
+  usage += "eg. ntfsattr c:\\image.img\\Windows\n";
+#else
+  usage += ".\n";
+  usage += "eg. ntfsattr /dev/sda1/Windows/notepad.exe\n";
+  usage += "eg. ntfsattr --directory /dev/sda1/Windows/notepad.exe\n";
+  usage += "eg. ntfsattr ./disk.img/Windows\n";
+#endif
+  return usage;
+}
+
+std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
+  Arguments args;
+  bool has_target = false;
+  for (int i = 1; i < argc; i++) {
+    const std::wstring_view arg = argv[i];
+    if (arg == L"--directory" || arg == L"-d") {
+      args.directory = true;
+      continue;
+    }
+    const Tool::DeviceAccess::OptionResult common =
+        Tool::DeviceAccess::ParseCommonOption(arg, args.common);
+    if (common == Tool::DeviceAccess::OptionResult::Malformed) {
+      return std::nullopt;
+    }
+    if (common == Tool::DeviceAccess::OptionResult::Accepted) {
+      continue;
+    }
+    if (has_target) {
+      return std::nullopt;
+    }
+    args.target = arg;
+    has_target = true;
+  }
+
+  if (!has_target && !args.common.help) {
+    return std::nullopt;
+  }
+  return args;
+}
+
+int DumpTarget(const Arguments& args, std::FILE* out, std::FILE* err) {
+  const auto opened =
+      Tool::DeviceAccess::OpenVolumeFromTarget<Cache::Strategy::FullCache>(
+          args.target, args.common.volume_options);
+  if (!opened.volume) {
+    Tool::DeviceAccess::WriteText(err, opened.error + L"\n");
+    return failure_exit_code;
+  }
+
+  const DumpResult result =
+      DumpAttributes(*opened.volume, TargetPath(opened.inside, args.directory));
+  if (!result.message.empty()) {
+    Tool::DeviceAccess::WriteText(err, result.message + L"\n");
+    return failure_exit_code;
+  }
+  Tool::DeviceAccess::WriteText(out, result.dump);
+  return 0;
+}
+
+int RunNtfsAttr(int argc, wchar_t* argv[]) {
+  const std::optional<Arguments> args = ParseArguments(argc, argv);
+  if (!args) {
+    (void)std::fputs(UsageText().c_str(), stderr);
+    return failure_exit_code;
+  }
+  if (args->common.help) {
+    (void)std::fputs(UsageText().c_str(), stdout);
+    return 0;
+  }
+
+  // Names print as UTF-8: a console shows them right with its code page set.
+  const Tool::DeviceAccess::Utf8ConsoleOutput console;
+  if (!Log::Configure(args->common.log_config)) {
+    Tool::DeviceAccess::ReportLogFileError(args->common.log_config);
+  }
+  return DumpTarget(*args, stdout, stderr);
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsAttr
