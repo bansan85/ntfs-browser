@@ -26,7 +26,12 @@ class LegacyFixtures {
     // total_sectors is 0 and the two bytes of the end marker are swapped.
     UnsetTotalSectors,
     // total_sectors is the largest value, as the fuzzer patches it.
-    PatchedTotalSectors
+    PatchedTotalSectors,
+    // The geometry of the first fake images (see LegacyGeometry), early era,
+    // with the boot sector of UnsetTotalSectors.
+    LegacyEarly,
+    // The same, late era.
+    LegacyLate
   };
 
   // One saved input.
@@ -42,6 +47,27 @@ class LegacyFixtures {
     RecordedStream::Probe probe = RecordedStream::Probe::Main;
     Feature needs = Feature::None;
   };
+
+  // An input of the first fake images: a base image, put in the old form of
+  // its era, then damaged in one field.
+  struct Damaged {
+    // The file name.
+    std::string name;
+    // The fake image before the old form is applied.
+    std::function<std::vector<BYTE>()> base;
+    // Edits the image once it has the old form. Empty means no damage.
+    std::function<void(std::vector<BYTE>&)> damage;
+    // Early inputs have the $Volume record of the first builders.
+    bool early = false;
+    NTFS_BROWSER_NAMESPACE::VolumeOptions options =
+        RecordedStream::Recovering();
+    RecordedStream::Probe probe = RecordedStream::Probe::Main;
+    Feature needs = Feature::None;
+  };
+
+  // Adds one scenario per damaged input.
+  static void RegisterDamaged(ScenarioRegistry& registry,
+                              const std::vector<Damaged>& inputs);
 
   // Adds one scenario per fixture.
   static void Register(ScenarioRegistry& registry,

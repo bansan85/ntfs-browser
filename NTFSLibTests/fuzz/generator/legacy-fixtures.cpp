@@ -8,6 +8,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-geometry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
 #include "data/ntfs-bpb.h"
@@ -24,11 +25,36 @@ void LegacyFixtures::ApplyBoot(std::vector<BYTE>& image, Boot boot) {
         std::swap(bpb.x_aa, bpb.x_55);
       });
       break;
+    case Boot::LegacyEarly:
+      LegacyGeometry::Apply(image, LegacyGeometry::Era::Early);
+      ApplyBoot(image, Boot::UnsetTotalSectors);
+      break;
+    case Boot::LegacyLate:
+      LegacyGeometry::Apply(image, LegacyGeometry::Era::Late);
+      ApplyBoot(image, Boot::UnsetTotalSectors);
+      break;
     case Boot::PatchedTotalSectors:
       BpbEdit::Apply(image, [](Data::NtfsBpb& bpb) {
         bpb.total_sectors = std::numeric_limits<std::uint64_t>::max();
       });
       break;
+  }
+}
+
+void LegacyFixtures::RegisterDamaged(ScenarioRegistry& registry,
+                                     const std::vector<Damaged>& inputs) {
+  for (const Damaged& input : inputs) {
+    registry.AddRecorded(
+        input.name,
+        [input] {
+          std::vector<BYTE> image = input.base();
+          ApplyBoot(image, input.early ? Boot::LegacyEarly : Boot::LegacyLate);
+          if (input.damage) {
+            input.damage(image);
+          }
+          return image;
+        },
+        input.options, input.probe, input.needs);
   }
 }
 

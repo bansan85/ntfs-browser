@@ -10,6 +10,9 @@
 #include <ntfs-browser/tool/fuzzgen/file-record-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/index-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/index-slack-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-builder-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-index-root-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-root-record-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/record-slack-scenarios.h>
@@ -46,6 +49,9 @@ ScenarioRegistry ScenarioCatalog::Build() {
   VolumeRecordScenarios::Register(registry);
   AttributeListFixtureScenarios::Register(registry);
   IndexFixtureScenarios::Register(registry);
+  LegacyIndexRootScenarios::Register(registry);
+  LegacyRootRecordScenarios::Register(registry);
+  LegacyBuilderScenarios::Register(registry);
   return registry;
 }
 
