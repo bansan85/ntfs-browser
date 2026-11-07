@@ -3,6 +3,7 @@
 #include <ntfs-browser/tool/fuzzgen/bad-cluster-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/boot-sector-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/case-twin-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/cluster-bitmap-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/cluster-state-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/run-list-scenarios.h>
@@ -23,6 +24,7 @@ ScenarioRegistry ScenarioCatalog::Build() {
   UsnTreeScenarios::Register(registry);
   BootSectorScenarios::Register(registry);
   CaseTwinScenarios::Register(registry);
+  ClusterBitmapScenarios::Register(registry);
   TinyStreamScenarios::Register(registry);
   MftScanScenarios::Register(registry);
   RunListScenarios::Register(registry);

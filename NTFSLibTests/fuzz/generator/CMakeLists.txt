@@ -44,6 +44,8 @@ add_library(
   "boot-sector-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/tiny-stream-scenarios.h"
   "tiny-stream-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/cluster-bitmap-scenarios.h"
+  "cluster-bitmap-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/case-twin-scenarios.h"
   "case-twin-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h"
