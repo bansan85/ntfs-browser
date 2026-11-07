@@ -1,7 +1,9 @@
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -9,7 +11,10 @@
 #include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-geometry.h>
+#include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
+#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+#include <ntfs-browser/tool/fuzzgen/transient-damage-reader.h>
 
 #include "data/ntfs-bpb.h"
 
@@ -44,17 +49,41 @@ void LegacyFixtures::ApplyBoot(std::vector<BYTE>& image, Boot boot) {
 void LegacyFixtures::RegisterDamaged(ScenarioRegistry& registry,
                                      const std::vector<Damaged>& inputs) {
   for (const Damaged& input : inputs) {
-    registry.AddRecorded(
-        input.name,
-        [input] {
-          std::vector<BYTE> image = input.base();
-          ApplyBoot(image, input.early ? Boot::LegacyEarly : Boot::LegacyLate);
-          if (input.damage) {
-            input.damage(image);
-          }
-          return image;
-        },
-        input.options, input.probe, input.needs);
+    const auto make_intact = [input] {
+      std::vector<BYTE> image = input.base();
+      ApplyBoot(image, input.early ? Boot::LegacyEarly : Boot::LegacyLate);
+      if (input.prepare) {
+        input.prepare(image);
+      }
+      return image;
+    };
+    if (input.transient_reads == 0) {
+      registry.AddRecorded(
+          input.name,
+          [input, make_intact] {
+            std::vector<BYTE> image = make_intact();
+            if (input.damage) {
+              input.damage(image);
+            }
+            return image;
+          },
+          input.options, input.probe, input.needs);
+      continue;
+    }
+    registry.Add(
+        {.name = input.name,
+         .needs = input.needs,
+         .make = [input, make_intact](const ResourceLocator& /*resources*/) {
+           std::vector<BYTE> intact = make_intact();
+           std::vector<BYTE> damaged = intact;
+           input.damage(damaged);
+           const std::size_t size = intact.size();
+           return RecordedStream::Record(
+               std::make_unique<TransientDamageReader>(std::move(intact),
+                                                       std::move(damaged),
+                                                       input.transient_reads),
+               size, input.options, input.probe);
+         }});
   }
 }
 

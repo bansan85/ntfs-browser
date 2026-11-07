@@ -4,8 +4,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -39,6 +41,13 @@ class RecordedStream {
   // sector.
   [[nodiscard]] static std::vector<BYTE>
       Record(std::vector<BYTE> image,
+             const NTFS_BROWSER_NAMESPACE::VolumeOptions& options, Probe probe);
+
+  // The same, for an image that disk serves. image_size is the size of that
+  // image.
+  [[nodiscard]] static std::vector<BYTE>
+      Record(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> disk,
+             std::size_t image_size,
              const NTFS_BROWSER_NAMESPACE::VolumeOptions& options, Probe probe);
 
   // The options most inputs are recorded under: recovering, with deleted items

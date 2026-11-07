@@ -29,6 +29,8 @@ add_library(
   "scenario-registry.cpp"
   "include/ntfs-browser/tool/fuzzgen/stream-comparator.h"
   "stream-comparator.cpp"
+  "include/ntfs-browser/tool/fuzzgen/transient-damage-reader.h"
+  "transient-damage-reader.cpp"
   # The scenario families, one per group of saved inputs.
   "include/ntfs-browser/tool/fuzzgen/alloc-scan-scenarios.h"
   "alloc-scan-scenarios.cpp"

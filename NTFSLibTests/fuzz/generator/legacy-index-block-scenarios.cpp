@@ -67,6 +67,10 @@ constexpr DWORD entry_offset_past_block = 0x3E8;
 // A sector end word that does not match the update sequence number.
 constexpr WORD mismatched_sequence_number = 1;
 
+// The first read of the damaged item shows the damage, the next ones do not:
+// the first copy of the item in the saved input is damaged, the others intact.
+constexpr std::size_t first_read_only = 1;
+
 // The run list of the index allocation: one run of one cluster at the cluster
 // of the block, with a 4-byte offset, and the same run with a length of two.
 const std::vector<BYTE> one_cluster_run = {0x41, 0x01, 0x14, 0, 0, 0, 0};
@@ -313,15 +317,16 @@ void Repack(Image& image) {
   IndexEdit::UnpadBlock(image, index_block_offset);
 }
 
-// The repacked volume, then one change by edit.
+// The repacked volume, then one change by edit. A transient_reads above 0 makes
+// the change show to that many reads only (see LegacyFixtures::Damaged).
 LegacyFixtures::Damaged Variant(const char* name,
-                                std::function<void(Image&)> edit) {
+                                std::function<void(Image&)> edit,
+                                std::size_t transient_reads = 0) {
   return {.name = name,
           .base = FakeImage::BuildFakeNtfsImageWithGapCollationSubNode,
-          .damage = [edit = std::move(edit)](Image& image) {
-            Repack(image);
-            edit(image);
-          }};
+          .prepare = Repack,
+          .damage = std::move(edit),
+          .transient_reads = transient_reads};
 }
 
 Image Base() { return FakeImage::BuildFakeNtfsImage(); }
@@ -334,37 +339,47 @@ std::size_t IndexAllocation(const Image& image) {
 const std::vector<LegacyFixtures::Damaged>& Inputs() {
   static const std::vector<LegacyFixtures::Damaged> inputs = {
       Variant("gap_collation_subnode", [](Image&) {}),
-      Variant("data_run_cluster_exceeds_bounds",
-              [](Image& image) {
-                RecordEdit::Edit<Data::HeaderNonResident>(
-                    image, IndexAllocation(image), [](auto& header) {
-                      header.last_vcn = std::numeric_limits<ULONGLONG>::max();
-                    });
-              }),
-      Variant("data_run_vcn_exceeds_bound",
-              [](Image& image) {
-                RecordEdit::SetRunList(image, IndexAllocation(image),
-                                       two_cluster_run);
-              }),
-      Variant("index_block_entry_exceeds_bounds",
-              [](Image& image) {
-                RecordEdit::Edit<Data::IndexEntry>(
-                    image, index_block_offset + block_entries_offset,
-                    [](auto& entry) { entry.size = entry_size_past_block; });
-              }),
-      Variant("index_block_entry_header_exceeds_bounds",
-              [](Image& image) {
-                RecordEdit::Edit<Data::IndexBlock>(
-                    image, index_block_offset, [](auto& block) {
-                      block.entry_offset = entry_offset_past_block;
-                    });
-              }),
-      Variant("index_block_magic_mismatch",
-              [](Image& image) {
-                RecordEdit::Edit<Data::IndexBlock>(
-                    image, index_block_offset,
-                    [](auto& block) { block.magic = overwritten_magic; });
-              }),
+      Variant(
+          "data_run_cluster_exceeds_bounds",
+          [](Image& image) {
+            RecordEdit::Edit<Data::HeaderNonResident>(
+                image, IndexAllocation(image), [](auto& header) {
+                  header.last_vcn = std::numeric_limits<ULONGLONG>::max();
+                });
+          },
+          first_read_only),
+      Variant(
+          "data_run_vcn_exceeds_bound",
+          [](Image& image) {
+            RecordEdit::SetRunList(image, IndexAllocation(image),
+                                   two_cluster_run);
+          },
+          first_read_only),
+      Variant(
+          "index_block_entry_exceeds_bounds",
+          [](Image& image) {
+            RecordEdit::Edit<Data::IndexEntry>(
+                image, index_block_offset + block_entries_offset,
+                [](auto& entry) { entry.size = entry_size_past_block; });
+          },
+          first_read_only),
+      Variant(
+          "index_block_entry_header_exceeds_bounds",
+          [](Image& image) {
+            RecordEdit::Edit<Data::IndexBlock>(
+                image, index_block_offset, [](auto& block) {
+                  block.entry_offset = entry_offset_past_block;
+                });
+          },
+          first_read_only),
+      Variant(
+          "index_block_magic_mismatch",
+          [](Image& image) {
+            RecordEdit::Edit<Data::IndexBlock>(
+                image, index_block_offset,
+                [](auto& block) { block.magic = overwritten_magic; });
+          },
+          first_read_only),
       Variant("index_block_usn_mismatch",
               [](Image& image) {
                 RecordEdit::StoreWord(image,

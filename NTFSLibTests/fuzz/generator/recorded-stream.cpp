@@ -20,11 +20,18 @@ std::vector<BYTE>
                            const NTFS_BROWSER_NAMESPACE::VolumeOptions& options,
                            Probe probe) {
   const std::size_t image_size = image.size();
+  return Record(
+      std::make_unique<Test::DiskReaders::MemoryDiskReader>(std::move(image)),
+      image_size, options, probe);
+}
+
+std::vector<BYTE> RecordedStream::Record(
+    std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> disk,
+    std::size_t image_size,
+    const NTFS_BROWSER_NAMESPACE::VolumeOptions& options, Probe probe) {
   std::vector<BYTE> stream;
   {
-    auto reader = std::make_unique<RecordingReader>(
-        std::make_unique<Test::DiskReaders::MemoryDiskReader>(std::move(image)),
-        stream);
+    auto reader = std::make_unique<RecordingReader>(std::move(disk), stream);
     switch (probe) {
       case Probe::Main:
         Test::Fuzz::ProbeOnce(std::move(reader), options);

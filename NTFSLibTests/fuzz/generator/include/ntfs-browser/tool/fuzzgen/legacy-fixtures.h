@@ -2,6 +2,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -55,8 +56,17 @@ class LegacyFixtures {
     std::string name;
     // The fake image before the old form is applied.
     std::function<std::vector<BYTE>()> base;
-    // Edits the image once it has the old form. Empty means no damage.
+    // Edits the image once it has the old form, before the damage. Empty
+    // means no edit. A transient damage keeps this edit in both copies.
+    std::function<void(std::vector<BYTE>&)> prepare;
+    // Damages the image once it has the old form. Empty means no damage.
     std::function<void(std::vector<BYTE>&)> damage;
+    // 0 damages the image: every read sees the damage. N above 0 makes the
+    // damage transient: only the first N reads that touch a damaged byte see
+    // it (see TransientDamageReader), and the next ones read the intact item.
+    // The saved input of such a fixture holds the damaged copy first and an
+    // intact one after.
+    std::size_t transient_reads = 0;
     // Early inputs have the $Volume record of the first builders.
     bool early = false;
     NTFS_BROWSER_NAMESPACE::VolumeOptions options =
