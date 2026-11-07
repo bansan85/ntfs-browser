@@ -20,13 +20,14 @@ target_sources(
     "mft-tree-threads-tests.cpp"
     "ntfsmftlist-format-tests.cpp"
     "ntfsmftlist-name-tests.cpp"
-    "ntfsmftlist-sample-support.h"
+    "include/ntfs-browser/test/mft/ntfsmftlist-sample-support.h"
     "ntfsmftlist-sample-tests.cpp"
+    "include/ntfs-browser/test/mft/mft-tree-state-support.h"
 )
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 # NtfsMftList runs on Windows and Linux (examples/CMakeLists.txt).

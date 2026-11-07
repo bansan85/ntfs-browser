@@ -6,17 +6,16 @@ target_sources(
     "usn-failure-cache-tests.cpp"
     "usn-journal-hint-tests.cpp"
     "usn-journal-load-tests.cpp"
-    "usn-journal-record.h"
+    "include/ntfs-browser/test/usn/usn-journal-record.h"
     "usn-mft-tree-tests.cpp"
     "usn-record-scanner-tests.cpp"
     "usn-resync-tests.cpp"
     "usn-sparse-read-tests.cpp"
     "usn-strict-mode-tests.cpp"
-    "usn-test-support.h"
+    "include/ntfs-browser/test/usn/usn-test-support.h"
 )
 
-# alloc-failure-support.h, shared with the allocation tests, captures log lines.
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../alloc"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )

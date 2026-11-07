@@ -13,10 +13,9 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/usn/usn-test-support.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "usn-test-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

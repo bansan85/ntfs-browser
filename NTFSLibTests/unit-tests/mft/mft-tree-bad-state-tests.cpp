@@ -19,10 +19,10 @@
 #include <ntfs-browser/test/alloc/alloc-failure-support.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/mft/mft-tree-state-support.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "mft-tree-state-support.h"
 #include "mft/tree-testing.h"
 
 using Catch::Matchers::ContainsSubstring;

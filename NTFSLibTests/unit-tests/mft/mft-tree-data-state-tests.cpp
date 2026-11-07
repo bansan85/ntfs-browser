@@ -17,10 +17,9 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/mft/mft-tree-state-support.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "mft-tree-state-support.h"
 
 using Catch::Matchers::ContainsSubstring;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

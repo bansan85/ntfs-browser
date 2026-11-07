@@ -11,8 +11,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/alloc/alloc-failure-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-
-#include "usn-test-support.h"
+#include <ntfs-browser/test/usn/usn-test-support.h>
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

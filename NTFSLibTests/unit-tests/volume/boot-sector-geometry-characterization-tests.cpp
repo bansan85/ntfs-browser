@@ -15,9 +15,9 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/volume/volume-tree-support.h>
 
 #include "data/ntfs-bpb.h"
-#include "volume-tree-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Tests {

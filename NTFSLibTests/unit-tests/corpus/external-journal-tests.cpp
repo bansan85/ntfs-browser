@@ -24,13 +24,13 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/usn/usn-test-support.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "external-journal-samples.h"
 #include "external-journal-support.h"
 #include "external-mft-support.h"
-#include "usn-test-support.h"
 
 namespace {
 

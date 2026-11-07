@@ -20,7 +20,7 @@ target_sources(
     "held-probe-groups-tests.cpp"
     "long-host-path-tests.cpp"
     "ntfsdir-name-tests.cpp"
-    "ntfsdir-sample-support.h"
+    "include/ntfs-browser/test/io/ntfsdir-sample-support.h"
     "ntfsdir-sample-tests.cpp"
     "probe-run-plan-tests.cpp"
     "probe-store-tests.cpp"
@@ -34,7 +34,7 @@ target_sources(
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 # The read ahead tests list a fake volume through NtfsDir's own listing code.

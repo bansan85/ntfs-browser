@@ -15,8 +15,7 @@
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-
-#include "mft-tree-state-support.h"
+#include <ntfs-browser/test/mft/mft-tree-state-support.h>
 
 namespace NtfsBrowser {
 

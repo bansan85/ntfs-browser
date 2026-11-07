@@ -28,10 +28,10 @@ target_sources(
     "volume-dirty-flag-tests.cpp"
     "volume-name-log-tests.cpp"
     "volume-options-getters-tests.cpp"
-    "volume-tree-support.h"
+    "include/ntfs-browser/test/volume/volume-tree-support.h"
 )
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )

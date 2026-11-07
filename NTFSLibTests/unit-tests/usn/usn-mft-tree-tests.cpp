@@ -14,10 +14,9 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/usn/usn-journal-record.h>
+#include <ntfs-browser/test/usn/usn-test-support.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "usn-journal-record.h"
-#include "usn-test-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;

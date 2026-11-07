@@ -17,9 +17,9 @@
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/mft/mft-tree-state-support.h>
 
 #include "alloc/content-check.h"
-#include "mft-tree-state-support.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;

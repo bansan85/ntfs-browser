@@ -17,8 +17,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-
-#include "volume-tree-support.h"
+#include <ntfs-browser/test/volume/volume-tree-support.h>
 
 namespace NtfsBrowser {
 

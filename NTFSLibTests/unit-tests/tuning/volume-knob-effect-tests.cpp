@@ -33,13 +33,13 @@
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/mft/mft-tree-state-support.h>
+#include <ntfs-browser/test/usn/usn-journal-record.h>
+#include <ntfs-browser/test/usn/usn-test-support.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "knob-effect-support.h"
-#include "mft-tree-state-support.h"
-#include "usn-journal-record.h"
-#include "usn-test-support.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

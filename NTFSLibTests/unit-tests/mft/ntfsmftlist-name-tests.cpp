@@ -13,12 +13,11 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
 #include <ntfs-browser/test/support/long-path-support.h>
 #include <ntfs-browser/test/support/name-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
-
-#include "ntfsmftlist-sample-support.h"
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;

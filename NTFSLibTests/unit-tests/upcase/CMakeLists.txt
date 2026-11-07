@@ -5,8 +5,3 @@ target_sources(
     "coverage-upcase-tests.cpp"
     "upcase-collation-tests.cpp"
 )
-
-target_include_directories(
-  NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
-)

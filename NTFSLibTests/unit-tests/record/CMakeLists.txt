@@ -28,8 +28,3 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/include/ntfs-browser/test/fuzz/named-stream-probe.h"
     "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/include/ntfs-browser/test/fuzz/gap-collation-probe.h"
 )
-
-target_include_directories(
-  NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
-)

@@ -29,11 +29,11 @@
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/usn/usn-test-support.h>
 #include <ntfs-browser/usn/types.h>
 
 #include "external-journal-samples.h"
 #include "external-mft-support.h"
-#include "usn-test-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

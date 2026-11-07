@@ -22,6 +22,7 @@
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/mft/mft-tree-state-support.h>
 #include <ntfs-browser/test/support/bench-session-guard.h>
 #include <ntfs-browser/test/support/scan-comparison.h>
 #include <ntfs-browser/tuning/tuning.h>
@@ -29,7 +30,6 @@
 
 #include "alloc/cluster-bitmap.h"
 #include "knob-effect-support.h"
-#include "mft-tree-state-support.h"
 #include "mft/tree-testing.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
