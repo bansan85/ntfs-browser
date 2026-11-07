@@ -1,14 +1,24 @@
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/fuzzgen/alloc-scan-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/bad-cluster-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/case-twin-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/cluster-state-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/run-list-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-catalog.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+#include <ntfs-browser/tool/fuzzgen/usn-journal-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/usn-tree-scenarios.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 
 ScenarioRegistry ScenarioCatalog::Build() {
   ScenarioRegistry registry;
+  AllocScanScenarios::Register(registry);
+  BadClusterScenarios::Register(registry);
+  ClusterStateScenarios::Register(registry);
+  UsnJournalScenarios::Register(registry);
+  UsnTreeScenarios::Register(registry);
   CaseTwinScenarios::Register(registry);
   MftScanScenarios::Register(registry);
   RunListScenarios::Register(registry);
