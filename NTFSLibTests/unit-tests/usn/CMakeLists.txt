@@ -6,7 +6,6 @@ target_sources(
     "usn-failure-cache-tests.cpp"
     "usn-journal-hint-tests.cpp"
     "usn-journal-load-tests.cpp"
-    "include/ntfs-browser/test/usn/usn-journal-record.h"
     "usn-mft-tree-tests.cpp"
     "usn-record-scanner-tests.cpp"
     "usn-resync-tests.cpp"

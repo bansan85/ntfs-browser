@@ -15,6 +15,8 @@ add_library(
   "fake-ntfs-image-attr-data.cpp"
   "fake-ntfs-image-backup-boot.cpp"
   "fake-ntfs-image-account.cpp"
+  "include/ntfs-browser/test/fake-image/account-volume.h"
+  "fake-ntfs-image-account-volume.cpp"
   "fake-ntfs-image-badclus.cpp"
   "fake-ntfs-image-bitmap.cpp"
   "fake-ntfs-image-index-blocks.cpp"
@@ -28,6 +30,7 @@ add_library(
   "fake-ntfs-image-slack.cpp"
   "fake-ntfs-image-usn.cpp"
   "include/ntfs-browser/test/fake-image/file-record-header-edit.h"
+  "include/ntfs-browser/test/usn/usn-journal-record.h"
 )
 
 # fuzz/include resolves the named-stream-probe.h and gap-collation-probe.h that

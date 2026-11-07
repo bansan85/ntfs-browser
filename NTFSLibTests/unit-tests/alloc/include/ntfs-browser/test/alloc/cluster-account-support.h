@@ -15,6 +15,7 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
+#include <ntfs-browser/test/fake-image/account-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
 #include <ntfs-browser/volume-options.h>
@@ -28,66 +29,28 @@ inline constexpr ULONGLONG first_file = 17;
 
 // Clusters of the volume past which a run is out of range: the base image is 64
 // clusters, and its bitmap clusters follow.
-inline constexpr ULONGLONG far_lcn = 5000;
+inline constexpr ULONGLONG far_lcn = Test::FakeImage::account_far_lcn;
 
 // A volume whose files and bitmap a test composes, then builds.
-struct Volume {
-  std::vector<BYTE> image =
-      Test::FakeImage::BuildFakeNtfsImageWithFreedFileTree();
-  // The clusters the bitmap marks allocated.
-  std::vector<Test::FakeImage::FakeDataRun> allocated;
-  // The clusters $BadClus lists.
-  std::vector<NTFS_BROWSER_NAMESPACE::Alloc::Extent> bad;
-  // False leaves $Bitmap out: nothing is known of the allocation.
-  bool with_bitmap = true;
-  // How the bitmap is written, and how large the volume is.
-  Test::FakeImage::FakeBitmapOptions bitmap_options;
-
-  // Writes file at slot idx.
-  void Put(ULONGLONG idx, const Test::FakeImage::FakeAccountFile& file) {
-    Test::FakeImage::PutAccountFile(image, idx, file);
-  }
-
-  // The image with its bitmap and bad list.
-  [[nodiscard]] std::vector<BYTE> Build() const {
-    std::vector<BYTE> built = image;
-    if (with_bitmap) {
-      built = WithBitmap(std::move(built), allocated, bitmap_options);
-    }
-    if (!bad.empty()) {
-      built = WithBadClusters(std::move(built), bad);
-    }
-    return built;
-  }
-};
+using Volume = Test::FakeImage::FakeAccountVolume;
 
 // A stream of the unnamed $DATA of runs, size bytes long, fully written.
 inline Test::FakeImage::FakeAccountStream
     Stream(std::vector<Test::FakeImage::FakeDataRun> runs, ULONGLONG size) {
-  Test::FakeImage::FakeAccountStream stream;
-  stream.runs = std::move(runs);
-  stream.real_size = size;
-  return stream;
+  return Test::FakeImage::MakeAccountStream(std::move(runs), size);
 }
 
 // A freed file whose header carries the $LogFile sequence number lsn, with one
 // stream.
 inline Test::FakeImage::FakeAccountFile
     Freed(ULONGLONG lsn, Test::FakeImage::FakeAccountStream stream) {
-  Test::FakeImage::FakeAccountFile file;
-  file.freed = true;
-  file.lsn = lsn;
-  file.streams.push_back(std::move(stream));
-  return file;
+  return Test::FakeImage::MakeFreedAccountFile(lsn, std::move(stream));
 }
 
 // A live file with one stream.
 inline Test::FakeImage::FakeAccountFile
     Live(Test::FakeImage::FakeAccountStream stream) {
-  Test::FakeImage::FakeAccountFile file;
-  file.freed = false;
-  file.streams.push_back(std::move(stream));
-  return file;
+  return Test::FakeImage::MakeLiveAccountFile(std::move(stream));
 }
 
 // Options that list freed records, and account for clusters at level.
