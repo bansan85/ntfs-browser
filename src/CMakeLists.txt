@@ -21,14 +21,12 @@ set(
   "attr/std-info.cpp"
   "attr/vol-info.cpp"
   "attr/vol-name.cpp"
-  "bench/platform-reader.cpp"
   "bench/read-log.cpp"
   "bench/recorder.cpp"
   "bench/replay.cpp"
   "cache/block-cache.cpp"
   "cache/view.cpp"
   "efs/fek.cpp"
-  "io/extended-path.cpp"
   "io/file-record.cpp"
   "io/file-record-attrs.cpp"
   "io/file-record-efs.cpp"
@@ -100,16 +98,30 @@ if(NTFS_BROWSER_EFS_MASTER)
   list(APPEND ${PROJECT_NAME}_SRC "efs/efs-context.cpp" "efs/efs-stream.cpp")
 endif()
 
+# Code that differs per platform lives in a -win.cpp and a -posix.cpp file
+# behind one header.
 if(WIN32)
   list(
     APPEND ${PROJECT_NAME}_SRC
+    "bench/platform-reader-win.cpp"
+    "bench/process-times-win.cpp"
+    "io/extended-path-win.cpp"
     "io/host-media-kind.cpp"
     "io/win32-disk-reader.cpp"
     "efs/key-provider-win.cpp"
+    "util/local-file-time-win.cpp"
   )
   if(NTFS_BROWSER_ENABLE_EFS_BCRYPT)
     list(APPEND ${PROJECT_NAME}_SRC "efs/cipher-bcrypt.cpp")
   endif()
+else()
+  list(
+    APPEND ${PROJECT_NAME}_SRC
+    "bench/platform-reader-posix.cpp"
+    "bench/process-times-posix.cpp"
+    "io/extended-path-posix.cpp"
+    "util/local-file-time-posix.cpp"
+  )
 endif()
 
 set(
@@ -158,6 +170,7 @@ set(
   "alloc/content-check.h"
   "alloc/data-state.h"
   "attr/flags.h"
+  "bench/process-times.h"
   "bench/recorder.h"
   "attr/bitmap.h"
   "attr/data.h"
@@ -250,6 +263,7 @@ set(
   "usn/usn-record-scanner.h"
   "utf/utf.h"
   "util/chunk-pool.h"
+  "util/local-file-time.h"
   "util/small-pool.h"
   "util/util.h"
   "volume/boot-sector-loader.h"

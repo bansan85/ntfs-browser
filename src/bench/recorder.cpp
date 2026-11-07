@@ -9,7 +9,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <ctime>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -23,6 +22,8 @@
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 
+#include "bench/process-times.h"
+
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Tuning {
 
@@ -30,12 +31,6 @@ enum class MediaKind : std::uint8_t;
 
 }  // namespace Tuning
 }  // namespace NTFS_BROWSER_NAMESPACE
-
-#ifdef _WIN32
-  #include <windows.h>
-#else
-  #include <sys/resource.h>
-#endif
 
 namespace NTFS_BROWSER_NAMESPACE::Bench {
 
@@ -55,72 +50,6 @@ std::uint64_t Nanoseconds(Clock::duration duration) noexcept {
       (std::max)(std::chrono::nanoseconds::rep{0},
                  std::chrono::duration_cast<std::chrono::nanoseconds>(duration)
                      .count()));
-}
-
-#ifdef _WIN32
-// Ticks of a FILETIME are 100 nanoseconds.
-constexpr std::uint64_t ns_per_filetime_tick = 100;
-
-std::uint64_t FileTimeNs(const FILETIME& time) noexcept {
-  return ((static_cast<std::uint64_t>(time.dwHighDateTime) << 32U) |
-          time.dwLowDateTime) *
-         ns_per_filetime_tick;
-}
-#else
-constexpr std::uint64_t ns_per_second = 1'000'000'000;
-
-std::uint64_t TimespecNs(const timespec& time) noexcept {
-  return (static_cast<std::uint64_t>(time.tv_sec) * ns_per_second) +
-         static_cast<std::uint64_t>(time.tv_nsec);
-}
-
-std::uint64_t TimevalNs(const timeval& time) noexcept {
-  constexpr std::uint64_t ns_per_microsecond = 1000;
-  return (static_cast<std::uint64_t>(time.tv_sec) * ns_per_second) +
-         (static_cast<std::uint64_t>(time.tv_usec) * ns_per_microsecond);
-}
-#endif
-
-// User and kernel CPU time of the calling thread.
-std::pair<std::uint64_t, std::uint64_t> ThreadTimes() noexcept {
-#ifdef _WIN32
-  FILETIME created{};
-  FILETIME exited{};
-  FILETIME kernel{};
-  FILETIME user{};
-  if (GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user) ==
-      FALSE) {
-    return {0, 0};
-  }
-  return {FileTimeNs(user), FileTimeNs(kernel)};
-#else
-  timespec time{};
-  if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time) != 0) {
-    return {0, 0};
-  }
-  return {TimespecNs(time), 0};
-#endif
-}
-
-// User and kernel CPU time of the whole process.
-std::pair<std::uint64_t, std::uint64_t> ProcessTimes() noexcept {
-#ifdef _WIN32
-  FILETIME created{};
-  FILETIME exited{};
-  FILETIME kernel{};
-  FILETIME user{};
-  if (GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user) ==
-      FALSE) {
-    return {0, 0};
-  }
-  return {FileTimeNs(user), FileTimeNs(kernel)};
-#else
-  rusage usage{};
-  if (getrusage(RUSAGE_SELF, &usage) != 0) {
-    return {0, 0};
-  }
-  return {TimevalNs(usage.ru_utime), TimevalNs(usage.ru_stime)};
-#endif
 }
 
 // Adds value to the power of two bucket of histogram.

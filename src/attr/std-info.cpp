@@ -12,6 +12,7 @@
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
 #include "log/ntfs-common.h"
+#include "util/local-file-time.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {
@@ -25,12 +26,6 @@ class FileRecord;
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {
-
-// Selects the low DWORD of a 64-bit FILETIME value.
-constexpr ULONGLONG low_dword_mask = 0xFFFFFFFFULL;
-
-// Bits in a DWORD: where the high half of a FILETIME value starts.
-constexpr unsigned dword_bits = 32;
 
 // Checks the body size before a reference is bound to it: an empty body may
 // have a null data pointer, which a reference MUST NOT be bound to.
@@ -162,18 +157,7 @@ bool AttrStdInfo<Resident, S>::IsReparsePoint() const noexcept {
 template <typename Resident, Cache::Strategy S>
 void AttrStdInfo<Resident, S>::UTC2Local(const ULONGLONG& ultm,
                                          FILETIME& lftm) noexcept {
-#ifdef _WIN32
-  const _ULARGE_INTEGER fti{.QuadPart = ultm};
-  FILETIME ftt{.dwLowDateTime = fti.LowPart, .dwHighDateTime = fti.HighPart};
-
-  if (FileTimeToLocalFileTime(&ftt, &lftm) == 0) {
-    lftm = ftt;
-  }
-#else
-  // No portable timezone conversion outside Windows; time stays in UTC.
-  lftm.dwLowDateTime = static_cast<DWORD>(ultm & low_dword_mask);
-  lftm.dwHighDateTime = static_cast<DWORD>(ultm >> dword_bits);
-#endif
+  Util::UtcToLocalFileTime(ultm, lftm);
 }
 
 template class AttrStdInfo<AttrResidentFullCache, Cache::Strategy::FullCache>;

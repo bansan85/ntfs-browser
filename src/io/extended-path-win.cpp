@@ -2,17 +2,12 @@
 #include <string>
 #include <string_view>
 
+#include <windows.h>
+
 #include <ntfs-browser/io/extended-path.h>
-
-#ifdef _WIN32
-  #include <windows.h>
-#endif
-
 #include <ntfs-browser/namespace.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
-
-#ifdef _WIN32
 
 namespace {
 
@@ -76,21 +71,9 @@ std::wstring ToExtendedLengthPath(std::wstring_view path) {
   return std::wstring(extended_prefix) + full;
 }
 
-#else
-
-std::wstring ToExtendedLengthPath(std::wstring_view path) {
-  return std::wstring(path);
-}
-
-#endif  // _WIN32
-
 std::filesystem::path
     ToExtendedLengthFsPath(const std::filesystem::path& path) {
-#ifdef _WIN32
   return ToExtendedLengthPath(std::wstring_view(path.native()));
-#else
-  return path;
-#endif
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io
