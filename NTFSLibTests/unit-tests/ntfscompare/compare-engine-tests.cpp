@@ -419,7 +419,8 @@ TEST_CASE("OsNamesAreComparable needs no mapping for names with a UTF-8 form",
 
 TEST_CASE("PrintReport writes every kind of exotic name as UTF-8",
           "[ntfscompare][compare][name]") {
-  for (const auto& exotic : NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+  for (const auto& exotic :
+       NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames()) {
     INFO(exotic.label);
     const Listing reference{{exotic.name, FileEntry(5)}};
     Report report;

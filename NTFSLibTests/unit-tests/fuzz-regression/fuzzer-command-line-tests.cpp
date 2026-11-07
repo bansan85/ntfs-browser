@@ -15,7 +15,7 @@
 namespace {
 
 namespace Fs = std::filesystem;
-using NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink;
+using NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink;
 
 // The argv string type of this platform, as RunCommandLine() takes it.
 using Arg = std::basic_string<NTFS_BROWSER_NAMESPACE::Test::Fuzz::ArgChar>;

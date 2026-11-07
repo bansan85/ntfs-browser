@@ -67,7 +67,7 @@ TEST_CASE("a line written to a sink with the off level carries that label",
 }
 
 TEST_CASE("a silenced thread emits nothing", "[logging][levels]") {
-  static_cast<void>(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog());
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog());
 
   std::thread worker([] {
     Log::Detail::SilenceCurrentThread();
@@ -77,6 +77,6 @@ TEST_CASE("a silenced thread emits nothing", "[logging][levels]") {
   });
   worker.join();
 
-  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog(),
              !ContainsSubstring("silenced-line"));
 }

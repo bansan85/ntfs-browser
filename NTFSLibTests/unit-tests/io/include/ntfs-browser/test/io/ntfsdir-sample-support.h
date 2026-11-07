@@ -32,10 +32,10 @@ inline std::vector<std::filesystem::path> SampleExes() {
 }
 
 // Runs one sample with args, after checking that it was built.
-inline SampleRun RunDir(const std::filesystem::path& exe,
-                        const std::vector<std::wstring>& args) {
+inline Test::Support::SampleRun RunDir(const std::filesystem::path& exe,
+                                       const std::vector<std::wstring>& args) {
   REQUIRE(std::filesystem::exists(exe));
-  return RunSample(exe, args);
+  return Test::Support::RunSample(exe, args);
 }
 
 // Writes an NTFS image to a temp file, removed on exit. The default holds

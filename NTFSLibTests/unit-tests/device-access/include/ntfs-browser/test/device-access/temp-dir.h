@@ -9,7 +9,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DeviceAccess {
 
 // A fresh empty directory under the system temp directory, removed with
 // everything in it when the object goes out of scope.
@@ -54,4 +54,4 @@ class TempDir final {
   std::filesystem::path path_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DeviceAccess

@@ -31,6 +31,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -100,12 +101,12 @@ TEMPLATE_TEST_CASE_SIG("An $EFS stream above 64 KiB is not read",
   Encrypted encrypted = MakeEncrypted();
   encrypted.file.efs_stream.assign(oversized_efs_stream, 0);
 
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   const Opened<S> opened = OpenVolume<S>(
       TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
       encrypted.provider);
 
-  CHECK_THAT(Tests::TakeCapturedLog(),
+  CHECK_THAT(TestSupport::TakeCapturedLog(),
              ContainsSubstring("$EFS stream is too large"));
   CHECK_FALSE(ReadAt<S>(OnlyData<S>(*opened.record), 0, file_size).has_value());
 }
@@ -114,22 +115,22 @@ TEST_CASE("An $EFS stream that cannot be read leaves the data locked",
           "[efs][efs-limits]") {
   constexpr Cache::Strategy S = Cache::Strategy::NoCache;
   Encrypted encrypted = MakeEncrypted();
-  auto reader = std::make_unique<Tests::ScriptedDiskReader>(
+  auto reader = std::make_unique<TestSupport::ScriptedDiskReader>(
       TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(encrypted.file));
   // The $EFS stream is one cluster; the data stream sits elsewhere.
   reader->FaultRange(efs_stream_offset,
                      efs_stream_offset + TestFakeImage::fake_cluster_size,
-                     Tests::ScriptedDiskReader::Fault::Fail);
+                     TestSupport::ScriptedDiskReader::Fault::Fail);
   NtfsVolume<S> volume(std::move(reader), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
   volume.SetEfsKeyProvider(encrypted.provider);
 
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   static_cast<void>(record.ParseAttrs());
 
-  CHECK_THAT(Tests::TakeCapturedLog(),
+  CHECK_THAT(TestSupport::TakeCapturedLog(),
              ContainsSubstring("Cannot read the $EFS stream"));
   CHECK_FALSE(ReadAt<S>(OnlyData<S>(record), 0, file_size).has_value());
 }

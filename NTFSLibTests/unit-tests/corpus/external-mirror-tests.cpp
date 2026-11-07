@@ -45,6 +45,7 @@ namespace {
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
@@ -218,10 +219,10 @@ Opened<S> Open(std::vector<std::pair<unsigned, Damage>> damaged, bool recover,
       std::move(mft), std::move(mirror), std::move(damaged));
   Opened<S> result;
   result.reader = reader.get();
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   result.volume = std::make_unique<NtfsVolume<S>>(
       std::move(reader), VolumeOptions{.recover_errors = recover});
-  result.log = Tests::TakeCapturedLog();
+  result.log = TestSupport::TakeCapturedLog();
   return result;
 }
 

@@ -96,7 +96,7 @@ struct Opened {
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 Opened Open(std::vector<BYTE> image,
             NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
       std::make_unique<
           NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
@@ -107,7 +107,7 @@ Opened Open(std::vector<BYTE> image,
                        .cluster_size = volume.GetClusterSize(),
                        .mft_addr = volume.GetMFTAddr(),
                        .cluster_buffer_size = volume.GetClusterBuffer().size()},
-          .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
+          .log = NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog()};
 }
 
 // One boot sector case: an image, the options to open it with and what the

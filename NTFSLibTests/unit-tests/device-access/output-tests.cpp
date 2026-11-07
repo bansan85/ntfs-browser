@@ -32,7 +32,7 @@
 #include <ntfs-browser/tool/device-access/line-buffer.h>
 #include <ntfs-browser/tool/device-access/output.h>
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 using NtfsDevice::Output;
 
 namespace {
@@ -162,7 +162,7 @@ std::string Listing(const std::filesystem::path& path, size_t flush_bytes) {
 
 TEST_CASE("Output gives the same bytes whatever the size of its chunks",
           "[device-access][output]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "out.txt";
 
   const std::string whole = Listing(path, 0);
@@ -180,7 +180,7 @@ TEST_CASE("Output gives the same bytes whatever the size of its chunks",
 
 TEST_CASE("Output counts a size of 0 as the default size",
           "[device-access][output]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   StdoutToFile redirect(dir.Path() / "out.txt");
   if (!redirect.Unbuffered()) {
     SKIP("the standard output cannot be made to write at once");
@@ -204,7 +204,7 @@ TEST_CASE("Output counts a size of 0 as the default size",
 
 TEST_CASE("Output hands its writer a chunk as soon as it holds flush_bytes",
           "[device-access][output]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   StdoutToFile redirect(dir.Path() / "out.txt");
   if (!redirect.Unbuffered()) {
     SKIP("the standard output cannot be made to write at once");
@@ -248,7 +248,7 @@ TEST_CASE("Output hands its writer a chunk as soon as it holds flush_bytes",
 
 TEST_CASE("The first chunk of an Output ends at the first piece past its size",
           "[device-access][output]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   StdoutToFile redirect(dir.Path() / "out.txt");
   if (!redirect.Unbuffered()) {
     SKIP("the standard output cannot be made to write at once");
@@ -279,7 +279,7 @@ TEST_CASE("Output flushes what is left when it ends, in any chunk size",
           "[device-access][output]") {
   const size_t flush_bytes = GENERATE(size_t{1}, size_t{4096}, size_t{0});
   INFO("flush_bytes " << flush_bytes);
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
 
   const std::string text = Listing(dir.Path() / "out.txt", flush_bytes);
 
@@ -295,7 +295,7 @@ TEST_CASE("Output flushes what is left when it ends, in any chunk size",
 
 TEST_CASE("A LineBuffer holds the text that an Output writes",
           "[device-access][output]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   NtfsDevice::LineBuffer buffer;
 
   FillListing(buffer);
@@ -321,7 +321,7 @@ TEST_CASE("Output writes text built apart as it writes its own",
           "[device-access][output]") {
   const size_t flush_bytes = GENERATE(size_t{1}, size_t{700}, size_t{0});
   INFO("flush_bytes " << flush_bytes);
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "out.txt";
   const std::string whole = Listing(path, 0);
 

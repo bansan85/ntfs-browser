@@ -229,7 +229,7 @@ template <Cache::Strategy S>
 Run ListVolume(NtfsVolume<S>& volume,
                Test::DiskReaders::CountingDiskReader& reads) {
   reads.Reset();
-  (void)TakeCapturedLog();
+  (void)Test::Support::TakeCapturedLog();
   const std::uint64_t recovered_before = Log::Detail::RecoveredCount();
 
   const std::filesystem::path path =
@@ -242,7 +242,7 @@ Run ListVolume(NtfsVolume<S>& volume,
   run.exit_code = ListFrom<S>(
       volume, {.label = L"image", .path = L"", .root = L"image"}, true, file);
   run.text = ReadAndRemove(file, path);
-  run.log = WithoutReadLines(TakeCapturedLog());
+  run.log = WithoutReadLines(Test::Support::TakeCapturedLog());
   run.calls = reads.Calls();
   run.recovered = Log::Detail::RecoveredCount() - recovered_before;
   return run;

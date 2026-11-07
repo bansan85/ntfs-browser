@@ -49,7 +49,7 @@ using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
@@ -64,8 +64,8 @@ constexpr ULONGLONG busy_record_count = 8300;
 // 255, the most one length byte holds.
 constexpr ULONGLONG busy_fragment_clusters = 255;
 
-using Tests::CheckSameScan;
-using Tests::ScanResult;
+using TestSupport::CheckSameScan;
+using TestSupport::ScanResult;
 
 // Scans image with threads threads, and gathers what it did. progress_stops_at,
 // when not zero, makes the scan's progress callback stop it at that call.
@@ -73,13 +73,13 @@ template <Cache::Strategy S>
 ScanResult ScanWithThreads(const std::vector<BYTE>& image,
                            const VolumeOptions& options, unsigned threads,
                            size_t progress_stops_at = 0) {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
       std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
   const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
-  return Tests::CaptureScan(volume, counting, threads, progress_stops_at);
+  return TestSupport::CaptureScan(volume, counting, threads, progress_stops_at);
 }
 
 // Checks that scanning image with each thread count gives what one thread

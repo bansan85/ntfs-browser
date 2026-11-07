@@ -42,7 +42,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Bench::Detail::KindScope;
@@ -144,7 +144,7 @@ std::vector<BYTE> LiveStaleImage() {
 
 TEST_CASE("A kind scope declares its kind and restores the outer one",
           "[bench][kind]") {
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   CHECK(Bench::Detail::CurrentKind() == Bench::ReadKind::Other);
   {
     const KindScope outer(Bench::ReadKind::Boot);
@@ -165,7 +165,7 @@ TEST_CASE("A kind scope declares its kind and restores the outer one",
 
 TEST_CASE("A kind scope that yields leaves the kind an outer scope set",
           "[bench][kind]") {
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     const KindScope general(Bench::ReadKind::Data, /*only_if_other=*/true);
     CHECK(Bench::Detail::CurrentKind() == Bench::ReadKind::Data);
@@ -197,7 +197,7 @@ TEST_CASE("A read lands in the histogram bucket of its size",
       std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
   const std::vector<size_t> lengths{1, 100, 4096, 5000, 65536};
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     const KindScope kind(Bench::ReadKind::Data);
     for (const size_t length : lengths) {
@@ -228,7 +228,7 @@ TEST_CASE("A read lands in the histogram bucket of its size",
 }
 
 TEST_CASE("The reads of a volume open are Boot reads", "[bench][kind]") {
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     const NtfsVolume<Cache::Strategy::NoCache> volume(
         std::make_unique<TestDiskReaders::MemoryDiskReader>(
@@ -251,7 +251,7 @@ TEMPLATE_TEST_CASE_SIG("The reads of a scan land in the kinds that made them",
   // No record is held for the second pass: an extension record is read there.
   options.tuning.mft.max_held_record_bytes = 0;
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     const NtfsVolume<S> volume(
         std::make_unique<TestDiskReaders::MemoryDiskReader>(image), options);
@@ -282,13 +282,13 @@ TEMPLATE_TEST_CASE_SIG("The reads of a walk land in the kinds that made them",
   const std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(walk_record_count);
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     const NtfsVolume<S> volume(
         std::make_unique<TestDiskReaders::MemoryDiskReader>(image),
         VolumeOptions{.include_deleted = true, .recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
-    const Tests::WalkResult walk = Tests::WalkVolume(volume, true);
+    const TestSupport::WalkResult walk = TestSupport::WalkVolume(volume, true);
     REQUIRE_FALSE(walk.entries.empty());
   }
   const Bench::Report report = session.Finish();
@@ -309,7 +309,7 @@ TEMPLATE_TEST_CASE_SIG("The reads of the bitmap and of file data have kinds",
 
   SECTION("a bitmap window") {
     auto opened = Support::OpenVolume<S>(bitmap_image);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     CHECK(opened.volume->GetClusterState(40) == Alloc::ClusterState::Allocated);
     const Bench::Report report = session.Finish();
 
@@ -325,7 +325,7 @@ TEMPLATE_TEST_CASE_SIG("The reads of the bitmap and of file data have kinds",
     // reach the reader.
     opened.volume->MinifyCache();
     std::vector<BYTE> bytes(Support::stale_size);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     const auto read = record->FindStream({})->ReadData(0, bytes);
     const Bench::Report report = session.Finish();
 
@@ -339,7 +339,7 @@ TEMPLATE_TEST_CASE_SIG("The reads of the bitmap and of file data have kinds",
 
 TEST_CASE("A slice takes out the slices nested in it", "[bench][slice]") {
   using std::chrono::milliseconds;
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   const auto began = Clock::now();
   {
     const SliceScope outer(Bench::Slice::Parse);
@@ -370,7 +370,7 @@ TEST_CASE("A slice takes out the slices nested in it", "[bench][slice]") {
 
 TEST_CASE("Slices nested twice are each exclusive", "[bench][slice]") {
   using std::chrono::milliseconds;
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   const auto began = Clock::now();
   {
     const SliceScope outer(Bench::Slice::Parse);
@@ -404,7 +404,7 @@ TEST_CASE("Slices nested twice are each exclusive", "[bench][slice]") {
 
 TEST_CASE("A slice repeats and adds its repeats", "[bench][slice]") {
   using std::chrono::milliseconds;
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   for (int round = 0; round < 3; round++) {
     const SliceScope scope(Bench::Slice::LogReplay);
     SpinFor(milliseconds{5});
@@ -424,7 +424,7 @@ TEST_CASE("A slice takes out the time its thread waited for the disk",
   std::vector<BYTE> buffer(512);
   LARGE_INTEGER addr{.QuadPart = 0};
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   const auto began = Clock::now();
   {
     const SliceScope scope(Bench::Slice::Parse);
@@ -450,7 +450,7 @@ TEST_CASE("A slice outside a session records nothing", "[bench][slice]") {
     const SliceScope scope(Bench::Slice::Parse);
     SpinFor(std::chrono::milliseconds{1});
   }
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   const Bench::Report report = session.Finish();
 
   for (const std::uint64_t ns : report.slices_ns) {

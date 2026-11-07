@@ -34,7 +34,7 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
@@ -205,11 +205,11 @@ TEST_CASE("a damaged attribute that is only listed does not damage a record",
     for (const bool recover : {false, true}) {
       const VolumeOptions options{.include_deleted = true,
                                   .recover_errors = recover};
-      static_cast<void>(Tests::TakeCapturedLog());
+      static_cast<void>(TestSupport::TakeCapturedLog());
       const TreeSupport::ScannedVolume<S> off(image, options);
-      const std::string off_log = Tests::TakeCapturedLog();
+      const std::string off_log = TestSupport::TakeCapturedLog();
       const TreeSupport::ScannedVolume<S> on(image, options, Support::Scan());
-      const std::string on_log = Tests::TakeCapturedLog();
+      const std::string on_log = TestSupport::TakeCapturedLog();
 
       INFO("recover " << recover);
       CHECK(on.tree.Stats().damaged == off.tree.Stats().damaged);

@@ -14,24 +14,7 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Cache {
-
-enum class Strategy : std::uint8_t;
-
-}  // namespace Cache
-
-namespace Test::DiskReaders {
-
-class MemoryDiskReader;
-
-}  // namespace Test::DiskReaders
-template <Cache::Strategy S>
-class NtfsVolume;
-
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // The MFT record of node of BuildFakeNtfsImageWithNameTree().
 [[nodiscard]] inline ULONGLONG NameTreeRecord(std::size_t node) {
@@ -39,7 +22,7 @@ namespace NTFS_BROWSER_NAMESPACE::Tests {
 }
 
 // Opens BuildFakeNtfsImageWithNameTree(nodes) over a reader in memory.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] std::unique_ptr<NtfsVolume<S>> OpenNameTreeVolume(
     std::span<const Test::FakeImage::FakeTreeNode> nodes,
     const VolumeOptions& options = {},
@@ -52,4 +35,4 @@ template <Cache::Strategy S>
   return volume;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

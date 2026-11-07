@@ -54,7 +54,7 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
@@ -203,7 +203,7 @@ struct Rig {
     REQUIRE(listing->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(listing->ParseAttrs());
     reads->Reset();
-    (void)Tests::TakeCapturedLog();
+    (void)TestSupport::TakeCapturedLog();
   }
 };
 

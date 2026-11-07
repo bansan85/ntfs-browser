@@ -62,7 +62,7 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -130,9 +130,9 @@ std::optional<std::vector<BYTE>>
 // library logger is already pinned to a trace-level capturing sink; see
 // test-log-sink.h.
 std::string CaptureTrace(const std::function<void()>& body) {
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   body();
-  return Tests::TakeCapturedLog();
+  return TestSupport::TakeCapturedLog();
 }
 
 // Reads expected.size() bytes at offset of the root's $DATA, and requires
@@ -143,8 +143,8 @@ void CheckRootBytes(const NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& record,
   const std::optional<std::vector<BYTE>> data =
       ReadRootData<S>(record, offset, expected.size());
   REQUIRE(data.has_value());
-  REQUIRE(Tests::Unwrap(data).size() == expected.size());
-  CHECK(std::memcmp(Tests::Unwrap(data).data(), expected.data(),
+  REQUIRE(TestSupport::Unwrap(data).size() == expected.size());
+  CHECK(std::memcmp(TestSupport::Unwrap(data).data(), expected.data(),
                     expected.size()) == 0);
 }
 
@@ -190,11 +190,11 @@ void CheckCompressedFileReadsBackDecompressed() {
   const std::optional<std::vector<BYTE>> data = ReadRootData<S>(
       *root.record, 0, TestFakeImage::xca_lznt1_example_decompressed_size);
   REQUIRE(data.has_value());
-  REQUIRE(Tests::Unwrap(data).size() ==
+  REQUIRE(TestSupport::Unwrap(data).size() ==
           TestFakeImage::xca_lznt1_example_decompressed_size);
-  CHECK(std::memcmp(Tests::Unwrap(data).data(),
+  CHECK(std::memcmp(TestSupport::Unwrap(data).data(),
                     TestFakeImage::xca_lznt1_example_decompressed.data(),
-                    Tests::Unwrap(data).size()) == 0);
+                    TestSupport::Unwrap(data).size()) == 0);
 }
 
 // I/O matrix row "Stored (incompressible) unit": real runs fill the whole
@@ -219,10 +219,11 @@ void CheckSparseCompressionUnitReadsBackZeroed() {
   const std::optional<std::vector<BYTE>> data =
       ReadRootData<S>(*root.record, 0, TestFakeImage::compression_unit_size);
   REQUIRE(data.has_value());
-  REQUIRE(Tests::Unwrap(data).size() == TestFakeImage::compression_unit_size);
+  REQUIRE(TestSupport::Unwrap(data).size() ==
+          TestFakeImage::compression_unit_size);
 
   size_t non_zero = 0;
-  for (const BYTE byte_value : Tests::Unwrap(data)) {
+  for (const BYTE byte_value : TestSupport::Unwrap(data)) {
     if (byte_value != 0) {
       non_zero++;
     }
@@ -265,10 +266,10 @@ void CheckTrailingPartialCompressionUnit() {
   const std::optional<std::vector<BYTE>> whole =
       ReadRootData<S>(*root.record, 0, total);
   REQUIRE(whole.has_value());
-  REQUIRE(Tests::Unwrap(whole).size() == total);
-  CHECK(std::memcmp(Tests::Unwrap(whole).data(), head.data(), head.size()) ==
-        0);
-  CHECK(std::memcmp(&Tests::Unwrap(whole).at(head.size()), tail.data(),
+  REQUIRE(TestSupport::Unwrap(whole).size() == total);
+  CHECK(std::memcmp(TestSupport::Unwrap(whole).data(), head.data(),
+                    head.size()) == 0);
+  CHECK(std::memcmp(&TestSupport::Unwrap(whole).at(head.size()), tail.data(),
                     tail.size()) == 0);
 
   // Oversized read past EOF must truncate to the real count, not invent
@@ -276,9 +277,9 @@ void CheckTrailingPartialCompressionUnit() {
   const std::optional<std::vector<BYTE>> beyond = ReadRootData<S>(
       *root.record, head.size(), TestFakeImage::compression_unit_size);
   REQUIRE(beyond.has_value());
-  REQUIRE(Tests::Unwrap(beyond).size() == tail.size());
-  CHECK(std::memcmp(Tests::Unwrap(beyond).data(), tail.data(), tail.size()) ==
-        0);
+  REQUIRE(TestSupport::Unwrap(beyond).size() == tail.size());
+  CHECK(std::memcmp(TestSupport::Unwrap(beyond).data(), tail.data(),
+                    tail.size()) == 0);
 }
 
 // I/O matrix row "Corrupt/truncated LZNT1 chunk": ReadData() must fail
@@ -364,9 +365,9 @@ void CheckSparseUnitBeforeCompressedUnitReadsBack() {
                             TestFakeImage::sparse_then_compressed_real_size);
   });
   REQUIRE(whole.has_value());
-  REQUIRE(Tests::Unwrap(whole).size() ==
+  REQUIRE(TestSupport::Unwrap(whole).size() ==
           TestFakeImage::sparse_then_compressed_real_size);
-  const std::vector<BYTE>& bytes = Tests::Unwrap(whole);
+  const std::vector<BYTE>& bytes = TestSupport::Unwrap(whole);
   CHECK(std::all_of(bytes.begin(),
                     bytes.begin() + static_cast<std::ptrdiff_t>(hole_size),
                     [](BYTE value) { return value == 0; }));
@@ -385,8 +386,9 @@ void CheckSparseUnitBeforeCompressedUnitReadsBack() {
       ReadRootData<S>(*root.record, hole_size - straddle_before,
                       straddle_before + straddle_after);
   REQUIRE(straddle.has_value());
-  REQUIRE(Tests::Unwrap(straddle).size() == straddle_before + straddle_after);
-  const std::vector<BYTE>& straddled = Tests::Unwrap(straddle);
+  REQUIRE(TestSupport::Unwrap(straddle).size() ==
+          straddle_before + straddle_after);
+  const std::vector<BYTE>& straddled = TestSupport::Unwrap(straddle);
   CHECK(std::all_of(straddled.begin(),
                     straddled.begin() +
                         static_cast<std::ptrdiff_t>(straddle_before),
@@ -399,7 +401,7 @@ void CheckSparseUnitBeforeCompressedUnitReadsBack() {
   const std::optional<std::vector<BYTE>> decoded_only =
       ReadRootData<S>(*root.record, hole_size, hole_size);
   REQUIRE(decoded_only.has_value());
-  CHECK(Tests::Unwrap(decoded_only).size() == decoded_size);
+  CHECK(TestSupport::Unwrap(decoded_only).size() == decoded_size);
 }
 
 // A hole before a real cluster inside one unit is rejected, not read as a
@@ -527,7 +529,7 @@ TEST_CASE(
 
   // Same bytes...
   REQUIRE(second.has_value());
-  CHECK(Tests::Unwrap(second) == Tests::Unwrap(first));
+  CHECK(TestSupport::Unwrap(second) == TestSupport::Unwrap(first));
   // ...but served from the cache rather than decompressed again.
   CHECK_THAT(second_trace, Catch::Matchers::ContainsSubstring(
                                "Compression unit 0 served from cache"));
@@ -555,7 +557,7 @@ TEST_CASE(
 
   REQUIRE(first.has_value());
   REQUIRE(second.has_value());
-  CHECK(Tests::Unwrap(second) == Tests::Unwrap(first));
+  CHECK(TestSupport::Unwrap(second) == TestSupport::Unwrap(first));
   CHECK_THAT(first_trace,
              Catch::Matchers::ContainsSubstring(
                  "Decompressed compression unit 0 into 142 bytes"));
@@ -687,7 +689,7 @@ void CheckCompressedIndexAllocationTraverses() {
   const std::optional<IndexEntry> found =
       root.record->FindSubEntry(TestFakeImage::compressed_index_entry_name);
   REQUIRE(found.has_value());
-  CHECK(Tests::Unwrap(found).GetFileReference() ==
+  CHECK(TestSupport::Unwrap(found).GetFileReference() ==
         TestFakeImage::compressed_index_entry_mft_ref);
 }
 
@@ -781,7 +783,7 @@ void CheckSurrogatePairNamesTraverse() {
         root.record->FindSubEntry(TestFakeImage::surrogate_names[i]);
     REQUIRE(found.has_value());
     CHECK(
-        Tests::Unwrap(found).GetFileReference() ==
+        TestSupport::Unwrap(found).GetFileReference() ==
         // The surrogate* tables hold as many entries as surrogate_names.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         TestFakeImage::surrogate_name_mft_refs[i]);

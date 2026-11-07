@@ -35,7 +35,7 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
@@ -181,7 +181,7 @@ RecordedScan RecordScan() {
   RecordedScan recorded;
   recorded.image = TestFakeImage::BuildFakeNtfsImageWithListMftScan(
       list_record_count, list_fragment_clusters);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
         std::make_unique<TestDiskReaders::MemoryDiskReader>(recorded.image));
@@ -428,7 +428,7 @@ TEST_CASE("A replay inside a session is timed like the real run",
   const RecordedScan recorded = RecordScan();
   const TestDiskReaders::MemoryDiskReader reader(recorded.image);
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   const Bench::ReplayResult result = Bench::Replay(reader, recorded.log, {});
   const Bench::Report report = session.Finish();
 

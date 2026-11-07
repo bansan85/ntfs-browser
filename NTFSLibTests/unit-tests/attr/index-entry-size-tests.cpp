@@ -110,11 +110,11 @@ TEMPLATE_TEST_CASE_SIG(
                    VolumeOptions{.recover_errors = true});
   REQUIRE(!intact.empty());
 
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const std::vector<std::wstring> strict =
       RootNames<S>(WithZeroSizedFirstEntry(), {});
   const std::string strict_log =
-      NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   CHECK(strict.size() < intact.size());
   CHECK_THAT(strict_log, ContainsSubstring(
@@ -128,11 +128,11 @@ TEMPLATE_TEST_CASE_SIG(
   const std::vector<std::wstring> strict =
       RootNames<S>(WithZeroSizedFirstEntry(), {});
 
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const std::vector<std::wstring> recovered = RootNames<S>(
       WithZeroSizedFirstEntry(), VolumeOptions{.recover_errors = true});
   const std::string recovered_log =
-      NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   // The block still yields nothing: its entries stop at the zero-sized one.
   // Only the VCN 1 orphan comes back, from the orphan scan.

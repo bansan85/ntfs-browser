@@ -8,15 +8,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Mft {
-
-class MftTree;
-
-}  // namespace Mft
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // Everything a scan leaves to look at: what the tree says, what the library
 // logged, and what it asked of the reader. Two scans of one volume that differ
@@ -33,7 +25,8 @@ struct ScanResult {
 
 // Writes every field of every entry, and of the statistics, one entry per
 // line: two trees are the same when their descriptions are.
-[[nodiscard]] std::string DescribeTree(const Mft::MftTree& tree);
+[[nodiscard]] std::string
+    DescribeTree(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree);
 
 // Where two texts part: a few lines of each from the line before the first
 // that differs, and nothing when they are the same.
@@ -68,4 +61,4 @@ void CheckSameScan(const ScanResult& one, const ScanResult& many);
                 const Test::DiskReaders::CountingDiskReader* reader,
                 unsigned threads, size_t progress_stops_at = 0);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

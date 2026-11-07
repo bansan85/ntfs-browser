@@ -53,7 +53,7 @@ using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithDumpTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
-using NTFS_BROWSER_NAMESPACE::Tests::Unwrap;
+using NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap;
 using NtfsCompare::CompareAgainstReference;
 using NtfsCompare::CompareLibraryMethods;
 using NtfsCompare::comparison_volume_options;
@@ -425,7 +425,7 @@ TEST_CASE("A name with an unpaired surrogate is the same in every method",
   // The NTFS name U+D800, "a" has no UTF-8 form: ntfs-3g shows it as the
   // WTF-8 bytes ED A0 80 61.
   const std::wstring name = {static_cast<wchar_t>(0xD800), L'a'};
-  const NTFS_BROWSER_NAMESPACE::Tests::TempDir dir;
+  const NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir dir;
   const std::string os_name =
       "\xED\xA0\x80"
       "a";
@@ -458,7 +458,7 @@ TEST_CASE("An accented name is the same in every method",
                               static_cast<wchar_t>(0xD83D) +
                               static_cast<wchar_t>(0xDE00) + L".txt";
   const std::wstring name = L"café-\U0001F600.txt";
-  const NTFS_BROWSER_NAMESPACE::Tests::TempDir dir;
+  const NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir dir;
   const std::filesystem::path os_file = dir.Write(
       "caf\xC3\xA9-\xF0\x9F\x98\x80"
       ".txt",

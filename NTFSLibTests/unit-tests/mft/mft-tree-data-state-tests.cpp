@@ -25,7 +25,7 @@ using Catch::Matchers::ContainsSubstring;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
@@ -118,7 +118,7 @@ template <Cache::Strategy S>
 void CheckTheCountersAddUp() {
   const std::array<FakeDataRun, 1> reused_cluster{
       FakeDataRun{.lcn = 41, .clusters = 1}};
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   const ScannedVolume<S> scanned(Image(reused_cluster));
   const Mft::MftTree& tree = scanned.tree;
 
@@ -139,7 +139,7 @@ void CheckTheCountersAddUp() {
   CHECK(stats.data_intact == intact);
   CHECK(stats.data_reallocated == reallocated);
   CHECK(stats.data_unknown == unknown);
-  CHECK_THAT(Tests::TakeCapturedLog(),
+  CHECK_THAT(TestSupport::TakeCapturedLog(),
              ContainsSubstring("MFT scan data: " + std::to_string(intact) +
                                " intact, 1 reallocated, 0 unknown"));
 }

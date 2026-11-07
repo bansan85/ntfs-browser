@@ -22,7 +22,7 @@
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -65,7 +65,7 @@ TEMPLATE_TEST_CASE_SIG(
       OpenListed<S>(TestFakeImage::FakeListResidency::NonResident,
                     TestFakeImage::FakeListedState::Freed, bytes, recover);
 
-  const Tests::RecordLevels levels;
+  const TestSupport::RecordLevels levels;
   CHECK(opened.record->ParseAttrs());
 
   CHECK(opened.record->HasOverwrittenAttrList());
@@ -112,7 +112,7 @@ TEMPLATE_TEST_CASE_SIG(
     const ParsedRecord<S> opened =
         OpenListed<S>(residency, state,
                       TestFakeImage::FakeListBytes::InvalidTypeFirst, recover);
-    const Tests::RecordLevels levels;
+    const TestSupport::RecordLevels levels;
 
     CHECK_FALSE(opened.record->ParseAttrs());
 
@@ -124,7 +124,7 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("a cut last entry") {
     const ParsedRecord<S> opened = OpenListed<S>(
         residency, state, TestFakeImage::FakeListBytes::CutLastEntry, recover);
-    const Tests::RecordLevels levels;
+    const TestSupport::RecordLevels levels;
 
     // Strict rejects the cut list. Recovering keeps what it read.
     CHECK(opened.record->ParseAttrs() == recover);

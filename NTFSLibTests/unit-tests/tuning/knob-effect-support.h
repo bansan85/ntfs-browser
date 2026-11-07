@@ -68,15 +68,16 @@ inline VolumeOptions Recovering() {
 
 // Scans image over a counting reader with threads threads, and gathers what
 // the scan did.
-inline ScanResult ScanOf(const std::vector<BYTE>& image,
-                         const VolumeOptions& options, unsigned threads = 1) {
-  static_cast<void>(TakeCapturedLog());
+inline Test::Support::ScanResult ScanOf(const std::vector<BYTE>& image,
+                                        const VolumeOptions& options,
+                                        unsigned threads = 1) {
+  static_cast<void>(Test::Support::TakeCapturedLog());
   auto reader = std::make_unique<Test::DiskReaders::CountingDiskReader>(
       std::make_unique<Test::DiskReaders::MemoryDiskReader>(image));
   const Test::DiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
-  return CaptureScan(volume, counting, threads);
+  return Test::Support::CaptureScan(volume, counting, threads);
 }
 
 inline size_t Count(const std::vector<Call>& calls, Kind kind) {

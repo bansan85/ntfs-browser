@@ -6,7 +6,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // The exit code of a sample that ends with "return -1". Windows reports the
 // int as it is; a POSIX process keeps its low 8 bits.
@@ -28,4 +28,4 @@ struct SampleRun {
 [[nodiscard]] SampleRun RunSample(const std::filesystem::path& exe,
                                   const std::vector<std::wstring>& args);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

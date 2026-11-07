@@ -43,7 +43,7 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;
+using NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog;
 
 namespace {
 

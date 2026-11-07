@@ -64,7 +64,7 @@ void RunSalvageableConditionLogLevel() {
     REQUIRE(record.ParseFileRecord(attr_name_exceeds_total_size_record_idx));
     (void)record.ParseAttrs();
 
-    NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+    NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
     return out.str();
   };
 

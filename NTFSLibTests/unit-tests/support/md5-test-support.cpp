@@ -22,7 +22,7 @@
 
   #endif
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 namespace {
 
@@ -60,6 +60,6 @@ std::string Md5Hex(std::span<const BYTE> data) {
 
   #endif
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support
 
 #endif  // NTFS_TEST_HAS_MD5

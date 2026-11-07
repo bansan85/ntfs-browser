@@ -26,6 +26,8 @@
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -64,7 +66,7 @@ class ImageFile {
   }
 
  private:
-  Tests::TempDir dir_;
+  TestDeviceAccess::TempDir dir_;
   std::filesystem::path path_;
 };
 
@@ -83,7 +85,7 @@ std::uint64_t StartedBy(const VolumeOptions& options, size_t count,
                         std::optional<Tuning::Pattern> pattern = std::nullopt) {
   const ImageFile image;
   const std::unique_ptr<IDiskReader> reader = image.Open(options);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   if (pattern) {
     reader->SetReadPattern(*pattern);
   }
@@ -147,7 +149,7 @@ TEST_CASE(
   const auto plain_reads = [](const VolumeOptions& options) {
     const ImageFile image;
     const std::unique_ptr<IDiskReader> reader = image.Open(options);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     Announce(*reader, 4);
     std::vector<BYTE> buffer(range_bytes);
     LARGE_INTEGER addr{.QuadPart = static_cast<LONGLONG>(2 * range_stride)};
@@ -185,7 +187,7 @@ TEST_CASE("SetReadPattern switches the caps of a Win32DiskReader",
 
   SECTION("a wider pattern starts the ranges that waited") {
     const std::unique_ptr<IDiskReader> reader = image.Open(m1_narrow);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     Announce(*reader, 4);
     reader->SetReadPattern(Tuning::Pattern::ScatteredGrouped);
     CHECK(session.Finish().disk.prefetch_reads == 4);
@@ -193,7 +195,7 @@ TEST_CASE("SetReadPattern switches the caps of a Win32DiskReader",
 
   SECTION("the same pattern again starts nothing more") {
     const std::unique_ptr<IDiskReader> reader = image.Open(m1_narrow);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     Announce(*reader, 4);
     reader->SetReadPattern(Tuning::Pattern::LargeSequential);
     CHECK(session.Finish().disk.prefetch_reads == 1);
@@ -202,7 +204,7 @@ TEST_CASE("SetReadPattern switches the caps of a Win32DiskReader",
   SECTION("a narrower pattern lets the reads in flight finish") {
     const std::unique_ptr<IDiskReader> reader = image.Open(
         Tuned({}, {{"reader.max_reads", 1, Tuning::Pattern::LargeData}}));
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     Announce(*reader, 3);
     reader->SetReadPattern(Tuning::Pattern::LargeData);
     reader->Prefetch(3 * range_stride, range_bytes);

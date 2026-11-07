@@ -198,10 +198,10 @@ struct Opened {
 // wrote.
 template <Cache::Strategy S>
 Opened OpenLogged(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader) {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NtfsVolume<S> volume(std::move(reader));
   return {.ok = volume.IsVolumeOK(),
-          .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
+          .log = NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog()};
 }
 
 // Opens the fake image with edit applied to its boot sector BPB.
@@ -437,12 +437,13 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume logs the boot sector geometry in validation order",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NtfsVolume<S> volume(
       std::make_unique<
           NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
-  const std::string log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string log =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   CHECK(volume.GetSectorSize() ==
         NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_bytes_per_sector);

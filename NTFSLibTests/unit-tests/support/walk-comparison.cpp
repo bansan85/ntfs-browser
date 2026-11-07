@@ -18,14 +18,7 @@
 #include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/test/support/walk-comparison.h>
 
-namespace NtfsBrowser {
-
-template <Cache::Strategy S>
-class NtfsVolume;
-
-}  // namespace NtfsBrowser
-
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 namespace {
 
@@ -48,19 +41,21 @@ void TakeLogLines(std::string& log) {
 
 // The standing of a record as a caller of TraverseSubEntries() works it out:
 // it parses the record the entry names itself.
-template <Cache::Strategy S>
-Io::RecordStanding ClassifyByProbe(Io::FileRecord<S>& probe,
-                                   const WalkedEntry& entry) {
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+NTFS_BROWSER_NAMESPACE::Io::RecordStanding
+    ClassifyByProbe(NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& probe,
+                    const WalkedEntry& entry) {
   if (!probe.ParseFileRecord(entry.reference)) {
-    return Io::RecordStanding::Unreadable;
+    return NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Unreadable;
   }
   if (probe.IsDeleted()) {
-    return Io::RecordStanding::Deleted;
+    return NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Deleted;
   }
   // A reference that carries sequence 0 claims no generation.
   const bool reused =
       entry.sequence != 0 && entry.sequence != probe.GetSequenceNumber();
-  return reused ? Io::RecordStanding::Reused : Io::RecordStanding::Live;
+  return reused ? NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Reused
+                : NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Live;
 }
 
 // Where a callback of the walk puts what it is given.
@@ -68,7 +63,8 @@ struct Collected {
   std::vector<WalkedEntry>* entries;
 };
 
-WalkedEntry EntryOf(const IndexEntryView& view, Io::RecordStanding standing) {
+WalkedEntry EntryOf(const IndexEntryView& view,
+                    NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing) {
   return {.name = std::wstring(view.GetFilename()),
           .reference = view.GetFileReference(),
           .sequence = view.GetSequenceNumber(),
@@ -78,14 +74,16 @@ WalkedEntry EntryOf(const IndexEntryView& view, Io::RecordStanding standing) {
 
 }  // namespace
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 WalkResult WalkVolume(const NtfsVolume<S>& volume, bool batched) {
-  Io::FileRecord<S> dir(volume);
-  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  Io::FileRecord<S> probe(volume);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> dir(volume);
+  dir.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                  NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> probe(volume);
 
   WalkResult result;
-  std::vector<ULONGLONG> pending{static_cast<ULONGLONG>(Mft::Idx::Root)};
+  std::vector<ULONGLONG> pending{
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)};
   std::unordered_set<ULONGLONG> seen;
   (void)TakeCapturedLog();
   while (!pending.empty()) {
@@ -100,7 +98,8 @@ WalkResult WalkVolume(const NtfsVolume<S>& volume, bool batched) {
     Collected collected{&listed};
     if (batched) {
       dir.TraverseSubEntriesWithStanding(
-          [](const IndexEntryView& view, Io::RecordStanding standing,
+          [](const IndexEntryView& view,
+             NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing,
              void* context) {
             static_cast<Collected*>(context)->entries->push_back(
                 EntryOf(view, standing));
@@ -109,8 +108,8 @@ WalkResult WalkVolume(const NtfsVolume<S>& volume, bool batched) {
     } else {
       dir.TraverseSubEntries(
           [](const IndexEntryView& view, void* context) {
-            static_cast<Collected*>(context)->entries->push_back(
-                EntryOf(view, Io::RecordStanding::Live));
+            static_cast<Collected*>(context)->entries->push_back(EntryOf(
+                view, NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Live));
           },
           &collected);
     }
@@ -123,8 +122,10 @@ WalkResult WalkVolume(const NtfsVolume<S>& volume, bool batched) {
         entry.standing = ClassifyByProbe(probe, entry);
       }
       if (entry.directory &&
-          entry.reference >= static_cast<ULONGLONG>(Mft::Idx::User) &&
-          entry.standing != Io::RecordStanding::Reused) {
+          entry.reference >=
+              static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User) &&
+          entry.standing !=
+              NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Reused) {
         below.push_back(entry.reference);
       }
       result.entries.push_back(std::move(entry));
@@ -136,9 +137,15 @@ WalkResult WalkVolume(const NtfsVolume<S>& volume, bool batched) {
   return result;
 }
 
-template WalkResult WalkVolume<Cache::Strategy::NoCache>(
-    const NtfsVolume<Cache::Strategy::NoCache>& volume, bool batched);
-template WalkResult WalkVolume<Cache::Strategy::FullCache>(
-    const NtfsVolume<Cache::Strategy::FullCache>& volume, bool batched);
+template WalkResult
+    WalkVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+        const NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>&
+            volume,
+        bool batched);
+template WalkResult
+    WalkVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        const NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>&
+            volume,
+        bool batched);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

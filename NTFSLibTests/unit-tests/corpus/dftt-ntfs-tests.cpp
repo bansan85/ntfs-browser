@@ -64,20 +64,21 @@ void CheckReadsPartitionImage(std::wstring_view image_name,
 
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"ntfs.txt");
   REQUIRE(entry.has_value());
-  CHECK_FALSE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).IsDirectory());
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileSize() > 0);
+  CHECK_FALSE(
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).IsDirectory());
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileSize() > 0);
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file(volume);
   file.SetAttrMask(Attr::Mask::Data);
   REQUIRE(file.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>* data =
       file.FindStream({});
   REQUIRE(data != nullptr);
   CHECK(data->GetDataSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileSize());
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileSize());
 }
 
 }  // namespace
@@ -224,7 +225,7 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
 }
 
 #ifdef NTFS_TEST_HAS_MD5
-using NTFS_BROWSER_NAMESPACE::Tests::Md5Hex;
+using NTFS_BROWSER_NAMESPACE::Test::Support::Md5Hex;
 #endif
 
 namespace {

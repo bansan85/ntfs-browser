@@ -217,27 +217,30 @@ TEST_CASE("The $EFS parser reads the users out of a well-formed stream",
   const auto parsed = NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
       NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(users, recovery));
   REQUIRE(parsed.has_value());
-  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed).size() == 3);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed).size() == 3);
 
   for (size_t i = 0; i < 2; ++i) {
     // i < 2 = users.size(), and the REQUIRE above checks that parsed holds 3.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(std::equal(
-        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[i].thumbprint.begin(),
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed)[i]
+            .thumbprint.begin(),
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[i].thumbprint.end(),
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed)[i]
+            .thumbprint.end(),
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         users[i].thumbprint.begin()));
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[i].wrapped_fek ==
-          users[i].wrapped_fek);
+    CHECK(
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed)[i].wrapped_fek ==
+        users[i].wrapped_fek);
   }
   // The REQUIRE above checks that parsed holds 3; recovery holds 1.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[2].wrapped_fek ==
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed)[2].wrapped_fek ==
         recovery[0].wrapped_fek);
 
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(
             NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
                 NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream({}, {})))
             .empty());
@@ -251,11 +254,11 @@ TEST_CASE("An $EFS entry keeps its thumbprint and its largest wrapped FEK",
   const auto parsed = NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
       NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1)));
   REQUIRE(parsed.has_value());
-  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed).size() == 1);
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed).size() == 1);
 
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   const NTFS_BROWSER_NAMESPACE::Efs::WrappedFek& kept =
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(parsed)[0];
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed)[0];
   CHECK(kept.thumbprint ==
         std::vector<BYTE>(user.thumbprint.begin(), user.thumbprint.end()));
   CHECK(kept.wrapped_fek == user.wrapped_fek);
@@ -330,12 +333,12 @@ TEST_CASE("A FEK blob is checked against its algorithm", "[efs]") {
 
     const std::optional<Fek> fek = Fek::Parse(blob);
     REQUIRE(fek.has_value());
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek).GetAlgorithm() ==
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(fek).GetAlgorithm() ==
           algorithm);
-    CHECK(
-        std::equal(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek).GetKey().begin(),
-                   NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek).GetKey().end(),
-                   key.begin(), key.end()));
+    CHECK(std::equal(
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(fek).GetKey().begin(),
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(fek).GetKey().end(),
+        key.begin(), key.end()));
   }
 
   const std::vector<BYTE> good = NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
@@ -366,7 +369,8 @@ TEST_CASE("A DESX FEK carries a 16-byte key, not a 24-byte one", "[efs]") {
   const std::optional<Fek> fek = Fek::Parse(
       NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(Algorithm::Desx, sixteen));
   REQUIRE(fek.has_value());
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek).GetKey().size() == 16);
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(fek).GetKey().size() ==
+        16);
 
   CHECK_FALSE(Fek::Parse(NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
                              Algorithm::Desx, twenty_four))
@@ -494,7 +498,7 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
 
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
       auto decryptor = NTFS_BROWSER_NAMESPACE::Efs::MakeCryptoPpDecryptor(
-          NTFS_BROWSER_NAMESPACE::Tests::Unwrap(fek));
+          NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(fek));
 #else
       std::unique_ptr<NTFS_BROWSER_NAMESPACE::Efs::SectorDecryptor> decryptor;
 #endif

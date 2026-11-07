@@ -13,7 +13,7 @@
 
 namespace Fs = std::filesystem;
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 namespace {
 
 // Reads a whole file as text, without its carriage returns.
@@ -56,4 +56,4 @@ SampleRun RunSample(const Fs::path& exe,
   return run;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

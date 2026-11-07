@@ -8,7 +8,7 @@
   #include <ntfs-browser/namespace.h>
   #include <ntfs-browser/tuning/tuning.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // Before main(), the library's query for the volume that hosts an image file
 // is replaced by one that answers Unknown and opens nothing: no test opens a
@@ -17,7 +17,7 @@ namespace NTFS_BROWSER_NAMESPACE::Tests {
 // scope, then restores the previous answer.
 class HostMediaAnswer final {
  public:
-  explicit HostMediaAnswer(Tuning::MediaKind kind);
+  explicit HostMediaAnswer(NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind);
   HostMediaAnswer(const HostMediaAnswer&) = delete;
   HostMediaAnswer& operator=(const HostMediaAnswer&) = delete;
   HostMediaAnswer(HostMediaAnswer&&) = delete;
@@ -28,9 +28,9 @@ class HostMediaAnswer final {
   [[nodiscard]] static const std::vector<std::wstring>& Asked();
 
  private:
-  Tuning::MediaKind previous_;
+  NTFS_BROWSER_NAMESPACE::Tuning::MediaKind previous_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support
 
 #endif  // _WIN32

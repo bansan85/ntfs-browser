@@ -28,6 +28,7 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Fs = std::filesystem;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -40,12 +41,13 @@ constexpr std::string_view mft_folder = "test_data";
 
 // Scans the standalone $MFT file with threads threads. The volume is opened
 // after the log is emptied, so that its opening counts too.
-Tests::ScanResult ScanMftFile(const Fs::path& file,
-                              const VolumeOptions& options, unsigned threads) {
-  static_cast<void>(Tests::TakeCapturedLog());
+TestSupport::ScanResult ScanMftFile(const Fs::path& file,
+                                    const VolumeOptions& options,
+                                    unsigned threads) {
+  static_cast<void>(TestSupport::TakeCapturedLog());
   const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
       Tests::OpenStandaloneMftVolume(file, options);
-  return Tests::CaptureScan(*volume, nullptr, threads);
+  return TestSupport::CaptureScan(*volume, nullptr, threads);
 }
 
 }  // namespace
@@ -62,14 +64,14 @@ TEST_CASE("A small real $MFT scans the same whatever the thread count",
   const VolumeOptions options{.include_deleted = include_deleted,
                               .recover_errors = recover};
 
-  const Tests::ScanResult one = ScanMftFile(file, options, 1);
-  const Tests::ScanResult many = ScanMftFile(file, options, 4);
+  const TestSupport::ScanResult one = ScanMftFile(file, options, 1);
+  const TestSupport::ScanResult many = ScanMftFile(file, options, 4);
 
   INFO(std::string(name) << " deleted " << include_deleted << " recover "
                          << recover);
   CHECK_FALSE(one.tree.empty());
   CHECK(many.parsed_by_threads > 0);
-  Tests::CheckSameScan(one, many);
+  TestSupport::CheckSameScan(one, many);
 }
 
 TEST_CASE("The NIST hacking case $MFT scans the same whatever the thread count",
@@ -80,9 +82,9 @@ TEST_CASE("The NIST hacking case $MFT scans the same whatever the thread count",
   const VolumeOptions options{.include_deleted = true,
                               .recover_errors = recover};
 
-  const Tests::ScanResult one = ScanMftFile(file, options, 1);
-  const Tests::ScanResult several = ScanMftFile(file, options, 3);
-  const Tests::ScanResult many = ScanMftFile(file, options, 8);
+  const TestSupport::ScanResult one = ScanMftFile(file, options, 1);
+  const TestSupport::ScanResult several = ScanMftFile(file, options, 3);
+  const TestSupport::ScanResult many = ScanMftFile(file, options, 8);
 
   // Over 12 000 slots: three windows, and the last one short.
   CHECK(one.tree.size() > 1000000);
@@ -90,8 +92,8 @@ TEST_CASE("The NIST hacking case $MFT scans the same whatever the thread count",
   // Its files with an $ATTRIBUTE_LIST, parsed by threads in the second pass.
   CHECK(several.waiting_by_threads > 0);
   CHECK(one.waiting_by_threads == 0);
-  Tests::CheckSameScan(one, several);
-  Tests::CheckSameScan(one, many);
+  TestSupport::CheckSameScan(one, several);
+  TestSupport::CheckSameScan(one, many);
 }
 
 TEST_CASE("The NPS ntfs1 image scans the same whatever the thread count",
@@ -102,22 +104,22 @@ TEST_CASE("The NPS ntfs1 image scans the same whatever the thread count",
   const VolumeOptions options{.include_deleted = include_deleted,
                               .recover_errors = true};
   const auto scan = [&](unsigned threads) {
-    static_cast<void>(Tests::TakeCapturedLog());
+    static_cast<void>(TestSupport::TakeCapturedLog());
     auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
         Tests::OpenCorpusImage(Tests::ntfs1_image, 0, trace));
     const TestDiskReaders::CountingDiskReader* const reader = counting.get();
     const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(counting),
                                                       options);
     REQUIRE(volume.IsVolumeOK());
-    return Tests::CaptureScan(volume, reader, threads);
+    return TestSupport::CaptureScan(volume, reader, threads);
   };
 
-  const Tests::ScanResult one = scan(1);
-  const Tests::ScanResult many = scan(4);
+  const TestSupport::ScanResult one = scan(1);
+  const TestSupport::ScanResult many = scan(4);
 
   CHECK_FALSE(one.tree.empty());
   CHECK(many.parsed_by_threads > 0);
-  Tests::CheckSameScan(one, many);
+  TestSupport::CheckSameScan(one, many);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -132,20 +134,20 @@ TEMPLATE_TEST_CASE_SIG(
   const VolumeOptions options{.include_deleted = include_deleted,
                               .recover_errors = recover};
   const auto scan = [&](unsigned threads) {
-    static_cast<void>(Tests::TakeCapturedLog());
+    static_cast<void>(TestSupport::TakeCapturedLog());
     auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
         std::make_unique<TestDiskReaders::MemoryDiskReader>(bytes));
     const TestDiskReaders::CountingDiskReader* const reader = counting.get();
     const NtfsVolume<S> volume(std::move(counting), options);
     REQUIRE(volume.IsVolumeOK());
-    return Tests::CaptureScan(volume, reader, threads);
+    return TestSupport::CaptureScan(volume, reader, threads);
   };
 
-  const Tests::ScanResult one = scan(1);
+  const TestSupport::ScanResult one = scan(1);
   CHECK_FALSE(one.tree.empty());
   for (const unsigned threads : {2U, 8U}) {
     INFO("threads " << threads);
-    const Tests::ScanResult many = scan(threads);
-    Tests::CheckSameScan(one, many);
+    const TestSupport::ScanResult many = scan(threads);
+    TestSupport::CheckSameScan(one, many);
   }
 }

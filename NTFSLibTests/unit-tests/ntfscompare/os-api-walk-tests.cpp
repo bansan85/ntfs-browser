@@ -18,7 +18,7 @@
 #include <ntfs-browser/tool/ntfscompare/entry.h>
 #include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
 
-using NTFS_BROWSER_NAMESPACE::Tests::Unwrap;
+using NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap;
 using NtfsCompare::Entry;
 using NtfsCompare::Listing;
 using NtfsCompare::WalkOsApi;

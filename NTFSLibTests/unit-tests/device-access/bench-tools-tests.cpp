@@ -32,12 +32,13 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace DirSample = NTFS_BROWSER_NAMESPACE::Tests::DirSample;
 namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
 using NtfsDevice::JsonValue;
-using Tests::SampleRun;
+using TestSupport::SampleRun;
 
 namespace {
 
@@ -194,7 +195,7 @@ TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
   const std::vector<BYTE> original =
       big ? ListImage() : TestFakeImage::BuildFakeNtfsImageWithMftTree();
   const MftListSample::TempTreeImage image(original);
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path capture = dir.Path() / "capture.img";
   std::vector<std::wstring> extra;
   if (deleted) {
@@ -237,7 +238,7 @@ TEST_CASE("NtfsDir on its capture image lists what it listed on the image",
       TestFakeImage::BuildFakeNtfsImageWithReportName(
           L"report.txt", TestFakeImage::dump_broken_alter_time);
   const DirSample::TempImage image(original);
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path capture = dir.Path() / "capture.img";
   std::vector<std::wstring> extra{L"--recursive"};
   if (deleted) {
@@ -278,7 +279,7 @@ TEST_CASE("NtfsDir on its capture image lists what it listed on the image",
 TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
           "[device-access][benchmark][sample]") {
   const MftListSample::TempTreeImage image(ListImage());
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
   const SampleRun plain = MftListSample::RunMftList({image.path.wstring()});
@@ -347,7 +348,7 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
 TEST_CASE("NtfsMftList --media sets the media kind its summary reports",
           "[device-access][benchmark][sample]") {
   const MftListSample::TempTreeImage image(ListImage());
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
 
   const auto kind_of = [&](const std::wstring& media) {
     const std::filesystem::path summary = dir.Path() / "summary.json";
@@ -377,7 +378,7 @@ TEST_CASE("NtfsMftList refuses a --media it does not know",
 TEST_CASE("The read log next to a summary is the log of its run",
           "[device-access][benchmark][sample]") {
   const MftListSample::TempTreeImage image(ListImage());
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
   const SampleRun run = MftListSample::RunMftList(
@@ -406,7 +407,7 @@ TEST_CASE("The read log next to a summary is the log of its run",
 TEST_CASE("NtfsMftList --stop-after ends the run after the phase",
           "[device-access][benchmark][sample]") {
   const MftListSample::TempTreeImage image(ListImage());
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
   const SampleRun run =
@@ -429,7 +430,7 @@ TEST_CASE("NtfsMftList --stop-after ends the run after the phase",
 TEST_CASE("NtfsDir --benchmark walks its phases and keeps its listing",
           "[device-access][benchmark][sample]") {
   const DirSample::TempImage image;
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
 
   for (const std::filesystem::path& exe : DirSample::SampleExes()) {
     INFO("sample " << exe.filename().string());

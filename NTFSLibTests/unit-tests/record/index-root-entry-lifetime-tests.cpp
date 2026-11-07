@@ -56,9 +56,11 @@ void RunFindSubEntryOutlivesReparseTest() {
   std::optional<IndexEntry> saved_entry = record.FindSubEntry(
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_name);
   REQUIRE(saved_entry.has_value());
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(saved_entry).GetFileReference() ==
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(saved_entry)
+            .GetFileReference() ==
         NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_mft_ref);
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(saved_entry).GetFilename() ==
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(saved_entry)
+            .GetFilename() ==
         NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_name);
 
   // Reparse the SAME FileRecord object for variant B's record - same fixed
@@ -70,9 +72,11 @@ void RunFindSubEntryOutlivesReparseTest() {
 
   // The entry saved from variant A must be entirely unaffected by parsing a
   // second, different record on the same FileRecord object.
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(saved_entry).GetFileReference() ==
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(saved_entry)
+            .GetFileReference() ==
         NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_mft_ref);
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(saved_entry).GetFilename() ==
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(saved_entry)
+            .GetFilename() ==
         NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_name);
 }
 

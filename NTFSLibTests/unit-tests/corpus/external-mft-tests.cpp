@@ -753,7 +753,7 @@ TEST_CASE("Real 4096-byte records keep their resident data",
     std::vector<BYTE> bytes(expected.size);
     REQUIRE(data.ReadData(0, bytes) == expected.size);
 #ifdef NTFS_TEST_HAS_MD5
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Md5Hex(bytes) == expected.md5);
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Md5Hex(bytes) == expected.md5);
 #endif
   }
 }
@@ -845,7 +845,7 @@ TEST_CASE("The fragmented $MFT of ntfs_frag_mft.bin reads in five runs",
   // Python.
   std::vector<BYTE> mft(3145728);
   REQUIRE(volume.ReadMftData(0, mft) == mft.size());
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Md5Hex(mft) ==
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Md5Hex(mft) ==
         "3a75da5a96eeab4850b811df1c6b6ec9");
 #endif
 }

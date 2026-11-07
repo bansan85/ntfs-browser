@@ -39,7 +39,7 @@ using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
@@ -121,7 +121,7 @@ struct Opened {
 template <Cache::Strategy S>
 Opened<S> Open(std::vector<BYTE> image, const VolumeOptions& options,
                std::optional<ULONGLONG> reported_size) {
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   const size_t image_bytes = image.size();
   auto record = std::make_shared<SpyDiskReader::Record>();
   auto volume = std::make_unique<NtfsVolume<S>>(
@@ -129,7 +129,7 @@ Opened<S> Open(std::vector<BYTE> image, const VolumeOptions& options,
       options);
   return {.volume = std::move(volume),
           .record = std::move(record),
-          .log = Tests::TakeCapturedLog(),
+          .log = TestSupport::TakeCapturedLog(),
           .image_bytes = image_bytes};
 }
 

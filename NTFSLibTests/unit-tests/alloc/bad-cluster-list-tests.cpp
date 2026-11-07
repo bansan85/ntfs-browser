@@ -127,7 +127,7 @@ TEST_CASE("extents come out sorted and merged", "[alloc][bad-list]") {
 
 TEST_CASE("extents are clamped to the volume", "[alloc][bad-list]") {
   SECTION("one wholly past the end is dropped, and logged") {
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+    (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
     const auto list = BadClusterList::Build(
         Stream({{.lcn = 10, .clusters = 2}, {.lcn = 100, .clusters = 4}}), 100,
         false);
@@ -135,7 +135,7 @@ TEST_CASE("extents are clamped to the volume", "[alloc][bad-list]") {
     REQUIRE(list != nullptr);
     CHECK(Pairs(*list) ==
           std::vector<std::pair<ULONGLONG, ULONGLONG>>{{10, 2}});
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().find(
               "past the volume") != std::string::npos);
   }
 
@@ -176,9 +176,10 @@ TEST_CASE("a damaged stream is rejected when strict and kept when recovering",
       Stream({{.lcn = 10, .clusters = 2}, {.lcn = 20, .clusters = 3}}, false);
 
   SECTION("strict") {
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+    (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
     CHECK(BadClusterList::Build(damaged, 100, false) == nullptr);
-    CHECK_FALSE(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().empty());
+    CHECK_FALSE(
+        NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().empty());
   }
 
   SECTION("recovering") {
@@ -203,16 +204,16 @@ TEST_CASE("a list over the ceiling is rejected or cut", "[alloc][bad-list]") {
   }
 
   SECTION("strict rejects it, and logs") {
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+    (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
     CHECK(BadClusterList::Build(Stream(Isolated(9)), 0, false) == nullptr);
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().find(
               "more than 8 extents") != std::string::npos);
   }
 
   SECTION("recovering keeps the lowest and flags it") {
     std::vector<Extent> extents = Isolated(9);
     std::swap(extents.front(), extents.back());
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+    (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
     const auto list =
         BadClusterList::Build(Stream(std::move(extents)), 0, true);
 
@@ -221,7 +222,7 @@ TEST_CASE("a list over the ceiling is rejected or cut", "[alloc][bad-list]") {
     REQUIRE(list->Get().extents.size() == 8);
     CHECK(list->Get().extents.front().lcn == 0);
     CHECK(list->Get().extents.back().lcn == 14);
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().find(
               "more than 8 extents") != std::string::npos);
   }
 }

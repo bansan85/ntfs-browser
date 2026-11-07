@@ -23,13 +23,14 @@ TEMPLATE_TEST_CASE_SIG("the volume name is logged without its terminator",
                        ((NTFS_BROWSER_NAMESPACE::Cache::Strategy S), S),
                        NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache,
                        NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache) {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
       std::make_unique<
           NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           NTFS_BROWSER_NAMESPACE::Test::FakeImage::
               BuildFakeNtfsImageWithVolumeName()));
-  const std::string captured = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string captured =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   CHECK(volume.IsVolumeOK());
   CHECK_THAT(captured, ContainsSubstring("NTFS volume name: TESTVOL"));

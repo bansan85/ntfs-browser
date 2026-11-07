@@ -40,7 +40,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
@@ -434,11 +434,11 @@ TEMPLATE_TEST_CASE_SIG(
     const ParsedRecord<S> dir = OpenListRecord<S>(
         TestFakeImage::BuildFakeNtfsImageWithAttributeListDuplicateEntry(),
         TestFakeImage::attribute_list_dir_idx, Attr::Mask::IndexRoot);
-    (void)Tests::TakeCapturedLog();
+    (void)TestSupport::TakeCapturedLog();
 
     CHECK(dir.record->ParseAttrs());
     CHECK(dir.record->GetAttr(Attr::Type::IndexRoot).size() == 1);
-    CHECK_THAT(Tests::TakeCapturedLog(),
+    CHECK_THAT(TestSupport::TakeCapturedLog(),
                Catch::Matchers::ContainsSubstring(skipped));
   }
 

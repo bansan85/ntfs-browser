@@ -212,12 +212,12 @@ TEMPLATE_TEST_CASE_SIG(
   faulty->Arm();
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(static_cast<ULONGLONG>(
                       NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)));
   CHECK_FALSE(parsed);
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().find(
             "Cannot read file record 5") != std::string::npos);
 }
 
@@ -237,13 +237,13 @@ TEMPLATE_TEST_CASE_SIG(
   faulty->Arm();
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(
       parsed = record.ParseFileRecord(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                                           fragmented_mft_invalid_record_idx));
   CHECK_FALSE(parsed);
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().find(
             "Cannot read file record 16") != std::string::npos);
 }
 
@@ -257,11 +257,11 @@ TEMPLATE_TEST_CASE_SIG("A record past every $MFT extent yields no record",
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(unmapped_record_idx));
   CHECK_FALSE(parsed);
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().find(
             "Cannot read file record 1099511627776") != std::string::npos);
 }
 
@@ -278,13 +278,14 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(
       parsed = record.ParseFileRecord(
           NTFS_BROWSER_NAMESPACE::Test::FakeImage::forged_direct_record_idx));
   CHECK_FALSE(parsed);
-  const std::string log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string log =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   CHECK(log.find("Offset must be lower than 1024.") != std::string::npos);
   CHECK(log.find("Cannot read file record 12") != std::string::npos);
 }
@@ -326,12 +327,13 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE_FALSE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed =
                       record.ParseFileRecord(overflowing_direct_record_idx));
   CHECK_FALSE(parsed);
-  const std::string log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string log =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   CHECK_THAT(log, ContainsSubstring("past the end of $MFT"));
   CHECK_THAT(log,
              ContainsSubstring("Cannot read file record 9007199254740992"));
@@ -349,11 +351,12 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(free_direct_record_idx));
   CHECK_FALSE(parsed);
-  const std::string log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string log =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   CHECK_THAT(log, ContainsSubstring("Invalid file record"));
   CHECK_THAT(log, !ContainsSubstring("Cannot read file record"));
   CHECK_THAT(log, !ContainsSubstring("Update Sequence Number error"));
@@ -380,12 +383,13 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(static_cast<ULONGLONG>(
                       NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)));
   CHECK_FALSE(parsed);
-  const std::string log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string log =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   CHECK_THAT(log, ContainsSubstring("Update Sequence Number error"));
   CHECK_THAT(log, !ContainsSubstring("Cannot read file record"));
 }

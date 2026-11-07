@@ -29,7 +29,7 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -119,7 +119,7 @@ TEST_CASE("A session logs the standing lane of a FileReader<NoCache> as given",
   CountedFile<Cache::Strategy::NoCache> counted =
       MakeCountedFile<Cache::Strategy::NoCache>();
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   counted.file->PrefetchStanding(inside_offset, inside_length);
   counted.file->PrefetchStanding(across_offset, across_length);
   counted.file->PrefetchStanding(inside_offset, 0);
@@ -159,7 +159,7 @@ TEST_CASE("A session logs the widened ranges of a FileReader<FullCache>",
   CountedFile<Cache::Strategy::FullCache> counted =
       MakeCountedFile<Cache::Strategy::FullCache>();
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   counted.file->PrefetchStanding(inside_offset, inside_length);
   counted.file->PrefetchStanding(across_offset, across_length);
   counted.file->CancelStanding(inside_offset, 1);
@@ -201,7 +201,7 @@ TEST_CASE("A FileReader<FullCache> logs only the blocks the lane announces",
   const auto held = counted.file->Read(addr, static_cast<DWORD>(block_bytes));
   REQUIRE(held.has_value());
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   counted.file->PrefetchStanding(block_bytes, 3 * block_bytes);
   const Bench::Report report = session.Finish();
   const Bench::ReadLog log = Bench::TakeReadLog();
@@ -222,7 +222,7 @@ TEMPLATE_TEST_CASE_SIG("The lane and the first queue are logged apart",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CountedFile<S> counted = MakeCountedFile<S>();
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   counted.file->Prefetch(0, block_bytes);
   counted.file->PrefetchStanding(block_bytes, block_bytes);
   counted.file->CancelPrefetch();
@@ -255,7 +255,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(std::move(counting));
   REQUIRE(volume.IsVolumeOK());
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   // A range across the end of a fragment of $MFT: two ranges on the disk.
   volume.PrefetchMftSlots(90, 20);
   volume.PrefetchMftSlotsStanding(90, 20);
@@ -304,7 +304,8 @@ TEST_CASE("A session that keeps no log counts the standing lane all the same",
   CountedFile<Cache::Strategy::NoCache> counted =
       MakeCountedFile<Cache::Strategy::NoCache>();
 
-  Tests::BenchSessionGuard session(Bench::SessionOptions{.keep_log = false});
+  TestSupport::BenchSessionGuard session(
+      Bench::SessionOptions{.keep_log = false});
   counted.file->PrefetchStanding(inside_offset, inside_length);
   counted.file->CancelStanding(0, max_offset);
   const Bench::Report report = session.Finish();

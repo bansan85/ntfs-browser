@@ -43,7 +43,7 @@ void CheckDirMatchesGroundTruth(
         NTFS_BROWSER_NAMESPACE::Tests::ReadFile(volume, dir, file.name);
     CHECK(data.size() == file.size);
 #ifdef NTFS_TEST_HAS_MD5
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Md5Hex(data) == file.md5);
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Md5Hex(data) == file.md5);
 #endif
   }
 }

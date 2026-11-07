@@ -14,8 +14,8 @@
 #include <ntfs-browser/test/corpus/nps-ntfs1-test-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 
-using NTFS_BROWSER_NAMESPACE::Tests::RunSample;
-using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
+using NTFS_BROWSER_NAMESPACE::Test::Support::RunSample;
+using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
 namespace Fs = std::filesystem;
 
 namespace {

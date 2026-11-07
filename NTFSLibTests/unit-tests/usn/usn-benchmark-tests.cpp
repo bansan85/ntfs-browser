@@ -25,7 +25,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
@@ -51,7 +51,7 @@ class QuietLog {
   QuietLog(const QuietLog&) = delete;
   QuietLog& operator=(const QuietLog&) = delete;
 
-  ~QuietLog() { Tests::InstallCaptureSink(); }
+  ~QuietLog() { TestSupport::InstallCaptureSink(); }
 };
 
 // A journal of count records with names of 20 characters: what a document

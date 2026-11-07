@@ -19,7 +19,7 @@
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
@@ -38,7 +38,7 @@ constexpr ULONGLONG size_past_longlong =
 // mode over a reader that script can bend.
 template <Cache::Strategy S, typename Script>
 std::unique_ptr<NtfsVolume<S>> OpenWithZeroedSector(Script script) {
-  auto reader = std::make_unique<Tests::ScriptedDiskReader>(
+  auto reader = std::make_unique<TestSupport::ScriptedDiskReader>(
       TestFakeImage::BuildFakeNtfsImageWithBackupBootSector());
   script(*reader);
   return std::make_unique<NtfsVolume<S>>(std::move(reader),
@@ -71,8 +71,10 @@ TEMPLATE_TEST_CASE_SIG(
     "the backup boot sector is skipped when its address does not exist",
     "[ntfs-volume][backup-boot]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto volume = OpenWithZeroedSector<S>(
-      [](Tests::ScriptedDiskReader& r) { r.DeclareSize(size_past_longlong); });
+  const auto volume =
+      OpenWithZeroedSector<S>([](TestSupport::ScriptedDiskReader& r) {
+        r.DeclareSize(size_past_longlong);
+      });
 
   CHECK_FALSE(volume->IsVolumeOK());
 }
@@ -81,12 +83,13 @@ TEMPLATE_TEST_CASE_SIG(
     "the backup boot sector is skipped when its sector cannot be read",
     "[ntfs-volume][backup-boot]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto volume = OpenWithZeroedSector<S>([](Tests::ScriptedDiskReader& r) {
-    // Every candidate sector ends at the end of the image.
-    r.FaultRange(TestFakeImage::fake_backup_image_bytes - 512,
-                 TestFakeImage::fake_backup_image_bytes,
-                 Tests::ScriptedDiskReader::Fault::Fail);
-  });
+  const auto volume =
+      OpenWithZeroedSector<S>([](TestSupport::ScriptedDiskReader& r) {
+        // Every candidate sector ends at the end of the image.
+        r.FaultRange(TestFakeImage::fake_backup_image_bytes - 512,
+                     TestFakeImage::fake_backup_image_bytes,
+                     TestSupport::ScriptedDiskReader::Fault::Fail);
+      });
 
   CHECK_FALSE(volume->IsVolumeOK());
 }

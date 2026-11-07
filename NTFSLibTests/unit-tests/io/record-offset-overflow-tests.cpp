@@ -46,11 +46,11 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(wrapping_mapped_record_idx));
   CHECK_FALSE(parsed);
-  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog(),
              ContainsSubstring("past the end of $MFT"));
 }
 
@@ -69,10 +69,10 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE_FALSE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(wrapping_record_idx));
   CHECK_FALSE(parsed);
-  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog(),
              ContainsSubstring("past the end of $MFT"));
 }

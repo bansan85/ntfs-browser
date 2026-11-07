@@ -21,7 +21,7 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -68,7 +68,7 @@ Applied Apply(const BenchOptions& bench,
 
 // The options of a run that names a profile text and a disk.
 struct Profile {
-  Tests::TempDir dir;
+  TestDeviceAccess::TempDir dir;
   BenchOptions bench;
 
   explicit Profile(std::string_view text, std::string_view disk = exact_key) {

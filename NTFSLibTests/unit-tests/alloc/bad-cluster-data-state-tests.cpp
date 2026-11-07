@@ -20,7 +20,7 @@
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::DataState;
@@ -183,9 +183,9 @@ void CheckAMissingBadListFallsBackOnTheBitmap() {
                                                                 stale_runs),
       marked);
 
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   CHECK(StateOfStale<S>(image) == DataState::Reallocated);
-  const std::string log = Tests::TakeCapturedLog();
+  const std::string log = TestSupport::TakeCapturedLog();
   CHECK(log.find("$BadClus is not usable") != std::string::npos);
 }
 

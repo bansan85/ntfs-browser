@@ -114,7 +114,7 @@ TEST_CASE("each sink keeps its own level", "[logging]") {
   NTFS_BROWSER_NAMESPACE::Log::Error("error-line");
 
   // Drops the file sink, which closes the file before it is read back.
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
 
   const std::string contents = log_file.Read();
   CHECK_THAT(contents, ContainsSubstring("warn-line"));
@@ -136,7 +136,7 @@ TEST_CASE("a file sink at trace records every level", "[logging]") {
   NTFS_BROWSER_NAMESPACE::Log::Trace("recorded-trace");
   NTFS_BROWSER_NAMESPACE::Log::Error("recorded-error");
 
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
 
   const std::string contents = log_file.Read();
   CHECK_THAT(contents, ContainsSubstring("recorded-trace"));
@@ -155,7 +155,7 @@ TEST_CASE("both targets off writes nothing at all", "[logging]") {
 
   NTFS_BROWSER_NAMESPACE::Log::Error("never-written");
 
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
   CHECK_FALSE(Fs::exists(log_file.Path()));
 }
 
@@ -174,7 +174,7 @@ TEST_CASE("a message carrying braces is not treated as a format string",
   const std::runtime_error thrown("relayed {0} {bad} text\n");
   NTFS_BROWSER_NAMESPACE::Log::Exception(thrown);
 
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
 
   // Carriage returns go first: spdlog ends a line with \r\n here, which
   // would hide the thrower's own newline from the check below.
@@ -226,7 +226,7 @@ TEST_CASE("a log path outside the ANSI code page still opens", "[logging]") {
 
   NTFS_BROWSER_NAMESPACE::Log::Error("wide-path-line");
 
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
 
   CHECK(Fs::exists(log_file.Path()));
   CHECK_THAT(log_file.Read(), ContainsSubstring("wide-path-line"));
@@ -249,7 +249,7 @@ TEST_CASE("Configure() replaces the previous sinks wholesale", "[logging]") {
   REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
   NTFS_BROWSER_NAMESPACE::Log::Error("into-second");
 
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
 
   CHECK_THAT(first.Read(), ContainsSubstring("into-first"));
   CHECK_THAT(first.Read(), !ContainsSubstring("into-second"));

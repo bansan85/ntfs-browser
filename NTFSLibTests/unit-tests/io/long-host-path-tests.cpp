@@ -26,7 +26,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Fs = std::filesystem;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage;
-using NTFS_BROWSER_NAMESPACE::Tests::LongTempDir;
+using NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir;
 
 #ifdef _WIN32
 
@@ -128,7 +128,7 @@ TEST_CASE("the file log target opens a path of more than 260 units",
   config.file_path = log;
   REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
   NTFS_BROWSER_NAMESPACE::Log::Error("long-path-line");
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
 
   std::ifstream input(NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(log));
   const std::string text((std::istreambuf_iterator<char>(input)),
@@ -148,7 +148,7 @@ TEST_CASE("the file log target makes the folders of a long path",
   config.file_path = log;
   REQUIRE(NTFS_BROWSER_NAMESPACE::Log::Configure(config));
   NTFS_BROWSER_NAMESPACE::Log::Error("made-folders-line");
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
 
   std::ifstream input(NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(log));
   const std::string text((std::istreambuf_iterator<char>(input)),

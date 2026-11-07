@@ -43,10 +43,10 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::ScratchFileNameBody;
-using NTFS_BROWSER_NAMESPACE::Tests::ScratchHeader;
-using NTFS_BROWSER_NAMESPACE::Tests::ScratchRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::ScratchStdInfoBody;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ScratchFileNameBody;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ScratchHeader;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ScratchRecord;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ScratchStdInfoBody;
 
 namespace {
 

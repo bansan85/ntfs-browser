@@ -37,6 +37,8 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
@@ -67,7 +69,7 @@ class ImageFile {
   [[nodiscard]] const std::filesystem::path& Path() const { return path_; }
 
  private:
-  Tests::TempDir dir_;
+  TestDeviceAccess::TempDir dir_;
   std::filesystem::path path_;
 };
 
@@ -111,21 +113,21 @@ TEST_CASE("A Win32DiskReader over an image file takes the kind of its host",
   const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
   const MediaKind kind = GENERATE(MediaKind::Unknown, MediaKind::SolidState,
                                   MediaKind::Rotational);
-  const Tests::HostMediaAnswer answer(kind);
+  const TestSupport::HostMediaAnswer answer(kind);
 
   Io::Win32DiskReader reader;
   REQUIRE(reader.Open(file.Path().wstring()));
 
   CHECK(reader.GetMediaKind() == kind);
   // Asked once, in Open(), and about the extended path of the file.
-  REQUIRE(Tests::HostMediaAnswer::Asked().size() == 1);
-  CHECK(Tests::HostMediaAnswer::Asked().front().ends_with(L"image.img"));
+  REQUIRE(TestSupport::HostMediaAnswer::Asked().size() == 1);
+  CHECK(TestSupport::HostMediaAnswer::Asked().front().ends_with(L"image.img"));
 }
 
 TEST_CASE("The reader of a replay asks no host volume",
           "[io][media-kind][win32]") {
   const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
-  const Tests::HostMediaAnswer answer(MediaKind::Rotational);
+  const TestSupport::HostMediaAnswer answer(MediaKind::Rotational);
 
   const std::unique_ptr<IDiskReader> reader =
       NTFS_BROWSER_NAMESPACE::Bench::OpenPlatformReader(file.Path().wstring(),
@@ -133,20 +135,20 @@ TEST_CASE("The reader of a replay asks no host volume",
   REQUIRE(reader != nullptr);
 
   CHECK(reader->GetMediaKind() == MediaKind::Unknown);
-  CHECK(Tests::HostMediaAnswer::Asked().empty());
+  CHECK(TestSupport::HostMediaAnswer::Asked().empty());
 }
 
 TEST_CASE("A path that does not open asks no host volume",
           "[io][media-kind][win32]") {
-  const Tests::HostMediaAnswer answer(MediaKind::Rotational);
-  const Tests::TempDir dir;
+  const TestSupport::HostMediaAnswer answer(MediaKind::Rotational);
+  const TestDeviceAccess::TempDir dir;
 
   const std::unique_ptr<IDiskReader> reader =
       NTFS_BROWSER_NAMESPACE::Bench::OpenPlatformReader(
           (dir.Path() / "missing.img").wstring(), {});
 
   CHECK(reader == nullptr);
-  CHECK(Tests::HostMediaAnswer::Asked().empty());
+  CHECK(TestSupport::HostMediaAnswer::Asked().empty());
 }
 
 TEST_CASE("Without a test answer, the query of the tests says Unknown",
@@ -162,7 +164,7 @@ TEMPLATE_TEST_CASE_SIG("A volume on an image file reports the kind of its host",
   const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
   const MediaKind kind = GENERATE(MediaKind::Unknown, MediaKind::SolidState,
                                   MediaKind::Rotational);
-  const Tests::HostMediaAnswer answer(kind);
+  const TestSupport::HostMediaAnswer answer(kind);
 
   const NtfsVolume<S> volume(file.Path().wstring());
 
@@ -175,7 +177,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][media-kind][win32]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
-  const Tests::HostMediaAnswer answer(MediaKind::Rotational);
+  const TestSupport::HostMediaAnswer answer(MediaKind::Rotational);
   VolumeOptions options;
   options.media_kind = MediaKind::SolidState;
 
@@ -183,7 +185,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetMediaKind() == MediaKind::SolidState);
-  CHECK(Tests::HostMediaAnswer::Asked().empty());
+  CHECK(TestSupport::HostMediaAnswer::Asked().empty());
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -194,22 +196,22 @@ TEMPLATE_TEST_CASE_SIG(
       Tests::ReadAhead::SpacedTree(directories, files_per_directory)));
 
   SECTION("a solid state host plans the lane") {
-    const Tests::HostMediaAnswer answer(MediaKind::SolidState);
+    const TestSupport::HostMediaAnswer answer(MediaKind::SolidState);
     CHECK(RunsPlannedOn<S>(file, OptionsWithLane()) > 0);
   }
 
   SECTION("a host that does not say plans the lane") {
-    const Tests::HostMediaAnswer answer(MediaKind::Unknown);
+    const TestSupport::HostMediaAnswer answer(MediaKind::Unknown);
     CHECK(RunsPlannedOn<S>(file, OptionsWithLane()) > 0);
   }
 
   SECTION("a rotational host does not") {
-    const Tests::HostMediaAnswer answer(MediaKind::Rotational);
+    const TestSupport::HostMediaAnswer answer(MediaKind::Rotational);
     CHECK(RunsPlannedOn<S>(file, OptionsWithLane()) == 0);
   }
 
   SECTION("a rotational host with a stated solid state kind plans the lane") {
-    const Tests::HostMediaAnswer answer(MediaKind::Rotational);
+    const TestSupport::HostMediaAnswer answer(MediaKind::Rotational);
     VolumeOptions options = OptionsWithLane();
     options.media_kind = MediaKind::SolidState;
     CHECK(RunsPlannedOn<S>(file, options) > 0);

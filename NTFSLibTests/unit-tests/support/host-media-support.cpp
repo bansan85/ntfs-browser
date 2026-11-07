@@ -11,11 +11,12 @@
 
   #include "io/host-media-kind.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 namespace {
 
 struct Answer {
-  Tuning::MediaKind kind{Tuning::MediaKind::Unknown};
+  NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind{
+      NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown};
   std::vector<std::wstring> asked;
 };
 
@@ -24,7 +25,7 @@ Answer& Current() {
   return answer;
 }
 
-Tuning::MediaKind Ask(const std::wstring& path) {
+NTFS_BROWSER_NAMESPACE::Tuning::MediaKind Ask(const std::wstring& path) {
   Answer& answer = Current();
   answer.asked.push_back(path);
   return answer.kind;
@@ -35,14 +36,14 @@ Tuning::MediaKind Ask(const std::wstring& path) {
 // processes, which cannot use the query above: their bench options then set
 // the media kind to Unknown, and the library asks no host volume.
 [[maybe_unused]] const bool g_installed = [] {
-  Io::SetHostMediaQueryForTests(&Ask);
+  NTFS_BROWSER_NAMESPACE::Io::SetHostMediaQueryForTests(&Ask);
   SetEnvironmentVariableW(L"NTFS_BROWSER_NO_HOST_MEDIA_QUERY", L"1");
   return true;
 }();
 
 }  // namespace
 
-HostMediaAnswer::HostMediaAnswer(Tuning::MediaKind kind)
+HostMediaAnswer::HostMediaAnswer(NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind)
     : previous_(Current().kind) {
   Current().kind = kind;
   Current().asked.clear();
@@ -54,6 +55,6 @@ const std::vector<std::wstring>& HostMediaAnswer::Asked() {
   return Current().asked;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support
 
 #endif  // _WIN32

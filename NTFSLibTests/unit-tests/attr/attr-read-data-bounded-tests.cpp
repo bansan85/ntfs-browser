@@ -56,7 +56,7 @@ void CheckReadMatchesReference(const Attr::AttrNonResident<S>& attr,
   REQUIRE(offset + length <= reference.size());
   std::vector<BYTE> out(length + tail_slack, sentinel_byte);
 
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(attr.ReadExtentData(
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(attr.ReadExtentData(
             offset, std::span<BYTE>(out).first(length))) == length);
   CHECK(std::memcmp(out.data(), reference.data() + static_cast<size_t>(offset),
                     length) == 0);
@@ -87,15 +87,15 @@ TEMPLATE_TEST_CASE_SIG("ReadExtentData bounds reads by the extent",
 
   // One aligned read of the whole extent is the reference for every check.
   std::vector<BYTE> reference(static_cast<size_t>(extent_bytes), sentinel_byte);
-  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(alloc->ReadExtentData(
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(alloc->ReadExtentData(
               0, std::span<BYTE>(reference))) == extent_bytes);
   REQUIRE(std::any_of(reference.begin(), reference.end(),
                       [](BYTE b) { return b != 0; }));
 
   SECTION("an empty buffer reads zero bytes") {
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(
               alloc->ReadExtentData(0, std::span<BYTE>{})) == 0);
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(
               alloc->ReadExtentData(extent_bytes + 1, std::span<BYTE>{})) == 0);
   }
 
@@ -106,7 +106,7 @@ TEMPLATE_TEST_CASE_SIG("ReadExtentData bounds reads by the extent",
 
   SECTION("an offset at the extent end reads zero bytes") {
     std::vector<BYTE> out(16, sentinel_byte);
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(
               alloc->ReadExtentData(extent_bytes, out)) == 0);
   }
 
@@ -115,7 +115,7 @@ TEMPLATE_TEST_CASE_SIG("ReadExtentData bounds reads by the extent",
     const ULONGLONG offset = extent_bytes - tail;
     std::vector<BYTE> out(300, sentinel_byte);
 
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(
               alloc->ReadExtentData(offset, out)) == tail);
     CHECK(std::memcmp(out.data(),
                       reference.data() + static_cast<size_t>(offset),

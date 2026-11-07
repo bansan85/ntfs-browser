@@ -448,7 +448,7 @@ TEMPLATE_TEST_CASE_SIG("MftTree logs no warning for never-used record slots",
     const auto volume = OpenMftTreeVolume<S>();
     const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(*volume);
   }
-  NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink();
+  NTFS_BROWSER_NAMESPACE::Test::Support::InstallCaptureSink();
 
   CHECK_THAT(out.str(), ContainsSubstring("debug Invalid file record"));
   CHECK_THAT(out.str(), !ContainsSubstring("warning"));

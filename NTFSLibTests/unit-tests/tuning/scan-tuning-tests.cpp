@@ -30,7 +30,7 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
@@ -60,25 +60,25 @@ std::vector<BYTE> ListImage() {
       list_record_count, list_fragment_clusters);
 }
 
-Tests::ScanResult Scan(const std::vector<BYTE>& image,
-                       const VolumeOptions& options, unsigned threads) {
-  static_cast<void>(Tests::TakeCapturedLog());
+TestSupport::ScanResult Scan(const std::vector<BYTE>& image,
+                             const VolumeOptions& options, unsigned threads) {
+  static_cast<void>(TestSupport::TakeCapturedLog());
   auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
       std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
   const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
-  return Tests::CaptureScan(volume, counting, threads);
+  return TestSupport::CaptureScan(volume, counting, threads);
 }
 
-size_t Cancels(const Tests::ScanResult& scan) {
+size_t Cancels(const TestSupport::ScanResult& scan) {
   return static_cast<size_t>(std::ranges::count_if(
       scan.calls, [](const TestDiskReaders::CountingDiskReader::Call& call) {
         return call.kind == Kind::CancelPrefetch;
       }));
 }
 
-size_t Reads(const Tests::ScanResult& scan) {
+size_t Reads(const TestSupport::ScanResult& scan) {
   return static_cast<size_t>(std::ranges::count_if(
       scan.calls, [](const TestDiskReaders::CountingDiskReader::Call& call) {
         return call.kind == Kind::Read;
@@ -127,7 +127,7 @@ TEST_CASE(
   const std::vector<BYTE> image = ListImage();
   INFO("threads " << threads);
 
-  const Tests::ScanResult plain = Scan(image, ScanOptions(), threads);
+  const TestSupport::ScanResult plain = Scan(image, ScanOptions(), threads);
   CHECK(Cancels(plain) > 0);
   CHECK(Reads(plain) > 0);
 
@@ -135,9 +135,9 @@ TEST_CASE(
   Mft::SetMaxHeldRecordBytesForTests(old_held_record_bytes);
   Mft::SetWaitingBatchRecordsForTests(old_waiting_batch_records);
   Mft::SetAnnounceRestartIntervalForTests(old_restart_interval);
-  const Tests::ScanResult hooked = Scan(image, ScanOptions(), threads);
+  const TestSupport::ScanResult hooked = Scan(image, ScanOptions(), threads);
 
-  Tests::CheckSameScan(plain, hooked);
+  TestSupport::CheckSameScan(plain, hooked);
 }
 
 TEST_CASE("A scan with every knob set to its default is the default scan",
@@ -158,8 +158,8 @@ TEST_CASE("A scan with every knob set to its default is the default scan",
   }
   INFO("threads " << threads);
 
-  Tests::CheckSameScan(Scan(image, ScanOptions(), threads),
-                       Scan(image, explicit_defaults, threads));
+  TestSupport::CheckSameScan(Scan(image, ScanOptions(), threads),
+                             Scan(image, explicit_defaults, threads));
 }
 
 TEST_CASE("The announce restart hook wins over the tuning",
@@ -169,14 +169,14 @@ TEST_CASE("The announce restart hook wins over the tuning",
   VolumeOptions tuned = ScanOptions();
   tuned.tuning.mft.announce_restart_interval = 40;
 
-  const Tests::ScanResult baseline = Scan(image, ScanOptions(), 1);
+  const TestSupport::ScanResult baseline = Scan(image, ScanOptions(), 1);
   // The tuning alone restarts more often.
-  const Tests::ScanResult by_tuning = Scan(image, tuned, 1);
+  const TestSupport::ScanResult by_tuning = Scan(image, tuned, 1);
   CHECK(Cancels(by_tuning) > Cancels(baseline));
 
   Mft::SetAnnounceRestartIntervalForTests(old_restart_interval);
-  const Tests::ScanResult by_hook = Scan(image, tuned, 1);
-  Tests::CheckSameScan(baseline, by_hook);
+  const TestSupport::ScanResult by_hook = Scan(image, tuned, 1);
+  TestSupport::CheckSameScan(baseline, by_hook);
 }
 
 TEST_CASE("The held record hook wins over the tuning",
@@ -186,14 +186,14 @@ TEST_CASE("The held record hook wins over the tuning",
   VolumeOptions tuned = ScanOptions();
   tuned.tuning.mft.max_held_record_bytes = 0;
 
-  const Tests::ScanResult baseline = Scan(image, ScanOptions(), 1);
+  const TestSupport::ScanResult baseline = Scan(image, ScanOptions(), 1);
   // Holding nothing makes the second pass read the records again.
-  const Tests::ScanResult by_tuning = Scan(image, tuned, 1);
+  const TestSupport::ScanResult by_tuning = Scan(image, tuned, 1);
   CHECK(Reads(by_tuning) > Reads(baseline));
 
   Mft::SetMaxHeldRecordBytesForTests(old_held_record_bytes);
-  const Tests::ScanResult by_hook = Scan(image, tuned, 1);
-  Tests::CheckSameScan(baseline, by_hook);
+  const TestSupport::ScanResult by_hook = Scan(image, tuned, 1);
+  TestSupport::CheckSameScan(baseline, by_hook);
 }
 
 TEST_CASE("The thread limit hooks win over the tuning of an automatic scan",
@@ -208,11 +208,11 @@ TEST_CASE("The thread limit hooks win over the tuning of an automatic scan",
 
   // The probe says no: the first pass parses on this thread alone.
   Mft::SetAutoThreadLimitsForTests(1000, 1000, false, 100);
-  const Tests::ScanResult by_hook = Scan(image, tuned, 0);
-  const Tests::ScanResult hooked_default = Scan(image, ScanOptions(), 0);
+  const TestSupport::ScanResult by_hook = Scan(image, tuned, 0);
+  const TestSupport::ScanResult hooked_default = Scan(image, ScanOptions(), 0);
   CHECK(by_hook.waiting_by_threads > 0);
   CHECK(by_hook.waiting_by_threads == hooked_default.waiting_by_threads);
-  Tests::CheckSameScan(hooked_default, by_hook);
+  TestSupport::CheckSameScan(hooked_default, by_hook);
 
   // Without the hook for the waiting count, the tuning is read.
   Mft::SetAutoThreadLimitsForTests(1000, 1000, false);

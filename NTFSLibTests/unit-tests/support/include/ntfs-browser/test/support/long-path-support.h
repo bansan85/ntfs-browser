@@ -14,7 +14,7 @@
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // Code units of one level of a LongTempDir: the name and a separator. Under
 // every limit of a component, 255 on NTFS.
@@ -38,8 +38,8 @@ class LongTempDir final {
                               static_cast<char>('a' + (level % 26)));
     }
     std::error_code error;
-    std::filesystem::create_directories(Io::ToExtendedLengthFsPath(deepest_),
-                                        error);
+    std::filesystem::create_directories(
+        NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(deepest_), error);
     if (error) {
       throw std::system_error(error);
     }
@@ -52,7 +52,8 @@ class LongTempDir final {
 
   ~LongTempDir() {
     std::error_code ignored;
-    std::filesystem::remove_all(Io::ToExtendedLengthFsPath(root_), ignored);
+    std::filesystem::remove_all(
+        NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(root_), ignored);
   }
 
   // The deepest directory, as a user would type it: no extended-length prefix.
@@ -71,8 +72,9 @@ class LongTempDir final {
   std::filesystem::path Write(std::string_view name,
                               const std::vector<BYTE>& bytes) const {
     const std::filesystem::path file = FileIn(name);
-    std::ofstream output(Io::ToExtendedLengthFsPath(file),
-                         std::ios::binary | std::ios::trunc);
+    std::ofstream output(
+        NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(file),
+        std::ios::binary | std::ios::trunc);
     output.write(reinterpret_cast<const char*>(bytes.data()),
                  static_cast<std::streamsize>(bytes.size()));
     return file;
@@ -83,4 +85,4 @@ class LongTempDir final {
   std::filesystem::path deepest_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

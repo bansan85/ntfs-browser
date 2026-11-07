@@ -50,7 +50,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
@@ -110,7 +110,7 @@ struct Rig {
     REQUIRE(listing->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(listing->ParseAttrs());
     reads->Reset();
-    (void)Tests::TakeCapturedLog();
+    (void)TestSupport::TakeCapturedLog();
   }
 };
 
@@ -376,13 +376,13 @@ TEMPLATE_TEST_CASE_SIG(
     for (std::size_t node = 0; node < 30; node++) {
       records.push_back(TestFakeImage::name_tree_first_record + node);
     }
-    (void)Tests::TakeCapturedLog();
+    (void)TestSupport::TakeCapturedLog();
     const std::uint64_t salvaged = Log::Detail::RecoveredCount();
 
     ahead.Plan(records);
 
     CHECK(ahead.GetStats().records_read > 0);
-    CHECK(Tests::TakeCapturedLog().empty());
+    CHECK(TestSupport::TakeCapturedLog().empty());
     CHECK(Log::Detail::RecoveredCount() == salvaged);
   }
 }

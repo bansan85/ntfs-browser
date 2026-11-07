@@ -186,7 +186,7 @@ TEST_CASE("SetSinks with no sink discards every message", "[logging][sinks]") {
   CHECK_FALSE(Log::IsLogged(Log::Level::Error));
   REQUIRE_NOTHROW(Log::Error("nowhere to go"));
 
-  static_cast<void>(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog());
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog());
 }
 
 TEST_CASE("SetSinks keeps a sink alive after the caller let go of it",

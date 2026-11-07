@@ -31,7 +31,8 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
@@ -59,7 +60,7 @@ TEST_CASE("A reader that does not classify gives Unclassified",
   std::vector<BYTE> buffer(range_bytes);
   LARGE_INTEGER addr{.QuadPart = 0};
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   // An announced read is no better known to a reader that ignores hints.
   file.Prefetch(0, range_bytes);
   REQUIRE(file.ReadInto(addr, buffer));
@@ -82,7 +83,7 @@ TEST_CASE("A reader that does not classify gives Unclassified",
 
 TEST_CASE("The platform reader exists where the library has one",
           "[bench][read-class]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path =
       dir.Write("image.bin", std::string(range_bytes, 'x'));
 
@@ -119,7 +120,7 @@ class ImageFile {
   }
 
  private:
-  Tests::TempDir dir_;
+  TestDeviceAccess::TempDir dir_;
   std::filesystem::path path_;
 };
 
@@ -185,7 +186,7 @@ Bench::ReadClass ClassOfFirstRangeAfterWait(
 TEST_CASE("A read nobody announced is a Plan read", "[bench][read-class]") {
   const ImageFile image;
   const std::unique_ptr<IDiskReader> reader = image.Open(Caps{});
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   const Bench::Detail::ReadNote note = ReadAndNote(*reader, 0);
 
@@ -198,7 +199,7 @@ TEST_CASE("A read outside every announced range is a Plan read",
           "[bench][read-class]") {
   const ImageFile image;
   const std::unique_ptr<IDiskReader> reader = image.Open(Caps{});
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   Announce(*reader, 2);
 
   const Bench::Detail::ReadNote note = ReadAndNote(*reader, 5 * range_stride);
@@ -209,7 +210,7 @@ TEST_CASE("A read outside every announced range is a Plan read",
 TEST_CASE("A read of an announced range that is done and alone is Ready",
           "[bench][read-class]") {
   const ImageFile image;
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   CHECK(ClassOfFirstRangeAfterWait(image, Caps{}, 1, Bench::ReadClass::Ready) ==
         Bench::ReadClass::Ready);
@@ -221,7 +222,7 @@ TEST_CASE("A read the caller had to wait for is an Io read",
   // One read at a time: the second range is not even started when its read
   // comes, and the first one is passed over.
   const std::unique_ptr<IDiskReader> reader = image.Open(CapsWithMaxReads(1));
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   Announce(*reader, 3);
 
   const Bench::Detail::ReadNote note = ReadAndNote(*reader, 2 * range_stride);
@@ -236,7 +237,7 @@ TEST_CASE("A done read is a Window read once the caps hold ranges back",
   const size_t announced = GENERATE(size_t{1}, size_t{2}, size_t{3}, size_t{4});
   INFO("max_reads " << max_reads << ", announced " << announced);
   const ImageFile image;
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   // window_held_back turns true as soon as more ranges are announced than the
   // cap on the reads in flight allows.
@@ -254,7 +255,7 @@ TEST_CASE("The caps by pattern decide which ranges are held back",
   caps.at(static_cast<size_t>(Tuning::Pattern::ScatteredGrouped)).max_reads =
       32;
   const ImageFile image;
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   SECTION("the first pattern holds the second range back") {
     CHECK(
@@ -276,7 +277,7 @@ TEST_CASE("The classes and the disk side of a report add up",
   std::vector<BYTE> buffer(range_bytes);
   LARGE_INTEGER addr{.QuadPart = 0};
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   // One announced range that is used, one unannounced read, and one range that
   // is announced and withdrawn.
   file.Prefetch(0, range_bytes);
@@ -323,7 +324,7 @@ TEST_CASE("The disk reads of the standing lane are counted apart",
   std::vector<BYTE> buffer(range_bytes);
   LARGE_INTEGER addr{.QuadPart = 0};
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   // One range of the first queue that is used, two of the lane of which one is
   // used and one is withdrawn, and one read that nobody announced.
   file.Prefetch(0, range_bytes);
@@ -364,7 +365,7 @@ TEST_CASE("A withdrawn range of the first queue is not a standing waste",
   const ImageFile image;
   const Io::FileReader<Cache::Strategy::NoCache> file(image.Open(Caps{}));
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   file.Prefetch(0, range_bytes);
   file.PrefetchStanding(4 * range_stride, range_bytes);
   file.CancelPrefetch();

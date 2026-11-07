@@ -70,13 +70,13 @@ class ScopedSink {
  public:
   explicit ScopedSink(std::shared_ptr<LevelSink> sink)
       : sink_(std::move(sink)) {
-    Log::SetSinks({Tests::CaptureSinkHandle(), sink_});
+    Log::SetSinks({Test::Support::CaptureSinkHandle(), sink_});
   }
 
   ScopedSink(const ScopedSink&) = delete;
   ScopedSink& operator=(const ScopedSink&) = delete;
 
-  ~ScopedSink() { Tests::InstallCaptureSink(); }
+  ~ScopedSink() { Test::Support::InstallCaptureSink(); }
 
  private:
   std::shared_ptr<LevelSink> sink_;

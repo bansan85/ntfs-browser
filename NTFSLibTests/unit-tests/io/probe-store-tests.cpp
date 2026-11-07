@@ -38,7 +38,7 @@ enum class RecordStanding : std::uint8_t;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Io::FileRecord;
@@ -86,7 +86,7 @@ RootWalk WalkRoot(const std::vector<BYTE>& image, const Store* store) {
     root.SetProbeStore(*store);
   }
   reads.Reset();
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
 
   RootWalk walk;
   root.TraverseSubEntriesWithStanding(
@@ -96,7 +96,7 @@ RootWalk WalkRoot(const std::vector<BYTE>& image, const Store* store) {
       },
       &walk);
   walk.calls = reads.Calls();
-  walk.log = Tests::TakeCapturedLog();
+  walk.log = TestSupport::TakeCapturedLog();
   return walk;
 }
 

@@ -6,7 +6,7 @@
 #include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // Makes the capturing sink the library's only sink and opens every level
 // up, so trace-grade messages reach it. It is installed once before main()
@@ -25,4 +25,4 @@ std::shared_ptr<NTFS_BROWSER_NAMESPACE::Log::ISink> CaptureSinkHandle();
 // then discards.
 std::string TakeCapturedLog();
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

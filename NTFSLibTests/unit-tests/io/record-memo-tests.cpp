@@ -23,7 +23,7 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -231,11 +231,11 @@ TEMPLATE_TEST_CASE_SIG(
         INFO(fixture.name << ", slot " << slot << ", include_deleted "
                           << options.include_deleted << ", recover_errors "
                           << options.recover_errors);
-        (void)Tests::TakeCapturedLog();
+        (void)TestSupport::TakeCapturedLog();
         const bool full_parsed = full.ParseFileRecord(slot, original);
-        const std::string full_log = Tests::TakeCapturedLog();
+        const std::string full_log = TestSupport::TakeCapturedLog();
         const bool rebuilt_parsed = rebuilt.ParseFileRecord(slot, kept);
-        const std::string rebuilt_log = Tests::TakeCapturedLog();
+        const std::string rebuilt_log = TestSupport::TakeCapturedLog();
 
         CHECK(rebuilt_parsed == full_parsed);
         CHECK(rebuilt_log == full_log);

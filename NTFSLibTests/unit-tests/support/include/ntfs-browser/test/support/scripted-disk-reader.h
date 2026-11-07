@@ -12,7 +12,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // A MemoryDiskReader whose size and failures a test scripts: it can declare
 // another size, fail the reads that touch a byte range, or throw from them.
@@ -64,4 +64,4 @@ class ScriptedDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   std::optional<Fault> fault_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

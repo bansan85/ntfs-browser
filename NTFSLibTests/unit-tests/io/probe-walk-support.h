@@ -161,12 +161,12 @@ template <Cache::Strategy S>
   REQUIRE(record.ParseAttrs());
 
   DirectoryWalk walk;
-  (void)TakeCapturedLog();
+  (void)Test::Support::TakeCapturedLog();
   open.reads->Reset();
   const std::uint64_t recovered = Log::Detail::RecoveredCount();
   walk.groups = Io::DirectoryIndex<S>(record).HeldProbeGroups();
   walk.calls_of_groups = open.reads->Calls().size();
-  walk.log_of_groups = TakeCapturedLog();
+  walk.log_of_groups = Test::Support::TakeCapturedLog();
   walk.recovered_by_groups = Log::Detail::RecoveredCount() - recovered;
 
   typename Io::FileRecord<S>::ProbeStore store;

@@ -34,7 +34,7 @@ using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -54,7 +54,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> found = dir.record->FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
-  CHECK(Tests::Unwrap(found).GetFileReference() == 20);
+  CHECK(TestSupport::Unwrap(found).GetFileReference() == 20);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -146,7 +146,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> found = dir.record->FindSubEntry(L"Foo");
   REQUIRE(found.has_value());
-  CHECK(Tests::Unwrap(found).GetFileReference() == 20);
+  CHECK(TestSupport::Unwrap(found).GetFileReference() == 20);
 
   const auto& alloc_attrs = dir.record->GetAttr(Attr::Type::IndexAllocation);
   REQUIRE(alloc_attrs.size() == 1);

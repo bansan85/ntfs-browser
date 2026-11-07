@@ -30,7 +30,7 @@ extern char** environ;
 
 namespace Fs = std::filesystem;
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 namespace {
 
@@ -252,4 +252,4 @@ int RunProcessToFiles(const Fs::path& exe,
 #endif
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

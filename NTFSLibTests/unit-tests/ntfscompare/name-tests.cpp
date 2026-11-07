@@ -40,9 +40,9 @@ namespace Fs = std::filesystem;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
-using NTFS_BROWSER_NAMESPACE::Tests::FillerName;
-using NTFS_BROWSER_NAMESPACE::Tests::LongTempDir;
-using NTFS_BROWSER_NAMESPACE::Tests::OpenNameTreeVolume;
+using NTFS_BROWSER_NAMESPACE::Test::Support::FillerName;
+using NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir;
+using NTFS_BROWSER_NAMESPACE::Test::Support::OpenNameTreeVolume;
 using NtfsCompare::CompareAgainstReference;
 using NtfsCompare::CompareLibraryMethods;
 using NtfsCompare::comparison_volume_options;
@@ -234,7 +234,7 @@ TEST_CASE("ResolveDirectoryRecord walks down a path of more than 260 units",
   }
 
   CHECK(ResolveDirectoryRecord(*volume, path) ==
-        NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord(depth - 1));
+        NTFS_BROWSER_NAMESPACE::Test::Support::NameTreeRecord(depth - 1));
   CHECK_FALSE(ResolveDirectoryRecord(*volume, path + L"/leaf.txt"));
 }
 
@@ -245,9 +245,9 @@ TEST_CASE(
   const auto volume = OpenNameTreeVolume<Cache::Strategy::NoCache>(TwinNodes());
 
   CHECK(ResolveDirectoryRecord(*volume, L"a") ==
-        NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord(3));
+        NTFS_BROWSER_NAMESPACE::Test::Support::NameTreeRecord(3));
   CHECK(ResolveDirectoryRecord(*volume, L"A") ==
-        NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord(4));
+        NTFS_BROWSER_NAMESPACE::Test::Support::NameTreeRecord(4));
   CHECK(ResolveDirectoryRecord(*volume, L"A/x") == std::nullopt);
 }
 
@@ -389,7 +389,7 @@ TEST_CASE(
 
 TEST_CASE("the operating-system walks list names that differ only by case",
           "[ntfscompare][os-walk][case]") {
-  const NTFS_BROWSER_NAMESPACE::Tests::TempDir directory;
+  const NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir directory;
   const Fs::path folder = directory.Path() / "sensitive";
   MakeHostDirectory(folder);
   // A folder that keeps two names apart: the attribute NTFS gives a folder
@@ -401,8 +401,8 @@ TEST_CASE("the operating-system walks list names that differ only by case",
   if (!Fs::exists(fsutil)) {
     SKIP("fsutil is not there");
   }
-  const NTFS_BROWSER_NAMESPACE::Tests::SampleRun enabled =
-      NTFS_BROWSER_NAMESPACE::Tests::RunSample(
+  const NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun enabled =
+      NTFS_BROWSER_NAMESPACE::Test::Support::RunSample(
           fsutil,
           {L"file", L"setCaseSensitiveInfo", folder.wstring(), L"enable"});
   if (enabled.exit_code != 0) {

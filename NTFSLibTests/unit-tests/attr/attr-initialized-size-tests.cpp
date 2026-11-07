@@ -109,9 +109,10 @@ void CheckReadsBeyondTheInitializedSizeAreZero() {
 
     const std::vector<BYTE> expected =
         ExpectedBytes(range.offset, range.length);
-    REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(read) == expected.size());
-    buffer.resize(
-        gsl::narrow<size_t>(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(read)));
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(read) ==
+            expected.size());
+    buffer.resize(gsl::narrow<size_t>(
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(read)));
     const bool same = buffer == expected;
     CHECK(same);
   }

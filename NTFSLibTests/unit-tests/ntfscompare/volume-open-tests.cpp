@@ -47,8 +47,8 @@ TEMPLATE_TEST_CASE_SIG(
   #include <ntfs-browser/tool/device-access/device-path.h>
   #include <ntfs-browser/tool/device-access/text-convert.h>
 
+using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::WriteFakeNtfsImage;
-using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
 using NtfsCompare::FindMountOfDevice;
 using NtfsCompare::OpenDeviceVolume;
 

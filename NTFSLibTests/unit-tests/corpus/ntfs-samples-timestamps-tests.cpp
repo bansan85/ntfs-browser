@@ -47,13 +47,13 @@ TEST_CASE(
   REQUIRE(entry.has_value());
 
   FILETIME index_access{};
-  NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileTime(nullptr, nullptr,
-                                                           &index_access);
+  NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileTime(
+      nullptr, nullptr, &index_access);
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::StandardInformation);
   REQUIRE(file.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   FILETIME std_info_access{};
@@ -85,13 +85,13 @@ TEST_CASE(
   REQUIRE(entry.has_value());
 
   FILETIME index_create{};
-  NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileTime(
+  NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileTime(
       nullptr, &index_create, nullptr);
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::StandardInformation | Attr::Mask::FileName);
   REQUIRE(file.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   FILETIME std_info_create{};

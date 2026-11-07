@@ -54,7 +54,7 @@ using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;
+using NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog;
 
 namespace {
 

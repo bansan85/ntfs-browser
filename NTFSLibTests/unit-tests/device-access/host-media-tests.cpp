@@ -19,7 +19,7 @@
 
 namespace fs = std::filesystem;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
-using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
+using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
 using NtfsDevice::PosixDeviceDiskReader;
 using NtfsDevice::RotationalOfBlockDevice;
 using NtfsDevice::SysfsRoot;

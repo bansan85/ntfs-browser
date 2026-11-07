@@ -175,9 +175,9 @@ template <Cache::Strategy S>
 std::string LogOfReadingStale(std::vector<BYTE> image,
                               const VolumeOptions& options) {
   const auto opened = OpenVolume<S>(std::move(image), options);
-  (void)TakeCapturedLog();
+  (void)Test::Support::TakeCapturedLog();
   (void)ReadStale(opened);
-  return TakeCapturedLog();
+  return Test::Support::TakeCapturedLog();
 }
 
 // Fills the stale stream's four clusters, at LCN 40, with a pattern of the

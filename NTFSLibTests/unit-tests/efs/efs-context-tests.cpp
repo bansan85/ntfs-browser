@@ -23,6 +23,7 @@
 
 namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 using Catch::Matchers::ContainsSubstring;
 using Tests::Algorithm;
 using Tests::TestKeyProvider;
@@ -63,7 +64,7 @@ Efs::Context MakeContext() {
 TEST_CASE("A context refuses data that is not whole sectors at a sector start",
           "[efs][efs-context]") {
   const Efs::Context context = MakeContext();
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
 
   SECTION("a size that is not a multiple of a sector") {
     std::vector<BYTE> data(Efs::sector_size + 1, 0);
@@ -74,7 +75,8 @@ TEST_CASE("A context refuses data that is not whole sectors at a sector start",
     CHECK_FALSE(context.Decrypt(1, data));
   }
 
-  CHECK_THAT(Tests::TakeCapturedLog(), ContainsSubstring("not sector aligned"));
+  CHECK_THAT(TestSupport::TakeCapturedLog(),
+             ContainsSubstring("not sector aligned"));
 }
 
 TEST_CASE("A context decrypts whole sectors at a sector start",
@@ -97,11 +99,11 @@ TEST_CASE("A context without a provider reports why it cannot decrypt",
                        .wrapped_fek = user_wrapped_fek}},
       []() -> std::shared_ptr<Efs::IEfsKeyProvider> { return nullptr; },
       backend);
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   std::vector<BYTE> data(Efs::sector_size, 0);
 
   CHECK_FALSE(context.Decrypt(0, data));
 
-  CHECK_THAT(Tests::TakeCapturedLog(),
+  CHECK_THAT(TestSupport::TakeCapturedLog(),
              ContainsSubstring("no EFS key provider is installed"));
 }

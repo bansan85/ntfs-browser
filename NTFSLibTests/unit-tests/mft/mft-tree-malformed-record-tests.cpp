@@ -33,10 +33,10 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_hard_link_idx;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_reused_dir_idx;
-using NTFS_BROWSER_NAMESPACE::Tests::ScratchFileNameBody;
-using NTFS_BROWSER_NAMESPACE::Tests::ScratchHeader;
-using NTFS_BROWSER_NAMESPACE::Tests::ScratchRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::ScratchStdInfoBody;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ScratchFileNameBody;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ScratchHeader;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ScratchRecord;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ScratchStdInfoBody;
 
 namespace {
 

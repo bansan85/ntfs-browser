@@ -35,8 +35,8 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
-using NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
+using NTFS_BROWSER_NAMESPACE::Test::Support::NameTreeRecord;
+using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
 using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::RunMftList;
 using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::TempTreeImage;
 

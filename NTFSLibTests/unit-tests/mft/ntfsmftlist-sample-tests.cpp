@@ -25,8 +25,8 @@
 #include "mft-tree-parent-support.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::Tests::sample_failure_exit_code;
-using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
+using NTFS_BROWSER_NAMESPACE::Test::Support::sample_failure_exit_code;
+using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
 using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::TempTreeImage;
 namespace Fs = std::filesystem;
 

@@ -78,7 +78,7 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::multi_cluster_orphan_name;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::multi_cluster_reachable_name;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_orphan_name;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_reachable_name;
-using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;
+using NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog;
 
 namespace {
 

@@ -106,7 +106,7 @@ inline void OpenSubDir(
   REQUIRE(entry.has_value());
   dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(dir.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(dir.ParseAttrs());
 }
 
@@ -200,7 +200,7 @@ inline void CheckRepairStreamsHoldPtrnPattern(
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
   file.SetAttrMask(Attr::Mask::Data);
   REQUIRE(file.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 
   for (const std::wstring_view stream_name : {L"$Corrupt", L"$Verify"}) {

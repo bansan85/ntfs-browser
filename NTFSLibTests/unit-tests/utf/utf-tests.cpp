@@ -95,8 +95,8 @@ TEST_CASE("Utf16ToWide keeps what is not a surrogate pair", "[utf]") {
 }
 
 TEST_CASE("WideToUtf8 writes every exotic name as its UTF-8", "[utf]") {
-  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
-       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+  for (const NTFS_BROWSER_NAMESPACE::Test::Support::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames()) {
     INFO(exotic.label);
     CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(exotic.name) == exotic.utf8);
   }

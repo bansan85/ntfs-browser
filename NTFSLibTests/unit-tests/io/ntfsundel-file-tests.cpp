@@ -20,8 +20,8 @@
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace Fs = std::filesystem;
-using NTFS_BROWSER_NAMESPACE::Tests::LongTempDir;
-using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
+using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
+using NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir;
 using NtfsUndel::CreatedFile;
 using NtfsUndel::CreateError;
 using NtfsUndel::CreateRecoveryFile;

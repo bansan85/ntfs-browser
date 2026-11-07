@@ -9,7 +9,7 @@
 
 #include "utf/utf.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 namespace {
 
@@ -74,4 +74,4 @@ const std::vector<ExoticName>& ExoticNames() {
   return names;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

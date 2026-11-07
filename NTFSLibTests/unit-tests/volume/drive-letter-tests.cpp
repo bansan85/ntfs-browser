@@ -11,14 +11,14 @@
 using Catch::Matchers::ContainsSubstring;
 
 TEST_CASE("a drive argument that is not a letter opens no volume", "[volume]") {
-  static_cast<void>(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog());
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog());
 
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>
       volume(_T('1'));
 
   CHECK_FALSE(volume.IsVolumeOK());
-  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog(),
              ContainsSubstring("Volume name error"));
 }
 

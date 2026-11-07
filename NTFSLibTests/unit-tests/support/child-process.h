@@ -6,7 +6,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // Runs exe with args, redirecting its stdout and stderr to two separate
 // files instead of a pipe, and returns its exit code. Two temp files instead
@@ -18,4 +18,4 @@ namespace NTFS_BROWSER_NAMESPACE::Tests {
                                     const std::filesystem::path& stdout_path,
                                     const std::filesystem::path& stderr_path);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

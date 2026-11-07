@@ -87,11 +87,11 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume logs the NTFS version it reads from $Volume",
                        "[init]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("version 3.x is accepted and logged") {
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+    (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
     const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
         NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
     const std::string captured =
-        NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+        NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
     REQUIRE(volume.IsVolumeOK());
     CHECK(volume.GetVersion().first == 3);
@@ -105,11 +105,11 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume logs the NTFS version it reads from $Volume",
         FirstAttr(image, volume_idx, Attr::Type::VolumeInformation);
     Store<BYTE>(image, ResidentBody(image, attr) + volume_info_major_field,
                 old_major_version);
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+    (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
     const NtfsVolume<S> volume(
         std::make_unique<MemoryDiskReader>(std::move(image)));
     const std::string captured =
-        NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+        NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
     CHECK_FALSE(volume.IsVolumeOK());
     CHECK(volume.GetVersion().first == old_major_version);
@@ -121,10 +121,11 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume stays OK without a VOLUME_NAME and logs no name", "[init]",
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
-  const std::string captured = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string captured =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   CHECK(volume.IsVolumeOK());
   CHECK_THAT(captured, !ContainsSubstring("NTFS volume name"));
@@ -139,10 +140,11 @@ TEMPLATE_TEST_CASE_SIG(
   Store<ULONGLONG>(
       image, FirstAttr(image, mft_idx, Attr::Type::Data) + attr_real_size_field,
       overclaimed_mft_bytes);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(std::move(image)));
-  const std::string captured = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string captured =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   CHECK(volume.IsVolumeOK());
   CHECK(volume.GetRecordsCount() < overclaimed_mft_records);

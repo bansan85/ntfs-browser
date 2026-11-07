@@ -100,12 +100,12 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   MakeSecondExtentSparse(image);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NtfsVolume<S> volume(
       std::make_unique<
           NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(image));
   REQUIRE(volume.IsVolumeOK());
-  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog(),
              Catch::Matchers::ContainsSubstring("Sparse Data"));
 
   FileRecord<S> first(volume);
@@ -161,7 +161,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   // Parses the root record's $DATA and returns the messages logged meanwhile.
   const auto parse_log = [](std::vector<BYTE> image, VolumeOptions options) {
-    (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+    (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
     const NtfsVolume<S> volume(
         std::make_unique<
             NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
@@ -171,7 +171,7 @@ TEMPLATE_TEST_CASE_SIG(
     FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     (void)record.ParseAttrs();
-    return NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+    return NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   };
 
   SECTION("an LCN overflow") {

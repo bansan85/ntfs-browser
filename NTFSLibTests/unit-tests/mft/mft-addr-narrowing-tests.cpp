@@ -48,10 +48,10 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE_FALSE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(parsed = record.ParseFileRecord(0));
   CHECK_FALSE(parsed);
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().find(
             "Cannot read file record 0") != std::string::npos);
 }

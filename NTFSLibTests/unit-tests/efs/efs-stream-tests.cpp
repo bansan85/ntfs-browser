@@ -67,6 +67,7 @@ using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
 using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
 using NTFS_BROWSER_NAMESPACE::Tests::TestKeyProvider;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -94,7 +95,7 @@ constexpr DWORD broken_algorithm_id = 0x1234;
 // Fill of the residue past a file's initialized size.
 constexpr BYTE residue_fill = 0xAB;
 
-std::string TakeLog() { return Tests::TakeCapturedLog(); }
+std::string TakeLog() { return TestSupport::TakeCapturedLog(); }
 
 std::vector<BYTE> Slice(const std::vector<BYTE>& bytes, size_t offset,
                         size_t size) {
@@ -135,12 +136,12 @@ TEMPLATE_TEST_CASE_SIG(
 
       const auto whole = ReadAt<S>(data, 0, fixture.plaintext.size());
       REQUIRE(whole.has_value());
-      CHECK(Tests::Unwrap(whole) == fixture.plaintext);
+      CHECK(TestSupport::Unwrap(whole) == fixture.plaintext);
 
       // A second read: decrypting in place in a shared cache would garble it.
       const auto again = ReadAt<S>(data, 0, fixture.plaintext.size());
       REQUIRE(again.has_value());
-      CHECK(Tests::Unwrap(again) == fixture.plaintext);
+      CHECK(TestSupport::Unwrap(again) == fixture.plaintext);
     }
   }
 }
@@ -160,7 +161,8 @@ TEMPLATE_TEST_CASE_SIG(
       INFO("offset " << offset << ", length " << length);
       const auto read = ReadAt<S>(data, offset, length);
       REQUIRE(read.has_value());
-      CHECK(Tests::Unwrap(read) == Slice(fixture.plaintext, offset, length));
+      CHECK(TestSupport::Unwrap(read) ==
+            Slice(fixture.plaintext, offset, length));
     }
   }
 }
@@ -200,7 +202,7 @@ TEMPLATE_TEST_CASE_SIG(
       TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, expected.size());
   REQUIRE(read.has_value());
-  CHECK(Tests::Unwrap(read) == expected);
+  CHECK(TestSupport::Unwrap(read) == expected);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -420,7 +422,7 @@ TEMPLATE_TEST_CASE_SIG(
   // Never decrypted: the bytes come back exactly as they sit on disk.
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, on_disk.size());
   REQUIRE(read.has_value());
-  CHECK(Tests::Unwrap(read) == on_disk);
+  CHECK(TestSupport::Unwrap(read) == on_disk);
   CHECK_THAT(TakeLog(), Catch::Matchers::ContainsSubstring(
                             "flagged both compressed and encrypted"));
 }
@@ -620,9 +622,9 @@ TEMPLATE_TEST_CASE_SIG(
       TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, real_size);
   REQUIRE(read.has_value());
-  CHECK(Tests::Unwrap(read) == expected);
+  CHECK(TestSupport::Unwrap(read) == expected);
 
   const auto tail = ReadAt<S>(OnlyData<S>(*opened.record), 2000, 500);
   REQUIRE(tail.has_value());
-  CHECK(Tests::Unwrap(tail) == std::vector<BYTE>(500, 0));
+  CHECK(TestSupport::Unwrap(tail) == std::vector<BYTE>(500, 0));
 }

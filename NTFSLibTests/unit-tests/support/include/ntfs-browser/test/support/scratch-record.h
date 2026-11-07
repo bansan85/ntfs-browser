@@ -26,7 +26,7 @@
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // Header fields of a ScratchRecord a test may forge. The defaults describe a
 // well-formed record of a volume whose fixup array follows its 48-byte header.
@@ -37,7 +37,8 @@ struct ScratchHeader {
   WORD size_of_us = 3;
   // Offset of the first attribute.
   WORD offset_of_attr = 56;
-  Data::FileRecordFlag flags = Data::FileRecordFlag::InUse;
+  NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags =
+      NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse;
   WORD sequence = 1;
   ULONGLONG ref_to_base = 0;
   // The used size the header declares. The library MUST NOT rely on it.
@@ -53,8 +54,9 @@ class ScratchRecord {
   explicit ScratchRecord(const ScratchHeader& header = {})
       : cursor_(header.offset_of_attr) {
     Test::FakeImage::EditFileRecordHeader(
-        bytes_, [&](Data::FileRecordHeader& raw) {
-          raw.magic = Data::FileRecordHeader::file_record_magic;
+        bytes_, [&](NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader& raw) {
+          raw.magic =
+              NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::file_record_magic;
           raw.offset_of_us = header.offset_of_us;
           raw.size_of_us = header.size_of_us;
           raw.offset_of_attr = header.offset_of_attr;
@@ -67,8 +69,9 @@ class ScratchRecord {
   }
 
   // Appends a resident attribute of any type value, unnamed.
-  ScratchRecord& Resident(Attr::Type type, std::span<const BYTE> body) {
-    Data::HeaderResident header{};
+  ScratchRecord& Resident(NTFS_BROWSER_NAMESPACE::Attr::Type type,
+                          std::span<const BYTE> body) {
+    NTFS_BROWSER_NAMESPACE::Data::HeaderResident header{};
     header.header.type = type;
     header.header.total_size = Aligned(sizeof(header) + body.size());
     header.attr_size = gsl::narrow<DWORD>(body.size());
@@ -84,9 +87,10 @@ class ScratchRecord {
 
   // Appends an unnamed non-resident attribute from VCN 0. run_list holds the
   // encoded runs, terminator included. clusters is the VCN count it maps.
-  ScratchRecord& NonResident(Attr::Type type, std::span<const BYTE> run_list,
-                             ULONGLONG clusters, ULONGLONG real_size) {
-    Data::HeaderNonResident header{};
+  ScratchRecord& NonResident(NTFS_BROWSER_NAMESPACE::Attr::Type type,
+                             std::span<const BYTE> run_list, ULONGLONG clusters,
+                             ULONGLONG real_size) {
+    NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident header{};
     header.header.type = type;
     header.header.non_resident = 1;
     header.header.total_size = Aligned(sizeof(header) + run_list.size());
@@ -104,7 +108,7 @@ class ScratchRecord {
 
   // Appends the 4-byte marker that ends the attributes.
   ScratchRecord& End() {
-    Put(cursor_, static_cast<DWORD>(Attr::Type::All));
+    Put(cursor_, static_cast<DWORD>(NTFS_BROWSER_NAMESPACE::Attr::Type::All));
     cursor_ += sizeof(DWORD);
     return *this;
   }
@@ -162,14 +166,15 @@ class ScratchRecord {
 };
 
 // The body of a $STANDARD_INFORMATION with every time set.
-inline std::array<BYTE, sizeof(Data::StandardInformation)>
+inline std::array<BYTE,
+                  sizeof(NTFS_BROWSER_NAMESPACE::Data::StandardInformation)>
     ScratchStdInfoBody() {
-  Data::StandardInformation info{};
+  NTFS_BROWSER_NAMESPACE::Data::StandardInformation info{};
   info.create_time = 0x01D87F3C00000000ULL;
   info.alter_time = info.create_time;
   info.mft_time = info.create_time;
   info.read_time = info.create_time;
-  info.permission = Data::StdInfoPermission::Archive;
+  info.permission = NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive;
   std::array<BYTE, sizeof(info)> body{};
   std::memcpy(body.data(), &info, sizeof(info));
   return body;
@@ -186,17 +191,20 @@ inline std::vector<BYTE> ScratchFileNameBody(std::wstring_view name,
   for (const wchar_t unit : name) {
     units.push_back(static_cast<WORD>(unit));
   }
-  std::vector<BYTE> body(offsetof(Data::Filename, name) + (units.size() * 2));
-  Data::Filename header{};
+  std::vector<BYTE> body(
+      offsetof(NTFS_BROWSER_NAMESPACE::Data::Filename, name) +
+      (units.size() * 2));
+  NTFS_BROWSER_NAMESPACE::Data::Filename header{};
   header.parent_ref = parent_ref;
-  header.flags = Data::FilenameFlag::Archive;
+  header.flags = NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::Archive;
   header.name_length = gsl::narrow<BYTE>(
       name_length < 0 ? static_cast<int>(units.size()) : name_length);
-  header.name_space = Data::FilenameNamespace::Win32;
-  std::memcpy(body.data(), &header, offsetof(Data::Filename, name));
-  std::memcpy(&body.at(offsetof(Data::Filename, name)), units.data(),
-              units.size() * 2);
+  header.name_space = NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
+  std::memcpy(body.data(), &header,
+              offsetof(NTFS_BROWSER_NAMESPACE::Data::Filename, name));
+  std::memcpy(&body.at(offsetof(NTFS_BROWSER_NAMESPACE::Data::Filename, name)),
+              units.data(), units.size() * 2);
   return body;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

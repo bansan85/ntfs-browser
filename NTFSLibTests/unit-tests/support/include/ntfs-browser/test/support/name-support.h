@@ -7,7 +7,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // A name of exactly units code units: fill repeated, then tag as the last one.
 // Names of different tags differ, so a path made of them shows which level a
@@ -34,4 +34,4 @@ struct ExoticName {
 // dot and space.
 [[nodiscard]] const std::vector<ExoticName>& ExoticNames();
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

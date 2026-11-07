@@ -45,7 +45,7 @@ using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
@@ -331,7 +331,7 @@ TEMPLATE_TEST_CASE_SIG(
           TestFakeImage::FakeListResidency::Resident,
           TestFakeImage::FakeListedState::Freed);
 
-  const Tests::RecordLevels levels;
+  const TestSupport::RecordLevels levels;
   const CountedScan<S> scan = Scan<S>(image, options);
 
   const MftTree::Entry* const listed =
@@ -533,7 +533,7 @@ TEMPLATE_TEST_CASE_SIG(
           TestFakeImage::FakeListResidency::NonResident,
           TestFakeImage::FakeListedState::Freed, bytes);
 
-  const Tests::RecordLevels levels;
+  const TestSupport::RecordLevels levels;
   const CountedScan<S> scan = Scan<S>(image, options);
 
   const MftTree::Entry* const listed =
@@ -592,7 +592,7 @@ TEMPLATE_TEST_CASE_SIG(
                std::pair{TestFakeImage::FakeListResidency::Resident,
                          TestFakeImage::FakeListedState::Live});
 
-  const Tests::RecordLevels levels;
+  const TestSupport::RecordLevels levels;
   const CountedScan<S> scan =
       Scan<S>(TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
                   TestFakeImage::FakeListedExtension::Genuine, residency, state,

@@ -68,7 +68,7 @@ void CheckReadDataReturnsActualByteCount() {
   const std::optional<ULONGLONG> result = data_attrs[0]->ReadData(0, buffer);
 
   REQUIRE(result.has_value());
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result) ==
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(result) ==
         NTFS_BROWSER_NAMESPACE::Test::FakeImage::small_resident_data_content
             .size());
 

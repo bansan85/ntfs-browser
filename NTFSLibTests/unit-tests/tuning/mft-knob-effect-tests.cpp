@@ -37,10 +37,11 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::ScanResult;
+using TestSupport::ScanResult;
 using namespace Tests::KnobEffect;
 
 namespace {
@@ -294,7 +295,7 @@ TEST_CASE(
   TestFakeImage::PutClusterBitmap(image, bits);
 
   const auto flushes = [&image](const VolumeOptions& options) {
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     const Tests::MftTreeSupport::ScannedVolume<Cache::Strategy::NoCache>
         scanned(image, options);
     const Bench::Report report = session.Finish();
@@ -430,7 +431,7 @@ TEST_CASE("mft.max_auto_threads caps the threads of an automatic scan",
                            {"mft.max_load_per_mille", 1000}});
 
   const auto pool_workers = [&](std::uint64_t cap) {
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     const ScanResult scan =
         ScanOf(image, Tuned(threaded, {{"mft.max_auto_threads", cap}}), 0);
     static_cast<void>(scan);

@@ -37,14 +37,14 @@ class FailingSink final : public Log::ISink {
 
 TEST_CASE("a log call survives a sink that throws", "[logging]") {
   const RestoreCaptureSink restore;
-  static_cast<void>(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog());
+  static_cast<void>(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog());
 
   // The capturing sink sits before the failing one, so it still gets the line.
-  Log::SetSinks({NTFS_BROWSER_NAMESPACE::Tests::CaptureSinkHandle(),
+  Log::SetSinks({NTFS_BROWSER_NAMESPACE::Test::Support::CaptureSinkHandle(),
                  std::make_shared<FailingSink>()});
 
   REQUIRE_NOTHROW(Log::Info("line before the failing sink"));
-  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog(),
              ContainsSubstring("line before the failing sink"));
 }
 

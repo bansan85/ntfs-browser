@@ -127,7 +127,7 @@ TEST_CASE(
       if (file.name == reencrypted_file) {
         REQUIRE(read == data.size());
   #ifdef NTFS_TEST_HAS_MD5
-        CHECK(NTFS_BROWSER_NAMESPACE::Tests::Md5Hex(data) == file.md5);
+        CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Md5Hex(data) == file.md5);
   #endif
       } else {
         CHECK(read == std::nullopt);

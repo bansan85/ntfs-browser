@@ -65,8 +65,9 @@ void OpenSubDir(
     std::string_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
-  ParseDir(dir,
-           NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference());
+  ParseDir(
+      dir,
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference());
 }
 
 void OpenFile(
@@ -78,7 +79,7 @@ void OpenFile(
 
   file.SetAttrMask(Attr::Mask::Data);
   REQUIRE(file.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileReference()));
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
 }
 

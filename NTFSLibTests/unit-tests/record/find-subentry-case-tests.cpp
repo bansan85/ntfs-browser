@@ -38,9 +38,9 @@ using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::CountingDiskReader;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeNameTreeOptions;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
-using NTFS_BROWSER_NAMESPACE::Tests::FillerName;
-using NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::OpenNameTreeVolume;
+using NTFS_BROWSER_NAMESPACE::Test::Support::FillerName;
+using NTFS_BROWSER_NAMESPACE::Test::Support::NameTreeRecord;
+using NTFS_BROWSER_NAMESPACE::Test::Support::OpenNameTreeVolume;
 
 namespace {
 
@@ -288,13 +288,15 @@ TEMPLATE_TEST_CASE_SIG("FindSubEntry finds every kind of exotic name",
                        "[file-record][name-tree]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   std::vector<FakeTreeNode> nodes;
-  for (const auto& exotic : NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+  for (const auto& exotic :
+       NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames()) {
     nodes.push_back({.links = {{.name = exotic.name}}});
   }
   const auto volume = OpenNameTreeVolume<S>(nodes);
 
   for (std::size_t index = 0; index < nodes.size(); index++) {
-    const auto& exotic = NTFS_BROWSER_NAMESPACE::Tests::ExoticNames().at(index);
+    const auto& exotic =
+        NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames().at(index);
     INFO(exotic.label);
     const std::optional<IndexEntry> found = FindInRoot(*volume, exotic.name);
     REQUIRE(found);

@@ -26,7 +26,7 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
@@ -243,9 +243,10 @@ void CheckAThrowingReaderGivesNoJournal() {
       TestFakeImage::fake_cluster_size;
   const ULONGLONG image_size = image.size();
 
-  auto reader = std::make_unique<Tests::ScriptedDiskReader>(std::move(image));
+  auto reader =
+      std::make_unique<TestSupport::ScriptedDiskReader>(std::move(image));
   reader->FaultRange(data_start, image_size,
-                     Tests::ScriptedDiskReader::Fault::Throw);
+                     TestSupport::ScriptedDiskReader::Fault::Throw);
   const NtfsVolume<S> volume(std::move(reader), Support::RecoverOptions());
   REQUIRE(volume.IsVolumeOK());
 

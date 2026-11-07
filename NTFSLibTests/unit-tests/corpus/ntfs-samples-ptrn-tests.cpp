@@ -33,7 +33,7 @@ TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
   OpenRootDir(root);
   const std::optional<IndexEntry> entry = root.FindSubEntry(L"2.txt");
   REQUIRE(entry.has_value());
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(entry).GetFileSize() > 0);
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileSize() > 0);
 
   // /2.txt's own cluster slack (past its real size, still inside its last
   // allocated cluster) isn't checked: ReadData() clamps every read to
@@ -64,15 +64,16 @@ TEST_CASE(
   const std::optional<std::span<const BYTE>> ram_slack =
       volume.Read(ram_slack_addr, 4);
   REQUIRE(ram_slack.has_value());
-  CHECK(MatchesPtrnPattern(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(ram_slack)));
+  CHECK(MatchesPtrnPattern(
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(ram_slack)));
 
   // Cluster slack: the rest of the cluster past that same sector.
   LARGE_INTEGER cluster_slack_addr{.QuadPart = cluster_slack_address};
   const std::optional<std::span<const BYTE>> cluster_slack =
       volume.Read(cluster_slack_addr, 4);
   REQUIRE(cluster_slack.has_value());
-  CHECK(
-      MatchesPtrnPattern(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(cluster_slack)));
+  CHECK(MatchesPtrnPattern(
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(cluster_slack)));
 
   CheckRepairStreamsHoldPtrnPattern(volume);
 }

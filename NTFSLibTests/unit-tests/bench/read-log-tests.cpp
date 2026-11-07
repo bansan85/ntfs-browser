@@ -34,7 +34,8 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
@@ -124,7 +125,7 @@ void Patch(std::vector<char>& bytes, size_t offset, T value) {
 }
 
 // The file of log written under dir, as bytes.
-std::vector<char> Serialized(const Tests::TempDir& dir,
+std::vector<char> Serialized(const TestDeviceAccess::TempDir& dir,
                              const Bench::ReadLog& log) {
   const std::filesystem::path path = dir.Path() / "good.readlog";
   std::string error;
@@ -133,7 +134,7 @@ std::vector<char> Serialized(const Tests::TempDir& dir,
 }
 
 // Loads a file that holds bytes, and returns the reason it is refused.
-std::string RefusedBecause(const Tests::TempDir& dir,
+std::string RefusedBecause(const TestDeviceAccess::TempDir& dir,
                            const std::vector<char>& bytes) {
   const std::filesystem::path path = dir.Path() / "bad.readlog";
   WriteFile(path, bytes);
@@ -149,7 +150,7 @@ std::string RefusedBecause(const Tests::TempDir& dir,
 
 TEST_CASE("A read log written and loaded is the same log",
           "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const Bench::ReadLog log = SampleLog();
   const std::filesystem::path path = dir.Path() / "round.readlog";
 
@@ -162,7 +163,7 @@ TEST_CASE("A read log written and loaded is the same log",
 }
 
 TEST_CASE("A read log file has the documented layout", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const Bench::ReadLog log = SampleLog();
   const std::vector<char> bytes = Serialized(dir, log);
 
@@ -180,7 +181,7 @@ TEST_CASE("A read log file has the documented layout", "[bench][read-log]") {
 }
 
 TEST_CASE("An empty read log round trips", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   Bench::ReadLog log;
   log.volume_bytes = 42;
   log.start_unix_ns = 7;
@@ -197,7 +198,7 @@ TEST_CASE("An empty read log round trips", "[bench][read-log]") {
 
 TEST_CASE("A log with more events than one chunk round trips",
           "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   Bench::ReadLog log;
   log.volume_bytes = 1;
   for (std::uint64_t index = 0; index < 40000; index++) {
@@ -214,12 +215,12 @@ TEST_CASE("A log with more events than one chunk round trips",
 }
 
 TEST_CASE("The log of a real session round trips", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithListMftScan(
           3000, TestFakeImage::fragmented_mft_scan_fragment_clusters);
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     const NtfsVolume<Cache::Strategy::NoCache> volume(
         std::make_unique<TestDiskReaders::MemoryDiskReader>(image),
@@ -245,7 +246,7 @@ TEST_CASE("The log of a real session round trips", "[bench][read-log]") {
 }
 
 TEST_CASE("A read log that is cut is refused", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::vector<char> good = Serialized(dir, SampleLog());
   // Inside the header, at the header, inside an event, one byte short.
   const size_t length =
@@ -265,7 +266,7 @@ TEST_CASE("A read log that is cut is refused", "[bench][read-log]") {
 }
 
 TEST_CASE("A file with another magic is refused", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   std::vector<char> bytes = Serialized(dir, SampleLog());
   bytes.at(0) = 'X';
 
@@ -273,7 +274,7 @@ TEST_CASE("A file with another magic is refused", "[bench][read-log]") {
 }
 
 TEST_CASE("A file of another version is refused", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::uint32_t version =
       GENERATE(std::uint32_t{0}, std::uint32_t{3}, std::uint32_t{0xFFFFFFFF});
   std::vector<char> bytes = Serialized(dir, SampleLog());
@@ -287,7 +288,7 @@ TEST_CASE("A file of another version is refused", "[bench][read-log]") {
 }
 
 TEST_CASE("A version 1 read log still loads", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const Bench::ReadLog log = SampleLog();
   std::vector<char> bytes = Serialized(dir, log);
   Patch(bytes, version_offset, std::uint32_t{1});
@@ -303,7 +304,7 @@ TEST_CASE("A version 1 read log still loads", "[bench][read-log]") {
 
 TEST_CASE("The standing lane events keep their letters in the file",
           "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   Bench::ReadLog log;
   log.events.push_back(MakeEvent(Bench::EventType::StandingPrefetch, 1));
   log.events.push_back(MakeEvent(Bench::EventType::StandingCancel, 2));
@@ -319,7 +320,7 @@ TEST_CASE("The standing lane events keep their letters in the file",
 }
 
 TEST_CASE("A file with another event size is refused", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::uint32_t size =
       GENERATE(std::uint32_t{0}, std::uint32_t{40}, std::uint32_t{56});
   std::vector<char> bytes = Serialized(dir, SampleLog());
@@ -330,7 +331,7 @@ TEST_CASE("A file with another event size is refused", "[bench][read-log]") {
 
 TEST_CASE("A forged event count is refused and reserves no memory",
           "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const Bench::ReadLog log = SampleLog();
   // One more than the file holds, and counts whose events would take
   // terabytes, or that wrap a size computed from them.
@@ -347,7 +348,7 @@ TEST_CASE("A forged event count is refused and reserves no memory",
 
 TEST_CASE("A forged count in a file with no event at all is refused",
           "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   std::vector<char> bytes = Serialized(dir, Bench::ReadLog{});
   REQUIRE(bytes.size() == header_bytes);
   Patch(bytes, count_offset, std::uint64_t{1} << 62U);
@@ -356,7 +357,7 @@ TEST_CASE("A forged count in a file with no event at all is refused",
 }
 
 TEST_CASE("A missing read log is refused with its path", "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "no-such-file.readlog";
 
   std::string error;
@@ -368,7 +369,7 @@ TEST_CASE("A missing read log is refused with its path", "[bench][read-log]") {
 
 TEST_CASE("A read log is not written where no file can be made",
           "[bench][read-log]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "no-folder" / "x.readlog";
 
   std::string error;

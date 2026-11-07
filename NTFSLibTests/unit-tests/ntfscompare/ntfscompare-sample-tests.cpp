@@ -20,8 +20,8 @@
 #endif
 
 using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::Tests::RunSample;
-using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
+using NTFS_BROWSER_NAMESPACE::Test::Support::RunSample;
+using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
 namespace Fs = std::filesystem;
 
 namespace {
@@ -48,7 +48,7 @@ struct TempImage final {
   TempImage& operator=(TempImage&&) = delete;
 };
 
-using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
+using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
 
 #endif
 

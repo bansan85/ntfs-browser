@@ -81,10 +81,13 @@ TEST_CASE("Building a case table from $UpCase bytes checks what it is given",
 
     const std::optional<Table> table = Table::FromBytes(bytes);
     REQUIRE(table.has_value());
-    CHECK_FALSE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(table).IsBuiltIn());
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(table).Map(u'a') == u'A');
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(table).Map(u'\u00E9') == u'A');
-    CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(table).Map(u'\u00C9') ==
+    CHECK_FALSE(
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(table).IsBuiltIn());
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(table).Map(u'a') ==
+          u'A');
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(table).Map(u'\u00E9') ==
+          u'A');
+    CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(table).Map(u'\u00C9') ==
           u'\u00C9');
   }
 

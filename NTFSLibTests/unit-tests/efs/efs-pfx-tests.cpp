@@ -125,16 +125,16 @@ TEST_CASE("A PFX key provider only knows the certificates of its own file",
 }
 
 TEST_CASE("A PFX that cannot be opened gives no provider", "[efs][pfx]") {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   CHECK(MakePfxKeyProvider(DataFile("efs-test-cng.pfx"), L"wrong") == nullptr);
-  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog(),
              Catch::Matchers::ContainsSubstring("Cannot import the PFX"));
 
   CHECK(MakePfxKeyProvider(DataFile("garbage.pfx"), password_value) == nullptr);
   CHECK(MakePfxKeyProvider(DataFile("no-such-file.pfx"), password_value) ==
         nullptr);
-  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
+  CHECK_THAT(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog(),
              Catch::Matchers::ContainsSubstring("Cannot read a PFX"));
 }
 
@@ -156,9 +156,10 @@ TEST_CASE("An oversized PFX is refused by its size, before any read",
   }
   REQUIRE(Fs::file_size(path) == just_over_the_limit);
 
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const auto provider = MakePfxKeyProvider(path, password_value);
-  const std::string log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string log =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   std::error_code ignored;
   Fs::remove(path, ignored);
 

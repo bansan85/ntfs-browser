@@ -58,13 +58,13 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   bool parsed = true;
   REQUIRE_NOTHROW(
       parsed = record.ParseFileRecord(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                                           fragmented_mft_invalid_record_idx));
   CHECK_FALSE(parsed);
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
+  CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog().find(
             "Offset must be lower than 1024.") != std::string::npos);
 }

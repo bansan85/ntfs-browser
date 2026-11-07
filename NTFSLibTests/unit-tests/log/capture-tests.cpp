@@ -17,7 +17,7 @@
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Detail = NTFS_BROWSER_NAMESPACE::Log::Detail;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 
 namespace {
 
@@ -59,7 +59,7 @@ class SinkScope {
   SinkScope& operator=(const SinkScope&) = delete;
   SinkScope& operator=(SinkScope&&) = delete;
 
-  ~SinkScope() { Tests::InstallCaptureSink(); }
+  ~SinkScope() { TestSupport::InstallCaptureSink(); }
 };
 
 constexpr Detail::LevelMask all_levels =
@@ -73,7 +73,7 @@ TEST_CASE(
     "a capturing thread keeps its lines out of the sinks until they are "
     "replayed",
     "[log][capture]") {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   Detail::CapturedLog log;
   log.Reset(all_levels);
   const Detail::CapturedLog::Mark begin = log.End();
@@ -82,16 +82,16 @@ TEST_CASE(
     Log::Info("one {}", 1);
     Log::Warn("two");
   }
-  CHECK(Tests::TakeCapturedLog().empty());
+  CHECK(TestSupport::TakeCapturedLog().empty());
 
   log.Replay(begin, log.End());
 
-  CHECK(Tests::TakeCapturedLog() == "one 1\ntwo\n");
+  CHECK(TestSupport::TakeCapturedLog() == "one 1\ntwo\n");
 }
 
 TEST_CASE("a replay sends the lines between two marks, in order",
           "[log][capture]") {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   Detail::CapturedLog log;
   log.Reset(all_levels);
   Detail::CapturedLog::Mark first;
@@ -108,12 +108,12 @@ TEST_CASE("a replay sends the lines between two marks, in order",
 
   log.Replay(first, second);
 
-  CHECK(Tests::TakeCapturedLog() == "b\nc\n");
+  CHECK(TestSupport::TakeCapturedLog() == "b\nc\n");
 }
 
 TEST_CASE("a replay from another thread than the capture is ordered",
           "[log][capture]") {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   Detail::CapturedLog log;
   log.Reset(all_levels);
   Detail::CapturedLog::Mark first;
@@ -129,10 +129,10 @@ TEST_CASE("a replay from another thread than the capture is ordered",
   });
   worker.join();
 
-  CHECK(Tests::TakeCapturedLog().empty());
+  CHECK(TestSupport::TakeCapturedLog().empty());
   log.Replay(first, second);
 
-  CHECK(Tests::TakeCapturedLog() == "b\nc\n");
+  CHECK(TestSupport::TakeCapturedLog() == "b\nc\n");
 }
 
 TEST_CASE("a capture keeps the levels it was given and answers for them",
@@ -156,7 +156,7 @@ TEST_CASE("a capture keeps the levels it was given and answers for them",
 
 TEST_CASE("a capture drops the lines of the levels it does not keep",
           "[log][capture]") {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   Detail::CapturedLog log;
   log.Reset(Detail::LevelBit(Log::Level::Warn));
   const Detail::CapturedLog::Mark begin = log.End();
@@ -171,7 +171,7 @@ TEST_CASE("a capture drops the lines of the levels it does not keep",
 
   log.Replay(begin, log.End());
 
-  CHECK(Tests::TakeCapturedLog() == "warn\n");
+  CHECK(TestSupport::TakeCapturedLog() == "warn\n");
 }
 
 TEST_CASE("the levels a capture is asked for are the ones the sinks accept",
@@ -259,7 +259,7 @@ TEST_CASE("a thread counts the conditions it salvages while it captures",
 
 TEST_CASE("capture scopes nest and give the thread back to the outer one",
           "[log][capture]") {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   Detail::CapturedLog outer;
   Detail::CapturedLog inner;
   outer.Reset(all_levels);
@@ -277,14 +277,14 @@ TEST_CASE("capture scopes nest and give the thread back to the outer one",
   }
 
   outer.Replay(outer_begin, outer.End());
-  CHECK(Tests::TakeCapturedLog() == "outer 1\nouter 2\n");
+  CHECK(TestSupport::TakeCapturedLog() == "outer 1\nouter 2\n");
   inner.Replay(inner_begin, inner.End());
-  CHECK(Tests::TakeCapturedLog() == "inner\n");
+  CHECK(TestSupport::TakeCapturedLog() == "inner\n");
 }
 
 TEST_CASE("a capture reset forgets its lines and takes new levels",
           "[log][capture]") {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   Detail::CapturedLog log;
   log.Reset(all_levels);
   {
@@ -303,12 +303,12 @@ TEST_CASE("a capture reset forgets its lines and takes new levels",
       Detail::CapturedLog::Mark{.lines = 0, .recovered = begin.recovered},
       log.End());
 
-  CHECK(Tests::TakeCapturedLog() == "second\n");
+  CHECK(TestSupport::TakeCapturedLog() == "second\n");
 }
 
 TEST_CASE("a replay past the end of the capture stops at its end",
           "[log][capture]") {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   Detail::CapturedLog log;
   log.Reset(all_levels);
   const Detail::CapturedLog::Mark begin = log.End();
@@ -321,5 +321,5 @@ TEST_CASE("a replay past the end of the capture stops at its end",
 
   log.Replay(begin, end);
 
-  CHECK(Tests::TakeCapturedLog() == "only\n");
+  CHECK(TestSupport::TakeCapturedLog() == "only\n");
 }

@@ -7,7 +7,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 namespace {
 
 // Keeps every line the library logs, so a test can assert on text that
@@ -16,15 +16,17 @@ namespace {
 // GetStdHandle() returned when they were built, so _dup2() on fd 1 leaves
 // them writing to the real console and the capture comes back empty.
 // No lock: the library and its tests log from one thread.
-class CaptureSink final : public Log::ISink {
+class CaptureSink final : public NTFS_BROWSER_NAMESPACE::Log::ISink {
  public:
-  [[nodiscard]] bool ShouldLog(Log::Level level) const override {
-    return level != Log::Level::Off;
+  [[nodiscard]] bool
+      ShouldLog(NTFS_BROWSER_NAMESPACE::Log::Level level) const override {
+    return level != NTFS_BROWSER_NAMESPACE::Log::Level::Off;
   }
 
   // The bare message plus a newline, so assertions match what the library
   // wrote.
-  void Write(Log::Level /*level*/, std::string_view message) override {
+  void Write(NTFS_BROWSER_NAMESPACE::Log::Level /*level*/,
+             std::string_view message) override {
     buffer_.append(message);
     buffer_.push_back('\n');
   }
@@ -54,10 +56,12 @@ std::shared_ptr<CaptureSink>& Sink() {
 
 }  // namespace
 
-void InstallCaptureSink() { Log::SetSinks({Sink()}); }
+void InstallCaptureSink() { NTFS_BROWSER_NAMESPACE::Log::SetSinks({Sink()}); }
 
-std::shared_ptr<Log::ISink> CaptureSinkHandle() { return Sink(); }
+std::shared_ptr<NTFS_BROWSER_NAMESPACE::Log::ISink> CaptureSinkHandle() {
+  return Sink();
+}
 
 std::string TakeCapturedLog() { return Sink()->Take(); }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

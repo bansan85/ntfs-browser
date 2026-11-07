@@ -41,7 +41,7 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
@@ -108,14 +108,14 @@ struct Opened {
 
 template <Cache::Strategy S>
 Opened<S> Open(std::vector<BYTE> image, bool recover) {
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   auto starts = std::make_shared<std::vector<LONGLONG>>();
   auto volume = std::make_unique<NtfsVolume<S>>(
       std::make_unique<SpyDiskReader>(std::move(image), starts),
       VolumeOptions{.recover_errors = recover});
   return {.volume = std::move(volume),
           .starts = std::move(starts),
-          .log = Tests::TakeCapturedLog()};
+          .log = TestSupport::TakeCapturedLog()};
 }
 
 // BuildFakeNtfsImageWithMftMirror() with the given damage.
@@ -271,12 +271,13 @@ TEMPLATE_TEST_CASE_SIG("records 1 and 2 fall back on $MFTMirr too",
       const Opened<S> opened = Open<S>(Image(Bit(record)), true);
       REQUIRE(opened.volume->IsVolumeOK());
 
-      (void)Tests::TakeCapturedLog();
+      (void)TestSupport::TakeCapturedLog();
       Io::FileRecord<S> file_record(*opened.volume);
       CHECK(file_record.ParseFileRecord(record));
       CHECK(file_record.GetFileReference() == record);
       CHECK(opened.MirrorReads() == 1);
-      CHECK_THAT(Tests::TakeCapturedLog(), ContainsSubstring(fallback_message));
+      CHECK_THAT(TestSupport::TakeCapturedLog(),
+                 ContainsSubstring(fallback_message));
     }
 
     SECTION("recovering, with the copy damaged too") {

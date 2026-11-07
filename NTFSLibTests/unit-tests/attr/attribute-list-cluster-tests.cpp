@@ -30,7 +30,7 @@ using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -119,10 +119,10 @@ TEST_CASE(
           VolumeOptions{.recover_errors = recover});
   list.reader->FailReadsIn(ListCluster(1), ListCluster(2));
   list.reader->Reset();
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
 
   const bool parsed = list.opened.record->ParseAttrs();
-  CHECK_THAT(Tests::TakeCapturedLog(),
+  CHECK_THAT(TestSupport::TakeCapturedLog(),
              ContainsSubstring("Attribute List ended at offset 1024 instead of "
                                "its declared size 1280."));
   // The walk stops at the failed cluster: it is never asked for again.

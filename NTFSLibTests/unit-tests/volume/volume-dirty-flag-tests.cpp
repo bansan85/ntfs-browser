@@ -41,14 +41,14 @@ struct Opened {
 
 template <Cache::Strategy S>
 Opened Open(WORD flags, NTFS_BROWSER_NAMESPACE::VolumeOptions options) {
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(
           NTFS_BROWSER_NAMESPACE::Test::FakeImage::
               BuildFakeNtfsImageWithVolumeFlags(flags)),
       options);
   return {.ok = volume.IsVolumeOK(),
-          .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
+          .log = NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog()};
 }
 
 }  // namespace

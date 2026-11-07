@@ -26,12 +26,13 @@
 
 namespace DirSample = NTFS_BROWSER_NAMESPACE::Tests::DirSample;
 namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
 using NtfsDevice::JsonValue;
-using Tests::SampleRun;
+using TestSupport::SampleRun;
 
 namespace {
 
@@ -162,7 +163,7 @@ std::vector<Tool> Tools(const Images& images) {
 TEST_CASE("A tool run with a profile lists what it lists without",
           "[device-access][profile][sample]") {
   const Images images;
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path profile =
       dir.Write("profile.json", tuned_profile);
 
@@ -204,7 +205,7 @@ TEST_CASE(
     "The summary of a tuned run shows the values and the reads they changed",
     "[device-access][profile][sample]") {
   const Images images;
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path profile =
       dir.Write("profile.json", tuned_profile);
 
@@ -262,7 +263,7 @@ TEST_CASE(
     "The option --tune comes after the profile in a tool and in its summary",
     "[device-access][profile][sample]") {
   const Images images;
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path profile =
       dir.Write("profile.json", tuned_profile);
   const Tool tool = Tools(images).front();
@@ -284,7 +285,7 @@ TEST_CASE(
 TEST_CASE("A profile without a section for the disk is said and ignored",
           "[device-access][profile][sample]") {
   const Images images;
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path profile =
       dir.Write("profile.json", R"({"format": 1, "disks": {"Only|One": {
           "common": {"mft.window_bytes": 8192}}}})");
@@ -312,7 +313,7 @@ TEST_CASE("A profile without a section for the disk is said and ignored",
 TEST_CASE("The star of a profile serves a disk the profile does not name",
           "[device-access][profile][sample]") {
   const Images images;
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path profile =
       dir.Write("profile.json", tuned_profile);
   const Tool tool = Tools(images).front();
@@ -358,7 +359,7 @@ TEST_CASE("A profile a tool cannot use ends the run with its reason",
        "\"format\" MUST be 1"}};
 
   const Images images;
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   for (const Case& bad : cases) {
     const std::filesystem::path profile = dir.Write("bad.json", bad.text);
     for (const Tool& tool : Tools(images)) {
@@ -366,7 +367,7 @@ TEST_CASE("A profile a tool cannot use ends the run with its reason",
       const SampleRun run =
           tool.Run({Option(L"--profile", profile), std::wstring(disk_option)});
 
-      CHECK(run.exit_code == Tests::sample_failure_exit_code);
+      CHECK(run.exit_code == TestSupport::sample_failure_exit_code);
       // No listing: the run ended before it opened the volume.
       CHECK(run.out.empty());
       CHECK_THAT(run.err, ContainsSubstring(profile.string()));
@@ -378,7 +379,7 @@ TEST_CASE("A profile a tool cannot use ends the run with its reason",
 TEST_CASE("A profile that is not there ends the run",
           "[device-access][profile][sample]") {
   const Images images;
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path missing = dir.Path() / "missing.json";
 
   for (const Tool& tool : Tools(images)) {
@@ -386,7 +387,7 @@ TEST_CASE("A profile that is not there ends the run",
     const SampleRun run =
         tool.Run({Option(L"--profile", missing), std::wstring(disk_option)});
 
-    CHECK(run.exit_code == Tests::sample_failure_exit_code);
+    CHECK(run.exit_code == TestSupport::sample_failure_exit_code);
     CHECK(run.out.empty());
     CHECK_THAT(run.err, ContainsSubstring("cannot read the profile " +
                                           missing.string()));
@@ -417,7 +418,7 @@ TEST_CASE("A --tune a tool cannot use ends the run with its reason",
       INFO("option " << bad.message << ", tool " << tool.name);
       const SampleRun run = tool.Run({bad.option});
 
-      CHECK(run.exit_code == Tests::sample_failure_exit_code);
+      CHECK(run.exit_code == TestSupport::sample_failure_exit_code);
       CHECK_THAT(run.err, ContainsSubstring(bad.message));
     }
   }
@@ -443,7 +444,7 @@ TEST_CASE("A malformed option of the benchmark ends the run with its reason",
       INFO("option " << bad.message << ", tool " << tool.name);
       const SampleRun run = tool.Run({bad.option});
 
-      CHECK(run.exit_code == Tests::sample_failure_exit_code);
+      CHECK(run.exit_code == TestSupport::sample_failure_exit_code);
       CHECK_THAT(run.err, ContainsSubstring(bad.message));
     }
   }

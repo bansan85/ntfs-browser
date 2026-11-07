@@ -7,7 +7,7 @@
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // Runs a Bench session for the life of the object. The session is process
 // wide, so a test that starts one MUST end it however the test ends.
@@ -73,4 +73,4 @@ class CaptureSinkGuard final {
   ~CaptureSinkGuard() { Bench::SetCaptureSink(nullptr); }
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

@@ -67,10 +67,10 @@ ListParse ParseListLog(std::vector<BYTE> image, ULONGLONG idx, bool recover,
                        Attr::Mask mask) {
   const ParsedRecord<S> opened = OpenListRecord<S>(
       std::move(image), idx, mask, VolumeOptions{.recover_errors = recover});
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   const bool parsed = opened.record->ParseAttrs();
-  return {parsed, NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};
+  return {parsed, NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog()};
 }
 
 }  // namespace

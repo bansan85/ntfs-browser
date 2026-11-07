@@ -30,9 +30,9 @@ using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::Support::WalkResult;
+using NTFS_BROWSER_NAMESPACE::Test::Support::WalkVolume;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::WalkResult;
-using NTFS_BROWSER_NAMESPACE::Tests::WalkVolume;
 
 namespace {
 

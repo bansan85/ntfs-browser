@@ -159,19 +159,19 @@ TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
   LARGE_INTEGER first_addr{.QuadPart = 0};
   const auto first = reader.Read(first_addr, first_read_size);
   REQUIRE(first.has_value());
-  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(first).size() ==
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(first).size() ==
           first_read_size);
 
   LARGE_INTEGER second_addr{.QuadPart = second_read_offset};
   const auto second = reader.Read(second_addr, second_read_size);
   REQUIRE(second.has_value());
-  REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second).size() ==
+  REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(second).size() ==
           second_read_size);
-  for (size_t i = 0; i < NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second).size();
-       i++) {
+  for (size_t i = 0;
+       i < NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(second).size(); i++) {
     // i < second->size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    REQUIRE(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second)[i] ==
+    REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(second)[i] ==
             content.at(second_read_offset + i));
   }
 }
@@ -292,11 +292,12 @@ TEST_CASE(
     const auto actual_view = full.Read(addr_full, range.length);
     REQUIRE(actual_view.has_value());
     const std::span<const BYTE> actual =
-        NTFS_BROWSER_NAMESPACE::Tests::Unwrap(actual_view);
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(actual_view);
     REQUIRE(actual.size() ==
-            NTFS_BROWSER_NAMESPACE::Tests::Unwrap(expected).size());
-    CHECK(std::equal(actual.begin(), actual.end(),
-                     NTFS_BROWSER_NAMESPACE::Tests::Unwrap(expected).begin()));
+            NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(expected).size());
+    CHECK(std::equal(
+        actual.begin(), actual.end(),
+        NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(expected).begin()));
     CHECK(std::equal(actual.begin(), actual.end(),
                      backing.begin() + gsl::narrow<ptrdiff_t>(range.offset)));
   }
@@ -307,7 +308,7 @@ TEST_CASE(
   const auto second_view = full.Read(again, inner_length);
   REQUIRE(second_view.has_value());
   const std::span<const BYTE> second =
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(second_view);
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(second_view);
   CHECK(std::equal(second.begin(), second.end(),
                    backing.begin() +
                        static_cast<ptrdiff_t>(block_value + inner_offset)));
@@ -338,7 +339,7 @@ TEST_CASE(
   const auto result_view = full.Read(addr, inner_length);
   REQUIRE(result_view.has_value());
   const std::span<const BYTE> result =
-      NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result_view);
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(result_view);
   REQUIRE(result.size() == inner_length);
   CHECK(
       std::equal(result.begin(), result.end(), backing.begin() + inner_length));

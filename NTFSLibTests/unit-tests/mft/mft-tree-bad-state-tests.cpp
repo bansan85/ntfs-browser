@@ -29,7 +29,7 @@ using Catch::Matchers::ContainsSubstring;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
@@ -89,7 +89,7 @@ void CheckADeletedEntryOnABadClusterIsBad() {
 
 template <Cache::Strategy S>
 void CheckTheFourCountersAddUpAndReachTheLog() {
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   const ScannedVolume<S> scanned(Image());
   const Mft::MftTree& tree = scanned.tree;
 
@@ -108,7 +108,7 @@ void CheckTheFourCountersAddUpAndReachTheLog() {
   CHECK(stats.data_intact + stats.data_reallocated + stats.data_unknown +
             stats.data_bad ==
         annotated);
-  CHECK_THAT(Tests::TakeCapturedLog(),
+  CHECK_THAT(TestSupport::TakeCapturedLog(),
              ContainsSubstring(" reallocated, " +
                                std::to_string(stats.data_unknown) +
                                " unknown, 1 bad"));

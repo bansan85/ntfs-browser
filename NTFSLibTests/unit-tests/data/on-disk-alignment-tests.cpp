@@ -46,7 +46,7 @@ using NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader;
 using NTFS_BROWSER_NAMESPACE::Data::index_block_magic;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Data = NTFS_BROWSER_NAMESPACE::Data;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::Record::HeaderImpl;
@@ -217,7 +217,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   const std::optional<IndexEntry> entry = record.FindSubEntry(L"AA");
   REQUIRE(entry.has_value());
-  CHECK(Tests::Unwrap(entry).GetFileReference() ==
+  CHECK(TestSupport::Unwrap(entry).GetFileReference() ==
         TestFakeImage::index_root_variant_a_mft_ref);
 }
 

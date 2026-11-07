@@ -92,8 +92,8 @@ TEST_CASE("Utf8ToWide undoes WideToUtf8", "[device-access][text-convert]") {
 
 TEST_CASE("Utf8ToWide decodes every exotic name back",
           "[device-access][text-convert]") {
-  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
-       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+  for (const NTFS_BROWSER_NAMESPACE::Test::Support::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames()) {
     INFO(exotic.label);
     CHECK(Utf8ToWide(exotic.utf8) == exotic.name);
   }
@@ -103,8 +103,8 @@ TEST_CASE("Utf8ToWide decodes every exotic name back",
 
 TEST_CASE("WideToUtf8 writes every exotic name as its UTF-8",
           "[device-access][text-convert]") {
-  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
-       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+  for (const NTFS_BROWSER_NAMESPACE::Test::Support::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames()) {
     INFO(exotic.label);
     CHECK(WideToUtf8(exotic.name) == exotic.utf8);
   }
@@ -112,8 +112,8 @@ TEST_CASE("WideToUtf8 writes every exotic name as its UTF-8",
 
 TEST_CASE("AppendAsUtf8 appends what WideToUtf8 returns",
           "[device-access][text-convert]") {
-  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
-       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+  for (const NTFS_BROWSER_NAMESPACE::Test::Support::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames()) {
     INFO(exotic.label);
     std::string out = "before:";
     NtfsDevice::AppendAsUtf8(out, exotic.name);
@@ -123,8 +123,8 @@ TEST_CASE("AppendAsUtf8 appends what WideToUtf8 returns",
 
 TEST_CASE("WideToUtf8 and the library's conversion agree on every name",
           "[device-access][text-convert]") {
-  for (const NTFS_BROWSER_NAMESPACE::Tests::ExoticName& exotic :
-       NTFS_BROWSER_NAMESPACE::Tests::ExoticNames()) {
+  for (const NTFS_BROWSER_NAMESPACE::Test::Support::ExoticName& exotic :
+       NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames()) {
     INFO(exotic.label);
     CHECK(WideToUtf8(exotic.name) ==
           NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(exotic.name));

@@ -62,8 +62,9 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode() {
   const std::optional<IndexEntry> found = root.FindSubEntry(
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::gap_collation_search_name);
   REQUIRE(found.has_value());
-  CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(found).GetFileReference() ==
-        NTFS_BROWSER_NAMESPACE::Test::FakeImage::gap_collation_leaf_mft_ref);
+  CHECK(
+      NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(found).GetFileReference() ==
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::gap_collation_leaf_mft_ref);
 }
 
 }  // namespace

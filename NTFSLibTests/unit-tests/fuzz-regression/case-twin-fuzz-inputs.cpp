@@ -17,6 +17,7 @@
 #include "fuzz-input-writer.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestFakeImage::FakeNameTreeOptions;
@@ -61,9 +62,10 @@ std::vector<Variant> Variants() {
   for (const std::size_t fillers : {std::size_t{6}, std::size_t{13}}) {
     std::vector<FakeTreeNode> nodes = Twins();
     for (std::size_t index = 0; index < fillers; index++) {
-      nodes.push_back(PosixFile(
-          Tests::FillerName(20, L'a', static_cast<wchar_t>(L'a' + index)) +
-          std::to_wstring(index)));
+      nodes.push_back(
+          PosixFile(TestSupport::FillerName(
+                        20, L'a', static_cast<wchar_t>(L'a' + index)) +
+                    std::to_wstring(index)));
     }
     variants.push_back({"case_twin_blocks_" + std::to_string(fillers),
                         TestFakeImage::BuildFakeNtfsImageWithNameTree(nodes)});

@@ -35,7 +35,8 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
@@ -85,7 +86,7 @@ std::uint64_t AllocatedBytes(const std::filesystem::path& path) {
 
 TEST_CASE("A capture writes the data of a read at its offset",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   const std::vector<BYTE> bytes = Data(2 * piece, BYTE{0x5A});
   {
@@ -103,7 +104,7 @@ TEST_CASE("A capture writes the data of a read at its offset",
 
 TEST_CASE("A capture skips the pieces that are all zeros",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   {
     SparseCapture capture(path);
@@ -118,7 +119,7 @@ TEST_CASE("A capture skips the pieces that are all zeros",
 
 TEST_CASE("A capture of zeros only leaves the file empty",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   {
     SparseCapture capture(path);
@@ -133,7 +134,7 @@ TEST_CASE("A capture of zeros only leaves the file empty",
 
 TEST_CASE("A capture writes the data on both sides of a hole",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   const std::vector<BYTE> read = Join(
       {Data(piece, BYTE{2}), Zeros(4 * piece), Data(piece + 100, BYTE{3})});
@@ -149,7 +150,7 @@ TEST_CASE("A capture writes the data on both sides of a hole",
 
 TEST_CASE("A zero piece after a piece with data is not written",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   {
     SparseCapture capture(path);
@@ -166,7 +167,7 @@ TEST_CASE("A zero piece after a piece with data is not written",
 
 TEST_CASE("A capture of a large hole allocates no space for it",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   constexpr size_t hole = 16 * 1024 * 1024;
   {
@@ -185,7 +186,7 @@ TEST_CASE("A capture of a large hole allocates no space for it",
 
 TEST_CASE("SetSize gives the file the size of the volume, and never shrinks it",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   constexpr std::uint64_t volume = 1U << 20U;
   {
@@ -208,7 +209,7 @@ TEST_CASE("SetSize gives the file the size of the volume, and never shrinks it",
 
 TEST_CASE("Bytes written past the size given stay",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   constexpr std::uint64_t volume = 1U << 16U;
   {
@@ -223,7 +224,7 @@ TEST_CASE("Bytes written past the size given stay",
 
 TEST_CASE("A capture that cannot be created says why and ignores writes",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   SparseCapture capture(dir.Path() / "no-folder" / "capture.img");
 
   CHECK_FALSE(capture.Ok());
@@ -235,14 +236,14 @@ TEST_CASE("A capture that cannot be created says why and ignores writes",
 
 TEST_CASE("A capture sink set in the library receives every read",
           "[device-access][capture]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
   const std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImage();
   std::vector<BYTE> boot(piece);
   {
     auto capture = std::make_shared<SparseCapture>(path);
     REQUIRE(capture->Ok());
-    const Tests::CaptureSinkGuard sink(capture);
+    const TestSupport::CaptureSinkGuard sink(capture);
     // A capture runs without a session.
     CHECK_FALSE(Bench::Enabled());
     const Io::FileReader<Cache::Strategy::NoCache> file(

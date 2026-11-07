@@ -13,7 +13,7 @@
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
-using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
+using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
 using NtfsDevice::SplitDeviceTarget;
 using NtfsDevice::WideFromPath;
 
@@ -187,7 +187,7 @@ TEST_CASE("SplitDeviceTarget keeps a backslash in a POSIX file name",
 
 TEST_CASE("SplitDeviceTarget finds an image at a path of more than 260 units",
           "[device-access][device-path][long-path]") {
-  const NTFS_BROWSER_NAMESPACE::Tests::LongTempDir directory(300);
+  const NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir directory(300);
   const std::filesystem::path image =
       directory.Write("disk.img", std::vector<BYTE>(512, 0));
   REQUIRE(image.native().size() > 260);
@@ -205,7 +205,7 @@ TEST_CASE("SplitDeviceTarget finds an image at a path of more than 260 units",
 
 TEST_CASE("SplitDeviceTarget takes a directory deeper than 260 units",
           "[device-access][device-path][long-path]") {
-  const NTFS_BROWSER_NAMESPACE::Tests::LongTempDir directory(300);
+  const NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir directory(300);
   const std::filesystem::path image =
       directory.Write("disk.img", std::vector<BYTE>(512, 0));
   const std::wstring deep(250, L'd');
@@ -222,7 +222,7 @@ TEST_CASE("SplitDeviceTarget takes a directory deeper than 260 units",
 
 TEST_CASE("SplitDeviceTarget takes an extended-length path",
           "[device-access][device-path][long-path]") {
-  const NTFS_BROWSER_NAMESPACE::Tests::LongTempDir directory(300);
+  const NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir directory(300);
   const std::filesystem::path image =
       directory.Write("disk.img", std::vector<BYTE>(512, 0));
   const std::wstring extended = LR"(\\?\)" + image.wstring();
@@ -236,7 +236,7 @@ TEST_CASE("SplitDeviceTarget takes an extended-length path",
 
 TEST_CASE("SplitDeviceTarget takes forward slashes in a long path",
           "[device-access][device-path][long-path]") {
-  const NTFS_BROWSER_NAMESPACE::Tests::LongTempDir directory(300);
+  const NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir directory(300);
   const std::filesystem::path image =
       directory.Write("disk.img", std::vector<BYTE>(512, 0));
   std::wstring forward = image.wstring();

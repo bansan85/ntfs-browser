@@ -31,7 +31,8 @@
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using Caps = std::array<Tuning::ReaderTuning, Tuning::pattern_count>;
@@ -90,7 +91,7 @@ class ImageFile {
   }
 
  private:
-  Tests::TempDir dir_;
+  TestDeviceAccess::TempDir dir_;
   std::filesystem::path path_;
 };
 
@@ -330,7 +331,7 @@ TEST_CASE("A read inside a standing range is served from it",
           "[io][win32-reader][standing]") {
   const ImageFile image;
   const auto reader = image.Open();
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   AnnounceStanding(*reader, 0, 1);
   AnnounceStanding(*reader, 3, 1);
 
@@ -351,7 +352,7 @@ TEST_CASE("A read outside every standing range is a Plan read",
           "[io][win32-reader][standing]") {
   const ImageFile image;
   const auto reader = image.Open();
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   AnnounceStanding(*reader, 0, 2);
 
   const ReadOutcome outside = ReadAndNote(*reader, RangeAt(5));
@@ -369,7 +370,7 @@ TEST_CASE("A read of either lane drops no range of the standing lane",
           "[io][win32-reader][standing]") {
   const ImageFile image;
   const auto reader = image.Open();
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   AnnounceStanding(*reader, 0, 3);
   reader->Prefetch(RangeAt(10), range_bytes);
 
@@ -392,7 +393,7 @@ TEST_CASE("The first lane is tried before the standing lane",
           "[io][win32-reader][standing]") {
   const ImageFile image;
   const auto reader = image.Open();
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   // The lane holds a wider range than the first lane, over the same bytes.
   reader->PrefetchStanding(0, 4 * range_bytes);
   reader->Prefetch(range_bytes, range_bytes);
@@ -414,7 +415,7 @@ TEST_CASE("CancelPrefetch leaves the standing lane alone",
           "[io][win32-reader][standing]") {
   const ImageFile image;
   const auto reader = image.Open();
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   AnnounceStanding(*reader, 0, 2);
   reader->Prefetch(RangeAt(10), range_bytes);
 
@@ -436,7 +437,7 @@ TEST_CASE("CancelStanding withdraws the ranges that overlap the interval",
           "[io][win32-reader][standing]") {
   const ImageFile image;
   const auto reader = image.Open();
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   AnnounceStanding(*reader, 0, 4);
 
   SECTION("a length of 0 overlaps nothing") {
@@ -489,7 +490,7 @@ TEST_CASE("A range of the first lane equal to a standing range is ignored",
           "[io][win32-reader][standing]") {
   const ImageFile image;
   const auto reader = image.Open();
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   reader->PrefetchStanding(range_stride, 2 * range_bytes);
 
   reader->Prefetch(range_stride, 2 * range_bytes);
@@ -521,7 +522,7 @@ TEST_CASE(
 
   SECTION("the lane alone starts the share it may take, and no more at once") {
     const auto reader = image.Open(caps);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     AnnounceStanding(*reader, 0, 40);
     const Bench::Report report = session.Finish();
     CHECK(AheadReads(report.disk) >= lane_reads);
@@ -532,7 +533,7 @@ TEST_CASE(
 
   SECTION("the first lane takes the rest, whatever the lane holds") {
     const auto reader = image.Open(caps);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     AnnounceStanding(*reader, 0, 40);
     for (size_t index = 100; index < 140; index++) {
       reader->Prefetch(RangeAt(index), range_bytes);
@@ -554,7 +555,7 @@ TEST_CASE("A finished read of the standing lane holds no read in flight",
   std::uint64_t started = 0;
   for (int attempt = 1; attempt <= 8 && started < 6; attempt++) {
     const auto reader = image.Open(caps);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     // Each range starts once the read before it is over, and the finished
     // reads wait for their caller: six of them in all.
     for (size_t index = 0; index < 6; index++) {
@@ -572,7 +573,7 @@ TEST_CASE("The lane holds at most max_announced_ranges ranges",
       [](Tuning::ReaderTuning& tuning) { tuning.max_announced_ranges = 3; });
   const ImageFile image;
   const auto reader = image.Open(caps);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   AnnounceStanding(*reader, 0, 5);
   // The first lane has a cap of its own.
@@ -595,7 +596,7 @@ TEST_CASE("A range of the lane over the range cap is not announced",
   });
   const ImageFile image;
   const auto reader = image.Open(caps);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   reader->PrefetchStanding(0, 8 * range_bytes);
   reader->PrefetchStanding(range_stride, 0);
@@ -611,7 +612,7 @@ TEST_CASE("The lane and the first lane share the bytes in flight",
       [](Tuning::ReaderTuning& tuning) { tuning.max_bytes = 4 * range_bytes; });
   const ImageFile image;
   const auto reader = image.Open(caps);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   // The first one always starts, then the ones that fit. The lane stops at the
   // first range that does not fit, so that its reads start in order.
@@ -631,7 +632,7 @@ TEST_CASE("A lone range over the byte cap still starts on the lane",
       [](Tuning::ReaderTuning& tuning) { tuning.max_bytes = range_bytes; });
   const ImageFile image;
   const auto reader = image.Open(caps);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   reader->PrefetchStanding(0, 8 * range_bytes);
   const ReadOutcome read = ReadAndNote(*reader, 0, 8 * range_bytes);
@@ -648,7 +649,7 @@ TEST_CASE("The lane starts under the caps of the pattern in force",
   caps.at(static_cast<size_t>(Tuning::Pattern::ScatteredGrouped)).max_reads = 1;
   const ImageFile image;
   const auto reader = image.Open(caps);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   reader->SetReadPattern(Tuning::Pattern::ScatteredGrouped);
   AnnounceStanding(*reader, 0, 3);
@@ -663,7 +664,7 @@ TEST_CASE("The lane starts under the caps of the pattern in force",
 TEST_CASE("A lane read that is done is classified like a first lane one",
           "[io][win32-reader][standing][read-class]") {
   const ImageFile image;
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   SECTION("done, and nothing held back, is Ready") {
     Bench::ReadClass seen = Bench::ReadClass::Unclassified;
@@ -756,7 +757,7 @@ TEST_CASE("A slot that served a big standing range serves a tiny one next",
   constexpr ULONGLONG big_range = ULONGLONG{256} * 1024;
   const ImageFile image;
   const auto reader = image.Open();
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   for (size_t round = 0; round < 4; round++) {
     reader->PrefetchStanding(round * big_range, big_range);
@@ -778,7 +779,7 @@ TEST_CASE("The reads started do not depend on how the lane counts its own",
       [](Tuning::ReaderTuning& tuning) { tuning.max_announced_ranges = 16; });
   const ImageFile image;
   const auto reader = image.Open(caps);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   RandomLaneDriver driver(*reader, 2024);
   for (size_t step = 0; step < 600; step++) {
     const std::uint32_t kind = driver.Below(100);
@@ -824,7 +825,7 @@ TEST_CASE("The lane starts a read as the ones in flight are over",
   const auto reader = image.Open(caps);
   // The reads that the lane starts while step runs.
   const auto lane_reads = [](const auto& step) {
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     step();
     return session.Finish().disk.standing_reads;
   };
@@ -853,7 +854,7 @@ TEST_CASE("A withdrawn read in flight leaves its place to the next range",
     HeldReads().insert(RangeAt(index));
   }
   const auto reader = image.Open(caps);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
 
   AnnounceStanding(*reader, 0, 5);
   // Ranges 0 to 2 are in flight. Withdrawing range 1 frees a place.
@@ -879,7 +880,7 @@ TEST_CASE("The reads started are the same whatever is in flight",
   const ImageFile image;
   const HeldReadsGuard held;
   const auto reader = image.Open(caps);
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   RandomLaneDriver driver(*reader, static_cast<std::uint32_t>(max_reads));
   FirstAnnouncementHold hold;
   for (size_t step = 0; step < 800; step++) {

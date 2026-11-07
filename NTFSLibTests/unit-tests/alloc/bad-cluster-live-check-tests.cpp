@@ -25,7 +25,7 @@ using Catch::Matchers::ContainsSubstring;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -81,10 +81,10 @@ void CheckABadClusterIsLogged() {
 
   const auto opened =
       Support::OpenVolume<S>(LiveImage(one_bad, rest_used), recovering);
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
 
   CHECK(ReadStale(opened) == expected);
-  const std::string log = Tests::TakeCapturedLog();
+  const std::string log = TestSupport::TakeCapturedLog();
   CHECK_THAT(log, ContainsSubstring(bad_message));
   CHECK_THAT(log, ContainsSubstring("1 clusters"));
   // The message names the start of the run that holds the bad cluster.
@@ -119,17 +119,17 @@ template <Cache::Strategy S>
 void CheckStrictModeReadsNoBadList() {
   const std::vector<BYTE> image = LiveImage(one_bad, rest_used);
   const auto opened = Support::OpenVolume<S>(image, strict);
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   opened.counter->Reset();
 
   (void)ReadStale(opened);
 
-  CHECK_THAT(Tests::TakeCapturedLog(), !ContainsSubstring(bad_message));
+  CHECK_THAT(TestSupport::TakeCapturedLog(), !ContainsSubstring(bad_message));
   CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
                                      image.size()) == 0);
   // Reading the stale stream asks for no allocation at all: a failure to load
   // the bad list would be logged as soon as it was tried.
-  CHECK_THAT(Tests::TakeCapturedLog(), !ContainsSubstring("$BadClus"));
+  CHECK_THAT(TestSupport::TakeCapturedLog(), !ContainsSubstring("$BadClus"));
 }
 
 template <Cache::Strategy S>
@@ -149,12 +149,12 @@ void CheckTheCheckRunsOnce() {
   const auto record = Support::ParsedStale(opened);
   std::vector<BYTE> out(stale_size);
   const auto* const stream = record->FindStream({});
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
 
   REQUIRE(stream->ReadData(0, out));
-  const std::string first = Tests::TakeCapturedLog();
+  const std::string first = TestSupport::TakeCapturedLog();
   REQUIRE(stream->ReadData(0, out));
-  const std::string second = Tests::TakeCapturedLog();
+  const std::string second = TestSupport::TakeCapturedLog();
 
   CHECK_THAT(first, ContainsSubstring(bad_message));
   CHECK_THAT(second, !ContainsSubstring(bad_message));
@@ -173,7 +173,7 @@ template <Cache::Strategy S>
 void CheckTheVolumesOwnMetadataIsNotChecked() {
   const std::vector<BYTE> image = LiveImage(one_bad, rest_used);
   const auto opened = Support::OpenVolume<S>(image, recovering);
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
 
   const auto mft = Support::ParsedRecord(*opened.volume,
                                          static_cast<ULONGLONG>(Mft::Idx::Mft));
@@ -185,7 +185,7 @@ void CheckTheVolumesOwnMetadataIsNotChecked() {
   std::vector<BYTE> bitmap_bytes(8);
   CHECK(bitmap->FindStream({})->ReadData(0, bitmap_bytes));
 
-  CHECK_THAT(Tests::TakeCapturedLog(), !ContainsSubstring(bad_message));
+  CHECK_THAT(TestSupport::TakeCapturedLog(), !ContainsSubstring(bad_message));
 }
 
 }  // namespace

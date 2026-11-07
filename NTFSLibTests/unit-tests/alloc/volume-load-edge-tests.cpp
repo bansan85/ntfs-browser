@@ -27,7 +27,7 @@ struct VolumeOptions;
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
@@ -50,7 +50,8 @@ constexpr ULONGLONG bad_clus_record = 8;
 template <Cache::Strategy S, typename Script>
 std::unique_ptr<NtfsVolume<S>> OpenScripted(std::vector<BYTE> image,
                                             Script script) {
-  auto reader = std::make_unique<Tests::ScriptedDiskReader>(std::move(image));
+  auto reader =
+      std::make_unique<TestSupport::ScriptedDiskReader>(std::move(image));
   script(*reader);
   return std::make_unique<NtfsVolume<S>>(std::move(reader),
                                          Support::DeletedOptions());
@@ -94,9 +95,9 @@ TEMPLATE_TEST_CASE_SIG("a bitmap read that throws leaves the clusters unknown",
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated_runs);
   const ULONGLONG image_size = image.size();
   const auto volume = OpenScripted<S>(
-      std::move(image), [image_size](Tests::ScriptedDiskReader& reader) {
+      std::move(image), [image_size](TestSupport::ScriptedDiskReader& reader) {
         reader.FaultRange(Support::bitmap_data_offset, image_size,
-                          Tests::ScriptedDiskReader::Fault::Throw);
+                          TestSupport::ScriptedDiskReader::Fault::Throw);
       });
   REQUIRE(volume->IsVolumeOK());
 
@@ -115,10 +116,11 @@ TEST_CASE("a record read that throws leaves the bad cluster list unusable",
       mft_offset + bad_clus_record * TestFakeImage::fake_file_record_size;
 
   const auto volume = OpenScripted<Cache::Strategy::NoCache>(
-      std::move(image), [record_offset](Tests::ScriptedDiskReader& reader) {
+      std::move(image),
+      [record_offset](TestSupport::ScriptedDiskReader& reader) {
         reader.FaultRange(record_offset,
                           record_offset + TestFakeImage::fake_file_record_size,
-                          Tests::ScriptedDiskReader::Fault::Throw);
+                          TestSupport::ScriptedDiskReader::Fault::Throw);
       });
   REQUIRE(volume->IsVolumeOK());
 

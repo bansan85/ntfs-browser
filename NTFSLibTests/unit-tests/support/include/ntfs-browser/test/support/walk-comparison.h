@@ -9,14 +9,14 @@
 #include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // One entry a directory walk showed.
 struct WalkedEntry {
@@ -25,7 +25,8 @@ struct WalkedEntry {
   WORD sequence{0};
   bool directory{false};
   // How the record the entry names stands.
-  Io::RecordStanding standing{Io::RecordStanding::Live};
+  NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing{
+      NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Live};
 
   auto operator<=>(const WalkedEntry&) const = default;
 };
@@ -48,4 +49,4 @@ struct WalkResult {
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] WalkResult WalkVolume(const NtfsVolume<S>& volume, bool batched);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support

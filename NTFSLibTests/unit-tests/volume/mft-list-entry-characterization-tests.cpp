@@ -143,10 +143,11 @@ TEMPLATE_TEST_CASE_SIG(
           attr_total_size_field,
       static_cast<DWORD>(
           NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size));
-  (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  (void)NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
   const NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(std::move(image)));
-  const std::string captured = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
+  const std::string captured =
+      NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog();
 
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetRecordsCount() == fixed_address_records);

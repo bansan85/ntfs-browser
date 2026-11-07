@@ -34,10 +34,10 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeLink;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::name_tree_root;
-using NTFS_BROWSER_NAMESPACE::Tests::ExoticNames;
-using NTFS_BROWSER_NAMESPACE::Tests::FillerName;
-using NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::OpenNameTreeVolume;
+using NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames;
+using NTFS_BROWSER_NAMESPACE::Test::Support::FillerName;
+using NTFS_BROWSER_NAMESPACE::Test::Support::NameTreeRecord;
+using NTFS_BROWSER_NAMESPACE::Test::Support::OpenNameTreeVolume;
 
 namespace {
 

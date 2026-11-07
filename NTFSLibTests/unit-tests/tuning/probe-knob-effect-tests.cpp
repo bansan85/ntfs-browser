@@ -41,6 +41,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
@@ -113,14 +114,14 @@ bool SameCalls(const RootWalk& left, const RootWalk& right) {
 
 // The entries a walk of every directory shows, in order, with their standing.
 template <Cache::Strategy S = Cache::Strategy::NoCache>
-std::vector<Tests::WalkedEntry>
+std::vector<TestSupport::WalkedEntry>
     Entries(const std::vector<BYTE>& image, const VolumeOptions& options,
             Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
   auto memory = std::make_unique<TestDiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
   const NtfsVolume<S> volume(std::move(memory), options);
   REQUIRE(volume.IsVolumeOK());
-  return Tests::WalkVolume(volume, true).entries;
+  return TestSupport::WalkVolume(volume, true).entries;
 }
 
 const std::vector<BYTE>& Image() {
@@ -276,11 +277,11 @@ TEST_CASE("The probe knobs leave a walk of FullCache as it was",
     const NtfsVolume<Cache::Strategy::FullCache> volume(
         std::make_unique<TestDiskReaders::MemoryDiskReader>(Image()), options);
     REQUIRE(volume.IsVolumeOK());
-    return Tests::WalkVolume(volume, true);
+    return TestSupport::WalkVolume(volume, true);
   };
 
-  const Tests::WalkResult plain = walk({});
-  const Tests::WalkResult changed = walk(tuned);
+  const TestSupport::WalkResult plain = walk({});
+  const TestSupport::WalkResult changed = walk(tuned);
   CHECK(changed.entries == plain.entries);
   CHECK_FALSE(plain.entries.empty());
 }

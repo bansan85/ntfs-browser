@@ -18,12 +18,12 @@
 
 #ifdef NTFS_TEST_HAS_MD5
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 // Hex-encodes the MD5 of data, using whichever EFS crypto backend this build
 // already compiles in.
 std::string Md5Hex(std::span<const BYTE> data);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support
 
 #endif  // NTFS_TEST_HAS_MD5

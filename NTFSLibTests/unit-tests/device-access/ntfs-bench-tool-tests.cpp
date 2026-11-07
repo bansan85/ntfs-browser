@@ -32,12 +32,13 @@
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
 using NtfsDevice::JsonValue;
-using Tests::SampleRun;
+using TestSupport::SampleRun;
 
 namespace {
 
@@ -62,7 +63,7 @@ constexpr std::wstring_view absent_target = L"ntfs-bench-test-no-such-target";
 SampleRun RunBench(const std::vector<std::wstring>& args) {
   const std::filesystem::path exe(NTFS_BENCH_EXE);
   REQUIRE(std::filesystem::exists(exe));
-  return Tests::RunSample(exe, args);
+  return TestSupport::RunSample(exe, args);
 }
 
 std::string ReadText(const std::filesystem::path& path) {
@@ -105,7 +106,7 @@ std::uint64_t SimulatedNs(const std::vector<std::wstring>& args) {
 }
 
 // A plain file of zeros, in a temp folder.
-std::filesystem::path WriteZeros(const Tests::TempDir& dir,
+std::filesystem::path WriteZeros(const TestDeviceAccess::TempDir& dir,
                                  std::string_view name, std::size_t bytes) {
   return dir.Write(name, std::string(bytes, '\0'));
 }
@@ -113,7 +114,7 @@ std::filesystem::path WriteZeros(const Tests::TempDir& dir,
 // A run of NtfsMftList on an image, with its summary and read log, and the
 // image the log was made from.
 struct RecordedRun {
-  Tests::TempDir dir;
+  TestDeviceAccess::TempDir dir;
   MftListSample::TempTreeImage image;
   std::filesystem::path summary_path;
   std::filesystem::path log_path;
@@ -218,7 +219,7 @@ TEST_CASE("NtfsBench simulate: a tuned constant moves the time",
 
 TEST_CASE("NtfsBench simulate writes its JSON to the file --json names",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path out = dir.Path() / "sim.json";
 
   const SampleRun to_stdout = RunBench({L"simulate", L"--records=200"});
@@ -235,7 +236,7 @@ TEST_CASE("NtfsBench simulate writes its JSON to the file --json names",
 
 TEST_CASE("NtfsBench simulate --write-image writes a volume the tools open",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path image = dir.Path() / "volume.img";
 
   const SampleRun written = RunBench(
@@ -414,7 +415,7 @@ TEST_CASE("NtfsBench replay refuses what it cannot use",
   const RecordedRun recorded;
   const std::wstring log = recorded.log_path.wstring();
   const std::wstring image = recorded.image.path.wstring();
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path not_a_log = dir.Write("not-a-log.bin", "hello");
 
   struct Case {
@@ -507,7 +508,7 @@ TEST_CASE(
 
 TEST_CASE("NtfsBench commands that need a target refuse a missing one",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::wstring absent_file = (dir.Path() / "absent.img").wstring();
   const std::wstring absent(absent_target);
 
@@ -548,7 +549,7 @@ TEST_CASE("NtfsBench commands that need a target refuse a missing one",
 
 TEST_CASE("NtfsBench disk-id refuses a target that does not exist",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::wstring missing_file = (dir.Path() / "absent.img").wstring();
 
   for (const std::wstring& target :
@@ -563,7 +564,7 @@ TEST_CASE("NtfsBench disk-id refuses a target that does not exist",
 
 TEST_CASE("NtfsBench disk-id names no disk for a file",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path image = WriteZeros(dir, "disk.img", 4096);
 
   const SampleRun run = RunBench({L"disk-id", image.wstring()});
@@ -578,7 +579,7 @@ TEST_CASE("NtfsBench disk-id names no disk for a file",
 
 TEST_CASE("NtfsBench wake refuses what is no disk and acts on no other drive",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path image = WriteZeros(dir, "disk.img", 4096);
 
   // The temp folder sits under a drive letter on Windows: neither path is
@@ -598,7 +599,7 @@ TEST_CASE("NtfsBench wake refuses what is no disk and acts on no other drive",
 
 TEST_CASE("NtfsBench sample refuses a file and a missing path",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path image = WriteZeros(dir, "disk.img", 4096);
   const std::filesystem::path out = dir.Path() / "samples.json";
 
@@ -617,7 +618,7 @@ TEST_CASE("NtfsBench sample refuses a file and a missing path",
 
 TEST_CASE("NtfsBench diskbench refuses a zone it cannot use",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path file = WriteZeros(dir, "disk.img", 1U << 20U);
 
   const SampleRun malformed =
@@ -644,7 +645,7 @@ TEST_CASE("NtfsBench diskbench refuses a zone it cannot use",
 
 TEST_CASE("NtfsBench diskbench measures a plain file with no device",
           "[device-access][ntfsbench][sample]") {
-  const Tests::TempDir dir;
+  const TestDeviceAccess::TempDir dir;
   const std::filesystem::path file =
       WriteZeros(dir, "disk.img", measured_file_bytes);
   const std::filesystem::path out = dir.Path() / "sheet.json";

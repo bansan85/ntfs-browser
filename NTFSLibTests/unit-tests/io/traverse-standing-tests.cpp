@@ -39,7 +39,7 @@ class NtfsVolume;
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
@@ -50,8 +50,8 @@ using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Io::RecordStanding;
 using TestDiskReaders::CountingDiskReader;
 using TestDiskReaders::MemoryDiskReader;
-using Tests::WalkedEntry;
-using Tests::WalkResult;
+using TestSupport::WalkedEntry;
+using TestSupport::WalkResult;
 
 namespace {
 
@@ -88,10 +88,10 @@ WalkResult CheckSameWalk(const std::vector<BYTE>& image,
                          const VolumeOptions& options) {
   const auto plain =
       OpenVolume<S>(std::make_unique<MemoryDiskReader>(image), options);
-  const WalkResult expected = Tests::WalkVolume(*plain, false);
+  const WalkResult expected = TestSupport::WalkVolume(*plain, false);
   const auto batched =
       OpenVolume<S>(std::make_unique<MemoryDiskReader>(image), options);
-  WalkResult actual = Tests::WalkVolume(*batched, true);
+  WalkResult actual = TestSupport::WalkVolume(*batched, true);
 
   CHECK(actual.entries == expected.entries);
   CHECK(actual.log == expected.log);
@@ -171,14 +171,14 @@ RootWalk WalkRootOnly(const std::vector<BYTE>& image, bool batched,
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
   reads.Reset();
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   if (batched) {
     root.TraverseSubEntriesWithStanding(
         [](const IndexEntryView&, RecordStanding, void*) {}, nullptr);
   } else {
     root.TraverseSubEntries([](const IndexEntryView&, void*) {}, nullptr);
   }
-  return {.calls = reads.Calls(), .log = Tests::TakeCapturedLog()};
+  return {.calls = reads.Calls(), .log = TestSupport::TakeCapturedLog()};
 }
 
 // How many times text occurs in log.

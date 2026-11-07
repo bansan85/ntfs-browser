@@ -26,7 +26,7 @@ using Catch::Matchers::ContainsSubstring;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -61,10 +61,10 @@ void CheckAFreeClusterIsLogged() {
   const std::vector<BYTE> expected = ReadStale(strict_opened);
 
   const auto opened = Support::OpenVolume<S>(LiveImage({}), recovering);
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
 
   CHECK(ReadStale(opened) == expected);
-  CHECK_THAT(Tests::TakeCapturedLog(), ContainsSubstring(free_message));
+  CHECK_THAT(TestSupport::TakeCapturedLog(), ContainsSubstring(free_message));
 }
 
 template <Cache::Strategy S>
@@ -92,12 +92,12 @@ template <Cache::Strategy S>
 void CheckStrictModeReadsNoBitmap() {
   const std::vector<BYTE> image = LiveImage({});
   const auto opened = Support::OpenVolume<S>(image, strict);
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   opened.counter->Reset();
 
   (void)ReadStale(opened);
 
-  CHECK_THAT(Tests::TakeCapturedLog(), !ContainsSubstring(free_message));
+  CHECK_THAT(TestSupport::TakeCapturedLog(), !ContainsSubstring(free_message));
   CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
                                      image.size()) == 0);
 }
@@ -108,12 +108,12 @@ void CheckTheCheckRunsOnce() {
   const auto record = Support::ParsedStale(opened);
   std::vector<BYTE> out(stale_size);
   const auto* const stream = record->FindStream({});
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
 
   REQUIRE(stream->ReadData(0, out));
-  const std::string first = Tests::TakeCapturedLog();
+  const std::string first = TestSupport::TakeCapturedLog();
   REQUIRE(stream->ReadData(0, out));
-  const std::string second = Tests::TakeCapturedLog();
+  const std::string second = TestSupport::TakeCapturedLog();
 
   CHECK_THAT(first, ContainsSubstring(free_message));
   CHECK_THAT(second, !ContainsSubstring(free_message));
@@ -132,7 +132,7 @@ template <Cache::Strategy S>
 void CheckTheVolumesOwnMetadataIsNotChecked() {
   const std::vector<BYTE> image = LiveImage({});
   const auto opened = Support::OpenVolume<S>(image, recovering);
-  (void)Tests::TakeCapturedLog();
+  (void)TestSupport::TakeCapturedLog();
   opened.counter->Reset();
 
   const auto mft = Support::ParsedRecord(*opened.volume,
@@ -145,7 +145,7 @@ void CheckTheVolumesOwnMetadataIsNotChecked() {
   std::vector<BYTE> bitmap_bytes(8);
   CHECK(bitmap->FindStream({})->ReadData(0, bitmap_bytes));
 
-  CHECK_THAT(Tests::TakeCapturedLog(), !ContainsSubstring(free_message));
+  CHECK_THAT(TestSupport::TakeCapturedLog(), !ContainsSubstring(free_message));
 }
 
 // A live stale file in two fragments of two clusters, at LCN 40 and 50.

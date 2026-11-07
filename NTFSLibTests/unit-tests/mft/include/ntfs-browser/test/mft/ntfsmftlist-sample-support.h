@@ -17,10 +17,11 @@
 namespace NTFS_BROWSER_NAMESPACE::Tests::MftListSample {
 
 // Runs NtfsMftList with args, its stdout and stderr captured apart.
-inline SampleRun RunMftList(const std::vector<std::wstring>& args) {
+inline Test::Support::SampleRun
+    RunMftList(const std::vector<std::wstring>& args) {
   const std::filesystem::path exe(NTFS_MFT_LIST_EXE);
   REQUIRE(std::filesystem::exists(exe));
-  return RunSample(exe, args);
+  return Test::Support::RunSample(exe, args);
 }
 
 // Writes an MFT tree image to a temp file, removed on exit. The default is

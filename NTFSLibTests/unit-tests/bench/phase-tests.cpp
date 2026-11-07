@@ -44,7 +44,7 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Util = NTFS_BROWSER_NAMESPACE::Util;
@@ -124,8 +124,8 @@ SessionScan ScanInSession(const std::vector<BYTE>& image,
                           const VolumeOptions& volume_options,
                           const Mft::MftTree::ScanOptions& scan_options,
                           bool with_session = true) {
-  static_cast<void>(Tests::TakeCapturedLog());
-  std::optional<Tests::BenchSessionGuard> session;
+  static_cast<void>(TestSupport::TakeCapturedLog());
+  std::optional<TestSupport::BenchSessionGuard> session;
   if (with_session) {
     session.emplace();
   }
@@ -169,7 +169,7 @@ Mft::MftTree::ScanOptions OneThread() {
 
 TEST_CASE("A phase scope nests, repeats and adds its repeats",
           "[bench][phase]") {
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     const Bench::PhaseScope outer(Bench::Phase::Open);
     SpinFor(std::chrono::microseconds{500});
@@ -213,7 +213,7 @@ TEST_CASE("A read counts for the innermost phase only", "[bench][phase]") {
   std::vector<BYTE> buffer(100);
   LARGE_INTEGER addr{.QuadPart = 0};
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   REQUIRE(file.ReadInto(addr, buffer));
   {
     const Bench::PhaseScope outer(Bench::Phase::Open);
@@ -253,7 +253,7 @@ TEST_CASE("A phase scope outside a session records nothing", "[bench][phase]") {
   CHECK_FALSE(Bench::Enabled());
   {
     const Bench::PhaseScope before(Bench::Phase::Open);
-    Tests::BenchSessionGuard session;
+    TestSupport::BenchSessionGuard session;
     {
       const Bench::PhaseScope inside(Bench::Phase::Link);
     }
@@ -409,7 +409,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   SessionScan stopped;
   {
-    const Tests::StopAfterGuard stop(Bench::Phase::Pass1);
+    const TestSupport::StopAfterGuard stop(Bench::Phase::Pass1);
     CHECK_FALSE(Bench::StopRequested());
     stopped =
         ScanInSession<S>(image, volume_options, OneThread(), with_session);
@@ -442,7 +442,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("Stopping after the second pass skips the link", "[bench][stop]") {
   SessionScan stopped;
   {
-    const Tests::StopAfterGuard stop(Bench::Phase::Pass2);
+    const TestSupport::StopAfterGuard stop(Bench::Phase::Pass2);
     stopped = ScanInSession<Cache::Strategy::NoCache>(
         ListImage(), VolumeOptions{.include_deleted = true}, OneThread());
   }
@@ -455,7 +455,7 @@ TEST_CASE("Stopping after the second pass skips the link", "[bench][stop]") {
 
 TEST_CASE("A new stop request clears the previous one", "[bench][stop]") {
   {
-    const Tests::StopAfterGuard stop(Bench::Phase::Open);
+    const TestSupport::StopAfterGuard stop(Bench::Phase::Open);
     {
       const Bench::PhaseScope phase(Bench::Phase::Open);
     }
@@ -475,7 +475,7 @@ TEST_CASE("A new stop request clears the previous one", "[bench][stop]") {
 }
 
 TEST_CASE("A thread scope reports the thread when it ends", "[bench][thread]") {
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   std::thread worker([] {
     const Bench::ThreadScope scope(Bench::ThreadRole::OutputWriter);
     SpinFor(std::chrono::milliseconds{2});
@@ -499,7 +499,7 @@ TEST_CASE("A thread scope outside a session reports nothing",
   });
   worker.join();
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   const Bench::Report report = session.Finish();
 
   REQUIRE(report.threads.size() == 1);
@@ -509,7 +509,7 @@ TEST_CASE("A thread scope outside a session reports nothing",
 TEST_CASE("A chunk pool reports one thread stat per helper",
           "[bench][thread]") {
   constexpr size_t helpers = 3;
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     Util::ChunkPool pool(helpers);
     CHECK(pool.Slots() == helpers + 1);
@@ -526,7 +526,7 @@ TEST_CASE("A chunk pool reports one thread stat per helper",
 }
 
 TEST_CASE("A pool without helpers reports no worker", "[bench][thread]") {
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   {
     Util::ChunkPool pool(0);
     pool.Start(2, [](size_t /*chunk*/, size_t /*slot*/) {});

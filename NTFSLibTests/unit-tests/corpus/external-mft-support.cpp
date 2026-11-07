@@ -156,9 +156,9 @@ StandaloneMftScan ScanWith(const std::filesystem::path& file,
   auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
       std::move(standalone));
   const Test::DiskReaders::CountingDiskReader* reads = counting.get();
-  static_cast<void>(TakeCapturedLog());
+  static_cast<void>(Test::Support::TakeCapturedLog());
   const NtfsVolume<S> volume(std::move(counting), options);
-  INFO("log of the volume open: " << TakeCapturedLog());
+  INFO("log of the volume open: " << Test::Support::TakeCapturedLog());
   REQUIRE(volume.IsVolumeOK());
 
   StandaloneMftScan scan{.tree = Mft::MftTree(volume),
@@ -167,7 +167,7 @@ StandaloneMftScan ScanWith(const std::filesystem::path& file,
                          .record_size = record_size,
                          .cluster_size = cluster_size};
   // The scan logs a line per record: do not keep them.
-  static_cast<void>(TakeCapturedLog());
+  static_cast<void>(Test::Support::TakeCapturedLog());
   for (const Test::DiskReaders::CountingDiskReader::Call& call :
        reads->Calls()) {
     if (call.kind == Test::DiskReaders::CountingDiskReader::Kind::Read) {
@@ -215,10 +215,10 @@ std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
   const bool opened = standalone->Open(file.wstring());
   INFO("StandaloneMftDiskReader::Open: " << standalone->Failure());
   REQUIRE(opened);
-  static_cast<void>(TakeCapturedLog());
+  static_cast<void>(Test::Support::TakeCapturedLog());
   auto volume = std::make_unique<NtfsVolume<Cache::Strategy::NoCache>>(
       std::move(standalone), options);
-  INFO("log of the volume open: " << TakeCapturedLog());
+  INFO("log of the volume open: " << Test::Support::TakeCapturedLog());
   REQUIRE(volume->IsVolumeOK());
   return volume;
 }

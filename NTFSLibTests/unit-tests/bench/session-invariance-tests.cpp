@@ -36,7 +36,7 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
@@ -201,34 +201,35 @@ std::vector<Call> LoggedReads(const Bench::ReadLog& log) {
 // A scan of the list fixture over a counting reader: the volume is opened and
 // scanned in this call, so a session started before it sees the open too.
 template <Cache::Strategy S>
-Tests::ScanResult ScanList(const std::vector<BYTE>& image,
-                           const VolumeOptions& options, unsigned threads) {
-  static_cast<void>(Tests::TakeCapturedLog());
+TestSupport::ScanResult ScanList(const std::vector<BYTE>& image,
+                                 const VolumeOptions& options,
+                                 unsigned threads) {
+  static_cast<void>(TestSupport::TakeCapturedLog());
   auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
       std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
   const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
-  return Tests::CaptureScan(volume, counting, threads);
+  return TestSupport::CaptureScan(volume, counting, threads);
 }
 
 // What a batched walk showed and asked of the reader.
 struct WalkRun {
-  Tests::WalkResult walk;
+  TestSupport::WalkResult walk;
   std::vector<Call> calls;
 };
 
 template <Cache::Strategy S>
 WalkRun WalkIndexed(const std::vector<BYTE>& image,
                     const VolumeOptions& options) {
-  static_cast<void>(Tests::TakeCapturedLog());
+  static_cast<void>(TestSupport::TakeCapturedLog());
   auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
       std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
   const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
   WalkRun run;
-  run.walk = Tests::WalkVolume(volume, true);
+  run.walk = TestSupport::WalkVolume(volume, true);
   run.calls = counting->Calls();
   return run;
 }
@@ -239,7 +240,7 @@ TEST_CASE("No Bench session runs unless a test starts one",
           "[bench][invariance]") {
   CHECK_FALSE(Bench::Enabled());
   {
-    const Tests::BenchSessionGuard session;
+    const TestSupport::BenchSessionGuard session;
     CHECK(Bench::Enabled());
   }
   CHECK_FALSE(Bench::Enabled());
@@ -260,7 +261,8 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(CountKind(plain.calls, Kind::PrefetchStanding) == 2);
   CHECK(CountKind(plain.calls, Kind::CancelStanding) == 2);
 
-  Tests::BenchSessionGuard session(Bench::SessionOptions{.keep_log = keep_log});
+  TestSupport::BenchSessionGuard session(
+      Bench::SessionOptions{.keep_log = keep_log});
   const ScriptRun measured = RunScript<S>(image);
   const Bench::Report report = session.Finish();
 
@@ -297,21 +299,21 @@ TEMPLATE_TEST_CASE_SIG(
                                                        list_fragment_clusters);
   INFO("include_deleted " << include_deleted << ", threads " << threads);
 
-  const Tests::ScanResult plain = ScanList<S>(image, options, threads);
+  const TestSupport::ScanResult plain = ScanList<S>(image, options, threads);
   CHECK_FALSE(plain.tree.empty());
   CHECK_FALSE(plain.log.empty());
   CHECK(CountKind(plain.calls, Kind::Prefetch) > 0);
 
-  Tests::BenchSessionGuard session;
-  Tests::ScanResult measured = ScanList<S>(image, options, threads);
+  TestSupport::BenchSessionGuard session;
+  TestSupport::ScanResult measured = ScanList<S>(image, options, threads);
   const Bench::Report report = session.Finish();
 
-  Tests::ScanResult unqueried = plain;
+  TestSupport::ScanResult unqueried = plain;
   const size_t plain_queries = TakeSizeQueries(unqueried.calls);
   CHECK(TakeSizeQueries(measured.calls) == plain_queries + 1);
 
   INFO("calls " << CallDivergence(unqueried.calls, measured.calls));
-  Tests::CheckSameScan(unqueried, measured);
+  TestSupport::CheckSameScan(unqueried, measured);
   CHECK(measured.parsed_by_threads == plain.parsed_by_threads);
   CHECK(measured.waiting_by_threads == plain.waiting_by_threads);
   CHECK(report.requested_reads == CountKind(plain.calls, Kind::Read));
@@ -333,7 +335,7 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK_FALSE(plain.walk.entries.empty());
   CHECK(CountKind(plain.calls, Kind::Prefetch) > 0);
 
-  Tests::BenchSessionGuard session;
+  TestSupport::BenchSessionGuard session;
   WalkRun measured = WalkIndexed<S>(image, options);
   const Bench::Report report = session.Finish();
   const size_t plain_queries = TakeSizeQueries(plain.calls);

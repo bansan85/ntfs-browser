@@ -25,12 +25,12 @@
 
 namespace NTFS_BROWSER_NAMESPACE {
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 class NtfsVolume;
 
 }  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 
 namespace {
 
@@ -48,11 +48,11 @@ ULONGLONG Ticks(const FILETIME& time) {
          time.dwLowDateTime;
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 ScanResult Capture(const NtfsVolume<S>& volume,
                    const Test::DiskReaders::CountingDiskReader* reader,
                    unsigned threads, size_t progress_stops_at) {
-  Mft::MftTree::ScanOptions scan;
+  NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanOptions scan;
   scan.threads = threads;
   size_t progress_calls = 0;
   if (progress_stops_at != 0) {
@@ -62,13 +62,17 @@ ScanResult Capture(const NtfsVolume<S>& volume,
     };
   }
 
-  static_cast<void>(Mft::SlotsParsedByThreadsForTests(true));
-  static_cast<void>(Mft::WaitingParsedByThreadsForTests(true));
-  const Mft::MftTree tree(volume, scan);
+  static_cast<void>(
+      NTFS_BROWSER_NAMESPACE::Mft::SlotsParsedByThreadsForTests(true));
+  static_cast<void>(
+      NTFS_BROWSER_NAMESPACE::Mft::WaitingParsedByThreadsForTests(true));
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(volume, scan);
 
   ScanResult result;
-  result.parsed_by_threads = Mft::SlotsParsedByThreadsForTests(true);
-  result.waiting_by_threads = Mft::WaitingParsedByThreadsForTests(true);
+  result.parsed_by_threads =
+      NTFS_BROWSER_NAMESPACE::Mft::SlotsParsedByThreadsForTests(true);
+  result.waiting_by_threads =
+      NTFS_BROWSER_NAMESPACE::Mft::WaitingParsedByThreadsForTests(true);
   result.tree = DescribeTree(tree);
   result.log = TakeCapturedLog();
   if (reader != nullptr) {
@@ -79,8 +83,8 @@ ScanResult Capture(const NtfsVolume<S>& volume,
 
 }  // namespace
 
-std::string DescribeTree(const Mft::MftTree& tree) {
-  using Tree = Mft::MftTree;
+std::string DescribeTree(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree) {
+  using Tree = NTFS_BROWSER_NAMESPACE::Mft::MftTree;
   std::string out;
   for (const Tree::Entry& entry : tree.Entries()) {
     out += std::format(
@@ -160,16 +164,19 @@ void CheckSameScan(const ScanResult& one, const ScanResult& many) {
   CHECK(SameCalls(many, one));
 }
 
-ScanResult CaptureScan(const NtfsVolume<Cache::Strategy::NoCache>& volume,
-                       const Test::DiskReaders::CountingDiskReader* reader,
-                       unsigned threads, size_t progress_stops_at) {
+ScanResult CaptureScan(
+    const NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
+    const Test::DiskReaders::CountingDiskReader* reader, unsigned threads,
+    size_t progress_stops_at) {
   return Capture(volume, reader, threads, progress_stops_at);
 }
 
-ScanResult CaptureScan(const NtfsVolume<Cache::Strategy::FullCache>& volume,
-                       const Test::DiskReaders::CountingDiskReader* reader,
-                       unsigned threads, size_t progress_stops_at) {
+ScanResult CaptureScan(
+    const NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>&
+        volume,
+    const Test::DiskReaders::CountingDiskReader* reader, unsigned threads,
+    size_t progress_stops_at) {
   return Capture(volume, reader, threads, progress_stops_at);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Support
