@@ -54,16 +54,18 @@ struct HeaderCommon;
 }  // namespace Attr
 }  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead {
+namespace NTFS_BROWSER_NAMESPACE::Test::Io {
 
 VerifiedLaneZone::VerifiedLaneZone() noexcept
-    : mismatches_before_(Io::LaneZoneMismatchesForTests()) {
-  Io::SetVerifyLaneZoneForTests(true);
+    : mismatches_before_(
+          NTFS_BROWSER_NAMESPACE::Io::LaneZoneMismatchesForTests()) {
+  NTFS_BROWSER_NAMESPACE::Io::SetVerifyLaneZoneForTests(true);
 }
 
 VerifiedLaneZone::~VerifiedLaneZone() {
-  Io::SetVerifyLaneZoneForTests(false);
-  CHECK(Io::LaneZoneMismatchesForTests() == mismatches_before_);
+  NTFS_BROWSER_NAMESPACE::Io::SetVerifyLaneZoneForTests(false);
+  CHECK(NTFS_BROWSER_NAMESPACE::Io::LaneZoneMismatchesForTests() ==
+        mismatches_before_);
 }
 
 namespace {
@@ -105,7 +107,7 @@ std::wstring Number(std::size_t value) {
 
 // The offset in image of file record record, going by the volume's own $MFT.
 ULONGLONG RecordOffset(const std::vector<BYTE>& image, ULONGLONG record) {
-  NtfsVolume<Cache::Strategy::NoCache> volume(
+  NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache> volume(
       std::make_unique<Test::DiskReaders::MemoryDiskReader>(image));
   REQUIRE(volume.IsVolumeOK());
   return volume.GetMFTAddr() + (record * volume.GetFileRecordSize());
@@ -225,12 +227,13 @@ VolumeOptions WithReadAhead(VolumeOptions options, std::size_t dirs,
 }
 
 // Lists volume recursively, and gathers the text and the log.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 Run ListVolume(NtfsVolume<S>& volume,
                Test::DiskReaders::CountingDiskReader& reads) {
   reads.Reset();
   (void)Test::Support::TakeCapturedLog();
-  const std::uint64_t recovered_before = Log::Detail::RecoveredCount();
+  const std::uint64_t recovered_before =
+      NTFS_BROWSER_NAMESPACE::Log::Detail::RecoveredCount();
 
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /
@@ -244,7 +247,8 @@ Run ListVolume(NtfsVolume<S>& volume,
   run.text = ReadAndRemove(file, path);
   run.log = WithoutReadLines(Test::Support::TakeCapturedLog());
   run.calls = reads.Calls();
-  run.recovered = Log::Detail::RecoveredCount() - recovered_before;
+  run.recovered =
+      NTFS_BROWSER_NAMESPACE::Log::Detail::RecoveredCount() - recovered_before;
   return run;
 }
 
@@ -436,10 +440,10 @@ std::vector<VolumeOptions> AllOptions() {
   return options;
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 Run ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
                     std::size_t dirs, std::uint64_t bytes,
-                    Tuning::MediaKind kind) {
+                    NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind) {
   auto memory = std::make_unique<Test::DiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
   auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
@@ -451,7 +455,7 @@ Run ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
   return ListVolume(volume, reads);
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 Run ListWithDefaultTuning(const std::vector<BYTE>& image,
                           const VolumeOptions& options) {
   auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
@@ -472,19 +476,22 @@ struct LaneChildren {
 // Whether a listing enters the entry, as the visitor of NtfsDir does: a
 // directory with a Win32 name, not reused, and not a metadata file.
 bool IsListedSubdirectory(const IndexEntryView& entry,
-                          Io::RecordStanding standing) {
-  if (entry.GetFileReference() < static_cast<ULONGLONG>(Mft::Idx::User)) {
+                          NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing) {
+  if (entry.GetFileReference() <
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User)) {
     return false;
   }
   if (!entry.IsWin32Name() || entry.GetFilename().empty()) {
     return false;
   }
-  return entry.IsDirectory() && standing != Io::RecordStanding::Reused;
+  return entry.IsDirectory() &&
+         standing != NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Reused;
 }
 
 // TraverseSubEntriesWithStanding callback of ListForLane(): collects the
 // subdirectories the way the visitor of NtfsDir does.
-void CollectChildren(const IndexEntryView& entry, Io::RecordStanding standing,
+void CollectChildren(const IndexEntryView& entry,
+                     NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing,
                      void* context) {
   if (IsListedSubdirectory(entry, standing)) {
     static_cast<LaneChildren*>(context)->references.push_back(
@@ -493,7 +500,8 @@ void CollectChildren(const IndexEntryView& entry, Io::RecordStanding standing,
 }
 
 // Keeps every attribute: a callback only has to be there.
-void KeepAttribute(const Attr::HeaderCommon& /*header*/, bool& discard) {
+void KeepAttribute(const NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon& /*header*/,
+                   bool& discard) {
   discard = false;
 }
 
@@ -516,10 +524,11 @@ std::vector<ULONGLONG>
 // Pops the stack down to the next directory that parses, and enters it. A
 // directory that is skipped or does not parse is released. False when the
 // stack ran out.
-template <Cache::Strategy S>
-bool EnterNextDirectory(Io::FileRecord<S>& fr, Io::DirectoryReadAhead<S>& ahead,
-                        std::vector<ULONGLONG>& pending,
-                        std::unordered_set<ULONGLONG>& listed) {
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+bool EnterNextDirectory(
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
+    NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S>& ahead,
+    std::vector<ULONGLONG>& pending, std::unordered_set<ULONGLONG>& listed) {
   while (!pending.empty()) {
     const ULONGLONG next = pending.back();
     pending.pop_back();
@@ -538,8 +547,9 @@ bool EnterNextDirectory(Io::FileRecord<S>& fr, Io::DirectoryReadAhead<S>& ahead,
 
 // The listing of ListTree() of NtfsDir, without its output: the same walk of
 // the stack and the same calls on ahead.
-template <Cache::Strategy S>
-void WalkStack(Io::FileRecord<S>& fr, Io::DirectoryReadAhead<S>& ahead) {
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+void WalkStack(NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
+               NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S>& ahead) {
   std::vector<ULONGLONG> pending;
   std::unordered_set<ULONGLONG> listed;
   if (const std::optional<ULONGLONG> start = fr.GetFileReference()) {
@@ -563,9 +573,10 @@ void WalkStack(Io::FileRecord<S>& fr, Io::DirectoryReadAhead<S>& ahead) {
 
 }  // namespace
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 LaneRun ListForLane(const std::vector<BYTE>& image,
-                    const VolumeOptions& options, Tuning::MediaKind kind,
+                    const VolumeOptions& options,
+                    NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind,
                     bool raw_callback) {
   auto memory = std::make_unique<Test::DiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
@@ -575,18 +586,22 @@ LaneRun ListForLane(const std::vector<BYTE>& image,
   NtfsVolume<S> volume(std::move(counting), options);
   REQUIRE(volume.IsVolumeOK());
   if (raw_callback) {
-    REQUIRE(volume.InstallAttrRawCB(Attr::Type::Data, &KeepAttribute));
+    REQUIRE(volume.InstallAttrRawCB(NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
+                                    &KeepAttribute));
   }
-  volume.SetReadPattern(Tuning::Pattern::DependentSmall);
-  Io::FileRecord<S> fr(volume);
-  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  REQUIRE(fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+  volume.SetReadPattern(
+      NTFS_BROWSER_NAMESPACE::Tuning::Pattern::DependentSmall);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> fr(volume);
+  fr.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                 NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  REQUIRE(fr.ParseFileRecord(
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)));
   REQUIRE(fr.ParseAttrs());
   reads.Reset();
 
   LaneRun run;
   {
-    Io::DirectoryReadAhead<S> ahead(volume);
+    NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S> ahead(volume);
     WalkStack(fr, ahead);
     run.stats = ahead.GetStats();
   }
@@ -612,7 +627,7 @@ Test::DiskReaders::DiskModel HardDiskModel() {
   return model;
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 TimedRun ListOnSimulatedDisk(const std::vector<BYTE>& image,
                              VolumeOptions options, std::size_t dirs,
                              std::uint64_t bytes,
@@ -670,7 +685,7 @@ std::string FirstDifference(const std::string& left, const std::string& right) {
 }
 
 MftSpan MftSpanOf(const std::vector<BYTE>& image) {
-  NtfsVolume<Cache::Strategy::NoCache> volume(
+  NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache> volume(
       std::make_unique<Test::DiskReaders::MemoryDiskReader>(image));
   REQUIRE(volume.IsVolumeOK());
   const ULONGLONG first = volume.GetMFTAddr();
@@ -698,27 +713,33 @@ std::vector<std::uint32_t> SectorReadCounts(
   return counts;
 }
 
-template Run ListRecursively<Cache::Strategy::NoCache>(
+template Run ListRecursively<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes, Tuning::MediaKind kind);
-template Run ListRecursively<Cache::Strategy::FullCache>(
-    const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes, Tuning::MediaKind kind);
-template Run ListWithDefaultTuning<Cache::Strategy::NoCache>(
-    const std::vector<BYTE>& image, const VolumeOptions& options);
-template Run ListWithDefaultTuning<Cache::Strategy::FullCache>(
-    const std::vector<BYTE>& image, const VolumeOptions& options);
-template LaneRun ListForLane<Cache::Strategy::NoCache>(
+    std::uint64_t bytes, NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind);
+template Run
+    ListRecursively<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
+        std::uint64_t bytes, NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind);
+template Run
+    ListWithDefaultTuning<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+        const std::vector<BYTE>& image, const VolumeOptions& options);
+template Run
+    ListWithDefaultTuning<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        const std::vector<BYTE>& image, const VolumeOptions& options);
+template LaneRun ListForLane<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
     const std::vector<BYTE>& image, const VolumeOptions& options,
-    Tuning::MediaKind kind, bool raw_callback);
-template LaneRun ListForLane<Cache::Strategy::FullCache>(
-    const std::vector<BYTE>& image, const VolumeOptions& options,
-    Tuning::MediaKind kind, bool raw_callback);
-template TimedRun ListOnSimulatedDisk<Cache::Strategy::NoCache>(
-    const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes, const SimulatedDevice& device);
-template TimedRun ListOnSimulatedDisk<Cache::Strategy::FullCache>(
-    const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-    std::uint64_t bytes, const SimulatedDevice& device);
+    NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind, bool raw_callback);
+template LaneRun
+    ListForLane<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        const std::vector<BYTE>& image, const VolumeOptions& options,
+        NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind, bool raw_callback);
+template TimedRun
+    ListOnSimulatedDisk<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+        const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
+        std::uint64_t bytes, const SimulatedDevice& device);
+template TimedRun
+    ListOnSimulatedDisk<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
+        std::uint64_t bytes, const SimulatedDevice& device);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Io

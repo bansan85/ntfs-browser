@@ -17,6 +17,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/fuzz/gap-collation-probe.h>
 #include <ntfs-browser/test/support/optional-access.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -60,7 +61,7 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode() {
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> found = root.FindSubEntry(
-      NTFS_BROWSER_NAMESPACE::Test::FakeImage::gap_collation_search_name);
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::gap_collation_search_name);
   REQUIRE(found.has_value());
   CHECK(
       NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(found).GetFileReference() ==

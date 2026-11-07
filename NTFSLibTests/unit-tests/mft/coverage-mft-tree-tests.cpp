@@ -31,10 +31,10 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::MakeRef;
-using NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::RedirectFileNames;
-using NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::ref_record_mask;
-using NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::root_sequence;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::MakeRef;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::RedirectFileNames;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::ref_record_mask;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::root_sequence;
 
 namespace {
 
@@ -253,7 +253,7 @@ TEST_CASE("MftTree GetPath reports nothing for an unknown record or name",
 TEST_CASE("MftTree stops a path at a loop of parent references", "[cov-vol]") {
   std::vector<BYTE> image =
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
-  NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(image);
+  NTFS_BROWSER_NAMESPACE::Test::Mft::LoopDocsAndNewDir(image);
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)));
   REQUIRE(volume->IsVolumeOK());
@@ -300,7 +300,7 @@ TEST_CASE(
 
   std::vector<BYTE> image =
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
-  NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(image);
+  NTFS_BROWSER_NAMESPACE::Test::Mft::LoopDocsAndNewDir(image);
   const auto volume = std::make_unique<NtfsVolume<Cache::Strategy::FullCache>>(
       std::make_unique<MemoryDiskReader>(std::move(image)),
       NTFS_BROWSER_NAMESPACE::VolumeOptions{.include_deleted = true});

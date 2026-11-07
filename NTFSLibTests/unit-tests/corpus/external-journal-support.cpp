@@ -215,13 +215,12 @@ std::optional<NTFS_BROWSER_NAMESPACE::Usn::Journal>
                                                       sparse_head_bytes};
   journal_options.raw_stream.assign(stream.begin(), stream.end());
   std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::UsnSupport::JournalImage(journal_options);
+      NTFS_BROWSER_NAMESPACE::Test::Usn::JournalImage(journal_options);
 
   const auto read = [&]<NTFS_BROWSER_NAMESPACE::Cache::Strategy S>()
       -> std::optional<NTFS_BROWSER_NAMESPACE::Usn::Journal> {
-    const auto opened =
-        NTFS_BROWSER_NAMESPACE::Tests::UsnSupport::OpenVolume<S>(
-            std::move(image), options);
+    const auto opened = NTFS_BROWSER_NAMESPACE::Test::Usn::OpenVolume<S>(
+        std::move(image), options);
     const NTFS_BROWSER_NAMESPACE::Usn::Journal* journal =
         opened.volume->GetUsnJournal();
     if (journal == nullptr) {

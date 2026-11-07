@@ -20,7 +20,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestFakeImage::FakeUsnRecord;
 
@@ -45,8 +45,8 @@ VolumeOptions WithCap(std::uint64_t cap) {
 
 template <Cache::Strategy S>
 void CheckTheNewestRecordsAreKept() {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage({.records = SmallJournal()}), WithCap(5));
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage({.records = SmallJournal()}), WithCap(5));
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
 
@@ -62,8 +62,8 @@ void CheckTheNewestRecordsAreKept() {
 
 template <Cache::Strategy S>
 void CheckACapOfZeroKeepsNone() {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage({.records = SmallJournal()}), WithCap(0));
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage({.records = SmallJournal()}), WithCap(0));
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
 
@@ -76,7 +76,7 @@ void CheckACapOfZeroKeepsNone() {
 template <Cache::Strategy S>
 void CheckNoLimitKeepsAll() {
   const auto opened =
-      Support::OpenVolume<S>(Support::JournalImage({.records = SmallJournal()}),
+      TestUsn::OpenVolume<S>(TestUsn::JournalImage({.records = SmallJournal()}),
                              WithCap(Usn::unlimited_records));
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
@@ -88,8 +88,8 @@ void CheckNoLimitKeepsAll() {
 
 template <Cache::Strategy S>
 void CheckACapAboveTheCountIsNotTruncated() {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage({.records = SmallJournal()}), WithCap(small_count));
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage({.records = SmallJournal()}), WithCap(small_count));
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
 
@@ -142,8 +142,8 @@ TEST_CASE("the default limit holds a journal of 100 MiB whole",
   REQUIRE(stream.size() == journal_bytes);
 
   VolumeOptions options{.include_deleted = true, .recover_errors = true};
-  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
-      Support::JournalImage({.raw_stream = std::move(stream)}), options);
+  const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
+      TestUsn::JournalImage({.raw_stream = std::move(stream)}), options);
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
 

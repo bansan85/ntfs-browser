@@ -35,7 +35,7 @@ namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
-namespace ProbeWalk = NTFS_BROWSER_NAMESPACE::Tests::ProbeWalk;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using TestDiskReaders::CountingDiskReader;
 using TestFakeImage::FakeTreeNode;
@@ -200,14 +200,14 @@ template <Cache::Strategy S>
 void CheckProbeRuns(const std::vector<BYTE>& image, const ProbeVariant& variant,
                     const std::vector<Run>& expected_runs) {
   constexpr ULONGLONG directory = TestFakeImage::name_tree_first_record;
-  auto open = ProbeWalk::Open<S>(image, variant.kind);
-  REQUIRE(ProbeWalk::BlocksOf(*open.volume, directory).empty());
+  auto open = TestIo::Open<S>(image, variant.kind);
+  REQUIRE(TestIo::BlocksOf(*open.volume, directory).empty());
   const ULONGLONG mft = open.volume->GetMFTAddr();
   const ULONGLONG record_size = open.volume->GetFileRecordSize();
   const auto held_records =
       HeldRecordsOf(image, mft, record_size, variant.holds_e);
 
-  const ProbeWalk::DirectoryWalk walk = ProbeWalk::WalkDirectory<S>(
+  const TestIo::DirectoryWalk walk = TestIo::WalkDirectory<S>(
       open, directory, {.held_records = &held_records, .keeps = variant.keeps});
   REQUIRE(walk.groups.size() == 1);
   CHECK(walk.listed.size() == FileSlots().size());
@@ -409,13 +409,13 @@ TEMPLATE_TEST_CASE_SIG(
       TestFakeImage::BuildFakeNtfsImageWithNameTree(RunTree());
   constexpr ULONGLONG directory = TestFakeImage::name_tree_first_record;
 
-  auto plain = ProbeWalk::Open<S>(image);
-  const ProbeWalk::DirectoryWalk reference =
-      ProbeWalk::WalkDirectory<S>(plain, directory, {});
+  auto plain = TestIo::Open<S>(image);
+  const TestIo::DirectoryWalk reference =
+      TestIo::WalkDirectory<S>(plain, directory, {});
 
-  auto open = ProbeWalk::Open<S>(image);
-  const ProbeWalk::DirectoryWalk walk =
-      ProbeWalk::WalkDirectory<S>(open, directory, {.note_only = true});
+  auto open = TestIo::Open<S>(image);
+  const TestIo::DirectoryWalk walk =
+      TestIo::WalkDirectory<S>(open, directory, {.note_only = true});
   CHECK(walk.ran == std::vector<Run>{{17, 7}, {124, 1}, {1325, 1}});
   // No find and no keep: the walk lists, announces and reads as it did.
   CHECK(walk.listed == reference.listed);
@@ -432,7 +432,7 @@ TEMPLATE_TEST_CASE_SIG("The plain walk never calls the note of a probe store",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithNameTree(RunTree());
-  auto open = ProbeWalk::Open<S>(image);
+  auto open = TestIo::Open<S>(image);
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(*open.volume);
   record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);

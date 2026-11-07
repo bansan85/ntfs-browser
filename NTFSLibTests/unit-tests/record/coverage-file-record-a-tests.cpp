@@ -636,9 +636,10 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
-  CHECK_FALSE(root.FindSubEntry(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
-                                    gap_collation_search_name)
-                  .has_value());
+  CHECK_FALSE(
+      root.FindSubEntry(
+              NTFS_BROWSER_NAMESPACE::Test::Fuzz::gap_collation_search_name)
+          .has_value());
 
   CHECK(CountSubEntries(root) == one_entry);
 }

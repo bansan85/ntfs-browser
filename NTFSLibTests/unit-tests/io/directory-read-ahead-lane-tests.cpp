@@ -58,7 +58,7 @@ namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
-namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestDiskReaders::CountingDiskReader;
@@ -240,7 +240,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
@@ -262,7 +262,7 @@ TEMPLATE_TEST_CASE_SIG(
   if constexpr (S == Cache::Strategy::NoCache) {
     // The records after the directory: its files.
     const ULONGLONG first =
-        ReadAhead::MftSpanOf(image).first +
+        TestIo::MftSpanOf(image).first +
         ((LaneDirectory(0) + 1) * rig.volume->GetFileRecordSize());
     CHECK(announced.front().offset == first);
     CHECK(announced.front().length ==
@@ -275,7 +275,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
@@ -296,7 +296,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(3));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
@@ -313,7 +313,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(3));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
@@ -341,7 +341,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
@@ -372,7 +372,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   {
     Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -391,7 +391,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
@@ -414,8 +414,8 @@ template <Cache::Strategy S>
 bool UsesLane(const std::vector<BYTE>& image, const VolumeOptions& options,
               std::size_t dirs = 64,
               Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
-  const ReadAhead::Run run =
-      ReadAhead::ListRecursively<S>(image, options, dirs, large_budget, kind);
+  const TestIo::Run run =
+      TestIo::ListRecursively<S>(image, options, dirs, large_budget, kind);
   return CountOf(run.calls, Kind::PrefetchStanding) > 0;
 }
 
@@ -424,8 +424,8 @@ template <Cache::Strategy S>
 bool LeavesLaneAlone(const std::vector<BYTE>& image,
                      const VolumeOptions& options, std::size_t dirs = 64,
                      Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
-  const ReadAhead::Run run =
-      ReadAhead::ListRecursively<S>(image, options, dirs, large_budget, kind);
+  const TestIo::Run run =
+      TestIo::ListRecursively<S>(image, options, dirs, large_budget, kind);
   return std::ranges::none_of(run.calls, IsLane);
 }
 
@@ -436,7 +436,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
 
   SECTION("with the lane on, a device of an unknown kind uses it") {
     CHECK(UsesLane<S>(image, VolumeOptions{}));
@@ -495,21 +495,21 @@ TEMPLATE_TEST_CASE_SIG(
     "A recursive listing is the same with the standing lane on and off",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    for (const VolumeOptions& options : TestIo::AllOptions()) {
       INFO(fixture.name << ", include_deleted " << options.include_deleted
                         << ", recover_errors " << options.recover_errors);
       VolumeOptions without = options;
       without.tuning.walk.read_ahead_runs = 0;
-      const ReadAhead::Run off = ReadAhead::ListRecursively<S>(
-          fixture.image, without, 64, large_budget);
-      const ReadAhead::Run on = ReadAhead::ListRecursively<S>(
-          fixture.image, options, 64, large_budget);
+      const TestIo::Run off =
+          TestIo::ListRecursively<S>(fixture.image, without, 64, large_budget);
+      const TestIo::Run on =
+          TestIo::ListRecursively<S>(fixture.image, options, 64, large_budget);
 
       CHECK(std::ranges::none_of(off.calls, IsLane));
       CHECK(on.exit_code == off.exit_code);
       CHECK(on.text == off.text);
-      INFO(ReadAhead::FirstDifference(on.log, off.log));
+      INFO(TestIo::FirstDifference(on.log, off.log));
       CHECK(on.log == off.log);
       CHECK(on.recovered == off.recovered);
       // The lane only hints: every other call is the same, in order.
@@ -529,12 +529,12 @@ TEMPLATE_TEST_CASE_SIG(
     "end of a listing",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    for (const VolumeOptions& options : TestIo::AllOptions()) {
       INFO(fixture.name << ", include_deleted " << options.include_deleted
                         << ", recover_errors " << options.recover_errors);
-      const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
-          fixture.image, options, 64, large_budget);
+      const TestIo::Run run =
+          TestIo::ListRecursively<S>(fixture.image, options, 64, large_budget);
       CHECK(LeftOnTheLane(run.calls).empty());
     }
   }
@@ -549,21 +549,21 @@ TEMPLATE_TEST_CASE_SIG(
   // rare exception.
   constexpr std::size_t unread_percent_at_most = 10;
 
-  const std::vector<ReadAhead::TreeFixture> trees = [] {
-    std::vector<ReadAhead::TreeFixture> kept;
+  const std::vector<TestIo::TreeFixture> trees = [] {
+    std::vector<TestIo::TreeFixture> kept;
     kept.push_back(
         {"wide", TestFakeImage::BuildFakeNtfsImageWithNameTree(
-                     ReadAhead::SpacedTree(directories, files_per_directory))});
+                     TestIo::SpacedTree(directories, files_per_directory))});
     kept.push_back({"grouped", TestFakeImage::BuildFakeNtfsImageWithNameTree(
-                                   ReadAhead::GroupedTree(4, 12))});
+                                   TestIo::GroupedTree(4, 12))});
     kept.push_back(
         {"big directories", TestFakeImage::BuildFakeNtfsImageWithNameTree(
-                                ReadAhead::BigDirectoryTree(6))});
+                                TestIo::BigDirectoryTree(6))});
     return kept;
   }();
-  for (const ReadAhead::TreeFixture& tree : trees) {
+  for (const TestIo::TreeFixture& tree : trees) {
     INFO(tree.name);
-    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
+    const TestIo::Run run = TestIo::ListRecursively<S>(
         tree.image, VolumeOptions{}, 64, large_budget);
     const std::vector<Call> announced =
         CallsOf(run.calls, Kind::PrefetchStanding);
@@ -591,9 +591,9 @@ TEMPLATE_TEST_CASE_SIG("The ranges on the standing lane never overlap",
                        "[io][directory-read-ahead][standing-lane]",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
     INFO(fixture.name);
-    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
+    const TestIo::Run run = TestIo::ListRecursively<S>(
         fixture.image, VolumeOptions{}, 64, large_budget);
     CHECK(LaneAfter(run.calls).violations == 0);
   }
@@ -604,9 +604,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
 
-  const ReadAhead::VerifiedLaneZone verified;
+  const TestIo::VerifiedLaneZone verified;
 
   SECTION("a stack that turns over withdraws nothing within the next runs") {
     Rig<S> rig(image, WithRuns(2));
@@ -648,12 +648,12 @@ TEMPLATE_TEST_CASE_SIG(
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
 
   SECTION("a rotational statement turns the lane off on a solid state reader") {
     VolumeOptions options;
     options.media_kind = Tuning::MediaKind::Rotational;
-    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
+    const TestIo::Run run = TestIo::ListRecursively<S>(
         image, options, 64, large_budget, Tuning::MediaKind::SolidState);
     CHECK(std::ranges::none_of(run.calls, IsLane));
   }
@@ -661,7 +661,7 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("a solid state statement turns it on over a rotational reader") {
     VolumeOptions options;
     options.media_kind = Tuning::MediaKind::SolidState;
-    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
+    const TestIo::Run run = TestIo::ListRecursively<S>(
         image, options, 64, large_budget, Tuning::MediaKind::Rotational);
     CHECK(CountOf(run.calls, Kind::PrefetchStanding) > 0);
   }
@@ -669,15 +669,15 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("an unknown statement is a statement too") {
     VolumeOptions options;
     options.media_kind = Tuning::MediaKind::Unknown;
-    const ReadAhead::Run run = ReadAhead::ListRecursively<S>(
+    const TestIo::Run run = TestIo::ListRecursively<S>(
         image, options, 64, large_budget, Tuning::MediaKind::Rotational);
     CHECK(CountOf(run.calls, Kind::PrefetchStanding) > 0);
   }
 
   SECTION("no statement leaves the reader's kind") {
-    const ReadAhead::Run run =
-        ReadAhead::ListRecursively<S>(image, VolumeOptions{}, 64, large_budget,
-                                      Tuning::MediaKind::Rotational);
+    const TestIo::Run run =
+        TestIo::ListRecursively<S>(image, VolumeOptions{}, 64, large_budget,
+                                   Tuning::MediaKind::Rotational);
     CHECK(std::ranges::none_of(run.calls, IsLane));
   }
 }
@@ -686,7 +686,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume::GetMediaKind answers the option first",
                        "[volume][media-kind]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(directories, files_per_directory));
+      TestIo::SpacedTree(directories, files_per_directory));
 
   const auto kind_of = [&image](const VolumeOptions& options,
                                 Tuning::MediaKind reader_kind) {

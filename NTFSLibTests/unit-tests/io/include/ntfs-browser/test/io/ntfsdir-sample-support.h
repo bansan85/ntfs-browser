@@ -19,7 +19,7 @@
 
 // What the tests of NtfsDir share: how to run it, the image it lists, and the
 // text it prints.
-namespace NTFS_BROWSER_NAMESPACE::Tests::DirSample {
+namespace NTFS_BROWSER_NAMESPACE::Test::Io {
 
 // The samples under test: NtfsDir on every platform, and NtfsDir2, the same
 // listing over the other cache strategy, where it is built.
@@ -121,4 +121,4 @@ inline std::wstring InImage(const std::filesystem::path& image,
   return image.wstring() + L"/" + std::wstring(directory);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::DirSample
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Io

@@ -36,7 +36,7 @@
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -193,7 +193,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][media-kind][win32][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ImageFile file(TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      Tests::ReadAhead::SpacedTree(directories, files_per_directory)));
+      TestIo::SpacedTree(directories, files_per_directory)));
 
   SECTION("a solid state host plans the lane") {
     const TestSupport::HostMediaAnswer answer(MediaKind::SolidState);

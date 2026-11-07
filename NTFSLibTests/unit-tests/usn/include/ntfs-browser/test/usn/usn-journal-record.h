@@ -8,7 +8,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::UsnSupport {
+namespace NTFS_BROWSER_NAMESPACE::Test::Usn {
 
 // The fields of a V2 journal record that the MftTree journal tests vary.
 struct JournalRecordSpec {
@@ -36,4 +36,4 @@ inline Test::FakeImage::FakeUsnRecord MakeRecord(JournalRecordSpec spec) {
       .file_attributes = Test::FakeImage::fake_usn_default_attributes};
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::UsnSupport
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Usn

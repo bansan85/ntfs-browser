@@ -9,7 +9,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzRegression {
+namespace NTFS_BROWSER_NAMESPACE::Test::FuzzRegression {
 
 // Whether this build decodes LZNT1. A testcase of compressed data then logs
 // other messages, so the table holds both spellings.
@@ -688,4 +688,4 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 233>
          {true, {"FindSubEntry() found entry in Index Root"}}},
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzRegression
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FuzzRegression

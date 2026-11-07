@@ -18,7 +18,7 @@
 
 #include "fuzz-input-writer.h"
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFuzzRegression = NTFS_BROWSER_NAMESPACE::Test::FuzzRegression;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestFakeImage::FakeSlackName;
@@ -246,8 +246,8 @@ TEST_CASE("write the slack names fuzz inputs", "[.write-fuzz-inputs]") {
   const VolumeOptions recovering{.include_deleted = true,
                                  .recover_errors = true};
   for (Variant& variant : Variants()) {
-    Tests::FuzzInputs::WriteRecordedInput(std::filesystem::path(dir) /
-                                              variant.name,
-                                          std::move(variant.image), recovering);
+    TestFuzzRegression::WriteRecordedInput(
+        std::filesystem::path(dir) / variant.name, std::move(variant.image),
+        recovering);
   }
 }

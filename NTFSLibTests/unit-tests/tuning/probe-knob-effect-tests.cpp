@@ -40,7 +40,7 @@ enum class RecordStanding : std::uint8_t;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestTuning = NTFS_BROWSER_NAMESPACE::Test::Tuning;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -49,7 +49,7 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Io::RecordStanding;
-using namespace Tests::KnobEffect;
+using namespace TestTuning;
 
 namespace {
 

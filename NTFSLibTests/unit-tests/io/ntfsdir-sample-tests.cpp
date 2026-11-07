@@ -28,18 +28,18 @@
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_broken_alter_time;
+using NTFS_BROWSER_NAMESPACE::Test::Io::Below;
+using NTFS_BROWSER_NAMESPACE::Test::Io::DirectoryHeader;
+using NTFS_BROWSER_NAMESPACE::Test::Io::DocsListing;
+using NTFS_BROWSER_NAMESPACE::Test::Io::InImage;
+using NTFS_BROWSER_NAMESPACE::Test::Io::ListingLine;
+using NTFS_BROWSER_NAMESPACE::Test::Io::RootListing;
+using NTFS_BROWSER_NAMESPACE::Test::Io::RunDir;
+using NTFS_BROWSER_NAMESPACE::Test::Io::SampleExes;
+using NTFS_BROWSER_NAMESPACE::Test::Io::SkipLine;
+using NTFS_BROWSER_NAMESPACE::Test::Io::TempImage;
 using NTFS_BROWSER_NAMESPACE::Test::Support::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::Below;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::DirectoryHeader;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::DocsListing;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::InImage;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::ListingLine;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::RootListing;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::RunDir;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::SampleExes;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::SkipLine;
-using NTFS_BROWSER_NAMESPACE::Tests::DirSample::TempImage;
 namespace Fs = std::filesystem;
 
 namespace {

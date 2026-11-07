@@ -14,7 +14,7 @@
 #include <ntfs-browser/test/support/sample-run.h>
 
 // What the tests of NtfsMftList share: how to run it, and the image it lists.
-namespace NTFS_BROWSER_NAMESPACE::Tests::MftListSample {
+namespace NTFS_BROWSER_NAMESPACE::Test::Mft {
 
 // Runs NtfsMftList with args, its stdout and stderr captured apart.
 inline Test::Support::SampleRun
@@ -46,4 +46,4 @@ struct TempTreeImage final {
   TempTreeImage& operator=(TempTreeImage&&) = delete;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::MftListSample
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Mft

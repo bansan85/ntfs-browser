@@ -14,7 +14,7 @@
 
 #include "fuzz-input-writer.h"
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFuzzRegression = NTFS_BROWSER_NAMESPACE::Test::FuzzRegression;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
@@ -60,7 +60,7 @@ TEST_CASE("write the attribute list scan fuzz inputs", "[.write-fuzz-inputs]") {
   }
 
   for (Variant& variant : Variants()) {
-    Tests::FuzzInputs::WriteRecordedInput(
+    TestFuzzRegression::WriteRecordedInput(
         std::filesystem::path(dir) / variant.name, std::move(variant.image),
         VolumeOptions{});
   }
@@ -79,10 +79,10 @@ TEST_CASE("write the waiting scan fuzz inputs", "[.write-fuzz-inputs]") {
 
   // Five turns of the kinds of slot, past the system files.
   constexpr ULONGLONG slots = 16 + 14 * 5;
-  Tests::FuzzInputs::WriteRecordedScanInput(
+  TestFuzzRegression::WriteRecordedScanInput(
       std::filesystem::path(dir) / "scan_threads_waiting_strict",
       TestFakeImage::BuildFakeNtfsImageWithListMftScan(slots), VolumeOptions{});
-  Tests::FuzzInputs::WriteRecordedScanInput(
+  TestFuzzRegression::WriteRecordedScanInput(
       std::filesystem::path(dir) / "scan_threads_waiting_recovering",
       TestFakeImage::BuildFakeNtfsImageWithListMftScan(slots),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
@@ -101,7 +101,7 @@ TEST_CASE("write the overwritten attribute list fuzz inputs",
   }
 
   const VolumeOptions options{.include_deleted = true, .recover_errors = true};
-  Tests::FuzzInputs::WriteRecordedInput(
+  TestFuzzRegression::WriteRecordedInput(
       std::filesystem::path(dir) / "attribute_list_overwritten_invalid_type",
       TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
           TestFakeImage::FakeListedExtension::Genuine,
@@ -109,7 +109,7 @@ TEST_CASE("write the overwritten attribute list fuzz inputs",
           TestFakeImage::FakeListedState::Freed,
           TestFakeImage::FakeListBytes::InvalidTypeFirst),
       options);
-  Tests::FuzzInputs::WriteRecordedInput(
+  TestFuzzRegression::WriteRecordedInput(
       std::filesystem::path(dir) / "attribute_list_overwritten_cut_entry",
       TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
           TestFakeImage::FakeListedExtension::Genuine,

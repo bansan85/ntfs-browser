@@ -23,8 +23,8 @@
 #include "frozen/unordered_map.h"
 #include "fuzzer-expected-messages.h"
 
+using NTFS_BROWSER_NAMESPACE::Test::FuzzRegression::expected_error_messages;
 using NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog;
-using NTFS_BROWSER_NAMESPACE::Tests::FuzzRegression::expected_error_messages;
 
 namespace Fs = std::filesystem;
 

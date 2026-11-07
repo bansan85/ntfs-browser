@@ -21,7 +21,7 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFuzzRegression = NTFS_BROWSER_NAMESPACE::Test::FuzzRegression;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestAlloc::Freed;
@@ -172,7 +172,7 @@ TEST_CASE("write the cluster state fuzz inputs", "[.write-fuzz-inputs]") {
 
   const VolumeOptions options{.include_deleted = true, .recover_errors = true};
   for (Variant& variant : Variants()) {
-    Tests::FuzzInputs::WriteRecordedAccountInput(
+    TestFuzzRegression::WriteRecordedAccountInput(
         std::filesystem::path(dir) / variant.name, std::move(variant.image),
         options);
   }

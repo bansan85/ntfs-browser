@@ -48,7 +48,7 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestTuning = NTFS_BROWSER_NAMESPACE::Test::Tuning;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
@@ -57,7 +57,7 @@ using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::KnobEffect::Tuned;
+using TestTuning::Tuned;
 using Patterns = std::vector<Tuning::Pattern>;
 
 namespace {

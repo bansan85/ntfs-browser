@@ -33,7 +33,7 @@
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
-namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -117,7 +117,7 @@ std::filesystem::path WriteZeros(const TestDeviceAccess::TempDir& dir,
 // image the log was made from.
 struct RecordedRun {
   TestDeviceAccess::TempDir dir;
-  MftListSample::TempTreeImage image;
+  TestMft::TempTreeImage image;
   std::filesystem::path summary_path;
   std::filesystem::path log_path;
   JsonValue summary;
@@ -127,7 +127,7 @@ struct RecordedRun {
             list_record_count, list_fragment_clusters)),
         summary_path(dir.Path() / "summary.json"),
         log_path(dir.Path() / "summary.json.readlog") {
-    const SampleRun run = MftListSample::RunMftList(
+    const SampleRun run = TestMft::RunMftList(
         {Option(L"--benchmark", summary_path), image.path.wstring()});
     REQUIRE(run.exit_code == 0);
     REQUIRE(std::filesystem::exists(log_path));
@@ -248,7 +248,7 @@ TEST_CASE("NtfsBench simulate --write-image writes a volume the tools open",
   CHECK(written.out.empty());
   REQUIRE(std::filesystem::exists(image));
   CHECK(std::filesystem::file_size(image) > 0);
-  const SampleRun listed = MftListSample::RunMftList({image.wstring()});
+  const SampleRun listed = TestMft::RunMftList({image.wstring()});
   CHECK(listed.exit_code == 0);
   CHECK_FALSE(listed.out.empty());
 }

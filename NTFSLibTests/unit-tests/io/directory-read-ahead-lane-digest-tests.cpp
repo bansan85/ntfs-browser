@@ -31,7 +31,7 @@ namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
-namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestDiskReaders::CountingDiskReader;
 
@@ -139,7 +139,7 @@ VolumeOptions Tuned(const Knobs& knobs) {
 // The trees of the scenarios. A std::deque keeps the images where they are.
 struct Trees {
   std::deque<std::vector<BYTE>> images;
-  std::vector<ReadAhead::TreeFixture> fixtures;
+  std::vector<TestIo::TreeFixture> fixtures;
 
   const std::vector<BYTE>&
       Add(const std::vector<TestFakeImage::FakeTreeNode>& nodes) {
@@ -310,9 +310,9 @@ class ScenarioSet {
 
   // Every tree of the other tests, under each way to open the volume.
   void AddFixtures(bool full) {
-    for (const ReadAhead::TreeFixture& fixture : trees_.fixtures) {
+    for (const TestIo::TreeFixture& fixture : trees_.fixtures) {
       std::size_t mode = 0;
-      for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+      for (const VolumeOptions& options : TestIo::AllOptions()) {
         Add(fixture.name + "/mode=" + std::to_string(mode++), fixture.image,
             full, options);
       }
@@ -357,21 +357,21 @@ const Trees& ScenarioTrees() {
   static const Trees trees = [] {
     Trees built;
     // Many small directories: the shape of a system volume.
-    built.Add(ReadAhead::GroupedTree(4, 24));
+    built.Add(TestIo::GroupedTree(4, 24));
     // A stack that grows and shrinks: 3 + 9 + 27 + 81 directories.
-    built.Add(ReadAhead::BranchingTree(3, 4));
+    built.Add(TestIo::BranchingTree(3, 4));
     // Directories whose probes lie a run of $MFT apart: 36 runs each.
-    built.Add(ReadAhead::ScatteredTree(3, 36, 70));
+    built.Add(TestIo::ScatteredTree(3, 36, 70));
     // Records side by side, and two apart (closer than a block of the cache).
-    built.Add(ReadAhead::ScatteredTree(4, 36, 0));
-    built.Add(ReadAhead::ScatteredTree(4, 36, 2));
+    built.Add(TestIo::ScatteredTree(4, 36, 0));
+    built.Add(TestIo::ScatteredTree(4, 36, 2));
     // One directory of 300 probes, each a run of its own.
-    built.Add(ReadAhead::ScatteredTree(1, 44, 0));
-    built.Add(ReadAhead::BigDirectoryTree(6));
-    built.Add(ReadAhead::SpacedTree(44, 6, 0));
+    built.Add(TestIo::ScatteredTree(1, 44, 0));
+    built.Add(TestIo::BigDirectoryTree(6));
+    built.Add(TestIo::SpacedTree(44, 6, 0));
     // Records with two names in one directory: a hard link or a DOS alias.
-    built.Add(ReadAhead::LinkedTree(3, 20));
-    built.fixtures = ReadAhead::Fixtures();
+    built.Add(TestIo::LinkedTree(3, 20));
+    built.fixtures = TestIo::Fixtures();
     return built;
   }();
   return trees;
@@ -392,12 +392,12 @@ struct Outcome {
 };
 
 Outcome Run(const Scenario& scenario) {
-  const ReadAhead::VerifiedLaneZone verified;
-  const ReadAhead::LaneRun run =
-      scenario.full_cache ? ReadAhead::ListForLane<Cache::Strategy::FullCache>(
+  const TestIo::VerifiedLaneZone verified;
+  const TestIo::LaneRun run =
+      scenario.full_cache ? TestIo::ListForLane<Cache::Strategy::FullCache>(
                                 *scenario.image, scenario.options,
                                 scenario.kind, scenario.raw_callback)
-                          : ReadAhead::ListForLane<Cache::Strategy::NoCache>(
+                          : TestIo::ListForLane<Cache::Strategy::NoCache>(
                                 *scenario.image, scenario.options,
                                 scenario.kind, scenario.raw_callback);
   Outcome outcome;

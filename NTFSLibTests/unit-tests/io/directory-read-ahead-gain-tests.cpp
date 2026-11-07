@@ -20,7 +20,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
@@ -51,11 +51,11 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::BigDirectoryTree(6));
+      TestIo::BigDirectoryTree(6));
 
-  const ReadAhead::TimedRun off = ReadAhead::ListOnSimulatedDisk<S>(
+  const TestIo::TimedRun off = TestIo::ListOnSimulatedDisk<S>(
       image, {}, 0, 0, {TestDiskReaders::DiskModel{}});
-  const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
+  const TestIo::TimedRun on = TestIo::ListOnSimulatedDisk<S>(
       image, {}, window, large_budget, {TestDiskReaders::DiskModel{}});
 
   CHECK(on.run.text == off.run.text);
@@ -69,12 +69,12 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::GroupedTree(groups, directories_per_group));
-  const TestDiskReaders::DiskModel hard_disk = ReadAhead::HardDiskModel();
+      TestIo::GroupedTree(groups, directories_per_group));
+  const TestDiskReaders::DiskModel hard_disk = TestIo::HardDiskModel();
 
-  const ReadAhead::TimedRun off =
-      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, {hard_disk});
-  const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
+  const TestIo::TimedRun off =
+      TestIo::ListOnSimulatedDisk<S>(image, {}, 0, 0, {hard_disk});
+  const TestIo::TimedRun on = TestIo::ListOnSimulatedDisk<S>(
       image, {}, window, large_budget, {hard_disk});
 
   CAPTURE(off.elapsed_ns, on.elapsed_ns, off.disk.disk_reads,
@@ -91,12 +91,12 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::GroupedTree(groups, directories_per_group));
+      TestIo::GroupedTree(groups, directories_per_group));
   const TestDiskReaders::DiskModel solid_state;
 
-  const ReadAhead::TimedRun off =
-      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, {solid_state});
-  const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
+  const TestIo::TimedRun off =
+      TestIo::ListOnSimulatedDisk<S>(image, {}, 0, 0, {solid_state});
+  const TestIo::TimedRun on = TestIo::ListOnSimulatedDisk<S>(
       image, {}, window, large_budget, {solid_state});
 
   CAPTURE(off.elapsed_ns, on.elapsed_ns, off.disk.disk_reads,
@@ -110,14 +110,14 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::SpacedTree(spaced_directories, spaced_files, spaced_ballast));
+      TestIo::SpacedTree(spaced_directories, spaced_files, spaced_ballast));
   const TestDiskReaders::DiskModel solid_state;
   VolumeOptions without_lane;
   without_lane.tuning.walk.read_ahead_runs = 0;
 
-  const ReadAhead::TimedRun off = ReadAhead::ListOnSimulatedDisk<S>(
+  const TestIo::TimedRun off = TestIo::ListOnSimulatedDisk<S>(
       image, without_lane, window, large_budget, {solid_state});
-  const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
+  const TestIo::TimedRun on = TestIo::ListOnSimulatedDisk<S>(
       image, {}, window, large_budget, {solid_state});
 
   CAPTURE(off.elapsed_ns, on.elapsed_ns, off.disk.disk_reads,
@@ -133,15 +133,15 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
-      ReadAhead::GroupedTree(groups, directories_per_group));
-  const TestDiskReaders::DiskModel hard_disk = ReadAhead::HardDiskModel();
+      TestIo::GroupedTree(groups, directories_per_group));
+  const TestDiskReaders::DiskModel hard_disk = TestIo::HardDiskModel();
   VolumeOptions without_lane;
   without_lane.tuning.walk.read_ahead_runs = 0;
 
-  const ReadAhead::TimedRun off = ReadAhead::ListOnSimulatedDisk<S>(
+  const TestIo::TimedRun off = TestIo::ListOnSimulatedDisk<S>(
       image, without_lane, window, large_budget,
       {hard_disk, Tuning::MediaKind::Rotational});
-  const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
+  const TestIo::TimedRun on = TestIo::ListOnSimulatedDisk<S>(
       image, {}, window, large_budget,
       {hard_disk, Tuning::MediaKind::Rotational});
 

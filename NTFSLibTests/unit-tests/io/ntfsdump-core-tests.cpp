@@ -24,7 +24,7 @@ namespace {
 using NoCacheVolume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
     NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>;
 using ExampleNtfsDump::DumpResult;
-using NTFS_BROWSER_NAMESPACE::Tests::DumpTreeImage;
+using NTFS_BROWSER_NAMESPACE::Test::Io::DumpTreeImage;
 
 // A volume over image, opened the way the dialog opens it.
 std::unique_ptr<NoCacheVolume>

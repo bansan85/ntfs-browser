@@ -34,12 +34,12 @@ class CountingDiskReader;
 class MemoryDiskReader;
 
 }  // namespace Test::DiskReaders
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 class NtfsVolume;
 
 }  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::UsnSupport {
+namespace NTFS_BROWSER_NAMESPACE::Test::Usn {
 
 // The volume options of the journal tests: recovery on, deleted items shown.
 inline VolumeOptions RecoverOptions() {
@@ -48,7 +48,7 @@ inline VolumeOptions RecoverOptions() {
 
 // What a scan of some bytes found.
 struct ScanResult {
-  std::vector<Usn::Record> records;
+  std::vector<NTFS_BROWSER_NAMESPACE::Usn::Record> records;
   ULONGLONG damaged{0};
   ULONGLONG skipped{0};
 };
@@ -56,7 +56,7 @@ struct ScanResult {
 // Scans bytes as one range of $J that starts at stream_offset, in one Feed().
 inline ScanResult ScanBytes(std::span<const BYTE> bytes,
                             ULONGLONG stream_offset = 0) {
-  Usn::RecordScanner scanner;
+  NTFS_BROWSER_NAMESPACE::Usn::RecordScanner scanner;
   ScanResult result;
   scanner.Reset();
   scanner.Feed(bytes, stream_offset, result.records);
@@ -97,7 +97,7 @@ inline std::vector<BYTE>
 }
 
 // A volume over image, whose reader counts every call.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 struct Opened {
   std::unique_ptr<NtfsVolume<S>> volume;
   // Owned by volume.
@@ -105,7 +105,7 @@ struct Opened {
 };
 
 // Opens image with options, over a counting reader.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 Opened<S> OpenVolume(std::vector<BYTE> image,
                      const VolumeOptions& options = RecoverOptions()) {
   auto counter = std::make_unique<Test::DiskReaders::CountingDiskReader>(
@@ -117,4 +117,4 @@ Opened<S> OpenVolume(std::vector<BYTE> image,
   return opened;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::UsnSupport
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Usn

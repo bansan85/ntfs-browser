@@ -24,7 +24,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using TestFakeImage::FakeUsnRecord;
 
@@ -65,11 +65,11 @@ Journal Build(size_t count) {
 TEST_CASE("one corrupted record among ten thousand costs one record",
           "[usn][resync]") {
   Journal journal = Build(10000);
-  Support::PutAt<WORD>(journal.bytes,
+  TestUsn::PutAt<WORD>(journal.bytes,
                        journal.starts.at(5000) + major_version_offset,
                        unknown_version);
 
-  const Support::ScanResult result = Support::ScanBytes(journal.bytes);
+  const TestUsn::ScanResult result = TestUsn::ScanBytes(journal.bytes);
 
   CHECK(result.records.size() == 9999);
   CHECK(result.damaged == 1);
@@ -83,10 +83,10 @@ TEST_CASE("a forged length that no record can have is skipped",
   for (const DWORD forged : {DWORD{0}, DWORD{8}, DWORD{62}, DWORD{8192}}) {
     INFO("length " << forged);
     Journal journal = Build(10);
-    Support::PutAt<DWORD>(journal.bytes, journal.starts.at(3) + length_offset,
+    TestUsn::PutAt<DWORD>(journal.bytes, journal.starts.at(3) + length_offset,
                           forged);
 
-    const Support::ScanResult result = Support::ScanBytes(journal.bytes);
+    const TestUsn::ScanResult result = TestUsn::ScanBytes(journal.bytes);
 
     REQUIRE(result.records.size() == 9);
     CHECK(result.records.at(2).file_record == RecordNumberOf(2));
@@ -99,10 +99,10 @@ TEST_CASE(
     "a plausible length that is too large costs what it swallows, no more",
     "[usn][resync]") {
   Journal journal = Build(40);
-  Support::PutAt<DWORD>(journal.bytes, journal.starts.at(3) + length_offset,
+  TestUsn::PutAt<DWORD>(journal.bytes, journal.starts.at(3) + length_offset,
                         1024);
 
-  const Support::ScanResult result = Support::ScanBytes(journal.bytes);
+  const TestUsn::ScanResult result = TestUsn::ScanBytes(journal.bytes);
 
   // The first records, and the last one, come back. The scan finds the next
   // record again by its USN, wherever the swallowed bytes end.
@@ -120,7 +120,7 @@ TEST_CASE("a journal cut in the middle of its last record keeps the others",
       journal.bytes.begin() +
           static_cast<std::ptrdiff_t>(journal.starts.at(5) + 20));
 
-  const Support::ScanResult result = Support::ScanBytes(cut);
+  const TestUsn::ScanResult result = TestUsn::ScanBytes(cut);
 
   CHECK(result.records.size() == 5);
   CHECK(result.damaged == 1);
@@ -138,7 +138,7 @@ TEST_CASE("records of every version mix in one journal", "[usn][resync]") {
     bytes.insert(bytes.end(), encoded.begin(), encoded.end());
   }
 
-  const Support::ScanResult result = Support::ScanBytes(bytes);
+  const TestUsn::ScanResult result = TestUsn::ScanBytes(bytes);
 
   CHECK(result.records.size() == 4);
   CHECK(result.skipped == 1);
@@ -164,7 +164,7 @@ TEST_CASE("after damage a record is taken only when its USN is its offset",
       FakeUsnRecord{.name = L"last.txt"}, bytes.size());
   bytes.insert(bytes.end(), last.begin(), last.end());
 
-  const Support::ScanResult result = Support::ScanBytes(bytes);
+  const TestUsn::ScanResult result = TestUsn::ScanBytes(bytes);
 
   REQUIRE(result.records.size() == 2);
   CHECK(result.records.at(0).name == L"first.txt");
@@ -180,7 +180,7 @@ TEST_CASE("random bytes end in bounded time and never throw", "[usn][resync]") {
       byte = static_cast<BYTE>(generator());
     }
 
-    CHECK_NOTHROW(Support::ScanBytes(bytes, size_t{4096} * seed));
+    CHECK_NOTHROW(TestUsn::ScanBytes(bytes, size_t{4096} * seed));
   }
 }
 
@@ -191,10 +191,10 @@ TEST_CASE("bytes that look like records but are not, never throw",
     for (WORD version = 0; version < 6; ++version) {
       for (DWORD length = 0; length <= 128; length += 8) {
         std::vector<BYTE> bytes(512, fill);
-        Support::PutAt<DWORD>(bytes, 0, length);
-        Support::PutAt<WORD>(bytes, 4, version);
-        Support::PutAt<WORD>(bytes, 6, 0);
-        CHECK_NOTHROW(Support::ScanBytes(bytes));
+        TestUsn::PutAt<DWORD>(bytes, 0, length);
+        TestUsn::PutAt<WORD>(bytes, 4, version);
+        TestUsn::PutAt<WORD>(bytes, 6, 0);
+        CHECK_NOTHROW(TestUsn::ScanBytes(bytes));
       }
     }
   }
@@ -214,7 +214,7 @@ void CheckDamageIsLoggedOncePerVolume() {
 
   const auto sink = std::make_shared<TestAlloc::LevelSink>();
   const TestAlloc::ScopedSink scoped(sink);
-  const auto opened = Support::OpenVolume<S>(Support::JournalImage(options));
+  const auto opened = TestUsn::OpenVolume<S>(TestUsn::JournalImage(options));
 
   const Usn::Journal* result = opened.volume->GetUsnJournal();
   REQUIRE(result != nullptr);

@@ -25,7 +25,7 @@ enum class Strategy : std::uint8_t;
 
 // What the tests of the read ahead of a recursive listing share: the trees they
 // list, and a run of the listing of NtfsDir over a fake volume.
-namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead {
+namespace NTFS_BROWSER_NAMESPACE::Test::Io {
 
 // A tree to list, and a name for it in a failure message.
 struct TreeFixture {
@@ -109,11 +109,12 @@ struct Run {
 // Lists the whole volume of image, recursively, with the options and the read
 // ahead of dirs directories (0 is off) and bytes bytes at most. The reader is
 // in memory, and says it is a device of the given kind.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] Run
     ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
                     std::size_t dirs, std::uint64_t bytes,
-                    Tuning::MediaKind kind = Tuning::MediaKind::Unknown);
+                    NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind =
+                        NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown);
 
 // While it lives, every refill of the standing lane works its zone out again
 // and compares it with the one it kept. At the end, it checks that none
@@ -139,7 +140,7 @@ struct LaneRun {
   // Every other call the listing made on the reader.
   std::vector<Test::DiskReaders::CountingDiskReader::Call> others;
   // Read just before the read ahead was destroyed.
-  Io::DirectoryReadAheadStats stats;
+  NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAheadStats stats;
 };
 
 // Lists the whole volume of image recursively, as ListTree() of NtfsDir does:
@@ -147,15 +148,16 @@ struct LaneRun {
 // they are. The reader is in memory, and says it is a device of the given
 // kind. With raw_callback, the volume has a raw attribute callback, which
 // turns the lane off.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] LaneRun
     ListForLane(const std::vector<BYTE>& image, const VolumeOptions& options,
-                Tuning::MediaKind kind = Tuning::MediaKind::Unknown,
+                NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind =
+                    NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown,
                 bool raw_callback = false);
 
 // The same with the walk tuning of options left as it is: what NtfsDir does
 // when it is given no tuning.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] Run ListWithDefaultTuning(const std::vector<BYTE>& image,
                                         const VolumeOptions& options);
 
@@ -171,10 +173,11 @@ struct TimedRun {
 // device its reader says it is.
 struct SimulatedDevice {
   Test::DiskReaders::DiskModel model;
-  Tuning::MediaKind kind{Tuning::MediaKind::Unknown};
+  NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind{
+      NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown};
 };
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] TimedRun
     ListOnSimulatedDisk(const std::vector<BYTE>& image, VolumeOptions options,
                         std::size_t dirs, std::uint64_t bytes,
@@ -203,4 +206,4 @@ struct MftSpan {
     const std::vector<Test::DiskReaders::CountingDiskReader::Call>& calls,
     std::size_t image_bytes);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Io

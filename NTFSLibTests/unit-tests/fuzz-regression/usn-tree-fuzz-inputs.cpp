@@ -19,12 +19,13 @@
 
 #include "fuzz-input-writer.h"
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFuzzRegression = NTFS_BROWSER_NAMESPACE::Test::FuzzRegression;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestFakeImage::FakeUsnOptions;
 using TestFakeImage::FakeUsnRecord;
-using Tests::UsnSupport::MakeRecord;
+using TestUsn::MakeRecord;
 
 namespace {
 
@@ -307,9 +308,9 @@ TEST_CASE("write the usn tree fuzz inputs", "[.write-fuzz-inputs]") {
     std::vector<BYTE> image =
         TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
     TestFakeImage::PutUsnJournal(image, variant.options);
-    Tests::FuzzInputs::WriteRecordedInput(std::filesystem::path(dir) /
-                                              variant.name,
-                                          std::move(image), recovering);
+    TestFuzzRegression::WriteRecordedInput(std::filesystem::path(dir) /
+                                               variant.name,
+                                           std::move(image), recovering);
   }
 
   const std::vector<BYTE> scanner = ScannerStream();

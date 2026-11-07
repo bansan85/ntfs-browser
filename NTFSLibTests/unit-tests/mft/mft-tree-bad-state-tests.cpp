@@ -32,14 +32,14 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
-namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestAlloc::stale_size;
 using TestFakeImage::FakeDataRun;
-using TreeSupport::CheckNoEntryIsAnnotated;
-using TreeSupport::RequiredEntry;
-using TreeSupport::ScannedVolume;
+using TestMft::CheckNoEntryIsAnnotated;
+using TestMft::RequiredEntry;
+using TestMft::ScannedVolume;
 
 namespace {
 

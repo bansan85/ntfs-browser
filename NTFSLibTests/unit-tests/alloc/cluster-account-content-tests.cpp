@@ -26,7 +26,7 @@ namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 using Alloc::ClusterCondition;
 using Alloc::DataCheckMode;
 using TestAlloc::CountOf;
@@ -67,9 +67,9 @@ TestAlloc::Volume Subject() {
 }
 
 template <Cache::Strategy S>
-TreeSupport::ScannedVolume<S> Check(const TestAlloc::Volume& volume,
-                                    DataCheckMode mode) {
-  return TreeSupport::ScannedVolume<S>(
+TestMft::ScannedVolume<S> Check(const TestAlloc::Volume& volume,
+                                DataCheckMode mode) {
+  return TestMft::ScannedVolume<S>(
       volume.Build(), TestAlloc::DeletedOptions(),
       TestAlloc::Scan(Alloc::ClusterAccountLevel::CountsAndMap, mode));
 }
@@ -139,7 +139,7 @@ TEST_CASE("the sample reads the first cluster of each stream",
 
 TEST_CASE("the content check implies the counts", "[alloc][cluster][check]") {
   TestAlloc::ForEachStrategy([](auto strategy) {
-    const TreeSupport::ScannedVolume<decltype(strategy)::value> scanned(
+    const TestMft::ScannedVolume<decltype(strategy)::value> scanned(
         Subject().Build(), TestAlloc::DeletedOptions(),
         TestAlloc::Scan(Alloc::ClusterAccountLevel::Off, DataCheckMode::Full));
 
@@ -180,11 +180,11 @@ TEST_CASE("the content check reads in order, announced, and nothing else",
   const auto data_first = first_cluster * cluster;
   const auto data_last = (first_cluster + 4) * cluster;
 
-  const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> counts(
+  const TestMft::ScannedVolume<Cache::Strategy::NoCache> counts(
       image, TestAlloc::DeletedOptions(), TestAlloc::Scan());
   CHECK(counts.opened.counter->ReadsInRange(data_first, data_last) == 0);
 
-  const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> full(
+  const TestMft::ScannedVolume<Cache::Strategy::NoCache> full(
       image, TestAlloc::DeletedOptions(),
       TestAlloc::Scan(Alloc::ClusterAccountLevel::Counts, DataCheckMode::Full));
   CHECK(full.opened.counter->ReadsInRange(data_first, data_last) == 1);

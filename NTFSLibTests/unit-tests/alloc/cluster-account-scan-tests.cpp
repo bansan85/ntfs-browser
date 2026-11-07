@@ -36,7 +36,7 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 using Alloc::ClusterCondition;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestAlloc::CountOf;
@@ -120,9 +120,9 @@ TEST_CASE("a non-resident attribute in an extension record is a claim",
           "[alloc][cluster][scan]") {
   TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
-    const TreeSupport::ScannedVolume<S> scanned(WithListedIndex().Build(),
-                                                TestAlloc::DeletedOptions(),
-                                                TestAlloc::Scan());
+    const TestMft::ScannedVolume<S> scanned(WithListedIndex().Build(),
+                                            TestAlloc::DeletedOptions(),
+                                            TestAlloc::Scan());
 
     CHECK(CountOf(scanned.tree, subject, ClusterCondition::Intact) == 3);
     CHECK(CountOf(scanned.tree, subject,
@@ -135,9 +135,9 @@ TEST_CASE("the account changes nothing about the tree of a healthy volume",
   TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
     const std::vector<BYTE> image = WithListedIndex().Build();
-    const TreeSupport::ScannedVolume<S> off(image);
-    const TreeSupport::ScannedVolume<S> on(image, TestAlloc::DeletedOptions(),
-                                           TestAlloc::Scan());
+    const TestMft::ScannedVolume<S> off(image);
+    const TestMft::ScannedVolume<S> on(image, TestAlloc::DeletedOptions(),
+                                       TestAlloc::Scan());
 
     REQUIRE(off.tree.Entries().size() == on.tree.Entries().size());
     for (size_t i = 0; i < off.tree.Entries().size(); i++) {
@@ -166,10 +166,10 @@ TEST_CASE("an extension record nobody can use does not fail a record",
     std::fill_n(image.begin() + static_cast<std::ptrdiff_t>(slot_start),
                 TestFakeImage::fake_file_record_size, BYTE{0});
     for (const bool recover : {false, true}) {
-      const TreeSupport::ScannedVolume<S> off(
+      const TestMft::ScannedVolume<S> off(
           image,
           VolumeOptions{.include_deleted = true, .recover_errors = recover});
-      const TreeSupport::ScannedVolume<S> on(
+      const TestMft::ScannedVolume<S> on(
           image,
           VolumeOptions{.include_deleted = true, .recover_errors = recover},
           TestAlloc::Scan());
@@ -205,9 +205,9 @@ TEST_CASE("a damaged attribute that is only listed does not damage a record",
       const VolumeOptions options{.include_deleted = true,
                                   .recover_errors = recover};
       static_cast<void>(TestSupport::TakeCapturedLog());
-      const TreeSupport::ScannedVolume<S> off(image, options);
+      const TestMft::ScannedVolume<S> off(image, options);
       const std::string off_log = TestSupport::TakeCapturedLog();
-      const TreeSupport::ScannedVolume<S> on(image, options, TestAlloc::Scan());
+      const TestMft::ScannedVolume<S> on(image, options, TestAlloc::Scan());
       const std::string on_log = TestSupport::TakeCapturedLog();
 
       INFO("recover " << recover);
@@ -238,7 +238,7 @@ TEST_CASE("the account is the same whatever the thread count",
       Mft::MftTree::ScanOptions options =
           TestAlloc::Scan(Alloc::ClusterAccountLevel::CountsAndMap);
       options.threads = threads;
-      const TreeSupport::ScannedVolume<S> scanned(
+      const TestMft::ScannedVolume<S> scanned(
           image, TestAlloc::DeletedAndRecover(), options);
 
       const std::string text = DescribeAccounts(scanned.tree);
@@ -278,7 +278,7 @@ TEST_CASE("the account reads $Bitmap once, in ascending order",
   for (const bool annotate : {true, false}) {
     Mft::MftTree::ScanOptions options = TestAlloc::Scan();
     options.annotate_data_state = annotate;
-    const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> scanned(
+    const TestMft::ScannedVolume<Cache::Strategy::NoCache> scanned(
         image, TestAlloc::DeletedOptions(), options);
 
     INFO("annotate " << annotate);
@@ -302,9 +302,9 @@ TEST_CASE("the account reads $Bitmap once, in ascending order",
 TEST_CASE("the account never touches a volume with nothing to keep",
           "[alloc][cluster][scan]") {
   const std::vector<BYTE> image = WithListedIndex().Build();
-  const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> plain(
-      image, VolumeOptions{});
-  const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> asked(
+  const TestMft::ScannedVolume<Cache::Strategy::NoCache> plain(image,
+                                                               VolumeOptions{});
+  const TestMft::ScannedVolume<Cache::Strategy::NoCache> asked(
       image, VolumeOptions{}, TestAlloc::Scan());
 
   CHECK(plain.opened.counter->ReadCount() == asked.opened.counter->ReadCount());

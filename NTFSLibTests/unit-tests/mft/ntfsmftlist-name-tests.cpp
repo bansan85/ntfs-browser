@@ -27,13 +27,13 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::RunMftList;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::TempTreeImage;
 using NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames;
 using NTFS_BROWSER_NAMESPACE::Test::Support::FillerName;
 using NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir;
 using NTFS_BROWSER_NAMESPACE::Test::Support::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
-using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::RunMftList;
-using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::TempTreeImage;
 namespace Fs = std::filesystem;
 
 namespace {

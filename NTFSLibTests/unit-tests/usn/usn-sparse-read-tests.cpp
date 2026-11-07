@@ -15,7 +15,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 using TestFakeImage::FakeUsnOptions;
 using TestFakeImage::FakeUsnRecord;
 
@@ -43,7 +43,7 @@ struct Outcome {
 
 template <Cache::Strategy S>
 Outcome<S> ReadJournalOf(const FakeUsnOptions& options) {
-  const auto opened = Support::OpenVolume<S>(Support::JournalImage(options));
+  const auto opened = TestUsn::OpenVolume<S>(TestUsn::JournalImage(options));
   opened.counter->Reset();
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
   REQUIRE(journal != nullptr);

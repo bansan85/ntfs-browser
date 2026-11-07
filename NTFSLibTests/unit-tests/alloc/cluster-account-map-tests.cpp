@@ -26,7 +26,7 @@ struct VolumeOptions;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 using Alloc::ClusterCondition;
 using Alloc::ClusterPiece;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -44,10 +44,10 @@ constexpr ULONGLONG live_owner = 17;
 constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
-TreeSupport::ScannedVolume<S>
+TestMft::ScannedVolume<S>
     ScanMap(const TestAlloc::Volume& volume,
             const VolumeOptions& options = TestAlloc::DeletedOptions()) {
-  return TreeSupport::ScannedVolume<S>(
+  return TestMft::ScannedVolume<S>(
       volume.Build(), options,
       TestAlloc::Scan(Alloc::ClusterAccountLevel::CountsAndMap));
 }
@@ -153,7 +153,7 @@ TEST_CASE("the counts level keeps no map", "[alloc][cluster][map]") {
   TestAlloc::ForEachStrategy([](auto strategy) {
     TestAlloc::Volume volume;
     volume.Put(subject, Freed(100, Stream({{40, 2}}, 2 * cluster)));
-    const TreeSupport::ScannedVolume<decltype(strategy)::value> scanned(
+    const TestMft::ScannedVolume<decltype(strategy)::value> scanned(
         volume.Build(), TestAlloc::DeletedOptions(), TestAlloc::Scan());
 
     CHECK(TestAlloc::AccountOf(scanned.tree, subject).streams.empty());

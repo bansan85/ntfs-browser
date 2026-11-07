@@ -32,8 +32,8 @@
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
-namespace DirSample = NTFS_BROWSER_NAMESPACE::Tests::DirSample;
-namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -196,7 +196,7 @@ TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
   INFO("deleted " << deleted << ", list image " << big);
   const std::vector<BYTE> original =
       big ? ListImage() : TestFakeImage::BuildFakeNtfsImageWithMftTree();
-  const MftListSample::TempTreeImage image(original);
+  const TestMft::TempTreeImage image(original);
   const TestDeviceAccess::TempDir dir;
   const std::filesystem::path capture = dir.Path() / "capture.img";
   std::vector<std::wstring> extra;
@@ -211,11 +211,11 @@ TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
     return all;
   };
 
-  const SampleRun plain = MftListSample::RunMftList(args(image.path));
+  const SampleRun plain = TestMft::RunMftList(args(image.path));
   REQUIRE(plain.exit_code == 0);
   REQUIRE_FALSE(plain.out.empty());
-  const SampleRun captured = MftListSample::RunMftList(
-      args(image.path, {Option(L"--capture", capture)}));
+  const SampleRun captured =
+      TestMft::RunMftList(args(image.path, {Option(L"--capture", capture)}));
   CHECK(captured.exit_code == 0);
   CHECK(captured.out == plain.out);
   CHECK(captured.err == plain.err);
@@ -226,7 +226,7 @@ TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
 
   // The capture is an image of the ranges the run used: listing it gives the
   // same listing.
-  const SampleRun again = MftListSample::RunMftList(args(capture));
+  const SampleRun again = TestMft::RunMftList(args(capture));
   CHECK(again.exit_code == 0);
   CHECK(again.out == plain.out);
   CHECK(again.err == plain.err);
@@ -239,7 +239,7 @@ TEST_CASE("NtfsDir on its capture image lists what it listed on the image",
   const std::vector<BYTE> original =
       TestFakeImage::BuildFakeNtfsImageWithReportName(
           L"report.txt", TestFakeImage::dump_broken_alter_time);
-  const DirSample::TempImage image(original);
+  const TestIo::TempImage image(original);
   const TestDeviceAccess::TempDir dir;
   const std::filesystem::path capture = dir.Path() / "capture.img";
   std::vector<std::wstring> extra{L"--recursive"};
@@ -247,14 +247,14 @@ TEST_CASE("NtfsDir on its capture image lists what it listed on the image",
     extra.emplace_back(L"--deleted");
   }
 
-  for (const std::filesystem::path& exe : DirSample::SampleExes()) {
+  for (const std::filesystem::path& exe : TestIo::SampleExes()) {
     INFO("sample " << exe.filename().string());
     const auto run = [&](const std::filesystem::path& target,
                          std::vector<std::wstring> more = {}) {
       std::vector<std::wstring> args = extra;
       args.insert(args.end(), more.begin(), more.end());
       args.push_back(target.wstring());
-      return DirSample::RunDir(exe, args);
+      return TestIo::RunDir(exe, args);
     };
 
     const SampleRun plain = run(image.path);
@@ -280,12 +280,12 @@ TEST_CASE("NtfsDir on its capture image lists what it listed on the image",
 
 TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
           "[device-access][benchmark][sample]") {
-  const MftListSample::TempTreeImage image(ListImage());
+  const TestMft::TempTreeImage image(ListImage());
   const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
-  const SampleRun plain = MftListSample::RunMftList({image.path.wstring()});
-  const SampleRun run = MftListSample::RunMftList(
+  const SampleRun plain = TestMft::RunMftList({image.path.wstring()});
+  const SampleRun run = TestMft::RunMftList(
       {Option(L"--benchmark", summary), image.path.wstring()});
 
   // The benchmark leaves the listing alone, and says where its summary is.
@@ -349,13 +349,13 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
 
 TEST_CASE("NtfsMftList --media sets the media kind its summary reports",
           "[device-access][benchmark][sample]") {
-  const MftListSample::TempTreeImage image(ListImage());
+  const TestMft::TempTreeImage image(ListImage());
   const TestDeviceAccess::TempDir dir;
 
   const auto kind_of = [&](const std::wstring& media) {
     const std::filesystem::path summary = dir.Path() / "summary.json";
     std::filesystem::remove(summary);
-    const SampleRun run = MftListSample::RunMftList(
+    const SampleRun run = TestMft::RunMftList(
         {Option(L"--benchmark", summary), media, image.path.wstring()});
     REQUIRE(run.exit_code == 0);
     return Member(Member(LoadSummary(summary), "run"), "media_kind").text;
@@ -368,10 +368,10 @@ TEST_CASE("NtfsMftList --media sets the media kind its summary reports",
 
 TEST_CASE("NtfsMftList refuses a --media it does not know",
           "[device-access][benchmark][sample]") {
-  const MftListSample::TempTreeImage image(ListImage());
+  const TestMft::TempTreeImage image(ListImage());
 
   const SampleRun run =
-      MftListSample::RunMftList({L"--media=floppy", image.path.wstring()});
+      TestMft::RunMftList({L"--media=floppy", image.path.wstring()});
 
   CHECK(run.exit_code != 0);
   CHECK_THAT(run.err, ContainsSubstring("--media"));
@@ -379,11 +379,11 @@ TEST_CASE("NtfsMftList refuses a --media it does not know",
 
 TEST_CASE("The read log next to a summary is the log of its run",
           "[device-access][benchmark][sample]") {
-  const MftListSample::TempTreeImage image(ListImage());
+  const TestMft::TempTreeImage image(ListImage());
   const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
-  const SampleRun run = MftListSample::RunMftList(
+  const SampleRun run = TestMft::RunMftList(
       {Option(L"--benchmark", summary), image.path.wstring()});
   REQUIRE(run.exit_code == 0);
 
@@ -408,13 +408,13 @@ TEST_CASE("The read log next to a summary is the log of its run",
 
 TEST_CASE("NtfsMftList --stop-after ends the run after the phase",
           "[device-access][benchmark][sample]") {
-  const MftListSample::TempTreeImage image(ListImage());
+  const TestMft::TempTreeImage image(ListImage());
   const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
   const SampleRun run =
-      MftListSample::RunMftList({Option(L"--benchmark", summary),
-                                 L"--stop-after=pass1", image.path.wstring()});
+      TestMft::RunMftList({Option(L"--benchmark", summary),
+                           L"--stop-after=pass1", image.path.wstring()});
 
   // No tree and no listing, and the summary says where the run stopped.
   CHECK(run.exit_code == 0);
@@ -431,16 +431,16 @@ TEST_CASE("NtfsMftList --stop-after ends the run after the phase",
 
 TEST_CASE("NtfsDir --benchmark walks its phases and keeps its listing",
           "[device-access][benchmark][sample]") {
-  const DirSample::TempImage image;
+  const TestIo::TempImage image;
   const TestDeviceAccess::TempDir dir;
 
-  for (const std::filesystem::path& exe : DirSample::SampleExes()) {
+  for (const std::filesystem::path& exe : TestIo::SampleExes()) {
     INFO("sample " << exe.filename().string());
     const std::filesystem::path summary = dir.Path() / "summary-dir.json";
-    const std::wstring target = DirSample::InImage(image.path, L"Docs");
-    const SampleRun plain = DirSample::RunDir(exe, {target});
+    const std::wstring target = TestIo::InImage(image.path, L"Docs");
+    const SampleRun plain = TestIo::RunDir(exe, {target});
     const SampleRun run =
-        DirSample::RunDir(exe, {Option(L"--benchmark", summary), target});
+        TestIo::RunDir(exe, {Option(L"--benchmark", summary), target});
 
     REQUIRE(run.exit_code == 0);
     CHECK(run.out == plain.out);

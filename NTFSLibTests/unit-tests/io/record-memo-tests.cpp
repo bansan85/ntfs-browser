@@ -25,7 +25,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
-namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
@@ -199,10 +199,10 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][record-memo]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   std::size_t compared = 0;
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    for (const VolumeOptions& options : TestIo::AllOptions()) {
       std::vector<BYTE> image = fixture.image;
-      const ReadAhead::MftSpan mft = ReadAhead::MftSpanOf(image);
+      const TestIo::MftSpan mft = TestIo::MftSpanOf(image);
       const std::size_t slots = (mft.end - mft.first) / record_size;
       // Damage the sector ends of some records: a failed update sequence check
       // is judged by the same bytes, and the memo keeps them as they are.

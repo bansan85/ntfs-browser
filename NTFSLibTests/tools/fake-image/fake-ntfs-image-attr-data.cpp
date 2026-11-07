@@ -117,8 +117,8 @@ FakeRecord MakeNamedDataStreamRecord() {
 
   auto& attr = InitResidentAttr(record, attr_offset_value,
                                 NTFS_BROWSER_NAMESPACE::Attr::Type::Data);
-  const std::vector<WORD> encoded_name = ToUtf16(named_data_stream_name);
-  attr.header.name_length = named_data_stream_name_length;
+  const std::vector<WORD> encoded_name = ToUtf16(Fuzz::named_data_stream_name);
+  attr.header.name_length = Fuzz::named_data_stream_name_length;
   attr.header.name_offset = static_cast<WORD>(sizeof(attr));
   attr.attr_size = gsl::narrow<DWORD>(named_data_stream_content.size());
   attr.attr_offset =

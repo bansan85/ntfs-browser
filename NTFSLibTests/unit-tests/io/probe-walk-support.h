@@ -41,7 +41,7 @@ namespace Io {
 enum class RecordStanding : std::uint8_t;
 
 }  // namespace Io
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 class NtfsVolume;
 
 }  // namespace NTFS_BROWSER_NAMESPACE
@@ -49,23 +49,24 @@ class NtfsVolume;
 // What the tests of the probes of a directory walk share: a volume over a
 // counting reader, the blocks of a directory's index, and a walk that notes
 // what its probes ask.
-namespace NTFS_BROWSER_NAMESPACE::Tests::ProbeWalk {
+namespace NTFS_BROWSER_NAMESPACE::Test::Io {
 
 // First slot of $MFT that a probe reads through its extents.
 inline constexpr ULONGLONG first_mapped_slot = 16;
 
 // A volume over an image, and the reader that counts what it is asked.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 struct OpenVolume {
   Test::DiskReaders::CountingDiskReader* reads{nullptr};
   std::unique_ptr<NtfsVolume<S>> volume;
 };
 
 // Opens image as a volume. kind is what the reader says about its device.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] OpenVolume<S>
     Open(const std::vector<BYTE>& image,
-         Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
+         NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind =
+             NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown) {
   auto memory = std::make_unique<Test::DiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
   auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
@@ -80,16 +81,18 @@ template <Cache::Strategy S>
 
 // The index blocks of the directory record directory, by sub-node VCN, as the
 // disk holds them.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] std::map<ULONGLONG, std::vector<BYTE>>
     BlocksOf(const NtfsVolume<S>& volume, ULONGLONG directory) {
-  Io::FileRecord<S> record(volume);
-  record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
+  record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                     NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
   REQUIRE(record.ParseFileRecord(directory));
   REQUIRE(record.ParseAttrs());
 
   std::map<ULONGLONG, std::vector<BYTE>> blocks;
-  const auto& allocs = record.GetAttr(Attr::Type::IndexAllocation);
+  const auto& allocs =
+      record.GetAttr(NTFS_BROWSER_NAMESPACE::Attr::Type::IndexAllocation);
   if (allocs.empty()) {
     return blocks;
   }
@@ -143,12 +146,13 @@ struct WalkSetup {
 // Parses directory, asks its held index for the probe groups, then walks it
 // with TraverseSubEntriesWithStanding() over a probe store that notes what the
 // probes ask and read.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] DirectoryWalk WalkDirectory(OpenVolume<S>& open,
                                           ULONGLONG directory,
                                           const WalkSetup& setup) {
-  Io::FileRecord<S> record(*open.volume);
-  record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(*open.volume);
+  record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                     NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
   if (setup.held != nullptr) {
     record.SetIndexBlockSource(
         [held = setup.held](ULONGLONG, ULONGLONG vcn) -> std::span<const BYTE> {
@@ -163,13 +167,16 @@ template <Cache::Strategy S>
   DirectoryWalk walk;
   (void)Test::Support::TakeCapturedLog();
   open.reads->Reset();
-  const std::uint64_t recovered = Log::Detail::RecoveredCount();
-  walk.groups = Io::DirectoryIndex<S>(record).HeldProbeGroups();
+  const std::uint64_t recovered =
+      NTFS_BROWSER_NAMESPACE::Log::Detail::RecoveredCount();
+  walk.groups =
+      NTFS_BROWSER_NAMESPACE::Io::DirectoryIndex<S>(record).HeldProbeGroups();
   walk.calls_of_groups = open.reads->Calls().size();
   walk.log_of_groups = Test::Support::TakeCapturedLog();
-  walk.recovered_by_groups = Log::Detail::RecoveredCount() - recovered;
+  walk.recovered_by_groups =
+      NTFS_BROWSER_NAMESPACE::Log::Detail::RecoveredCount() - recovered;
 
-  typename Io::FileRecord<S>::ProbeStore store;
+  typename NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::ProbeStore store;
   if (!setup.note_only) {
     store.find = [&walk, &setup](ULONGLONG slot) -> std::span<const BYTE> {
       walk.asked.push_back(slot);
@@ -192,7 +199,8 @@ template <Cache::Strategy S>
 
   open.reads->Reset();
   record.TraverseSubEntriesWithStanding(
-      [](const IndexEntryView& entry, Io::RecordStanding, void* context) {
+      [](const IndexEntryView& entry,
+         NTFS_BROWSER_NAMESPACE::Io::RecordStanding, void* context) {
         static_cast<DirectoryWalk*>(context)->listed.push_back(
             entry.GetFileReference());
       },
@@ -227,4 +235,4 @@ template <Cache::Strategy S>
   return asked;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::ProbeWalk
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Io

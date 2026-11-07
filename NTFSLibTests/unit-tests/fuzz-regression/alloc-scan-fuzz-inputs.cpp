@@ -20,7 +20,7 @@
 #include "fuzz-input-writer.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFuzzRegression = NTFS_BROWSER_NAMESPACE::Test::FuzzRegression;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -139,8 +139,8 @@ TEST_CASE("write the allocation scan fuzz inputs", "[.write-fuzz-inputs]") {
   const VolumeOptions recovering{.include_deleted = true,
                                  .recover_errors = true};
   for (Variant& variant : Variants()) {
-    Tests::FuzzInputs::WriteRecordedInput(std::filesystem::path(dir) /
-                                              variant.name,
-                                          std::move(variant.image), recovering);
+    TestFuzzRegression::WriteRecordedInput(
+        std::filesystem::path(dir) / variant.name, std::move(variant.image),
+        recovering);
   }
 }

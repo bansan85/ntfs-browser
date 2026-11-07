@@ -24,7 +24,7 @@ struct VolumeOptions;
 
 }  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzInputs {
+namespace NTFS_BROWSER_NAMESPACE::Test::FuzzRegression {
 
 // Bytes of the boot sector read a NoCache volume issues first, and how far the
 // fuzzer's reader moves the stream after it.
@@ -105,4 +105,4 @@ inline void WriteRecordedAccountInput(const std::filesystem::path& path,
   }
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::FuzzInputs
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FuzzRegression

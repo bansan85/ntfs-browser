@@ -29,7 +29,7 @@ namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -59,7 +59,7 @@ FakeUsnRecord Ghost() {
 
 template <Cache::Strategy S>
 void CheckAFileLostFromTheMftComesBack() {
-  const auto opened = Support::OpenVolume<S>(Support::JournalImage(
+  const auto opened = TestUsn::OpenVolume<S>(TestUsn::JournalImage(
       {.records = {Ghost(), {.name = L"second.txt", .file_record = 41}}}));
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
@@ -75,7 +75,7 @@ void CheckAFileLostFromTheMftComesBack() {
   CHECK(ghost.reason == delete_and_close);
   CHECK(ghost.file_attributes == 0x20);
   CHECK(ghost.usn == 0);
-  const FILETIME time = Support::ExpectedTime(0x01D87F3C0A0B0C0DULL);
+  const FILETIME time = TestUsn::ExpectedTime(0x01D87F3C0A0B0C0DULL);
   CHECK(ghost.time.dwLowDateTime == time.dwLowDateTime);
   CHECK(ghost.time.dwHighDateTime == time.dwHighDateTime);
 
@@ -89,8 +89,8 @@ void CheckAFileLostFromTheMftComesBack() {
 
 template <Cache::Strategy S>
 void CheckTheResultIsOwnedData() {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage({.records = {Ghost(), {.name = L"two.txt"}}}));
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage({.records = {Ghost(), {.name = L"two.txt"}}}));
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
   REQUIRE(journal != nullptr);
   REQUIRE(journal->records.size() == 2);
@@ -115,8 +115,8 @@ void CheckTheResultIsOwnedData() {
 
 template <Cache::Strategy S>
 void CheckAFreedJournalRecordIsStillRead() {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage(
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage(
           {.records = {Ghost()}, .journal_record_freed = true}),
       VolumeOptions{.include_deleted = false, .recover_errors = true});
 
@@ -130,7 +130,7 @@ template <Cache::Strategy S>
 void CheckAnAbsentJournalIsNull(const FakeUsnOptions& options) {
   const auto sink = std::make_shared<TestAlloc::LevelSink>();
   const TestAlloc::ScopedSink scoped(sink);
-  const auto opened = Support::OpenVolume<S>(Support::JournalImage(options));
+  const auto opened = TestUsn::OpenVolume<S>(TestUsn::JournalImage(options));
 
   CHECK(opened.volume->GetUsnJournal() == nullptr);
 
@@ -145,7 +145,7 @@ void CheckAnAbsentJournalIsNull(const FakeUsnOptions& options) {
 
 template <Cache::Strategy S>
 void CheckAJournalWithNoRecordIsEmpty() {
-  const auto opened = Support::OpenVolume<S>(Support::JournalImage({}));
+  const auto opened = TestUsn::OpenVolume<S>(TestUsn::JournalImage({}));
 
   const Usn::Journal* journal = opened.volume->GetUsnJournal();
 
@@ -207,7 +207,7 @@ void CheckADamagedRunListIsReadAsFarAsItGoes() {
   const auto sink = std::make_shared<TestAlloc::LevelSink>();
   const TestAlloc::ScopedSink scoped(sink);
   // The cut drops the run of the second stretch, which follows a hole.
-  const auto opened = Support::OpenVolume<S>(Support::JournalImage(
+  const auto opened = TestUsn::OpenVolume<S>(TestUsn::JournalImage(
       {.records = {Ghost()},
        .more_stretches = {{.hole_bytes = TestFakeImage::fake_cluster_size,
                            .records = {{.name = L"far.txt",
@@ -224,8 +224,8 @@ void CheckADamagedRunListIsReadAsFarAsItGoes() {
 
 template <Cache::Strategy S>
 void CheckStrictModeLoadsNothing() {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage({.records = {Ghost()}}), VolumeOptions{});
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage({.records = {Ghost()}}), VolumeOptions{});
 
   CHECK(Usn::LoadJournal(*opened.volume) == nullptr);
 }
@@ -247,7 +247,7 @@ void CheckAThrowingReaderGivesNoJournal() {
       std::make_unique<TestSupport::ScriptedDiskReader>(std::move(image));
   reader->FaultRange(data_start, image_size,
                      TestSupport::ScriptedDiskReader::Fault::Throw);
-  const NtfsVolume<S> volume(std::move(reader), Support::RecoverOptions());
+  const NtfsVolume<S> volume(std::move(reader), TestUsn::RecoverOptions());
   REQUIRE(volume.IsVolumeOK());
 
   CHECK_NOTHROW(volume.GetUsnJournal());

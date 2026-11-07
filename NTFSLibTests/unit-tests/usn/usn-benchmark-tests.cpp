@@ -28,7 +28,7 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestFakeImage::FakeUsnRecord;
 
@@ -88,7 +88,7 @@ double MeasureJournal(size_t count) {
   std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   TestFakeImage::PutUsnJournal(image, {.raw_stream = RealisticStream(count)});
-  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
+  const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
       std::move(image),
       VolumeOptions{.include_deleted = true,
                     .recover_errors = true,
@@ -114,7 +114,7 @@ double MeasureJournal(size_t count) {
 double MeasureMftScan(size_t files) {
   const TestFakeImage::FakeManyDeleted many =
       TestFakeImage::BuildFakeNtfsImageWithManyDeletedFiles(files, 1);
-  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
+  const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
       many.image, VolumeOptions{.include_deleted = true});
 
   const auto start = Clock::now();

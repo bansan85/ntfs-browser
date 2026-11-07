@@ -10,7 +10,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Io {
 
 // The dump-tree image with its big file on the default run: 20 clusters at
 // LCN 40, past the 16 KiB a dump shows.
@@ -21,4 +21,4 @@ inline std::vector<BYTE> DumpTreeImage() {
         .clusters = Test::FakeImage::dump_big_file_clusters}});
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Io

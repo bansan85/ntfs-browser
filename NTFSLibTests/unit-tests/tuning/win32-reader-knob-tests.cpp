@@ -25,13 +25,13 @@
   #include "knob-effect-support.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestTuning = NTFS_BROWSER_NAMESPACE::Test::Tuning;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::KnobEffect::Tuned;
+using TestTuning::Tuned;
 
 namespace {
 

@@ -10,7 +10,7 @@
 #include <ntfs-browser/volume-options.h>
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeUsnRecord;
 
@@ -18,8 +18,8 @@ namespace {
 
 template <Cache::Strategy S>
 void CheckStrictModeReadsNothing(const VolumeOptions& options) {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}}}),
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}}}),
       options);
   opened.counter->Reset();
 
@@ -31,8 +31,8 @@ void CheckStrictModeReadsNothing(const VolumeOptions& options) {
 
 template <Cache::Strategy S>
 void CheckRecoveryModeReadsTheJournal() {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}}}));
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}}}));
   opened.counter->Reset();
 
   CHECK(opened.volume->GetUsnJournal() != nullptr);

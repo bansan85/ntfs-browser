@@ -21,11 +21,11 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::MakeRecord;
 using TestFakeImage::FakeUsnOptions;
 using TestFakeImage::FakeUsnRecord;
+using TestUsn::MakeRecord;
 
 namespace {
 
@@ -59,12 +59,12 @@ Mft::MftTree ScanWith(const FakeUsnOptions& options,
                       const VolumeOptions& volume_options,
                       const Mft::MftTree::ScanOptions& scan = {}) {
   const auto opened =
-      Support::OpenVolume<S>(Support::JournalImage(options), volume_options);
+      TestUsn::OpenVolume<S>(TestUsn::JournalImage(options), volume_options);
   return Mft::MftTree(*opened.volume, scan);
 }
 
 bool SameTime(const FILETIME& time, ULONGLONG utc) {
-  const FILETIME expected = Support::ExpectedTime(utc);
+  const FILETIME expected = TestUsn::ExpectedTime(utc);
   return time.dwLowDateTime == expected.dwLowDateTime &&
          time.dwHighDateTime == expected.dwHighDateTime;
 }
@@ -137,7 +137,7 @@ void CheckTheFourFlagCombinations() {
 
   SECTION("recovery and deleted items: annotates and lists") {
     const Mft::MftTree tree =
-        ScanWith<S>(MixedJournal(), Support::RecoverOptions());
+        ScanWith<S>(MixedJournal(), TestUsn::RecoverOptions());
     const Mft::MftTree::Entry* report = tree.Find(report_record);
     const Mft::MftTree::Entry* deleted = tree.Find(deleted_record);
     REQUIRE(report != nullptr);
@@ -172,7 +172,7 @@ void CheckUsnInfoFields() {
                                .sequence = report_sequence,
                                .reason = reason_data_overwrite | reason_close,
                                .time = time_c})}},
-      Support::RecoverOptions());
+      TestUsn::RecoverOptions());
 
   const Mft::MftTree::Entry* report = tree.Find(report_record);
   REQUIRE(report != nullptr);
@@ -202,7 +202,7 @@ void CheckTheDeletionTimeOfAFreedFile() {
                                .sequence = 1,
                                .reason = reason_file_delete | reason_close,
                                .time = time_b})}},
-      Support::RecoverOptions());
+      TestUsn::RecoverOptions());
 
   const Mft::MftTree::Entry* deleted = tree.Find(deleted_record);
   REQUIRE(deleted != nullptr);
@@ -238,7 +238,7 @@ void CheckTheSequenceRules() {
                                            .sequence = report_sequence + 1,
                                            .reason = reason_file_create,
                                            .time = time_c})}},
-                  Support::RecoverOptions());
+                  TestUsn::RecoverOptions());
 
   const Mft::MftTree::Entry* linked = tree.Find(link_record);
   const Mft::MftTree::Entry* report = tree.Find(report_record);
@@ -282,7 +282,7 @@ void CheckTheNewestNameWins() {
                                .sequence = 2,
                                .reason = reason_rename_new | reason_close,
                                .time = time_c})}},
-      Support::RecoverOptions());
+      TestUsn::RecoverOptions());
 
   const Mft::MftTree::JournalOnlyEntry* item =
       FindJournalOnly(tree, ghost_record, 2);
@@ -338,7 +338,7 @@ FakeUsnOptions JournalOnlyPathsJournal() {
 template <Cache::Strategy S>
 void CheckJournalOnlyPaths() {
   const Mft::MftTree tree =
-      ScanWith<S>(JournalOnlyPathsJournal(), Support::RecoverOptions());
+      ScanWith<S>(JournalOnlyPathsJournal(), TestUsn::RecoverOptions());
 
   REQUIRE(tree.JournalOnly().size() == 5);
   const auto* docs_item = FindJournalOnly(tree, 41, 1);
@@ -381,7 +381,7 @@ void CheckJournalOnlyPaths() {
 template <Cache::Strategy S>
 void CheckJournalOnlyFilesStayOutOfTheEntries() {
   const Mft::MftTree with_journal =
-      ScanWith<S>(MixedJournal(), Support::RecoverOptions());
+      ScanWith<S>(MixedJournal(), TestUsn::RecoverOptions());
   REQUIRE(with_journal.JournalOnly().size() == 1);
 
   CHECK(with_journal.Find(ghost_record) == nullptr);
@@ -400,7 +400,7 @@ void CheckJournalOnlyFilesStayOutOfTheEntries() {
 template <Cache::Strategy S>
 void CheckStrictModeIsTheScanWithoutAJournal() {
   const VolumeOptions strict{.include_deleted = true};
-  const auto plain = Support::OpenVolume<S>(
+  const auto plain = TestUsn::OpenVolume<S>(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), strict);
   const Mft::MftTree without(*plain.volume);
   const Mft::MftTree with = ScanWith<S>(MixedJournal(), strict);
@@ -438,7 +438,7 @@ void CheckStrictModeIsTheScanWithoutAJournal() {
 template <Cache::Strategy S>
 void CheckACopyKeepsTheJournalOnlyFiles() {
   Mft::MftTree original =
-      ScanWith<S>(MixedJournal(), Support::RecoverOptions());
+      ScanWith<S>(MixedJournal(), TestUsn::RecoverOptions());
   const Mft::MftTree copy(original);
   const Mft::MftTree moved(std::move(original));
 
@@ -459,7 +459,7 @@ void CheckAHighReferenceNeverMatches() {
   wide.file_reference_high = 1;
 
   const Mft::MftTree tree =
-      ScanWith<S>({.records = {wide}}, Support::RecoverOptions());
+      ScanWith<S>({.records = {wide}}, TestUsn::RecoverOptions());
 
   const Mft::MftTree::Entry* report = tree.Find(report_record);
   REQUIRE(report != nullptr);
@@ -480,7 +480,7 @@ void CheckJournalOrderBreaksATimeTie() {
                                            .sequence = report_sequence,
                                            .reason = reason_close,
                                            .time = time_a})}},
-                  Support::RecoverOptions());
+                  TestUsn::RecoverOptions());
 
   const Mft::MftTree::Entry* report = tree.Find(report_record);
   REQUIRE(report != nullptr);
@@ -502,7 +502,7 @@ void CheckADamagedRecordDoesNotStopTheScan() {
   FakeUsnOptions options = MixedJournal();
   options.patches.push_back(
       {.stream_offset = first.size(), .bytes = {0x3E, 0x00, 0x00, 0x00}});
-  const Mft::MftTree tree = ScanWith<S>(options, Support::RecoverOptions());
+  const Mft::MftTree tree = ScanWith<S>(options, TestUsn::RecoverOptions());
 
   const Mft::MftTree::Entry* report = tree.Find(report_record);
   REQUIRE(report != nullptr);
@@ -516,7 +516,7 @@ void CheckAStoppedScanLeavesTheJournalAlone() {
   Mft::MftTree::ScanOptions scan;
   scan.progress = [](ULONGLONG /*done*/, ULONGLONG /*total*/) { return false; };
   const Mft::MftTree tree =
-      ScanWith<S>(MixedJournal(), Support::RecoverOptions(), scan);
+      ScanWith<S>(MixedJournal(), TestUsn::RecoverOptions(), scan);
 
   CHECK_FALSE(tree.Stats().complete);
   CHECK(tree.JournalOnly().empty());
@@ -622,7 +622,7 @@ void CheckPathsWithoutAnAncestorOutput() {
                                       .parent_sequence = 1});
 
   Mft::MftTree tree = ScanWith<S>({.records = {in_docs, in_root, in_lost}},
-                                  Support::RecoverOptions());
+                                  TestUsn::RecoverOptions());
   REQUIRE(tree.JournalOnly().size() == 3);
 
   const auto index_of = [&](ULONGLONG record) {

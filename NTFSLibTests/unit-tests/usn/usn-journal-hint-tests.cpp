@@ -24,11 +24,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::MakeRecord;
 using TestDiskReaders::CountingDiskReader;
 using TestFakeImage::FakeUsnOptions;
+using TestUsn::MakeRecord;
 
 namespace {
 
@@ -88,8 +88,8 @@ bool EveryReadIsAnnouncedBefore(const std::vector<Call>& calls) {
 // The (offset, length) of the reads of $J when only the loader reads them.
 std::vector<std::pair<ULONGLONG, ULONGLONG>>
     LoaderReads(const FakeUsnOptions& options) {
-  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
-      Support::JournalImage(options));
+  const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
+      TestUsn::JournalImage(options));
   opened.counter->Reset();
   REQUIRE(opened.volume->GetUsnJournal() != nullptr);
   std::vector<std::pair<ULONGLONG, ULONGLONG>> reads;
@@ -104,8 +104,8 @@ std::vector<std::pair<ULONGLONG, ULONGLONG>>
 TEST_CASE("a scan announces the data of $J before the journal is read",
           "[usn][tree][prefetch]") {
   for (const FakeUsnOptions& options : {SmallJournal(), LargeJournal()}) {
-    const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
-        Support::JournalImage(options));
+    const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
+        TestUsn::JournalImage(options));
     const Mft::MftTree tree(*opened.volume);
     const std::vector<Call>& calls = opened.counter->Calls();
 
@@ -118,8 +118,8 @@ TEST_CASE("a scan announces the data of $J before the journal is read",
 
 TEST_CASE("the announced ranges of $J are at most 4 MiB each",
           "[usn][tree][prefetch]") {
-  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
-      Support::JournalImage(LargeJournal()));
+  const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
+      TestUsn::JournalImage(LargeJournal()));
   const Mft::MftTree tree(*opened.volume);
 
   const std::vector<Call> hints =
@@ -133,8 +133,8 @@ TEST_CASE("the announced ranges of $J are at most 4 MiB each",
 TEST_CASE("announcing $J changes none of the reads that load it",
           "[usn][tree][prefetch]") {
   for (const FakeUsnOptions& options : {SmallJournal(), LargeJournal()}) {
-    const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
-        Support::JournalImage(options));
+    const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
+        TestUsn::JournalImage(options));
     const Mft::MftTree tree(*opened.volume);
 
     std::vector<std::pair<ULONGLONG, ULONGLONG>> scanned;
@@ -147,8 +147,8 @@ TEST_CASE("announcing $J changes none of the reads that load it",
 
 TEST_CASE("a scan that does not recover announces nothing of $J",
           "[usn][tree][prefetch]") {
-  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
-      Support::JournalImage(SmallJournal()), VolumeOptions{});
+  const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
+      TestUsn::JournalImage(SmallJournal()), VolumeOptions{});
   const Mft::MftTree tree(*opened.volume);
 
   CHECK(JournalCalls(opened.counter->Calls(), Kind::Prefetch).empty());
@@ -157,8 +157,8 @@ TEST_CASE("a scan that does not recover announces nothing of $J",
 
 TEST_CASE("a scan that progress() stopped announces nothing of $J",
           "[usn][tree][prefetch]") {
-  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
-      Support::JournalImage(SmallJournal()));
+  const auto opened = TestUsn::OpenVolume<Cache::Strategy::NoCache>(
+      TestUsn::JournalImage(SmallJournal()));
   Mft::MftTree::ScanOptions scan;
   scan.progress = [](ULONGLONG /*done*/, ULONGLONG /*total*/) { return false; };
   const Mft::MftTree tree(*opened.volume, scan);

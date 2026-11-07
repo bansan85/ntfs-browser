@@ -146,7 +146,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithGapCollationSubNode() {
       sizeof(NTFS_BROWSER_NAMESPACE::Data::IndexBlock);
   const WORD leaf_size =
       WriteFilenameEntry(&gsl::at(block_start, entries_offset),
-                         {.name = gap_collation_search_name,
+                         {.name = Fuzz::gap_collation_search_name,
                           .mft_ref = gap_collation_leaf_mft_ref,
                           .directory = false});
   const WORD terminal_size =

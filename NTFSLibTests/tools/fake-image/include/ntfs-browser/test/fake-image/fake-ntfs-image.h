@@ -16,8 +16,6 @@
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/test/fuzz/gap-collation-probe.h>
-#include <ntfs-browser/test/fuzz/named-stream-probe.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {
@@ -564,11 +562,6 @@ inline constexpr ULONGLONG mft_last_vcn_overflow_last_vcn =
 // $ATTRIBUTE_LIST names a continuation record past Mft::Idx::User.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithMftDataLastVcnOverflow();
 
-// Shared with ntfs-browser/test/fuzz/named-stream-probe.h, so a fuzz corpus
-// file built from this fixture reaches the same named stream by name.
-using NTFS_BROWSER_NAMESPACE::Test::Fuzz::named_data_stream_name;
-using NTFS_BROWSER_NAMESPACE::Test::Fuzz::named_data_stream_name_length;
-
 // Recognizable byte pattern written as this fixture's entire $DATA body.
 inline constexpr std::array<BYTE, 4> named_data_stream_content{0xCA, 0xFE, 0xBA,
                                                                0xBE};
@@ -598,11 +591,6 @@ inline constexpr std::wstring_view index_root_variant_b_name = L"BBB";
 // replaced by one holding its own real $INDEX_ROOT entry directly, not via
 // an $ATTRIBUTE_LIST extension record.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithRootIndexRootEntry();
-
-// Shared with ntfs-browser/test/fuzz/gap-collation-probe.h, so a fuzz corpus
-// file built from this fixture reaches the same sub-node entry by name.
-using NTFS_BROWSER_NAMESPACE::Test::Fuzz::gap_collation_search_name;
-using NTFS_BROWSER_NAMESPACE::Test::Fuzz::gap_collation_search_name_length;
 
 // MFT reference the root-level, non-terminal $INDEX_ROOT entry declares.
 inline constexpr ULONGLONG gap_collation_non_terminal_mft_ref = 25;

@@ -10,7 +10,7 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/volume/volume-tree-support.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents {
+namespace NTFS_BROWSER_NAMESPACE::Test::Mft {
 
 // Mask for the 48-bit record number inside a file reference.
 inline constexpr ULONGLONG ref_record_mask = 0x0000FFFFFFFFFFFFULL;
@@ -29,7 +29,8 @@ inline constexpr ULONGLONG new_dir_sequence = 7;
 // Writes new_ref over every $FILE_NAME of idx that names from_record.
 inline void RedirectFileNames(std::vector<BYTE>& image, ULONGLONG idx,
                               ULONGLONG from_record, ULONGLONG new_ref) {
-  for (const size_t attr : AttrOffsets(image, idx, Attr::Type::FileName)) {
+  for (const size_t attr :
+       AttrOffsets(image, idx, NTFS_BROWSER_NAMESPACE::Attr::Type::FileName)) {
     const size_t body = ResidentBody(image, attr);
     if ((Load<ULONGLONG>(image, body) & ref_record_mask) == from_record) {
       Store<ULONGLONG>(image, body, new_ref);
@@ -47,4 +48,4 @@ inline void LoopDocsAndNewDir(std::vector<BYTE>& image) {
                     MakeRef(Test::FakeImage::mft_tree_docs_idx, docs_sequence));
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Mft

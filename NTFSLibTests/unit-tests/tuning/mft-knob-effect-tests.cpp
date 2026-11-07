@@ -36,13 +36,14 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
+namespace TestTuning = NTFS_BROWSER_NAMESPACE::Test::Tuning;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestSupport::ScanResult;
-using namespace Tests::KnobEffect;
+using namespace TestTuning;
 
 namespace {
 
@@ -296,8 +297,8 @@ TEST_CASE(
 
   const auto flushes = [&image](const VolumeOptions& options) {
     TestSupport::BenchSessionGuard session;
-    const Tests::MftTreeSupport::ScannedVolume<Cache::Strategy::NoCache>
-        scanned(image, options);
+    const TestMft::ScannedVolume<Cache::Strategy::NoCache> scanned(image,
+                                                                   options);
     const Bench::Report report = session.Finish();
     const auto flush = std::ranges::find(
         report.phases, Bench::Phase::DataStateFlush, &Bench::PhaseStat::phase);
@@ -327,8 +328,8 @@ TEST_CASE("mft.max_kept_bitmap_bytes sets the bitmap windows a scan keeps",
   const auto bitmap_reads = [&](const VolumeOptions& options) {
     Mft::MftTree::ScanOptions scan;
     scan.cluster_account = Alloc::ClusterAccountLevel::Counts;
-    const Tests::MftTreeSupport::ScannedVolume<Cache::Strategy::NoCache>
-        scanned(image, options, scan);
+    const TestMft::ScannedVolume<Cache::Strategy::NoCache> scanned(
+        image, options, scan);
     return scanned.opened.counter->ReadsInRange(data_offset, image.size());
   };
 

@@ -15,7 +15,7 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using TestFakeImage::FakeUsnRecord;
@@ -29,7 +29,7 @@ template <Cache::Strategy S>
 void CheckAnUnreadableStreamIsNullAndNotRetried() {
   const auto sink = std::make_shared<TestAlloc::LevelSink>();
   const TestAlloc::ScopedSink scoped(sink);
-  const auto opened = Support::OpenVolume<S>(Support::JournalImage(
+  const auto opened = TestUsn::OpenVolume<S>(TestUsn::JournalImage(
       {.records = {FakeUsnRecord{.name = L"a.txt"}}, .unreadable_data = true}));
 
   REQUIRE(opened.volume->GetUsnJournal() == nullptr);
@@ -43,8 +43,8 @@ void CheckAnUnreadableStreamIsNullAndNotRetried() {
 
 template <Cache::Strategy S>
 void CheckAMissingJournalIsNotLookedForAgain() {
-  const auto opened = Support::OpenVolume<S>(
-      Support::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}},
+  const auto opened = TestUsn::OpenVolume<S>(
+      TestUsn::JournalImage({.records = {FakeUsnRecord{.name = L"a.txt"}},
                              .omit_extend_entry = true}));
   REQUIRE(opened.volume->GetUsnJournal() == nullptr);
 
@@ -55,7 +55,7 @@ void CheckAMissingJournalIsNotLookedForAgain() {
 
 template <Cache::Strategy S>
 void CheckTheVolumeKeepsWorkingAfterAFailure() {
-  const auto opened = Support::OpenVolume<S>(Support::JournalImage(
+  const auto opened = TestUsn::OpenVolume<S>(TestUsn::JournalImage(
       {.records = {FakeUsnRecord{.name = L"a.txt"}}, .unreadable_data = true}));
   REQUIRE(opened.volume->GetUsnJournal() == nullptr);
 

@@ -25,7 +25,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
-namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestDiskReaders::CountingDiskReader;
 
@@ -70,7 +70,7 @@ std::size_t ExtraRounds(const std::vector<CountingDiskReader::Call>& on,
 std::vector<std::size_t>
     SectorsReadTooOften(const std::vector<std::uint32_t>& with,
                         const std::vector<std::uint32_t>& without,
-                        const ReadAhead::MftSpan& mft,
+                        const TestIo::MftSpan& mft,
                         std::size_t extra_reads_in_mft) {
   std::vector<std::size_t> read_too_often;
   for (std::size_t sector = 0; sector < with.size(); sector++) {
@@ -91,15 +91,15 @@ TEMPLATE_TEST_CASE_SIG(
     "A recursive listing reads the same with the read ahead absent or 0",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    for (const VolumeOptions& options : TestIo::AllOptions()) {
       INFO(fixture.name << ", include_deleted " << options.include_deleted
                         << ", recover_errors " << options.recover_errors);
-      const ReadAhead::Run absent =
-          ReadAhead::ListRecursively<S>(fixture.image, options, 0, 0);
+      const TestIo::Run absent =
+          TestIo::ListRecursively<S>(fixture.image, options, 0, 0);
       VolumeOptions explicit_off = options;
       explicit_off.tuning.walk.read_ahead_dirs = 0;
-      const ReadAhead::Run off = ReadAhead::ListRecursively<S>(
+      const TestIo::Run off = TestIo::ListRecursively<S>(
           fixture.image, explicit_off, 0, large_budget);
 
       CHECK(off.exit_code == absent.exit_code);
@@ -118,10 +118,10 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG("A recursive listing is the same with the read ahead on",
                        "[io][directory-read-ahead]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
-      const ReadAhead::Run off =
-          ReadAhead::ListRecursively<S>(fixture.image, options, 0, 0);
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    for (const VolumeOptions& options : TestIo::AllOptions()) {
+      const TestIo::Run off =
+          TestIo::ListRecursively<S>(fixture.image, options, 0, 0);
       CHECK(off.exit_code == 0);
       CHECK_FALSE(off.text.empty());
 
@@ -136,12 +136,12 @@ TEMPLATE_TEST_CASE_SIG("A recursive listing is the same with the read ahead on",
                           << ", recover_errors " << options.recover_errors
                           << ", " << dirs << " directories, " << bytes
                           << " bytes");
-        const ReadAhead::Run on =
-            ReadAhead::ListRecursively<S>(fixture.image, options, dirs, bytes);
+        const TestIo::Run on =
+            TestIo::ListRecursively<S>(fixture.image, options, dirs, bytes);
 
         CHECK(on.exit_code == off.exit_code);
         CHECK(on.text == off.text);
-        INFO(ReadAhead::FirstDifference(on.log, off.log));
+        INFO(TestIo::FirstDifference(on.log, off.log));
         CHECK(on.log == off.log);
       }
     }
@@ -153,22 +153,22 @@ TEMPLATE_TEST_CASE_SIG(
     "reads once without",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    const ReadAhead::MftSpan mft = ReadAhead::MftSpanOf(fixture.image);
-    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
-      const ReadAhead::Run off =
-          ReadAhead::ListRecursively<S>(fixture.image, options, 0, 0);
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    const TestIo::MftSpan mft = TestIo::MftSpanOf(fixture.image);
+    for (const VolumeOptions& options : TestIo::AllOptions()) {
+      const TestIo::Run off =
+          TestIo::ListRecursively<S>(fixture.image, options, 0, 0);
       const std::vector<std::uint32_t> without =
-          ReadAhead::SectorReadCounts(off.calls, fixture.image.size());
+          TestIo::SectorReadCounts(off.calls, fixture.image.size());
 
       for (const std::size_t dirs : window_sizes) {
         INFO(fixture.name << ", include_deleted " << options.include_deleted
                           << ", recover_errors " << options.recover_errors
                           << ", " << dirs << " directories");
-        const ReadAhead::Run on = ReadAhead::ListRecursively<S>(
+        const TestIo::Run on = TestIo::ListRecursively<S>(
             fixture.image, options, dirs, large_budget);
         const std::vector<std::uint32_t> with =
-            ReadAhead::SectorReadCounts(on.calls, fixture.image.size());
+            TestIo::SectorReadCounts(on.calls, fixture.image.size());
 
         REQUIRE(with.size() == without.size());
         const std::vector<std::size_t> read_too_often = SectorsReadTooOften(
@@ -191,17 +191,17 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const Tuning::Settings defaults;
   REQUIRE(defaults.walk.read_ahead_dirs == 64);
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    for (const VolumeOptions& options : TestIo::AllOptions()) {
       INFO(fixture.name << ", include_deleted " << options.include_deleted
                         << ", recover_errors " << options.recover_errors);
-      const ReadAhead::Run given =
-          ReadAhead::ListWithDefaultTuning<S>(fixture.image, options);
-      const ReadAhead::Run explicit_on = ReadAhead::ListRecursively<S>(
+      const TestIo::Run given =
+          TestIo::ListWithDefaultTuning<S>(fixture.image, options);
+      const TestIo::Run explicit_on = TestIo::ListRecursively<S>(
           fixture.image, options, defaults.walk.read_ahead_dirs,
           defaults.walk.read_ahead_bytes);
-      const ReadAhead::Run off =
-          ReadAhead::ListRecursively<S>(fixture.image, options, 0, 0);
+      const TestIo::Run off =
+          TestIo::ListRecursively<S>(fixture.image, options, 0, 0);
 
       // The default is the explicit 64: the same reads, in the same order.
       CHECK(given.exit_code == explicit_on.exit_code);
@@ -227,18 +227,16 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("The default read ahead plans rounds of reads on a wide tree",
           "[io][directory-read-ahead]") {
   const std::vector<BYTE> image =
-      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(TestIo::WideTree(40));
   // The window of $MFT and the memo spare the probes their rounds: leave them
   // out.
   VolumeOptions options;
   options.tuning.walk.record_window_bytes = 0;
   options.tuning.walk.record_memo_entries = 0;
-  const ReadAhead::Run given =
-      ReadAhead::ListWithDefaultTuning<Cache::Strategy::NoCache>(image,
-                                                                 options);
-  const ReadAhead::Run off =
-      ReadAhead::ListRecursively<Cache::Strategy::NoCache>(image, options, 0,
-                                                           0);
+  const TestIo::Run given =
+      TestIo::ListWithDefaultTuning<Cache::Strategy::NoCache>(image, options);
+  const TestIo::Run off =
+      TestIo::ListRecursively<Cache::Strategy::NoCache>(image, options, 0, 0);
   CHECK(Rounds(given.calls) > Rounds(off.calls));
 }
 
@@ -246,12 +244,12 @@ TEMPLATE_TEST_CASE_SIG(
     "A recursive listing is the same with a record window of any size",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    for (const VolumeOptions& options : ReadAhead::AllOptions()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    for (const VolumeOptions& options : TestIo::AllOptions()) {
       VolumeOptions without = options;
       without.tuning.walk.record_window_bytes = 0;
-      const ReadAhead::Run off = ReadAhead::ListRecursively<S>(
-          fixture.image, without, 64, large_budget);
+      const TestIo::Run off =
+          TestIo::ListRecursively<S>(fixture.image, without, 64, large_budget);
 
       for (const std::uint64_t bytes : window_bytes) {
         INFO(fixture.name << ", include_deleted " << options.include_deleted
@@ -259,12 +257,12 @@ TEMPLATE_TEST_CASE_SIG(
                           << ", window " << bytes << " bytes");
         VolumeOptions with = options;
         with.tuning.walk.record_window_bytes = bytes;
-        const ReadAhead::Run on = ReadAhead::ListRecursively<S>(
-            fixture.image, with, 64, large_budget);
+        const TestIo::Run on =
+            TestIo::ListRecursively<S>(fixture.image, with, 64, large_budget);
 
         CHECK(on.exit_code == off.exit_code);
         CHECK(on.text == off.text);
-        INFO(ReadAhead::FirstDifference(on.log, off.log));
+        INFO(TestIo::FirstDifference(on.log, off.log));
         CHECK(on.log == off.log);
       }
     }
@@ -274,13 +272,13 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("A block cache reads the same whatever the record window",
           "[io][directory-read-ahead]") {
   constexpr Cache::Strategy S = Cache::Strategy::FullCache;
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
     VolumeOptions without;
     without.tuning.walk.record_window_bytes = 0;
-    const ReadAhead::Run off =
-        ReadAhead::ListRecursively<S>(fixture.image, without, 64, large_budget);
-    const ReadAhead::Run on =
-        ReadAhead::ListWithDefaultTuning<S>(fixture.image, VolumeOptions{});
+    const TestIo::Run off =
+        TestIo::ListRecursively<S>(fixture.image, without, 64, large_budget);
+    const TestIo::Run on =
+        TestIo::ListWithDefaultTuning<S>(fixture.image, VolumeOptions{});
 
     INFO(fixture.name);
     REQUIRE(on.calls.size() == off.calls.size());
@@ -297,18 +295,18 @@ TEST_CASE(
     "[io][directory-read-ahead]") {
   constexpr Cache::Strategy S = Cache::Strategy::NoCache;
   const std::vector<std::vector<BYTE>> images{
-      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40)),
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(TestIo::WideTree(40)),
       TestFakeImage::BuildFakeNtfsImageWithNameTree(
-          ReadAhead::GroupedTree(4, 12))};
+          TestIo::GroupedTree(4, 12))};
   for (const std::vector<BYTE>& image : images) {
     VolumeOptions without;
     without.tuning.walk.record_window_bytes = 0;
-    const ReadAhead::Run off =
-        ReadAhead::ListRecursively<S>(image, without, 64, large_budget);
-    const ReadAhead::Run on =
-        ReadAhead::ListWithDefaultTuning<S>(image, VolumeOptions{});
+    const TestIo::Run off =
+        TestIo::ListRecursively<S>(image, without, 64, large_budget);
+    const TestIo::Run on =
+        TestIo::ListWithDefaultTuning<S>(image, VolumeOptions{});
 
-    const auto reads = [](const ReadAhead::Run& run) {
+    const auto reads = [](const TestIo::Run& run) {
       return std::ranges::count_if(
           run.calls, [](const CountingDiskReader::Call& call) {
             return call.kind == CountingDiskReader::Kind::Read;
@@ -324,14 +322,14 @@ TEMPLATE_TEST_CASE_SIG(
     "A recursive listing is the same with a record memo of any size",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
-    for (VolumeOptions options : ReadAhead::AllOptions()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
+    for (VolumeOptions options : TestIo::AllOptions()) {
       // The window would serve the probes first: the memo serves them alone.
       options.tuning.walk.record_window_bytes = 0;
       VolumeOptions without = options;
       without.tuning.walk.record_memo_entries = 0;
-      const ReadAhead::Run off = ReadAhead::ListRecursively<S>(
-          fixture.image, without, 64, large_budget);
+      const TestIo::Run off =
+          TestIo::ListRecursively<S>(fixture.image, without, 64, large_budget);
 
       // One place, a few that collide, and the default.
       for (const std::uint64_t entries : {1, 7, 64, 65536}) {
@@ -340,12 +338,12 @@ TEMPLATE_TEST_CASE_SIG(
                           << ", memo " << entries << " entries");
         VolumeOptions with = options;
         with.tuning.walk.record_memo_entries = entries;
-        const ReadAhead::Run on = ReadAhead::ListRecursively<S>(
-            fixture.image, with, 64, large_budget);
+        const TestIo::Run on =
+            TestIo::ListRecursively<S>(fixture.image, with, 64, large_budget);
 
         CHECK(on.exit_code == off.exit_code);
         CHECK(on.text == off.text);
-        INFO(ReadAhead::FirstDifference(on.log, off.log));
+        INFO(TestIo::FirstDifference(on.log, off.log));
         CHECK(on.log == off.log);
       }
     }
@@ -355,13 +353,13 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("A block cache reads the same whatever the record memo",
           "[io][directory-read-ahead]") {
   constexpr Cache::Strategy S = Cache::Strategy::FullCache;
-  for (const ReadAhead::TreeFixture& fixture : ReadAhead::Fixtures()) {
+  for (const TestIo::TreeFixture& fixture : TestIo::Fixtures()) {
     VolumeOptions without;
     without.tuning.walk.record_memo_entries = 0;
-    const ReadAhead::Run off =
-        ReadAhead::ListRecursively<S>(fixture.image, without, 64, large_budget);
-    const ReadAhead::Run on =
-        ReadAhead::ListWithDefaultTuning<S>(fixture.image, VolumeOptions{});
+    const TestIo::Run off =
+        TestIo::ListRecursively<S>(fixture.image, without, 64, large_budget);
+    const TestIo::Run on =
+        TestIo::ListWithDefaultTuning<S>(fixture.image, VolumeOptions{});
 
     INFO(fixture.name);
     REQUIRE(on.calls.size() == off.calls.size());
@@ -377,9 +375,9 @@ TEST_CASE("The record memo spares a listing without a cache its reads of $MFT",
           "[io][directory-read-ahead]") {
   constexpr Cache::Strategy S = Cache::Strategy::NoCache;
   const std::vector<std::vector<BYTE>> images{
-      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40)),
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(TestIo::WideTree(40)),
       TestFakeImage::BuildFakeNtfsImageWithNameTree(
-          ReadAhead::GroupedTree(4, 12))};
+          TestIo::GroupedTree(4, 12))};
   for (const std::vector<BYTE>& image : images) {
     // The window would hold the same runs: leave it out.
     VolumeOptions without;
@@ -387,12 +385,12 @@ TEST_CASE("The record memo spares a listing without a cache its reads of $MFT",
     without.tuning.walk.record_memo_entries = 0;
     VolumeOptions with = without;
     with.tuning.walk.record_memo_entries = 65536;
-    const ReadAhead::Run off =
-        ReadAhead::ListRecursively<S>(image, without, 64, large_budget);
-    const ReadAhead::Run on =
-        ReadAhead::ListRecursively<S>(image, with, 64, large_budget);
+    const TestIo::Run off =
+        TestIo::ListRecursively<S>(image, without, 64, large_budget);
+    const TestIo::Run on =
+        TestIo::ListRecursively<S>(image, with, 64, large_budget);
 
-    const auto reads = [](const ReadAhead::Run& run) {
+    const auto reads = [](const TestIo::Run& run) {
       return std::ranges::count_if(
           run.calls, [](const CountingDiskReader::Call& call) {
             return call.kind == CountingDiskReader::Kind::Read;

@@ -20,7 +20,7 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 using Alloc::ClusterCondition;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestAlloc::CountOf;
@@ -47,11 +47,10 @@ constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 constexpr ULONGLONG four_clusters = 4 * cluster;
 
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
-TreeSupport::ScannedVolume<S>
+TestMft::ScannedVolume<S>
     ScanVolume(const TestAlloc::Volume& volume,
                const VolumeOptions& options = TestAlloc::DeletedOptions()) {
-  return TreeSupport::ScannedVolume<S>(volume.Build(), options,
-                                       TestAlloc::Scan());
+  return TestMft::ScannedVolume<S>(volume.Build(), options, TestAlloc::Scan());
 }
 
 // Counts of the subject's tally, under the conditions the check lists, and
@@ -329,11 +328,11 @@ TEST_CASE(
     TestAlloc::Volume volume;
     volume.Put(subject, Freed(100, Stream(subject_runs, four_clusters)));
 
-    const TreeSupport::ScannedVolume<S> off(volume.Build());
+    const TestMft::ScannedVolume<S> off(volume.Build());
     CHECK(off.tree.ClusterAccountOf(subject) == nullptr);
     CHECK(off.tree.Stats().cluster_accounts == 0);
 
-    const TreeSupport::ScannedVolume<S> nothing_to_keep(
+    const TestMft::ScannedVolume<S> nothing_to_keep(
         volume.Build(), VolumeOptions{}, TestAlloc::Scan());
     CHECK(nothing_to_keep.tree.Stats().cluster_accounts == 0);
   });

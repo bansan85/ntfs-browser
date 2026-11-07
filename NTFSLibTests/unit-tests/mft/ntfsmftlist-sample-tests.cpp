@@ -27,9 +27,9 @@
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
 using Catch::Matchers::ContainsSubstring;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::TempTreeImage;
 using NTFS_BROWSER_NAMESPACE::Test::Support::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
-using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::TempTreeImage;
 namespace Fs = std::filesystem;
 
 namespace {
@@ -118,7 +118,7 @@ constexpr std::string_view missing_volume_error =
 
 // Runs NtfsMftList with args, its stdout and stderr captured apart.
 SampleRun RunSample(const std::vector<std::wstring>& args) {
-  return NTFS_BROWSER_NAMESPACE::Tests::MftListSample::RunMftList(args);
+  return NTFS_BROWSER_NAMESPACE::Test::Mft::RunMftList(args);
 }
 
 }  // namespace
@@ -155,7 +155,7 @@ TEST_CASE("NtfsMftList shows where the chain breaks in the paths under a loop",
           "[mft][sample][characterization]") {
   std::vector<BYTE> tree =
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
-  NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(tree);
+  NTFS_BROWSER_NAMESPACE::Test::Mft::LoopDocsAndNewDir(tree);
   const TempTreeImage image(tree);
   const SampleRun run = RunSample({image.path.wstring()});
 
@@ -440,7 +440,7 @@ TEST_CASE("NtfsMftList with several threads keeps the paths under a loop",
           "[mft][sample][threads]") {
   std::vector<BYTE> tree =
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
-  NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(tree);
+  NTFS_BROWSER_NAMESPACE::Test::Mft::LoopDocsAndNewDir(tree);
   const TempTreeImage image(tree);
 
   const SampleRun one = RunSample({L"--threads=1", image.path.wstring()});

@@ -36,7 +36,7 @@ enum class Pattern : std::uint8_t;
 }  // namespace Tuning
 }  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::KnobEffect {
+namespace NTFS_BROWSER_NAMESPACE::Test::Tuning {
 
 using Call = Test::DiskReaders::CountingDiskReader::Call;
 using Kind = Test::DiskReaders::CountingDiskReader::Kind;
@@ -45,7 +45,7 @@ using Kind = Test::DiskReaders::CountingDiskReader::Kind;
 struct Setting {
   std::string_view name;
   std::uint64_t value;
-  std::optional<Tuning::Pattern> pattern{};
+  std::optional<NTFS_BROWSER_NAMESPACE::Tuning::Pattern> pattern{};
 };
 
 // base with the settings applied through Tuning::ApplyKnob(), the one door a
@@ -53,8 +53,8 @@ struct Setting {
 inline VolumeOptions Tuned(VolumeOptions base,
                            std::initializer_list<Setting> settings) {
   for (const Setting& setting : settings) {
-    const std::string failure =
-        Tuning::ApplyKnob(base, setting.name, setting.value, setting.pattern);
+    const std::string failure = NTFS_BROWSER_NAMESPACE::Tuning::ApplyKnob(
+        base, setting.name, setting.value, setting.pattern);
     INFO("setting " << setting.name << " = " << setting.value);
     REQUIRE(failure.empty());
   }
@@ -75,7 +75,8 @@ inline Test::Support::ScanResult ScanOf(const std::vector<BYTE>& image,
   auto reader = std::make_unique<Test::DiskReaders::CountingDiskReader>(
       std::make_unique<Test::DiskReaders::MemoryDiskReader>(image));
   const Test::DiskReaders::CountingDiskReader* const counting = reader.get();
-  const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
+  const NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache> volume(
+      std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
   return Test::Support::CaptureScan(volume, counting, threads);
 }
@@ -156,4 +157,4 @@ inline std::vector<Call> Region(const std::vector<Call>& calls, ULONGLONG first,
   return kept;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::KnobEffect
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Tuning

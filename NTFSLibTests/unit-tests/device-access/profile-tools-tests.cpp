@@ -26,8 +26,8 @@
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
-namespace DirSample = NTFS_BROWSER_NAMESPACE::Tests::DirSample;
-namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -129,17 +129,16 @@ struct Tool {
 
   [[nodiscard]] SampleRun Run(std::vector<std::wstring> options) const {
     options.push_back(target);
-    return dir ? DirSample::RunDir(exe, options)
-               : MftListSample::RunMftList(options);
+    return dir ? TestIo::RunDir(exe, options) : TestMft::RunMftList(options);
   }
 };
 
 // The image files the tools list, made once per test.
 struct Images {
-  MftListSample::TempTreeImage mft_list{
+  TestMft::TempTreeImage mft_list{
       TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
                                                        list_fragment_clusters)};
-  DirSample::TempImage dir;
+  TestIo::TempImage dir;
 };
 
 // Every tool of the build, over the image of its listing.
@@ -150,11 +149,11 @@ std::vector<Tool> Tools(const Images& images) {
                    .image = images.mft_list.path,
                    .target = images.mft_list.path.wstring(),
                    .dir = false});
-  for (const std::filesystem::path& exe : DirSample::SampleExes()) {
+  for (const std::filesystem::path& exe : TestIo::SampleExes()) {
     tools.push_back({.name = exe.stem().string(),
                      .exe = exe,
                      .image = images.dir.path,
-                     .target = DirSample::InImage(images.dir.path, L"Docs"),
+                     .target = TestIo::InImage(images.dir.path, L"Docs"),
                      .dir = true});
   }
   return tools;

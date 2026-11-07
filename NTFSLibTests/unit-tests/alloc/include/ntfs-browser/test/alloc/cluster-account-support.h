@@ -112,8 +112,7 @@ inline const NTFS_BROWSER_NAMESPACE::Alloc::ClusterAccount&
     AccountOf(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
               ULONGLONG record) {
   static_cast<void>(
-      NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport::RequiredEntry(tree,
-                                                                   record));
+      NTFS_BROWSER_NAMESPACE::Test::Mft::RequiredEntry(tree, record));
   const NTFS_BROWSER_NAMESPACE::Alloc::ClusterAccount* const account =
       tree.ClusterAccountOf(record);
   REQUIRE(account != nullptr);

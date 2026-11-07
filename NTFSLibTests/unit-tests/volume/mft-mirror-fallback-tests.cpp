@@ -66,7 +66,7 @@ constexpr ULONGLONG fake_mft_lcn = 1;
 // fits.
 constexpr ULONGLONG lcn_past_the_volume = 61;
 
-// Bit of a record number in a Tests::MftMirrorDamage mask.
+// Bit of a record number in a Test::FakeImage::MftMirrorDamage mask.
 constexpr std::uint32_t Bit(unsigned record) { return 1U << record; }
 
 // A MemoryDiskReader that remembers where each read started.

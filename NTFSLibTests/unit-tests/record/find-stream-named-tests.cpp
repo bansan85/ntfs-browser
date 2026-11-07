@@ -18,6 +18,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/fuzz/named-stream-probe.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {
@@ -64,11 +65,11 @@ void CheckFindStreamReturnsNamedStream() {
   CHECK(record.FindStream(L"nonexistent") == nullptr);
 
   const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>* stream = record.FindStream(
-      NTFS_BROWSER_NAMESPACE::Test::FakeImage::named_data_stream_name);
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::named_data_stream_name);
   REQUIRE(stream != nullptr);
 
   CHECK(stream->GetAttrName() ==
-        NTFS_BROWSER_NAMESPACE::Test::FakeImage::named_data_stream_name);
+        NTFS_BROWSER_NAMESPACE::Test::Fuzz::named_data_stream_name);
 
   // Confirm it's genuinely the named stream's own data, not some other
   // attribute.

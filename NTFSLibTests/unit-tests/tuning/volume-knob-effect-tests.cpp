@@ -44,17 +44,17 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestTuning = NTFS_BROWSER_NAMESPACE::Test::Tuning;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
-namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
+namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
-namespace UsnSupport = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
+namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using namespace Tests::KnobEffect;
+using namespace TestTuning;
 
 namespace {
 
@@ -92,7 +92,7 @@ std::vector<BYTE> CheckImage() {
 }
 
 CheckScan ScanCheck(const VolumeOptions& options) {
-  const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> scanned(
+  const TestMft::ScannedVolume<Cache::Strategy::NoCache> scanned(
       CheckImage(), options,
       TestAlloc::Scan(Alloc::ClusterAccountLevel::Counts,
                       Alloc::DataCheckMode::Full));
@@ -400,7 +400,7 @@ TEST_CASE("usn.read_chunk_bytes sets the size of the reads of $J",
   // Nine MiB of journal.
   const TestFakeImage::FakeUsnOptions journal{
       .raw_stream = std::vector<BYTE>(std::size_t{9} << 20U, BYTE{0})};
-  const std::vector<BYTE> image = UsnSupport::JournalImage(journal);
+  const std::vector<BYTE> image = TestUsn::JournalImage(journal);
   const ULONGLONG journal_from =
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree().size();
   const std::uint64_t chunk =
@@ -409,7 +409,7 @@ TEST_CASE("usn.read_chunk_bytes sets the size of the reads of $J",
 
   const auto loader_reads = [&](const VolumeOptions& options) {
     const auto opened =
-        UsnSupport::OpenVolume<Cache::Strategy::NoCache>(image, options);
+        TestUsn::OpenVolume<Cache::Strategy::NoCache>(image, options);
     opened.counter->Reset();
     REQUIRE(opened.volume->GetUsnJournal() != nullptr);
     return Select(opened.counter->Calls(), Kind::Read,
@@ -418,9 +418,9 @@ TEST_CASE("usn.read_chunk_bytes sets the size of the reads of $J",
                   });
   };
 
-  const std::vector<Call> base = loader_reads(UsnSupport::RecoverOptions());
+  const std::vector<Call> base = loader_reads(TestUsn::RecoverOptions());
   const std::vector<Call> tuned = loader_reads(
-      Tuned(UsnSupport::RecoverOptions(), {{"usn.read_chunk_bytes", chunk}}));
+      Tuned(TestUsn::RecoverOptions(), {{"usn.read_chunk_bytes", chunk}}));
 
   CHECK(base.size() == 9);
   CHECK(LongestRead(tuned) == chunk);
@@ -430,13 +430,13 @@ TEST_CASE("usn.read_chunk_bytes sets the size of the reads of $J",
 TEST_CASE("usn.read_chunk_bytes leaves the records of the journal as they were",
           "[tuning][knob-effect][usn]") {
   const TestFakeImage::FakeUsnOptions journal{
-      .records = {UsnSupport::MakeRecord({.name = L"a.txt", .record = 40}),
-                  UsnSupport::MakeRecord({.name = L"b.txt", .record = 41})}};
-  const std::vector<BYTE> image = UsnSupport::JournalImage(journal);
+      .records = {TestUsn::MakeRecord({.name = L"a.txt", .record = 40}),
+                  TestUsn::MakeRecord({.name = L"b.txt", .record = 41})}};
+  const std::vector<BYTE> image = TestUsn::JournalImage(journal);
 
   const auto names = [&](const VolumeOptions& options) {
     const auto opened =
-        UsnSupport::OpenVolume<Cache::Strategy::NoCache>(image, options);
+        TestUsn::OpenVolume<Cache::Strategy::NoCache>(image, options);
     const Usn::Journal* const loaded = opened.volume->GetUsnJournal();
     REQUIRE(loaded != nullptr);
     std::vector<std::wstring> found;
@@ -446,9 +446,9 @@ TEST_CASE("usn.read_chunk_bytes leaves the records of the journal as they were",
     return found;
   };
 
-  const std::vector<std::wstring> base = names(UsnSupport::RecoverOptions());
+  const std::vector<std::wstring> base = names(TestUsn::RecoverOptions());
   REQUIRE(base.size() == 2);
-  CHECK(names(Tuned(UsnSupport::RecoverOptions(),
+  CHECK(names(Tuned(TestUsn::RecoverOptions(),
                     {{"usn.read_chunk_bytes", min_bytes}})) == base);
 }
 
@@ -456,14 +456,14 @@ TEST_CASE("mft.journal_piece_bytes sets the ranges announced for $J",
           "[tuning][knob-effect][usn]") {
   const TestFakeImage::FakeUsnOptions journal{
       .raw_stream = std::vector<BYTE>(std::size_t{9} << 20U, BYTE{0})};
-  const std::vector<BYTE> image = UsnSupport::JournalImage(journal);
+  const std::vector<BYTE> image = TestUsn::JournalImage(journal);
   const ULONGLONG journal_from =
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree().size();
   const std::uint64_t piece = std::uint64_t{1} << 20U;
 
   const auto hints = [&](const VolumeOptions& options) {
     const auto opened =
-        UsnSupport::OpenVolume<Cache::Strategy::NoCache>(image, options);
+        TestUsn::OpenVolume<Cache::Strategy::NoCache>(image, options);
     const Mft::MftTree tree(*opened.volume);
     return Select(opened.counter->Calls(), Kind::Prefetch,
                   [journal_from](const Call& call) {
@@ -471,9 +471,9 @@ TEST_CASE("mft.journal_piece_bytes sets the ranges announced for $J",
                   });
   };
 
-  const std::vector<Call> base = hints(UsnSupport::RecoverOptions());
-  const std::vector<Call> tuned = hints(Tuned(
-      UsnSupport::RecoverOptions(), {{"mft.journal_piece_bytes", piece}}));
+  const std::vector<Call> base = hints(TestUsn::RecoverOptions());
+  const std::vector<Call> tuned = hints(
+      Tuned(TestUsn::RecoverOptions(), {{"mft.journal_piece_bytes", piece}}));
 
   CHECK(base.size() == 3);
   CHECK(tuned.size() == 9);

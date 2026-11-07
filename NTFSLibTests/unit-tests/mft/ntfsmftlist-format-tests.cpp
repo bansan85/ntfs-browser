@@ -37,10 +37,10 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::RunMftList;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::TempTreeImage;
 using NTFS_BROWSER_NAMESPACE::Test::Support::NameTreeRecord;
 using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
-using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::RunMftList;
-using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::TempTreeImage;
 
 namespace {
 
@@ -270,8 +270,7 @@ std::string Shown(const std::wstring& path,
 // the path and the other hard links that the library gives.
 void CheckPathsAgainstTheTree(const std::vector<BYTE>& image) {
   using NTFS_BROWSER_NAMESPACE::Cache::Strategy;
-  const NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport::ScannedVolume<
-      Strategy::NoCache>
+  const NTFS_BROWSER_NAMESPACE::Test::Mft::ScannedVolume<Strategy::NoCache>
       scanned(image);
   const TempTreeImage file(image);
   const SampleRun one = ListWith(file, {L"--deleted"}, 1);
@@ -315,9 +314,8 @@ void CheckPathsAgainstTheTree(const std::vector<BYTE>& image) {
 
 TEST_CASE("NtfsMftList shows the paths that the tree gives, lost ones too",
           "[mft][sample][threads][name]") {
-  namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
   std::vector<BYTE> looped = BuildFakeNtfsImageWithMftTree();
-  Tests::MftTreeParents::LoopDocsAndNewDir(looped);
+  NTFS_BROWSER_NAMESPACE::Test::Mft::LoopDocsAndNewDir(looped);
 
   CheckPathsAgainstTheTree(BuildFakeNtfsImageWithMftTree());
   CheckPathsAgainstTheTree(looped);
