@@ -1,5 +1,6 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/fuzzgen/alloc-scan-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/attribute-list-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/bad-cluster-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/boot-sector-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/case-twin-scenarios.h>
@@ -28,6 +29,7 @@ ScenarioRegistry ScenarioCatalog::Build() {
   TinyStreamScenarios::Register(registry);
   MftScanScenarios::Register(registry);
   RunListScenarios::Register(registry);
+  AttributeListScanScenarios::Register(registry);
   return registry;
 }
 

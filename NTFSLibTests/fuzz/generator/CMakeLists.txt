@@ -52,6 +52,8 @@ add_library(
   "mft-scan-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/run-list-scenarios.h"
   "run-list-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/attribute-list-scan-scenarios.h"
+  "attribute-list-scan-scenarios.cpp"
 )
 
 target_include_directories(
